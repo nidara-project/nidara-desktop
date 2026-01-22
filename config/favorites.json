@@ -1,0 +1,7 @@
+{
+  "pinned": [
+    {"id": "org.gnome.Nautilus", "name": "Files", "icon": "system-file-manager", "exec": "nautilus"},
+    {"id": "firefox", "name": "Firefox", "icon": "firefox", "exec": "firefox"},
+    {"id": "org.gnome.Terminal", "name": "Terminal", "icon": "utilities-terminal", "exec": "gnome-terminal"}
+  ]
+}

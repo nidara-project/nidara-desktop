@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=MiDistroIA
+Comment=AI-Native Desktop Environment powered by Hyprland
+Exec=Hyprland
+Type=Application
+DesktopNames=MiDistroIA
