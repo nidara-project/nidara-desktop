@@ -1,6 +1,7 @@
 import gi
 import json
 import sys
+import threading
 
 # Require GTK 3.0 and Wnck 3.0
 gi.require_version('Gtk', '3.0')
@@ -23,6 +24,10 @@ class WindowMonitor:
         # Initial dump
         GLib.idle_add(self.dump_windows)
 
+        # NOTE: Origin had check_dock_position here for wmctrl/X11. 
+        # We disable it for Wayland/Hyprland as we use LayerShell in the Dock itself.
+        # GLib.timeout_add(2000, self.check_dock_position)
+
     def on_window_changed(self, screen, window=None):
         self.dump_windows()
 
@@ -43,16 +48,17 @@ class WindowMonitor:
                 
                 app = window.get_class_group_name()
                 
-                # Priority for icon:
-                # 1. Class instance name (res_name) - e.g. "google-chrome", "gnome-terminal-server"
-                # 2. Class group name (res_class) - e.g. "Google-chrome", "Gnome-terminal"
-                # 3. Wnck App icon name (fallback)
-                
                 res_name = window.get_class_instance_name()
                 res_class = window.get_class_group_name()
                 
-                # Default
-                icon_name = res_name.lower()
+                # Para PWAs: usar res_name (crx_xxx) como class_name
+                if res_name and res_name.startswith('crx_'):
+                    class_name = res_name.lower()
+                else:
+                    class_name = res_class.lower() if res_class else res_name.lower()
+                
+                # Default icon
+                icon_name = res_name.lower() if res_name else 'application-x-executable'
                 
                 # Try to get a better app name if possible
                 wnck_app = window.get_application()
@@ -65,6 +71,7 @@ class WindowMonitor:
                     "xid": window.get_xid(),
                     "title": window.get_name(),
                     "app_name": app_name,
+                    "class_name": class_name,
                     "icon_name": icon_name, 
                     "is_active": (window.get_xid() == active_xid)
                 })
@@ -75,8 +82,37 @@ class WindowMonitor:
         except Exception as e:
             sys.stderr.write(f"Error dumping windows: {e}\n")
 
+    def read_commands(self):
+        while True:
+            try:
+                line = sys.stdin.readline()
+                if not line:
+                    break
+                cmd = json.loads(line)
+                if cmd.get("action") == "activate":
+                    self.activate_window(cmd.get("xid"))
+            except ValueError:
+                continue
+            except Exception as e:
+                sys.stderr.write(f"Error reading command: {e}\n")
+
+    def activate_window(self, xid):
+        # Find window by xid
+        for window in self.screen.get_windows():
+            if window.get_xid() == xid:
+                # Get current timestamp for activation
+                now = Gdk.CURRENT_TIME # Gtk3 Gdk
+                # Wnck activation needs timestamp
+                window.activate(now)
+                break
+
 if __name__ == "__main__":
     monitor = WindowMonitor()
+    
+    # Start command listener thread
+    cmd_thread = threading.Thread(target=monitor.read_commands, daemon=True)
+    cmd_thread.start()
+    
     try:
         Gtk.main()
     except KeyboardInterrupt:

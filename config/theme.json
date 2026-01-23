@@ -1,14 +1,14 @@
 {
-    "distro_name": "MiDistroIA",
-    "version": "0.1-alpha",
-    "style": {
-        "primary_color": "#3498db",
-        "bg_rgba": "rgba(20, 20, 20, 0.6)",
-        "border_radius": "15px",
-        "blur_intensity": "20px"
+    "dock": {
+        "background": "rgba(30, 30, 46, 0.8)",
+        "border_color": "#cba6f7",
+        "border_width": 2,
+        "border_radius": "20px",
+        "spacing": 15,
+        "opacity": 0.9
     },
-    "layout": {
-        "dock_height": 60,
-        "dock_position": "BOTTOM"
+    "ai_button": {
+        "color": "#f5c2e7",
+        "font_size": "14px"
     }
 }
