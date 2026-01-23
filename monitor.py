@@ -51,9 +51,9 @@ class WindowMonitor:
                 f'0,{x_pos},{y_pos},{dock_w},{dock_h}'
             ], capture_output=True)
             
-            # Mantener siempre encima
+            # Mantener siempre encima y persistente (sticky)
             subprocess.run([
-                'wmctrl', '-r', 'MiDistro Dock', '-b', 'add,above'
+                'wmctrl', '-r', 'MiDistro Dock', '-b', 'add,above,sticky'
             ], capture_output=True)
             
             # Ocultar de la barra de tareas y del dock de Ubuntu
