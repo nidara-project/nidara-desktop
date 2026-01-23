@@ -70,11 +70,14 @@ class SettingsWindow(Gtk.ApplicationWindow):
             with open(path, 'w') as f:
                 json.dump(self.themes_data, f, indent=4)
             
-            # Reiniciar dock usando el script de arranque robusto
+            # Reiniciar dock y topbar usando los scripts de arranque robustos
             import subprocess
-            start_script = os.path.expanduser("~/Dev/MiDistroIA/scripts/start_dock.sh")
-            # Usar setsid para que el proceso sobreviva si cerramos settings
-            subprocess.Popen(f"setsid {start_script}", shell=True)
+            dock_script = os.path.expanduser("~/Dev/MiDistroIA/scripts/start_dock.sh")
+            topbar_script = os.path.expanduser("~/Dev/MiDistroIA/scripts/start_topbar.sh")
+            
+            # Usar setsid para que los procesos sobrevivan si cerramos settings
+            subprocess.Popen(f"setsid {dock_script}", shell=True)
+            subprocess.Popen(f"setsid {topbar_script}", shell=True)
 
     def load_css(self):
         css = """
