@@ -117,8 +117,15 @@ class WindowMonitor:
                 res_name = window.get_class_instance_name()
                 res_class = window.get_class_group_name()
                 
-                # Default
-                icon_name = res_name.lower()
+                # Para PWAs: usar res_name (crx_xxx) como class_name
+                # Esto las separa de Chrome normal
+                if res_name and res_name.startswith('crx_'):
+                    class_name = res_name.lower()
+                else:
+                    class_name = res_class.lower() if res_class else res_name.lower()
+                
+                # Default icon
+                icon_name = res_name.lower() if res_name else 'application-x-executable'
                 
                 # Try to get a better app name if possible
                 wnck_app = window.get_application()
@@ -131,7 +138,7 @@ class WindowMonitor:
                     "xid": window.get_xid(),
                     "title": window.get_name(),
                     "app_name": app_name,
-                    "class_name": res_class.lower() if res_class else res_name.lower(),
+                    "class_name": class_name,
                     "icon_name": icon_name, 
                     "is_active": (window.get_xid() == active_xid)
                 })
