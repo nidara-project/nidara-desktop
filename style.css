@@ -1,0 +1,37 @@
+window {
+    background-color: transparent;
+}
+
+#dock-box {
+    background-color: rgba(20, 20, 20, 0.8);
+    border-radius: 20px;
+    padding: 10px;
+    margin-bottom: 20px; /* Floating effect */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+}
+
+button {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 10px;
+    border-radius: 12px;
+    transition: all 0.2s ease-in-out;
+}
+
+button:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+    transform: scale(1.1);
+}
+
+button:active {
+    background-color: rgba(255, 255, 255, 0.3);
+    transform: scale(0.95);
+}
+
+.active-app {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-bottom: 2px solid #3584e4; 
+    border-radius: 12px; /* Re-apply radius to avoid square bottom from border */
+}

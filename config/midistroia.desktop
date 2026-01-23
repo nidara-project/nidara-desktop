@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=MiDistroIA
+Comment=AI-Native Desktop Environment (GNOME Wayland)
+Exec=gnome-session --session=gnome
+Type=Application
+DesktopNames=GNOME
+X-GDM-SessionRegisters=true

@@ -1,0 +1,14 @@
+{
+    "distro_name": "MiDistroIA",
+    "version": "0.1-alpha",
+    "style": {
+        "primary_color": "#3498db",
+        "bg_rgba": "rgba(20, 20, 20, 0.6)",
+        "border_radius": "15px",
+        "blur_intensity": "20px"
+    },
+    "layout": {
+        "dock_height": 60,
+        "dock_position": "BOTTOM"
+    }
+}

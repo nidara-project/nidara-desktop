@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=MiDistroIA Dock
+Comment=AI-Native Dock
+Exec=/home/angel/Dev/MiDistroIA/scripts/start_dock.sh
+Hidden=false
+NoDisplay=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=3
