@@ -34,10 +34,10 @@ class WindowMonitor:
         display_w = self.screen.get_width()
         display_h = self.screen.get_height()
         
-        # Tamaño del dock
-        dock_w = 700
-        dock_h = 80  # Altura aumentada para indicadores
-        margin = 40  # Separación del borde inferior
+        # Tamaño del dock (incluye espacio para sombra)
+        dock_w = 800
+        dock_h = 120
+        margin = 20  # Margen desde el borde de pantalla
         
         # Calcular posición centrada abajo
         x_pos = (display_w - dock_w) // 2
