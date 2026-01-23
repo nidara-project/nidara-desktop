@@ -36,8 +36,8 @@ class WindowMonitor:
         
         # Tamaño del dock
         dock_w = 700
-        dock_h = 60
-        margin = 20  # Más separación del borde
+        dock_h = 80  # Altura aumentada para indicadores
+        margin = 40  # Separación del borde inferior
         
         # Calcular posición centrada abajo
         x_pos = (display_w - dock_w) // 2
@@ -131,6 +131,7 @@ class WindowMonitor:
                     "xid": window.get_xid(),
                     "title": window.get_name(),
                     "app_name": app_name,
+                    "class_name": res_class.lower() if res_class else res_name.lower(),
                     "icon_name": icon_name, 
                     "is_active": (window.get_xid() == active_xid)
                 })
