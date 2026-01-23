@@ -47,7 +47,10 @@ $SUDO apt install -y \
     yaru-theme-icon \
     libgtk-3-dev \
     libgtk-4-dev \
-    libgirepository1.0-dev
+    libgirepository1.0-dev \
+    libgtk4-layer-shell-dev \
+    gir1.2-gtk4-layer-shell-1.0 \
+    gir1.2-wnck-3.0
 
 # 1.1 Install Google Chrome
 if ! command -v google-chrome-stable >/dev/null 2>&1; then
@@ -95,8 +98,15 @@ echo "🛠️ Ensuring start_all utility is ready..."
 cat <<EOF > /opt/midistroia/scripts/start_all.sh
 #!/bin/bash
 # Master launcher for MiDistroIA
-/opt/midistroia/scripts/start_dock.sh &
-/opt/midistroia/scripts/start_topbar.sh &
+# Prefer home version if available (development mode)
+if [ -d "\$HOME/Dev/MiDistroIA" ]; then
+    bash \$HOME/Dev/MiDistroIA/scripts/start_dock.sh &
+    bash \$HOME/Dev/MiDistroIA/scripts/start_topbar.sh &
+else
+    # Fallback to system install
+    bash /opt/midistroia/scripts/start_dock.sh &
+    bash /opt/midistroia/scripts/start_topbar.sh &
+fi
 EOF
 chmod +x /opt/midistroia/scripts/start_all.sh
 
