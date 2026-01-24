@@ -9,7 +9,7 @@ from gi.repository import Gtk, Gdk, Gio
 class SettingsWindow(Gtk.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app)
-        self.set_title("Configuración MiDistroIA")
+        self.set_title("Configuración DistroIA")
         self.set_default_size(400, 300)
         
         # Estilo de la ventana

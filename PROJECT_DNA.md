@@ -1,6 +1,8 @@
-# MiDistroIA: PROJECT DNA (Seed)
+# PROJECT_DNA: DistroIA
+**Identidad Inmutable y Reglas Maestras**
 
-Este archivo es el **Vínculo de Continuidad** para Antigravity. Si eres un agente nuevo en este proyecto, lee esto antes de tocar nada. El historial de este repo ha sido restaurado tras un desastre de sincronización; respeta estas reglas.
+Este documento define la esencia de **DistroIA** (antes MiDistroIA). Cualquier agente trabajando en este proyecto debe respetar estas directrices sagradas.
+ El historial de este repo ha sido restaurado tras un desastre de sincronización; respeta estas reglas.
 
 ## 1. Identidad Técnica Inamovible
 - **Entorno**: X.org (GNOME sobre X11). **NO** Wayland/LayerShell.

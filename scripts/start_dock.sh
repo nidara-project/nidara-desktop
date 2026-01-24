@@ -1,5 +1,10 @@
 #!/bin/bash
-# Script para lanzar el Dock de MiDistroIA en GNOME/X11
+# Script para lanzar el Dock de MiDistroIA
+# Portable: Funciona en Dev (~/Dev/...) y en Producción (/opt/...)
+
+# Calcular directorio base del proyecto
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )"
+PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
 # Matar instancias previas
 pkill -f "main_dock.py"
@@ -12,11 +17,8 @@ sleep 1
 export LC_ALL=es_ES.UTF-8
 export LANG=es_ES.UTF-8
 
-# Lanzar el monitor (Nota: ahora main_dock.py lo lanza internamente, 
-# pero si preferimos desacoplarlo podríamos dejarlo. 
-# El nuevo código de main_dock.py lo lanza como subproceso, así que NO lo lanzamos aquí para evitar duplicados)
-
-# Lanzar el dock
-python3 ~/Dev/MiDistroIA/ui/dock/main_dock.py &
+# Lanzar el dock usando ruta relativa
+echo "🚀 Iniciando Dock desde: $PROJECT_ROOT"
+python3 "$PROJECT_ROOT/ui/dock/main_dock.py" &
 
 echo "✨ MiDistroIA Dock iniciado"
