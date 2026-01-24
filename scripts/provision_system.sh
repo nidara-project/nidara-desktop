@@ -93,7 +93,22 @@ EOF
 echo "🎨 Applying global stylization to /etc/skel..."
 cp /opt/midistroia/ui/global.css "$SKEL/.config/gtk-4.0/gtk.css"
 
-# 5. Create start_all utility in the project folder
+# 5. System Overlay (Deep Integration)
+# This allows modifying any part of the OS from the repository
+echo "🔗 Blending repository with system root (/)..."
+if [ -d "$PROJECT_ROOT/system_root" ]; then
+    # Copy all files from system_root to / preserving structure
+    # Use -a to preserve permissions and -u to only update if newer
+    $SUDO cp -ru "$PROJECT_ROOT/system_root/"* / 2>/dev/null || true
+fi
+
+# 6. Global UI Link (Deep Link)
+# Ensure the UI components are accessible from a standard system path
+echo "🔗 Creating system-wide links for UI components..."
+$SUDO mkdir -p /usr/share/midistro/ui
+$SUDO ln -sf /opt/midistroia/ui/* /usr/share/midistro/ui/
+
+# 7. Ensure the start_all utility is ready
 echo "🛠️ Ensuring start_all utility is ready..."
 cat <<EOF > /opt/midistroia/scripts/start_all.sh
 #!/bin/bash
