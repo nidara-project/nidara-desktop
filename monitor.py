@@ -1,82 +1,29 @@
-import gi
-import json
 import sys
+import os
+import json
 import threading
+import gi
 
-# Require GTK 3.0 and Wnck 3.0
+# Ensure we can import from core (if running from project root)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.append(current_dir)
+
+# GTK Loop needed for X11 Wnck events (even if logic is imported)
 gi.require_version('Gtk', '3.0')
-gi.require_version('Wnck', '3.0')
+from gi.repository import Gtk, GLib
 
-from gi.repository import Gtk, Wnck, GLib
+# Import wrapper factory
+from core.wm.factory import get_window_manager
 
-class WindowMonitor:
+class MonitorService:
     def __init__(self):
-        self.screen = Wnck.Screen.get_default()
-        
-        # We need to force an update to populate the initial list
-        self.screen.force_update()
+        self.wm = get_window_manager()
+        self.wm.set_on_windows_changed(self.on_update)
+        self.wm.start_monitoring()
 
-        # Connect signals
-        self.screen.connect("window-opened", self.on_window_changed)
-        self.screen.connect("window-closed", self.on_window_changed)
-        self.screen.connect("active-window-changed", self.on_window_changed)
-        
-        # Initial dump
-        GLib.idle_add(self.dump_windows)
-
-        # NOTE: Origin had check_dock_position here for wmctrl/X11. 
-        # We disable it for Wayland/Hyprland as we use LayerShell in the Dock itself.
-        # GLib.timeout_add(2000, self.check_dock_position)
-
-    def on_window_changed(self, screen, window=None):
-        self.dump_windows()
-
-    def dump_windows(self):
-        # Determine active window XID
-        active_window = self.screen.get_active_window()
-        active_xid = active_window.get_xid() if active_window else None
-
-        windows_list = []
-        for window in self.screen.get_windows():
-            window_type = window.get_window_type()
-            
-            # Filter for normal windows (skip docks, desktops, etc.)
-            if window_type == Wnck.WindowType.NORMAL:
-                # Wnck might list windows that are "skip_tasklist"
-                if window.is_skip_tasklist():
-                    continue
-                
-                app = window.get_class_group_name()
-                
-                res_name = window.get_class_instance_name()
-                res_class = window.get_class_group_name()
-                
-                # Para PWAs: usar res_name (crx_xxx) como class_name
-                if res_name and res_name.startswith('crx_'):
-                    class_name = res_name.lower()
-                else:
-                    class_name = res_class.lower() if res_class else res_name.lower()
-                
-                # Default icon
-                icon_name = res_name.lower() if res_name else 'application-x-executable'
-                
-                # Try to get a better app name if possible
-                wnck_app = window.get_application()
-                if wnck_app:
-                    app_name = wnck_app.get_name()
-                else:
-                    app_name = res_class or window.get_name()
-
-                windows_list.append({
-                    "xid": window.get_xid(),
-                    "title": window.get_name(),
-                    "app_name": app_name,
-                    "class_name": class_name,
-                    "icon_name": icon_name, 
-                    "is_active": (window.get_xid() == active_xid)
-                })
-
-        # Output JSON to stdout
+    def on_update(self, windows_list):
+        # Dump to stdout for the Dock
         try:
             print(json.dumps(windows_list), flush=True)
         except Exception as e:
@@ -89,31 +36,30 @@ class WindowMonitor:
                 if not line:
                     break
                 cmd = json.loads(line)
-                if cmd.get("action") == "activate":
-                    self.activate_window(cmd.get("xid"))
+                action = cmd.get("action")
+                
+                if action == "activate":
+                    self.wm.activate_window(cmd.get("xid"))
+                elif action == "close":
+                    self.wm.close_window(cmd.get("xid"))
+                    
             except ValueError:
                 continue
             except Exception as e:
                 sys.stderr.write(f"Error reading command: {e}\n")
 
-    def activate_window(self, xid):
-        # Find window by xid
-        for window in self.screen.get_windows():
-            if window.get_xid() == xid:
-                # Get current timestamp for activation
-                now = Gdk.CURRENT_TIME # Gtk3 Gdk
-                # Wnck activation needs timestamp
-                window.activate(now)
-                break
-
 if __name__ == "__main__":
-    monitor = WindowMonitor()
-    
-    # Start command listener thread
-    cmd_thread = threading.Thread(target=monitor.read_commands, daemon=True)
-    cmd_thread.start()
-    
     try:
+        service = MonitorService()
+        
+        # Start command listener
+        cmd_thread = threading.Thread(target=service.read_commands, daemon=True)
+        cmd_thread.start()
+        
+        # Start Main Loop (Required for Signal Handling in X11/Wnck)
+        # In a pure Wayland/Hyprland Thread implementation this might differ,
+        # but Gtk.main() is safe for now as `factory` imports Gtk only if needed.
         Gtk.main()
+        
     except KeyboardInterrupt:
         pass
