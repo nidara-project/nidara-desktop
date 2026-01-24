@@ -6,6 +6,11 @@ export GDK_BACKEND=wayland
 # Esto ayuda a que GTK4 prefiera Wayland
 export MOZ_ENABLE_WAYLAND=1 
 
+# FIX: Link Order Hell in Python + GTK4 Layer Shell
+export GI_TYPELIB_PATH=/usr/local/lib/x86_64-linux-gnu/girepository-1.0:$GI_TYPELIB_PATH
+export LD_LIBRARY_PATH=/usr/local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+export LD_PRELOAD=/usr/local/lib/x86_64-linux-gnu/libgtk4-layer-shell.so
+
 echo "🚀 Iniciando DistroIA UI en modo Wayland..."
 
 # Directorio raiz

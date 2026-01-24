@@ -9,23 +9,45 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.append(current_dir)
 
-# GTK Loop needed for X11 Wnck events (even if logic is imported)
-gi.require_version('Gtk', '3.0')
-from gi.repository import Gtk, GLib
+from datetime import datetime
+
+# Detect session type
+SESSION_TYPE = os.environ.get('XDG_SESSION_TYPE', 'x11').lower()
+
+# GTK Loop only needed for X11 Wnck events
+if SESSION_TYPE == 'x11':
+    gi.require_version('Gtk', '3.0')
+    from gi.repository import Gtk, GLib
+else:
+    # On Wayland, we don't need GTK here
+    Gtk = None
+    GLib = None
 
 # Import wrapper factory
 from core.wm.factory import get_window_manager
 
 class MonitorService:
     def __init__(self):
-        self.wm = get_window_manager()
-        self.wm.set_on_windows_changed(self.on_update)
-        self.wm.start_monitoring()
+        with open("/tmp/monitor_boot.log", "a") as f:
+            f.write(f"MonitorService INIT at {datetime.now()}\n")
+        try:
+            self.wm = get_window_manager()
+            self.wm.set_on_windows_changed(self.on_update)
+            self.wm.start_monitoring()
+            sys.stderr.write(f"MonitorService started with backend: {self.wm.__class__.__name__}\n")
+        except Exception as e:
+            sys.stderr.write(f"CRITICAL: Failed to initialize WindowManager backend: {e}\n")
+            # Fallback a lista vacía para no matar el proceso padre
+            self.wm = None
 
     def on_update(self, windows_list):
         # Dump to stdout for the Dock
         try:
-            print(json.dumps(windows_list), flush=True)
+            output = json.dumps(windows_list)
+            print(output, flush=True)
+            # Log adicional para auditoría
+            with open("/tmp/monitor_standalone.log", "a") as f:
+                f.write(f"UPDATE: {len(windows_list)} windows\n")
         except Exception as e:
             sys.stderr.write(f"Error dumping windows: {e}\n")
 
@@ -56,10 +78,13 @@ if __name__ == "__main__":
         cmd_thread = threading.Thread(target=service.read_commands, daemon=True)
         cmd_thread.start()
         
-        # Start Main Loop (Required for Signal Handling in X11/Wnck)
-        # In a pure Wayland/Hyprland Thread implementation this might differ,
-        # but Gtk.main() is safe for now as `factory` imports Gtk only if needed.
-        Gtk.main()
+        # Start Main Loop
+        if SESSION_TYPE == 'x11' and Gtk:
+            Gtk.main()
+        else:
+            import time
+            while True:
+                time.sleep(10)
         
     except KeyboardInterrupt:
         pass
