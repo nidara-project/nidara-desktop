@@ -1,0 +1,27 @@
+
+▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
+█   ATAJOS DE DISTROIA   █
+▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
+
+VENTANAS:
+  [SUPER] + Q          Cerrar ventana activa
+  [SUPER] + M          Salir de la sesión (Logout)
+  [SUPER] + Flechas    Mover el foco entre ventanas
+  [SUPER] + Click      Mover ventana (arrastrar)
+  [SUPER] + Click Der  Redimensionar ventana
+
+APLICACIONES:
+  [SUPER] + T          Terminal (GNOME Terminal)
+  [SUPER] + R          Lanzador de Apps (DistroIA Menu)
+  [SUPER] + D          Lanzador Rápido (Wofi)
+  [SUPER] + H          Ver esta ayuda
+
+SISTEMA:
+  [ImpPnt]             Captura de pantalla (al portapapeles)
+  [Shift] + [ImpPnt]   Captura de pantalla (guardar en Imágenes)
+
+CONFIGURACIÓN:
+  Archivo: ~/.config/hypr/hyprland.conf
+  (Edita este archivo para cambiar colores, bordes o atajos)
+
+Para cerrar esta ventana, presiona ENTER.

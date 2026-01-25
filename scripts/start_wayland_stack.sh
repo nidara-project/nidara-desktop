@@ -7,9 +7,10 @@ export GDK_BACKEND=wayland
 export MOZ_ENABLE_WAYLAND=1 
 
 # FIX: Link Order Hell in Python + GTK4 Layer Shell
-export GI_TYPELIB_PATH=/usr/local/lib/x86_64-linux-gnu/girepository-1.0:$GI_TYPELIB_PATH
-export LD_LIBRARY_PATH=/usr/local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
-export LD_PRELOAD=/usr/local/lib/x86_64-linux-gnu/libgtk4-layer-shell.so
+# These vars interfere with C++ apps like Waybar, so we apply them locally to Python
+PY_ENV="GI_TYPELIB_PATH=/usr/local/lib/x86_64-linux-gnu/girepository-1.0:$GI_TYPELIB_PATH \
+LD_LIBRARY_PATH=/usr/local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH \
+LD_PRELOAD=/usr/local/lib/x86_64-linux-gnu/libgtk4-layer-shell.so"
 
 echo "🚀 Iniciando DistroIA UI en modo Wayland..."
 
@@ -21,10 +22,10 @@ cd $HOME/Dev/MiDistroIA
 # los componentes deberían posicionarse con LayerShell (si está implementado)
 # o flotar si no.
 
-python3 ui/dock/main_dock.py &
+env $PY_ENV python3 ui/dock/main_dock.py &
 PID_DOCK=$!
 
-python3 ui/topbar/main_topbar.py &
+env -u LD_PRELOAD waybar &
 PID_TOPBAR=$!
 
 echo "✅ UI Iniciada (PIDs: $PID_DOCK, $PID_TOPBAR)"

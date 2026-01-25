@@ -15,13 +15,13 @@ from datetime import datetime
 SESSION_TYPE = os.environ.get('XDG_SESSION_TYPE', 'x11').lower()
 
 # GTK Loop only needed for X11 Wnck events
+Gtk = None
+GLib = None
+
 if SESSION_TYPE == 'x11':
+    import gi
     gi.require_version('Gtk', '3.0')
     from gi.repository import Gtk, GLib
-else:
-    # On Wayland, we don't need GTK here
-    Gtk = None
-    GLib = None
 
 # Import wrapper factory
 from core.wm.factory import get_window_manager

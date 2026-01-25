@@ -24,3 +24,19 @@ dist/
 *.log
 *.tmp
 google-chrome-stable_current_amd64.deb
+
+# Local Builds & Deps
+aquamarine/
+hyprgraphics/
+hyprland-protocols/
+hyprlang/
+hyprpaper/
+hyprpicker/
+hyprsunset/
+hyprsysteminfo/
+hyprtoolkit/
+hyprutils/
+hyprwayland-scanner/
+hyprwire/
+local/
+temp_deps/

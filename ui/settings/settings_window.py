@@ -140,10 +140,9 @@ class SettingsWindow(Gtk.ApplicationWindow):
         subprocess.Popen(["xdg-open", os.path.expanduser("~/.config/hypr/hyprpaper.conf")])
 
     def reload_ui(self, btn):
-         # Reiniciar dock y topbar usando los scripts de arranque robustos
-        dock_script = os.path.expanduser("~/Dev/MiDistroIA/scripts/start_dock.sh")
-        # topbar ahora es waybar, start_wayland_stack lo maneja
-        subprocess.Popen("pkill -f main_dock.py; pkill -f waybar; nohup bash ~/Dev/MiDistroIA/scripts/start_wayland_stack.sh > /dev/null 2>&1 &", shell=True)
+        # Reiniciar de forma limpia y desvinculada (pkill -9 para asegurar muerte)
+        cmd = "pkill -9 -f main_dock.py; pkill -9 waybar; sleep 0.8; setsid bash /home/angel/Dev/MiDistroIA/scripts/start_wayland_stack.sh &"
+        subprocess.Popen(cmd, shell=True, start_new_session=True)
 
     def load_themes(self):
         path = os.path.expanduser("~/.config/midistroia/themes.json")
@@ -159,8 +158,9 @@ class SettingsWindow(Gtk.ApplicationWindow):
             path = os.path.expanduser("~/.config/midistroia/themes.json")
             with open(path, 'w') as f:
                 json.dump(self.themes_data, f, indent=4)
-            # Todo: Aplicar tema real
+            # Todo: Aplicar tema real (Postpuesto por ahora)
             
+
     def load_css(self):
         css = """
         .settings-window {
