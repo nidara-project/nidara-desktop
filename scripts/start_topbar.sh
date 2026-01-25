@@ -12,6 +12,16 @@ pkill -f main_topbar.py
 # Esperar un poco
 sleep 0.5
 
+# FIX: Link Order Hell in Python + GTK4 Layer Shell
+export GI_TYPELIB_PATH=/usr/local/lib/x86_64-linux-gnu/girepository-1.0:$GI_TYPELIB_PATH
+export LD_LIBRARY_PATH=/usr/local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+export LD_PRELOAD=/usr/local/lib/x86_64-linux-gnu/libgtk4-layer-shell.so
+
+# Force Wayland backend if in Wayland
+if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
+    export GDK_BACKEND=wayland
+fi
+
 # Iniciar la top bar en segundo plano
 echo "🚀 Iniciando TopBar desde: $PROJECT_ROOT"
 python3 "$PROJECT_ROOT/ui/topbar/main_topbar.py" > /dev/null 2>&1 &

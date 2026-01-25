@@ -9,6 +9,10 @@ export GI_TYPELIB_PATH=/usr/local/lib/x86_64-linux-gnu/girepository-1.0:$GI_TYPE
 export LD_LIBRARY_PATH=/usr/local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 export LD_PRELOAD=/usr/local/lib/x86_64-linux-gnu/libgtk4-layer-shell.so
 
+# Ensure Wayland Detection
+export XDG_SESSION_TYPE=wayland
+export GDK_BACKEND=wayland
+
 # Check if running
 if pgrep -f "$PROCESS_NAME" > /dev/null; then
     echo "Menu is open. Closing..."
