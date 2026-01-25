@@ -43,7 +43,7 @@ class SettingsWindow(Gtk.ApplicationWindow):
         
         # Botón grande para abrir GNOME Control Center
         btn_ubuntu = Gtk.Button()
-        btn_ubuntu.set_height_request(80)
+        btn_ubuntu.set_size_request(-1, 80)
         btn_ubuntu.add_css_class("card-button")
         
         btn_content = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=15)
