@@ -22,10 +22,20 @@ Para todo lo **visual y de comportamiento de ventanas**, debes editar los archiv
 | **Resolución de Pantalla** | `~/.config/hypr/hyprland.conf` (sección `monitor`) |
 | **Bordes y Colores** | `~/.config/hypr/hyprland.conf` (sección `general`) |
 | **Animaciones** | `~/.config/hypr/hyprland.conf` (sección `animations`) |
-| **Fondo de Pantalla** | `~/.config/hypr/hyprpaper.conf` |
+| **Fondo de Pantalla** | `~/.config/hypr/hyprland.conf` (busca `exec-once = swaybg`) |
 | **Barra Superior** | `~/.config/waybar/config` y `style.css` |
 | **Iconos y Tema Oscuro** | Herramienta `nwg-look` (recomendado) o archivos GTK. |
 
 ## Resumen
 *   **Hardware/Sistema** -> **Ajustes de Ubuntu**
 *   **Ventanas/Visual** -> **Archivos de Texto**
+## 3. Ejemplos Rápidos
+
+### Cambiar Fondo de Pantalla 🖼️
+1. Abre `~/.config/hypr/hyprland.conf`.
+2. Busca la línea:
+   ```bash
+   exec-once = swaybg -i /ruta/a/tu/imagen.jpg -m fill
+   ```
+3. Cambia la ruta por la de tu imagen y guarda.
+4. Recarga Hyprland (`Super + Shift + C`).
