@@ -21,6 +21,7 @@ Para todo lo **visual y de comportamiento de ventanas**, debes editar los archiv
 | **Atajos de Teclado** | `~/.config/hypr/hyprland.conf` |
 | **Resolución de Pantalla** | `~/.config/hypr/hyprland.conf` (sección `monitor`) |
 | **Bordes y Colores** | `~/.config/hypr/hyprland.conf` (sección `general`) |
+| **Transparencia/Opacidad** | `~/.config/hypr/hyprland.conf` (sección `decoration`) |
 | **Animaciones** | `~/.config/hypr/hyprland.conf` (sección `animations`) |
 | **Fondo de Pantalla** | `~/.config/hypr/hyprland.conf` (busca `exec-once = swaybg`) |
 | **Barra Superior** | `~/.config/waybar/config` y `style.css` |
@@ -39,3 +40,20 @@ Para todo lo **visual y de comportamiento de ventanas**, debes editar los archiv
    ```
 3. Cambia la ruta por la de tu imagen y guarda.
 4. Recarga Hyprland (`Super + Shift + C`).
+### Personalización de Terminal (Kitty & Fastfetch) 🐱
+
+#### Arreglar Iconos Raros (Kanjis/Cuadrados)
+Si ves símbolos extraños en lugar de iconos, es porque falta la **Nerd Font**.
+1. Asegúrate de tener instalada `JetBrainsMono Nerd Font`.
+2. En `~/.config/kitty/kitty.conf`:
+   *   Usa `font_family JetBrainsMono Nerd Font` (sin "Mono") para iconos grandes y bonitos.
+   *   Usa `... Nerd Font Mono` si prefieres que los iconos sean del mismo ancho que las letras (más pequeños).
+
+#### Cambiar el Logo de Información (Fastfetch)
+Para cambiar el logo que sale al abrir la terminal:
+1. Edita `~/.config/fastfetch/config.jsonc`.
+2. Busca la sección `"logo"`.
+3. Cambia `"source"` por:
+   *   `"source": "ubuntu"` (Logo clásico)
+   *   `"source": "windows"` (Broma)
+   *   `"source": "/ruta/a/imagen.png"` (Imagen personalizada)

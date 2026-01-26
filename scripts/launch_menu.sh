@@ -10,9 +10,6 @@ export LD_LIBRARY_PATH=/usr/local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 export LD_PRELOAD=/usr/local/lib/x86_64-linux-gnu/libgtk4-layer-shell.so
 
 # Ensure Wayland Detection
-export XDG_SESSION_TYPE=wayland
-export GDK_BACKEND=wayland
-
 # Check if running
 if pgrep -f "$PROCESS_NAME" > /dev/null; then
     echo "Menu is open. Closing..."
@@ -21,5 +18,9 @@ else
     echo "Launching Menu..."
     # Ensure environment is correct
     export PYTHONPATH="$HOME/Dev/MiDistroIA"
-    python3 "$MENU_SCRIPT" &
+    
+    # Use env to set Wayland variables ONLY for the menu process
+    # This prevents child apps (like Antigravity) from inheriting GDK_BACKEND=wayland
+    # which causes crashes if they aren't fully Wayland-native.
+    env GDK_BACKEND=wayland XDG_SESSION_TYPE=wayland python3 "$MENU_SCRIPT" &
 fi

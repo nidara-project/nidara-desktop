@@ -10,6 +10,13 @@ VENTANAS:
   [SUPER] + Click      Mover ventana (arrastrar)
   [SUPER] + Click Der  Redimensionar ventana
 
+  [SUPER] + Click Der  Redimensionar ventana
+
+ESPACIOS DE TRABAJO (WORKSPACES):
+  [SUPER] + [1-5]      Cambiar de escritorio
+  [SUPER] + Scroll     Cambiar de escritorio rápidamente
+  [SUPER] + Shift + #  Mover ventana al escritorio # (ej: Super+Shift+2)
+
 APLICACIONES:
   [SUPER] + T          Terminal (GNOME Terminal)
   [SUPER] + R          Lanzador de Apps (DistroIA Menu)
