@@ -61,6 +61,10 @@ Actualmente estamos usando **swaybg** porque es la opción más compatible.
 > [!IMPORTANT]
 > **Pendiente**: Hemos detectado un error de permisos con `hyprpaper` (amdgpu -13). Hemos añadido tu usuario a los grupos `video` y `render`, pero esto suele requerir un **reinicio completo del PC** para que el kernel aplique los cambios. Si reinicias, prueba a volver a `hyprpaper` para ganar rendimiento.
 
+### "El Dock no se oculta después de usar el menú clic derecho"
+Es un fallo conocido en la interacción con Wayland.
+> **Solución temporal**: Vuelve a pasar el ratón por encima del Dock y sácalo hacia abajo. Eso reactiva el temporizador de ocultación.
+
 ### "El Dock no aparece"
 Pulsa `SUPER` + `SHIFT` + `C`. Esto debería relanzar el script `scripts/start_dock.sh`.
 
