@@ -3,42 +3,23 @@
 █   ATAJOS DE DISTROIA   █
 ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 
-VENTANAS:
+ESENCIALES:
+  [SUPER] + SHIFT + C  RECUPERAR/RECARGAR TODO (Barra, Dock, Fondo)
   [SUPER] + Q          Cerrar ventana activa
-  [SUPER] + M          Salir de la sesión (Logout)
-  [SUPER] + Flechas    Mover el foco entre ventanas
-  [SUPER] + Click      Mover ventana (arrastrar)
-  [SUPER] + Click Der  Redimensionar ventana
-
-  [SUPER] + Click Der  Redimensionar ventana
-
-ESPACIOS DE TRABAJO (WORKSPACES):
-  [SUPER] + [1-5]      Cambiar de escritorio
-  [SUPER] + Scroll     Cambiar de escritorio rápidamente
-  [SUPER] + Shift + #  Mover ventana al escritorio # (ej: Super+Shift+2)
-
-APLICACIONES:
-  [SUPER] + T          Terminal (GNOME Terminal)
-  [SUPER] + R          Lanzador de Apps (DistroIA Menu)
-  [SUPER] + D          Lanzador Rápido (Wofi)
-  [SUPER] + H          Ver esta ayuda
-
-SISTEMA:
-  [ImpPnt]             Captura de pantalla (al portapapeles)
-  [Shift] + [ImpPnt]   Captura de pantalla (guardar en Imágenes)
-
-CONFIGURACIÓN:
-  Atajos/Bordes:  ~/.config/hypr/hyprland.conf
-  Barra Superior: ~/.config/waybar/config
-  Fondo Pantalla: ~/.config/hypr/hyprpaper.conf
+  [SUPER] + H          Ver este resumen
   
-FONDO DE PANTALLA (Hyprpaper):
-  1. Edita ~/.config/hypr/hyprpaper.conf
-  2. Para probar uno sin reiniciar:
-     hyprctl hyprpaper preload "/ruta/a/imagen.jpg"
-     hyprctl hyprpaper wallpaper ",/ruta/a/imagen.jpg"
+APLICACIONES:
+  [SUPER] + R          Menú de Aplicaciones (Grid)
+  [SUPER] + T          Terminal (Kitty)
+  [SUPER] + [1-5]      Cambiar escritorio
+  [SUPER] + SHIFT + #  Mover ventana a escritorio #
 
-SEGURIDAD:
-  Las apps se lanzan vía 'AppLauncher' (sanitizado) para evitar crashes.
+DOCK:
+  - Clic Der: Cerrar Aplicación
+  - Auto-hide activado cuando hay ventanas.
+
+MANUAL COMPLETO:
+  Consulta el archivo: ~/Dev/MiDistroIA/USER_MANUAL.md
+  para ver guías de configuración y resolución de errores.
 
 Para cerrar esta ventana, presiona ENTER.

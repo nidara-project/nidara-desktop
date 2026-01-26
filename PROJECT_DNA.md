@@ -9,7 +9,7 @@ Este documento define la esencia de **DistroIA** (antes MiDistroIA). Cualquier a
 - **UI Architecture**: Python Gtk4 + **Gtk4LayerShell** para posicionamiento nativo de Dock y TopBar.
 - **Visuals**: Dock Orgánico con **indicadores (dots)** de estado y Menú Contextual (Cerrar App).
 - **Lanzador**: DistroIA Menu (Python/Gtk4) & `wofi --show drun` como backup.
-- **Fondo de Pantalla**: Gestionado por `hyprpaper`.
+- **Fondo de Pantalla**: Gestionado por **swaybg** (Solución estable que no requiere permisos de GPU).
 
 ## 2. El Historial de Oro (Source of Truth)
 El historial legítimo del proyecto fue rescatado el 24/01/2026. 

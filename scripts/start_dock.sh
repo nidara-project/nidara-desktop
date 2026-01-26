@@ -24,6 +24,9 @@ if [ "$XDG_SESSION_TYPE" == "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
     export XDG_SESSION_TYPE=wayland
 fi
 
+# Path fix for internal modules
+export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
+
 # Export locales to ensure Python doesn't complain
 export LC_ALL=es_ES.UTF-8
 export LANG=es_ES.UTF-8
