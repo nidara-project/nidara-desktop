@@ -4,11 +4,12 @@
 Este documento define la esencia de **DistroIA** (antes MiDistroIA). Cualquier agente trabajando en este proyecto debe respetar estas directrices sagradas.
  El historial de este repo ha sido restaurado tras un desastre de sincronización; respeta estas reglas.
 
-## 1. Identidad Técnica Inamovible
-- **Entorno**: X.org (GNOME sobre X11). **NO** Wayland/LayerShell.
-- **UI Architecture**: Python Gtk4 + wmctrl/xprop para posicionamiento de Dock y TopBar.
-- **Visuals**: Dock Orgánico con **indicadores (dots)** de estado (Cyberpunk/Catppuccin theme).
-- **Lanzador**: `wofi --show drun`.
+## 1. Identidad Técnica Inamovible (Actualizada 26/01/2026)
+- **Entorno**: Wayland (Compositor: **Hyprland**).
+- **UI Architecture**: Python Gtk4 + **Gtk4LayerShell** para posicionamiento nativo de Dock y TopBar.
+- **Visuals**: Dock Orgánico con **indicadores (dots)** de estado y Menú Contextual (Cerrar App).
+- **Lanzador**: DistroIA Menu (Python/Gtk4) & `wofi --show drun` como backup.
+- **Fondo de Pantalla**: Gestionado por `hyprpaper`.
 
 ## 2. El Historial de Oro (Source of Truth)
 El historial legítimo del proyecto fue rescatado el 24/01/2026. 

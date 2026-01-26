@@ -19,8 +19,9 @@ export LD_LIBRARY_PATH=/usr/local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 export LD_PRELOAD=/usr/local/lib/x86_64-linux-gnu/libgtk4-layer-shell.so
 
 # Force Wayland backend if in Wayland
-if [ "$XDG_SESSION_TYPE" == "wayland" ]; then
+if [ "$XDG_SESSION_TYPE" == "wayland" ] || [ -n "$WAYLAND_DISPLAY" ]; then
     export GDK_BACKEND=wayland
+    export XDG_SESSION_TYPE=wayland
 fi
 
 # Export locales to ensure Python doesn't complain
