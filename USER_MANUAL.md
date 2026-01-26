@@ -56,6 +56,11 @@ El Dock es una aplicación inteligente escrita en Python que se comunica con el 
 
 ## 🛠️ RESOLUCIÓN DE PROBLEMAS (Troubleshooting)
 
+### "El fondo de pantalla no se ve o sale negro"
+Actualmente estamos usando **swaybg** porque es la opción más compatible. 
+> [!IMPORTANT]
+> **Pendiente**: Hemos detectado un error de permisos con `hyprpaper` (amdgpu -13). Hemos añadido tu usuario a los grupos `video` y `render`, pero esto suele requerir un **reinicio completo del PC** para que el kernel aplique los cambios. Si reinicias, prueba a volver a `hyprpaper` para ganar rendimiento.
+
 ### "El Dock no aparece"
 Pulsa `SUPER` + `SHIFT` + `C`. Esto debería relanzar el script `scripts/start_dock.sh`.
 
