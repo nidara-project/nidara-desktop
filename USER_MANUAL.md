@@ -30,6 +30,22 @@ Estamos usando **swaybg** porque es la herramienta más estable para tu tarjeta 
 
 ---
 
+## ⚙️ GESTIÓN DE CONFIGURACIÓN
+
+En DistroIA trabajamos con dos niveles de archivos para que nada se pierda nunca:
+
+1.  **NIVEL USUARIO (EN VIVO)**: Se encuentra en `~/.config/`.
+    - Es lo que el sistema lee **realmente** para funcionar.
+    - Si cambias algo aquí y pulsas `SUPER + SHIFT + C`, lo verás aplicado al momento.
+2.  **NIVEL PROYECTO (SOURCE OF TRUTH)**: Se encuentra en `~/Dev/MiDistroIA/config/`.
+    - Es nuestra "Copia de Oro". Está protegida por **Git**.
+    - Sirve para que, si rompes algo en tu carpeta de usuario o el PC falla, podamos restaurar todo en un segundo desde el repositorio.
+
+**¿Cómo los mantenemos sincronizados?**
+Cada vez que terminamos un cambio exitoso, yo (tu asistente) copio los archivos desde tu nivel de usuario al nivel de proyecto y hago un `git push`. Así, tu configuración personal se convierte en la nueva configuración estándar de la distro.
+
+---
+
 ## ⚓ EL DOCK (Barra Inferior)
 El Dock es una aplicación inteligente escrita en Python que se comunica con el sistema.
 - **Auto-Hide**: Se oculta automáticamente si hay una ventana que le estorba. Pasa el ratón por la parte inferior para que aparezca.
