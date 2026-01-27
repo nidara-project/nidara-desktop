@@ -1,0 +1,200 @@
+/* Glass UI for SwayNC */
+
+* {
+    font-family: 'Segoe UI', 'Roboto', Helvetica, Arial, sans-serif;
+    font-weight: bold;
+}
+
+.control-center .notification-row:focus,
+.control-center .notification-row:hover {
+    opacity: 1;
+    background: rgba(49, 116, 241, 0.2);
+}
+
+.notification-row {
+    outline: none;
+    margin: 10px;
+    padding: 0;
+}
+
+.notification {
+    background: transparent;
+    padding: 0;
+    margin: 0px;
+}
+
+.notification-content {
+    background: rgba(30, 30, 46, 0.6);
+    padding: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    margin: 0;
+}
+
+.notification-default-action {
+    margin: 0;
+    padding: 0;
+    border-radius: 12px;
+}
+
+.close-button {
+    background: #f38ba8;
+    color: #1e1e2e;
+    text-shadow: none;
+    padding: 0;
+    border-radius: 100%;
+    margin-top: 5px;
+    margin-right: 5px;
+}
+
+.close-button:hover {
+    box-shadow: none;
+    background: #d20f39;
+    transition: all .15s ease-in-out;
+    border: none;
+}
+
+.notification-action {
+    border: 2px solid #cdd6f4;
+    border-top: none;
+    border-radius: 12px;
+}
+
+.notification-default-action:hover,
+.notification-action:hover {
+    color: #cdd6f4;
+    background: #cdd6f4;
+}
+
+.summary {
+    font-size: 16px;
+    font-weight: 700;
+    background: transparent;
+    color: #cdd6f4;
+    text-shadow: none;
+}
+
+.time {
+    font-size: 16px;
+    font-weight: 700;
+    background: transparent;
+    color: #cdd6f4;
+    text-shadow: none;
+    margin-right: 18px;
+}
+
+.body {
+    font-size: 15px;
+    font-weight: 400;
+    background: transparent;
+    color: #cdd6f4;
+    text-shadow: none;
+}
+
+.control-center {
+    background: rgba(20, 20, 30, 0.6);
+    border-radius: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5);
+}
+
+.control-center-list {
+    background: transparent;
+}
+
+.control-center-list-placeholder {
+    opacity: 0.5;
+}
+
+.floating-notifications {
+    background: transparent;
+}
+
+.blank-window {
+    background: transparent;
+}
+
+.widget-title {
+    color: #cdd6f4;
+    background: rgba(30, 30, 46, 0.6);
+    padding: 10px 15px;
+    margin: 10px;
+    border-radius: 12px;
+    background: rgba(30, 30, 46, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.widget-title>label {
+    margin-right: 10px;
+}
+
+.widget-title button {
+    font-size: 0.9rem;
+    color: #cdd6f4;
+    text-shadow: none;
+    background: rgba(49, 116, 241, 0.8);
+    /* Increased opacity */
+    box-shadow: none;
+    border-radius: 8px;
+    border: none;
+}
+
+/* Ensure padding for centering text */
+
+.widget-title button:hover {
+    background: #3174f1;
+}
+
+.widget-dnd {
+    background: rgba(30, 30, 46, 0.6);
+    padding: 10px;
+    margin: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-size: 1.1rem;
+    color: #cdd6f4;
+}
+
+.widget-dnd>switch {
+    font-size: initial;
+    border-radius: 12px;
+    background: #313244;
+    border: 1px solid #cdd6f4;
+    box-shadow: none;
+}
+
+.widget-dnd>switch:checked {
+    background: #3174f1;
+}
+
+.widget-dnd>switch slider {
+    background: #cdd6f4;
+    border-radius: 12px;
+}
+
+.widget-mpris {
+    color: #cdd6f4;
+    background: rgba(30, 30, 46, 0.6);
+    padding: 10px;
+    margin: 10px;
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.widget-mpris>button {
+    border-radius: 12px;
+}
+
+.widget-mpris-player {
+    padding: 5px 10px;
+    margin: 10px;
+}
+
+.widget-mpris-title {
+    font-weight: 700;
+    font-size: 1.25rem;
+}
+
+.widget-mpris-subtitle {
+    font-size: 1.1rem;
+}
