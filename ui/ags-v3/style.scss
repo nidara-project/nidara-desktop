@@ -109,3 +109,66 @@ window#crystal-dock main {
   background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.1) 20%, rgba(0, 0, 0, 0.1) 80%, transparent);
   margin: 0 14px;
 }
+
+/* 6. CUSTOM DOCK TOOLTIPS (GtkPopover) 🍏 */
+popover.dock-tooltip {
+  background: none;
+  background-color: transparent;
+}
+
+popover.dock-tooltip contents {
+  background: none;
+  background-color: transparent;
+  box-shadow: none;
+  border: none;
+  padding: 0;
+}
+
+.tooltip-content {
+  background-color: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+  padding: 6px 14px;
+  margin-bottom: 25px;
+  /* Separation from Dock */
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+}
+
+.tooltip-label {
+  color: #2e2e2e;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* 7. CONTEXT MENUS (POPOVERS) 🍏 */
+.dock-popover {
+  background-color: rgba(255, 255, 255, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+  padding: 6px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.dock-popover button {
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  margin: 2px 0;
+  transition: all 200ms ease;
+}
+
+.dock-popover button label {
+  color: #2e2e2e;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dock-popover button:hover {
+  background-color: #3174f1;
+  /* macOS System Blue */
+}
+
+.dock-popover button:hover label {
+  color: #ffffff;
+}
