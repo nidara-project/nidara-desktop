@@ -6,10 +6,11 @@ import * as astal from "ags/gtk4/jsx-runtime"
 import GLib from "gi://GLib"
 import AstalHyprland from "gi://AstalHyprland"
 import AstalApps from "gi://AstalApps"
+import GObject from "gi://GObject"
 
 // --- CONFIGURACIÓN & PERSISTENCIA ---
 const PINNED_FILE = GLib.get_home_dir() + "/.config/dock_pinned.json"
-const DEFAULT_PINNED = ["google-chrome", "kitty", "org.gnome.Nautilus"]
+const DEFAULT_PINNED: string[] = []
 
 const hypr = AstalHyprland.get_default()
 const appsService = new AstalApps.Apps()
@@ -30,36 +31,41 @@ const savePinned = () => {
 
 function DockItem(app: AstalApps.Application, updateDock: () => void, address?: string) {
     // @ts-ignore
-    const currentId = (app.get_id ? app.get_id() : (app.id || "")).toLowerCase().replace(".desktop", "")
-    const appId = (app.get_id ? app.get_id() : (app.id || "")).replace(".desktop", "")
+    const rawId = (app.get_id ? app.get_id() : (app.id || app.icon_name || app.name || "")).replace(".desktop", "")
+    const appId = rawId || "unknown-app"
 
     const iconSize = 64
     const button = new Gtk.Button({
         css_classes: ["dock-item"],
-        valign: Gtk.Align.CENTER,
+        valign: Gtk.Align.FILL, // Take full 84px height
     })
 
     const image = new Gtk.Image({
         icon_name: app.icon_name || "preferences-system-windows",
         pixel_size: iconSize,
-        css_classes: ["dock-icon"]
+        css_classes: ["dock-icon"],
+        valign: Gtk.Align.CENTER, // Centered in the 84px space
+        halign: Gtk.Align.CENTER,
     })
 
     const dot = new Gtk.Box({ css_classes: ["indicator-dot"] })
     const indicator = new Gtk.Box({
         css_classes: ["indicator"],
         halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.END
+        valign: Gtk.Align.END, // Fixed at bottom edge
+        margin_bottom: 2 // Closer to edge for maximum separation from icon
     })
     indicator.append(dot)
 
-    const content = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 4
+    const overlay = new Gtk.Overlay({
+        css_classes: ["dock-item-overlay"],
+        valign: Gtk.Align.FILL, // Stretch to full height
     })
-    content.append(image)
-    content.append(indicator)
-    button.set_child(content)
+
+    overlay.set_child(image)
+    overlay.add_overlay(indicator)
+
+    button.set_child(overlay)
 
     // --- PRECISE DELAYED TOOLTIP (POPOVER) ---
     const tooltipPopover = new Gtk.Popover({
@@ -105,49 +111,32 @@ function DockItem(app: AstalApps.Application, updateDock: () => void, address?: 
     const popover = new Gtk.Popover({ css_classes: ["dock-popover"] })
     const popoverBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
 
-    const isPinned = pinnedList.includes(appId)
+    const isPinned = pinnedList.some(p => {
+        if (!p || !appId) return false
+        const lp = p.toLowerCase()
+        const lid = appId.toLowerCase()
+        return lp === lid || lp.includes(lid) || lid.includes(lp)
+    })
 
     const actions = [
         { label: "Lanzar", action: () => app.launch() },
         {
             label: isPinned ? "Desanclar del Dock" : "Anclar al Dock",
             action: () => {
-                if (isPinned) pinnedList = pinnedList.filter(p => p !== appId)
-                else pinnedList.push(appId)
+                if (isPinned) {
+                    pinnedList = pinnedList.filter(p => {
+                        const lp = p.toLowerCase()
+                        const lid = appId.toLowerCase()
+                        return !(lp === lid || lp.includes(lid) || lid.includes(lp))
+                    })
+                } else {
+                    if (appId !== "unknown-app") pinnedList.push(appId)
+                }
                 savePinned()
                 updateDock()
             }
         }
     ]
-
-    if (isPinned) {
-        actions.push(
-            {
-                label: "Mover a la Izquierda", action: () => {
-                    const idx = pinnedList.indexOf(appId)
-                    if (idx > 0) {
-                        const temp = pinnedList[idx - 1]
-                        pinnedList[idx - 1] = pinnedList[idx]
-                        pinnedList[idx] = temp
-                        savePinned()
-                        updateDock()
-                    }
-                }
-            },
-            {
-                label: "Mover a la Derecha", action: () => {
-                    const idx = pinnedList.indexOf(appId)
-                    if (idx < pinnedList.length - 1) {
-                        const temp = pinnedList[idx + 1]
-                        pinnedList[idx + 1] = pinnedList[idx]
-                        pinnedList[idx] = temp
-                        savePinned()
-                        updateDock()
-                    }
-                }
-            }
-        )
-    }
 
     if (address) {
         actions.push(
@@ -182,25 +171,62 @@ function DockItem(app: AstalApps.Application, updateDock: () => void, address?: 
     clickGesture.connect("released", () => popover.popup())
     button.add_controller(clickGesture)
 
+    // --- DRAG AND DROP REORDERING ---
+    if (isPinned) {
+        const dragSource = new Gtk.DragSource({ actions: Gdk.DragAction.MOVE })
+        dragSource.connect("prepare", (source, x, y) => {
+            source.set_icon(Gtk.WidgetPaintable.new(image), x, y)
+            return Gdk.ContentProvider.new_for_value(appId)
+        })
+        button.add_controller(dragSource)
+
+        const dropTarget = new Gtk.DropTarget({
+            actions: Gdk.DragAction.MOVE,
+        })
+        dropTarget.set_gtypes([GObject.TYPE_STRING])
+
+        dropTarget.connect("drop", (target, value) => {
+            const draggedId = value as unknown as string
+            const targetId = appId
+
+            const fromIdx = pinnedList.findIndex(p => p === draggedId)
+            const toIdx = pinnedList.findIndex(p => p === targetId)
+
+            if (fromIdx !== -1 && toIdx !== -1 && fromIdx !== toIdx) {
+                const [item] = pinnedList.splice(fromIdx, 1)
+                pinnedList.splice(toIdx, 0, item)
+                savePinned()
+                updateDock()
+                return true
+            }
+            return false
+        })
+        button.add_controller(dropTarget)
+    }
+
+    const checkMatch = (c: any) => {
+        const currentId = appId.toLowerCase()
+        const currentName = (app.name || "").toLowerCase()
+        const currentIcon = (app.icon_name || "").toLowerCase()
+        const cClass = (c.class || "").toLowerCase()
+        const cTitle = (c.title || "").toLowerCase()
+
+        if (!currentId || currentId === "unknown-app") return false
+
+        return (cClass.includes(currentId) || currentId.includes(cClass)) ||
+            (currentName !== "" && (cClass.includes(currentName) || currentName.includes(cClass))) ||
+            (currentIcon !== "" && (cClass.includes(currentIcon) || currentIcon.includes(cClass))) ||
+            (currentIcon.includes("chrome") && (cClass.includes("chrome") || cTitle.includes("chrome"))) ||
+            (currentIcon.includes("terminal") && cClass.includes("kitty")) ||
+            (currentIcon.includes("kitty") && cClass.includes("kitty"))
+    }
+
     const updateState = () => {
         const clients = hypr.clients
         const focused = hypr.focusedClient
 
         let isOpen = false
         let isActive = false
-
-        const checkMatch = (c: any) => {
-            const currentName = (app.name || "").toLowerCase()
-            const currentIcon = (app.icon_name || "").toLowerCase()
-            const cClass = (c.class || "").toLowerCase()
-            const cTitle = (c.title || "").toLowerCase()
-            return (currentId !== "" && (cClass.includes(currentId) || currentId.includes(cClass))) ||
-                (currentName !== "" && (cClass.includes(currentName) || currentName.includes(cClass))) ||
-                (currentIcon !== "" && (cClass.includes(currentIcon) || currentIcon.includes(cClass))) ||
-                (currentIcon.includes("chrome") && (cClass.includes("chrome") || cTitle.includes("chrome"))) ||
-                (currentIcon.includes("terminal") && cClass.includes("kitty")) ||
-                (currentIcon.includes("kitty") && cClass.includes("kitty"))
-        }
 
         if (address) {
             isOpen = clients.some(c => c.address === address)
@@ -229,17 +255,7 @@ function DockItem(app: AstalApps.Application, updateDock: () => void, address?: 
         if (address) {
             execAsync(`hyprctl dispatch focuswindow address:${address}`)
         } else {
-            const client = hypr.clients.find(c => {
-                const currentName = (app.name || "").toLowerCase()
-                const currentIcon = (app.icon_name || "").toLowerCase()
-                const cClass = (c.class || "").toLowerCase()
-                return (currentId !== "" && (cClass.includes(currentId) || currentId.includes(cClass))) ||
-                    (currentName !== "" && (cClass.includes(currentName) || currentName.includes(cClass))) ||
-                    (currentIcon !== "" && (cClass.includes(currentIcon) || currentIcon.includes(cClass))) ||
-                    (currentIcon.includes("chrome") && cClass.includes("chrome")) ||
-                    (currentIcon.includes("terminal") && cClass.includes("kitty"))
-            })
-
+            const client = hypr.clients.find(checkMatch)
             if (client) {
                 execAsync(`hyprctl dispatch focuswindow address:${client.address}`)
             } else {
@@ -259,8 +275,47 @@ function Separator() {
     })
 }
 
+// --- MATHEMATICAL SQUIRCLE DRAWING (Cairo Helpers) ---
+const radiusToContinuousFactor = (r: number) => 0.52 // Apple HIG approx factor
+
+const drawSquircle = (cr: any, width: number, height: number, r: number = 40) => {
+    if (width <= 0 || height <= 0) return;
+    const cpi = radiusToContinuousFactor(r);
+    cr.setSourceRGBA(1, 1, 1, 0.2);
+    cr.moveTo(r, 0);
+    cr.lineTo(width - r, 0);
+    cr.curveTo(width - r * (1 - cpi), 0, width, r * (1 - cpi), width, r);
+    cr.lineTo(width, height - r);
+    cr.curveTo(width, height - r * (1 - cpi), width - r * (1 - cpi), height, width - r, height);
+    cr.lineTo(r, height);
+    cr.curveTo(r * (1 - cpi), height, 0, height - r * (1 - cpi), 0, height - r);
+    cr.lineTo(0, r);
+    cr.curveTo(0, r * (1 - cpi), r * (1 - cpi), 0, r, 0);
+    cr.closePath();
+    cr.fillPreserve();
+    cr.setSourceRGBA(1, 1, 1, 0.4);
+    cr.setLineWidth(1);
+    cr.stroke();
+}
+
 export default function Dock(gdkmonitor: Gdk.Monitor) {
-    const bar = new Gtk.Box({ css_classes: ["dock-bar"] })
+    const bar = new Gtk.Box({
+        css_classes: ["dock-bar"],
+        valign: Gtk.Align.FILL,
+        halign: Gtk.Align.CENTER,
+    })
+
+    const drawingArea = new Gtk.DrawingArea({
+        height_request: 84,
+    })
+
+    drawingArea.set_draw_func((da, cr, width, height) => {
+        drawSquircle(cr, width, height)
+    })
+
+    const dockLayout = new Gtk.Overlay()
+    dockLayout.set_child(drawingArea) // DrawingArea as base
+    dockLayout.add_overlay(bar)      // Icons on top
 
     const update = () => {
         const children: Gtk.Widget[] = []
@@ -271,13 +326,17 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             if (app) children.push(DockItem(app, update))
         })
 
-        const running = hypr.clients.filter(c =>
-            !pinnedList.some(p => {
+        const running = hypr.clients.filter(c => {
+            const cClass = c.class.toLowerCase()
+            const isAgs = cClass.includes("ags")
+            if (isAgs) return false
+
+            const inPinned = pinnedList.some(p => {
                 const lp = p.toLowerCase()
-                const lc = c.class.toLowerCase()
-                return lp === lc || lp.includes(lc) || lc.includes(lp)
-            }) && c.class && !c.class.includes("ags")
-        )
+                return (lp === cClass || lp.includes(cClass) || cClass.includes(lp))
+            })
+            return !inPinned
+        })
 
         if (running.length > 0) {
             children.push(Separator())
@@ -302,6 +361,12 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             child = next
         }
         children.forEach(c => bar.append(c))
+
+        // Sync background size
+        const [min, nat] = bar.get_preferred_size()
+        if (nat) {
+            drawingArea.set_size_request(nat.width, 84)
+        }
     }
 
     const conn = hypr.connect("notify::clients", update)
@@ -325,8 +390,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 css_classes={["dock-bar-container"]}
                 marginBottom={10}
                 css="background: transparent;"
+                halign={Gtk.Align.CENTER}
             >
-                {bar}
+                {dockLayout}
             </box>
         </window>
     )
