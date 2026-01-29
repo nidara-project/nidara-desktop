@@ -55,7 +55,6 @@ window#crystal-dock main {
 }
 
 #crystal-dock .dock-item:hover {
-  background-color: rgba(255, 255, 255, 0.15);
   transform: translateY(-4px) scale(1.08);
   /* INDIVIDUAL SCALING FEEDBACK */
 }
@@ -102,7 +101,7 @@ window#crystal-dock main {
 #crystal-dock .separator {
   min-width: 1px;
   min-height: 42px;
-  background-color: rgba(0, 0, 0, 0.1);
+  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.1) 20%, rgba(0, 0, 0, 0.1) 80%, transparent);
   margin: 0 14px;
 }
 
