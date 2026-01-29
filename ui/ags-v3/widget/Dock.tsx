@@ -7,6 +7,7 @@ import GLib from "gi://GLib"
 import AstalHyprland from "gi://AstalHyprland"
 import AstalApps from "gi://AstalApps"
 import GObject from "gi://GObject"
+import Gtk4LayerShell from "gi://Gtk4LayerShell"
 
 // --- CONFIGURACIÓN & PERSISTENCIA ---
 const PINNED_FILE = GLib.get_home_dir() + "/.config/dock_pinned.json"
@@ -37,14 +38,15 @@ function DockItem(app: AstalApps.Application, updateDock: () => void, address?: 
     const iconSize = 64
     const button = new Gtk.Button({
         css_classes: ["dock-item"],
-        valign: Gtk.Align.FILL, // Take full 84px height
+        valign: Gtk.Align.CENTER,
+        overflow: Gtk.Overflow.VISIBLE,
     })
 
     const image = new Gtk.Image({
         icon_name: app.icon_name || "preferences-system-windows",
         pixel_size: iconSize,
         css_classes: ["dock-icon"],
-        valign: Gtk.Align.CENTER, // Centered in the 84px space
+        valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
     })
 
@@ -52,20 +54,24 @@ function DockItem(app: AstalApps.Application, updateDock: () => void, address?: 
     const indicator = new Gtk.Box({
         css_classes: ["indicator"],
         halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.END, // Fixed at bottom edge
-        margin_bottom: 2 // Closer to edge for maximum separation from icon
+        valign: Gtk.Align.END,
+        margin_bottom: 2,
+        spacing: 0, // Prevent phantom gaps
     })
     indicator.append(dot)
 
-    const overlay = new Gtk.Overlay({
-        css_classes: ["dock-item-overlay"],
-        valign: Gtk.Align.FILL, // Stretch to full height
+    const container = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        valign: Gtk.Align.CENTER, // Perfectly center icon + indicator within 92px
+        css_classes: ["dock-item-container"],
+        overflow: Gtk.Overflow.VISIBLE,
+        spacing: 0, // Force zero spacing to eliminate artifacts
     })
 
-    overlay.set_child(image)
-    overlay.add_overlay(indicator)
+    container.append(image)
+    container.append(indicator)
 
-    button.set_child(overlay)
+    button.set_child(container)
 
     // --- PRECISE DELAYED TOOLTIP (POPOVER) ---
     const tooltipPopover = new Gtk.Popover({
@@ -268,114 +274,97 @@ function DockItem(app: AstalApps.Application, updateDock: () => void, address?: 
     return button
 }
 
-function Separator() {
-    return new Gtk.Box({
-        css_classes: ["separator"],
-        valign: Gtk.Align.CENTER
-    })
-}
+// --- REPLACED SEPARATOR WITH CRYSTAL CLEAR SPACE ---
 
 const drawSquircle = (cr: any, width: number, height: number) => {
     if (width <= 0 || height <= 0) return;
 
-    // Architectural Squircle (macOS Authentic)
-    // Rectangular base with independent G2 corners.
-    const r = height * 0.45; // 45% of height for the corners
-    const n = 3.8;           // Balanced superellipse exponent
+    // Absolute 0.0 margins for total integration (No sub-pixel ghosting)
+    const marginX = 0.0;
+    const marginY = 0.0;
+    const w = width - (marginX * 2);
+    const h = height - (marginY * 2);
+
+    cr.translate(marginX, marginY);
+
+    const r = h * 0.45;
+    const n = 3.8;
     const steps = 64;
 
-    // Enable high-quality antialiasing
-    // @ts-ignore
-    if (cr.setAntialias) {
-        // @ts-ignore
-        cr.setAntialias(3); // Antialias.BEST is usually 3 in Cairo
-    }
-
-    // Frosted Glass (Apple Style)
-    // Light white with low opacity allows the background blur to shine through.
-    cr.setSourceRGBA(1, 1, 1, 0.15);
-
-    // Helper for superellipse plotting relative to an origin
-    const getPoint = (t: number) => {
-        return {
+    const definePath = () => {
+        const getPoint = (t: number) => ({
             x: r * Math.pow(Math.abs(Math.cos(t)), 2 / n),
             y: r * Math.pow(Math.abs(Math.sin(t)), 2 / n)
-        };
+        });
+        cr.moveTo(r, 0);
+        cr.lineTo(w - r, 0);
+        for (let i = steps; i >= 0; i--) {
+            const t = (i / steps) * (Math.PI / 2);
+            const p = getPoint(t);
+            cr.lineTo(w - r + p.x, r - p.y);
+        }
+        cr.lineTo(w, h - r);
+        for (let i = 0; i <= steps; i++) {
+            const t = (i / steps) * (Math.PI / 2);
+            const p = getPoint(t);
+            cr.lineTo(w - r + p.x, h - r + p.y);
+        }
+        cr.lineTo(r, h);
+        for (let i = steps; i >= 0; i--) {
+            const t = (i / steps) * (Math.PI / 2);
+            const p = getPoint(t);
+            cr.lineTo(r - p.x, h - r + p.y);
+        }
+        cr.lineTo(0, r);
+        for (let i = 0; i <= steps; i++) {
+            const t = (i / steps) * (Math.PI / 2);
+            const p = getPoint(t);
+            cr.lineTo(r - p.x, r - p.y);
+        }
+        cr.closePath();
     };
 
-    // 1. Top Edge (Straight)
-    cr.moveTo(r, 0);
-    cr.lineTo(width - r, 0);
-
-    // 2. Top-Right Corner
-    for (let i = steps; i >= 0; i--) {
-        const t = (i / steps) * (Math.PI / 2);
-        const p = getPoint(t);
-        cr.lineTo(width - r + p.x, r - p.y);
-    }
-
-    // 3. Right Edge (Straight)
-    cr.lineTo(width, height - r);
-
-    // 4. Bottom-Right Corner
-    for (let i = 0; i <= steps; i++) {
-        const t = (i / steps) * (Math.PI / 2);
-        const p = getPoint(t);
-        cr.lineTo(width - r + p.x, height - r + p.y);
-    }
-
-    // 5. Bottom Edge (Straight)
-    cr.lineTo(r, height);
-
-    // 6. Bottom-Left Corner
-    for (let i = steps; i >= 0; i--) {
-        const t = (i / steps) * (Math.PI / 2);
-        const p = getPoint(t);
-        cr.lineTo(r - p.x, height - r + p.y);
-    }
-
-    // 7. Left Edge (Straight)
-    cr.lineTo(0, r);
-
-    // 8. Top-Left Corner
-    for (let i = 0; i <= steps; i++) {
-        const t = (i / steps) * (Math.PI / 2);
-        const p = getPoint(t);
-        cr.lineTo(r - p.x, r - p.y);
-    }
-
-    cr.closePath();
-    cr.fillPreserve();
-
-    // Subtle Rim Light (Separator Edge)
-    cr.setSourceRGBA(1, 1, 1, 0.12);
-    cr.setLineWidth(1.0);
-    cr.stroke();
+    // Pure Frosted Glass (No strokes, no ghosts)
+    definePath();
+    cr.setSourceRGBA(1, 1, 1, 0.15);
+    cr.fill();
 }
 
 export default function Dock(gdkmonitor: Gdk.Monitor) {
     const bar = new Gtk.Box({
         css_classes: ["dock-bar"],
-        valign: Gtk.Align.FILL,
+        valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
+        overflow: Gtk.Overflow.VISIBLE,
+        height_request: 92,
+        spacing: 0, // Eliminate any theme-driven horizontal gaps
     })
 
     const drawingArea = new Gtk.DrawingArea({
+        valign: Gtk.Align.END,
+        halign: Gtk.Align.CENTER,
         height_request: 92,
+        overflow: Gtk.Overflow.VISIBLE,
     })
 
     drawingArea.set_draw_func((da, cr, width, height) => {
         drawSquircle(cr, width, height)
     })
 
-    const dockLayout = new Gtk.Overlay()
-    dockLayout.set_child(drawingArea) // DrawingArea as base
-    dockLayout.add_overlay(bar)      // Icons on top
+    const dockLayout = new Gtk.Overlay({
+        css_classes: ["dock-overlay"],
+        valign: Gtk.Align.END,
+        halign: Gtk.Align.CENTER,
+        overflow: Gtk.Overflow.VISIBLE,
+    })
+    dockLayout.set_child(drawingArea)
+    dockLayout.add_overlay(bar)
 
     const update = () => {
         const children: Gtk.Widget[] = []
 
-        pinnedList.forEach(id => {
+        // Nuclear filter to avoid ghost items
+        pinnedList.filter(id => !!id && id !== "").forEach(id => {
             let app = appsService.list.find(a => a.id === id)
             if (!app) app = appsService.fuzzy_query(id)?.[0]
             if (app) children.push(DockItem(app, update))
@@ -394,7 +383,6 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         })
 
         if (running.length > 0) {
-            children.push(Separator())
             running.forEach(c => {
                 let app = appsService.fuzzy_query(c.class)?.[0]
                 if (!app) {
@@ -417,40 +405,53 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         }
         children.forEach(c => bar.append(c))
 
-        // Sync background size
+        // Precise sync: Background = Bar Width Exactly (No buffers)
         const [min, nat] = bar.get_preferred_size()
         if (nat) {
-            // Add 64px (32px per side) of horizontal "breathing room" 
-            // so icons don't hit the curved Squircle ends.
-            drawingArea.set_size_request(nat.width + 64, 92)
+            drawingArea.set_size_request(nat.width, 92)
+            if (win) win.queue_resize()
         }
     }
 
     const conn = hypr.connect("notify::clients", update)
     bar.connect("destroy", () => hypr.disconnect(conn))
-    update()
-
-    return (
+    const win = (
         <window
             name="crystal-dock"
             namespace="crystal-dock"
             css_classes={["dock-window"]}
             gdkmonitor={gdkmonitor}
-            exclusivity={Astal.Exclusivity.EXCLUSIVE}
             anchor={Astal.WindowAnchor.BOTTOM}
             layer={Astal.Layer.TOP}
             application={app}
             visible
-            css="background: transparent;"
+            heightRequest={200}
         >
             <box
                 css_classes={["dock-bar-container"]}
-                marginBottom={10}
-                css="background: transparent;"
+                marginBottom={0}
                 halign={Gtk.Align.CENTER}
+                valign={Gtk.Align.END}
+                heightRequest={200}
+                vexpand={false}
+                overflow={Gtk.Overflow.VISIBLE}
             >
                 {dockLayout}
             </box>
         </window>
-    )
+    ) as any as Gtk.Window
+
+    // Apply manual layer shell configuration for the Glass Overlay
+    try {
+        Gtk4LayerShell.init_for_window(win);
+        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true);
+        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 10);
+        Gtk4LayerShell.set_exclusive_zone(win, 112); // Mathematically Perfect: 10 + 92 + 10 = 112px
+    } catch (e) {
+        console.error("Failed to initialize Gtk4LayerShell:", e);
+    }
+
+    update() // Reference works now that 'win' is hoisted/initialized
+
+    return win
 }

@@ -1,104 +1,76 @@
+@charset "UTF-8";
 /* 
    PREMIUM GTK4 DOCK - AUTHENTIC macOS HIG 🍏💎
    ---------------------------------
    Soft corners (Squircles), Tiered Shadows, and White Indicators.
 */
-/* 1. ATOMIC NODE RESET - TARGETING TAG NAMES */
+/* 1. ATOMIC NODE RESET - ABSOLUTE RECTIFICATION 🍏 */
 window#crystal-dock,
 window#crystal-dock background,
 window#crystal-dock decoration,
 window#crystal-dock contents,
-window#crystal-dock main {
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  box-shadow: none;
-  border: none;
-  margin: 0;
-  padding: 0;
+window#crystal-dock main,
+#crystal-dock .dock-window,
+#crystal-dock .dock-window > *,
+#crystal-dock .dock-bar-container,
+#crystal-dock .dock-bar-container > *,
+#crystal-dock button,
+#crystal-dock button *,
+#crystal-dock button contents,
+#crystal-dock button main,
+#crystal-dock box,
+#crystal-dock widget,
+#crystal-dock * {
+  background: none !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  border-width: 0 !important;
+  border-style: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
   border-radius: 0;
+  outline: none !important;
+  opacity: 1 !important;
+  /* Block additive semi-transparency layers */
 }
 
-/* 2. THE DOCK BAR CONTAINER */
-.dock-bar-container {
-  background: none;
-  background-color: transparent;
-  padding: 0;
-  margin: 0;
+/* 2. THE DOCK BAR CONTAINER & OVERLAY */
+.dock-bar-container,
+.dock-overlay {
+  background: none !important;
+  background-color: transparent !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
+  opacity: 1 !important;
 }
 
 /* 3. THE macOS FROSTED GLASS BAR */
 #crystal-dock .dock-bar {
-  background-color: transparent;
-  background: none;
-  /* Curvature and backgrounds are now handled by Cairo in Dock.tsx */
-  border: none;
-  padding: 0 20px;
-  /* Zero vertical padding for full layout control */
-  min-height: 84px;
-  /* TIERED SHADOWS (APPLE STYLE) */
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05), 0 10px 30px rgba(0, 0, 0, 0.1);
-  /* Penumbra */
+  background-color: transparent !important;
+  background: none !important;
+  border: none !important;
+  margin: 0 !important;
+  /* Tight Apple-like padding */
+  padding: 0 24px !important;
+  height: 92px;
+  min-height: 92px;
+  box-shadow: none !important;
+  opacity: 1 !important;
 }
 
 /* 4. THE ITEMS */
 #crystal-dock .dock-item {
-  background-color: transparent;
-  background: none;
-  border: none;
+  background-color: transparent !important;
+  background: none !important;
+  border: none !important;
   border-radius: 16px;
   padding: 0 8px;
-  /* Zero vertical padding for items */
-  transition: all 350ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-
-#crystal-dock .dock-icon {
-  filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.2));
-  /* ICON DEPTH */
-  transition: all 350ms cubic-bezier(0.16, 1, 0.3, 1);
+  /* Magnify upwards from the baseline */
   transform-origin: bottom center;
-}
-
-#crystal-dock .dock-item:hover .dock-icon {
-  transform: scale(1.18) translateY(-6px);
-  filter: drop-shadow(0 8px 16px rgba(0, 0, 0, 0.35));
-  /* Hover depth boost */
-}
-
-/* 5. INDICATORS & SEPARATORS */
-
-#crystal-dock .indicator-dot {
-  min-width: 6px;
-  min-height: 4px;
-  border-radius: 100px;
-  /* Force Pill shape */
-  background-color: transparent;
-  transition: all 350ms cubic-bezier(0.16, 1, 0.3, 1);
-  margin-bottom: 2px;
-}
-
-#crystal-dock .open .indicator-dot {
-  background-color: rgba(60, 60, 60, 0.55);
-  min-width: 8px;
-  /* Subtle dark pill for open apps */
-}
-
-#crystal-dock .active .indicator-dot {
-  background-color: #ffffff;
-  /* RESTORED WHITE */
-  min-width: 24px;
-  min-height: 4px;
-  /* Active Pill shape */
-  opacity: 1;
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.4);
-}
-
-#crystal-dock .separator {
-  min-width: 1px;
-  min-height: 42px;
-  background: linear-gradient(to bottom, transparent, rgba(0, 0, 0, 0.1) 20%, rgba(0, 0, 0, 0.1) 80%, transparent);
-  margin: 0 14px;
+  transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* 6. CUSTOM DOCK TOOLTIPS (GtkPopover) 🍏 */
