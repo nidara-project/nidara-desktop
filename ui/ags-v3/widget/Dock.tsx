@@ -275,26 +275,81 @@ function Separator() {
     })
 }
 
-// --- MATHEMATICAL SQUIRCLE DRAWING (Cairo Helpers) ---
-const radiusToContinuousFactor = (r: number) => 0.52 // Apple HIG approx factor
-
-const drawSquircle = (cr: any, width: number, height: number, r: number = 40) => {
+const drawSquircle = (cr: any, width: number, height: number) => {
     if (width <= 0 || height <= 0) return;
-    const cpi = radiusToContinuousFactor(r);
-    cr.setSourceRGBA(1, 1, 1, 0.2);
+
+    // Architectural Squircle (macOS Authentic)
+    // Rectangular base with independent G2 corners.
+    const r = height * 0.45; // 45% of height for the corners
+    const n = 3.8;           // Balanced superellipse exponent
+    const steps = 64;
+
+    // Enable high-quality antialiasing
+    // @ts-ignore
+    if (cr.setAntialias) {
+        // @ts-ignore
+        cr.setAntialias(3); // Antialias.BEST is usually 3 in Cairo
+    }
+
+    // Frosted Glass (Apple Style)
+    // Light white with low opacity allows the background blur to shine through.
+    cr.setSourceRGBA(1, 1, 1, 0.15);
+
+    // Helper for superellipse plotting relative to an origin
+    const getPoint = (t: number) => {
+        return {
+            x: r * Math.pow(Math.abs(Math.cos(t)), 2 / n),
+            y: r * Math.pow(Math.abs(Math.sin(t)), 2 / n)
+        };
+    };
+
+    // 1. Top Edge (Straight)
     cr.moveTo(r, 0);
     cr.lineTo(width - r, 0);
-    cr.curveTo(width - r * (1 - cpi), 0, width, r * (1 - cpi), width, r);
+
+    // 2. Top-Right Corner
+    for (let i = steps; i >= 0; i--) {
+        const t = (i / steps) * (Math.PI / 2);
+        const p = getPoint(t);
+        cr.lineTo(width - r + p.x, r - p.y);
+    }
+
+    // 3. Right Edge (Straight)
     cr.lineTo(width, height - r);
-    cr.curveTo(width, height - r * (1 - cpi), width - r * (1 - cpi), height, width - r, height);
+
+    // 4. Bottom-Right Corner
+    for (let i = 0; i <= steps; i++) {
+        const t = (i / steps) * (Math.PI / 2);
+        const p = getPoint(t);
+        cr.lineTo(width - r + p.x, height - r + p.y);
+    }
+
+    // 5. Bottom Edge (Straight)
     cr.lineTo(r, height);
-    cr.curveTo(r * (1 - cpi), height, 0, height - r * (1 - cpi), 0, height - r);
+
+    // 6. Bottom-Left Corner
+    for (let i = steps; i >= 0; i--) {
+        const t = (i / steps) * (Math.PI / 2);
+        const p = getPoint(t);
+        cr.lineTo(r - p.x, height - r + p.y);
+    }
+
+    // 7. Left Edge (Straight)
     cr.lineTo(0, r);
-    cr.curveTo(0, r * (1 - cpi), r * (1 - cpi), 0, r, 0);
+
+    // 8. Top-Left Corner
+    for (let i = 0; i <= steps; i++) {
+        const t = (i / steps) * (Math.PI / 2);
+        const p = getPoint(t);
+        cr.lineTo(r - p.x, r - p.y);
+    }
+
     cr.closePath();
     cr.fillPreserve();
-    cr.setSourceRGBA(1, 1, 1, 0.4);
-    cr.setLineWidth(1);
+
+    // Subtle Rim Light (Separator Edge)
+    cr.setSourceRGBA(1, 1, 1, 0.12);
+    cr.setLineWidth(1.0);
     cr.stroke();
 }
 
@@ -306,7 +361,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     })
 
     const drawingArea = new Gtk.DrawingArea({
-        height_request: 84,
+        height_request: 92,
     })
 
     drawingArea.set_draw_func((da, cr, width, height) => {
@@ -365,7 +420,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         // Sync background size
         const [min, nat] = bar.get_preferred_size()
         if (nat) {
-            drawingArea.set_size_request(nat.width, 84)
+            // Add 64px (32px per side) of horizontal "breathing room" 
+            // so icons don't hit the curved Squircle ends.
+            drawingArea.set_size_request(nat.width + 64, 92)
         }
     }
 

@@ -34,8 +34,9 @@ window#crystal-dock main {
   background: none;
   /* Curvature and backgrounds are now handled by Cairo in Dock.tsx */
   border: none;
-  padding: 0 20px;
-  min-height: 84px;
+  padding: 0 48px;
+  /* Zero vertical padding for full layout control */
+  min-height: 92px;
 
   /* TIERED SHADOWS (APPLE STYLE) */
   box-shadow:
