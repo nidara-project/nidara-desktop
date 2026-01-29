@@ -1,0 +1,11 @@
+{
+  "dependencies": {
+    "ags": "*",
+    "gnim": "*",
+    "sass": "^1.97.3"
+  },
+  "prettier": {
+    "semi": false,
+    "tabWidth": 2
+  }
+}

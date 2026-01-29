@@ -4,12 +4,15 @@
 Este documento define la esencia de **DistroIA** (antes MiDistroIA). Cualquier agente trabajando en este proyecto debe respetar estas directrices sagradas.
  El historial de este repo ha sido restaurado tras un desastre de sincronización; respeta estas reglas.
 
-## 1. Identidad Técnica Inamovible (Actualizada 26/01/2026)
+## 1. Identidad Técnica Inamovible (Actualizada 28/01/2026 - Era AGS)
 - **Entorno**: Wayland (Compositor: **Hyprland**).
-- **UI Architecture**: Python Gtk4 + **Gtk4LayerShell** para posicionamiento nativo de Dock y TopBar.
+- **UI Architecture**: **AGS v3 (Aylur's GTK Shell)** usando TypeScript/TSX.
+  - *Motivo del cambio*: Superación de limitaciones de Python Gtk4 (estabilidad, gestión de capas, complejidad de widgets).
 - **Hyprland v0.53.3 compatibility**: Requiere sintaxis de bloque con nombre (`layerrule { name = '...' ... }`) para efectos de capa (blur).
-- **Visuals**: Dock Orgánico con **indicadores (dots)** de estado, opacidad de cristal v2 (0.5), y Menual Contextual.
-- **Lanzador**: DistroIA Menu (Python/Gtk4) & `wofi --show drun` como backup.
+- **Visuals**: Dock Orgánico (Glassmorphism) inspirado en macOS pero con identidad propia.
+- **Indicadores**: Estilo **"Pill" (Pastilla)**, no puntos. Diferenciación clave para evitar el efecto "copia barata".
+- **Icon Theme**: **Reversal-dark** (Variante "all" instalada en `~/.local/share/icons`). *Mandatory*. Cualquier widget nuevo debe usar estos iconos para mantener la coherencia.
+- **Lanzador**: AGS AppLauncher (Objetivo) & `wofi --show drun` como backup legado.
 - **Fondo de Pantalla**: Gestionado por **swaybg** (Solución estable que no requiere permisos de GPU).
 
 ## 2. El Historial de Oro (Source of Truth)

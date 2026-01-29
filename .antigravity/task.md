@@ -12,5 +12,6 @@
 - [x] Final Validation: Add Gtk4LayerShell & Wnck deps <!-- id: 9 -->
 - [x] ISO Troubleshooting: Fix `minimal.standard.squashfs` error <!-- id: 10 -->
 - [/] Plan integration of AI Agents (Phase 2) <!-- id: 3 -->
+- [x] Visuals: Install Reversal Icon Theme (all variants) & enforce in DNA <!-- id: 14 -->
 - [ ] Implement AI-driven System Settings <!-- id: 12 -->
 - [ ] Advanced Context Menus for AI Interaction <!-- id: 13 -->

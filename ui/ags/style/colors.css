@@ -1,0 +1,5 @@
+/* Color palette and tokens */
+@define-color apple-blue #007AFF;
+@define-color apple-gray #8E8E93;
+@define-color glass-bg rgba(255, 255, 255, 0.12);
+@define-color glass-border rgba(255, 255, 255, 0.2);

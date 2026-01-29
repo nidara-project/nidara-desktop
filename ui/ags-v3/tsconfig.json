@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "astal": [
+        "./vendor/astal_source/lang/gjs/src"
+      ],
+      "astal/*": [
+        "./vendor/astal_source/lang/gjs/src/*"
+      ],
+      "astal/jsx-runtime": [
+        "./vendor/astal_source/lang/gjs/src/gtk4/jsx-runtime"
+      ],
+      "ags": [
+        "./node_modules/ags/lib"
+      ],
+      "ags/*": [
+        "./node_modules/ags/lib/*"
+      ],
+      "ags/gtk4/jsx-runtime": [
+        "./node_modules/ags/lib/gtk4/jsx-runtime"
+      ]
+    },
+    "module": "ESNext",
+    "target": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react",
+    "jsxFactory": "astal.jsx",
+    "jsxFragmentFactory": "astal.Fragment",
+    "allowJs": true,
+    "checkJs": false,
+    "strict": false,
+    "noEmit": true,
+    "skipLibCheck": true
+  }
+}

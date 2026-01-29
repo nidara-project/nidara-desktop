@@ -9,7 +9,8 @@ sleep 0.5
 
 # 2. Matar procesos existentes
 pkill waybar
-pkill -f main_dock.py
+pkill -f "gjs -m .*ags.js"
+pkill -f main_dock.py # Safety for transition
 pkill swaybg
 sleep 0.5
 
