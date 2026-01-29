@@ -1,45 +1,42 @@
-@charset "UTF-8";
 /* 
-   PREMIUM GTK4 DOCK - FINAL REBORN 💎
+   PREMIUM GTK4 DOCK - macOS FROSTED GLASS 💎🍏
    ---------------------------------
-   Definitively eradicating the "Purple Ghost" by targeting Yaru's internal nodes.
+   High vibrancy, light theme, crystal clear blur.
 */
-/* 1. THE NUCLEAR RESET - KILLING ALL GHOSTS */
+/* 1. ATOMIC NODE RESET */
 window#crystal-dock,
-window#crystal-dock > contents,
-window#crystal-dock .background,
-window#crystal-dock .decoration,
-.dock-window,
-.dock-window > contents,
-.dock-window .background,
-.dock-window .decoration {
-  background: none !important;
-  background-color: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
-  border: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border-radius: 0 !important;
+window#crystal-dock background,
+window#crystal-dock decoration,
+window#crystal-dock contents,
+window#crystal-dock main {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
 }
 
 /* 2. THE DOCK BAR CONTAINER */
 .dock-bar-container {
-  background: none !important;
-  background-color: transparent !important;
+  background: none;
+  background-color: transparent;
   padding: 0;
   margin: 0;
 }
 
-/* 3. THE PREMIUM GLASS BAR */
+/* 3. THE macOS FROSTED GLASS BAR */
 #crystal-dock .dock-bar {
-  background-color: rgba(20, 20, 20, 0.45);
+  background-color: rgba(255, 255, 255, 0.4);
+  /* macOS Frosted Glass */
   border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  /* Glass Edge */
   padding: 10px 16px;
   min-height: 80px;
-  box-shadow: none !important;
-  /* No shadows to prevent compositor artifacts */
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
 }
 
 /* 4. THE ITEMS */
@@ -53,17 +50,17 @@ window#crystal-dock .decoration,
 }
 
 #crystal-dock .dock-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 #crystal-dock .dock-icon {
-  transition: all 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* 5. INDICATORS & SEPARATORS */
 #crystal-dock .indicator {
   margin-top: 4px;
-  min-height: 10px;
+  min-height: 8px;
 }
 
 #crystal-dock .indicator-dot {
@@ -71,24 +68,24 @@ window#crystal-dock .decoration,
   min-height: 8px;
   border-radius: 4px;
   background-color: transparent;
-  transition: all 300ms ease;
 }
 
 #crystal-dock .open .indicator-dot {
-  background-color: rgba(255, 255, 255, 0.4);
+  background-color: rgba(60, 60, 60, 0.35);
+  /* Darker for light theme */
 }
 
 #crystal-dock .active .indicator-dot {
-  background-color: #ffffff;
+  background-color: #3174f1;
+  /* Accent Color */
   min-width: 24px;
-  border-radius: 4px;
 }
 
 #crystal-dock .separator {
   min-width: 1px;
   min-height: 40px;
-  background-color: rgba(255, 255, 255, 0.12);
-  margin: 0 14px;
+  background-color: rgba(0, 0, 0, 0.1);
+  margin: 0 12px;
 }
 
 /*# sourceMappingURL=style.css.map */

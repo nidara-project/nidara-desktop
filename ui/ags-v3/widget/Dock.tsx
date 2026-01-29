@@ -197,10 +197,12 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             layer={Astal.Layer.TOP}
             application={app}
             visible
+            css="background: transparent;"
         >
             <box
                 css_classes={["dock-bar-container"]}
                 marginBottom={24}
+                css="background: transparent;"
             >
                 {bar}
             </box>
