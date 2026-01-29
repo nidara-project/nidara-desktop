@@ -201,7 +201,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         >
             <box
                 css_classes={["dock-bar-container"]}
-                marginBottom={24}
+                marginBottom={10}
                 css="background: transparent;"
             >
                 {bar}
