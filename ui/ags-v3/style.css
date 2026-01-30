@@ -1,138 +1,157 @@
 @charset "UTF-8";
-/* 
+/*
    PREMIUM GTK4 DOCK - AUTHENTIC macOS HIG 🍏💎
    ---------------------------------
    Soft corners (Squircles), Tiered Shadows, and White Indicators.
 */
-/* 1. ATOMIC NODE RESET - ABSOLUTE RECTIFICATION 🍏 */
-window#crystal-dock,
-window#crystal-dock background,
-window#crystal-dock decoration,
-window#crystal-dock contents,
-window#crystal-dock main,
-#crystal-dock .dock-window,
-#crystal-dock .dock-window > *,
-#crystal-dock .dock-bar-container,
-#crystal-dock .dock-bar-container > *,
-#crystal-dock button,
-#crystal-dock button *,
-#crystal-dock button contents,
-#crystal-dock button main,
-#crystal-dock box,
-#crystal-dock widget,
-#crystal-dock * {
-  background: none !important;
+/* 1. CRYSTAL VOID - TOTAL ERADICATION 🍏💎 */
+window,
+decoration,
+background,
+overlay,
+box,
+widget,
+drawingarea,
+viewport,
+contents {
+  background: transparent none !important;
+  background-color: transparent !important;
+  border: none !important;
+  border-width: 0 !important;
+  box-shadow: none !important;
+  -gtk-icon-shadow: none !important;
+  outline: none !important;
+  margin: 0;
+  padding: 0;
+  border-radius: 0;
+  text-shadow: none !important;
+}
+
+#the-dock-bar {
+  padding: 0 12px;
+  min-height: 92px;
+}
+
+/* 1.1 SURGICAL ITEM RESET (Must remain transparent) */
+#crystal-dock .dock-item,
+#crystal-dock .dock-item contents,
+#crystal-dock .dock-item background,
+#crystal-dock .dock-item widget,
+#crystal-dock .dock-item image,
+#crystal-dock .dock-item:active,
+#crystal-dock .dock-item:checked,
+#crystal-dock .dock-item.is-active-app {
   background-color: transparent !important;
   background-image: none !important;
   box-shadow: none !important;
-  border: none !important;
-  border-width: 0 !important;
   border-style: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  border-radius: 0;
-  outline: none !important;
-  opacity: 1 !important;
-  /* Block additive semi-transparency layers */
 }
 
-/* 2. THE DOCK BAR CONTAINER & OVERLAY */
-.dock-bar-container,
-.dock-overlay {
-  background: none !important;
+/* 2. THE macOS FROSTED GLASS BAR - NO SHADOWS HERE */
+#the-dock-bar,
+#the-dock-bar box,
+#the-dock-bar button,
+#the-dock-bar * {
   background-color: transparent !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  border: none !important;
-  opacity: 1 !important;
-}
-
-/* 3. THE macOS FROSTED GLASS BAR */
-#crystal-dock .dock-bar {
-  background-color: transparent !important;
-  background: none !important;
-  border: none !important;
-  margin: 0 !important;
-  /* Tight Apple-like padding */
-  padding: 0 24px !important;
-  height: 92px;
-  min-height: 92px;
+  background-image: none !important;
+  border-style: none !important;
   box-shadow: none !important;
-  opacity: 1 !important;
-}
-
-/* 4. THE ITEMS */
-#crystal-dock .dock-item {
-  background-color: transparent !important;
-  background: none !important;
-  border: none !important;
-  border-radius: 16px;
-  padding: 0 8px;
-  /* Magnify upwards from the baseline */
-  transform-origin: bottom center;
-  transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* 6. CUSTOM DOCK TOOLTIPS (GtkPopover) 🍏 */
-popover.dock-tooltip {
-  background: none;
-  background-color: transparent;
-}
-
-popover.dock-tooltip contents {
-  background: none;
-  background-color: transparent;
-  box-shadow: none;
-  border: none;
+  -gtk-icon-shadow: none !important;
+  outline-style: none !important;
+  margin: 0;
   padding: 0;
 }
 
-.tooltip-content {
-  background-color: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 12px;
-  padding: 6px 14px;
-  margin-bottom: 25px;
-  /* Separation from Dock */
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+#the-dock-bar {
+  padding: 0 24px;
+  min-height: 92px;
 }
 
-.tooltip-label {
-  color: #2e2e2e;
+/* 6. INDICATORS (The little dots/pills) 🍏 */
+.indicator-dot {
+  min-height: 4px;
+  min-width: 4px;
+  border-radius: 4px;
+  background-color: transparent !important;
+  box-shadow: none !important;
+  transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.indicator-dot.open {
+  background-color: rgba(255, 255, 255, 0.8) !important;
+  min-width: 12px;
+}
+
+window#crystal-dock .dock-bar-container box.dock-bar {
+  padding: 0 24px;
+  min-height: 92px;
+}
+
+/* 4. THE ITEMS */
+window#crystal-dock .dock-item {
+  min-height: 56px;
+  min-width: 56px;
+  margin: 0 4px;
+  border-radius: 12px;
+  padding: 0 8px;
+  transform-origin: bottom center;
+  transition: transform 350ms cubic-bezier(0.16, 1, 0.3, 1), background-color 200ms ease;
+  background-color: transparent !important;
+}
+
+window#crystal-dock .dock-item:hover {
+  background-color: rgba(255, 255, 255, 0.15) !important;
+  /* The Apple Magnification Effect 🍏 */
+  transform: translateY(-16px) scale(1.3);
+}
+
+/* 6. CUSTOM DOCK TOOLTIPS (GtkPopover) 🍏 */
+popover.dock-tooltip contents {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  border-radius: 12px;
+  border-style: solid;
+  border-width: 1px;
+  border-color: rgba(0, 0, 0, 0.1);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+  padding: 6px 14px;
+}
+
+popover.dock-tooltip label {
+  color: #111111;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: bold;
 }
 
 /* 7. CONTEXT MENUS (POPOVERS) 🍏 */
-.dock-popover {
-  background-color: rgba(255, 255, 255, 0.45);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  border-radius: 12px;
-  padding: 6px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+popover.dock-popover contents {
+  background-color: rgba(255, 255, 255, 0.98) !important;
+  border-style: solid;
+  border-width: 1px;
+  border-color: rgba(0, 0, 0, 0.1);
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
 }
 
-.dock-popover button {
-  background: none;
-  border: none;
+window#crystal-dock popover.dock-popover button {
+  background-color: transparent;
   border-radius: 6px;
   padding: 6px 12px;
   margin: 2px 0;
-  transition: all 200ms ease;
+  color: #222222;
 }
 
-.dock-popover button label {
-  color: #2e2e2e;
+window#crystal-dock popover.dock-popover button:hover {
+  background-color: #007aff !important;
+}
+
+window#crystal-dock popover.dock-popover button label {
   font-size: 13px;
   font-weight: 500;
+  color: inherit;
 }
 
-.dock-popover button:hover {
-  background-color: #3174f1;
-  /* macOS System Blue */
-}
-
-.dock-popover button:hover label {
+window#crystal-dock popover.dock-popover button:hover label {
   color: #ffffff;
 }
 

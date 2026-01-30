@@ -36,42 +36,51 @@ function DockItem(app: AstalApps.Application, updateDock: () => void, address?: 
     const appId = rawId || "unknown-app"
 
     const iconSize = 64
-    const button = new Gtk.Button({
-        css_classes: ["dock-item"],
+    const itemBox = new Gtk.Box({
+        name: "dock-item",
+        orientation: Gtk.Orientation.VERTICAL,
+        halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER,
         overflow: Gtk.Overflow.VISIBLE,
+        can_focus: false,
+        cursor: Gdk.Cursor.new_from_name("pointer", null),
+        spacing: 0,
     })
 
     const image = new Gtk.Image({
         icon_name: app.icon_name || "preferences-system-windows",
-        pixel_size: iconSize,
-        css_classes: ["dock-icon"],
-        valign: Gtk.Align.CENTER,
+        pixel_size: iconSize * 1.0,
         halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER,
     })
 
-    const dot = new Gtk.Box({ css_classes: ["indicator-dot"] })
+    const dot = new Gtk.Box({ name: "dock-dot" })
     const indicator = new Gtk.Box({
-        css_classes: ["indicator"],
+        name: "dock-indicator",
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
         margin_bottom: 2,
-        spacing: 0, // Prevent phantom gaps
+        spacing: 0,
     })
     indicator.append(dot)
 
-    const container = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        valign: Gtk.Align.CENTER, // Perfectly center icon + indicator within 92px
-        css_classes: ["dock-item-container"],
-        overflow: Gtk.Overflow.VISIBLE,
-        spacing: 0, // Force zero spacing to eliminate artifacts
+    itemBox.append(image)
+    itemBox.append(indicator)
+
+    // --- INTERACTION: CLICK TO LAUNCH ---
+    const click = new Gtk.GestureClick()
+    click.connect("released", () => {
+        app.launch()
     })
+    itemBox.add_controller(click)
 
-    container.append(image)
-    container.append(indicator)
-
-    button.set_child(container)
+    // --- INTERACTION: RIGHT CLICK FOR MENU ---
+    const rightClick = new Gtk.GestureClick({ button: 3 })
+    rightClick.connect("released", (g, n, x, y) => {
+        popover.set_pointing_to(new Gdk.Rectangle({ x, y, width: 0, height: 0 }))
+        popover.popup()
+    })
+    itemBox.add_controller(rightClick)
 
     // --- PRECISE DELAYED TOOLTIP (POPOVER) ---
     const tooltipPopover = new Gtk.Popover({
@@ -91,30 +100,9 @@ function DockItem(app: AstalApps.Application, updateDock: () => void, address?: 
         css_classes: ["tooltip-label"]
     }))
 
-    tooltipPopover.set_child(tooltipContent)
-    tooltipPopover.set_parent(button)
-
-    let hoverTimeout: any = null
-    const hoverCtrl = new Gtk.EventControllerMotion()
-    hoverCtrl.connect("enter", () => {
-        if (hoverTimeout) GLib.source_remove(hoverTimeout)
-        hoverTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 700, () => {
-            tooltipPopover.popup()
-            hoverTimeout = null
-            return false
-        })
-    })
-    hoverCtrl.connect("leave", () => {
-        if (hoverTimeout) {
-            GLib.source_remove(hoverTimeout)
-            hoverTimeout = null
-        }
-        tooltipPopover.popdown()
-    })
-    button.add_controller(hoverCtrl)
-
-    // --- CONTEXT MENU POPUP ---
+    tooltipPopover.set_parent(itemBox)
     const popover = new Gtk.Popover({ css_classes: ["dock-popover"] })
+    popover.set_parent(itemBox)
     const popoverBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
 
     const isPinned = pinnedList.some(p => {
@@ -161,7 +149,7 @@ function DockItem(app: AstalApps.Application, updateDock: () => void, address?: 
 
     actions.forEach(a => {
         const btn = new Gtk.Button({
-            child: new Gtk.Label({ label: a.label }),
+            label: a.label,
             css_classes: ["menu-action"]
         })
         btn.connect("clicked", () => {
@@ -171,11 +159,10 @@ function DockItem(app: AstalApps.Application, updateDock: () => void, address?: 
         popoverBox.append(btn)
     })
     popover.set_child(popoverBox)
-    popover.set_parent(button)
 
     const clickGesture = new Gtk.GestureClick({ button: 3 })
     clickGesture.connect("released", () => popover.popup())
-    button.add_controller(clickGesture)
+    itemBox.add_controller(clickGesture)
 
     // --- DRAG AND DROP REORDERING ---
     if (isPinned) {
@@ -184,160 +171,157 @@ function DockItem(app: AstalApps.Application, updateDock: () => void, address?: 
             source.set_icon(Gtk.WidgetPaintable.new(image), x, y)
             return Gdk.ContentProvider.new_for_value(appId)
         })
-        button.add_controller(dragSource)
+        itemBox.add_controller(dragSource)
 
         const dropTarget = new Gtk.DropTarget({
             actions: Gdk.DragAction.MOVE,
+            formats: Gdk.ContentFormats.new_for_gtype(GObject.TYPE_STRING),
         })
-        dropTarget.set_gtypes([GObject.TYPE_STRING])
-
-        dropTarget.connect("drop", (target, value) => {
-            const draggedId = value as unknown as string
-            const targetId = appId
-
-            const fromIdx = pinnedList.findIndex(p => p === draggedId)
-            const toIdx = pinnedList.findIndex(p => p === targetId)
-
-            if (fromIdx !== -1 && toIdx !== -1 && fromIdx !== toIdx) {
-                const [item] = pinnedList.splice(fromIdx, 1)
-                pinnedList.splice(toIdx, 0, item)
-                savePinned()
-                updateDock()
-                return true
+        dropTarget.connect("drop", (target, value, x, y) => {
+            const dragId = (value as unknown as GObject.Value).get_string()
+            if (dragId && dragId !== appId) {
+                const oldIdx = pinnedList.indexOf(dragId)
+                const newIdx = pinnedList.indexOf(appId)
+                if (oldIdx !== -1 && newIdx !== -1) {
+                    pinnedList.splice(oldIdx, 1)
+                    pinnedList.splice(newIdx, 0, dragId)
+                    savePinned()
+                    updateDock()
+                    return true
+                }
             }
             return false
         })
-        button.add_controller(dropTarget)
+        itemBox.add_controller(dropTarget)
     }
 
     const checkMatch = (c: any) => {
-        const currentId = appId.toLowerCase()
-        const currentName = (app.name || "").toLowerCase()
-        const currentIcon = (app.icon_name || "").toLowerCase()
-        const cClass = (c.class || "").toLowerCase()
-        const cTitle = (c.title || "").toLowerCase()
-
-        if (!currentId || currentId === "unknown-app") return false
-
-        return (cClass.includes(currentId) || currentId.includes(cClass)) ||
-            (currentName !== "" && (cClass.includes(currentName) || currentName.includes(cClass))) ||
-            (currentIcon !== "" && (cClass.includes(currentIcon) || currentIcon.includes(cClass))) ||
-            (currentIcon.includes("chrome") && (cClass.includes("chrome") || cTitle.includes("chrome"))) ||
-            (currentIcon.includes("terminal") && cClass.includes("kitty")) ||
-            (currentIcon.includes("kitty") && cClass.includes("kitty"))
+        if (!app.get_id) return false
+        const appId = app.get_id().toLowerCase()
+        const clientClass = (c.class || "").toLowerCase()
+        const clientTitle = (c.title || "").toLowerCase()
+        return clientClass.includes(appId) || clientTitle.includes(appId) || appId.includes(clientClass)
     }
 
     const updateState = () => {
-        const clients = hypr.clients
-        const focused = hypr.focusedClient
-
+        const clients = hypr.get_clients()
+        const focused = hypr.get_focused_client()
         let isOpen = false
         let isActive = false
 
         if (address) {
             isOpen = clients.some(c => c.address === address)
-            isActive = focused?.address === address || (focused && checkMatch(focused))
+            isActive = focused?.address === address
         } else {
-            const client = clients.find(checkMatch)
-            isOpen = !!client
-            isActive = focused ? checkMatch(focused) : false
+            const match = clients.find(checkMatch)
+            isOpen = match !== undefined
+            isActive = match?.address === focused?.address
         }
 
         if (isOpen) indicator.add_css_class("open")
         else indicator.remove_css_class("open")
 
-        if (isActive) button.add_css_class("active")
-        else button.remove_css_class("active")
+        if (isActive) itemBox.add_css_class("is-focused")
+        else itemBox.remove_css_class("is-focused")
     }
 
     const c1 = hypr.connect("notify::clients", updateState)
-    const c2 = hypr.connect("notify::focused-client", updateState)
-    button.connect("destroy", () => {
-        hypr.disconnect(c1)
-        hypr.disconnect(c2)
-    })
-
-    button.connect("clicked", () => {
+    const launchAction = new Gtk.GestureClick({ button: 1 })
+    launchAction.connect("released", () => {
         if (address) {
             execAsync(`hyprctl dispatch focuswindow address:${address}`)
         } else {
-            const client = hypr.clients.find(checkMatch)
-            if (client) {
-                execAsync(`hyprctl dispatch focuswindow address:${client.address}`)
+            const clients = hypr.get_clients()
+            const match = clients.find(checkMatch)
+            if (match) {
+                execAsync(`hyprctl dispatch focuswindow address:${match.address}`)
             } else {
                 app.launch()
             }
         }
     })
+    itemBox.add_controller(launchAction)
+
+    const c2 = hypr.connect("notify::active-window", updateState)
+    itemBox.connect("destroy", () => {
+        hypr.disconnect(c1)
+        hypr.disconnect(c2)
+    })
 
     updateState()
-    return button
+    return itemBox
 }
 
 // --- REPLACED SEPARATOR WITH CRYSTAL CLEAR SPACE ---
 
-const drawSquircle = (cr: any, width: number, height: number) => {
+const drawSquircle = (cr: any, width: number, height: number, targetW?: number) => {
     if (width <= 0 || height <= 0) return;
 
-    // Absolute 0.0 margins for total integration (No sub-pixel ghosting)
-    const marginX = 0.0;
-    const marginY = 0.0;
-    const w = width - (marginX * 2);
-    const h = height - (marginY * 2);
-
-    cr.translate(marginX, marginY);
-
-    const r = h * 0.45;
+    const w = targetW || width;
+    const xOffset = (width - w) / 2;
+    const r = height * 0.45;
     const n = 3.8;
     const steps = 64;
 
+    cr.setAntialias(3);
+
+    const getPoint = (t: number) => ({
+        x: r * Math.pow(Math.abs(Math.cos(t)), 2 / n),
+        y: r * Math.pow(Math.abs(Math.sin(t)), 2 / n)
+    });
+
     const definePath = () => {
-        const getPoint = (t: number) => ({
-            x: r * Math.pow(Math.abs(Math.cos(t)), 2 / n),
-            y: r * Math.pow(Math.abs(Math.sin(t)), 2 / n)
-        });
-        cr.moveTo(r, 0);
-        cr.lineTo(w - r, 0);
+        cr.newPath();
+        cr.moveTo(xOffset + r, 0);
+        cr.lineTo(xOffset + w - r, 0);
         for (let i = steps; i >= 0; i--) {
-            const t = (i / steps) * (Math.PI / 2);
-            const p = getPoint(t);
-            cr.lineTo(w - r + p.x, r - p.y);
+            const p = getPoint((i / steps) * (Math.PI / 2));
+            cr.lineTo(xOffset + w - r + p.x, r - p.y);
         }
-        cr.lineTo(w, h - r);
+        cr.lineTo(xOffset + w, height - r);
         for (let i = 0; i <= steps; i++) {
-            const t = (i / steps) * (Math.PI / 2);
-            const p = getPoint(t);
-            cr.lineTo(w - r + p.x, h - r + p.y);
+            const p = getPoint((i / steps) * (Math.PI / 2));
+            cr.lineTo(xOffset + w - r + p.x, height - r + p.y);
         }
-        cr.lineTo(r, h);
+        cr.lineTo(xOffset + r, height);
         for (let i = steps; i >= 0; i--) {
-            const t = (i / steps) * (Math.PI / 2);
-            const p = getPoint(t);
-            cr.lineTo(r - p.x, h - r + p.y);
+            const p = getPoint((i / steps) * (Math.PI / 2));
+            cr.lineTo(xOffset + r - p.x, height - r + p.y);
         }
-        cr.lineTo(0, r);
+        cr.lineTo(xOffset, r);
         for (let i = 0; i <= steps; i++) {
-            const t = (i / steps) * (Math.PI / 2);
-            const p = getPoint(t);
-            cr.lineTo(r - p.x, r - p.y);
+            const p = getPoint((i / steps) * (Math.PI / 2));
+            cr.lineTo(xOffset + r - p.x, r - p.y);
         }
         cr.closePath();
     };
 
-    // Pure Frosted Glass (No strokes, no ghosts)
+    // 1. CLEANING
+    cr.setOperator(0);
+    cr.paint();
+    cr.setOperator(2);
+
+    // 2. THE GLASS (FILL)
     definePath();
-    cr.setSourceRGBA(1, 1, 1, 0.15);
+    cr.setSourceRGBA(1, 1, 1, 0.12);
     cr.fill();
+
+    // 3. THE RIM (STROKE)
+    definePath();
+    cr.setSourceRGBA(1, 1, 1, 0.1);
+    cr.setLineWidth(0.5);
+    cr.stroke();
 }
 
 export default function Dock(gdkmonitor: Gdk.Monitor) {
     const bar = new Gtk.Box({
-        css_classes: ["dock-bar"],
+        name: "the-dock-bar",
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
         overflow: Gtk.Overflow.VISIBLE,
         height_request: 92,
-        spacing: 0, // Eliminate any theme-driven horizontal gaps
+        spacing: 0,
+        hexpand: false,
     })
 
     const drawingArea = new Gtk.DrawingArea({
@@ -345,17 +329,20 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         halign: Gtk.Align.CENTER,
         height_request: 92,
         overflow: Gtk.Overflow.VISIBLE,
+        hexpand: false,
     })
 
     drawingArea.set_draw_func((da, cr, width, height) => {
-        drawSquircle(cr, width, height)
+        const [_, nat] = bar.get_preferred_size()
+        drawSquircle(cr, width, height, nat?.width)
     })
 
     const dockLayout = new Gtk.Overlay({
-        css_classes: ["dock-overlay"],
+        name: "dock-overlay",
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
         overflow: Gtk.Overflow.VISIBLE,
+        hexpand: false,
     })
     dockLayout.set_child(drawingArea)
     dockLayout.add_overlay(bar)
@@ -408,8 +395,15 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         // Precise sync: Background = Bar Width Exactly (No buffers)
         const [min, nat] = bar.get_preferred_size()
         if (nat) {
-            drawingArea.set_size_request(nat.width, 92)
-            if (win) win.queue_resize()
+            const w = Math.ceil(nat.width)
+            const h = 92
+            drawingArea.set_size_request(w, h)
+
+            // SYNCHRONIZE WINDOW SIZE TO DOCK SIZE
+            if (win) {
+                win.set_default_size(w, h)
+                win.set_size_request(w, h)
+            }
         }
     }
 
@@ -419,31 +413,23 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         <window
             name="crystal-dock"
             namespace="crystal-dock"
-            css_classes={["dock-window"]}
             gdkmonitor={gdkmonitor}
             anchor={Astal.WindowAnchor.BOTTOM}
             layer={Astal.Layer.TOP}
             application={app}
             visible
-            heightRequest={200}
+            heightRequest={92}
         >
-            <box
-                css_classes={["dock-bar-container"]}
-                marginBottom={0}
-                halign={Gtk.Align.CENTER}
-                valign={Gtk.Align.END}
-                heightRequest={200}
-                vexpand={false}
-                overflow={Gtk.Overflow.VISIBLE}
-            >
-                {dockLayout}
-            </box>
+            {dockLayout}
         </window>
     ) as any as Gtk.Window
+    win.add_css_class("crystal-dock")
+    win.set_decorated(false)
 
     // Apply manual layer shell configuration for the Glass Overlay
     try {
         Gtk4LayerShell.init_for_window(win);
+        Gtk4LayerShell.set_namespace(win, "crystal-dock");
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true);
         Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 10);
         Gtk4LayerShell.set_exclusive_zone(win, 112); // Mathematically Perfect: 10 + 92 + 10 = 112px
