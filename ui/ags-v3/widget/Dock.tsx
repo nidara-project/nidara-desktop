@@ -37,10 +37,14 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
     if (width <= 0 || height <= 0) return
     const w = targetW || width
     const x = (width - w) / 2
-    const r = height * 0.45
+
+    // Lamé Exponent (n): 3.8 for Apple curvature tension
     const n = 3.8
+    const r = height / 2 // Curvature starts from the exact middle of the sides
 
     cr.setAntialias(3)
+
+    // Superellipse parametric formula for a 90-degree corner
     const getPoint = (t: number) => ({
         x: r * Math.pow(Math.abs(Math.cos(t)), 2 / n),
         y: r * Math.pow(Math.abs(Math.sin(t)), 2 / n)
@@ -48,14 +52,42 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
 
     const path = () => {
         cr.newPath()
-        cr.moveTo(x + r, 0); cr.lineTo(x + w - r, 0)
-        for (let i = 64; i >= 0; i--) { let p = getPoint((i / 64) * (Math.PI / 2)); cr.lineTo(x + w - r + p.x, r - p.y) }
-        cr.lineTo(x + w, height - r)
-        for (let i = 0; i <= 64; i++) { let p = getPoint((i / 64) * (Math.PI / 2)); cr.lineTo(x + w - r + p.x, height - r + p.y) }
+
+        // Start at top-left flat edge
+        cr.moveTo(x + r, 0)
+        cr.lineTo(x + w - r, 0)
+
+        // 1. Top-Right Corner (from t=PI/2 down to 0)
+        for (let i = 64; i >= 0; i--) {
+            let t = (i / 64) * (Math.PI / 2)
+            let p = getPoint(t)
+            cr.lineTo(x + w - r + p.x, r - p.y)
+        }
+
+        // 2. Bottom-Right Corner (from t=0 up to PI/2)
+        for (let i = 0; i <= 64; i++) {
+            let t = (i / 64) * (Math.PI / 2)
+            let p = getPoint(t)
+            cr.lineTo(x + w - r + p.x, height - r + p.y)
+        }
+
+        // Bottom flat edge
         cr.lineTo(x + r, height)
-        for (let i = 64; i >= 0; i--) { let p = getPoint((i / 64) * (Math.PI / 2)); cr.lineTo(x + r - p.x, height - r + p.y) }
-        cr.lineTo(x, r)
-        for (let i = 0; i <= 64; i++) { let p = getPoint((i / 64) * (Math.PI / 2)); cr.lineTo(x + r - p.x, r - p.y) }
+
+        // 3. Bottom-Left Corner (from t=PI/2 down to 0)
+        for (let i = 64; i >= 0; i--) {
+            let t = (i / 64) * (Math.PI / 2)
+            let p = getPoint(t)
+            cr.lineTo(x + r - p.x, height - r + p.y)
+        }
+
+        // 4. Top-Left Corner (from t=0 up to PI/2)
+        for (let i = 0; i <= 64; i++) {
+            let t = (i / 64) * (Math.PI / 2)
+            let p = getPoint(t)
+            cr.lineTo(x + r - p.x, r - p.y)
+        }
+
         cr.closePath()
     }
 
