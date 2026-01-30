@@ -37,63 +37,106 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
     if (width <= 0 || height <= 0) return
     const w = targetW || width
     const x = (width - w) / 2
-
-    // Lamé Exponent (n): 3.8 for Apple curvature tension
-    const n = 3.8
-    const r = height / 2 // Curvature starts from the exact middle of the sides
+    const r = height * 0.44 // Perfect balance for non-capsule appearance
+    const n = 4.0 // High tension Lamé exponent
 
     cr.setAntialias(3)
-
-    // Superellipse parametric formula for a 90-degree corner
     const getPoint = (t: number) => ({
         x: r * Math.pow(Math.abs(Math.cos(t)), 2 / n),
         y: r * Math.pow(Math.abs(Math.sin(t)), 2 / n)
     })
 
-    const path = () => {
+    const path = (d = 0) => {
+        const rd = r + d
         cr.newPath()
+        cr.moveTo(x + r, -d)
+        cr.lineTo(x + w - r, -d)
 
-        // Start at top-left flat edge
-        cr.moveTo(x + r, 0)
-        cr.lineTo(x + w - r, 0)
-
-        // 1. Top-Right Corner (from t=PI/2 down to 0)
+        // Top-right
         for (let i = 64; i >= 0; i--) {
             let t = (i / 64) * (Math.PI / 2)
-            let p = getPoint(t)
-            cr.lineTo(x + w - r + p.x, r - p.y)
+            let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
+            let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
+            cr.lineTo(x + w - r + px, r - py)
         }
-
-        // 2. Bottom-Right Corner (from t=0 up to PI/2)
+        // Bottom-right
         for (let i = 0; i <= 64; i++) {
             let t = (i / 64) * (Math.PI / 2)
-            let p = getPoint(t)
-            cr.lineTo(x + w - r + p.x, height - r + p.y)
+            let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
+            let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
+            cr.lineTo(x + w - r + px, height - r + py)
         }
 
-        // Bottom flat edge
-        cr.lineTo(x + r, height)
+        cr.lineTo(x + r, height + d)
 
-        // 3. Bottom-Left Corner (from t=PI/2 down to 0)
+        // Bottom-left
         for (let i = 64; i >= 0; i--) {
             let t = (i / 64) * (Math.PI / 2)
-            let p = getPoint(t)
-            cr.lineTo(x + r - p.x, height - r + p.y)
+            let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
+            let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
+            cr.lineTo(x + r - px, height - r + py)
         }
-
-        // 4. Top-Left Corner (from t=0 up to PI/2)
+        // Top-left
         for (let i = 0; i <= 64; i++) {
             let t = (i / 64) * (Math.PI / 2)
-            let p = getPoint(t)
-            cr.lineTo(x + r - p.x, r - p.y)
+            let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
+            let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
+            cr.lineTo(x + r - px, r - py)
         }
-
         cr.closePath()
     }
 
     cr.setOperator(0); cr.paint(); cr.setOperator(2)
-    path(); cr.setSourceRGBA(1, 1, 1, 0.12); cr.fill()
-    path(); cr.setSourceRGBA(1, 1, 1, 0.1); cr.setLineWidth(0.5); cr.stroke()
+
+    // 1. CLEAN OUTER SHADOW (Dilation + Clip to avoid bleed-in)
+    cr.save()
+    cr.rectangle(0, 0, width, height)
+    path()
+    cr.setFillRule(1) // CAIRO_FILL_RULE_EVEN_ODD
+    cr.clip()
+
+    const shadowPasses = [
+        { d: 8, o: 0.04, y: 6 }, // Far, soft lift
+        { d: 4, o: 0.06, y: 3 }  // Near, grounding lift
+    ]
+    shadowPasses.forEach(pass => {
+        cr.save()
+        cr.translate(0, pass.y)
+        path(pass.d)
+        cr.setSourceRGBA(0, 0, 0, pass.o)
+        cr.fill()
+        cr.restore()
+    })
+    cr.restore()
+
+    // 2. SPLIT DEFINITION BORDER (Sides & Bottom only)
+    cr.newPath()
+    cr.moveTo(x, height / 2)
+    cr.lineTo(x, height - r)
+    for (let i = 0; i <= 64; i++) {
+        let t = (i / 64) * (Math.PI / 2)
+        cr.lineTo(x + r - (r * Math.pow(Math.abs(Math.cos(t)), 2 / n)), height - r + (r * Math.pow(Math.abs(Math.sin(t)), 2 / n)))
+    }
+    cr.lineTo(x + w - r, height)
+    for (let i = 64; i >= 0; i--) {
+        let t = (i / 64) * (Math.PI / 2)
+        cr.lineTo(x + w - r + (r * Math.pow(Math.abs(Math.cos(t)), 2 / n)), height - r + (r * Math.pow(Math.abs(Math.sin(t)), 2 / n)))
+    }
+    cr.lineTo(x + w, height / 2)
+    cr.setSourceRGBA(0, 0, 0, 0.08) // Back to subtle
+    cr.setLineWidth(1)
+    cr.stroke()
+
+    // 3. MAIN BACKGROUND FILL
+    path()
+    cr.setSourceRGBA(1, 1, 1, 0.12)
+    cr.fill()
+
+    // 4. M3 RIM LIGHT (Subtle Perimeter)
+    path()
+    cr.setSourceRGBA(1, 1, 1, 0.15) // Back to 15%
+    cr.setLineWidth(0.5)           // Back to 0.5px
+    cr.stroke()
 }
 
 // --- DOCK ITEM COMPONENT ---
