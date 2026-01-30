@@ -13,7 +13,8 @@ app.start({
       const scss = `${GLib.get_current_dir()}/style.scss`
       const css = `${GLib.get_current_dir()}/style.css`
       GLib.spawn_command_line_sync(`sass ${scss} ${css}`)
-      console.log("[DISTROIA] SCSS compiled successfully.")
+      GLib.spawn_command_line_sync(`sed -i '/@charset "UTF-8";/d' ${css}`)
+      console.log("[DISTROIA] SCSS compiled and cleaned successfully.")
     } catch (e) {
       console.error("[DISTROIA] Failed to compile SCSS:", e)
     }
@@ -29,7 +30,7 @@ app.start({
       Gtk.StyleContext.add_provider_for_display(
         display,
         provider,
-        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 100
+        Gtk.STYLE_PROVIDER_PRIORITY_USER
       )
 
       const monitors = display.get_monitors()

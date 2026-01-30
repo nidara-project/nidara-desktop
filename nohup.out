@@ -1,0 +1,22 @@
+Error: unknown shorthand flag: 'c' in -c
+Usage:
+  ags [command]
+
+Available Commands:
+  run         Run an app
+  request     Send a request to an instance
+  list        List running instances
+  inspect     Open up Gtk debug tool
+  toggle      Toggle visibility of a Window
+  quit        Quit an instance
+  types       Generate TypeScript types
+  bundle      Bundle an app
+  init        Initialize a project directory
+  help        Help about any command
+
+Flags:
+  -h, --help      help for ags
+  -v, --version   version for ags
+
+Use "ags [command] --help" for more information about a command.
+

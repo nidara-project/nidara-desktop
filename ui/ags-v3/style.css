@@ -1,62 +1,124 @@
-@charset "UTF-8";
 /*
    CRYSTAL DOCK - AESTHETIC PERFECTION
+   Prefix: cd- (Class Isolation)
 */
-.crystal-dock {
-  background-color: transparent;
-}
-
-#the-dock-bar {
-  padding: 0 16px;
-}
-
-.dock-item {
-  margin-left: 8px;
-  margin-right: 8px;
-  background-color: transparent;
-  transition: background-color 200ms ease;
-  min-height: 92px;
-  min-width: 64px;
-}
-
-.dock-item:hover {
-  background-color: rgba(255, 255, 255, 0.1) !important;
+/* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
+window.fullscreen,
+window.crystal-dock,
+.background,
+.view,
+.fullscreen {
+  background-color: transparent !important;
   background-image: none !important;
-  border: none !important;
   box-shadow: none !important;
+  border: none !important;
 }
 
-/* Blindaje Nuclear de estados de sistema */
-.dock-item:hover,
-.dock-item:active,
-.dock-item:checked,
-.dock-item.active,
-.dock-item:hover *,
-.dock-item:active *,
-.dock-item:checked * {
+/* Neutralización Específica con Ruta Completa */
+.dock-window.fullscreen .cd-dock-container .dock-overlay .cd-bar {
+  background-color: transparent !important;
+  border: none !important;
+}
+
+/* --- 2. SELECTORES DE "FINAL WAR" ID HIERARCHY --- */
+window#crystal-dock,
+window#crystal-dock > box#dock-main-container,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widget,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widget > box#the-dock-bar {
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* --- NUCLEAR: KILL FULLSCREEN BACKGROUNDS (User Requested) --- */
+window#crystal-dock,
+window#crystal-dock decoration,
+window#crystal-dock background,
+window#crystal-dock main,
+window#crystal-dock contents,
+window#crystal-dock.fullscreen,
+window#crystal-dock.fullscreen > decoration,
+window#crystal-dock.fullscreen > background,
+window#crystal-dock.fullscreen > contents {
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  outline: none !important;
+}
+
+/* --- NUCLEAR: KILL INTERMEDIATE CONTAINERS (Strict IDs) --- */
+#dock-main-container,
+.cd-dock-container,
+#dock-main-overlay,
+#the-dock-bar {
   background-color: transparent !important;
   background-image: none !important;
   border: none !important;
   box-shadow: none !important;
-  outline: none !important;
-  /* Mata el Focus Ring de GTK */
 }
 
-/* Excepción: El punto indicador debe seguir viéndose */
-.dock-item .indicator-dot.open {
+/* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
+.cd-item,
+.cd-item > contents,
+box.cd-item {
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* --- 3. ESTILOS PROPIOS (cd-*) --- */
+#the-dock-bar {
+  padding: 0 16px;
+}
+
+.cd-item {
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  transition: background-color 200ms ease;
+  min-height: 112px;
+  min-width: 64px;
+}
+
+.cd-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Blindaje Nuclear de estados de sistema */
+.cd-item,
+.cd-item *,
+.cd-item:hover,
+.cd-item:hover * {
+  border: none;
+  box-shadow: none;
+  outline: none;
+  background-image: none;
+}
+
+.cd-dot.open {
   background-color: rgba(255, 255, 255, 0.95) !important;
 }
 
-.icon-container {
+.cd-icon-container {
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
   transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
   transform-origin: bottom center;
 }
 
-.dock-item:hover .icon-container {
+.cd-item:hover .cd-icon-container {
   transform: scale(1.6);
 }
 
-.indicator-dot {
+.cd-dot {
   min-height: 4px;
   min-width: 4px;
   border-radius: 4px;
@@ -64,39 +126,43 @@
   transition: background-color 200ms ease;
 }
 
-.indicator-dot.open {
-  background-color: rgba(255, 255, 255, 0.95);
-  /* Efecto de brillo sutil de Apple */
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.6);
-  /* Aseguramos que sea un círculo perfecto */
+.cd-dot.open {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.6) !important;
   border-radius: 50%;
 }
 
-.dock-separator {
+.cd-separator {
   min-height: 48px;
   min-width: 1.2px;
-  background-color: rgba(255, 255, 255, 0.2);
+  background-color: rgba(255, 255, 255, 0.2) !important;
   margin: 0 12px;
 }
 
-/* Tooltips */
-popover.dock-tooltip contents {
+/* Tooltips (cd-tooltip) */
+popover.cd-tooltip {
+  background-color: transparent;
+  box-shadow: none;
+  background: none;
+  border: none;
+}
+
+popover.cd-tooltip contents {
   background-color: #ffffff;
   border-radius: 12px;
   padding: 6px 14px;
   margin-bottom: 5px;
-  /* Reduced since we use code offsets now */
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
-.tooltip-label {
+.cd-tooltip-label {
   color: #000000;
   font-size: 13px;
   font-weight: 700;
 }
 
-/* Menus */
-.menu-action {
+/* Menus (cd-popover) */
+.cd-menu-action {
   background-color: transparent;
   color: #222222;
   padding: 8px 16px;
@@ -104,7 +170,7 @@ popover.dock-tooltip contents {
   font-weight: 500;
 }
 
-.menu-action:hover {
+.cd-menu-action:hover {
   background-color: #007aff;
   color: #ffffff;
 }
