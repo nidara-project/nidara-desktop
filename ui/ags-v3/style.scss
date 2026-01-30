@@ -1,156 +1,82 @@
 /*
-   PREMIUM GTK4 DOCK - AUTHENTIC macOS HIG 🍏💎
-   ---------------------------------
-   Soft corners (Squircles), Tiered Shadows, and White Indicators.
+   CRYSTAL DOCK - AESTHETIC PERFECTION
 */
 
-/* 1. CRYSTAL VOID - TOTAL ERADICATION 🍏💎 */
-window,
-decoration,
-background,
-overlay,
-box,
-widget,
-drawingarea,
-viewport,
-contents {
-  background: transparent none !important;
-  background-color: transparent !important;
-  border: none !important;
-  border-width: 0 !important;
-  box-shadow: none !important;
-  -gtk-icon-shadow: none !important;
-  outline: none !important;
-  margin: 0;
-  padding: 0;
-  border-radius: 0;
-  text-shadow: none !important;
+.crystal-dock {
+  background-color: transparent;
 }
 
 #the-dock-bar {
-  padding: 0 12px;
+  padding: 0 16px;
+}
+
+.dock-item {
+  margin-left: 8px;
+  margin-right: 8px;
+  background-color: transparent;
+  transition: background-color 200ms ease;
   min-height: 92px;
+  min-width: 64px;
 }
 
-/* 1.1 SURGICAL ITEM RESET (Must remain transparent) */
-#crystal-dock .dock-item,
-#crystal-dock .dock-item contents,
-#crystal-dock .dock-item background,
-#crystal-dock .dock-item widget,
-#crystal-dock .dock-item image,
-#crystal-dock .dock-item:active,
-#crystal-dock .dock-item:checked,
-#crystal-dock .dock-item.is-active-app {
-  background-color: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
-  border-style: none !important;
+.dock-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
-/* 2. THE macOS FROSTED GLASS BAR - NO SHADOWS HERE */
-#the-dock-bar,
-#the-dock-bar box,
-#the-dock-bar button,
-#the-dock-bar * {
-  background-color: transparent !important;
-  background-image: none !important;
-  border-style: none !important;
-  box-shadow: none !important;
-  -gtk-icon-shadow: none !important;
-  outline-style: none !important;
-  margin: 0;
-  padding: 0;
+.icon-container {
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  transform-origin: bottom center;
 }
 
-#the-dock-bar {
-  padding: 0 24px;
-  min-height: 92px;
+.dock-item:hover .icon-container {
+  transform: scale(1.6);
 }
 
-/* 6. INDICATORS (The little dots/pills) 🍏 */
 .indicator-dot {
   min-height: 4px;
   min-width: 4px;
   border-radius: 4px;
-  background-color: transparent !important;
-  box-shadow: none !important;
-  transition: all 400ms cubic-bezier(0.16, 1, 0.3, 1);
+  background-color: transparent;
+  transition: background-color 200ms ease;
 }
 
 .indicator-dot.open {
-  background-color: rgba(255, 255, 255, 0.8) !important;
-  min-width: 12px;
+  background-color: rgba(255, 255, 255, 0.9);
 }
 
-window#crystal-dock .dock-bar-container box.dock-bar {
-  padding: 0 24px;
-  min-height: 92px;
+.dock-separator {
+  min-height: 48px;
+  min-width: 1.2px;
+  background-color: rgba(255, 255, 255, 0.2);
+  margin: 0 12px;
 }
 
-/* 4. THE ITEMS */
-window#crystal-dock .dock-item {
-  min-height: 56px;
-  min-width: 56px;
-  margin: 0 4px;
-  border-radius: 12px;
-  padding: 0 8px;
-  transform-origin: bottom center;
-  transition: transform 350ms cubic-bezier(0.16, 1, 0.3, 1), background-color 200ms ease;
-  background-color: transparent !important;
-}
-
-window#crystal-dock .dock-item:hover {
-  background-color: rgba(255, 255, 255, 0.15) !important;
-  /* The Apple Magnification Effect 🍏 */
-  transform: translateY(-16px) scale(1.3);
-}
-
-/* 6. CUSTOM DOCK TOOLTIPS (GtkPopover) 🍏 */
+/* Tooltips */
 popover.dock-tooltip contents {
-  background-color: rgba(255, 255, 255, 0.95) !important;
+  background-color: #ffffff;
   border-radius: 12px;
-  border-style: solid;
-  border-width: 1px;
-  border-color: rgba(0, 0, 0, 0.1);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
   padding: 6px 14px;
+  margin-bottom: 5px;
+  /* Reduced since we use code offsets now */
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
 }
 
-popover.dock-tooltip label {
-  color: #111111;
+.tooltip-label {
+  color: #000000;
   font-size: 13px;
-  font-weight: bold;
+  font-weight: 700;
 }
 
-/* 7. CONTEXT MENUS (POPOVERS) 🍏 */
-popover.dock-popover contents {
-  background-color: rgba(255, 255, 255, 0.98) !important;
-  border-style: solid;
-  border-width: 1px;
-  border-color: rgba(0, 0, 0, 0.1);
-  border-radius: 14px;
-  padding: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
-}
-
-window#crystal-dock popover.dock-popover button {
+/* Menus */
+.menu-action {
   background-color: transparent;
-  border-radius: 6px;
-  padding: 6px 12px;
-  margin: 2px 0;
   color: #222222;
-}
-
-window#crystal-dock popover.dock-popover button:hover {
-  background-color: #007aff !important;
-}
-
-window#crystal-dock popover.dock-popover button label {
+  padding: 8px 16px;
   font-size: 13px;
   font-weight: 500;
-  color: inherit;
 }
 
-window#crystal-dock popover.dock-popover button:hover label {
+.menu-action:hover {
+  background-color: #007aff;
   color: #ffffff;
 }

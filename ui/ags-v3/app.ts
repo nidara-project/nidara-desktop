@@ -8,6 +8,16 @@ const windows = new Set()
 
 app.start({
   main() {
+    // Tacitly compile SCSS to CSS on startup for DistroIA
+    try {
+      const scss = `${GLib.get_current_dir()}/style.scss`
+      const css = `${GLib.get_current_dir()}/style.css`
+      GLib.spawn_command_line_sync(`sass ${scss} ${css}`)
+      console.log("[DISTROIA] SCSS compiled successfully.")
+    } catch (e) {
+      console.error("[DISTROIA] Failed to compile SCSS:", e)
+    }
+
     // Manually inject CSS with the HIGHEST priority (USER = 800)
     // This kills the system-wide purple theme once and for all.
     const styleFile = `${GLib.get_current_dir()}/style.css`
@@ -19,7 +29,7 @@ app.start({
       Gtk.StyleContext.add_provider_for_display(
         display,
         provider,
-        Gtk.STYLE_PROVIDER_PRIORITY_USER
+        Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 100
       )
 
       const monitors = display.get_monitors()
