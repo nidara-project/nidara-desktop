@@ -10,13 +10,13 @@ The magnification follows a Gaussian curve anchored to a **Static Ground Truth G
 
 | Parameter | Value | Description |
 | :--- | :--- | :--- |
-| **Max Scale** | 1.5x | Target magnification for icons. |
-| **Max Scale (Sep)** | **1.0x** | GAUSSIAN V16: Fixed width, only horizontal shift. |
-| **Sigma (σ)** | 150 | GAUSSIAN V16: Master Sigma for organic flow. |
-| **Threshold** | **1.005** | GAUSSIAN V16: Master floor to settle vibrations. |
+| **Max Scale** | **2.0x** | Target magnification (128px / 64px = 2.0). |
+| **Algorithm** | **Sine-Wave** | Cos-based easing for organic falloff. |
+| **Range (Spread)**| **2.5** | Sigma spread relative to icon size. |
+| **Dynamic Margin**| **Yes** | Margins shrink as icons grow to maintain cohesion. |
 | **Overlap Ratio** | **0.8x** | Slot growth vs Icon growth for premium overlap. |
 | **Vertical Space**| **160px**  | GAUSSIAN V16: Expanded headspace to prevent clipping. |
-| **Formula** | `1 + (0.5 * exp(-(dist^2) / (2 * sigma^2)))` | `dist` = mouseX - staticCenter. |
+| **Formula** | `cos(normDist * PI/2)^2` | Mapped 0-1 intensity. |
 
 ## 3. Geometry & Spacing (80px Slot Model)
 To ensure zero-shift layout stability, we use a "Virtual Grid" where every icon has a fixed-width slot.

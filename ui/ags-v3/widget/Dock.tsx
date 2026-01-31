@@ -10,6 +10,7 @@ import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
+import { calculateDockItemMetrics } from "./DockPhysics"
 
 // --- PERSISTENCE ---
 const PINNED_FILE = GLib.get_home_dir() + "/.config/dock_pinned.json"
@@ -26,7 +27,7 @@ try {
 }
 
 const savePinned = () => {
-    console.log(`[Dock] Saving pinned list: ${JSON.stringify(pinnedList)}`);
+    console.log(`[Dock] Saving pinned list: ${JSON.stringify(pinnedList)} `);
     writeFile(PINNED_FILE, JSON.stringify(pinnedList, null, 2))
 }
 
@@ -62,15 +63,12 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
 
     // Actually, let's keep it simple: the box can hold a reference to its state
     const state = {
-        target: 1.0,
-        current: 1.0,
-        staticCenter: 0, // GROUND TRUTH (V13)
+        targetScale: 1.0, currentScale: 1.0,
+        targetWidth: 48, currentWidth: 48,
+        targetMargin: 6, currentMargin: 6,
+        staticCenter: 0,
         virtualCenter: 0,
-        isSeparator: true,
-        update: (scale: number) => {
-            // Separators move but don't widen in macOS logic
-            box.set_size_request(baseWidth, height)
-        }
+        isSeparator: true
     }
     register(id, state)
         ; (box as any).setVirtualCenter = (v: number) => {
@@ -262,7 +260,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
     // REACTIVE GAP: JS EventBus connection
     const unsub = dragBus.subscribe((hoverId) => {
-        // console.log(`[DragBus] Item ${appId} saw ${hoverId}`)
+        // console.log(`[DragBus] Item ${ appId } saw ${ hoverId } `)
         const isTarget = hoverId === appId
         if (isTarget && appItem.name !== "Papelera") {
             itemBox.add_css_class("cd-drag-gap")
@@ -320,24 +318,12 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     const slotSize = 80 // Base Slot (V14 Master)
 
     const state = {
-        target: 1.0,
-        current: 1.0,
-        staticCenter: 0, // GROUND TRUTH (V13)
+        targetScale: 1.0, currentScale: 1.0,
+        targetWidth: 64, currentWidth: 64,
+        targetMargin: 6, currentMargin: 6,
+        staticCenter: 0,
         virtualCenter: 0,
-        isSeparator: false,
-        update: (scale: number) => {
-            const visualSize = Math.round(iconSize * scale)
-            if (child && (child as any).set_pixel_size) (child as any).set_pixel_size(visualSize)
-
-            // APPLE OVERLAP PHYSICS (V16): 0.8x width growth for premium overlap
-            const targetWidth = Math.round(slotSize + (slotSize * (scale - 1) * 0.8))
-            itemBox.set_size_request(targetWidth, 160)
-
-            const parent = itemBox.get_parent()
-            if (parent && parent instanceof Gtk.Revealer) {
-                parent.set_size_request(targetWidth, 160)
-            }
-        }
+        isSeparator: false
     }
     register(appId, state)
 
@@ -468,7 +454,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             action: () => {
                 addresses.forEach(addr => {
                     const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
-                    execAsync(`hyprctl dispatch closewindow address:${cleanAddr}`).catch(print)
+                    execAsync(`hyprctl dispatch closewindow address:${cleanAddr} `).catch(print)
                 })
             }
         })
@@ -488,13 +474,13 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     // DND Logic: Universal Drag & Drop (MUST BE ADDED FIRST FOR PRIORITY)
     const source = new Gtk.DragSource({ actions: Gdk.DragAction.COPY | Gdk.DragAction.MOVE })
     source.connect("prepare", (s, x, y) => {
-        console.log(`[DnD] Prepare Drag: ${appId}`)
+        console.log(`[DnD] Prepare Drag: ${appId} `)
         s.set_icon(Gtk.WidgetPaintable.new(child), x, y)
         // Ensure we send a string value
         return Gdk.ContentProvider.new_for_value(appId)
     })
-    source.connect("drag-begin", () => console.log(`[DnD] Drag Begin: ${appId}`))
-    source.connect("drag-end", () => console.log(`[DnD] Drag End: ${appId}`))
+    source.connect("drag-begin", () => console.log(`[DnD] Drag Begin: ${appId} `))
+    source.connect("drag-end", () => console.log(`[DnD] Drag End: ${appId} `))
     itemBox.add_controller(source)
 
     const rightClick = new Gtk.GestureClick({ button: 3 })
@@ -504,7 +490,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     const leftClick = new Gtk.GestureClick({ button: 1 })
     // HARDENED CLICK LOGIC
     leftClick.connect("released", () => {
-        console.log(`[DockClick] Clicked ${appId}. Addresses in scope: ${addresses.length}`);
+        console.log(`[DockClick] Clicked ${appId}.Addresses in scope: ${addresses.length} `);
 
         // 1. Refresh active addresses from Hyprland source of truth if possible
         // (For now relying on 'addresses' prop, assuming update() runs on client open/close)
@@ -523,12 +509,12 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             console.log(`[DockClick] Cycling to: ${target} (current: ${focusedAddr})`);
             try {
                 // FORCE FOCUS
-                hypr.dispatch("focuswindow", `address:${target}`)
+                hypr.dispatch("focuswindow", `address:${target} `)
                 // OPTIONAL: Workspace switch backup if focuswindow fails to swap WS
                 // const client = hypr.clients.find(c => c.address === target)
-                // if (client) hypr.dispatch("workspace", `${client.workspace.id}`)
+                // if (client) hypr.dispatch("workspace", `${ client.workspace.id } `)
             } catch (e) {
-                console.error(`[DockClick] Dispatch failed: ${e}`)
+                console.error(`[DockClick] Dispatch failed: ${e} `)
             }
         } else {
             console.log(`[DockClick] Launching or finding match for ${appId}`);
@@ -540,8 +526,8 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             if (match) {
                 let matchAddr = match.address
                 if (!matchAddr.startsWith("0x")) matchAddr = "0x" + matchAddr
-                console.log(`[DockClick] Found logic match: ${matchAddr}`);
-                hypr.dispatch("focuswindow", `address:${matchAddr}`)
+                console.log(`[DockClick] Found logic match: ${matchAddr} `);
+                hypr.dispatch("focuswindow", `address:${matchAddr} `)
             }
             else {
                 console.log(`[DockClick] Launching via appItem.launch()`);
@@ -569,7 +555,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
         // REACTIVE GAP LOGIC
         target.connect("enter", () => {
-            console.log(`[DnD] Enter Item: ${appId}`)
+            console.log(`[DnD] Enter Item: ${appId} `)
             dragBus.update(appId)
             return Gdk.DragAction.COPY
         })
@@ -591,11 +577,11 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             } else if (val && (val as any).get_string) {
                 dragId = (val as unknown as GObject.Value).get_string()
             } else {
-                console.log(`[DnD] Unknown payload type: ${typeof val}`)
+                console.log(`[DnD] Unknown payload type: ${typeof val} `)
                 return false
             }
 
-            console.log(`[DnD] Payload: ${dragId}`)
+            console.log(`[DnD] Payload: ${dragId} `)
 
             const sourceId = dragId ? dragId.toLowerCase().replace(".desktop", "") : ""
             const targetId = appId.toLowerCase()
@@ -756,35 +742,91 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         can_focus: false,
     })
 
-    // --- GAUSSIAN V13 UNIFIED ENGINE ---
-    type AnimState = { target: number, current: number, update: (val: number) => void, virtualCenter: number, staticCenter: number }
+    // --- V17 PHYSICS ENGINE ---
+    type AnimState = {
+        targetScale: number, currentScale: number,
+        targetWidth: number, currentWidth: number,
+        targetMargin: number, currentMargin: number,
+        virtualCenter: number, staticCenter: number, isSeparator: boolean
+    }
     const animRegistry = new Map<string, AnimState>()
     let globalAnimId = 0
     let smoothedBarWidth = 200
 
+    // Linear Interpolation Helper
+    const lerp = (start: number, end: number, factor: number) => start + (end - start) * factor
+
     const runUnifiedTick = () => {
         if (globalAnimId !== 0) return
+
         globalAnimId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
             let active = false
-            animRegistry.forEach((state) => {
-                const step = (state.target - state.current) * 0.15
-                if (Math.abs(step) > 0.001) {
-                    state.current += step
-                    state.update(state.current)
+
+            // Sync Background Width (V17: Sum of atomic widths)
+            let sumWidths = 0
+
+            animRegistry.forEach((state, id) => {
+                // LERP PHYSICS (Split Scale & Width for snapiness)
+                if (Math.abs(state.targetScale - state.currentScale) > 0.001) {
+                    state.currentScale = lerp(state.currentScale, state.targetScale, 0.2) // Fast Scale
                     active = true
-                } else if (state.current !== state.target) {
-                    state.current = state.target
-                    state.update(state.current)
+                } else state.currentScale = state.targetScale
+
+                if (Math.abs(state.targetWidth - state.currentWidth) > 0.1) {
+                    state.currentWidth = lerp(state.currentWidth, state.targetWidth, 0.2) // Fast Layout
+                    active = true
+                } else state.currentWidth = state.targetWidth
+
+                if (Math.abs(state.targetMargin - state.currentMargin) > 0.01) {
+                    state.currentMargin = lerp(state.currentMargin, state.targetMargin, 0.2)
+                    active = true
+                } else state.currentMargin = state.targetMargin
+
+                // APPLY TO WIDGETS
+                const widget = widgetCache.get(id)
+                if (widget) {
+                    // 1. The Container (Slot)
+                    const revealer = widget as Gtk.Revealer
+                    const itemBox = revealer.get_child() as Gtk.Box
+
+                    // Width & Dynamic Margins
+                    const w = Math.round(state.currentWidth)
+                    revealer.set_size_request(w, 160)
+                    itemBox?.set_size_request(w, 160)
+                    itemBox?.set_margin_start(Math.round(state.currentMargin))
+                    itemBox?.set_margin_end(Math.round(state.currentMargin))
+
+                    // 2. The Content (Icon Scale)
+                    if (!state.isSeparator) {
+                        // Find icon inside structure of boxes
+                        // itemBox -> overlay -> iconBox -> child
+                        // We need a cleaner way to update icon size. Using the update callback was cleaner.
+                        // Let's re-implement a manual update or keep a ref.
+                        // Ideally we traverse:
+                        // DockItem has `update` callback, but now state is pure data.
+
+                        // HACK: We can find the icon by name convention or traverse.
+                        // Or better: Restore the `update` callback slightly to just handle the icon pixel size?
+                        // Actually, let's just use CSS scale or find the child.
+                        // The user said: "Icon Visual: transform: scale(scale)." -> CSS transform is better but GTK4 CSS transform is tricky.
+                        // Let's stick to pixel_size for now as it worked.
+
+                        // We need to access the Gtk.Image.
+                        // Known structure: itemBox -> Overlay -> Box (icon-box) -> Image
+                        const overlay = itemBox?.get_first_child() as Gtk.Overlay
+                        const iconBox = overlay?.get_child() as Gtk.Box // set_child was used
+                        const icon = iconBox?.get_first_child()
+                        if (icon && (icon as any).set_pixel_size) {
+                            (icon as any).set_pixel_size(Math.round(64 * state.currentScale))
+                        }
+                    }
                 }
+
+                // Add to total width (Width + Margins)
+                sumWidths += state.currentWidth + (state.currentMargin * 2)
             })
 
-            // Sync Background Width (V16 Master: Atomic Summation)
-            let sumWidths = 0
-            animRegistry.forEach(s => {
-                const base = (s as any).isSeparator ? 48 : 80
-                sumWidths += Math.round(base + (base * (s.current - 1) * 0.8))
-            })
-            const totalTargetPillWidth = sumWidths + 32 // Add padding
+            const totalTargetPillWidth = sumWidths + 12 // Small padding
 
             if (totalTargetPillWidth > 0) {
                 const bgStep = (totalTargetPillWidth - smoothedBarWidth) * 0.15
@@ -809,14 +851,20 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     const updateAllTargets = (mouseX: number) => {
         animRegistry.forEach((state) => {
             if (mouseX === -1000) {
-                state.target = 1.0
+                // RESET
+                state.targetScale = 1.0
+                state.targetWidth = state.isSeparator ? 48 : 64 // Min size
+                state.targetMargin = 6
             } else {
-                // DISTANCE BASED ON FIXED GROUND TRUTH (V16)
-                const dist = Math.abs(mouseX - state.staticCenter)
-                const maxScale = (state as any).isSeparator ? 1.0 : 1.5 // Separator lock 1.0
-                const sigma = 150 // Master Sigma
-                const target = 1 + (0.5 * Math.exp(-(dist ** 2) / (2 * (sigma ** 2))))
-                state.target = target < 1.005 ? 1.0 : target // Micro-Clamp 1.005
+                // V17 PHYSICS
+                const metrics = calculateDockItemMetrics(
+                    mouseX,
+                    state.staticCenter,
+                    state.isSeparator
+                )
+                state.targetScale = metrics.scale
+                state.targetWidth = metrics.width
+                state.targetMargin = metrics.margin
             }
         })
         runUnifiedTick()
@@ -955,7 +1003,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         const getLaunch = (lid: string) => {
             const app = appService.getAppData(lid)
             const desktopId = app?.id || lid
-            return () => execAsync(`gtk-launch ${desktopId}`).catch(print)
+            return () => execAsync(`gtk - launch ${desktopId} `).catch(print)
         }
 
         // 0. Static: Finder
