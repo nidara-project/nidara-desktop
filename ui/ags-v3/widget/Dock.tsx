@@ -108,7 +108,7 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
     cr.save()
     cr.translate(0, 4)
     path(4)
-    cr.setSourceRGBA(0, 0, 0, 0.10)
+    cr.setSourceRGBA(0, 0, 0, 0.04) // SAFELY BELOW ignore_alpha (0.05)
     cr.fill()
     cr.restore()
     cr.restore()
@@ -131,15 +131,32 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
     cr.setLineWidth(1)
     cr.stroke()
 
-    // 3. MAIN BACKGROUND FILL (Stable Majestic Glass 12%)
+    // 3. MAIN BACKGROUND FILL (Linear Gradient for Depth)
+    // @ts-ignore
+    const gradient = new Cairo.LinearGradient(x, y, x, y + drawH)
+    gradient.addColorStopRGBA(0, 1, 1, 1, 0.22) // Lighter top
+    gradient.addColorStopRGBA(1, 1, 1, 1, 0.14) // Deeper bottom (Above 0.1)
     path()
-    cr.setSourceRGBA(1, 1, 1, 0.12) // CATCH ALPHA - Translucent blur effect
+    cr.setSource(gradient)
     cr.fill()
 
-    // 4. M3 RIM LIGHT
+    // 4. SPECULAR HIGHLIGHT (Top-light reflection)
+    cr.save()
     path()
-    cr.setSourceRGBA(1, 1, 1, 0.20)
-    cr.setLineWidth(0.5)
+    cr.clip()
+    cr.newPath()
+    cr.moveTo(x + r, y + 1)
+    cr.lineTo(x + drawW - r, y + 1)
+    cr.setSourceRGBA(1, 1, 1, 0.45) // Bright specular
+    cr.setLineWidth(1.5)
+    cr.setLineCap(1) // ROUND CAP
+    cr.stroke()
+    cr.restore()
+
+    // 5. M3 RIM LIGHT (Precision edge)
+    path()
+    cr.setSourceRGBA(1, 1, 1, 0.25)
+    cr.setLineWidth(0.6)
     cr.stroke()
 }
 

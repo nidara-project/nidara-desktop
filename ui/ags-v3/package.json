@@ -1,4 +1,9 @@
 {
+  "scripts": {
+    "dev": "ags -c app.ts",
+    "run": "ags -c app.ts",
+    "build": "ags bundle app.ts style.css"
+  },
   "dependencies": {
     "ags": "*",
     "gnim": "*",
