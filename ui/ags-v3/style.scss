@@ -141,7 +141,8 @@ box.cd-item {
 }
 
 .cd-item {
-  margin: 0;
+  margin: 0 5px;
+  /* Spacing for hover expansion */
   padding: 0;
   background-color: transparent;
   background-image: none;
@@ -152,11 +153,34 @@ box.cd-item {
   min-width: 64px;
 }
 
+.cd-revealer {
+  background-color: transparent;
+  padding: 0;
+  margin: 0;
+  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+  overflow: visible;
+  /* Try to prevent clip */
+}
+
 .cd-item:hover {
   background-color: rgba(255, 255, 255, 0.08);
 }
 
+/* High Specificity for Drag Gap */
+window#crystal-dock box.cd-drag-gap,
+.cd-drag-gap {
+  margin-left: 72px !important;
+  /* Icon (64) + Gap (8) */
+  transition: margin-left 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
 /* Blindaje Nuclear de estados de sistema */
+.cd-item {
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  margin-left: 0px;
+  /* Explicit default */
+}
+
 .cd-item,
 .cd-item *,
 .cd-item:hover,
@@ -252,6 +276,12 @@ window#crystal-dock popover.cd-tooltip contents {
 .cd-menu-action:hover {
   background-color: #007aff;
   color: #ffffff;
+}
+
+.cd-menu-separator {
+  min-height: 1px;
+  background-color: rgba(0, 0, 0, 0.1);
+  margin: 4px 8px;
 }
 
 /* ==========================================================================
