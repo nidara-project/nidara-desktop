@@ -75,7 +75,7 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
     register(id, state)
         ; (box as any).setVirtualCenter = (v: number) => {
             state.virtualCenter = v
-            state.staticCenter = v // Always update to current resting center (V14)
+            state.staticCenter = v
         }
 
     // DROP ON SEPARATOR = APPEND TO LIST
@@ -272,10 +272,6 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     })
     itemBox.connect("destroy", unsub)
 
-        // EXPOSE VIRTUAL CENTER UPDATE for Dynamic Grid
-        ; (itemBox as any).setVirtualCenter = (v: number) => {
-            state.virtualCenter = v
-        }
 
     const iconBox = new Gtk.Box({
         name: "cd-icon-box-" + appId,
@@ -333,8 +329,8 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             const visualSize = Math.round(iconSize * scale)
             if (child && (child as any).set_pixel_size) (child as any).set_pixel_size(visualSize)
 
-            // PURE PROPORTIONAL SCALING (V15): 1:1 Width-to-Scale ratio
-            const targetWidth = Math.round(slotSize * scale)
+            // APPLE OVERLAP PHYSICS (V16): 0.8x width growth for premium overlap
+            const targetWidth = Math.round(slotSize + (slotSize * (scale - 1) * 0.8))
             itemBox.set_size_request(targetWidth, 160)
 
             const parent = itemBox.get_parent()
@@ -348,10 +344,9 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         // EXPOSE VIRTUAL CENTER UPDATE
         ; (itemBox as any).setVirtualCenter = (v: number) => {
             state.virtualCenter = v
-            state.staticCenter = v // Always update to current resting center (V14)
+            state.staticCenter = v
         }
 
-    // Standard Scaling for all Gtk.Image icons
     // @ts-ignore
     child.pixel_size = 64
     // Tooltip / name logic...
@@ -783,22 +778,22 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 }
             })
 
-            // Sync Background Width (V15: Sum of current slot widths)
+            // Sync Background Width (V16 Master: Atomic Summation)
             let sumWidths = 0
             animRegistry.forEach(s => {
                 const base = (s as any).isSeparator ? 48 : 80
-                sumWidths += Math.round(base * s.current)
+                sumWidths += Math.round(base + (base * (s.current - 1) * 0.8))
             })
-            const targetWidth = sumWidths + 32 // +32 for padding
+            const totalTargetPillWidth = sumWidths + 32 // Add padding
 
-            if (targetWidth > 0) {
-                const bgStep = (targetWidth - (smoothedBarWidth + 32)) * 0.15
+            if (totalTargetPillWidth > 0) {
+                const bgStep = (totalTargetPillWidth - smoothedBarWidth) * 0.15
                 if (Math.abs(bgStep) > 0.1) {
-                    smoothedBarWidth = (smoothedBarWidth + 32 + bgStep) - 32
+                    smoothedBarWidth += bgStep
                     da.queue_draw()
                     active = true
-                } else if (smoothedBarWidth + 32 !== targetWidth) {
-                    smoothedBarWidth = targetWidth - 32
+                } else if (smoothedBarWidth !== totalTargetPillWidth) {
+                    smoothedBarWidth = totalTargetPillWidth
                     da.queue_draw()
                 }
             }
@@ -816,12 +811,12 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             if (mouseX === -1000) {
                 state.target = 1.0
             } else {
-                // DISTANCE BASED ON STATIC GROUND TRUTH (V14)
+                // DISTANCE BASED ON FIXED GROUND TRUTH (V16)
                 const dist = Math.abs(mouseX - state.staticCenter)
                 const maxScale = (state as any).isSeparator ? 1.0 : 1.5 // Separator lock 1.0
-                const sigma = 150 // GAUSSIAN V14: Master Sigma
+                const sigma = 150 // Master Sigma
                 const target = 1 + (0.5 * Math.exp(-(dist ** 2) / (2 * (sigma ** 2))))
-                state.target = target < 1.005 ? 1.0 : target // Clamp 1.005 (V14)
+                state.target = target < 1.005 ? 1.0 : target // Micro-Clamp 1.005
             }
         })
         runUnifiedTick()
