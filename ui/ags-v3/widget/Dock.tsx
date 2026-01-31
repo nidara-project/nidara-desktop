@@ -64,14 +64,19 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
     const state = {
         target: 1.0,
         current: 1.0,
+        staticCenter: 0, // GROUND TRUTH (V13)
         virtualCenter: 0,
         isSeparator: true,
         update: (scale: number) => {
-            box.set_size_request(Math.round(baseWidth * scale), height)
+            // Separators move but don't widen in macOS logic
+            box.set_size_request(baseWidth, height)
         }
     }
     register(id, state)
-        ; (box as any).setVirtualCenter = (v: number) => { state.virtualCenter = v }
+        ; (box as any).setVirtualCenter = (v: number) => {
+            state.virtualCenter = v
+            if (state.staticCenter === 0) state.staticCenter = v // Set on first layout
+        }
 
     // DROP ON SEPARATOR = APPEND TO LIST
     const target = new Gtk.DropTarget({ actions: Gdk.DragAction.COPY | Gdk.DragAction.MOVE, formats: null })
@@ -321,14 +326,17 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     const state = {
         target: 1.0,
         current: 1.0,
+        staticCenter: 0, // GROUND TRUTH (V13)
         virtualCenter: 0,
         isSeparator: false,
         update: (scale: number) => {
             const visualSize = Math.round(iconSize * scale)
             if (child && (child as any).set_pixel_size) (child as any).set_pixel_size(visualSize)
-            const targetWidth = Math.round(slotSize * scale)
+
+            // APPLE OVERLAP PHYSICS (V13): 0.8x width growth
+            const targetWidth = Math.round(slotSize + (slotSize * (scale - 1) * 0.8))
             itemBox.set_size_request(targetWidth, 160)
-            // Propagate width to Revealer parent for 1:1 layout push (V12.1)
+
             const parent = itemBox.get_parent()
             if (parent && parent instanceof Gtk.Revealer) {
                 parent.set_size_request(targetWidth, 160)
@@ -340,6 +348,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         // EXPOSE VIRTUAL CENTER UPDATE
         ; (itemBox as any).setVirtualCenter = (v: number) => {
             state.virtualCenter = v
+            if (state.staticCenter === 0) state.staticCenter = v // Set once
         }
 
     // Standard Scaling for all Gtk.Image icons
@@ -752,8 +761,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         can_focus: false,
     })
 
-    // --- GAUSSIAN V10 UNIFIED ENGINE ---
-    type AnimState = { target: number, current: number, update: (val: number) => void, virtualCenter: number }
+    // --- GAUSSIAN V13 UNIFIED ENGINE ---
+    type AnimState = { target: number, current: number, update: (val: number) => void, virtualCenter: number, staticCenter: number }
     const animRegistry = new Map<string, AnimState>()
     let globalAnimId = 0
     let smoothedBarWidth = 200
@@ -801,11 +810,12 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             if (mouseX === -1000) {
                 state.target = 1.0
             } else {
-                const dist = Math.abs(mouseX - state.virtualCenter)
-                const maxScale = (state as any).isSeparator ? 1.3 : 1.5
-                const sigma = 130 // GAUSSIAN V12: Balanced curve
+                // DISTANCE BASED ON STATIC GROUND TRUTH (V13)
+                const dist = Math.abs(mouseX - state.staticCenter)
+                const maxScale = (state as any).isSeparator ? 1.0 : 1.5 // Separator lock 1.0
+                const sigma = 130
                 const target = 1 + ((maxScale - 1) * Math.exp(-(dist ** 2) / (2 * (sigma ** 2))))
-                state.target = target < 1.005 ? 1.0 : target
+                state.target = target < 1.01 ? 1.0 : target // Clamp 1.01
             }
         })
         runUnifiedTick()
