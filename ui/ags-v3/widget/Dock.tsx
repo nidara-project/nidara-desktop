@@ -37,13 +37,16 @@ import appService from "../core/AppService"
 // --- UI HELPERS ---
 
 // 2. SEPARATOR (Now accepts drops to APPEND, with wider hitbox)
-function Separator(updateDock: () => void, height = 32) {
-    // Container for Hitbox (invisible, wide)
+// SEPARATOR: Gaussian Horizontal Scaling, Fixed Vertical Height.
+function Separator(id: string, updateDock: () => void, register: (id: string, s: any) => void, height = 40) {
+    const baseWidth = 48 // Slot: 32 + 16 Gap
+    // Container for Hitbox (invisible, wide, fixed height)
     const box = new Gtk.Box({
         css_classes: ["cd-separator-container"],
-        valign: Gtk.Align.FILL, halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
         width_request: 32, // WIDE CLICK AREA
         height_request: height,
+        hexpand: false,
     })
 
     // Visible Line
@@ -51,24 +54,34 @@ function Separator(updateDock: () => void, height = 32) {
         name: "cd-separator", css_classes: ["cd-separator"],
         valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
         width_request: 2, height_request: height,
-        hexpand: true, // Center inside 32px
+        hexpand: false, // Strict width
         margin_start: 15, margin_end: 15
     })
 
     box.append(line)
 
+    // Actually, let's keep it simple: the box can hold a reference to its state
+    const state = {
+        target: 1.0,
+        current: 1.0,
+        virtualCenter: 0,
+        isSeparator: true,
+        update: (scale: number) => {
+            box.set_size_request(Math.round(baseWidth * scale), height)
+        }
+    }
+    register(id, state)
+        ; (box as any).setVirtualCenter = (v: number) => { state.virtualCenter = v }
+
     // DROP ON SEPARATOR = APPEND TO LIST
-    // Relaxed Formats: Accept potentially any string-like thing
     const target = new Gtk.DropTarget({ actions: Gdk.DragAction.COPY | Gdk.DragAction.MOVE, formats: null })
     target.set_gtypes([GObject.TYPE_STRING]) // Explicit String Type
 
     target.connect("enter", () => {
-        console.log(`[DnD] Enter Separator`)
         return Gdk.DragAction.COPY
     })
 
     target.connect("drop", (t, val) => {
-        console.log(`[DnD] DROP on Separator (Append)`)
         let sourceId = ""
         if (typeof val === "string") sourceId = val
         else if (val && (val as any).get_string) sourceId = (val as unknown as GObject.Value).get_string()
@@ -225,10 +238,9 @@ const dragBus = {
 
 // --- DOCK ITEM COMPONENT ---
 
-function DockItem(appItem: AstalApps.Application, updateDock: () => void, addresses: string[] = [], clientTitle?: string) {
+function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () => void, register: (id: string, s: any) => void, addresses: string[] = [], clientTitle?: string, referenceWidget?: Gtk.Widget) {
     // Preserve case for icon lookups if possible, but use lower for comparison
     const rawId = (appItem.get_id ? appItem.get_id() : (appItem.id || appItem.icon_name || appItem.name || "void")).replace(".desktop", "")
-    const appId = rawId.toLowerCase()
 
     const itemBox = new Gtk.Box({
         name: "cd-item-" + appId,
@@ -254,6 +266,11 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
         }
     })
     itemBox.connect("destroy", unsub)
+
+        // EXPOSE VIRTUAL CENTER UPDATE for Dynamic Grid
+        ; (itemBox as any).setVirtualCenter = (v: number) => {
+            state.virtualCenter = v
+        }
 
     const iconBox = new Gtk.Box({
         name: "cd-icon-box-" + appId,
@@ -296,6 +313,28 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
     } else {
         child = Gtk.Image.new_from_icon_name("image-missing")
     }
+
+    // --- MAGNIFICATION PHYSICS V10 (Unified) ---
+    const iconSize = 64
+    const slotSize = 80 // Icon (64) + Gap (16)
+
+    const state = {
+        target: 1.0,
+        current: 1.0,
+        virtualCenter: 0,
+        isSeparator: false,
+        update: (scale: number) => {
+            const visualSize = Math.round(iconSize * scale)
+            if (child && (child as any).set_pixel_size) (child as any).set_pixel_size(visualSize)
+            itemBox.set_size_request(Math.round(slotSize * scale), 92)
+        }
+    }
+    register(appId, state)
+
+        // EXPOSE VIRTUAL CENTER UPDATE
+        ; (itemBox as any).setVirtualCenter = (v: number) => {
+            state.virtualCenter = v
+        }
 
     // Standard Scaling for all Gtk.Image icons
     // @ts-ignore
@@ -683,6 +722,13 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
 
 // --- MAIN DOCK ---
 
+// --- MOUSE BUS FOR MAGNIFICATION ---
+const mouseBus = {
+    listeners: new Set<(x: number) => void>(),
+    emit(x: number) { this.listeners.forEach(l => l(x)) },
+    subscribe(l: (x: number) => void) { this.listeners.add(l); return () => this.listeners.delete(l) }
+}
+
 export default function Dock(gdkmonitor: Gdk.Monitor) {
     console.log("[DISTROIA] Dock() called");
     // CACHE for consistent widget identity & animations
@@ -694,61 +740,174 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         halign: Gtk.Align.CENTER,
         overflow: Gtk.Overflow.VISIBLE,
         height_request: 92,
-        spacing: 16,
+        spacing: 0, // V7: Total control via widget width_request
         can_focus: false,
     })
+
+    // --- GAUSSIAN V10 UNIFIED ENGINE ---
+    type AnimState = { target: number, current: number, update: (val: number) => void, virtualCenter: number }
+    const animRegistry = new Map<string, AnimState>()
+    let globalAnimId = 0
+    let smoothedBarWidth = 200
+
+    const runUnifiedTick = () => {
+        if (globalAnimId !== 0) return
+        globalAnimId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
+            let active = false
+            animRegistry.forEach((state) => {
+                const step = (state.target - state.current) * 0.15
+                if (Math.abs(step) > 0.001) {
+                    state.current += step
+                    state.update(state.current)
+                    active = true
+                } else if (state.current !== state.target) {
+                    state.current = state.target
+                    state.update(state.current)
+                }
+            })
+
+            // Sync Background Width
+            const targetWidth = bar.get_allocation().width
+            if (targetWidth > 0) {
+                const bgStep = (targetWidth - smoothedBarWidth) * 0.15
+                if (Math.abs(bgStep) > 0.1) {
+                    smoothedBarWidth += bgStep
+                    da.queue_draw()
+                    active = true
+                } else if (smoothedBarWidth !== targetWidth) {
+                    smoothedBarWidth = targetWidth
+                    da.queue_draw()
+                }
+            }
+
+            if (!active) {
+                globalAnimId = 0
+                return GLib.SOURCE_REMOVE
+            }
+            return GLib.SOURCE_CONTINUE
+        })
+    }
+
+    const updateAllTargets = (mouseX: number) => {
+        animRegistry.forEach((state) => {
+            if (mouseX === -1000) {
+                state.target = 1.0
+            } else {
+                const dist = Math.abs(mouseX - state.virtualCenter)
+                const maxScale = (state as any).isSeparator ? 1.3 : 1.5
+                const sigma = 100
+                const target = 1 + ((maxScale - 1) * Math.exp(-(dist ** 2) / (2 * (sigma ** 2))))
+                state.target = target < 1.005 ? 1.0 : target
+            }
+        })
+        runUnifiedTick()
+    }
+    let bgAnimId = 0
+
+    const startBgAnimation = () => {
+        if (bgAnimId !== 0) return
+        bgAnimId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
+            const alloc = bar.get_allocation()
+            const target = alloc.width > 0 ? alloc.width : smoothedBarWidth
+            const step = (target - smoothedBarWidth) * 0.15
+            smoothedBarWidth += step
+            da.queue_draw()
+            if (Math.abs(target - smoothedBarWidth) < 0.1) {
+                smoothedBarWidth = target
+                da.queue_draw()
+                bgAnimId = 0
+                return GLib.SOURCE_REMOVE
+            }
+            return GLib.SOURCE_CONTINUE
+        })
+    }
+
+    // MOTION CONTROLLER
+    // MOTION CONTROLLER - Attached to STATIC Container (Layout), not dynamic Bar
+    const motion = new Gtk.EventControllerMotion()
+    motion.connect("enter", () => { /* console.log("Enter Dock") */ })
+    motion.connect("motion", (controller, x, y) => {
+        updateAllTargets(x)
+    })
+    motion.connect("leave", () => {
+        updateAllTargets(-1000)
+    })
+
+    // Attach to the layout (Overlay) which is full width
+    // Attach to the layout (Overlay) which is full width
+    const layout = new Gtk.Overlay({ name: "dock-main-overlay", css_classes: ["cd-main-overlay"], valign: Gtk.Align.FILL, halign: Gtk.Align.FILL, overflow: Gtk.Overflow.VISIBLE })
+    layout.add_controller(motion)
+
     const da = new Gtk.DrawingArea({
         name: "dock-drawing-area",
         css_classes: ["cd-drawing-area"],
         valign: Gtk.Align.FILL,
-        halign: Gtk.Align.CENTER,
+        halign: Gtk.Align.FILL, // Full Fill
         height_request: 160,
         overflow: Gtk.Overflow.VISIBLE,
         can_focus: false,
     })
     da.set_draw_func((_, cr, w, h) => {
         cr.setOperator(0); cr.paint(); cr.setOperator(2);
+
+        // DYNAMIC BACKGROUND SIZING (SMOOTHED V9)
+        const pillWidth = smoothedBarWidth + 32 // +32px padding
+
+        // Center the pill in the full-width drawing area
+        const xOffset = (w - pillWidth) / 2
+
         const dockHeight = 92
         const yOffset = h - dockHeight
+
         cr.save()
-        cr.translate(0, yOffset)
-        drawSquircle(cr, w, dockHeight)
+        cr.translate(xOffset, yOffset) // Move to calculated center
+        drawSquircle(cr, pillWidth, dockHeight)
         cr.restore()
     })
 
-    const layout = new Gtk.Overlay({ name: "dock-main-overlay", css_classes: ["cd-main-overlay"], valign: Gtk.Align.FILL, halign: Gtk.Align.CENTER, overflow: Gtk.Overflow.VISIBLE })
-    layout.set_child(da); layout.add_overlay(bar)
+    // WRAPPER: Force vertical stability
+    const shim = new Gtk.Box({
+        valign: Gtk.Align.END, halign: Gtk.Align.CENTER,
+        height_request: 92, // STRICT HEIGHT
+        overflow: Gtk.Overflow.VISIBLE,
+        css_classes: ["cd-dock-shim"],
+    })
+    // Bar inside shim
+    // bar.valign = CENTER ensures that if bar grows (visual), it grows from center of 92px shim
+    bar.valign = Gtk.Align.CENTER
+    shim.append(bar)
 
-    const mainContainer = new Gtk.Box({ name: "dock-main-container", css_classes: ["cd-dock-container"], valign: Gtk.Align.FILL, halign: Gtk.Align.CENTER, hexpand: false, vexpand: false, can_focus: false })
+    layout.set_child(da); layout.add_overlay(shim)
+
+    const mainContainer = new Gtk.Box({
+        name: "dock-main-container", css_classes: ["cd-dock-container"],
+        valign: Gtk.Align.FILL, halign: Gtk.Align.FILL,
+        hexpand: true, vexpand: false, can_focus: false
+    })
     mainContainer.append(layout)
 
     const update = () => {
-        const items: Gtk.Widget[] = []
+        // VIRTUAL GRID REFACTOR: Collection Phase
+        type ItemConfig = { id: string, width: number, factory: (vc: number) => Gtk.Widget }
+        const configs: ItemConfig[] = []
         const currentIds = new Set<string>()
 
-        // Helper to get/create widget
+        // Helper to get/create widget (Used later in instantiation phase)
         const getOrCreateItem = (id: string, factory: () => Gtk.Widget) => {
             currentIds.add(id)
             if (widgetCache.has(id)) {
                 return widgetCache.get(id)!
             }
-
-            // NEW ITEM -> ANIMATE
             const widget = factory()
-
-            // Wrap in Revealer for insertion animation
+            // Wrap in revealer
             const revealer = new Gtk.Revealer({
-                css_classes: ["cd-revealer"], // Hook for overflow control
+                css_classes: ["cd-revealer"],
                 transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT,
                 transition_duration: 300,
                 child: widget,
-                reveal_child: false // Start hidden
+                reveal_child: false
             })
-
-            // Trigger reveal after mount
-            // We use GLib.timeout_add
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { revealer.reveal_child = true; return GLib.SOURCE_REMOVE })
-
             widgetCache.set(id, revealer)
             return revealer
         }
@@ -789,7 +948,14 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             icon_name: "user-home",
             launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
         }
-        items.push(getOrCreateItem("finder", () => DockItem(finder as any, update, [])))
+        configs.push({
+            id: "finder", width: 80,
+            factory: (vc) => {
+                const w = DockItem("finder", finder as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar)
+                if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                return w
+            }
+        })
 
         // 2. Process Pinned List
         pinnedList.filter(id => !!id).forEach(id => {
@@ -820,14 +986,27 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                     // @ts-ignore
                     appItem.icon_name = originalId.replace(/-default$/i, "-Default")
                 }
-                items.push(getOrCreateItem("pinned-" + lid, () => DockItem(appItem, update, addrs, clientTitle)))
+                configs.push({
+                    id: "pinned-" + lid, width: 80,
+                    factory: (vc) => {
+                        const w = DockItem(lid, appItem!, update, (id, s) => animRegistry.set(id, s), addrs, clientTitle, bar)
+                        if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                        return w
+                    }
+                })
             } else {
                 const aliases: Record<string, string> = { "system-file-manager": "org.gnome.Nautilus" }
-                // ... (Ghost logic) ...
                 let icon = aliases[lid] || originalId
                 if (lid.startsWith("chrome-") && lid.endsWith("-default")) icon = icon.replace(/-default$/i, "-Default")
                 const ghost = { name: originalId, icon_name: icon, launch: getLaunch(lid) } as any
-                items.push(getOrCreateItem("pinned-ghost-" + lid, () => DockItem(ghost, update, [])))
+                configs.push({
+                    id: "pinned-ghost-" + lid, width: 80,
+                    factory: (vc) => {
+                        const w = DockItem(lid, ghost, update, (id, s) => animRegistry.set(id, s), [], undefined, bar)
+                        if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                        return w
+                    }
+                })
             }
         })
 
@@ -847,54 +1026,80 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
                 appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default")
             }
-            items.push(getOrCreateItem("running-" + lid, () => DockItem(appItem, update, group.addresses, group.title)))
+            configs.push({
+                id: "running-" + lid, width: 80,
+                factory: (vc) => {
+                    const w = DockItem(lid, appItem!, update, (id, s) => animRegistry.set(id, s), group.addresses, group.title, bar)
+                    if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                    return w
+                }
+            })
         })
 
         // 4. Separator & Trash
-        items.push(getOrCreateItem("sep-trash", () => Separator(update)))
+        configs.push({
+            id: "sep-trash", width: 48,
+            factory: (vc) => {
+                const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 40)
+                if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                return w
+            }
+        })
+
         const trash = {
             name: "Papelera",
             icon_name: "user-trash",
             launch: () => execAsync("nautilus trash:///").catch(print)
         }
-        items.push(getOrCreateItem("trash", () => DockItem(trash as any, update, [])))
+        configs.push({
+            id: "trash", width: 80,
+            factory: (vc) => {
+                const w = DockItem("trash", trash as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar)
+                if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                return w
+            }
+        })
+
+        // VIRTUAL GRID V7: Slot-Based Calculation
+        const count = configs.length
+        const totalWidth = configs.reduce((sum, c) => sum + c.width, 0)
+
+        const screenWidth = gdkmonitor.get_geometry().width
+        const startX = (screenWidth - totalWidth) / 2
+
+        let currentX = startX
+        const finalItems = configs.map((c) => {
+            const myCenter = currentX + (c.width / 2)
+            currentX += c.width
+
+            const widget = getOrCreateItem(c.id, () => c.factory(myCenter))
+            const inner = (widget as Gtk.Revealer).get_child()
+            if (inner && (inner as any).setVirtualCenter) (inner as any).setVirtualCenter(myCenter)
+            return widget
+        })
 
         // Diff & Prune Cache
         for (const [id, w] of widgetCache) {
             if (!currentIds.has(id)) {
                 widgetCache.delete(id)
-                // Widget destroyed implicitly by not being in set_children? 
-                // Gtk.Box.set_children calls unparent() on old children. 
-                // We should ensure they are properly cleaned up if needed, but unparent is usually enough.
-                // Actually, if we hold a reference in Map, it won't be GC'd. 
-                // We must manually destroy or release.
-                // But simply not adding it to new list will remove it from UI.
             }
         }
-
-        // Sync with bar
-        // Efficient update: only change if difference? 
-        // Gtk.Box.set_children doesn't exist in GJS/AGS binding usually? 
-        // We usually iterate and append/remove.
 
         // Manual Child Sync Algo
         const currentChildren = [] as Gtk.Widget[]
         let child = bar.get_first_child()
         while (child) { currentChildren.push(child); child = child.get_next_sibling() }
 
-        // Naive for now: Clear and re-append. 
-        // Since we are reusing widgets from cache, re-appending them moves them.
-        // It preserves state because the GObject instance is the same!
-
         // Remove all current
         currentChildren.forEach(c => bar.remove(c))
         // Append new order
-        items.forEach(i => bar.append(i))
+        finalItems.forEach(i => bar.append(i))
 
         const [_, nat] = bar.get_preferred_size()
         if (nat) {
             const monitorWidth = gdkmonitor.get_geometry().width
-            const w = Math.min(Math.ceil(nat.width) + 48, monitorWidth * 0.95)
+            // EXPANSION: Layout is now full width to allow Magnification overflow
+            const w = monitorWidth
             da.set_size_request(w, 160)
             if (win) { win.set_default_size(w, 160); win.set_size_request(w, 160) }
         }
@@ -929,7 +1134,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         Gtk4LayerShell.set_namespace(win, "crystal-dock");
         Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY);
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true);
-        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 10); // PHYSICAL GAP
+        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true);
+        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true);
+        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 10);
         Gtk4LayerShell.set_exclusive_zone(win, 112); // ZONE = 10 (Gap) + 92 (Docker) + 10 (Window Gap)
     } catch (e) { console.error(e) }
 

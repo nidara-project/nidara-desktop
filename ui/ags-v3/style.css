@@ -133,11 +133,13 @@ box.cd-item {
 
 /* --- 3. ESTILOS PROPIOS (cd-*) --- */
 #the-dock-bar {
-  padding: 0 16px;
+  padding: 0;
+  min-height: 92px;
+  max-height: 92px;
 }
 
 .cd-item {
-  margin: 0 5px;
+  margin: 0;
   /* Spacing for hover expansion */
   padding: 0;
   background-color: transparent;
@@ -145,7 +147,7 @@ box.cd-item {
   border: none;
   box-shadow: none;
   transition: background-color 200ms ease;
-  min-height: 112px;
+  min-height: 92px;
   min-width: 64px;
 }
 
@@ -172,7 +174,7 @@ window#crystal-dock box.cd-drag-gap,
 
 /* Blindaje Nuclear de estados de sistema */
 .cd-item {
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1);
   margin-left: 0px;
   /* Explicit default */
 }
@@ -192,14 +194,12 @@ window#crystal-dock box.cd-drag-gap,
   margin: 0;
   padding: 0;
   background-color: transparent;
-  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  transition: none;
+  /* Physics controls transform/size */
   transform-origin: bottom center;
 }
 
-.cd-item:hover .cd-icon-container {
-  transform: scale(1.6);
-}
-
+/* Legacy Hover Removed for Physics */
 .cd-dot {
   min-height: 4px;
   min-width: 4px;
@@ -229,12 +229,15 @@ window#crystal-dock .cd-dot.focused {
 
 /* High Specificity ID Selector to defeat Nuclear Reset safely */
 window#crystal-dock box#cd-separator {
-  min-height: 32px;
+  min-height: 40px;
+  max-height: 40px;
   min-width: 2px;
   background-color: rgba(255, 255, 255, 0.5);
   margin: 0 12px;
   border-radius: 2px;
   opacity: 1;
+  vertical-align: center;
+  /* CSS syntax implies valign handled by parent layout mostly, but helpful fallback */
 }
 
 /* Tooltips (cd-tooltip) */
