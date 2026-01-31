@@ -106,18 +106,28 @@ class AppService {
     private applyOverrides() {
         const overrides: Record<string, string> = {
             "nautilus": "org.gnome.Nautilus",
-            "system-file-manager": "org.gnome.Nautilus",
             "terminal": "org.gnome.Terminal",
             "utilities-terminal": "org.gnome.Terminal",
             "gnome-terminal-server": "org.gnome.Terminal",
             "kitty": "terminal",
             "google-chrome": "google-chrome",
-            "chrome": "google-chrome"
+            "chrome": "google-chrome",
+            // Antigravity & File Manager Standardization
+            "antigravity": "antigravity",
+            "Antigravity": "antigravity",
+            "code-url-handler": "antigravity", // VSCode URL handler fallback
+            "/usr/share/pixmaps/antigravity.png": "antigravity" // Force unification
         }
 
         Object.entries(overrides).forEach(([key, iconName]) => {
-            const name = this.getCanonicalName(iconName)
-            if (name) this.nameMap.set(key, name)
+            // Special Case: If key matches the hardcoded path, map directly to the name without canonical lookup
+            if (key.startsWith("/")) {
+                this.nameMap.set(key, iconName)
+                return
+            }
+
+            const name = this.getCanonicalName(iconName) || iconName
+            if (name) this.nameMap.set(key.toLowerCase(), name)
         })
     }
 

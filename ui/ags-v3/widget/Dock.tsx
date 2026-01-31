@@ -18,7 +18,9 @@ const appsService = new AstalApps.Apps()
 
 let pinnedList: string[] = []
 try {
-    pinnedList = JSON.parse(readFile(PINNED_FILE)) as string[]
+    const raw = JSON.parse(readFile(PINNED_FILE)) as string[]
+    // Auto-Sanitization: Dedup and filter paths to prevent ghosts
+    pinnedList = [...new Set(raw)].filter(id => !id.startsWith("/"))
 } catch {
     pinnedList = []
 }
@@ -40,6 +42,8 @@ function Separator() {
         css_classes: ["cd-separator"],
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
+        width_request: 2, // Explicit width for visibility
+        height_request: 32, // Explicit height
         has_tooltip: false, // NUCLEAR
     })
 }
@@ -580,44 +584,34 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         })
 
         const findApp = (searchId: string) => {
-            const aliases: Record<string, string> = {
-                "system-file-manager": "org.gnome.Nautilus",
-                "antigravity": "antigravity"
-            }
             const lid = searchId.toLowerCase().replace(".desktop", "")
-            const targetId = aliases[lid] || searchId
-            const tlid = targetId.toLowerCase().replace(".desktop", "")
 
             // Precise match in registry (lid-to-lid)
             let app = appsService.list.find(a => {
                 const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase().replace(".desktop", "")
-                return aid === tlid
+                return aid === lid
             })
             // Fuzzy fallback (handles class-to-desktop)
-            if (!app) app = appsService.fuzzy_query(targetId)?.[0]
+            if (!app) app = appsService.fuzzy_query(lid)?.[0]
             return app
         }
 
-        const desktopMap: { [key: string]: string } = {
-            "gnome-terminal-server": "org.gnome.Terminal",
-            "org.gnome.nautilus": "org.gnome.Nautilus",
-            "nautilus": "org.gnome.Nautilus",
-            "org.gnome.settings": "org.gnome.Settings",
-            "antigravity": "antigravity",
-            "system-file-manager": "org.gnome.Nautilus"
-        }
-        const groupMap: { [key: string]: string } = {
-            "system-file-manager": "org.gnome.nautilus",
-            "antigravity": "antigravity"
-        }
-
         const getLaunch = (lid: string) => {
-            if (lid === "antigravity") {
-                return () => execAsync(`bash -c "unset LD_PRELOAD; /usr/share/antigravity/antigravity &"`).catch(print)
-            }
-            const desktopId = desktopMap[lid] || lid
+            const app = appService.getAppData(lid)
+            const desktopId = app?.id || lid
             return () => execAsync(`gtk-launch ${desktopId}`).catch(print)
         }
+
+        // 0. Static: User Home (Dynamic Name)
+        const userName = GLib.get_user_name()
+        const prettyName = userName.charAt(0).toUpperCase() + userName.slice(1)
+
+        const finder = {
+            name: prettyName,
+            icon_name: "user-home", // Restore Semantic "House" Icon
+            launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
+        }
+        items.push(DockItem(finder as any, update, []))
 
         // 2. Process Pinned List
         pinnedList.filter(id => !!id).forEach(id => {
@@ -626,18 +620,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
             let appItem = findApp(id)
 
-            // Antigravity Override (System Necessity)
-            if (lid === "antigravity") {
-                appItem = {
-                    ...(appItem || {}),
-                    name: "Antigravity",
-                    icon_name: "/usr/share/pixmaps/antigravity.png",
-                    launch: getLaunch(lid)
-                } as any
-            }
-
             // Match with running group
-            const targetKey = groupMap[lid] || lid
+            const targetKey = lid
             const groupKey = Object.keys(groupedClients).find(k => k === targetKey || k.includes(targetKey))
             let addrs: string[] = []
             let clientTitle = undefined
@@ -707,6 +691,15 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
             items.push(DockItem(appItem, update, group.addresses, group.title))
         })
+
+        // 4. Static: Trash (Recycle Bin)
+        items.push(Separator())
+        const trash = {
+            name: "Papelera",
+            icon_name: "user-trash", // Future: Dynamic check if full
+            launch: () => execAsync("nautilus trash:///").catch(print)
+        }
+        items.push(DockItem(trash as any, update, []))
 
         // Sync with bar
         let child = bar.get_first_child()

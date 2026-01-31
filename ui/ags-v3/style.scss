@@ -208,13 +208,14 @@ window#crystal-dock .cd-dot.focused {
   border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
-.cd-separator {
-  min-height: 48px;
-  min-width: 1px;
-  background-color: rgba(255, 255, 255, 0.3);
-  /* VISIBLE WHITE */
-  margin: 0 8px;
-  /* Tighter margins */
+/* High Specificity ID Selector to defeat Nuclear Reset safely */
+window#crystal-dock box#cd-separator {
+  min-height: 32px;
+  min-width: 2px;
+  background-color: rgba(255, 255, 255, 0.5);
+  margin: 0 12px;
+  border-radius: 2px;
+  opacity: 1;
 }
 
 /* Tooltips (cd-tooltip) */
