@@ -9,16 +9,16 @@ window.crystal-dock,
 .background,
 .view,
 .fullscreen {
-  background-color: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
-  border: none !important;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
 }
 
 /* Neutralización Específica con Ruta Completa */
 .dock-window.fullscreen .cd-dock-container .dock-overlay .cd-bar {
-  background-color: transparent !important;
-  border: none !important;
+  background-color: transparent;
+  border: none;
 }
 
 /* --- 2. SELECTORES DE "FINAL WAR" ID HIERARCHY --- */
@@ -27,49 +27,93 @@ window#crystal-dock>box#dock-main-container,
 window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay,
 window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay>widget,
 window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay>widget>box#the-dock-bar {
-  background-color: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
-  border: none !important;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
 }
 
 
 /* --- NUCLEAR: KILL FULLSCREEN BACKGROUNDS (User Requested) --- */
+/* --- EXORCISMO CSS (Nuclear Paradox Fix) --- */
+/* Atacamos la raíz de la ventana y sus capas ocultas */
 window#crystal-dock,
 window#crystal-dock decoration,
 window#crystal-dock background,
 window#crystal-dock main,
-window#crystal-dock contents,
-window#crystal-dock.fullscreen,
-window#crystal-dock.fullscreen>decoration,
-window#crystal-dock.fullscreen>background,
-window#crystal-dock.fullscreen>contents {
-  background-color: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
-  border: none !important;
-  outline: none !important;
+window#crystal-dock contents {
+  background-color: rgba(0, 0, 0, 0);
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* 2. UNIVERSAL WIDGET RESET (The "Black Hole") */
+/* Esto fuerza a que NINGUN hijo herede estilos del tema Yaru/Adwaita */
+window#crystal-dock * {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  text-shadow: none;
+  -gtk-icon-shadow: none;
 }
 
 /* --- NUCLEAR: KILL INTERMEDIATE CONTAINERS (Strict IDs) --- */
 #dock-main-container,
-.cd-dock-container,
 #dock-main-overlay,
-#the-dock-bar {
-  background-color: transparent !important;
-  background-image: none !important;
-  border: none !important;
-  box-shadow: none !important;
+.cd-dock-container,
+.cd-main-overlay,
+.cd-overlay,
+.overlay,
+#dock-drawing-area,
+.cd-drawing-area,
+#the-dock-bar,
+.cd-dock-bar,
+.cd-tooltip,
+.cd-tooltip>contents,
+.cd-tooltip>background,
+.cd-popover,
+.cd-popover>contents,
+.cd-popover>background,
+tooltip,
+.background {
+  background-color: rgba(0, 0, 0, 0);
+  background-image: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* --- TOOLTIP NEUTRALIZATION --- */
+window#crystal-dock tooltip,
+window#crystal-dock tooltip.background,
+window#crystal-dock tooltip>box,
+window#crystal-dock tooltip>box>label,
+window#crystal-dock tooltip>box>image,
+#crystal-dock tooltip,
+#crystal-dock tooltip.background,
+#crystal-dock .background,
+tooltip,
+tooltip.background,
+popover background {
+  background-color: transparent;
+  background-image: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  opacity: 0;
 }
 
 /* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
 .cd-item,
 .cd-item>contents,
 box.cd-item {
-  background-color: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
-  border: none !important;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
 }
 
 
@@ -106,9 +150,7 @@ box.cd-item {
   background-image: none;
 }
 
-.cd-dot.open {
-  background-color: rgba(255, 255, 255, 0.95) !important;
-}
+/* .cd-dot.open consolidated below */
 
 .cd-icon-container {
   margin: 0;
@@ -131,15 +173,15 @@ box.cd-item {
 }
 
 .cd-dot.open {
-  background-color: rgba(255, 255, 255, 0.95) !important;
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.6) !important;
+  background-color: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 4px rgba(255, 255, 255, 0.6);
   border-radius: 50%;
 }
 
 .cd-separator {
   min-height: 48px;
   min-width: 1.2px;
-  background-color: rgba(255, 255, 255, 0.2) !important;
+  background-color: rgba(255, 255, 255, 0.2);
   margin: 0 12px;
 }
 
@@ -152,11 +194,12 @@ popover.cd-tooltip {
 }
 
 popover.cd-tooltip contents {
-  background-color: #ffffff;
+  background-color: transparent;
+  /* FORCE TRANSPARENCY */
   border-radius: 12px;
   padding: 6px 14px;
   margin-bottom: 5px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  box-shadow: none;
 }
 
 .cd-tooltip-label {
@@ -177,4 +220,39 @@ popover.cd-tooltip contents {
 .cd-menu-action:hover {
   background-color: #007aff;
   color: #ffffff;
+}
+
+/* ==========================================================================
+   FINAL STRIKE: NEUTRALIZACION DE CLASES DE SISTEMA (FULLSCREEN/BACKGROUND)
+   ========================================================================== */
+
+/* 1. Ataque directo al nodo fantasma del tooltip y su fondo */
+window#crystal-dock tooltip,
+window#crystal-dock tooltip.background,
+window#crystal-dock .background,
+#crystal-dock tooltip,
+#crystal-dock tooltip.background,
+#crystal-dock .background {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  /* Asegura que no ocupe espacio ni se dibuje */
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  opacity: 0;
+}
+
+/* 2. Red de seguridad para la ventana raiz si sigue en fullscreen o hereda temas */
+window#crystal-dock,
+window#crystal-dock.fullscreen,
+window#crystal-dock decoration,
+#crystal-dock,
+#crystal-dock.fullscreen {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
 }

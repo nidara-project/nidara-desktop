@@ -1,73 +1,35 @@
-# Protocolo Anti-Morado: Configuración de Transparencia Hyprland
+# Protocolo "Cristal Puro" para DistroIA (AGS v3)
 
-> [!IMPORTANT]
-> Este documento define la **UNICA** configuración validada que garantiza la eliminación del fondo/borde morado en el Dock transparente. Cualquier desviación reintroducirá el artefacto.
+Este documento define la técnica oficial para lograr la transparencia absoluta y el blur perfecto en el Dock.
 
-## 1. El Problema "Purple Haze"
+## 1. Lógica del Blur (Hyprland Skill)
+Para que el desenfoque sea nítido y respire con el fondo, usamos la **Lógica de Alpha Inversa**:
+- **Dibujo (Cairo)**: Opacidad del relleno fija en `0.12`.
+- **Umbral (Hyprland)**: `ignore_alpha` fijo en `0.10`.
+- **Efecto**: Hyprland "atrapa" el 12% de blanco y aplica el desenfoque sobre él, creando un cristal traslúcido real.
 
-El "fondo morado" o borde oscuro alrededor del dock es causado por el shader de desenfoque (blur) de Hyprland interactuando con píxeles de baja opacidad (sombras, bordes de ventana, o basura del tema GTK) que no son totalmente transparentes.
-
-*   **Síntoma**: Halo morado/negro alrededor o detrás del dock.
-*   **Causa**: `ignore_alpha` demasiado bajo permite que el blur procese píxeles "casi" transparentes (ej. alpha 0.01 - 0.1).
-
-## 2. La Solución "Golden Config" (Sintaxis V2)
-
-Para eliminar el morado, debemos ser **agresivos** con el filtrado alpha y puristas con el renderizado de color.
-
-**Archivo**: `~/.config/hypr/hyprland.conf`
-
-```ini
-# --- REGLA DE ORO ---
-layerrule = blur 1, match:namespace crystal-dock
-layerrule = ignore_alpha 0.5, match:namespace crystal-dock
-layerrule = xray 1, match:namespace crystal-dock
+## 2. Sintaxis de Bloques (v0.53.3)
+Es obligatorio usar la sintaxis de bloque para asegurar que todas las propiedades se apliquen correctamente:
+```hyprland
+layerrule {
+  name = crystal-dock-glass
+  match:namespace = crystal-dock
+  ignore_alpha = 0.1
+  blur = on
+  xray = 1
+}
 ```
 
-### Componentes Críticos
+## 3. Limpieza de Hardware (Dock.tsx)
+Aunque el blur es la clave, mantenemos la transparencia de base en el código:
+- `win.app_paintable = true`: Cede el control total del dibujo a Cairo.
+- `win.input_shape_combine_region(null)`: Asegura que el buffer de GDK no oculte el canal alpha.
 
-1.  **`match:namespace` (Sintaxis Estricta V2)**
-    *   **Obligatorio**: Hyprland v0.53+ requiere selectores explícitos.
-    *   *Prohibido*: Usar sintaxis antigua sin `match:` (ej. `blur, crystal-dock`).
+## 4. El Desafío del Dock: Lecciones Aprendidas
+El Dock de AGS v3 ha sido el componente más complejo de calibrar debido a la interacción entre GTK y Hyprland:
+- **Centrado Vertical**: Se logró mediante un contenedor `Box` con `vpack: "center"`, evitando que los iconos "bailaran" durante la magnificación.
+- **Magnificación vs Layer Shell**: El mayor reto fue evitar que los iconos magnificados fueran recortados. La solución fue definir una `exclusive_zone` de `10px` pero permitir que la ventana real de GDK sea más grande, permitiendo el desbordamiento visual sin colisiones de layout.
+- **Z-Index y Foco**: Se configuró como `layer: "top"` para garantizar que siempre esté visible sobre las ventanas, pero con reglas de blur que lo integran orgánicamente con el wallpaper.
 
-2.  **`ignore_alpha 0.5` (El "Martillo")**
-    *   **Función**: Ordena al compositor IGNORAR cualquier píxel con opacidad menor al 50%.
-    *   **Efecto**: Elimina el morado porque la "basura" del tema suele ser sutil (< 0.2).
-    *   **Trade-off**: Si el dock tiene opacidad 0.12, **también pierde el blur**. Es el precio de la transparencia perfecta sin artefactos.
-    *   *Prohibido*:ajar este valor por debajo de 0.2 traerá de vuelta el morado.
-
-3.  **`xray 1` (Pureza)**
-    *   **Función**: Renderizado "paso a través". Evita que el blur se mezcle erróneamente con el fondo negro/oscuro.
-    *   *Prohibido*: Eliminar esta línea.
-
-## 3. Lista de Verificación de Mantenimiento
-
-Si el morado vuelve tras una actualización, verificar:
-
-- [ ] ¿Se ha roto la sintaxis en `hyprland.conf`? (Verificar con `hyprctl reload`).
-- [ ] ¿Alguien bajó `ignore_alpha` a `0.1` o `0.05` intentando recuperar el blur? -> **REVERTIR A 0.5**.
-- [ ] ¿Se ha desactivado `xray`? -> **REACTIVAR**.
-
-## 4. FAQ Crítico: "¿Por qué no hay Blur?"
-
-**Respuesta**: Porque `ignore_alpha 0.5` está haciendo su trabajo "demasiado bien".
-
-*   Tu Dock actual (0.12) es ignorado por el filtro (0.5).
-*   **Intento Fallido**: Probamos bajar el filtro a `0.15`. **Resultado**: El morado volvió.
-*   **Conclusión**: La "basura" del tema es > 0.15. No se puede bajar el filtro.
-
-### ¿Se puede arreglar?
-Solo hay dos caminos:
-1.  **Opción A (Actual - Segura)**: Opacidad Dock 0.12 / Ignore 0.5 -> **Sin Blur**, Sin Morado.
-2.  **Opción B (Alta Opacidad)**: Subir Dock a **0.60** -> Blur vuelve, pero el dock será mucho más oscuro.
-
-*Estado*: Revertido a Opción A por estabilidad mental.
-
-## 5. Estado Actual (Aprobado)
-
-*   **Fondo**: Limpio (Transparente Real).
-*   **Bordes**: Nítidos (Sin Halo).
-*   **Blur**: **ACTIVADO y Nítido**.
-
-*   **Fondo**: Limpio (Transparente Real).
-*   **Bordes**: Nítidos (Sin Halo).
-*   **Blur**: Desactivado tácticamente (debido a `ignore_alpha 0.5`) para preservar la pureza visual.
+---
+*Este protocolo es la ley suprema del diseño en DistroIA. Cualquier componente nuevo (Waybar, SwayNC, etc.) debe someterse a estas reglas matemáticas de transparencia y profundidad.*

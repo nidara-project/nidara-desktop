@@ -8,6 +8,7 @@ import AstalHyprland from "gi://AstalHyprland"
 import AstalApps from "gi://AstalApps"
 import GObject from "gi://GObject"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
+import Cairo from "gi://cairo"
 
 // --- PERSISTENCE ---
 const PINNED_FILE = GLib.get_home_dir() + "/.config/dock_pinned.json"
@@ -29,9 +30,11 @@ const savePinned = () => writeFile(PINNED_FILE, JSON.stringify(pinnedList, null,
 
 function Separator() {
     return new Gtk.Box({
+        name: "cd-separator",
         css_classes: ["cd-separator"],
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
+        has_tooltip: false, // NUCLEAR
     })
 }
 
@@ -130,7 +133,7 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
 
     // 3. MAIN BACKGROUND FILL (Stable Majestic Glass 12%)
     path()
-    cr.setSourceRGBA(1, 1, 1, 0.12)
+    cr.setSourceRGBA(1, 1, 1, 0.12) // CATCH ALPHA - Translucent blur effect
     cr.fill()
 
     // 4. M3 RIM LIGHT
@@ -146,7 +149,8 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
     const appId = (appItem.get_id ? appItem.get_id() : (appItem.id || appItem.icon_name || appItem.name || "void")).replace(".desktop", "").toLowerCase()
 
     const itemBox = new Gtk.Box({
-        css_classes: ["dock-item"],
+        name: "cd-item-" + appId,
+        css_classes: ["cd-item"],
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
         height_request: 92, // RESTORE 92px
@@ -158,37 +162,47 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
         can_focus: false, // DISABLE THEME INTERFERENCE
         focus_on_click: false, // HARDENING
         receives_default: false, // NUCLEAR: No default handling
+        has_tooltip: false, // PREVENT NATIVE GHOST TOOLTIP
     })
 
     const iconBox = new Gtk.Box({
-        css_classes: ["icon-container"],
+        name: "cd-icon-box-" + appId,
+        css_classes: ["cd-icon-container"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END, // ANCHOR TO BOTTOM FOR GROWTH
         margin_bottom: 14,    // 14px from bottom of 92px widget
         margin_top: 0,
         margin_start: 0,
         margin_end: 0,
+        has_tooltip: false, // PREVENT NATIVE GHOST TOOLTIP
     })
 
     const image = new Gtk.Image({
+        name: "cd-icon-image-" + appId,
         icon_name: appItem.icon_name || "application-x-executable",
         pixel_size: 64,
+        has_tooltip: false, // NUCLEAR
     })
     iconBox.append(image)
 
-    const dot = new Gtk.Box({ css_classes: ["indicator-dot"] })
+    const dot = new Gtk.Box({ name: "cd-dot-" + appId, css_classes: ["cd-dot"], has_tooltip: false })
     const indicator = new Gtk.Box({
-        css_classes: ["indicator-container"],
+        name: "cd-indicator-" + appId,
+        css_classes: ["cd-indicator-container"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
         margin_bottom: 14, // 10 margin + 4 internal = INSIDE the crystal
+        has_tooltip: false, // NUCLEAR
     })
     indicator.append(dot)
 
     const overlay = new Gtk.Overlay({
+        name: "cd-overlay-" + appId,
+        css_classes: ["cd-overlay", "overlay"],
         overflow: Gtk.Overflow.VISIBLE,
         valign: Gtk.Align.FILL,
         vexpand: true,
+        has_tooltip: false, // NUCLEAR
     })
     overlay.set_child(iconBox)
     overlay.add_overlay(indicator)
@@ -196,14 +210,17 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
 
     // Tooltip
     const tooltip = new Gtk.Popover({
-        css_classes: ["dock-tooltip"],
+        name: "cd-tooltip-" + appId,
+        css_classes: ["cd-tooltip"],
         position: Gtk.PositionType.TOP,
         autohide: false,
         has_arrow: false,
+        has_tooltip: false, // NO NESTED TOOLTIPS
     })
+    tooltip.set_name("cd-tooltip-" + appId) // EXPLICIT ID FORCE
     tooltip.set_offset(0, -12) // Ensure it floats clearly above magnified icons
-    const label = new Gtk.Label({ label: appItem.name || "App", css_classes: ["tooltip-label"] })
-    const content = new Gtk.Box({ css_classes: ["tooltip-content"] })
+    const label = new Gtk.Label({ name: "cd-tooltip-lbl-" + appId, label: appItem.name || "App", css_classes: ["cd-tooltip-label"], has_tooltip: false })
+    const content = new Gtk.Box({ name: "cd-tooltip-box-" + appId, css_classes: ["cd-tooltip-content"], has_tooltip: false })
     content.append(label)
     tooltip.set_child(content)
     tooltip.set_parent(itemBox)
@@ -229,9 +246,9 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
 
     // Interaction
     const isPinned = pinnedList.some(p => p.toLowerCase() === appId)
-    const popover = new Gtk.Popover({ css_classes: ["dock-popover"] })
+    const popover = new Gtk.Popover({ css_classes: ["cd-popover"], has_tooltip: false })
     popover.set_parent(itemBox)
-    const menu = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+    const menu = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, has_tooltip: false })
 
     const actions = [
         { label: "Lanzar", action: () => appItem.launch() },
@@ -244,7 +261,8 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
         }
     ]
     actions.forEach(a => {
-        const b = new Gtk.Button({ label: a.label, css_classes: ["cd-menu-action"] })
+        const b = new Gtk.Button({ label: a.label, css_classes: ["cd-menu-action"], has_tooltip: false })
+        b.set_has_tooltip(false) // HARDENING
         b.set_has_frame(false) // HARDENING: No system frame drawing
         b.connect("clicked", () => { a.action(); popover.popdown() })
         menu.append(b)
@@ -316,14 +334,18 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
 export default function Dock(gdkmonitor: Gdk.Monitor) {
     const bar = new Gtk.Box({
         name: "the-dock-bar",
+        css_classes: ["cd-dock-bar"], // Explicit class overrides defaults
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
         overflow: Gtk.Overflow.VISIBLE,
         height_request: 92, // PHYSICAL OBJECT HEIGHT
         spacing: 16,
         can_focus: false,
+        has_tooltip: false, // NUCLEAR
     })
     const da = new Gtk.DrawingArea({
+        name: "dock-drawing-area",
+        css_classes: ["cd-drawing-area"],
         valign: Gtk.Align.FILL, // FILL WINDOW
         halign: Gtk.Align.CENTER,
         height_request: 160, // FULL CANVAS WIPE
@@ -331,18 +353,20 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         margin_top: 0,
         margin_bottom: 0,
         can_focus: false,
+        has_tooltip: false, // NUCLEAR
     })
     da.set_draw_func((_, cr, w, h) => {
-        // 1. CAIRO PRIORITY: WIPE EVERYTHING
-        // This physically erases the GTK Theme background pixels
-        cr.setOperator(0); cr.paint(); cr.setOperator(2);
+        // === GPU BUFFER CLEAR ===
+        // Ensures a clean surface before drawing
+        cr.setOperator(0); // CAIRO_OPERATOR_CLEAR
+        cr.paint();
+        cr.setOperator(2); // CAIRO_OPERATOR_OVER
 
-        // 2. Align Squircle to Bottom (92px height)
+        // === GLASS DRAWING ===
         // Canvas is 160, Object is 92. Y = 160 - 92 = 68.
         const dockHeight = 92
         const yOffset = h - dockHeight
 
-        // We translate the context so drawSquircle thinks it's at (0,0) of the dock area
         cr.save()
         cr.translate(0, yOffset)
         drawSquircle(cr, w, dockHeight)
@@ -352,11 +376,14 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     // 3. ID HIERARCHY: explicit names for every node
     const layout = new Gtk.Overlay({
         name: "dock-main-overlay", // ID: dock-main-overlay
+        css_classes: ["cd-main-overlay"],
         valign: Gtk.Align.FILL,
         halign: Gtk.Align.CENTER,
-        overflow: Gtk.Overflow.VISIBLE
+        overflow: Gtk.Overflow.VISIBLE,
+        has_tooltip: false, // NUCLEAR
     })
     layout.set_child(da); layout.add_overlay(bar)
+    layout.set_has_tooltip(false)
 
     // WRAPPER BOX matches Inspector's "dock-bar-container" but with strict ID
     const mainContainer = new Gtk.Box({
@@ -367,6 +394,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         hexpand: true,
         vexpand: true,
         can_focus: false,
+        has_tooltip: false, // NUCLEAR
     })
     mainContainer.append(layout)
 
@@ -414,14 +442,29 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     }
 
     const win = (
-        <window name="crystal-dock" namespace="crystal-dock" css_classes={["crystal-dock"]} gdkmonitor={gdkmonitor} anchor={Astal.WindowAnchor.BOTTOM} layer={Astal.Layer.TOP} application={app} visible heightRequest={160}>
+        <window
+            name="crystal-dock"
+            namespace="crystal-dock"
+            css_classes={["crystal-dock"]}
+            gdkmonitor={gdkmonitor}
+            application={app}
+            visible={true}
+            decorated={false}
+            heightRequest={160}
+            hasTooltip={false}>
             {mainContainer}
         </window>
     ) as any as Gtk.Window
+
+    // --- HARDWARE TRANSPARENCY & BLUR SYNC ---
+    try {
+        // @ts-ignore
+        win.app_paintable = true
+        // @ts-ignore
+        win.input_shape_combine_region(null)
+    } catch (e) { }
+
     win.set_decorated(false)
-    // CRITICAL: DISABLES THEME BACKGROUND PAINTING ("The Undercoat")
-    // @ts-ignore
-    win.app_paintable = true
 
     try {
         Gtk4LayerShell.init_for_window(win)
