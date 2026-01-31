@@ -757,10 +757,10 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     } catch (e) { console.error(e) }
 
     const cConn = hypr.connect("notify::clients", update)
-    const aConn = appsService.connect("notify::list", update)
+    const aConn = appService.connect(update)
     bar.connect("destroy", () => {
         hypr.disconnect(cConn)
-        appsService.disconnect(aConn)
+        aConn() // Disconnect manual callback
     })
 
     // Initial update + Safety delay for appsService to populate

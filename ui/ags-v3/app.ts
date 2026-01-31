@@ -13,8 +13,11 @@ app.start({
     console.log("[DISTROIA] main() started!");
     // Tacitly compile SCSS to CSS on startup for DistroIA
     try {
-      const scss = `${GLib.get_current_dir()}/style.scss`
-      const css = `${GLib.get_current_dir()}/style.css`
+      const configDir = GLib.get_current_dir()
+      const scss = `${configDir}/style.scss`
+      const css = `${configDir}/style.css`
+
+      console.log(`[DISTROIA] Compiling SCSS: ${scss} -> ${css}`)
       GLib.spawn_command_line_sync(`sass ${scss} ${css}`)
       GLib.spawn_command_line_sync(`sed -i '/@charset "UTF-8";/d' ${css}`)
       console.log("[DISTROIA] SCSS compiled and cleaned successfully.")
@@ -23,7 +26,6 @@ app.start({
     }
 
     // Manually inject CSS with the HIGHEST priority (USER = 800)
-    // This kills the system-wide purple theme once and for all.
     const styleFile = `${GLib.get_current_dir()}/style.css`
     const provider = new Gtk.CssProvider()
     provider.load_from_path(styleFile)

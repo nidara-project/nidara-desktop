@@ -14,15 +14,33 @@ export interface AppData {
 
 class AppService {
     private cache = new Map<string, AppData>()
-    private nameMap = new Map<string, string>() // Key -> Canonical Name or Path
+    private nameMap = new Map<string, string>()
+    private listeners = new Set<() => void>()
 
     constructor() {
         this.reload()
-        // Deep Sync: Secondary scan to catch delayed icon registration on boot
+
+        // Deep Sync: Secondary scan for boot resilience
         GLib.timeout_add(GLib.PRIORITY_LOW, 5000, () => {
             this.reload()
             return GLib.SOURCE_REMOVE
         })
+
+        // Theme Awareness: Refresh when the system theme changes
+        const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+        theme.connect("changed", () => {
+            console.log("[AppService] System theme changed, refreshing registry...")
+            this.reload()
+        })
+    }
+
+    connect(callback: () => void) {
+        this.listeners.add(callback)
+        return () => this.listeners.delete(callback)
+    }
+
+    private emit() {
+        this.listeners.forEach(cb => cb())
     }
 
     private getCanonicalName(n: string): string | null {
@@ -82,6 +100,7 @@ class AppService {
 
         this.applyOverrides()
         console.log(`[AppService] Registry synced. ${this.cache.size} apps, ${this.nameMap.size} names cached in ${Date.now() - start}ms.`)
+        this.emit()
     }
 
     private applyOverrides() {
