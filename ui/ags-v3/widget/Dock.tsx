@@ -7,6 +7,7 @@ import GLib from "gi://GLib"
 import AstalHyprland from "gi://AstalHyprland"
 import AstalApps from "gi://AstalApps"
 import GObject from "gi://GObject"
+import Gio from "gi://Gio"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 
@@ -22,11 +23,16 @@ try {
     pinnedList = []
 }
 
-const savePinned = () => writeFile(PINNED_FILE, JSON.stringify(pinnedList, null, 2))
+const savePinned = () => {
+    console.log(`[Dock] Saving pinned list: ${JSON.stringify(pinnedList)}`);
+    writeFile(PINNED_FILE, JSON.stringify(pinnedList, null, 2))
+}
+
+import appService from "../core/AppService"
+
+// --- DOCK ITEM COMPONENT ---
 
 // --- UI HELPERS ---
-
-
 
 function Separator() {
     return new Gtk.Box({
@@ -41,11 +47,11 @@ function Separator() {
 const drawSquircle = (cr: any, width: number, height: number, targetW?: number) => {
     if (width <= 0 || height <= 0) return
 
-    // CLEAR BUFFER: Nukes any theme residue from the DrawingArea context
+    // CLEAR BUFFER
     cr.setOperator(0); cr.paint(); cr.setOperator(2)
 
-    // SAFE MARGINS - Ensures rim and shadows are never clipped
-    const marginY = 0 // FILL THE 92PX WIDGET
+    // SAFE MARGINS
+    const marginY = 0
     const marginX = 12
     const drawH = height - (marginY * 2)
     const drawW = (targetW || width)
@@ -53,7 +59,7 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
     const y = marginY
 
     const r = drawH * 0.44
-    const n = 3.2 // Apple's Golden Ratio for G2 Continuous Curve
+    const n = 3.2
 
     cr.setAntialias(3)
     const path = (d = 0) => {
@@ -98,7 +104,7 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
 
     cr.setOperator(0); cr.paint(); cr.setOperator(2)
 
-    // 1. CLEAN OUTER SHADOW (Subtle grounding)
+    // 1. CLEAN OUTER SHADOW
     cr.save()
     cr.rectangle(0, 0, width, height)
     path()
@@ -108,7 +114,7 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
     cr.save()
     cr.translate(0, 4)
     path(4)
-    cr.setSourceRGBA(0, 0, 0, 0.04) // SAFELY BELOW ignore_alpha (0.05)
+    cr.setSourceRGBA(0, 0, 0, 0.04)
     cr.fill()
     cr.restore()
     cr.restore()
@@ -131,29 +137,32 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
     cr.setLineWidth(1)
     cr.stroke()
 
-    // 3. MAIN BACKGROUND FILL (Linear Gradient for Depth)
+    // 3. MAIN BACKGROUND FILL
     // @ts-ignore
     const gradient = new Cairo.LinearGradient(x, y, x, y + drawH)
-    gradient.addColorStopRGBA(0, 1, 1, 1, 0.22) // Lighter top
-    gradient.addColorStopRGBA(1, 1, 1, 1, 0.14) // Deeper bottom (Above 0.1)
+    gradient.addColorStopRGBA(0, 1, 1, 1, 0.22)
+    gradient.addColorStopRGBA(1, 1, 1, 1, 0.14)
     path()
     cr.setSource(gradient)
     cr.fill()
 
-    // 4. SPECULAR HIGHLIGHT (Top-light reflection)
+    // 4. SPECULAR HIGHLIGHT
     cr.save()
-    path()
+    cr.translate(0, 1) // 1px Top inset
+    path(0)
     cr.clip()
-    cr.newPath()
-    cr.moveTo(x + r, y + 1)
-    cr.lineTo(x + drawW - r, y + 1)
-    cr.setSourceRGBA(1, 1, 1, 0.45) // Bright specular
+
+    // @ts-ignore
+    const rimGrad = new Cairo.LinearGradient(x, y, x, y + 4)
+    rimGrad.addColorStopRGBA(0, 1, 1, 1, 0.55)
+    rimGrad.addColorStopRGBA(1, 1, 1, 1, 0.0)
+
+    cr.setSource(rimGrad)
     cr.setLineWidth(1.5)
-    cr.setLineCap(1) // ROUND CAP
     cr.stroke()
     cr.restore()
 
-    // 5. M3 RIM LIGHT (Precision edge)
+    // 5. M3 RIM LIGHT 
     path()
     cr.setSourceRGBA(1, 1, 1, 0.25)
     cr.setLineWidth(0.6)
@@ -162,45 +171,72 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
 
 // --- DOCK ITEM COMPONENT ---
 
-function DockItem(appItem: AstalApps.Application, updateDock: () => void, address?: string) {
-    const appId = (appItem.get_id ? appItem.get_id() : (appItem.id || appItem.icon_name || appItem.name || "void")).replace(".desktop", "").toLowerCase()
+function DockItem(appItem: AstalApps.Application, updateDock: () => void, addresses: string[] = [], clientTitle?: string) {
+    // Preserve case for icon lookups if possible, but use lower for comparison
+    const rawId = (appItem.get_id ? appItem.get_id() : (appItem.id || appItem.icon_name || appItem.name || "void")).replace(".desktop", "")
+    const appId = rawId.toLowerCase()
 
     const itemBox = new Gtk.Box({
         name: "cd-item-" + appId,
         css_classes: ["cd-item"],
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
-        height_request: 92, // RESTORE 92px
+        hexpand: false,
+        width_request: 64, // Capped width
+        height_request: 92,
         cursor: Gdk.Cursor.new_from_name("pointer", null),
-        margin_top: 0,
-        margin_bottom: 0,
-        margin_start: 0,
-        margin_end: 0,
-        can_focus: false, // DISABLE THEME INTERFERENCE
-        focus_on_click: false, // HARDENING
-        receives_default: false, // NUCLEAR: No default handling
-        has_tooltip: false, // PREVENT NATIVE GHOST TOOLTIP
+        can_focus: false,
+        has_tooltip: false,
     })
 
     const iconBox = new Gtk.Box({
         name: "cd-icon-box-" + appId,
         css_classes: ["cd-icon-container"],
         halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.END, // ANCHOR TO BOTTOM FOR GROWTH
-        margin_bottom: 14,    // 14px from bottom of 92px widget
-        margin_top: 0,
-        margin_start: 0,
-        margin_end: 0,
-        has_tooltip: false, // PREVENT NATIVE GHOST TOOLTIP
+        valign: Gtk.Align.END,
+        hexpand: false,
+        width_request: 64, // Capped width
+        margin_bottom: 14,
+        has_tooltip: false,
     })
 
-    const image = new Gtk.Image({
-        name: "cd-icon-image-" + appId,
-        icon_name: appItem.icon_name || "application-x-executable",
-        pixel_size: 64,
-        has_tooltip: false, // NUCLEAR
-    })
-    iconBox.append(image)
+    // ICON LOGIC: High-Reliability Path Resolution from Pre-resolved SSOT Service
+    // ICON LOGIC: High-Reliability Resolution from SSOT Service
+    const getIcon = (): { name?: string, path?: string, gicon?: Gio.Icon } => {
+        let name = appItem.icon_name || appItem.name || "application-x-executable"
+
+        const candidate = appService.getIconName(name)
+        if (candidate) {
+            if (candidate.startsWith("/") || candidate.startsWith("file://")) {
+                return { path: candidate.replace("file://", "") }
+            }
+            return { name: candidate }
+        }
+
+        if (appItem.get_icon) return { gicon: appItem.get_icon() }
+        return { name: "image-missing" }
+    }
+
+    const res = getIcon()
+    let child: Gtk.Widget
+
+    if (res.name) {
+        child = Gtk.Image.new_from_icon_name(res.name)
+    } else if (res.path) {
+        const file = Gio.File.new_for_path(res.path)
+        child = Gtk.Image.new_from_gicon(Gio.FileIcon.new(file))
+    } else if (res.gicon) {
+        child = Gtk.Image.new_from_gicon(res.gicon)
+    } else {
+        child = Gtk.Image.new_from_icon_name("image-missing")
+    }
+
+    // Standard Scaling for all Gtk.Image icons
+    // @ts-ignore
+    child.pixel_size = 64
+    // Tooltip / name logic...
+    child.set_name("cd-icon-image-" + appId)
+    iconBox.append(child)
 
     const dot = new Gtk.Box({ name: "cd-dot-" + appId, css_classes: ["cd-dot"], has_tooltip: false })
     const indicator = new Gtk.Box({
@@ -208,8 +244,8 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
         css_classes: ["cd-indicator-container"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
-        margin_bottom: 14, // 10 margin + 4 internal = INSIDE the crystal
-        has_tooltip: false, // NUCLEAR
+        margin_bottom: 5,
+        has_tooltip: false,
     })
     indicator.append(dot)
 
@@ -219,25 +255,55 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
         overflow: Gtk.Overflow.VISIBLE,
         valign: Gtk.Align.FILL,
         vexpand: true,
-        has_tooltip: false, // NUCLEAR
+        has_tooltip: false,
     })
     overlay.set_child(iconBox)
     overlay.add_overlay(indicator)
     itemBox.append(overlay)
 
-    // Tooltip
-    const tooltip = new Gtk.Popover({
-        name: "cd-tooltip-" + appId,
-        css_classes: ["cd-tooltip"],
-        position: Gtk.PositionType.TOP,
-        autohide: false,
-        has_arrow: false,
-        has_tooltip: false, // NO NESTED TOOLTIPS
-    })
-    tooltip.set_name("cd-tooltip-" + appId) // EXPLICIT ID FORCE
-    tooltip.set_offset(0, -12) // Ensure it floats clearly above magnified icons
-    const label = new Gtk.Label({ name: "cd-tooltip-lbl-" + appId, label: appItem.name || "App", css_classes: ["cd-tooltip-label"], has_tooltip: false })
-    const content = new Gtk.Box({ name: "cd-tooltip-box-" + appId, css_classes: ["cd-tooltip-content"], has_tooltip: false })
+    // Tooltip Logic
+    const tooltip = new Gtk.Popover({ css_classes: ["cd-tooltip"], position: Gtk.PositionType.TOP, autohide: false, has_arrow: false })
+    tooltip.set_offset(0, -12)
+    // PREFER CLIENT TITLE for Tooltip (Dynamic)
+    const label = new Gtk.Label({ css_classes: ["cd-tooltip-label"] })
+
+    // BINDING LOGIC
+    // We want the title of the *focused* instance if active, or the first instance otherwise.
+    // Since we can't easily complex-bind in vanilla Gtk logic here without Reactive, 
+    // we'll set initial text and try to hook a signal if possible, or reliance on polling/update.
+
+    // Actually, update() is called on notify::clients. 
+    // Title changes usually trigger notify::client on Hyprland service? 
+    // Let's try to bind if we can find the specific client object.
+
+    const updateLabel = () => {
+        // Find the "active" client among addresses
+        let targetClient = null
+        if (addresses.length > 0) {
+            const focused = hypr.focusedClient
+            if (focused && addresses.includes(focused.address)) {
+                targetClient = focused
+            } else {
+                // Find first match in clients list (expensive but accurate)
+                targetClient = hypr.clients.find(c => c.address === addresses[0])
+            }
+        }
+
+        let text = appItem.name || "App"
+        if (targetClient && targetClient.title) text = targetClient.title
+        else if (clientTitle) text = clientTitle
+
+        label.set_label(text)
+    }
+
+    updateLabel()
+
+    // Hook into hypr events just for this item? No, that's too heavy.
+    // Instead, trust that the parent `update()` recreates us or we need a specific signal.
+    // If update() is not called on title change, it means `dock.update()` isn't firing on title change.
+    // WE NEED TO ADD listeners for title changes.
+
+    const content = new Gtk.Box({ css_classes: ["cd-tooltip-content"] })
     content.append(label)
     tooltip.set_child(content)
     tooltip.set_parent(itemBox)
@@ -247,16 +313,11 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
     motion.connect("enter", () => {
         if (tooltipTimeout) GLib.source_remove(tooltipTimeout)
         tooltipTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-            tooltip.popup()
-            tooltipTimeout = null
-            return GLib.SOURCE_REMOVE
+            tooltip.popup(); tooltipTimeout = null; return GLib.SOURCE_REMOVE
         })
     })
     motion.connect("leave", () => {
-        if (tooltipTimeout) {
-            GLib.source_remove(tooltipTimeout)
-            tooltipTimeout = null
-        }
+        if (tooltipTimeout) { GLib.source_remove(tooltipTimeout); tooltipTimeout = null }
         tooltip.popdown()
     })
     itemBox.add_controller(motion)
@@ -265,22 +326,20 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
     const isPinned = pinnedList.some(p => p.toLowerCase() === appId)
     const popover = new Gtk.Popover({ css_classes: ["cd-popover"], has_tooltip: false })
     popover.set_parent(itemBox)
-    const menu = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, has_tooltip: false })
+    const menu = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
 
     const actions = [
-        { label: "Lanzar", action: () => appItem.launch() },
+        { label: "Nuevo Ventana", action: () => appItem.launch() },
         {
             label: isPinned ? "Desanclar" : "Anclar", action: () => {
                 if (isPinned) pinnedList = pinnedList.filter(p => p.toLowerCase() !== appId)
-                else pinnedList.push(appId)
+                else pinnedList.push(rawId) // SAVE PRESERVED ID
                 savePinned(); updateDock()
             }
         }
     ]
     actions.forEach(a => {
-        const b = new Gtk.Button({ label: a.label, css_classes: ["cd-menu-action"], has_tooltip: false })
-        b.set_has_tooltip(false) // HARDENING
-        b.set_has_frame(false) // HARDENING: No system frame drawing
+        const b = new Gtk.Button({ label: a.label, css_classes: ["cd-menu-action"] })
         b.connect("clicked", () => { a.action(); popover.popdown() })
         menu.append(b)
     })
@@ -291,21 +350,60 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
     itemBox.add_controller(rightClick)
 
     const leftClick = new Gtk.GestureClick({ button: 1 })
+    // HARDENED CLICK LOGIC
     leftClick.connect("released", () => {
-        if (address) execAsync(`hyprctl dispatch focuswindow address:${address}`)
-        else {
-            const match = hypr.clients.find(c => (c.class || "").toLowerCase().includes(appId))
-            if (match) execAsync(`hyprctl dispatch focuswindow address:${match.address}`)
-            else appItem.launch()
+        console.log(`[DockClick] Clicked ${appId}. Addresses in scope: ${addresses.length}`);
+
+        // 1. Refresh active addresses from Hyprland source of truth if possible
+        // (For now relying on 'addresses' prop, assuming update() runs on client open/close)
+
+        if (addresses.length > 0) {
+            // CYCLING LOGIC
+            const focusedAddr = hypr.focusedClient?.address
+            const idx = addresses.indexOf(focusedAddr || "")
+            // If active, go to next. If not active, go to first.
+            const nextIdx = (idx + 1) % addresses.length
+            let target = addresses[nextIdx]
+
+            // Hyprland requires 0x prefix for address dispatch
+            if (!target.startsWith("0x")) target = "0x" + target
+
+            console.log(`[DockClick] Cycling to: ${target} (current: ${focusedAddr})`);
+            try {
+                // FORCE FOCUS
+                hypr.dispatch("focuswindow", `address:${target}`)
+                // OPTIONAL: Workspace switch backup if focuswindow fails to swap WS
+                // const client = hypr.clients.find(c => c.address === target)
+                // if (client) hypr.dispatch("workspace", `${client.workspace.id}`)
+            } catch (e) {
+                console.error(`[DockClick] Dispatch failed: ${e}`)
+            }
+        } else {
+            console.log(`[DockClick] Launching or finding match for ${appId}`);
+            const match = hypr.clients.find(c => {
+                const cClass = (c.class || "").toLowerCase()
+                const cTitle = (c.initialTitle || "").toLowerCase()
+                return cClass === appId || cTitle === appId || cClass.includes(appId)
+            })
+            if (match) {
+                let matchAddr = match.address
+                if (!matchAddr.startsWith("0x")) matchAddr = "0x" + matchAddr
+                console.log(`[DockClick] Found logic match: ${matchAddr}`);
+                hypr.dispatch("focuswindow", `address:${matchAddr}`)
+            }
+            else {
+                console.log(`[DockClick] Launching via appItem.launch()`);
+                appItem.launch()
+            }
         }
     })
     itemBox.add_controller(leftClick)
 
-    // DND REORDERING
+    // DND Logic
     if (isPinned) {
         const source = new Gtk.DragSource({ actions: Gdk.DragAction.MOVE })
         source.connect("prepare", (s, x, y) => {
-            s.set_icon(Gtk.WidgetPaintable.new(image), x, y)
+            s.set_icon(Gtk.WidgetPaintable.new(child), x, y)
             return Gdk.ContentProvider.new_for_value(appId)
         })
         itemBox.add_controller(source)
@@ -334,13 +432,94 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
     }
 
     const sync = () => {
-        const clients = hypr.clients
-        const open = address ? clients.some(c => c.address === address) : clients.some(c => (c.class || "").toLowerCase().includes(appId))
-        if (open) dot.add_css_class("open")
-        else dot.remove_css_class("open")
+        const focused = hypr.focusedClient
+        const isOpen = addresses.length > 0
+        const isFocused = focused && addresses.includes(focused.address)
+
+        if (isOpen) {
+            dot.set_visible(true)
+            dot.add_css_class("open")
+            if (isFocused) dot.add_css_class("focused")
+            else dot.remove_css_class("focused")
+        } else {
+            dot.set_visible(false)
+            dot.remove_css_class("open")
+            dot.remove_css_class("focused")
+        }
+
+        // Update tooltip text dynamically
+        // Optimized: only look for focused if it matches us, else first instance
+        let targetTitle = appItem.name || "App"
+        if (focused && addresses.includes(focused.address)) {
+            targetTitle = focused.title
+        } else if (addresses.length > 0) {
+            // Fallback to first client we can find
+            const c = hypr.clients.find(c => c.address === addresses[0])
+            if (c) targetTitle = c.title
+        }
+        label.set_label(targetTitle)
     }
     const c1 = hypr.connect("notify::clients", sync)
-    itemBox.connect("destroy", () => hypr.disconnect(c1))
+    const c2 = hypr.connect("notify::focused-client", sync)
+
+    // REACTIVITY FOR TITLES: Connect to 'notify::title' on all relevant clients
+    // We need to keep track of these connections to disconnect them
+    const clientSignals: number[] = []
+    const refreshSignals = () => {
+        // Clear old
+        // Note: we can't easily clear signal handlers on specific GObjects we don't hold ref to nicely 
+        // without keeping the object.
+        // BUT, since DockItem is destroyed and recreated on list updates, 
+        // we might be leaking if we don't handle this carefully or if we do standard partial updates.
+        // Actually Dock updates recreate all items currently (brute force). 
+        // So we just need to connect on init and disconnect on destroy.
+
+        addresses.forEach(addr => {
+            const client = hypr.clients.find(c => c.address === addr)
+            if (client) {
+                // @ts-ignore
+                const id = client.connect("notify::title", sync)
+                // We need to store client + id to disconnect? 
+                // Client object might be ephemeral in bindings? 
+                // ASTAL usually keeps singletons. Let's assume safely we need to manage this.
+                // However, doing this cleanly inside a functional component without hooks is tricky.
+
+                // Hack: Just re-running sync on focused-client change handles the active window title case
+                // IF Hyprland notifies focused-client change when title changes? (Unlikely).
+
+                // Let's try connecting to the *active* client specifically if possible
+            }
+        })
+    }
+
+    // Better strategy: Just listen to 'urgent' or global events? 
+    // Or simply: 
+    // The user says "doesn't update". 
+    // Let's try connecting sync to 'notify::active-window' on Hyprlans if accessible?
+    // No.
+
+    // Let's loop addresses and connect to signals.
+    /* 
+       We will store the objects to disconnect later.
+    */
+    const monitoredClients: any[] = []
+    addresses.forEach(addr => {
+        const c = hypr.clients.find(cl => cl.address === addr)
+        if (c) {
+            monitoredClients.push(c)
+            c.connect("notify::title", sync)
+        }
+    })
+
+    itemBox.connect("destroy", () => {
+        hypr.disconnect(c1);
+        hypr.disconnect(c2);
+        // Clean up client signals? 
+        // GObject signals are usually auto-disconnected when the *handler* (this closure) dies? 
+        // No, when the *emitter* or *object* dies. 
+        // We SHOULD disconnect manually.
+        monitoredClients.forEach(c => GObject.signal_handlers_disconnect_by_func(c, sync))
+    })
     sync()
 
     return itemBox
@@ -349,111 +528,196 @@ function DockItem(appItem: AstalApps.Application, updateDock: () => void, addres
 // --- MAIN DOCK ---
 
 export default function Dock(gdkmonitor: Gdk.Monitor) {
+    console.log("[DISTROIA] Dock() called");
     const bar = new Gtk.Box({
         name: "the-dock-bar",
-        css_classes: ["cd-dock-bar"], // Explicit class overrides defaults
+        css_classes: ["cd-dock-bar"],
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
         overflow: Gtk.Overflow.VISIBLE,
-        height_request: 92, // PHYSICAL OBJECT HEIGHT
+        height_request: 92,
         spacing: 16,
         can_focus: false,
-        has_tooltip: false, // NUCLEAR
     })
     const da = new Gtk.DrawingArea({
         name: "dock-drawing-area",
         css_classes: ["cd-drawing-area"],
-        valign: Gtk.Align.FILL, // FILL WINDOW
+        valign: Gtk.Align.FILL,
         halign: Gtk.Align.CENTER,
-        height_request: 160, // FULL CANVAS WIPE
+        height_request: 160,
         overflow: Gtk.Overflow.VISIBLE,
-        margin_top: 0,
-        margin_bottom: 0,
         can_focus: false,
-        has_tooltip: false, // NUCLEAR
     })
     da.set_draw_func((_, cr, w, h) => {
-        // === GPU BUFFER CLEAR ===
-        // Ensures a clean surface before drawing
-        cr.setOperator(0); // CAIRO_OPERATOR_CLEAR
-        cr.paint();
-        cr.setOperator(2); // CAIRO_OPERATOR_OVER
-
-        // === GLASS DRAWING ===
-        // Canvas is 160, Object is 92. Y = 160 - 92 = 68.
+        cr.setOperator(0); cr.paint(); cr.setOperator(2);
         const dockHeight = 92
         const yOffset = h - dockHeight
-
         cr.save()
         cr.translate(0, yOffset)
         drawSquircle(cr, w, dockHeight)
         cr.restore()
     })
 
-    // 3. ID HIERARCHY: explicit names for every node
-    const layout = new Gtk.Overlay({
-        name: "dock-main-overlay", // ID: dock-main-overlay
-        css_classes: ["cd-main-overlay"],
-        valign: Gtk.Align.FILL,
-        halign: Gtk.Align.CENTER,
-        overflow: Gtk.Overflow.VISIBLE,
-        has_tooltip: false, // NUCLEAR
-    })
+    const layout = new Gtk.Overlay({ name: "dock-main-overlay", css_classes: ["cd-main-overlay"], valign: Gtk.Align.FILL, halign: Gtk.Align.CENTER, overflow: Gtk.Overflow.VISIBLE })
     layout.set_child(da); layout.add_overlay(bar)
-    layout.set_has_tooltip(false)
 
-    // WRAPPER BOX matches Inspector's "dock-bar-container" but with strict ID
-    const mainContainer = new Gtk.Box({
-        name: "dock-main-container", // ID: dock-main-container
-        css_classes: ["cd-dock-container"],
-        valign: Gtk.Align.FILL,
-        halign: Gtk.Align.FILL,
-        hexpand: true,
-        vexpand: true,
-        can_focus: false,
-        has_tooltip: false, // NUCLEAR
-    })
+    const mainContainer = new Gtk.Box({ name: "dock-main-container", css_classes: ["cd-dock-container"], valign: Gtk.Align.FILL, halign: Gtk.Align.CENTER, hexpand: false, vexpand: false, can_focus: false })
     mainContainer.append(layout)
 
     const update = () => {
         const items: Gtk.Widget[] = []
 
-        pinnedList.filter(id => !!id).forEach(id => {
-            const lid = id.toLowerCase()
-            let appItem = appsService.list.find(a => {
-                const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase()
-                return aid.includes(lid)
-            })
-            if (!appItem) appItem = appsService.fuzzy_query(id)?.[0]
-            if (appItem) items.push(DockItem(appItem, update))
-        })
-
-        const running = hypr.clients.filter(c => {
-            const cls = (c.class || "").toLowerCase()
-            if (cls.includes("ags")) return false
-            return !pinnedList.some(p => cls.includes(p.toLowerCase()))
-        })
-
-        if (running.length > 0 && items.length > 0) items.push(Separator())
-
-        running.forEach(c => {
-            let appItem = appsService.fuzzy_query(c.class)?.[0]
-            if (!appItem) {
-                // @ts-ignore
-                appItem = { name: c.title || c.class, icon_name: (c.class === "kitty" ? "terminal" : c.class), launch: () => execAsync(`hyprctl dispatch focuswindow address:${c.address}`) }
+        // 1. Group Running Clients by Class
+        const groupedClients: { [key: string]: { addresses: string[], displayClass: string, title: string } } = {}
+        hypr.clients.forEach(c => {
+            const rawClass = c.class || ""
+            if (rawClass.toLowerCase().includes("ags")) return
+            const key = rawClass.toLowerCase()
+            if (!groupedClients[key]) {
+                groupedClients[key] = { addresses: [], displayClass: rawClass, title: c.title }
             }
-            items.push(DockItem(appItem, update, c.address))
+            groupedClients[key].addresses.push(c.address)
         })
 
+        const findApp = (searchId: string) => {
+            const aliases: Record<string, string> = {
+                "system-file-manager": "org.gnome.Nautilus",
+                "antigravity": "antigravity"
+            }
+            const lid = searchId.toLowerCase().replace(".desktop", "")
+            const targetId = aliases[lid] || searchId
+            const tlid = targetId.toLowerCase().replace(".desktop", "")
+
+            // Precise match in registry (lid-to-lid)
+            let app = appsService.list.find(a => {
+                const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase().replace(".desktop", "")
+                return aid === tlid
+            })
+            // Fuzzy fallback (handles class-to-desktop)
+            if (!app) app = appsService.fuzzy_query(targetId)?.[0]
+            return app
+        }
+
+        const desktopMap: { [key: string]: string } = {
+            "gnome-terminal-server": "org.gnome.Terminal",
+            "org.gnome.nautilus": "org.gnome.Nautilus",
+            "nautilus": "org.gnome.Nautilus",
+            "org.gnome.settings": "org.gnome.Settings",
+            "antigravity": "antigravity",
+            "system-file-manager": "org.gnome.Nautilus"
+        }
+        const groupMap: { [key: string]: string } = {
+            "system-file-manager": "org.gnome.nautilus",
+            "antigravity": "antigravity"
+        }
+
+        const getLaunch = (lid: string) => {
+            if (lid === "antigravity") {
+                return () => execAsync(`bash -c "unset LD_PRELOAD; /usr/share/antigravity/antigravity &"`).catch(print)
+            }
+            const desktopId = desktopMap[lid] || lid
+            return () => execAsync(`gtk-launch ${desktopId}`).catch(print)
+        }
+
+        // 2. Process Pinned List
+        pinnedList.filter(id => !!id).forEach(id => {
+            const lid = id.toLowerCase().replace(".desktop", "")
+            const originalId = id.replace(".desktop", "")
+
+            let appItem = findApp(id)
+
+            // Antigravity Override (System Necessity)
+            if (lid === "antigravity") {
+                appItem = {
+                    ...(appItem || {}),
+                    name: "Antigravity",
+                    icon_name: "/usr/share/pixmaps/antigravity.png",
+                    launch: getLaunch(lid)
+                } as any
+            }
+
+            // Match with running group
+            const targetKey = groupMap[lid] || lid
+            const groupKey = Object.keys(groupedClients).find(k => k === targetKey || k.includes(targetKey))
+            let addrs: string[] = []
+            let clientTitle = undefined
+
+            if (groupKey && groupedClients[groupKey]) {
+                const group = groupedClients[groupKey]
+                addrs = group.addresses
+                clientTitle = group.title
+                delete groupedClients[groupKey]
+
+                if (!appItem) {
+                    appItem = {
+                        name: clientTitle || group.displayClass,
+                        icon_name: originalId || group.displayClass || lid,
+                        launch: getLaunch(lid)
+                    } as any
+                }
+            }
+
+            if (appItem) {
+                // PWA CASING CORRECTION: Force -Default suffix as it's the standard for Chrome icons
+                if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
+                    // @ts-ignore
+                    appItem.icon_name = originalId.replace(/-default$/i, "-Default")
+                }
+
+                items.push(DockItem(appItem, update, addrs, clientTitle))
+            } else {
+                // Ghost fallback
+                const aliases: Record<string, string> = { "system-file-manager": "org.gnome.Nautilus" }
+                let icon = aliases[lid] || originalId
+
+                if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
+                    icon = icon.replace(/-default$/i, "-Default")
+                }
+
+                console.log(`[DockTrace] Ghost: ${id} -> Icon: ${icon}`);
+                const ghost = {
+                    name: originalId,
+                    icon_name: icon,
+                    launch: getLaunch(lid)
+                } as any
+                items.push(DockItem(ghost, update, []))
+            }
+        })
+
+        // 3. Separator and Remaining Running Apps
+        const runKeys = Object.keys(groupedClients)
+        if (runKeys.length > 0 && items.length > 0) items.push(Separator())
+
+        runKeys.forEach(k => {
+            const group = groupedClients[k]
+            let appItem = findApp(group.displayClass)
+            const lid = k.toLowerCase().replace(".desktop", "")
+
+            if (!appItem) {
+                appItem = {
+                    name: group.title || group.displayClass,
+                    icon_name: group.displayClass || lid,
+                    launch: getLaunch(lid)
+                } as any
+            }
+
+            if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
+                appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default")
+            }
+
+            items.push(DockItem(appItem, update, group.addresses, group.title))
+        })
+
+        // Sync with bar
         let child = bar.get_first_child()
         while (child) { const n = child.get_next_sibling(); bar.remove(child); child = n }
         items.forEach(i => bar.append(i))
 
         const [_, nat] = bar.get_preferred_size()
         if (nat) {
-            const w = Math.ceil(nat.width) + 48 // 24px per side to accomodate 1.6x scale
-            da.set_size_request(w, 160) // FULL CANVAS 160
-            // CRITICAL: Window must be TALLER (160) to allow growth without clipping
+            const monitorWidth = gdkmonitor.get_geometry().width
+            const w = Math.min(Math.ceil(nat.width) + 48, monitorWidth * 0.95)
+            da.set_size_request(w, 160)
             if (win) { win.set_default_size(w, 160); win.set_size_request(w, 160) }
         }
     }
@@ -493,7 +757,16 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     } catch (e) { console.error(e) }
 
     const cConn = hypr.connect("notify::clients", update)
-    bar.connect("destroy", () => hypr.disconnect(cConn))
+    const aConn = appsService.connect("notify::list", update)
+    bar.connect("destroy", () => {
+        hypr.disconnect(cConn)
+        appsService.disconnect(aConn)
+    })
+
+    // Initial update + Safety delay for appsService to populate
     update()
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => { update(); return GLib.SOURCE_REMOVE })
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3000, () => { update(); return GLib.SOURCE_REMOVE })
+
     return win
 }

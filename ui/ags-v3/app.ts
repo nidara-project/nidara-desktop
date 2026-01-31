@@ -6,8 +6,11 @@ import Dock from "./widget/Dock"
 
 const windows = new Set()
 
+console.log("[DISTROIA] app.ts loading...");
+
 app.start({
   main() {
+    console.log("[DISTROIA] main() started!");
     // Tacitly compile SCSS to CSS on startup for DistroIA
     try {
       const scss = `${GLib.get_current_dir()}/style.scss`
@@ -36,8 +39,13 @@ app.start({
       const monitors = display.get_monitors()
       for (let i = 0; i < monitors.get_n_items(); i++) {
         const monitor = monitors.get_item(i) as Gdk.Monitor
-        const win = Dock(monitor)
-        windows.add(win)
+        console.log(`[DISTROIA] Creating Dock for monitor ${i}`);
+        try {
+          const win = Dock(monitor)
+          windows.add(win)
+        } catch (err) {
+          console.error("[DISTROIA] Dock creation failed:", err);
+        }
       }
     }
     console.log(`[CSS] Nuclear injection successful with HIGHEST priority (800) from: ${styleFile}`)

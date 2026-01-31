@@ -76,14 +76,20 @@ window#crystal-dock * {
 .cd-tooltip>background,
 .cd-popover,
 .cd-popover>contents,
-.cd-popover>background,
-tooltip,
-.background {
-  background-color: rgba(0, 0, 0, 0);
+.cd-popover>background {
+  background-color: transparent;
   background-image: none;
   background: none;
   border: none;
   box-shadow: none;
+}
+
+/* RESTORE MENU CONTENT BACKGROUND (High Specificity) */
+window#crystal-dock .cd-popover>contents {
+  background-color: rgba(255, 255, 255, 0.95);
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  padding: 6px;
 }
 
 /* --- TOOLTIP NEUTRALIZATION --- */
@@ -107,6 +113,7 @@ popover background {
 }
 
 /* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
+/* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
 .cd-item,
 .cd-item>contents,
 box.cd-item {
@@ -114,6 +121,16 @@ box.cd-item {
   background-image: none;
   box-shadow: none;
   border: none;
+}
+
+/* --- APP GRID CLEANUP (Specific Target) --- */
+.launcher-grid,
+.launcher-item,
+.app-item {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
 }
 
 
@@ -172,17 +189,32 @@ box.cd-item {
   transition: background-color 200ms ease;
 }
 
-.cd-dot.open {
-  background-color: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 0 4px rgba(255, 255, 255, 0.6);
+/* High Specificity to defeat "window#crystal-dock *" reset */
+window#crystal-dock .cd-dot.open {
+  min-height: 4px;
+  min-width: 4px;
+  background-color: rgba(255, 255, 255, 0.6);
+  /* DIMMED FOR BACKGROUND APPS */
+  box-shadow: none;
+  border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 50%;
+  opacity: 1;
+}
+
+window#crystal-dock .cd-dot.focused {
+  background-color: #ffffff;
+  /* BRIGHT FOR FOCUSED APP */
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .cd-separator {
   min-height: 48px;
-  min-width: 1.2px;
-  background-color: rgba(255, 255, 255, 0.2);
-  margin: 0 12px;
+  min-width: 1px;
+  background-color: rgba(255, 255, 255, 0.3);
+  /* VISIBLE WHITE */
+  margin: 0 8px;
+  /* Tighter margins */
 }
 
 /* Tooltips (cd-tooltip) */
@@ -193,13 +225,12 @@ popover.cd-tooltip {
   border: none;
 }
 
-popover.cd-tooltip contents {
-  background-color: transparent;
-  /* FORCE TRANSPARENCY */
+window#crystal-dock popover.cd-tooltip contents {
+  background-color: rgba(255, 255, 255, 0.9);
   border-radius: 12px;
   padding: 6px 14px;
   margin-bottom: 5px;
-  box-shadow: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
 
 .cd-tooltip-label {

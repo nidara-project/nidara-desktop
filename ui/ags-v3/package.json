@@ -1,7 +1,7 @@
 {
   "scripts": {
-    "dev": "ags -c app.ts",
-    "run": "ags -c app.ts",
+    "dev": "ags run app.ts",
+    "run": "ags run app.ts",
     "build": "ags bundle app.ts style.css"
   },
   "dependencies": {
