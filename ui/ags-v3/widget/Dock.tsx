@@ -39,7 +39,7 @@ import appService from "../core/AppService"
 // 2. SEPARATOR (Now accepts drops to APPEND, with wider hitbox)
 // SEPARATOR: Gaussian Horizontal Scaling, Fixed Vertical Height.
 function Separator(id: string, updateDock: () => void, register: (id: string, s: any) => void, height = 40) {
-    const baseWidth = 32 // Compact Slot
+    const baseWidth = 48 // Slot (V14 Master)
     // Container for Hitbox (invisible, wide, fixed height)
     const box = new Gtk.Box({
         css_classes: ["cd-separator-container"],
@@ -75,7 +75,7 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
     register(id, state)
         ; (box as any).setVirtualCenter = (v: number) => {
             state.virtualCenter = v
-            if (state.staticCenter === 0) state.staticCenter = v // Set on first layout
+            state.staticCenter = v // Always update to current resting center (V14)
         }
 
     // DROP ON SEPARATOR = APPEND TO LIST
@@ -253,8 +253,8 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
         hexpand: false,
-        width_request: 72, // COMPACT SLOT (64 icon + 8 gap)
-        height_request: 160, // ALLOW GROWTH (V12)
+        width_request: 80, // SLOT (V14 Master)
+        height_request: 160,
         cursor: Gdk.Cursor.new_from_name("pointer", null),
         can_focus: false,
         has_tooltip: false,
@@ -319,9 +319,9 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         child = Gtk.Image.new_from_icon_name("image-missing")
     }
 
-    // --- MAGNIFICATION PHYSICS V12 (Compact) ---
+    // --- MAGNIFICATION PHYSICS V14 (Master) ---
     const iconSize = 64
-    const slotSize = 72 // 64 + 8 Gap
+    const slotSize = 80 // Base Slot (V14 Master)
 
     const state = {
         target: 1.0,
@@ -348,7 +348,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         // EXPOSE VIRTUAL CENTER UPDATE
         ; (itemBox as any).setVirtualCenter = (v: number) => {
             state.virtualCenter = v
-            if (state.staticCenter === 0) state.staticCenter = v // Set once
+            state.staticCenter = v // Always update to current resting center (V14)
         }
 
     // Standard Scaling for all Gtk.Image icons
@@ -783,16 +783,23 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 }
             })
 
-            // Sync Background Width
-            const targetWidth = bar.get_allocation().width
+            // Sync Background Width (V14: Sum of current slot widths)
+            let sumWidths = 0
+            animRegistry.forEach(s => {
+                // Approximate current slot width based on current scale
+                const base = (s as any).isSeparator ? 48 : 80
+                sumWidths += Math.round(base + (base * (s.current - 1) * 0.8))
+            })
+            const targetWidth = sumWidths + 32 // +32 for padding
+
             if (targetWidth > 0) {
-                const bgStep = (targetWidth - smoothedBarWidth) * 0.15
+                const bgStep = (targetWidth - (smoothedBarWidth + 32)) * 0.15
                 if (Math.abs(bgStep) > 0.1) {
-                    smoothedBarWidth += bgStep
+                    smoothedBarWidth = (smoothedBarWidth + 32 + bgStep) - 32
                     da.queue_draw()
                     active = true
-                } else if (smoothedBarWidth !== targetWidth) {
-                    smoothedBarWidth = targetWidth
+                } else if (smoothedBarWidth + 32 !== targetWidth) {
+                    smoothedBarWidth = targetWidth - 32
                     da.queue_draw()
                 }
             }
@@ -810,12 +817,12 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             if (mouseX === -1000) {
                 state.target = 1.0
             } else {
-                // DISTANCE BASED ON STATIC GROUND TRUTH (V13)
+                // DISTANCE BASED ON STATIC GROUND TRUTH (V14)
                 const dist = Math.abs(mouseX - state.staticCenter)
                 const maxScale = (state as any).isSeparator ? 1.0 : 1.5 // Separator lock 1.0
-                const sigma = 130
-                const target = 1 + ((maxScale - 1) * Math.exp(-(dist ** 2) / (2 * (sigma ** 2))))
-                state.target = target < 1.01 ? 1.0 : target // Clamp 1.01
+                const sigma = 150 // GAUSSIAN V14: Master Sigma
+                const target = 1 + (0.5 * Math.exp(-(dist ** 2) / (2 * (sigma ** 2))))
+                state.target = target < 1.005 ? 1.0 : target // Clamp 1.005 (V14)
             }
         })
         runUnifiedTick()
@@ -966,7 +973,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
         }
         configs.push({
-            id: "finder", width: 72,
+            id: "finder", width: 80,
             factory: (vc) => {
                 const w = DockItem("finder", finder as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar)
                 if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
@@ -1004,7 +1011,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                     appItem.icon_name = originalId.replace(/-default$/i, "-Default")
                 }
                 configs.push({
-                    id: "pinned-" + lid, width: 72,
+                    id: "pinned-" + lid, width: 80,
                     factory: (vc) => {
                         const w = DockItem(lid, appItem!, update, (id, s) => animRegistry.set(id, s), addrs, clientTitle, bar)
                         if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
@@ -1017,7 +1024,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 if (lid.startsWith("chrome-") && lid.endsWith("-default")) icon = icon.replace(/-default$/i, "-Default")
                 const ghost = { name: originalId, icon_name: icon, launch: getLaunch(lid) } as any
                 configs.push({
-                    id: "pinned-ghost-" + lid, width: 72,
+                    id: "pinned-ghost-" + lid, width: 80,
                     factory: (vc) => {
                         const w = DockItem(lid, ghost, update, (id, s) => animRegistry.set(id, s), [], undefined, bar)
                         if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
@@ -1044,7 +1051,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default")
             }
             configs.push({
-                id: "running-" + lid, width: 72,
+                id: "running-" + lid, width: 80,
                 factory: (vc) => {
                     const w = DockItem(lid, appItem!, update, (id, s) => animRegistry.set(id, s), group.addresses, group.title, bar)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
@@ -1055,7 +1062,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         // 4. Separator & Trash
         configs.push({
-            id: "sep-trash", width: 32,
+            id: "sep-trash", width: 48,
             factory: (vc) => {
                 const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 40)
                 if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
@@ -1069,7 +1076,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             launch: () => execAsync("nautilus trash:///").catch(print)
         }
         configs.push({
-            id: "trash", width: 72,
+            id: "trash", width: 80,
             factory: (vc) => {
                 const w = DockItem("trash", trash as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar)
                 if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)

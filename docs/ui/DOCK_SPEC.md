@@ -16,8 +16,8 @@ The magnification follows a standard 2D Gaussian distribution for organic, smoot
 | :--- | :--- | :--- |
 | **Max Scale** | 1.5x | Target magnification for icons. |
 | **Max Scale (Sep)** | **1.0x** | GAUSSIAN V13: Separators do not scale, only move. |
-| **Sigma (σ)** | 130 | Balanced curve for natural interaction. |
-| **Threshold** | **1.01** | GAUSSIAN V13: Hard floor to prevent micro-vibrations. |
+| **Sigma (σ)** | 150 | GAUSSIAN V14: Master Sigma for organic flow. |
+| **Threshold** | **1.005** | GAUSSIAN V14: Master floor to settle vibrations. |
 | **Growth Origin** | Bottom | Icons grow upwards via `transform-origin: bottom`. |
 | **Formula** | `1 + ((max - 1) * exp(-(dist^2) / (2 * sigma^2)))` | `dist` = mouseX - virtualCenter. |
 
@@ -25,10 +25,10 @@ The magnification follows a standard 2D Gaussian distribution for organic, smoot
 To ensure zero-shift layout stability, we use a "Virtual Grid" where every icon has a fixed-width slot.
 
 - **Icon Size (Base)**: `64px`
-- **Slot Width (Base)**: `72px`
-    - *Calculation*: `64px (Icon) + 8px (Proportional Padding)`.
-- **Overlap Physics (0.8x)**: GAUSSIAN V13: `Width_actual = Slot_base + (Slot_base * (Scale - 1) * 0.8)`. This creates the macOS premium overlap effect.
-- **Static Ground Truth**: Distances are calculated against fixed resting coordinates (`staticCenter`), preventing feedback loops.
+- **Slot Width (Base)**: `80px`
+    - *Calculation*: `64px (Icon) + 16px (Proportional Padding)`.
+- **Overlap Physics (0.8x)**: GAUSSIAN V14: `Width_actual = Slot_base + (Slot_base * (Scale - 1) * 0.8)`. This creates the macOS premium overlap effect.
+- **Static Ground Truth**: Distances are calculated against fixed **resting** centers (`staticCenter`), preventing the feedback loop.
 - **Vertical Alignment**: Bottom-pinned growth (`valign: END` + `transform-origin: bottom`).
 
 ## 4. Separator Specifications
