@@ -13,6 +13,7 @@ Detalles técnicos para la implementación de los widgets principales en AGS.
 ## 2. El Dock (Aplicaciones)
 - **Comportamiento**: Auto-hide por defecto.
 - **Efecto de Escala**: Implementar lógica de magnificación gaussiana en el evento `hover`.
+- **Lógica Detallada**: Ver [DOCK_SPEC.md](file:///home/angel/Dev/MiDistroIA/docs/ui/DOCK_SPEC.md) para parámetros físicos y geométricos (V10).
 - **Indicadores**: Puntos sutiles bajo los iconos para apps abiertas (estilo macOS).
 
 ## 3. Centro de Control
