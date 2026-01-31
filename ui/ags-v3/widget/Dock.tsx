@@ -333,8 +333,8 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             const visualSize = Math.round(iconSize * scale)
             if (child && (child as any).set_pixel_size) (child as any).set_pixel_size(visualSize)
 
-            // APPLE OVERLAP PHYSICS (V13): 0.8x width growth
-            const targetWidth = Math.round(slotSize + (slotSize * (scale - 1) * 0.8))
+            // PURE PROPORTIONAL SCALING (V15): 1:1 Width-to-Scale ratio
+            const targetWidth = Math.round(slotSize * scale)
             itemBox.set_size_request(targetWidth, 160)
 
             const parent = itemBox.get_parent()
@@ -756,7 +756,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
         overflow: Gtk.Overflow.VISIBLE,
-        height_request: 92,
+        height_request: 160, // UNLEASH HEIGHT (V15)
         spacing: 0, // V7: Total control via widget width_request
         can_focus: false,
     })
@@ -783,12 +783,11 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 }
             })
 
-            // Sync Background Width (V14: Sum of current slot widths)
+            // Sync Background Width (V15: Sum of current slot widths)
             let sumWidths = 0
             animRegistry.forEach(s => {
-                // Approximate current slot width based on current scale
                 const base = (s as any).isSeparator ? 48 : 80
-                sumWidths += Math.round(base + (base * (s.current - 1) * 0.8))
+                sumWidths += Math.round(base * s.current)
             })
             const targetWidth = sumWidths + 32 // +32 for padding
 
