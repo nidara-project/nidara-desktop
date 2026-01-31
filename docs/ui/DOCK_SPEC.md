@@ -25,10 +25,10 @@ To ensure zero-shift layout stability, we use a "Virtual Grid" where every icon 
 
 - **Icon Size (Base)**: `64px`
 - **Slot Width (Base)**: `80px`
-    - *Calculation*: `64px (Icon) + 16px (Static Gap)`.
-- **Vertical Alignment**: Bottom-pinned (icons grow upwards).
-- **Magnified Slot**: `Math.round(80 * currentScale)`.
-- **Resting state**: All icons return to `80px` slots on mouse-leave, ensuring perfectly consistent spacing.
+    - *Calculation*: `64px (Icon) + 16px (Proportional Padding)`.
+- **Proportional Scaling**: Slot width scales **1:1** with icon scale (`Width_actual = Slot_base * Scale`). This eliminates the "Gap Shifting" effect.
+- **Initial Handshake**: All widths must be initialized to their base values (80px/48px) to prevent "jumps" on first interaction.
+- **Vertical Alignment**: Bottom-pinned growth (`valign: END` + `transform-origin: bottom`).
 
 ## 4. Separator Specifications
 - **Base Width**: `48px` (Hitbox) / `2px` (Visible Line).

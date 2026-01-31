@@ -44,7 +44,7 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
     const box = new Gtk.Box({
         css_classes: ["cd-separator-container"],
         valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
-        width_request: 32, // WIDE CLICK AREA
+        width_request: 48, // SLOT WIDTH (Match baseWidth)
         height_request: height,
         hexpand: false,
     })
@@ -248,7 +248,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
         hexpand: false,
-        width_request: 64, // Capped width
+        width_request: 80, // SLOT WIDTH (Match slotSize)
         height_request: 92,
         cursor: Gdk.Cursor.new_from_name("pointer", null),
         can_focus: false,
@@ -278,7 +278,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
         hexpand: false,
-        width_request: 64, // Capped width
+        // Remove fixed width_request to allow icon to push freely
         margin_bottom: 14,
         has_tooltip: false,
     })
