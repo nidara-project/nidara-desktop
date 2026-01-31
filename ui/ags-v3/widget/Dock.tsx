@@ -343,14 +343,15 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     child.set_name("cd-icon-image-" + appId)
     iconBox.append(child)
 
-    const dot = new Gtk.Box({ name: "cd-dot-" + appId, css_classes: ["cd-dot"], has_tooltip: false })
+    const dot = new Gtk.Box({ name: "cd-dot-" + appId, css_classes: ["cd-dot"], width_request: 4, height_request: 4, has_tooltip: false })
     const indicator = new Gtk.Box({
         name: "cd-indicator-" + appId,
         css_classes: ["cd-indicator-container"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
-        margin_bottom: 5,
+        margin_bottom: 4,
         has_tooltip: false,
+        width_request: 4, height_request: 4, // FIXED SIZE (V11)
     })
     indicator.append(dot)
 
@@ -358,7 +359,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         name: "cd-overlay-" + appId,
         css_classes: ["cd-overlay", "overlay"],
         overflow: Gtk.Overflow.VISIBLE,
-        valign: Gtk.Align.FILL,
+        valign: Gtk.Align.END, // BOTTOM ANCHOR (V11)
         vexpand: true,
         has_tooltip: false,
     })
@@ -795,9 +796,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             } else {
                 const dist = Math.abs(mouseX - state.virtualCenter)
                 const maxScale = (state as any).isSeparator ? 1.3 : 1.5
-                const sigma = 100
+                const sigma = 150 // GAUSSIAN V11: WIDER BELL (Organic)
                 const target = 1 + ((maxScale - 1) * Math.exp(-(dist ** 2) / (2 * (sigma ** 2))))
-                state.target = target < 1.005 ? 1.0 : target
+                state.target = target < 1.002 ? 1.0 : target
             }
         })
         runUnifiedTick()

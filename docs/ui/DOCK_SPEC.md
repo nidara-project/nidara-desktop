@@ -14,9 +14,10 @@ The magnification follows a standard 2D Gaussian distribution for organic, smoot
 
 | Parameter | Value | Description |
 | :--- | :--- | :--- |
-| **Max Scale** | 1.5x | Target magnification for icons directly under the mouse. |
-| **Max Scale (Sep)** | 1.3x | Target magnification for separators (smaller to preserve visual weight). |
-| **Sigma (σ)** | 100 | The "spread" of the magnification bell curve. |
+| **Max Scale** | 1.5x | Target magnification for icons. |
+| **Max Scale (Sep)** | 1.3x | Target magnification for separators. |
+| **Sigma (σ)** | 150 | GAUSSIAN V11: Widened curve for smoother transitions. |
+| **Growth Origin** | **Bottom** | Icons grow upwards via `transform-origin: bottom`. |
 | **Formula** | `1 + ((max - 1) * exp(-(dist^2) / (2 * sigma^2)))` | `dist` = mouseX - virtualCenter. |
 
 ## 3. Geometry & Spacing (80px Slot Model)

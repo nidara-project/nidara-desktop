@@ -6,7 +6,7 @@ import Dock from "./widget/Dock"
 
 const windows = new Set()
 
-console.log("[DISTROIA] app.ts loading... (Gaussian V10 Unified Engine)");
+console.log("[DISTROIA] app.ts loading... (Gaussian V11 Apple-Pure Refresh)");
 
 app.start({
   main() {
