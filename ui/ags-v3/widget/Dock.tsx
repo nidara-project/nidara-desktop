@@ -1055,7 +1055,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 configs.push({
                     id: "pinned-" + lid, width: 80,
                     factory: (vc) => {
-                        const w = DockItem(lid, appItem!, update, (id, s) => animRegistry.set(id, s), addrs, clientTitle, bar)
+                        const w = DockItem("pinned-" + lid, appItem!, update, (id, s) => animRegistry.set(id, s), addrs, clientTitle, bar)
                         if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                         return w
                     }
@@ -1068,7 +1068,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 configs.push({
                     id: "pinned-ghost-" + lid, width: 80,
                     factory: (vc) => {
-                        const w = DockItem(lid, ghost, update, (id, s) => animRegistry.set(id, s), [], undefined, bar)
+                        const w = DockItem("pinned-ghost-" + lid, ghost, update, (id, s) => animRegistry.set(id, s), [], undefined, bar)
                         if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                         return w
                     }
@@ -1095,7 +1095,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             configs.push({
                 id: "running-" + lid, width: 80,
                 factory: (vc) => {
-                    const w = DockItem(lid, appItem!, update, (id, s) => animRegistry.set(id, s), group.addresses, group.title, bar)
+                    const w = DockItem("running-" + lid, appItem!, update, (id, s) => animRegistry.set(id, s), group.addresses, group.title, bar)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
                 }

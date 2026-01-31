@@ -6,7 +6,7 @@ import Dock from "./widget/Dock"
 
 const windows = new Set()
 
-console.log("[DISTROIA] app.ts loading... (Gaussian V17 Sine-Wave Physics)");
+console.log("[DISTROIA] app.ts loading... (Gaussian V17.1 ID Mismatch Fix)");
 
 app.start({
   main() {
