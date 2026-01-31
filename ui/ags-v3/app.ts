@@ -6,7 +6,7 @@ import Dock from "./widget/Dock"
 
 const windows = new Set()
 
-console.log("[DISTROIA] app.ts loading... (Gaussian V11 Proportional Scaling)");
+console.log("[DISTROIA] app.ts loading... (Gaussian V12.1 Layout-Sync)");
 
 app.start({
   main() {
