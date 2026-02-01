@@ -48,7 +48,7 @@ import appService from "../core/AppService"
 // 2. SEPARATOR (Now accepts drops to APPEND, with wider hitbox)
 // SEPARATOR: Gaussian Horizontal Scaling, Fixed Vertical Height.
 function Separator(id: string, updateDock: () => void, register: (id: string, s: any) => void, height = 48) {
-    const baseWidth = 80 // V50: HYBRID SLOT 80px
+    const baseWidth = 32 // V54: Compressed Slot 32px (Was 80, causing centering conflict)
     // Container for Hitbox (invisible, wide, fixed height)
     const box = new Gtk.Box({
         css_classes: ["cd-separator-container"],
@@ -64,7 +64,6 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
         valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
         width_request: 1, height_request: height,
         hexpand: false, // Strict width
-        margin_start: 12 // V54.1: Visual Balance (Shift Right 6px to compensate for narrow Trash)
     })
 
     box.append(line)
