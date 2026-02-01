@@ -1199,7 +1199,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         // 4. Separator & Trash
         configs.push({
-            id: "sep-trash", width: 32, // V54: Compressed Slot 32px
+            id: "sep-trash", width: 80, // V50: Slot 80
             syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
             factory: (vc) => {
                 const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 48)
@@ -1225,18 +1225,17 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         // VIRTUAL GRID V7: Slot-Based Calculation
         const count = configs.length
-        // VIRTUAL GRID V54: Variable Geometry Calculation
-        // We sum specific widths instead of count * 80
-        const totalWidth = configs.reduce((sum, c) => sum + (c.width || 80), 0)
+        // VIRTUAL GRID V10: Hybrid Precision (80px slot / 64px icon)
+        const slotSize = 80
+        const totalWidth = configs.length * slotSize
 
         const screenWidth = gdkmonitor.get_geometry().width
         const startX = (screenWidth - totalWidth) / 2
 
         let currentX = startX
         const finalItems = configs.map((c) => {
-            const slotWidth = c.width || 80 // V54: Support variable width (Separator=32, App=80)
-            const myCenter = currentX + (slotWidth / 2)
-            currentX += slotWidth
+            const myCenter = currentX + (slotSize / 2)
+            currentX += slotSize
 
             const widget = getOrCreateItem(c.id, () => c.factory(myCenter))
             const inner = (widget as Gtk.Revealer).get_child()

@@ -31,7 +31,7 @@ export function calculateDockItemMetrics(qX: number, staticCenter: number, isSep
     if (isSeparator) {
         return {
             scale: 1.0,
-            width: 80,
+            width: 32, // V54: Match new compressed slot
             height: 80,
             translateY: 0,
             margin: 0
