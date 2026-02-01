@@ -280,6 +280,11 @@ window#crystal-dock popover.cd-tooltip contents {
   color: #ffffff;
 }
 
+.cd-menu-action:active {
+  background-color: #0062cc;
+  color: #ffffff;
+}
+
 .cd-menu-separator {
   min-height: 1px;
   background-color: rgba(0, 0, 0, 0.1);

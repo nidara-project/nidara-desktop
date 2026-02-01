@@ -459,27 +459,32 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         actions.push({ separator: true })
 
         // 2. DESKTOP ACTIONS (Quick Actions)
+        let desktopActions: string[] = []
         // @ts-ignore
-        if (appItem && appItem.get_actions) {
-            // @ts-ignore
-            const desktopActions = appItem.get_actions()
-            desktopActions.forEach((action: any) => {
-                // Determine label: try to get name -> label -> raw name
-                const rawLabel = action.get_name ? action.get_name() : (action.name || "action")
-                // Format: Sentence case
-                const label = toSentenceCase(rawLabel.replace(/_/g, " "))
+        if (appItem && appItem.list_actions) desktopActions = appItem.list_actions()
+        // @ts-ignore
+        else if (appItem && appItem.app && appItem.app.list_actions) desktopActions = appItem.app.list_actions()
+
+        if (desktopActions.length > 0) {
+            desktopActions.forEach((actionName: string) => {
+                // Determine label: For raw GAppInfo, we map action ID -> Sentence Case
+                const rawLabel = actionName
+                // Format: Sentence case (replace - and _ with space)
+                const label = toSentenceCase(rawLabel.replace(/[-_]/g, " "))
 
                 actions.push({
                     label: label,
                     action: () => {
                         console.log(`[DockMenu] Launching action: ${rawLabel}`)
-                        appItem.launch_action(rawLabel)
+                        // Try standard launch_action
+                        if (appItem.launch_action) appItem.launch_action(rawLabel)
+                        // @ts-ignore
+                        else if (appItem && appItem.app && appItem.app.launch_action) appItem.app.launch_action(rawLabel)
                     }
                 })
             })
-            if (desktopActions.length > 0) actions.push({ separator: true })
+            actions.push({ separator: true })
         }
-
         // 3. SYSTEM ACTIONS
         actions.push({ label: "Abrir nueva ventana", action: () => appItem.launch() })
 
@@ -1108,6 +1113,37 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 return w
             }
         })
+
+        // V53 PROBE: Simulate Action Lookup for Firefox/Chrome without interaction
+        if (!globalThis.dockProbeRun) {
+            globalThis.dockProbeRun = true
+            GLib.timeout_add(GLib.PRIORITY_LOW, 5000, () => {
+                console.log("[PROBE-SIM] Starting 5s delayed probe for actions...")
+                const targetApp = appsService.list.find(a => a.name.toLowerCase().includes("firefox") || a.name.toLowerCase().includes("chrome")) || appsService.list[0]
+                if (targetApp) {
+                    console.log(`[PROBE-SIM] Found app: ${targetApp.name}`)
+                    // @ts-ignore
+                    console.log(`[PROBE-SIM] Keys:`, Object.keys(targetApp))
+                    // @ts-ignore
+                    console.log(`[PROBE-SIM] Prototype:`, Object.getPrototypeOf(targetApp))
+
+                    // Check specific properties commonly found in Gjs wrappers
+                    // @ts-ignore
+                    console.log(`[PROBE-SIM] .app:`, targetApp.app)
+                    // @ts-ignore
+                    console.log(`[PROBE-SIM] .entry:`, targetApp.entry)
+                    // @ts-ignore
+                    console.log(`[PROBE-SIM] .desktop:`, targetApp.desktop)
+
+                    // Try raw GObject inspection logic?
+                    // @ts-ignore
+                    if (targetApp.list_actions) console.log(`[PROBE-SIM] direct list_actions():`, targetApp.list_actions())
+                } else {
+                    console.log("[PROBE-SIM] No suitable app found (Firefox/Chrome/Any) to probe.")
+                }
+                return GLib.SOURCE_REMOVE
+            })
+        }
 
         // 2. Process Pinned List
         pinnedList.filter(id => !!id).forEach(id => {
