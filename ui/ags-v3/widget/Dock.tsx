@@ -54,7 +54,7 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
         css_classes: ["cd-separator-container"],
         valign: Gtk.Align.END, halign: Gtk.Align.CENTER,
         width_request: baseWidth,
-        height_request: 92, // V41: Perfect vertical centering
+        height_request: 92, // V51: Lock height to prevent vertical jitter
         hexpand: false,
     })
 
@@ -78,7 +78,9 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
         isSeparator: true
     }
     register(id, state)
+        // EXPOSE VIRTUAL CENTER UPDATE
         ; (box as any).setVirtualCenter = (v: number) => {
+            if (Math.abs(state.staticCenter - v) < 0.1) return // V51: Sub-pixel lock
             state.virtualCenter = v
             state.staticCenter = v
         }
@@ -338,6 +340,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
         // EXPOSE VIRTUAL CENTER UPDATE
         ; (itemBox as any).setVirtualCenter = (v: number) => {
+            if (Math.abs(state.staticCenter - v) < 0.1) return // V51: Sub-pixel lock
             state.virtualCenter = v
             state.staticCenter = v
         }
@@ -888,8 +891,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
     let lastMouseX = -1000
     const updateAllTargets = (mouseX: number) => {
-        // V31 Precision Hysteresis: 1.0px deadzone for micro-tremors
-        if (mouseX !== -1000 && Math.abs(mouseX - lastMouseX) < 1.0) return
+        // V51 Precision Hysteresis: 1.5px deadzone for boundary stabilization
+        if (mouseX !== -1000 && Math.abs(mouseX - lastMouseX) < 1.5) return
         lastMouseX = mouseX
 
         // Quantize Mouse Input (V31: 0.5px sub-steps for smoother physics)
@@ -917,12 +920,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         })
         runUnifiedTick()
     }
-    let bgAnimId = 0
 
-    // V31: Background animation is now unified in the main tick
-    const startBgAnimation = () => {
-        runUnifiedTick()
-    }
+    let bgAnimId = 0
 
     // MOTION CONTROLLER
     // MOTION CONTROLLER - Attached to STATIC Container (Layout), not dynamic Bar

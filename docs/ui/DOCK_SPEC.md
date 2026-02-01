@@ -1,6 +1,6 @@
-# MiDistroIA Dock Specification: Gaussian V50 (Hybrid 80/64 Architecture) 🧸🍎💎
+# MiDistroIA Dock Specification: Gaussian V51 (Stability & Symmetry) 🧸🍎💎
 
-This document defines the technical implementation, physics, and geometry of the Unified Dock Engine as of version 50 (Symmetry Resolution).
+This document defines the technical implementation, physics, and geometry of the Unified Dock Engine as of version 51 (Precision Stabilization).
 
 ## 1. Core Architecture: Unified Animation Engine
 The dock uses a **Single Central Clock (60fps)** to synchronize all animations. This eliminates the phase-jitter caused by independent widget loops.

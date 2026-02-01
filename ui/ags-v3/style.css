@@ -232,7 +232,7 @@ window#crystal-dock .cd-dot.focused {
 window#crystal-dock box#cd-separator {
   min-height: 48px;
   max-height: 48px;
-  min-width: 1px;
+  min-width: 2px;
   background-color: rgba(255, 255, 255, 0.4);
   margin: 0;
   border-radius: 1px;

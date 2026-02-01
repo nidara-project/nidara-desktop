@@ -26,14 +26,20 @@ export interface DockItemMetrics {
  * @param itemCenterX - Centro estático (Ground Truth) del item en pantalla
  * @param isSeparator - Si es un separador (lógica especial)
  */
-export const calculateDockItemMetrics = (
-    mouseX: number,
-    itemCenterX: number,
-    isSeparator: boolean
-): DockItemMetrics => {
+export function calculateDockItemMetrics(qX: number, staticCenter: number, isSeparator = false): DockItemMetrics {
+    // V51: Absolute stability for separators (Zero movement/scaling)
+    if (isSeparator) {
+        return {
+            scale: 1.0,
+            width: 80,
+            height: 80,
+            translateY: 0,
+            margin: 0
+        };
+    }
 
     // 1. Distancia absoluta
-    const distance = Math.abs(mouseX - itemCenterX);
+    const distance = Math.abs(qX - staticCenter);
 
     // 2. Cálculo del Sigma dinámico
     // El 'spread' del efecto depende del tamaño base.
@@ -48,16 +54,11 @@ export const calculateDockItemMetrics = (
         // Mapeamos la distancia a un ángulo entre 0 y PI (mitad de una onda sinusoidal)
         // Esto da una transición más suave y "orgánica" que Math.exp
         const normalizedDist = distance / sigma;
-        intensity = Math.cos(normalizedDist * (Math.PI / 2));
-
-        // Elevamos al cuadrado para suavizar la entrada/salida (Ease-In-Out)
-        intensity = intensity * intensity;
+        intensity = Math.pow(Math.cos(normalizedDist * (Math.PI / 2)), 2);
     }
 
     // 4. Interpolación de Escala
-    const targetScale = isSeparator
-        ? 1.0
-        : 1 + (intensity * ((DOCK_PREFS.maxSize / DOCK_PREFS.minSize) - 1));
+    const targetScale = 1 + (intensity * ((DOCK_PREFS.maxSize / DOCK_PREFS.minSize) - 1));
 
     // 5. Cálculo de Dimensiones Físicas (Layout)
     // CRÍTICO: El width físico debe ser idéntico al visual para empujar a los vecinos.
@@ -75,4 +76,4 @@ export const calculateDockItemMetrics = (
         translateY: 0, // En un layout Flex/Box alineado a 'end', esto debe ser 0.
         margin: dynamicMargin
     };
-};
+}
