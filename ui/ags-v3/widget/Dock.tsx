@@ -441,6 +441,12 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     const checkId = (cleanId || appId).toLowerCase()
     const popover = new Gtk.Popover({ css_classes: ["cd-popover"], has_tooltip: false })
     popover.set_parent(itemBox)
+
+    const toSentenceCase = (str: string) => {
+        if (!str) return ""
+        return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase()
+    }
+
     const rebuildMenu = () => {
         // V39: Recalculate isPinned and active status every time the menu is shown
         const currentIsPinned = pinnedList.some(p => p.toLowerCase() === checkId)
@@ -448,12 +454,37 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         const menu = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
         const actions: any[] = []
 
-        // 1. OPEN
-        actions.push({ label: "Abrir", action: () => appItem.launch() })
+        // 1. HEADER (App Name)
+        actions.push({ label: appItem.name || "App", header: true })
+        actions.push({ separator: true })
 
-        // 2. PIN TOGGLE
+        // 2. DESKTOP ACTIONS (Quick Actions)
+        // @ts-ignore
+        if (appItem && appItem.get_actions) {
+            // @ts-ignore
+            const desktopActions = appItem.get_actions()
+            desktopActions.forEach((action: any) => {
+                // Determine label: try to get name -> label -> raw name
+                const rawLabel = action.get_name ? action.get_name() : (action.name || "action")
+                // Format: Sentence case
+                const label = toSentenceCase(rawLabel.replace(/_/g, " "))
+
+                actions.push({
+                    label: label,
+                    action: () => {
+                        console.log(`[DockMenu] Launching action: ${rawLabel}`)
+                        appItem.launch_action(rawLabel)
+                    }
+                })
+            })
+            if (desktopActions.length > 0) actions.push({ separator: true })
+        }
+
+        // 3. SYSTEM ACTIONS
+        actions.push({ label: "Abrir nueva ventana", action: () => appItem.launch() })
+
         actions.push({
-            label: currentIsPinned ? "Desanclar" : "Anclar",
+            label: currentIsPinned ? "Desanclar del dock" : "Mantener en el dock",
             action: () => {
                 const cid = cleanId || rawId
                 if (currentIsPinned) pinnedList = pinnedList.filter(p => p.toLowerCase() !== cid.toLowerCase())
@@ -462,25 +493,44 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             }
         })
 
-        // 3. QUIT (If running)
+        // 4. WINDOW MANAGEMENT (If running)
         if (state.addresses && state.addresses.length > 0) {
             actions.push({ separator: true })
-            actions.push({
-                label: "Salir",
-                action: () => {
-                    state.addresses.forEach(addr => {
-                        const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
-                        execAsync(`hyprctl dispatch closewindow address:${cleanAddr} `).catch(print)
-                    })
-                }
-            })
+
+            // If multiple windows, maybe show count?
+            const winCount = state.addresses.length
+            if (winCount > 1) {
+                actions.push({
+                    label: `Cerrar todas (${winCount})`, isDestructive: true,
+                    action: () => {
+                        state.addresses.forEach(addr => {
+                            const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
+                            execAsync(`hyprctl dispatch closewindow address:${cleanAddr} `).catch(print)
+                        })
+                    }
+                })
+            } else {
+                actions.push({
+                    label: "Salir", isDestructive: true,
+                    action: () => {
+                        state.addresses.forEach(addr => {
+                            const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
+                            execAsync(`hyprctl dispatch closewindow address:${cleanAddr} `).catch(print)
+                        })
+                    }
+                })
+            }
         }
 
         actions.forEach(a => {
             if (a.separator) {
                 menu.append(new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL, css_classes: ["cd-menu-separator"] }))
+            } else if (a.header) { // V53: Header style
+                const l = new Gtk.Label({ label: a.label, xalign: 0, css_classes: ["cd-menu-header"] })
+                menu.append(l)
             } else {
                 const b = new Gtk.Button({ label: a.label, css_classes: ["cd-menu-action"] })
+                if (a.isDestructive) b.add_css_class("destructive") // Add red style
                 b.connect("clicked", () => { a.action(); popover.popdown() })
                 menu.append(b)
             }
@@ -990,6 +1040,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         // VIRTUAL GRID REFACTOR: Collection Phase
         type ItemConfig = { id: string, width: number, syncData?: any, factory: (vc: number) => Gtk.Widget }
         const configs: ItemConfig[] = []
+        // removed bad log
         const currentIds = new Set<string>()
 
         // Helper to get/create widget (Used later in instantiation phase)
