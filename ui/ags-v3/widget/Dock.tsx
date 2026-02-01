@@ -728,7 +728,7 @@ const mouseBus = {
 }
 
 export default function Dock(gdkmonitor: Gdk.Monitor) {
-    console.log("[DISTROIA] Dock() called");
+    console.log("[DISTROIA] Dock() initializing (Anti-Jitter Widget Edition)");
     // CACHE for consistent widget identity & animations
     const widgetCache = new Map<string, Gtk.Widget>()
     const bar = new Gtk.Box({
@@ -766,19 +766,22 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             let sumWidths = 0
 
             animRegistry.forEach((state, id) => {
-                // LERP PHYSICS (Split Scale & Width for snapiness)
-                if (Math.abs(state.targetScale - state.currentScale) > 0.001) {
-                    state.currentScale = lerp(state.currentScale, state.targetScale, 0.2) // Fast Scale
+                // PHYSICS: Hysteresis & Quantization (V27 Anti-Jitter)
+                const scaleDiff = Math.abs(state.targetScale - state.currentScale)
+                if (scaleDiff > 0.0001) {
+                    state.currentScale = lerp(state.currentScale, state.targetScale, 0.25)
                     active = true
                 } else state.currentScale = state.targetScale
 
-                if (Math.abs(state.targetWidth - state.currentWidth) > 0.1) {
-                    state.currentWidth = lerp(state.currentWidth, state.targetWidth, 0.2) // Fast Layout
+                const widthDiff = Math.abs(state.targetWidth - state.currentWidth)
+                if (widthDiff > 0.01) {
+                    state.currentWidth = lerp(state.currentWidth, state.targetWidth, 0.25)
                     active = true
                 } else state.currentWidth = state.targetWidth
 
-                if (Math.abs(state.targetMargin - state.currentMargin) > 0.01) {
-                    state.currentMargin = lerp(state.currentMargin, state.targetMargin, 0.2)
+                const marginDiff = Math.abs(state.targetMargin - state.currentMargin)
+                if (marginDiff > 0.01) {
+                    state.currentMargin = lerp(state.currentMargin, state.targetMargin, 0.25)
                     active = true
                 } else state.currentMargin = state.targetMargin
 
@@ -789,12 +792,18 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                     const revealer = widget as Gtk.Revealer
                     const itemBox = revealer.get_child() as Gtk.Box
 
-                    // Width & Dynamic Margins
+                    // Width & Dynamic Margins (Rounded for GTK but cached to avoid redundant calls)
                     const w = Math.round(state.currentWidth)
-                    revealer.set_size_request(w, 160)
-                    itemBox?.set_size_request(w, 160)
-                    itemBox?.set_margin_start(Math.round(state.currentMargin))
-                    itemBox?.set_margin_end(Math.round(state.currentMargin))
+                    const m = Math.round(state.currentMargin)
+
+                    if (revealer.width_request !== w) {
+                        revealer.width_request = w
+                        if (itemBox) itemBox.width_request = w
+                    }
+                    if (itemBox && itemBox.margin_start !== m) {
+                        itemBox.margin_start = m
+                        itemBox.margin_end = m
+                    }
 
                     // 2. The Content (Icon Scale)
                     if (!state.isSeparator) {
@@ -815,9 +824,12 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                         // Known structure: itemBox -> Overlay -> Box (icon-box) -> Image
                         const overlay = itemBox?.get_first_child() as Gtk.Overlay
                         const iconBox = overlay?.get_child() as Gtk.Box // set_child was used
-                        const icon = iconBox?.get_first_child()
-                        if (icon && (icon as any).set_pixel_size) {
-                            (icon as any).set_pixel_size(Math.round(64 * state.currentScale))
+                        const icon = iconBox?.get_first_child() as any
+                        const targetPixelSize = Math.round(64 * state.currentScale)
+                        // @ts-ignore
+                        if (icon && icon.pixel_size !== targetPixelSize) {
+                            // @ts-ignore
+                            icon.pixel_size = targetPixelSize
                         }
                     }
                 }
@@ -848,17 +860,24 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         })
     }
 
+    let lastMouseX = -1000
     const updateAllTargets = (mouseX: number) => {
+        // V27: Deadzone to discard micro-tremors (sensor noise)
+        if (mouseX !== -1000 && Math.abs(mouseX - lastMouseX) < 1.5) return
+        lastMouseX = mouseX
+
+        // Quantize Mouse Input (V27: 1px steps)
+        const qX = mouseX === -1000 ? -1000 : Math.round(mouseX)
+
         animRegistry.forEach((state) => {
-            if (mouseX === -1000) {
+            if (qX === -1000) {
                 // RESET
                 state.targetScale = 1.0
-                state.targetWidth = state.isSeparator ? 48 : 64 // Min size
+                state.targetWidth = state.isSeparator ? 48 : 64
                 state.targetMargin = 6
             } else {
-                // V17 PHYSICS
                 const metrics = calculateDockItemMetrics(
-                    mouseX,
+                    qX,
                     state.staticCenter,
                     state.isSeparator
                 )

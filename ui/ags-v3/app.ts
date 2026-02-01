@@ -6,7 +6,7 @@ import Dock from "./widget/Dock"
 
 const windows = new Set()
 
-console.log("[DISTROIA] app.ts loading... (Gaussian V17.1 ID Mismatch Fix)");
+console.log("[DISTROIA] app.ts loading... (Phase 27: Anti-Jitter Widget Edition - Stable)");
 
 app.start({
   main() {

@@ -61,7 +61,7 @@ export const calculateDockItemMetrics = (
 
     // 5. Cálculo de Dimensiones Físicas (Layout)
     // CRÍTICO: El width físico debe ser idéntico al visual para empujar a los vecinos.
-    const targetWidth = Math.round(DOCK_PREFS.minSize * targetScale);
+    const targetWidth = DOCK_PREFS.minSize * targetScale;
 
     // 6. Cálculo de Separación (Margin)
     // Truco visual: Reducir ligeramente el margen entre iconos cuando están grandes
