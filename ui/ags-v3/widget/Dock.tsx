@@ -221,26 +221,26 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
     cr.setSource(gradient)
     cr.fill()
 
-    // 4. SPECULAR HIGHLIGHT
+    // 4. SPECULAR HIGHLIGHT (Glass Edge)
     cr.save()
     cr.translate(0, 1) // 1px Top inset
     path(0)
     cr.clip()
 
     // @ts-ignore
-    const rimGrad = new Cairo.LinearGradient(x, y, x, y + 4)
-    rimGrad.addColorStopRGBA(0, 1, 1, 1, 0.55)
+    const rimGrad = new Cairo.LinearGradient(x, y, x, y + 2)
+    rimGrad.addColorStopRGBA(0, 1, 1, 1, 0.75) // More vibrant top edge
     rimGrad.addColorStopRGBA(1, 1, 1, 1, 0.0)
 
     cr.setSource(rimGrad)
-    cr.setLineWidth(1.5)
+    cr.setLineWidth(2.0)
     cr.stroke()
     cr.restore()
 
-    // 5. M3 RIM LIGHT
+    // 5. M3 RIM LIGHT (Full path definition)
     path()
-    cr.setSourceRGBA(1, 1, 1, 0.25)
-    cr.setLineWidth(0.6)
+    cr.setSourceRGBA(1, 1, 1, 0.3)
+    cr.setLineWidth(0.7)
     cr.stroke()
 }
 
@@ -295,8 +295,8 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
         hexpand: false,
-        // Remove fixed width_request to allow icon to push freely
-        margin_bottom: 14,
+        // V67: OPTICAL UPLIFT - macOS style icons are anchored slightly higher than geometric center
+        margin_bottom: 22,
         has_tooltip: false,
     })
 
@@ -426,7 +426,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         css_classes: ["cd-indicator-container"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
-        margin_bottom: 4,
+        margin_bottom: 8, // V67: Indicator also pulled up slightly
         has_tooltip: false,
         width_request: 4, height_request: 4, // FIXED SIZE (V11)
     })

@@ -204,10 +204,14 @@ window#crystal-dock box.cd-drag-gap,
 #dock-main-container .cd-squircle-plate {
   background-color: #ffffff;
   border-radius: 28%;
-  /* Percentage radius for perfect scaling */
   margin: 0;
   padding: 0;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), 0 4px 12px rgba(0, 0, 0, 0.15);
+  /* V67: Multi-layered Apple Shadow (Soft + Directional + Inner) */
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.1),
+    0 2px 4px rgba(0, 0, 0, 0.15),
+    0 8px 16px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .cd-squircle-plate image,
