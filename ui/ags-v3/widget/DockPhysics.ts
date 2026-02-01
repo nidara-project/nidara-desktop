@@ -5,12 +5,28 @@
  */
 
 // Constantes de calibración
-const DOCK_PREFS = {
+export const DOCK_CONSTANTS = {
+    // PHYSICS
     minSize: 64,        // Tamaño base (RESTAURADO)
     maxSize: 128,       // Tamaño máximo
     range: 2.5,         // Sigma Spread
     sensitivity: 0.35,  // Ajuste fino
+    // LAYOUT (V55: Centralized Polish)
+    ICON_SIZE: 64,
+    BASE_MARGIN: 4,     // V54.12: Stable Gap
+    SEPARATOR_SLOT: 32,
+    SEPARATOR_LINE: 2,
+    SEPARATOR_OFFSET: 15,
+    APP_SLOT: 80,
 };
+
+// Aliases for local physics compatibility (gradual migration)
+const DOCK_PREFS = {
+    minSize: DOCK_CONSTANTS.minSize,
+    maxSize: DOCK_CONSTANTS.maxSize,
+    range: DOCK_CONSTANTS.range,
+    sensitivity: DOCK_CONSTANTS.sensitivity
+}
 
 export interface DockItemMetrics {
     width: number;
@@ -65,9 +81,10 @@ export function calculateDockItemMetrics(qX: number, staticCenter: number, isSep
     const targetWidth = DOCK_PREFS.minSize * targetScale;
 
     // 6. Cálculo de Separación (Margin)
-    // V50: 8px margin + 64px icon = 80px total slot (Symmetry Fix)
-    const baseMargin = 8;
-    const dynamicMargin = baseMargin * (1 - (intensity * 0.5));
+    // 6. Cálculo de Separación (Margin)
+    // V55: Centralized Constant (Stable 4px)
+    const baseMargin = DOCK_CONSTANTS.BASE_MARGIN;
+    const dynamicMargin = baseMargin; // CONSTANT.
 
     return {
         width: targetWidth,

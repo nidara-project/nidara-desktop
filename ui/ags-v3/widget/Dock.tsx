@@ -10,7 +10,14 @@ import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
-import { calculateDockItemMetrics } from "./DockPhysics"
+import { calculateDockItemMetrics, DOCK_CONSTANTS } from "./DockPhysics"
+
+
+
+// Override APP_SLOT calculation if we want perfect math:
+// 64 (Icon) + 4 (Margin Start) + 4 (Margin End) = 72px.
+// But users are used to 80px density. 
+// Let's define default width for Apps as 80 for now.
 
 // --- PERSISTENCE ---
 const PINNED_FILE = GLib.get_home_dir() + "/.config/dock_pinned.json"
@@ -48,7 +55,7 @@ import appService from "../core/AppService"
 // 2. SEPARATOR (Now accepts drops to APPEND, with wider hitbox)
 // SEPARATOR: Gaussian Horizontal Scaling, Fixed Vertical Height.
 function Separator(id: string, updateDock: () => void, register: (id: string, s: any) => void, height = 48) {
-    const baseWidth = 32 // V54: Compressed Slot 32px (Was 80, causing centering conflict)
+    const baseWidth = DOCK_CONSTANTS.SEPARATOR_SLOT
     // Container for Hitbox (invisible, wide, fixed height)
     const box = new Gtk.Box({
         css_classes: ["cd-separator-container"],
@@ -61,9 +68,10 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
     // Visible Line
     const line = new Gtk.Box({
         name: "cd-separator", css_classes: ["cd-separator"],
-        valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
-        width_request: 1, height_request: height,
-        hexpand: false, // Strict width
+        valign: Gtk.Align.CENTER, halign: Gtk.Align.START, // V54.10: Force START + Margin to ensure position
+        width_request: DOCK_CONSTANTS.SEPARATOR_LINE, height_request: height,
+        hexpand: false,
+        margin_start: DOCK_CONSTANTS.SEPARATOR_OFFSET
     })
 
     box.append(line)
@@ -260,7 +268,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
         hexpand: false,
-        width_request: 80, // SLOT (V14 Master)
+        width_request: DOCK_CONSTANTS.APP_SLOT, // SLOT (V14 Master)
         height_request: 160,
         cursor: Gdk.Cursor.new_from_name("pointer", null),
         can_focus: false,
@@ -323,13 +331,13 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     }
 
     // --- MAGNIFICATION PHYSICS V14 (Master) ---
-    const iconSize = 64
-    const slotSize = 80 // Base Slot (V14 Master)
+    const iconSize = DOCK_CONSTANTS.ICON_SIZE
+    const slotSize = DOCK_CONSTANTS.APP_SLOT // Base Slot (V14 Master)
 
     const state = {
         targetScale: 1.0, currentScale: 1.0,
-        targetWidth: 64, currentWidth: 64, // V50: Stable Physical Base
-        targetMargin: 8, currentMargin: 8, // V50: Padding to fill 80px slot
+        targetWidth: DOCK_CONSTANTS.ICON_SIZE, currentWidth: DOCK_CONSTANTS.ICON_SIZE, // V50: Stable Physical Base
+        targetMargin: DOCK_CONSTANTS.BASE_MARGIN, currentMargin: DOCK_CONSTANTS.BASE_MARGIN, // V55: Polished Margin
         staticCenter: 0,
         virtualCenter: 0,
         isSeparator: false,
@@ -958,9 +966,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 // RESET
                 state.targetScale = 1.0
                 if (state.isSeparator) {
-                    state.targetWidth = 80; state.targetMargin = 0
+                    state.targetWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.targetMargin = 0 // V54: Sync with Physics 32px
                 } else {
-                    state.targetWidth = 64; state.targetMargin = 8 // V50: 64 + 8 + 8 = 80
+                    state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.targetMargin = DOCK_CONSTANTS.BASE_MARGIN // V55: Clean Reset
                 }
             } else {
                 const metrics = calculateDockItemMetrics(
@@ -1199,7 +1207,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         // 4. Separator & Trash
         configs.push({
-            id: "sep-trash", width: 32, // V54: Compressed Slot 32px
+            id: "sep-trash", width: DOCK_CONSTANTS.SEPARATOR_SLOT,
             syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
             factory: (vc) => {
                 const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 48)
@@ -1225,16 +1233,16 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         // VIRTUAL GRID V7: Slot-Based Calculation
         const count = configs.length
-        // VIRTUAL GRID V54: Variable Geometry Calculation
-        // We sum specific widths instead of count * 80
-        const totalWidth = configs.reduce((sum, c) => sum + (c.width || 80), 0)
+        // VIRTUAL GRID V55: Variable Geometry Calculation (Polished)
+        // We sum specific widths instead of count * Constants
+        const totalWidth = configs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
 
         const screenWidth = gdkmonitor.get_geometry().width
         const startX = (screenWidth - totalWidth) / 2
 
         let currentX = startX
         const finalItems = configs.map((c) => {
-            const slotWidth = c.width || 80 // V54: Support variable width (Separator=32, App=80)
+            const slotWidth = c.width || DOCK_CONSTANTS.APP_SLOT // V55: Consistent Polished Slot
             const myCenter = currentX + (slotWidth / 2)
             currentX += slotWidth
 
