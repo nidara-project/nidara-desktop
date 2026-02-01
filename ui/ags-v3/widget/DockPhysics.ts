@@ -8,7 +8,7 @@
 export const DOCK_CONSTANTS = {
     // PHYSICS
     minSize: 64,        // Tamaño base (RESTAURADO)
-    maxSize: 96,       // V70: Compact Magnification for Safe Zones
+    maxSize: 96,        // V70: Stable 96px magnification
     range: 2.5,         // Sigma Spread
     sensitivity: 0.35,  // Ajuste fino
     // LAYOUT (V55: Centralized Polish)

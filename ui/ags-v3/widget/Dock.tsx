@@ -277,8 +277,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         halign: Gtk.Align.CENTER,
         hexpand: false,
         width_request: DOCK_CONSTANTS.APP_SLOT, // SLOT (V14 Master)
-        height_request: 112,
-        cursor: Gdk.Cursor.new_from_name("pointer", null),
+        height_request: 92, // V70: Constrained to Pill Height to prevent ghost hover
         can_focus: false,
         has_tooltip: false,
     })
@@ -303,7 +302,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         valign: Gtk.Align.END,
         hexpand: false,
         // V67: OPTICAL UPLIFT - macOS style icons are anchored slightly higher than geometric center
-        margin_bottom: 16, // V70: 16px uplift (Fits in 112px zone)
+        margin_bottom: 22, // RESTORED: Optical Uplift (macOS style)
         has_tooltip: false,
     })
 
@@ -433,7 +432,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         css_classes: ["cd-indicator-container"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
-        margin_bottom: 4, // V70: Compact Dot Sync
+        margin_bottom: 12, // RESTORED: Indicator Gap
         has_tooltip: false,
         width_request: 4, height_request: 4, // FIXED SIZE (V11)
     })
@@ -445,7 +444,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         overflow: Gtk.Overflow.VISIBLE,
         valign: Gtk.Align.END, // BOTTOM ANCHOR
         vexpand: true,
-        height_request: 112, // V70: Reduced height to avoid input interference
+        height_request: 120, // V70: Calibrated for 22px uplift
         has_tooltip: false,
     })
     overlay.set_child(iconBox)
@@ -457,6 +456,9 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     tooltip.set_offset(0, -12)
     // PREFER CLIENT TITLE for Tooltip (Dynamic)
     const label = new Gtk.Label({ css_classes: ["cd-tooltip-label"] })
+    const content = new Gtk.Box({ css_classes: ["cd-tooltip-content"] })
+    content.append(label)
+    tooltip.set_child(content)
 
     // BINDING LOGIC
     // We want the title of the *focused* instance if active, or the first instance otherwise.
@@ -489,34 +491,38 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
     updateLabel()
 
-    // Hook into hypr events just for this item? No, that's too heavy.
-    // Instead, trust that the parent `update()` recreates us or we need a specific signal.
-    // If update() is not called on title change, it means `dock.update()` isn't firing on title change.
-    // WE NEED TO ADD listeners for title changes.
-
-    const content = new Gtk.Box({ css_classes: ["cd-tooltip-content"] })
-    content.append(label)
-    tooltip.set_child(content)
-    tooltip.set_parent(itemBox)
+    tooltip.set_parent(iconBox)
 
     let tooltipTimeout: number | null = null
     const motion = new Gtk.EventControllerMotion()
     motion.connect("enter", () => {
         if (tooltipTimeout) GLib.source_remove(tooltipTimeout)
-        tooltipTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-            tooltip.popup(); tooltipTimeout = null; return GLib.SOURCE_REMOVE
-        })
+    })
+    motion.connect("motion", (controller, x, y) => {
+        // NATURAL BOUNDARIES: itemBox is only 92px and sits at the bottom. y=0 is Pill Top.
+        itemBox.set_cursor(Gdk.Cursor.new_from_name("pointer", null))
+
+        // Only start timeout if not visible and no timeout pending
+        if (!tooltip.visible && !tooltipTimeout) {
+            tooltipTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+                tooltip.popup(); tooltipTimeout = null; return GLib.SOURCE_REMOVE
+            })
+        }
     })
     motion.connect("leave", () => {
+        itemBox.set_cursor(null) // Clean state reset
         if (tooltipTimeout) { GLib.source_remove(tooltipTimeout); tooltipTimeout = null }
         tooltip.popdown()
     })
-    itemBox.add_controller(motion)
+    // V70.16: TACTILE PRECISION
+    // We attach controllers to iconBox, NOT the invisible slot (itemBox).
+    // This ensures only the icon graphic captures the heart of the interaction.
+    iconBox.add_controller(motion)
 
     // Interaction: Use cleanId for persistence checks (V35: Strips internal prefixes)
     const checkId = (cleanId || appId).toLowerCase()
     const popover = new Gtk.Popover({ css_classes: ["cd-popover"], has_tooltip: false })
-    popover.set_parent(itemBox)
+    popover.set_parent(iconBox)
 
     const toSentenceCase = (str: string) => {
         if (!str) return ""
@@ -632,15 +638,17 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     itemBox.add_controller(source)
 
     const rightClick = new Gtk.GestureClick({ button: 3 })
-    rightClick.connect("released", () => {
+    rightClick.connect("released", (gesture, n, x, y) => {
+        // NO GATE: itemBox is only 92px and situated exactly in the Pill
         rebuildMenu()
         popover.popup()
     })
-    itemBox.add_controller(rightClick)
+    iconBox.add_controller(rightClick)
 
     const leftClick = new Gtk.GestureClick({ button: 1 })
     // HARDENED CLICK LOGIC
-    leftClick.connect("released", () => {
+    leftClick.connect("released", (gesture, n, x, y) => {
+        // NO GATE: iconBox follow icon scale. Perfectly tactile.
         console.log(`[DockClick] Clicked ${appId}.Addresses in scope: ${addresses.length} `);
 
         // 1. Refresh active addresses from Hyprland source of truth if possible
@@ -686,7 +694,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             }
         }
     })
-    itemBox.add_controller(leftClick)
+    iconBox.add_controller(leftClick)
 
 
     // --- DOCK ITEM COMPONENT ---
@@ -898,7 +906,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
         overflow: Gtk.Overflow.VISIBLE,
-        height_request: 112, // V70: Compact Headspace
+        height_request: 120, // Final 120px sync
         spacing: 0, // V7: Total control via widget width_request
         can_focus: false,
     })
@@ -1022,6 +1030,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             if (Math.abs(smoothedBarWidth - totalTargetPillWidth) > 0.01) {
                 smoothedBarWidth = totalTargetPillWidth // INSTANT FOLLOW
                 da.queue_draw()
+                updateInputRegion(smoothedBarWidth) // V71: Follow Pill width for input masking
                 active = true // Keep loop alive if widths are changing
             }
 
@@ -1067,14 +1076,24 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     let bgAnimId = 0
 
     // MOTION CONTROLLER
-    // MOTION CONTROLLER - Attached to STATIC Container (Layout), not dynamic Bar
     const motion = new Gtk.EventControllerMotion()
     motion.connect("enter", () => { /* console.log("Enter Dock") */ })
+    const updateInputRegion = (totalWidth: number) => {
+        const surface = win.get_native()?.get_surface()
+        if (!surface) return
+
+        const monitorWidth = gdkmonitor.get_geometry().width
+        const region = new Cairo.Region()
+        // Interaction starts at y=28 (Pill top).
+        // REVERTED TO FULL WIDTH (Ignoring horizontal lock as requested)
+        // @ts-ignore
+        region.unionRectangle({ x: 0, y: 28, width: monitorWidth, height: 92 })
+        surface.set_input_region(region)
+    }
+
     motion.connect("motion", (controller, x, y) => {
-        // V70.1: Motion Gating
-        // Don't trigger magnification if the mouse is in the safe 10px window-gap.
-        // This prevents 'wave jumping' while browsing windows near the bottom.
-        if (y < 12) {
+        // V70.15: Pill-Lock (Exactly 28px)
+        if (y < 28) {
             updateAllTargets(-1000)
             return
         }
@@ -1084,64 +1103,60 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         updateAllTargets(-1000)
     })
 
-    // Attach to the layout (Overlay) which is full width
-    // Attach to the layout (Overlay) which is full width
-    const layout = new Gtk.Overlay({ name: "dock-main-overlay", css_classes: ["cd-main-overlay"], valign: Gtk.Align.FILL, halign: Gtk.Align.FILL, overflow: Gtk.Overflow.VISIBLE })
-    layout.add_controller(motion)
-
+    // 1. Drawing Area (Background Pill)
     const da = new Gtk.DrawingArea({
         name: "dock-drawing-area",
         css_classes: ["cd-drawing-area"],
         valign: Gtk.Align.FILL,
-        halign: Gtk.Align.FILL, // Full Fill
-        height_request: 112,
+        halign: Gtk.Align.FILL,
+        height_request: 120,
         overflow: Gtk.Overflow.VISIBLE,
         can_focus: false,
     })
     da.set_draw_func((_, cr, w, h) => {
         cr.setOperator(0); cr.paint(); cr.setOperator(2);
-
-        // DYNAMIC BACKGROUND SIZING (V52: Unified 16px gaps)
-        const pillWidth = smoothedBarWidth + 16 // 8px per side (8px pill + 8px icon margin = 16px gap)
-
-        // Center the pill in the full-width drawing area
+        const pillWidth = smoothedBarWidth + 16
         const xOffset = (w - pillWidth) / 2
-
         const dockHeight = 92
         const yOffset = h - dockHeight
-
         cr.save()
-        cr.translate(xOffset, yOffset) // Move to calculated center
+        cr.translate(xOffset, yOffset)
         drawSquircle(cr, pillWidth, dockHeight)
         cr.restore()
     })
 
-    // WRAPPER: Force vertical stability
+    // 2. Icon Shelf (Shim + Bar)
     const shim = new Gtk.Box({
         valign: Gtk.Align.END, halign: Gtk.Align.CENTER,
-        height_request: 112, // V70: Tighter Headspace
+        height_request: 120,
         overflow: Gtk.Overflow.VISIBLE,
         css_classes: ["cd-dock-shim"],
     })
-    // Bar inside shim
     bar.valign = Gtk.Align.END
     shim.append(bar)
 
-    layout.set_child(da);
-
-    // V58: Input Shield (Must be added BEFORE shim to be underneath)
-    // This catches motion in the 'gaps' so the cursor doesn't fall through to the desktop.
-    const inputShield = new Gtk.Box({ css_classes: ["cd-input-shield"] })
-    layout.add_overlay(inputShield) // Layer 1 (Shield)
-
-    layout.add_overlay(shim) // Layer 2 (Icons/Bar)
+    // 4. Assemble Overlay Stack
+    const layout = new Gtk.Overlay({
+        name: "dock-main-overlay",
+        css_classes: ["cd-main-overlay"],
+        valign: Gtk.Align.FILL,
+        halign: Gtk.Align.FILL,
+        overflow: Gtk.Overflow.VISIBLE
+    })
+    layout.add_controller(motion) // Global magnification controller
+    layout.set_child(da)
+    layout.add_overlay(shim)
 
     const mainContainer = new Gtk.Box({
-        name: "dock-main-container", css_classes: ["cd-dock-container"],
-        valign: Gtk.Align.FILL, halign: Gtk.Align.FILL,
-        hexpand: true, vexpand: false, can_focus: false
+        name: "dock-main-container",
+        css_classes: ["cd-dock-container"],
+        valign: Gtk.Align.FILL,
+        halign: Gtk.Align.FILL,
+        hexpand: true,
+        vexpand: false,
+        can_focus: false
     })
-    mainContainer.append(layout) // RESTORED VITAL CONNECTION
+    mainContainer.append(layout)
 
 
     const update = () => {
@@ -1378,8 +1393,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             const monitorWidth = gdkmonitor.get_geometry().width
             // EXPANSION: Layout is now full width to allow Magnification overflow
             const w = monitorWidth
-            da.set_size_request(w, 112)
-            if (win) { win.set_default_size(w, 112); win.set_size_request(w, 112) }
+            da.set_size_request(w, 120)
+            if (win) { win.set_default_size(w, 120); win.set_size_request(w, 120) }
         }
     }
     const win = (
@@ -1391,7 +1406,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             application={app}
             visible={true}
             decorated={false}
-            heightRequest={112}
+            heightRequest={120}
             hasTooltip={false}>
             {mainContainer}
         </window>
@@ -1415,20 +1430,27 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true);
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true);
         Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 10);
-        // V71.4: Final Optical Symmetry Calibration
-        // Nudging to 94px to match the bottom 10px gap's "air density".
+        // Initialize input region with current state
+        if (animRegistry.size > 0) {
+            let total = 0
+            for (const s of animRegistry.values()) {
+                total += s.currentWidth + (s.currentMargin * 2)
+            }
+            updateInputRegion(total)
+        }
+
+        // V71.14: 94px EXCLUSIVE ZONE (As requested)
         Gtk4LayerShell.set_exclusive_zone(win, 94);
 
-        // V70.1: ZERO-STEAL INPUT REGION
-        // We restrict the hit area to the bottom ~100px of our 112px container.
-        // This makes the 12px 'Window Gap' at the top totally transparent to clicks!
         win.connect("realize", () => {
             const surface = win.get_native()?.get_surface()
             if (surface) {
                 const monitorWidth = gdkmonitor.get_geometry().width
                 const region = new Cairo.Region()
-                // @ts-ignore (RectangleInt is native in GJS-Cairo)
-                region.union_rectangle({ x: 0, y: 12, width: monitorWidth, height: 100 })
+                // Interaction starts EXACTLY at y=28 (Pill top).
+                // Top 28px of the window are COMPLETELY CLICK-THROUGH.
+                // @ts-ignore
+                region.unionRectangle({ x: 0, y: 28, width: monitorWidth, height: 92 })
                 surface.set_input_region(region)
             }
         })

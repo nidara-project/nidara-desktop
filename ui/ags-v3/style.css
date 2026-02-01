@@ -90,24 +90,16 @@ window#crystal-dock .cd-popover>contents {
   padding: 6px;
 }
 
-/* --- TOOLTIP NEUTRALIZATION --- */
 window#crystal-dock tooltip,
 window#crystal-dock tooltip.background,
-window#crystal-dock tooltip>box,
-window#crystal-dock tooltip>box>label,
-window#crystal-dock tooltip>box>image,
-#crystal-dock tooltip,
-#crystal-dock tooltip.background,
-#crystal-dock .background,
+window#crystal-dock .background,
 tooltip,
-tooltip.background,
-popover background {
+tooltip.background {
   background-color: transparent;
   background-image: none;
-  background: none;
   border: none;
   box-shadow: none;
-  opacity: 0;
+  opacity: 1;
 }
 
 /* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
@@ -134,9 +126,7 @@ box.cd-item {
 /* --- 3. ESTILOS PROPIOS (cd-*) --- */
 #the-dock-bar {
   padding: 0;
-  min-height: 160px;
-  max-height: 160px;
-  transform-origin: bottom bottom;
+  min-height: 120px;
 }
 
 .cd-item {
@@ -144,11 +134,10 @@ box.cd-item {
   padding: 0;
   background-color: transparent;
   background-image: none;
-  transform-origin: bottom bottom;
   border: none;
   box-shadow: none;
   transition: background-color 200ms ease;
-  min-height: 160px;
+  min-height: 92px;
   min-width: 64px;
 }
 
@@ -158,18 +147,17 @@ box.cd-item {
   margin: 0;
   transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
   overflow: visible;
-  /* Try to prevent clip */
 }
 
+/* Hover effect removed to prevent invisible ghost box highlight */
 .cd-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: transparent;
 }
 
 /* High Specificity for Drag Gap */
 window#crystal-dock box.cd-drag-gap,
 .cd-drag-gap {
-  margin-left: 72px !important;
-  /* Icon (64) + Gap (8) */
+  margin-left: 72px;
   transition: margin-left 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -201,27 +189,20 @@ window#crystal-dock box.cd-drag-gap,
 }
 
 /* --- SQUIRCLE ICON PLATES (Phase 66) --- */
-#dock-main-container .cd-squircle-plate {
-  background-color: #ffffff;
+window#crystal-dock box.cd-squircle-plate {
+  background-color: rgb(255, 255, 255);
+  /* Apple pure white */
   border-radius: 28%;
+  /* Percentage radius for perfect scaling */
   margin: 0;
   padding: 0;
-  /* V67: Multi-layered Apple Shadow (Soft + Directional + Inner) */
-  box-shadow:
-    0 1px 1px rgba(0, 0, 0, 0.1),
-    0 2px 4px rgba(0, 0, 0, 0.15),
-    0 8px 16px rgba(0, 0, 0, 0.12),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  /* Multi-level shadows for Apple depth - STATIC */
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.cd-squircle-plate image,
-.cd-squircle-plate widget {
+.cd-squircle-plate image {
   box-shadow: none;
-  -gtk-icon-shadow: none;
-  border-width: 0;
-  outline-color: transparent;
-  outline-width: 0;
-  background-color: transparent;
+  border: none;
 }
 
 /* Legacy Hover Removed for Physics */
@@ -247,10 +228,8 @@ window#crystal-dock .cd-dot.open {
 
 window#crystal-dock .cd-dot.focused {
   background-color: #ffffff;
-  /* V68: Multi-layered Retina Glow */
-  box-shadow:
-    0 0 4px rgba(255, 255, 255, 0.8),
-    0 0 10px rgba(255, 255, 255, 0.4);
+  /* BRIGHT FOR FOCUSED APP */
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
