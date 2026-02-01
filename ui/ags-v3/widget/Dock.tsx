@@ -931,18 +931,17 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 sumWidths += state.currentWidth + (state.currentMargin * 2)
             })
 
-            // UNIFIED BACKGROUND UPDATE (V52: Perfect Rhythm Symmetry)
-            const totalTargetPillWidth = sumWidths // V52: Zero-base for exact padding control
-            const bgDiff = Math.abs(totalTargetPillWidth - smoothedBarWidth)
+            // UNIFIED BACKGROUND UPDATE (V57: 1:1 Synchronization)
+            // sumWidths is already derived from 'currentWidth' (which is Lerped).
+            // We must NOT Lerp again, or the background lags behind the icons.
+            const totalTargetPillWidth = sumWidths
 
-            if (bgDiff > 0.05) {
-                smoothedBarWidth = lerp(smoothedBarWidth, totalTargetPillWidth, 0.2)
+            if (Math.abs(smoothedBarWidth - totalTargetPillWidth) > 0.01) {
+                smoothedBarWidth = totalTargetPillWidth // INSTANT FOLLOW
                 da.queue_draw()
-                active = true
-            } else if (smoothedBarWidth !== totalTargetPillWidth) {
-                smoothedBarWidth = totalTargetPillWidth
-                da.queue_draw()
+                active = true // Keep loop alive if widths are changing
             }
+
 
             if (!active) {
                 tickId = null
@@ -954,12 +953,10 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
     let lastMouseX = -1000
     const updateAllTargets = (mouseX: number) => {
-        // V51 Precision Hysteresis: 1.5px deadzone for boundary stabilization
-        if (mouseX !== -1000 && Math.abs(mouseX - lastMouseX) < 1.5) return
+        // V56: Raw Input (No Deadzone, No Quantization)
+        // Removed 1.5px deadzone and 0.5px rounding for ultra-smooth response.
         lastMouseX = mouseX
-
-        // Quantize Mouse Input (V31: 0.5px sub-steps for smoother physics)
-        const qX = mouseX === -1000 ? -1000 : Math.round(mouseX * 2) / 2
+        const qX = mouseX
 
         animRegistry.forEach((state) => {
             if (qX === -1000) {
