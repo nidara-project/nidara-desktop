@@ -1114,36 +1114,6 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             }
         })
 
-        // V53 PROBE: Simulate Action Lookup for Firefox/Chrome without interaction
-        if (!globalThis.dockProbeRun) {
-            globalThis.dockProbeRun = true
-            GLib.timeout_add(GLib.PRIORITY_LOW, 5000, () => {
-                console.log("[PROBE-SIM] Starting 5s delayed probe for actions...")
-                const targetApp = appsService.list.find(a => a.name.toLowerCase().includes("firefox") || a.name.toLowerCase().includes("chrome")) || appsService.list[0]
-                if (targetApp) {
-                    console.log(`[PROBE-SIM] Found app: ${targetApp.name}`)
-                    // @ts-ignore
-                    console.log(`[PROBE-SIM] Keys:`, Object.keys(targetApp))
-                    // @ts-ignore
-                    console.log(`[PROBE-SIM] Prototype:`, Object.getPrototypeOf(targetApp))
-
-                    // Check specific properties commonly found in Gjs wrappers
-                    // @ts-ignore
-                    console.log(`[PROBE-SIM] .app:`, targetApp.app)
-                    // @ts-ignore
-                    console.log(`[PROBE-SIM] .entry:`, targetApp.entry)
-                    // @ts-ignore
-                    console.log(`[PROBE-SIM] .desktop:`, targetApp.desktop)
-
-                    // Try raw GObject inspection logic?
-                    // @ts-ignore
-                    if (targetApp.list_actions) console.log(`[PROBE-SIM] direct list_actions():`, targetApp.list_actions())
-                } else {
-                    console.log("[PROBE-SIM] No suitable app found (Firefox/Chrome/Any) to probe.")
-                }
-                return GLib.SOURCE_REMOVE
-            })
-        }
 
         // 2. Process Pinned List
         pinnedList.filter(id => !!id).forEach(id => {
