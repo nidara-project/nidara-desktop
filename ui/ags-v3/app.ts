@@ -6,7 +6,7 @@ import Dock from "./widget/Dock"
 
 const windows = new Set()
 
-console.log("[DISTROIA] app.ts loading... (Phase 27: Anti-Jitter Widget Edition - Stable)");
+console.log("[DISTROIA] app.ts loading... (Phase 31: High-Fidelity Master - Stable)");
 
 app.start({
   main() {

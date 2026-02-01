@@ -753,13 +753,14 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     let globalAnimId = 0
     let smoothedBarWidth = 200
 
-    // Linear Interpolation Helper
     const lerp = (start: number, end: number, factor: number) => start + (end - start) * factor
 
-    const runUnifiedTick = () => {
-        if (globalAnimId !== 0) return
+    let tickId: number | null = null
 
-        globalAnimId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
+    const runUnifiedTick = () => {
+        if (tickId !== null) return
+
+        tickId = mainContainer.add_tick_callback((_, clock) => {
             let active = false
 
             // Sync Background Width (V17: Sum of atomic widths)
@@ -838,36 +839,35 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 sumWidths += state.currentWidth + (state.currentMargin * 2)
             })
 
-            const totalTargetPillWidth = sumWidths + 12 // Small padding
+            // UNIFIED BACKGROUND UPDATE (V31: Synchronized with Icons)
+            const totalTargetPillWidth = sumWidths + 12
+            const bgDiff = Math.abs(totalTargetPillWidth - smoothedBarWidth)
 
-            if (totalTargetPillWidth > 0) {
-                const bgStep = (totalTargetPillWidth - smoothedBarWidth) * 0.15
-                if (Math.abs(bgStep) > 0.1) {
-                    smoothedBarWidth += bgStep
-                    da.queue_draw()
-                    active = true
-                } else if (smoothedBarWidth !== totalTargetPillWidth) {
-                    smoothedBarWidth = totalTargetPillWidth
-                    da.queue_draw()
-                }
+            if (bgDiff > 0.05) {
+                smoothedBarWidth = lerp(smoothedBarWidth, totalTargetPillWidth, 0.2)
+                da.queue_draw()
+                active = true
+            } else if (smoothedBarWidth !== totalTargetPillWidth) {
+                smoothedBarWidth = totalTargetPillWidth
+                da.queue_draw()
             }
 
             if (!active) {
-                globalAnimId = 0
-                return GLib.SOURCE_REMOVE
+                tickId = null
+                return false // STOP TICK
             }
-            return GLib.SOURCE_CONTINUE
+            return true // CONTINUE TICK
         })
     }
 
     let lastMouseX = -1000
     const updateAllTargets = (mouseX: number) => {
-        // V27: Deadzone to discard micro-tremors (sensor noise)
-        if (mouseX !== -1000 && Math.abs(mouseX - lastMouseX) < 1.5) return
+        // V31 Precision Hysteresis: 1.0px deadzone for micro-tremors
+        if (mouseX !== -1000 && Math.abs(mouseX - lastMouseX) < 1.0) return
         lastMouseX = mouseX
 
-        // Quantize Mouse Input (V27: 1px steps)
-        const qX = mouseX === -1000 ? -1000 : Math.round(mouseX)
+        // Quantize Mouse Input (V31: 0.5px sub-steps for smoother physics)
+        const qX = mouseX === -1000 ? -1000 : Math.round(mouseX * 2) / 2
 
         animRegistry.forEach((state) => {
             if (qX === -1000) {
@@ -890,22 +890,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     }
     let bgAnimId = 0
 
+    // V31: Background animation is now unified in the main tick
     const startBgAnimation = () => {
-        if (bgAnimId !== 0) return
-        bgAnimId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
-            const alloc = bar.get_allocation()
-            const target = alloc.width > 0 ? alloc.width : smoothedBarWidth
-            const step = (target - smoothedBarWidth) * 0.15
-            smoothedBarWidth += step
-            da.queue_draw()
-            if (Math.abs(target - smoothedBarWidth) < 0.1) {
-                smoothedBarWidth = target
-                da.queue_draw()
-                bgAnimId = 0
-                return GLib.SOURCE_REMOVE
-            }
-            return GLib.SOURCE_CONTINUE
-        })
+        runUnifiedTick()
     }
 
     // MOTION CONTROLLER
