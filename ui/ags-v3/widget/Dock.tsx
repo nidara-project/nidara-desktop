@@ -277,7 +277,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         halign: Gtk.Align.CENTER,
         hexpand: false,
         width_request: DOCK_CONSTANTS.APP_SLOT, // SLOT (V14 Master)
-        height_request: 160,
+        height_request: 112,
         cursor: Gdk.Cursor.new_from_name("pointer", null),
         can_focus: false,
         has_tooltip: false,
@@ -303,7 +303,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         valign: Gtk.Align.END,
         hexpand: false,
         // V67: OPTICAL UPLIFT - macOS style icons are anchored slightly higher than geometric center
-        margin_bottom: 22,
+        margin_bottom: 16, // V70: 16px uplift (Fits in 112px zone)
         has_tooltip: false,
     })
 
@@ -433,7 +433,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         css_classes: ["cd-indicator-container"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
-        margin_bottom: 8, // V67: Indicator also pulled up slightly
+        margin_bottom: 4, // V70: Compact Dot Sync
         has_tooltip: false,
         width_request: 4, height_request: 4, // FIXED SIZE (V11)
     })
@@ -445,7 +445,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         overflow: Gtk.Overflow.VISIBLE,
         valign: Gtk.Align.END, // BOTTOM ANCHOR
         vexpand: true,
-        height_request: 160,
+        height_request: 112, // V70: Reduced height to avoid input interference
         has_tooltip: false,
     })
     overlay.set_child(iconBox)
@@ -898,7 +898,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
         overflow: Gtk.Overflow.VISIBLE,
-        height_request: 160, // UNLEASH HEIGHT (V15)
+        height_request: 112, // V70: Compact Headspace
         spacing: 0, // V7: Total control via widget width_request
         can_focus: false,
     })
@@ -1087,7 +1087,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         css_classes: ["cd-drawing-area"],
         valign: Gtk.Align.FILL,
         halign: Gtk.Align.FILL, // Full Fill
-        height_request: 160,
+        height_request: 112,
         overflow: Gtk.Overflow.VISIBLE,
         can_focus: false,
     })
@@ -1112,7 +1112,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     // WRAPPER: Force vertical stability
     const shim = new Gtk.Box({
         valign: Gtk.Align.END, halign: Gtk.Align.CENTER,
-        height_request: 160, // ALLOW UPWARD GROWTH (V12)
+        height_request: 112, // V70: Tighter Headspace
         overflow: Gtk.Overflow.VISIBLE,
         css_classes: ["cd-dock-shim"],
     })
@@ -1371,8 +1371,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             const monitorWidth = gdkmonitor.get_geometry().width
             // EXPANSION: Layout is now full width to allow Magnification overflow
             const w = monitorWidth
-            da.set_size_request(w, 160)
-            if (win) { win.set_default_size(w, 160); win.set_size_request(w, 160) }
+            da.set_size_request(w, 112)
+            if (win) { win.set_default_size(w, 112); win.set_size_request(w, 112) }
         }
     }
     const win = (
@@ -1384,7 +1384,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             application={app}
             visible={true}
             decorated={false}
-            heightRequest={160}
+            heightRequest={112}
             hasTooltip={false}>
             {mainContainer}
         </window>
@@ -1408,7 +1408,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true);
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true);
         Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 10);
-        Gtk4LayerShell.set_exclusive_zone(win, 112); // ZONE = 10 (Gap) + 92 (Docker) + 10 (Window Gap)
+        Gtk4LayerShell.set_exclusive_zone(win, 112); // ZONE = 10 (Gap) + 92 (Pill) + 10 (Buffer)
     } catch (e) { console.error(e) }
 
     const cConn = hypr.connect("notify::clients", update)
