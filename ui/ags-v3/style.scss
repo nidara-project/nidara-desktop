@@ -206,21 +206,25 @@ window#crystal-dock box.cd-drag-gap,
 }
 
 /* --- SQUIRCLE ICON PLATES (Phase 66) --- */
-window#crystal-dock box.cd-icon-plate {
+window#crystal-dock box.cd-squircle-plate {
   background-color: rgb(255, 255, 255);
   /* Apple pure white */
-  border-radius: 18px;
-  /* High radius for 64px squircle simulation */
+  border-radius: 28%;
+  /* Percentage radius for perfect scaling */
   margin: 0;
   padding: 0;
-  /* Multi-level shadows for Apple depth */
+  /* Multi-level shadows for Apple depth - STATIC */
   box-shadow:
     0 1px 1px rgba(0, 0, 0, 0.1),
     0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.cd-icon-inner {
-  /* No special styles needed here yet, padding handled in TSX */
+.cd-squircle-plate image,
+.cd-squircle-plate widget {
+  /* Prevent GTK from adding any hover shadows to internal icons */
+  box-shadow: none !important;
+  -gtk-icon-shadow: none !important;
+  border: none !important;
 }
 
 /* Legacy Hover Removed for Physics */

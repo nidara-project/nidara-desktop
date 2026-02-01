@@ -320,26 +320,38 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     const res = getIcon()
     let child: Gtk.Widget
 
-    if (res.name) {
-        child = Gtk.Image.new_from_icon_name(res.name)
-    } else if (res.path) {
-        try {
-            // V65: GLOBAL HIGH-RES SANITIZER 🛡️
-            // Problem: 1024px icons cause aliasing jitter when scaled continuously in the Dock.
-            // Solution: Pre-scale ALL file-based icons to a safe 'Texture Max' (256px) on load.
-            // This ensures the animation loop works with a stable, manageable texture.
-            const pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(res.path, 256, 256, true)
-            child = Gtk.Image.new_from_pixbuf(pixbuf)
-        } catch (e) {
-            // Fallback for SVGs or errors (Pixbuf sometimes fails on SVGs, though it usually handles them)
-            // Or if file not found.
-            // console.warn("Pixbuf load failed, falling back to GIcon", e)
-            const file = Gio.File.new_for_path(res.path)
-            child = Gtk.Image.new_from_gicon(Gio.FileIcon.new(file))
+    // V67: UNIVERSAL HIGH-RES TEXTURE STABILIZER 💎
+    // Force ALL icons (theme or file) into a high-res Pixbuf (256px).
+    // This prevents GTK from swapping to low-res or "symbolic" versions during the wave.
+    try {
+        let pixbuf: GdkPixbuf.Pixbuf | null = null
+        if (res.path) {
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(res.path, 256, 256, true)
+        } else if (res.name || res.gicon) {
+            const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+            let iconPaintable: any = null
+            if (res.name) {
+                iconPaintable = theme.lookup_icon(res.name, [], 256, 1, Gtk.TextDirection.NONE, 0)
+            } else if (res.gicon) {
+                // @ts-ignore
+                iconPaintable = theme.lookup_by_gicon(res.gicon, 256, 1, Gtk.TextDirection.NONE, 0)
+            }
+
+            if (iconPaintable) {
+                // We use Gtk.Image.new_from_paintable to keep it as a stable texture
+                child = Gtk.Image.new_from_paintable(iconPaintable)
+            } else {
+                child = Gtk.Image.new_from_icon_name("image-missing")
+            }
+        } else {
+            child = Gtk.Image.new_from_icon_name("image-missing")
         }
-    } else if (res.gicon) {
-        child = Gtk.Image.new_from_gicon(res.gicon)
-    } else {
+
+        if (pixbuf) {
+            child = Gtk.Image.new_from_pixbuf(pixbuf)
+        }
+    } catch (e) {
+        console.warn(`[Dock] Icon resolution failed for ${appId}:`, e)
         child = Gtk.Image.new_from_icon_name("image-missing")
     }
 
@@ -373,9 +385,17 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             state.staticCenter = v
         }
 
-    // V66: APPLE-STYLE ICON PLATE (Squircle)
-    // Wrap app icons in a white plate to homogenize the dock look.
-    const isApp = !!(appItem.icon_name || appItem.get_icon) && appItem.name !== "Separator"
+    // V66.3: APPLE-STYLE ICON PLATE (Squircle) - FINAL ROBUST VERSION
+    // Exclude system items (Trash, Finder, Nautilus, Separator) from the white background.
+    const systemExclusions = [
+        "papelera", "home", "files", "archivo", "nautilus", "thunar", "dolphin",
+        "org.gnome.nautilus", "separator", "finder"
+    ]
+    const nameStr = (appItem.name || "").toLowerCase()
+    const idStr = appId.toLowerCase()
+    const isApp = !!(appItem.icon_name || appItem.get_icon) &&
+        !systemExclusions.some(ex => nameStr.includes(ex) || idStr.includes(ex))
+
     let iconToDisplay: Gtk.Widget = child
 
     if (isApp) {
@@ -387,15 +407,15 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             vexpand: false,
         })
         plate.append(child)
-        // Manual internal centering with margins
-        const m = 10
+        // Set initial symmetric margins
+        const m = Math.round(DOCK_CONSTANTS.ICON_SIZE * 0.15)
         child.set_margin_start(m); child.set_margin_end(m)
         child.set_margin_top(m); child.set_margin_bottom(m)
         iconToDisplay = plate
     }
 
     // @ts-ignore
-    child.pixel_size = DOCK_CONSTANTS.ICON_SIZE
+    child.pixel_size = isApp ? (DOCK_CONSTANTS.ICON_SIZE - (2 * Math.round(DOCK_CONSTANTS.ICON_SIZE * 0.15))) : DOCK_CONSTANTS.ICON_SIZE
     // Tooltip / name logic...
     child.set_name("cd-icon-image-" + appId)
     iconBox.append(iconToDisplay)
@@ -893,10 +913,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     const runUnifiedTick = () => {
         if (tickId !== null) return
 
-        tickId = mainContainer.add_tick_callback((_, clock) => {
+        tickId = bar.add_tick_callback((_, clock) => {
             let active = false
-
-            // Sync Background Width (V17: Sum of atomic widths)
             let sumWidths = 0
 
             animRegistry.forEach((state, id) => {
@@ -962,33 +980,29 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                         const targetPixelSize = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
 
                         if (content) {
-                            // V66: Hierarchical Scaling
+                            // V66.3: Hierarchical Scaling (Radius + Symmetry)
                             if (content.get_css_classes().includes("cd-squircle-plate")) {
                                 content.set_size_request(targetPixelSize, targetPixelSize)
+
                                 const icon = content.get_first_child() as any
-
-                                // V66: Proportional Inner Scaling
-                                const internalSize = Math.round(targetPixelSize * 0.70)
-                                const marginSize = Math.max(2, Math.floor(targetPixelSize * 0.15))
-
                                 if (icon) {
+                                    // V66.3: Integer-Perfect Margins
+                                    const im = Math.round(targetPixelSize * 0.15)
+                                    const internalSize = targetPixelSize - (2 * im)
+
                                     if (icon.pixel_size !== internalSize) {
                                         icon.pixel_size = internalSize
                                     }
-                                    icon.set_margin_start(marginSize); icon.set_margin_end(marginSize)
-                                    icon.set_margin_top(marginSize); icon.set_margin_bottom(marginSize)
+                                    icon.set_margin_start(im); icon.set_margin_end(im)
+                                    icon.set_margin_top(im); icon.set_margin_bottom(im)
                                 }
                             } else {
-                                // Standard direct child scaling (Trash, Separator fallback)
-                                if (content.pixel_size !== targetPixelSize) {
-                                    content.pixel_size = targetPixelSize
-                                }
+                                if (content.pixel_size !== targetPixelSize) content.pixel_size = targetPixelSize
                             }
                         }
                     }
                 }
-
-                // Add to total width (Width + Margins)
+                // SYNC SUM (V57: Derivation)
                 sumWidths += state.currentWidth + (state.currentMargin * 2)
             })
 
@@ -1002,7 +1016,6 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 da.queue_draw()
                 active = true // Keep loop alive if widths are changing
             }
-
 
             if (!active) {
                 tickId = null
