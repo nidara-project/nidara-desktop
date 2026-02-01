@@ -20,8 +20,16 @@ const appsService = new AstalApps.Apps()
 let pinnedList: string[] = []
 try {
     const raw = JSON.parse(readFile(PINNED_FILE)) as string[]
-    // Auto-Sanitization: Dedup and filter paths to prevent ghosts
-    pinnedList = [...new Set(raw)].filter(id => !id.startsWith("/"))
+    // V34: TOTAL SANITY - Dedup, filter paths, and STRIP ALL LEGACY PREFIXES
+    const oldLen = raw.length
+    pinnedList = [...new Set(raw)]
+        .filter(id => id && !id.startsWith("/"))
+        .map(id => id.replace(/^pinned-/, "").replace(/^pinned-ghost-/, "").replace(/^running-/, ""))
+
+    // V36: If we cleaned something, save it back to disk immediately
+    if (pinnedList.length !== oldLen) {
+        writeFile(PINNED_FILE, JSON.stringify(pinnedList, null, 2))
+    }
 } catch {
     pinnedList = []
 }
@@ -89,7 +97,7 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
         if (typeof val === "string") sourceId = val
         else if (val && (val as any).get_string) sourceId = (val as unknown as GObject.Value).get_string()
 
-        if (sourceId) sourceId = sourceId.toLowerCase().replace(".desktop", "")
+        // V34: No prefixes to strip, IDs are already clean
         if (!sourceId || sourceId === "void") return false
 
         // If already pinned, move to end
@@ -241,7 +249,7 @@ const dragBus = {
 
 // --- DOCK ITEM COMPONENT ---
 
-function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () => void, register: (id: string, s: any) => void, addresses: string[] = [], clientTitle?: string, referenceWidget?: Gtk.Widget) {
+function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () => void, register: (id: string, s: any) => void, addresses: string[] = [], clientTitle?: string, referenceWidget?: Gtk.Widget, cleanId?: string) {
     // Preserve case for icon lookups if possible, but use lower for comparison
     const rawId = (appItem.get_id ? appItem.get_id() : (appItem.id || appItem.icon_name || appItem.name || "void")).replace(".desktop", "")
 
@@ -323,7 +331,9 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         targetMargin: 6, currentMargin: 6,
         staticCenter: 0,
         virtualCenter: 0,
-        isSeparator: false
+        isSeparator: false,
+        addresses: addresses as string[], // V39
+        clientTitle: clientTitle as string | undefined // V39
     }
     register(appId, state)
 
@@ -425,66 +435,74 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     })
     itemBox.add_controller(motion)
 
-    // Interaction
-    const isPinned = pinnedList.some(p => p.toLowerCase() === appId)
+    // Interaction: Use cleanId for persistence checks (V35: Strips internal prefixes)
+    const checkId = (cleanId || appId).toLowerCase()
     const popover = new Gtk.Popover({ css_classes: ["cd-popover"], has_tooltip: false })
     popover.set_parent(itemBox)
-    const menu = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+    const rebuildMenu = () => {
+        // V39: Recalculate isPinned and active status every time the menu is shown
+        const currentIsPinned = pinnedList.some(p => p.toLowerCase() === checkId)
 
-    const actions: any[] = []
+        const menu = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+        const actions: any[] = []
 
-    // 1. OPEN
-    actions.push({ label: "Abrir", action: () => appItem.launch() })
+        // 1. OPEN
+        actions.push({ label: "Abrir", action: () => appItem.launch() })
 
-    // 2. PIN TOGGLE
-    actions.push({
-        label: isPinned ? "Desanclar" : "Mantener en el Dock",
-        action: () => {
-            if (isPinned) pinnedList = pinnedList.filter(p => p.toLowerCase() !== appId)
-            else pinnedList.push(rawId)
-            savePinned(); updateDock()
-        }
-    })
-
-    // 3. QUIT (If running)
-    if (addresses.length > 0) {
-        actions.push({ separator: true })
+        // 2. PIN TOGGLE
         actions.push({
-            label: "Salir",
+            label: currentIsPinned ? "Desanclar" : "Anclar",
             action: () => {
-                addresses.forEach(addr => {
-                    const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
-                    execAsync(`hyprctl dispatch closewindow address:${cleanAddr} `).catch(print)
-                })
+                const cid = cleanId || rawId
+                if (currentIsPinned) pinnedList = pinnedList.filter(p => p.toLowerCase() !== cid.toLowerCase())
+                else pinnedList.push(cid)
+                savePinned(); updateDock()
             }
         })
-    }
 
-    actions.forEach(a => {
-        if (a.separator) {
-            menu.append(new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL, css_classes: ["cd-menu-separator"] }))
-        } else {
-            const b = new Gtk.Button({ label: a.label, css_classes: ["cd-menu-action"] })
-            b.connect("clicked", () => { a.action(); popover.popdown() })
-            menu.append(b)
+        // 3. QUIT (If running)
+        if (state.addresses && state.addresses.length > 0) {
+            actions.push({ separator: true })
+            actions.push({
+                label: "Salir",
+                action: () => {
+                    state.addresses.forEach(addr => {
+                        const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
+                        execAsync(`hyprctl dispatch closewindow address:${cleanAddr} `).catch(print)
+                    })
+                }
+            })
         }
-    })
-    popover.set_child(menu)
+
+        actions.forEach(a => {
+            if (a.separator) {
+                menu.append(new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL, css_classes: ["cd-menu-separator"] }))
+            } else {
+                const b = new Gtk.Button({ label: a.label, css_classes: ["cd-menu-action"] })
+                b.connect("clicked", () => { a.action(); popover.popdown() })
+                menu.append(b)
+            }
+        })
+        popover.set_child(menu)
+    }
 
     // DND Logic: Universal Drag & Drop (MUST BE ADDED FIRST FOR PRIORITY)
     const source = new Gtk.DragSource({ actions: Gdk.DragAction.COPY | Gdk.DragAction.MOVE })
     source.connect("prepare", (s, x, y) => {
         console.log(`[DnD] Prepare Drag: ${appId} `)
         s.set_icon(Gtk.WidgetPaintable.new(child), x, y)
-        // Ensure we send a string value
-        return Gdk.ContentProvider.new_for_value(appId)
+        // V35: Send cleanId (pre-sanitized raw app name) to prevent prefix leakage
+        return Gdk.ContentProvider.new_for_value(cleanId || rawId)
     })
     source.connect("drag-begin", () => console.log(`[DnD] Drag Begin: ${appId} `))
     source.connect("drag-end", () => console.log(`[DnD] Drag End: ${appId} `))
     itemBox.add_controller(source)
 
     const rightClick = new Gtk.GestureClick({ button: 3 })
-    rightClick.connect("released", () => popover.popup())
+    rightClick.connect("released", () => {
+        rebuildMenu()
+        popover.popup()
+    })
     itemBox.add_controller(rightClick)
 
     const leftClick = new Gtk.GestureClick({ button: 1 })
@@ -583,6 +601,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
             console.log(`[DnD] Payload: ${dragId} `)
 
+            // V34: Clean IDs, direct comparison
             const sourceId = dragId ? dragId.toLowerCase().replace(".desktop", "") : ""
             const targetId = appId.toLowerCase()
 
@@ -714,6 +733,14 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         monitoredClients.forEach(c => GObject.signal_handlers_disconnect_by_func(c, sync))
     })
     sync()
+
+        // V39: Expose state sync for reused widgets
+        ; (itemBox as any).syncState = (newAddrs: string[], newTitle: string | undefined, newAppItem: AstalApps.Application) => {
+            state.addresses = newAddrs
+            state.clientTitle = newTitle
+            appItem = newAppItem
+            indicator.visible = newAddrs.length > 0
+        }
 
     return itemBox
 }
@@ -960,7 +987,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
     const update = () => {
         // VIRTUAL GRID REFACTOR: Collection Phase
-        type ItemConfig = { id: string, width: number, factory: (vc: number) => Gtk.Widget }
+        type ItemConfig = { id: string, width: number, syncData?: any, factory: (vc: number) => Gtk.Widget }
         const configs: ItemConfig[] = []
         const currentIds = new Set<string>()
 
@@ -1022,8 +1049,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         }
         configs.push({
             id: "finder", width: 80,
+            syncData: { addrs: [], clientTitle: undefined, appItem: finder as any },
             factory: (vc) => {
-                const w = DockItem("finder", finder as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar)
+                const w = DockItem("finder", finder as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, "finder")
                 if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                 return w
             }
@@ -1059,9 +1087,10 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                     appItem.icon_name = originalId.replace(/-default$/i, "-Default")
                 }
                 configs.push({
-                    id: "pinned-" + lid, width: 80,
+                    id: lid, width: 80,
+                    syncData: { addrs, clientTitle, appItem: appItem! },
                     factory: (vc) => {
-                        const w = DockItem("pinned-" + lid, appItem!, update, (id, s) => animRegistry.set(id, s), addrs, clientTitle, bar)
+                        const w = DockItem(lid, appItem!, update, (id, s) => animRegistry.set(id, s), addrs, clientTitle, bar, lid)
                         if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                         return w
                     }
@@ -1072,9 +1101,10 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 if (lid.startsWith("chrome-") && lid.endsWith("-default")) icon = icon.replace(/-default$/i, "-Default")
                 const ghost = { name: originalId, icon_name: icon, launch: getLaunch(lid) } as any
                 configs.push({
-                    id: "pinned-ghost-" + lid, width: 80,
+                    id: lid, width: 80,
+                    syncData: { addrs: [], clientTitle: undefined, appItem: ghost },
                     factory: (vc) => {
-                        const w = DockItem("pinned-ghost-" + lid, ghost, update, (id, s) => animRegistry.set(id, s), [], undefined, bar)
+                        const w = DockItem(lid, ghost, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, lid)
                         if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                         return w
                     }
@@ -1099,9 +1129,10 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default")
             }
             configs.push({
-                id: "running-" + lid, width: 80,
+                id: lid, width: 80,
+                syncData: { addrs: group.addresses, clientTitle: group.title, appItem: appItem! },
                 factory: (vc) => {
-                    const w = DockItem("running-" + lid, appItem!, update, (id, s) => animRegistry.set(id, s), group.addresses, group.title, bar)
+                    const w = DockItem(lid, appItem!, update, (id, s) => animRegistry.set(id, s), group.addresses, group.title, bar, lid)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
                 }
@@ -1111,6 +1142,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         // 4. Separator & Trash
         configs.push({
             id: "sep-trash", width: 48,
+            syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
             factory: (vc) => {
                 const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 40)
                 if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
@@ -1125,8 +1157,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         }
         configs.push({
             id: "trash", width: 80,
+            syncData: { addrs: [], clientTitle: undefined, appItem: trash as any },
             factory: (vc) => {
-                const w = DockItem("trash", trash as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar)
+                const w = DockItem("trash", trash as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, "trash")
                 if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                 return w
             }
@@ -1147,13 +1180,20 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             const widget = getOrCreateItem(c.id, () => c.factory(myCenter))
             const inner = (widget as Gtk.Revealer).get_child()
             if (inner && (inner as any).setVirtualCenter) (inner as any).setVirtualCenter(myCenter)
+
+            // V39: REFRESH STATE for reused widgets (Crucial for context menu labels)
+            if (inner && (inner as any).syncState && (c as any).syncData) {
+                const d = (c as any).syncData
+                    ; (inner as any).syncState(d.addrs, d.clientTitle, d.appItem)
+            }
             return widget
         })
 
-        // Diff & Prune Cache
+        // Diff & Prune Cache (V34: Unified Purge for Zero-Ghosting)
         for (const [id, w] of widgetCache) {
             if (!currentIds.has(id)) {
                 widgetCache.delete(id)
+                animRegistry.delete(id)
             }
         }
 
