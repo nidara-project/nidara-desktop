@@ -247,8 +247,10 @@ window#crystal-dock .cd-dot.open {
 
 window#crystal-dock .cd-dot.focused {
   background-color: #ffffff;
-  /* BRIGHT FOR FOCUSED APP */
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
+  /* V68: Multi-layered Retina Glow */
+  box-shadow:
+    0 0 4px rgba(255, 255, 255, 0.8),
+    0 0 10px rgba(255, 255, 255, 0.4);
   border: 1px solid rgba(255, 255, 255, 0.6);
 }
 

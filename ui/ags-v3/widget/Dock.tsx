@@ -242,6 +242,13 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
     cr.setSourceRGBA(1, 1, 1, 0.3)
     cr.setLineWidth(0.7)
     cr.stroke()
+
+    // 6. BOTTOM DEFINITION (Anchor)
+    cr.moveTo(x + r, y + drawH)
+    cr.lineTo(x + drawW - r, y + drawH)
+    cr.setSourceRGBA(0, 0, 0, 0.15)
+    cr.setLineWidth(0.5)
+    cr.stroke()
 }
 
 // --- STATE: Pure JS EventBus (No GObject complexity) ---
@@ -1290,7 +1297,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             id: "sep-trash", width: DOCK_CONSTANTS.SEPARATOR_SLOT,
             syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
             factory: (vc) => {
-                const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 48)
+                const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 64) // V68: Taller Separator
                 if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                 return w
             }
