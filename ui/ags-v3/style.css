@@ -230,15 +230,12 @@ window#crystal-dock .cd-dot.focused {
 
 /* High Specificity ID Selector to defeat Nuclear Reset safely */
 window#crystal-dock box#cd-separator {
-  min-height: 40px;
-  max-height: 40px;
-  min-width: 2px;
-  background-color: rgba(255, 255, 255, 0.5);
-  margin: 0 12px;
-  border-radius: 2px;
-  opacity: 1;
-  vertical-align: center;
-  /* CSS syntax implies valign handled by parent layout mostly, but helpful fallback */
+  min-height: 48px;
+  max-height: 48px;
+  min-width: 1px;
+  background-color: rgba(255, 255, 255, 0.4);
+  margin: 0;
+  border-radius: 1px;
 }
 
 /* Tooltips (cd-tooltip) */

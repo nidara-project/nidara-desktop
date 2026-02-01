@@ -47,14 +47,14 @@ import appService from "../core/AppService"
 
 // 2. SEPARATOR (Now accepts drops to APPEND, with wider hitbox)
 // SEPARATOR: Gaussian Horizontal Scaling, Fixed Vertical Height.
-function Separator(id: string, updateDock: () => void, register: (id: string, s: any) => void, height = 40) {
-    const baseWidth = 48 // Slot (V14 Master)
+function Separator(id: string, updateDock: () => void, register: (id: string, s: any) => void, height = 48) {
+    const baseWidth = 80 // V50: HYBRID SLOT 80px
     // Container for Hitbox (invisible, wide, fixed height)
     const box = new Gtk.Box({
         css_classes: ["cd-separator-container"],
-        valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
-        width_request: 48, // SLOT WIDTH (Match baseWidth)
-        height_request: height,
+        valign: Gtk.Align.END, halign: Gtk.Align.CENTER,
+        width_request: baseWidth,
+        height_request: 92, // V41: Perfect vertical centering
         hexpand: false,
     })
 
@@ -62,9 +62,8 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
     const line = new Gtk.Box({
         name: "cd-separator", css_classes: ["cd-separator"],
         valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
-        width_request: 2, height_request: height,
+        width_request: 1, height_request: height,
         hexpand: false, // Strict width
-        margin_start: 15, margin_end: 15
     })
 
     box.append(line)
@@ -72,8 +71,8 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
     // Actually, let's keep it simple: the box can hold a reference to its state
     const state = {
         targetScale: 1.0, currentScale: 1.0,
-        targetWidth: 48, currentWidth: 48,
-        targetMargin: 6, currentMargin: 6,
+        targetWidth: baseWidth, currentWidth: baseWidth,
+        targetMargin: 0, currentMargin: 0,
         staticCenter: 0,
         virtualCenter: 0,
         isSeparator: true
@@ -227,7 +226,7 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
     cr.stroke()
     cr.restore()
 
-    // 5. M3 RIM LIGHT 
+    // 5. M3 RIM LIGHT
     path()
     cr.setSourceRGBA(1, 1, 1, 0.25)
     cr.setLineWidth(0.6)
@@ -327,8 +326,8 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
     const state = {
         targetScale: 1.0, currentScale: 1.0,
-        targetWidth: 64, currentWidth: 64,
-        targetMargin: 6, currentMargin: 6,
+        targetWidth: 64, currentWidth: 64, // V50: Stable Physical Base
+        targetMargin: 8, currentMargin: 8, // V50: Padding to fill 80px slot
         staticCenter: 0,
         virtualCenter: 0,
         isSeparator: false,
@@ -382,11 +381,11 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
     // BINDING LOGIC
     // We want the title of the *focused* instance if active, or the first instance otherwise.
-    // Since we can't easily complex-bind in vanilla Gtk logic here without Reactive, 
+    // Since we can't easily complex-bind in vanilla Gtk logic here without Reactive,
     // we'll set initial text and try to hook a signal if possible, or reliance on polling/update.
 
-    // Actually, update() is called on notify::clients. 
-    // Title changes usually trigger notify::client on Hyprland service? 
+    // Actually, update() is called on notify::clients.
+    // Title changes usually trigger notify::client on Hyprland service?
     // Let's try to bind if we can find the specific client object.
 
     const updateLabel = () => {
@@ -679,11 +678,11 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     const clientSignals: number[] = []
     const refreshSignals = () => {
         // Clear old
-        // Note: we can't easily clear signal handlers on specific GObjects we don't hold ref to nicely 
+        // Note: we can't easily clear signal handlers on specific GObjects we don't hold ref to nicely
         // without keeping the object.
-        // BUT, since DockItem is destroyed and recreated on list updates, 
+        // BUT, since DockItem is destroyed and recreated on list updates,
         // we might be leaking if we don't handle this carefully or if we do standard partial updates.
-        // Actually Dock updates recreate all items currently (brute force). 
+        // Actually Dock updates recreate all items currently (brute force).
         // So we just need to connect on init and disconnect on destroy.
 
         addresses.forEach(addr => {
@@ -691,8 +690,8 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             if (client) {
                 // @ts-ignore
                 const id = client.connect("notify::title", sync)
-                // We need to store client + id to disconnect? 
-                // Client object might be ephemeral in bindings? 
+                // We need to store client + id to disconnect?
+                // Client object might be ephemeral in bindings?
                 // ASTAL usually keeps singletons. Let's assume safely we need to manage this.
                 // However, doing this cleanly inside a functional component without hooks is tricky.
 
@@ -704,14 +703,14 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         })
     }
 
-    // Better strategy: Just listen to 'urgent' or global events? 
-    // Or simply: 
-    // The user says "doesn't update". 
+    // Better strategy: Just listen to 'urgent' or global events?
+    // Or simply:
+    // The user says "doesn't update".
     // Let's try connecting sync to 'notify::active-window' on Hyprlans if accessible?
     // No.
 
     // Let's loop addresses and connect to signals.
-    /* 
+    /*
        We will store the objects to disconnect later.
     */
     const monitoredClients: any[] = []
@@ -726,9 +725,9 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     itemBox.connect("destroy", () => {
         hypr.disconnect(c1);
         hypr.disconnect(c2);
-        // Clean up client signals? 
-        // GObject signals are usually auto-disconnected when the *handler* (this closure) dies? 
-        // No, when the *emitter* or *object* dies. 
+        // Clean up client signals?
+        // GObject signals are usually auto-disconnected when the *handler* (this closure) dies?
+        // No, when the *emitter* or *object* dies.
         // We SHOULD disconnect manually.
         monitoredClients.forEach(c => GObject.signal_handlers_disconnect_by_func(c, sync))
     })
@@ -900,8 +899,11 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             if (qX === -1000) {
                 // RESET
                 state.targetScale = 1.0
-                state.targetWidth = state.isSeparator ? 48 : 64
-                state.targetMargin = 6
+                if (state.isSeparator) {
+                    state.targetWidth = 80; state.targetMargin = 0
+                } else {
+                    state.targetWidth = 64; state.targetMargin = 8 // V50: 64 + 8 + 8 = 80
+                }
             } else {
                 const metrics = calculateDockItemMetrics(
                     qX,
@@ -1048,7 +1050,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
         }
         configs.push({
-            id: "finder", width: 80,
+            id: "finder", width: 80, // V50: Unified 80px Slot
             syncData: { addrs: [], clientTitle: undefined, appItem: finder as any },
             factory: (vc) => {
                 const w = DockItem("finder", finder as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, "finder")
@@ -1087,7 +1089,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                     appItem.icon_name = originalId.replace(/-default$/i, "-Default")
                 }
                 configs.push({
-                    id: lid, width: 80,
+                    id: lid, width: 80, // V50: Unified 80px Slot
                     syncData: { addrs, clientTitle, appItem: appItem! },
                     factory: (vc) => {
                         const w = DockItem(lid, appItem!, update, (id, s) => animRegistry.set(id, s), addrs, clientTitle, bar, lid)
@@ -1101,7 +1103,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 if (lid.startsWith("chrome-") && lid.endsWith("-default")) icon = icon.replace(/-default$/i, "-Default")
                 const ghost = { name: originalId, icon_name: icon, launch: getLaunch(lid) } as any
                 configs.push({
-                    id: lid, width: 80,
+                    id: lid, width: 80, // V50: Unified 80px Slot
                     syncData: { addrs: [], clientTitle: undefined, appItem: ghost },
                     factory: (vc) => {
                         const w = DockItem(lid, ghost, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, lid)
@@ -1129,7 +1131,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default")
             }
             configs.push({
-                id: lid, width: 80,
+                id: lid, width: 80, // V50: Unified 80px Slot
                 syncData: { addrs: group.addresses, clientTitle: group.title, appItem: appItem! },
                 factory: (vc) => {
                     const w = DockItem(lid, appItem!, update, (id, s) => animRegistry.set(id, s), group.addresses, group.title, bar, lid)
@@ -1141,10 +1143,10 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         // 4. Separator & Trash
         configs.push({
-            id: "sep-trash", width: 48,
+            id: "sep-trash", width: 80, // V50: Slot 80
             syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
             factory: (vc) => {
-                const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 40)
+                const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 48)
                 if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                 return w
             }
@@ -1156,7 +1158,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             launch: () => execAsync("nautilus trash:///").catch(print)
         }
         configs.push({
-            id: "trash", width: 80,
+            id: "trash", width: 80, // V50: Unified 80px Slot
             syncData: { addrs: [], clientTitle: undefined, appItem: trash as any },
             factory: (vc) => {
                 const w = DockItem("trash", trash as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, "trash")
@@ -1167,15 +1169,17 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         // VIRTUAL GRID V7: Slot-Based Calculation
         const count = configs.length
-        const totalWidth = configs.reduce((sum, c) => sum + c.width, 0)
+        // VIRTUAL GRID V10: Hybrid Precision (80px slot / 64px icon)
+        const slotSize = 80
+        const totalWidth = configs.length * slotSize
 
         const screenWidth = gdkmonitor.get_geometry().width
         const startX = (screenWidth - totalWidth) / 2
 
         let currentX = startX
         const finalItems = configs.map((c) => {
-            const myCenter = currentX + (c.width / 2)
-            currentX += c.width
+            const myCenter = currentX + (slotSize / 2)
+            currentX += slotSize
 
             const widget = getOrCreateItem(c.id, () => c.factory(myCenter))
             const inner = (widget as Gtk.Revealer).get_child()

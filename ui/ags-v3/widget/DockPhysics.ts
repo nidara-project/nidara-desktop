@@ -6,10 +6,10 @@
 
 // Constantes de calibración
 const DOCK_PREFS = {
-    minSize: 64,        // Tamaño base
-    maxSize: 128,       // Tamaño máximo al hacer hover
-    range: 2.5,         // Cuántos iconos a izquierda/derecha se ven afectados (Sigma Spread)
-    sensitivity: 0.35,  // Ajuste fino de la curva (más alto = más "picudo")
+    minSize: 64,        // Tamaño base (RESTAURADO)
+    maxSize: 128,       // Tamaño máximo
+    range: 2.5,         // Sigma Spread
+    sensitivity: 0.35,  // Ajuste fino
 };
 
 export interface DockItemMetrics {
@@ -64,9 +64,8 @@ export const calculateDockItemMetrics = (
     const targetWidth = DOCK_PREFS.minSize * targetScale;
 
     // 6. Cálculo de Separación (Margin)
-    // Truco visual: Reducir ligeramente el margen entre iconos cuando están grandes
-    // para mantener la cohesión visual del grupo.
-    const baseMargin = 6;
+    // V50: 8px margin + 64px icon = 80px total slot (Symmetry Fix)
+    const baseMargin = 8;
     const dynamicMargin = baseMargin * (1 - (intensity * 0.5));
 
     return {
