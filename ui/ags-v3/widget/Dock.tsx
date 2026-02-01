@@ -64,6 +64,7 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
         valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
         width_request: 1, height_request: height,
         hexpand: false, // Strict width
+        margin_start: 12 // V54.1: Visual Balance (Shift Right 6px to compensate for narrow Trash)
     })
 
     box.append(line)
