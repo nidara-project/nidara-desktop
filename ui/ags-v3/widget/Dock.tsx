@@ -1071,6 +1071,13 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     const motion = new Gtk.EventControllerMotion()
     motion.connect("enter", () => { /* console.log("Enter Dock") */ })
     motion.connect("motion", (controller, x, y) => {
+        // V70.1: Motion Gating
+        // Don't trigger magnification if the mouse is in the safe 10px window-gap.
+        // This prevents 'wave jumping' while browsing windows near the bottom.
+        if (y < 12) {
+            updateAllTargets(-1000)
+            return
+        }
         updateAllTargets(x)
     })
     motion.connect("leave", () => {
@@ -1411,6 +1418,20 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         // V71.4: Final Optical Symmetry Calibration
         // Nudging to 94px to match the bottom 10px gap's "air density".
         Gtk4LayerShell.set_exclusive_zone(win, 94);
+
+        // V70.1: ZERO-STEAL INPUT REGION
+        // We restrict the hit area to the bottom ~100px of our 112px container.
+        // This makes the 12px 'Window Gap' at the top totally transparent to clicks!
+        win.connect("realize", () => {
+            const surface = win.get_native()?.get_surface()
+            if (surface) {
+                const monitorWidth = gdkmonitor.get_geometry().width
+                const region = new Cairo.Region()
+                // @ts-ignore (RectangleInt is native in GJS-Cairo)
+                region.union_rectangle({ x: 0, y: 12, width: monitorWidth, height: 100 })
+                surface.set_input_region(region)
+            }
+        })
     } catch (e) { console.error(e) }
 
     const cConn = hypr.connect("notify::clients", update)
