@@ -868,8 +868,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 sumWidths += state.currentWidth + (state.currentMargin * 2)
             })
 
-            // UNIFIED BACKGROUND UPDATE (V31: Synchronized with Icons)
-            const totalTargetPillWidth = sumWidths + 12
+            // UNIFIED BACKGROUND UPDATE (V52: Perfect Rhythm Symmetry)
+            const totalTargetPillWidth = sumWidths // V52: Zero-base for exact padding control
             const bgDiff = Math.abs(totalTargetPillWidth - smoothedBarWidth)
 
             if (bgDiff > 0.05) {
@@ -951,8 +951,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     da.set_draw_func((_, cr, w, h) => {
         cr.setOperator(0); cr.paint(); cr.setOperator(2);
 
-        // DYNAMIC BACKGROUND SIZING (SMOOTHED V9)
-        const pillWidth = smoothedBarWidth + 32 // +32px padding
+        // DYNAMIC BACKGROUND SIZING (V52: Unified 16px gaps)
+        const pillWidth = smoothedBarWidth + 16 // 8px per side (8px pill + 8px icon margin = 16px gap)
 
         // Center the pill in the full-width drawing area
         const xOffset = (w - pillWidth) / 2

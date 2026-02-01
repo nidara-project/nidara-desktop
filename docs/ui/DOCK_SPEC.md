@@ -1,6 +1,6 @@
-# MiDistroIA Dock Specification: Gaussian V51 (Stability & Symmetry) 🧸🍎💎
+# MiDistroIA Dock Specification: Gaussian V52 (Unified Rhythm) 🧸🍎💎
 
-This document defines the technical implementation, physics, and geometry of the Unified Dock Engine as of version 51 (Precision Stabilization).
+This document defines the technical implementation, physics, and geometry of the Unified Dock Engine as of version 52 (Geometric Uniformity).
 
 ## 1. Core Architecture: Unified Animation Engine
 The dock uses a **Single Central Clock (60fps)** to synchronize all animations. This eliminates the phase-jitter caused by independent widget loops.
@@ -33,7 +33,8 @@ To ensure absolute horizontal symmetry and zero-jitter, we use a **Hybrid Layout
 - **Behavior**: Scale is locked to 1.0x to satisfy the "macOS Anchor" principle.
 
 ## 5. Background Pill (The Glass)
-- **Summation Logic**: Sum of all `currentWidth + (currentMargin * 2)` across all slots + 12px padding.
+- **Summation Logic**: Sum of all icon widths and margins with an additional **16px** total width offset. 
+- **Unified Rhythm**: This offset leaves **8px of background** on each side. Combined with the **8px icon margin**, it creates a total visible edge padding of **16px**, perfectly matching the internal gaps.
 - **Smoothing**: The background width has its own inertia (lerp 0.2) to follow the layout fluidly.
 
 ## 6. Layout Synchronization (V50 Master)
