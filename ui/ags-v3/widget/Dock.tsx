@@ -11,7 +11,7 @@ import Gio from "gi://Gio"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import GdkPixbuf from "gi://GdkPixbuf"
-import { calculateDockItemMetrics, DOCK_CONSTANTS } from "./DockPhysics"
+import { calculateDockItemMetrics, DOCK_CONSTANTS, getProjectedMouseX } from "./DockPhysics"
 
 
 
@@ -888,6 +888,7 @@ const mouseBus = {
 }
 
 export default function Dock(gdkmonitor: Gdk.Monitor) {
+    let totalStaticWidth = 400 // V69: For projection mapping
     console.log("[DISTROIA] Dock() initializing (Anti-Jitter Widget Edition)");
     // CACHE for consistent widget identity & animations
     const widgetCache = new Map<string, Gtk.Widget>()
@@ -1049,8 +1050,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                     state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.targetMargin = DOCK_CONSTANTS.BASE_MARGIN // V55: Clean Reset
                 }
             } else {
+                const pX = getProjectedMouseX(qX, gdkmonitor.get_geometry().width, totalStaticWidth)
                 const metrics = calculateDockItemMetrics(
-                    qX,
+                    pX,
                     state.staticCenter,
                     state.isSeparator
                 )
@@ -1322,7 +1324,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         const count = configs.length
         // VIRTUAL GRID V55: Variable Geometry Calculation (Polished)
         // We sum specific widths instead of count * Constants
-        const totalWidth = configs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
+        totalStaticWidth = configs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
+        const totalWidth = totalStaticWidth
 
         const screenWidth = gdkmonitor.get_geometry().width
         const startX = (screenWidth - totalWidth) / 2

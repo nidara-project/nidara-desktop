@@ -37,9 +37,29 @@ export interface DockItemMetrics {
 }
 
 /**
+ * V69: Zero-Shift Perspective Correction
+ * Calcula la posición "virtual" del ratón compensando la expansión del Dock centrado.
+ * Esto asegura que el pico de magnificación coincida con el centro visual del icono.
+ */
+export function getProjectedMouseX(qX: number, screenWidth: number, totalStaticWidth: number): number {
+    if (qX < 0) return qX;
+
+    const center = screenWidth / 2;
+    // Normalize relative position (-1 to 1) 
+    const relPos = (qX - center) / (totalStaticWidth / 2 || 1);
+
+    // MaxShift: La mitad de la expansión total teórica (64px / 2 = 32px)
+    // Usamos 28px como ajuste fino empírico para el borde de un Dock medio.
+    const maxShift = 28;
+
+    // Proyectamos el ratón hacia afuera para que la "ola" alcance al icono desplazado.
+    return qX + (relPos * maxShift);
+}
+
+/**
  * Calcula las métricas para un solo item basándose en la posición absoluta del ratón.
- * * @param mouseX - Posición X global del ratón
- * @param itemCenterX - Centro estático (Ground Truth) del item en pantalla
+ * * @param qX - Posición X proyectada/compensada del ratón
+ * @param staticCenter - Centro estático (Ground Truth) del item en pantalla
  * @param isSeparator - Si es un separador (lógica especial)
  */
 export function calculateDockItemMetrics(qX: number, staticCenter: number, isSeparator = false): DockItemMetrics {
@@ -58,17 +78,12 @@ export function calculateDockItemMetrics(qX: number, staticCenter: number, isSep
     const distance = Math.abs(qX - staticCenter);
 
     // 2. Cálculo del Sigma dinámico
-    // El 'spread' del efecto depende del tamaño base.
     const sigma = DOCK_PREFS.minSize * DOCK_PREFS.range;
 
     // 3. Función Gaussiana Normalizada (0.0 a 1.0)
-    // Usamos una variante Sine-based para una caída más dramática que la Gaussiana pura,
-    // lo que reduce el movimiento de iconos lejanos (evita jitter global).
     let intensity = 0;
 
     if (distance < sigma) {
-        // Mapeamos la distancia a un ángulo entre 0 y PI (mitad de una onda sinusoidal)
-        // Esto da una transición más suave y "orgánica" que Math.exp
         const normalizedDist = distance / sigma;
         intensity = Math.pow(Math.cos(normalizedDist * (Math.PI / 2)), 2);
     }
@@ -77,20 +92,16 @@ export function calculateDockItemMetrics(qX: number, staticCenter: number, isSep
     const targetScale = 1 + (intensity * ((DOCK_PREFS.maxSize / DOCK_PREFS.minSize) - 1));
 
     // 5. Cálculo de Dimensiones Físicas (Layout)
-    // CRÍTICO: El width físico debe ser idéntico al visual para empujar a los vecinos.
     const targetWidth = DOCK_PREFS.minSize * targetScale;
 
     // 6. Cálculo de Separación (Margin)
-    // 6. Cálculo de Separación (Margin)
-    // V55: Centralized Constant (Stable 4px)
-    const baseMargin = DOCK_CONSTANTS.BASE_MARGIN;
-    const dynamicMargin = baseMargin; // CONSTANT.
+    const dynamicMargin = DOCK_CONSTANTS.BASE_MARGIN;
 
     return {
         width: targetWidth,
-        height: targetWidth, // Asumimos aspecto 1:1
+        height: targetWidth,
         scale: targetScale,
-        translateY: 0, // En un layout Flex/Box alineado a 'end', esto debe ser 0.
+        translateY: 0,
         margin: dynamicMargin
     };
 }
