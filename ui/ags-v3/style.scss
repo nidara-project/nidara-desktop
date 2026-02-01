@@ -205,6 +205,24 @@ window#crystal-dock box.cd-drag-gap,
   transform-origin: bottom center;
 }
 
+/* --- SQUIRCLE ICON PLATES (Phase 66) --- */
+window#crystal-dock box.cd-icon-plate {
+  background-color: rgb(255, 255, 255);
+  /* Apple pure white */
+  border-radius: 18px;
+  /* High radius for 64px squircle simulation */
+  margin: 0;
+  padding: 0;
+  /* Multi-level shadows for Apple depth */
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.1),
+    0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.cd-icon-inner {
+  /* No special styles needed here yet, padding handled in TSX */
+}
+
 /* Legacy Hover Removed for Physics */
 
 .cd-dot {

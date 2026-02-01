@@ -373,11 +373,32 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             state.staticCenter = v
         }
 
+    // V66: APPLE-STYLE ICON PLATE (Squircle)
+    // Wrap app icons in a white plate to homogenize the dock look.
+    const isApp = !!(appItem.icon_name || appItem.get_icon) && appItem.name !== "Separator"
+    let iconToDisplay: Gtk.Widget = child
+
+    if (isApp) {
+        const plate = new Gtk.Box({
+            css_classes: ["cd-squircle-plate"],
+            halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.CENTER,
+            hexpand: false,
+            vexpand: false,
+        })
+        plate.append(child)
+        // Manual internal centering with margins
+        const m = 10
+        child.set_margin_start(m); child.set_margin_end(m)
+        child.set_margin_top(m); child.set_margin_bottom(m)
+        iconToDisplay = plate
+    }
+
     // @ts-ignore
-    child.pixel_size = 64
+    child.pixel_size = DOCK_CONSTANTS.ICON_SIZE
     // Tooltip / name logic...
     child.set_name("cd-icon-image-" + appId)
-    iconBox.append(child)
+    iconBox.append(iconToDisplay)
 
     const dot = new Gtk.Box({ name: "cd-dot-" + appId, css_classes: ["cd-dot"], width_request: 4, height_request: 4, has_tooltip: false })
     const indicator = new Gtk.Box({
@@ -936,13 +957,33 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                         // We need to access the Gtk.Image.
                         // Known structure: itemBox -> Overlay -> Box (icon-box) -> Image
                         const overlay = itemBox?.get_first_child() as Gtk.Overlay
-                        const iconBox = overlay?.get_child() as Gtk.Box // set_child was used
-                        const icon = iconBox?.get_first_child() as any
+                        const iconBox = overlay?.get_child() as Gtk.Box
+                        const content = iconBox?.get_first_child() as any
                         const targetPixelSize = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
-                        // @ts-ignore
-                        if (icon && icon.pixel_size !== targetPixelSize) {
-                            // @ts-ignore
-                            icon.pixel_size = targetPixelSize
+
+                        if (content) {
+                            // V66: Hierarchical Scaling
+                            if (content.get_css_classes().includes("cd-squircle-plate")) {
+                                content.set_size_request(targetPixelSize, targetPixelSize)
+                                const icon = content.get_first_child() as any
+
+                                // V66: Proportional Inner Scaling
+                                const internalSize = Math.round(targetPixelSize * 0.70)
+                                const marginSize = Math.max(2, Math.floor(targetPixelSize * 0.15))
+
+                                if (icon) {
+                                    if (icon.pixel_size !== internalSize) {
+                                        icon.pixel_size = internalSize
+                                    }
+                                    icon.set_margin_start(marginSize); icon.set_margin_end(marginSize)
+                                    icon.set_margin_top(marginSize); icon.set_margin_bottom(marginSize)
+                                }
+                            } else {
+                                // Standard direct child scaling (Trash, Separator fallback)
+                                if (content.pixel_size !== targetPixelSize) {
+                                    content.pixel_size = targetPixelSize
+                                }
+                            }
                         }
                     }
                 }
