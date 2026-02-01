@@ -22,10 +22,10 @@ window.crystal-dock,
 
 /* --- 2. SELECTORES DE "FINAL WAR" ID HIERARCHY --- */
 window#crystal-dock,
-window#crystal-dock>box#dock-main-container,
-window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay,
-window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay>widget,
-window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay>widget>box#the-dock-bar {
+window#crystal-dock > box#dock-main-container,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widget,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widget > box#the-dock-bar {
   background-color: transparent;
   background-image: none;
   box-shadow: none;
@@ -70,11 +70,11 @@ window#crystal-dock * {
 #the-dock-bar,
 .cd-dock-bar,
 .cd-tooltip,
-.cd-tooltip>contents,
-.cd-tooltip>background,
+.cd-tooltip > contents,
+.cd-tooltip > background,
 .cd-popover,
-.cd-popover>contents,
-.cd-popover>background {
+.cd-popover > contents,
+.cd-popover > background {
   background-color: transparent;
   background-image: none;
   background: none;
@@ -83,7 +83,7 @@ window#crystal-dock * {
 }
 
 /* RESTORE MENU CONTENT BACKGROUND (High Specificity) */
-window#crystal-dock .cd-popover>contents {
+window#crystal-dock .cd-popover > contents {
   background-color: rgba(255, 255, 255, 0.95);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
@@ -93,9 +93,9 @@ window#crystal-dock .cd-popover>contents {
 /* --- TOOLTIP NEUTRALIZATION --- */
 window#crystal-dock tooltip,
 window#crystal-dock tooltip.background,
-window#crystal-dock tooltip>box,
-window#crystal-dock tooltip>box>label,
-window#crystal-dock tooltip>box>image,
+window#crystal-dock tooltip > box,
+window#crystal-dock tooltip > box > label,
+window#crystal-dock tooltip > box > image,
 #crystal-dock tooltip,
 #crystal-dock tooltip.background,
 #crystal-dock .background,
@@ -113,7 +113,7 @@ popover background {
 /* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
 /* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
 .cd-item,
-.cd-item>contents,
+.cd-item > contents,
 box.cd-item {
   background-color: transparent;
   background-image: none;
@@ -244,15 +244,6 @@ popover.cd-tooltip {
   box-shadow: none;
   background: none;
   border: none;
-}
-
-/* V54.10: CLEAN GEOMETRY (32px) */
-window#crystal-dock .cd-separator-container {
-  min-width: 32px;
-  max-width: 32px;
-  margin: 0;
-  padding: 0;
-  background: transparent;
 }
 
 window#crystal-dock popover.cd-tooltip contents {

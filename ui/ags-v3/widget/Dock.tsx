@@ -10,6 +10,7 @@ import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
+import GdkPixbuf from "gi://GdkPixbuf"
 import { calculateDockItemMetrics, DOCK_CONSTANTS } from "./DockPhysics"
 
 
@@ -322,13 +323,32 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     if (res.name) {
         child = Gtk.Image.new_from_icon_name(res.name)
     } else if (res.path) {
-        const file = Gio.File.new_for_path(res.path)
-        child = Gtk.Image.new_from_gicon(Gio.FileIcon.new(file))
+        try {
+            // V65: GLOBAL HIGH-RES SANITIZER 🛡️
+            // Problem: 1024px icons cause aliasing jitter when scaled continuously in the Dock.
+            // Solution: Pre-scale ALL file-based icons to a safe 'Texture Max' (256px) on load.
+            // This ensures the animation loop works with a stable, manageable texture.
+            const pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(res.path, 256, 256, true)
+            child = Gtk.Image.new_from_pixbuf(pixbuf)
+        } catch (e) {
+            // Fallback for SVGs or errors (Pixbuf sometimes fails on SVGs, though it usually handles them)
+            // Or if file not found.
+            // console.warn("Pixbuf load failed, falling back to GIcon", e)
+            const file = Gio.File.new_for_path(res.path)
+            child = Gtk.Image.new_from_gicon(Gio.FileIcon.new(file))
+        }
     } else if (res.gicon) {
         child = Gtk.Image.new_from_gicon(res.gicon)
     } else {
         child = Gtk.Image.new_from_icon_name("image-missing")
     }
+
+    // V61: UNIVERSAL CENTERING (Fix for Antigravity & All Icons)
+    // Force center alignment for ALL icon types to prevent sub-pixel jitter.
+    // Previously this was only applied to 'path' icons, but AppService maps Antigravity to 'name'.
+    child.set_halign(Gtk.Align.CENTER)
+    child.set_valign(Gtk.Align.CENTER)
+
 
     // --- MAGNIFICATION PHYSICS V14 (Master) ---
     const iconSize = DOCK_CONSTANTS.ICON_SIZE
@@ -918,7 +938,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                         const overlay = itemBox?.get_first_child() as Gtk.Overlay
                         const iconBox = overlay?.get_child() as Gtk.Box // set_child was used
                         const icon = iconBox?.get_first_child() as any
-                        const targetPixelSize = Math.round(64 * state.currentScale)
+                        const targetPixelSize = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
                         // @ts-ignore
                         if (icon && icon.pixel_size !== targetPixelSize) {
                             // @ts-ignore
@@ -1037,16 +1057,25 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     bar.valign = Gtk.Align.END
     shim.append(bar)
 
-    layout.set_child(da); layout.add_overlay(shim)
+    layout.set_child(da);
+
+    // V58: Input Shield (Must be added BEFORE shim to be underneath)
+    // This catches motion in the 'gaps' so the cursor doesn't fall through to the desktop.
+    const inputShield = new Gtk.Box({ css_classes: ["cd-input-shield"] })
+    layout.add_overlay(inputShield) // Layer 1 (Shield)
+
+    layout.add_overlay(shim) // Layer 2 (Icons/Bar)
 
     const mainContainer = new Gtk.Box({
         name: "dock-main-container", css_classes: ["cd-dock-container"],
         valign: Gtk.Align.FILL, halign: Gtk.Align.FILL,
         hexpand: true, vexpand: false, can_focus: false
     })
-    mainContainer.append(layout)
+    mainContainer.append(layout) // RESTORED VITAL CONNECTION
+
 
     const update = () => {
+
         // VIRTUAL GRID REFACTOR: Collection Phase
         type ItemConfig = { id: string, width: number, syncData?: any, factory: (vc: number) => Gtk.Widget }
         const configs: ItemConfig[] = []

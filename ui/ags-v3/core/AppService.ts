@@ -113,10 +113,7 @@ class AppService {
             "google-chrome": "google-chrome",
             "chrome": "google-chrome",
             // Antigravity & File Manager Standardization
-            "antigravity": "antigravity",
-            "Antigravity": "antigravity",
             "code-url-handler": "antigravity", // VSCode URL handler fallback
-            "/usr/share/pixmaps/antigravity.png": "antigravity" // Force unification
         }
 
         Object.entries(overrides).forEach(([key, iconName]) => {
