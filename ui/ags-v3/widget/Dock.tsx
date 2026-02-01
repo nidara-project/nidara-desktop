@@ -1408,9 +1408,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true);
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true);
         Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 10);
-        // V71: 10px Symmetrical Floating Gap
-        // Bottom (10) + Pill (92) + Top Gap (10) = 112px
-        Gtk4LayerShell.set_exclusive_zone(win, 112);
+        // V71.4: Final Optical Symmetry Calibration
+        // Nudging to 94px to match the bottom 10px gap's "air density".
+        Gtk4LayerShell.set_exclusive_zone(win, 94);
     } catch (e) { console.error(e) }
 
     const cConn = hypr.connect("notify::clients", update)
