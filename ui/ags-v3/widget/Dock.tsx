@@ -12,6 +12,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { calculateDockItemMetrics, DOCK_CONSTANTS, getProjectedMouseX } from "./DockPhysics"
+import { getMappedIcon } from "../core/IconMapper"
 
 
 
@@ -27,10 +28,10 @@ const appsService = new AstalApps.Apps()
 
 // CONSTANT CONFIGURATION (Future: Bind to Settings JSON)
 const DOCK_CONFIG = {
-    USE_ICON_PLATES: false, // Set to false for WhiteSur/macOS themes that have shaped icons
-    SMART_PLATES_FOR_FILES: true, // Auto-enable plates for specific file paths (WebApps, etc.)
+    USE_ICON_PLATES: false, // Set to false for themes that already have pre-shaped (squircle/circle) icons
+    SMART_PLATES_FOR_FILES: true, // Auto-enable plates for specific file paths    MAX_ICON_SIZE: 160,
     MAGNIFICATION_SCALE: 2.2, // Future-proof param
-    FINDER_ICON_FALLBACK: ["finder", "macos-finder", "system-file-manager", "user-home"],
+    HOME_ICON_FALLBACK: ["user-home", "system-file-manager", "folder"],
 }
 
 let pinnedList: string[] = []
@@ -70,8 +71,9 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
         css_classes: ["cd-separator-container"],
         valign: Gtk.Align.END, halign: Gtk.Align.CENTER,
         width_request: baseWidth,
-        height_request: 92, // V51: Lock height to prevent vertical jitter
+        height_request: 92, // V51: Lock height to match Pill
         hexpand: false,
+        margin_bottom: 0,  // V95: 10px Gap handled by window margin
     })
 
     // Visible Line
@@ -309,8 +311,8 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
         hexpand: false,
-        // V67: OPTICAL UPLIFT - macOS style icons are anchored slightly higher than geometric center
-        margin_bottom: 22, // RESTORED: Optical Uplift (macOS style)
+        // V98: Perfectly centered in 92px pill (Balanced for 64px icon)
+        margin_bottom: 14,
         has_tooltip: false,
     })
 
@@ -332,6 +334,16 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     }
 
     const res = getIcon()
+
+    // V94: APPLY MATERIAL ALIASING 💎
+    if (res.name) {
+        const originalName = res.name
+        res.name = getMappedIcon(res.name, appId)
+        if (appId.includes("calculator") || appId.includes("calendar")) {
+            console.log(`[Dock] [Debug] appId: ${appId}, original: ${originalName}, mapped: ${res.name}`)
+        }
+    }
+
     let child: Gtk.Widget
 
     // V72: VECTOR-FIRST RENDERING 💎
@@ -343,11 +355,11 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         valign: Gtk.Align.CENTER
     }
 
-    if (res.name) {
-        iconProps.icon_name = res.name
-    } else if (res.path) {
-        // For file paths, use GIcon (FileIcon) to preserve vector scalability
+    if (res.path) {
+        // V72/V93: Use GIcon (FileIcon) to preserve vector scalability 💎
         iconProps.gicon = Gio.FileIcon.new(Gio.File.new_for_path(res.path))
+    } else if (res.name) {
+        iconProps.icon_name = res.name
     } else if (res.gicon) {
         iconProps.gicon = res.gicon
     } else {
@@ -386,32 +398,10 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             state.staticCenter = v
         }
 
-    // V66.3: APPLE-STYLE ICON PLATE (Squircle) - FINAL ROBUST VERSION
-    // Exclude system items (Trash, Finder, Nautilus, Separator) from the white background.
-    const systemExclusions = [
-        "papelera", "home", "files", "archivo", "nautilus", "thunar", "dolphin",
-        "org.gnome.nautilus", "separator", "finder"
-    ]
+    // V94: MANDATORY PLATING 💎
+    // Every item (App or System) gets the white squircle plate.
+    const isApp = !state.isSeparator && (!!res.name || !!res.path || !!res.gicon)
     const nameStr = (appItem.name || "").toLowerCase()
-    const idStr = appId.toLowerCase()
-
-    // V76: HYBRID PLATE HEURISTIC
-    // If Global Plates are OFF, we still FORCE them for:
-    // 1. Icons that are file paths (WebApps, local assets) -> likely unshaped
-    // 2. Unless strictly excluded (System items)
-    // 3. SPECIAL: Force for "generator" types like chrome- apps if they don't map to theme
-    const isChromeApp = appId.startsWith("chrome-") || nameStr.includes("pwa")
-
-    // Check if the RESOLVED icon is a path
-    const isPath = !!res.path || (res.name && res.name.startsWith("/"))
-
-    const shouldPlate = DOCK_CONFIG.USE_ICON_PLATES ||
-        (DOCK_CONFIG.SMART_PLATES_FOR_FILES && (isPath || isChromeApp))
-
-    const isApp = !!(appItem.icon_name || appItem.get_icon) &&
-        !systemExclusions.some(ex => nameStr.includes(ex) || idStr.includes(ex)) &&
-        shouldPlate
-
     let iconToDisplay: Gtk.Widget = child
 
     if (isApp) {
@@ -419,13 +409,14 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             css_classes: ["cd-squircle-plate"],
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
-            hexpand: false, // Don't let plate stretch, keep it square
+            hexpand: false,
             vexpand: false,
+            width_request: DOCK_CONSTANTS.ICON_SIZE,
+            height_request: DOCK_CONSTANTS.ICON_SIZE,
         })
-        // Force the child (icon) to center itself within the plate
         child.set_halign(Gtk.Align.CENTER)
         child.set_valign(Gtk.Align.CENTER)
-        child.set_hexpand(true) // Expand to fill the plate's internal allocation so center works
+        child.set_hexpand(true)
         child.set_vexpand(true)
 
         plate.append(child)
@@ -433,7 +424,6 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     }
 
     // SCALING LOGIC
-    // Antigravity (and other irregular icons) might need slightly different scaling inside the plate
     const isAntigravity = appId.includes("antigravity") || nameStr.includes("antigravity")
     const scaleFactor = isAntigravity ? 0.65 : 0.7
 
@@ -449,7 +439,8 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         css_classes: ["cd-indicator-container"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
-        margin_bottom: 12, // RESTORED: Indicator Gap
+        // V98: Perfectly aligned with centered icon
+        margin_bottom: 4,
         has_tooltip: false,
         width_request: 4, height_request: 4, // FIXED SIZE (V11)
     })
@@ -459,9 +450,9 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         name: "cd-overlay-" + appId,
         css_classes: ["cd-overlay", "overlay"],
         overflow: Gtk.Overflow.VISIBLE,
-        valign: Gtk.Align.END, // BOTTOM ANCHOR
+        valign: Gtk.Align.END, // BOTTOM ANCHOR in 120px container
         vexpand: true,
-        height_request: 120, // V70: Calibrated for 22px uplift
+        height_request: 92, // V98: Locked to Pill height
         has_tooltip: false,
     })
     overlay.set_child(iconBox)
@@ -776,7 +767,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
                 return false
             }
 
-            // FINDER -> PIN START
+            // PINNED ITEM DRAG HANDLING
             if (appItem.name === "Angel" || targetId.includes("user-home")) {
                 console.log("[DnD] Action: Pin Start")
                 pinnedList = pinnedList.filter(p => p.toLowerCase() !== sourceId)
@@ -913,17 +904,36 @@ const mouseBus = {
 }
 
 export default function Dock(gdkmonitor: Gdk.Monitor) {
-    let totalStaticWidth = 400 // V69: For projection mapping
-    console.log("[DISTROIA] Dock() initializing (Anti-Jitter Widget Edition)");
-    // CACHE for consistent widget identity & animations
+    let totalStaticWidth = 400
     const widgetCache = new Map<string, Gtk.Widget>()
+
+    // Create Layout First
+    const layout = new Gtk.Overlay({
+        name: "dock-main-overlay",
+        css_classes: ["cd-main-overlay"],
+        valign: Gtk.Align.FILL,
+        halign: Gtk.Align.FILL,
+        overflow: Gtk.Overflow.VISIBLE
+    })
+
+    const win = new Gtk.Window({
+        name: "crystal-dock",
+        title: "Crystal Dock",
+        application: app,
+        focusable: false,
+        can_focus: false,
+        can_target: true,
+        resizable: false,
+        default_height: 120,
+    })
+    win.set_child(layout)
     const bar = new Gtk.Box({
         name: "the-dock-bar",
         css_classes: ["cd-dock-bar"],
         valign: Gtk.Align.END,
-        halign: Gtk.Align.CENTER,
+        halign: Gtk.Align.START,
         overflow: Gtk.Overflow.VISIBLE,
-        height_request: 120, // Final 120px sync
+        height_request: 92, // V98: Locked to Pill height
         spacing: 0, // V7: Total control via widget width_request
         can_focus: false,
     })
@@ -1024,7 +1034,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                                 content.set_size_request(drawIconW, targetPixelSize)
                                 const icon = content.get_first_child() as any
                                 if (icon) {
-                                    const isAntigravity = icon.icon_name?.includes("antigravity") || (icon.fileVal?.includes("antigravity"))
+                                    const iconPath = icon.gicon?.get_file?.()?.get_path() || ""
+                                    const isAntigravity = icon.icon_name?.includes("antigravity") || iconPath.includes("antigravity")
                                     const factor = isAntigravity ? 0.65 : 0.7
                                     const internalSize = Math.round(targetPixelSize * factor)
                                     if (icon.pixel_size !== internalSize) {
@@ -1114,16 +1125,16 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         const monitorWidth = gdkmonitor.get_geometry().width
         const region = new Cairo.Region()
-        // Interaction starts at y=28 (Pill top).
-        // REVERTED TO FULL WIDTH (Ignoring horizontal lock as requested)
+        // Interaction starts at y=98 (Pill top in 200px window).
         // @ts-ignore
-        region.unionRectangle({ x: 0, y: 28, width: monitorWidth, height: 92 })
+        region.unionRectangle({ x: 0, y: 98, width: monitorWidth, height: 92 })
         surface.set_input_region(region)
     }
 
+    win.add_controller(motion) // CRITICAL: RE-ATTACH TO WINDOW
     motion.connect("motion", (controller, x, y) => {
-        // V70.15: Pill-Lock (Exactly 28px)
-        if (y < 28) {
+        // V99: Overlap-Aware (Trigger ONLY in active pill area)
+        if (y < 98) {
             updateAllTargets(-1000)
             return
         }
@@ -1139,7 +1150,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         css_classes: ["cd-drawing-area"],
         valign: Gtk.Align.FILL,
         halign: Gtk.Align.FILL,
-        height_request: 120,
+        height_request: 200, // V99: Tall window for icon overlap
         overflow: Gtk.Overflow.VISIBLE,
         can_focus: false,
     })
@@ -1148,7 +1159,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         const pillWidth = smoothedBarWidth + 16
         const xOffset = (w - pillWidth) / 2
         const dockHeight = 92
-        const yOffset = h - dockHeight
+        const yOffset = h - 92 - 10 // V99: 10px from bottom of 200px window
         cr.save()
         cr.translate(xOffset, yOffset)
         drawSquircle(cr, pillWidth, dockHeight)
@@ -1158,35 +1169,17 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     // 2. Icon Shelf (Shim + Bar)
     const shim = new Gtk.Box({
         valign: Gtk.Align.END, halign: Gtk.Align.START,
-        height_request: 120,
+        margin_bottom: 10, // V98: 10px Bottom Gap
+        height_request: 92,
+        vexpand: true,
         overflow: Gtk.Overflow.VISIBLE,
-        css_classes: ["cd-dock-shim"],
     })
     bar.valign = Gtk.Align.END
     shim.append(bar)
 
     // 4. Assemble Overlay Stack
-    const layout = new Gtk.Overlay({
-        name: "dock-main-overlay",
-        css_classes: ["cd-main-overlay"],
-        valign: Gtk.Align.FILL,
-        halign: Gtk.Align.FILL,
-        overflow: Gtk.Overflow.VISIBLE
-    })
-    layout.add_controller(motion) // Global magnification controller
     layout.set_child(da)
     layout.add_overlay(shim)
-
-    const mainContainer = new Gtk.Box({
-        name: "dock-main-container",
-        css_classes: ["cd-dock-container"],
-        valign: Gtk.Align.FILL,
-        halign: Gtk.Align.FILL,
-        hexpand: true,
-        vexpand: false,
-        can_focus: false
-    })
-    mainContainer.append(layout)
 
 
     const update = () => {
@@ -1242,30 +1235,30 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         const getLaunch = (lid: string) => {
             const app = appService.getAppData(lid)
             const desktopId = app?.id || lid
-            return () => execAsync(`gtk - launch ${desktopId} `).catch(print)
+            return () => execAsync(`gtk-launch ${desktopId}`).catch(print)
         }
 
-        // 0. Static: Finder (Smart Resolution)
+        // 0. Static: Home Shortcut (Smart Resolution)
         const userName = GLib.get_user_name()
         const prettyName = userName.charAt(0).toUpperCase() + userName.slice(1)
 
-        const resolveFinderIcon = () => {
-            for (const name of DOCK_CONFIG.FINDER_ICON_FALLBACK) {
+        const resolveHomeIcon = () => {
+            for (const name of DOCK_CONFIG.HOME_ICON_FALLBACK) {
                 if (appService.getIconName(name)) return name;
             }
             return "user-home";
         }
 
-        const finder = {
+        const homeItem = {
             name: prettyName,
-            icon_name: resolveFinderIcon(),
+            icon_name: "home",
             launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
         }
         configs.push({
-            id: "finder", width: 80, // V50: Unified 80px Slot
-            syncData: { addrs: [], clientTitle: undefined, appItem: finder as any },
+            id: "home-shortcut", width: 80, // V50: Unified 80px Slot
+            syncData: { addrs: [], clientTitle: undefined, appItem: homeItem as any },
             factory: (vc) => {
-                const w = DockItem("finder", finder as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, "finder")
+                const w = DockItem("home-shortcut", homeItem as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, "home-shortcut")
                 if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                 return w
             }
@@ -1422,20 +1415,16 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         let lastWidget: Gtk.Revealer | null = null
 
         animRegistry.forEach((state, id) => {
-            // V87: INITIALIZATION LOOP (Simulate qX = -1000)
-            if (true) { // Force RESET logic for initialization
-                // RESET
-                state.targetScale = 1.0
-                if (state.isSeparator) {
-                    state.targetWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.targetMargin = 0
-                } else {
-                    state.targetWidth = DOCK_CONSTANTS.APP_SLOT; state.targetMargin = DOCK_CONSTANTS.BASE_MARGIN
-                }
+            // V87: INITIALIZATION LOOP (Force Rest State)
+            state.targetScale = 1.0
+            if (state.isSeparator) {
+                state.targetWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.targetMargin = 0
+            } else {
+                state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.targetMargin = DOCK_CONSTANTS.BASE_MARGIN
             }
-
-            // Capture last widget for parity correction
-            const w = widgetCache.get(id)
-            if (w) lastWidget = w as Gtk.Revealer
+            state.currentScale = 1.0
+            state.currentWidth = state.targetWidth
+            state.currentMargin = state.targetMargin
         })
 
         if (!tickId) runUnifiedTick() // V87: Ensure tick is running for initialization
@@ -1467,25 +1456,10 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         return bar
     }
 
-    const win = (
-        <window
-            name="crystal-dock"
-            namespace="crystal-dock"
-            css_classes={["crystal-dock"]}
-            gdkmonitor={gdkmonitor}
-            application={app}
-            visible={true}
-            decorated={false}
-            heightRequest={120}
-            hasTooltip={false}>
-            {mainContainer}
-        </window>
-    ) as any as Gtk.Window
-
     const monitorWidth = gdkmonitor.get_geometry().width
-    da.set_size_request(monitorWidth, 120)
-    win.set_default_size(monitorWidth, 120)
-    win.set_size_request(monitorWidth, 120)
+    da.set_size_request(monitorWidth, 200)
+    win.set_default_size(monitorWidth, 200)
+    win.set_size_request(monitorWidth, 200)
 
     // --- HARDWARE TRANSPARENCY & BLUR SYNC ---
     try {
@@ -1504,7 +1478,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true);
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true);
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true);
-        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 10);
+        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 0); // V99: Internal gap is 10px
         // Initialize input region with current state
         if (animRegistry.size > 0) {
             let total = 0
@@ -1514,18 +1488,17 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             updateInputRegion(total)
         }
 
-        // V71.14: 94px EXCLUSIVE ZONE (As requested)
-        Gtk4LayerShell.set_exclusive_zone(win, 94);
+        // V99: 104px EXCLUSIVE ZONE (Ensures windows stop 104px from screen bottom)
+        Gtk4LayerShell.set_exclusive_zone(win, 104);
 
         win.connect("realize", () => {
             const surface = win.get_native()?.get_surface()
             if (surface) {
                 const monitorWidth = gdkmonitor.get_geometry().width
                 const region = new Cairo.Region()
-                // Interaction starts EXACTLY at y=28 (Pill top).
-                // Top 28px of the window are COMPLETELY CLICK-THROUGH.
+                // Interaction starts at y=98 (Pill top in 200px window).
                 // @ts-ignore
-                region.unionRectangle({ x: 0, y: 28, width: monitorWidth, height: 92 })
+                region.unionRectangle({ x: 0, y: 98, width: monitorWidth, height: 92 })
                 surface.set_input_region(region)
             }
         })
@@ -1543,5 +1516,6 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => { update(); return GLib.SOURCE_REMOVE })
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3000, () => { update(); return GLib.SOURCE_REMOVE })
 
+    win.present()
     return win
 }
