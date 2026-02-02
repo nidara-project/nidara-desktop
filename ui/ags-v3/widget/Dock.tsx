@@ -25,6 +25,14 @@ const PINNED_FILE = GLib.get_home_dir() + "/.config/dock_pinned.json"
 const hypr = AstalHyprland.get_default()
 const appsService = new AstalApps.Apps()
 
+// CONSTANT CONFIGURATION (Future: Bind to Settings JSON)
+const DOCK_CONFIG = {
+    USE_ICON_PLATES: false, // Set to false for WhiteSur/macOS themes that have shaped icons
+    SMART_PLATES_FOR_FILES: true, // Auto-enable plates for specific file paths (WebApps, etc.)
+    MAGNIFICATION_SCALE: 2.2, // Future-proof param
+    FINDER_ICON_FALLBACK: ["finder", "macos-finder", "system-file-manager", "user-home"],
+}
+
 let pinnedList: string[] = []
 try {
     const raw = JSON.parse(readFile(PINNED_FILE)) as string[]
@@ -326,40 +334,27 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     const res = getIcon()
     let child: Gtk.Widget
 
-    // V67: UNIVERSAL HIGH-RES TEXTURE STABILIZER 💎
-    // Force ALL icons (theme or file) into a high-res Pixbuf (256px).
-    // This prevents GTK from swapping to low-res or "symbolic" versions during the wave.
-    try {
-        let pixbuf: GdkPixbuf.Pixbuf | null = null
-        if (res.path) {
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(res.path, 256, 256, true)
-        } else if (res.name || res.gicon) {
-            const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
-            let iconPaintable: any = null
-            if (res.name) {
-                iconPaintable = theme.lookup_icon(res.name, [], 256, 1, Gtk.TextDirection.NONE, 0)
-            } else if (res.gicon) {
-                // @ts-ignore
-                iconPaintable = theme.lookup_by_gicon(res.gicon, 256, 1, Gtk.TextDirection.NONE, 0)
-            }
-
-            if (iconPaintable) {
-                // We use Gtk.Image.new_from_paintable to keep it as a stable texture
-                child = Gtk.Image.new_from_paintable(iconPaintable)
-            } else {
-                child = Gtk.Image.new_from_icon_name("image-missing")
-            }
-        } else {
-            child = Gtk.Image.new_from_icon_name("image-missing")
-        }
-
-        if (pixbuf) {
-            child = Gtk.Image.new_from_pixbuf(pixbuf)
-        }
-    } catch (e) {
-        console.warn(`[Dock] Icon resolution failed for ${appId}:`, e)
-        child = Gtk.Image.new_from_icon_name("image-missing")
+    // V72: VECTOR-FIRST RENDERING 💎
+    // Instead of rasterizing to a fixed 256px Pixbuf (which blurs upon zoom),
+    // we use native Gtk.Image properties that allow GTK to reschedule vector drawing at any size.
+    const iconProps: any = {
+        pixel_size: DOCK_CONSTANTS.ICON_SIZE,
+        halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER
     }
+
+    if (res.name) {
+        iconProps.icon_name = res.name
+    } else if (res.path) {
+        // For file paths, use GIcon (FileIcon) to preserve vector scalability
+        iconProps.gicon = Gio.FileIcon.new(Gio.File.new_for_path(res.path))
+    } else if (res.gicon) {
+        iconProps.gicon = res.gicon
+    } else {
+        iconProps.icon_name = "image-missing"
+    }
+
+    child = new Gtk.Image(iconProps)
 
     // V61: UNIVERSAL CENTERING (Fix for Antigravity & All Icons)
     // Force center alignment for ALL icon types to prevent sub-pixel jitter.
@@ -399,8 +394,23 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     ]
     const nameStr = (appItem.name || "").toLowerCase()
     const idStr = appId.toLowerCase()
+
+    // V76: HYBRID PLATE HEURISTIC
+    // If Global Plates are OFF, we still FORCE them for:
+    // 1. Icons that are file paths (WebApps, local assets) -> likely unshaped
+    // 2. Unless strictly excluded (System items)
+    // 3. SPECIAL: Force for "generator" types like chrome- apps if they don't map to theme
+    const isChromeApp = appId.startsWith("chrome-") || nameStr.includes("pwa")
+
+    // Check if the RESOLVED icon is a path
+    const isPath = !!res.path || (res.name && res.name.startsWith("/"))
+
+    const shouldPlate = DOCK_CONFIG.USE_ICON_PLATES ||
+        (DOCK_CONFIG.SMART_PLATES_FOR_FILES && (isPath || isChromeApp))
+
     const isApp = !!(appItem.icon_name || appItem.get_icon) &&
-        !systemExclusions.some(ex => nameStr.includes(ex) || idStr.includes(ex))
+        !systemExclusions.some(ex => nameStr.includes(ex) || idStr.includes(ex)) &&
+        shouldPlate
 
     let iconToDisplay: Gtk.Widget = child
 
@@ -409,19 +419,26 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             css_classes: ["cd-squircle-plate"],
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
-            hexpand: false,
+            hexpand: false, // Don't let plate stretch, keep it square
             vexpand: false,
         })
+        // Force the child (icon) to center itself within the plate
+        child.set_halign(Gtk.Align.CENTER)
+        child.set_valign(Gtk.Align.CENTER)
+        child.set_hexpand(true) // Expand to fill the plate's internal allocation so center works
+        child.set_vexpand(true)
+
         plate.append(child)
-        // Set initial symmetric margins
-        const m = Math.round(DOCK_CONSTANTS.ICON_SIZE * 0.15)
-        child.set_margin_start(m); child.set_margin_end(m)
-        child.set_margin_top(m); child.set_margin_bottom(m)
         iconToDisplay = plate
     }
 
+    // SCALING LOGIC
+    // Antigravity (and other irregular icons) might need slightly different scaling inside the plate
+    const isAntigravity = appId.includes("antigravity") || nameStr.includes("antigravity")
+    const scaleFactor = isAntigravity ? 0.65 : 0.7
+
     // @ts-ignore
-    child.pixel_size = isApp ? (DOCK_CONSTANTS.ICON_SIZE - (2 * Math.round(DOCK_CONSTANTS.ICON_SIZE * 0.15))) : DOCK_CONSTANTS.ICON_SIZE
+    child.pixel_size = isApp ? Math.round(DOCK_CONSTANTS.ICON_SIZE * scaleFactor) : DOCK_CONSTANTS.ICON_SIZE
     // Tooltip / name logic...
     child.set_name("cd-icon-image-" + appId)
     iconBox.append(iconToDisplay)
@@ -933,6 +950,11 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             let active = false
             let sumWidths = 0
 
+            // Initialize Error Accumulators for Sub-pixel Diffusion
+            let widthError = 0
+            let marginError = 0
+            let lastWidget: Gtk.Revealer | null = null
+
             animRegistry.forEach((state, id) => {
                 // PHYSICS: Hysteresis & Quantization (V27 Anti-Jitter)
                 const scaleDiff = Math.abs(state.targetScale - state.currentScale)
@@ -960,18 +982,35 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                     const revealer = widget as Gtk.Revealer
                     const itemBox = revealer.get_child() as Gtk.Box
 
-                    // Width & Dynamic Margins (Rounded for GTK but cached to avoid redundant calls)
-                    const w = Math.round(state.currentWidth)
-                    const m = Math.round(state.currentMargin)
+                    // V85: SUB-PIXEL ERROR DIFFUSION (Fix Horizontal Vibration)
+                    // The "Total Width" of the dock must match the float perfection of the physics.
+                    // Simple Math.round() on each item causes accumulated errors (Variance ~N/2 pixels),
+                    // making the edges "vibrate" as items cross 0.5 boundaries randomly.
+                    // We carry over the rounding error to the next item to keep the Sum stable.
+
+                    // Width Error Diffusion
+                    const rawW = state.currentWidth + widthError
+                    const w = Math.round(rawW)
+                    widthError = rawW - w
+
+                    // Margin Error Diffusion
+                    const rawM = state.currentMargin + marginError
+                    const m = Math.round(rawM)
+                    marginError = rawM - m
 
                     if (revealer.width_request !== w) {
                         revealer.width_request = w
+                        // Also update container, but note: we might correct this later for parity
                         if (itemBox) itemBox.width_request = w
                     }
                     if (itemBox && itemBox.margin_start !== m) {
                         itemBox.margin_start = m
                         itemBox.margin_end = m
                     }
+
+                    // V87: PARITY LOCK (Store last widget for correction)
+                    lastWidget = revealer
+
 
                     // 2. The Content (Icon Scale)
                     if (!state.isSeparator) {
@@ -996,24 +1035,40 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                         const targetPixelSize = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
 
                         if (content) {
-                            // V66.3: Hierarchical Scaling (Radius + Symmetry)
-                            if (content.get_css_classes().includes("cd-squircle-plate")) {
-                                content.set_size_request(targetPixelSize, targetPixelSize)
+                            // V86: SYNC CONTENT WITH DIFFUSED WIDTH
+                            // The container (revealer) has width 'w' (diffused).
+                            // The content MUST match 'w' exactly to prevent 1px float/jitter.
+                            // Height remains targetPixelSize (no vertical stacking errors).
 
+                            // 1. PLATED ICONS
+                            if (content.get_css_classes().includes("cd-squircle-plate")) {
+                                content.set_size_request(w, targetPixelSize)
+
+                                // Scale inner icon
                                 const icon = content.get_first_child() as any
                                 if (icon) {
-                                    // V66.3: Integer-Perfect Margins
-                                    const im = Math.round(targetPixelSize * 0.15)
-                                    const internalSize = targetPixelSize - (2 * im)
+                                    // V79: Antigravity icon specific fix
+                                    const isAntigravity = icon.icon_name?.includes("antigravity") || (icon.fileVal?.includes("antigravity"))
+                                    const factor = isAntigravity ? 0.65 : 0.7
+                                    const internalSize = Math.round(targetPixelSize * factor)
 
                                     if (icon.pixel_size !== internalSize) {
                                         icon.pixel_size = internalSize
+                                        // V84: STABILITY LOCK
+                                        icon.set_size_request(internalSize, internalSize)
                                     }
-                                    icon.set_margin_start(im); icon.set_margin_end(im)
-                                    icon.set_margin_top(im); icon.set_margin_bottom(im)
                                 }
                             } else {
-                                if (content.pixel_size !== targetPixelSize) content.pixel_size = targetPixelSize
+                                // 2. NON-PLATED ICONS
+                                if (content.pixel_size !== targetPixelSize) {
+                                    content.pixel_size = targetPixelSize
+                                    // V83: FORCE GEOMETRY STANDARDIZATION + V86 DIFFUSION SYNC
+                                    content.set_size_request(w, targetPixelSize)
+                                } else {
+                                    // Ensure width matches even if pixel_size didn't change (e.g. only diffusion changed)
+                                    // This checks if the size_request is stale
+                                    content.set_size_request(w, targetPixelSize)
+                                }
                             }
                         }
                     }
@@ -1021,6 +1076,24 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 // SYNC SUM (V57: Derivation)
                 sumWidths += state.currentWidth + (state.currentMargin * 2)
             })
+
+            // V87: PARITY LOCK EXECUTION
+            // Ensure the total dock width is always EVEN to prevent "Center Jitter" (0.5px shifts).
+            // If the sum is odd, we add 1px to the last widget.
+            const totalIntWidth = Math.round(sumWidths)
+
+            if (totalIntWidth % 2 !== 0 && lastWidget) {
+                // Add 1px to make it even
+                const currentW = lastWidget.width_request
+                lastWidget.width_request = currentW + 1
+
+                // Also update its childbox if needed
+                const childBox = lastWidget.get_child() as Gtk.Box
+                if (childBox) childBox.width_request = currentW + 1
+
+                // Update sum for the pill
+                sumWidths += 1
+            }
 
             // UNIFIED BACKGROUND UPDATE (V57: 1:1 Synchronization)
             // sumWidths is already derived from 'currentWidth' (which is Lerped).
@@ -1048,6 +1121,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         // Removed 1.5px deadzone and 0.5px rounding for ultra-smooth response.
         lastMouseX = mouseX
         const qX = mouseX
+
 
         animRegistry.forEach((state) => {
             if (qX === -1000) {
@@ -1215,12 +1289,20 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             return () => execAsync(`gtk - launch ${desktopId} `).catch(print)
         }
 
-        // 0. Static: Finder
+        // 0. Static: Finder (Smart Resolution)
         const userName = GLib.get_user_name()
         const prettyName = userName.charAt(0).toUpperCase() + userName.slice(1)
+
+        const resolveFinderIcon = () => {
+            for (const name of DOCK_CONFIG.FINDER_ICON_FALLBACK) {
+                if (appService.getIconName(name)) return name;
+            }
+            return "user-home";
+        }
+
         const finder = {
             name: prettyName,
-            icon_name: "user-home",
+            icon_name: resolveFinderIcon(),
             launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
         }
         configs.push({
@@ -1378,6 +1460,36 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             }
         }
 
+        // Initialize Error Accumulators for Sub-pixel Diffusion
+        let widthError = 0
+        let marginError = 0
+        let lastWidget: Gtk.Revealer | null = null
+
+        animRegistry.forEach((state, id) => {
+            // V87: INITIALIZATION LOOP (Simulate qX = -1000)
+            if (true) { // Force RESET logic for initialization
+                // RESET
+                state.targetScale = 1.0
+                if (state.isSeparator) {
+                    state.targetWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.targetMargin = 0
+                } else {
+                    state.targetWidth = DOCK_CONSTANTS.APP_SLOT; state.targetMargin = DOCK_CONSTANTS.BASE_MARGIN
+                }
+            }
+
+            // Capture last widget for parity correction
+            const w = widgetCache.get(id)
+            if (w) lastWidget = w as Gtk.Revealer
+        })
+
+        if (!tickId) runUnifiedTick() // V87: Ensure tick is running for initialization
+
+        // Call updateAllTargets immediately to set initial state
+        updateAllTargets(-1000)
+
+        // Initial setup of tick listener
+        runUnifiedTick()
+
         // Manual Child Sync Algo
         const currentChildren = [] as Gtk.Widget[]
         let child = bar.get_first_child()
@@ -1389,14 +1501,16 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         finalItems.forEach(i => bar.append(i))
 
         const [_, nat] = bar.get_preferred_size()
-        if (nat) {
-            const monitorWidth = gdkmonitor.get_geometry().width
-            // EXPANSION: Layout is now full width to allow Magnification overflow
-            const w = monitorWidth
-            da.set_size_request(w, 120)
-            if (win) { win.set_default_size(w, 120); win.set_size_request(w, 120) }
+        if (nat && nat.width > 10) {
+            smoothedBarWidth = nat.width
+        } else {
+            // Fallback if nat is 0 (unmapped)
+            smoothedBarWidth = totalStaticWidth > 0 ? totalStaticWidth : 400
         }
+
+        return bar
     }
+
     const win = (
         <window
             name="crystal-dock"
@@ -1411,6 +1525,11 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             {mainContainer}
         </window>
     ) as any as Gtk.Window
+
+    const monitorWidth = gdkmonitor.get_geometry().width
+    da.set_size_request(monitorWidth, 120)
+    win.set_default_size(monitorWidth, 120)
+    win.set_size_request(monitorWidth, 120)
 
     // --- HARDWARE TRANSPARENCY & BLUR SYNC ---
     try {
