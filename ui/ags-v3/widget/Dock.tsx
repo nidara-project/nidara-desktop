@@ -948,15 +948,10 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         tickId = bar.add_tick_callback((_, clock) => {
             let active = false
-            let sumWidths = 0
-
-            // Initialize Error Accumulators for Sub-pixel Diffusion
-            let widthError = 0
-            let marginError = 0
-            let lastWidget: Gtk.Revealer | null = null
+            let currentFloatX = 0 // V90: Global Continuous Coordinate
 
             animRegistry.forEach((state, id) => {
-                // PHYSICS: Hysteresis & Quantization (V27 Anti-Jitter)
+                // PHYSICS: Hysteresis & Quantization
                 const scaleDiff = Math.abs(state.targetScale - state.currentScale)
                 if (scaleDiff > 0.0001) {
                     state.currentScale = lerp(state.currentScale, state.targetScale, 0.25)
@@ -975,137 +970,96 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                     active = true
                 } else state.currentMargin = state.targetMargin
 
-                // APPLY TO WIDGETS
+                // APPLY TO WIDGETS (V90: Global Tiling Engine)
                 const widget = widgetCache.get(id)
                 if (widget) {
-                    // 1. The Container (Slot)
                     const revealer = widget as Gtk.Revealer
                     const itemBox = revealer.get_child() as Gtk.Box
 
-                    // V85: SUB-PIXEL ERROR DIFFUSION (Fix Horizontal Vibration)
-                    // The "Total Width" of the dock must match the float perfection of the physics.
-                    // Simple Math.round() on each item causes accumulated errors (Variance ~N/2 pixels),
-                    // making the edges "vibrate" as items cross 0.5 boundaries randomly.
-                    // We carry over the rounding error to the next item to keep the Sum stable.
+                    // 1. Calculate Float Geometry
+                    const floatSlotW = state.currentWidth + (state.currentMargin * 2)
+                    const floatIconStart = currentFloatX + state.currentMargin
+                    const floatIconEnd = floatIconStart + state.currentWidth
+                    const floatSlotEnd = currentFloatX + floatSlotW
 
-                    // Width Error Diffusion
-                    const rawW = state.currentWidth + widthError
-                    const w = Math.round(rawW)
-                    widthError = rawW - w
+                    // 2. Snap to Pixel Grid (Global Snap)
+                    const intSlotStart = Math.round(currentFloatX)
+                    const intIconStart = Math.round(floatIconStart)
+                    const intIconEnd = Math.round(floatIconEnd)
+                    const intSlotEnd = Math.round(floatSlotEnd)
 
-                    // Margin Error Diffusion
-                    const rawM = state.currentMargin + marginError
-                    const m = Math.round(rawM)
-                    marginError = rawM - m
+                    // 3. Derive Integer Widths & Margins
+                    const drawSlotW = intSlotEnd - intSlotStart
+                    const drawIconW = intIconEnd - intIconStart
+                    const drawMarginS = intIconStart - intSlotStart
 
-                    if (revealer.width_request !== w) {
-                        revealer.width_request = w
-                        // Also update container, but note: we might correct this later for parity
-                        if (itemBox) itemBox.width_request = w
+                    // Update Global Coordinate
+                    currentFloatX = floatSlotEnd
+
+                    // 4. Apply to Layout
+                    if (revealer.width_request !== drawSlotW) {
+                        revealer.width_request = drawSlotW
+                        if (itemBox) itemBox.width_request = drawIconW
                     }
-                    if (itemBox && itemBox.margin_start !== m) {
-                        itemBox.margin_start = m
-                        itemBox.margin_end = m
+                    if (itemBox) {
+                        // V90: Force START alignment to prevent GTK internal rounding jitter
+                        if (itemBox.get_halign() !== Gtk.Align.START) itemBox.set_halign(Gtk.Align.START)
+
+                        if (itemBox.margin_start !== drawMarginS) {
+                            itemBox.margin_start = drawMarginS
+                            itemBox.margin_end = 0 // Margin end is redundant in Tiling
+                        }
                     }
 
-                    // V87: PARITY LOCK (Store last widget for correction)
-                    lastWidget = revealer
-
-
-                    // 2. The Content (Icon Scale)
+                    // 5. The Content (Icon Scale Sync)
                     if (!state.isSeparator) {
-                        // Find icon inside structure of boxes
-                        // itemBox -> overlay -> iconBox -> child
-                        // We need a cleaner way to update icon size. Using the update callback was cleaner.
-                        // Let's re-implement a manual update or keep a ref.
-                        // Ideally we traverse:
-                        // DockItem has `update` callback, but now state is pure data.
-
-                        // HACK: We can find the icon by name convention or traverse.
-                        // Or better: Restore the `update` callback slightly to just handle the icon pixel size?
-                        // Actually, let's just use CSS scale or find the child.
-                        // The user said: "Icon Visual: transform: scale(scale)." -> CSS transform is better but GTK4 CSS transform is tricky.
-                        // Let's stick to pixel_size for now as it worked.
-
-                        // We need to access the Gtk.Image.
-                        // Known structure: itemBox -> Overlay -> Box (icon-box) -> Image
                         const overlay = itemBox?.get_first_child() as Gtk.Overlay
                         const iconBox = overlay?.get_child() as Gtk.Box
                         const content = iconBox?.get_first_child() as any
                         const targetPixelSize = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
 
                         if (content) {
-                            // V86: SYNC CONTENT WITH DIFFUSED WIDTH
-                            // The container (revealer) has width 'w' (diffused).
-                            // The content MUST match 'w' exactly to prevent 1px float/jitter.
-                            // Height remains targetPixelSize (no vertical stacking errors).
-
-                            // 1. PLATED ICONS
+                            // Sync Content Width with Integer Icon Width
                             if (content.get_css_classes().includes("cd-squircle-plate")) {
-                                content.set_size_request(w, targetPixelSize)
-
-                                // Scale inner icon
+                                content.set_size_request(drawIconW, targetPixelSize)
                                 const icon = content.get_first_child() as any
                                 if (icon) {
-                                    // V79: Antigravity icon specific fix
                                     const isAntigravity = icon.icon_name?.includes("antigravity") || (icon.fileVal?.includes("antigravity"))
                                     const factor = isAntigravity ? 0.65 : 0.7
                                     const internalSize = Math.round(targetPixelSize * factor)
-
                                     if (icon.pixel_size !== internalSize) {
                                         icon.pixel_size = internalSize
-                                        // V84: STABILITY LOCK
                                         icon.set_size_request(internalSize, internalSize)
                                     }
                                 }
                             } else {
-                                // 2. NON-PLATED ICONS
                                 if (content.pixel_size !== targetPixelSize) {
                                     content.pixel_size = targetPixelSize
-                                    // V83: FORCE GEOMETRY STANDARDIZATION + V86 DIFFUSION SYNC
-                                    content.set_size_request(w, targetPixelSize)
+                                    content.set_size_request(drawIconW, targetPixelSize)
                                 } else {
-                                    // Ensure width matches even if pixel_size didn't change (e.g. only diffusion changed)
-                                    // This checks if the size_request is stale
-                                    content.set_size_request(w, targetPixelSize)
+                                    content.set_size_request(drawIconW, targetPixelSize)
                                 }
                             }
                         }
                     }
                 }
-                // SYNC SUM (V88: Integer-Perfect Synchronization)
-                // We sum the ACTUAL integer values used for widgets to prevent
-                // the background/pill from jittering relative to the icons.
-                // Note: w and m correspond to the values applied to 'revealer' and 'itemBox'.
             })
 
-            // V87: PARITY LOCK EXECUTION
-            // Ensure the total dock width is always EVEN to prevent "Center Jitter" (0.5px shifts).
-            // Calculate sum from actual widget requests (track them or derive from diffusion)
-            let totalIntWidth = 0
-            animRegistry.forEach((state, id) => {
-                const w = widgetCache.get(id)
-                if (w) {
-                    const rev = w as Gtk.Revealer
-                    const box = rev.get_child() as Gtk.Box
-                    totalIntWidth += rev.width_request + (box ? box.margin_start * 2 : 0)
-                }
-            })
+            // V90: MANUALLY CENTER THE BAR (Prevent 0.5px parity jitter)
+            const totalIntWidth = Math.round(currentFloatX)
+            const monitorWidth = gdkmonitor.get_geometry().width
+            const manualMarginStart = Math.round((monitorWidth - totalIntWidth) / 2)
 
-            if (totalIntWidth % 2 !== 0 && lastWidget) {
-                // Add 1px to make it even
-                const currentW = lastWidget.width_request
-                lastWidget.width_request = currentW + 1
-                const childBox = lastWidget.get_child() as Gtk.Box
-                if (childBox) childBox.width_request = currentW + 1
-                totalIntWidth += 1
+            if (bar.get_halign() !== Gtk.Align.START) bar.set_halign(Gtk.Align.START)
+            if (bar.margin_start !== manualMarginStart) {
+                bar.margin_start = manualMarginStart
             }
 
-            // UNIFIED BACKGROUND UPDATE (V88: 1:1 Integer Sync)
+            // UNIFIED BACKGROUND UPDATE (V90: Global Tiling Sync)
             if (Math.abs(smoothedBarWidth - totalIntWidth) > 0.01) {
                 smoothedBarWidth = totalIntWidth // INSTANT FOLLOW
                 da.queue_draw()
-                updateInputRegion(smoothedBarWidth) // V71: Follow Pill width for input masking
+                updateInputRegion(smoothedBarWidth)
                 active = true
             }
 

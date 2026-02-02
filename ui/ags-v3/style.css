@@ -22,10 +22,10 @@ window.crystal-dock,
 
 /* --- 2. SELECTORES DE "FINAL WAR" ID HIERARCHY --- */
 window#crystal-dock,
-window#crystal-dock>box#dock-main-container,
-window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay,
-window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay>widget,
-window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay>widget>box#the-dock-bar {
+window#crystal-dock > box#dock-main-container,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widget,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widget > box#the-dock-bar {
   background-color: transparent;
   background-image: none;
   box-shadow: none;
@@ -70,11 +70,11 @@ window#crystal-dock * {
 #the-dock-bar,
 .cd-dock-bar,
 .cd-tooltip,
-.cd-tooltip>contents,
-.cd-tooltip>background,
+.cd-tooltip > contents,
+.cd-tooltip > background,
 .cd-popover,
-.cd-popover>contents,
-.cd-popover>background {
+.cd-popover > contents,
+.cd-popover > background {
   background-color: transparent;
   background-image: none;
   background: none;
@@ -83,29 +83,37 @@ window#crystal-dock * {
 }
 
 /* RESTORE MENU CONTENT BACKGROUND (High Specificity) */
-window#crystal-dock .cd-popover>contents {
+window#crystal-dock .cd-popover > contents {
   background-color: rgba(255, 255, 255, 0.95);
   border-radius: 12px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   padding: 6px;
 }
 
+/* --- TOOLTIP NEUTRALIZATION --- */
 window#crystal-dock tooltip,
 window#crystal-dock tooltip.background,
-window#crystal-dock .background,
+window#crystal-dock tooltip > box,
+window#crystal-dock tooltip > box > label,
+window#crystal-dock tooltip > box > image,
+#crystal-dock tooltip,
+#crystal-dock tooltip.background,
+#crystal-dock .background,
 tooltip,
-tooltip.background {
+tooltip.background,
+popover background {
   background-color: transparent;
   background-image: none;
+  background: none;
   border: none;
   box-shadow: none;
-  opacity: 1;
+  opacity: 0;
 }
 
 /* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
 /* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
 .cd-item,
-.cd-item>contents,
+.cd-item > contents,
 box.cd-item {
   background-color: transparent;
   background-image: none;
@@ -126,7 +134,9 @@ box.cd-item {
 /* --- 3. ESTILOS PROPIOS (cd-*) --- */
 #the-dock-bar {
   padding: 0;
-  min-height: 120px;
+  min-height: 160px;
+  max-height: 160px;
+  transform-origin: bottom bottom;
 }
 
 .cd-item {
@@ -134,10 +144,11 @@ box.cd-item {
   padding: 0;
   background-color: transparent;
   background-image: none;
+  transform-origin: bottom bottom;
   border: none;
   box-shadow: none;
   transition: background-color 200ms ease;
-  min-height: 92px;
+  min-height: 160px;
   min-width: 64px;
 }
 
@@ -145,19 +156,20 @@ box.cd-item {
   background-color: transparent;
   padding: 0;
   margin: 0;
-  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+  transition: none;
+  /* PHYSICS ENGINE CONTROLS LAYOUT */
   overflow: visible;
 }
 
-/* Hover effect removed to prevent invisible ghost box highlight */
 .cd-item:hover {
-  background-color: transparent;
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 /* High Specificity for Drag Gap */
 window#crystal-dock box.cd-drag-gap,
 .cd-drag-gap {
-  margin-left: 72px;
+  margin-left: 72px !important;
+  /* Icon (64) + Gap (8) */
   transition: margin-left 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
@@ -200,9 +212,12 @@ window#crystal-dock box.cd-squircle-plate {
   box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.cd-squircle-plate image {
-  box-shadow: none;
-  border: none;
+.cd-squircle-plate image,
+.cd-squircle-plate widget {
+  /* Prevent GTK from adding any hover shadows to internal icons */
+  box-shadow: none !important;
+  -gtk-icon-shadow: none !important;
+  border: none !important;
 }
 
 /* Legacy Hover Removed for Physics */
