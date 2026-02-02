@@ -951,22 +951,22 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             let currentFloatX = 0 // V90: Global Continuous Coordinate
 
             animRegistry.forEach((state, id) => {
-                // PHYSICS: Hysteresis & Quantization
+                // PHYSICS: Hysteresis & Quantization (V91: Fluid Physics)
                 const scaleDiff = Math.abs(state.targetScale - state.currentScale)
-                if (scaleDiff > 0.0001) {
-                    state.currentScale = lerp(state.currentScale, state.targetScale, 0.25)
+                if (scaleDiff > 0.00001) {
+                    state.currentScale = lerp(state.currentScale, state.targetScale, 0.12)
                     active = true
                 } else state.currentScale = state.targetScale
 
                 const widthDiff = Math.abs(state.targetWidth - state.currentWidth)
-                if (widthDiff > 0.01) {
-                    state.currentWidth = lerp(state.currentWidth, state.targetWidth, 0.25)
+                if (widthDiff > 0.001) {
+                    state.currentWidth = lerp(state.currentWidth, state.targetWidth, 0.12)
                     active = true
                 } else state.currentWidth = state.targetWidth
 
                 const marginDiff = Math.abs(state.targetMargin - state.currentMargin)
-                if (marginDiff > 0.01) {
-                    state.currentMargin = lerp(state.currentMargin, state.targetMargin, 0.25)
+                if (marginDiff > 0.001) {
+                    state.currentMargin = lerp(state.currentMargin, state.targetMargin, 0.12)
                     active = true
                 } else state.currentMargin = state.targetMargin
 
