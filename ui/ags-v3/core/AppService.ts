@@ -26,10 +26,24 @@ class AppService {
             return GLib.SOURCE_REMOVE
         })
 
-        // Theme Awareness: Refresh when the system theme changes
+        // Global Theme Discovery
         const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+
+        // V94.1: ENSURE SYSTEM ICONS WIN (FALLBACKS ONLY)
+        const localIcons = GLib.get_home_dir() + "/.local/share/icons"
+        const systemIcons = "/usr/share/icons"
+        const projectIcons = "/home/angel/Dev/MiDistroIA/assets/icons/material"
+
+        // STANDARD PATHS FIRST
+        theme.add_search_path(localIcons)
+        theme.add_search_path(systemIcons)
+
+        // CUSTOM POOLS LAST (Fallback only)
+        theme.add_search_path(localIcons + "/DistroIA/scalable/apps")
+        theme.add_search_path(projectIcons)
+
         theme.connect("changed", () => {
-            console.log("[AppService] System theme changed, refreshing registry...")
+            console.log(`[AppService] System theme changed to ${theme.get_theme_name()}, refreshing registry...`)
             this.reload()
         })
     }
@@ -85,17 +99,23 @@ class AppService {
             }
 
             const data: AppData = {
-                id: id.toLowerCase(),
+                id: id, // V94.2: PRESERVE ORIGINAL CASE (Critical for gtk-launch)
                 name: app.get_name(),
                 exec: app.get_executable()?.split(" ").pop()?.split("/").pop()?.replace(/["']/g, "").toLowerCase() || "",
                 icon: canonical,
                 wmClass: wmClass
             }
 
-            this.cache.set(data.id, data)
-            if (data.wmClass) this.nameMap.set(data.wmClass, canonical!)
-            if (data.exec) this.nameMap.set(data.exec, canonical!)
-            if (canonical) this.nameMap.set(data.id, canonical)
+            this.cache.set(id.toLowerCase(), data)
+            if (data.wmClass) {
+                this.nameMap.set(data.wmClass, canonical!)
+            } else if (data.exec) {
+                // Only map generic executable names if NO wmClass is specified.
+                // This prevents PWAs (which have specific wmClass) from hijacking the generic binary name (e.g. google-chrome).
+                this.nameMap.set(data.exec, canonical!)
+            }
+
+            if (canonical) this.nameMap.set(id.toLowerCase(), canonical)
         })
 
         this.applyOverrides()
@@ -104,36 +124,28 @@ class AppService {
     }
 
     private applyOverrides() {
-        const overrides: Record<string, string> = {
-            "nautilus": "org.gnome.Nautilus",
-            "terminal": "org.gnome.Terminal",
-            "utilities-terminal": "org.gnome.Terminal",
-            "gnome-terminal-server": "org.gnome.Terminal",
-            "kitty": "terminal",
-            "google-chrome": "google-chrome",
-            "chrome": "google-chrome",
-            // Antigravity & File Manager Standardization
-            "code-url-handler": "antigravity", // VSCode URL handler fallback
-        }
-
-        Object.entries(overrides).forEach(([key, iconName]) => {
-            // Special Case: If key matches the hardcoded path, map directly to the name without canonical lookup
-            if (key.startsWith("/")) {
-                this.nameMap.set(key, iconName)
-                return
-            }
-
-            const name = this.getCanonicalName(iconName) || iconName
-            if (name) this.nameMap.set(key.toLowerCase(), name)
-        })
+        // V74: Static overrides removed. Configuration should be done via .desktop files.
     }
 
     getIconName(key: string): string | null {
         if (!key || key === "void") return null
         const k = key.toLowerCase().replace(".desktop", "")
-        const hit = this.nameMap.get(k) || this.getCanonicalName(key)
+        let hit = this.nameMap.get(k) || this.getCanonicalName(key)
 
-        if (hit) console.log(`[AppService] [Hit] ${key} -> ${hit}`)
+        // Fallbacks for known missing icons
+        if (!hit) {
+            if (k.includes("kitty")) hit = this.getCanonicalName("utilities-terminal")
+            if (k.includes("terminal") && !hit) hit = this.getCanonicalName("utilities-terminal")
+        }
+
+        // V77: HEURISTIC PRESERVATION
+        // If the query itself looked like a path ("/" or "file://") and we found no system theme override,
+        // we should trust the input as a path.
+        if (!hit && (key.startsWith("/") || key.startsWith("file://"))) {
+            return key
+        }
+
+        if (hit) { /* Hit */ }
         else console.warn(`[AppService] [Miss] ${key}`)
 
         return hit

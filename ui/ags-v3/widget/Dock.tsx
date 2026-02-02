@@ -336,11 +336,33 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     const res = getIcon()
 
     // V94: APPLY MATERIAL ALIASING 💎
-    if (res.name) {
-        const originalName = res.name
-        res.name = getMappedIcon(res.name, appId)
-        if (appId.includes("calculator") || appId.includes("calendar")) {
-            console.log(`[Dock] [Debug] appId: ${appId}, original: ${originalName}, mapped: ${res.name}`)
+    const originalName = res.name || ""
+    const appNameStr = appItem.name || ""
+    const mapped = getMappedIcon(originalName, appId, appNameStr)
+
+    if (mapped !== originalName) {
+        // FORCE Material ONLY for core system tools via ABSOLUTE PATH
+        const idLower = appId.toLowerCase()
+        const isSystemTool = idLower.includes("pavucontrol") ||
+            idLower.includes("rhythmbox") ||
+            idLower.includes("distributor-logo") ||
+            idLower.includes("wlogout") ||
+            idLower.includes("control-center") ||
+            idLower.includes("nautilus") ||
+            idLower.includes("terminal") ||
+            idLower.includes("calculator") ||
+            idLower.includes("calendar") ||
+            idLower.includes("clocks");
+
+        if (!res.path && !res.gicon) {
+            // No better icon, use mapped name
+            res.name = mapped
+        } else if (isSystemTool) {
+            // Force Material theme for system tools by using absolute path
+            const materialPath = `/home/angel/.local/share/icons/DistroIA/scalable/apps/${mapped}.svg`
+            res.path = materialPath
+            res.name = undefined
+            res.gicon = undefined
         }
     }
 
@@ -356,12 +378,14 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     }
 
     if (res.path) {
-        // V72/V93: Use GIcon (FileIcon) to preserve vector scalability 💎
+        // High Priority: Manual absolute path (usually for forced system icons)
         iconProps.gicon = Gio.FileIcon.new(Gio.File.new_for_path(res.path))
-    } else if (res.name) {
-        iconProps.icon_name = res.name
     } else if (res.gicon) {
+        // Medium Priority: Coastal / WebApp embedded icons
         iconProps.gicon = res.gicon
+    } else if (res.name) {
+        // Low Priority: System themed icon name
+        iconProps.icon_name = res.name
     } else {
         iconProps.icon_name = "image-missing"
     }
@@ -697,8 +721,14 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
                 hypr.dispatch("focuswindow", `address:${matchAddr} `)
             }
             else {
-                console.log(`[DockClick] Launching via appItem.launch()`);
-                appItem.launch()
+                console.log(`[DockClick] Launching via appItem.launch(). AppId: ${appId}, Name: ${appItem.name}`);
+                try {
+                    appItem.launch()
+                } catch (e) {
+                    console.error(`[DockClick] Launch failed for ${appId}: ${e}`);
+                    // Fallback to manual launch if internal launch fails
+                    execAsync(`gtk-launch ${appId}`).catch(print)
+                }
             }
         }
     })
@@ -1229,6 +1259,22 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 return aid === lid
             })
             if (!app) app = appsService.fuzzy_query(lid)?.[0]
+
+            // V94.3: DEEP FALLBACK TO CUSTOM SERVICE 💎
+            if (!app) {
+                const data = appService.getAppData(lid)
+                if (data) {
+                    return {
+                        name: data.name,
+                        icon_name: data.icon || lid,
+                        id: data.id,
+                        get_id: () => data.id,
+                        get_name: () => data.name,
+                        launch: () => execAsync(`gtk-launch ${data.id}`).catch(print)
+                    } as any
+                }
+            }
+
             return app
         }
 
@@ -1304,10 +1350,12 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                     }
                 })
             } else {
+                const appData = appService.getAppData(lid)
+                const displayName = appData?.name || originalId
                 const aliases: Record<string, string> = { "system-file-manager": "org.gnome.Nautilus" }
                 let icon = aliases[lid] || originalId
                 if (lid.startsWith("chrome-") && lid.endsWith("-default")) icon = icon.replace(/-default$/i, "-Default")
-                const ghost = { name: originalId, icon_name: icon, launch: getLaunch(lid) } as any
+                const ghost = { name: displayName, icon_name: icon, launch: getLaunch(lid) } as any
                 configs.push({
                     id: lid, width: 80, // V50: Unified 80px Slot
                     syncData: { addrs: [], clientTitle: undefined, appItem: ghost },

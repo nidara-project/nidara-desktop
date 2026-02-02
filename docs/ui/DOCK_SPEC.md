@@ -38,3 +38,13 @@ To prevent magnified icons from being cut off by the dock's window or other appl
 ## 6. Interaction Model
 - **Input Region**: The interactive area is precision-locked to the 92px pill (y=98 to y=190 in the 200px window).
 - **Motion Trigger**: Magnification is only triggered if the cursor is within the pill's vertically active zone, preventing "ghost" hovers.
+41: 
+42: ## 7. Icon Policy & Resolution (V94.3)
+43: To maintain DistroIA identity while respecting Third-Party branding, the dock implements a **Hybrid Policy**:
+44: 
+45: 1. **Linux System Core**: Absolute Material paths are enforced for core utilities:
+46:    - `pavucontrol` (Volume), `rhythmbox` (Music), `clocks` (Reloj), `nautilus` (Files), `terminal`, `calculator`, `calendar`, `settings`.
+47: 2. **Branded Apps & WebApps**: Embedded icons (`GIcon` / `res.path` from `.desktop`) are strictly prioritized over themed names. This ensures PWAs (YouTube, Gmail) and Pro Software (GIMP, Blender) maintain their original identity.
+48: 3. **Fallbacks**: If no local or system icon is found, the **Material Fallback Pool** (`assets/icons/material`) is used as a last resort.
+49: 4. **Case-Preserving Resolution**: App IDs (e.g., `org.gnome.Calculator`) are preserved in their original casing to guarantee compatibility with `gtk-launch`.
+50: 5. **Ghost Resolution**: When the standard application service fails, `AppService` is used to resolve human-readable names for "ghost" icons that are pinned but not currently found in the main system registry.
