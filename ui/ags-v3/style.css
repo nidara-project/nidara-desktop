@@ -1,80 +1,20 @@
 /*
-   CRYSTAL DOCK - AESTHETIC PERFECTION
-   Prefix: cd- (Class Isolation)
+   DISTROIA - MASTER CRYSTAL STYLE SHEET 💎
+   Phase 52: Button Fidelity & Radius Sync (V149)
+   Logic: Kill systemic button tiles. Lock radius for hover.
 */
-/* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
-window.fullscreen,
-window.crystal-dock,
-.background,
-.view,
-.fullscreen {
-  background-color: transparent;
-  background-image: none;
-  box-shadow: none;
-  border: none;
-}
 
-/* Neutralización Específica con Ruta Completa */
-.dock-window.fullscreen .cd-dock-container .dock-overlay .cd-bar {
-  background-color: transparent;
-  border: none;
-}
-
-/* --- 2. SELECTORES DE "FINAL WAR" ID HIERARCHY --- */
-window#crystal-dock,
-window#crystal-dock > box#dock-main-container,
-window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay,
-window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widget,
-window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widget > box#the-dock-bar {
-  background-color: transparent;
-  background-image: none;
-  box-shadow: none;
-  border: none;
-}
-
-/* --- NUCLEAR: KILL FULLSCREEN BACKGROUNDS (User Requested) --- */
-/* --- EXORCISMO CSS (Nuclear Paradox Fix) --- */
-/* Atacamos la raíz de la ventana y sus capas ocultas */
-window#crystal-dock,
-window#crystal-dock decoration,
-window#crystal-dock background,
-window#crystal-dock main,
-window#crystal-dock contents {
-  background-color: rgba(0, 0, 0, 0);
-  background-image: none;
-  border: none;
-  box-shadow: none;
-}
-
-/* 2. UNIVERSAL WIDGET RESET (The "Black Hole") */
-/* Esto fuerza a que NINGUN hijo herede estilos del tema Yaru/Adwaita */
-window#crystal-dock * {
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-  text-shadow: none;
-  -gtk-icon-shadow: none;
-}
-
-/* --- NUCLEAR: KILL INTERMEDIATE CONTAINERS (Strict IDs) --- */
-#dock-main-container,
-#dock-main-overlay,
-.cd-dock-container,
-.cd-main-overlay,
-.cd-overlay,
-.overlay,
-#dock-drawing-area,
-.cd-drawing-area,
-#the-dock-bar,
-.cd-dock-bar,
-.cd-tooltip,
-.cd-tooltip > contents,
-.cd-tooltip > background,
-.cd-popover,
-.cd-popover > contents,
-.cd-popover > background {
+/* --- 1. WINDOW ONION PEELING (Universal ID Silence) --- */
+window#app-grid-window.app-grid-window,
+window#app-grid-window.app-grid-window decoration,
+window#app-grid-window.app-grid-window background,
+window#app-grid-window.app-grid-window main,
+window#app-grid-window.app-grid-window contents,
+window#crystal-dock.crystal-dock,
+window#crystal-dock.crystal-dock decoration,
+window#crystal-dock.crystal-dock background,
+window#crystal-dock.crystal-dock main,
+window#crystal-dock.crystal-dock contents {
   background-color: transparent;
   background-image: none;
   background: none;
@@ -82,342 +22,102 @@ window#crystal-dock * {
   box-shadow: none;
 }
 
-/* RESTORE MENU CONTENT BACKGROUND (High Specificity) */
-window#crystal-dock .cd-popover > contents {
-  background-color: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  padding: 6px;
-}
-
-/* --- TOOLTIP NEUTRALIZATION --- */
-window#crystal-dock tooltip,
-window#crystal-dock tooltip.background,
-window#crystal-dock tooltip > box,
-window#crystal-dock tooltip > box > label,
-window#crystal-dock tooltip > box > image,
-#crystal-dock tooltip,
-#crystal-dock tooltip.background,
-#crystal-dock .background,
-tooltip,
-tooltip.background,
-popover background {
+/* --- 2. LAYER 2: INTERNAL CONTAINERS --- */
+#app-grid-scrolled-window,
+#app-grid-scrolled-window viewport,
+#app-grid-scrolled-window .view,
+#app-grid-flowbox,
+#app-grid-workspaces,
+#app-grid-system-actions,
+.app-grid-catcher,
+#app-grid-main-overlay {
   background-color: transparent;
-  background-image: none;
   background: none;
   border: none;
   box-shadow: none;
-  opacity: 0;
 }
 
-/* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
-/* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
-.cd-item,
-.cd-item > contents,
-box.cd-item {
-  background-color: transparent;
-  background-image: none;
-  box-shadow: none;
-  border: none;
-}
-
-/* --- APP GRID CLEANUP (Specific Target) --- */
-.launcher-grid,
-.launcher-item,
-.app-item {
-  background-color: transparent;
-  border: none;
-  box-shadow: none;
-  outline: none;
-}
-
-/* --- 3. ESTILOS PROPIOS (cd-*) --- */
-#the-dock-bar {
-  padding: 0;
-  min-height: 92px;
-  max-height: 92px;
-  transform-origin: bottom bottom;
-}
-
-.cd-item {
-  margin: 0;
-  padding: 0;
-  background-color: transparent;
-  background-image: none;
-  transform-origin: bottom bottom;
-  border: none;
-  box-shadow: none;
-  transition: background-color 200ms ease;
-  min-height: 92px;
-  min-width: 64px;
-}
-
-.cd-revealer {
-  background-color: transparent;
-  padding: 0;
-  margin: 0;
-  transition: none;
-  /* PHYSICS ENGINE CONTROLS LAYOUT */
-  overflow: visible;
-}
-
-.cd-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-}
-
-/* High Specificity for Drag Gap */
-window#crystal-dock box.cd-drag-gap,
-.cd-drag-gap {
-  margin-left: 72px !important;
-  /* Icon (64) + Gap (8) */
-  transition: margin-left 0.2s cubic-bezier(0.2, 0, 0, 1);
-}
-
-/* Blindaje Nuclear de estados de sistema */
-.cd-item {
-  transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1);
-  margin-left: 0px;
-  /* Explicit default */
-}
-
-.cd-item,
-.cd-item *,
-.cd-item:hover,
-.cd-item:hover * {
-  border: none;
-  box-shadow: none;
-  outline: none;
-  background-image: none;
-}
-
-/* .cd-dot.open consolidated below */
-.cd-icon-container {
-  margin: 0;
-  padding: 0;
-  background-color: transparent;
-  transition: none;
-  /* Physics controls transform/size */
-  transform-origin: bottom center;
-}
-
-/* --- SQUIRCLE ICON PLATES (Phase 66) --- */
-window#crystal-dock box.cd-squircle-plate {
-  background-color: rgb(255, 255, 255);
-  /* Apple pure white */
-  border-radius: 28%;
-  /* Percentage radius for perfect scaling */
-  margin: 0;
-  padding: 0;
-  /* Multi-level shadows for Apple depth - STATIC */
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.cd-squircle-plate image,
-.cd-squircle-plate widget {
-  /* Prevent GTK from adding any hover shadows to internal icons */
-  box-shadow: none !important;
-  -gtk-icon-shadow: none !important;
-  border: none !important;
-}
-
-/* Legacy Hover Removed for Physics */
-.cd-dot {
-  min-height: 4px;
-  min-width: 4px;
-  border-radius: 4px;
-  background-color: transparent;
-  transition: background-color 200ms ease;
-}
-
-/* High Specificity to defeat "window#crystal-dock *" reset */
-window#crystal-dock .cd-dot.open {
-  min-height: 4px;
-  min-width: 4px;
-  background-color: rgba(255, 255, 255, 0.6);
-  /* DIMMED FOR BACKGROUND APPS */
-  box-shadow: none;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 50%;
-  opacity: 1;
-}
-
-window#crystal-dock .cd-dot.focused {
-  background-color: #ffffff;
-  /* BRIGHT FOR FOCUSED APP */
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.6);
-}
-
-/* High Specificity ID Selector to defeat Nuclear Reset safely */
-window#crystal-dock box#cd-separator {
-  min-height: 48px;
-  max-height: 48px;
-  min-width: 2px;
-  background-color: rgba(255, 255, 255, 0.4);
-  margin: 0;
-  border-radius: 1px;
-}
-
-/* Tooltips (cd-tooltip) */
-popover.cd-tooltip {
-  background-color: transparent;
-  box-shadow: none;
-  background: none;
-  border: none;
-}
-
-window#crystal-dock popover.cd-tooltip contents {
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 12px;
-  padding: 6px 14px;
-  margin-bottom: 5px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
-
-.cd-tooltip-label {
-  color: #000000;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-/* Menus (cd-popover) */
-.cd-menu-action {
-  background-color: transparent;
-  color: #222222;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.cd-menu-action:hover {
-  background-color: #007aff;
-  color: #ffffff;
-}
-
-.cd-menu-action:active {
-  background-color: #0062cc;
-  color: #ffffff;
-}
-
-.cd-menu-separator {
-  min-height: 1px;
-  background-color: rgba(0, 0, 0, 0.1);
-  margin: 4px 8px;
-}
-
-/* ==========================================================================
-   FINAL STRIKE: NEUTRALIZACION DE CLASES DE SISTEMA (FULLSCREEN/BACKGROUND)
-   ========================================================================== */
-/* 1. Ataque directo al nodo fantasma del tooltip y su fondo */
-window#crystal-dock tooltip,
-window#crystal-dock tooltip.background,
-window#crystal-dock .background,
-#crystal-dock tooltip,
-#crystal-dock tooltip.background,
-#crystal-dock .background {
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  /* Asegura que no ocupe espacio ni se dibuje */
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-  margin: 0;
-  opacity: 0;
-}
-
-/* 2. Red de seguridad para la ventana raiz si sigue en fullscreen o hereda temas */
-window#crystal-dock,
-window#crystal-dock.fullscreen,
-window#crystal-dock decoration,
-#crystal-dock,
-#crystal-dock.fullscreen {
-  background-color: transparent;
-  background-image: none;
-  box-shadow: none;
-  border: none;
-}
-
-/* 2. Red de seguridad para la ventana raiz si sigue en fullscreen o hereda temas */
-window#app-grid-window,
-.app-grid-window {
-  background-color: transparent;
-}
-
-.app-grid-main {
-  background-color: rgba(0, 0, 0, 0.4);
-  padding: 40px;
-}
-
-.app-grid-content {
-  background-color: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 40px;
+/* --- 3. THE CRYSTAL PANEL (App Grid) 🍏 --- */
+.app-grid-content.app-grid-content {
+  background-color: rgba(18, 18, 18, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 64px;
   padding: 60px;
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(20px);
+  box-shadow: none;
+}
+
+/* --- 4. APP GRID BUTTONS (The Tile & Radius Fix) 🍏 --- */
+/* Target by class AND tag to defeat the system theme */
+button.app-grid-button,
+.app-grid-button.app-grid-button {
+  background-color: transparent;
+  background-image: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 20px;
+  /* Locked Radius */
+  padding: 15px;
+  margin: 4px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* HOVER PROTECTION */
+button.app-grid-button:hover,
+.app-grid-button.app-grid-button:hover,
+button.app-grid-button:active,
+.app-grid-button.app-grid-button:active {
+  background-color: rgba(255, 255, 255, 0.1);
+  /* Subtle hover tile */
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 20px;
+  /* Sync radius to prevent jitter */
+}
+
+/* Kill internal button box styles */
+.app-grid-button>box,
+.app-grid-button grid {
+  background-color: transparent;
+  background: none;
+}
+
+/* --- 5. COMPONENTS & POPUPS 🎈 --- */
+popover contents,
+.cd-popover contents,
+tooltip {
+  background-color: rgba(24, 24, 24, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  color: white;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
 }
 
 .app-grid-search {
-  background-color: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
   color: white;
-  font-size: 20px;
-  padding: 12px 30px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  caret-color: #007aff;
-  transition: all 0.2s ease;
+  padding: 14px 28px;
 }
 
-.app-grid-search:focus {
-  background-color: rgba(255, 255, 255, 0.15);
-  border-color: rgba(0, 122, 255, 0.5);
-  box-shadow: 0 10px 30px rgba(0, 122, 255, 0.2);
+.workspace-item {
+  min-width: 44px;
+  min-height: 44px;
+  border-radius: 12px;
+  background-color: rgba(255, 255, 255, 0.08);
+  font-weight: 800;
+  margin: 0 6px;
 }
 
-.app-grid-item {
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+.workspace-item.active {
+  background-color: #ffffff;
+  color: #000000;
 }
 
-.app-grid-button {
-  background: none;
-  border: none;
-  box-shadow: none;
-  border-radius: 24px;
-  padding: 10px;
-  transition: all 0.2s ease;
-}
-
-.app-grid-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.app-grid-button:hover .app-grid-item {
-  transform: translateY(-5px);
-}
-
-.app-grid-label {
-  color: white;
-  font-size: 13px;
-  font-weight: 500;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
-}
-
-/* REUSE SQUIRCLE PLATE LOGIC (Forced centering) */
-.app-grid-window .cd-squircle-plate {
-  background-color: white;
+/* Dock plates */
+.cd-squircle-plate {
+  background-color: #ffffff;
   border-radius: 28%;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  /* Centering Fix */
-  padding: 0;
-  margin: 0;
 }
-
-.app-grid-window .cd-squircle-plate image {
-  margin: 0;
-  padding: 0;
-}
-
-/*# sourceMappingURL=style.css.map */

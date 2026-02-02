@@ -13,7 +13,7 @@ console.log("[DISTROIA] app.ts loading... (Phase 31: High-Fidelity Master - Stab
 app.start({
   main() {
     console.log("[DISTROIA] main() started!");
-    // Tacitly compile SCSS to CSS on startup for DistroIA
+    /* // SCSS compilation disabled to prevent overwriting style.css
     try {
       const configDir = GLib.get_current_dir()
       const scss = `${configDir}/style.scss`
@@ -26,6 +26,7 @@ app.start({
     } catch (e) {
       console.error("[DISTROIA] Failed to compile SCSS:", e)
     }
+    */
 
     // Manually inject CSS with the HIGHEST priority (USER = 800)
     const styleFile = `${GLib.get_current_dir()}/style.css`

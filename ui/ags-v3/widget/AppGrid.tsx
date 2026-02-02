@@ -19,6 +19,7 @@ const hyprland = AstalHyprland.get_default()
  */
 function WorkspaceStrip() {
     const box = new Gtk.Box({
+        name: "app-grid-workspaces", // V114: Added ID
         css_classes: ["app-grid-workspaces"],
         halign: Gtk.Align.CENTER,
         spacing: 12,
@@ -60,6 +61,7 @@ function WorkspaceStrip() {
  */
 function SystemActionStrip(win: Gtk.Window) {
     const box = new Gtk.Box({
+        name: "app-grid-system-actions", // V114: Added ID
         css_classes: ["app-grid-system-actions"],
         halign: Gtk.Align.CENTER,
         spacing: 60,
@@ -111,8 +113,9 @@ export default function AppGrid(monitor: Gdk.Monitor) {
 
     win.visible = false
 
+
     const searchEntry = new Gtk.Entry({
-        name: "app-grid-search-entry", // Added ID for specificity
+        name: "app-grid-search-entry",
         placeholder_text: "Buscar aplicaciones...",
         halign: Gtk.Align.CENTER,
         css_classes: ["app-grid-search"],
@@ -121,6 +124,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     })
 
     const flowbox = new Gtk.FlowBox({
+        name: "app-grid-flowbox", // V114: Added ID
         halign: Gtk.Align.FILL,
         valign: Gtk.Align.START,
         hexpand: true,
@@ -133,6 +137,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     })
 
     const scroll = new Gtk.ScrolledWindow({
+        name: "app-grid-scrolled-window", // V114: Added ID
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         vexpand: true,
@@ -142,9 +147,9 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     scroll.set_child(flowbox)
 
     const contentBox = new Gtk.Box({
-        name: "app-grid-content-panel", // CRITICAL: Added ID for max CSS specificity
+        name: "app-grid-content",
         orientation: Gtk.Orientation.VERTICAL,
-        css_classes: ["app-grid-content-panel"],
+        css_classes: ["app-grid-content"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER,
         width_request: 1200,
@@ -157,7 +162,8 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     contentBox.append(SystemActionStrip(win))
 
     const overlayTrigger = new Gtk.Box({
-        css_classes: ["app-grid-click-catcher"],
+        name: "app-grid-overlay",
+        css_classes: ["app-grid-catcher"], // Clear any "main" background here
         hexpand: true,
         vexpand: true,
     })
@@ -168,7 +174,9 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     })
     overlayTrigger.add_controller(click)
 
-    const mainOverlay = new Gtk.Overlay()
+    const mainOverlay = new Gtk.Overlay({
+        name: "app-grid-main-overlay"
+    })
     mainOverlay.set_child(overlayTrigger)
     mainOverlay.add_overlay(contentBox)
 
