@@ -1157,7 +1157,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
     // 2. Icon Shelf (Shim + Bar)
     const shim = new Gtk.Box({
-        valign: Gtk.Align.END, halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.END, halign: Gtk.Align.START,
         height_request: 120,
         overflow: Gtk.Overflow.VISIBLE,
         css_classes: ["cd-dock-shim"],
