@@ -1073,38 +1073,40 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                         }
                     }
                 }
-                // SYNC SUM (V57: Derivation)
-                sumWidths += state.currentWidth + (state.currentMargin * 2)
+                // SYNC SUM (V88: Integer-Perfect Synchronization)
+                // We sum the ACTUAL integer values used for widgets to prevent
+                // the background/pill from jittering relative to the icons.
+                // Note: w and m correspond to the values applied to 'revealer' and 'itemBox'.
             })
 
             // V87: PARITY LOCK EXECUTION
             // Ensure the total dock width is always EVEN to prevent "Center Jitter" (0.5px shifts).
-            // If the sum is odd, we add 1px to the last widget.
-            const totalIntWidth = Math.round(sumWidths)
+            // Calculate sum from actual widget requests (track them or derive from diffusion)
+            let totalIntWidth = 0
+            animRegistry.forEach((state, id) => {
+                const w = widgetCache.get(id)
+                if (w) {
+                    const rev = w as Gtk.Revealer
+                    const box = rev.get_child() as Gtk.Box
+                    totalIntWidth += rev.width_request + (box ? box.margin_start * 2 : 0)
+                }
+            })
 
             if (totalIntWidth % 2 !== 0 && lastWidget) {
                 // Add 1px to make it even
                 const currentW = lastWidget.width_request
                 lastWidget.width_request = currentW + 1
-
-                // Also update its childbox if needed
                 const childBox = lastWidget.get_child() as Gtk.Box
                 if (childBox) childBox.width_request = currentW + 1
-
-                // Update sum for the pill
-                sumWidths += 1
+                totalIntWidth += 1
             }
 
-            // UNIFIED BACKGROUND UPDATE (V57: 1:1 Synchronization)
-            // sumWidths is already derived from 'currentWidth' (which is Lerped).
-            // We must NOT Lerp again, or the background lags behind the icons.
-            const totalTargetPillWidth = sumWidths
-
-            if (Math.abs(smoothedBarWidth - totalTargetPillWidth) > 0.01) {
-                smoothedBarWidth = totalTargetPillWidth // INSTANT FOLLOW
+            // UNIFIED BACKGROUND UPDATE (V88: 1:1 Integer Sync)
+            if (Math.abs(smoothedBarWidth - totalIntWidth) > 0.01) {
+                smoothedBarWidth = totalIntWidth // INSTANT FOLLOW
                 da.queue_draw()
                 updateInputRegion(smoothedBarWidth) // V71: Follow Pill width for input masking
-                active = true // Keep loop alive if widths are changing
+                active = true
             }
 
             if (!active) {
