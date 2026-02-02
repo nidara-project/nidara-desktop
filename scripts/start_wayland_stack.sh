@@ -9,6 +9,10 @@ ROOT_DIR="$HOME/Dev/MiDistroIA"
 AGS_DIR="$ROOT_DIR/ui/ags-v3"
 ISOLATED_CONF="$AGS_DIR/isolated_config"
 
+# --- PREMIUM NATIVE STACK ---
+export GI_TYPELIB_PATH="$AGS_DIR/astal-local/lib/x86_64-linux-gnu/girepository-1.0:$GI_TYPELIB_PATH"
+export LD_LIBRARY_PATH="$AGS_DIR/astal-local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
+
 cd "$AGS_DIR"
 
 # 2. Start Dock in Absolute Isolation
@@ -21,9 +25,9 @@ ags run --gtk 4 . > /tmp/ags.log 2>&1 &
 PID_DOCK=$!
 
 # 3. Start Waybar
-echo "🚀 Iniciando Waybar..."
-LD_PRELOAD="" waybar &
-PID_TOPBAR=$!
+echo "🚀 Waybar deshabilitado (Dando paso a Crystal Bar)..."
+# LD_PRELOAD="" waybar &
+# PID_TOPBAR=$!
 
 echo "✅ UI Iniciada (PIDs: $PID_DOCK, $PID_TOPBAR)"
 wait

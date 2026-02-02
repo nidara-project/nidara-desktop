@@ -1,6 +1,11 @@
 #!/bin/bash
 # reload_ui.sh - Robust UI stack restarter for DistroIA
 
+# --- PREMIUM NATIVE STACK ---
+AGS_DIR="/home/angel/Dev/MiDistroIA/ui/ags-v3"
+export GI_TYPELIB_PATH="$AGS_DIR/astal-local/lib/x86_64-linux-gnu/girepository-1.0:$GI_TYPELIB_PATH"
+export LD_LIBRARY_PATH="$AGS_DIR/astal-local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
+
 echo "🔄 Reiniciando stack de UI DistroIA..."
 
 # 1. Recargar Hyprland config (solo la lógica del compositor)
@@ -8,7 +13,7 @@ hyprctl reload
 sleep 0.5
 
 # 2. Matar procesos existentes
-pkill waybar
+pkill waybar || true
 pkill -f "gjs -m .*ags.js"
 pkill -f main_dock.py # Safety for transition
 pkill swaybg

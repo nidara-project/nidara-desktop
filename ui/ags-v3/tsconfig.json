@@ -1,7 +1,25 @@
 {
   "compilerOptions": {
+    "allowJs": true,
     "baseUrl": ".",
+    "checkJs": false,
+    "jsx": "react-jsx",
+    "jsxFactory": "astal.jsx",
+    "jsxFragmentFactory": "astal.Fragment",
+    "jsxImportSource": "ags/gtk4",
+    "module": "ES2022",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
     "paths": {
+      "ags": [
+        "./node_modules/ags/lib"
+      ],
+      "ags/*": [
+        "./node_modules/ags/lib/*"
+      ],
+      "ags/gtk4/jsx-runtime": [
+        "./node_modules/ags/lib/gtk4/jsx-runtime"
+      ],
       "astal": [
         "./vendor/astal_source/lang/gjs/src"
       ],
@@ -11,26 +29,30 @@
       "astal/jsx-runtime": [
         "./vendor/astal_source/lang/gjs/src/gtk4/jsx-runtime"
       ],
-      "ags": [
-        "./node_modules/ags/lib"
+      "gi://AstalApps*": [
+        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalApps-0.1.gir"
       ],
-      "ags/*": [
-        "./node_modules/ags/lib/*"
+      "gi://AstalAuth*": [
+        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalAuth-0.1.gir"
       ],
-      "ags/gtk4/jsx-runtime": [
-        "./node_modules/ags/lib/gtk4/jsx-runtime"
+      "gi://AstalBattery*": [
+        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalBattery-0.1.gir"
+      ],
+      "gi://AstalBluetooth*": [
+        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalBluetooth-0.1.gir"
+      ],
+      "gi://AstalHyprland*": [
+        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalHyprland-0.1.gir"
+      ],
+      "gi://AstalMpris*": [
+        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalMpris-0.1.gir"
+      ],
+      "gi://AstalNetwork*": [
+        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalNetwork-0.1.gir"
       ]
     },
-    "module": "ESNext",
-    "target": "ESNext",
-    "moduleResolution": "Bundler",
-    "jsx": "react",
-    "jsxFactory": "astal.jsx",
-    "jsxFragmentFactory": "astal.Fragment",
-    "allowJs": true,
-    "checkJs": false,
+    "skipLibCheck": true,
     "strict": false,
-    "noEmit": true,
-    "skipLibCheck": true
+    "target": "ES2020"
   }
 }

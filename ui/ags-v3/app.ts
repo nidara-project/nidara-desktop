@@ -4,6 +4,7 @@ import { Gdk, Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Dock from "./widget/Dock"
 import AppGrid from "./widget/AppGrid"
+import Bar from "./widget/Bar"
 
 const windows = new Set<Gtk.Window>()
 const appGrids: any[] = []
@@ -48,8 +49,10 @@ app.start({
         try {
           const dockWin = Dock(monitor)
           const gridWin = AppGrid(monitor)
+          const barWin = Bar(monitor)
           windows.add(dockWin)
           windows.add(gridWin)
+          windows.add(barWin)
           appGrids.push(gridWin)
         } catch (err) {
           console.error("[DISTROIA] UI creation failed:", err);

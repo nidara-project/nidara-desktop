@@ -1,6 +1,6 @@
 /*
    DISTROIA - MASTER CRYSTAL STYLE SHEET 💎
-   Phase 54: No-Brand MacOS Master Bar (V151)
+   Phase 55: TopBar Functional Refinement (V152)
 */
 
 /* --- 1. WINDOW ONION PEELING --- */
@@ -53,22 +53,45 @@ window#crystal-bar contents {
 }
 
 /* CENTER: WORKSPACES */
+.bar-workspaces button {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
 .bar-ws-dot {
   min-width: 6px;
   min-height: 6px;
   border-radius: 50%;
   background-color: rgba(255, 255, 255, 0.25);
-  margin: 0 4px;
+  margin: 0 6px;
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bar-ws-dot:hover {
+  background-color: rgba(255, 255, 255, 0.4);
 }
 
 .bar-ws-dot.active {
   background-color: white;
-  min-width: 20px;
-  border-radius: 10px;
+  min-width: 22px;
+  border-radius: 11px;
 }
 
 /* RIGHT: STATUS & CLOCK */
+.bar-status button {
+  background: none;
+  border: none;
+  padding: 4px 12px;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.bar-status button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
 .bar-status label {
   color: rgba(255, 255, 255, 0.9);
   font-size: 13px;
@@ -88,6 +111,7 @@ window#crystal-bar contents {
   border-radius: 8px;
   padding: 4px 8px;
   color: white;
+  transition: all 0.2s ease;
 }
 
 .bar-util-btn:hover {

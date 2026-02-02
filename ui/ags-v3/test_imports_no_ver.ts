@@ -1,8 +1,8 @@
-import AstalBattery from "gi://AstalBattery?0.1"
-import AstalNetwork from "gi://AstalNetwork?0.1"
-import AstalMpris from "gi://AstalMpris?0.1"
+import AstalBattery from "gi://AstalBattery"
+import AstalNetwork from "gi://AstalNetwork"
+import AstalMpris from "gi://AstalMpris"
 
-console.log("💎 [PREMIUM CHECK] 💎")
+console.log("💎 [PREMIUM CHECK - NO VERSION] 💎")
 if (AstalBattery) console.log("✅ AstalBattery loaded!")
 if (AstalNetwork) console.log("✅ AstalNetwork loaded!")
 if (AstalMpris) console.log("✅ AstalMpris loaded!")
