@@ -1,9 +1,9 @@
-# MiDistroIA Dock Specification: Gaussian V52 (Unified Rhythm) 🧸🍎💎
+# MiDistroIA Dock Specification: Gaussian V90 (Zero-Vibration) 🧸🍎💎
 
-This document defines the technical implementation, physics, and geometry of the Unified Dock Engine as of version 52 (Geometric Uniformity).
+This document defines the technical implementation, physics, and geometry of the Unified Dock Engine as of version 90 (Global Tiling Engine).
 
 ## 1. Core Architecture: Unified Animation Engine
-The dock uses a **Single Central Clock (60fps)** to synchronize all animations. This eliminates the phase-jitter caused by independent widget loops.
+The dock uses a **Single Central Clock (60fps)** to synchronize all animations. Version 90 introduces the **Global Tiling Engine** to eliminate sub-pixel vibration.
 
 ## 2. Physics & Constants
 The magnification follows a Gaussian (Sine-based) curve anchored to the **Hybrid Physics Engine**.
@@ -14,28 +14,24 @@ The magnification follows a Gaussian (Sine-based) curve anchored to the **Hybrid
 | **Max Scale** | **2.0x** | Target magnification (128px / 64px = 2.0). |
 | **Algorithm** | **Sine-Wave** | Cos-based easing for organic falloff. |
 | **Range (Spread)**| **2.5** | Sigma spread relative to icon size. |
-| **Dynamic Margin**| **8px (Base)**| Margins shrink as icons grow to maintain cohesion. |
-| **Vertical Space**| **160px**  | GAUSSIAN V50: Expanded headspace to prevent clipping. |
-| **Formula** | `cos(normDist * PI/2)^2` | Mapped 0-1 intensity. |
+| **Base Slot (App)**| **80px** | Fixed base width (64px + 8px * 2 margins). |
+| **Separator Slot**| **40px** | Fixed base width for separators. |
 
-## 3. Geometry & Symmetry (Hybrid 80/64 Model)
-To ensure absolute horizontal symmetry and zero-jitter, we use a **Hybrid Layout Model**:
+## 3. Geometric Stability (V90 Tiling Engine)
+To achieve zero-vibration, the dock bypasses standard relative layout rounding:
 
-- **Layout Slot (Logical)**: Exactly **80px** for every item (Apps, Separator, Trash).
-- **Icon Rendering (Physical)**: **64px** (Icon) + **8px** (Left Margin) + **8px** (Right Margin).
-- **Stability Formula**: `64 + 8 + 8 = 80`. Since the physical size matches the logical slot perfectly at rest, there is **zero-shift** (baile) when interaction begins.
-- **Static Ground Truth**: Centers are calculated against fixed **80px** slots (`staticCenter`), ensuring the separator remains mathematically equidistant.
+- **Global Tiling**: Each item's horizontal `start` and `end` coordinates are calculated as absolute floating-point values from the dock's origin (0.0). These are snapped to the global pixel grid (`Math.round`) *before* widget sizes are applied.
+- **Manual Pixel-Centering**: Standard `halign: CENTER` is disabled (`halign: START` is enforced). The dock bar's position is manually calculated as `Math.round((monitorWidth - totalIntWidth) / 2)` to prevent 0.5px "parity jitter".
+- **Zero Gaps**: This approach ensures every icon is mathematically adjacent to its neighbor with exactly 0px overlap or gap at the pixel level.
 
 ## 4. Separator Specifications
-- **Base Slot**: `80px` (Hitbox/Slot).
-- **Visible Line**: `1px` (Translucent White @ 40%).
-- **Alignment**: Mathematically centered in the 80px slot and vertically centered in the 92px background pill.
-- **Behavior**: Scale is locked to 1.0x to satisfy the "macOS Anchor" principle.
+- **Base Slot**: `40px` (Hitbox/Slot).
+- **Visible Line**: `2px` width, `48px` height (Translucent White @ 40%).
+- **Alignment**: Centered in its slot via the Tiling Engine. Scale is locked to 1.0x.
 
 ## 5. Background Pill (The Glass)
-- **Summation Logic**: Sum of all icon widths and margins with an additional **16px** total width offset. 
-- **Unified Rhythm**: This offset leaves **8px of background** on each side. Combined with the **8px icon margin**, it creates a total visible edge padding of **16px**, perfectly matching the internal gaps.
-- **Smoothing**: The background width has its own inertia (lerp 0.2) to follow the layout fluidly.
+- **Integer-Perfect Sync**: The background width is calculated as the literal sum of the integer-snapped icon slot widths.
+- **Lockstep Movement**: Because the background uses the same integer values as the icons, they move in perfect synchrony with zero relative vibration.
 
-## 6. Layout Synchronization (V50 Master)
-The `Gtk.Revealer` base and the `DockItem` internal state are synchronized frame-by-frame. The `update` loop uses **V10 Precision Arithmetic** to recalculate global centers every time the application list or focus changes.
+## 6. Layout Synchronization (V90 Master)
+The `runUnifiedTick` loop handles all geometric updates. CSS transitions on layout properties (`width`, `margin`) are disabled to ensure the JS physics engine has absolute authority over the frame-by-frame rendering.
