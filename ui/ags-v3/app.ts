@@ -3,8 +3,10 @@ import app from "ags/gtk4/app"
 import { Gdk, Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Dock from "./widget/Dock"
+import AppGrid from "./widget/AppGrid"
 
-const windows = new Set()
+const windows = new Set<Gtk.Window>()
+const appGrids: any[] = []
 
 console.log("[DISTROIA] app.ts loading... (Phase 31: High-Fidelity Master - Stable)");
 
@@ -41,15 +43,32 @@ app.start({
       const monitors = display.get_monitors()
       for (let i = 0; i < monitors.get_n_items(); i++) {
         const monitor = monitors.get_item(i) as Gdk.Monitor
-        console.log(`[DISTROIA] Creating Dock for monitor ${i}`);
+        console.log(`[DISTROIA] Creating Dock and AppGrid for monitor ${i}`);
         try {
-          const win = Dock(monitor)
-          windows.add(win)
+          const dockWin = Dock(monitor)
+          const gridWin = AppGrid(monitor)
+          windows.add(dockWin)
+          windows.add(gridWin)
+          appGrids.push(gridWin)
         } catch (err) {
-          console.error("[DISTROIA] Dock creation failed:", err);
+          console.error("[DISTROIA] UI creation failed:", err);
         }
       }
     }
+
+    // Global toggle for external triggers (Hyprland / Keyboard)
+    (globalThis as any).toggleAppGrid = () => {
+      appGrids.forEach(g => g.toggle())
+    }
+
     console.log(`[CSS] Nuclear injection successful with HIGHEST priority (800) from: ${styleFile}`)
   },
+  requestHandler(argv, res) {
+    if (argv[0] === "toggleAppGrid()") {
+      (globalThis as any).toggleAppGrid?.()
+      res("ok")
+    } else {
+      res("unknown command")
+    }
+  }
 })

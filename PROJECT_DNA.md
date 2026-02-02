@@ -11,7 +11,9 @@ Este documento define la esencia de **DistroIA** (antes MiDistroIA). Cualquier a
 - **Hyprland v0.53.3 compatibility**: Requiere sintaxis de bloque con nombre (`layerrule { name = '...' ... }`) para efectos de capa (blur).
 - **Visuals**: Dock Orgánico (Glassmorphism) inspirado en macOS pero con identidad propia.
 - **Indicadores**: Estilo **"Pill" (Pastilla)**, no puntos. Diferenciación clave para evitar el efecto "copia barata".
-- **Icon Theme**: **Reversal-dark** (Variante "all" instalada en `~/.local/share/icons`). *Mandatory*. Cualquier widget nuevo debe usar estos iconos para mantener la coherencia.
+- **Icon Theme**: **Theme-Agnostic**. El sistema DEBE respetar y adaptarse al tema de iconos configurado por el usuario (gtsettings/nwg-look). 
+  - *Prohibido*: Hardcodear nombres de iconos específicos de un paquete (ej. Reversal) si no son estándar (Freedesktop).
+  - *Fallback*: Usar nombres estándar (ej. `utilities-terminal` en vez de `kitty` si este último falla).
 - **Lanzador**: AGS AppLauncher (Objetivo) & `wofi --show drun` como backup legado.
 - **Fondo de Pantalla**: Gestionado por **swaybg** (Solución estable que no requiere permisos de GPU).
 

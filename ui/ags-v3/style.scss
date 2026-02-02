@@ -347,3 +347,84 @@ window#crystal-dock decoration,
   box-shadow: none;
   border: none;
 }
+
+/* 2. Red de seguridad para la ventana raiz si sigue en fullscreen o hereda temas */
+window#app-grid-window,
+.app-grid-window {
+  background-color: transparent;
+}
+
+.app-grid-main {
+  background-color: rgba(0, 0, 0, 0.4); // V96: Subtle Fullscreen Overlay
+  padding: 40px;
+}
+
+.app-grid-content {
+  background-color: rgba(255, 255, 255, 0.05); // V96: Blurred Glass Container
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 40px;
+  padding: 60px;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(20px); // Note: Requires Hyprland blur rule to be effective
+}
+
+.app-grid-search {
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  color: white;
+  font-size: 20px;
+  padding: 12px 30px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  caret-color: #007aff;
+  transition: all 0.2s ease;
+}
+
+.app-grid-search:focus {
+  background-color: rgba(255, 255, 255, 0.15);
+  border-color: rgba(0, 122, 255, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 122, 255, 0.2);
+}
+
+.app-grid-item {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-grid-button {
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 24px;
+  padding: 10px;
+  transition: all 0.2s ease;
+}
+
+.app-grid-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.app-grid-button:hover .app-grid-item {
+  transform: translateY(-5px);
+}
+
+.app-grid-label {
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
+}
+
+/* REUSE SQUIRCLE PLATE LOGIC (Forced centering) */
+.app-grid-window .cd-squircle-plate {
+  background-color: white;
+  border-radius: 28%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  /* Centering Fix */
+  padding: 0;
+  margin: 0;
+}
+
+.app-grid-window .cd-squircle-plate image {
+  margin: 0;
+  padding: 0;
+}
