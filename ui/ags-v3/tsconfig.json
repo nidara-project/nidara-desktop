@@ -30,25 +30,28 @@
         "./vendor/astal_source/lang/gjs/src/gtk4/jsx-runtime"
       ],
       "gi://AstalApps*": [
-        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalApps-0.1.gir"
+        "./astal-local/share/gir-1.0/AstalApps-0.1.gir"
       ],
       "gi://AstalAuth*": [
-        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalAuth-0.1.gir"
+        "./astal-local/share/gir-1.0/AstalAuth-0.1.gir"
       ],
       "gi://AstalBattery*": [
-        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalBattery-0.1.gir"
+        "./astal-local/share/gir-1.0/AstalBattery-0.1.gir"
       ],
       "gi://AstalBluetooth*": [
-        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalBluetooth-0.1.gir"
+        "./astal-local/share/gir-1.0/AstalBluetooth-0.1.gir"
       ],
       "gi://AstalHyprland*": [
-        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalHyprland-0.1.gir"
+        "./astal-local/share/gir-1.0/AstalHyprland-0.1.gir"
       ],
       "gi://AstalMpris*": [
-        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalMpris-0.1.gir"
+        "./astal-local/share/gir-1.0/AstalMpris-0.1.gir"
       ],
       "gi://AstalNetwork*": [
-        "./astal-local/lib/x86_64-linux-gnu/girepository-1.0/AstalNetwork-0.1.gir"
+        "./astal-local/share/gir-1.0/AstalNetwork-0.1.gir"
+      ],
+      "gi://AstalNotifd*": [
+        "./astal-local/share/gir-1.0/AstalNotifd-0.1.gir"
       ]
     },
     "skipLibCheck": true,

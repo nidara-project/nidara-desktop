@@ -5,6 +5,7 @@
 AGS_DIR="/home/angel/Dev/MiDistroIA/ui/ags-v3"
 export GI_TYPELIB_PATH="$AGS_DIR/astal-local/lib/x86_64-linux-gnu/girepository-1.0:$GI_TYPELIB_PATH"
 export LD_LIBRARY_PATH="$AGS_DIR/astal-local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
+export XDG_DATA_DIRS="$AGS_DIR/astal-local/share:$XDG_DATA_DIRS"
 
 echo "🔄 Reiniciando stack de UI DistroIA..."
 

@@ -8,12 +8,12 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 // Native Premium Imports
 import AstalBattery from "gi://AstalBattery"
 import AstalNetwork from "gi://AstalNetwork"
+import AstalNotifd from "gi://AstalNotifd"
 
 const hyprland = AstalHyprland.get_default()
 
 /**
  * App Menu Module (Left) 🍎
- * Shows the Active App Name + Mock Menus
  */
 function AppMenu() {
   const box = new Gtk.Box({
@@ -28,7 +28,6 @@ function AppMenu() {
     label: "Desktop"
   })
 
-  // Mock Menus
   const menus = ["Archivo", "Editar", "Ver", "Ir", "Ventana", "Ayuda"]
   const mockBox = new Gtk.Box({ spacing: 14 })
 
@@ -79,9 +78,7 @@ function Workspaces() {
       const dot = new Gtk.Button({
         css_classes: ["bar-ws-dot", active ? "active" : ""],
         cursor: Gdk.Cursor.new_from_name("pointer", null),
-        action_name: `hyprland.dispatch`,
       })
-      // Manual click handler since Gtk.Action is complex
       dot.connect("clicked", () => {
         hyprland.dispatch("workspace", ws.id.toString())
       })
@@ -99,7 +96,7 @@ function Workspaces() {
 }
 
 /**
- * System Status Modules (Right) 🔋📶🔊
+ * System Status Modules (Right) 🔋📶🔊🔔🎛️🕒
  */
 function SystemStatus() {
   const box = new Gtk.Box({
@@ -156,7 +153,7 @@ function SystemStatus() {
     batLabel.set_visible(false)
   }
 
-  // Volume (Shell Fallback for now) 🔊
+  // Volume 🔊
   const volContent = new Gtk.Box({ spacing: 8 })
   const volIcon = new Gtk.Label({ label: "󰕾", css_classes: ["bar-status-icon"] })
   const volLabel = new Gtk.Label({ label: "0%", css_classes: ["bar-status-label"] })
@@ -179,16 +176,57 @@ function SystemStatus() {
       volLabel.label = val
     }
   })
-
-  // Initial sync
-  const initialVol = volAccessor.get()
-  volLabel.label = initialVol === "muted" ? "Muted" : initialVol
+  volLabel.label = volAccessor.get() === "muted" ? "Muted" : volAccessor.get()
 
   volBtn.connect("clicked", () => {
     execAsync("pavucontrol").catch(console.error)
   })
 
-  // Screenshot Button
+  // Native Notifications Indicator 🔔
+  const notifd = AstalNotifd.get_default()
+  const notifContent = new Gtk.Box({ spacing: 6 })
+  const notifIcon = new Gtk.Label({ label: "󰂚", css_classes: ["bar-status-icon"] })
+  const notifCountText = new Gtk.Label({ label: "0", css_classes: ["bar-status-label"] })
+  notifContent.append(notifIcon)
+  notifContent.append(notifCountText)
+
+  const notifBtn = new Gtk.Button({
+    css_classes: ["bar-status-btn"],
+    child: notifContent
+  })
+
+  const syncNotifs = () => {
+    const count = notifd.notifications.length
+    notifIcon.label = count > 0 ? "󰂛" : "󰂚"
+    notifCountText.label = count.toString()
+
+    if (notifd.dont_disturb) {
+      notifIcon.label = "󰂛"
+      notifCountText.label = "DND"
+    }
+
+    notifBtn.set_visible(count > 0 || notifd.dont_disturb)
+  }
+
+  notifd.connect("notify::notifications", syncNotifs)
+  notifd.connect("notify::dont-disturb", syncNotifs)
+  syncNotifs()
+
+  notifBtn.connect("clicked", () => {
+    notifd.dont_disturb = !notifd.dont_disturb
+  })
+
+  // Control Center Toggle 🎛️
+  const ccBtn = new Gtk.Button({
+    css_classes: ["bar-util-btn"],
+    child: new Gtk.Label({ label: "󰕮", css_classes: ["bar-cc-icon"] }),
+    tooltip_text: "Centro de Control"
+  })
+  ccBtn.connect("clicked", () => {
+    (globalThis as any).toggleControlCenter?.()
+  })
+
+  // Utilities
   const screenshotBtn = new Gtk.Button({
     child: new Gtk.Image({ icon_name: "camera-photo-symbolic", pixel_size: 16 }),
     css_classes: ["bar-util-btn"],
@@ -197,14 +235,15 @@ function SystemStatus() {
   screenshotBtn.connect("clicked", () => {
     execAsync(`bash -c 'grim -g "$(slurp)" /tmp/screenshot_$(date +%Y%m%d_%H%M%S).png && notify-send "Captura realizada" "Guardada en /tmp"'`)
       .catch(e => {
-        console.error("[Bar] Screenshot failed:", e)
         execAsync(`notify-send -u critical "Error de captura" "${e}"`)
       })
   })
 
   box.append(screenshotBtn)
+  box.append(notifBtn)
   box.append(volBtn)
   box.append(netBtn)
+  box.append(ccBtn)
   box.append(batLabel)
   return box
 }
@@ -218,7 +257,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   win.set_decorated(false)
 
-  // Gtk4LayerShell Configuration
   try {
     Gtk4LayerShell.init_for_window(win)
     Gtk4LayerShell.set_namespace(win, "crystal-bar")
@@ -238,7 +276,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     css_classes: ["bar-centerbox"]
   })
 
-  // LEFT: App + Menus
   const leftSide = new Gtk.Box({
     spacing: 12,
     halign: Gtk.Align.START,
@@ -246,14 +283,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   })
   leftSide.append(AppMenu())
 
-  // CENTER: Workspaces
   const centerSide = new Gtk.Box({
     halign: Gtk.Align.CENTER,
     css_classes: ["bar-center"]
   })
   centerSide.append(Workspaces())
 
-  // RIGHT: Status + Clock
   const rightSide = new Gtk.Box({
     spacing: 20,
     halign: Gtk.Align.END,
@@ -262,20 +297,29 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   rightSide.append(SystemStatus())
 
+  // Time / Notification Center Trigger 🕒
   const timeLabel = new Gtk.Label({
-    name: "bar-time",
+    name: "bar-time-label",
     css_classes: ["bar-time"],
     label: "..."
+  })
+
+  const timeBtn = new Gtk.Button({
+    css_classes: ["bar-time-btn"],
+    child: timeLabel
   })
 
   const timeAccessor = createPoll("...", 1000, "date +'%a %b %d  %H:%M'", (out) => out.trim())
   timeAccessor.subscribe(() => {
     timeLabel.label = timeAccessor.get()
   })
-  // Initial sync
   timeLabel.label = timeAccessor.get()
 
-  rightSide.append(timeLabel)
+  timeBtn.connect("clicked", () => {
+    (globalThis as any).toggleNotificationCenter?.()
+  })
+
+  rightSide.append(timeBtn)
 
   centerBox.set_start_widget(leftSide)
   centerBox.set_center_widget(centerSide)

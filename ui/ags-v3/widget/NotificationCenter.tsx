@@ -1,0 +1,111 @@
+import { Astal, Gtk, Gdk } from "ags/gtk4"
+import app from "ags/gtk4/app"
+import Gtk4LayerShell from "gi://Gtk4LayerShell"
+import AstalNotifd from "gi://AstalNotifd"
+
+function NotificationItem(n: AstalNotifd.Notification) {
+    const box = new Gtk.Box({
+        css_classes: ["nc-notif-item"],
+        spacing: 12
+    })
+
+    const iconBox = new Gtk.Box({ css_classes: ["nc-notif-icon-box"] })
+    const icon = new Gtk.Image({
+        icon_name: n.app_icon || n.desktop_entry || "dialog-information-symbolic",
+        pixel_size: 24
+    })
+    iconBox.append(icon)
+
+    const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
+    const title = new Gtk.Label({ label: n.summary, css_classes: ["nc-notif-title"], halign: Gtk.Align.START, ellipsize: 3 })
+    const body = new Gtk.Label({ label: n.body, css_classes: ["nc-notif-body"], halign: Gtk.Align.START, wrap: true, max_width_chars: 30 })
+
+    content.append(title)
+    content.append(body)
+
+    const closeBtn = new Gtk.Button({
+        child: new Gtk.Image({ icon_name: "window-close-symbolic" }),
+        css_classes: ["nc-notif-close"]
+    })
+    closeBtn.connect("clicked", () => n.dismiss())
+
+    box.append(iconBox)
+    box.append(content)
+    box.append(closeBtn)
+
+    return box
+}
+
+export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
+    const notifd = AstalNotifd.get_default()
+
+    const container = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 16,
+        css_classes: ["notification-center"]
+    })
+
+    const header = new Gtk.Box({ css_classes: ["nc-header"] })
+    header.append(new Gtk.Label({ label: "Notificaciones", css_classes: ["nc-header-title"], hexpand: true, halign: Gtk.Align.START }))
+
+    const clearBtn = new Gtk.Button({ label: "Borrar todo", css_classes: ["nc-clear-btn"] })
+    clearBtn.connect("clicked", () => {
+        notifd.notifications.forEach(n => n.dismiss())
+    })
+    header.append(clearBtn)
+
+    const list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+
+    const sync = () => {
+        let child = list.get_first_child()
+        while (child) {
+            const next = child.get_next_sibling()
+            list.remove(child)
+            child = next
+        }
+
+        notifd.notifications.forEach(n => {
+            list.append(NotificationItem(n))
+        })
+
+        if (notifd.notifications.length === 0) {
+            list.append(new Gtk.Label({ label: "No hay notificaciones nuevas", css_classes: ["nc-empty"] }))
+        }
+    }
+
+    notifd.connect("notify::notifications", sync)
+    sync()
+
+    container.append(header)
+    container.append(list)
+
+    const win = new Gtk.Window({
+        name: "notification-center-win",
+        application: app,
+        css_classes: ["notification-center-win"],
+        child: container,
+        visible: false
+    })
+
+    try {
+        Gtk4LayerShell.init_for_window(win)
+        Gtk4LayerShell.set_namespace(win, "notification-center")
+        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
+        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
+        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
+        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 54)
+        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, 12)
+        // @ts-ignore
+        win.gdkmonitor = gdkmonitor
+    } catch (e) {
+        console.error("[NC] LayerShell failed:", e)
+    }
+
+    // @ts-ignore
+    win.toggle = () => {
+        win.set_visible(!win.get_visible())
+        if (win.get_visible()) win.present()
+    }
+
+    return win
+}

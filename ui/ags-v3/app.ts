@@ -5,29 +5,20 @@ import GLib from "gi://GLib"
 import Dock from "./widget/Dock"
 import AppGrid from "./widget/AppGrid"
 import Bar from "./widget/Bar"
+import NotificationPopups from "./widget/NotificationPopups"
+import ControlCenter from "./widget/ControlCenter"
+import NotificationCenter from "./widget/NotificationCenter"
 
 const windows = new Set<Gtk.Window>()
 const appGrids: any[] = []
+const controlCenters: any[] = []
+const notificationCenters: any[] = []
 
-console.log("[DISTROIA] app.ts loading... (Phase 31: High-Fidelity Master - Stable)");
+console.log("[DISTROIA] app.ts loading... (Phase 56: Dual Center Architecture)");
 
 app.start({
   main() {
     console.log("[DISTROIA] main() started!");
-    /* // SCSS compilation disabled to prevent overwriting style.css
-    try {
-      const configDir = GLib.get_current_dir()
-      const scss = `${configDir}/style.scss`
-      const css = `${configDir}/style.css`
-
-      console.log(`[DISTROIA] Compiling SCSS: ${scss} -> ${css}`)
-      GLib.spawn_command_line_sync(`sass ${scss} ${css}`)
-      GLib.spawn_command_line_sync(`sed -i '/@charset "UTF-8";/d' ${css}`)
-      console.log("[DISTROIA] SCSS compiled and cleaned successfully.")
-    } catch (e) {
-      console.error("[DISTROIA] Failed to compile SCSS:", e)
-    }
-    */
 
     // Manually inject CSS with the HIGHEST priority (USER = 800)
     const styleFile = `${GLib.get_current_dir()}/style.css`
@@ -45,15 +36,25 @@ app.start({
       const monitors = display.get_monitors()
       for (let i = 0; i < monitors.get_n_items(); i++) {
         const monitor = monitors.get_item(i) as Gdk.Monitor
-        console.log(`[DISTROIA] Creating Dock and AppGrid for monitor ${i}`);
+        console.log(`[DISTROIA] Creating UI stack for monitor ${i}`);
         try {
           const dockWin = Dock(monitor)
           const gridWin = AppGrid(monitor)
           const barWin = Bar(monitor)
+          const notifWin = NotificationPopups(monitor)
+          const ccWin = ControlCenter(monitor)
+          const ncWin = NotificationCenter(monitor)
+
           windows.add(dockWin)
           windows.add(gridWin)
           windows.add(barWin)
+          windows.add(notifWin)
+          windows.add(ccWin)
+          windows.add(ncWin)
+
           appGrids.push(gridWin)
+          controlCenters.push(ccWin)
+          notificationCenters.push(ncWin)
         } catch (err) {
           console.error("[DISTROIA] UI creation failed:", err);
         }
@@ -65,11 +66,29 @@ app.start({
       appGrids.forEach(g => g.toggle())
     }
 
+    (globalThis as any).toggleControlCenter = () => {
+      // Toggle and close others
+      notificationCenters.forEach(nc => nc.set_visible(false))
+      controlCenters.forEach(cc => cc.toggle())
+    }
+
+    (globalThis as any).toggleNotificationCenter = () => {
+      // Toggle and close others
+      controlCenters.forEach(cc => cc.set_visible(false))
+      notificationCenters.forEach(nc => nc.toggle())
+    }
+
     console.log(`[CSS] Nuclear injection successful with HIGHEST priority (800) from: ${styleFile}`)
   },
   requestHandler(argv, res) {
     if (argv[0] === "toggleAppGrid()") {
       (globalThis as any).toggleAppGrid?.()
+      res("ok")
+    } else if (argv[0] === "toggleControlCenter()") {
+      (globalThis as any).toggleControlCenter?.()
+      res("ok")
+    } else if (argv[0] === "toggleNotificationCenter()") {
+      (globalThis as any).toggleNotificationCenter?.()
       res("ok")
     } else {
       res("unknown command")
