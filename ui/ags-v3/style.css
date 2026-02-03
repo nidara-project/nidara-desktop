@@ -82,6 +82,30 @@ window.crystal-bar {
   padding: 4px 10px;
 }
 
+.bar-notif-cluster {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 2px 10px;
+  margin-right: 4px;
+  transition: all 0.3s ease;
+}
+
+.bar-notif-cluster:hover {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.bar-time-notif-icon {
+  color: #ff9500;
+  /* Apple Alarm/Notif Orange */
+  font-size: 14px;
+}
+
+.bar-time-notif-count {
+  color: white;
+  font-weight: 800;
+  font-size: 13px;
+}
+
 .bar-status-btn:hover,
 .bar-time-btn:hover,
 .bar-util-btn:hover {

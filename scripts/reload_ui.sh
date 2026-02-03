@@ -1,30 +1,36 @@
 #!/bin/bash
-# reload_ui.sh - Robust UI stack restarter for DistroIA
+# reload_ui.sh - Robust UI stack restarter for DistroIA 🛡️💎
 
-# --- PREMIUM NATIVE STACK ---
 AGS_DIR="/home/angel/Dev/MiDistroIA/ui/ags-v3"
 export GI_TYPELIB_PATH="$AGS_DIR/astal-local/lib/x86_64-linux-gnu/girepository-1.0:$GI_TYPELIB_PATH"
 export LD_LIBRARY_PATH="$AGS_DIR/astal-local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
 export XDG_DATA_DIRS="$AGS_DIR/astal-local/share:$XDG_DATA_DIRS"
 
 LOG_FILE="/tmp/ags_reload.log"
-echo "[$(date)] 🔄 Reiniciando stack de UI DistroIA..." | tee -a "$LOG_FILE"
-notify-send "DistroIA" "Reiniciando interfaz..." -i preferences-desktop-theme -t 1000
+echo "[$(date)] 🔄 Iniciando recarga robusta de DistroIA..." | tee -a "$LOG_FILE"
 
-# 1. Recargar Hyprland config
-hyprctl reload
-
-# 2. Matar procesos existentes de forma instantánea
+# 1. Matar procesos existentes agresivamente
 killall -9 ags gjs 2>/dev/null || true
-pkill -9 waybar 2>/dev/null || true
-pkill -9 swaync 2>/dev/null || true
 pkill -9 swaybg 2>/dev/null || true
-sleep 0.2
+sleep 0.1
+
+# 2. Recargar Hyprland y esperar a que el socket responda
+hyprctl reload
+for i in {1..20}; do
+    if hyprctl version &>/dev/null; then
+        echo "✅ Hyprland Ready!" | tee -a "$LOG_FILE"
+        break
+    fi
+    sleep 0.1
+done
 
 # 3. Reiniciar Wallpaper
-(swaybg -i /home/angel/Pictures/wallpaper.jpg -m fill &)
+swaybg -i /home/angel/Pictures/wallpaper.jpg -m fill &
 
-# 4. Iniciar Stack AGS (Barra y Dock)
+# 4. Breve espera para estabilización de DRM antes de AGS
+sleep 0.5
+
+# 5. Iniciar Stack AGS
 bash /home/angel/Dev/MiDistroIA/scripts/start_wayland_stack.sh &
 
-echo "✅ UI reiniciada." | tee -a "$LOG_FILE"
+echo "✨ Recarga completada exitosamente." | tee -a "$LOG_FILE"

@@ -69,13 +69,29 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
         css_classes: ["notification-center"]
     })
 
-    const header = new Gtk.Box({ css_classes: ["nc-header"] })
+    const header = new Gtk.Box({ css_classes: ["nc-header"], spacing: 12 })
     header.append(new Gtk.Label({ label: "Notificaciones", css_classes: ["nc-header-title"], hexpand: true, halign: Gtk.Align.START }))
+
+    const dndBox = new Gtk.Box({ spacing: 8, css_classes: ["nc-dnd-box"] })
+    const dndLabel = new Gtk.Label({ label: "No molestar", css_classes: ["nc-dnd-label"] })
+    const dndSwitch = new Gtk.Switch({
+        active: notifd.dont_disturb,
+        valign: Gtk.Align.CENTER,
+        css_classes: ["nc-dnd-switch"]
+    })
+    dndSwitch.connect("state-set", (_, state) => {
+        notifd.dont_disturb = state
+        return false // let the property notify handle it or handle it manually
+    })
+    dndBox.append(dndLabel)
+    dndBox.append(dndSwitch)
 
     const clearBtn = new Gtk.Button({ label: "Borrar todo", css_classes: ["nc-clear-btn"] })
     clearBtn.connect("clicked", () => {
         notifd.notifications.forEach(n => n.dismiss())
     })
+
+    header.append(dndBox)
     header.append(clearBtn)
 
     const list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
