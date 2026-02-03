@@ -70,21 +70,24 @@ function Workspaces() {
       child = next
     }
 
-    const workspaces = hyprland.get_workspaces().sort((a, b) => a.id - b.id)
-    workspaces.forEach(ws => {
-      if (ws.id < 0) return
-      const active = hyprland.focused_workspace.id === ws.id
+    const occupied = new Set(hyprland.get_workspaces().map(ws => ws.id))
+    const focusedId = hyprland.focused_workspace.id
+    const maxWs = Math.max(5, focusedId, ...(Array.from(occupied) as number[]))
+
+    for (let i = 1; i <= maxWs; i++) {
+      const active = focusedId === i
+      const hasWindows = occupied.has(i)
 
       const dot = new Gtk.Button({
-        css_classes: ["bar-ws-dot", active ? "active" : ""],
+        css_classes: ["bar-ws-dot", active ? "active" : "", hasWindows ? "occupied" : ""],
         cursor: Gdk.Cursor.new_from_name("pointer", null),
       })
       dot.connect("clicked", () => {
-        hyprland.dispatch("workspace", ws.id.toString())
+        hyprland.dispatch("workspace", i.toString())
       })
 
       box.append(dot)
-    })
+    }
   }
 
   hyprland.connect("notify::focused-workspace", sync)
