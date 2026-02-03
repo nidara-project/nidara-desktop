@@ -38,19 +38,16 @@ app.start({
         const monitor = monitors.get_item(i) as Gdk.Monitor
         console.log(`[DISTROIA] Creating UI stack for monitor ${i}`);
         try {
+          const barWin = Bar(monitor)
           const dockWin = Dock(monitor)
           const gridWin = AppGrid(monitor)
-          const barWin = Bar(monitor)
           const notifWin = NotificationPopups(monitor)
           const ccWin = ControlCenter(monitor)
           const ncWin = NotificationCenter(monitor)
 
-          windows.add(dockWin)
-          windows.add(gridWin)
-          windows.add(barWin)
-          windows.add(notifWin)
-          windows.add(ccWin)
-          windows.add(ncWin)
+          windows.add(barWin); windows.add(dockWin)
+          windows.add(gridWin); windows.add(notifWin)
+          windows.add(ccWin); windows.add(ncWin)
 
           appGrids.push(gridWin)
           controlCenters.push(ccWin)

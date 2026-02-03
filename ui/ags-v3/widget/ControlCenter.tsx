@@ -187,9 +187,16 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         css_classes: ["control-center"]
     })
 
-    box.append(GridControls())
-    box.append(Sliders())
-    box.append(Media())
+    let initialized = false
+    const ensureInit = () => {
+        if (initialized) return
+        try {
+            box.append(GridControls())
+            box.append(Sliders())
+            box.append(Media())
+            initialized = true
+        } catch (e) { console.error("[CC] Lazy init failed:", e) }
+    }
 
     const win = new Gtk.Window({
         name: "control-center-win",
@@ -215,6 +222,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     // @ts-ignore
     win.toggle = () => {
+        ensureInit()
         win.set_visible(!win.get_visible())
         if (win.get_visible()) win.present()
     }

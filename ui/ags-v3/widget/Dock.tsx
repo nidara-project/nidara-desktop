@@ -204,32 +204,18 @@ const drawSquircle = (cr: any, width: number, height: number, targetW?: number) 
     cr.restore()
     cr.restore()
 
-    // 2. SPLIT DEFINITION BORDER
-    cr.newPath()
-    cr.moveTo(x, y + drawH / 2)
-    cr.lineTo(x, y + drawH - r)
-    for (let i = 0; i <= 64; i++) {
-        let t = (i / 64) * (Math.PI / 2)
-        cr.lineTo(x + r - (r * Math.pow(Math.abs(Math.cos(t)), 2 / n)), y + drawH - r + (r * Math.pow(Math.abs(Math.sin(t)), 2 / n)))
-    }
-    cr.lineTo(x + drawW - r, y + drawH)
-    for (let i = 64; i >= 0; i--) {
-        let t = (i / 64) * (Math.PI / 2)
-        cr.lineTo(x + drawW - r + (r * Math.pow(Math.abs(Math.cos(t)), 2 / n)), y + drawH - r + (r * Math.pow(Math.abs(Math.sin(t)), 2 / n)))
-    }
-    cr.lineTo(x + drawW, y + drawH / 2)
-    cr.setSourceRGBA(0, 0, 0, 0.08)
-    cr.setLineWidth(1)
-    cr.stroke()
 
-    // 3. MAIN BACKGROUND FILL
+    // 3. (COMPLETED BY CSS) - Base Background
+
+    // 4. GLASS GLOSS OVERLAY (The Sophisticated Highlight)
     // @ts-ignore
     const gradient = new Cairo.LinearGradient(x, y, x, y + drawH)
-    gradient.addColorStopRGBA(0, 1, 1, 1, 0.22)
-    gradient.addColorStopRGBA(1, 1, 1, 1, 0.14)
+    gradient.addColorStopRGBA(0, 1, 1, 1, 0.18) // Soft light from top
+    gradient.addColorStopRGBA(1, 1, 1, 1, 0.08) // Fading towards bottom
     path()
     cr.setSource(gradient)
     cr.fill()
+
 
     // 4. SPECULAR HIGHLIGHT (Glass Edge)
     cr.save()
@@ -948,8 +934,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
     const win = new Gtk.Window({
         name: "crystal-dock",
-        css_classes: ["crystal-dock"],
-        title: "Crystal Dock",
+        css_classes: ["crystal-dock-window"],
         application: app,
         focusable: false,
         can_focus: false,
@@ -1100,7 +1085,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             // UNIFIED BACKGROUND UPDATE (V90: Global Tiling Sync)
             if (Math.abs(smoothedBarWidth - totalIntWidth) > 0.01) {
                 smoothedBarWidth = totalIntWidth // INSTANT FOLLOW
-                da.queue_draw()
+                updateSize()
                 updateInputRegion(smoothedBarWidth)
                 active = true
             }
@@ -1175,27 +1160,41 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         updateAllTargets(-1000)
     })
 
-    // 1. Drawing Area (Background Pill)
+    // 1. Layer 0: THE BASE (CSS-based Blur & Style)
+    const pillBg = new Gtk.Box({
+        name: "crystal-dock-bg",
+        css_classes: ["crystal-dock"],
+        valign: Gtk.Align.END,
+        halign: Gtk.Align.CENTER,
+        height_request: 92,
+        margin_bottom: 10,
+    })
+
+    // 2. Layer 1: THE GLOSS (Cairo refined specs)
     const da = new Gtk.DrawingArea({
-        name: "dock-drawing-area",
-        css_classes: ["cd-drawing-area"],
-        valign: Gtk.Align.FILL,
-        halign: Gtk.Align.FILL,
-        height_request: 200, // V99: Tall window for icon overlap
-        overflow: Gtk.Overflow.VISIBLE,
+        name: "dock-gloss-layer",
+        valign: Gtk.Align.END,
+        halign: Gtk.Align.CENTER,
+        height_request: 92,
+        margin_bottom: 10,
         can_focus: false,
     })
+
     da.set_draw_func((_, cr, w, h) => {
         cr.setOperator(0); cr.paint(); cr.setOperator(2);
-        const pillWidth = smoothedBarWidth + 16
-        const xOffset = (w - pillWidth) / 2
-        const dockHeight = 92
-        const yOffset = h - 92 - 10 // V99: 10px from bottom of 200px window
-        cr.save()
-        cr.translate(xOffset, yOffset)
-        drawSquircle(cr, pillWidth, dockHeight)
-        cr.restore()
+        // We only draw the LIGHT overlays here (Specular highlight, Rim, etc.)
+        // The dark base is already provided by pillBg (CSS)
+        drawSquircle(cr, w, h)
     })
+
+    // Update dimensions for all layers
+    const updateSize = () => {
+        const w = smoothedBarWidth + 16
+        pillBg.set_size_request(w, 92)
+        da.set_size_request(w, 92)
+    }
+
+    // 3. Layer 2: THE ICONS (Interactions)
 
     // 2. Icon Shelf (Shim + Bar)
     const shim = new Gtk.Box({
@@ -1209,7 +1208,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     shim.append(bar)
 
     // 4. Assemble Overlay Stack
-    layout.set_child(da)
+    layout.set_child(pillBg)
+    layout.add_overlay(da)
     layout.add_overlay(shim)
 
 
@@ -1514,19 +1514,11 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         // Append new order
         finalItems.forEach(i => bar.append(i))
 
-        const [_, nat] = bar.get_preferred_size()
-        if (nat && nat.width > 10) {
-            smoothedBarWidth = nat.width
-        } else {
-            // Fallback if nat is 0 (unmapped)
-            smoothedBarWidth = totalStaticWidth > 0 ? totalStaticWidth : 400
-        }
-
+        updateSize()
         return bar
     }
 
     const monitorWidth = gdkmonitor.get_geometry().width
-    da.set_size_request(monitorWidth, 200)
     win.set_default_size(monitorWidth, 200)
     win.set_size_request(monitorWidth, 200)
 
@@ -1582,8 +1574,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
     // Initial update + Safety delay for appsService to populate
     update()
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => { update(); return GLib.SOURCE_REMOVE })
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 3000, () => { update(); return GLib.SOURCE_REMOVE })
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { update(); return GLib.SOURCE_REMOVE })
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => { update(); return GLib.SOURCE_REMOVE })
 
     win.present()
     return win
