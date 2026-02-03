@@ -16,19 +16,9 @@ export XDG_DATA_DIRS="$AGS_DIR/astal-local/share:$XDG_DATA_DIRS"
 
 cd "$AGS_DIR"
 
-# 2. Start Dock in Absolute Isolation
-echo "🚀 Iniciando Dock (AGS v3)..."
-# Removed GTK_THEME=Empty to allow system icons (Yaru)
-# Removed XDG_CONFIG_HOME isolation to allow theme lookup
+# 2. Start AGS
 GDK_BACKEND=wayland \
 PATH="$PATH:$(pwd)/node_modules/.bin" \
 ags run --gtk 4 . > /tmp/ags.log 2>&1 &
-PID_DOCK=$!
 
-# 3. Start Waybar
-echo "🚀 Waybar deshabilitado (Dando paso a Crystal Bar)..."
-# LD_PRELOAD="" waybar &
-# PID_TOPBAR=$!
-
-echo "✅ UI Iniciada (PIDs: $PID_DOCK, $PID_TOPBAR)"
-wait
+exit 0

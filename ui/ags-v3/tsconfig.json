@@ -3,12 +3,11 @@
     "allowJs": true,
     "baseUrl": ".",
     "checkJs": false,
-    "jsx": "react-jsx",
+    "jsx": "react",
     "jsxFactory": "astal.jsx",
     "jsxFragmentFactory": "astal.Fragment",
-    "jsxImportSource": "ags/gtk4",
     "module": "ES2022",
-    "moduleResolution": "Bundler",
+    "moduleResolution": "node",
     "noEmit": true,
     "paths": {
       "ags": [
@@ -29,33 +28,19 @@
       "astal/jsx-runtime": [
         "./vendor/astal_source/lang/gjs/src/gtk4/jsx-runtime"
       ],
-      "gi://AstalApps*": [
-        "./astal-local/share/gir-1.0/AstalApps-0.1.gir"
-      ],
-      "gi://AstalAuth*": [
-        "./astal-local/share/gir-1.0/AstalAuth-0.1.gir"
-      ],
-      "gi://AstalBattery*": [
-        "./astal-local/share/gir-1.0/AstalBattery-0.1.gir"
-      ],
-      "gi://AstalBluetooth*": [
-        "./astal-local/share/gir-1.0/AstalBluetooth-0.1.gir"
-      ],
-      "gi://AstalHyprland*": [
-        "./astal-local/share/gir-1.0/AstalHyprland-0.1.gir"
-      ],
-      "gi://AstalMpris*": [
-        "./astal-local/share/gir-1.0/AstalMpris-0.1.gir"
-      ],
-      "gi://AstalNetwork*": [
-        "./astal-local/share/gir-1.0/AstalNetwork-0.1.gir"
-      ],
-      "gi://AstalNotifd*": [
-        "./astal-local/share/gir-1.0/AstalNotifd-0.1.gir"
+      "astal-girs": [
+        "./@girs/index.d.ts"
       ]
     },
     "skipLibCheck": true,
     "strict": false,
     "target": "ES2020"
-  }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.d.ts",
+    "types.d.ts",
+    "@girs/**/*"
+  ]
 }

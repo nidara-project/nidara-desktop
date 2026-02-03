@@ -89,13 +89,130 @@ window.crystal-bar {
 }
 
 /* --- 3. CRYSTAL PANELS --- */
+.control-center-win,
+.notification-center-win,
+.notif-win {
+  background-color: transparent;
+  background: none;
+  box-shadow: none;
+  border: none;
+}
+
 .control-center,
 .notification-center {
-  background-color: rgba(18, 18, 18, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background-color: rgba(22, 22, 22, 0.85);
+  /* Slightly more opaque for better masking */
+  border: 1.2px solid rgba(255, 255, 255, 0.22);
   border-radius: 28px;
   padding: 24px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+  min-width: 480px;
+}
+
+/* Notification Items 🔔 */
+.nc-notif-item {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 8px;
+  min-height: 80px;
+  transition: all 0.3s ease;
+}
+
+.nc-notif-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.nc-notif-title {
+  font-weight: 700;
+  font-size: 1.15em;
+  color: #ffffff;
+}
+
+.nc-notif-body {
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 1em;
+  line-height: 1.4;
+  margin-top: 6px;
+}
+
+.notif-card {
+  background-color: rgba(22, 22, 22, 0.85);
+  border: 1.2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 24px;
+  padding: 20px;
+  min-width: 420px;
+}
+
+.notif-close-btn,
+.nc-notif-close {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.3s ease;
+}
+
+.notif-close-btn:hover,
+.nc-notif-close:hover {
+  background-color: rgba(255, 59, 48, 0.4);
+  color: white;
+}
+
+.notif-app-name {
+  font-weight: 800;
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.notif-summary {
+  font-weight: 700;
+  font-size: 1.2em;
+  color: white;
+}
+
+.notif-body {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 1em;
+}
+
+.nc-header {
+  margin-bottom: 8px;
+}
+
+.nc-header-title {
+  font-size: 1.5em;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.nc-clear-btn {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 6px 14px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.nc-clear-btn:hover {
+  background-color: rgba(255, 59, 48, 0.2);
+  color: #ff3b30;
+}
+
+.nc-scroll {
+  margin-top: 8px;
+  min-height: 400px;
+}
+
+.nc-empty {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 1.1em;
+  font-style: italic;
+  margin-top: 40px;
 }
 
 .cc-toggle {
@@ -114,7 +231,6 @@ window.crystal-bar {
   border-radius: 20px;
   padding: 18px;
   margin-top: 20px;
-  backdrop-filter: blur(20px);
 }
 
 /* --- 4. THE DOCK --- */

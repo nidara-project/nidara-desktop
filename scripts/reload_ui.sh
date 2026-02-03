@@ -7,24 +7,24 @@ export GI_TYPELIB_PATH="$AGS_DIR/astal-local/lib/x86_64-linux-gnu/girepository-1
 export LD_LIBRARY_PATH="$AGS_DIR/astal-local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
 export XDG_DATA_DIRS="$AGS_DIR/astal-local/share:$XDG_DATA_DIRS"
 
-echo "🔄 Reiniciando stack de UI DistroIA..."
+LOG_FILE="/tmp/ags_reload.log"
+echo "[$(date)] 🔄 Reiniciando stack de UI DistroIA..." | tee -a "$LOG_FILE"
+notify-send "DistroIA" "Reiniciando interfaz..." -i preferences-desktop-theme -t 1000
 
-# 1. Recargar Hyprland config (solo la lógica del compositor)
+# 1. Recargar Hyprland config
 hyprctl reload
-sleep 0.5
 
-# 2. Matar procesos existentes
-pkill waybar || true
-pkill -f "gjs -m .*ags.js"
-pkill -f main_dock.py # Safety for transition
-pkill swaybg
-sleep 0.5
+# 2. Matar procesos existentes de forma instantánea
+killall -9 ags gjs 2>/dev/null || true
+pkill -9 waybar 2>/dev/null || true
+pkill -9 swaync 2>/dev/null || true
+pkill -9 swaybg 2>/dev/null || true
+sleep 0.2
 
-# 3. Reiniciar Wallpapaer (Swaybg)
+# 3. Reiniciar Wallpaper
 (swaybg -i /home/angel/Pictures/wallpaper.jpg -m fill &)
 
-# 4. Iniciar Stack Wayland (Barra y Dock)
-# Usar el script original start_wayland_stack.sh pero de forma robusta
+# 4. Iniciar Stack AGS (Barra y Dock)
 bash /home/angel/Dev/MiDistroIA/scripts/start_wayland_stack.sh &
 
-echo "✅ UI reiniciada con éxito."
+echo "✅ UI reiniciada." | tee -a "$LOG_FILE"

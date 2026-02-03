@@ -3,7 +3,8 @@ import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import AstalMpris from "gi://AstalMpris"
 import AstalNetwork from "gi://AstalNetwork"
-import AstalBluetooth from "gi://AstalBluetooth"
+// import AstalBluetooth from "gi://AstalBluetooth" // DISABLED
+import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 
 function Media() {
@@ -91,8 +92,11 @@ function Media() {
 }
 
 function GridControls() {
-    const network = AstalNetwork.get_default()
-    const bluetooth = AstalBluetooth.get_default()
+    let network;
+
+    try {
+        network = AstalNetwork.get_default()
+    } catch (e) { console.error("[CC] Network service failed:", e) }
 
     const grid = new Gtk.Grid({
         column_spacing: 12,
@@ -120,23 +124,16 @@ function GridControls() {
     let row = 0
 
     // WiFi Real Toggle - Only if hardware present
-    if (network.wifi) {
-        const wifi = createToggle("󰖩", "Wi-Fi", true, () => {
+    if (network && network.wifi) {
+        const wifi = createToggle("󰖩", "Wi-Fi", network.wifi.enabled, () => {
             network.wifi.enabled = !network.wifi.enabled
         })
         grid.attach(wifi, col++, row, 1, 1)
     }
 
-    // Bluetooth Real Toggle - Only if hardware present (adapters > 0)
-    // @ts-ignore - astal bluetooth has adapters property
-    if (bluetooth && bluetooth.adapters && bluetooth.adapters.length > 0) {
-        const bt = createToggle("󰂯", "Bluetooth", bluetooth.is_powered, () => {
-            bluetooth.is_powered = !bluetooth.is_powered
-        })
-        grid.attach(bt, col++, row, 1, 1)
-    }
+    /* Bluetooth section REMOVED for stability 🚑 */
 
-    // If no toggles were added, hide the grid
+    // If no toggles were added, hide the grid or add placeholder
     if (col === 0 && row === 0) {
         grid.set_visible(false)
     }
@@ -190,12 +187,26 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     let initialized = false
     const ensureInit = () => {
         if (initialized) return
-        try {
-            box.append(GridControls())
-            box.append(Sliders())
-            box.append(Media())
-            initialized = true
-        } catch (e) { console.error("[CC] Lazy init failed:", e) }
+
+        // Phase 1: Atomic Sliders (Fast)
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            try { box.append(Sliders()) } catch (e) { console.error("[CC] Sliders init failed:", e) }
+            return GLib.SOURCE_REMOVE
+        })
+
+        // Phase 2: Atomic Network/BT (Can be slow)
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            try { box.append(GridControls()) } catch (e) { console.error("[CC] Grid init failed:", e) }
+            return GLib.SOURCE_REMOVE
+        })
+
+        // Phase 3: Media (Medium)
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+            try { box.append(Media()) } catch (e) { console.error("[CC] Media init failed:", e) }
+            return GLib.SOURCE_REMOVE
+        })
+
+        initialized = true
     }
 
     const win = new Gtk.Window({

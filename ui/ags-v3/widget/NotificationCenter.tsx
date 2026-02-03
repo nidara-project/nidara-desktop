@@ -6,26 +6,50 @@ import AstalNotifd from "gi://AstalNotifd"
 function NotificationItem(n: AstalNotifd.Notification) {
     const box = new Gtk.Box({
         css_classes: ["nc-notif-item"],
-        spacing: 12
+        spacing: 12,
+        valign: Gtk.Align.START
     })
 
-    const iconBox = new Gtk.Box({ css_classes: ["nc-notif-icon-box"] })
+    const iconBox = new Gtk.Box({
+        css_classes: ["nc-notif-icon-box"],
+        valign: Gtk.Align.START
+    })
     const icon = new Gtk.Image({
         icon_name: n.app_icon || n.desktop_entry || "dialog-information-symbolic",
         pixel_size: 24
     })
     iconBox.append(icon)
 
-    const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
-    const title = new Gtk.Label({ label: n.summary, css_classes: ["nc-notif-title"], halign: Gtk.Align.START, ellipsize: 3 })
-    const body = new Gtk.Label({ label: n.body, css_classes: ["nc-notif-body"], halign: Gtk.Align.START, wrap: true, max_width_chars: 30 })
+    const content = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        hexpand: true,
+        valign: Gtk.Align.START
+    })
+    const title = new Gtk.Label({
+        label: n.summary,
+        css_classes: ["nc-notif-title"],
+        halign: Gtk.Align.START,
+        ellipsize: 3,
+        lines: 1
+    })
+    const body = new Gtk.Label({
+        label: n.body,
+        css_classes: ["nc-notif-body"],
+        halign: Gtk.Align.START,
+        wrap: true,
+        lines: 2,
+        ellipsize: 3,
+        max_width_chars: 42
+    })
 
     content.append(title)
     content.append(body)
 
     const closeBtn = new Gtk.Button({
         child: new Gtk.Image({ icon_name: "window-close-symbolic" }),
-        css_classes: ["nc-notif-close"]
+        css_classes: ["nc-notif-close"],
+        valign: Gtk.Align.CENTER,
+        halign: Gtk.Align.CENTER
     })
     closeBtn.connect("clicked", () => n.dismiss())
 
@@ -56,6 +80,14 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
 
     const list = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
 
+    const scroll = new Gtk.ScrolledWindow({
+        hscrollbar_policy: Gtk.PolicyType.NEVER,
+        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+        vexpand: true,
+        child: list,
+        css_classes: ["nc-scroll"]
+    })
+
     const sync = () => {
         let child = list.get_first_child()
         while (child) {
@@ -69,15 +101,16 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
         })
 
         if (notifd.notifications.length === 0) {
-            list.append(new Gtk.Label({ label: "No hay notificaciones nuevas", css_classes: ["nc-empty"] }))
+            list.append(new Gtk.Label({ label: "No hay notificaciones nuevas", css_classes: ["nc-empty"], vexpand: true, valign: Gtk.Align.CENTER }))
         }
     }
 
-    notifd.connect("notify::notifications", sync)
+    notifd.connect("notified", sync)
+    notifd.connect("resolved", sync)
     sync()
 
     container.append(header)
-    container.append(list)
+    container.append(scroll)
 
     const win = new Gtk.Window({
         name: "notification-center-win",
@@ -103,6 +136,7 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
 
     // @ts-ignore
     win.toggle = () => {
+        sync() // Force sync on toggle
         win.set_visible(!win.get_visible())
         if (win.get_visible()) win.present()
     }

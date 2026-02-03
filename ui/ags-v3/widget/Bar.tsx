@@ -239,7 +239,8 @@ function SystemStatus() {
         tooltip_text: "Captura de pantalla"
       })
       screenshotBtn.connect("clicked", () => {
-        execAsync(`bash -c 'grim -g "$(slurp)" /tmp/screenshot_$(date +%Y%m%d_%H%M%S).png && notify-send "Captura realizada" "Guardada en /tmp"'`)
+        const path = `${GLib.get_user_special_dir(GLib.UserDirectory.DIRECTORY_PICTURES)}/Screenshot_${new Date().getTime()}.png`
+        execAsync(`bash -c 'grim -g "$(slurp)" "${path}" && notify-send "Captura realizada" "Guardada en Imágenes"'`)
           .catch(e => {
             execAsync(`notify-send -u critical "Error de captura" "${e}"`)
           })

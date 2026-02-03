@@ -1,12 +1,18 @@
 declare module "gi://AstalBattery" {
+    export namespace AstalBattery { interface Battery { [key: string]: any } }
     const value: any;
     export default value;
 }
 declare module "gi://AstalNetwork" {
+    export namespace AstalNetwork { interface Network { [key: string]: any } }
     const value: any;
     export default value;
 }
 declare module "gi://AstalMpris" {
+    export namespace AstalMpris {
+        interface Player { [key: string]: any }
+        enum PlaybackStatus { PLAYING, PAUSED, STOPPED }
+    }
     const value: any;
     export default value;
 }
@@ -19,6 +25,7 @@ declare module "gi://AstalBluetooth" {
     export default value;
 }
 declare module "gi://AstalNotifd" {
+    export namespace AstalNotifd { interface Notification { [key: string]: any } }
     const value: any;
     export default value;
 }

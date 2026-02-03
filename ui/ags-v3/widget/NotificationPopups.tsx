@@ -7,10 +7,14 @@ function Notification(n: AstalNotifd.Notification) {
     const box = new Gtk.Box({
         css_classes: ["notif-card"],
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 8
+        spacing: 8,
+        valign: Gtk.Align.START
     })
 
-    const header = new Gtk.Box({ spacing: 8 })
+    const header = new Gtk.Box({
+        spacing: 8,
+        valign: Gtk.Align.CENTER
+    })
 
     if (n.app_icon || n.desktop_entry) {
         const icon = new Gtk.Image({
@@ -24,20 +28,25 @@ function Notification(n: AstalNotifd.Notification) {
         label: n.app_name || "Notification",
         css_classes: ["notif-app-name"],
         halign: Gtk.Align.START,
-        hexpand: true
+        hexpand: true,
+        ellipsize: 3,
+        lines: 1
     })
     header.append(appLabel)
 
     const closeBtn = new Gtk.Button({
         child: new Gtk.Image({ icon_name: "window-close-symbolic" }),
-        css_classes: ["notif-close-btn"]
+        css_classes: ["notif-close-btn"],
+        valign: Gtk.Align.CENTER,
+        halign: Gtk.Align.CENTER
     })
     closeBtn.connect("clicked", () => n.dismiss())
     header.append(closeBtn)
 
     const content = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 4
+        spacing: 4,
+        valign: Gtk.Align.START
     })
 
     const summary = new Gtk.Label({
@@ -45,6 +54,8 @@ function Notification(n: AstalNotifd.Notification) {
         css_classes: ["notif-summary"],
         halign: Gtk.Align.START,
         wrap: true,
+        lines: 1,
+        ellipsize: 3,
         max_width_chars: 30
     })
 
@@ -53,7 +64,9 @@ function Notification(n: AstalNotifd.Notification) {
         css_classes: ["notif-body"],
         halign: Gtk.Align.START,
         wrap: true,
-        max_width_chars: 40
+        lines: 3,
+        ellipsize: 3,
+        max_width_chars: 42
     })
 
     content.append(summary)
@@ -61,9 +74,6 @@ function Notification(n: AstalNotifd.Notification) {
 
     box.append(header)
     box.append(content)
-
-    // Auto dismiss after 5s
-    setTimeout(() => n.dismiss(), 5000)
 
     return box
 }
@@ -104,10 +114,26 @@ export default function NotificationPopups(gdkmonitor: Gdk.Monitor) {
         const n = notifd.get_notification(id)
         if (!n) return
 
+        // Remove existing if any (re-notified)
+        if (notifMap.has(id)) {
+            box.remove(notifMap.get(id)!)
+        }
+
         const widget = Notification(n)
         box.append(widget)
         notifMap.set(id, widget)
+        win.set_visible(true)
         win.present()
+
+        // Auto remove from popups after 6s (history stays in NotificationCenter)
+        setTimeout(() => {
+            const w = notifMap.get(id)
+            if (w) {
+                box.remove(w)
+                notifMap.delete(id)
+                if (notifMap.size === 0) win.set_visible(false)
+            }
+        }, 6000)
     }
 
     const onResolved = (_: any, id: number) => {
@@ -116,7 +142,7 @@ export default function NotificationPopups(gdkmonitor: Gdk.Monitor) {
             box.remove(widget)
             notifMap.delete(id)
             if (notifMap.size === 0) {
-                // Should we hide window? Gtk4LayerShell might feel weird if we hide/show too much
+                win.set_visible(false)
             }
         }
     }
