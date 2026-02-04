@@ -1,7 +1,7 @@
-import "./polyfills"
 import app from "ags/gtk4/app"
 import { Gdk, Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
+import Gio from "gi://Gio"
 
 // Widget Imports
 import Dock from "./widget/Dock"
@@ -22,15 +22,38 @@ app.start({
     const controlCenters: any[] = []
     const notificationCenters: any[] = []
 
-    // 🎨 Internal Style Init
+    // 🎨 Dynamic Style Sync
     const styleFile = `${GLib.get_current_dir()}/style.css`
-    const provider = new Gtk.CssProvider()
+    const mainProvider = new Gtk.CssProvider()
+    const themeProvider = new Gtk.CssProvider()
+    const defaultDisplay = Gdk.Display.get_default()
+
+    const syncTheme = () => {
+      try {
+        const settings = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
+        const fontName = settings.get_string("font-name")
+        const [family, size] = fontName.match(/^(.*?) (\d+)$/)?.slice(1) || ["sans-serif", "11"]
+
+        const themeCss = `
+          window { 
+            font-family: "${family}", "Symbols Nerd Font", sans-serif; 
+          }
+        `
+        themeProvider.load_from_data(themeCss, themeCss.length)
+        console.log(`[Style] Sync: ${family} ${size}px`)
+      } catch (e) { console.error("[Style] GSettings error:", e) }
+    }
+
     try {
-      provider.load_from_path(styleFile)
-      const display = Gdk.Display.get_default()
-      if (display) {
-        Gtk.StyleContext.add_provider_for_display(display, provider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
-        console.log(`[Style] Loaded: ${styleFile}`)
+      mainProvider.load_from_path(styleFile)
+      if (defaultDisplay) {
+        Gtk.StyleContext.add_provider_for_display(defaultDisplay, mainProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+        Gtk.StyleContext.add_provider_for_display(defaultDisplay, themeProvider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        syncTheme()
+
+        // Listen for changes
+        const settings = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
+        settings.connect("changed::font-name", syncTheme)
       }
     } catch (err) { console.error(`[Style] Error:`, err) }
 

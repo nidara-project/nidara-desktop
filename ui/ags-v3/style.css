@@ -297,3 +297,155 @@ window.crystal-dock-window {
 .app-grid-button:hover {
   background-color: rgba(255, 255, 255, 0.12);
 }
+
+/* --- 6. WORKSPACE COCKPIT 🛡️ --- */
+window.workspace-cockpit {
+  background: transparent;
+  box-shadow: none;
+}
+
+.cockpit-window-content {
+  padding-top: 100px;
+  /* Buffer for shadow bleed 🛡️☁️ */
+  padding-bottom: 250px;
+  /* Deep harbor for shadow 🛡️⚓ */
+  background: transparent;
+}
+
+.workspace-overview {
+  background: #0c0c0c;
+  /* Absolute Solid Grounding 🛡️🌑 */
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 32px;
+  padding: 32px;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95);
+  /* Master Premium Shadow 🛡️✨ */
+}
+
+.wo-item {
+  padding: 8px;
+  border-radius: 18px;
+  transition: all 0.3s ease;
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  /* Placeholder to prevent shift 🛡️ */
+}
+
+.wo-item.active {
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.wo-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 18px;
+}
+
+.wo-btn:hover .wo-item {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.wo-label {
+  font-weight: 800;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+}
+
+.wo-label.active {
+  color: #007aff;
+}
+
+.wo-count {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.2);
+  font-weight: 900;
+}
+
+/* Schematic 🗺️ */
+.wo-schematic-preview {
+  background-color: rgba(0, 0, 0, 0.4);
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  margin: 0;
+  padding: 0;
+}
+
+.wo-schematic-container {
+  /* Dynamic size handled by JS 🛡️ */
+  background: transparent;
+}
+
+.wo-schematic-chassis {
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background-color: rgba(255, 255, 255, 0.01);
+  border-radius: 4px;
+}
+
+.wo-schematic-win {
+  background-color: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+}
+
+.wo-schematic-win.focused {
+  background-color: rgba(0, 122, 255, 0.5);
+  border-color: rgba(0, 122, 255, 0.7);
+  box-shadow: none;
+  /* No shadow to prevent ghosting 🛡️ */
+}
+
+.wo-schematic-reserved {
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.wo-schematic-reserved.bar {
+  background-color: rgba(0, 122, 255, 0.1);
+  border-bottom: 1px solid rgba(0, 122, 255, 0.2);
+}
+
+.wo-schematic-reserved.dock {
+  background-color: rgba(255, 149, 0, 0.1);
+  border-top: 1px solid rgba(255, 149, 0, 0.2);
+}
+
+.wo-schematic-win-label {
+  font-size: 8px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.82);
+  padding: 0 4px;
+}
+
+/* Cockpit Window 🛰️ */
+window.workspace-cockpit {
+  background: transparent;
+}
+
+.bar-ws-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 4px 16px;
+  min-width: 80px;
+  min-height: 28px;
+  transition: all 0.3s ease;
+}
+
+.bar-center {
+  min-width: 100px;
+  min-height: 40px;
+}
+
+.bar-ws-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.bar-ws-pill {
+  color: white;
+  font-weight: 800;
+  font-size: 13px;
+}

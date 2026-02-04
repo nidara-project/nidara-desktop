@@ -104,7 +104,7 @@ function GridControls() {
         css_classes: ["cc-grid"]
     })
 
-    const createToggle = (icon: string, label: string, active: boolean, onClick: () => void) => {
+    const createToggle = (iconName: string, label: string, active: boolean, onClick: () => void) => {
         const box = new Gtk.Box({
             spacing: 8,
             css_classes: ["cc-toggle", active ? "active" : ""]
@@ -112,7 +112,7 @@ function GridControls() {
         const btn = new Gtk.Button({ child: box })
         btn.connect("clicked", onClick)
 
-        const i = new Gtk.Label({ label: icon, css_classes: ["cc-toggle-icon"] })
+        const i = new Gtk.Image({ icon_name: iconName, pixel_size: 18, css_classes: ["cc-toggle-icon"] })
         const l = new Gtk.Label({ label: label, css_classes: ["cc-toggle-label"] })
 
         box.append(i)
@@ -125,7 +125,7 @@ function GridControls() {
 
     // WiFi Real Toggle - Only if hardware present
     if (network && network.wifi) {
-        const wifi = createToggle("󰖩", "Wi-Fi", network.wifi.enabled, () => {
+        const wifi = createToggle(network.wifi.icon_name, "Wi-Fi", network.wifi.enabled, () => {
             network.wifi.enabled = !network.wifi.enabled
         })
         grid.attach(wifi, col++, row, 1, 1)
@@ -148,9 +148,9 @@ function Sliders() {
         css_classes: ["cc-sliders"]
     })
 
-    const createSlider = (icon: string, className: string, onChange: (val: number) => void) => {
+    const createSlider = (iconName: string, className: string, onChange: (val: number) => void) => {
         const row = new Gtk.Box({ spacing: 12, css_classes: ["cc-slider-row", className] })
-        const i = new Gtk.Label({ label: icon, css_classes: ["cc-slider-icon"] })
+        const i = new Gtk.Image({ icon_name: iconName, pixel_size: 18, css_classes: ["cc-slider-icon"] })
 
         const scale = new Gtk.Scale({
             orientation: Gtk.Orientation.HORIZONTAL,
@@ -166,10 +166,10 @@ function Sliders() {
         return row
     }
 
-    box.append(createSlider("󰕾", "vol", (v) => execAsync(`pamixer --set-volume ${Math.floor(v)}`)))
+    box.append(createSlider("audio-volume-high-symbolic", "vol", (v) => execAsync(`pamixer --set-volume ${Math.floor(v)}`)))
     // Brightness check
     execAsync("brightnessctl g").then(() => {
-        box.append(createSlider("󰃠", "brt", (v) => execAsync(`brightnessctl s ${Math.floor(v)}%`)))
+        box.append(createSlider("display-brightness-symbolic", "brt", (v) => execAsync(`brightnessctl s ${Math.floor(v)}%`)))
     }).catch(() => {
         // No brightness control available
     })

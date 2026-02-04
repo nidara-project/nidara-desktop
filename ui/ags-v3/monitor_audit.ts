@@ -1,0 +1,1 @@
+import AstalHyprland from 'gi://AstalHyprland'; const h = AstalHyprland.get_default(); console.log('Monitors count:', h.get_monitors().length); h.get_monitors().forEach(m => console.log(' - ' + m.id + ': ' + m.width + 'x' + m.height + ' at ' + m.x + ',' + m.y))

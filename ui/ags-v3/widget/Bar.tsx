@@ -10,6 +10,8 @@ import GLib from "gi://GLib"
 import AstalBattery from "gi://AstalBattery"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalNotifd from "gi://AstalNotifd"
+import WorkspaceOverview from "./WorkspaceOverview"
+import { getWordmark } from "../utils"
 
 /**
  * Robust Service Fetcher 🛡️
@@ -27,60 +29,6 @@ async function getServiceSafe<T>(getter: () => T, name: string): Promise<T | nul
   return null;
 }
 
-/**
- * Wordmark Engine 🍎
- * Pretty names and sanitization for a premium look.
- */
-function getWordmark(client: AstalHyprland.Client | null, hyprland: AstalHyprland.Hyprland): string {
-  if (!client) {
-    const ws = hyprland.focused_workspace
-    return ws ? `Workspace ${ws.id}` : "Workspace"
-  }
-
-  const classMap: Record<string, string> = {
-    "google-chrome": "Google Chrome",
-    "chrome-google.com": "Google Chrome",
-    "firefox": "Firefox",
-    "code-url-handler": "Visual Studio Code",
-    "code": "Visual Studio Code",
-    "thunar": "Archivos",
-    "foot": "Terminal",
-    "kitty": "Terminal",
-    "nautilus": "Archivos",
-    "pavucontrol": "Ajustes de Sonido",
-    "nm-connection-editor": "Red",
-    "org.gnome.Settings": "Ajustes",
-    "vlc": "VLC Player",
-    "spotify": "Spotify",
-    "discord": "Discord",
-    "telegram-desktop": "Telegram",
-    "org.gnome.Calendar": "Calendario"
-  }
-
-  // 1. Prioritize Title for specific dynamic context (like Browser tabs or Folders)
-  let title = client.title || ""
-
-  // 2. Clear known suffixes to keep it clean
-  const suffixes = [
-    " — Mozilla Firefox",
-    " - Google Chrome",
-    " - Visual Studio Code",
-    " - VSCodium",
-    " - Terminal",
-    " - File Manager"
-  ]
-  suffixes.forEach(s => { if (title.endsWith(s)) title = title.replace(s, "") })
-
-  // 3. If title is too generic or empty, use class mapping
-  const genericTitles = ["New Tab", "Google Chrome", "Mozilla Firefox", "Untitled", "index.html", "Enter name of file", ""]
-  if (genericTitles.includes(title) || title.length < 2) {
-    return classMap[client.class.toLowerCase()] ||
-      client.class.charAt(0).toUpperCase() + client.class.slice(1) ||
-      "App"
-  }
-
-  return title
-}
 
 /**
  * App Menu Module (Left) 🍎
@@ -140,49 +88,78 @@ function Workspaces() {
   const box = new Gtk.Box({
     name: "bar-workspaces",
     css_classes: ["bar-workspaces"],
-    spacing: 8
+    halign: Gtk.Align.CENTER,
+    valign: Gtk.Align.CENTER,
+    hexpand: false // Prevent unwanted expansion! 🛡️
   })
 
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
-    getServiceSafe(() => AstalHyprland.get_default(), "Hyprland (WS)").then(hyprland => {
-      if (!hyprland) return;
+  // 1. Permanent Pill Structure
+  const label = new Gtk.Label({ label: "1", css_classes: ["bar-ws-pill"] })
+  const pillBox = new Gtk.Box({
+    spacing: 8,
+    halign: Gtk.Align.CENTER,
+    valign: Gtk.Align.CENTER
+  })
+  pillBox.append(new Gtk.Image({ icon_name: "computer-symbolic", pixel_size: 16 }))
+  pillBox.append(label)
 
-      const sync = () => {
-        let child = box.get_first_child()
-        while (child) {
-          const next = child.get_next_sibling()
-          box.remove(child)
-          child = next
-        }
+  const btn = new Gtk.Button({
+    css_classes: ["bar-ws-btn"],
+    child: pillBox,
+    cursor: Gdk.Cursor.new_from_name("pointer", null),
+    hexpand: false, // Strict bounding! 🛡️
+    vexpand: false
+  })
 
-        const workspaces = hyprland.get_workspaces() || []
-        const occupied = new Set(workspaces.map(ws => ws.id))
-        const focused = hyprland.focused_workspace
-        const focusedId = focused ? focused.id : 1
+  box.append(btn)
 
-        const maxWs = Math.max(5, focusedId, ...(Array.from(occupied) as number[]))
+  // 2. Data & Cockpit Initialization
+  getServiceSafe(() => AstalHyprland.get_default(), "Hyprland (WS)").then(hyprland => {
+    if (!hyprland) return;
 
-        for (let i = 1; i <= maxWs; i++) {
-          const active = focusedId === i
-          const hasWindows = occupied.has(i)
+    // Standalone Cockpit Window (Surface-Isolation)
+    const monitor = (btn.get_root() as any)?.gdk_monitor ||
+      (btn.get_root() as any)?.gdkmonitor ||
+      app.get_monitors()[0]
+    const cockpit = WorkspaceOverview(monitor, hyprland)
+    app.add_window(cockpit) // Register with app! 🛡️🚨
 
-          const dot = new Gtk.Button({
-            css_classes: ["bar-ws-dot", active ? "active" : "", hasWindows ? "occupied" : ""],
-            cursor: Gdk.Cursor.new_from_name("pointer", null),
-          })
-          dot.connect("clicked", () => {
-            hyprland.dispatch("workspace", i.toString())
-          })
-          box.append(dot)
-        }
-      }
+    const updateUI = () => {
+      const id = hyprland.focused_workspace?.id || 1
+      label.label = id.toString()
+    }
 
-      hyprland.connect("notify::focused-workspace", sync)
-      hyprland.connect("workspace-added", sync)
-      hyprland.connect("workspace-removed", sync)
-      sync()
+    // Explicit Triggers
+    btn.connect("clicked", () => {
+      const target = !cockpit.get_visible()
+      console.log(`[Cockpit] Toggle visibility to: ${target}`)
+      cockpit.set_visible(target)
+      if (target) cockpit.present()
     })
-    return GLib.SOURCE_REMOVE
+
+    let hoverTimeout: number | null = null
+    const motion = new Gtk.EventControllerMotion()
+    motion.connect("enter", () => {
+      if (hoverTimeout) GLib.source_remove(hoverTimeout)
+      hoverTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => {
+        hoverTimeout = null
+        if (!cockpit.get_visible()) {
+          cockpit.set_visible(true)
+          cockpit.present()
+        }
+        return GLib.SOURCE_REMOVE
+      })
+    })
+    motion.connect("leave", () => {
+      if (hoverTimeout) {
+        GLib.source_remove(hoverTimeout)
+        hoverTimeout = null
+      }
+    })
+    btn.add_controller(motion)
+
+    hyprland.connect("notify::focused-workspace", updateUI)
+    updateUI()
   })
 
   return box
@@ -201,18 +178,18 @@ function SystemStatus() {
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
     getServiceSafe(() => AstalNetwork.get_default(), "Network").then(network => {
       if (!network) return;
-      const netIcon = new Gtk.Label({ label: "󰖩", css_classes: ["bar-status-icon"] })
+      const netIcon = new Gtk.Image({ icon_name: "network-wireless-symbolic", pixel_size: 16 })
       const netBtn = new Gtk.Button({ css_classes: ["bar-status-btn"], child: netIcon })
 
       const syncNet = () => {
         if (network.wifi) {
-          netIcon.label = "󰖩"
+          netIcon.icon_name = network.wifi.icon_name
           netBtn.tooltip_text = network.wifi.ssid || "Wi-Fi"
         } else if (network.wired) {
-          netIcon.label = "󰈀"
+          netIcon.icon_name = network.wired.icon_name
           netBtn.tooltip_text = "Ethernet"
         } else {
-          netIcon.label = "󰖪"
+          netIcon.icon_name = "network-offline-symbolic"
           netBtn.tooltip_text = "Desconectado"
         }
       }
@@ -226,15 +203,19 @@ function SystemStatus() {
   })
 
   const volContent = new Gtk.Box({ spacing: 8 })
-  const volIcon = new Gtk.Label({ label: "󰕾", css_classes: ["bar-status-icon"] })
-  const volLabel = new Gtk.Label({ label: "0%", css_classes: ["bar-status-label"] })
-  volContent.append(volIcon); volContent.append(volLabel)
-  const volBtn = new Gtk.Button({ css_classes: ["bar-status-btn"], child: volContent })
+  const volIcon = new Gtk.Image({ icon_name: "audio-volume-high-symbolic", pixel_size: 16 })
+  const volBtn = new Gtk.Button({ css_classes: ["bar-status-btn"], child: volIcon })
   const volAccessor = createPoll("0%", 1000, "pamixer --get-volume-human", (out) => out.trim())
   volAccessor.subscribe(() => {
     const val = volAccessor.get()
-    if (val === "muted") { volIcon.label = "󰝟"; volLabel.label = "Muted" }
-    else { volIcon.label = "󰕾"; volLabel.label = val }
+    if (val === "muted") {
+      volIcon.icon_name = "audio-volume-muted-symbolic"
+    } else {
+      const v = parseInt(val)
+      if (v <= 33) volIcon.icon_name = "audio-volume-low-symbolic"
+      else if (v <= 66) volIcon.icon_name = "audio-volume-medium-symbolic"
+      else volIcon.icon_name = "audio-volume-high-symbolic"
+    }
   })
   volBtn.connect("clicked", () => execAsync("pavucontrol").catch(console.error))
   box.append(volBtn)
@@ -242,16 +223,22 @@ function SystemStatus() {
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
     getServiceSafe(() => AstalBattery.get_default(), "Battery").then(battery => {
       if (!battery) return;
+      const batContent = new Gtk.Box({ spacing: 6 })
+      const batIcon = new Gtk.Image({ icon_name: battery.icon_name, pixel_size: 16 })
       const batLabel = new Gtk.Label({ css_classes: ["bar-bat-label"] })
+      batContent.append(batIcon)
+      batContent.append(batLabel)
+
       const syncBat = () => {
-        const icon = battery.charging ? "󰂄" : "󰁹"
-        batLabel.label = `${icon}  ${Math.floor(battery.percentage * 100)}%`
-        batLabel.set_visible(battery.is_present)
+        batIcon.icon_name = battery.icon_name
+        batLabel.label = `${Math.floor(battery.percentage * 100)}%`
+        batContent.set_visible(battery.is_present)
       }
       battery.connect("notify::percentage", syncBat)
       battery.connect("notify::charging", syncBat)
+      battery.connect("notify::icon-name", syncBat)
       syncBat()
-      box.append(batLabel)
+      box.append(batContent)
     })
     return GLib.SOURCE_REMOVE
   })
@@ -303,7 +290,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const leftSide = new Gtk.Box({ spacing: 12, halign: Gtk.Align.START, css_classes: ["bar-left"] })
   leftSide.append(AppMenu())
 
-  const centerSide = new Gtk.Box({ halign: Gtk.Align.CENTER, css_classes: ["bar-center"] })
+  const centerSide = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, css_classes: ["bar-center"] })
   centerSide.append(Workspaces())
 
   const rightSide = new Gtk.Box({ spacing: 20, halign: Gtk.Align.END, css_classes: ["bar-right"] })
@@ -312,7 +299,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const timeContent = new Gtk.Box({ spacing: 8 })
   const timeLabel = new Gtk.Label({ name: "bar-time-label", css_classes: ["bar-time"], label: "..." })
   const notifCluster = new Gtk.Box({ spacing: 6, css_classes: ["bar-notif-cluster"] })
-  const timeNotifIcon = new Gtk.Label({ label: "", css_classes: ["bar-time-notif-icon"] })
+  const timeNotifIcon = new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 14 })
   const timeNotifCount = new Gtk.Label({ label: "", css_classes: ["bar-time-notif-count"] })
 
   notifCluster.append(timeNotifIcon)
@@ -344,7 +331,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
         notifCluster.set_visible(true)
 
         // Icon Logic: Prioritize DND icon if active
-        timeNotifIcon.label = dnd ? "󰂛" : "󰂚"
+        timeNotifIcon.icon_name = dnd ? "notifications-disabled-symbolic" : "notifications-symbolic"
         timeNotifIcon.set_visible(true)
 
         // Count Logic: Always show if > 0
