@@ -6,9 +6,16 @@ set -e
 
 echo "🚀 Starting MiDistroIA Provisioning..."
 
-# 1. System Dependencies
-echo "📦 Installing system dependencies..."
+# 1. System Dependencies & Repairs
+echo "📦 Preparing system and fixing potential broken packages..."
 sudo apt update
+sudo apt install -f -y
+
+# Install Node.js & NPM via NodeSource (More reliable on Ubuntu)
+echo "🌐 Installing Node.js 20.x (LTS) via NodeSource..."
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+
+echo "📦 Installing build dependencies..."
 sudo apt install -y \
     meson \
     ninja-build \
@@ -22,7 +29,7 @@ sudo apt install -y \
     libgbm-dev \
     libpam0g-dev \
     git \
-    npm
+    nodejs
 
 # 2. Build & Install Astal Libraries (The "Secret Sauce")
 echo "🛠️ Compiling Astal Service Libraries..."
