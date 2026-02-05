@@ -177,6 +177,11 @@ function Sliders() {
         css_classes: ["cc-sliders"]
     })
 
+    const volRow = new Gtk.Box()
+    const brtRow = new Gtk.Box()
+    box.append(volRow)
+    box.append(brtRow)
+
     const createSlider = (iconName: string, className: string, initialValue: number, onChange: (val: number) => void) => {
         const row = new Gtk.Box({ spacing: 12, css_classes: ["cc-slider-row", className] })
         const i = new Gtk.Image({ icon_name: iconName, pixel_size: 18, css_classes: ["cc-slider-icon"] })
@@ -198,20 +203,18 @@ function Sliders() {
     // Volume Init 🔊
     execAsync("pamixer --get-volume").then(out => {
         const val = parseInt(out)
-        box.append(createSlider("audio-volume-high-symbolic", "vol", val, (v) => execAsync(`pamixer --set-volume ${Math.floor(v)}`)))
+        volRow.append(createSlider("audio-volume-high-symbolic", "vol", val, (v) => execAsync(`pamixer --set-volume ${Math.floor(v)}`)))
     }).catch(() => {
-        box.append(createSlider("audio-volume-high-symbolic", "vol", 50, (v) => execAsync(`pamixer --set-volume ${Math.floor(v)}`)))
+        volRow.append(createSlider("audio-volume-high-symbolic", "vol", 50, (v) => execAsync(`pamixer --set-volume ${Math.floor(v)}`)))
     })
 
     // Brightness Init ☀️
     execAsync("brightnessctl g").then(curr => {
         execAsync("brightnessctl m").then(max => {
             const val = Math.floor((parseInt(curr) / parseInt(max)) * 100)
-            box.append(createSlider("display-brightness-symbolic", "brt", val, (v) => execAsync(`brightnessctl s ${Math.floor(v)}%`)))
+            brtRow.append(createSlider("display-brightness-symbolic", "brt", val, (v) => execAsync(`brightnessctl s ${Math.floor(v)}%`)))
         })
-    }).catch(() => {
-        // No brightness control or failed
-    })
+    }).catch(() => { })
 
     return box
 }
