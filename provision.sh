@@ -31,7 +31,7 @@ cd /tmp/astal-build
 git clone https://github.com/aylur/astal.git .
 
 # List of components to install in order
-COMPONENTS=("lib/astal" "lib/io" "lib/apps" "lib/hyprland" "lib/mpris" "lib/network" "lib/battery" "lib/notifd" "lib/bluetooth")
+COMPONENTS=("lib/astal" "lib/io" "lib/apps" "lib/hyprland" "lib/mpris" "lib/network" "lib/battery" "lib/notifd" "lib/bluetooth" "lib/tray")
 
 for comp in "${COMPONENTS[@]}"; do
     echo "🔨 Building $comp..."

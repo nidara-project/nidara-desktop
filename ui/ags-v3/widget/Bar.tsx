@@ -10,8 +10,70 @@ import GLib from "gi://GLib"
 import AstalBattery from "gi://AstalBattery"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalNotifd from "gi://AstalNotifd"
+import AstalTray from "gi://AstalTray"
 import WorkspaceOverview from "./WorkspaceOverview"
 import { getWordmark } from "../utils"
+
+/**
+ * System Tray Module (Right) 📥
+ */
+function Tray() {
+  const box = new Gtk.Box({
+    name: "bar-tray",
+    css_classes: ["bar-tray"],
+    spacing: 8
+  })
+
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
+    getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
+      if (!tray) return;
+
+      const items = new Map<string, Gtk.Button>()
+
+      const createItem = (item: AstalTray.TrayItem) => {
+        if (items.has(item.item_id)) return;
+
+        const btn = new Gtk.Button({
+          css_classes: ["bar-tray-btn"],
+          tooltip_markup: item.tooltip_markup,
+          child: new Gtk.Image({
+            gicon: item.gicon,
+            pixel_size: 16
+          })
+        })
+
+        btn.connect("clicked", (b) => item.activate(0, 0))
+        btn.connect("button-release-event", (b, event: any) => {
+          if (event.get_button() === 3) { // Right click
+            item.about_to_show()
+            // In GTK4 we use the menu from the item
+            // item.create_menu() is common in Astal
+          }
+          return false
+        })
+
+        items.set(item.item_id, btn)
+        box.append(btn)
+      }
+
+      tray.items.forEach(createItem)
+      tray.connect("item-added", (_, id) => {
+        const item = tray.get_item(id)
+        if (item) createItem(item)
+      })
+      tray.connect("item-removed", (_, id) => {
+        const btn = items.get(id)
+        if (btn) {
+          box.remove(btn)
+          items.delete(id)
+        }
+      })
+    })
+    return GLib.SOURCE_REMOVE
+  })
+
+  return box
+}
 
 /**
  * Robust Service Fetcher with Exponential Backoff 🛡️
@@ -260,6 +322,9 @@ function SystemStatus() {
   })
   ccBtn.connect("clicked", () => { (globalThis as any).toggleControlCenter?.() })
   box.append(ccBtn)
+
+  // System Tray
+  box.append(Tray())
 
   return box
 }
