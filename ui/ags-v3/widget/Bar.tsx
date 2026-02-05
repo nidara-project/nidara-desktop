@@ -26,76 +26,61 @@ function Tray() {
 
   const items = new Map<string, Gtk.Button>()
 
-  const createItem = (tray: any, id: string) => {
-    if (items.has(id)) return;
+  const syncTray = (tray: any) => {
+    const currentIds = new Set(tray.items.map((i: any) => i.item_id))
 
-    // Direct lookup in the service state 🛡️
-    const item = tray.items.find((i: any) => i.item_id === id)
-    if (!item) return;
-
-    // STRICT FILTER: No icon = No button. 
-    // This kills the 'StatusNotifierItem' protocol ghosts 👻
-    const hasIcon = item.gicon || (item.icon_name && item.icon_name.length > 0);
-    if (!hasIcon) return;
-
-    const icon = new Gtk.Image({
-      pixel_size: 16,
-      css_classes: ["bar-tray-icon"]
-    })
-
-    if (item.gicon) icon.gicon = item.gicon;
-    else if (item.icon_name) icon.icon_name = item.icon_name;
-
-    const btn = new Gtk.Button({
-      css_classes: ["bar-tray-btn"],
-      tooltip_markup: item.tooltip_markup || item.title || id,
-      child: icon
-    })
-
-    btn.connect("clicked", () => {
-      try { item.activate(0, 0) } catch (e) { }
-    })
-
-    const gesture = new Gtk.GestureClick()
-    gesture.set_button(0)
-    gesture.connect("released", (g) => {
-      if (g.get_current_button() === 3) {
-        try { item.about_to_show() } catch (e) { }
+    // 1. Remove dead items 🧹
+    for (const [id, btn] of items.entries()) {
+      if (!currentIds.has(id)) {
+        box.remove(btn)
+        items.delete(id)
       }
-    })
-    btn.add_controller(gesture)
-
-    items.set(id, btn)
-    box.append(btn)
-  }
-
-  const removeItem = (id: string) => {
-    const btn = items.get(id)
-    if (btn) {
-      try {
-        if (btn.get_parent() === box) box.remove(btn)
-      } catch (e) { }
-      items.delete(id)
     }
+
+    // 2. Add new items ✨
+    tray.items.forEach((item: any) => {
+      const id = item.item_id
+      if (items.has(id)) return;
+
+      // STRICT FILTER: No icon = No button. 
+      const hasIcon = item.gicon || (item.icon_name && item.icon_name.length > 0);
+      if (!hasIcon) return;
+
+      const btn = new Gtk.Button({
+        css_classes: ["bar-tray-btn"],
+        tooltip_markup: item.tooltip_markup || item.title || id,
+        child: new Gtk.Image({
+          pixel_size: 16,
+          css_classes: ["bar-tray-icon"],
+          gicon: item.gicon,
+          icon_name: item.icon_name
+        })
+      })
+
+      btn.connect("clicked", () => {
+        try { item.activate(0, 0) } catch (e) { }
+      })
+
+      const gesture = new Gtk.GestureClick()
+      gesture.set_button(0)
+      gesture.connect("released", (g) => {
+        if (g.get_current_button() === 3) {
+          try { item.about_to_show() } catch (e) { }
+        }
+      })
+      btn.add_controller(gesture)
+
+      items.set(id, btn)
+      box.append(btn)
+    })
   }
 
-  // Purely independent initialization to avoid blocking other components 🛡️
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
-    getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
-      if (!tray) return;
-      tray.items.forEach(item => createItem(tray, item.item_id))
-      tray.connect("item-added", (_, id) => {
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-          createItem(tray, id); return GLib.SOURCE_REMOVE;
-        })
-      })
-      tray.connect("item-removed", (_, id) => {
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-          removeItem(id); return GLib.SOURCE_REMOVE;
-        })
-      })
+  // Poll-based sync to avoid GLib-GIO signal crashes 🛡️
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2500, () => {
+    getServiceSafe(() => AstalTray.get_default(), "Tray (Poll)").then(tray => {
+      if (tray) syncTray(tray)
     })
-    return GLib.SOURCE_REMOVE
+    return GLib.SOURCE_CONTINUE
   })
 
   return box
@@ -341,23 +326,32 @@ function SystemStatus() {
 
 
 
+  // Utilities Box (CC + Extras)
+  const utilsBox = new Gtk.Box({ spacing: 8, css_classes: ["bar-utils"] })
   const ccBtn = new Gtk.Button({
-    css_classes: ["bar-util-btn"],
+    css_classes: ["bar-util-btn", "cc-trigger"],
     child: new Gtk.Label({ label: "󰕮", css_classes: ["bar-cc-icon"] }),
     tooltip_text: "Centro de Control"
   })
   ccBtn.connect("clicked", () => {
+    console.log("[Bar] Toggling Control Center...")
     try {
       (globalThis as any).toggleControlCenter?.()
     } catch (e) {
       console.error("[Bar] CC toggle failed:", e)
     }
   })
-  box.append(ccBtn)
+  utilsBox.append(ccBtn)
+  box.append(utilsBox)
 
-  // System Tray - Appended as the last, optional element
-  box.append(Tray())
+  // System Tray - Last one
+  try {
+    box.append(Tray())
+  } catch (e) {
+    console.error("[Bar] Failed to init Tray:", e)
+  }
 
+  console.log("[Bar] SystemStatus fully initialized ✅")
   return box
 }
 
