@@ -10,7 +10,7 @@ import GLib from "gi://GLib"
 import AstalBattery from "gi://AstalBattery"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalNotifd from "gi://AstalNotifd"
-import AstalTray from "gi://AstalTray"
+// import AstalTray from "gi://AstalTray" // TEMPORARY: Install AstalTray library to enable
 import WorkspaceOverview from "./WorkspaceOverview"
 import { getWordmark } from "../utils"
 
@@ -91,7 +91,8 @@ function Tray() {
     }
   }
 
-  // Restore signal-based logic but fully decoupled from the main loop
+  // TEMPORARY: Tray disabled until AstalTray library is installed
+  /* 
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
     getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
       if (!tray) return;
@@ -112,6 +113,7 @@ function Tray() {
     })
     return GLib.SOURCE_REMOVE
   })
+  */
 
   return box
 }
