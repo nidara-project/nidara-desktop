@@ -600,6 +600,13 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
         // 4. WINDOW MANAGEMENT (If running)
         if (state.addresses && state.addresses.length > 0) {
+            itemBox.add_css_class("open") // Ensure dot style matches
+            if (hypr.focusedClient && state.addresses.includes(hypr.focusedClient.address)) {
+                itemBox.add_css_class("focused")
+            } else {
+                itemBox.remove_css_class("focused")
+            }
+
             actions.push({ separator: true })
 
             // If multiple windows, maybe show count?
@@ -738,7 +745,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
         // REACTIVE GAP LOGIC
         target.connect("enter", () => {
-            console.log(`[DnD] Enter Item: ${appId} `)
+            // console.log(`[DnD] Enter Item: ${appId} `)
             dragBus.update(appId)
             return Gdk.DragAction.COPY
         })
