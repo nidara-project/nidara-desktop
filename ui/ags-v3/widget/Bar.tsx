@@ -27,7 +27,8 @@ function Tray() {
   const items = new Map<string, Gtk.Button>()
 
   const createItem = (tray: any, id: string) => {
-    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+    // 250ms Settlement Delay for DBus properties ⏳
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
       if (items.has(id)) return GLib.SOURCE_REMOVE;
 
       const item = tray.get_item(id)
@@ -39,10 +40,10 @@ function Tray() {
 
       try {
         gicon = item.gicon;
-        iconName = item.icon_name;
+        iconName = item.icon_name || item.attention_icon_name;
         tooltip = item.tooltip_markup || item.title || id;
       } catch (e) {
-        console.warn(`[Tray] Item ${id} disappeared before creation`);
+        console.warn(`[Tray] Item ${id} became inaccessible during creation`);
         return GLib.SOURCE_REMOVE;
       }
 
@@ -51,13 +52,13 @@ function Tray() {
         css_classes: ["bar-tray-icon"]
       })
 
-      // Multi-fallback icon resolution 🛡️
+      // Tiered Icon Resolution 🛡️
       if (gicon) {
         icon.gicon = gicon;
-      } else if (iconName) {
+      } else if (iconName && iconName.trim().length > 0) {
         icon.icon_name = iconName;
       } else {
-        icon.icon_name = "dialog-question-symbolic";
+        icon.icon_name = "image-missing-symbolic";
       }
 
       const btn = new Gtk.Button({
@@ -70,7 +71,7 @@ function Tray() {
         try {
           const it = tray.get_item(id);
           if (it) it.activate(0, 0);
-        } catch (e) { console.warn(`[Tray] Click failed: ${id}`) }
+        } catch (e) { console.warn(`[Tray] Action failed for ${id}`) }
       })
 
       const gesture = new Gtk.GestureClick()
@@ -80,7 +81,7 @@ function Tray() {
           try {
             const it = tray.get_item(id);
             if (it) it.about_to_show();
-          } catch (e) { console.warn(`[Tray] Menu failed: ${id}`) }
+          } catch (e) { console.warn(`[Tray] Context menu failed for ${id}`) }
         }
       })
       btn.add_controller(gesture)
