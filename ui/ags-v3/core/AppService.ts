@@ -129,7 +129,11 @@ class AppService {
                     const content = readFile(desktopPath)
                     const categories = content.match(/^Categories=(.*)$/m)?.[1] || ""
 
-                    if (categories.includes("Development")) canonical = this.getCanonicalName("applications-development")
+                    // Specific known apps without proper icons
+                    if (id.includes("kitty")) canonical = this.getCanonicalName("utilities-terminal")
+                    else if (id.includes("system") && id.includes("info")) canonical = this.getCanonicalName("hwinfo") || this.getCanonicalName("utilities-system-monitor")
+                    // Category-based fallbacks
+                    else if (categories.includes("Development")) canonical = this.getCanonicalName("applications-development")
                     else if (categories.includes("Graphics")) canonical = this.getCanonicalName("applications-graphics")
                     else if (categories.includes("Game")) canonical = this.getCanonicalName("applications-games")
                     else if (categories.includes("Network")) canonical = this.getCanonicalName("applications-internet")
