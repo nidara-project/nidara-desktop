@@ -65,9 +65,13 @@ function Tray() {
       })
       tray.connect("item-removed", (_, id) => {
         const btn = items.get(id)
-        if (btn) {
-          box.remove(btn)
-          items.delete(id)
+        if (btn && btn.get_parent() === box) {
+          try {
+            box.remove(btn)
+            items.delete(id)
+          } catch (e) {
+            console.warn(`[Bar] Failed to remove tray item ${id}:`, e)
+          }
         }
       })
     })
