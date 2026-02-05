@@ -258,11 +258,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     const initCache = () => {
         if (cacheInitialized) return
 
-        // Get all apps - try query("") which should return everything
-        const rawApps = appsService.query("")
-        console.log(`[AppGrid] Raw apps from AstalApps query: ${rawApps.length}`)
-
-        cachedApps = rawApps.sort((a, b) =>
+        cachedApps = appsService.get_list().sort((a, b) =>
             (a.name || "").localeCompare(b.name || "")
         )
         console.log(`[AppGrid] Initializing cache with ${cachedApps.length} apps`)
