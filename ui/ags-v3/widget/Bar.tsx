@@ -269,26 +269,46 @@ function SystemStatus() {
     spacing: 12
   })
 
-  // 1. Priority CC Toggle (Synchronous)
-  const utilsBox = new Gtk.Box({ spacing: 8, css_classes: ["bar-utils"] })
+  // 1. Create Placeholders to Preserve Order 🏗️
+  const trayContainer = Tray()
+  const netContainer = new Gtk.Box({ spacing: 8 })
+  const volContainer = new Gtk.Box({ spacing: 8 })
+  const batContainer = new Gtk.Box({ spacing: 8 })
+  const ccContainer = new Gtk.Box({ spacing: 8 })
+
+  box.append(trayContainer)
+  box.append(netContainer)
+  box.append(volContainer)
+  box.append(batContainer)
+  box.append(ccContainer)
+
+  // 2. Priority CC Button (Immediate)
   const ccBtn = new Gtk.Button({
     css_classes: ["bar-util-btn", "cc-trigger"],
     child: new Gtk.Label({ label: "󰕮", css_classes: ["bar-cc-icon"] }),
     tooltip_text: "Centro de Control"
   })
   ccBtn.connect("clicked", () => {
-    try {
-      (globalThis as any).toggleControlCenter?.()
-    } catch (e) {
-      console.error("[Bar] CC toggle failed:", e)
-    }
+    try { (globalThis as any).toggleControlCenter?.() } catch (e) { }
   })
-  utilsBox.append(ccBtn)
-  box.append(utilsBox)
+  ccContainer.append(ccBtn)
 
-  // 2. Asynchronous Status Components (Isolated) 🏎️
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
-    // Volume & Network & Battery (Each in its own try/catch block)
+  // 3. Isolated Background Initialization 🏎️
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+    // Network
+    getServiceSafe(() => AstalNetwork.get_default(), "Network").then(net => {
+      if (!net) return;
+      const netIcon = new Gtk.Image({ icon_name: "network-wireless-symbolic", pixel_size: 16 })
+      const netBtn = new Gtk.Button({ css_classes: ["bar-status-btn"], child: netIcon })
+      const sync = () => {
+        if (net.wifi) netIcon.icon_name = net.wifi.icon_name
+        else if (net.wired) netIcon.icon_name = net.wired.icon_name
+      }
+      net.connect("notify::wifi", sync); net.connect("notify::wired", sync); sync()
+      netContainer.append(netBtn)
+    }).catch(() => { })
+
+    // Volume
     try {
       const volIcon = new Gtk.Image({ icon_name: "audio-volume-high-symbolic", pixel_size: 16 })
       const volBtn = new Gtk.Button({ css_classes: ["bar-status-btn"], child: volIcon })
@@ -304,35 +324,27 @@ function SystemStatus() {
         }
       })
       volBtn.connect("clicked", () => execAsync("pavucontrol").catch(() => { }))
-      box.prepend(volBtn)
-    } catch (e) { console.warn("[Bar] Vol init failed") }
+      volContainer.append(volBtn)
+    } catch (e) { }
 
-    getServiceSafe(() => AstalNetwork.get_default(), "Network").then(net => {
-      if (!net) return;
-      const netIcon = new Gtk.Image({ icon_name: "network-wireless-symbolic", pixel_size: 16 })
-      const netBtn = new Gtk.Button({ css_classes: ["bar-status-btn"], child: netIcon })
-      const syncNet = () => {
-        if (net.wifi) netIcon.icon_name = net.wifi.icon_name
-        else if (net.wired) netIcon.icon_name = net.wired.icon_name
-      }
-      net.connect("notify::wifi", syncNet); net.connect("notify::wired", syncNet); syncNet()
-      box.prepend(netBtn)
-    }).catch(() => { })
-
+    // Battery
     getServiceSafe(() => AstalBattery.get_default(), "Battery").then(bat => {
       if (!bat) return;
+      const batContent = new Gtk.Box({ spacing: 6 })
+      const batIcon = new Gtk.Image({ icon_name: bat.icon_name, pixel_size: 16 })
       const batLabel = new Gtk.Label({ css_classes: ["bar-bat-label"] })
-      const syncBat = () => { batLabel.label = `${Math.floor(bat.percentage * 100)}%` }
-      bat.connect("notify::percentage", syncBat); syncBat()
-      box.insert_child_after(batLabel, box.get_first_child())
+      batContent.append(batIcon); batContent.append(batLabel)
+      const sync = () => {
+        batIcon.icon_name = bat.icon_name
+        batLabel.label = `${Math.floor(bat.percentage * 100)}%`
+        batContent.set_visible(bat.is_present)
+      }
+      bat.connect("notify::percentage", sync)
+      bat.connect("notify::charging", sync)
+      bat.connect("notify::icon-name", sync)
+      sync(); batContainer.append(batContent)
     }).catch(() => { })
 
-    return GLib.SOURCE_REMOVE
-  })
-
-  // 3. Independent Tray (Last)
-  GLib.idle_add(GLib.PRIORITY_LOW, () => {
-    try { box.append(Tray()) } catch (e) { }
     return GLib.SOURCE_REMOVE
   })
 
