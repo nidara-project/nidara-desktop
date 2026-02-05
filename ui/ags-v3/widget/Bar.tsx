@@ -25,99 +25,71 @@ function Tray() {
   })
 
   const items = new Map<string, Gtk.Button>()
-  const GHOST_BLACKLIST = ["StatusNotifierItem", "sn-watcher", "org.freedesktop.StatusNotifierWatcher"]
 
   const createItem = (tray: any, id: string) => {
-    // Immediate filter for internal ghosts 👻
-    if (GHOST_BLACKLIST.some(ghost => id.includes(ghost))) return;
+    if (items.has(id)) return;
 
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
-      if (items.has(id)) return GLib.SOURCE_REMOVE;
+    // Use find() to avoid unstable service getters 🛡️
+    const item = tray.items.find((i: any) => i.item_id === id)
+    if (!item) return;
 
-      const item = tray.get_item(id)
-      if (!item) return GLib.SOURCE_REMOVE;
+    // Filter out protocol ghosts (items with no icon and no title) 👻
+    const hasVisuals = item.gicon || item.icon_name || item.title || item.tooltip_markup;
+    if (!hasVisuals) return;
 
-      let gicon = null;
-      let iconName = null;
-      let tooltip = id;
-
-      try {
-        gicon = item.gicon;
-        iconName = item.icon_name || item.attention_icon_name;
-        tooltip = item.tooltip_markup || item.title || id;
-      } catch (e) {
-        console.warn(`[Tray] Item ${id} unreachable`)
-        return GLib.SOURCE_REMOVE;
-      }
-
-      // If absolutely no icon is provided, it's a ghost or broken app
-      if (!gicon && (!iconName || iconName.trim().length === 0)) {
-        console.warn(`[Tray] Skipping ${id}: No icon data found`);
-        return GLib.SOURCE_REMOVE;
-      }
-
-      const icon = new Gtk.Image({
-        pixel_size: 16,
-        css_classes: ["bar-tray-icon"]
-      })
-
-      if (gicon) {
-        icon.gicon = gicon;
-      } else if (iconName) {
-        icon.icon_name = iconName;
-      }
-
-      const btn = new Gtk.Button({
-        css_classes: ["bar-tray-btn"],
-        tooltip_markup: tooltip,
-        child: icon
-      })
-
-      btn.connect("clicked", () => {
-        try { tray.get_item(id)?.activate(0, 0) } catch (e) { }
-      })
-
-      const gesture = new Gtk.GestureClick()
-      gesture.set_button(0)
-      gesture.connect("released", (g) => {
-        if (g.get_current_button() === 3) {
-          try { tray.get_item(id)?.about_to_show() } catch (e) { }
-        }
-      })
-      btn.add_controller(gesture)
-
-      items.set(id, btn)
-      box.append(btn)
-      return GLib.SOURCE_REMOVE
+    const icon = new Gtk.Image({
+      pixel_size: 16,
+      css_classes: ["bar-tray-icon"]
     })
+
+    if (item.gicon) icon.gicon = item.gicon;
+    else if (item.icon_name) icon.icon_name = item.icon_name;
+    else icon.icon_name = "image-missing-symbolic";
+
+    const btn = new Gtk.Button({
+      css_classes: ["bar-tray-btn"],
+      tooltip_markup: item.tooltip_markup || item.title || id,
+      child: icon
+    })
+
+    btn.connect("clicked", () => {
+      try { item.activate(0, 0) } catch (e) { }
+    })
+
+    const gesture = new Gtk.GestureClick()
+    gesture.set_button(0)
+    gesture.connect("released", (g) => {
+      if (g.get_current_button() === 3) {
+        try { item.about_to_show() } catch (e) { }
+      }
+    })
+    btn.add_controller(gesture)
+
+    items.set(id, btn)
+    box.append(btn)
   }
 
   const removeItem = (id: string) => {
-    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-      const btn = items.get(id)
-      if (btn) {
-        // Double check parent to prevent GLib-GIO criticals 🛡️
-        if (btn.get_parent() === box) {
-          box.remove(btn)
-        }
-        items.delete(id)
+    const btn = items.get(id)
+    if (btn) {
+      if (btn.get_parent() === box) {
+        box.remove(btn)
       }
-      return GLib.SOURCE_REMOVE
-    })
+      items.delete(id)
+    }
   }
 
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
     getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
       if (!tray) return;
 
       // Initial sync
       tray.items.forEach(item => createItem(tray, item.item_id))
 
-      // Wait 100ms before creating new items to let DBus settle 🛡️
       tray.connect("item-added", (_, id) => {
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-          createItem(tray, id);
-          return GLib.SOURCE_REMOVE;
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+          createItem(tray, id)
+          return GLib.SOURCE_REMOVE
         })
       })
       tray.connect("item-removed", (_, id) => removeItem(id))
