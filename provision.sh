@@ -35,17 +35,30 @@ sudo apt install -y \
 echo "🛠️ Compiling Astal Service Libraries..."
 mkdir -p /tmp/astal-build
 cd /tmp/astal-build
-git clone https://github.com/aylur/astal.git .
+git clone https://github.com/aylur/astal.git . || (cd . && git pull)
 
 # List of components to install in order
-COMPONENTS=("lib/astal" "lib/io" "lib/apps" "lib/hyprland" "lib/mpris" "lib/network" "lib/battery" "lib/notifd" "lib/bluetooth" "lib/tray")
+# NOTE: lib/astal is split into io and gtk4
+COMPONENTS=(
+    "lib/astal/io" 
+    "lib/astal/gtk4" 
+    "lib/apps" 
+    "lib/hyprland" 
+    "lib/mpris" 
+    "lib/network" 
+    "lib/battery" 
+    "lib/notifd" 
+    "lib/bluetooth" 
+    "lib/tray"
+)
 
 for comp in "${COMPONENTS[@]}"; do
     echo "🔨 Building $comp..."
-    cd "$comp"
+    cd "/tmp/astal-build/$comp"
+    # Clean old build dir if it exists
+    rm -rf build
     meson setup build --prefix=/usr/local
     sudo meson install -C build
-    cd /tmp/astal-build
 done
 
 # 3. Global Path Configuration
