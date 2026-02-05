@@ -10,7 +10,7 @@ import GLib from "gi://GLib"
 import AstalBattery from "gi://AstalBattery"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalNotifd from "gi://AstalNotifd"
-// import AstalTray from "gi://AstalTray" // TEMPORARY: Install AstalTray library to enable
+import AstalTray from "gi://AstalTray"
 import WorkspaceOverview from "./WorkspaceOverview"
 import { getWordmark } from "../utils"
 
@@ -91,13 +91,11 @@ function Tray() {
     }
   }
 
-  // TEMPORARY: Tray disabled until AstalTray library is installed
-  /* 
+  // Tray functionality enabled
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
     getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
       if (!tray) return;
 
-      // Sync initial set
       tray.items.forEach(item => createItem(tray, item.item_id))
 
       tray.connect("item-added", (_, id) => {
@@ -113,7 +111,6 @@ function Tray() {
     })
     return GLib.SOURCE_REMOVE
   })
-  */
 
   return box
 }

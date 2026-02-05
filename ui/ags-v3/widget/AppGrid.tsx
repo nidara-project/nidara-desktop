@@ -258,9 +258,14 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     const initCache = () => {
         if (cacheInitialized) return
 
-        cachedApps = appsService.get_list().sort((a, b) =>
+        // Get all apps - try query("") which should return everything
+        const rawApps = appsService.query("")
+        console.log(`[AppGrid] Raw apps from AstalApps query: ${rawApps.length}`)
+
+        cachedApps = rawApps.sort((a, b) =>
             (a.name || "").localeCompare(b.name || "")
         )
+        console.log(`[AppGrid] Initializing cache with ${cachedApps.length} apps`)
 
         cachedApps.forEach(app => {
             const id = (app.get_id ? app.get_id() : (app as any).id || "").toLowerCase()
@@ -288,8 +293,9 @@ export default function AppGrid(monitor: Gdk.Monitor) {
                 widget.set_visible(true)
             })
         } else {
-            // Fuzzy match results from service
-            const matches = appsService.fuzzy_query(query)
+            // Use AstalApps for fuzzy matching (it's good at this)
+            const astalApps = new AstalApps.Apps()
+            const matches = astalApps.fuzzy_query(query)
             const matchIds = new Set(
                 matches.map(app => (app.get_id ? app.get_id() : (app as any).id || "").toLowerCase())
             )
