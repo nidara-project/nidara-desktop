@@ -1221,6 +1221,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
 
     const update = () => {
+        console.log("[Dock] update() called - rebuilding dock")
 
         // VIRTUAL GRID REFACTOR: Collection Phase
         type ItemConfig = { id: string, width: number, syncData?: any, factory: (vc: number) => Gtk.Widget }
@@ -1433,6 +1434,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 return w
             }
         })
+        console.log(`[Dock] Separator added to configs. Total configs: ${configs.length}`)
 
         const trash = {
             name: "Papelera",
@@ -1476,6 +1478,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             }
             return widget
         })
+
+        console.log(`[Dock] finalItems count: ${finalItems.length}, configs count: ${configs.length}`)
+        console.log(`[Dock] Config IDs: ${configs.map(c => c.id).join(', ')}`)
 
         // Diff & Prune Cache (V34: Unified Purge for Zero-Ghosting)
         for (const [id, w] of widgetCache) {

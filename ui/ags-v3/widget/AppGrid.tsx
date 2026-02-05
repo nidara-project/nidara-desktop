@@ -263,11 +263,14 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         console.log(`[AppGrid] Loading from appService: ${appDataList.length} apps`)
 
         cachedApps = appDataList.map(appData => {
+            // Use getMappedIcon for proper icon resolution
+            const mappedIcon = getMappedIcon(appData.icon || "application-x-executable", appData.id, appData.name)
+
             // Create AstalApps-compatible wrapper
             return {
                 id: appData.id,
                 name: appData.name,
-                icon_name: appData.icon || "application-x-executable",
+                icon_name: mappedIcon,
                 get_id: () => appData.id,
                 get_name: () => appData.name,
                 launch: () => {
