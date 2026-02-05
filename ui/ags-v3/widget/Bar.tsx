@@ -33,24 +33,47 @@ function Tray() {
       const item = tray.get_item(id)
       if (!item) return GLib.SOURCE_REMOVE;
 
-      const btn = new Gtk.Button({
-        css_classes: ["bar-tray-btn"],
-        tooltip_markup: item.tooltip_markup,
-        child: new Gtk.Image({
-          gicon: item.gicon,
-          pixel_size: 16
-        })
+      let gicon = null;
+      let tooltip = id;
+      try {
+        gicon = item.gicon;
+        tooltip = item.tooltip_markup || item.title || id;
+      } catch (e) {
+        console.warn(`[Tray] Item ${id} died during creation:`, e);
+        return GLib.SOURCE_REMOVE;
+      }
+
+      const icon = new Gtk.Image({
+        gicon: gicon || "view-refresh-symbolic",
+        pixel_size: 16,
+        css_classes: ["bar-tray-icon"]
       })
 
+      const btn = new Gtk.Button({
+        css_classes: ["bar-tray-btn"],
+        tooltip_markup: tooltip,
+        child: icon
+      })
+
+      if (!gicon) {
+        console.warn(`[Tray] Item ${id} provided NO icon, using fallback.`);
+      }
+
       btn.connect("clicked", () => {
-        try { item.activate(0, 0) } catch (e) { }
+        try {
+          const it = tray.get_item(id);
+          if (it) it.activate(0, 0);
+        } catch (e) { console.warn(`[Tray] Activate failed: ${id}`) }
       })
 
       const gesture = new Gtk.GestureClick()
       gesture.set_button(0)
       gesture.connect("released", (g) => {
         if (g.get_current_button() === 3) {
-          try { item.about_to_show() } catch (e) { }
+          try {
+            const it = tray.get_item(id);
+            if (it) it.about_to_show();
+          } catch (e) { console.warn(`[Tray] Menu failed: ${id}`) }
         }
       })
       btn.add_controller(gesture)

@@ -108,8 +108,22 @@ window.crystal-bar {
 
 .bar-status-btn:hover,
 .bar-time-btn:hover,
-.bar-util-btn:hover {
+.bar-util-btn:hover,
+.bar-tray-btn:hover {
   background-color: rgba(255, 255, 255, 0.1);
+}
+
+.bar-tray {
+  margin-right: 6px;
+}
+
+.bar-tray-btn {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  min-width: 28px;
+  min-height: 28px;
+  transition: all 0.2s ease;
 }
 
 /* --- 3. CRYSTAL PANELS --- */
