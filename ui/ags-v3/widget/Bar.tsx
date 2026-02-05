@@ -34,12 +34,15 @@ function Tray() {
       if (!item) return GLib.SOURCE_REMOVE;
 
       let gicon = null;
+      let iconName = null;
       let tooltip = id;
+
       try {
         gicon = item.gicon;
+        iconName = item.icon_name;
         tooltip = item.tooltip_markup || item.title || id;
       } catch (e) {
-        console.warn(`[Tray] Item ${id} died during creation:`, e);
+        console.warn(`[Tray] Item ${id} disappeared before creation`);
         return GLib.SOURCE_REMOVE;
       }
 
@@ -48,10 +51,13 @@ function Tray() {
         css_classes: ["bar-tray-icon"]
       })
 
+      // Multi-fallback icon resolution 🛡️
       if (gicon) {
-        icon.gicon = gicon
+        icon.gicon = gicon;
+      } else if (iconName) {
+        icon.icon_name = iconName;
       } else {
-        icon.icon_name = "view-refresh-symbolic"
+        icon.icon_name = "dialog-question-symbolic";
       }
 
       const btn = new Gtk.Button({
@@ -60,15 +66,11 @@ function Tray() {
         child: icon
       })
 
-      if (!gicon) {
-        console.warn(`[Tray] Item ${id} provided NO icon, using fallback.`);
-      }
-
       btn.connect("clicked", () => {
         try {
           const it = tray.get_item(id);
           if (it) it.activate(0, 0);
-        } catch (e) { console.warn(`[Tray] Activate failed: ${id}`) }
+        } catch (e) { console.warn(`[Tray] Click failed: ${id}`) }
       })
 
       const gesture = new Gtk.GestureClick()
@@ -109,7 +111,13 @@ function Tray() {
       // Initial sync
       tray.items.forEach(item => createItem(tray, item.item_id))
 
-      tray.connect("item-added", (_, id) => createItem(tray, id))
+      // Wait 100ms before creating new items to let DBus settle 🛡️
+      tray.connect("item-added", (_, id) => {
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+          createItem(tray, id);
+          return GLib.SOURCE_REMOVE;
+        })
+      })
       tray.connect("item-removed", (_, id) => removeItem(id))
     })
     return GLib.SOURCE_REMOVE
