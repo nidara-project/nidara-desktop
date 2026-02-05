@@ -36,7 +36,7 @@ sudo apt install -y \
 echo "🛠️ Compiling appmenu-glib-translator..."
 mkdir -p /tmp/astal-deps
 cd /tmp/astal-deps
-git clone https://gitlab.com/vala-panel-appmenu/vala-panel-appmenu.git . || (cd . && git pull)
+git clone https://gitlab.com/vala-panel-project/vala-panel-appmenu.git . || (cd . && git pull)
 cd subprojects/appmenu-glib-translator
 # Clean old build dir if it exists
 rm -rf build
