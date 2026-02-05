@@ -64,15 +64,16 @@ function Tray() {
         if (item) createItem(item)
       })
       tray.connect("item-removed", (_, id) => {
-        const btn = items.get(id)
-        if (btn && btn.get_parent() === box) {
-          try {
-            box.remove(btn)
+        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+          const btn = items.get(id)
+          if (btn) {
+            if (btn.get_parent() === box) {
+              box.remove(btn)
+            }
             items.delete(id)
-          } catch (e) {
-            console.warn(`[Bar] Failed to remove tray item ${id}:`, e)
           }
-        }
+          return GLib.SOURCE_REMOVE
+        })
       })
     })
     return GLib.SOURCE_REMOVE
