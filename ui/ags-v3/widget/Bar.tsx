@@ -24,57 +24,65 @@ function Tray() {
     spacing: 8
   })
 
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
+  const items = new Map<string, Gtk.Button>()
+
+  const createItem = (tray: any, id: string) => {
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      if (items.has(id)) return GLib.SOURCE_REMOVE;
+
+      const item = tray.get_item(id)
+      if (!item) return GLib.SOURCE_REMOVE;
+
+      const btn = new Gtk.Button({
+        css_classes: ["bar-tray-btn"],
+        tooltip_markup: item.tooltip_markup,
+        child: new Gtk.Image({
+          gicon: item.gicon,
+          pixel_size: 16
+        })
+      })
+
+      btn.connect("clicked", () => {
+        try { item.activate(0, 0) } catch (e) { }
+      })
+
+      const gesture = new Gtk.GestureClick()
+      gesture.set_button(0)
+      gesture.connect("released", (g) => {
+        if (g.get_current_button() === 3) {
+          try { item.about_to_show() } catch (e) { }
+        }
+      })
+      btn.add_controller(gesture)
+
+      items.set(id, btn)
+      box.append(btn)
+      return GLib.SOURCE_REMOVE
+    })
+  }
+
+  const removeItem = (id: string) => {
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+      const btn = items.get(id)
+      if (btn) {
+        if (btn.get_parent() === box) {
+          box.remove(btn)
+        }
+        items.delete(id)
+      }
+      return GLib.SOURCE_REMOVE
+    })
+  }
+
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 800, () => {
     getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
       if (!tray) return;
 
-      const items = new Map<string, Gtk.Button>()
+      // Initial sync
+      tray.items.forEach(item => createItem(tray, item.item_id))
 
-      const createItem = (item: AstalTray.TrayItem) => {
-        if (items.has(item.item_id)) return;
-
-        const btn = new Gtk.Button({
-          css_classes: ["bar-tray-btn"],
-          tooltip_markup: item.tooltip_markup,
-          child: new Gtk.Image({
-            gicon: item.gicon,
-            pixel_size: 16
-          })
-        })
-
-        btn.connect("clicked", (b) => item.activate(0, 0))
-
-        const gesture = new Gtk.GestureClick()
-        gesture.set_button(0) // All buttons
-        gesture.connect("released", (g, n, x, y) => {
-          if (g.get_current_button() === 3) { // Right click
-            item.about_to_show()
-            // item.create_menu() and show it
-          }
-        })
-        btn.add_controller(gesture)
-
-        items.set(item.item_id, btn)
-        box.append(btn)
-      }
-
-      tray.items.forEach(createItem)
-      tray.connect("item-added", (_, id) => {
-        const item = tray.get_item(id)
-        if (item) createItem(item)
-      })
-      tray.connect("item-removed", (_, id) => {
-        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-          const btn = items.get(id)
-          if (btn) {
-            if (btn.get_parent() === box) {
-              box.remove(btn)
-            }
-            items.delete(id)
-          }
-          return GLib.SOURCE_REMOVE
-        })
-      })
+      tray.connect("item-added", (_, id) => createItem(tray, id))
+      tray.connect("item-removed", (_, id) => removeItem(id))
     })
     return GLib.SOURCE_REMOVE
   })
