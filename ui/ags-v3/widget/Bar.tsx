@@ -25,10 +25,13 @@ function Tray() {
   })
 
   const items = new Map<string, Gtk.Button>()
+  const GHOST_BLACKLIST = ["StatusNotifierItem", "sn-watcher", "org.freedesktop.StatusNotifierWatcher"]
 
   const createItem = (tray: any, id: string) => {
-    // 250ms Settlement Delay for DBus properties ⏳
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+    // Immediate filter for internal ghosts 👻
+    if (GHOST_BLACKLIST.some(ghost => id.includes(ghost))) return;
+
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
       if (items.has(id)) return GLib.SOURCE_REMOVE;
 
       const item = tray.get_item(id)
@@ -43,7 +46,13 @@ function Tray() {
         iconName = item.icon_name || item.attention_icon_name;
         tooltip = item.tooltip_markup || item.title || id;
       } catch (e) {
-        console.warn(`[Tray] Item ${id} became inaccessible during creation`);
+        console.warn(`[Tray] Item ${id} unreachable`)
+        return GLib.SOURCE_REMOVE;
+      }
+
+      // If absolutely no icon is provided, it's a ghost or broken app
+      if (!gicon && (!iconName || iconName.trim().length === 0)) {
+        console.warn(`[Tray] Skipping ${id}: No icon data found`);
         return GLib.SOURCE_REMOVE;
       }
 
@@ -52,13 +61,10 @@ function Tray() {
         css_classes: ["bar-tray-icon"]
       })
 
-      // Tiered Icon Resolution 🛡️
       if (gicon) {
         icon.gicon = gicon;
-      } else if (iconName && iconName.trim().length > 0) {
+      } else if (iconName) {
         icon.icon_name = iconName;
-      } else {
-        icon.icon_name = "image-missing-symbolic";
       }
 
       const btn = new Gtk.Button({
@@ -68,20 +74,14 @@ function Tray() {
       })
 
       btn.connect("clicked", () => {
-        try {
-          const it = tray.get_item(id);
-          if (it) it.activate(0, 0);
-        } catch (e) { console.warn(`[Tray] Action failed for ${id}`) }
+        try { tray.get_item(id)?.activate(0, 0) } catch (e) { }
       })
 
       const gesture = new Gtk.GestureClick()
       gesture.set_button(0)
       gesture.connect("released", (g) => {
         if (g.get_current_button() === 3) {
-          try {
-            const it = tray.get_item(id);
-            if (it) it.about_to_show();
-          } catch (e) { console.warn(`[Tray] Context menu failed for ${id}`) }
+          try { tray.get_item(id)?.about_to_show() } catch (e) { }
         }
       })
       btn.add_controller(gesture)
@@ -96,6 +96,7 @@ function Tray() {
     GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
       const btn = items.get(id)
       if (btn) {
+        // Double check parent to prevent GLib-GIO criticals 🛡️
         if (btn.get_parent() === box) {
           box.remove(btn)
         }
