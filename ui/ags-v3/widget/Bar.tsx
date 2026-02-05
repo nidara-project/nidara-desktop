@@ -43,14 +43,16 @@ function Tray() {
         })
 
         btn.connect("clicked", (b) => item.activate(0, 0))
-        btn.connect("button-release-event", (b, event: any) => {
-          if (event.get_button() === 3) { // Right click
+
+        const gesture = new Gtk.GestureClick()
+        gesture.set_button(0) // All buttons
+        gesture.connect("released", (g, n, x, y) => {
+          if (g.get_current_button() === 3) { // Right click
             item.about_to_show()
-            // In GTK4 we use the menu from the item
-            // item.create_menu() is common in Astal
+            // item.create_menu() and show it
           }
-          return false
         })
+        btn.add_controller(gesture)
 
         items.set(item.item_id, btn)
         box.append(btn)
