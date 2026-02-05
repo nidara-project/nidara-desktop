@@ -72,7 +72,7 @@ function SchematicMap(wsId: number, hyprland: AstalHyprland.AstalHyprland, gdkMo
         dock.set_size_request(drawWidth, dockH)
 
         const clients = this.hyprland.get_clients() || []
-        const wsClients = clients.filter(c => c.workspace.id === this.wsId && c.mapped)
+        const wsClients = clients.filter(c => c.workspace && c.workspace.id === this.wsId && c.mapped)
             .sort((a, b) => b.focus_history_id - a.focus_history_id)
 
         // Clear extinct windows
@@ -210,7 +210,7 @@ export default function WorkspaceOverview(monitor: Gdk.Monitor, hyprland: AstalH
             label.set_css_classes(["wo-label", isActive ? "active" : ""])
             label.opacity = isActive ? 1.0 : (isOccupied ? 0.7 : 0.3)
 
-            const wsClients = clients.filter(c => c.workspace.id === i && c.mapped)
+            const wsClients = clients.filter(c => c.workspace && c.workspace.id === i && c.mapped)
             count.label = wsClients.length > 0 ? wsClients.length.toString() : "󰝦"
 
             if (ctx.schematic.sync) ctx.schematic.sync()
