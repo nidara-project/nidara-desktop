@@ -44,10 +44,15 @@ function Tray() {
       }
 
       const icon = new Gtk.Image({
-        gicon: gicon || "view-refresh-symbolic",
         pixel_size: 16,
         css_classes: ["bar-tray-icon"]
       })
+
+      if (gicon) {
+        icon.gicon = gicon
+      } else {
+        icon.icon_name = "view-refresh-symbolic"
+      }
 
       const btn = new Gtk.Button({
         css_classes: ["bar-tray-btn"],
