@@ -271,9 +271,24 @@ export default function AppGrid(monitor: Gdk.Monitor) {
                 get_id: () => appData.id,
                 get_name: () => appData.name,
                 launch: () => {
-                    execAsync(`gtk-launch ${appData.id}`).catch(err => {
-                        console.error(`[AppGrid] Failed to launch ${appData.id}:`, err)
-                    })
+                    // Try gtk-launch first (proper way)
+                    execAsync(`gtk-launch ${appData.id}`)
+                        .catch(err => {
+                            console.warn(`[AppGrid] gtk-launch failed for ${appData.id}, trying direct exec:`, err)
+                            // Fallback: Try direct execution if gtk-launch fails
+                            if (appData.exec) {
+                                return execAsync(appData.exec)
+                            }
+                            throw new Error(`No exec command available for ${appData.id}`)
+                        })
+                        .catch(err => {
+                            console.error(`[AppGrid] All launch methods failed for ${appData.name} (${appData.id}):`, err)
+                            // TODO: Show notification to user about launch failure
+                        })
+                        .finally(() => {
+                            // Close App Grid after launch attempt
+                            win.visible = false
+                        })
                 }
             } as any
         }).sort((a, b) => (a.name || "").localeCompare(b.name || ""))
