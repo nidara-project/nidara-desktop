@@ -3,7 +3,7 @@ import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import AstalNotifd from "gi://AstalNotifd"
 
-function Notification(n: AstalNotifd.Notification) {
+function Notification(n: any) {
     const box = new Gtk.Box({
         css_classes: ["notif-card"],
         orientation: Gtk.Orientation.VERTICAL,

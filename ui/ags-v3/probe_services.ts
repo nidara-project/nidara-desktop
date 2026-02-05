@@ -1,30 +1,22 @@
-import { Variable } from "ags"
 import { exec, execAsync } from "ags/process"
 
-try {
-    const battery = pkg.require("gi://AstalBattery")
-    console.log("AstalBattery available")
-} catch (e) {
-    console.log("AstalBattery NOT available")
+/**
+ * Service Availability Probe 🛡️🔍
+ * Bypasses broken pkg.require and uses safe dynamic imports or GObject checks.
+ */
+
+async function probeService(name: string) {
+    try {
+        // @ts-ignore
+        const service = await import(`gi://${name}`)
+        console.log(`[PROBE] ${name} available`)
+        return true
+    } catch (e) {
+        console.log(`[PROBE] ${name} NOT available`)
+        return false
+    }
 }
 
-try {
-    const network = pkg.require("gi://AstalNetwork")
-    console.log("AstalNetwork available")
-} catch (e) {
-    console.log("AstalNetwork NOT available")
-}
-
-try {
-    const wp = pkg.require("gi://AstalWp")
-    console.log("AstalWp available")
-} catch (e) {
-    console.log("AstalWp NOT available")
-}
-
-try {
-    const tray = pkg.require("gi://AstalTray")
-    console.log("AstalTray available")
-} catch (e) {
-    console.log("AstalTray NOT available")
-}
+// Execution
+const services = ["AstalBattery", "AstalNetwork", "AstalWp", "AstalTray"]
+services.forEach(s => probeService(s))
