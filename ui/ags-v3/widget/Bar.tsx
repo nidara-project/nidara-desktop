@@ -72,28 +72,28 @@ function Tray() {
   const removeItem = (id: string) => {
     const btn = items.get(id)
     if (btn) {
-      if (btn.get_parent() === box) {
-        box.remove(btn)
-      }
+      try {
+        if (btn.get_parent() === box) box.remove(btn)
+      } catch (e) { }
       items.delete(id)
     }
   }
 
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+  // Purely independent initialization to avoid blocking other components 🛡️
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
     getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
       if (!tray) return;
-
-      // Initial sync
       tray.items.forEach(item => createItem(tray, item.item_id))
-
       tray.connect("item-added", (_, id) => {
-        // Safe defer to allow item properties to sync ⏳
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-          createItem(tray, id)
-          return GLib.SOURCE_REMOVE
+          createItem(tray, id); return GLib.SOURCE_REMOVE;
         })
       })
-      tray.connect("item-removed", (_, id) => removeItem(id))
+      tray.connect("item-removed", (_, id) => {
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+          removeItem(id); return GLib.SOURCE_REMOVE;
+        })
+      })
     })
     return GLib.SOURCE_REMOVE
   })
@@ -346,10 +346,16 @@ function SystemStatus() {
     child: new Gtk.Label({ label: "󰕮", css_classes: ["bar-cc-icon"] }),
     tooltip_text: "Centro de Control"
   })
-  ccBtn.connect("clicked", () => { (globalThis as any).toggleControlCenter?.() })
+  ccBtn.connect("clicked", () => {
+    try {
+      (globalThis as any).toggleControlCenter?.()
+    } catch (e) {
+      console.error("[Bar] CC toggle failed:", e)
+    }
+  })
   box.append(ccBtn)
 
-  // System Tray
+  // System Tray - Appended as the last, optional element
   box.append(Tray())
 
   return box
