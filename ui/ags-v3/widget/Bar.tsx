@@ -47,6 +47,21 @@ function Tray() {
       })
     })
 
+    // Context Menu Support 🖱️
+    let menu: Gtk.PopoverMenu | null = null
+    if (item.menu_model) {
+      menu = new Gtk.PopoverMenu({
+        menu_model: item.menu_model,
+        autohide: true,
+        has_arrow: false,
+        css_classes: ["bar-tray-menu"]
+      })
+      menu.set_parent(btn)
+      if (item.action_group) {
+        btn.insert_action_group("dbusmenu", item.action_group)
+      }
+    }
+
     btn.connect("clicked", () => {
       try { item.activate(0, 0) } catch (e) { }
     })
@@ -54,8 +69,10 @@ function Tray() {
     const gesture = new Gtk.GestureClick()
     gesture.set_button(0)
     gesture.connect("released", (g) => {
-      if (g.get_current_button() === 3) {
+      const b = g.get_current_button()
+      if (b === 3) { // Right Click
         try { item.about_to_show() } catch (e) { }
+        if (menu) menu.popup()
       }
     })
     btn.add_controller(gesture)
