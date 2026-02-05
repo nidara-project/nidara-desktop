@@ -258,9 +258,26 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     const initCache = () => {
         if (cacheInitialized) return
 
-        cachedApps = appsService.get_list().sort((a, b) =>
-            (a.name || "").localeCompare(b.name || "")
-        )
+        // Use custom appService which has all 169 apps
+        const appDataList = Array.from(appService['cache'].values())
+        console.log(`[AppGrid] Loading from appService: ${appDataList.length} apps`)
+
+        cachedApps = appDataList.map(appData => {
+            // Create AstalApps-compatible wrapper
+            return {
+                id: appData.id,
+                name: appData.name,
+                icon_name: appData.icon || "application-x-executable",
+                get_id: () => appData.id,
+                get_name: () => appData.name,
+                launch: () => {
+                    execAsync(`gtk-launch ${appData.id}`).catch(err => {
+                        console.error(`[AppGrid] Failed to launch ${appData.id}:`, err)
+                    })
+                }
+            } as any
+        }).sort((a, b) => (a.name || "").localeCompare(b.name || ""))
+
         console.log(`[AppGrid] Initializing cache with ${cachedApps.length} apps`)
 
         cachedApps.forEach(app => {
