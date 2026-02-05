@@ -31,7 +31,19 @@ sudo apt install -y \
     git \
     nodejs
 
-# 2. Build & Install Astal Libraries (The "Secret Sauce")
+# 2. Build & Install Dependencies (Vala Panel Appmenu)
+# Required for AstalTray
+echo "🛠️ Compiling appmenu-glib-translator..."
+mkdir -p /tmp/astal-deps
+cd /tmp/astal-deps
+git clone https://gitlab.com/vala-panel-appmenu/vala-panel-appmenu.git . || (cd . && git pull)
+cd subprojects/appmenu-glib-translator
+# Clean old build dir if it exists
+rm -rf build
+meson setup build --prefix=/usr/local
+sudo meson install -C build
+
+# 3. Build & Install Astal Libraries (The "Secret Sauce")
 echo "🛠️ Compiling Astal Service Libraries..."
 mkdir -p /tmp/astal-build
 cd /tmp/astal-build
