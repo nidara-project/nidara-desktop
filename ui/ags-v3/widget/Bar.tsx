@@ -29,13 +29,14 @@ function Tray() {
   const createItem = (tray: any, id: string) => {
     if (items.has(id)) return;
 
-    // Use find() to avoid unstable service getters 🛡️
+    // Direct lookup in the service state 🛡️
     const item = tray.items.find((i: any) => i.item_id === id)
     if (!item) return;
 
-    // Filter out protocol ghosts (items with no icon and no title) 👻
-    const hasVisuals = item.gicon || item.icon_name || item.title || item.tooltip_markup;
-    if (!hasVisuals) return;
+    // STRICT FILTER: No icon = No button. 
+    // This kills the 'StatusNotifierItem' protocol ghosts 👻
+    const hasIcon = item.gicon || (item.icon_name && item.icon_name.length > 0);
+    if (!hasIcon) return;
 
     const icon = new Gtk.Image({
       pixel_size: 16,
@@ -44,7 +45,6 @@ function Tray() {
 
     if (item.gicon) icon.gicon = item.gicon;
     else if (item.icon_name) icon.icon_name = item.icon_name;
-    else icon.icon_name = "image-missing-symbolic";
 
     const btn = new Gtk.Button({
       css_classes: ["bar-tray-btn"],
@@ -87,7 +87,8 @@ function Tray() {
       tray.items.forEach(item => createItem(tray, item.item_id))
 
       tray.connect("item-added", (_, id) => {
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+        // Safe defer to allow item properties to sync ⏳
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
           createItem(tray, id)
           return GLib.SOURCE_REMOVE
         })
