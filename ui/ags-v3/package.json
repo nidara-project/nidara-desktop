@@ -1,7 +1,7 @@
 {
   "scripts": {
-    "dev": "ags run app.ts",
-    "run": "ags run app.ts",
+    "dev": "GI_TYPELIB_PATH=/usr/local/lib/x86_64-linux-gnu/girepository-1.0:/usr/local/lib/girepository-1.0:$GI_TYPELIB_PATH ags run app.ts",
+    "run": "GI_TYPELIB_PATH=/usr/local/lib/x86_64-linux-gnu/girepository-1.0:/usr/local/lib/girepository-1.0:$GI_TYPELIB_PATH ags run app.ts",
     "build": "ags bundle app.ts style.css"
   },
   "dependencies": {

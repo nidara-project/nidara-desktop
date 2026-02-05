@@ -8,13 +8,14 @@ DistroIA utiliza la versión moderna de AGS (v3+), basada en el ecosistema **Ast
 - **Importaciones**: Se utilizan módulos modernos (ESM) en lugar de `imports.gi`.
 - **Estructura**: Basado en librerías `astal` independientes para cada servicio (Hyprland, Mpris, etc.).
 
-## 2. Estructura del Proyecto Astal
+## 2. Estructura del Proyecto (MiDistroIA)
 ```text
-~/.config/ags/
-├── app.ts             # Punto de entrada
-├── style.scss         # Estilos compilados
-├── widget/            # Componentes (Dock, Bar, etc.)
-└── lib/               # Utilidades y lógica
+~/Dev/MiDistroIA/ui/ags-v3/
+├── app.ts             # Punto de entrada (Configuración de Ventanas)
+├── style.css          # Definición de Glassmorphism (Vanilla CSS)
+├── widget/            # Componentes Natos (Dock, Bar, Cockpit)
+├── core/              # Servicios de lógica (Icon Mapping, App Tracking)
+└── utils.ts           # Helpers globales
 ```
 
 ## 3. Principios de DistroIA (v3)

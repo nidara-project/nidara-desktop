@@ -24,6 +24,7 @@ To achieve zero-vibration and eliminate the "jitter" during magnification, the d
 
 ## 4. Seamless Overlap Model (V100)
 To prevent magnified icons from being cut off by the dock's window or other applications, we use an overlap model:
+- **Window Layer**: The Dock operates on the `TOP` layer (changed from `OVERLAY` in V105). This allows fullscreen windows (like YouTube or Games) to cover the dock, while maintaining its presence above regular tiled/floating windows.
 - **Window Geometry**: The Gtk4LayerShell window is **200px** high, but the **Exclusive Zone** is locked to **104px**.
 - **Window Transparency**: The top ~96px of the window are transparent and non-interactive (`exclusive_zone: 0` for that area), allowing magnified icons to render *over* other applications.
 - **Vertical Distribution**: 

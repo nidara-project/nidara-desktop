@@ -6,7 +6,7 @@ import AstalHyprland from "gi://AstalHyprland"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 
-// Native Premium Imports
+// Astal Service Libraries
 import AstalBattery from "gi://AstalBattery"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalNotifd from "gi://AstalNotifd"
@@ -14,20 +14,28 @@ import WorkspaceOverview from "./WorkspaceOverview"
 import { getWordmark } from "../utils"
 
 /**
- * Robust Service Fetcher 🛡️
+ * Robust Service Fetcher with Exponential Backoff 🛡️
+ * Retries with increasing delays: 200ms, 400ms, 800ms, 1600ms, 3200ms
  */
 async function getServiceSafe<T>(getter: () => T, name: string): Promise<T | null> {
-  for (let i = 0; i < 5; i++) {
+  const MAX_RETRIES = 5;
+  const BASE_DELAY = 200;
+
+  for (let i = 0; i < MAX_RETRIES; i++) {
     try {
       const service = getter();
       if (service) return service;
     } catch (e) {
-      console.warn(`[Bar] Service ${name} not ready (attempt ${i + 1}), retrying...`);
+      console.warn(`[Bar] Service ${name} not ready (attempt ${i + 1}/${MAX_RETRIES}), retrying...`);
     }
-    await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => { r(null); return GLib.SOURCE_REMOVE }));
+    // Exponential backoff: 200, 400, 800, 1600, 3200ms
+    const delay = BASE_DELAY * Math.pow(2, i);
+    await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => { r(null); return GLib.SOURCE_REMOVE }));
   }
+  console.error(`[Bar] Service ${name} failed to initialize after ${MAX_RETRIES} attempts`);
   return null;
 }
+
 
 
 /**

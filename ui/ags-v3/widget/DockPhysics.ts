@@ -18,6 +18,14 @@ export const DOCK_CONSTANTS = {
     SEPARATOR_LINE: 2,
     SEPARATOR_OFFSET: 15,
     APP_SLOT: 80,
+    // ANIMATION (V106: Centralized)
+    LERP_FACTOR: 0.18,      // Smoothness of scale transitions
+    TICK_INTERVAL: 16,      // ~60fps tick rate in ms
+    TOOLTIP_DELAY: 500,     // Tooltip appear delay in ms
+    // WINDOW GEOMETRY
+    PILL_HEIGHT: 92,
+    WINDOW_HEIGHT: 200,
+    EXCLUSIVE_ZONE: 104,
 };
 
 // Aliases for local physics compatibility (gradual migration)

@@ -46,37 +46,39 @@ Cada vez que terminamos un cambio exitoso, yo (tu asistente) copio los archivos 
 
 ---
 
+---
+
 ## ⚓ EL DOCK (Barra Inferior)
-El Dock es una aplicación inteligente escrita en Python que se comunica con el sistema.
-- **Auto-Hide**: Se oculta automáticamente si hay una ventana que le estorba. Pasa el ratón por la parte inferior para que aparezca.
-- **Cerrar Apps**: Haz **clic derecho** sobre cualquier icono de una app abierta para ver la opción "Cerrar aplicación".
-- **Indicadores**: Los puntos debajo de los iconos indican que la aplicación está abierta. Un punto brillante indica la ventana activa.
+El Dock es una aplicación inteligente desarrollada en **AGS v3**. 
+- **Efecto de Magnificación**: Los iconos crecen dinámicamente al pasar el ratón, siguiendo una física de interpolación lineal para máxima suavidad.
+- **Gestión de Pinned Apps**: Puedes fijar o desanclar aplicaciones directamente.
+- **Indicadores de Estado**: Puntos de estilo premium indican si una aplicación está activa o tiene ventanas abiertas.
+
+---
+
+## 🎛️ CENTRO DE CONTROL
+El Centro de Control (`SUPER + O` o clic en el icono de la barra) permite gestionar:
+- **Sliders rápidos**: Ajuste instantáneo de Volumen y Brillo.
+- **Conectividad**: Estado y toggle de Wi-Fi y Bluetooth (si las librerías están presentes).
+- **Media Player**: Control de reproducción MRPIS (Play/Pause, Prev/Next) con visualización de carátulas.
 
 ---
 
 ## 🛠️ RESOLUCIÓN DE PROBLEMAS (Troubleshooting)
 
 ### "El fondo de pantalla no se ve o sale negro"
-Actualmente estamos usando **swaybg** porque es la opción más compatible. 
+Actualmente estamos usando **swaybg** por estabilidad.
 > [!IMPORTANT]
-> **Pendiente**: Hemos detectado un error de permisos con `hyprpaper` (amdgpu -13). Hemos añadido tu usuario a los grupos `video` y `render`, pero esto suele requerir un **reinicio completo del PC** para que el kernel aplique los cambios. Si reinicias, prueba a volver a `hyprpaper` para ganar rendimiento.
+> Si deseas usar `hyprpaper`, asegúrate de estar en el grupo `video` y `render`.
 
-### "El Dock no se oculta después de usar el menú clic derecho"
-Es un fallo conocido en la interacción con Wayland.
-> **Solución temporal**: Vuelve a pasar el ratón por encima del Dock y sácalo hacia abajo. Eso reactiva el temporizador de ocultación.
-
-### "El Dock no aparece"
-Pulsa `SUPER` + `SHIFT` + `C`. Esto debería relanzar el script `scripts/start_dock.sh`.
-
-### "Hay una aplicación que hace crashear el sistema (como Antigravity)"
-Hemos implementado un **Lanzador de Seguridad**. Todas las apps se abren a través de `core/launcher.py`, que limpia las variables de entorno peligrosas antes de lanzarlas. Esto evita que las apps de desarrollo se confundan con el entorno Wayland del sistema.
-
-### "He cambiado una tecla y no funciona"
-Revisa `~/.config/hypr/hyprland.conf`. Es el corazón del sistema. Si cometes un error de sintaxis, Hyprland te avisará con una barra roja arriba.
+### "No aparecen los iconos de Red o Batería"
+Esto sucede si las librerías **Astal** no están instaladas o no se encuentran en el `GI_TYPELIB_PATH`.
+- Revisa el archivo `package.json` para asegurar que las rutas `/usr/local/lib/...` están presentes o usa `provision.sh`.
 
 ---
 
 ## 🏗️ ARQUITECTURA TÉCNICA
 - **Compositor**: Hyprland (Wayland).
-- **Librería UI**: GTK4 + Gtk4LayerShell (para que el Dock y la Barra se peguen a los bordes).
-- **Lanzador**: DistroIA Menu (Escrito por nosotros para ser rápido y limpio).
+- **Librería UI**: AGS v3 (GJS + GTK4 + Gtk4LayerShell).
+- **Optimización**: Widget caching y physics engine personalizado en TypeScript.
+- **Provisión**: Script `provision.sh` para instalación rápida de dependencias.

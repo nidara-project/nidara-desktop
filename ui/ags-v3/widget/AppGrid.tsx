@@ -124,16 +124,17 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     })
 
     const flowbox = new Gtk.FlowBox({
-        name: "app-grid-flowbox", // V114: Added ID
+        name: "app-grid-flowbox",
         halign: Gtk.Align.FILL,
         valign: Gtk.Align.START,
         hexpand: true,
         max_children_per_line: 7,
         min_children_per_line: 4,
-        selection_mode: Gtk.SelectionMode.NONE,
+        selection_mode: Gtk.SelectionMode.SINGLE, // V106: Enable keyboard navigation
         column_spacing: 30,
         row_spacing: 40,
         css_classes: ["app-grid-flow"],
+        can_focus: true, // V106: Allow focus for keyboard nav
     })
 
     const scroll = new Gtk.ScrolledWindow({
@@ -182,85 +183,176 @@ export default function AppGrid(monitor: Gdk.Monitor) {
 
     win.set_child(mainOverlay)
 
-    // INITIAL RENDER
-    const renderApps = (query = "") => {
-        let child = flowbox.get_first_child()
-        while (child) {
-            const next = child.get_next_sibling()
-            flowbox.remove(child)
-            child = next
+    // V106: OPTIMIZED APP GRID - Widget Cache + Visibility Filtering 🚀
+    // Apps are created once and filtered via visibility instead of destroying/recreating
+    const widgetCache = new Map<string, Gtk.Button>()
+    let cachedApps: AstalApps.Application[] = []
+    let cacheInitialized = false
+
+    // Create widget for a single app (called once per app, cached)
+    const createAppWidget = (app: AstalApps.Application): Gtk.Button => {
+        const id = (app.get_id ? app.get_id() : (app as any).id || "").toLowerCase()
+        const name = app.get_name ? app.get_name() : (app as any).name || ""
+
+        const iconName = app.icon_name || "image-missing"
+        const mapped = getMappedIcon(iconName, id, name)
+
+        const icon = new Gtk.Image({
+            pixel_size: 64,
+            halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.CENTER,
+            hexpand: true,
+            vexpand: true,
+        })
+
+        const resolved = appService.getIconName(mapped)
+        if (resolved && resolved.startsWith("/")) {
+            icon.gicon = Gio.FileIcon.new(Gio.File.new_for_path(resolved))
+        } else {
+            icon.icon_name = resolved || mapped
         }
 
-        const list = query.trim()
-            ? appsService.fuzzy_query(query)
-            : appsService.get_list().sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-
-        list.forEach(app => {
-            const id = (app.get_id ? app.get_id() : (app as any).id || "").toLowerCase()
-            const name = app.get_name ? app.get_name() : (app as any).name || ""
-
-            const iconName = app.icon_name || "image-missing"
-            const mapped = getMappedIcon(iconName, id, name)
-
-            const icon = new Gtk.Image({
-                pixel_size: 64,
-                halign: Gtk.Align.CENTER,
-                valign: Gtk.Align.CENTER,
-                hexpand: true,
-                vexpand: true,
-            })
-
-            const resolved = appService.getIconName(mapped)
-            if (resolved && resolved.startsWith("/")) {
-                icon.gicon = Gio.FileIcon.new(Gio.File.new_for_path(resolved))
-            } else {
-                icon.icon_name = resolved || mapped
-            }
-
-            const plate = new Gtk.Box({
-                css_classes: ["cd-squircle-plate"],
-                width_request: 92,
-                height_request: 92,
-                halign: Gtk.Align.CENTER,
-                valign: Gtk.Align.CENTER,
-            })
-            plate.append(icon)
-
-            const label = new Gtk.Label({
-                label: name,
-                css_classes: ["app-grid-label"],
-                halign: Gtk.Align.CENTER,
-                max_width_chars: 14,
-                ellipsize: Pango.EllipsizeMode.END
-            })
-
-            const item = new Gtk.Box({
-                orientation: Gtk.Orientation.VERTICAL,
-                spacing: 12,
-                css_classes: ["app-grid-item"],
-                halign: Gtk.Align.CENTER,
-            })
-            item.append(plate)
-            item.append(label)
-
-            const button = new Gtk.Button({
-                css_classes: ["app-grid-button"],
-            })
-            button.set_child(item)
-            button.connect("clicked", () => {
-                app.launch()
-                win.visible = false
-            })
-
-            flowbox.append(button)
+        const plate = new Gtk.Box({
+            css_classes: ["cd-squircle-plate"],
+            width_request: 92,
+            height_request: 92,
+            halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.CENTER,
         })
+        plate.append(icon)
+
+        const label = new Gtk.Label({
+            label: name,
+            css_classes: ["app-grid-label"],
+            halign: Gtk.Align.CENTER,
+            max_width_chars: 14,
+            ellipsize: Pango.EllipsizeMode.END
+        })
+
+        const item = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 12,
+            css_classes: ["app-grid-item"],
+            halign: Gtk.Align.CENTER,
+        })
+        item.append(plate)
+        item.append(label)
+
+        const button = new Gtk.Button({
+            css_classes: ["app-grid-button"],
+        })
+        button.set_child(item)
+            // Store search metadata for filtering
+            ; (button as any)._appId = id
+            ; (button as any)._appName = name.toLowerCase()
+
+        button.connect("clicked", () => {
+            app.launch()
+            win.visible = false
+        })
+
+        return button
     }
 
+    // Initialize cache with all apps (called once)
+    const initCache = () => {
+        if (cacheInitialized) return
+
+        cachedApps = appsService.get_list().sort((a, b) =>
+            (a.name || "").localeCompare(b.name || "")
+        )
+
+        cachedApps.forEach(app => {
+            const id = (app.get_id ? app.get_id() : (app as any).id || "").toLowerCase()
+            if (!widgetCache.has(id)) {
+                const widget = createAppWidget(app)
+                widgetCache.set(id, widget)
+                flowbox.append(widget)
+            }
+        })
+
+        cacheInitialized = true
+    }
+
+    // Optimized filter: just toggle visibility instead of recreating
+    const filterApps = (query = "") => {
+        if (!cacheInitialized) {
+            initCache()
+        }
+
+        const q = query.trim().toLowerCase()
+
+        if (q === "") {
+            // Show all apps
+            widgetCache.forEach((widget) => {
+                widget.set_visible(true)
+            })
+        } else {
+            // Fuzzy match results from service
+            const matches = appsService.fuzzy_query(query)
+            const matchIds = new Set(
+                matches.map(app => (app.get_id ? app.get_id() : (app as any).id || "").toLowerCase())
+            )
+
+            widgetCache.forEach((widget, id) => {
+                const isMatch = matchIds.has(id) ||
+                    (widget as any)._appName?.includes(q) ||
+                    (widget as any)._appId?.includes(q)
+                widget.set_visible(isMatch)
+            })
+        }
+
+        // Select first visible child if flowbox has focus
+        const first = flowbox.get_first_child()
+        if (first && first.get_visible()) {
+            flowbox.select_child(first as Gtk.FlowBoxChild)
+        }
+    }
+
+
     searchEntry.connect("changed", () => {
-        renderApps(searchEntry.text)
+        filterApps(searchEntry.text)
     })
 
-    renderApps()
+    // V106: KEYBOARD NAVIGATION 🎹
+    const keyController = new Gtk.EventControllerKey()
+    keyController.connect("key-pressed", (controller, keyval, keycode, state) => {
+        // Escape: Close the grid
+        if (keyval === Gdk.KEY_Escape) {
+            win.visible = false
+            return true
+        }
+        // Down Arrow: Move focus from search to flowbox
+        if (keyval === Gdk.KEY_Down && searchEntry.has_focus) {
+            const first = flowbox.get_child_at_index(0)
+            if (first) {
+                flowbox.select_child(first)
+                first.grab_focus()
+            }
+            return true
+        }
+        // Enter: Launch selected app (when flowbox has focus)
+        if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
+            const selected = flowbox.get_selected_children()
+            if (selected && selected.length > 0) {
+                const child = selected[0]
+                const button = child.get_child() as Gtk.Button
+                if (button) button.emit("clicked")
+                return true
+            }
+        }
+        return false
+    })
+    win.add_controller(keyController)
+
+    // FlowBox: Activate on Enter when child is selected
+    flowbox.connect("child-activated", (fb, child) => {
+        const button = child.get_child() as Gtk.Button
+        if (button) button.emit("clicked")
+    })
+
+    // Initialize on first show
+    filterApps()
 
         // Global toggle mechanism
         ; (win as any).toggle = () => {
@@ -268,7 +360,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
             if (win.visible) {
                 searchEntry.text = ""
                 searchEntry.grab_focus()
-                renderApps()
+                filterApps()
             }
         }
 

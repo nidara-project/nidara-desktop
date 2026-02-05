@@ -3,7 +3,7 @@ import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import AstalMpris from "gi://AstalMpris"
 import AstalNetwork from "gi://AstalNetwork"
-// import AstalBluetooth from "gi://AstalBluetooth" // DISABLED
+// import AstalBluetooth from "gi://AstalBluetooth" // Still missing on system
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 
@@ -93,10 +93,17 @@ function Media() {
 
 function GridControls() {
     let network;
+    let bluetooth;
 
     try {
         network = AstalNetwork.get_default()
-    } catch (e) { console.error("[CC] Network service failed:", e) }
+    } catch (e) { console.warn("[CC] Network service unavailable:", e) }
+
+    /* Bluetooth disabled - AstalBluetooth missing
+    try {
+        bluetooth = AstalBluetooth.get_default()
+    } catch (e) { console.warn("[CC] Bluetooth service unavailable:", e) }
+    */
 
     const grid = new Gtk.Grid({
         column_spacing: 12,
@@ -131,9 +138,31 @@ function GridControls() {
         grid.attach(wifi, col++, row, 1, 1)
     }
 
-    /* Bluetooth section REMOVED for stability 🚑 */
+    // Bluetooth Toggle - DISABLED
+    /*
+    if (bluetooth && bluetooth.is_powered !== undefined) {
+        try {
+            const btActive = bluetooth.is_powered
+            const bt = createToggle(
+                btActive ? "bluetooth-active-symbolic" : "bluetooth-disabled-symbolic",
+                "Bluetooth",
+                btActive,
+                () => {
+                    try {
+                        bluetooth.is_powered = !bluetooth.is_powered
+                    } catch (e) {
+                        console.error("[CC] Bluetooth toggle failed:", e)
+                    }
+                }
+            )
+            grid.attach(bt, col++, row, 1, 1)
+        } catch (e) {
+            console.warn("[CC] Bluetooth toggle creation failed:", e)
+        }
+    }
+    */
 
-    // If no toggles were added, hide the grid or add placeholder
+    // If no toggles were added, hide the grid
     if (col === 0 && row === 0) {
         grid.set_visible(false)
     }

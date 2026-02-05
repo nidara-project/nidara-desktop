@@ -345,7 +345,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             res.name = mapped
         } else if (isSystemTool) {
             // Force Material theme for system tools by using absolute path
-            const materialPath = `/home/angel/.local/share/icons/DistroIA/scalable/apps/${mapped}.svg`
+            const materialPath = `${GLib.get_home_dir()}/.local/share/icons/DistroIA/scalable/apps/${mapped}.svg`
             res.path = materialPath
             res.name = undefined
             res.gicon = undefined
@@ -875,27 +875,27 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     // Let's try connecting sync to 'notify::active-window' on Hyprlans if accessible?
     // No.
 
-    // Let's loop addresses and connect to signals.
-    /*
-       We will store the objects to disconnect later.
-    */
-    const monitoredClients: any[] = []
+    // V106: PROPER SIGNAL MANAGEMENT - Store connection IDs for reliable cleanup
+    const clientSignalIds: { client: any, signalId: number }[] = []
     addresses.forEach(addr => {
         const c = hypr.clients.find(cl => cl.address === addr)
         if (c) {
-            monitoredClients.push(c)
-            c.connect("notify::title", sync)
+            const signalId = c.connect("notify::title", sync)
+            clientSignalIds.push({ client: c, signalId })
         }
     })
 
     itemBox.connect("destroy", () => {
         hypr.disconnect(c1);
         hypr.disconnect(c2);
-        // Clean up client signals?
-        // GObject signals are usually auto-disconnected when the *handler* (this closure) dies?
-        // No, when the *emitter* or *object* dies.
-        // We SHOULD disconnect manually.
-        monitoredClients.forEach(c => GObject.signal_handlers_disconnect_by_func(c, sync))
+        // V106: Disconnect using stored IDs (reliable)
+        clientSignalIds.forEach(({ client, signalId }) => {
+            try {
+                client.disconnect(signalId)
+            } catch (e) {
+                // Client may have been destroyed already, ignore
+            }
+        })
     })
     sync()
 
@@ -1535,7 +1535,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     try {
         Gtk4LayerShell.init_for_window(win)
         Gtk4LayerShell.set_namespace(win, "crystal-dock");
-        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY);
+        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP);
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true);
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true);
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true);
