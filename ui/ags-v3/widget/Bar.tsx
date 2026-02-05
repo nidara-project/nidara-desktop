@@ -26,61 +26,74 @@ function Tray() {
 
   const items = new Map<string, Gtk.Button>()
 
-  const syncTray = (tray: any) => {
-    const currentIds = new Set(tray.items.map((i: any) => i.item_id))
+  const createItem = (tray: any, id: string) => {
+    if (items.has(id)) return;
 
-    // 1. Remove dead items 🧹
-    for (const [id, btn] of items.entries()) {
-      if (!currentIds.has(id)) {
-        box.remove(btn)
-        items.delete(id)
-      }
-    }
+    // Use find() instead of get_item() to avoid service-level assertion crashes
+    const item = tray.items.find((i: any) => i.item_id === id)
+    if (!item) return;
 
-    // 2. Add new items ✨
-    tray.items.forEach((item: any) => {
-      const id = item.item_id
-      if (items.has(id)) return;
+    // Strict Visibility Check: only items with Icons or Titles
+    if (!item.gicon && (!item.icon_name || item.icon_name.length === 0) && !item.title) return;
 
-      // STRICT FILTER: No icon = No button. 
-      const hasIcon = item.gicon || (item.icon_name && item.icon_name.length > 0);
-      if (!hasIcon) return;
-
-      const btn = new Gtk.Button({
-        css_classes: ["bar-tray-btn"],
-        tooltip_markup: item.tooltip_markup || item.title || id,
-        child: new Gtk.Image({
-          pixel_size: 16,
-          css_classes: ["bar-tray-icon"],
-          gicon: item.gicon,
-          icon_name: item.icon_name
-        })
+    const btn = new Gtk.Button({
+      css_classes: ["bar-tray-btn"],
+      tooltip_markup: item.tooltip_markup || item.title || id,
+      child: new Gtk.Image({
+        pixel_size: 16,
+        css_classes: ["bar-tray-icon"],
+        gicon: item.gicon,
+        icon_name: item.icon_name
       })
-
-      btn.connect("clicked", () => {
-        try { item.activate(0, 0) } catch (e) { }
-      })
-
-      const gesture = new Gtk.GestureClick()
-      gesture.set_button(0)
-      gesture.connect("released", (g) => {
-        if (g.get_current_button() === 3) {
-          try { item.about_to_show() } catch (e) { }
-        }
-      })
-      btn.add_controller(gesture)
-
-      items.set(id, btn)
-      box.append(btn)
     })
+
+    btn.connect("clicked", () => {
+      try { item.activate(0, 0) } catch (e) { }
+    })
+
+    const gesture = new Gtk.GestureClick()
+    gesture.set_button(0)
+    gesture.connect("released", (g) => {
+      if (g.get_current_button() === 3) {
+        try { item.about_to_show() } catch (e) { }
+      }
+    })
+    btn.add_controller(gesture)
+
+    items.set(id, btn)
+    box.append(btn)
   }
 
-  // Poll-based sync to avoid GLib-GIO signal crashes 🛡️
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2500, () => {
-    getServiceSafe(() => AstalTray.get_default(), "Tray (Poll)").then(tray => {
-      if (tray) syncTray(tray)
+  const removeItem = (id: string) => {
+    const btn = items.get(id)
+    if (btn) {
+      try {
+        if (btn.get_parent() === box) box.remove(btn)
+      } catch (e) { }
+      items.delete(id)
+    }
+  }
+
+  // Restore signal-based logic but fully decoupled from the main loop
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
+    getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
+      if (!tray) return;
+
+      // Sync initial set
+      tray.items.forEach(item => createItem(tray, item.item_id))
+
+      tray.connect("item-added", (_, id) => {
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+          createItem(tray, id); return GLib.SOURCE_REMOVE;
+        })
+      })
+      tray.connect("item-removed", (_, id) => {
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+          removeItem(id); return GLib.SOURCE_REMOVE;
+        })
+      })
     })
-    return GLib.SOURCE_CONTINUE
+    return GLib.SOURCE_REMOVE
   })
 
   return box
@@ -253,80 +266,10 @@ function SystemStatus() {
   const box = new Gtk.Box({
     name: "bar-status",
     css_classes: ["bar-status"],
-    spacing: 16
+    spacing: 12
   })
 
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
-    getServiceSafe(() => AstalNetwork.get_default(), "Network").then(network => {
-      if (!network) return;
-      const netIcon = new Gtk.Image({ icon_name: "network-wireless-symbolic", pixel_size: 16 })
-      const netBtn = new Gtk.Button({ css_classes: ["bar-status-btn"], child: netIcon })
-
-      const syncNet = () => {
-        if (network.wifi) {
-          netIcon.icon_name = network.wifi.icon_name
-          netBtn.tooltip_text = network.wifi.ssid || "Wi-Fi"
-        } else if (network.wired) {
-          netIcon.icon_name = network.wired.icon_name
-          netBtn.tooltip_text = "Ethernet"
-        } else {
-          netIcon.icon_name = "network-offline-symbolic"
-          netBtn.tooltip_text = "Desconectado"
-        }
-      }
-      network.connect("notify::wifi", syncNet)
-      network.connect("notify::wired", syncNet)
-      syncNet()
-      netBtn.connect("clicked", () => execAsync("nm-connection-editor").catch(console.error))
-      box.prepend(netBtn)
-    })
-    return GLib.SOURCE_REMOVE
-  })
-
-  const volContent = new Gtk.Box({ spacing: 8 })
-  const volIcon = new Gtk.Image({ icon_name: "audio-volume-high-symbolic", pixel_size: 16 })
-  const volBtn = new Gtk.Button({ css_classes: ["bar-status-btn"], child: volIcon })
-  const volAccessor = createPoll("0%", 1000, "pamixer --get-volume-human", (out) => out.trim())
-  volAccessor.subscribe(() => {
-    const val = volAccessor.get()
-    if (val === "muted") {
-      volIcon.icon_name = "audio-volume-muted-symbolic"
-    } else {
-      const v = parseInt(val)
-      if (v <= 33) volIcon.icon_name = "audio-volume-low-symbolic"
-      else if (v <= 66) volIcon.icon_name = "audio-volume-medium-symbolic"
-      else volIcon.icon_name = "audio-volume-high-symbolic"
-    }
-  })
-  volBtn.connect("clicked", () => execAsync("pavucontrol").catch(console.error))
-  box.append(volBtn)
-
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
-    getServiceSafe(() => AstalBattery.get_default(), "Battery").then(battery => {
-      if (!battery) return;
-      const batContent = new Gtk.Box({ spacing: 6 })
-      const batIcon = new Gtk.Image({ icon_name: battery.icon_name, pixel_size: 16 })
-      const batLabel = new Gtk.Label({ css_classes: ["bar-bat-label"] })
-      batContent.append(batIcon)
-      batContent.append(batLabel)
-
-      const syncBat = () => {
-        batIcon.icon_name = battery.icon_name
-        batLabel.label = `${Math.floor(battery.percentage * 100)}%`
-        batContent.set_visible(battery.is_present)
-      }
-      battery.connect("notify::percentage", syncBat)
-      battery.connect("notify::charging", syncBat)
-      battery.connect("notify::icon-name", syncBat)
-      syncBat()
-      box.append(batContent)
-    })
-    return GLib.SOURCE_REMOVE
-  })
-
-
-
-  // Utilities Box (CC + Extras)
+  // 1. Priority CC Toggle (Synchronous)
   const utilsBox = new Gtk.Box({ spacing: 8, css_classes: ["bar-utils"] })
   const ccBtn = new Gtk.Button({
     css_classes: ["bar-util-btn", "cc-trigger"],
@@ -334,7 +277,6 @@ function SystemStatus() {
     tooltip_text: "Centro de Control"
   })
   ccBtn.connect("clicked", () => {
-    console.log("[Bar] Toggling Control Center...")
     try {
       (globalThis as any).toggleControlCenter?.()
     } catch (e) {
@@ -344,14 +286,56 @@ function SystemStatus() {
   utilsBox.append(ccBtn)
   box.append(utilsBox)
 
-  // System Tray - Last one
-  try {
-    box.append(Tray())
-  } catch (e) {
-    console.error("[Bar] Failed to init Tray:", e)
-  }
+  // 2. Asynchronous Status Components (Isolated) 🏎️
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
+    // Volume & Network & Battery (Each in its own try/catch block)
+    try {
+      const volIcon = new Gtk.Image({ icon_name: "audio-volume-high-symbolic", pixel_size: 16 })
+      const volBtn = new Gtk.Button({ css_classes: ["bar-status-btn"], child: volIcon })
+      const volAccessor = createPoll("0%", 1000, "pamixer --get-volume-human", (out) => out.trim())
+      volAccessor.subscribe(() => {
+        const val = volAccessor.get()
+        if (val === "muted") volIcon.icon_name = "audio-volume-muted-symbolic"
+        else {
+          const v = parseInt(val)
+          if (v <= 33) volIcon.icon_name = "audio-volume-low-symbolic"
+          else if (v <= 66) volIcon.icon_name = "audio-volume-medium-symbolic"
+          else volIcon.icon_name = "audio-volume-high-symbolic"
+        }
+      })
+      volBtn.connect("clicked", () => execAsync("pavucontrol").catch(() => { }))
+      box.prepend(volBtn)
+    } catch (e) { console.warn("[Bar] Vol init failed") }
 
-  console.log("[Bar] SystemStatus fully initialized ✅")
+    getServiceSafe(() => AstalNetwork.get_default(), "Network").then(net => {
+      if (!net) return;
+      const netIcon = new Gtk.Image({ icon_name: "network-wireless-symbolic", pixel_size: 16 })
+      const netBtn = new Gtk.Button({ css_classes: ["bar-status-btn"], child: netIcon })
+      const syncNet = () => {
+        if (net.wifi) netIcon.icon_name = net.wifi.icon_name
+        else if (net.wired) netIcon.icon_name = net.wired.icon_name
+      }
+      net.connect("notify::wifi", syncNet); net.connect("notify::wired", syncNet); syncNet()
+      box.prepend(netBtn)
+    }).catch(() => { })
+
+    getServiceSafe(() => AstalBattery.get_default(), "Battery").then(bat => {
+      if (!bat) return;
+      const batLabel = new Gtk.Label({ css_classes: ["bar-bat-label"] })
+      const syncBat = () => { batLabel.label = `${Math.floor(bat.percentage * 100)}%` }
+      bat.connect("notify::percentage", syncBat); syncBat()
+      box.insert_child_after(batLabel, box.get_first_child())
+    }).catch(() => { })
+
+    return GLib.SOURCE_REMOVE
+  })
+
+  // 3. Independent Tray (Last)
+  GLib.idle_add(GLib.PRIORITY_LOW, () => {
+    try { box.append(Tray()) } catch (e) { }
+    return GLib.SOURCE_REMOVE
+  })
+
   return box
 }
 
