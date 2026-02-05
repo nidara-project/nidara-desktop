@@ -73,19 +73,31 @@ for comp in "${COMPONENTS[@]}"; do
     sudo meson install -C build
 done
 
-# 3. Global Path Configuration
-echo "⚙️ Configuring Global GI_TYPELIB_PATH..."
+# 4. Global Path Configuration & Linker Cache
+echo "⚙️ Configuring Global GI_TYPELIB_PATH & Library Cache..."
 # Find where typelibs are (Ubuntu usually puts them in x86_64-linux-gnu subdirectory)
 TYPELIB_PATH="/usr/local/lib/x86_64-linux-gnu/girepository-1.0"
+LIB_PATH="/usr/local/lib/x86_64-linux-gnu"
+
 if [ ! -d "$TYPELIB_PATH" ]; then
     TYPELIB_PATH="/usr/local/lib/girepository-1.0"
+    LIB_PATH="/usr/local/lib"
 fi
+
+# Refresh shared library cache
+echo "🔄 Refreshing system library cache (ldconfig)..."
+sudo ldconfig
 
 # Add to /etc/environment for global access
 if ! grep -q "GI_TYPELIB_PATH" /etc/environment; then
     echo "GI_TYPELIB_PATH=\"$TYPELIB_PATH:$GI_TYPELIB_PATH\"" | sudo tee -a /etc/environment
 else
     sudo sed -i "s|GI_TYPELIB_PATH=\"|GI_TYPELIB_PATH=\"$TYPELIB_PATH:|g" /etc/environment
+fi
+
+# Also add LD_LIBRARY_PATH just in case
+if ! grep -q "LD_LIBRARY_PATH" /etc/environment; then
+    echo "LD_LIBRARY_PATH=\"$LIB_PATH:$LD_LIBRARY_PATH\"" | sudo tee -a /etc/environment
 fi
 
 # 4. Icon Theme & Assets
