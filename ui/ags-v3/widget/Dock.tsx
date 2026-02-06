@@ -327,27 +327,10 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
     if (mapped !== originalName) {
         // FORCE Material ONLY for core system tools via ABSOLUTE PATH
-        const idLower = appId.toLowerCase()
-        const isSystemTool = idLower.includes("pavucontrol") ||
-            idLower.includes("rhythmbox") ||
-            idLower.includes("distributor-logo") ||
-            idLower.includes("wlogout") ||
-            idLower.includes("control-center") ||
-            idLower.includes("nautilus") ||
-            idLower.includes("terminal") ||
-            idLower.includes("calculator") ||
-            idLower.includes("calendar") ||
-            idLower.includes("clocks");
-
+        // Use mapped icon name from IconMapper
+        // AppService and IconMapper will handle icon resolution dynamically
         if (!res.path && !res.gicon) {
-            // No better icon, use mapped name
             res.name = mapped
-        } else if (isSystemTool) {
-            // Force Material theme for system tools by using absolute path
-            const materialPath = `${GLib.get_home_dir()}/.local/share/icons/DistroIA/scalable/apps/${mapped}.svg`
-            res.path = materialPath
-            res.name = undefined
-            res.gicon = undefined
         }
     }
 
