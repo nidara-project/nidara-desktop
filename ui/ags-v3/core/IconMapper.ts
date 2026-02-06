@@ -51,6 +51,9 @@ const MAPPINGS: Record<string, string> = {
  * Returns the alias name for the icon theme, or the original name.
  */
 export function getMappedIcon(iconName: string, appId: string = "", appName: string = ""): string {
+    // V126: Icon mapping disabled. We prefer original system icons.
+    return iconName;
+
     const cleanId = appId.toLowerCase().replace(".desktop", "");
     const cleanName = iconName.toLowerCase();
 
