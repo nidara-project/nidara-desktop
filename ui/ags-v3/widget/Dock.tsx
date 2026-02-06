@@ -675,10 +675,15 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
         // Re-parent popover to ensure clean widget hierarchy
         try {
-            popover.unparent()
-            popover.set_parent(iconBox)
+            const currentParent = popover.get_parent()
+            if (currentParent && currentParent !== iconBox) {
+                popover.unparent()
+            }
+            if (!popover.get_parent()) {
+                popover.set_parent(iconBox)
+            }
         } catch (e) {
-            // Ignore if already unparented
+            console.warn("[Dock] Popover re-parenting warning:", e)
         }
 
         popover.popup()
