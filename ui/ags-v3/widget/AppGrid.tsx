@@ -108,7 +108,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-    Gtk4LayerShell.set_namespace(win, "app-grid")
+    Gtk4LayerShell.set_namespace(win, "launcher")
     Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
 
     win.visible = false
@@ -191,7 +191,8 @@ export default function AppGrid(monitor: Gdk.Monitor) {
 
     // Create widget for a single app (called once per app, cached)
     const createAppWidget = (app: AstalApps.Application): Gtk.Button => {
-        const id = (app.get_id ? app.get_id() : (app as any).id || "").toLowerCase()
+        // V125: Use entry (desktop file) as stable unique identifier
+        const id = (app.entry || "").toLowerCase()
         const name = app.get_name ? app.get_name() : (app as any).name || ""
 
         const iconName = app.icon_name || "image-missing"
@@ -263,8 +264,8 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         )
 
         cachedApps.forEach(app => {
-            const id = (app.get_id ? app.get_id() : (app as any).id || "").toLowerCase()
-            if (!widgetCache.has(id)) {
+            const id = (app.entry || "").toLowerCase()
+            if (id && !widgetCache.has(id)) {
                 const widget = createAppWidget(app)
                 widgetCache.set(id, widget)
                 flowbox.append(widget)
@@ -291,7 +292,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
             // Fuzzy match results from service
             const matches = appsService.fuzzy_query(query)
             const matchIds = new Set(
-                matches.map(app => (app.get_id ? app.get_id() : (app as any).id || "").toLowerCase())
+                matches.map(app => (app.entry || "").toLowerCase())
             )
 
             widgetCache.forEach((widget, id) => {
