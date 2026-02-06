@@ -1350,7 +1350,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         // 1. Static: Launcher (Grid - like macOS Launchpad)
         const launcherItem = {
             name: "Lanzador",
-            icon_name: getMappedIcon("apps"),
+            icon_name: "grid_view",  // Standard icon for app grids
             launch: () => {
                 if ((globalThis as any).toggleAppGrid) {
                     (globalThis as any).toggleAppGrid()
