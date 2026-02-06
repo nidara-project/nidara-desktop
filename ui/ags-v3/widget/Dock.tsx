@@ -599,8 +599,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             })
             actions.push({ separator: true })
         }
-        // 3. SYSTEM ACTIONS
-        actions.push({ label: "Abrir nueva ventana", action: () => appItem.launch() })
+        // 3. SYSTEM ACTIONS (Pin/Unpin)
 
         actions.push({
             label: currentIsPinned ? "Desanclar del dock" : "Mantener en el dock",
