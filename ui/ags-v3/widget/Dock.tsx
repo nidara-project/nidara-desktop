@@ -67,15 +67,17 @@ import appService from "../core/AppService"
 function Separator(id: string, updateDock: () => void, register: (id: string, s: any) => void, height = 48) {
     const baseWidth = DOCK_CONSTANTS.SEPARATOR_SLOT
     // Container for Hitbox (invisible, wide, fixed height)
-    const box = new Gtk.Box({
+    // V110: CENTER BOX ensures strict centering within the 20px slot
+    const box = new Gtk.CenterBox({
         css_classes: ["cd-separator-container"],
         valign: Gtk.Align.END, halign: Gtk.Align.CENTER,
         width_request: baseWidth,
-        height_request: 92, // V51: Lock height to match Pill
+        height_request: DOCK_CONSTANTS.PILL_HEIGHT, // V51: Lock height to match Pill
         hexpand: false,
         margin_bottom: 0,  // V95: 10px Gap handled by window margin
     })
 
+    // Visible Line
     // Visible Line
     const line = new Gtk.Box({
         name: "cd-separator", css_classes: ["cd-separator"],
@@ -84,7 +86,7 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
         hexpand: false,
     })
 
-    box.append(line)
+    box.set_center_widget(line)
 
     // Actually, let's keep it simple: the box can hold a reference to its state
     const state = {
@@ -272,7 +274,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         halign: Gtk.Align.CENTER,
         hexpand: false,
         width_request: DOCK_CONSTANTS.APP_SLOT, // SLOT (V14 Master)
-        height_request: 92, // V70: Constrained to Pill Height to prevent ghost hover
+        height_request: DOCK_CONSTANTS.PILL_HEIGHT, // V70: Constrained to Pill Height to prevent ghost hover
         can_focus: false,
         has_tooltip: false,
     })
@@ -296,8 +298,8 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
         hexpand: false,
-        // V98: Perfectly centered in 92px pill (Balanced for 64px icon)
-        margin_bottom: 14,
+        // V98: Perfectly centered in 100px pill (Balanced for 64px icon)
+        margin_bottom: 18,
         has_tooltip: false,
     })
 
@@ -1000,7 +1002,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         valign: Gtk.Align.END,
         halign: Gtk.Align.START,
         overflow: Gtk.Overflow.VISIBLE,
-        height_request: 92, // V98: Locked to Pill height
+        height_request: DOCK_CONSTANTS.PILL_HEIGHT, // V98: Locked to Pill height
         spacing: 0, // V7: Total control via widget width_request
         can_focus: false,
     })
@@ -1242,8 +1244,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
     // Update dimensions for all layers
     const updateSize = () => {
-        // V108: Side padding exactly matches top/bottom (18px per side)
-        const w = smoothedBarWidth + 36
+        // V108.1: Corrected Side Padding math to 9px (Container) + 9px (Item) = 18px Visual Total
+        const w = smoothedBarWidth + 18
         pillBg.set_size_request(w, DOCK_CONSTANTS.PILL_HEIGHT)
         da.set_size_request(w, DOCK_CONSTANTS.PILL_HEIGHT)
     }
@@ -1361,7 +1363,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
         }
         configs.push({
-            id: "home-shortcut", width: 80, // V50: Unified 80px Slot
+            id: "home-shortcut", width: DOCK_CONSTANTS.APP_SLOT, // V50: Unified Slot
             syncData: { addrs: [], clientTitle: undefined, appItem: homeItem as any },
             factory: (vc) => {
                 const w = DockItem("home-shortcut", homeItem as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, "home-shortcut")
@@ -1381,7 +1383,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             }
         }
         configs.push({
-            id: "launcher", width: 80,
+            id: "launcher", width: DOCK_CONSTANTS.APP_SLOT,
             syncData: { addrs: [], clientTitle: undefined, appItem: launcherItem as any },
             factory: (vc) => {
                 const w = DockItem("launcher", launcherItem as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, "launcher")
@@ -1421,7 +1423,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                     appItem.icon_name = originalId.replace(/-default$/i, "-Default")
                 }
                 configs.push({
-                    id: lid, width: 80, // V50: Unified 80px Slot
+                    id: lid, width: DOCK_CONSTANTS.APP_SLOT, // V50: Unified Slot
                     syncData: { addrs, clientTitle, appItem: appItem! },
                     factory: (vc) => {
                         const w = DockItem(lid, appItem!, update, (id, s) => animRegistry.set(id, s), addrs, clientTitle, bar, lid)
@@ -1436,7 +1438,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 if (lid.startsWith("chrome-") && lid.endsWith("-default")) icon = icon.replace(/-default$/i, "-Default")
                 const ghost = { name: displayName, icon_name: icon, launch: getLaunch(lid) } as any
                 configs.push({
-                    id: lid, width: 80, // V50: Unified 80px Slot
+                    id: lid, width: DOCK_CONSTANTS.APP_SLOT, // V50: Unified Slot
                     syncData: { addrs: [], clientTitle: undefined, appItem: ghost },
                     factory: (vc) => {
                         const w = DockItem(lid, ghost, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, lid)
@@ -1464,7 +1466,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default")
             }
             configs.push({
-                id: lid, width: 80, // V50: Unified 80px Slot
+                id: lid, width: DOCK_CONSTANTS.APP_SLOT, // V50: Unified Slot
                 syncData: { addrs: group.addresses, clientTitle: group.title, appItem: appItem! },
                 factory: (vc) => {
                     const w = DockItem(lid, appItem!, update, (id, s) => animRegistry.set(id, s), group.addresses, group.title, bar, lid)
@@ -1491,7 +1493,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             launch: () => execAsync("nautilus trash:///").catch(print)
         }
         configs.push({
-            id: "trash", width: 80, // V50: Unified 80px Slot
+            id: "trash", width: DOCK_CONSTANTS.APP_SLOT, // V50: Unified Slot
             syncData: { addrs: [], clientTitle: undefined, appItem: trash as any },
             factory: (vc) => {
                 const w = DockItem("trash", trash as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, "trash")

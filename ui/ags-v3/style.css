@@ -495,8 +495,9 @@ window.workspace-cockpit {
       rgba(255, 255, 255, 0.3) 50%,
       rgba(255, 255, 255, 0) 100%);
   min-width: 2px;
-  margin: 0 15px;
-  /* Symmetric margins for visual centering */
+  min-width: 2px;
+  margin: 0;
+  /* V109: Physics Engine controls spacing (20px slot) */
 }
 
 /* macOS-style indicators: single consistent dot */

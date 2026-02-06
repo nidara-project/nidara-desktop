@@ -14,9 +14,9 @@ export const DOCK_CONSTANTS = {
     // LAYOUT (V55: Centralized Polish)
     ICON_SIZE: 64,
     BASE_MARGIN: 9,      // V108: Perfect 18px gap (9+9)
-    SEPARATOR_SLOT: 36,  // Balanced for 18px rhythm
+    SEPARATOR_SLOT: 20,  // V109: Corrected for 18px Visual Gap (9+2+9)
     SEPARATOR_LINE: 2,
-    SEPARATOR_OFFSET: 18, // Aligned with rhythm
+    SEPARATOR_OFFSET: 9,  // Aligned with half-slot
     APP_SLOT: 82,        // 64 + 9 + 9
     // ANIMATION (V106: Centralized)
     LERP_FACTOR: 0.18,      // Smoothness of scale transitions
@@ -75,8 +75,8 @@ export function calculateDockItemMetrics(qX: number, staticCenter: number, isSep
     if (isSeparator) {
         return {
             scale: 1.0,
-            width: 32, // V54: Match new compressed slot
-            height: 80,
+            width: DOCK_CONSTANTS.SEPARATOR_SLOT, // Use Constant (20)
+            height: DOCK_CONSTANTS.PILL_HEIGHT,
             translateY: 0,
             margin: 0
         };
