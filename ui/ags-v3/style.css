@@ -296,6 +296,25 @@ window.crystal-dock-window {
   background-color: rgba(255, 255, 255, 0.12);
 }
 
+/* Neutralize GTK FlowBox Selection 🛡️ */
+flowboxchild {
+  background: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+flowboxchild:selected,
+flowboxchild:active,
+flowboxchild:hover {
+  background: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
 /* --- 6. WORKSPACE COCKPIT 🛡️ --- */
 window.workspace-cockpit {
   background: transparent;
