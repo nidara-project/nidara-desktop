@@ -542,37 +542,32 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
         // 2. DESKTOP ACTIONS (Quick Actions)
         let desktopActions: string[] = []
-        // @ts-ignore
-        if (appItem && appItem.list_actions) desktopActions = appItem.list_actions()
-        // @ts-ignore
-        else if (appItem && appItem.app && appItem.app.list_actions) desktopActions = appItem.app.list_actions()
+
+        // V94.11: GLOBAL RESOLUTION 💎
+        // Use the universal resolver to find the real GAppInfo for ANY app.
+        // This searches by ID, WM_CLASS, or Variant automatically.
+        const gAppInfo = appService.getAppInfo(appId)
+
+        if (gAppInfo && gAppInfo.list_actions) {
+            desktopActions = gAppInfo.list_actions()
+        }
 
         if (desktopActions.length > 0) {
             desktopActions.forEach((actionName: string) => {
-                // Determine label: For raw GAppInfo, we map action ID -> Sentence Case
                 const rawLabel = actionName
-                // Format: Sentence case (replace - and _ with space)
-                const label = toSentenceCase(rawLabel.replace(/[-_]/g, " "))
+                // V94.7: USE LOCALIZED NAMES 🌍
+                // Try to get the real name from the desktop file, otherwise fallback to ID
+                const label = gAppInfo ? gAppInfo.get_action_name(actionName) : toSentenceCase(rawLabel.replace(/[-_]/g, " "))
 
                 actions.push({
                     label: label,
                     action: () => {
-                        console.log(`[DockMenu] Launching action: ${rawLabel}`)
-                        console.log(`[DockMenu] appItem:`, appItem)
-                        console.log(`[DockMenu] appItem.launch_action exists:`, !!appItem.launch_action)
-
                         try {
-                            // Try standard launch_action
-                            if (appItem.launch_action) {
-                                console.log(`[DockMenu] Calling appItem.launch_action("${rawLabel}", null)`)
-                                appItem.launch_action(rawLabel, null)
-                            }
-                            // @ts-ignore
-                            else if (appItem && appItem.app && appItem.app.launch_action) {
-                                console.log(`[DockMenu] Calling appItem.app.launch_action("${rawLabel}", null)`)
-                                appItem.app.launch_action(rawLabel, null)
+                            if (gAppInfo && gAppInfo.launch_action) {
+                                console.log(`[DockMenu] Calling gAppInfo.launch_action("${rawLabel}", null)`)
+                                gAppInfo.launch_action(rawLabel, null)
                             } else {
-                                console.warn(`[DockMenu] No launch_action method found for ${rawLabel}`)
+                                console.warn(`[DockMenu] No gAppInfo or launch_action method found for ${rawLabel}`)
                             }
                         } catch (e) {
                             console.error(`[DockMenu] Error launching action ${rawLabel}:`, e)
@@ -1407,10 +1402,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                     }
                 })
             } else {
-                const appData = appService.getAppData(lid)
-                const displayName = appData?.name || originalId
-                const aliases: Record<string, string> = { "system-file-manager": "org.gnome.Nautilus" }
-                let icon = aliases[lid] || originalId
+                const info = appService.getAppInfo(lid)
+                const displayName = info?.get_name() || lid
+                let icon = info?.get_id() || originalId
                 if (lid.startsWith("chrome-") && lid.endsWith("-default")) icon = icon.replace(/-default$/i, "-Default")
                 const ghost = { name: displayName, icon_name: icon, launch: getLaunch(lid) } as any
                 configs.push({

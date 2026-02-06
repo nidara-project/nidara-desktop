@@ -14,7 +14,9 @@ export interface AppData {
 
 class AppService {
     private cache = new Map<string, AppData>()
+    private gAppCache = new Map<string, Gio.DesktopAppInfo>()
     private nameMap = new Map<string, string>()
+    private wmMap = new Map<string, string>() // Map wmClass -> Desktop ID
     private listeners = new Set<() => void>()
 
     constructor() {
@@ -107,11 +109,12 @@ class AppService {
             }
 
             this.cache.set(id.toLowerCase(), data)
+            this.gAppCache.set(id.toLowerCase(), app as Gio.DesktopAppInfo)
+
             if (data.wmClass) {
                 this.nameMap.set(data.wmClass, canonical!)
+                this.wmMap.set(data.wmClass, id.toLowerCase())
             } else if (data.exec) {
-                // Only map generic executable names if NO wmClass is specified.
-                // This prevents PWAs (which have specific wmClass) from hijacking the generic binary name (e.g. google-chrome).
                 this.nameMap.set(data.exec, canonical!)
             }
 
@@ -153,6 +156,30 @@ class AppService {
 
     getAppData(id: string): AppData | null {
         return this.cache.get(id.toLowerCase()) || null
+    }
+
+    /**
+     * V94.10: UNIVERSAL RESOLVER 🚀
+     * Finds the real DesktopAppInfo using any identifier (ID, WM_CLASS, or Variant)
+     */
+    getAppInfo(query: string): Gio.DesktopAppInfo | null {
+        if (!query) return null
+        const q = query.toLowerCase().replace(".desktop", "")
+
+        // 1. Exact ID match (case-insensitive)
+        let info = this.gAppCache.get(q)
+        if (info) return info
+
+        // 2. WM_CLASS match
+        const idFromWm = this.wmMap.get(q)
+        if (idFromWm) return this.gAppCache.get(idFromWm) || null
+
+        // 3. Reverse search for fuzzy matches
+        for (const [id, data] of this.cache.entries()) {
+            if (data.wmClass === q || data.exec === q) return this.gAppCache.get(id) || null
+        }
+
+        return null
     }
 }
 
