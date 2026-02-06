@@ -659,6 +659,15 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     rightClick.connect("released", (gesture, n, x, y) => {
         // NO GATE: itemBox is only 92px and situated exactly in the Pill
         rebuildMenu()
+
+        // Re-parent popover to ensure clean widget hierarchy
+        try {
+            popover.unparent()
+            popover.set_parent(iconBox)
+        } catch (e) {
+            // Ignore if already unparented
+        }
+
         popover.popup()
     })
     iconBox.add_controller(rightClick)
