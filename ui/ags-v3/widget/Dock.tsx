@@ -600,13 +600,6 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
         // 4. WINDOW MANAGEMENT (If running)
         if (state.addresses && state.addresses.length > 0) {
-            itemBox.add_css_class("open") // Ensure dot style matches
-            if (hypr.focusedClient && state.addresses.includes(hypr.focusedClient.address)) {
-                itemBox.add_css_class("focused")
-            } else {
-                itemBox.remove_css_class("focused")
-            }
-
             actions.push({ separator: true })
 
             // If multiple windows, maybe show count?
@@ -745,7 +738,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
         // REACTIVE GAP LOGIC
         target.connect("enter", () => {
-            // console.log(`[DnD] Enter Item: ${appId} `)
+            console.log(`[DnD] Enter Item: ${appId} `)
             dragBus.update(appId)
             return Gdk.DragAction.COPY
         })
@@ -1221,7 +1214,6 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
 
     const update = () => {
-        console.log("[Dock] update() called - rebuilding dock")
 
         // VIRTUAL GRID REFACTOR: Collection Phase
         type ItemConfig = { id: string, width: number, syncData?: any, factory: (vc: number) => Gtk.Widget }
@@ -1434,7 +1426,6 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 return w
             }
         })
-        console.log(`[Dock] Separator added to configs. Total configs: ${configs.length}`)
 
         const trash = {
             name: "Papelera",
@@ -1478,9 +1469,6 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             }
             return widget
         })
-
-        console.log(`[Dock] finalItems count: ${finalItems.length}, configs count: ${configs.length}`)
-        console.log(`[Dock] Config IDs: ${configs.map(c => c.id).join(', ')}`)
 
         // Diff & Prune Cache (V34: Unified Purge for Zero-Ghosting)
         for (const [id, w] of widgetCache) {

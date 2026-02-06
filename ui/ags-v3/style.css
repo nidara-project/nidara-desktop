@@ -290,67 +290,6 @@ window.crystal-dock-window {
   padding: 8px;
 }
 
-/* 4.1 DOCK ELEMENTS: Separator & Dots 💎 */
-.cd-separator {
-  background: linear-gradient(to bottom,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.3) 50%,
-      rgba(255, 255, 255, 0) 100%);
-  width: 2px;
-  margin: 0 12px;
-}
-
-.cd-dot {
-  min-width: 4px;
-  min-height: 4px;
-  border-radius: 4px;
-  background-color: rgba(255, 255, 255, 0.4);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.cd-item.open .cd-dot {
-  background-color: white;
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
-}
-
-.cd-item.focused .cd-dot {
-  background-color: #007aff;
-  min-width: 14px;
-  box-shadow: 0 0 8px rgba(0, 122, 255, 0.6);
-}
-
-/* 4.2 CONTEXT MENUS: System Theme Integration 🖱️ */
-popover.bar-tray-menu contents,
-popover.cd-popover contents {
-  padding: 8px;
-  border-radius: 18px;
-  /* Respect system theme but ensure grounding */
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.cd-menu-action {
-  padding: 8px 16px;
-  border-radius: 10px;
-  background: transparent;
-  color: inherit;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.cd-menu-action:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-.cd-menu-action.destructive {
-  color: #ff3b30;
-}
-
-.cd-menu-separator {
-  margin: 6px 0;
-  background-color: rgba(255, 255, 255, 0.1);
-  min-height: 1px;
-}
-
 .cd-squircle-plate {
   background-color: #ffffff;
   border-radius: 28%;
@@ -523,4 +462,27 @@ window.workspace-cockpit {
   color: white;
   font-weight: 800;
   font-size: 13px;
+}
+/* Dock Context Menu Actions */
+.cd-menu-action {
+  padding: 8px 16px;
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.cd-menu-action:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.cd-menu-action.destructive {
+  color: #ff3b30;
+}
+
+.cd-menu-separator {
+  margin: 6px 0;
+  background-color: rgba(255, 255, 255, 0.1);
+  min-height: 1px;
 }

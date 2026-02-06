@@ -75,79 +75,21 @@ class AppService {
 
         const apps = Gio.AppInfo.get_all()
 
-        // Exclusion patterns for known duplicates and config tools
-        const excludePatterns = [
-            /^im-config/,
-            /^software-properties/,
-            /^gnome-language-selector/,
-            /^language-selector/,
-            /^update-/,
-            /^system-config-/
-        ]
-
         apps.forEach(app => {
             const id = app.get_id()?.replace(".desktop", "")
             if (!id) return
-
-            // Filter: Exclude known duplicates/config tools
-            if (excludePatterns.some(p => p.test(id))) return
-
-            // Filter: Must have a valid name
-            const appName = app.get_name()
-            if (!appName || appName.trim() === "") return
-
-            // Filter: Check NoDisplay flag
-            const desktopPath = (app as any).get_filename?.()
-            if (desktopPath) {
-                try {
-                    const content = readFile(desktopPath)
-
-                    // Skip if NoDisplay=true
-                    if (/^NoDisplay=true$/m.test(content)) return
-
-                    // Skip if OnlyShowIn doesn't include current DE (future enhancement)
-
-                } catch (e) { /* Ignore read errors */ }
-            }
 
             const icon = app.get_icon()
             let canonical: string | null = null
 
             if (icon instanceof Gio.ThemedIcon) {
-                const names = icon.get_names()
-                for (const name of names) {
-                    canonical = this.getCanonicalName(name)
-                    if (canonical) break
-                }
+                canonical = this.getCanonicalName(icon.get_names()[0])
             } else if (icon instanceof Gio.FileIcon) {
                 canonical = icon.get_file().get_path()
             }
 
-            // Fallback: Category-based icons
-            if (!canonical && desktopPath) {
-                try {
-                    const content = readFile(desktopPath)
-                    const categories = content.match(/^Categories=(.*)$/m)?.[1] || ""
-
-                    // Specific known apps without proper icons
-                    if (id.includes("kitty")) canonical = this.getCanonicalName("utilities-terminal")
-                    else if (id.includes("system") && id.includes("info")) canonical = this.getCanonicalName("hwinfo") || this.getCanonicalName("utilities-system-monitor")
-                    // Category-based fallbacks
-                    else if (categories.includes("Development")) canonical = this.getCanonicalName("applications-development")
-                    else if (categories.includes("Graphics")) canonical = this.getCanonicalName("applications-graphics")
-                    else if (categories.includes("Game")) canonical = this.getCanonicalName("applications-games")
-                    else if (categories.includes("Network")) canonical = this.getCanonicalName("applications-internet")
-                    else if (categories.includes("Audio") || categories.includes("Video")) canonical = this.getCanonicalName("applications-multimedia")
-                    else if (categories.includes("Office")) canonical = this.getCanonicalName("applications-office")
-                    else if (categories.includes("Settings")) canonical = this.getCanonicalName("preferences-system")
-                    else if (categories.includes("System")) canonical = this.getCanonicalName("applications-system")
-                } catch (e) { /* Ignore */ }
-            }
-
-            // Final fallback
-            if (!canonical) canonical = this.getCanonicalName("application-x-executable")
-
             let wmClass: string | null = null
+            const desktopPath = (app as any).get_filename?.()
             if (desktopPath) {
                 try {
                     const content = readFile(desktopPath)

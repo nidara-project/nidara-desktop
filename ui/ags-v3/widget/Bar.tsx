@@ -91,11 +91,12 @@ function Tray() {
     }
   }
 
-  // Tray functionality enabled
+  // Restore signal-based logic but fully decoupled from the main loop
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
     getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
       if (!tray) return;
 
+      // Sync initial set
       tray.items.forEach(item => createItem(tray, item.item_id))
 
       tray.connect("item-added", (_, id) => {

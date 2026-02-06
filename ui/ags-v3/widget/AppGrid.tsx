@@ -258,45 +258,9 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     const initCache = () => {
         if (cacheInitialized) return
 
-        // Use custom appService which has all 169 apps
-        const appDataList = Array.from(appService['cache'].values())
-        console.log(`[AppGrid] Loading from appService: ${appDataList.length} apps`)
-
-        cachedApps = appDataList.map(appData => {
-            // Use getMappedIcon for proper icon resolution
-            const mappedIcon = getMappedIcon(appData.icon || "application-x-executable", appData.id, appData.name)
-
-            // Create AstalApps-compatible wrapper
-            return {
-                id: appData.id,
-                name: appData.name,
-                icon_name: mappedIcon,
-                get_id: () => appData.id,
-                get_name: () => appData.name,
-                launch: () => {
-                    // Try gtk-launch first (proper way)
-                    execAsync(`gtk-launch ${appData.id}`)
-                        .catch(err => {
-                            console.warn(`[AppGrid] gtk-launch failed for ${appData.id}, trying direct exec:`, err)
-                            // Fallback: Try direct execution if gtk-launch fails
-                            if (appData.exec) {
-                                return execAsync(appData.exec)
-                            }
-                            throw new Error(`No exec command available for ${appData.id}`)
-                        })
-                        .catch(err => {
-                            console.error(`[AppGrid] All launch methods failed for ${appData.name} (${appData.id}):`, err)
-                            // TODO: Show notification to user about launch failure
-                        })
-                        .finally(() => {
-                            // Close App Grid after launch attempt
-                            win.visible = false
-                        })
-                }
-            } as any
-        }).sort((a, b) => (a.name || "").localeCompare(b.name || ""))
-
-        console.log(`[AppGrid] Initializing cache with ${cachedApps.length} apps`)
+        cachedApps = appsService.get_list().sort((a, b) =>
+            (a.name || "").localeCompare(b.name || "")
+        )
 
         cachedApps.forEach(app => {
             const id = (app.get_id ? app.get_id() : (app as any).id || "").toLowerCase()
@@ -324,9 +288,8 @@ export default function AppGrid(monitor: Gdk.Monitor) {
                 widget.set_visible(true)
             })
         } else {
-            // Use AstalApps for fuzzy matching (it's good at this)
-            const astalApps = new AstalApps.Apps()
-            const matches = astalApps.fuzzy_query(query)
+            // Fuzzy match results from service
+            const matches = appsService.fuzzy_query(query)
             const matchIds = new Set(
                 matches.map(app => (app.get_id ? app.get_id() : (app as any).id || "").toLowerCase())
             )
