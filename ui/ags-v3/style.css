@@ -463,6 +463,7 @@ window.workspace-cockpit {
   font-weight: 800;
   font-size: 13px;
 }
+
 /* Dock Context Menu Actions */
 .cd-menu-action {
   padding: 8px 16px;
@@ -485,4 +486,34 @@ window.workspace-cockpit {
   margin: 6px 0;
   background-color: rgba(255, 255, 255, 0.1);
   min-height: 1px;
+}
+
+/* Dock Indicators and Separator */
+.cd-separator {
+  background: linear-gradient(to bottom,
+      rgba(255, 255, 255, 0) 0%,
+      rgba(255, 255, 255, 0.3) 50%,
+      rgba(255, 255, 255, 0) 100%);
+  min-width: 2px;
+  margin: 0 8px;
+}
+
+/* macOS-style indicators: single consistent dot */
+.cd-dot {
+  min-width: 4px;
+  min-height: 4px;
+  border-radius: 50%;
+  background-color: transparent;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Open app: semi-transparent white dot */
+.cd-item.open .cd-dot {
+  background-color: rgba(255, 255, 255, 0.7);
+}
+
+/* Focused app: bright white dot with glow */
+.cd-item.focused .cd-dot {
+  background-color: rgba(255, 255, 255, 1);
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
 }

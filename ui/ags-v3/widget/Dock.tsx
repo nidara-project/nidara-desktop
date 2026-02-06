@@ -79,10 +79,9 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
     // Visible Line
     const line = new Gtk.Box({
         name: "cd-separator", css_classes: ["cd-separator"],
-        valign: Gtk.Align.CENTER, halign: Gtk.Align.START, // V54.10: Force START + Margin to ensure position
+        valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER, // Centered horizontally
         width_request: DOCK_CONSTANTS.SEPARATOR_LINE, height_request: height,
         hexpand: false,
-        margin_start: DOCK_CONSTANTS.SEPARATOR_OFFSET
     })
 
     box.append(line)
@@ -914,6 +913,22 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             state.clientTitle = newTitle
             appItem = newAppItem
             indicator.visible = newAddrs.length > 0
+
+            // Update CSS classes for indicator styling
+            if (newAddrs.length > 0) {
+                itemBox.add_css_class("open")
+
+                // Check if this is the focused window
+                const focusedAddr = hypr.focusedClient?.address
+                if (focusedAddr && newAddrs.includes(focusedAddr)) {
+                    itemBox.add_css_class("focused")
+                } else {
+                    itemBox.remove_css_class("focused")
+                }
+            } else {
+                itemBox.remove_css_class("open")
+                itemBox.remove_css_class("focused")
+            }
         }
 
     return itemBox
@@ -1575,6 +1590,27 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     } catch (e) { console.error(e) }
 
     const cConn = hypr.connect("notify::clients", update)
+    const fConn = hypr.connect("notify::focused-client", () => {
+        // Update all dock items to reflect new focus state
+        update()
+
+        // Also update CSS classes for all items immediately
+        const focusedAddr = hypr.focusedClient?.address
+        animRegistry.forEach((state, id) => {
+            const widget = state.widget
+            if (widget && (widget as any).syncState) {
+                // Get current addresses for this item
+                const currentAddrs = (state as any).addresses || []
+                if (currentAddrs.length > 0) {
+                    if (focusedAddr && currentAddrs.includes(focusedAddr)) {
+                        widget.add_css_class("focused")
+                    } else {
+                        widget.remove_css_class("focused")
+                    }
+                }
+            }
+        })
+    })
     const aConn = appService.connect(update)
     bar.connect("destroy", () => {
         hypr.disconnect(cConn)
