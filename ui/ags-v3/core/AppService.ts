@@ -34,11 +34,15 @@ class AppService {
         // V94.1: ENSURE SYSTEM ICONS WIN (FALLBACKS ONLY)
         const localIcons = GLib.get_home_dir() + "/.local/share/icons"
         const systemIcons = "/usr/share/icons"
+        const flatpakIcons = "/var/lib/flatpak/exports/share/icons"
+        const snapIcons = "/var/lib/snapd/desktop/icons"
         const projectIcons = "/home/angel/Dev/MiDistroIA/assets/icons/material"
 
-        // STANDARD PATHS FIRST
+        // STANDARD PATHS FIRST (Including Flatpak & Snap)
         theme.add_search_path(localIcons)
         theme.add_search_path(systemIcons)
+        theme.add_search_path(flatpakIcons)
+        theme.add_search_path(snapIcons)
 
         // CUSTOM POOLS LAST (Fallback only)
         theme.add_search_path(localIcons + "/DistroIA/scalable/apps")
@@ -174,9 +178,18 @@ class AppService {
         const idFromWm = this.wmMap.get(q)
         if (idFromWm) return this.gAppCache.get(idFromWm) || null
 
-        // 3. Reverse search for fuzzy matches
+        // 3. Reverse search for fuzzy matches and substring IDs
         for (const [id, data] of this.cache.entries()) {
-            if (data.wmClass === q || data.exec === q) return this.gAppCache.get(id) || null
+            // V94.12: HEURISTIC MATCHING 💎
+            // Handle cases like "org.telegram" -> "org.telegram.desktop"
+            if (id.includes(q) || q.includes(id)) {
+                return this.gAppCache.get(id) || null
+            }
+
+            // Handle metadata matches
+            if (data.wmClass === q || data.exec === q || data.name.toLowerCase() === q) {
+                return this.gAppCache.get(id) || null
+            }
         }
 
         return null

@@ -13,19 +13,19 @@ export const DOCK_CONSTANTS = {
     sensitivity: 0.35,  // Ajuste fino
     // LAYOUT (V55: Centralized Polish)
     ICON_SIZE: 64,
-    BASE_MARGIN: 4,     // V54.12: Stable Gap
-    SEPARATOR_SLOT: 32,
+    BASE_MARGIN: 9,      // V108: Perfect 18px gap (9+9)
+    SEPARATOR_SLOT: 36,  // Balanced for 18px rhythm
     SEPARATOR_LINE: 2,
-    SEPARATOR_OFFSET: 15,
-    APP_SLOT: 80,
+    SEPARATOR_OFFSET: 18, // Aligned with rhythm
+    APP_SLOT: 82,        // 64 + 9 + 9
     // ANIMATION (V106: Centralized)
     LERP_FACTOR: 0.18,      // Smoothness of scale transitions
     TICK_INTERVAL: 16,      // ~60fps tick rate in ms
     TOOLTIP_DELAY: 500,     // Tooltip appear delay in ms
     // WINDOW GEOMETRY
-    PILL_HEIGHT: 92,
+    PILL_HEIGHT: 100,       // V107: Balanced 100px height
     WINDOW_HEIGHT: 200,
-    EXCLUSIVE_ZONE: 104,
+    EXCLUSIVE_ZONE: 110,    // V107: 100px + 10px margin
 };
 
 // Aliases for local physics compatibility (gradual migration)

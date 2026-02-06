@@ -444,7 +444,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         overflow: Gtk.Overflow.VISIBLE,
         valign: Gtk.Align.END, // BOTTOM ANCHOR in 120px container
         vexpand: true,
-        height_request: 92, // V98: Locked to Pill height
+        height_request: DOCK_CONSTANTS.PILL_HEIGHT, // V107: Using centralized height
         has_tooltip: false,
     })
     overlay.set_child(iconBox)
@@ -550,6 +550,31 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
 
         if (gAppInfo && gAppInfo.list_actions) {
             desktopActions = gAppInfo.list_actions()
+        }
+
+        // V94.13: STATIC ACTIONS FOR SPECIAL ITEMS 🍎
+        if (appId === "launcher") {
+            actions.push({
+                label: "Abrir",
+                action: () => appItem.launch()
+            })
+            actions.push({ separator: true })
+        } else if (appId === "home-shortcut") {
+            actions.push({
+                label: "Abrir",
+                action: () => appItem.launch()
+            })
+            actions.push({ separator: true })
+        } else if (appId === "trash") {
+            actions.push({
+                label: "Abrir",
+                action: () => appItem.launch()
+            })
+            actions.push({
+                label: "Vaciar papelera",
+                action: () => execAsync("gio trash --empty").catch(print)
+            })
+            actions.push({ separator: true })
         }
 
         if (desktopActions.length > 0) {
@@ -1167,16 +1192,18 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         const monitorWidth = gdkmonitor.get_geometry().width
         const region = new Cairo.Region()
-        // Interaction starts at y=98 (Pill top in 200px window).
+        // V107: Interaction starts at dynamic Y based on PILL_HEIGHT
+        const yOffset = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT - 10
         // @ts-ignore
-        region.unionRectangle({ x: 0, y: 98, width: monitorWidth, height: 92 })
+        region.unionRectangle({ x: 0, y: yOffset, width: monitorWidth, height: DOCK_CONSTANTS.PILL_HEIGHT })
         surface.set_input_region(region)
     }
 
     win.add_controller(motion) // CRITICAL: RE-ATTACH TO WINDOW
     motion.connect("motion", (controller, x, y) => {
-        // V99: Overlap-Aware (Trigger ONLY in active pill area)
-        if (y < 98) {
+        // V107: Overlap-Aware (Trigger ONLY in active pill area)
+        const yOffset = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT - 10
+        if (y < yOffset) {
             updateAllTargets(-1000)
             return
         }
@@ -1192,7 +1219,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         css_classes: ["crystal-dock"],
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
-        height_request: 92,
+        height_request: DOCK_CONSTANTS.PILL_HEIGHT,
         margin_bottom: 10,
     })
 
@@ -1201,7 +1228,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         name: "dock-gloss-layer",
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
-        height_request: 92,
+        height_request: DOCK_CONSTANTS.PILL_HEIGHT,
         margin_bottom: 10,
         can_focus: false,
     })
@@ -1215,9 +1242,10 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
     // Update dimensions for all layers
     const updateSize = () => {
-        const w = smoothedBarWidth + 16
-        pillBg.set_size_request(w, 92)
-        da.set_size_request(w, 92)
+        // V108: Side padding exactly matches top/bottom (18px per side)
+        const w = smoothedBarWidth + 36
+        pillBg.set_size_request(w, DOCK_CONSTANTS.PILL_HEIGHT)
+        da.set_size_request(w, DOCK_CONSTANTS.PILL_HEIGHT)
     }
 
     // 3. Layer 2: THE ICONS (Interactions)
@@ -1226,7 +1254,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     const shim = new Gtk.Box({
         valign: Gtk.Align.END, halign: Gtk.Align.START,
         margin_bottom: 10, // V98: 10px Bottom Gap
-        height_request: 92,
+        height_request: DOCK_CONSTANTS.PILL_HEIGHT,
         vexpand: true,
         overflow: Gtk.Overflow.VISIBLE,
     })
@@ -1579,17 +1607,18 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             updateInputRegion(total)
         }
 
-        // V99: 104px EXCLUSIVE ZONE (Ensures windows stop 104px from screen bottom)
-        Gtk4LayerShell.set_exclusive_zone(win, 104);
+        // V107: Using EXCLUSIVE_ZONE from constants
+        Gtk4LayerShell.set_exclusive_zone(win, DOCK_CONSTANTS.EXCLUSIVE_ZONE);
 
         win.connect("realize", () => {
             const surface = win.get_native()?.get_surface()
             if (surface) {
                 const monitorWidth = gdkmonitor.get_geometry().width
                 const region = new Cairo.Region()
-                // Interaction starts at y=98 (Pill top in 200px window).
+                // V107: Interaction starts at dynamic Y based on PILL_HEIGHT
+                const yOffset = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT - 10
                 // @ts-ignore
-                region.unionRectangle({ x: 0, y: 98, width: monitorWidth, height: 92 })
+                region.unionRectangle({ x: 0, y: yOffset, width: monitorWidth, height: DOCK_CONSTANTS.PILL_HEIGHT })
                 surface.set_input_region(region)
             }
         })
