@@ -582,17 +582,22 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             })
             actions.push({ separator: true })
         }
-        // 3. SYSTEM ACTIONS (Pin/Unpin)
 
-        actions.push({
-            label: currentIsPinned ? "Desanclar del dock" : "Mantener en el dock",
-            action: () => {
-                const cid = cleanId || rawId
-                if (currentIsPinned) pinnedList = pinnedList.filter(p => p.toLowerCase() !== cid.toLowerCase())
-                else pinnedList.push(cid)
-                savePinned(); updateDock()
-            }
-        })
+        // 3. SYSTEM ACTIONS (Pin/Unpin)
+        // Special items (launcher, home, trash) cannot be unpinned
+        const isSpecialItem = appId === "launcher" || appId === "home-shortcut" || appId === "trash"
+
+        if (!isSpecialItem) {
+            actions.push({
+                label: currentIsPinned ? "Desanclar del dock" : "Mantener en el dock",
+                action: () => {
+                    const cid = cleanId || rawId
+                    if (currentIsPinned) pinnedList = pinnedList.filter(p => p.toLowerCase() !== cid.toLowerCase())
+                    else pinnedList.push(cid)
+                    savePinned(); updateDock()
+                }
+            })
+        }
 
         // 4. WINDOW MANAGEMENT (If running)
         if (state.addresses && state.addresses.length > 0) {
@@ -1331,20 +1336,24 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             }
         })
 
-        // 1. Static: Home Shortcut (Smart Resolution)
+        // 1. Static: Home Shortcut (User's Folder - like macOS Finder)
         const userName = GLib.get_user_name()
         const prettyName = userName.charAt(0).toUpperCase() + userName.slice(1)
 
-        const resolveHomeIcon = () => {
-            for (const name of DOCK_CONFIG.HOME_ICON_FALLBACK) {
-                if (appService.getIconName(name)) return name;
+        // Try to get user's folder icon or avatar
+        const getUserIcon = () => {
+            // Check if user has a .face file (avatar)
+            const facePath = GLib.get_home_dir() + "/.face"
+            if (GLib.file_test(facePath, GLib.FileTest.EXISTS)) {
+                return facePath  // Use user's avatar as folder icon
             }
-            return "user-home";
+            // Otherwise use folder icon with user emblem
+            return "folder"  // Generic folder icon
         }
 
         const homeItem = {
             name: prettyName,
-            icon_name: getMappedIcon("user-home"),
+            icon_name: getUserIcon(),
             launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
         }
         configs.push({
