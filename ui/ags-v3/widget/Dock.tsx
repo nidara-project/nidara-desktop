@@ -1316,27 +1316,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             return () => execAsync(`gtk-launch ${desktopId}`).catch(print)
         }
 
-        // 0. Static: Launcher (Grid)
-        const launcherItem = {
-            name: "Lanzador",
-            icon_name: getMappedIcon("apps"),
-            launch: () => {
-                if ((globalThis as any).toggleAppGrid) {
-                    (globalThis as any).toggleAppGrid()
-                }
-            }
-        }
-        configs.push({
-            id: "launcher", width: 80,
-            syncData: { addrs: [], clientTitle: undefined, appItem: launcherItem as any },
-            factory: (vc) => {
-                const w = DockItem("launcher", launcherItem as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, "launcher")
-                if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
-                return w
-            }
-        })
 
-        // 1. Static: Home Shortcut (User's Folder - like macOS Finder)
+        // 0. Static: Home Shortcut (User's Folder - like macOS Finder)
         const userName = GLib.get_user_name()
         const prettyName = userName.charAt(0).toUpperCase() + userName.slice(1)
 
@@ -1361,6 +1342,26 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             syncData: { addrs: [], clientTitle: undefined, appItem: homeItem as any },
             factory: (vc) => {
                 const w = DockItem("home-shortcut", homeItem as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, "home-shortcut")
+                if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                return w
+            }
+        })
+
+        // 1. Static: Launcher (Grid - like macOS Launchpad)
+        const launcherItem = {
+            name: "Lanzador",
+            icon_name: getMappedIcon("apps"),
+            launch: () => {
+                if ((globalThis as any).toggleAppGrid) {
+                    (globalThis as any).toggleAppGrid()
+                }
+            }
+        }
+        configs.push({
+            id: "launcher", width: 80,
+            syncData: { addrs: [], clientTitle: undefined, appItem: launcherItem as any },
+            factory: (vc) => {
+                const w = DockItem("launcher", launcherItem as any, update, (id, s) => animRegistry.set(id, s), [], undefined, bar, "launcher")
                 if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                 return w
             }
