@@ -495,7 +495,8 @@ window.workspace-cockpit {
       rgba(255, 255, 255, 0.3) 50%,
       rgba(255, 255, 255, 0) 100%);
   min-width: 2px;
-  margin: 0 8px;
+  margin: 0 15px;
+  /* Symmetric margins for visual centering */
 }
 
 /* macOS-style indicators: single consistent dot */
@@ -507,9 +508,9 @@ window.workspace-cockpit {
   transition: background-color 0.2s ease, box-shadow 0.2s ease;
 }
 
-/* Open app: semi-transparent white dot */
+/* Open app: gray dot for non-focused */
 .cd-item.open .cd-dot {
-  background-color: rgba(255, 255, 255, 0.7);
+  background-color: rgba(150, 150, 150, 0.8);
 }
 
 /* Focused app: bright white dot with glow */
