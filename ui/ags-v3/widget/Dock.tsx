@@ -575,10 +575,25 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
                     label: label,
                     action: () => {
                         console.log(`[DockMenu] Launching action: ${rawLabel}`)
-                        // Try standard launch_action
-                        if (appItem.launch_action) appItem.launch_action(rawLabel)
-                        // @ts-ignore
-                        else if (appItem && appItem.app && appItem.app.launch_action) appItem.app.launch_action(rawLabel)
+                        console.log(`[DockMenu] appItem:`, appItem)
+                        console.log(`[DockMenu] appItem.launch_action exists:`, !!appItem.launch_action)
+
+                        try {
+                            // Try standard launch_action
+                            if (appItem.launch_action) {
+                                console.log(`[DockMenu] Calling appItem.launch_action("${rawLabel}", null)`)
+                                appItem.launch_action(rawLabel, null)
+                            }
+                            // @ts-ignore
+                            else if (appItem && appItem.app && appItem.app.launch_action) {
+                                console.log(`[DockMenu] Calling appItem.app.launch_action("${rawLabel}", null)`)
+                                appItem.app.launch_action(rawLabel, null)
+                            } else {
+                                console.warn(`[DockMenu] No launch_action method found for ${rawLabel}`)
+                            }
+                        } catch (e) {
+                            console.error(`[DockMenu] Error launching action ${rawLabel}:`, e)
+                        }
                     }
                 })
             })
