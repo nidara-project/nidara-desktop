@@ -1314,7 +1314,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         // 0. Static: Launcher (Grid)
         const launcherItem = {
             name: "Lanzador",
-            icon_name: "apps",
+            icon_name: getMappedIcon("apps"),
             launch: () => {
                 if ((globalThis as any).toggleAppGrid) {
                     (globalThis as any).toggleAppGrid()
@@ -1344,7 +1344,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         const homeItem = {
             name: prettyName,
-            icon_name: "home",
+            icon_name: getMappedIcon("user-home"),
             launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
         }
         configs.push({
@@ -1455,7 +1455,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         const trash = {
             name: "Papelera",
-            icon_name: "user-trash",
+            icon_name: getMappedIcon("user-trash"),
             launch: () => execAsync("nautilus trash:///").catch(print)
         }
         configs.push({
