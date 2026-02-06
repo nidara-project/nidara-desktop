@@ -4,11 +4,9 @@
 */
 
 /* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
-window.fullscreen,
-window.crystal-dock,
-.background,
-.view,
-.fullscreen {
+#crystal-dock,
+#crystal-dock .background,
+#crystal-dock .view {
   background-color: transparent;
   background-image: none;
   box-shadow: none;
@@ -48,35 +46,18 @@ window#crystal-dock contents {
   box-shadow: none;
 }
 
-/* 2. UNIVERSAL WIDGET RESET (The "Black Hole") */
-/* Esto fuerza a que NINGUN hijo herede estilos del tema Yaru/Adwaita */
-window#crystal-dock * {
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-  text-shadow: none;
-  -gtk-icon-shadow: none;
-}
+
 
 /* --- NUCLEAR: KILL INTERMEDIATE CONTAINERS (Strict IDs) --- */
-#dock-main-container,
-#dock-main-overlay,
-.cd-dock-container,
-.cd-main-overlay,
-.cd-overlay,
-.overlay,
-#dock-drawing-area,
-.cd-drawing-area,
-#the-dock-bar,
-.cd-dock-bar,
-.cd-tooltip,
-.cd-tooltip>contents,
-.cd-tooltip>background,
-.cd-popover,
-.cd-popover>contents,
-.cd-popover>background {
+#crystal-dock #dock-main-container,
+#crystal-dock #dock-main-overlay,
+#crystal-dock .cd-dock-container,
+#crystal-dock .cd-main-overlay,
+#crystal-dock .cd-overlay,
+#crystal-dock #dock-drawing-area,
+#crystal-dock .cd-drawing-area,
+#crystal-dock #the-dock-bar,
+#crystal-dock .cd-dock-bar {
   background-color: transparent;
   background-image: none;
   background: none;
@@ -84,33 +65,9 @@ window#crystal-dock * {
   box-shadow: none;
 }
 
-/* RESTORE MENU CONTENT BACKGROUND (High Specificity) */
-window#crystal-dock .cd-popover>contents {
-  background-color: rgba(255, 255, 255, 0.95);
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
-  padding: 6px;
-}
 
-/* --- TOOLTIP NEUTRALIZATION --- */
-window#crystal-dock tooltip,
-window#crystal-dock tooltip.background,
-window#crystal-dock tooltip>box,
-window#crystal-dock tooltip>box>label,
-window#crystal-dock tooltip>box>image,
-#crystal-dock tooltip,
-#crystal-dock tooltip.background,
-#crystal-dock .background,
-tooltip,
-tooltip.background,
-popover background {
-  background-color: transparent;
-  background-image: none;
-  background: none;
-  border: none;
-  box-shadow: none;
-  opacity: 0;
-}
+
+
 
 /* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
 /* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
@@ -266,75 +223,16 @@ window#crystal-dock box#cd-separator {
   border-radius: 1px;
 }
 
-/* Tooltips (cd-tooltip) */
-popover.cd-tooltip {
-  background-color: transparent;
-  box-shadow: none;
-  background: none;
-  border: none;
-}
 
-window#crystal-dock popover.cd-tooltip contents {
-  background-color: rgba(255, 255, 255, 0.9);
-  border-radius: 12px;
-  padding: 6px 14px;
-  margin-bottom: 5px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
 
-.cd-tooltip-label {
-  color: #000000;
-  font-size: 13px;
-  font-weight: 700;
-}
 
-/* Menus (cd-popover) */
-.cd-menu-action {
-  background-color: transparent;
-  color: #222222;
-  padding: 8px 16px;
-  font-size: 13px;
-  font-weight: 500;
-}
 
-.cd-menu-action:hover {
-  background-color: #007aff;
-  color: #ffffff;
-}
 
-.cd-menu-action:active {
-  background-color: #0062cc;
-  color: #ffffff;
-}
-
-.cd-menu-separator {
-  min-height: 1px;
-  background-color: rgba(0, 0, 0, 0.1);
-  margin: 4px 8px;
-}
 
 /* ==========================================================================
    FINAL STRIKE: NEUTRALIZACION DE CLASES DE SISTEMA (FULLSCREEN/BACKGROUND)
    ========================================================================== */
 
-/* 1. Ataque directo al nodo fantasma del tooltip y su fondo */
-window#crystal-dock tooltip,
-window#crystal-dock tooltip.background,
-window#crystal-dock .background,
-#crystal-dock tooltip,
-#crystal-dock tooltip.background,
-#crystal-dock .background {
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  /* Asegura que no ocupe espacio ni se dibuje */
-  min-width: 0;
-  min-height: 0;
-  padding: 0;
-  margin: 0;
-  opacity: 0;
-}
 
 /* 2. Red de seguridad para la ventana raiz si sigue en fullscreen o hereda temas */
 window#crystal-dock,
@@ -373,7 +271,6 @@ window#app-grid-window,
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 20px;
   color: white;
-  font-size: 20px;
   padding: 12px 30px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
   caret-color: #007aff;
@@ -409,8 +306,6 @@ window#app-grid-window,
 
 .app-grid-label {
   color: white;
-  font-size: 13px;
-  font-weight: 500;
   text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
 }
 

@@ -3,9 +3,14 @@
    Phase 61: Premium Design Restoration (Stable)
 */
 
-/* --- 1. BASE WINDOW RESET --- */
-window {
+/* --- 1. WINDOW ISOLATION --- */
+.crystal-bar,
+.crystal-dock,
+.control-center-win,
+.notification-center-win,
+.notif-win {
   background-color: transparent;
+  background-image: none;
 }
 
 /* --- 2. THE CRYSTAL BAR 💎 --- */
@@ -25,15 +30,11 @@ window.crystal-bar {
 
 .bar-app-name {
   color: white;
-  font-weight: 800;
-  font-size: 14px;
   margin-right: 20px;
 }
 
 .bar-menu-item {
   color: rgba(255, 255, 255, 0.82);
-  font-weight: 500;
-  font-size: 13px;
   margin-right: 14px;
 }
 
@@ -63,14 +64,10 @@ window.crystal-bar {
 /* RIGHT: STATUS */
 .bar-status label {
   color: rgba(255, 255, 255, 0.95);
-  font-size: 13px;
-  font-weight: 600;
 }
 
 .bar-time {
   color: white;
-  font-weight: 700;
-  font-size: 14px;
 }
 
 .bar-status-btn,
@@ -97,13 +94,10 @@ window.crystal-bar {
 .bar-time-notif-icon {
   color: #ff9500;
   /* Apple Alarm/Notif Orange */
-  font-size: 14px;
 }
 
 .bar-time-notif-count {
   color: white;
-  font-weight: 800;
-  font-size: 13px;
 }
 
 .bar-status-btn:hover,
@@ -125,6 +119,7 @@ window.crystal-bar {
   min-height: 28px;
   transition: all 0.2s ease;
 }
+
 
 /* --- 3. CRYSTAL PANELS --- */
 .control-center-win,
@@ -163,14 +158,12 @@ window.crystal-bar {
 }
 
 .nc-notif-title {
-  font-weight: 700;
-  font-size: 1.15em;
+  /* Font Inherited */
   color: #ffffff;
 }
 
 .nc-notif-body {
   color: rgba(255, 255, 255, 0.75);
-  font-size: 1em;
   line-height: 1.4;
   margin-top: 6px;
 }
@@ -201,22 +194,17 @@ window.crystal-bar {
 }
 
 .notif-app-name {
-  font-weight: 800;
-  font-size: 0.9em;
   color: rgba(255, 255, 255, 0.5);
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .notif-summary {
-  font-weight: 700;
-  font-size: 1.2em;
   color: white;
 }
 
 .notif-body {
   color: rgba(255, 255, 255, 0.8);
-  font-size: 1em;
 }
 
 .nc-header {
@@ -224,8 +212,6 @@ window.crystal-bar {
 }
 
 .nc-header-title {
-  font-size: 1.5em;
-  font-weight: 800;
   color: #ffffff;
 }
 
@@ -248,8 +234,6 @@ window.crystal-bar {
 
 .nc-empty {
   color: rgba(255, 255, 255, 0.4);
-  font-size: 1.1em;
-  font-style: italic;
   margin-top: 40px;
 }
 
@@ -362,8 +346,6 @@ window.workspace-cockpit {
 }
 
 .wo-label {
-  font-weight: 800;
-  font-size: 11px;
   color: rgba(255, 255, 255, 0.3);
   text-transform: uppercase;
 }
@@ -373,9 +355,7 @@ window.workspace-cockpit {
 }
 
 .wo-count {
-  font-size: 10px;
   color: rgba(255, 255, 255, 0.2);
-  font-weight: 900;
 }
 
 /* Schematic 🗺️ */
@@ -427,8 +407,6 @@ window.workspace-cockpit {
 }
 
 .wo-schematic-win-label {
-  font-size: 8px;
-  font-weight: 700;
   color: rgba(255, 255, 255, 0.82);
   padding: 0 4px;
 }
@@ -460,32 +438,45 @@ window.workspace-cockpit {
 
 .bar-ws-pill {
   color: white;
-  font-weight: 800;
-  font-size: 13px;
 }
 
-/* Dock Context Menu Actions */
+/* Unified Menu Layout (Tray & Dock) */
+popover.bar-tray-menu modelbutton,
 .cd-menu-action {
   padding: 8px 16px;
   border-radius: 10px;
   background: transparent;
-  color: inherit;
-  font-size: 13px;
-  font-weight: 500;
+  /* Colors inherited from GTK Theme */
 }
 
+popover.bar-tray-menu modelbutton:hover,
 .cd-menu-action:hover {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
-.cd-menu-action.destructive {
-  color: #ff3b30;
-}
 
+popover.bar-tray-menu separator,
 .cd-menu-separator {
   margin: 6px 0;
   background-color: rgba(255, 255, 255, 0.1);
   min-height: 1px;
+}
+
+/* Explicit Tooltip Styling (Force Theme Inheritance & Layout) */
+tooltip,
+tooltip.background {
+  background-color: @theme_bg_color;
+  color: @theme_fg_color;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 6px 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+tooltip label {
+  color: @theme_fg_color;
+  padding: 0;
+  margin: 0;
 }
 
 /* Dock Indicators and Separator */

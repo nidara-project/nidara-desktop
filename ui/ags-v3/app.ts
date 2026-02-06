@@ -35,7 +35,7 @@ app.start({
         const [family, size] = fontName.match(/^(.*?) (\d+)$/)?.slice(1) || ["sans-serif", "11"]
 
         const themeCss = `
-          window { 
+          * { 
             font-family: "${family}", "Symbols Nerd Font", sans-serif; 
           }
         `
