@@ -1354,7 +1354,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 return facePath  // Use user's avatar as folder icon
             }
             // Otherwise use folder icon with user emblem
-            return "folder"  // Generic folder icon
+            return "user-home"  // Standard home icon
         }
 
         const homeItem = {
@@ -1375,7 +1375,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         // 1. Static: Launcher (Grid - like macOS Launchpad)
         const launcherItem = {
             name: "Lanzador",
-            icon_name: "grid_view",  // Standard icon for app grids
+            icon_name: "appgrid",  // Standard icon for app grids (Papirus/Yaru)
             launch: () => {
                 if ((globalThis as any).toggleAppGrid) {
                     (globalThis as any).toggleAppGrid()

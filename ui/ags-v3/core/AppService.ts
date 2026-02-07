@@ -34,10 +34,15 @@ class AppService {
         // V94.1: ENSURE SYSTEM ICONS WIN (FALLBACKS ONLY)
         const localIcons = GLib.get_home_dir() + "/.local/share/icons"
         const systemIcons = "/usr/share/icons"
+        const localShareIcons = "/usr/local/share/icons" // V126: Support for locally installed app icons (e.g. Rofi)
+        const pixmaps = "/usr/share/pixmaps" // V126: Legacy standard fallback
         const flatpakIcons = "/var/lib/flatpak/exports/share/icons"
         const snapIcons = "/var/lib/snapd/desktop/icons"
+
         // STANDARD PATHS FIRST (Including Flatpak & Snap)
         theme.add_search_path(localIcons)
+        theme.add_search_path(localShareIcons)
+        theme.add_search_path(pixmaps)
         theme.add_search_path(systemIcons)
         theme.add_search_path(flatpakIcons)
         theme.add_search_path(snapIcons)
