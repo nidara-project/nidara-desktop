@@ -9,7 +9,7 @@ import Gio from "gi://Gio"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import AstalHyprland from "gi://AstalHyprland"
 import appService from "../core/AppService"
-import { getMappedIcon } from "../core/IconMapper"
+// V126: IconMapper removed for 100% natural icons
 
 const appsService = new AstalApps.Apps()
 const hyprland = AstalHyprland.get_default()
@@ -196,7 +196,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         const name = app.get_name ? app.get_name() : (app as any).name || ""
 
         const iconName = app.icon_name || "image-missing"
-        const mapped = getMappedIcon(iconName, id, name)
+        // V126: Mapping disabled for natural branding
 
         const icon = new Gtk.Image({
             pixel_size: 64,
@@ -206,11 +206,11 @@ export default function AppGrid(monitor: Gdk.Monitor) {
             vexpand: true,
         })
 
-        const resolved = appService.getIconName(mapped)
+        const resolved = appService.getIconName(iconName)
         if (resolved && resolved.startsWith("/")) {
             icon.gicon = Gio.FileIcon.new(Gio.File.new_for_path(resolved))
         } else {
-            icon.icon_name = resolved || mapped
+            icon.icon_name = resolved || iconName
         }
 
         const plate = new Gtk.Box({

@@ -12,7 +12,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { calculateDockItemMetrics, DOCK_CONSTANTS, getProjectedMouseX } from "./DockPhysics"
-import { getMappedIcon } from "../core/IconMapper"
+// V126: IconMapper removed for 100% natural icons
 
 
 
@@ -321,20 +321,6 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     }
 
     const res = getIcon()
-
-    // V94: APPLY MATERIAL ALIASING 💎
-    const originalName = res.name || ""
-    const appNameStr = appItem.name || ""
-    const mapped = getMappedIcon(originalName, appId, appNameStr)
-
-    if (mapped !== originalName) {
-        // FORCE Material ONLY for core system tools via ABSOLUTE PATH
-        // Use mapped icon name from IconMapper
-        // AppService and IconMapper will handle icon resolution dynamically
-        if (!res.path && !res.gicon) {
-            res.name = mapped
-        }
-    }
 
     let child: Gtk.Widget
 
@@ -1489,7 +1475,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         const trash = {
             name: "Papelera",
-            icon_name: getMappedIcon("user-trash"),
+            icon_name: "user-trash",  // Standard system name
             launch: () => execAsync("nautilus trash:///").catch(print)
         }
         configs.push({

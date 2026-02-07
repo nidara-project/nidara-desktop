@@ -20,14 +20,6 @@ class AppService {
     private listeners = new Set<() => void>()
 
     constructor() {
-        this.reload()
-
-        // Deep Sync: Secondary scan for boot resilience
-        GLib.timeout_add(GLib.PRIORITY_LOW, 5000, () => {
-            this.reload()
-            return GLib.SOURCE_REMOVE
-        })
-
         // Global Theme Discovery
         const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
 
@@ -46,6 +38,14 @@ class AppService {
         theme.add_search_path(systemIcons)
         theme.add_search_path(flatpakIcons)
         theme.add_search_path(snapIcons)
+
+        this.reload()
+
+        // Deep Sync: Secondary scan for boot resilience
+        GLib.timeout_add(GLib.PRIORITY_LOW, 5000, () => {
+            this.reload()
+            return GLib.SOURCE_REMOVE
+        })
 
         theme.connect("changed", () => {
             console.log(`[AppService] System theme changed to ${theme.get_theme_name()}, refreshing registry...`)
