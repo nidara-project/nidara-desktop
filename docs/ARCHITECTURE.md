@@ -93,7 +93,9 @@ graph TB
 │       ├── app.ts          # Punto de entrada
 │       ├── style.css       # Definición del Glassmorphism
 │       ├── widget/         # Componentes Core
-│       │   ├── Dock.tsx    # Dock con Magnificación Gaussiana
+│       │   ├── Dock.tsx    # Dock con Magnificación Gaussiana (Motor Físico)
+│       │   ├── DockItem.tsx # Componente de Ítem Individual
+│       │   ├── DockUtils.ts # Utilidades Gráficas (Cairo)
 │       │   ├── Bar.tsx     # TopBar con integración de servicios
 │       │   └── WorkspaceOverview.tsx # Cockpit de Geometría Absoluta
 │       └── core/           # Lógica de negocio (IconMapper, AppService)

@@ -5,6 +5,12 @@ This document defines the technical implementation, physics, and geometry of the
 ## 1. Core Architecture: Unified Animation Engine
 The dock uses a **Single Central Clock (60fps)** to synchronize all animations. Version 90 introduced the **Global Tiling Engine**, and Version 100 adds the **Seamless Overlap Model** to allow magnified icons to hover over windows.
 
+### 1.1 Modular Code Structure (Refactored V130)
+To maintain code quality and separation of concerns, the Dock is split into three main modules:
+- **`Dock.tsx`**: The main entry point. Handles the window creation (`Gtk4LayerShell`), the physics engine loop ("Unified Tick"), and the high-level application list generation.
+- **`DockItem.tsx`**: Contains the `DockItem` component (the individual icon) and `Separator`. Manages its own local state (hover, click, menu) and the Drag & Drop logic.
+- **`DockUtils.ts`**: Pure utility functions for graphics, primarily the Cairo `drawSquircle` function used for the glass background and icon plates.
+
 ## 2. Physics & Constants
 The magnification follows a Gaussian (Sine-based) curve anchored to the **Hybrid Physics Engine**.
 
@@ -40,6 +46,7 @@ To prevent magnified icons from being cut off by the dock's window or other appl
 - **Input Region**: The interactive area is precision-locked to the 92px pill (y=98 to y=190 in the 200px window).
 - **Motion Trigger**: Magnification is only triggered if the cursor is within the pill's vertically active zone, preventing "ghost" hovers.
 41: 
+
 42: ## 7. Icon Policy & Resolution (V94.3)
 43: To maintain DistroIA identity while respecting Third-Party branding, the dock implements a **Hybrid Policy**:
 44: 
