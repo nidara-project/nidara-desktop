@@ -95,7 +95,8 @@ function Separator(id: string, updateDock: () => void, register: (id: string, s:
         targetMargin: 0, currentMargin: 0,
         staticCenter: 0,
         virtualCenter: 0,
-        isSeparator: true
+        isSeparator: true,
+        widget: box as Gtk.Widget
     }
     register(id, state)
         // EXPOSE VIRTUAL CENTER UPDATE
@@ -395,7 +396,8 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
         virtualCenter: 0,
         isSeparator: false,
         addresses: addresses as string[], // V39
-        clientTitle: clientTitle as string | undefined // V39
+        clientTitle: clientTitle as string | undefined, // V39
+        widget: itemBox as Gtk.Widget
     }
     register(appId, state)
 
@@ -1026,7 +1028,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         targetScale: number, currentScale: number,
         targetWidth: number, currentWidth: number,
         targetMargin: number, currentMargin: number,
-        virtualCenter: number, staticCenter: number, isSeparator: boolean
+        virtualCenter: number, staticCenter: number, isSeparator: boolean,
+        widget?: Gtk.Widget
     }
     const animRegistry = new Map<string, AnimState>()
     let globalAnimId = 0
