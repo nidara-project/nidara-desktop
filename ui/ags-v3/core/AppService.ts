@@ -36,17 +36,11 @@ class AppService {
         const systemIcons = "/usr/share/icons"
         const flatpakIcons = "/var/lib/flatpak/exports/share/icons"
         const snapIcons = "/var/lib/snapd/desktop/icons"
-        const projectIcons = "/home/angel/Dev/MiDistroIA/assets/icons/material"
-
         // STANDARD PATHS FIRST (Including Flatpak & Snap)
         theme.add_search_path(localIcons)
         theme.add_search_path(systemIcons)
         theme.add_search_path(flatpakIcons)
         theme.add_search_path(snapIcons)
-
-        // CUSTOM POOLS LAST (Fallback only)
-        theme.add_search_path(localIcons + "/DistroIA/scalable/apps")
-        theme.add_search_path(projectIcons)
 
         theme.connect("changed", () => {
             console.log(`[AppService] System theme changed to ${theme.get_theme_name()}, refreshing registry...`)
