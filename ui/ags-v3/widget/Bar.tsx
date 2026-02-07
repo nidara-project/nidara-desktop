@@ -166,12 +166,15 @@ function AppMenu() {
 
       const sync = () => {
         const client = hyprland.focused_client
-        appName.label = getWordmark(client, hyprland)
+
+        // V127: Robust Title Sync
+        const title = getWordmark(client, hyprland)
+        appName.label = title || "Finder"
 
         // If client changed, we need to listen to ITS title changes too
         if (client !== lastClient) {
           if (lastClient) {
-            try { lastClient.disconnect_by_func(sync) } catch (e) { }
+            try { (lastClient as any).disconnect_by_func(sync) } catch (e) { }
           }
           if (client) {
             client.connect("notify::title", sync)
@@ -375,18 +378,26 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   win.set_decorated(false)
 
+  // V135: Initialize LayerShell first
+  let layerInit = false
   try {
     Gtk4LayerShell.init_for_window(win)
-    Gtk4LayerShell.set_namespace(win, "crystal-bar")
-    Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
-    Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
-    Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
-    Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-    Gtk4LayerShell.set_exclusive_zone(win, 44)
-    // @ts-ignore
-    win.gdkmonitor = gdkmonitor
-  } catch (e) {
-    console.error("[Bar] LayerShell init failed:", e)
+    layerInit = true
+  } catch (e) { }
+
+  if (layerInit) {
+    try {
+      Gtk4LayerShell.set_namespace(win, "crystal-bar")
+      Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
+      Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
+      Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
+      Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
+      Gtk4LayerShell.set_exclusive_zone(win, 44)
+      // @ts-ignore
+      win.gdkmonitor = gdkmonitor
+    } catch (e) {
+      console.error("[Bar] LayerShell init failed:", e)
+    }
   }
 
   const centerBox = new Gtk.CenterBox({

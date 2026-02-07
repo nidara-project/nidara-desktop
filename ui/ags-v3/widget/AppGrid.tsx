@@ -9,7 +9,7 @@ import Gio from "gi://Gio"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import AstalHyprland from "gi://AstalHyprland"
 import appService from "../core/AppService"
-// V126: IconMapper removed for 100% natural icons
+// V127: Native Gtk Resolution - No mapping needed
 
 const appsService = new AstalApps.Apps()
 const hyprland = AstalHyprland.get_default()
@@ -101,15 +101,23 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         css_classes: ["app-grid-window"],
     })
 
-    Gtk4LayerShell.init_for_window(win)
-    Gtk4LayerShell.set_monitor(win, monitor)
-    Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
-    Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
-    Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true)
-    Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
-    Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-    Gtk4LayerShell.set_namespace(win, "launcher")
-    Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+    // V135: Initialize LayerShell first
+    let layerInit = false
+    try {
+        Gtk4LayerShell.init_for_window(win)
+        layerInit = true
+    } catch (e) { }
+
+    if (layerInit) {
+        Gtk4LayerShell.set_monitor(win, monitor)
+        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
+        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
+        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
+        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
+        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true)
+        Gtk4LayerShell.set_exclusive_zone(win, -1)
+        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+    }
 
     win.visible = false
 
@@ -196,7 +204,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         const name = app.get_name ? app.get_name() : (app as any).name || ""
 
         const iconName = app.icon_name || "image-missing"
-        // V126: Mapping disabled for natural branding
+        // V127: Native Resolution (No mapping)
 
         const icon = new Gtk.Image({
             pixel_size: 64,
@@ -304,6 +312,17 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         }
 
         // Select first visible child if flowbox has focus
+        // Initialize LayerShell first
+        let winInit = false
+        try {
+            Gtk4LayerShell.init_for_window(win)
+            winInit = true
+        } catch (e) { }
+
+        const monitorWidth = monitor.get_geometry().width
+        const monitorHeight = monitor.get_geometry().height
+        win.set_default_size(monitorWidth, monitorHeight)
+
         const first = flowbox.get_first_child()
         if (first && first.get_visible()) {
             flowbox.select_child(first as Gtk.FlowBoxChild)

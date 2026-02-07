@@ -77,8 +77,9 @@ export function getWordmark(client: AstalHyprland.Client | null, hyprland: Astal
     // 3. If title is too generic or empty, use class mapping
     const genericTitles = ["New Tab", "Google Chrome", "Mozilla Firefox", "Untitled", "index.html", "Enter name of file", ""]
     if (genericTitles.includes(title) || title.length < 2) {
-        return classMap[client.class.toLowerCase()] ||
-            client.class.charAt(0).toUpperCase() + client.class.slice(1) ||
+        const cls = client.class || "App"
+        return classMap[cls.toLowerCase()] ||
+            cls.charAt(0).toUpperCase() + cls.slice(1) ||
             "App"
     }
 

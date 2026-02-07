@@ -12,7 +12,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { calculateDockItemMetrics, DOCK_CONSTANTS, getProjectedMouseX } from "./DockPhysics"
-// V126: IconMapper removed for 100% natural icons
+// V127: Native Gtk Resolution - No mapping needed
 
 
 
@@ -265,7 +265,15 @@ const dragBus = {
 
 function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () => void, register: (id: string, s: any) => void, addresses: string[] = [], clientTitle?: string, referenceWidget?: Gtk.Widget, cleanId?: string) {
     // Preserve case for icon lookups if possible, but use lower for comparison
-    const rawId = (appItem.get_id ? appItem.get_id() : (appItem.id || appItem.icon_name || appItem.name || "void")).replace(".desktop", "")
+    let rawId = "void"
+    if (appItem.get_id) {
+        rawId = appItem.get_id() || "void"
+    } else {
+        const key = (appItem as any).id || (appItem as any).icon_name || (appItem as any).name || "void"
+        if (Array.isArray(key)) rawId = key[0] // Use first item of fallback array
+        else if (typeof key === "string") rawId = key
+    }
+    rawId = rawId.replace(".desktop", "")
 
     const itemBox = new Gtk.Box({
         name: "cd-item-" + appId,
@@ -306,9 +314,29 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
     // ICON LOGIC: High-Reliability Path Resolution from Pre-resolved SSOT Service
     // ICON LOGIC: High-Reliability Resolution from SSOT Service
     const getIcon = (): { name?: string, path?: string, gicon?: Gio.Icon } => {
-        let name = appItem.icon_name || appItem.name || "application-x-executable"
+        // Handle AppData (our service) vs AstalApps (GIO)
+        // V127: Robust property checking
+        let name: string | string[] = (appItem as any).icon_name || (appItem as any).icon || appItem.name || "application-x-executable"
 
-        const candidate = appService.getIconName(name)
+        // V127: UNIVERSAL RESOLVER (Handles arrays & single strings)
+        let candidate: string | null = null
+        try {
+            if (Array.isArray(name)) {
+                // Iterate through candidates until one works
+                for (const n of name) {
+                    const res = appService.getIconName(n)
+                    if (res && res !== "image-missing") {
+                        candidate = res
+                        break
+                    }
+                }
+            } else {
+                candidate = appService.getIconName(name)
+            }
+        } catch (e) {
+            console.error(`[Dock] getIcon crash for ${(appItem as any).name}:`, e)
+        }
+
         if (candidate) {
             if (candidate.startsWith("/") || candidate.startsWith("file://")) {
                 return { path: candidate.replace("file://", "") }
@@ -857,7 +885,7 @@ function DockItem(appId: string, appItem: AstalApps.Application, updateDock: () 
             const c = hypr.clients.find(c => c.address === addresses[0])
             if (c) targetTitle = c.title
         }
-        label.set_label(targetTitle)
+        label.set_label(targetTitle || "")
     }
     const c1 = hypr.connect("notify::clients", sync)
     const c2 = hypr.connect("notify::focused-client", sync)
@@ -1345,7 +1373,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         const homeItem = {
             name: prettyName,
-            icon_name: getUserIcon(),
+            // V127: Fallback Group for Home
+            icon_name: ["user-home", "folder-home", "folder"],
             launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
         }
         configs.push({
@@ -1361,7 +1390,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         // 1. Static: Launcher (Grid - like macOS Launchpad)
         const launcherItem = {
             name: "Lanzador",
-            icon_name: "appgrid",  // Standard icon for app grids (Papirus/Yaru)
+            // V127: Fallback Group for Launcher (Ubuntu/Gnome Logic)
+            icon_name: ["view-app-grid-symbolic", "view-app-grid", "org.gnome.Shell.Apps-symbolic", "pan-start-symbolic"],
             launch: () => {
                 if ((globalThis as any).toggleAppGrid) {
                     (globalThis as any).toggleAppGrid()
@@ -1401,6 +1431,13 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                         launch: getLaunch(lid)
                     } as any
                 }
+
+                // V127: Fix Chrome/Edge icon name replacement for arrays
+                if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
+                    if (typeof appItem.icon_name === "string") {
+                        appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default");
+                    }
+                }
             }
 
             if (appItem) {
@@ -1421,7 +1458,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 const info = appService.getAppInfo(lid)
                 const displayName = info?.get_name() || lid
                 let icon = info?.get_id() || originalId
-                if (lid.startsWith("chrome-") && lid.endsWith("-default")) icon = icon.replace(/-default$/i, "-Default")
+                if (lid.startsWith("chrome-") && lid.endsWith("-default") && typeof icon === "string") {
+                    icon = icon.replace(/-default$/i, "-Default")
+                }
                 const ghost = { name: displayName, icon_name: icon, launch: getLaunch(lid) } as any
                 configs.push({
                     id: lid, width: DOCK_CONSTANTS.APP_SLOT, // V50: Unified Slot
@@ -1449,7 +1488,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 } as any
             }
             if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
-                appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default")
+                if (typeof appItem.icon_name === "string") {
+                    appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default")
+                }
             }
             configs.push({
                 id: lid, width: DOCK_CONSTANTS.APP_SLOT, // V50: Unified Slot
@@ -1475,7 +1516,8 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
         const trash = {
             name: "Papelera",
-            icon_name: "user-trash",  // Standard system name
+            // V127: Fallback Group for Trash (Ubuntu/Gnome Logic)
+            icon_name: ["user-trash", "trashcan-empty", "trash"],
             launch: () => execAsync("nautilus trash:///").catch(print)
         }
         configs.push({
@@ -1566,7 +1608,17 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
     const monitorWidth = gdkmonitor.get_geometry().width
     win.set_default_size(monitorWidth, 200)
+    // V135: Initialize LayerShell first to prevent warnings
+    let layerInit = false
+    try {
+        Gtk4LayerShell.init_for_window(win)
+        layerInit = true
+    } catch (e) {
+        console.warn("Gtk4LayerShell init failed (not on Wayland?): " + e)
+    }
+
     win.set_size_request(monitorWidth, 200)
+    win.set_decorated(false) // Move here
 
     // --- HARDWARE TRANSPARENCY & BLUR SYNC ---
     try {
@@ -1576,41 +1628,41 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         win.input_shape_combine_region(null)
     } catch (e) { }
 
-    win.set_decorated(false)
 
-    try {
-        Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, "crystal-dock");
-        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP);
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true);
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true);
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true);
-        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 0); // V99: Internal gap is 10px
-        // Initialize input region with current state
-        if (animRegistry.size > 0) {
-            let total = 0
-            for (const s of animRegistry.values()) {
-                total += s.currentWidth + (s.currentMargin * 2)
+    if (layerInit) {
+        try {
+            Gtk4LayerShell.set_namespace(win, "crystal-dock");
+            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP);
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true);
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true);
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true);
+            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 0); // V99: Internal gap is 10px
+            // Initialize input region with current state
+            if (animRegistry.size > 0) {
+                let total = 0
+                for (const s of animRegistry.values()) {
+                    total += s.currentWidth + (s.currentMargin * 2)
+                }
+                updateInputRegion(total)
             }
-            updateInputRegion(total)
-        }
 
-        // V107: Using EXCLUSIVE_ZONE from constants
-        Gtk4LayerShell.set_exclusive_zone(win, DOCK_CONSTANTS.EXCLUSIVE_ZONE);
+            // V107: Using EXCLUSIVE_ZONE from constants
+            Gtk4LayerShell.set_exclusive_zone(win, DOCK_CONSTANTS.EXCLUSIVE_ZONE);
 
-        win.connect("realize", () => {
-            const surface = win.get_native()?.get_surface()
-            if (surface) {
-                const monitorWidth = gdkmonitor.get_geometry().width
-                const region = new Cairo.Region()
-                // V107: Interaction starts at dynamic Y based on PILL_HEIGHT
-                const yOffset = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT - 10
-                // @ts-ignore
-                region.unionRectangle({ x: 0, y: yOffset, width: monitorWidth, height: DOCK_CONSTANTS.PILL_HEIGHT })
-                surface.set_input_region(region)
-            }
-        })
-    } catch (e) { console.error(e) }
+            win.connect("realize", () => {
+                const surface = win.get_native()?.get_surface()
+                if (surface) {
+                    const monitorWidth = gdkmonitor.get_geometry().width
+                    const region = new Cairo.Region()
+                    // V107: Interaction starts at dynamic Y based on PILL_HEIGHT
+                    const yOffset = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT - 10
+                    // @ts-ignore
+                    region.unionRectangle({ x: 0, y: yOffset, width: monitorWidth, height: DOCK_CONSTANTS.PILL_HEIGHT })
+                    surface.set_input_region(region)
+                }
+            })
+        } catch (e) { console.error(e) }
+    }
 
     const cConn = hypr.connect("notify::clients", update)
     const fConn = hypr.connect("notify::focused-client", () => {

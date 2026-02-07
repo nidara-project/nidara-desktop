@@ -94,18 +94,25 @@ export default function NotificationPopups(gdkmonitor: Gdk.Monitor) {
         child: box
     })
 
+    let layerInit = false
     try {
         Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, "notif-win")
-        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 54)
-        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, 12)
-        // @ts-ignore
-        win.gdkmonitor = gdkmonitor
-    } catch (e) {
-        console.error("[Notif] LayerShell failed:", e)
+        layerInit = true
+    } catch (e) { }
+
+    if (layerInit) {
+        try {
+            Gtk4LayerShell.set_namespace(win, "notif-win")
+            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
+            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 54)
+            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, 12)
+            // @ts-ignore
+            win.gdkmonitor = gdkmonitor
+        } catch (e) {
+            console.error("[Notif] LayerShell failed:", e)
+        }
     }
 
     const notifMap = new Map<number, Gtk.Widget>()

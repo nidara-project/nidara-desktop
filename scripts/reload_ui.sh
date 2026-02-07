@@ -1,6 +1,8 @@
 #!/bin/bash
 # reload_ui.sh - Simple & Reliable restarter (V122: Flatpak/Snap Support)
 
+export GDK_BACKEND=wayland
+export XDG_SESSION_TYPE=wayland
 AGS_DIR="/home/angel/Dev/MiDistroIA/ui/ags-v3"
 LOG_FILE="/tmp/ags_reload.log"
 

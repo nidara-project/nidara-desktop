@@ -481,6 +481,13 @@ popover.bar-tray-menu separator,
   min-height: 1px;
 }
 
+/* V136: LAUNCHER ICON VISIBILITY (Symbolic Grid Fix) */
+/* Force white color and shadow so symbolic icons don't vanish or appear blank */
+#cd-icon-box-launcher image {
+  color: #ffffff;
+  -gtk-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+}
+
 /* Explicit Tooltip Styling (Force Theme Inheritance & Layout) */
 tooltip,
 tooltip.background {

@@ -131,17 +131,26 @@ export default function WorkspaceOverview(monitor: Gdk.Monitor, hyprland: AstalH
         visible: false
     })
 
+    let layerInit = false
     try {
         Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, "workspace-cockpit")
-        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, false)
-        Gtk4LayerShell.set_exclusive_zone(win, 0)
-        if (monitor) Gtk4LayerShell.set_monitor(win, monitor)
+        layerInit = true
     } catch (e) { }
+
+    if (layerInit) {
+        try {
+            Gtk4LayerShell.set_namespace(win, "workspace-cockpit")
+            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, false)
+            Gtk4LayerShell.set_exclusive_zone(win, 0)
+            if (monitor) Gtk4LayerShell.set_monitor(win, monitor)
+        } catch (e) {
+            console.error("[WO] LayerShell failed:", e)
+        }
+    }
 
     const overview = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,

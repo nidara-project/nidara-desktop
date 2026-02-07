@@ -136,18 +136,25 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
         visible: false
     })
 
+    let layerInit = false
     try {
         Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, "notification-center")
-        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 54)
-        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, 12)
-        // @ts-ignore
-        win.gdkmonitor = gdkmonitor
-    } catch (e) {
-        console.error("[NC] LayerShell failed:", e)
+        layerInit = true
+    } catch (e) { }
+
+    if (layerInit) {
+        try {
+            Gtk4LayerShell.set_namespace(win, "notification-center")
+            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
+            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 54)
+            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, 12)
+            // @ts-ignore
+            win.gdkmonitor = gdkmonitor
+        } catch (e) {
+            console.error("[NC] LayerShell failed:", e)
+        }
     }
 
     // @ts-ignore
