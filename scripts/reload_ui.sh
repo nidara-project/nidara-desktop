@@ -9,6 +9,12 @@ LOG_FILE="/tmp/ags_reload.log"
 
 echo "[$(date)] 🔄 Restaurando estabilidad TOTAL (Poppi Edition)..."
 
+# 0. Compilar CSS
+if [ -f "$AGS_DIR/style.scss" ]; then
+    echo "🎨 Compilando estilos..."
+    npx sass "$AGS_DIR/style.scss" "$AGS_DIR/style.css"
+fi
+
 # 1. Limpiar procesos
 killall -9 ags gjs swaybg mako dunst swww-daemon 2>/dev/null || true
 sleep 0.2
@@ -24,20 +30,28 @@ LD_LIBRARY_PATH="/usr/lib:/usr/local/lib:$AGS_DIR/astal-local/lib/linux:$LD_LIBR
 nohup ags run --gtk 4 . > /tmp/ags.log 2>&1 &
 disown
 
-# 4. Fondo de pantalla (swww para transiciones premium)
-swww-daemon &
-sleep 0.5
-swww img /home/angel/Dev/DistroIA/config/wallpaper.png --transition-type grow --transition-pos 0.5,0.5 --transition-step 90
-# Usar una ruta relativa o configurable si es posible
-WALLPAPER="$HOME/Pictures/wallpaper.jpg"
-if [ ! -f "$WALLPAPER" ]; then
-    # Fallback to a default asset if exists
-    WALLPAPER="$PROJECT_ROOT/assets/wallpapers/current.jpg"
+# 4. Fondo de pantalla (swww con transiciones animadas) 💎
+if ! pgrep -x "swww-daemon" > /dev/null; then
+    swww-daemon &
+    sleep 0.5
 fi
 
-if [ -f "$WALLPAPER" ]; then
-    nohup swaybg -i "$WALLPAPER" -m fill >/dev/null 2>&1 &
-    disown
+# Cargar configuración si existe
+CONFIG_WALLPAPER="/home/angel/Dev/DistroIA/config/wallpaper.sh"
+if [ -f "$CONFIG_WALLPAPER" ]; then
+    source "$CONFIG_WALLPAPER"
+fi
+
+# Fallback si las variables no están definidas
+WALLPAPER_PATH="${WALLPAPER_PATH:-/home/angel/Dev/DistroIA/config/wallpaper.png}"
+TRANSITION_TYPE="${TRANSITION_TYPE:-grow}"
+
+if [ -f "$WALLPAPER_PATH" ]; then
+    swww img "$WALLPAPER_PATH" \
+        --transition-type "$TRANSITION_TYPE" \
+        --transition-step "${TRANSITION_STEP:-90}" \
+        --transition-fps "${TRANSITION_FPS:-60}" \
+        --transition-pos "${TRANSITION_POS:-0.5,0.5}"
 fi
 
 echo "✅ Sistema estable y con todos los iconos."

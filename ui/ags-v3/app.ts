@@ -45,7 +45,13 @@ app.start({
     }
 
     try {
-      mainProvider.load_from_path(styleFile)
+      if (GLib.file_test(styleFile, GLib.FileTest.EXISTS)) {
+        mainProvider.load_from_path(styleFile)
+        console.log(`[Style] Loaded: ${styleFile}`)
+      } else {
+        console.error(`[Style] NOT FOUND: ${styleFile}`)
+      }
+
       if (defaultDisplay) {
         Gtk.StyleContext.add_provider_for_display(defaultDisplay, mainProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
         Gtk.StyleContext.add_provider_for_display(defaultDisplay, themeProvider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)

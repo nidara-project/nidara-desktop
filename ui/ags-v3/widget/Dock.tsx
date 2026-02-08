@@ -24,7 +24,7 @@ const hypr = AstalHyprland.get_default()
 const appsService = new AstalApps.Apps()
 
 const DOCK_CONFIG = {
-    USE_ICON_PLATES: false,
+    USE_ICON_PLATES: true,
     SMART_PLATES_FOR_FILES: true,
     MAX_ICON_SIZE: 160,
     MAGNIFICATION_SCALE: 2.2,
@@ -170,34 +170,39 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
                     if (!state.isSeparator) {
                         const overlay = itemBox?.get_first_child() as Gtk.Overlay
-                        const iconBox = overlay?.get_child() as Gtk.Box
-                        const content = iconBox?.get_first_child() as any
+                        if (!overlay) {
+                            console.warn(`[Dock] No overlay for ${id}`)
+                            return
+                        }
+
+                        // Robust Search for the Plate
+                        let iconBox = overlay.get_child() as Gtk.Box
+                        let plate: Gtk.Widget | null = null
+
+                        if (iconBox && (iconBox as any).get_first_child) {
+                            const first = (iconBox as any).get_first_child()
+                            if (first && first.get_css_classes().includes("cd-squircle-plate")) {
+                                plate = first
+                            }
+                        }
+
                         const targetPixelSize = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
 
-                        if (content) {
-                            if (content.get_css_classes().includes("cd-squircle-plate")) {
-                                content.set_size_request(drawIconW, targetPixelSize)
-                                const icon = content.get_first_child() as any
-                                // V132: Custom DrawingArea Support
-                                // The 'icon' widget is now a Gtk.DrawingArea (or fallback Image).
-                                // We simply set the size request. The DrawingArea's draw_func handles the rest.
-
-                                // V134: Simplified Requests
-                                // The DrawingArea now handles padding internally in its draw_func.
-                                // We request the full target size (Plate Size) so the widget fills the plate
-                                // and the internal logic centers/scales the icon.
-                                icon.set_size_request(targetPixelSize, targetPixelSize)
-                            } else {
-                                // Standard Icons (No Plate) - Fixed Logic
-                                content.set_size_request(drawIconW, targetPixelSize)
-                            }
+                        if (plate) {
+                            plate.set_size_request(drawIconW, targetPixelSize)
+                            const icon = (plate as any).get_first_child()
+                            if (icon) icon.set_size_request(targetPixelSize, targetPixelSize)
+                        } else if (iconBox) {
+                            iconBox.set_size_request(drawIconW, targetPixelSize)
                         }
                     }
                 }
-
             })
 
             const totalIntWidth = Math.round(currentFloatX)
+            if (totalIntWidth === 0 && animRegistry.size > 0) {
+                console.warn("[Dock] Bar width is 0! Check physics constants.")
+            }
             const monitorWidth = gdkmonitor.get_geometry().width
             const manualMarginStart = Math.round((monitorWidth - totalIntWidth) / 2)
 

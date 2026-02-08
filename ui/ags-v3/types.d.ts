@@ -1,43 +1,56 @@
-declare module "gi://AstalBattery" {
-    export namespace AstalBattery { interface Battery { [key: string]: any } }
+declare module "ags/gtk4/app" {
     const value: any;
     export default value;
 }
-declare module "gi://AstalNetwork" {
-    export namespace AstalNetwork { interface Network { [key: string]: any } }
-    const value: any;
-    export default value;
-}
-declare module "gi://AstalMpris" {
-    export namespace AstalMpris {
-        interface Player { [key: string]: any }
-        enum PlaybackStatus { PLAYING, PAUSED, STOPPED }
+
+declare module "ags/gtk4" {
+    export namespace Gtk {
+        export type Widget = any;
+        export type Box = any;
+        export type CenterBox = any;
+        export type Label = any;
+        export type Popover = any;
+        export type Image = any;
+        export type Overlay = any;
+        export type DrawingArea = any;
+        export type DropTarget = any;
+        export type EventControllerMotion = any;
+        export type GestureClick = any;
+        export type Button = any;
+        export type Separator = any;
+        export type WidgetPaintable = any;
+        export type TextDirection = any;
+        export type IconTheme = any;
+        export type IconLookupFlags = any;
+        export type PositionType = any;
+        export type Align = any;
+        export type Overflow = any;
+        export type Orientation = any;
     }
-    const value: any;
-    export default value;
+    export namespace Gdk {
+        export type Display = any;
+        export type Cursor = any;
+        export type DragAction = any;
+        export type ContentProvider = any;
+        export const DragAction: any;
+        export const Cursor: any;
+        export const Display: any;
+        export const cairo_set_source_pixbuf: any;
+    }
+    export const Astal: any;
+    export const Gtk: any;
+    export const Gdk: any;
 }
-declare module "gi://AstalAuth" {
-    const value: any;
-    export default value;
+
+declare module "ags/file" {
+    export const writeFile: any;
+    export const readFile: any;
 }
-declare module "gi://AstalBluetooth" {
-    const value: any;
-    export default value;
+
+declare module "ags/process" {
+    export const execAsync: any;
 }
-declare module "gi://AstalNotifd" {
-    export namespace AstalNotifd { interface Notification { [key: string]: any } }
-    const value: any;
-    export default value;
-}
-declare module "gi://AstalApps" {
-    const value: any;
-    export default value;
-}
-declare module "gi://AstalHyprland" {
-    const value: any;
-    export default value;
-}
-declare module "gi://Gtk4LayerShell" {
-    const value: any;
-    export default value;
+
+declare module "ags/gtk4/jsx-runtime" {
+    export const astal: any;
 }

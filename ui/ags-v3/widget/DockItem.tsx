@@ -309,6 +309,7 @@ export function DockItem(
             valign: Gtk.Align.CENTER,
             hexpand: false,
             vexpand: false,
+            overflow: Gtk.Overflow.HIDDEN,
             width_request: DOCK_CONSTANTS.ICON_SIZE,
             height_request: DOCK_CONSTANTS.ICON_SIZE,
         })
@@ -386,7 +387,7 @@ export function DockItem(
         if (tooltipTimeout) GLib.source_remove(tooltipTimeout)
     })
     motion.connect("motion", (controller, x, y) => {
-        itemBox.set_cursor(Gdk.Cursor.new_from_name("pointer", null))
+        // Removed: itemBox.set_cursor(Gdk.Cursor.new_from_name("pointer", null))
         if (!tooltip.visible && !tooltipTimeout) {
             tooltipTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
                 tooltip.popup(); tooltipTimeout = null; return GLib.SOURCE_REMOVE
@@ -394,7 +395,7 @@ export function DockItem(
         }
     })
     motion.connect("leave", () => {
-        itemBox.set_cursor(null)
+        // Removed: itemBox.set_cursor(null)
         if (tooltipTimeout) { GLib.source_remove(tooltipTimeout); tooltipTimeout = null }
         tooltip.popdown()
     })

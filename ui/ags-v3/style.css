@@ -147,69 +147,70 @@ window#crystal-dock box.cd-drag-gap,
   transform-origin: bottom center;
 }
 
-/* --- SQUIRCLE ICON PLATES (Phase 66) --- */
+/* --- SQUIRCLE ICON PLATES (Phase 72: Specificity over Force) --- */
 window#crystal-dock box.cd-squircle-plate {
-  background-color: rgb(255, 255, 255);
-  /* Apple pure white */
+  background-color: #ffffff;
   border-radius: 28%;
-  /* Percentage radius for perfect scaling */
+  min-width: 32px;
+  min-height: 32px;
   margin: 0;
   padding: 0;
-  /* Multi-level shadows for Apple depth - STATIC */
-  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.15);
+  opacity: 1;
+  box-shadow: none;
+  border: none;
 }
 
-.cd-squircle-plate image,
-.cd-squircle-plate widget {
-  /* Prevent GTK from adding any hover shadows to internal icons */
-  box-shadow: none !important;
-  -gtk-icon-shadow: none !important;
-  border: none !important;
+/* Internal Icon Clamping - High Specificity */
+window#crystal-dock box.cd-squircle-plate image,
+window#crystal-dock box.cd-squircle-plate widget,
+window#crystal-dock box.cd-squircle-plate drawingarea {
+  box-shadow: none;
+  -gtk-icon-shadow: none;
+  border: none;
+  background: none;
 }
 
-/* Legacy Hover Removed for Physics */
-.cd-dot {
-  min-height: 4px;
-  min-width: 4px;
-  border-radius: 4px;
-  background-color: transparent;
-  transition: background-color 200ms ease;
-}
-
-/* High Specificity to defeat "window#crystal-dock *" reset */
-/* High Specificity to defeat "window#crystal-dock *" reset */
-window#crystal-dock .cd-dot.open,
-window#crystal-dock .cd-dot.focused {
+/* --- INDICATORS (Dots) --- */
+window#crystal-dock button.cd-dot,
+window#crystal-dock box.cd-dot {
   min-height: 5px;
   min-width: 5px;
-  background-color: rgba(255, 255, 255, 0.5);
-  /* Flat semi-transparent dot (macOS standard) */
-  box-shadow: none;
-  /* No depth/glow */
-  border: none;
   border-radius: 50%;
-  opacity: 1;
+  margin-top: 4px;
+  background-color: transparent;
+  transition: all 0.2s ease;
 }
 
-/* Unified: Focused app has SAME dot as open app in macOS */
-window#crystal-dock .cd-dot.focused {
+/* Active/Focused State - SEMI-TRANSPARENT (Original Look) */
+window#crystal-dock box.cd-dot.open,
+window#crystal-dock box.cd-dot.focused {
   background-color: rgba(255, 255, 255, 0.5);
   box-shadow: none;
   border: none;
+  opacity: 1;
+  min-height: 5px;
+  min-width: 5px;
 }
 
-/* High Specificity ID Selector to defeat Nuclear Reset safely */
-/* High Specificity ID Selector to defeat Nuclear Reset safely */
+/* --- SEPARATOR --- */
+window#crystal-dock box.cd-separator,
 window#crystal-dock box#cd-separator {
-  min-height: 40px;
-  /* Slightly shorter than icon height */
-  max-height: 40px;
-  min-width: 1px;
-  /* Crisp hairline */
-  background-color: rgba(255, 255, 255, 0.25);
-  /* Subtle macOS divider */
-  margin: 0;
+  min-height: 48px;
+  min-width: 2px;
+  background-color: rgba(255, 255, 255, 0.4);
+  margin: 0 10px;
+  box-shadow: none;
   border-radius: 1px;
+}
+
+/* --- HOVER SHADOW KILLER (Surgical & Specific) --- */
+/* Target ONLY the hover states we want to flatten */
+window#crystal-dock .cd-item:hover,
+window#crystal-dock .cd-item *:hover,
+window#crystal-dock .cd-squircle-plate:hover {
+  box-shadow: none;
+  -gtk-icon-shadow: none;
+  filter: none;
 }
 
 /* ==========================================================================

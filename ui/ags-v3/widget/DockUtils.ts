@@ -62,7 +62,7 @@ export const drawSquircle = (cr: any, width: number, height: number, targetW?: n
     // We paint the full main path with a uniform translucent white.
     // This allows the background blur (Hyprland/CSS) to be "caught" by the surface.
     path()
-    cr.setSourceRGBA(1, 1, 1, 0.25) // Higher opacity to catch blur
+    cr.setSourceRGBA(1, 1, 1, 0.3) // Subtle glassy white
     cr.fill()
 
     // 2. OPTIONAL: SUBTLE GRADIENT OVERLAY - REMOVED (User requested flat/no-gradient look)
