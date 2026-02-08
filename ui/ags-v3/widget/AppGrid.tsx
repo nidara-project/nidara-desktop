@@ -109,6 +109,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     } catch (e) { }
 
     if (layerInit) {
+        Gtk4LayerShell.set_namespace(win, "launcher") // Use "launcher" to match existing Hyprland blur rules
         Gtk4LayerShell.set_monitor(win, monitor)
         Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
@@ -312,12 +313,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         }
 
         // Select first visible child if flowbox has focus
-        // Initialize LayerShell first
-        let winInit = false
-        try {
-            Gtk4LayerShell.init_for_window(win)
-            winInit = true
-        } catch (e) { }
+        // Initialize LayerShell first - REMOVED REDUNDANT INIT
 
         const monitorWidth = monitor.get_geometry().width
         const monitorHeight = monitor.get_geometry().height
@@ -379,7 +375,11 @@ export default function AppGrid(monitor: Gdk.Monitor) {
             win.visible = !win.visible
             if (win.visible) {
                 searchEntry.text = ""
-                searchEntry.grab_focus()
+                // V136: Focus fix with timeout
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+                    searchEntry.grab_focus()
+                    return GLib.SOURCE_REMOVE
+                })
                 filterApps()
             }
         }

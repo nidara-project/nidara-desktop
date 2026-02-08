@@ -4,7 +4,6 @@
    Prefix: cd- (Class Isolation)
 */
 /* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
-/* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
 #crystal-dock {
   background-color: transparent;
   background-image: none;
@@ -30,9 +29,6 @@ window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widg
   border: none;
 }
 
-/* --- NUCLEAR: KILL FULLSCREEN BACKGROUNDS (User Requested) --- */
-/* --- EXORCISMO CSS (Nuclear Paradox Fix) --- */
-/* Atacamos la raíz de la ventana y sus capas ocultas */
 /* --- NUCLEAR: KILL FULLSCREEN BACKGROUNDS (User Requested) --- */
 /* --- EXORCISMO CSS (Nuclear Paradox Fix) --- */
 /* Atacamos la raíz de la ventana SOLAMENTE */
@@ -237,18 +233,347 @@ window#app-grid-window,
   background-color: transparent;
 }
 
-.app-grid-main {
-  background-color: rgba(0, 0, 0, 0.4);
-  padding: 40px;
+/* --- POPUP & TOOLTIP STYLES REMOVED TO INHERIT GTK THEME --- */
+/* --- RESTORED LAYOUT STRUCTURE (Theme Compatible) --- */
+/* We define spacing and layout, but let the Theme handle colors */
+.cd-menu-separator {
+  min-height: 1px;
+  margin: 6px 0;
+  background-color: rgba(255, 255, 255, 0.15);
+  /* Structure needs visibility */
 }
 
-.app-grid-content {
+.cd-menu-action {
+  padding: 8px 12px;
+  border-radius: 8px;
+  min-width: 140px;
+  margin-bottom: 2px;
+  /* Prevent ciumping */
+  background: transparent;
+  /* Clean default state */
+  transition: background-color 0.2s;
+}
+
+.cd-menu-action:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  /* Restore visual feedback */
+}
+
+.cd-menu-header {
+  padding: 4px 12px;
+  margin-bottom: 4px;
+  font-size: 0.85em;
+  font-weight: bold;
+  opacity: 0.7;
+}
+
+/* --- FINAL NUCLEAR CLEANUP: PREVENT DOUBLE BACKGROUNDS --- */
+/* Ensure the GtkBox behind the DrawingArea is 100% invisible */
+#crystal-dock #crystal-dock-bg,
+.crystal-dock,
+window#crystal-dock box.crystal-dock {
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Ensure the shim and bar are transparent */
+#crystal-dock #the-dock-bar,
+.cd-dock-bar {
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* ==========================================================================
+   RESTORED SYSTEM STYLES (BAR, GRID, PANELS)
+   ========================================================================== */
+/* --- 2. THE CRYSTAL BAR 💎 --- */
+.crystal-bar,
+#crystal-bar,
+window#crystal-bar,
+window.crystal-bar {
+  background-color: rgba(18, 18, 18, 0.88);
+  background: rgba(18, 18, 18, 0.88);
+}
+
+.bar-centerbox {
+  padding: 0 24px;
+  min-height: 44px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.bar-app-name {
+  color: white;
+  margin-right: 20px;
+}
+
+.bar-menu-item {
+  color: rgba(255, 255, 255, 0.82);
+  margin-right: 14px;
+}
+
+.bar-menu-item:hover {
+  color: white;
+}
+
+/* CENTER: WORKSPACES */
+.bar-ws-dot {
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.25);
+  margin: 0 6px;
+  transition: all 0.3s ease;
+}
+
+.bar-ws-dot.occupied {
+  background-color: rgba(255, 255, 255, 0.5);
+}
+
+.bar-ws-dot.active {
+  background-color: white;
+  min-width: 22px;
+}
+
+/* RIGHT: STATUS */
+.bar-status label {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.bar-time {
+  color: white;
+}
+
+.bar-status-btn,
+.bar-time-btn,
+.bar-util-btn {
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 4px 10px;
+}
+
+.bar-notif-cluster {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  padding: 2px 10px;
+  margin-right: 4px;
+  transition: all 0.3s ease;
+}
+
+.bar-notif-cluster:hover {
+  background-color: rgba(255, 255, 255, 0.18);
+}
+
+.bar-time-notif-icon {
+  color: #ff9500;
+  /* Apple Alarm/Notif Orange */
+}
+
+.bar-time-notif-count {
+  color: white;
+}
+
+.bar-status-btn:hover,
+.bar-time-btn:hover,
+.bar-util-btn:hover,
+.bar-tray-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
+.bar-tray {
+  margin-right: 6px;
+}
+
+.bar-tray-btn {
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  min-width: 28px;
+  min-height: 28px;
+  transition: all 0.2s ease;
+}
+
+/* --- 3. CRYSTAL PANELS --- */
+.control-center-win,
+.notification-center-win,
+.notif-win {
+  background-color: transparent;
+  background: none;
+  box-shadow: none;
+  border: none;
+}
+
+.control-center,
+.notification-center {
+  background-color: rgba(22, 22, 22, 0.85);
+  /* Slightly more opaque for better masking */
+  border: 1.2px solid rgba(255, 255, 255, 0.22);
+  border-radius: 28px;
+  padding: 24px;
+  min-width: 480px;
+}
+
+/* Notification Items 🔔 */
+.nc-notif-item {
   background-color: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 8px;
+  min-height: 80px;
+  transition: all 0.3s ease;
+}
+
+.nc-notif-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.nc-notif-title {
+  /* Font Inherited */
+  color: #ffffff;
+}
+
+.nc-notif-body {
+  color: rgba(255, 255, 255, 0.75);
+  line-height: 1.4;
+  margin-top: 6px;
+}
+
+.notif-card {
+  background-color: rgba(22, 22, 22, 0.85);
+  border: 1.2px solid rgba(255, 255, 255, 0.25);
+  border-radius: 24px;
+  padding: 20px;
+  min-width: 420px;
+}
+
+.notif-close-btn,
+.nc-notif-close {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 50%;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.6);
+  transition: all 0.3s ease;
+}
+
+.notif-close-btn:hover,
+.nc-notif-close:hover {
+  background-color: rgba(255, 59, 48, 0.4);
+  color: white;
+}
+
+.notif-app-name {
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.notif-summary {
+  color: white;
+}
+
+.notif-body {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.nc-header {
+  margin-bottom: 8px;
+}
+
+.nc-header-title {
+  color: #ffffff;
+}
+
+.nc-clear-btn {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 6px 14px;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.nc-clear-btn:hover {
+  background-color: rgba(255, 59, 48, 0.2);
+  color: #ff3b30;
+}
+
+.nc-scroll {
+  margin-top: 8px;
+  min-height: 400px;
+}
+
+.nc-empty {
+  color: rgba(255, 255, 255, 0.4);
+  margin-top: 40px;
+}
+
+.cc-toggle {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  padding: 12px 18px;
+}
+
+.cc-toggle.active {
+  background-color: #007aff;
+}
+
+.cc-sliders,
+.cc-media {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  padding: 18px;
+  margin-top: 20px;
+}
+
+/* --- 5. APP GRID --- */
+/* 1. Window & Overlay: Transparent */
+window#app-grid-window,
+window.app-grid-window {
+  background-color: transparent;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+#app-grid-overlay,
+.app-grid-catcher {
+  background-color: transparent;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* 2. Main Card: The ONLY visible background */
+window#app-grid-window #app-grid-content,
+#app-grid-content,
+.app-grid-content {
+  background-color: rgba(30, 30, 30, 0.6);
+  /* Restored semi-transparent */
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 40px;
   padding: 60px;
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(20px);
+  box-shadow: none;
+  /* Removed shadow to eliminate ghosting */
+}
+
+/* 3. Internals: Reset to Transparent using Custom Classes */
+.app-grid-scroll,
+.app-grid-flow,
+.app-grid-scroll viewport,
+.app-grid-scroll scrollbar,
+.app-grid-scroll undershoot,
+.app-grid-scroll overshoot {
+  background-color: transparent;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
 }
 
 .app-grid-search {
@@ -304,82 +629,181 @@ flowboxchild:hover {
   outline: none;
 }
 
-.app-grid-button:hover .app-grid-item {
-  transform: translateY(-5px);
+/* --- 6. WORKSPACE COCKPIT 🛡️ --- */
+window.workspace-cockpit {
+  background: transparent;
+  box-shadow: none;
 }
 
-.app-grid-label {
+.cockpit-window-content {
+  padding-top: 100px;
+  /* Buffer for shadow bleed 🛡️☁️ */
+  padding-bottom: 250px;
+  /* Deep harbor for shadow 🛡️⚓ */
+  background: transparent;
+}
+
+.workspace-overview {
+  background: #0c0c0c;
+  /* Absolute Solid Grounding 🛡️🌑 */
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 32px;
+  padding: 32px;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95);
+  /* Master Premium Shadow 🛡️✨ */
+}
+
+.wo-item {
+  padding: 8px;
+  border-radius: 18px;
+  transition: all 0.3s ease;
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid transparent;
+  /* Placeholder to prevent shift 🛡️ */
+}
+
+.wo-item.active {
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.wo-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 18px;
+}
+
+.wo-btn:hover .wo-item {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.wo-label {
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+}
+
+.wo-label.active {
+  color: #007aff;
+}
+
+.wo-count {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+/* Schematic 🗺️ */
+.wo-schematic-preview {
+  background-color: rgba(0, 0, 0, 0.4);
+  border-radius: 14px;
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  margin: 0;
+  padding: 0;
+}
+
+.wo-schematic-container {
+  /* Dynamic size handled by JS 🛡️ */
+  background: transparent;
+}
+
+.wo-schematic-chassis {
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  background-color: rgba(255, 255, 255, 0.01);
+  border-radius: 4px;
+}
+
+.wo-schematic-win {
+  background-color: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 5px;
+}
+
+.wo-schematic-win.focused {
+  background-color: rgba(0, 122, 255, 0.5);
+  border-color: rgba(0, 122, 255, 0.7);
+  box-shadow: none;
+  /* No shadow to prevent ghosting 🛡️ */
+}
+
+.wo-schematic-reserved {
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.wo-schematic-reserved.bar {
+  background-color: rgba(0, 122, 255, 0.1);
+  border-bottom: 1px solid rgba(0, 122, 255, 0.2);
+}
+
+.wo-schematic-reserved.dock {
+  background-color: rgba(255, 149, 0, 0.1);
+  border-top: 1px solid rgba(255, 149, 0, 0.2);
+}
+
+.wo-schematic-win-label {
+  color: rgba(255, 255, 255, 0.82);
+  padding: 0 4px;
+}
+
+/* Cockpit Window 🛰️ */
+window.workspace-cockpit {
+  background: transparent;
+}
+
+.bar-ws-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 4px 16px;
+  min-width: 80px;
+  min-height: 28px;
+  transition: all 0.3s ease;
+}
+
+.bar-center {
+  min-width: 100px;
+  min-height: 40px;
+}
+
+.bar-ws-btn:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.bar-ws-pill {
   color: white;
-  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
 }
 
-/* REUSE SQUIRCLE PLATE LOGIC (Forced centering) */
-.app-grid-window .cd-squircle-plate {
-  background-color: white;
-  border-radius: 28%;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-  /* Centering Fix */
-  padding: 0;
-  margin: 0;
-}
-
-.app-grid-window .cd-squircle-plate image {
-  margin: 0;
-  padding: 0;
-}
-
-/* --- POPUP & TOOLTIP STYLES REMOVED TO INHERIT GTK THEME --- */
-/* --- RESTORED LAYOUT STRUCTURE (Theme Compatible) --- */
-/* We define spacing and layout, but let the Theme handle colors */
-.cd-menu-separator {
-  min-height: 1px;
-  margin: 6px 0;
-  background-color: rgba(255, 255, 255, 0.15);
-  /* Structure needs visibility */
-}
-
+/* Unified Menu Layout (Tray & Dock) */
+popover.bar-tray-menu modelbutton,
 .cd-menu-action {
   padding: 8px 12px;
   border-radius: 8px;
   min-width: 140px;
   margin-bottom: 2px;
-  /* Prevent ciumping */
+  /* Prevent clumping */
   background: transparent;
   /* Clean default state */
   transition: background-color 0.2s;
 }
 
+popover.bar-tray-menu modelbutton:hover,
 .cd-menu-action:hover {
   background-color: rgba(255, 255, 255, 0.1);
-  /* Restore visual feedback */
+  /* Visible feedback */
 }
 
-.cd-menu-header {
-  padding: 4px 12px;
-  margin-bottom: 4px;
-  font-size: 0.85em;
-  font-weight: bold;
-  opacity: 0.7;
+popover.bar-tray-menu separator,
+.cd-menu-separator {
+  margin: 6px 0;
+  background-color: rgba(255, 255, 255, 0.15);
+  min-height: 1px;
 }
 
-/* --- FINAL NUCLEAR CLEANUP: PREVENT DOUBLE BACKGROUNDS --- */
-/* Ensure the GtkBox behind the DrawingArea is 100% invisible */
-#crystal-dock #crystal-dock-bg,
-.crystal-dock,
-window#crystal-dock box.crystal-dock {
-  background-color: transparent !important;
-  background-image: none !important;
-  border: none !important;
-  box-shadow: none !important;
-}
-
-/* Ensure the shim and bar are transparent */
-#crystal-dock #the-dock-bar,
-.cd-dock-bar {
-  background-color: transparent !important;
-  background-image: none !important;
-  border: none !important;
-  box-shadow: none !important;
+/* V136: LAUNCHER ICON VISIBILITY (Symbolic Grid Fix) */
+/* Force white color and shadow so symbolic icons don't vanish or appear blank */
+#cd-icon-box-launcher image {
+  color: #ffffff;
+  -gtk-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
 }
 
 /*# sourceMappingURL=style.css.map */
