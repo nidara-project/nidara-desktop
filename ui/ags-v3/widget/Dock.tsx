@@ -178,27 +178,23 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                             if (content.get_css_classes().includes("cd-squircle-plate")) {
                                 content.set_size_request(drawIconW, targetPixelSize)
                                 const icon = content.get_first_child() as any
-                                if (icon) {
-                                    const iconPath = icon.gicon?.get_file?.()?.get_path() || ""
-                                    const isAntigravity = icon.icon_name?.includes("antigravity") || iconPath.includes("antigravity")
-                                    const factor = isAntigravity ? 0.65 : 0.7
-                                    const internalSize = Math.round(targetPixelSize * factor)
-                                    if (icon.pixel_size !== internalSize) {
-                                        icon.pixel_size = internalSize
-                                        icon.set_size_request(internalSize, internalSize)
-                                    }
-                                }
+                                // V132: Custom DrawingArea Support
+                                // The 'icon' widget is now a Gtk.DrawingArea (or fallback Image).
+                                // We simply set the size request. The DrawingArea's draw_func handles the rest.
+
+                                // V134: Simplified Requests
+                                // The DrawingArea now handles padding internally in its draw_func.
+                                // We request the full target size (Plate Size) so the widget fills the plate
+                                // and the internal logic centers/scales the icon.
+                                icon.set_size_request(targetPixelSize, targetPixelSize)
                             } else {
-                                if (content.pixel_size !== targetPixelSize) {
-                                    content.pixel_size = targetPixelSize
-                                    content.set_size_request(drawIconW, targetPixelSize)
-                                } else {
-                                    content.set_size_request(drawIconW, targetPixelSize)
-                                }
+                                // Standard Icons (No Plate) - Fixed Logic
+                                content.set_size_request(drawIconW, targetPixelSize)
                             }
                         }
                     }
                 }
+
             })
 
             const totalIntWidth = Math.round(currentFloatX)
@@ -221,9 +217,11 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 tickId = null
                 return false
             }
+
             return true
         })
     }
+
 
     let lastMouseX = -1000
     const updateAllTargets = (mouseX: number) => {

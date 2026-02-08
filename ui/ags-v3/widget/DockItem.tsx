@@ -1,4 +1,5 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
+import GdkPixbuf from "gi://GdkPixbuf"
 import { writeFile, readFile } from "ags/file"
 import { execAsync } from "ags/process"
 import * as astal from "ags/gtk4/jsx-runtime"
@@ -189,25 +190,95 @@ export function DockItem(
     const res = getIcon()
     let child: Gtk.Widget
 
-    const iconProps: any = {
-        pixel_size: DOCK_CONSTANTS.ICON_SIZE,
-        halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.CENTER
+    // V132: Custom DrawingArea for Pixel-Perfect Scaling (Zero Popping / Zero Layout Shift)
+    let pixbuf: GdkPixbuf.Pixbuf | null = null
+    const sourceSize = 128 // Load high-res once
+
+    try {
+        if (res.path) {
+            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(res.path, sourceSize, sourceSize, true)
+        } else if (res.name) {
+            const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default()!)
+            if (theme.has_icon(res.name)) {
+                const info = theme.lookup_icon(res.name, [], sourceSize, 1, Gtk.TextDirection.NONE, Gtk.IconLookupFlags.FORCE_REGULAR)
+                if (info) {
+                    const file = info.get_file()
+                    if (file) {
+                        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(file.get_path()!, sourceSize, sourceSize, true)
+                    }
+                }
+            }
+        } else if (res.gicon) {
+            const gicon = res.gicon as any
+            if (gicon.get_file && gicon.get_file()) {
+                const p = gicon.get_file()!.get_path()
+                if (p) pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(p, sourceSize, sourceSize, true)
+            }
+        }
+    } catch (e) {
+        // console.error(`[DockItem] Failed to load pixbuf for ${appId}:`, e)
     }
 
-    if (res.path) {
-        iconProps.gicon = Gio.FileIcon.new(Gio.File.new_for_path(res.path))
-    } else if (res.gicon) {
-        iconProps.gicon = res.gicon
-    } else if (res.name) {
-        iconProps.icon_name = res.name
+    if (pixbuf) {
+        // Custom Drawing
+        child = new Gtk.DrawingArea()
+        child.set_valign(Gtk.Align.CENTER)
+        child.set_halign(Gtk.Align.CENTER)
+            // Explicitly cast to any because TS definitions for Gtk4 DrawingArea might be incomplete in this environment
+            ; (child as any).set_content_width(DOCK_CONSTANTS.ICON_SIZE)
+            ; (child as any).set_content_height(DOCK_CONSTANTS.ICON_SIZE)
+
+            ; (child as any).set_draw_func((area: any, cr: any, w: number, h: number) => {
+                if (!pixbuf) return
+
+                // V133: Internal Padding Enforcement
+                // Even if layout alignment fails and we get full size, we force padding here.
+                const isAg = appId.includes("antigravity") || nameStr.includes("antigravity")
+                const factor = isAg ? 0.65 : 0.8
+
+                // Calculate available size including padding
+                const availW = w * factor
+                const availH = h * factor
+
+                // Native aspect ratio
+                const iconW = pixbuf.get_width()
+                const iconH = pixbuf.get_height()
+
+                // Scale to fit available padded area
+                const scaleX = availW / iconW
+                const scaleY = availH / iconH
+                const scale = Math.min(scaleX, scaleY)
+
+                // Center in the FULL widget area (w, h)
+                const drawW = iconW * scale
+                const drawH = iconH * scale
+                const x = (w - drawW) / 2
+                const y = (h - drawH) / 2
+
+                cr.save()
+                cr.translate(x, y)
+                cr.scale(scale, scale)
+
+                Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
+                cr.paint()
+                cr.restore()
+            })
     } else {
-        iconProps.icon_name = "image-missing"
+        // Fallback for system icons
+        const iconProps: any = {
+            icon_name: res.name || "image-missing",
+            pixel_size: 128,
+            halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.CENTER
+        }
+        child = new Gtk.Image(iconProps)
+        child.set_size_request(DOCK_CONSTANTS.ICON_SIZE, DOCK_CONSTANTS.ICON_SIZE)
     }
 
-    child = new Gtk.Image(iconProps)
+    // Common props
     child.set_halign(Gtk.Align.CENTER)
     child.set_valign(Gtk.Align.CENTER)
+    // Removed override: child.set_size_request(..., ...) - Size is handled by DrawingArea setup or Plate logic
 
     const state = {
         targetScale: 1.0, currentScale: 1.0,
@@ -241,19 +312,20 @@ export function DockItem(
             width_request: DOCK_CONSTANTS.ICON_SIZE,
             height_request: DOCK_CONSTANTS.ICON_SIZE,
         })
-        child.set_halign(Gtk.Align.CENTER)
-        child.set_valign(Gtk.Align.CENTER)
+        // V134: Revert to FILL
+        // We want the DrawingArea to fill the plate so our internal draw_func controls the padding relative to the full plate size.
+        child.set_halign(Gtk.Align.FILL)
+        child.set_valign(Gtk.Align.FILL)
         child.set_hexpand(true)
         child.set_vexpand(true)
+        child.set_size_request(DOCK_CONSTANTS.ICON_SIZE, DOCK_CONSTANTS.ICON_SIZE)
 
         plate.append(child)
         iconToDisplay = plate
     }
 
     const isAntigravity = appId.includes("antigravity") || nameStr.includes("antigravity")
-    const scaleFactor = isAntigravity ? 0.65 : 0.7
-    // @ts-ignore
-    child.pixel_size = isApp ? Math.round(DOCK_CONSTANTS.ICON_SIZE * scaleFactor) : DOCK_CONSTANTS.ICON_SIZE
+
     child.set_name("cd-icon-image-" + appId)
     iconBox.append(iconToDisplay)
 
