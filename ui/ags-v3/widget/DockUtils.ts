@@ -65,14 +65,7 @@ export const drawSquircle = (cr: any, width: number, height: number, targetW?: n
     cr.setSourceRGBA(1, 1, 1, 0.25) // Higher opacity to catch blur
     cr.fill()
 
-    // 2. OPTIONAL: SUBTLE GRADIENT OVERLAY (Top-down light)
-    // To add volume without "hiding" the blur at the bottom, we add a very subtle white gradient.
-    // @ts-ignore
-    const gradient = new Cairo.LinearGradient(x, y, x, y + drawH)
-    gradient.addColorStopRGBA(0, 1, 1, 1, 0.05) // Highlight at top
-    gradient.addColorStopRGBA(1, 1, 1, 1, 0.00) // Transparent at bottom
+    // 2. OPTIONAL: SUBTLE GRADIENT OVERLAY - REMOVED (User requested flat/no-gradient look)
+    // The previous gradient caused a perception of "non-native" shading.
 
-    path()
-    cr.setSource(gradient)
-    cr.fill()
 }

@@ -4,9 +4,8 @@
 */
 
 /* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
-#crystal-dock,
-#crystal-dock .background,
-#crystal-dock .view {
+/* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
+#crystal-dock {
   background-color: transparent;
   background-image: none;
   box-shadow: none;
@@ -35,11 +34,12 @@ window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay>widget>box
 /* --- NUCLEAR: KILL FULLSCREEN BACKGROUNDS (User Requested) --- */
 /* --- EXORCISMO CSS (Nuclear Paradox Fix) --- */
 /* Atacamos la raíz de la ventana y sus capas ocultas */
+/* --- NUCLEAR: KILL FULLSCREEN BACKGROUNDS (User Requested) --- */
+/* --- EXORCISMO CSS (Nuclear Paradox Fix) --- */
+/* Atacamos la raíz de la ventana SOLAMENTE */
 window#crystal-dock,
 window#crystal-dock decoration,
-window#crystal-dock background,
-window#crystal-dock main,
-window#crystal-dock contents {
+window#crystal-dock main {
   background-color: rgba(0, 0, 0, 0);
   background-image: none;
   border: none;
@@ -123,7 +123,8 @@ box.cd-item {
 }
 
 .cd-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
+  background-color: transparent;
+  /* Fix: Remove unwanted hover background */
 }
 
 /* High Specificity for Drag Gap */
@@ -134,17 +135,15 @@ window#crystal-dock box.cd-drag-gap,
   transition: margin-left 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Blindaje Nuclear de estados de sistema */
+/* Blindaje Nuclear de estados de sistema - REMOVED WILDCARDS TO ALLOW THEME INHERITANCE */
 .cd-item {
   transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1);
   margin-left: 0px;
-  /* Explicit default */
 }
 
-.cd-item,
-.cd-item *,
-.cd-item:hover,
-.cd-item:hover * {
+/* Only target the item itself, not its children (popovers/tooltips) */
+.cd-item:hover {
+  background-color: transparent;
   border: none;
   box-shadow: none;
   outline: none;
@@ -200,10 +199,10 @@ window#crystal-dock .cd-dot.open,
 window#crystal-dock .cd-dot.focused {
   min-height: 5px;
   min-width: 5px;
-  background-color: rgb(220, 220, 220);
-  /* macOS Solid Dot (Light Grey/White) */
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  /* Subtle depth */
+  background-color: rgba(255, 255, 255, 0.5);
+  /* Flat semi-transparent dot (macOS standard) */
+  box-shadow: none;
+  /* No depth/glow */
   border: none;
   border-radius: 50%;
   opacity: 1;
@@ -211,8 +210,8 @@ window#crystal-dock .cd-dot.focused {
 
 /* Unified: Focused app has SAME dot as open app in macOS */
 window#crystal-dock .cd-dot.focused {
-  background-color: rgb(220, 220, 220);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  background-color: rgba(255, 255, 255, 0.5);
+  box-shadow: none;
   border: none;
 }
 
@@ -348,6 +347,42 @@ flowboxchild:hover {
 .app-grid-window .cd-squircle-plate image {
   margin: 0;
   padding: 0;
+}
+
+/* --- POPUP & TOOLTIP STYLES REMOVED TO INHERIT GTK THEME --- */
+
+/* --- RESTORED LAYOUT STRUCTURE (Theme Compatible) --- */
+/* We define spacing and layout, but let the Theme handle colors */
+
+.cd-menu-separator {
+  min-height: 1px;
+  margin: 6px 0;
+  background-color: rgba(255, 255, 255, 0.15);
+  /* Structure needs visibility */
+}
+
+.cd-menu-action {
+  padding: 8px 12px;
+  border-radius: 8px;
+  min-width: 140px;
+  margin-bottom: 2px;
+  /* Prevent ciumping */
+  background: transparent;
+  /* Clean default state */
+  transition: background-color 0.2s;
+}
+
+.cd-menu-action:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  /* Restore visual feedback */
+}
+
+.cd-menu-header {
+  padding: 4px 12px;
+  margin-bottom: 4px;
+  font-size: 0.85em;
+  font-weight: bold;
+  opacity: 0.7;
 }
 
 /* --- FINAL NUCLEAR CLEANUP: PREVENT DOUBLE BACKGROUNDS --- */

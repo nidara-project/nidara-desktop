@@ -329,7 +329,7 @@ export function DockItem(
     child.set_name("cd-icon-image-" + appId)
     iconBox.append(iconToDisplay)
 
-    const dot = new Gtk.Box({ name: "cd-dot-" + appId, css_classes: ["cd-dot"], width_request: 4, height_request: 4, has_tooltip: false })
+    const dot = new Gtk.Box({ name: "cd-dot-" + appId, css_classes: ["cd-dot"], width_request: 5, height_request: 5, has_tooltip: false })
     const indicator = new Gtk.Box({
         name: "cd-indicator-" + appId,
         css_classes: ["cd-indicator-container"],
@@ -337,7 +337,7 @@ export function DockItem(
         valign: Gtk.Align.END,
         margin_bottom: 4,
         has_tooltip: false,
-        width_request: 4, height_request: 4,
+        width_request: 5, height_request: 5,
     })
     indicator.append(dot)
 

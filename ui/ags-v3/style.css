@@ -1,299 +1,288 @@
+@charset "UTF-8";
 /*
-   DISTROIA - MASTER CRYSTAL STYLE SHEET 💎
-   Phase 61: Premium Design Restoration (Stable)
+   CRYSTAL DOCK - AESTHETIC PERFECTION
+   Prefix: cd- (Class Isolation)
 */
-
-/* --- 1. WINDOW ISOLATION --- */
-.crystal-bar,
-.crystal-dock,
-.control-center-win,
-.notification-center-win,
-.notif-win {
+/* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
+/* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
+#crystal-dock {
   background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}
+
+/* Neutralización Específica con Ruta Completa */
+.dock-window.fullscreen .cd-dock-container .dock-overlay .cd-bar {
+  background-color: transparent;
+  border: none;
+}
+
+/* --- 2. SELECTORES DE "FINAL WAR" ID HIERARCHY --- */
+window#crystal-dock,
+window#crystal-dock > box#dock-main-container,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widget,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widget > box#the-dock-bar {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}
+
+/* --- NUCLEAR: KILL FULLSCREEN BACKGROUNDS (User Requested) --- */
+/* --- EXORCISMO CSS (Nuclear Paradox Fix) --- */
+/* Atacamos la raíz de la ventana y sus capas ocultas */
+/* --- NUCLEAR: KILL FULLSCREEN BACKGROUNDS (User Requested) --- */
+/* --- EXORCISMO CSS (Nuclear Paradox Fix) --- */
+/* Atacamos la raíz de la ventana SOLAMENTE */
+window#crystal-dock,
+window#crystal-dock decoration,
+window#crystal-dock main {
+  background-color: rgba(0, 0, 0, 0);
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* --- NUCLEAR: KILL INTERMEDIATE CONTAINERS (Strict IDs) --- */
+#crystal-dock #dock-main-container,
+#crystal-dock #dock-main-overlay,
+#crystal-dock .cd-dock-container,
+#crystal-dock .cd-main-overlay,
+#crystal-dock .cd-overlay,
+#crystal-dock #dock-drawing-area,
+#crystal-dock .cd-drawing-area,
+#crystal-dock #the-dock-bar,
+#crystal-dock .cd-dock-bar {
+  background-color: transparent;
+  background-image: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
+/* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
+.cd-item,
+.cd-item > contents,
+box.cd-item {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}
+
+/* --- APP GRID CLEANUP (Specific Target) --- */
+.launcher-grid,
+.launcher-item,
+.app-item {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+/* --- 3. ESTILOS PROPIOS (cd-*) --- */
+#the-dock-bar {
+  padding: 0;
+  min-height: 100px;
+  max-height: 100px;
+  transform-origin: bottom bottom;
+}
+
+.cd-item {
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  background-image: none;
+  transform-origin: bottom bottom;
+  border: none;
+  box-shadow: none;
+  transition: background-color 200ms ease;
+  min-height: 100px;
+  min-width: 64px;
+}
+
+.cd-revealer {
+  background-color: transparent;
+  padding: 0;
+  margin: 0;
+  transition: none;
+  /* PHYSICS ENGINE CONTROLS LAYOUT */
+  overflow: visible;
+}
+
+.cd-item:hover {
+  background-color: transparent;
+  /* Fix: Remove unwanted hover background */
+}
+
+/* High Specificity for Drag Gap */
+window#crystal-dock box.cd-drag-gap,
+.cd-drag-gap {
+  margin-left: 72px !important;
+  /* Icon (64) + Gap (8) */
+  transition: margin-left 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Blindaje Nuclear de estados de sistema - REMOVED WILDCARDS TO ALLOW THEME INHERITANCE */
+.cd-item {
+  transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1);
+  margin-left: 0px;
+}
+
+/* Only target the item itself, not its children (popovers/tooltips) */
+.cd-item:hover {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
   background-image: none;
 }
 
-/* --- 2. THE CRYSTAL BAR 💎 --- */
-.crystal-bar,
-#crystal-bar,
-window#crystal-bar,
-window.crystal-bar {
-  background-color: rgba(18, 18, 18, 0.88);
-  background: rgba(18, 18, 18, 0.88);
+/* .cd-dot.open consolidated below */
+.cd-icon-container {
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  transition: none;
+  /* Physics controls transform/size */
+  transform-origin: bottom center;
 }
 
-.bar-centerbox {
-  padding: 0 24px;
-  min-height: 44px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+/* --- SQUIRCLE ICON PLATES (Phase 66) --- */
+window#crystal-dock box.cd-squircle-plate {
+  background-color: rgb(255, 255, 255);
+  /* Apple pure white */
+  border-radius: 28%;
+  /* Percentage radius for perfect scaling */
+  margin: 0;
+  padding: 0;
+  /* Multi-level shadows for Apple depth - STATIC */
+  box-shadow: 0 1px 1px rgba(0, 0, 0, 0.1), 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.bar-app-name {
-  color: white;
-  margin-right: 20px;
+.cd-squircle-plate image,
+.cd-squircle-plate widget {
+  /* Prevent GTK from adding any hover shadows to internal icons */
+  box-shadow: none !important;
+  -gtk-icon-shadow: none !important;
+  border: none !important;
 }
 
-.bar-menu-item {
-  color: rgba(255, 255, 255, 0.82);
-  margin-right: 14px;
+/* Legacy Hover Removed for Physics */
+.cd-dot {
+  min-height: 4px;
+  min-width: 4px;
+  border-radius: 4px;
+  background-color: transparent;
+  transition: background-color 200ms ease;
 }
 
-.bar-menu-item:hover {
-  color: white;
-}
-
-/* CENTER: WORKSPACES */
-.bar-ws-dot {
-  min-width: 6px;
-  min-height: 6px;
-  border-radius: 6px;
-  background-color: rgba(255, 255, 255, 0.25);
-  margin: 0 6px;
-  transition: all 0.3s ease;
-}
-
-.bar-ws-dot.occupied {
+/* High Specificity to defeat "window#crystal-dock *" reset */
+/* High Specificity to defeat "window#crystal-dock *" reset */
+window#crystal-dock .cd-dot.open,
+window#crystal-dock .cd-dot.focused {
+  min-height: 5px;
+  min-width: 5px;
   background-color: rgba(255, 255, 255, 0.5);
-}
-
-.bar-ws-dot.active {
-  background-color: white;
-  min-width: 22px;
-}
-
-/* RIGHT: STATUS */
-.bar-status label {
-  color: rgba(255, 255, 255, 0.95);
-}
-
-.bar-time {
-  color: white;
-}
-
-.bar-status-btn,
-.bar-time-btn,
-.bar-util-btn {
-  background: transparent;
+  /* Flat semi-transparent dot (macOS standard) */
+  box-shadow: none;
+  /* No depth/glow */
   border: none;
-  border-radius: 8px;
-  padding: 4px 10px;
+  border-radius: 50%;
+  opacity: 1;
 }
 
-.bar-notif-cluster {
-  background-color: rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  padding: 2px 10px;
-  margin-right: 4px;
-  transition: all 0.3s ease;
+/* Unified: Focused app has SAME dot as open app in macOS */
+window#crystal-dock .cd-dot.focused {
+  background-color: rgba(255, 255, 255, 0.5);
+  box-shadow: none;
+  border: none;
 }
 
-.bar-notif-cluster:hover {
-  background-color: rgba(255, 255, 255, 0.18);
+/* High Specificity ID Selector to defeat Nuclear Reset safely */
+/* High Specificity ID Selector to defeat Nuclear Reset safely */
+window#crystal-dock box#cd-separator {
+  min-height: 40px;
+  /* Slightly shorter than icon height */
+  max-height: 40px;
+  min-width: 1px;
+  /* Crisp hairline */
+  background-color: rgba(255, 255, 255, 0.25);
+  /* Subtle macOS divider */
+  margin: 0;
+  border-radius: 1px;
 }
 
-.bar-time-notif-icon {
-  color: #ff9500;
-  /* Apple Alarm/Notif Orange */
+/* ==========================================================================
+   FINAL STRIKE: NEUTRALIZACION DE CLASES DE SISTEMA (FULLSCREEN/BACKGROUND)
+   ========================================================================== */
+/* 2. Red de seguridad para la ventana raiz si sigue en fullscreen o hereda temas */
+window#crystal-dock,
+window#crystal-dock.fullscreen,
+window#crystal-dock decoration,
+#crystal-dock,
+#crystal-dock.fullscreen {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
 }
 
-.bar-time-notif-count {
-  color: white;
+/* 2. Red de seguridad para la ventana raiz si sigue en fullscreen o hereda temas */
+window#app-grid-window,
+.app-grid-window {
+  background-color: transparent;
 }
 
-.bar-status-btn:hover,
-.bar-time-btn:hover,
-.bar-util-btn:hover,
-.bar-tray-btn:hover {
+.app-grid-main {
+  background-color: rgba(0, 0, 0, 0.4);
+  padding: 40px;
+}
+
+.app-grid-content {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 40px;
+  padding: 60px;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(20px);
+}
+
+.app-grid-search {
   background-color: rgba(255, 255, 255, 0.1);
-}
-
-.bar-tray {
-  margin-right: 6px;
-}
-
-.bar-tray-btn {
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  min-width: 28px;
-  min-height: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  color: white;
+  padding: 12px 30px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  caret-color: #007aff;
   transition: all 0.2s ease;
 }
 
-
-/* --- 3. CRYSTAL PANELS --- */
-.control-center-win,
-.notification-center-win,
-.notif-win {
-  background-color: transparent;
-  background: none;
-  box-shadow: none;
-  border: none;
-}
-
-.control-center,
-.notification-center {
-  background-color: rgba(22, 22, 22, 0.85);
-  /* Slightly more opaque for better masking */
-  border: 1.2px solid rgba(255, 255, 255, 0.22);
-  border-radius: 28px;
-  padding: 24px;
-  min-width: 480px;
-}
-
-/* Notification Items 🔔 */
-.nc-notif-item {
-  background-color: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.03);
-  border-radius: 20px;
-  padding: 16px;
-  margin-bottom: 8px;
-  min-height: 80px;
-  transition: all 0.3s ease;
-}
-
-.nc-notif-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-.nc-notif-title {
-  /* Font Inherited */
-  color: #ffffff;
-}
-
-.nc-notif-body {
-  color: rgba(255, 255, 255, 0.75);
-  line-height: 1.4;
-  margin-top: 6px;
-}
-
-.notif-card {
-  background-color: rgba(22, 22, 22, 0.85);
-  border: 1.2px solid rgba(255, 255, 255, 0.25);
-  border-radius: 24px;
-  padding: 20px;
-  min-width: 420px;
-}
-
-.notif-close-btn,
-.nc-notif-close {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 50%;
-  min-width: 32px;
-  min-height: 32px;
-  padding: 0;
-  color: rgba(255, 255, 255, 0.6);
-  transition: all 0.3s ease;
-}
-
-.notif-close-btn:hover,
-.nc-notif-close:hover {
-  background-color: rgba(255, 59, 48, 0.4);
-  color: white;
-}
-
-.notif-app-name {
-  color: rgba(255, 255, 255, 0.5);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.notif-summary {
-  color: white;
-}
-
-.notif-body {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.nc-header {
-  margin-bottom: 8px;
-}
-
-.nc-header-title {
-  color: #ffffff;
-}
-
-.nc-clear-btn {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  padding: 6px 14px;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.nc-clear-btn:hover {
-  background-color: rgba(255, 59, 48, 0.2);
-  color: #ff3b30;
-}
-
-.nc-scroll {
-  margin-top: 8px;
-  min-height: 400px;
-}
-
-.nc-empty {
-  color: rgba(255, 255, 255, 0.4);
-  margin-top: 40px;
-}
-
-.cc-toggle {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  padding: 12px 18px;
-}
-
-.cc-toggle.active {
-  background-color: #007aff;
-}
-
-.cc-sliders,
-.cc-media {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  padding: 18px;
-  margin-top: 20px;
-}
-
-/* --- 4. THE DOCK --- */
-/* The overall window must be transparent and non-styled */
-window#crystal-dock,
-window.crystal-dock-window {
-  background: transparent;
-  background-color: transparent;
-  box-shadow: none;
-  border: none;
-}
-
-/* The actual pill background */
-.crystal-dock {
+.app-grid-search:focus {
   background-color: rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.15);
-  border: none;
-  border-radius: 24px;
-  padding: 8px;
+  border-color: rgba(0, 122, 255, 0.5);
+  box-shadow: 0 10px 30px rgba(0, 122, 255, 0.2);
 }
 
-.cd-squircle-plate {
-  background-color: #ffffff;
-  border-radius: 28%;
-}
-
-/* --- 5. APP GRID --- */
-.app-grid-content {
-  background-color: rgba(18, 18, 18, 0.82);
-  border-radius: 40px;
-  padding: 60px;
+.app-grid-item {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .app-grid-button {
-  background: transparent;
-  border-radius: 20px;
-  padding: 16px;
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 24px;
+  padding: 10px;
+  transition: all 0.2s ease;
 }
 
 .app-grid-button:hover {
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: rgba(255, 255, 255, 0.1);
 }
 
 /* Neutralize GTK FlowBox Selection 🛡️ */
@@ -315,224 +304,82 @@ flowboxchild:hover {
   outline: none;
 }
 
-/* --- 6. WORKSPACE COCKPIT 🛡️ --- */
-window.workspace-cockpit {
-  background: transparent;
-  box-shadow: none;
+.app-grid-button:hover .app-grid-item {
+  transform: translateY(-5px);
 }
 
-.cockpit-window-content {
-  padding-top: 100px;
-  /* Buffer for shadow bleed 🛡️☁️ */
-  padding-bottom: 250px;
-  /* Deep harbor for shadow 🛡️⚓ */
-  background: transparent;
+.app-grid-label {
+  color: white;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.8);
 }
 
-.workspace-overview {
-  background: #0c0c0c;
-  /* Absolute Solid Grounding 🛡️🌑 */
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 32px;
-  padding: 32px;
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95);
-  /* Master Premium Shadow 🛡️✨ */
-}
-
-.wo-item {
-  padding: 8px;
-  border-radius: 18px;
-  transition: all 0.3s ease;
-  background-color: rgba(255, 255, 255, 0.02);
-  border: 1px solid transparent;
-  /* Placeholder to prevent shift 🛡️ */
-}
-
-.wo-item.active {
-  background-color: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.wo-btn {
-  background: transparent;
-  border: none;
+/* REUSE SQUIRCLE PLATE LOGIC (Forced centering) */
+.app-grid-window .cd-squircle-plate {
+  background-color: white;
+  border-radius: 28%;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  /* Centering Fix */
   padding: 0;
-  border-radius: 18px;
+  margin: 0;
 }
 
-.wo-btn:hover .wo-item {
-  background-color: rgba(255, 255, 255, 0.08);
-}
-
-.wo-label {
-  color: rgba(255, 255, 255, 0.3);
-  text-transform: uppercase;
-}
-
-.wo-label.active {
-  color: #007aff;
-}
-
-.wo-count {
-  color: rgba(255, 255, 255, 0.2);
-}
-
-/* Schematic 🗺️ */
-.wo-schematic-preview {
-  background-color: rgba(0, 0, 0, 0.4);
-  border-radius: 14px;
-  border: 1px dashed rgba(255, 255, 255, 0.08);
+.app-grid-window .cd-squircle-plate image {
   margin: 0;
   padding: 0;
 }
 
-.wo-schematic-container {
-  /* Dynamic size handled by JS 🛡️ */
-  background: transparent;
+/* --- POPUP & TOOLTIP STYLES REMOVED TO INHERIT GTK THEME --- */
+/* --- RESTORED LAYOUT STRUCTURE (Theme Compatible) --- */
+/* We define spacing and layout, but let the Theme handle colors */
+.cd-menu-separator {
+  min-height: 1px;
+  margin: 6px 0;
+  background-color: rgba(255, 255, 255, 0.15);
+  /* Structure needs visibility */
 }
 
-.wo-schematic-chassis {
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  background-color: rgba(255, 255, 255, 0.01);
-  border-radius: 4px;
-}
-
-.wo-schematic-win {
-  background-color: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 5px;
-}
-
-.wo-schematic-win.focused {
-  background-color: rgba(0, 122, 255, 0.5);
-  border-color: rgba(0, 122, 255, 0.7);
-  box-shadow: none;
-  /* No shadow to prevent ghosting 🛡️ */
-}
-
-.wo-schematic-reserved {
-  border-radius: 4px;
-  background-color: rgba(255, 255, 255, 0.03);
-}
-
-.wo-schematic-reserved.bar {
-  background-color: rgba(0, 122, 255, 0.1);
-  border-bottom: 1px solid rgba(0, 122, 255, 0.2);
-}
-
-.wo-schematic-reserved.dock {
-  background-color: rgba(255, 149, 0, 0.1);
-  border-top: 1px solid rgba(255, 149, 0, 0.2);
-}
-
-.wo-schematic-win-label {
-  color: rgba(255, 255, 255, 0.82);
-  padding: 0 4px;
-}
-
-/* Cockpit Window 🛰️ */
-window.workspace-cockpit {
-  background: transparent;
-}
-
-.bar-ws-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 4px 16px;
-  min-width: 80px;
-  min-height: 28px;
-  transition: all 0.3s ease;
-}
-
-.bar-center {
-  min-width: 100px;
-  min-height: 40px;
-}
-
-.bar-ws-btn:hover {
-  background-color: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.bar-ws-pill {
-  color: white;
-}
-
-/* Unified Menu Layout (Tray & Dock) */
-popover.bar-tray-menu modelbutton,
 .cd-menu-action {
-  padding: 8px 16px;
-  border-radius: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  min-width: 140px;
+  margin-bottom: 2px;
+  /* Prevent ciumping */
   background: transparent;
-  /* Colors inherited from GTK Theme */
+  /* Clean default state */
+  transition: background-color 0.2s;
 }
 
-popover.bar-tray-menu modelbutton:hover,
 .cd-menu-action:hover {
   background-color: rgba(255, 255, 255, 0.1);
+  /* Restore visual feedback */
 }
 
-
-popover.bar-tray-menu separator,
-.cd-menu-separator {
-  margin: 6px 0;
-  background-color: rgba(255, 255, 255, 0.1);
-  min-height: 1px;
+.cd-menu-header {
+  padding: 4px 12px;
+  margin-bottom: 4px;
+  font-size: 0.85em;
+  font-weight: bold;
+  opacity: 0.7;
 }
 
-/* V136: LAUNCHER ICON VISIBILITY (Symbolic Grid Fix) */
-/* Force white color and shadow so symbolic icons don't vanish or appear blank */
-#cd-icon-box-launcher image {
-  color: #ffffff;
-  -gtk-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+/* --- FINAL NUCLEAR CLEANUP: PREVENT DOUBLE BACKGROUNDS --- */
+/* Ensure the GtkBox behind the DrawingArea is 100% invisible */
+#crystal-dock #crystal-dock-bg,
+.crystal-dock,
+window#crystal-dock box.crystal-dock {
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
-/* Explicit Tooltip Styling (Force Theme Inheritance & Layout) */
-tooltip,
-tooltip.background {
-  background-color: rgba(30, 30, 30, 0.9);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 6px 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+/* Ensure the shim and bar are transparent */
+#crystal-dock #the-dock-bar,
+.cd-dock-bar {
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
 }
 
-tooltip label {
-  color: #ffffff;
-  padding: 0;
-  margin: 0;
-}
-
-/* Dock Indicators and Separator */
-.cd-separator {
-  background: linear-gradient(to bottom,
-      rgba(255, 255, 255, 0) 0%,
-      rgba(255, 255, 255, 0.3) 50%,
-      rgba(255, 255, 255, 0) 100%);
-  min-width: 2px;
-  min-width: 2px;
-  margin: 0;
-  /* V109: Physics Engine controls spacing (20px slot) */
-}
-
-/* macOS-style indicators: single consistent dot */
-.cd-dot {
-  min-width: 4px;
-  min-height: 4px;
-  border-radius: 50%;
-  background-color: transparent;
-  transition: background-color 0.2s ease, box-shadow 0.2s ease;
-}
-
-/* Open app: gray dot for non-focused */
-.cd-item.open .cd-dot {
-  background-color: rgba(150, 150, 150, 0.8);
-}
-
-/* Focused app: bright white dot with glow */
-.cd-item.focused .cd-dot {
-  background-color: rgba(255, 255, 255, 1);
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
-}
+/*# sourceMappingURL=style.css.map */
