@@ -15,7 +15,7 @@ export const DOCK_CONSTANTS = {
     ICON_SIZE: 64,
     BASE_MARGIN: 9,      // V108: Perfect 18px gap (9+9)
     SEPARATOR_SLOT: 20,  // V109: Corrected for 18px Visual Gap (9+2+9)
-    SEPARATOR_LINE: 2,
+    SEPARATOR_LINE: 1,
     SEPARATOR_OFFSET: 9,  // Aligned with half-slot
     APP_SLOT: 82,        // 64 + 9 + 9
     // ANIMATION (V106: Centralized)

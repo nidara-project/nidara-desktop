@@ -54,3 +54,9 @@ To prevent magnified icons from being cut off by the dock's window or other appl
 - **Prioritization**: `.desktop` file paths > Theme Icons > Fallback Material Icons.
 - **Resolution**: All icons are standardized to 128px internal buffers for high-quality downscaling.
 
+## 7. Styling Refinements (V137 - macOS Matching)
+- **Separator**: Reduced to a **1px hairline** with 25% opacity, matching the subtle divider of macOS.
+- **Indicators**:
+    - **Uniformity**: "Open" and "Focused" states use the exact same visual style (Solid Light Grey Dot).
+    - **Geometry**: Increased size to **5px** diameter.
+    - **No Glows**: Removed focus borders and glow effects to match the clean, flat aesthetic of the reference.

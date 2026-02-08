@@ -195,30 +195,37 @@ window#crystal-dock box.cd-squircle-plate {
 }
 
 /* High Specificity to defeat "window#crystal-dock *" reset */
-window#crystal-dock .cd-dot.open {
-  min-height: 4px;
-  min-width: 4px;
-  background-color: rgba(255, 255, 255, 0.6);
-  /* DIMMED FOR BACKGROUND APPS */
-  box-shadow: none;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+/* High Specificity to defeat "window#crystal-dock *" reset */
+window#crystal-dock .cd-dot.open,
+window#crystal-dock .cd-dot.focused {
+  min-height: 5px;
+  min-width: 5px;
+  background-color: rgb(220, 220, 220);
+  /* macOS Solid Dot (Light Grey/White) */
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  /* Subtle depth */
+  border: none;
   border-radius: 50%;
   opacity: 1;
 }
 
+/* Unified: Focused app has SAME dot as open app in macOS */
 window#crystal-dock .cd-dot.focused {
-  background-color: #ffffff;
-  /* BRIGHT FOR FOCUSED APP */
-  box-shadow: 0 0 8px rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.6);
+  background-color: rgb(220, 220, 220);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  border: none;
 }
 
 /* High Specificity ID Selector to defeat Nuclear Reset safely */
+/* High Specificity ID Selector to defeat Nuclear Reset safely */
 window#crystal-dock box#cd-separator {
-  min-height: 48px;
-  max-height: 48px;
-  min-width: 2px;
-  background-color: rgba(255, 255, 255, 0.4); // V40: macOS-like translucency
+  min-height: 40px;
+  /* Slightly shorter than icon height */
+  max-height: 40px;
+  min-width: 1px;
+  /* Crisp hairline */
+  background-color: rgba(255, 255, 255, 0.25);
+  /* Subtle macOS divider */
   margin: 0;
   border-radius: 1px;
 }
@@ -342,6 +349,7 @@ flowboxchild:hover {
   margin: 0;
   padding: 0;
 }
+
 /* --- FINAL NUCLEAR CLEANUP: PREVENT DOUBLE BACKGROUNDS --- */
 /* Ensure the GtkBox behind the DrawingArea is 100% invisible */
 #crystal-dock #crystal-dock-bg,
