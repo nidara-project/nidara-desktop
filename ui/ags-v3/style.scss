@@ -180,9 +180,31 @@ window#crystal-dock box.cd-squircle-plate drawingarea {
   background: none;
 }
 
+/* --- STABILITY: Dock Menu Actions --- */
+.cd-menu-action {
+  min-width: 160px;
+  /* Force minimum width to prevent jitter */
+  padding: 8px 12px;
+  margin: 0;
+  border: 1px solid transparent;
+  /* Reserve border space */
+  background-clip: padding-box;
+}
+
+/* --- STABILITY & THEME: Dock Menu --- */
+/* User requested: Let GTK define background (White), we define contrast hover */
+
+/* Boost specificity to override default GTK button theme */
+button.cd-menu-action:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+  /* Dark hover for White background */
+  border-color: rgba(0, 0, 0, 0.05);
+  box-shadow: none;
+  /* Ensure no GTK button shadow */
+}
+
 /* --- INDICATORS (Dots) --- */
 window#crystal-dock button.cd-dot,
-/* If it were a button */
 window#crystal-dock box.cd-dot {
   min-height: 5px;
   min-width: 5px;
@@ -203,6 +225,7 @@ window#crystal-dock box.cd-dot.focused {
   min-width: 5px;
 }
 
+
 /* --- SEPARATOR --- */
 window#crystal-dock box.cd-separator,
 window#crystal-dock box#cd-separator {
@@ -217,7 +240,6 @@ window#crystal-dock box#cd-separator {
 /* --- HOVER SHADOW KILLER (Surgical & Specific) --- */
 /* Target ONLY the hover states we want to flatten */
 window#crystal-dock .cd-item:hover,
-window#crystal-dock .cd-item *:hover,
 window#crystal-dock .cd-squircle-plate:hover {
   box-shadow: none;
   -gtk-icon-shadow: none;
@@ -801,27 +823,21 @@ window.workspace-cockpit {
   color: white;
 }
 
-/* Unified Menu Layout (Tray & Dock) */
-popover.bar-tray-menu modelbutton,
-.cd-menu-action {
+/* Unified Menu Layout (Tray Only) */
+popover.bar-tray-menu modelbutton {
   padding: 8px 12px;
   border-radius: 8px;
   min-width: 140px;
   margin-bottom: 2px;
-  /* Prevent clumping */
   background: transparent;
-  /* Clean default state */
   transition: background-color 0.2s;
 }
 
-popover.bar-tray-menu modelbutton:hover,
-.cd-menu-action:hover {
+popover.bar-tray-menu modelbutton:hover {
   background-color: rgba(255, 255, 255, 0.1);
-  /* Visible feedback */
 }
 
-popover.bar-tray-menu separator,
-.cd-menu-separator {
+popover.bar-tray-menu separator {
   margin: 6px 0;
   background-color: rgba(255, 255, 255, 0.15);
   min-height: 1px;

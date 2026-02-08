@@ -58,7 +58,7 @@ const mouseBus = {
     subscribe(l: (x: number) => void) { this.listeners.add(l); return () => this.listeners.delete(l) }
 }
 
-export default function Dock(gdkmonitor: Gdk.Monitor) {
+export default function Dock(gdkmonitor: any) {
     let totalStaticWidth = 400
     const widgetCache = new Map<string, Gtk.Widget>()
 
@@ -136,7 +136,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
                 const widget = widgetCache.get(id)
                 if (widget) {
-                    const revealer = widget as Gtk.Revealer
+                    const revealer = widget as any
                     const itemBox = revealer.get_child() as Gtk.Box
 
                     const floatSlotW = state.currentWidth + (state.currentMargin * 2)
@@ -329,7 +329,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
                 return widgetCache.get(id)!
             }
             const widget = factory()
-            const revealer = new Gtk.Revealer({
+            const revealer = new (Gtk as any).Revealer({
                 css_classes: ["cd-revealer"],
                 transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT,
                 transition_duration: 300,
@@ -627,7 +627,7 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
             currentX += slotWidth
 
             const widget = getOrCreateItem(c.id, () => c.factory(myCenter))
-            const inner = (widget as Gtk.Revealer).get_child()
+            const inner = (widget as any).get_child()
             if (inner && (inner as any).setVirtualCenter) (inner as any).setVirtualCenter(myCenter)
 
             if (inner && (inner as any).syncState && (c as any).syncData) {

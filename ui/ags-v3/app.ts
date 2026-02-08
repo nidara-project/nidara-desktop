@@ -2,6 +2,10 @@ import app from "ags/gtk4/app"
 import { Gdk, Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+// @ts-ignore
+import type { Monitor } from "gi://Gdk?version=4.0"
+// @ts-ignore
+import type { Window } from "gi://Gtk?version=4.0"
 
 // Widget Imports
 import Dock from "./widget/Dock"
@@ -17,7 +21,13 @@ app.start({
   main() {
     console.log("[DISTROIA] main() started!");
 
-    const windows = new Set<Gtk.Window>()
+    // Force Dark Theme for GTK4
+    const settings = Gtk.Settings.get_default()
+    if (settings) {
+      settings.gtk_application_prefer_dark_theme = true
+    }
+
+    const windows = new Set<any>()
     const appGrids: any[] = []
     const controlCenters: any[] = []
     const notificationCenters: any[] = []
@@ -64,7 +74,7 @@ app.start({
     } catch (err) { console.error(`[Style] Error:`, err) }
 
     // 🏗️ Internal UI Logic
-    const createUI = (monitor: Gdk.Monitor, idx: number) => {
+    const createUI = (monitor: any, idx: number) => {
       console.log(`[UI] Monitor ${idx}`);
       try {
         const barWin = Bar(monitor)
@@ -92,9 +102,9 @@ app.start({
     if (display) {
       const monitors = display.get_monitors()
       for (let i = 0; i < monitors.get_n_items(); i++) {
-        if (i === 0) createUI(monitors.get_item(i) as Gdk.Monitor, i)
+        if (i === 0) createUI(monitors.get_item(i) as any, i)
         else GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 200, () => {
-          createUI(monitors.get_item(i) as Gdk.Monitor, i)
+          createUI(monitors.get_item(i) as any, i)
           return GLib.SOURCE_REMOVE
         })
       }

@@ -86,7 +86,7 @@ export function Separator(id: string, updateDock: () => void, register: (id: str
     target.connect("drop", (t, val) => {
         let sourceId = ""
         if (typeof val === "string") sourceId = val
-        else if (val && (val as any).get_string) sourceId = (val as unknown as GObject.Value).get_string()
+        else if (val && (val as any).get_string) sourceId = (val as any).get_string()
 
         if (!sourceId || sourceId === "void") return false
 
@@ -100,7 +100,7 @@ export function Separator(id: string, updateDock: () => void, register: (id: str
 // DOCK ITEM COMPONENT
 interface DockItemProps {
     appId: string;
-    appItem: AstalApps.Application;
+    appItem: any;
     updateDock: () => void;
     register: (id: string, s: any) => void;
     addresses?: string[];
@@ -159,7 +159,7 @@ export function DockItem(
         has_tooltip: false,
     })
 
-    const getIcon = (): { name?: string, path?: string, gicon?: Gio.Icon } => {
+    const getIcon = (): { name?: string, path?: string, gicon?: any } => {
         let name: string | string[] = (appItem as any).icon_name || (appItem as any).icon || appItem.name || "application-x-executable"
         let candidate: string | null = null
         try {
@@ -191,12 +191,12 @@ export function DockItem(
     let child: Gtk.Widget
 
     // V132: Custom DrawingArea for Pixel-Perfect Scaling (Zero Popping / Zero Layout Shift)
-    let pixbuf: GdkPixbuf.Pixbuf | null = null
+    let pixbuf: any = null
     const sourceSize = 128 // Load high-res once
 
     try {
         if (res.path) {
-            pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(res.path, sourceSize, sourceSize, true)
+            pixbuf = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(res.path, sourceSize, sourceSize, true)
         } else if (res.name) {
             const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default()!)
             if (theme.has_icon(res.name)) {
@@ -204,7 +204,7 @@ export function DockItem(
                 if (info) {
                     const file = info.get_file()
                     if (file) {
-                        pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(file.get_path()!, sourceSize, sourceSize, true)
+                        pixbuf = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(file.get_path()!, sourceSize, sourceSize, true)
                     }
                 }
             }
@@ -212,7 +212,7 @@ export function DockItem(
             const gicon = res.gicon as any
             if (gicon.get_file && gicon.get_file()) {
                 const p = gicon.get_file()!.get_path()
-                if (p) pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(p, sourceSize, sourceSize, true)
+                if (p) pixbuf = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(p, sourceSize, sourceSize, true)
             }
         }
     } catch (e) {
@@ -356,7 +356,7 @@ export function DockItem(
     itemBox.append(overlay)
 
     // TOOLTIP
-    const tooltip = new Gtk.Popover({ css_classes: ["cd-tooltip"], position: Gtk.PositionType.TOP, autohide: false, has_arrow: false })
+    const tooltip = new Gtk.Popover({ css_classes: ["cd-tooltip"], position: Gtk.PositionType.TOP, autohide: false, has_arrow: true })
     tooltip.set_offset(0, -12)
     const label = new Gtk.Label({ css_classes: ["cd-tooltip-label"] })
     const content = new Gtk.Box({ css_classes: ["cd-tooltip-content"] })
@@ -388,6 +388,8 @@ export function DockItem(
     })
     motion.connect("motion", (controller, x, y) => {
         // Removed: itemBox.set_cursor(Gdk.Cursor.new_from_name("pointer", null))
+        if (popover.visible) return // Don't show tooltip if menu is open
+
         if (!tooltip.visible && !tooltipTimeout) {
             tooltipTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
                 tooltip.popup(); tooltipTimeout = null; return GLib.SOURCE_REMOVE
@@ -508,7 +510,7 @@ export function DockItem(
     const source = new Gtk.DragSource({ actions: Gdk.DragAction.COPY | Gdk.DragAction.MOVE })
     source.connect("prepare", (s, x, y) => {
         s.set_icon(Gtk.WidgetPaintable.new(child), x, y)
-        return Gdk.ContentProvider.new_for_value(cleanId || rawId)
+        return (Gdk as any).ContentProvider.new_for_value(cleanId || rawId)
     })
     itemBox.add_controller(source)
 
@@ -553,7 +555,7 @@ export function DockItem(
             dragBus.update("")
             let dragId = ""
             if (typeof val === "string") dragId = val
-            else if (val && (val as any).get_string) dragId = (val as unknown as GObject.Value).get_string()
+            else if (val && (val as any).get_string) dragId = (val as any).get_string()
 
             const sourceId = dragId ? dragId.toLowerCase().replace(".desktop", "") : ""
             const targetId = appId.toLowerCase()
@@ -627,7 +629,7 @@ export function DockItem(
     })
     sync()
 
-        ; (itemBox as any).syncState = (newAddrs: string[], newTitle: string | undefined, newAppItem: AstalApps.Application) => {
+        ; (itemBox as any).syncState = (newAddrs: string[], newTitle: string | undefined, newAppItem: any) => {
             state.addresses = newAddrs
             state.clientTitle = newTitle
             appItem = newAppItem // Updates closure reference? No, arguments are copies.
