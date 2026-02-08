@@ -6,6 +6,7 @@ Este documento define la esencia de **DistroIA** (antes MiDistroIA). Cualquier a
 
 ## 1. Identidad Técnica Inamovible (Actualizada 28/01/2026 - Era AGS)
 - **Entorno**: Wayland (Compositor: **Hyprland**).
+- **Base OS**: EndeavourOS (Arch Linux).
 - **UI Architecture**: **AGS v3 (Aylur's GTK Shell)** usando TypeScript/TSX.
   - *Motivo del cambio*: Superación de limitaciones de Python Gtk4 (estabilidad, gestión de capas, complejidad de widgets).
 - **Hyprland v0.53.3 compatibility**: Requiere sintaxis de bloque con nombre (`layerrule { name = '...' ... }`) para efectos de capa (blur).

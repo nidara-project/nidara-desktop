@@ -33,9 +33,9 @@ export LANG=es_ES.UTF-8
 
 # Lanzar el dock usando ruta relativa
 echo "🚀 Iniciando Dock desde: $PROJECT_ROOT"
-GI_TYPELIB_PATH="/usr/local/lib/x86_64-linux-gnu/girepository-1.0:$GI_TYPELIB_PATH" \
-LD_LIBRARY_PATH="/usr/local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH" \
-LD_PRELOAD="/usr/local/lib/x86_64-linux-gnu/libgtk4-layer-shell.so" \
+GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0:$PROJECT_ROOT/ui/ags-v3/astal-local/lib/linux/girepository-1.0:$GI_TYPELIB_PATH" \
+LD_LIBRARY_PATH="/usr/lib:/usr/local/lib:$PROJECT_ROOT/ui/ags-v3/astal-local/lib/linux:$LD_LIBRARY_PATH" \
+LD_PRELOAD="/usr/lib/libgtk4-layer-shell.so" \
 python3 "$PROJECT_ROOT/ui/dock/main_dock.py" &
 
 echo "✨ MiDistroIA Dock iniciado"

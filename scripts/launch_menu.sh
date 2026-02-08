@@ -1,13 +1,14 @@
 #!/bin/bash
 
 # Define variables
-MENU_SCRIPT="$HOME/Dev/MiDistroIA/ui/menu/app_launcher.py"
+PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd )"
+MENU_SCRIPT="$PROJECT_ROOT/ui/menu/app_launcher.py"
 PROCESS_NAME="ui/menu/app_launcher.py"
 
 # Fix LayerShell Linking (INLINE ONLY)
-# export GI_TYPELIB_PATH=/usr/local/lib/x86_64-linux-gnu/girepository-1.0:$GI_TYPELIB_PATH
-# export LD_LIBRARY_PATH=/usr/local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
-# export LD_PRELOAD=/usr/local/lib/x86_64-linux-gnu/libgtk4-layer-shell.so
+# export GI_TYPELIB_PATH=/usr/lib/girepository-1.0:$GI_TYPELIB_PATH
+# export LD_LIBRARY_PATH=/usr/lib:$LD_LIBRARY_PATH
+# export LD_PRELOAD=/usr/lib/libgtk4-layer-shell.so
 
 # Ensure Wayland Detection
 # Check if running
@@ -17,13 +18,11 @@ if pgrep -f "$PROCESS_NAME" > /dev/null; then
 else
     echo "Launching Menu..."
     # Ensure environment is correct
-    export PYTHONPATH="$HOME/Dev/MiDistroIA"
+    export PYTHONPATH="$PROJECT_ROOT"
     
     # Use env to set Wayland variables ONLY for the menu process
-    # This prevents child apps (like Antigravity) from inheriting GDK_BACKEND=wayland
-    # which causes crashes if they aren't fully Wayland-native.
-    GI_TYPELIB_PATH="/usr/local/lib/x86_64-linux-gnu/girepository-1.0:$GI_TYPELIB_PATH" \
-    LD_LIBRARY_PATH="/usr/local/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH" \
-    LD_PRELOAD="/usr/local/lib/x86_64-linux-gnu/libgtk4-layer-shell.so" \
+    GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0:$PROJECT_ROOT/ui/ags-v3/astal-local/lib/linux/girepository-1.0:$GI_TYPELIB_PATH" \
+    LD_LIBRARY_PATH="/usr/lib:/usr/local/lib:$PROJECT_ROOT/ui/ags-v3/astal-local/lib/linux:$LD_LIBRARY_PATH" \
+    LD_PRELOAD="/usr/lib/libgtk4-layer-shell.so" \
     env GDK_BACKEND=wayland XDG_SESSION_TYPE=wayland python3 "$MENU_SCRIPT" &
 fi

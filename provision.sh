@@ -1,58 +1,74 @@
 #!/bin/bash
 # MiDistroIA - ISO Provisioning Script 💎
-# Designed for Cubic (Ubuntu) or direct post-install automation.
+# Designed for EndeavourOS / Arch Linux 🚀
 
 set -e
 
-echo "🚀 Starting MiDistroIA Provisioning..."
+echo "🚀 Starting MiDistroIA Provisioning (Arch Linux Mode)..."
 
-# 1. System Dependencies & Repairs
-echo "📦 Preparing system and fixing potential broken packages..."
-sudo apt update
-sudo apt install -f -y
-
-# Install Node.js & NPM via NodeSource (More reliable on Ubuntu)
-echo "🌐 Installing Node.js 20.x (LTS) via NodeSource..."
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-
-echo "📦 Installing build dependencies..."
-sudo apt install -y \
+# 1. System Dependencies
+echo "📦 Installing system dependencies via pacman..."
+sudo pacman -Sy --needed --noconfirm \
+    base-devel \
+    glib2-devel \
+    cmake \
     meson \
-    ninja-build \
-    libgirepository1.0-dev \
-    valac \
-    libgtk-4-dev \
-    libadwaita-1-dev \
-    libpulse-dev \
-    libnm-dev \
-    libbluetooth-dev \
-    libgbm-dev \
-    libpam0g-dev \
+    ninja \
+    gobject-introspection \
+    vala \
+    gtk3 \
+    gtk4 \
+    gtk4-layer-shell \
+    libadwaita \
+    libpeas-2 \
+    libpulse \
+    networkmanager \
+    bluez-libs \
+    upower \
+    intltool \
+    scdoc \
+    brightnessctl \
+    pamixer \
+    hyprpicker \
+    jq \
+    slurp \
+    grim \
+    mesa \
+    pam \
     git \
-    nodejs
+    nodejs \
+    npm \
+    gjs \
+    go \
+    accountsservice
 
 # 2. Build & Install Dependencies (Vala Panel Appmenu)
 # Required for AstalTray
 echo "🛠️ Compiling appmenu-glib-translator..."
 mkdir -p /tmp/astal-deps
 cd /tmp/astal-deps
-git clone https://gitlab.com/vala-panel-project/vala-panel-appmenu.git . || (cd . && git pull)
-cd subprojects/appmenu-glib-translator
+if [ ! -d "vala-panel-appmenu" ]; then
+    git clone https://gitlab.com/vala-panel-project/vala-panel-appmenu.git
+fi
+cd vala-panel-appmenu/subprojects/appmenu-glib-translator
 # Clean old build dir if it exists
 rm -rf build
-meson setup build --prefix=/usr/local
+meson setup build --prefix=/usr
 sudo meson install -C build
 
 # 3. Build & Install Astal Libraries (The "Secret Sauce")
 echo "🛠️ Compiling Astal Service Libraries..."
 mkdir -p /tmp/astal-build
 cd /tmp/astal-build
-git clone https://github.com/aylur/astal.git . || (cd . && git pull)
+if [ ! -d "astal" ]; then
+    git clone https://github.com/aylur/astal.git
+fi
+cd astal
 
 # List of components to install in order
-# NOTE: lib/astal is split into io and gtk4
 COMPONENTS=(
     "lib/astal/io" 
+    "lib/astal/gtk3" 
     "lib/astal/gtk4" 
     "lib/apps" 
     "lib/hyprland" 
@@ -62,27 +78,23 @@ COMPONENTS=(
     "lib/notifd" 
     "lib/bluetooth" 
     "lib/tray"
+    "lang/gjs"
 )
 
 for comp in "${COMPONENTS[@]}"; do
     echo "🔨 Building $comp..."
-    cd "/tmp/astal-build/$comp"
-    # Clean old build dir if it exists
+    pushd "$comp"
     rm -rf build
-    meson setup build --prefix=/usr/local
+    meson setup build --prefix=/usr
     sudo meson install -C build
+    popd
 done
 
 # 4. Global Path Configuration & Linker Cache
 echo "⚙️ Configuring Global GI_TYPELIB_PATH & Library Cache..."
-# Find where typelibs are (Ubuntu usually puts them in x86_64-linux-gnu subdirectory)
-TYPELIB_PATH="/usr/local/lib/x86_64-linux-gnu/girepository-1.0"
-LIB_PATH="/usr/local/lib/x86_64-linux-gnu"
-
-if [ ! -d "$TYPELIB_PATH" ]; then
-    TYPELIB_PATH="/usr/local/lib/girepository-1.0"
-    LIB_PATH="/usr/local/lib"
-fi
+# On Arch, typelibs are usually in /usr/lib/girepository-1.0
+TYPELIB_PATH="/usr/lib/girepository-1.0"
+LIB_PATH="/usr/lib"
 
 # Refresh shared library cache
 echo "🔄 Refreshing system library cache (ldconfig)..."
@@ -90,25 +102,29 @@ sudo ldconfig
 
 # Add to /etc/environment for global access
 if ! grep -q "GI_TYPELIB_PATH" /etc/environment; then
-    echo "GI_TYPELIB_PATH=\"$TYPELIB_PATH:$GI_TYPELIB_PATH\"" | sudo tee -a /etc/environment
+    echo "GI_TYPELIB_PATH=\"$TYPELIB_PATH\"" | sudo tee -a /etc/environment
 else
-    sudo sed -i "s|GI_TYPELIB_PATH=\"|GI_TYPELIB_PATH=\"$TYPELIB_PATH:|g" /etc/environment
+    # Update existing if needed
+    sudo sed -i "s|GI_TYPELIB_PATH=.*|GI_TYPELIB_PATH=\"$TYPELIB_PATH\"|g" /etc/environment
 fi
 
-# Also add LD_LIBRARY_PATH just in case
-if ! grep -q "LD_LIBRARY_PATH" /etc/environment; then
-    echo "LD_LIBRARY_PATH=\"$LIB_PATH:$LD_LIBRARY_PATH\"" | sudo tee -a /etc/environment
+# 5. Build & Install AGS CLI (The Launcher)
+echo "🛠️ Compiling AGS v3 CLI (Launcher)..."
+mkdir -p /tmp/ags-build
+cd /tmp/ags-build
+if [ ! -d "ags" ]; then
+    git clone https://github.com/aylur/ags.git
 fi
+cd ags
+rm -rf build
+# We need gnim for the build
+npm install
+meson setup build --prefix=/usr
+sudo meson install -C build
 
-# 4. Icon Theme & Assets
-echo "🎨 Installing Design Assets..."
-mkdir -p ~/.local/share/icons
-# (Assumption: Icons are packaged or cloned here)
-# cp -r ./assets/icons/* ~/.local/share/icons/
-
-# 5. UI Setup
+# 6. UI Setup
 echo "🖥️ Setting up AGS UI..."
-cd ~/Dev/MiDistroIA/ui/ags-v3
+cd ~/Dev/DistroIA/ui/ags-v3
 npm install
 
 echo "✅ Provisioning Complete! Restart your session."
