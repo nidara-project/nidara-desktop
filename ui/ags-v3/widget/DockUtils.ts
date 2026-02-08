@@ -14,8 +14,8 @@ export const drawSquircle = (cr: any, width: number, height: number, targetW?: n
     const x = (width - drawW) / 2
     const y = marginY
 
-    const r = drawH * 0.44
-    const n = 3.2
+    const r = drawH * 0.5 // Full height radius base
+    const n = 3.2 // Superellipse exponent for G2/G3 continuous "Squircle" curvature
 
     cr.setAntialias(3)
     const path = (d = 0) => {
@@ -24,7 +24,7 @@ export const drawSquircle = (cr: any, width: number, height: number, targetW?: n
         cr.moveTo(x + r, y - d)
         cr.lineTo(x + drawW - r, y - d)
 
-        // Top-right
+        // Top-right (Superellipse Quadrant)
         for (let i = 64; i >= 0; i--) {
             let t = (i / 64) * (Math.PI / 2)
             let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
@@ -58,62 +58,21 @@ export const drawSquircle = (cr: any, width: number, height: number, targetW?: n
         cr.closePath()
     }
 
-    cr.setOperator(0); cr.paint(); cr.setOperator(2)
-
-    // 1. CLEAN OUTER SHADOW
-    cr.save()
-    cr.rectangle(0, 0, width, height)
+    // 1. CLEAN GLASS BODY
+    // We paint the full main path with a uniform translucent white.
+    // This allows the background blur (Hyprland/CSS) to be "caught" by the surface.
     path()
-    cr.setFillRule(1)
-    cr.clip()
-
-    cr.save()
-    cr.translate(0, 4)
-    path(4)
-    cr.setSourceRGBA(0, 0, 0, 0.04)
+    cr.setSourceRGBA(1, 1, 1, 0.25) // Higher opacity to catch blur
     cr.fill()
-    cr.restore()
-    cr.restore()
 
-
-    // 3. (COMPLETED BY CSS) - Base Background
-
-    // 4. GLASS GLOSS OVERLAY (The Sophisticated Highlight)
+    // 2. OPTIONAL: SUBTLE GRADIENT OVERLAY (Top-down light)
+    // To add volume without "hiding" the blur at the bottom, we add a very subtle white gradient.
     // @ts-ignore
     const gradient = new Cairo.LinearGradient(x, y, x, y + drawH)
-    gradient.addColorStopRGBA(0, 1, 1, 1, 0.18) // Soft light from top
-    gradient.addColorStopRGBA(1, 1, 1, 1, 0.08) // Fading towards bottom
+    gradient.addColorStopRGBA(0, 1, 1, 1, 0.05) // Highlight at top
+    gradient.addColorStopRGBA(1, 1, 1, 1, 0.00) // Transparent at bottom
+
     path()
     cr.setSource(gradient)
     cr.fill()
-
-
-    // 4. SPECULAR HIGHLIGHT (Glass Edge)
-    cr.save()
-    cr.translate(0, 1) // 1px Top inset
-    path(0)
-    cr.clip()
-
-    // @ts-ignore
-    const rimGrad = new Cairo.LinearGradient(x, y, x, y + 2)
-    rimGrad.addColorStopRGBA(0, 1, 1, 1, 0.75) // More vibrant top edge
-    rimGrad.addColorStopRGBA(1, 1, 1, 1, 0.0)
-
-    cr.setSource(rimGrad)
-    cr.setLineWidth(2.0)
-    cr.stroke()
-    cr.restore()
-
-    // 5. M3 RIM LIGHT (Full path definition)
-    path()
-    cr.setSourceRGBA(1, 1, 1, 0.3)
-    cr.setLineWidth(0.7)
-    cr.stroke()
-
-    // 6. BOTTOM DEFINITION (Anchor)
-    cr.moveTo(x + r, y + drawH)
-    cr.lineTo(x + drawW - r, y + drawH)
-    cr.setSourceRGBA(0, 0, 0, 0.15)
-    cr.setLineWidth(0.5)
-    cr.stroke()
 }

@@ -278,17 +278,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
         updateAllTargets(-1000)
     })
 
-    const pillBg = new Gtk.Box({
-        name: "crystal-dock-bg",
-        css_classes: ["crystal-dock"],
-        valign: Gtk.Align.END,
-        halign: Gtk.Align.CENTER,
-        height_request: DOCK_CONSTANTS.PILL_HEIGHT,
-        margin_bottom: 10,
-    })
-
     const da = new Gtk.DrawingArea({
         name: "dock-gloss-layer",
+        // css_classes: ["crystal-dock"], // REMOVED: Causes "Double Background" artifact
         valign: Gtk.Align.END,
         halign: Gtk.Align.CENTER,
         height_request: DOCK_CONSTANTS.PILL_HEIGHT,
@@ -302,7 +294,6 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
 
     const updateSize = () => {
         const w = smoothedBarWidth + 18
-        pillBg.set_size_request(w, DOCK_CONSTANTS.PILL_HEIGHT)
         da.set_size_request(w, DOCK_CONSTANTS.PILL_HEIGHT)
     }
 
@@ -316,8 +307,9 @@ export default function Dock(gdkmonitor: Gdk.Monitor) {
     bar.valign = Gtk.Align.END
     shim.append(bar)
 
-    layout.set_child(pillBg)
-    layout.add_overlay(da)
+    // V136: Architecture Simplification
+    // The DrawingArea is now the primary child (Background), removing 'pillBg' to prevent double backgrounds.
+    layout.set_child(da)
     layout.add_overlay(shim)
 
 

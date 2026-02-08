@@ -1,6 +1,6 @@
-# MiDistroIA Dock Specification: Gaussian V135 (Stable DrawingArea) 🧸🍎💎
+# MiDistroIA Dock Specification: Gaussian V136 (Purist Glass) 🧸🍎💎
 
-This document defines the technical implementation, physics, and geometry of the Unified Dock Engine as of version 135 (Stable DrawingArea Model).
+This document defines the technical implementation, physics, and geometry of the Unified Dock Engine as of version 136 (Purist Glass Model).
 
 ## 1. Core Architecture: Unified Animation Engine
 The dock uses a **Single Central Clock (60fps)** to synchronize all animations. Version 135 introduces the **Custom DrawingArea Renderer** to solve icon scaling artifacts.
@@ -45,9 +45,10 @@ To prevent magnified icons from being cut off by the dock's window or other appl
 - **Exclusive Zone**: Locked to **110px** (100px + margin), allowing the top part of magnified icons to overlap applications safely.
 - **Input Region**: Restricted to the visual pill area to avoid blocking clicks on underlying windows.
 
-## 5. Background Pill (The Glass)
-- **Gaussian Symmetric Alignment**: Icons are centered in the pill.
-- **Lockstep Sync**: The background width moves in perfect synchrony with the sum of icon widths.
+## 5. Background Pill (The Glass) - V136 Purist Model
+- **Single Source of Truth**: The background is rendered exclusively by the `Gtk.DrawingArea` using Cairo. The legacy CSS container (`pillBg`) has been removed to eliminate double-background artifacts.
+- **Shape Logic**: Uses a **Superellipse (n=3.2)** with full-height radius (`r=0.5h`) to achieve a perfect "Continuous Curve" aesthetic (Squircle Pill), distinct from standard geometric rounded rectangles.
+- **Material**: Translucent white fill (`alpha=0.25`) to capture the system blur, with a subtle top-down gradient for volume. No strokes or borders are drawn.
 
 ## 6. Icon Policy & Resolution
 - **Prioritization**: `.desktop` file paths > Theme Icons > Fallback Material Icons.

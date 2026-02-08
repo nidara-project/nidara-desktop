@@ -342,3 +342,22 @@ flowboxchild:hover {
   margin: 0;
   padding: 0;
 }
+/* --- FINAL NUCLEAR CLEANUP: PREVENT DOUBLE BACKGROUNDS --- */
+/* Ensure the GtkBox behind the DrawingArea is 100% invisible */
+#crystal-dock #crystal-dock-bg,
+.crystal-dock,
+window#crystal-dock box.crystal-dock {
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* Ensure the shim and bar are transparent */
+#crystal-dock #the-dock-bar,
+.cd-dock-bar {
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
