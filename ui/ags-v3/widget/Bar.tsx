@@ -91,28 +91,44 @@ function Tray() {
     }
   }
 
-  // Restore signal-based logic but fully decoupled from the main loop
+  // Sync initial set
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
     getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
       if (!tray) return;
 
+      const syncVisibility = () => {
+        box.set_visible(items.size > 0)
+      }
+
+      const addItem = (id: string) => {
+        createItem(tray, id)
+        syncVisibility()
+      }
+
+      const delItem = (id: string) => {
+        removeItem(id)
+        syncVisibility()
+      }
+
       // Sync initial set
-      tray.items.forEach(item => createItem(tray, item.item_id))
+      tray.items.forEach(item => addItem(item.item_id))
 
       tray.connect("item-added", (_, id) => {
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-          createItem(tray, id); return GLib.SOURCE_REMOVE;
+          addItem(id); return GLib.SOURCE_REMOVE;
         })
       })
       tray.connect("item-removed", (_, id) => {
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-          removeItem(id); return GLib.SOURCE_REMOVE;
+          delItem(id); return GLib.SOURCE_REMOVE;
         })
       })
+      syncVisibility()
     })
     return GLib.SOURCE_REMOVE
   })
 
+  box.set_visible(false) // Start hidden
   return box
 }
 
@@ -282,89 +298,64 @@ function Workspaces() {
 /**
  * System Status Modules (Right) 🔋📶🔊🔔🎛️🕒
  */
-function SystemStatus() {
+function SettingsGear() {
+  const btn = new Gtk.Button({
+    css_classes: ["bar-util-btn", "cc-trigger"],
+    child: new Gtk.Image({ icon_name: "emblem-system-symbolic", pixel_size: 16 }),
+    tooltip_text: "Centro de Control"
+  })
+  btn.connect("clicked", () => {
+    try { (globalThis as any).toggleControlCenter?.() } catch (e) { }
+  })
+  return btn
+}
+
+/**
+ * CPU and RAM Monitor Module 📊
+ */
+function SystemResources() {
   const box = new Gtk.Box({
-    name: "bar-status",
-    css_classes: ["bar-status"],
+    name: "bar-resources",
+    css_classes: ["bar-resources"],
     spacing: 12
   })
 
-  // 1. Static Placeholders to force Order (Tray -> Net -> Vol -> Bat -> CC) 🏗️
-  const trayBox = Tray()
-  const netBox = new Gtk.Box({ spacing: 8 })
-  const volBox = new Gtk.Box({ spacing: 8 })
-  const batBox = new Gtk.Box({ spacing: 8 })
-  const ccBox = new Gtk.Box({ spacing: 8 })
+  // CPU Monitor
+  const cpuIcon = new Gtk.Label({ label: "CPU", css_classes: ["bar-res-icon", "cpu"] })
+  const cpuLabel = new Gtk.Label({ label: "...", css_classes: ["bar-res-label"] })
+  const cpuBox = new Gtk.Box({ spacing: 4, css_classes: ["bar-res-item"] })
+  cpuBox.append(cpuIcon); cpuBox.append(cpuLabel)
 
-  box.append(trayBox)
-  box.append(netBox)
-  box.append(volBox)
-  box.append(batBox)
-  box.append(ccBox)
+  const updateCPU = () => {
+    // Use bash -c to correctly handle environment variables and pipes
+    execAsync(["bash", "-c", "LC_ALL=C top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'"]).then(out => {
+      const val = parseFloat(out.trim().replace(",", "."))
+      cpuLabel.label = isNaN(val) ? "0%" : `${Math.floor(val)}%`
+    }).catch(() => { cpuLabel.label = "0%" })
+    return true
+  }
+  updateCPU()
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, updateCPU)
 
-  // 2. Control Center Button (High Priority)
-  const ccBtn = new Gtk.Button({
-    css_classes: ["bar-util-btn", "cc-trigger"],
-    child: new Gtk.Label({ label: "󰕮", css_classes: ["bar-cc-icon"] }),
-    tooltip_text: "Centro de Control"
-  })
-  ccBtn.connect("clicked", () => {
-    try { (globalThis as any).toggleControlCenter?.() } catch (e) { }
-  })
-  ccBox.append(ccBtn)
+  // RAM Monitor
+  const ramIcon = new Gtk.Label({ label: "RAM", css_classes: ["bar-res-icon", "ram"] })
+  const ramLabel = new Gtk.Label({ label: "...", css_classes: ["bar-res-label"] })
+  const ramBox = new Gtk.Box({ spacing: 4, css_classes: ["bar-res-item"] })
+  ramBox.append(ramIcon); ramBox.append(ramLabel)
 
-  // 3. Deferred Service Population 🏎️
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
-    // Network
-    getServiceSafe(() => AstalNetwork.get_default(), "Network").then(net => {
-      if (!net) return;
-      const icon = new Gtk.Image({ pixel_size: 16 })
-      const btn = new Gtk.Button({ css_classes: ["bar-status-btn"], child: icon })
-      const syncStatus = () => {
-        if (net.wifi) icon.icon_name = net.wifi.icon_name
-        else if (net.wired) icon.icon_name = net.wired.icon_name
-        else icon.icon_name = "network-offline-symbolic"
-      }
-      net.connect("notify::wifi", syncStatus); net.connect("notify::wired", syncStatus); syncStatus()
-      netBox.append(btn)
-    }).catch(() => { })
+  const updateRAM = () => {
+    // Use bash -c for free command too
+    execAsync(["bash", "-c", "LC_ALL=C free -m | grep Mem | awk '{print $3/$2 * 100}'"]).then(out => {
+      const val = parseFloat(out.trim().replace(",", "."))
+      ramLabel.label = isNaN(val) ? "0%" : `${Math.floor(val)}%`
+    }).catch(() => { ramLabel.label = "0%" })
+    return true
+  }
+  updateRAM()
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 5000, updateRAM)
 
-    // Volume
-    try {
-      const icon = new Gtk.Image({ icon_name: "audio-volume-high-symbolic", pixel_size: 16 })
-      const btn = new Gtk.Button({ css_classes: ["bar-status-btn"], child: icon })
-      const poll = createPoll("0%", 1000, "pamixer --get-volume-human", (out) => out.trim())
-      poll.subscribe(() => {
-        const val = poll.get()
-        if (val === "muted") icon.icon_name = "audio-volume-muted-symbolic"
-        else {
-          const v = parseInt(val)
-          if (v <= 33) icon.icon_name = "audio-volume-low-symbolic"
-          else if (v <= 66) icon.icon_name = "audio-volume-medium-symbolic"
-          else icon.icon_name = "audio-volume-high-symbolic"
-        }
-      })
-      volBox.append(btn)
-    } catch (e) { }
-
-    // Battery
-    getServiceSafe(() => AstalBattery.get_default(), "Battery").then(bat => {
-      if (!bat) return;
-      const bContent = new Gtk.Box({ spacing: 6 })
-      const bIcon = new Gtk.Image({ icon_name: bat.icon_name, pixel_size: 16 })
-      const bLabel = new Gtk.Label({ css_classes: ["bar-bat-label"] })
-      bContent.append(bIcon); bContent.append(bLabel)
-      const syncBat = () => {
-        bIcon.icon_name = bat.icon_name
-        bLabel.label = `${Math.floor(bat.percentage * 100)}%`
-        bContent.set_visible(bat.is_present)
-      }
-      bat.connect("notify::percentage", syncBat); bat.connect("notify::charging", syncBat); syncBat()
-      batBox.append(bContent)
-    }).catch(() => { })
-
-    return GLib.SOURCE_REMOVE
-  })
+  box.append(cpuBox)
+  box.append(ramBox)
 
   return box
 }
@@ -414,8 +405,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const centerSide = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, css_classes: ["bar-center"] })
   centerSide.append(Workspaces())
 
-  const rightSide = new Gtk.Box({ spacing: 20, halign: Gtk.Align.END, css_classes: ["bar-right"] })
-  rightSide.append(SystemStatus())
+  const rightSide = new Gtk.Box({ spacing: 12, halign: Gtk.Align.END, css_classes: ["bar-right"] })
+  rightSide.append(SystemResources())
+  rightSide.append(Tray())
+  rightSide.append(SettingsGear())
 
   const timeContent = new Gtk.Box({ spacing: 8 })
   const timeLabel = new Gtk.Label({ name: "bar-time-label", css_classes: ["bar-time"], label: "..." })

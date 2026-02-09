@@ -8,9 +8,10 @@
 ## Estado de la Base:
 - [x] Estructura de carpetas profesional.
 - [x] Motor de temas basado en CSS dinámico.
-- [x] Lógica de anclaje de sistema (Layer Shell) configurada en AGS.
-- [x] Optimización de rendimiento (Caching de widgets).
-- [ ] Integración profunda de Agentes de IA (Próxima fase).
+- [x] Lógica de anclaje de sistema (Layer Shell) con protección de menús.
+- [x] Optimización de rendimiento y monitores de sistema (CPU/RAM).
+- [x] Central de control con selección de audio y Bluetooth.
+- [/] Integración profunda de Agentes de IA (Próxima fase).
 
 ## Notas Técnicas:
 - **UI Framework**: GJS + GTK4 vía AGS v3.

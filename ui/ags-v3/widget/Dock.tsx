@@ -115,6 +115,9 @@ export default function Dock(gdkmonitor: any) {
         if (tickId !== null) return
 
         tickId = bar.add_tick_callback((_, clock) => {
+            // V320: Also pause the animation shift if a menu is open
+            if ((globalThis as any).isAnyMenuOpen) return true
+
             let active = false
             let currentFloatX = 0
 
@@ -233,6 +236,9 @@ export default function Dock(gdkmonitor: any) {
 
     let lastMouseX = -1000
     const updateAllTargets = (mouseX: number) => {
+        // V320: Freeze magnification shifts while a menu is open to prevent "ghost menu" flickering
+        if ((globalThis as any).isAnyMenuOpen) return
+
         lastMouseX = mouseX
         const qX = mouseX
 
@@ -362,6 +368,13 @@ export default function Dock(gdkmonitor: any) {
         }
         updateLock = true
         try {
+            // V310: PROTECTION. If a menu is open, skip reconciliation to prevent widget tree shifts (the "ghost menu" fix).
+            if ((globalThis as any).isAnyMenuOpen) {
+                needsUpdate = true // Try again later
+                return bar
+            }
+
+            console.error("[DockLifecycle] Update triggered")
             needsUpdate = false
             type ItemConfig = { id: string, width: number, syncData?: any, isPinned: boolean, factory: (vc: number) => Gtk.Widget }
             const configs: ItemConfig[] = []
@@ -372,6 +385,7 @@ export default function Dock(gdkmonitor: any) {
                 if (widgetCache.has(id)) {
                     return widgetCache.get(id)!
                 }
+                console.error(`[DockLifecycle] Creating NEW: ${id}`)
                 const widget = factory()
                 const revealer = new (Gtk as any).Revealer({
                     css_classes: ["cd-revealer"],
@@ -742,6 +756,7 @@ export default function Dock(gdkmonitor: any) {
 
             for (const [id, w] of widgetCache) {
                 if (!currentIds.has(id)) {
+                    console.error(`[DockLifecycle] Evicting from cache: ${id}`)
                     widgetCache.delete(id)
                     animRegistry.delete(id)
                 }

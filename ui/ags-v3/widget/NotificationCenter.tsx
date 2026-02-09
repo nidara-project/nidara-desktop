@@ -104,6 +104,8 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
         css_classes: ["nc-scroll"]
     })
 
+    const history = new Map<number, AstalNotifd.Notification>()
+
     const sync = () => {
         let child = list.get_first_child()
         while (child) {
@@ -112,17 +114,38 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
             child = next
         }
 
-        notifd.notifications.forEach(n => {
+        // Convert map values to array and sort by ID (newer first)
+        const all = Array.from(history.values()).sort((a, b) => b.id - a.id)
+
+        all.forEach(n => {
             list.append(NotificationItem(n))
         })
 
-        if (notifd.notifications.length === 0) {
+        if (all.length === 0) {
             list.append(new Gtk.Label({ label: "No hay notificaciones nuevas", css_classes: ["nc-empty"], vexpand: true, valign: Gtk.Align.CENTER }))
         }
     }
 
-    notifd.connect("notified", sync)
-    notifd.connect("resolved", sync)
+    notifd.connect("notified", (_, id) => {
+        const n = notifd.get_notification(id)
+        if (n) {
+            history.set(id, n)
+            sync()
+        }
+    })
+
+    // On resolved, we DON'T remove from history, unless it was dismissed by user?
+    // Actually, let's just keep them all until "Borrar todo"
+    // notifd.connect("resolved", sync) // Removed!
+
+    clearBtn.connect("clicked", () => {
+        history.clear()
+        notifd.notifications.forEach(n => n.dismiss())
+        sync()
+    })
+
+    // Initial sync with whatever is active now
+    notifd.notifications.forEach(n => history.set(n.id, n))
     sync()
 
     container.append(header)

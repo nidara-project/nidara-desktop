@@ -3,7 +3,7 @@ import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import AstalMpris from "gi://AstalMpris"
 import AstalNetwork from "gi://AstalNetwork"
-// import AstalBluetooth from "gi://AstalBluetooth" // Still missing on system
+import AstalBluetooth from "gi://AstalBluetooth"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 
@@ -85,25 +85,27 @@ function Media() {
         box.append(playerBox)
     }
 
-    mpris.connect("notify::players", sync)
+    mpris.connect("player-added", (_, p) => {
+        p.connect("notify::playback-status", sync)
+        p.connect("notify::metadata", sync)
+        sync()
+    })
+    mpris.connect("player-closed", sync)
+    mpris.players.forEach(p => {
+        p.connect("notify::playback-status", sync)
+        p.connect("notify::metadata", sync)
+    })
     sync()
 
     return box
 }
 
 function GridControls() {
-    let network;
-    let bluetooth;
+    let network: AstalNetwork.Network | null = null;
+    let bluetooth: AstalBluetooth.Bluetooth | null = null;
 
-    try {
-        network = AstalNetwork.get_default()
-    } catch (e) { console.warn("[CC] Network service unavailable:", e) }
-
-    /* Bluetooth disabled - AstalBluetooth missing
-    try {
-        bluetooth = AstalBluetooth.get_default()
-    } catch (e) { console.warn("[CC] Bluetooth service unavailable:", e) }
-    */
+    try { network = AstalNetwork.get_default() } catch (e) { }
+    try { bluetooth = AstalBluetooth.get_default() } catch (e) { }
 
     const grid = new Gtk.Grid({
         column_spacing: 12,
@@ -111,63 +113,167 @@ function GridControls() {
         css_classes: ["cc-grid"]
     })
 
-    const createToggle = (iconName: string, label: string, active: boolean, onClick: () => void) => {
+    const createToggle = (iconName: string | null, label: string, sublabel: string, active: boolean, onClick: () => void) => {
         const box = new Gtk.Box({
-            spacing: 8,
+            spacing: 12,
             css_classes: ["cc-toggle", active ? "active" : ""]
         })
-        const btn = new Gtk.Button({ child: box })
+        const btn = new Gtk.Button({ child: box, hexpand: true })
         btn.connect("clicked", onClick)
 
-        const i = new Gtk.Image({ icon_name: iconName, pixel_size: 18, css_classes: ["cc-toggle-icon"] })
-        const l = new Gtk.Label({ label: label, css_classes: ["cc-toggle-label"] })
+        const i = new Gtk.Image({ icon_name: iconName || "network-wired-symbolic", pixel_size: 20, css_classes: ["cc-toggle-icon"] })
+        const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
+        const l = new Gtk.Label({ label: label, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START })
+        const sl = new Gtk.Label({ label: sublabel, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, ellipsize: 3 })
+
+        textStack.append(l)
+        textStack.append(sl)
 
         box.append(i)
-        box.append(l)
+        box.append(textStack)
+
+        // Add a signal handler to update the box class when active changes
+        // (Simplified for this version, we will re-render on service sync if needed)
+
         return btn
     }
 
-    let col = 0
-    let row = 0
+    const update = () => {
+        // Clear grid
+        let child = grid.get_first_child()
+        while (child) {
+            const next = child.get_next_sibling()
+            grid.remove(child)
+            child = next
+        }
 
-    // WiFi Real Toggle - Only if hardware present
-    if (network && network.wifi) {
-        const wifi = createToggle(network.wifi.icon_name, "Wi-Fi", network.wifi.enabled, () => {
-            network.wifi.enabled = !network.wifi.enabled
-        })
-        grid.attach(wifi, col++, row, 1, 1)
-    }
+        let col = 0
+        let row = 0
 
-    // Bluetooth Toggle - DISABLED
-    /*
-    if (bluetooth && bluetooth.is_powered !== undefined) {
-        try {
-            const btActive = bluetooth.is_powered
-            const bt = createToggle(
-                btActive ? "bluetooth-active-symbolic" : "bluetooth-disabled-symbolic",
-                "Bluetooth",
-                btActive,
-                () => {
-                    try {
-                        bluetooth.is_powered = !bluetooth.is_powered
-                    } catch (e) {
-                        console.error("[CC] Bluetooth toggle failed:", e)
-                    }
-                }
-            )
-            grid.attach(bt, col++, row, 1, 1)
-        } catch (e) {
-            console.warn("[CC] Bluetooth toggle creation failed:", e)
+        // 📶 Network Widget
+        if (network) {
+            let label = "Red"
+            let sublabel = "Desconectado"
+            let icon = "network-offline-symbolic"
+            let active = false
+
+            if (network.wired && network.wired.state === 100) {
+                label = "Ethernet"
+                sublabel = "Conectado"
+                icon = network.wired.icon_name || "network-wired-symbolic"
+                active = true
+            } else if (network.wifi) {
+                label = "Wi-Fi"
+                sublabel = network.wifi.active_access_point?.ssid || (network.wifi.enabled ? "Buscando..." : "Desactivado")
+                icon = network.wifi.icon_name || "network-wireless-signal-excellent-symbolic"
+                active = network.wifi.enabled
+            }
+
+            const netBtn = createToggle(icon, label, sublabel, active, () => {
+                if (network!.wifi) network!.wifi.enabled = !network!.wifi.enabled
+            })
+            grid.attach(netBtn, col++, row, 1, 1)
+        }
+
+        //  Bluetooth Widget
+        if (bluetooth) {
+            const active = bluetooth.is_powered
+            const label = "Bluetooth"
+            const sublabel = active ? (bluetooth.devices.find(d => d.connected)?.name || "Activado") : "Desactivado"
+            const icon = active ? "bluetooth-active-symbolic" : "bluetooth-disabled-symbolic"
+
+            const btBtn = createToggle(icon, label, sublabel, active, () => {
+                bluetooth!.is_powered = !bluetooth!.is_powered
+            })
+            grid.attach(btBtn, col++, row, 1, 1)
         }
     }
-    */
 
-    // If no toggles were added, hide the grid
-    if (col === 0 && row === 0) {
-        grid.set_visible(false)
+    if (network) {
+        network.connect("notify::wifi", update)
+        network.connect("notify::wired", update)
+    }
+    if (bluetooth) {
+        bluetooth.connect("notify::is-powered", update)
+        bluetooth.connect("notify::devices", update)
     }
 
+    update()
     return grid
+}
+
+function AudioSinks() {
+    const box = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 8,
+        css_classes: ["cc-audio-sinks"]
+    })
+
+    const sync = () => {
+        execAsync("wpctl status").then(out => {
+            // Remove old children
+            let child = box.get_first_child()
+            while (child) {
+                const next = child.get_next_sibling()
+                box.remove(child)
+                child = next
+            }
+
+            // Simple parser for Sinks section
+            const lines = out.split("\n")
+            let inSinks = false
+            const sinks: { id: string, name: string, active: boolean }[] = []
+
+            for (const line of lines) {
+                // Remove decoration characters and excessive spaces
+                const clean = line.replace(/[│├─└\*]/g, " ").trim()
+                if (clean.includes("Sinks:")) { inSinks = true; continue }
+                if (inSinks && (clean.includes("Sources:") || clean === "")) {
+                    inSinks = false;
+                    if (clean.includes("Sources:")) break;
+                    continue;
+                }
+
+                if (inSinks && clean.match(/^\d+\./)) {
+                    const match = clean.match(/^(\d+)\.\s+(.*)/)
+                    if (match) {
+                        const active = line.includes("*")
+                        const namePart = match[2].split("[")[0].trim()
+                        sinks.push({ id: match[1], name: namePart, active })
+                    }
+                }
+            }
+
+            if (sinks.length > 0) {
+                const title = new Gtk.Label({ label: "Salida de Audio", css_classes: ["cc-section-title"], halign: Gtk.Align.START })
+                box.append(title)
+
+                sinks.forEach(s => {
+                    const row = new Gtk.Box({ spacing: 12, css_classes: ["cc-sink-item", s.active ? "active" : ""] })
+                    const btn = new Gtk.Button({ child: row, hexpand: true })
+
+                    const icon = new Gtk.Image({
+                        icon_name: s.name.toLowerCase().includes("hdmi") ? "video-display-symbolic" : "audio-speakers-symbolic",
+                        pixel_size: 16
+                    })
+                    const label = new Gtk.Label({ label: s.name, ellipsize: 3, hexpand: true, halign: Gtk.Align.START })
+                    const check = new Gtk.Image({ icon_name: "object-select-symbolic", visible: s.active })
+
+                    row.append(icon)
+                    row.append(label)
+                    row.append(check)
+
+                    btn.connect("clicked", () => {
+                        execAsync(`wpctl set-default ${s.id}`).then(() => sync())
+                    })
+                    box.append(btn)
+                })
+            }
+        }).catch(err => console.error("[CC] AudioSinks error:", err))
+    }
+
+    sync()
+    return box
 }
 
 function Sliders() {
@@ -176,6 +282,9 @@ function Sliders() {
         spacing: 16,
         css_classes: ["cc-sliders"]
     })
+
+    // V330: Audio Sinks Switcher
+    box.append(AudioSinks())
 
     const volRow = new Gtk.Box()
     const brtRow = new Gtk.Box()
@@ -200,21 +309,32 @@ function Sliders() {
         return row
     }
 
-    // Volume Init 🔊
-    execAsync("pamixer --get-volume").then(out => {
-        const val = parseInt(out)
-        volRow.append(createSlider("audio-volume-high-symbolic", "vol", val, (v) => execAsync(`pamixer --set-volume ${Math.floor(v)}`)))
-    }).catch(() => {
-        volRow.append(createSlider("audio-volume-high-symbolic", "vol", 50, (v) => execAsync(`pamixer --set-volume ${Math.floor(v)}`)))
-    })
+    // Volume Placeholder
+    const volSlider = createSlider("audio-volume-high-symbolic", "vol", 50, (v) => execAsync(`wpctl set-volume @DEFAULT_AUDIO_SINK@ ${v / 100}`))
+    volRow.append(volSlider)
 
-    // Brightness Init ☀️
-    execAsync("brightnessctl g").then(curr => {
-        execAsync("brightnessctl m").then(max => {
-            const val = Math.floor((parseInt(curr) / parseInt(max)) * 100)
-            brtRow.append(createSlider("display-brightness-symbolic", "brt", val, (v) => execAsync(`brightnessctl s ${Math.floor(v)}%`)))
-        })
+    // Volume Init 🔊 (update placeholder)
+    execAsync("wpctl get-volume @DEFAULT_AUDIO_SINK@").then(out => {
+        const match = out.match(/Volume: (\d+\.\d+)/)
+        const val = match ? Math.floor(parseFloat(match[1]) * 100) : 50
+        const scale = volSlider.get_last_child() as Gtk.Scale
+        if (scale) scale.set_value(val)
     }).catch(() => { })
+
+    // Brightness Init ☀️ (check hardware first)
+    execAsync("which brightnessctl").then(() => {
+        const brtSlider = createSlider("display-brightness-symbolic", "brt", 50, (v) => execAsync(`brightnessctl s ${Math.floor(v)}%`))
+        brtRow.append(brtSlider)
+        execAsync("brightnessctl g").then(curr => {
+            execAsync("brightnessctl m").then(max => {
+                const val = Math.floor((parseInt(curr) / parseInt(max)) * 100)
+                const scale = brtSlider.get_last_child() as Gtk.Scale
+                if (scale) scale.set_value(val)
+            })
+        }).catch(() => { brtRow.set_visible(false) })
+    }).catch(() => {
+        brtRow.set_visible(false)
+    })
 
     return box
 }
@@ -230,20 +350,22 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const ensureInit = () => {
         if (initialized) return
 
+        const p = GLib.PRIORITY_DEFAULT_IDLE || 200
         // Phase 1: Atomic Sliders (Fast)
-        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        GLib.idle_add(p, () => {
             try { box.append(Sliders()) } catch (e) { console.error("[CC] Sliders init failed:", e) }
             return GLib.SOURCE_REMOVE
         })
 
         // Phase 2: Atomic Network/BT (Can be slow)
-        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        GLib.idle_add(p, () => {
             try { box.append(GridControls()) } catch (e) { console.error("[CC] Grid init failed:", e) }
             return GLib.SOURCE_REMOVE
         })
 
         // Phase 3: Media (Medium)
-        GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+        const priority = GLib.PRIORITY_DEFAULT_IDLE || 200
+        GLib.idle_add(priority, () => {
             try { box.append(Media()) } catch (e) { console.error("[CC] Media init failed:", e) }
             return GLib.SOURCE_REMOVE
         })

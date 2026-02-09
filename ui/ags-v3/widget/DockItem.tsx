@@ -408,10 +408,20 @@ export function DockItem(
     const checkId = (cleanId || appId).toLowerCase()
     const popover = new Gtk.Popover({ css_classes: ["cd-popover"], has_tooltip: false })
     popover.set_parent(iconBox)
+    popover.connect("notify::visible", () => {
+        (globalThis as any).isAnyMenuOpen = popover.visible
+        console.error(`[DockMenu] Popover visible change: ${popover.visible} for ${appId}`)
+    })
 
     const toSentenceCase = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : ""
 
     const rebuildMenu = () => {
+        if (popover.visible) {
+            console.error(`[DockMenu] Skip rebuild for ${appId} - already visible`)
+            return
+        }
+        console.error(`[DockMenu] Rebuilding menu for: ${appId}`)
+
         const menu = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
         const actions: any[] = []
 
@@ -489,7 +499,11 @@ export function DockItem(
             } else {
                 const b = new Gtk.Button({ label: a.label, css_classes: ["cd-menu-action"] })
                 if (a.isDestructive) b.add_css_class("destructive")
-                b.connect("clicked", () => { a.action(); popover.popdown() })
+                b.connect("clicked", () => {
+                    console.log(`[DockMenu] Action clicked, popping down: ${appId}`)
+                    a.action();
+                    popover.popdown()
+                })
                 menu.append(b)
             }
         })
@@ -498,9 +512,13 @@ export function DockItem(
 
     const rightClick = new Gtk.GestureClick({ button: 3 })
     rightClick.connect("released", () => {
+        console.error(`[DockMenu] Right-click released for: ${appId}`)
         rebuildMenu()
-        // popover.set_parent is already done at creation
-        popover.popup()
+        // V320: Delay popup by 1 frame to ensure GTK has processed the new child/layout
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            popover.popup()
+            return GLib.SOURCE_REMOVE
+        })
     })
     iconBox.add_controller(rightClick)
 

@@ -1,7 +1,13 @@
-/*
-   CRYSTAL DOCK - AESTHETIC PERFECTION
-   Prefix: cd- (Class Isolation)
+/* 
+   CRYSTAL UI - DYNAMIC THEME ENGINE
+   Inheriting system colors from GTK Registry
 */
+$theme_bg: unquote("@theme_bg_color");
+$theme_fg: unquote("@theme_fg_color");
+$theme_hover: unquote("@theme_selected_bg_color");
+$theme_hover_fg: unquote("@theme_selected_fg_color");
+$theme_border: rgba(0, 0, 0, 0.12);
+$theme_fg_dim: rgba(0, 0, 0, 0.5);
 
 /* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
 #crystal-dock {
@@ -191,19 +197,27 @@ window#crystal-dock box.cd-squircle-plate drawingarea {
 }
 
 /* --- STABILITY & THEME: Dock Menu --- */
-/* User requested: Let GTK define background (White), we define contrast hover */
-.cd-popover {
-  transition: none;
-  /* V82: Prevent ghosting/flicker on dismiss */
+popover.cd-popover contents {
+  background-color: $theme_bg;
+  border: 1px solid $theme_border;
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
-/* Boost specificity to override default GTK button theme */
+button.cd-menu-action {
+  background: transparent;
+  color: $theme_fg;
+  border-radius: 10px;
+  padding: 10px 16px;
+  transition: all 0.2s ease;
+}
+
 button.cd-menu-action:hover {
-  background-color: rgba(0, 0, 0, 0.08);
-  /* Dark hover for White background */
-  border-color: rgba(0, 0, 0, 0.05);
+  background-color: $theme_hover;
+  color: white;
+  border-color: transparent;
   box-shadow: none;
-  /* Ensure no GTK button shadow */
 }
 
 /* --- INDICATORS (Dots) --- */
@@ -286,9 +300,8 @@ window#app-grid-window,
 
 .cd-menu-separator {
   min-height: 1px;
-  margin: 6px 0;
-  background-color: rgba(255, 255, 255, 0.15);
-  /* Structure needs visibility */
+  margin: 6px 4px;
+  background-color: $theme_border;
 }
 
 .cd-menu-action {
@@ -296,23 +309,21 @@ window#app-grid-window,
   border-radius: 8px;
   min-width: 140px;
   margin-bottom: 2px;
-  /* Prevent ciumping */
   background: transparent;
-  /* Clean default state */
   transition: background-color 0.2s;
 }
 
 .cd-menu-action:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  /* Restore visual feedback */
+  background-color: $theme_hover;
+  color: white;
 }
 
 .cd-menu-header {
-  padding: 4px 12px;
+  padding: 8px 12px;
   margin-bottom: 4px;
-  font-size: 0.85em;
+  font-size: 0.9em;
   font-weight: bold;
-  opacity: 0.7;
+  color: $theme_fg_dim;
 }
 
 /* --- FINAL NUCLEAR CLEANUP: PREVENT DOUBLE BACKGROUNDS --- */
@@ -429,8 +440,17 @@ window.crystal-bar {
 .bar-status-btn:hover,
 .bar-time-btn:hover,
 .bar-util-btn:hover,
-.bar-tray-btn:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+.bar-tray-btn:hover,
+.bar-cockpit-btn:hover {
+  background-color: $theme_hover;
+  color: white;
+}
+
+.bar-cockpit-btn {
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 4px 12px;
 }
 
 .bar-tray {
@@ -566,11 +586,27 @@ window.crystal-bar {
 .cc-toggle {
   background-color: rgba(255, 255, 255, 0.05);
   border-radius: 16px;
-  padding: 12px 18px;
+  padding: 14px 20px;
+  transition: all 0.2s ease;
 }
 
 .cc-toggle.active {
   background-color: #007aff;
+}
+
+.cc-toggle-label {
+  font-weight: bold;
+  font-size: 1.05em;
+  color: white;
+}
+
+.cc-toggle-sublabel {
+  font-size: 0.85em;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.cc-toggle.active .cc-toggle-sublabel {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .cc-sliders,
@@ -827,22 +863,32 @@ window.workspace-cockpit {
 }
 
 /* Unified Menu Layout (Tray Only) */
+popover.bar-tray-menu contents {
+  background-color: $theme_bg;
+  padding: 8px;
+  border-radius: 14px;
+  border: 1px solid $theme_border;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
 popover.bar-tray-menu modelbutton {
-  padding: 8px 12px;
-  border-radius: 8px;
-  min-width: 140px;
-  margin-bottom: 2px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  min-width: 180px;
+  margin: 2px 4px;
   background: transparent;
-  transition: background-color 0.2s;
+  color: $theme_fg;
+  transition: all 0.2s ease;
 }
 
 popover.bar-tray-menu modelbutton:hover {
-  background-color: rgba(255, 255, 255, 0.1);
+  background-color: $theme_hover;
+  color: white;
 }
 
 popover.bar-tray-menu separator {
-  margin: 6px 0;
-  background-color: rgba(255, 255, 255, 0.15);
+  margin: 8px 4px;
+  background-color: $theme_border;
   min-height: 1px;
 }
 
@@ -851,4 +897,78 @@ popover.bar-tray-menu separator {
 #cd-icon-box-launcher image {
   color: #ffffff;
   -gtk-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+}
+
+/* --- 7. SYSTEM MONITORS 📊 --- */
+.bar-resources {
+  margin-right: 12px;
+}
+
+.bar-res-item {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 2px 10px;
+  transition: all 0.3s ease;
+}
+
+.bar-res-item:hover {
+  background-color: $theme_hover;
+}
+
+.bar-res-icon {
+  font-size: 14px;
+}
+
+.bar-res-icon.cpu {
+  color: #34c759;
+  /* Apple Success Green */
+}
+
+.bar-res-icon.ram {
+  color: #5856d6;
+  /* Apple Indigo */
+}
+
+.bar-res-label {
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+  min-width: 32px;
+}
+
+/* --- 8. AUDIO SINK SWITCHER 🔊 --- */
+.cc-audio-sinks {
+  margin-bottom: 16px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 20px;
+  padding: 16px;
+}
+
+.cc-section-title {
+  font-size: 0.9em;
+  font-weight: bold;
+  opacity: 0.6;
+  margin-bottom: 8px;
+  margin-left: 4px;
+}
+
+.cc-sink-item {
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: transparent;
+  transition: all 0.2s ease;
+}
+
+.cc-sink-item:hover {
+  background-color: $theme_hover;
+  color: white;
+}
+
+.cc-sink-item.active {
+  background-color: rgba(0, 122, 255, 0.2);
+  border: 1px solid rgba(0, 122, 255, 0.3);
+}
+
+.cc-sink-item label {
+  font-size: 0.95em;
 }
