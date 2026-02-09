@@ -114,9 +114,10 @@ interface DockItemProps {
 }
 
 export function DockItem(
-    { appId, appItem, updateDock, register, addresses = [], clientTitle, onPin, onUnpin, onReorder, isPinned, cleanId }: DockItemProps,
+    props: DockItemProps,
     referenceWidget?: Gtk.Widget
 ) {
+    let { appId, appItem, updateDock, register, addresses = [], clientTitle, onPin, onUnpin, onReorder, isPinned, cleanId } = props
     let rawId = "void"
     if (appItem.get_id) {
         rawId = appItem.get_id() || "void"
@@ -452,6 +453,7 @@ export function DockItem(
         }
 
         const isSpecialItem = appId === "launcher" || appId === "home-shortcut" || appId === "trash"
+        // console.log(`[DockItem] Rebuilding menu for ${appId}, isPinned: ${isPinned}, isSpecial: ${isSpecialItem}`)
         if (!isSpecialItem) {
             actions.push({
                 label: isPinned ? "Desanclar del dock" : "Mantener en el dock",
@@ -497,11 +499,7 @@ export function DockItem(
     const rightClick = new Gtk.GestureClick({ button: 3 })
     rightClick.connect("released", () => {
         rebuildMenu()
-        try {
-            const currentParent = popover.get_parent()
-            if (currentParent && currentParent !== iconBox) popover.unparent()
-            if (!popover.get_parent()) popover.set_parent(iconBox)
-        } catch (e) { }
+        // popover.set_parent is already done at creation
         popover.popup()
     })
     iconBox.add_controller(rightClick)
@@ -629,16 +627,14 @@ export function DockItem(
     })
     sync()
 
-        ; (itemBox as any).syncState = (newAddrs: string[], newTitle: string | undefined, newAppItem: any) => {
+        ; (itemBox as any).syncState = (newAddrs: string[], newTitle: string | undefined, newAppItem: any, newIsPinned: boolean) => {
+            addresses = newAddrs
+            clientTitle = newTitle
+            appItem = newAppItem
+            isPinned = newIsPinned
+
             state.addresses = newAddrs
             state.clientTitle = newTitle
-            appItem = newAppItem // Updates closure reference? No, arguments are copies.
-            // Be careful: 'appItem' in closure is bound on creation. 
-            // If we update state, we might need a way to refresh everything.
-            // Actually, the original code assigned `appItem = newAppItem` inside the syncState function 
-            // which was defined inside the main function scope, so it mutated the variable in that scope.
-            // Here we also do it, but let's ensure it works.
-            // Yes, JS closures allow mutation of outer variables.
 
             indicator.visible = newAddrs.length > 0
             if (newAddrs.length > 0) {

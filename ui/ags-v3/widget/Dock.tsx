@@ -318,361 +318,447 @@ export default function Dock(gdkmonitor: any) {
     layout.add_overlay(shim)
 
 
+    let updateLock = false
+    let needsUpdate = false
+
     const update = () => {
-        type ItemConfig = { id: string, width: number, syncData?: any, factory: (vc: number) => Gtk.Widget }
-        const configs: ItemConfig[] = []
-        const currentIds = new Set<string>()
-
-        const getOrCreateItem = (id: string, factory: () => Gtk.Widget) => {
-            currentIds.add(id)
-            if (widgetCache.has(id)) {
-                return widgetCache.get(id)!
-            }
-            const widget = factory()
-            const revealer = new (Gtk as any).Revealer({
-                css_classes: ["cd-revealer"],
-                transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT,
-                transition_duration: 300,
-                child: widget,
-                reveal_child: false
-            })
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { revealer.reveal_child = true; return GLib.SOURCE_REMOVE })
-            widgetCache.set(id, revealer)
-            return revealer
+        if (updateLock) {
+            needsUpdate = true
+            return bar
         }
+        updateLock = true
+        try {
+            needsUpdate = false
+            type ItemConfig = { id: string, width: number, syncData?: any, isPinned: boolean, factory: (vc: number) => Gtk.Widget }
+            const configs: ItemConfig[] = []
+            const currentIds = new Set<string>()
 
-        const groupedClients: { [key: string]: { addresses: string[], displayClass: string, title: string } } = {}
-        hypr.clients.forEach(c => {
-            const rawClass = c.class || ""
-            if (rawClass.toLowerCase().includes("ags")) return
-            const key = rawClass.toLowerCase()
-            if (!groupedClients[key]) {
-                groupedClients[key] = { addresses: [], displayClass: rawClass, title: c.title }
-            }
-            groupedClients[key].addresses.push(c.address)
-        })
-
-        const findApp = (searchId: string) => {
-            const lid = searchId.toLowerCase().replace(".desktop", "")
-            let app = appsService.list.find(a => {
-                const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase().replace(".desktop", "")
-                return aid === lid
-            })
-            if (!app) app = appsService.fuzzy_query(lid)?.[0]
-
-            if (!app) {
-                const data = appService.getAppData(lid)
-                if (data) {
-                    return {
-                        name: data.name,
-                        icon_name: data.icon || lid,
-                        id: data.id,
-                        get_id: () => data.id,
-                        get_name: () => data.name,
-                        launch: () => execAsync(`gtk-launch ${data.id}`).catch(print)
-                    } as any
+            const getOrCreateItem = (id: string, factory: () => Gtk.Widget) => {
+                currentIds.add(id)
+                if (widgetCache.has(id)) {
+                    return widgetCache.get(id)!
                 }
+                const widget = factory()
+                const revealer = new (Gtk as any).Revealer({
+                    css_classes: ["cd-revealer"],
+                    transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT,
+                    transition_duration: 300,
+                    child: widget,
+                    reveal_child: false
+                })
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { revealer.reveal_child = true; return GLib.SOURCE_REMOVE })
+                widgetCache.set(id, revealer)
+                return revealer
             }
-            return app
-        }
 
-        const getLaunch = (lid: string) => {
-            const app = appService.getAppData(lid)
-            const desktopId = app?.id || lid
-            return () => execAsync(`gtk-launch ${desktopId}`).catch(print)
-        }
+            // Dismantle popovers before update to prevent ghosting/hangs
+            widgetCache.forEach(w => {
+                const inner = (w as any).get_child()
+                if (inner && (inner as any).popdown) (inner as any).popdown()
+            })
 
-        // Logic for callbacks
-        const onPin = (sourceId: string) => {
-            pinnedList = pinnedList.filter(p => p.toLowerCase() !== sourceId)
-            pinnedList.unshift(sourceId)
-            savePinned(); update()
-        }
-        const onUnpin = (sourceId: string) => {
-            pinnedList = pinnedList.filter(p => p.toLowerCase() !== sourceId)
-            savePinned(); update()
-        }
-        const onReorder = (sourceId: string, targetId: string) => {
-            pinnedList = pinnedList.filter(p => p.toLowerCase() !== sourceId)
-            let newIdx = pinnedList.findIndex(p => p.toLowerCase() === targetId)
-            if (newIdx === -1) newIdx = pinnedList.length
-            pinnedList.splice(newIdx, 0, sourceId)
-            savePinned(); update()
-        }
-        const onDropSeparator = (sourceId: string) => {
-            pinnedList = pinnedList.filter(p => p.toLowerCase() !== sourceId)
-            pinnedList.push(sourceId)
-            savePinned(); update()
-        }
+            const groupedClients: { [key: string]: { addresses: string[], displayClass: string, title: string } } = {}
+            hypr.clients.forEach(c => {
+                const rawClass = c.class || ""
+                if (rawClass.toLowerCase().includes("ags")) return
+                const key = rawClass.toLowerCase()
+                if (!groupedClients[key]) {
+                    groupedClients[key] = { addresses: [], displayClass: rawClass, title: c.title }
+                }
+                groupedClients[key].addresses.push(c.address)
+            })
 
-        const userName = GLib.get_user_name()
-        const prettyName = userName.charAt(0).toUpperCase() + userName.slice(1)
+            const findApp = (searchId: string) => {
+                if (!searchId) return null
+                const lid = searchId.toLowerCase().replace(".desktop", "")
+                let app = appsService.list.find(a => {
+                    const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase().replace(".desktop", "")
+                    return aid === lid
+                })
 
-        const homeItem = {
-            name: prettyName,
-            icon_name: ["user-home", "folder-home", "folder"],
-            launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
-        }
-        configs.push({
-            id: "home-shortcut", width: DOCK_CONSTANTS.APP_SLOT,
-            syncData: { addrs: [], clientTitle: undefined, appItem: homeItem as any },
-            factory: (vc) => {
-                const w = DockItem({
-                    appId: "home-shortcut",
-                    appItem: homeItem as any,
-                    updateDock: update,
-                    register: (id, s) => animRegistry.set(id, s),
-                    addresses: [],
-                    clientTitle: undefined,
-                    onPin, onUnpin, onReorder,
-                    isPinned: true, // Special item logic handles actions
-                    cleanId: "home-shortcut"
-                }, bar)
-                if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
-                return w
+                if (!app && lid.includes(".")) {
+                    const parts = lid.split(".")
+                    const lastPart = parts[parts.length - 1]
+                    app = appsService.list.find(a => {
+                        const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase().replace(".desktop", "")
+                        return aid.includes(lastPart)
+                    })
+                }
+
+                if (!app) {
+                    const fuzzyList = [lid, lid.split(".").pop() || "", lid.replace("org.", "").replace("com.", "")]
+                    for (const f of fuzzyList) {
+                        app = appsService.fuzzy_query(f)?.[0]
+                        if (app) break
+                    }
+                }
+
+                // Specialized Telegram Match for EndeavourOS/Wayland
+                if (!app && (lid.includes("telegram") || lid.includes("tg"))) {
+                    app = appsService.list.find(a => {
+                        const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase()
+                        return aid.includes("telegram")
+                    })
+                }
+
+                if (!app) {
+                    const data = appService.getAppData(lid)
+                    if (data) {
+                        return {
+                            name: data.name,
+                            icon_name: data.icon || lid,
+                            id: data.id,
+                            get_id: () => data.id,
+                            get_name: () => data.name,
+                            launch: () => execAsync(`gtk-launch ${data.id || lid}`).catch(print)
+                        } as any
+                    }
+                }
+                return app
             }
-        })
 
-        const launcherItem = {
-            name: "Lanzador",
-            icon_name: ["view-app-grid-symbolic", "view-app-grid", "org.gnome.Shell.Apps-symbolic", "pan-start-symbolic"],
-            launch: () => { if ((globalThis as any).toggleAppGrid) (globalThis as any).toggleAppGrid() }
-        }
-        configs.push({
-            id: "launcher", width: DOCK_CONSTANTS.APP_SLOT,
-            syncData: { addrs: [], clientTitle: undefined, appItem: launcherItem as any },
-            factory: (vc) => {
-                const w = DockItem({
-                    appId: "launcher",
-                    appItem: launcherItem as any,
-                    updateDock: update,
-                    register: (id, s) => animRegistry.set(id, s),
-                    addresses: [],
-                    clientTitle: undefined,
-                    onPin, onUnpin, onReorder,
-                    isPinned: true,
-                    cleanId: "launcher"
-                }, bar)
-                if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
-                return w
+            const getLaunch = (lid: string) => {
+                const app = appService.getAppData(lid)
+                const desktopId = app?.id || lid
+                return () => execAsync(`gtk-launch ${desktopId}`).catch(print)
             }
-        })
 
-        pinnedList.filter(id => !!id).forEach(id => {
-            const lid = id.toLowerCase().replace(".desktop", "")
-            const originalId = id.replace(".desktop", "")
-            let appItem = findApp(id)
-            const targetKey = lid
-            const groupKey = Object.keys(groupedClients).find(k => k === targetKey || k.includes(targetKey))
-            let addrs: string[] = []
-            let clientTitle = undefined
+            // Logic for callbacks with normalization
+            const norm = (s: string) => s.toLowerCase().replace(".desktop", "")
+            const onPin = (sourceId: string) => {
+                const nid = norm(sourceId)
+                pinnedList = pinnedList.filter(p => norm(p) !== nid)
+                pinnedList.unshift(sourceId)
+                savePinned(); update()
+            }
+            const onUnpin = (sourceId: string) => {
+                const nid = norm(sourceId)
+                pinnedList = pinnedList.filter(p => norm(p) !== nid)
+                savePinned(); update()
+            }
+            const onReorder = (sourceId: string, targetId: string) => {
+                const nsid = norm(sourceId)
+                const ntid = norm(targetId)
+                pinnedList = pinnedList.filter(p => norm(p) !== nsid)
+                let newIdx = pinnedList.findIndex(p => norm(p) === ntid)
+                if (newIdx === -1) newIdx = pinnedList.length
+                pinnedList.splice(newIdx, 0, sourceId)
+                savePinned(); update()
+            }
+            const onDropSeparator = (sourceId: string) => {
+                const nid = norm(sourceId)
+                pinnedList = pinnedList.filter(p => norm(p) !== nid)
+                pinnedList.push(sourceId)
+                savePinned(); update()
+            }
 
-            if (groupKey && groupedClients[groupKey]) {
-                const group = groupedClients[groupKey]
-                addrs = group.addresses
-                clientTitle = group.title
-                delete groupedClients[groupKey]
+            const userName = GLib.get_user_name()
+            const prettyName = userName.charAt(0).toUpperCase() + userName.slice(1)
+
+            const homeItem = {
+                name: prettyName,
+                icon_name: ["user-home", "folder-home", "folder"],
+                launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
+            }
+            configs.push({
+                id: "home-shortcut", width: DOCK_CONSTANTS.APP_SLOT,
+                syncData: { addrs: [], clientTitle: undefined, appItem: homeItem as any },
+                isPinned: true,
+                factory: (vc) => {
+                    const w = DockItem({
+                        appId: "home-shortcut",
+                        appItem: homeItem as any,
+                        updateDock: update,
+                        register: (id, s) => animRegistry.set(id, s),
+                        addresses: [],
+                        clientTitle: undefined,
+                        onPin, onUnpin, onReorder,
+                        isPinned: true, // Special item logic handles actions
+                        cleanId: "home-shortcut"
+                    }, bar)
+                    if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                    return w
+                }
+            })
+
+            const launcherItem = {
+                name: "Lanzador",
+                icon_name: ["view-app-grid-symbolic", "view-app-grid", "org.gnome.Shell.Apps-symbolic", "pan-start-symbolic"],
+                launch: () => { if ((globalThis as any).toggleAppGrid) (globalThis as any).toggleAppGrid() }
+            }
+            configs.push({
+                id: "launcher", width: DOCK_CONSTANTS.APP_SLOT,
+                syncData: { addrs: [], clientTitle: undefined, appItem: launcherItem as any },
+                isPinned: true,
+                factory: (vc) => {
+                    const w = DockItem({
+                        appId: "launcher",
+                        appItem: launcherItem as any,
+                        updateDock: update,
+                        register: (id, s) => animRegistry.set(id, s),
+                        addresses: [],
+                        clientTitle: undefined,
+                        onPin, onUnpin, onReorder,
+                        isPinned: true,
+                        cleanId: "launcher"
+                    }, bar)
+                    if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                    return w
+                }
+            })
+
+            pinnedList.filter(id => !!id).forEach(id => {
+                const lid = id.toLowerCase().replace(".desktop", "")
+                const originalId = id.replace(".desktop", "")
+                let appItem = findApp(id)
+                const targetKey = lid
+                const groupKey = Object.keys(groupedClients).find(k =>
+                    k === targetKey || k.includes(targetKey) || targetKey.includes(k)
+                )
+                let addrs: string[] = []
+                let clientTitle = undefined
+
+                if (groupKey && groupedClients[groupKey]) {
+                    const group = groupedClients[groupKey]
+                    addrs = group.addresses
+                    clientTitle = group.title
+                    delete groupedClients[groupKey]
+                    if (!appItem) {
+                        appItem = {
+                            name: clientTitle || group.displayClass,
+                            icon_name: originalId || group.displayClass || lid,
+                            launch: getLaunch(lid)
+                        } as any
+                    }
+                    if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
+                        if (typeof appItem.icon_name === "string") {
+                            appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default");
+                        }
+                    }
+                }
+
+                if (appItem) {
+                    if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
+                        // @ts-ignore
+                        appItem.icon_name = originalId.replace(/-default$/i, "-Default")
+                    }
+                    configs.push({
+                        id: lid, width: DOCK_CONSTANTS.APP_SLOT,
+                        syncData: { addrs, clientTitle, appItem: appItem! },
+                        isPinned: true,
+                        factory: (vc) => {
+                            const w = DockItem({
+                                appId: lid,
+                                appItem: appItem!,
+                                updateDock: update,
+                                register: (id, s) => animRegistry.set(id, s),
+                                addresses: addrs,
+                                clientTitle: clientTitle,
+                                onPin, onUnpin, onReorder,
+                                isPinned: true,
+                                cleanId: lid
+                            }, bar)
+                            if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                            return w
+                        }
+                    })
+                } else {
+                    const info = appService.getAppInfo(lid)
+                    const displayName = info?.get_name() || lid
+                    let icon = info?.get_id() || originalId
+                    if (lid.startsWith("chrome-") && lid.endsWith("-default") && typeof icon === "string") {
+                        icon = icon.replace(/-default$/i, "-Default")
+                    }
+                    const ghost = { name: displayName, icon_name: icon, launch: getLaunch(lid) } as any
+                    configs.push({
+                        id: lid, width: DOCK_CONSTANTS.APP_SLOT,
+                        syncData: { addrs: [], clientTitle: undefined, appItem: ghost },
+                        isPinned: true,
+                        factory: (vc) => {
+                            const w = DockItem({
+                                appId: lid,
+                                appItem: ghost,
+                                updateDock: update,
+                                register: (id, s) => animRegistry.set(id, s),
+                                addresses: [],
+                                clientTitle: undefined,
+                                onPin, onUnpin, onReorder,
+                                isPinned: true,
+                                cleanId: lid
+                            }, bar)
+                            if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                            return w
+                        }
+                    })
+                }
+            })
+
+            const runKeys = Object.keys(groupedClients)
+            runKeys.forEach(k => {
+                const group = groupedClients[k]
+                let appItem = findApp(group.displayClass)
+                const lid = k.toLowerCase().replace(".desktop", "")
                 if (!appItem) {
                     appItem = {
-                        name: clientTitle || group.displayClass,
-                        icon_name: originalId || group.displayClass || lid,
+                        name: group.title || group.displayClass,
+                        icon_name: group.displayClass || lid,
                         launch: getLaunch(lid)
                     } as any
                 }
                 if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
                     if (typeof appItem.icon_name === "string") {
-                        appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default");
+                        appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default")
                     }
-                }
-            }
-
-            if (appItem) {
-                if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
-                    // @ts-ignore
-                    appItem.icon_name = originalId.replace(/-default$/i, "-Default")
                 }
                 configs.push({
                     id: lid, width: DOCK_CONSTANTS.APP_SLOT,
-                    syncData: { addrs, clientTitle, appItem: appItem! },
+                    syncData: { addrs: group.addresses, clientTitle: group.title, appItem: appItem! },
+                    isPinned: false,
                     factory: (vc) => {
                         const w = DockItem({
                             appId: lid,
                             appItem: appItem!,
                             updateDock: update,
                             register: (id, s) => animRegistry.set(id, s),
-                            addresses: addrs,
-                            clientTitle: clientTitle,
+                            addresses: group.addresses,
+                            clientTitle: group.title,
                             onPin, onUnpin, onReorder,
-                            isPinned: true,
+                            isPinned: false,
                             cleanId: lid
                         }, bar)
                         if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                         return w
                     }
                 })
-            } else {
-                const info = appService.getAppInfo(lid)
-                const displayName = info?.get_name() || lid
-                let icon = info?.get_id() || originalId
-                if (lid.startsWith("chrome-") && lid.endsWith("-default") && typeof icon === "string") {
-                    icon = icon.replace(/-default$/i, "-Default")
-                }
-                const ghost = { name: displayName, icon_name: icon, launch: getLaunch(lid) } as any
-                configs.push({
-                    id: lid, width: DOCK_CONSTANTS.APP_SLOT,
-                    syncData: { addrs: [], clientTitle: undefined, appItem: ghost },
-                    factory: (vc) => {
-                        const w = DockItem({
-                            appId: lid,
-                            appItem: ghost,
-                            updateDock: update,
-                            register: (id, s) => animRegistry.set(id, s),
-                            addresses: [],
-                            clientTitle: undefined,
-                            onPin, onUnpin, onReorder,
-                            isPinned: true,
-                            cleanId: lid
-                        }, bar)
-                        if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
-                        return w
-                    }
-                })
-            }
-        })
+            })
 
-        const runKeys = Object.keys(groupedClients)
-        runKeys.forEach(k => {
-            const group = groupedClients[k]
-            let appItem = findApp(group.displayClass)
-            const lid = k.toLowerCase().replace(".desktop", "")
-            if (!appItem) {
-                appItem = {
-                    name: group.title || group.displayClass,
-                    icon_name: group.displayClass || lid,
-                    launch: getLaunch(lid)
-                } as any
-            }
-            if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
-                if (typeof appItem.icon_name === "string") {
-                    appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default")
+            configs.push({
+                id: "sep-trash", width: DOCK_CONSTANTS.SEPARATOR_SLOT,
+                syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
+                isPinned: true,
+                factory: (vc) => {
+                    const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 64, onDropSeparator)
+                    if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                    return w
                 }
+            })
+
+            const trash = {
+                name: "Papelera",
+                icon_name: ["user-trash", "trashcan-empty", "trash"],
+                launch: () => execAsync("nautilus trash:///").catch(print)
             }
             configs.push({
-                id: lid, width: DOCK_CONSTANTS.APP_SLOT,
-                syncData: { addrs: group.addresses, clientTitle: group.title, appItem: appItem! },
+                id: "trash", width: DOCK_CONSTANTS.APP_SLOT,
+                syncData: { addrs: [], clientTitle: undefined, appItem: trash as any },
+                isPinned: true,
                 factory: (vc) => {
                     const w = DockItem({
-                        appId: lid,
-                        appItem: appItem!,
+                        appId: "trash",
+                        appItem: trash as any,
                         updateDock: update,
                         register: (id, s) => animRegistry.set(id, s),
-                        addresses: group.addresses,
-                        clientTitle: group.title,
+                        addresses: [],
+                        clientTitle: undefined,
                         onPin, onUnpin, onReorder,
-                        isPinned: false,
-                        cleanId: lid
+                        isPinned: true, // Special
+                        cleanId: "trash"
                     }, bar)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
                 }
             })
-        })
 
-        configs.push({
-            id: "sep-trash", width: DOCK_CONSTANTS.SEPARATOR_SLOT,
-            syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
-            factory: (vc) => {
-                const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 64, onDropSeparator)
-                if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
-                return w
+            const count = configs.length
+            totalStaticWidth = configs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
+            const totalWidth = totalStaticWidth
+
+            const screenWidth = gdkmonitor.get_geometry().width
+            const startX = (screenWidth - totalWidth) / 2
+
+            let currentX = startX
+            // Ensure NO DUPLICATE IDs in final mapping
+            const processed = new Set<string>()
+            const finalItems = configs.filter(c => {
+                if (processed.has(c.id)) return false
+                processed.add(c.id); return true
+            }).map((c) => {
+                const slotWidth = c.width || DOCK_CONSTANTS.APP_SLOT
+                const myCenter = currentX + (slotWidth / 2)
+                currentX += slotWidth
+
+                const widget = getOrCreateItem(c.id, () => c.factory(myCenter))
+                const inner = (widget as any).get_child()
+                if (inner && (inner as any).setVirtualCenter) (inner as any).setVirtualCenter(myCenter)
+
+                if (inner && (inner as any).syncState && (c as any).syncData) {
+                    const d = (c as any).syncData
+                        ; (inner as any).syncState(d.addrs, d.clientTitle, d.appItem, c.isPinned)
+                }
+                return widget
+            })
+
+            for (const [id, w] of widgetCache) {
+                if (!currentIds.has(id)) {
+                    widgetCache.delete(id)
+                    animRegistry.delete(id)
+                }
             }
-        })
 
-        const trash = {
-            name: "Papelera",
-            icon_name: ["user-trash", "trashcan-empty", "trash"],
-            launch: () => execAsync("nautilus trash:///").catch(print)
+            // Surgical Reordering without destruction
+            let currentChild = bar.get_first_child()
+            let prevSibling: Gtk.Widget | null = null
+            finalItems.forEach(item => {
+                if (currentChild !== item) {
+                    if (item.get_parent()) item.unparent()
+                    bar.insert_child_after(item, prevSibling)
+                }
+                prevSibling = item
+                currentChild = item ? (item as any).get_next_sibling() : null
+            })
+
+            // Remove lingering
+            const finalSet = new Set(finalItems)
+            let c = bar.get_first_child()
+            while (c) {
+                const next = c.get_next_sibling()
+                if (!finalSet.has(c)) bar.remove(c)
+                c = next
+            }
+
+            let totalCurrentWidth = 0
+            animRegistry.forEach((state, id) => {
+                const metrics = calculateDockItemMetrics(-1000, state.staticCenter, state.isSeparator)
+                state.targetScale = metrics.scale
+                state.targetWidth = metrics.width
+                state.targetMargin = metrics.margin
+                // Force immediate for first frame
+                state.currentScale = metrics.scale
+                state.currentWidth = metrics.width
+                state.currentMargin = metrics.margin
+                totalCurrentWidth += state.currentWidth + (state.currentMargin * 2)
+            })
+
+            // Sync alignment to prevent "bad load" shift
+            smoothedBarWidth = totalCurrentWidth
+            const monitorWidth = gdkmonitor.get_geometry().width
+            const manualMarginStart = Math.round((monitorWidth - smoothedBarWidth) / 2)
+            bar.margin_start = manualMarginStart
+
+            if (!tickId) runUnifiedTick()
+            updateAllTargets(-1000)
+            updateSize()
+            return bar
+        } catch (e) {
+            console.error("[Dock] Update error:", e)
+            return bar
+        } finally {
+            updateLock = false
+            if (needsUpdate) {
+                needsUpdate = false
+                GLib.timeout_add(GLib.PRIORITY_LOW, 100, () => { update(); return GLib.SOURCE_REMOVE })
+            }
         }
-        configs.push({
-            id: "trash", width: DOCK_CONSTANTS.APP_SLOT,
-            syncData: { addrs: [], clientTitle: undefined, appItem: trash as any },
-            factory: (vc) => {
-                const w = DockItem({
-                    appId: "trash",
-                    appItem: trash as any,
-                    updateDock: update,
-                    register: (id, s) => animRegistry.set(id, s),
-                    addresses: [],
-                    clientTitle: undefined,
-                    onPin, onUnpin, onReorder,
-                    isPinned: true, // Special
-                    cleanId: "trash"
-                }, bar)
-                if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
-                return w
-            }
-        })
-
-        const count = configs.length
-        totalStaticWidth = configs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
-        const totalWidth = totalStaticWidth
-
-        const screenWidth = gdkmonitor.get_geometry().width
-        const startX = (screenWidth - totalWidth) / 2
-
-        let currentX = startX
-        const finalItems = configs.map((c) => {
-            const slotWidth = c.width || DOCK_CONSTANTS.APP_SLOT
-            const myCenter = currentX + (slotWidth / 2)
-            currentX += slotWidth
-
-            const widget = getOrCreateItem(c.id, () => c.factory(myCenter))
-            const inner = (widget as any).get_child()
-            if (inner && (inner as any).setVirtualCenter) (inner as any).setVirtualCenter(myCenter)
-
-            if (inner && (inner as any).syncState && (c as any).syncData) {
-                const d = (c as any).syncData
-                    ; (inner as any).syncState(d.addrs, d.clientTitle, d.appItem)
-            }
-            return widget
-        })
-
-        for (const [id, w] of widgetCache) {
-            if (!currentIds.has(id)) {
-                widgetCache.delete(id)
-                animRegistry.delete(id)
-            }
-        }
-
-        let widthError = 0
-        let marginError = 0
-        let lastWidget: Gtk.Revealer | null = null
-
-        animRegistry.forEach((state, id) => {
-            state.targetScale = 1.0
-            if (state.isSeparator) {
-                state.targetWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.targetMargin = 0
-            } else {
-                state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.targetMargin = DOCK_CONSTANTS.BASE_MARGIN
-            }
-            state.currentScale = 1.0
-            state.currentWidth = state.targetWidth
-            state.currentMargin = state.targetMargin
-        })
-
-        if (!tickId) runUnifiedTick()
-        updateAllTargets(-1000)
-        runUnifiedTick()
-
-        const currentChildren = [] as Gtk.Widget[]
-        let child = bar.get_first_child()
-        while (child) { currentChildren.push(child); child = child.get_next_sibling() }
-
-        currentChildren.forEach(c => bar.remove(c))
-        finalItems.forEach(i => bar.append(i))
-
-        updateSize()
-        return bar
     }
 
     const monitorWidth = gdkmonitor.get_geometry().width
@@ -728,25 +814,17 @@ export default function Dock(gdkmonitor: any) {
         } catch (e) { console.error(e) }
     }
 
-    const cConn = hypr.connect("notify::clients", update)
-    const fConn = hypr.connect("notify::focused-client", () => {
-        update()
-        const focusedAddr = hypr.focusedClient?.address
-        animRegistry.forEach((state, id) => {
-            const widget = state.widget
-            if (widget && (widget as any).syncState) {
-                const currentAddrs = (state as any).addresses || []
-                if (currentAddrs.length > 0) {
-                    if (focusedAddr && currentAddrs.includes(focusedAddr)) {
-                        widget.add_css_class("focused")
-                    } else {
-                        widget.remove_css_class("focused")
-                    }
-                }
-            }
+    let updateTimer: number | null = null
+    const throttledUpdate = () => {
+        if (updateTimer) GLib.source_remove(updateTimer)
+        updateTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+            update(); updateTimer = null; return GLib.SOURCE_REMOVE
         })
-    })
-    const aConn = appService.connect(update)
+    }
+
+    const cConn = hypr.connect("notify::clients", throttledUpdate)
+    const fConn = hypr.connect("notify::focused-client", throttledUpdate)
+    const aConn = appService.connect(throttledUpdate)
     win.connect("destroy", () => {
         // V84: Aggressive Cleanup to prevent "failed to find wayland buffer"
         if (tickId) {
