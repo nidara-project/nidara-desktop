@@ -153,8 +153,7 @@ window#crystal-dock box.cd-drag-gap,
   padding: 0;
   background-color: transparent;
   transition: none;
-  /* Physics controls transform/size */
-  transform-origin: bottom center;
+  /* transform-origin removed to fix potential parser error */
 }
 
 /* --- SQUIRCLE ICON PLATES (Phase 72: Specificity over Force) --- */
@@ -193,6 +192,10 @@ window#crystal-dock box.cd-squircle-plate drawingarea {
 
 /* --- STABILITY & THEME: Dock Menu --- */
 /* User requested: Let GTK define background (White), we define contrast hover */
+.cd-popover {
+  transition: none;
+  /* V82: Prevent ghosting/flicker on dismiss */
+}
 
 /* Boost specificity to override default GTK button theme */
 button.cd-menu-action:hover {

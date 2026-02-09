@@ -747,8 +747,14 @@ export default function Dock(gdkmonitor: any) {
         })
     })
     const aConn = appService.connect(update)
-    bar.connect("destroy", () => {
+    win.connect("destroy", () => {
+        // V84: Aggressive Cleanup to prevent "failed to find wayland buffer"
+        if (tickId) {
+            bar.remove_tick_callback(tickId)
+            tickId = null
+        }
         hypr.disconnect(cConn)
+        hypr.disconnect(fConn)
         aConn()
     })
 
