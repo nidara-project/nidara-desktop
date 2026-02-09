@@ -358,7 +358,8 @@ export default function Dock(gdkmonitor: any) {
             })
 
             const groupedClients: { [key: string]: { addresses: string[], displayClass: string, title: string } } = {}
-            hypr.clients.forEach(c => {
+            const sortedClients = [...hypr.clients].sort((a, b) => a.address.localeCompare(b.address))
+            sortedClients.forEach(c => {
                 const rawClass = c.class || ""
                 if (rawClass.toLowerCase().includes("ags")) return
                 const key = rawClass.toLowerCase()
