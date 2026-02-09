@@ -424,13 +424,13 @@ export function DockItem(
             desktopActions = gAppInfo.list_actions()
         }
 
-        if (appId === "launcher") {
+        if (appId === "launcher" || appId === "special:launcher") {
             actions.push({ label: "Abrir", action: () => appItem.launch() })
             actions.push({ separator: true })
-        } else if (appId === "home-shortcut") {
+        } else if (appId === "home-shortcut" || appId === "special:home") {
             actions.push({ label: "Abrir", action: () => appItem.launch() })
             actions.push({ separator: true })
-        } else if (appId === "trash") {
+        } else if (appId === "trash" || appId === "special:trash") {
             actions.push({ label: "Abrir", action: () => appItem.launch() })
             actions.push({ label: "Vaciar Papelera", action: () => execAsync("gio trash --empty").catch(print) })
             actions.push({ separator: true })
