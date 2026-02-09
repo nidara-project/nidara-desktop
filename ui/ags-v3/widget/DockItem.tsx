@@ -452,7 +452,7 @@ export function DockItem(
             actions.push({ separator: true })
         }
 
-        const isSpecialItem = appId === "launcher" || appId === "home-shortcut" || appId === "trash"
+        const isSpecialItem = appId.startsWith("special:") || appId === "launcher" || appId === "home-shortcut" || appId === "trash"
         // console.log(`[DockItem] Rebuilding menu for ${appId}, isPinned: ${isPinned}, isSpecial: ${isSpecialItem}`)
         if (!isSpecialItem) {
             actions.push({
@@ -561,11 +561,11 @@ export function DockItem(
             if (!sourceId || sourceId === "void") return false
 
             // Logic delegated to callbacks
-            if (appItem.name === "Papelera" || targetId.includes("user-trash")) {
+            if (appItem.name === "Papelera" || targetId.includes("trash")) {
                 onUnpin(sourceId)
                 return true
             }
-            if (appItem.name === "Angel" || targetId.includes("user-home")) {
+            if (appItem.name === "Angel" || targetId.includes("home-shortcut")) {
                 onPin(sourceId)
                 return true
             }

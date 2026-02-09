@@ -59,8 +59,11 @@ const mouseBus = {
 }
 
 export default function Dock(gdkmonitor: any) {
-    let totalStaticWidth = 400
+    // V180: Sync initial width with pinned items to prevent "One-Time Jump" on startup
+    const initialCount = pinnedList.length + 3 // Launcher + Home + Trash
+    let totalStaticWidth = initialCount * 82
     const widgetCache = new Map<string, Gtk.Widget>()
+    let firstRender = true
 
     // Create Layout First
     const layout = new Gtk.Overlay({
@@ -79,7 +82,7 @@ export default function Dock(gdkmonitor: any) {
         can_focus: false,
         can_target: true,
         resizable: false,
-        default_height: 120,
+        default_height: 120, // Reverted per user request
     })
     win.set_child(layout)
     const bar = new Gtk.Box({
@@ -102,7 +105,7 @@ export default function Dock(gdkmonitor: any) {
         widget?: Gtk.Widget
     }
     const animRegistry = new Map<string, AnimState>()
-    let smoothedBarWidth = 200
+    let smoothedBarWidth = totalStaticWidth
 
     const lerp = (start: number, end: number, factor: number) => start + (end - start) * factor
 
@@ -264,23 +267,47 @@ export default function Dock(gdkmonitor: any) {
 
         const monitorWidth = gdkmonitor.get_geometry().width
         const region = new Cairo.Region()
-        const yOffset = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT - 10
+
+        // V300: Surgical Input Region for 200px window.
+        // The window is 200px high to allow icon magnification, but we ONLY 
+        // capture mouse events in the bottom 110px (Dock area).
+        const width = totalWidth + 80
+        const x = (monitorWidth - width) / 2
+        const y = 200 - 110
+
         // @ts-ignore
-        region.unionRectangle({ x: 0, y: yOffset, width: monitorWidth, height: DOCK_CONSTANTS.PILL_HEIGHT })
+        region.unionRectangle({ x: Math.round(x), y: Math.round(y), width: Math.round(width), height: 110 })
         surface.set_input_region(region)
+    }
+
+    let leaveTimeout: number | null = null
+    const clearLeaveTimeout = () => {
+        if (leaveTimeout) {
+            GLib.source_remove(leaveTimeout)
+            leaveTimeout = null
+        }
     }
 
     win.add_controller(motion)
     motion.connect("motion", (controller, x, y) => {
-        const yOffset = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT - 10
-        if (y < yOffset) {
+        clearLeaveTimeout() // V160: Cancel any pending leave reset
+        // V215: Correct for 200px window height. 
+        // We only magnify if the mouse is in the bottom 110px.
+        const yLimit = 200 - 110
+        if (y < yLimit) {
             updateAllTargets(-1000)
             return
         }
         updateAllTargets(x)
     })
     motion.connect("leave", () => {
-        updateAllTargets(-1000)
+        // V160: Debounce leave event to prevent flicker when resizing or crossing gaps
+        clearLeaveTimeout()
+        leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+            updateAllTargets(-1000)
+            leaveTimeout = null
+            return GLib.SOURCE_REMOVE
+        })
     })
 
     const da = new Gtk.DrawingArea({
@@ -298,8 +325,15 @@ export default function Dock(gdkmonitor: any) {
     })
 
     const updateSize = () => {
-        const w = smoothedBarWidth + 18
-        da.set_size_request(w, DOCK_CONSTANTS.PILL_HEIGHT)
+        const targetW = smoothedBarWidth + 18
+        const currentW = da.get_allocated_width()
+        // V141: Only resize if significant change (>1px) to prevent Wayland buffer thrashing / jitter
+        if (Math.abs(currentW - targetW) > 1) {
+            da.set_size_request(targetW, DOCK_CONSTANTS.PILL_HEIGHT)
+            da.queue_draw()
+        } else {
+            da.queue_draw() // Just redraw if size is close enough
+        }
     }
 
     const shim = new Gtk.Box({
@@ -344,11 +378,18 @@ export default function Dock(gdkmonitor: any) {
                     transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT,
                     transition_duration: 300,
                     child: widget,
-                    reveal_child: false
+                    reveal_child: firstRender // V150: Instant show on startup
                 })
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { revealer.reveal_child = true; return GLib.SOURCE_REMOVE })
+                if (!firstRender) {
+                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { revealer.reveal_child = true; return GLib.SOURCE_REMOVE })
+                }
                 widgetCache.set(id, revealer)
                 return revealer
+            }
+
+            // V150: Mark first render complete after this batch
+            if (firstRender) {
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => { firstRender = false; return GLib.SOURCE_REMOVE })
             }
 
             // Dismantle popovers before update to prevent ghosting/hangs
@@ -508,7 +549,7 @@ export default function Dock(gdkmonitor: any) {
                 }
             })
 
-            pinnedList.filter(id => !!id).forEach(id => {
+            pinnedList.filter(id => !!id && !id.startsWith("special:") && id !== "trash" && id !== "launcher").forEach(id => {
                 const lid = id.toLowerCase().replace(".desktop", "")
                 const originalId = id.replace(".desktop", "")
                 let appItem = findApp(id)
@@ -650,20 +691,20 @@ export default function Dock(gdkmonitor: any) {
                 launch: () => execAsync("nautilus trash:///").catch(print)
             }
             configs.push({
-                id: "trash", width: DOCK_CONSTANTS.APP_SLOT,
+                id: "special:trash", width: DOCK_CONSTANTS.APP_SLOT,
                 syncData: { addrs: [], clientTitle: undefined, appItem: trash as any },
                 isPinned: true,
                 factory: (vc) => {
                     const w = DockItem({
-                        appId: "trash",
+                        appId: "special:trash",
                         appItem: trash as any,
                         updateDock: update,
                         register: (id, s) => animRegistry.set(id, s),
                         addresses: [],
                         clientTitle: undefined,
-                        onPin, onUnpin, onReorder,
+                        onPin: () => { }, onUnpin: () => { }, onReorder: () => { }, // Special: No interactions
                         isPinned: true, // Special
-                        cleanId: "trash"
+                        cleanId: "special:trash"
                     }, bar)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
@@ -729,25 +770,30 @@ export default function Dock(gdkmonitor: any) {
 
             let totalCurrentWidth = 0
             animRegistry.forEach((state, id) => {
-                const metrics = calculateDockItemMetrics(-1000, state.staticCenter, state.isSeparator)
+                const metrics = calculateDockItemMetrics(lastMouseX, state.staticCenter, state.isSeparator)
                 state.targetScale = metrics.scale
                 state.targetWidth = metrics.width
                 state.targetMargin = metrics.margin
-                // Force immediate for first frame
-                state.currentScale = metrics.scale
-                state.currentWidth = metrics.width
-                state.currentMargin = metrics.margin
+
+                if (firstRender) {
+                    // Force immediate only for first frame
+                    state.currentScale = metrics.scale
+                    state.currentWidth = metrics.width
+                    state.currentMargin = metrics.margin
+                }
                 totalCurrentWidth += state.currentWidth + (state.currentMargin * 2)
             })
 
-            // Sync alignment to prevent "bad load" shift
-            smoothedBarWidth = totalCurrentWidth
-            const monitorWidth = gdkmonitor.get_geometry().width
-            const manualMarginStart = Math.round((monitorWidth - smoothedBarWidth) / 2)
-            bar.margin_start = manualMarginStart
+            // Sync alignment to prevent "bad load" shift - ONLY on first load
+            if (firstRender) {
+                smoothedBarWidth = totalCurrentWidth
+                const monitorWidth = gdkmonitor.get_geometry().width
+                const manualMarginStart = Math.round((monitorWidth - smoothedBarWidth) / 2)
+                bar.margin_start = manualMarginStart
+            }
 
             if (!tickId) runUnifiedTick()
-            updateAllTargets(-1000)
+            updateAllTargets(lastMouseX)
             updateSize()
             return bar
         } catch (e) {
@@ -763,7 +809,7 @@ export default function Dock(gdkmonitor: any) {
     }
 
     const monitorWidth = gdkmonitor.get_geometry().width
-    win.set_default_size(monitorWidth, 200)
+    win.set_default_size(monitorWidth, 200) // V300: High window prevents icon clipping
     let layerInit = false
     try {
         Gtk4LayerShell.init_for_window(win)
@@ -771,7 +817,6 @@ export default function Dock(gdkmonitor: any) {
     } catch (e) {
         console.warn("Gtk4LayerShell init failed (not on Wayland?): " + e)
     }
-
     win.set_size_request(monitorWidth, 200)
     win.set_decorated(false)
 
@@ -802,14 +847,15 @@ export default function Dock(gdkmonitor: any) {
             Gtk4LayerShell.set_exclusive_zone(win, DOCK_CONSTANTS.EXCLUSIVE_ZONE);
 
             win.connect("realize", () => {
-                const surface = win.get_native()?.get_surface()
-                if (surface) {
-                    const monitorWidth = gdkmonitor.get_geometry().width
-                    const region = new Cairo.Region()
-                    const yOffset = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT - 10
-                    // @ts-ignore
-                    region.unionRectangle({ x: 0, y: yOffset, width: monitorWidth, height: DOCK_CONSTANTS.PILL_HEIGHT })
-                    surface.set_input_region(region)
+                // V300: Delegate to surgical updateInputRegion on realize
+                if (animRegistry.size > 0) {
+                    let total = 0
+                    for (const s of animRegistry.values()) {
+                        total += s.currentWidth + (s.currentMargin * 2)
+                    }
+                    updateInputRegion(total)
+                } else {
+                    updateInputRegion(totalStaticWidth)
                 }
             })
         } catch (e) { console.error(e) }
@@ -838,9 +884,7 @@ export default function Dock(gdkmonitor: any) {
     })
 
     update()
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { update(); return GLib.SOURCE_REMOVE })
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => { update(); return GLib.SOURCE_REMOVE })
-
+    // V197: Redundant late-update timeouts removed. initialCount logic handles it.
     win.present()
     return win
 }
