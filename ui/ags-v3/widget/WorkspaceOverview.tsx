@@ -1,3 +1,4 @@
+import GObject from "gi://GObject"
 import { Astal, Gtk, Gdk } from "ags/gtk4"
 import AstalHyprland from "gi://AstalHyprland"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
@@ -10,21 +11,23 @@ import appService from "../core/AppService"
 const BASE_WIDTH = 300
 const BASE_HEIGHT = 170
 
-/**
- * Schematic Map V5 🗺️
- * Simplified Edition - Focusing on Layout & Icons.
- */
+// V7.27: Constant Physical Architecture �️
+const MonitorCache = new Map<string, { w: number, h: number }>()
+const REFRESH_RATE = 500 // Generic heartbeat
 function SchematicMap(wsId: number, hyprland: any) {
     const wrapper = new Gtk.Box({
         css_classes: ["wo-schematic-preview"],
-        width_request: BASE_WIDTH,
-        height_request: BASE_HEIGHT
+        halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER,
+        // No hardcoded size, let sync() handle it! 🛡️📐
     })
 
     const fixed = new Gtk.Fixed({
         css_classes: ["wo-schematic-container"],
-        hexpand: true,
-        vexpand: true,
+        hexpand: false,
+        vexpand: false,
+        halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER
     }) as any
 
     fixed.set_overflow(Gtk.Overflow.HIDDEN)
@@ -35,9 +38,14 @@ function SchematicMap(wsId: number, hyprland: any) {
     fixed.winWidgets = new Map<string, { box: Gtk.Box, icon: Gtk.Image }>()
     fixed.cachedDrawHeight = BASE_HEIGHT
 
-    fixed.sync = function () {
-        const monitors = this.hyprland.get_monitors() || []
-        const workspaces = this.hyprland.get_workspaces() || []
+    const barArea = new Gtk.Box({ css_classes: ["wo-reserved-area", "bar"] })
+    const dockArea = new Gtk.Box({ css_classes: ["wo-reserved-area", "dock"] })
+    fixed.put(barArea, 0, 0)
+    fixed.put(dockArea, 0, 0)
+    fixed.barArea = barArea
+    fixed.dockArea = dockArea
+
+    fixed.sync = function (workspaces: any[], monitors: any[], clients: any[]) {
         const ws = workspaces.find((w: any) => w.id === this.wsId)
         const focusedWs = this.hyprland.focused_workspace
 
@@ -48,58 +56,82 @@ function SchematicMap(wsId: number, hyprland: any) {
 
         if (!hMonitor || !hMonitor.width) return
 
-        // V7.8: Absolute Ground Truth via GDK Coordinates 🛰️
+        // V7.27: Geometric Unity 🛰️
+        // We recover physical truth from Cache or GDK once.
         let physW = hMonitor.width
         let physH = hMonitor.height
 
-        try {
-            const gdkMonitors = Gdk.Display.get_default()?.get_monitors()
-            for (let i = 0; i < (gdkMonitors?.get_n_items() || 0); i++) {
-                const gm = gdkMonitors?.get_item(i) as Gdk.Monitor
-                const geom = gm.get_geometry()
-                // Match by absolute coordinates (x, y) - This is the most robust way 🛡️
-                if (geom.x === (hMonitor.x || 0) && geom.y === (hMonitor.y || 0)) {
-                    physW = geom.width
-                    physH = geom.height
-                    break
-                }
-            }
-        } catch (e) { }
+        const cached = MonitorCache.get(hMonitor.name || "default")
+        if (cached) {
+            physW = cached.w
+            physH = cached.h
+        } else {
+            try {
+                const gdkMonitors = Gdk.Display.get_default()?.get_monitors()
+                let bestMatch = null
+                let minDist = Infinity
 
-        // Secondary fallback: Add back reserved margins if GDK fails
-        if (physH === hMonitor.height && (hMonitor as any).reserved) {
-            const res = (hMonitor as any).reserved
-            physH += (res[0] || 0) + (res[1] || 0) // top + bottom
-            physW += (res[2] || 0) + (res[3] || 0) // left + right
+                for (let i = 0; i < (gdkMonitors?.get_n_items() || 0); i++) {
+                    const gm = gdkMonitors?.get_item(i) as Gdk.Monitor
+                    const geom = gm.get_geometry()
+                    const dx = geom.x - (hMonitor.x || 0)
+                    const dy = geom.y - (hMonitor.y || 0)
+                    const dist = Math.sqrt(dx * dx + dy * dy)
+                    if (dist < minDist) {
+                        minDist = dist
+                        bestMatch = geom
+                    }
+                }
+
+                if (bestMatch && minDist < 100) {
+                    physW = bestMatch.width
+                    physH = bestMatch.height
+                    MonitorCache.set(hMonitor.name || "default", { w: physW, h: physH })
+                }
+            } catch (e) { }
         }
 
-        let logicalW = Math.max(100, physW / (hMonitor.scale || 1))
-        let logicalH = Math.max(100, physH / (hMonitor.scale || 1))
+        // Rigid normalization fallback (2K / 1080p standards)
+        if (physH > 1000 && physH < 1500) physH = 1440;
+        if (physH > 800 && physH <= 1000) physH = 1080;
+        if (physW > 3000) physW = 3840;
+        else if (physW > 2000) physW = 2560;
+        else if (physW > 1800) physW = 1920;
 
-        // V7.3: Absolute Scaling Reference 🎯
+        // V7.28: Immutable Aspect Ratio (Force 16:9 ground truth) 📐
+        const ratio = physW / physH
+        if (ratio > 1.7 && ratio < 1.8) physH = (physW * 9) / 16;
+        else if (ratio > 1.5 && ratio < 1.7) physH = (physW * 10) / 16; // 16:10
+
+        const logicalW = Math.max(100, physW / (hMonitor.scale || 1))
+        const logicalH = Math.max(100, physH / (hMonitor.scale || 1))
         const scale = BASE_WIDTH / logicalW
         this.cachedDrawHeight = Math.round(logicalH * scale)
 
         if (this.wsId === focusedWs?.id) {
-            // console.log(`[WO-Debug] ACTIVE WS Sync | Res: ${logicalW}x${logicalH} | DrawH: ${this.cachedDrawHeight}`)
+            console.log(`[WO-Audit] WS:${this.wsId} Mon:${hMonitor.name} Phys:${physW}x${physH} Logic:${logicalW}x${logicalH} Scale:${scale}`)
         }
 
         wrapper.set_size_request(BASE_WIDTH, this.cachedDrawHeight)
         this.set_size_request(BASE_WIDTH, this.cachedDrawHeight)
 
-        const clients = this.hyprland.get_clients() || []
+        // Update Reserved Overlays 🛡️
+        const bH = Math.round(44 * scale)
+        const dH = Math.round(110 * scale)
+        this.barArea.set_size_request(BASE_WIDTH, bH)
+        this.dockArea.set_size_request(BASE_WIDTH, dH)
+        this.move(this.dockArea, 0, this.cachedDrawHeight - dH)
+
         const wsClients = clients.filter((c: any) => c.workspace.id === this.wsId)
-            .sort((a: any, b: any) => b.focus_history_id - a.focus_history_id)
+            .sort((a: any, b: any) => (b.focus_history_id || 0) - (a.focus_history_id || 0))
 
-        // V7.4: Geometry Refinement for Bar/Dock 🛡️
-        // Ensure x,y are strictly relative to physical monitor
-        const hTop = hMonitor.reserved?.[0] || 0
-        const hBottom = hMonitor.reserved?.[1] || 0
+        // V7.13: Proper Reserved Indices and Geometry Compensation �️
+        // V7.15: Proper Reserved Property Access 🛰️
+        const rTop = (hMonitor as any).reserved_top || 0
+        const rBottom = (hMonitor as any).reserved_bottom || 0
+        const rLeft = (hMonitor as any).reserved_left || 0
+        const rRight = (hMonitor as any).reserved_right || 0
 
-        if (this.wsId === focusedWs?.id) {
-            // Log if we are hitting high-occupancy 🛡️
-            // console.log(`[WO-Debug] Active WS ${this.wsId} rendering ${wsClients.length} clients`)
-        }
 
         const activeAddresses = new Set(wsClients.map((c: any) => c.address))
         this.winWidgets.forEach((_: any, addr: string) => {
@@ -111,49 +143,71 @@ function SchematicMap(wsId: number, hyprland: any) {
         })
 
         wsClients.forEach((c: any) => {
-            // V7: Robust Relative Coordinates 🛰️
-            const x = Math.round((c.x - (hMonitor.x || 0)) * scale)
-            const y = Math.round((c.y - (hMonitor.y || 0)) * scale)
-            const w = Math.round(c.width * scale)
-            const h = Math.round(c.height * scale)
+            // V7.28: Constant Physical Grounds 🛡️📐
+            const isPrimary = (hMonitor.x || 0) === 0 && (hMonitor.y || 0) === 0
+            const barH = 44
+            const dockH = 110
 
-            // Log raw coordinates for inspection 🛡️
-            if (this.wsId === focusedWs?.id && c.address === this.hyprland.focused_client?.address) {
-                // console.log(`[WO-Debug] Focused Win Relative: ${x},${y} (Raw: ${c.x},${c.y} - Mon: ${hMonitor.x},${hMonitor.y})`)
+            let rawX = c.x - (hMonitor.x || 0)
+            let rawY = c.y - (hMonitor.y || 0)
+            let rawW = c.width
+            let rawH = c.height
+
+            if (isPrimary && !c.floating) {
+                // If windows are reported with full monitor height at cold-start
+                // We force them down regardless of reported reserved areas
+                if (rawY < barH) {
+                    const diff = barH - rawY
+                    rawY = barH
+                    if (rawH > (logicalH - barH - dockH)) rawH -= (diff + 10) // +10 for gap
+                }
+                if (rawY + rawH > (logicalH - dockH)) {
+                    rawH = Math.max(10, (logicalH - dockH) - rawY - 4)
+                }
             }
+
+            const x = Math.round(rawX * scale)
+            const y = Math.round(rawY * scale)
+            const w = Math.round(rawW * scale)
+            const h = Math.round(rawH * scale)
+
+
+            // V7.27: Simple & Centered Icon Architecture 🛡️✨
+            const iconSize = Math.min(w * 0.7, h * 0.7, 28)
 
             let widget = this.winWidgets.get(c.address)
             if (!widget) {
+                const img = new Gtk.Image({
+                    icon_name: appService.getIconName(c.class) || "system-run-symbolic",
+                    pixel_size: iconSize,
+                    halign: Gtk.Align.CENTER,
+                    valign: Gtk.Align.CENTER,
+                    hexpand: true,
+                    vexpand: true
+                })
                 const box = new Gtk.Box({
                     css_classes: ["wo-schematic-win"],
                     halign: Gtk.Align.FILL,
                     valign: Gtk.Align.FILL,
                     can_focus: false,
-                    focusable: false
-                })
-                const icon = new Gtk.Image({
-                    css_classes: ["wo-schematic-win-icon"],
-                    halign: Gtk.Align.CENTER,
-                    valign: Gtk.Align.CENTER,
+                    focusable: false,
                     hexpand: true,
-                    vexpand: true,
-                    can_focus: false,
-                    focusable: false
+                    vexpand: true
                 })
-                box.append(icon)
-                this.put(box, x, y)
-                widget = { box, icon }
+                box.append(img)
+                fixed.put(box, x, y)
+                widget = { box, icon: img }
                 this.winWidgets.set(c.address, widget)
             } else {
-                this.move(widget.box, x, y)
+                widget.icon.pixel_size = iconSize
+                fixed.move(widget.box, x, y)
             }
 
             if (this.wsId === (this.hyprland as any).focused_workspace?.id && c.address === this.hyprland.focused_client?.address) {
-                // console.log(`[WO-Debug]   TopWin: ${c.class} | Raw: ${c.x},${c.y} ${c.width}x${c.height} | Scaled: ${x},${y} ${w}x${h}`)
+                // console.log(`[WO-Debug] WS ${this.wsId} | Win: ${c.class} | RawY: ${c.y} | RawH: ${c.height} | ScaledY: ${y} | ScaledH: ${h}`)
             }
 
-            widget.box.width_request = Math.max(1, w)
-            widget.box.height_request = Math.max(1, h)
+            widget.box.set_size_request(Math.max(1, w), Math.max(1, h))
             widget.box.set_css_classes(["wo-schematic-win"])
 
             // Icon Logic 🖼️ (Robust lookup for Webapps)
@@ -175,10 +229,18 @@ function SchematicMap(wsId: number, hyprland: any) {
 
             widget.icon.set_from_icon_name(resolved)
 
-            // Centering & Scaling 🎯
-            widget.icon.pixel_size = Math.min(w * 0.7, h * 0.7, 48)
-            widget.icon.visible = w > 16 && h > 16
+            widget.icon.pixel_size = Math.min(w * 0.7, h * 0.7, 32)
+            widget.icon.visible = w > 12 && h > 12
         })
+
+        // V7.15-V7.16: Bring Reserved Areas to FRONT 🛡️✨
+        // Use remove and put for Gtk.Fixed reordering (Z-order)
+        try {
+            this.remove(this.barArea)
+            this.put(this.barArea, 0, 0)
+            this.remove(this.dockArea)
+            this.put(this.dockArea, 0, this.cachedDrawHeight - dH)
+        } catch (e) { }
     }
 
         ; (wrapper as any).schematic = fixed
@@ -224,10 +286,11 @@ export default function WorkspaceOverview(monitor: any, hyprland: any) {
     })
     windowContent.append(overview)
 
-    const list = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 16,
-        halign: Gtk.Align.CENTER
+    const list = new Gtk.Grid({
+        column_spacing: 16,
+        row_spacing: 16,
+        halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER
     })
 
     const slots = new Map<number, { btn: Gtk.Button, schematic: any }>()
@@ -244,7 +307,7 @@ export default function WorkspaceOverview(monitor: any, hyprland: any) {
             spacing: 12,
             css_classes: ["wo-item"],
             width_request: BASE_WIDTH + 24,
-            height_request: 220,
+            height_request: 280, // V7.17: Increased for breathing room 🛡️
             hexpand: false
         })
         item.append(header); item.append(schematic)
@@ -257,20 +320,24 @@ export default function WorkspaceOverview(monitor: any, hyprland: any) {
         })
 
         slots.set(i, { btn, schematic: (schematic as any).schematic })
-        list.append(btn)
+        const col = (i - 1) % 5
+        const row = Math.floor((i - 1) / 5)
+        list.attach(btn, col, row, 1, 1)
     }
 
     const syncAll = () => {
         try {
-            const focusedId = hyprland.focused_workspace?.id || 1
+            if (!hyprland) return
+            const monitors = hyprland.get_monitors() || []
             const workspaces = hyprland.get_workspaces() || []
-            const occupied = new Set(workspaces.map(ws => ws.id))
             const clients = hyprland.get_clients() || []
+            const focusedId = hyprland.focused_workspace?.id || 1
+            const occupied = new Set(workspaces.map(ws => ws.id))
 
             slots.forEach((ctx, i) => {
                 const isActive = focusedId === i
                 const isOccupied = occupied.has(i)
-                ctx.btn.visible = i <= 5 || isOccupied || isActive
+                ctx.btn.visible = true // V7.10: Force all 10 to be visible 🎯
 
                 const item = ctx.btn.child as Gtk.Box
                 const header = item.get_first_child() as Gtk.Box
@@ -284,7 +351,7 @@ export default function WorkspaceOverview(monitor: any, hyprland: any) {
                 count.label = wsClients.length > 0 ? wsClients.length.toString() : "󰝦"
 
                 if (ctx.schematic && ctx.schematic.sync) {
-                    ctx.schematic.sync()
+                    ctx.schematic.sync(workspaces, monitors, clients)
                 }
             })
         } catch (e) {
@@ -298,11 +365,21 @@ export default function WorkspaceOverview(monitor: any, hyprland: any) {
     }
 
     const signals = [
-        hyprland.connect("notify::focused-workspace", syncAll),
-        hyprland.connect("notify::clients", syncAll),
+        hyprland.connect("notify::focused-workspace", () => {
+            console.log("[WO-Debug] Signal: focused-workspace")
+            syncAll()
+        }),
+        hyprland.connect("notify::clients", () => {
+            console.log("[WO-Debug] Signal: clients notify")
+            syncAll()
+        }),
+        hyprland.connect("monitor-added", () => syncAll()),
+        hyprland.connect("monitor-removed", () => syncAll()),
         hyprland.connect("event", (h, name, data) => {
-            // Expanded reactive triggers 🚀
-            if (["workspace", "activewindow", "movewindow", "resizewindow", "openwindow", "closewindow", "fullscreen"].includes(name)) {
+            // Log ALL events for deep audit 🚀
+            // console.log(`[WO-Debug] Raw Hypr Event: ${name}`)
+            if (["workspace", "activewindow", "movewindow", "resizewindow", "openwindow", "closewindow", "fullscreen", "focusedmon"].includes(name)) {
+                console.log(`[WO-Debug] REACTIVE Hypr Event: ${name}`)
                 syncAll()
             }
         }),
@@ -315,12 +392,27 @@ export default function WorkspaceOverview(monitor: any, hyprland: any) {
         })
     ]
 
-    win.connect("unrealize", () => signals.forEach(id => hyprland.disconnect(id)))
+    // V7.11: Faster Heart-beat sync (500ms) 💓
+    const heartbeat = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+        if (win.get_visible()) {
+            syncAll()
+        }
+        return GLib.SOURCE_CONTINUE
+    })
+
+    win.connect("unrealize", () => {
+        signals.forEach(id => hyprland.disconnect(id))
+        GLib.source_remove(heartbeat)
+    })
 
     overview.append(list)
     win.set_child(windowContent)
 
-    GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { syncAll(); return GLib.SOURCE_REMOVE })
+    GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+        syncAll()
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => { syncAll(); return GLib.SOURCE_REMOVE })
+        return GLib.SOURCE_REMOVE
+    })
 
     return win
 }

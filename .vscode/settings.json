@@ -1,0 +1,8 @@
+{
+    "css.validate": false,
+    "scss.validate": false,
+    "css.lint.unknownAtRules": "ignore",
+    "css.lint.propertyValueExpected": "ignore",
+    "scss.lint.unknownAtRules": "ignore",
+    "scss.lint.propertyValueExpected": "ignore"
+}

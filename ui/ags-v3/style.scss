@@ -146,20 +146,16 @@ window#crystal-dock box.cd-drag-gap,
 /* Only target the item itself, not its children (popovers/tooltips) */
 .cd-item:hover {
   background-color: transparent;
-  border: none;
   box-shadow: none;
   outline: none;
   background-image: none;
 }
-
-/* .cd-dot.open consolidated below */
 
 .cd-icon-container {
   margin: 0;
   padding: 0;
   background-color: transparent;
   transition: none;
-  /* transform-origin removed to fix potential parser error */
 }
 
 /* --- SQUIRCLE ICON PLATES (Phase 72: Specificity over Force) --- */
@@ -799,6 +795,33 @@ window.workspace-cockpit {
   text-shadow: 0 0 15px rgba(0, 122, 255, 0.8);
 }
 
+.wo-reserved-area {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+
+  /* Use fixed labels to identify them */
+  &.bar {
+    border-radius: 0 0 12px 12px;
+  }
+
+  &.dock {
+    border-radius: 12px 12px 0 0;
+  }
+}
+
+.wo-schematic-win {
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 1.5px solid rgba(255, 255, 255, 0.8);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+
+  image {
+    margin: 0;
+    padding: 0;
+    -gtk-icon-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  }
+}
+
 .wo-count {
   font-size: 14px;
   font-weight: 200;
@@ -810,14 +833,8 @@ window.workspace-cockpit {
   background-color: rgba(0, 0, 0, 0.7);
   border-radius: 12px;
   border: 1px solid rgba(255, 255, 255, 0.03);
-  box-shadow: inset 0 20px 40px rgba(0, 0, 0, 0.5);
-}
 
-.wo-schematic-win {
-  /* Only border, no heavy fill as per user request 🛡️ */
-  background-color: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
+  box-shadow: inset 0 20px 40px rgba(0, 0, 0, 0.5);
 }
 
 .wo-schematic-win-icon {
