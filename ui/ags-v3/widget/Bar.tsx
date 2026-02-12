@@ -167,6 +167,23 @@ function AppMenu() {
     spacing: 16
   })
 
+  const distroIcon = new Gtk.Image({
+    icon_name: "archlinux-symbolic",
+    pixel_size: 16,
+    css_classes: ["bar-app-distro-icon"]
+  })
+
+  const sep = new Gtk.Separator({
+    orientation: Gtk.Orientation.VERTICAL,
+    css_classes: ["bar-app-sep"]
+  })
+
+  const arrow = new Gtk.Image({
+    icon_name: "pan-down-symbolic",
+    pixel_size: 12,
+    css_classes: ["bar-app-arrow"]
+  })
+
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
     getServiceSafe(() => AstalHyprland.get_default(), "Hyprland").then(hyprland => {
       if (!hyprland) return;
@@ -177,17 +194,13 @@ function AppMenu() {
         label: "Finder"
       })
 
-
       let lastClient: any = null;
 
       const sync = () => {
         const client = hyprland.focused_client
-
-        // V127: Robust Title Sync
         const title = getWordmark(client, hyprland)
         appName.label = title || "Finder"
 
-        // If client changed, we need to listen to ITS title changes too
         if (client !== lastClient) {
           if (lastClient) {
             try { (lastClient as any).disconnect_by_func(sync) } catch (e) { }
@@ -203,7 +216,10 @@ function AppMenu() {
       hyprland.connect("notify::focused-workspace", sync)
       sync()
 
+      box.append(distroIcon)
+      box.append(sep)
       box.append(appName)
+      box.append(arrow)
     })
     return GLib.SOURCE_REMOVE
   })
@@ -372,7 +388,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-      Gtk4LayerShell.set_exclusive_zone(win, 44)
+      Gtk4LayerShell.set_exclusive_zone(win, 48) // 8px top + 32px height + 8px gap
       // @ts-ignore
       win.gdkmonitor = gdkmonitor
     } catch (e) {

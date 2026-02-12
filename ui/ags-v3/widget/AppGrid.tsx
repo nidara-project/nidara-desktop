@@ -71,8 +71,7 @@ function SystemActionStrip(win: Gtk.Window) {
     const actions = [
         { icon: "utilities-terminal", name: "Terminal", cmd: "kitty" },
         { icon: "emblem-system", name: "Ajustes", cmd: "gnome-control-center" },
-        { icon: "system-reboot", name: "Reiniciar", cmd: "reboot" },
-        { icon: "system-shutdown", name: "Apagar", cmd: "shutdown now" },
+        { icon: "system-shutdown-symbolic", name: "Sesión", cmd: "togglePowerMenu()" },
     ]
 
     actions.forEach(a => {
@@ -83,7 +82,16 @@ function SystemActionStrip(win: Gtk.Window) {
             css_classes: ["system-action-btn"],
         })
         btn.connect("clicked", () => {
-            execAsync(a.cmd).catch(print)
+            if (a.cmd.startsWith("toggle")) {
+                const funcName = a.cmd.replace("()", "")
+                if ((globalThis as any)[funcName]) {
+                    (globalThis as any)[funcName]()
+                } else {
+                    console.error(`[Grid] Global function ${funcName} not found`)
+                }
+            } else {
+                execAsync(a.cmd).catch(print)
+            }
             win.visible = false
         })
         box.append(btn)

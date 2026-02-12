@@ -13,6 +13,7 @@ import AppGrid from "./widget/AppGrid"
 import Bar from "./widget/Bar"
 import NotificationPopups from "./widget/NotificationPopups"
 import ControlCenter from "./widget/ControlCenter"
+import PowerMenu from "./widget/PowerMenu"
 
 console.log("[DISTROIA] app.ts loading... (Phase 65: Mega-Main Stability)");
 
@@ -29,6 +30,7 @@ app.start({
     const windows = new Set<any>()
     const gridWindows: any[] = []
     const ccWindows: any[] = []
+    const powerWindows: any[] = []
 
     // 🎨 Dynamic Style Sync
     const styleFile = `${GLib.get_current_dir()}/style.css`
@@ -83,12 +85,14 @@ app.start({
           const gridWin = AppGrid(monitor)
           const notifWin = NotificationPopups(monitor)
           const ccWin = ControlCenter(monitor)
+          const powerWin = PowerMenu(monitor)
 
           windows.add(gridWin); windows.add(notifWin)
-          windows.add(ccWin)
+          windows.add(ccWin); windows.add(powerWin)
 
           gridWindows.push(gridWin)
           ccWindows.push(ccWin)
+          powerWindows.push(powerWin)
           return GLib.SOURCE_REMOVE
         })
       } catch (e) { console.error(`[UI] Error:`, e) }
@@ -115,14 +119,19 @@ app.start({
       console.log(`[Toggle] CC (Count: ${ccWindows.length})`)
       ccWindows.forEach(cc => { try { cc.toggle() } catch (e) { console.error(e) } })
     }
+    const togglePower = () => {
+      console.log(`[Toggle] Power (Count: ${powerWindows.length})`)
+      powerWindows.forEach(p => { try { p.toggle() } catch (e) { console.error(e) } })
+    }
 
     // Expose Globals
     (globalThis as any).toggleAppGrid = toggleAppGrid;
     (globalThis as any).toggleControlCenter = toggleCC;
     (globalThis as any).toggleNotificationCenter = toggleCC; // Redirect for safety
+    (globalThis as any).togglePowerMenu = togglePower;
 
     // Local request mapper
-    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleNC: toggleCC }
+    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleNC: toggleCC, togglePower }
   },
   requestHandler(argv, res) {
     const engine = (app as any).DistroIA
@@ -131,6 +140,7 @@ app.start({
     if (argv[0] === "toggleAppGrid()") { engine.toggleAppGrid(); res("ok") }
     else if (argv[0] === "toggleControlCenter()") { engine.toggleCC(); res("ok") }
     else if (argv[0] === "toggleNotificationCenter()") { engine.toggleNC(); res("ok") }
+    else if (argv[0] === "togglePowerMenu()") { engine.togglePower(); res("ok") }
     else res("unknown command")
   }
 })

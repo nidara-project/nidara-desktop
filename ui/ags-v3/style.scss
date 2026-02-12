@@ -368,15 +368,35 @@ window.crystal-bar {
 
 .bar-centerbox {
   padding: 0 16px;
-  min-height: 48px;
+  min-height: 32px;
   background-color: $crystal_bg;
-  border-bottom: 1px solid $crystal_border;
-  /* Blur requested via LayerShell namespace "crystal-bar" */
+  backdrop-filter: blur($crystal_blur);
+  border: 1px solid $crystal_border;
+  border-radius: $crystal_radius_lg;
+  margin: 8px 8px 0 8px;
+  /* Floating Pill Effect */
+}
+
+.bar-app-distro-icon {
+  margin-right: 4px;
+  color: white;
+  /* Or use an accent if preferred */
+}
+
+.bar-app-sep {
+  background-color: rgba(255, 255, 255, 0.2);
+  min-width: 1px;
+  margin: 6px 4px;
 }
 
 .bar-app-name {
   color: white;
-  margin-right: 20px;
+  font-weight: 600;
+}
+
+.bar-app-arrow {
+  margin-left: 4px;
+  opacity: 0.7;
 }
 
 .bar-menu-item {
@@ -1002,4 +1022,144 @@ popover.bar-tray-menu separator {
 
 .cc-sink-item label {
   font-size: 0.95em;
+}
+
+/* --- 5. POWER MENU (FULLSCREEN GLASS) 💎 --- */
+.power-menu-win {
+  background-color: transparent;
+}
+
+.power-main-box {
+  background-color: rgba(0, 0, 0, 0.6);
+  /* Slightly more contrast for readability */
+  backdrop-filter: blur(32px);
+  /* Crystal Polish */
+  padding: 80px;
+  border-radius: 40px;
+}
+
+.power-header {
+  font-size: 4em;
+  font-weight: 800;
+  color: white;
+  margin-bottom: 20px;
+}
+
+.power-uptime {
+  font-size: 1.4em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 20px;
+}
+
+.power-action-box {
+  margin: 40px 0;
+}
+
+.power-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 32px;
+  padding: 40px;
+  min-width: 180px;
+  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.power-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.4);
+  transform: scale(1.05);
+}
+
+.power-btn.shutdown:hover {
+  background-color: rgba(255, 59, 48, 0.4);
+  border-color: #ff3b30;
+}
+
+.power-btn.reboot:hover {
+  background-color: rgba(52, 199, 89, 0.4);
+  border-color: #34c759;
+}
+
+.power-btn.logout:hover {
+  background-color: rgba(0, 122, 255, 0.4);
+  border-color: #007aff;
+}
+
+.power-btn.lock:hover {
+  background-color: rgba(175, 82, 222, 0.4);
+  border-color: #af52de;
+}
+
+.power-btn-label {
+  font-size: 1.2em;
+  font-weight: 600;
+  color: white;
+}
+
+.power-cancel-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 100px;
+  padding: 12px 40px;
+  color: white;
+  font-weight: bold;
+  transition: all 0.2s;
+}
+
+.power-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: white;
+}
+
+/* --- 6. ATOMIC WINDOW NEUTRALIZATION (Doble Fondo Killer) ☢️ --- */
+window#crystal-bar,
+window#crystal-control-center,
+window#crystal-app-launcher,
+window#crystal-power-menu,
+.control-center-win,
+.app-grid-window,
+.power-menu-win {
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+window#crystal-bar decoration,
+window#crystal-bar main,
+window#crystal-control-center decoration,
+window#crystal-control-center main,
+window#crystal-app-launcher decoration,
+window#crystal-app-launcher main,
+window#crystal-power-menu decoration,
+window#crystal-power-menu main {
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* --- 7. SYSTEM ACTION STRIP POLISH (AppGrid) --- */
+.system-action-strip {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 100px;
+  padding: 6px 12px;
+  margin-top: 8px;
+}
+
+.system-action-btn {
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  min-width: 44px;
+  min-height: 44px;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.system-action-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+  transform: scale(1.1);
 }

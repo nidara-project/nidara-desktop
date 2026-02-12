@@ -288,6 +288,13 @@ function GridControls() {
             })
             grid.attach(btBtn, col++, row, 1, 1)
         }
+
+        // V136: Streamlined Power Entry
+        const pwrBtn = createToggle("system-shutdown-symbolic", "Sesión", "Power Menu", false, () => {
+            (app as any).DistroIA?.togglePower();
+            (app as any).DistroIA?.toggleCC() // Close CC after opening Power
+        })
+        grid.attach(pwrBtn, col++, row, 1, 1)
     }
 
     if (network) {
@@ -405,8 +412,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
             Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
             Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 54)
-            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, 12)
+            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 48) // Aligned with Bar 8px gap
+            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, 8)
             // @ts-ignore
             win.gdkmonitor = gdkmonitor
         } catch (e) {
