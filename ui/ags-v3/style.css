@@ -3,6 +3,7 @@
    CRYSTAL UI - DYNAMIC THEME ENGINE
    Inheriting system colors from GTK Registry
 */
+/* CRYSTAL UI DESIGN SYSTEM 💎 */
 /* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
 #crystal-dock {
   background-color: transparent;
@@ -180,7 +181,7 @@ window#crystal-dock box.cd-squircle-plate drawingarea {
 /* --- STABILITY & THEME: Dock Menu --- */
 popover.cd-popover contents {
   background-color: @theme_bg_color;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 14px;
   padding: 8px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
@@ -270,7 +271,7 @@ window#app-grid-window,
 .cd-menu-separator {
   min-height: 1px;
   margin: 6px 4px;
-  background-color: rgba(0, 0, 0, 0.12);
+  background-color: rgba(255, 255, 255, 0.12);
 }
 
 .cd-menu-action {
@@ -292,7 +293,7 @@ window#app-grid-window,
   margin-bottom: 4px;
   font-size: 0.9em;
   font-weight: bold;
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* --- FINAL NUCLEAR CLEANUP: PREVENT DOUBLE BACKGROUNDS --- */
@@ -323,14 +324,16 @@ window#crystal-dock box.crystal-dock {
 #crystal-bar,
 window#crystal-bar,
 window.crystal-bar {
-  background-color: rgba(18, 18, 18, 0.88);
-  background: rgba(18, 18, 18, 0.88);
+  background-color: transparent;
+  background: transparent;
 }
 
 .bar-centerbox {
-  padding: 0 24px;
-  min-height: 44px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0 16px;
+  min-height: 48px;
+  background-color: rgba(18, 18, 18, 0.72);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  /* Blur requested via LayerShell namespace "crystal-bar" */
 }
 
 .bar-app-name {
@@ -444,20 +447,21 @@ window.crystal-bar {
   border: none;
 }
 
-.control-center,
-.notification-center {
-  background-color: rgba(22, 22, 22, 0.85);
-  /* Slightly more opaque for better masking */
-  border: 1.2px solid rgba(255, 255, 255, 0.22);
+#crystal-control-center,
+.control-center-win .control-center,
+.control-center {
+  background-color: rgba(18, 18, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 28px;
   padding: 24px;
   min-width: 480px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
 }
 
 /* Notification Items 🔔 */
 .nc-notif-item {
-  background-color: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.03);
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 20px;
   padding: 16px;
   margin-bottom: 8px;
@@ -577,11 +581,20 @@ window.crystal-bar {
 }
 
 .cc-sliders,
-.cc-media {
-  background-color: rgba(255, 255, 255, 0.05);
+.cc-media,
+.cc-notifs-section {
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 20px;
   padding: 18px;
   margin-top: 20px;
+}
+
+.cc-section-title {
+  font-weight: bold;
+  font-size: 1.1em;
+  color: white;
+  margin-bottom: 12px;
 }
 
 /* --- 5. APP GRID --- */
@@ -603,16 +616,15 @@ window.app-grid-window {
 }
 
 /* 2. Main Card: The ONLY visible background */
-window#app-grid-window #app-grid-content,
-#app-grid-content,
+#crystal-app-launcher #app-grid-content,
+window#crystal-app-launcher #app-grid-content,
+.app-grid-window #app-grid-content,
 .app-grid-content {
-  background-color: rgba(30, 30, 30, 0.6);
-  /* Restored semi-transparent */
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background-color: rgba(18, 18, 18, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 40px;
   padding: 60px;
-  box-shadow: none;
-  /* Removed shadow to eliminate ghosting */
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
 }
 
 /* 3. Internals: Reset to Transparent using Custom Classes */
@@ -839,7 +851,7 @@ popover.bar-tray-menu contents {
   background-color: @theme_bg_color;
   padding: 8px;
   border-radius: 14px;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
@@ -860,7 +872,7 @@ popover.bar-tray-menu modelbutton:hover {
 
 popover.bar-tray-menu separator {
   margin: 8px 4px;
-  background-color: rgba(0, 0, 0, 0.12);
+  background-color: rgba(255, 255, 255, 0.12);
   min-height: 1px;
 }
 

@@ -97,7 +97,7 @@ function SystemActionStrip(win: Gtk.Window) {
  */
 export default function AppGrid(monitor: Gdk.Monitor) {
     const win = new Gtk.Window({
-        name: "app-grid-window",
+        name: "crystal-app-launcher",
         css_classes: ["app-grid-window"],
     })
 
@@ -162,8 +162,8 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         css_classes: ["app-grid-content"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER,
-        width_request: 1200,
-        height_request: 880,
+        width_request: 1000, // Slightly more compact
+        height_request: 800,
     })
 
     contentBox.append(WorkspaceStrip())
@@ -195,11 +195,11 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     // V106: OPTIMIZED APP GRID - Widget Cache + Visibility Filtering 🚀
     // Apps are created once and filtered via visibility instead of destroying/recreating
     const widgetCache = new Map<string, Gtk.Button>()
-    let cachedApps: AstalApps.Application[] = []
+    let cachedApps: any[] = []
     let cacheInitialized = false
 
     // Create widget for a single app (called once per app, cached)
-    const createAppWidget = (app: AstalApps.Application): Gtk.Button => {
+    const createAppWidget = (app: any): Gtk.Button => {
         // V125: Use entry (desktop file) as stable unique identifier
         const id = (app.entry || "").toLowerCase()
         const name = app.get_name ? app.get_name() : (app as any).name || ""
@@ -236,7 +236,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
             css_classes: ["app-grid-label"],
             halign: Gtk.Align.CENTER,
             max_width_chars: 14,
-            ellipsize: Pango.EllipsizeMode.END
+            ellipsize: (Pango as any).EllipsizeMode.END
         })
 
         const item = new Gtk.Box({
@@ -321,7 +321,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
 
         const first = flowbox.get_first_child()
         if (first && first.get_visible()) {
-            flowbox.select_child(first as Gtk.FlowBoxChild)
+            flowbox.select_child(first as any)
         }
     }
 
@@ -372,8 +372,10 @@ export default function AppGrid(monitor: Gdk.Monitor) {
 
         // Global toggle mechanism
         ; (win as any).toggle = () => {
-            win.visible = !win.visible
-            if (win.visible) {
+            console.log("[Grid] Internal toggle called")
+            win.set_visible(!win.get_visible())
+            if (win.get_visible()) {
+                win.present()
                 searchEntry.text = ""
                 // V136: Focus fix with timeout
                 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {

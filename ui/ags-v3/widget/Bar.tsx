@@ -178,7 +178,7 @@ function AppMenu() {
       })
 
 
-      let lastClient: AstalHyprland.Client | null = null;
+      let lastClient: any = null;
 
       const sync = () => {
         const client = hyprland.focused_client
@@ -298,17 +298,6 @@ function Workspaces() {
 /**
  * System Status Modules (Right) 🔋📶🔊🔔🎛️🕒
  */
-function SettingsGear() {
-  const btn = new Gtk.Button({
-    css_classes: ["bar-util-btn", "cc-trigger"],
-    child: new Gtk.Image({ icon_name: "emblem-system-symbolic", pixel_size: 16 }),
-    tooltip_text: "Centro de Control"
-  })
-  btn.connect("clicked", () => {
-    try { (globalThis as any).toggleControlCenter?.() } catch (e) { }
-  })
-  return btn
-}
 
 /**
  * CPU and RAM Monitor Module 📊
@@ -408,7 +397,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const rightSide = new Gtk.Box({ spacing: 12, halign: Gtk.Align.END, css_classes: ["bar-right"] })
   rightSide.append(SystemResources())
   rightSide.append(Tray())
-  rightSide.append(SettingsGear())
 
   const timeContent = new Gtk.Box({ spacing: 8 })
   const timeLabel = new Gtk.Label({ name: "bar-time-label", css_classes: ["bar-time"], label: "..." })
@@ -463,7 +451,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     return GLib.SOURCE_REMOVE
   })
 
-  timeBtn.connect("clicked", () => { (globalThis as any).toggleNotificationCenter?.() })
+  timeBtn.connect("clicked", () => { (app as any).DistroIA?.toggleCC() })
   rightSide.append(timeBtn)
 
   centerBox.set_start_widget(leftSide)

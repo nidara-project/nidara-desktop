@@ -13,7 +13,6 @@ import AppGrid from "./widget/AppGrid"
 import Bar from "./widget/Bar"
 import NotificationPopups from "./widget/NotificationPopups"
 import ControlCenter from "./widget/ControlCenter"
-import NotificationCenter from "./widget/NotificationCenter"
 
 console.log("[DISTROIA] app.ts loading... (Phase 65: Mega-Main Stability)");
 
@@ -28,9 +27,8 @@ app.start({
     }
 
     const windows = new Set<any>()
-    const appGrids: any[] = []
-    const controlCenters: any[] = []
-    const notificationCenters: any[] = []
+    const gridWindows: any[] = []
+    const ccWindows: any[] = []
 
     // 🎨 Dynamic Style Sync
     const styleFile = `${GLib.get_current_dir()}/style.css`
@@ -85,14 +83,12 @@ app.start({
           const gridWin = AppGrid(monitor)
           const notifWin = NotificationPopups(monitor)
           const ccWin = ControlCenter(monitor)
-          const ncWin = NotificationCenter(monitor)
 
           windows.add(gridWin); windows.add(notifWin)
-          windows.add(ccWin); windows.add(ncWin)
+          windows.add(ccWin)
 
-          appGrids.push(gridWin)
-          controlCenters.push(ccWin)
-          notificationCenters.push(ncWin)
+          gridWindows.push(gridWin)
+          ccWindows.push(ccWin)
           return GLib.SOURCE_REMOVE
         })
       } catch (e) { console.error(`[UI] Error:`, e) }
@@ -100,7 +96,7 @@ app.start({
 
     const display = Gdk.Display.get_default()
     if (display) {
-      const monitors = display.get_monitors()
+      const monitors: any = display.get_monitors()
       for (let i = 0; i < monitors.get_n_items(); i++) {
         if (i === 0) createUI(monitors.get_item(i) as any, i)
         else GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 200, () => {
@@ -111,23 +107,22 @@ app.start({
     }
 
     // 🕹️ Toggles Logic
-    const toggleAppGrid = () => appGrids.forEach(g => g.toggle())
-    const toggleCC = () => {
-      notificationCenters.forEach(nc => nc.set_visible(false))
-      controlCenters.forEach(cc => cc.toggle())
+    const toggleAppGrid = () => {
+      console.log(`[Toggle] AppGrid (Count: ${gridWindows.length})`)
+      gridWindows.forEach(g => { try { g.toggle() } catch (e) { console.error(e) } })
     }
-    const toggleNC = () => {
-      controlCenters.forEach(cc => cc.set_visible(false))
-      notificationCenters.forEach(nc => nc.toggle())
+    const toggleCC = () => {
+      console.log(`[Toggle] CC (Count: ${ccWindows.length})`)
+      ccWindows.forEach(cc => { try { cc.toggle() } catch (e) { console.error(e) } })
     }
 
     // Expose Globals
     (globalThis as any).toggleAppGrid = toggleAppGrid;
     (globalThis as any).toggleControlCenter = toggleCC;
-    (globalThis as any).toggleNotificationCenter = toggleNC;
+    (globalThis as any).toggleNotificationCenter = toggleCC; // Redirect for safety
 
     // Local request mapper
-    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleNC }
+    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleNC: toggleCC }
   },
   requestHandler(argv, res) {
     const engine = (app as any).DistroIA

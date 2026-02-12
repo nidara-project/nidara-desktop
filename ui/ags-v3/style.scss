@@ -6,8 +6,19 @@ $theme_bg: unquote("@theme_bg_color");
 $theme_fg: unquote("@theme_fg_color");
 $theme_hover: unquote("@theme_selected_bg_color");
 $theme_hover_fg: unquote("@theme_selected_fg_color");
-$theme_border: rgba(0, 0, 0, 0.12);
-$theme_fg_dim: rgba(0, 0, 0, 0.5);
+$theme_border: rgba(255, 255, 255, 0.12);
+$theme_fg_dim: rgba(255, 255, 255, 0.5);
+
+/* CRYSTAL UI DESIGN SYSTEM 💎 */
+$crystal_bg: rgba(18, 18, 18, 0.72);
+$crystal_bg_light: rgba(255, 255, 255, 0.08);
+$crystal_blur: 32px;
+$crystal_border: rgba(255, 255, 255, 0.15);
+$crystal_border_vibrant: rgba(255, 255, 255, 0.25);
+$crystal_radius_lg: 28px;
+$crystal_radius_md: 20px;
+$crystal_radius_sm: 14px;
+$crystal_shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
 
 /* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
 #crystal-dock {
@@ -351,14 +362,16 @@ window#crystal-dock box.crystal-dock {
 #crystal-bar,
 window#crystal-bar,
 window.crystal-bar {
-  background-color: rgba(18, 18, 18, 0.88);
-  background: rgba(18, 18, 18, 0.88);
+  background-color: transparent;
+  background: transparent;
 }
 
 .bar-centerbox {
-  padding: 0 24px;
-  min-height: 44px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0 16px;
+  min-height: 48px;
+  background-color: $crystal_bg;
+  border-bottom: 1px solid $crystal_border;
+  /* Blur requested via LayerShell namespace "crystal-bar" */
 }
 
 .bar-app-name {
@@ -473,21 +486,22 @@ window.crystal-bar {
   border: none;
 }
 
-.control-center,
-.notification-center {
-  background-color: rgba(22, 22, 22, 0.85);
-  /* Slightly more opaque for better masking */
-  border: 1.2px solid rgba(255, 255, 255, 0.22);
-  border-radius: 28px;
+#crystal-control-center,
+.control-center-win .control-center,
+.control-center {
+  background-color: $crystal_bg;
+  border: 1px solid $crystal_border_vibrant;
+  border-radius: $crystal_radius_lg;
   padding: 24px;
   min-width: 480px;
+  box-shadow: $crystal_shadow;
 }
 
 /* Notification Items 🔔 */
 .nc-notif-item {
-  background-color: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.03);
-  border-radius: 20px;
+  background-color: $crystal_bg_light;
+  border: 1px solid $crystal_border;
+  border-radius: $crystal_radius_md;
   padding: 16px;
   margin-bottom: 8px;
   min-height: 80px;
@@ -606,11 +620,20 @@ window.crystal-bar {
 }
 
 .cc-sliders,
-.cc-media {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
+.cc-media,
+.cc-notifs-section {
+  background-color: $crystal_bg_light;
+  border: 1px solid $crystal_border;
+  border-radius: $crystal_radius_md;
   padding: 18px;
   margin-top: 20px;
+}
+
+.cc-section-title {
+  font-weight: bold;
+  font-size: 1.1em;
+  color: white;
+  margin-bottom: 12px;
 }
 
 
@@ -634,16 +657,15 @@ window.app-grid-window {
 }
 
 /* 2. Main Card: The ONLY visible background */
-window#app-grid-window #app-grid-content,
-#app-grid-content,
+#crystal-app-launcher #app-grid-content,
+window#crystal-app-launcher #app-grid-content,
+.app-grid-window #app-grid-content,
 .app-grid-content {
-  background-color: rgba(30, 30, 30, 0.6);
-  /* Restored semi-transparent */
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background-color: $crystal_bg;
+  border: 1px solid $crystal_border;
   border-radius: 40px;
   padding: 60px;
-  box-shadow: none;
-  /* Removed shadow to eliminate ghosting */
+  box-shadow: $crystal_shadow;
 }
 
 /* 3. Internals: Reset to Transparent using Custom Classes */
