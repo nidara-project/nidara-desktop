@@ -1,0 +1,30 @@
+/* 
+   CRYSTAL UI - DESIGN TOKENS
+   Single source of truth for all design values
+*/
+
+// GTK Theme Integration
+$theme_bg: unquote("@theme_bg_color");
+$theme_fg: unquote("@theme_fg_color");
+$theme_hover: unquote("@theme_selected_bg_color");
+$theme_hover_fg: unquote("@theme_selected_fg_color");
+$theme_border: rgba(255, 255, 255, 0.12);
+$theme_fg_dim: rgba(255, 255, 255, 0.5);
+
+// Crystal Design System
+$crystal_bg: rgba(255, 255, 255, 0.12);
+$crystal_bg_light: rgba(255, 255, 255, 0.06);
+$crystal_blur: 32px;
+$crystal_border: rgba(255, 255, 255, 0.12);
+$crystal_border_vibrant: rgba(255, 255, 255, 0.2);
+$crystal_radius_lg: 24px;
+$crystal_radius_md: 16px;
+$crystal_radius_sm: 12px;
+$crystal_shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+
+// Accent Colors
+$accent_blue: #007aff;
+$accent_green: #34c759;
+$accent_red: #ff3b30;
+$accent_purple: #af52de;
+$accent_indigo: #5856d6;

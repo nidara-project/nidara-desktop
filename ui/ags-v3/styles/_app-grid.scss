@@ -1,0 +1,161 @@
+@use 'tokens' as *;
+
+/* ==========================================================================
+   APP GRID
+   Based on Stitch "Spotlight-style App Launcher" design
+   ========================================================================== */
+
+/* --- Window & Overlay --- */
+window#app-grid-window,
+window.app-grid-window {
+    background-color: transparent;
+    background: none;
+    border: none;
+    box-shadow: none;
+}
+
+#app-grid-overlay,
+.app-grid-catcher {
+    background-color: transparent;
+    background: none;
+    border: none;
+    box-shadow: none;
+}
+
+/* --- Main Card (Spotlight Panel) --- */
+#crystal-app-launcher #app-grid-content,
+window#crystal-app-launcher #app-grid-content,
+.app-grid-window #app-grid-content,
+.app-grid-content {
+    background-color: rgba(245, 245, 250, 0.95);
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 24px;
+    padding: 32px 40px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35),
+        0 0 1px rgba(0, 0, 0, 0.2);
+    min-width: 600px;
+}
+
+/* --- Search Bar --- */
+.app-grid-search {
+    background-color: transparent;
+    border: none;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 0;
+    color: rgba(0, 0, 0, 0.85);
+    padding: 12px 8px;
+    font-size: 1.2em;
+    font-weight: 300;
+    caret-color: #007aff;
+    transition: all 0.2s ease;
+    box-shadow: none;
+}
+
+.app-grid-search:focus {
+    background-color: transparent;
+    border-color: rgba(0, 122, 255, 0.3);
+    box-shadow: none;
+}
+
+/* Placeholder text */
+.app-grid-search-placeholder {
+    color: rgba(0, 0, 0, 0.35);
+    font-weight: 300;
+}
+
+/* --- Section Labels --- */
+.app-grid-section-title {
+    font-size: 0.7em;
+    font-weight: 700;
+    color: rgba(0, 0, 0, 0.35);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin: 16px 0 8px 4px;
+}
+
+/* --- Scroll & Layout --- */
+.app-grid-scroll,
+.app-grid-flow,
+.app-grid-scroll viewport,
+.app-grid-scroll scrollbar,
+.app-grid-scroll undershoot,
+.app-grid-scroll overshoot {
+    background-color: transparent;
+    background: none;
+    border: none;
+    box-shadow: none;
+    outline: none;
+}
+
+/* --- App Items --- */
+.app-grid-item {
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-grid-button {
+    background: none;
+    border: none;
+    box-shadow: none;
+    border-radius: 16px;
+    padding: 10px;
+    transition: all 0.2s ease;
+}
+
+.app-grid-button:hover {
+    background-color: rgba(0, 122, 255, 0.08);
+}
+
+.app-grid-icon {
+    border-radius: 22%;
+}
+
+.app-grid-label {
+    color: rgba(0, 0, 0, 0.7);
+    font-size: 0.8em;
+    font-weight: 500;
+    margin-top: 6px;
+}
+
+/* --- FlowBox Neutralization --- */
+flowboxchild {
+    background: none;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    outline: none;
+}
+
+flowboxchild:selected,
+flowboxchild:active,
+flowboxchild:hover {
+    background: none;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    outline: none;
+}
+
+/* --- System Action Strip --- */
+.system-action-strip {
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 100px;
+    padding: 4px 10px;
+    margin-top: 12px;
+}
+
+.system-action-btn {
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    min-width: 40px;
+    min-height: 40px;
+    transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+    color: rgba(0, 0, 0, 0.4);
+}
+
+.system-action-btn:hover {
+    background: rgba(0, 122, 255, 0.1);
+    color: #007aff;
+    transform: scale(1.08);
+}

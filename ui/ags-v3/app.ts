@@ -131,13 +131,14 @@ app.start({
     (globalThis as any).togglePowerMenu = togglePower;
 
     // Local request mapper
-    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleNC: toggleCC, togglePower }
+    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleControlCenter: toggleCC, toggleNC: toggleCC, togglePower }
   },
   requestHandler(argv, res) {
     const engine = (app as any).DistroIA
     if (!engine) return res("error: engine not ready")
 
     if (argv[0] === "toggleAppGrid()") { engine.toggleAppGrid(); res("ok") }
+    else if (argv[0] === "toggleCC()") { engine.toggleCC(); res("ok") }
     else if (argv[0] === "toggleControlCenter()") { engine.toggleCC(); res("ok") }
     else if (argv[0] === "toggleNotificationCenter()") { engine.toggleNC(); res("ok") }
     else if (argv[0] === "togglePowerMenu()") { engine.togglePower(); res("ok") }

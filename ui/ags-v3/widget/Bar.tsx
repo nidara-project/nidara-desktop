@@ -169,7 +169,7 @@ function AppMenu() {
 
   const distroIcon = new Gtk.Image({
     icon_name: "archlinux-symbolic",
-    pixel_size: 16,
+    pixel_size: 24,
     css_classes: ["bar-app-distro-icon"]
   })
 
@@ -390,7 +390,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-      Gtk4LayerShell.set_exclusive_zone(win, 48) // 8px top + 32px height + 8px gap
+      Gtk4LayerShell.set_exclusive_zone(win, 40) // 8px margin + 32px pill + 8px gap
       // @ts-ignore
       win.gdkmonitor = gdkmonitor
     } catch (e) {
@@ -406,13 +406,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     valign: Gtk.Align.FILL
   })
 
-  const leftSide = new Gtk.Box({ spacing: 12, halign: Gtk.Align.START, css_classes: ["bar-left"] })
+  const leftSide = new Gtk.Box({ spacing: 12, halign: Gtk.Align.START, valign: Gtk.Align.CENTER, css_classes: ["bar-left"] })
   leftSide.append(AppMenu())
 
-  const centerSide = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, css_classes: ["bar-center"] })
+  const centerSide = new Gtk.Box({ halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, css_classes: ["bar-center"] })
   centerSide.append(Workspaces())
 
-  const rightSide = new Gtk.Box({ spacing: 12, halign: Gtk.Align.END, css_classes: ["bar-right"] })
+  const rightSide = new Gtk.Box({ spacing: 12, halign: Gtk.Align.END, valign: Gtk.Align.CENTER, css_classes: ["bar-right"] })
   rightSide.append(SystemResources())
   rightSide.append(Tray())
 

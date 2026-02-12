@@ -7,6 +7,7 @@ import AstalBluetooth from "gi://AstalBluetooth"
 import AstalNotifd from "gi://AstalNotifd"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
+import Pango from "gi://Pango"
 
 function NotificationItem(n: any) {
     const box = new Gtk.Box({
@@ -34,7 +35,7 @@ function NotificationItem(n: any) {
         label: n.summary,
         css_classes: ["nc-notif-title"],
         halign: Gtk.Align.START,
-        ellipsize: 3,
+        ellipsize: (Pango as any).EllipsizeMode.END,
         lines: 1
     })
     const body = new Gtk.Label({
@@ -43,7 +44,7 @@ function NotificationItem(n: any) {
         halign: Gtk.Align.START,
         wrap: true,
         lines: 2,
-        ellipsize: 3,
+        ellipsize: (Pango as any).EllipsizeMode.END,
         max_width_chars: 42
     })
 
@@ -158,14 +159,14 @@ function Media() {
             label: p.title || "Unknown Title",
             css_classes: ["cc-media-title"],
             halign: Gtk.Align.START,
-            ellipsize: 3,
+            ellipsize: (Pango as any).EllipsizeMode.END,
             max_width_chars: 20
         }))
         info.append(new Gtk.Label({
             label: p.artist || "Unknown Artist",
             css_classes: ["cc-media-artist"],
             halign: Gtk.Align.START,
-            ellipsize: 3
+            ellipsize: (Pango as any).EllipsizeMode.END
         }))
 
         const controls = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END })
@@ -231,7 +232,7 @@ function GridControls() {
         const i = new Gtk.Image({ icon_name: iconName || "network-wired-symbolic", pixel_size: 20, css_classes: ["cc-toggle-icon"] })
         const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
         const l = new Gtk.Label({ label: label, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START })
-        const sl = new Gtk.Label({ label: sublabel, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, ellipsize: 3 })
+        const sl = new Gtk.Label({ label: sublabel, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, ellipsize: (Pango as any).EllipsizeMode.END })
 
         textStack.append(l)
         textStack.append(sl)
@@ -289,10 +290,9 @@ function GridControls() {
             grid.attach(btBtn, col++, row, 1, 1)
         }
 
-        // V136: Streamlined Power Entry
         const pwrBtn = createToggle("system-shutdown-symbolic", "Sesión", "Power Menu", false, () => {
             (app as any).DistroIA?.togglePower();
-            (app as any).DistroIA?.toggleCC() // Close CC after opening Power
+            (app as any).DistroIA?.toggleCC()
         })
         grid.attach(pwrBtn, col++, row, 1, 1)
     }
@@ -361,30 +361,52 @@ function Sliders() {
 }
 
 export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
-    const box = new Gtk.Box({
+    const mainBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 0,
+        css_classes: ["control-center"]
+    })
+
+    const fixedBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 24,
-        css_classes: ["control-center"]
+        css_classes: ["cc-fixed-container"],
+        margin_start: 24,
+        margin_end: 24,
+        margin_top: 24,
+        margin_bottom: 12
+    })
+
+    const scrollBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 12,
+        css_classes: ["cc-notifications-container"],
+        margin_start: 24,
+        margin_end: 24,
+        margin_bottom: 24
     })
 
     const scroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         vexpand: true,
-        child: box,
+        child: scrollBox,
         css_classes: ["cc-scroll"]
     })
+
+    mainBox.append(fixedBox)
+    mainBox.append(scroll)
 
     let initialized = false
     const ensureInit = () => {
         if (initialized) return
 
-        try { box.append(GridControls()) } catch (e) { console.error("[CC] GridControls failed:", e) }
-        try { box.append(Sliders()) } catch (e) { console.error("[CC] Sliders failed:", e) }
-        try { box.append(Media()) } catch (e) { console.error("[CC] Media failed:", e) }
+        try { fixedBox.append(GridControls()) } catch (e) { console.error("[CC] GridControls failed:", e) }
+        try { fixedBox.append(Sliders()) } catch (e) { console.error("[CC] Sliders failed:", e) }
+        try { fixedBox.append(Media()) } catch (e) { console.error("[CC] Media failed:", e) }
         try {
-            box.append(new Gtk.Separator({ css_classes: ["cc-separator"] }))
-            box.append(Notifications())
+            scrollBox.append(new Gtk.Separator({ css_classes: ["cc-separator"] }))
+            scrollBox.append(Notifications())
         } catch (e) { console.error("[CC] Notifications failed:", e) }
 
         initialized = true
@@ -394,13 +416,42 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         name: "crystal-control-center",
         application: app,
         css_classes: ["control-center-win"],
-        child: scroll,
-        default_width: 480,
-        default_height: 800,
+        child: mainBox,
+        default_width: 420,
+        default_height: -1,
         visible: false
     })
+    win.set_decorated(false)
     // @ts-ignore
     win.app_paintable = true
+
+    // GTK4: Force window transparency via display-level CSS provider (beats theme)
+    try {
+        const cssProvider = new Gtk.CssProvider()
+        cssProvider.load_from_string(`
+            window#crystal-control-center,
+            window#crystal-control-center.control-center-win {
+                background-color: transparent;
+                background-image: none;
+                background: none;
+                border: none;
+                box-shadow: none;
+            }
+            window#crystal-control-center decoration {
+                background-color: transparent;
+                background: none;
+                box-shadow: none;
+                border: none;
+            }
+        `)
+        // @ts-ignore — GTK4 display-level provider, highest priority
+        const display = Gdk.Display.get_default()
+        if (display) {
+            Gtk.StyleContext.add_provider_for_display(display, cssProvider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION + 1)
+        }
+    } catch (e) {
+        console.error("[CC] Display CSS provider failed:", e)
+    }
 
     let layerInit = false
     try {
@@ -414,8 +465,10 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
             Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
             Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 48) // Aligned with Bar 8px gap
+            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 48)
             Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, 8)
+            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true)
+            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 10) // Dock exclusive zone (110px) already subtracted
             // @ts-ignore
             win.gdkmonitor = gdkmonitor
         } catch (e) {
@@ -425,7 +478,6 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     // @ts-ignore
     win.toggle = () => {
-        console.log("[CC] Internal toggle called")
         ensureInit()
         win.set_visible(!win.get_visible())
         if (win.get_visible()) win.present()

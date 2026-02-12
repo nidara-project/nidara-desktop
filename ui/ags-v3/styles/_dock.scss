@@ -1,0 +1,194 @@
+@use 'tokens' as *;
+
+/* ==========================================================================
+   CRYSTAL DOCK
+   Items, squircles, indicators, menus, separators
+   ========================================================================== */
+
+#the-dock-bar {
+    padding: 0;
+    min-height: 100px;
+    max-height: 100px;
+    transform-origin: bottom bottom;
+}
+
+.cd-item {
+    margin: 0;
+    padding: 0;
+    background-color: transparent;
+    background-image: none;
+    transform-origin: bottom bottom;
+    border: none;
+    box-shadow: none;
+    transition: background-color 200ms ease;
+    min-height: 100px;
+    min-width: 64px;
+}
+
+.cd-revealer {
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
+    transition: none;
+    overflow: visible;
+}
+
+.cd-item:hover {
+    background-color: transparent;
+}
+
+/* Drag Gap */
+window#crystal-dock box.cd-drag-gap,
+.cd-drag-gap {
+    margin-left: 72px;
+    transition: margin-left 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Transition Override */
+.cd-item {
+    transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1);
+    margin-left: 0px;
+}
+
+.cd-item:hover {
+    background-color: transparent;
+    box-shadow: none;
+    outline: none;
+    background-image: none;
+}
+
+.cd-icon-container {
+    margin: 0;
+    padding: 0;
+    background-color: transparent;
+    transition: none;
+}
+
+/* --- Squircle Icon Plates --- */
+window#crystal-dock box.cd-squircle-plate {
+    background-color: #ffffff;
+    border-radius: 28%;
+    min-width: 32px;
+    min-height: 32px;
+    margin: 0;
+    padding: 0;
+    opacity: 1;
+    box-shadow: none;
+    border: none;
+}
+
+window#crystal-dock box.cd-squircle-plate image,
+window#crystal-dock box.cd-squircle-plate widget,
+window#crystal-dock box.cd-squircle-plate drawingarea {
+    box-shadow: none;
+    -gtk-icon-shadow: none;
+    border: none;
+    background: none;
+}
+
+/* --- Dock Menu --- */
+.cd-menu-action {
+    min-width: 160px;
+    padding: 8px 12px;
+    margin: 0;
+    border: 1px solid transparent;
+    background-clip: padding-box;
+}
+
+popover.cd-popover contents {
+    background-color: $theme_bg;
+    border: 1px solid $theme_border;
+    border-radius: 14px;
+    padding: 8px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+button.cd-menu-action {
+    background: transparent;
+    color: $theme_fg;
+    border-radius: 10px;
+    padding: 10px 16px;
+    transition: all 0.2s ease;
+}
+
+button.cd-menu-action:hover {
+    background-color: $theme_hover;
+    color: white;
+    border-color: transparent;
+    box-shadow: none;
+}
+
+/* --- Indicators (Dots) --- */
+window#crystal-dock button.cd-dot,
+window#crystal-dock box.cd-dot {
+    min-height: 5px;
+    min-width: 5px;
+    border-radius: 50%;
+    margin-top: 4px;
+    background-color: transparent;
+    transition: all 0.2s ease;
+}
+
+window#crystal-dock box.cd-dot.open,
+window#crystal-dock box.cd-dot.focused {
+    background-color: rgba(255, 255, 255, 0.5);
+    box-shadow: none;
+    border: none;
+    opacity: 1;
+    min-height: 5px;
+    min-width: 5px;
+}
+
+/* --- Separator --- */
+window#crystal-dock box.cd-separator,
+window#crystal-dock box#cd-separator {
+    min-height: 48px;
+    min-width: 2px;
+    background-color: rgba(255, 255, 255, 0.4);
+    margin: 0 10px;
+    box-shadow: none;
+    border-radius: 1px;
+}
+
+/* --- Hover Shadow Killer --- */
+window#crystal-dock .cd-item:hover,
+window#crystal-dock .cd-squircle-plate:hover {
+    box-shadow: none;
+    -gtk-icon-shadow: none;
+    filter: none;
+}
+
+/* --- Menu Layout --- */
+.cd-menu-separator {
+    min-height: 1px;
+    margin: 6px 4px;
+    background-color: $theme_border;
+}
+
+.cd-menu-action {
+    padding: 8px 12px;
+    border-radius: 8px;
+    min-width: 140px;
+    margin-bottom: 2px;
+    background: transparent;
+    transition: background-color 0.2s;
+}
+
+.cd-menu-action:hover {
+    background-color: $theme_hover;
+    color: white;
+}
+
+.cd-menu-header {
+    padding: 8px 12px;
+    margin-bottom: 4px;
+    font-size: 0.9em;
+    font-weight: bold;
+    color: $theme_fg_dim;
+}
+
+/* --- Launcher Icon Visibility --- */
+#cd-icon-box-launcher image {
+    color: #ffffff;
+    -gtk-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+}

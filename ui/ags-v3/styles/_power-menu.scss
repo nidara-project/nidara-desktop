@@ -1,0 +1,110 @@
+/* ==========================================================================
+   POWER MENU
+   Based on Stitch "Minimalist Power Menu" design
+   ========================================================================== */
+
+.power-menu-win {
+    background-color: transparent;
+}
+
+.power-main-box {
+    background-color: rgba(22, 22, 32, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 28px;
+    padding: 48px 64px;
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7);
+}
+
+/* --- User Greeting --- */
+.power-header {
+    font-size: 2.4em;
+    font-weight: 300;
+    color: white;
+    margin-bottom: 4px;
+}
+
+.power-header-accent {
+    color: #4cd964;
+    font-weight: 500;
+}
+
+.power-uptime {
+    font-size: 0.85em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.35);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-top: 8px;
+}
+
+/* --- Action Buttons --- */
+.power-action-box {
+    margin: 40px 0 20px;
+}
+
+.power-btn {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+    padding: 0;
+    min-width: 72px;
+    min-height: 72px;
+    transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.power-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.2);
+    transform: scale(1.08);
+}
+
+.power-btn-icon {
+    font-size: 1.4em;
+    color: white;
+}
+
+.power-btn.shutdown:hover {
+    background-color: rgba(255, 59, 48, 0.25);
+    border-color: rgba(255, 59, 48, 0.5);
+}
+
+.power-btn.reboot:hover {
+    background-color: rgba(52, 199, 89, 0.25);
+    border-color: rgba(52, 199, 89, 0.5);
+}
+
+.power-btn.logout:hover {
+    background-color: rgba(0, 122, 255, 0.25);
+    border-color: rgba(0, 122, 255, 0.5);
+}
+
+.power-btn.lock:hover {
+    background-color: rgba(175, 82, 222, 0.25);
+    border-color: rgba(175, 82, 222, 0.5);
+}
+
+.power-btn-label {
+    font-size: 0.8em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: 8px;
+}
+
+/* --- Cancel --- */
+.power-cancel-btn {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 100px;
+    padding: 8px 28px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.85em;
+    font-weight: 500;
+    letter-spacing: 0.5px;
+    transition: all 0.2s;
+}
+
+.power-cancel-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: white;
+}

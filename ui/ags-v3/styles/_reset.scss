@@ -1,0 +1,212 @@
+@use 'tokens' as *;
+
+/* ==========================================================================
+   SYSTEM NEUTRALIZATION & NUCLEAR HACKS
+   GTK background/shadow/border/focus overrides for Layer Shell windows
+   ========================================================================== */
+
+/* --- GLOBAL: Kill GTK Focus/Selection Borders --- */
+*:focus,
+*:active,
+*:checked {
+    outline: none;
+    outline-width: 0;
+    outline-style: none;
+    outline-color: transparent;
+    box-shadow: none;
+    -gtk-outline-radius: 0;
+}
+
+button:focus,
+button:active,
+button:checked,
+togglebutton:focus,
+togglebutton:checked,
+modelbutton:focus {
+    outline: none;
+    outline-width: 0;
+    box-shadow: none;
+    border-color: transparent;
+}
+
+/* --- GTK theme border killer --- */
+.cc-toggle:focus,
+.cc-toggle:active,
+.cc-toggle:checked,
+.bar-capsule:focus,
+.bar-capsule:active,
+.bar-res-item:focus,
+.bar-res-item:active,
+.bar-cockpit-btn:focus,
+.bar-ws-btn:focus,
+.bar-time-btn:focus,
+.bar-status-btn:focus,
+.bar-app-menu-btn:focus,
+.bar-tray-btn:focus {
+    outline: none;
+    outline-width: 0;
+    box-shadow: none;
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* --- Dock Window Neutralization --- */
+#crystal-dock {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    border: none;
+}
+
+.dock-window.fullscreen .cd-dock-container .dock-overlay .cd-bar {
+    background-color: transparent;
+    border: none;
+}
+
+/* --- ID Hierarchy Selectors --- */
+window#crystal-dock,
+window#crystal-dock>box#dock-main-container,
+window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay,
+window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay>widget,
+window#crystal-dock>box#dock-main-container>overlay#dock-main-overlay>widget>box#the-dock-bar {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    border: none;
+}
+
+/* --- Fullscreen Background Kill --- */
+window#crystal-dock,
+window#crystal-dock decoration,
+window#crystal-dock main {
+    background-color: rgba(0, 0, 0, 0);
+    background-image: none;
+    border: none;
+    box-shadow: none;
+}
+
+/* --- Intermediate Container Kill --- */
+#crystal-dock #dock-main-container,
+#crystal-dock #dock-main-overlay,
+#crystal-dock .cd-dock-container,
+#crystal-dock .cd-main-overlay,
+#crystal-dock .cd-overlay,
+#crystal-dock #dock-drawing-area,
+#crystal-dock .cd-drawing-area,
+#crystal-dock #the-dock-bar,
+#crystal-dock .cd-dock-bar {
+    background-color: transparent;
+    background-image: none;
+    background: none;
+    border: none;
+    box-shadow: none;
+}
+
+/* --- Dock Item Contents Kill --- */
+.cd-item,
+.cd-item>contents,
+box.cd-item {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    border: none;
+}
+
+/* --- App Grid Cleanup --- */
+.launcher-grid,
+.launcher-item,
+.app-item {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    outline: none;
+}
+
+/* --- Dock Window Final Cleanup --- */
+window#crystal-dock,
+window#crystal-dock.fullscreen,
+window#crystal-dock decoration,
+#crystal-dock,
+#crystal-dock.fullscreen {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    border: none;
+}
+
+/* --- App Grid Window Cleanup --- */
+window#app-grid-window,
+.app-grid-window {
+    background-color: transparent;
+}
+
+/* --- Double Background Killer --- */
+#crystal-dock #crystal-dock-bg,
+.crystal-dock,
+window#crystal-dock box.crystal-dock {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+}
+
+#crystal-dock #the-dock-bar,
+.cd-dock-bar {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+}
+
+/* --- Atomic Window Neutralization --- */
+window#crystal-bar,
+window#crystal-control-center,
+window#crystal-app-launcher,
+window#crystal-power-menu,
+.control-center-win,
+.app-grid-window,
+.power-menu-win {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    border: none;
+}
+
+window#crystal-bar decoration,
+window#crystal-bar main,
+window#crystal-control-center decoration,
+window#crystal-control-center main,
+window#crystal-app-launcher decoration,
+window#crystal-app-launcher main,
+window#crystal-power-menu decoration,
+window#crystal-power-menu main {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+}
+
+/* --- CC Window: UNIVERSAL transparency killer --- */
+/* GTK4 can insert windowhandle, contents, headerbar, and other internal
+   nodes between window and child. This wildcard catches them ALL. */
+window#crystal-control-center,
+window#crystal-control-center>*,
+window#crystal-control-center>*>*,
+window.control-center-win,
+window.control-center-win>*,
+window.control-center-win>*>* {
+    background-color: transparent;
+    background-image: none;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+/* Re-apply the actual panel background ONLY to .control-center box */
+window#crystal-control-center .control-center {
+    background-color: rgba(18, 18, 28, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 24px;
+    padding: 24px;
+    min-width: 420px;
+    box-shadow: none;
+}

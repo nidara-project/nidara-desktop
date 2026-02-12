@@ -1,12 +1,70 @@
-@charset "UTF-8";
 /* 
-   CRYSTAL UI - DYNAMIC THEME ENGINE
-   Inheriting system colors from GTK Registry
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
 */
-/* CRYSTAL UI DESIGN SYSTEM 💎 */
-/* Adjusted for Hyprland ignore_alpha threshold */
-/* Lightened for better blur visibility */
-/* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
+/* 
+   CRYSTAL UI - DESIGN TOKENS
+   Single source of truth for all design values
+*/
+/* 
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
+*/
+/* ==========================================================================
+   SYSTEM NEUTRALIZATION & NUCLEAR HACKS
+   GTK background/shadow/border/focus overrides for Layer Shell windows
+   ========================================================================== */
+/* --- GLOBAL: Kill GTK Focus/Selection Borders --- */
+*:focus,
+*:active,
+*:checked {
+  outline: none;
+  outline-width: 0;
+  outline-style: none;
+  outline-color: transparent;
+  box-shadow: none;
+  -gtk-outline-radius: 0;
+}
+
+button:focus,
+button:active,
+button:checked,
+togglebutton:focus,
+togglebutton:checked,
+modelbutton:focus {
+  outline: none;
+  outline-width: 0;
+  box-shadow: none;
+  border-color: transparent;
+}
+
+/* --- GTK theme border killer --- */
+.cc-toggle:focus,
+.cc-toggle:active,
+.cc-toggle:checked,
+.bar-capsule:focus,
+.bar-capsule:active,
+.bar-res-item:focus,
+.bar-res-item:active,
+.bar-cockpit-btn:focus,
+.bar-ws-btn:focus,
+.bar-time-btn:focus,
+.bar-status-btn:focus,
+.bar-app-menu-btn:focus,
+.bar-tray-btn:focus {
+  outline: none;
+  outline-width: 0;
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+/* --- Dock Window Neutralization --- */
 #crystal-dock {
   background-color: transparent;
   background-image: none;
@@ -14,13 +72,12 @@
   border: none;
 }
 
-/* Neutralización Específica con Ruta Completa */
 .dock-window.fullscreen .cd-dock-container .dock-overlay .cd-bar {
   background-color: transparent;
   border: none;
 }
 
-/* --- 2. SELECTORES DE "FINAL WAR" ID HIERARCHY --- */
+/* --- ID Hierarchy Selectors --- */
 window#crystal-dock,
 window#crystal-dock > box#dock-main-container,
 window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay,
@@ -32,9 +89,7 @@ window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widg
   border: none;
 }
 
-/* --- NUCLEAR: KILL FULLSCREEN BACKGROUNDS (User Requested) --- */
-/* --- EXORCISMO CSS (Nuclear Paradox Fix) --- */
-/* Atacamos la raíz de la ventana SOLAMENTE */
+/* --- Fullscreen Background Kill --- */
 window#crystal-dock,
 window#crystal-dock decoration,
 window#crystal-dock main {
@@ -44,7 +99,7 @@ window#crystal-dock main {
   box-shadow: none;
 }
 
-/* --- NUCLEAR: KILL INTERMEDIATE CONTAINERS (Strict IDs) --- */
+/* --- Intermediate Container Kill --- */
 #crystal-dock #dock-main-container,
 #crystal-dock #dock-main-overlay,
 #crystal-dock .cd-dock-container,
@@ -61,8 +116,7 @@ window#crystal-dock main {
   box-shadow: none;
 }
 
-/* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
-/* --- NUCLEAR: KILL DOCK ITEMS & CONTENTS --- */
+/* --- Dock Item Contents Kill --- */
 .cd-item,
 .cd-item > contents,
 box.cd-item {
@@ -72,7 +126,7 @@ box.cd-item {
   border: none;
 }
 
-/* --- APP GRID CLEANUP (Specific Target) --- */
+/* --- App Grid Cleanup --- */
 .launcher-grid,
 .launcher-item,
 .app-item {
@@ -82,7 +136,107 @@ box.cd-item {
   outline: none;
 }
 
-/* --- 3. ESTILOS PROPIOS (cd-*) --- */
+/* --- Dock Window Final Cleanup --- */
+window#crystal-dock,
+window#crystal-dock.fullscreen,
+window#crystal-dock decoration,
+#crystal-dock,
+#crystal-dock.fullscreen {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}
+
+/* --- App Grid Window Cleanup --- */
+window#app-grid-window,
+.app-grid-window {
+  background-color: transparent;
+}
+
+/* --- Double Background Killer --- */
+#crystal-dock #crystal-dock-bg,
+.crystal-dock,
+window#crystal-dock box.crystal-dock {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+#crystal-dock #the-dock-bar,
+.cd-dock-bar {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* --- Atomic Window Neutralization --- */
+window#crystal-bar,
+window#crystal-control-center,
+window#crystal-app-launcher,
+window#crystal-power-menu,
+.control-center-win,
+.app-grid-window,
+.power-menu-win {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}
+
+window#crystal-bar decoration,
+window#crystal-bar main,
+window#crystal-control-center decoration,
+window#crystal-control-center main,
+window#crystal-app-launcher decoration,
+window#crystal-app-launcher main,
+window#crystal-power-menu decoration,
+window#crystal-power-menu main {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* --- CC Window: UNIVERSAL transparency killer --- */
+/* GTK4 can insert windowhandle, contents, headerbar, and other internal
+   nodes between window and child. This wildcard catches them ALL. */
+window#crystal-control-center,
+window#crystal-control-center > *,
+window#crystal-control-center > * > *,
+window.control-center-win,
+window.control-center-win > *,
+window.control-center-win > * > * {
+  background-color: transparent;
+  background-image: none;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+/* Re-apply the actual panel background ONLY to .control-center box */
+window#crystal-control-center .control-center {
+  background-color: rgba(18, 18, 28, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  padding: 24px;
+  min-width: 420px;
+  box-shadow: none;
+}
+
+/* 
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
+*/
+/* ==========================================================================
+   CRYSTAL DOCK
+   Items, squircles, indicators, menus, separators
+   ========================================================================== */
 #the-dock-bar {
   padding: 0;
   min-height: 100px;
@@ -108,30 +262,26 @@ box.cd-item {
   padding: 0;
   margin: 0;
   transition: none;
-  /* PHYSICS ENGINE CONTROLS LAYOUT */
   overflow: visible;
 }
 
 .cd-item:hover {
   background-color: transparent;
-  /* Fix: Remove unwanted hover background */
 }
 
-/* High Specificity for Drag Gap */
+/* Drag Gap */
 window#crystal-dock box.cd-drag-gap,
 .cd-drag-gap {
   margin-left: 72px;
-  /* Icon (64) + Gap (8) */
   transition: margin-left 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
-/* Blindaje Nuclear de estados de sistema - REMOVED WILDCARDS TO ALLOW THEME INHERITANCE */
+/* Transition Override */
 .cd-item {
   transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1);
   margin-left: 0px;
 }
 
-/* Only target the item itself, not its children (popovers/tooltips) */
 .cd-item:hover {
   background-color: transparent;
   box-shadow: none;
@@ -146,7 +296,7 @@ window#crystal-dock box.cd-drag-gap,
   transition: none;
 }
 
-/* --- SQUIRCLE ICON PLATES (Phase 72: Specificity over Force) --- */
+/* --- Squircle Icon Plates --- */
 window#crystal-dock box.cd-squircle-plate {
   background-color: #ffffff;
   border-radius: 28%;
@@ -159,7 +309,6 @@ window#crystal-dock box.cd-squircle-plate {
   border: none;
 }
 
-/* Internal Icon Clamping - High Specificity */
 window#crystal-dock box.cd-squircle-plate image,
 window#crystal-dock box.cd-squircle-plate widget,
 window#crystal-dock box.cd-squircle-plate drawingarea {
@@ -169,18 +318,15 @@ window#crystal-dock box.cd-squircle-plate drawingarea {
   background: none;
 }
 
-/* --- STABILITY: Dock Menu Actions --- */
+/* --- Dock Menu --- */
 .cd-menu-action {
   min-width: 160px;
-  /* Force minimum width to prevent jitter */
   padding: 8px 12px;
   margin: 0;
   border: 1px solid transparent;
-  /* Reserve border space */
   background-clip: padding-box;
 }
 
-/* --- STABILITY & THEME: Dock Menu --- */
 popover.cd-popover contents {
   background-color: @theme_bg_color;
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -204,7 +350,7 @@ button.cd-menu-action:hover {
   box-shadow: none;
 }
 
-/* --- INDICATORS (Dots) --- */
+/* --- Indicators (Dots) --- */
 window#crystal-dock button.cd-dot,
 window#crystal-dock box.cd-dot {
   min-height: 5px;
@@ -215,7 +361,6 @@ window#crystal-dock box.cd-dot {
   transition: all 0.2s ease;
 }
 
-/* Active/Focused State - SEMI-TRANSPARENT (Original Look) */
 window#crystal-dock box.cd-dot.open,
 window#crystal-dock box.cd-dot.focused {
   background-color: rgba(255, 255, 255, 0.5);
@@ -226,7 +371,7 @@ window#crystal-dock box.cd-dot.focused {
   min-width: 5px;
 }
 
-/* --- SEPARATOR --- */
+/* --- Separator --- */
 window#crystal-dock box.cd-separator,
 window#crystal-dock box#cd-separator {
   min-height: 48px;
@@ -237,8 +382,7 @@ window#crystal-dock box#cd-separator {
   border-radius: 1px;
 }
 
-/* --- HOVER SHADOW KILLER (Surgical & Specific) --- */
-/* Target ONLY the hover states we want to flatten */
+/* --- Hover Shadow Killer --- */
 window#crystal-dock .cd-item:hover,
 window#crystal-dock .cd-squircle-plate:hover {
   box-shadow: none;
@@ -246,30 +390,7 @@ window#crystal-dock .cd-squircle-plate:hover {
   filter: none;
 }
 
-/* ==========================================================================
-   FINAL STRIKE: NEUTRALIZACION DE CLASES DE SISTEMA (FULLSCREEN/BACKGROUND)
-   ========================================================================== */
-/* 2. Red de seguridad para la ventana raiz si sigue en fullscreen o hereda temas */
-window#crystal-dock,
-window#crystal-dock.fullscreen,
-window#crystal-dock decoration,
-#crystal-dock,
-#crystal-dock.fullscreen {
-  background-color: transparent;
-  background-image: none;
-  box-shadow: none;
-  border: none;
-}
-
-/* 2. Red de seguridad para la ventana raiz si sigue en fullscreen o hereda temas */
-window#app-grid-window,
-.app-grid-window {
-  background-color: transparent;
-}
-
-/* --- POPUP & TOOLTIP STYLES REMOVED TO INHERIT GTK THEME --- */
-/* --- RESTORED LAYOUT STRUCTURE (Theme Compatible) --- */
-/* We define spacing and layout, but let the Theme handle colors */
+/* --- Menu Layout --- */
 .cd-menu-separator {
   min-height: 1px;
   margin: 6px 4px;
@@ -298,60 +419,67 @@ window#app-grid-window,
   color: rgba(255, 255, 255, 0.5);
 }
 
-/* --- FINAL NUCLEAR CLEANUP: PREVENT DOUBLE BACKGROUNDS --- */
-/* Ensure the GtkBox behind the DrawingArea is 100% invisible */
-#crystal-dock #crystal-dock-bg,
-.crystal-dock,
-window#crystal-dock box.crystal-dock {
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
+/* --- Launcher Icon Visibility --- */
+#cd-icon-box-launcher image {
+  color: #ffffff;
+  -gtk-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
 }
 
-/* Ensure the shim and bar are transparent */
-#crystal-dock #the-dock-bar,
-.cd-dock-bar {
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-}
-
+/* 
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
+*/
 /* ==========================================================================
-   RESTORED SYSTEM STYLES (BAR, GRID, PANELS)
+   CRYSTAL BAR
+   Window, centerbox, capsules, app menu, workspaces, time, tray, monitors
    ========================================================================== */
-/* --- 2. THE CRYSTAL BAR 💎 --- */
-.crystal-bar,
-#crystal-bar,
+/* --- Window --- */
 window#crystal-bar,
 window.crystal-bar {
-  background-color: transparent;
   background: transparent;
+  padding: 0;
+  margin: 0;
 }
 
+/* --- Nuclear: Kill GTK4 default button min-height inside bar --- */
+window#crystal-bar button,
+window#crystal-bar box:not(.bar-centerbox),
+.bar-centerbox button,
+.bar-centerbox > box {
+  min-height: 0;
+}
+
+/* --- Centerbox (the visible pill) --- */
 .bar-centerbox {
-  padding: 0 16px;
+  padding: 0 12px;
   min-height: 32px;
-  background-color: rgba(255, 255, 255, 0.3);
-  backdrop-filter: blur(32px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.12);
+  border: none;
   border-radius: 999px;
-  /* Absolute capsule */
-  margin: 8px 8px 0 8px;
-  /* Floating Pill Effect */
+  margin: 8px 12px;
 }
 
+/* --- Left/Center/Right containers: don't stretch children --- */
+.bar-left,
+.bar-center,
+.bar-right {
+  margin-top: 3px;
+  margin-bottom: 3px;
+}
+
+/* --- App Menu (left) --- */
 .bar-app-distro-icon {
   margin-right: 4px;
   color: white;
-  /* Or use an accent if preferred */
 }
 
 .bar-app-sep {
   background-color: rgba(255, 255, 255, 0.2);
   min-width: 1px;
-  margin: 6px 4px;
+  margin: 4px 4px;
 }
 
 .bar-app-name {
@@ -373,7 +501,7 @@ window.crystal-bar {
   color: white;
 }
 
-/* CENTER: WORKSPACES */
+/* --- Workspaces (center) --- */
 .bar-ws-dot {
   min-width: 6px;
   min-height: 6px;
@@ -392,452 +520,16 @@ window.crystal-bar {
   min-width: 22px;
 }
 
-/* RIGHT: STATUS */
-.bar-status label {
-  color: rgba(255, 255, 255, 0.95);
-}
-
-.bar-time {
-  color: white;
-}
-
-.bar-cockpit-btn,
-.bar-ws-btn,
-.bar-time-btn,
-.bar-status-btn,
-.bar-app-menu-btn,
-.bar-tray-btn {
-  background-color: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  padding: 4px 14px;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-}
-
-.bar-ws-pill,
-.bar-res-item {
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  padding: 2px 12px;
-}
-
-.bar-res-label,
-.bar-res-icon {
-  color: #FFFFFF;
-  font-weight: bold;
-}
-
-r-tray {
-  margin-right: 6px;
-}
-
-.bar-tray-btn {
-  background: transparent;
-  border: none;
-  border-radius: 6px;
-  min-width: 28px;
-  min-height: 28px;
-  transition: all 0.2s ease;
-}
-
-/* --- 3. CRYSTAL PANELS --- */
-.control-center-win,
-.notification-center-win,
-.notif-win {
-  background-color: transparent;
-  background: none;
-  box-shadow: none;
-  border: none;
-}
-
-#crystal-control-center,
-.control-center-win .control-center,
-.control-center {
-  background-color: rgba(255, 255, 255, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 28px;
-  padding: 24px;
-  min-width: 480px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-}
-
-/* Notification Items 🔔 */
-.nc-notif-item {
-  background-color: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
-  padding: 16px;
-  margin-bottom: 8px;
-  min-height: 80px;
-  transition: all 0.3s ease;
-}
-
-.nc-notif-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.08);
-}
-
-.nc-notif-title {
-  /* Font Inherited */
-  color: #ffffff;
-}
-
-.nc-notif-body {
-  color: rgba(255, 255, 255, 0.75);
-  line-height: 1.4;
-  margin-top: 6px;
-}
-
-.notif-card {
-  background-color: rgba(22, 22, 22, 0.85);
-  border: 1.2px solid rgba(255, 255, 255, 0.25);
-  border-radius: 24px;
-  padding: 20px;
-  min-width: 420px;
-}
-
-.notif-close-btn,
-.nc-notif-close {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 50%;
-  min-width: 32px;
-  min-height: 32px;
-  padding: 0;
-  color: rgba(255, 255, 255, 0.6);
-  transition: all 0.3s ease;
-}
-
-.notif-close-btn:hover,
-.nc-notif-close:hover {
-  background-color: rgba(255, 59, 48, 0.4);
-  color: white;
-}
-
-.notif-app-name {
-  color: rgba(255, 255, 255, 0.5);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.notif-summary {
-  color: white;
-}
-
-.notif-body {
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.nc-header {
-  margin-bottom: 8px;
-}
-
-.nc-header-title {
-  color: #ffffff;
-}
-
-.nc-clear-btn {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  padding: 6px 14px;
-  color: rgba(255, 255, 255, 0.8);
-}
-
-.nc-clear-btn:hover {
-  background-color: rgba(255, 59, 48, 0.2);
-  color: #ff3b30;
-}
-
-.nc-scroll {
-  margin-top: 8px;
-  min-height: 400px;
-}
-
-.nc-empty {
-  color: rgba(255, 255, 255, 0.4);
-  margin-top: 40px;
-}
-
-.cc-toggle {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  padding: 14px 20px;
-  transition: all 0.2s ease;
-}
-
-.cc-toggle.active {
-  background-color: #007aff;
-}
-
-.cc-toggle-label {
-  font-weight: bold;
-  font-size: 1.05em;
-  color: white;
-}
-
-.cc-toggle-sublabel {
-  font-size: 0.85em;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.cc-toggle.active .cc-toggle-sublabel {
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.cc-sliders,
-.cc-media,
-.cc-notifs-section {
-  background-color: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
-  padding: 18px;
-  margin-top: 20px;
-}
-
-.cc-section-title {
-  font-weight: bold;
-  font-size: 1.1em;
-  color: white;
-  margin-bottom: 12px;
-}
-
-/* --- 5. APP GRID --- */
-/* 1. Window & Overlay: Transparent */
-window#app-grid-window,
-window.app-grid-window {
-  background-color: transparent;
-  background: none;
-  border: none;
-  box-shadow: none;
-}
-
-#app-grid-overlay,
-.app-grid-catcher {
-  background-color: transparent;
-  background: none;
-  border: none;
-  box-shadow: none;
-}
-
-/* 2. Main Card: The ONLY visible background */
-#crystal-app-launcher #app-grid-content,
-window#crystal-app-launcher #app-grid-content,
-.app-grid-window #app-grid-content,
-.app-grid-content {
-  background-color: rgba(255, 255, 255, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 40px;
-  padding: 60px;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-}
-
-/* 3. Internals: Reset to Transparent using Custom Classes */
-.app-grid-scroll,
-.app-grid-flow,
-.app-grid-scroll viewport,
-.app-grid-scroll scrollbar,
-.app-grid-scroll undershoot,
-.app-grid-scroll overshoot {
-  background-color: transparent;
-  background: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-}
-
-.app-grid-search {
-  background-color: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
-  color: white;
-  padding: 12px 30px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-  caret-color: #007aff;
-  transition: all 0.2s ease;
-}
-
-.app-grid-search:focus {
-  background-color: rgba(255, 255, 255, 0.15);
-  border-color: rgba(0, 122, 255, 0.5);
-  box-shadow: 0 10px 30px rgba(0, 122, 255, 0.2);
-}
-
-.app-grid-item {
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.app-grid-button {
-  background: none;
-  border: none;
-  box-shadow: none;
-  border-radius: 24px;
-  padding: 10px;
-  transition: all 0.2s ease;
-}
-
-.app-grid-button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-}
-
-/* Neutralize GTK FlowBox Selection 🛡️ */
-flowboxchild {
-  background: none;
-  background-color: transparent;
-  border: none;
-  box-shadow: none;
-  outline: none;
-}
-
-flowboxchild:selected,
-flowboxchild:active,
-flowboxchild:hover {
-  background: none;
-  background-color: transparent;
-  border: none;
-  box-shadow: none;
-  outline: none;
-}
-
-/* --- 6. WORKSPACE COCKPIT 🛡️ --- */
-window.workspace-cockpit {
-  background: transparent;
-  box-shadow: none;
-}
-
-.cockpit-window-content {
-  padding-top: 100px;
-  /* Buffer for shadow bleed 🛡️☁️ */
-  padding-bottom: 250px;
-  /* Deep harbor for shadow 🛡️⚓ */
-  background: transparent;
-}
-
-.workspace-overview {
-  background: #0c0c0c;
-  /* Absolute Solid Grounding 🛡️🌑 */
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 32px;
-  padding: 32px;
-  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95);
-  /* Master Premium Shadow 🛡️✨ */
-}
-
-.wo-item {
-  padding: 16px;
-  border-radius: 24px;
-  background-color: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.wo-item.active {
-  background-color: rgba(0, 122, 255, 0.05);
-  border: 1px solid rgba(0, 122, 255, 0.6);
-  box-shadow: 0 0 60px rgba(0, 122, 255, 0.25);
-}
-
-.wo-btn {
-  background: transparent;
-  border: none;
-  padding: 0;
-  border-radius: 24px;
-  outline: none;
-  box-shadow: none;
-}
-
-.wo-btn:focus,
-.wo-btn:active {
-  outline: none;
-  box-shadow: none;
-  border: none;
-}
-
-.wo-btn:hover .wo-item {
-  background-color: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.12);
-  transform: translateY(-6px);
-}
-
-/* Specificity armor for Active + Hover 🛡️ */
-.wo-btn:hover .wo-item.active {
-  background-color: rgba(0, 122, 255, 0.08);
-  /* Maintain active glow on hover */
-  border-color: rgba(0, 122, 255, 0.8);
-  box-shadow: 0 0 60px rgba(0, 122, 255, 0.35);
-}
-
-.wo-label {
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 2px;
-  color: rgba(255, 255, 255, 0.4);
-}
-
-.wo-label.active {
-  color: #007aff;
-  text-shadow: 0 0 15px rgba(0, 122, 255, 0.8);
-}
-
-.wo-reserved-area {
-  background-color: rgba(255, 255, 255, 0.05);
-  border: 1px dashed rgba(255, 255, 255, 0.15);
-  /* Use fixed labels to identify them */
-}
-.wo-reserved-area.bar {
-  border-radius: 0 0 12px 12px;
-}
-.wo-reserved-area.dock {
-  border-radius: 12px 12px 0 0;
-}
-
-.wo-schematic-win {
-  background-color: rgba(255, 255, 255, 0.2);
-  border: 1.5px solid rgba(255, 255, 255, 0.8);
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-.wo-schematic-win image {
-  margin: 0;
-  padding: 0;
-  -gtk-icon-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-}
-
-.wo-count {
-  font-size: 14px;
-  font-weight: 200;
-  color: rgba(255, 255, 255, 0.2);
-}
-
-/* --- Schematic V5: Pure Layout Engine 🚀 --- */
-.wo-schematic-preview {
-  background-color: rgba(0, 0, 0, 0.7);
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.03);
-  box-shadow: inset 0 20px 40px rgba(0, 0, 0, 0.5);
-}
-
-.wo-schematic-win-icon {
-  opacity: 0.85;
-  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
-}
-
-/* Cockpit Window 🛰️ */
-window.workspace-cockpit {
-  background: transparent;
-}
-
 .bar-ws-btn {
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
-  padding: 4px 16px;
+  padding: 0px 14px;
   min-width: 80px;
-  min-height: 28px;
+  min-height: 0;
+  margin-top: 0;
+  margin-bottom: 0;
   transition: all 0.3s ease;
-}
-
-.bar-center {
-  min-width: 100px;
-  min-height: 40px;
 }
 
 .bar-ws-btn:hover {
@@ -849,7 +541,47 @@ window.workspace-cockpit {
   color: white;
 }
 
-/* Unified Menu Layout (Tray Only) */
+.bar-center {
+  min-width: 100px;
+}
+
+/* --- Status & Buttons (all bar capsule-like buttons) --- */
+.bar-status label {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.bar-time {
+  color: white;
+}
+
+.bar-cockpit-btn,
+.bar-time-btn,
+.bar-status-btn,
+.bar-app-menu-btn {
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 0px 10px;
+  min-height: 0;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* --- Tray --- */
+.bar-tray {
+  margin-right: 6px;
+}
+
+.bar-tray-btn {
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0px;
+  transition: all 0.2s ease;
+}
+
+/* --- Tray Menu --- */
 popover.bar-tray-menu contents {
   background-color: @theme_bg_color;
   padding: 8px;
@@ -879,27 +611,23 @@ popover.bar-tray-menu separator {
   min-height: 1px;
 }
 
-/* V136: LAUNCHER ICON VISIBILITY (Symbolic Grid Fix) */
-/* Force white color and shadow so symbolic icons don't vanish or appear blank */
-#cd-icon-box-launcher image {
-  color: #ffffff;
-  -gtk-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
-}
-
-/* --- 7. SYSTEM MONITORS 📊 --- */
+/* --- System Monitors (CPU / RAM capsules) --- */
 .bar-resources {
   margin-right: 12px;
 }
 
 .bar-res-item {
-  background-color: rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 2px 10px;
-  transition: all 0.3s ease;
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 0px 10px;
+  min-height: 0;
+  transition: all 0.2s ease;
 }
 
 .bar-res-item:hover {
-  background-color: @theme_selected_bg_color;
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .bar-res-icon {
@@ -908,12 +636,10 @@ popover.bar-tray-menu separator {
 
 .bar-res-icon.cpu {
   color: #34c759;
-  /* Apple Success Green */
 }
 
 .bar-res-icon.ram {
   color: #5856d6;
-  /* Apple Indigo */
 }
 
 .bar-res-label {
@@ -923,181 +649,762 @@ popover.bar-tray-menu separator {
   min-width: 32px;
 }
 
-/* --- 8. AUDIO SINK SWITCHER 🔊 --- */
-.cc-audio-sinks {
-  margin-bottom: 16px;
-  background-color: rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  padding: 16px;
+.bar-res-label,
+.bar-res-icon {
+  color: #FFFFFF;
+  font-weight: bold;
 }
 
-.cc-section-title {
-  font-size: 0.9em;
-  font-weight: bold;
-  opacity: 0.6;
+/* --- Capsule Hardening (generic) --- */
+.bar-capsule {
+  border-radius: 999px;
+  padding: 0px 10px;
+  min-height: 0;
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.2s ease;
+}
+
+.bar-capsule:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.bar-res-item.bar-capsule {
+  padding: 0px 10px;
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+/* 
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
+*/
+/* ==========================================================================
+   CONTROL CENTER & NOTIFICATIONS
+   Based on Stitch "Refined Notification Center" designs
+   ========================================================================== */
+/* --- Window --- */
+.control-center-win,
+.notification-center-win,
+.notif-win {
+  background-color: transparent;
+  background: none;
+  box-shadow: none;
+  border: none;
+}
+
+/* --- Main Panel (ONLY the inner box, NOT the window) --- */
+.control-center-win .control-center,
+.control-center {
+  background-color: rgba(18, 18, 28, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  padding: 24px;
+  min-width: 420px;
+  box-shadow: none;
+}
+
+/* --- Date/Time Header --- */
+.cc-datetime {
+  text-align: right;
+  margin-bottom: 16px;
+}
+
+.cc-time {
+  font-size: 2.8em;
+  font-weight: 300;
+  color: white;
+  letter-spacing: -1px;
+}
+
+.cc-date {
+  font-size: 0.8em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+/* --- Quick Toggles Grid --- */
+.cc-toggle {
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 14px 18px;
+  transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.cc-toggle.active {
+  background-color: #007aff;
+  border-color: rgba(0, 122, 255, 0.4);
+}
+
+.cc-toggle-label {
+  font-weight: 600;
+  font-size: 0.95em;
+  color: white;
+}
+
+.cc-toggle-sublabel {
+  font-size: 0.8em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+.cc-toggle.active .cc-toggle-sublabel {
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.cc-toggle-icon {
+  font-size: 1.2em;
+  margin-right: 8px;
+}
+
+/* --- Sliders (Brightness / Volume) --- */
+.cc-sliders {
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 14px 18px;
+  margin-top: 12px;
+}
+
+.cc-slider-row {
+  margin: 4px 0;
+}
+
+.cc-slider-icon {
+  color: rgba(255, 255, 255, 0.6);
+  margin-right: 10px;
+  font-size: 1.1em;
+}
+
+scale trough {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  min-height: 4px;
+}
+
+scale trough highlight {
+  background-color: white;
+  border-radius: 4px;
+}
+
+scale slider {
+  background-color: white;
+  border-radius: 50%;
+  min-width: 16px;
+  min-height: 16px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* --- Notifications Section --- */
+.cc-notifs-section {
+  margin-top: 16px;
+}
+
+.cc-notifs-header {
   margin-bottom: 8px;
-  margin-left: 4px;
+}
+
+.cc-notifs-title {
+  font-size: 0.75em;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+/* --- Notification Items --- */
+.nc-notif-item {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 14px 16px;
+  margin-bottom: 6px;
+  transition: all 0.2s ease;
+}
+
+.nc-notif-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.nc-notif-title {
+  color: white;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.nc-notif-body {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85em;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+/* --- Notification Card (Popup) --- */
+.notif-card {
+  background-color: rgba(18, 18, 28, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 18px;
+  min-width: 380px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.notif-close-btn,
+.nc-notif-close {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-radius: 50%;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.5);
+  transition: all 0.2s ease;
+}
+
+.notif-close-btn:hover,
+.nc-notif-close:hover {
+  background-color: rgba(255, 59, 48, 0.3);
+  color: #ff6961;
+}
+
+.notif-app-name {
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-size: 0.75em;
+  font-weight: 600;
+}
+
+.notif-summary {
+  color: white;
+  font-weight: 600;
+}
+
+.notif-body {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9em;
+}
+
+/* --- NC Header --- */
+.nc-header {
+  margin-bottom: 10px;
+}
+
+.nc-header-title {
+  color: white;
+  font-weight: 700;
+}
+
+.nc-clear-btn {
+  background-color: transparent;
+  border-radius: 8px;
+  padding: 4px 12px;
+  color: #007aff;
+  font-size: 0.85em;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.nc-clear-btn:hover {
+  background-color: rgba(0, 122, 255, 0.15);
+  color: #3395ff;
+}
+
+.nc-scroll {
+  margin-top: 8px;
+  min-height: 300px;
+}
+
+.nc-empty {
+  color: rgba(255, 255, 255, 0.3);
+  margin-top: 40px;
+  font-size: 0.9em;
+}
+
+/* --- Media Player --- */
+.cc-media {
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 12px 16px;
+  margin-top: 12px;
+}
+
+.cc-media-title {
+  color: white;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.cc-media-artist {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.8em;
+}
+
+.cc-media-controls button {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  min-width: 32px;
+  min-height: 32px;
+  transition: all 0.2s;
+}
+
+.cc-media-controls button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+/* --- Section Titles --- */
+.cc-section-title {
+  font-size: 0.75em;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+  margin-left: 2px;
+}
+
+/* --- Audio Sinks --- */
+.cc-audio-sinks {
+  margin-bottom: 12px;
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 14px;
 }
 
 .cc-sink-item {
-  padding: 10px 14px;
-  border-radius: 12px;
+  padding: 8px 12px;
+  border-radius: 10px;
   background: transparent;
   transition: all 0.2s ease;
 }
 
 .cc-sink-item:hover {
-  background-color: @theme_selected_bg_color;
-  color: white;
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 .cc-sink-item.active {
-  background-color: rgba(0, 122, 255, 0.2);
-  border: 1px solid rgba(0, 122, 255, 0.3);
+  background-color: rgba(0, 122, 255, 0.15);
+  border: 1px solid rgba(0, 122, 255, 0.25);
 }
 
 .cc-sink-item label {
-  font-size: 0.95em;
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.85);
 }
 
-/* --- 5. POWER MENU (FULLSCREEN GLASS) 💎 --- */
-.power-menu-win {
+/* 
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
+*/
+/* ==========================================================================
+   APP GRID
+   Based on Stitch "Spotlight-style App Launcher" design
+   ========================================================================== */
+/* --- Window & Overlay --- */
+window#app-grid-window,
+window.app-grid-window {
   background-color: transparent;
+  background: none;
+  border: none;
+  box-shadow: none;
 }
 
-.power-main-box {
-  background-color: rgba(0, 0, 0, 0.6);
-  /* Slightly more contrast for readability */
-  backdrop-filter: blur(32px);
-  /* Crystal Polish */
-  padding: 80px;
-  border-radius: 40px;
+#app-grid-overlay,
+.app-grid-catcher {
+  background-color: transparent;
+  background: none;
+  border: none;
+  box-shadow: none;
 }
 
-.power-header {
-  font-size: 4em;
-  font-weight: 800;
-  color: white;
-  margin-bottom: 20px;
+/* --- Main Card (Spotlight Panel) --- */
+#crystal-app-launcher #app-grid-content,
+window#crystal-app-launcher #app-grid-content,
+.app-grid-window #app-grid-content,
+.app-grid-content {
+  background-color: rgba(245, 245, 250, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 24px;
+  padding: 32px 40px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35), 0 0 1px rgba(0, 0, 0, 0.2);
+  min-width: 600px;
 }
 
-.power-uptime {
-  font-size: 1.4em;
-  color: rgba(255, 255, 255, 0.5);
-  margin-top: 20px;
-}
-
-.power-action-box {
-  margin: 40px 0;
-}
-
-.power-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 32px;
-  padding: 40px;
-  min-width: 180px;
-  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
-}
-
-.power-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  border-color: rgba(255, 255, 255, 0.4);
-  transform: scale(1.05);
-}
-
-.power-btn.shutdown:hover {
-  background-color: rgba(255, 59, 48, 0.4);
-  border-color: #ff3b30;
-}
-
-.power-btn.reboot:hover {
-  background-color: rgba(52, 199, 89, 0.4);
-  border-color: #34c759;
-}
-
-.power-btn.logout:hover {
-  background-color: rgba(0, 122, 255, 0.4);
-  border-color: #007aff;
-}
-
-.power-btn.lock:hover {
-  background-color: rgba(175, 82, 222, 0.4);
-  border-color: #af52de;
-}
-
-.power-btn-label {
+/* --- Search Bar --- */
+.app-grid-search {
+  background-color: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 0;
+  color: rgba(0, 0, 0, 0.85);
+  padding: 12px 8px;
   font-size: 1.2em;
-  font-weight: 600;
-  color: white;
-}
-
-.power-cancel-btn {
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 100px;
-  padding: 12px 40px;
-  color: white;
-  font-weight: bold;
-  transition: all 0.2s;
-}
-
-.power-cancel-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: white;
-}
-
-/* --- 6. ATOMIC WINDOW NEUTRALIZATION (Doble Fondo Killer) ☢️ --- */
-window#crystal-bar,
-window#crystal-control-center,
-window#crystal-app-launcher,
-window#crystal-power-menu,
-.control-center-win,
-.app-grid-window,
-.power-menu-win {
-  background-color: transparent;
-  background-image: none;
-  box-shadow: none;
-  border: none;
-}
-
-window#crystal-bar decoration,
-window#crystal-bar main,
-window#crystal-control-center decoration,
-window#crystal-control-center main,
-window#crystal-app-launcher decoration,
-window#crystal-app-launcher main,
-window#crystal-power-menu decoration,
-window#crystal-power-menu main {
-  background-color: transparent;
-  background-image: none;
-  border: none;
+  font-weight: 300;
+  caret-color: #007aff;
+  transition: all 0.2s ease;
   box-shadow: none;
 }
 
-/* --- 7. SYSTEM ACTION STRIP POLISH (AppGrid) --- */
+.app-grid-search:focus {
+  background-color: transparent;
+  border-color: rgba(0, 122, 255, 0.3);
+  box-shadow: none;
+}
+
+/* Placeholder text */
+.app-grid-search-placeholder {
+  color: rgba(0, 0, 0, 0.35);
+  font-weight: 300;
+}
+
+/* --- Section Labels --- */
+.app-grid-section-title {
+  font-size: 0.7em;
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin: 16px 0 8px 4px;
+}
+
+/* --- Scroll & Layout --- */
+.app-grid-scroll,
+.app-grid-flow,
+.app-grid-scroll viewport,
+.app-grid-scroll scrollbar,
+.app-grid-scroll undershoot,
+.app-grid-scroll overshoot {
+  background-color: transparent;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+/* --- App Items --- */
+.app-grid-item {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-grid-button {
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 16px;
+  padding: 10px;
+  transition: all 0.2s ease;
+}
+
+.app-grid-button:hover {
+  background-color: rgba(0, 122, 255, 0.08);
+}
+
+.app-grid-icon {
+  border-radius: 22%;
+}
+
+.app-grid-label {
+  color: rgba(0, 0, 0, 0.7);
+  font-size: 0.8em;
+  font-weight: 500;
+  margin-top: 6px;
+}
+
+/* --- FlowBox Neutralization --- */
+flowboxchild {
+  background: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+flowboxchild:selected,
+flowboxchild:active,
+flowboxchild:hover {
+  background: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+/* --- System Action Strip --- */
 .system-action-strip {
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 100px;
-  padding: 6px 12px;
-  margin-top: 8px;
+  padding: 4px 10px;
+  margin-top: 12px;
 }
 
 .system-action-btn {
   background: transparent;
   border: none;
   border-radius: 50%;
-  min-width: 44px;
-  min-height: 44px;
+  min-width: 40px;
+  min-height: 40px;
   transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(0, 0, 0, 0.4);
 }
 
 .system-action-btn:hover {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(0, 122, 255, 0.1);
+  color: #007aff;
+  transform: scale(1.08);
+}
+
+/* ==========================================================================
+   WORKSPACE COCKPIT
+   ========================================================================== */
+/* --- Window --- */
+window.workspace-cockpit {
+  background: transparent;
+  box-shadow: none;
+}
+
+.cockpit-window-content {
+  padding-top: 100px;
+  padding-bottom: 250px;
+  background: transparent;
+}
+
+/* --- Overview Panel --- */
+.workspace-overview {
+  background: #0c0c0c;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 32px;
+  padding: 32px;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95);
+}
+
+/* --- Workspace Items --- */
+.wo-item {
+  padding: 16px;
+  border-radius: 24px;
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wo-item.active {
+  background-color: rgba(0, 122, 255, 0.05);
+  border: 1px solid rgba(0, 122, 255, 0.6);
+  box-shadow: 0 0 60px rgba(0, 122, 255, 0.25);
+}
+
+/* --- Buttons --- */
+.wo-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 24px;
+  outline: none;
+  box-shadow: none;
+}
+
+.wo-btn:focus,
+.wo-btn:active {
+  outline: none;
+  box-shadow: none;
+  border: none;
+}
+
+.wo-btn:hover .wo-item {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-6px);
+}
+
+.wo-btn:hover .wo-item.active {
+  background-color: rgba(0, 122, 255, 0.08);
+  border-color: rgba(0, 122, 255, 0.8);
+  box-shadow: 0 0 60px rgba(0, 122, 255, 0.35);
+}
+
+/* --- Labels --- */
+.wo-label {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.wo-label.active {
+  color: #007aff;
+  text-shadow: 0 0 15px rgba(0, 122, 255, 0.8);
+}
+
+/* --- Reserved Areas --- */
+.wo-reserved-area {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+}
+.wo-reserved-area.bar {
+  border-radius: 0 0 12px 12px;
+}
+.wo-reserved-area.dock {
+  border-radius: 12px 12px 0 0;
+}
+
+/* --- Schematic Preview --- */
+.wo-schematic-win {
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 1.5px solid rgba(255, 255, 255, 0.8);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.wo-schematic-win image {
+  margin: 0;
+  padding: 0;
+  -gtk-icon-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.wo-count {
+  font-size: 14px;
+  font-weight: 200;
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.wo-schematic-preview {
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.wo-schematic-win-icon {
+  opacity: 0.85;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+}
+
+/* Cockpit Window Duplicate Safety */
+window.workspace-cockpit {
+  background: transparent;
+}
+
+/* ==========================================================================
+   POWER MENU
+   Based on Stitch "Minimalist Power Menu" design
+   ========================================================================== */
+.power-menu-win {
+  background-color: transparent;
+}
+
+.power-main-box {
+  background-color: rgba(22, 22, 32, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  padding: 48px 64px;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7);
+}
+
+/* --- User Greeting --- */
+.power-header {
+  font-size: 2.4em;
+  font-weight: 300;
   color: white;
-  transform: scale(1.1);
+  margin-bottom: 4px;
+}
+
+.power-header-accent {
+  color: #4cd964;
+  font-weight: 500;
+}
+
+.power-uptime {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-top: 8px;
+}
+
+/* --- Action Buttons --- */
+.power-action-box {
+  margin: 40px 0 20px;
+}
+
+.power-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  padding: 0;
+  min-width: 72px;
+  min-height: 72px;
+  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.power-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.08);
+}
+
+.power-btn-icon {
+  font-size: 1.4em;
+  color: white;
+}
+
+.power-btn.shutdown:hover {
+  background-color: rgba(255, 59, 48, 0.25);
+  border-color: rgba(255, 59, 48, 0.5);
+}
+
+.power-btn.reboot:hover {
+  background-color: rgba(52, 199, 89, 0.25);
+  border-color: rgba(52, 199, 89, 0.5);
+}
+
+.power-btn.logout:hover {
+  background-color: rgba(0, 122, 255, 0.25);
+  border-color: rgba(0, 122, 255, 0.5);
+}
+
+.power-btn.lock:hover {
+  background-color: rgba(175, 82, 222, 0.25);
+  border-color: rgba(175, 82, 222, 0.5);
+}
+
+.power-btn-label {
+  font-size: 0.8em;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 8px;
+}
+
+/* --- Cancel --- */
+.power-cancel-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 100px;
+  padding: 8px 28px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.85em;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  transition: all 0.2s;
+}
+
+.power-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: white;
 }
 
 /*# sourceMappingURL=style.css.map */

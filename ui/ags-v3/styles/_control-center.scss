@@ -1,0 +1,323 @@
+@use 'tokens' as *;
+
+/* ==========================================================================
+   CONTROL CENTER & NOTIFICATIONS
+   Based on Stitch "Refined Notification Center" designs
+   ========================================================================== */
+
+/* --- Window --- */
+.control-center-win,
+.notification-center-win,
+.notif-win {
+    background-color: transparent;
+    background: none;
+    box-shadow: none;
+    border: none;
+}
+
+/* --- Main Panel (ONLY the inner box, NOT the window) --- */
+.control-center-win .control-center,
+.control-center {
+    background-color: rgba(18, 18, 28, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 24px;
+    padding: 24px;
+    min-width: 420px;
+    box-shadow: none;
+}
+
+/* --- Date/Time Header --- */
+.cc-datetime {
+    text-align: right;
+    margin-bottom: 16px;
+}
+
+.cc-time {
+    font-size: 2.8em;
+    font-weight: 300;
+    color: white;
+    letter-spacing: -1px;
+}
+
+.cc-date {
+    font-size: 0.8em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+/* --- Quick Toggles Grid --- */
+.cc-toggle {
+    background-color: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 14px 18px;
+    transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.cc-toggle.active {
+    background-color: #007aff;
+    border-color: rgba(0, 122, 255, 0.4);
+}
+
+.cc-toggle-label {
+    font-weight: 600;
+    font-size: 0.95em;
+    color: white;
+}
+
+.cc-toggle-sublabel {
+    font-size: 0.8em;
+    color: rgba(255, 255, 255, 0.5);
+    margin-top: 2px;
+}
+
+.cc-toggle.active .cc-toggle-sublabel {
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.cc-toggle-icon {
+    font-size: 1.2em;
+    margin-right: 8px;
+}
+
+/* --- Sliders (Brightness / Volume) --- */
+.cc-sliders {
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: $crystal_radius_md;
+    padding: 14px 18px;
+    margin-top: 12px;
+}
+
+.cc-slider-row {
+    margin: 4px 0;
+}
+
+.cc-slider-icon {
+    color: rgba(255, 255, 255, 0.6);
+    margin-right: 10px;
+    font-size: 1.1em;
+}
+
+scale trough {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    min-height: 4px;
+}
+
+scale trough highlight {
+    background-color: white;
+    border-radius: 4px;
+}
+
+scale slider {
+    background-color: white;
+    border-radius: 50%;
+    min-width: 16px;
+    min-height: 16px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+/* --- Notifications Section --- */
+.cc-notifs-section {
+    margin-top: 16px;
+}
+
+.cc-notifs-header {
+    margin-bottom: 8px;
+}
+
+.cc-notifs-title {
+    font-size: 0.75em;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+}
+
+/* --- Notification Items --- */
+.nc-notif-item {
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-bottom: 6px;
+    transition: all 0.2s ease;
+}
+
+.nc-notif-item:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+.nc-notif-title {
+    color: white;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.nc-notif-body {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.85em;
+    line-height: 1.4;
+    margin-top: 4px;
+}
+
+/* --- Notification Card (Popup) --- */
+.notif-card {
+    background-color: rgba(18, 18, 28, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 18px;
+    min-width: 380px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.notif-close-btn,
+.nc-notif-close {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 50%;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0;
+    color: rgba(255, 255, 255, 0.5);
+    transition: all 0.2s ease;
+}
+
+.notif-close-btn:hover,
+.nc-notif-close:hover {
+    background-color: rgba(255, 59, 48, 0.3);
+    color: #ff6961;
+}
+
+.notif-app-name {
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-size: 0.75em;
+    font-weight: 600;
+}
+
+.notif-summary {
+    color: white;
+    font-weight: 600;
+}
+
+.notif-body {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.9em;
+}
+
+/* --- NC Header --- */
+.nc-header {
+    margin-bottom: 10px;
+}
+
+.nc-header-title {
+    color: white;
+    font-weight: 700;
+}
+
+.nc-clear-btn {
+    background-color: transparent;
+    border-radius: 8px;
+    padding: 4px 12px;
+    color: #007aff;
+    font-size: 0.85em;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.nc-clear-btn:hover {
+    background-color: rgba(0, 122, 255, 0.15);
+    color: #3395ff;
+}
+
+.nc-scroll {
+    margin-top: 8px;
+    min-height: 300px;
+}
+
+.nc-empty {
+    color: rgba(255, 255, 255, 0.3);
+    margin-top: 40px;
+    font-size: 0.9em;
+}
+
+/* --- Media Player --- */
+.cc-media {
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    padding: 12px 16px;
+    margin-top: 12px;
+}
+
+.cc-media-title {
+    color: white;
+    font-weight: 600;
+    font-size: 0.9em;
+}
+
+.cc-media-artist {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8em;
+}
+
+.cc-media-controls button {
+    background: transparent;
+    border: none;
+    color: rgba(255, 255, 255, 0.8);
+    border-radius: 50%;
+    min-width: 32px;
+    min-height: 32px;
+    transition: all 0.2s;
+}
+
+.cc-media-controls button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+/* --- Section Titles --- */
+.cc-section-title {
+    font-size: 0.75em;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.4);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    margin-left: 2px;
+}
+
+/* --- Audio Sinks --- */
+.cc-audio-sinks {
+    margin-bottom: 12px;
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 16px;
+    padding: 14px;
+}
+
+.cc-sink-item {
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: transparent;
+    transition: all 0.2s ease;
+}
+
+.cc-sink-item:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+}
+
+.cc-sink-item.active {
+    background-color: rgba(0, 122, 255, 0.15);
+    border: 1px solid rgba(0, 122, 255, 0.25);
+}
+
+.cc-sink-item label {
+    font-size: 0.9em;
+    color: rgba(255, 255, 255, 0.85);
+}
