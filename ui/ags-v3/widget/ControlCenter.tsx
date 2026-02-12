@@ -399,6 +399,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         default_height: 800,
         visible: false
     })
+    // @ts-ignore
+    win.app_paintable = true
 
     let layerInit = false
     try {

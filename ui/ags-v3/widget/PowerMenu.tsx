@@ -12,6 +12,8 @@ export default function PowerMenu(monitor: Gdk.Monitor) {
         css_classes: ["power-menu-win"],
         visible: false
     })
+    // @ts-ignore
+    win.app_paintable = true
 
     // LayerShell - Fullscreen Overlay
     try {

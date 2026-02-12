@@ -163,8 +163,8 @@ async function getServiceSafe<T>(getter: () => T, name: string): Promise<T | nul
 function AppMenu() {
   const box = new Gtk.Box({
     name: "bar-app-menu",
-    css_classes: ["bar-app-menu"],
-    spacing: 16
+    css_classes: ["bar-app-menu", "bar-app-menu-btn"], // V141: Added capsule class
+    spacing: 12 // Tighten a bit for capsule
   })
 
   const distroIcon = new Gtk.Image({
@@ -326,7 +326,7 @@ function SystemResources() {
   })
 
   // CPU Monitor
-  const cpuIcon = new Gtk.Label({ label: "CPU", css_classes: ["bar-res-icon", "cpu"] })
+  const cpuIcon = new Gtk.Label({ label: "CPU", css_classes: ["bar-res-icon"] })
   const cpuLabel = new Gtk.Label({ label: "...", css_classes: ["bar-res-label"] })
   const cpuBox = new Gtk.Box({ spacing: 4, css_classes: ["bar-res-item"] })
   cpuBox.append(cpuIcon); cpuBox.append(cpuLabel)
@@ -343,7 +343,7 @@ function SystemResources() {
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, updateCPU)
 
   // RAM Monitor
-  const ramIcon = new Gtk.Label({ label: "RAM", css_classes: ["bar-res-icon", "ram"] })
+  const ramIcon = new Gtk.Label({ label: "RAM", css_classes: ["bar-res-icon"] })
   const ramLabel = new Gtk.Label({ label: "...", css_classes: ["bar-res-label"] })
   const ramBox = new Gtk.Box({ spacing: 4, css_classes: ["bar-res-item"] })
   ramBox.append(ramIcon); ramBox.append(ramLabel)
@@ -373,6 +373,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   })
 
   win.set_decorated(false)
+  // @ts-ignore
+  win.app_paintable = true
 
   // V135: Initialize LayerShell first
   let layerInit = false

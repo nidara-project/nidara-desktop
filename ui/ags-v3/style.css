@@ -4,6 +4,8 @@
    Inheriting system colors from GTK Registry
 */
 /* CRYSTAL UI DESIGN SYSTEM 💎 */
+/* Adjusted for Hyprland ignore_alpha threshold */
+/* Lightened for better blur visibility */
 /* --- 1. NEUTRALIZACIÓN DE CLASES DE SISTEMA (Dirigida) --- */
 #crystal-dock {
   background-color: transparent;
@@ -118,7 +120,7 @@ box.cd-item {
 /* High Specificity for Drag Gap */
 window#crystal-dock box.cd-drag-gap,
 .cd-drag-gap {
-  margin-left: 72px !important;
+  margin-left: 72px;
   /* Icon (64) + Gap (8) */
   transition: margin-left 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
@@ -301,19 +303,19 @@ window#app-grid-window,
 #crystal-dock #crystal-dock-bg,
 .crystal-dock,
 window#crystal-dock box.crystal-dock {
-  background-color: transparent !important;
-  background-image: none !important;
-  border: none !important;
-  box-shadow: none !important;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
 }
 
 /* Ensure the shim and bar are transparent */
 #crystal-dock #the-dock-bar,
 .cd-dock-bar {
-  background-color: transparent !important;
-  background-image: none !important;
-  border: none !important;
-  box-shadow: none !important;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
 }
 
 /* ==========================================================================
@@ -331,10 +333,11 @@ window.crystal-bar {
 .bar-centerbox {
   padding: 0 16px;
   min-height: 32px;
-  background-color: rgba(18, 18, 18, 0.72);
+  background-color: rgba(255, 255, 255, 0.3);
   backdrop-filter: blur(32px);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 28px;
+  border-radius: 999px;
+  /* Absolute capsule */
   margin: 8px 8px 0 8px;
   /* Floating Pill Effect */
 }
@@ -398,53 +401,33 @@ window.crystal-bar {
   color: white;
 }
 
-.bar-status-btn,
+.bar-cockpit-btn,
+.bar-ws-btn,
 .bar-time-btn,
-.bar-util-btn {
-  background: transparent;
-  border: none;
-  border-radius: 8px;
-  padding: 4px 10px;
+.bar-status-btn,
+.bar-app-menu-btn,
+.bar-tray-btn {
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 4px 14px;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
 }
 
-.bar-notif-cluster {
-  background-color: rgba(255, 255, 255, 0.12);
-  border-radius: 12px;
-  padding: 2px 10px;
-  margin-right: 4px;
-  transition: all 0.3s ease;
+.bar-ws-pill,
+.bar-res-item {
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 12px;
 }
 
-.bar-notif-cluster:hover {
-  background-color: rgba(255, 255, 255, 0.18);
+.bar-res-label,
+.bar-res-icon {
+  color: #FFFFFF;
+  font-weight: bold;
 }
 
-.bar-time-notif-icon {
-  color: #ff9500;
-  /* Apple Alarm/Notif Orange */
-}
-
-.bar-time-notif-count {
-  color: white;
-}
-
-.bar-status-btn:hover,
-.bar-time-btn:hover,
-.bar-util-btn:hover,
-.bar-tray-btn:hover,
-.bar-cockpit-btn:hover {
-  background-color: @theme_selected_bg_color;
-  color: white;
-}
-
-.bar-cockpit-btn {
-  background-color: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 12px;
-  padding: 4px 12px;
-}
-
-.bar-tray {
+r-tray {
   margin-right: 6px;
 }
 
@@ -470,7 +453,7 @@ window.crystal-bar {
 #crystal-control-center,
 .control-center-win .control-center,
 .control-center {
-  background-color: rgba(18, 18, 18, 0.72);
+  background-color: rgba(255, 255, 255, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.25);
   border-radius: 28px;
   padding: 24px;
@@ -640,7 +623,7 @@ window.app-grid-window {
 window#crystal-app-launcher #app-grid-content,
 .app-grid-window #app-grid-content,
 .app-grid-content {
-  background-color: rgba(18, 18, 18, 0.72);
+  background-color: rgba(255, 255, 255, 0.3);
   border: 1px solid rgba(255, 255, 255, 0.15);
   border-radius: 40px;
   padding: 60px;
@@ -1072,10 +1055,10 @@ window#crystal-power-menu,
 .control-center-win,
 .app-grid-window,
 .power-menu-win {
-  background-color: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
-  border: none !important;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
 }
 
 window#crystal-bar decoration,
@@ -1086,10 +1069,10 @@ window#crystal-app-launcher decoration,
 window#crystal-app-launcher main,
 window#crystal-power-menu decoration,
 window#crystal-power-menu main {
-  background-color: transparent !important;
-  background-image: none !important;
-  border: none !important;
-  box-shadow: none !important;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
 }
 
 /* --- 7. SYSTEM ACTION STRIP POLISH (AppGrid) --- */

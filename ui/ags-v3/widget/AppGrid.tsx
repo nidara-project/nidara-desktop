@@ -108,6 +108,8 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         name: "crystal-app-launcher",
         css_classes: ["app-grid-window"],
     })
+    // @ts-ignore
+    win.app_paintable = true
 
     // V135: Initialize LayerShell first
     let layerInit = false
