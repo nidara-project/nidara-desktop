@@ -169,7 +169,7 @@ function AppMenu() {
 
   const distroIcon = new Gtk.Image({
     icon_name: "archlinux-symbolic",
-    pixel_size: 24,
+    pixel_size: 16,
     css_classes: ["bar-app-distro-icon"]
   })
 
@@ -178,11 +178,6 @@ function AppMenu() {
     css_classes: ["bar-app-sep"]
   })
 
-  const arrow = new Gtk.Image({
-    icon_name: "pan-down-symbolic",
-    pixel_size: 12,
-    css_classes: ["bar-app-arrow"]
-  })
 
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
     getServiceSafe(() => AstalHyprland.get_default(), "Hyprland").then(hyprland => {
@@ -219,7 +214,6 @@ function AppMenu() {
       box.append(distroIcon)
       box.append(sep)
       box.append(appName)
-      box.append(arrow)
     })
     return GLib.SOURCE_REMOVE
   })
@@ -390,7 +384,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-      Gtk4LayerShell.set_exclusive_zone(win, 40) // 8px margin + 32px pill + 8px gap
+      Gtk4LayerShell.set_exclusive_zone(win, 40) // 8px margin + 32px pill
       // @ts-ignore
       win.gdkmonitor = gdkmonitor
     } catch (e) {

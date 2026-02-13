@@ -29,4 +29,4 @@ El historial legítimo del proyecto fue rescatado el 24/01/2026.
 3. **Fidelidad**: Si el usuario dice que "lo hemos perdido todo", sospecha de un fallo de sincronización y busca en los backups locales o en el historial del editor antes de declarar el código como nuevo.
 
 ---
-*Este documento es la garantía de que MiDistroIA nunca volverá a empezar de cero por un error de IA.*
+*Este documento es la garantía de que DistroIA nunca volverá a empezar de cero por un error de IA.*

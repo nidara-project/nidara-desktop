@@ -1,0 +1,251 @@
+/* Example Application CSS */
+/* Demonstrates modern GTK4 styling with Libadwaita */
+
+ /* ========== Global Styles ========== */
+window {
+  background-color: var(--window-bg-color);
+  color: var(--window-fg-color);
+}
+
+/* ========== Typography ========== */
+.title-1 {
+  font-family: "Cantarell", system-ui, sans-serif;
+  font-size: 28pt;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.title-2 {
+  font-family: "Cantarell", system-ui, sans-serif;
+  font-size: 24pt;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.title-3 {
+  font-family: "Cantarell", system-ui, sans-serif;
+  font-size: 20pt;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.body {
+  font-family: "Cantarell", system-ui, sans-serif;
+  font-size: 11pt;
+  font-weight: 400;
+  line-height: 1.5;
+}
+
+.caption {
+  font-family: "Cantarell", system-ui, sans-serif;
+  font-size: 9pt;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.dim-label {
+  opacity: 0.7;
+}
+
+/* ========== Custom Accent Color ========== */
+:root {
+  /* Override accent color for brand identity */
+  --accent-bg-color: var(--accent-purple);
+  --accent-color: oklab(from var(--accent-bg-color) var(--standalone-color-oklab));
+}
+
+ /* ========== Cards ========== */
+.card {
+  background-color: var(--card-bg-color);
+  border-radius: 12px;
+  padding: 16px;
+  border: 1px solid var(--card-shade-color);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  transition: box-shadow 200ms ease, transform 100ms ease;
+}
+
+/* Dark mode override for cards */
+@media (prefers-color-scheme: dark) {
+  .card {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+}
+
+/* Card hover effect */
+.card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.16);
+  transform: translateY(-2px);
+}
+
+/* High contrast mode */
+@media (prefers-contrast: more) {
+  .card {
+    background-color: transparent;
+    border: 2px solid currentColor;
+  }
+}
+
+ /* ========== Sidebar ========== */
+.sidebar {
+  background-color: var(--sidebar-bg-color);
+  padding: 12px;
+  border-right: 1px solid var(--sidebar-border-color);
+}
+
+@media (prefers-color-scheme: dark) {
+  .sidebar {
+    background-color: rgba(255, 255, 255, 0.02);
+    border-right-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* ========== Navigation Sidebar ========== */
+.navigation-sidebar {
+  background-color: transparent;
+}
+
+.navigation-sidebar row {
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin: 2px 0;
+  transition: background-color 200ms ease;
+}
+
+.navigation-sidebar row:hover {
+  background-color: rgba(0, 0, 0, 0.04);
+}
+
+@media (prefers-color-scheme: dark) {
+  .navigation-sidebar row:hover {
+    background-color: rgba(255, 255, 255, 0.04);
+  }
+}
+
+.navigation-sidebar row:active {
+  background-color: rgba(0, 0, 0, 0.08);
+}
+
+@media (prefers-color-scheme: dark) {
+  .navigation-sidebar row:active {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+}
+
+.navigation-sidebar row:selected {
+  background-color: var(--accent-bg-color);
+  color: var(--accent-fg-color);
+}
+
+ /* ========== Buttons ========== */
+/* Primary action button (suggested) */
+.suggested-action {
+  background-color: var(--accent-bg-color);
+  color: var(--accent-fg-color);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  transition: background-color 200ms ease, transform 100ms ease;
+}
+
+.suggested-action:hover {
+  background-color: color-mix(in srgb, var(--accent-bg-color) 90%, white);
+  transform: translateY(-1px);
+}
+
+.suggested-action:active {
+  background-color: color-mix(in srgb, var(--accent-bg-color) 70%, white);
+  transform: translateY(0);
+}
+
+/* High contrast button */
+@media (prefers-contrast: more) {
+  .suggested-action {
+    border: 2px solid currentColor;
+    background-color: transparent;
+    color: currentColor;
+  }
+}
+
+/* Success button styling */
+.success {
+  background-color: var(--success-color);
+  color: var(--success-fg-color);
+}
+
+/* ========== Focus Indicators ========== */
+:focus {
+  outline: 2px solid var(--accent-bg-color);
+  outline-offset: 2px;
+}
+
+@media (prefers-contrast: more) {
+  :focus {
+    outline: 3px solid currentColor;
+    outline-offset: 0;
+  }
+}
+
+/* ========== FlowBox Cards ========== */
+GtkFlowBox > flowboxchild {
+  padding: 6px;
+}
+
+/* ========== Animations ========== */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-in {
+  animation: fadeIn 300ms ease-out;
+}
+
+/* ========== Responsive Utilities ========== */
+@media (max-width: 600px) {
+  .sidebar {
+    display: none;
+  }
+
+  GtkFlowBox {
+    max-children-per-line: 1;
+  }
+}
+
+/* ========== Spacing Utilities ========== */
+.space-xs { padding: 4px; }
+.space-sm { padding: 8px; }
+.space-md { padding: 12px; }
+.space-lg { padding: 16px; }
+.space-xl { padding: 24px; }
+.space-2xl { padding: 32px; }
+
+.gap-xs { gap: 4px; }
+.gap-sm { gap: 8px; }
+.gap-md { gap: 12px; }
+.gap-lg { gap: 16px; }
+.gap-xl { gap: 24px; }
+
+/* ========== Search Entry ========== */
+searchentry {
+  margin-bottom: 8px;
+}
+
+ /* ========== Status Bar ========== */
+GtkActionBar {
+  border-top: 1px solid var(--card-shade-color);
+  padding: 6px 12px;
+}
+
+@media (prefers-color-scheme: dark) {
+  GtkActionBar {
+    border-top-color: rgba(255, 255, 255, 0.08);
+  }
+}

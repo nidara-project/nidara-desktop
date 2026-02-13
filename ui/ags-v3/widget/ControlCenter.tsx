@@ -7,7 +7,8 @@ import AstalBluetooth from "gi://AstalBluetooth"
 import AstalNotifd from "gi://AstalNotifd"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
-import Pango from "gi://Pango"
+// @ts-ignore
+import Pango from "gi://Pango?version=1.0"
 
 function NotificationItem(n: any) {
     const box = new Gtk.Box({
@@ -125,86 +126,84 @@ function Media() {
         spacing: 8
     })
 
-    const sync = () => {
-        let child = box.get_first_child()
-        while (child) {
-            const next = child.get_next_sibling()
-            box.remove(child)
-            child = next
-        }
+    // Sub-widgets (Persistent)
+    const artImage = new Gtk.Image({ pixel_size: 54, css_classes: ["cc-media-art-img"] })
+    const art = new Gtk.Box({ css_classes: ["cc-media-art"], valign: Gtk.Align.CENTER })
+    art.append(artImage)
 
-        const players = mpris.players.filter(p => p.playback_status !== AstalMpris.PlaybackStatus.STOPPED).slice(0, 1)
-        if (players.length === 0) {
-            box.set_visible(false)
+    const titleLabel = new Gtk.Label({ label: "Title", css_classes: ["cc-media-title"], halign: Gtk.Align.START, ellipsize: (Pango as any).EllipsizeMode.END, max_width_chars: 20 })
+    const artistLabel = new Gtk.Label({ label: "Artist", css_classes: ["cc-media-artist"], halign: Gtk.Align.START, ellipsize: (Pango as any).EllipsizeMode.END })
+    const prevBtn = new Gtk.Button({ child: new Gtk.Image({ icon_name: "media-skip-backward-symbolic" }), css_classes: ["cc-media-btn"], focusable: false, focus_on_click: false })
+    const playBtn = new Gtk.Button({ child: new Gtk.Image({ icon_name: "media-playback-start-symbolic" }), css_classes: ["cc-media-btn"], focusable: false, focus_on_click: false })
+    const nextBtn = new Gtk.Button({ child: new Gtk.Image({ icon_name: "media-skip-forward-symbolic" }), css_classes: ["cc-media-btn"], focusable: false, focus_on_click: false })
+
+    const info = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
+    info.append(titleLabel)
+    info.append(artistLabel)
+
+    const controls = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END })
+    controls.append(prevBtn)
+    controls.append(playBtn)
+    controls.append(nextBtn)
+
+    const playerBox = new Gtk.Box({ spacing: 12, css_classes: ["cc-media-player"] })
+    playerBox.append(art)
+    playerBox.append(info)
+    playerBox.append(controls)
+    box.append(playerBox)
+
+    const sync = () => {
+        const player = mpris.players.filter(p => p.playback_status !== AstalMpris.PlaybackStatus.STOPPED).slice(0, 1)[0]
+        if (!player) {
+            if (box.visible) box.set_visible(false)
             return
         }
 
-        box.set_visible(true)
-        const p = players[0]
-        const playerBox = new Gtk.Box({ spacing: 12, css_classes: ["cc-media-player"] })
+        if (!box.visible) box.set_visible(true)
 
-        const art = new Gtk.Box({
-            css_classes: ["cc-media-art"],
-            valign: Gtk.Align.CENTER
-        })
-        if (p.cover_art) {
-            art.set_css_classes(["cc-media-art", "with-cover"])
-            art.append(new Gtk.Image({ file: p.cover_art, pixel_size: 54 }))
-        } else {
-            art.append(new Gtk.Image({ icon_name: "audio-x-generic-symbolic", pixel_size: 32 }))
+        // Strict dirty checking for labels
+        if (titleLabel.label !== (player.title || "Unknown Title")) {
+            titleLabel.label = player.title || "Unknown Title"
+        }
+        if (artistLabel.label !== (player.artist || "Unknown Artist")) {
+            artistLabel.label = player.artist || "Unknown Artist"
         }
 
-        const info = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
-        info.append(new Gtk.Label({
-            label: p.title || "Unknown Title",
-            css_classes: ["cc-media-title"],
-            halign: Gtk.Align.START,
-            ellipsize: (Pango as any).EllipsizeMode.END,
-            max_width_chars: 20
-        }))
-        info.append(new Gtk.Label({
-            label: p.artist || "Unknown Artist",
-            css_classes: ["cc-media-artist"],
-            halign: Gtk.Align.START,
-            ellipsize: (Pango as any).EllipsizeMode.END
-        }))
+        // Persistent Art update
+        if (player.cover_art) {
+            if (artImage.file !== player.cover_art) artImage.file = player.cover_art
+            if (artImage.pixel_size !== 54) artImage.pixel_size = 54
+            art.set_css_classes(["cc-media-art", "with-cover"])
+        } else {
+            if (artImage.icon_name !== "audio-x-generic-symbolic") artImage.icon_name = "audio-x-generic-symbolic"
+            if (artImage.pixel_size !== 32) artImage.pixel_size = 32
+            art.set_css_classes(["cc-media-art"])
+        }
 
-        const controls = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END })
+        // Play/Pause icon update
+        const playIcon = playBtn.get_child() as Gtk.Image
+        const targetPlayIcon = player.playback_status === AstalMpris.PlaybackStatus.PLAYING
+            ? "media-playback-pause-symbolic"
+            : "media-playback-start-symbolic"
+        if (playIcon && playIcon.icon_name !== targetPlayIcon) {
+            playIcon.icon_name = targetPlayIcon
+        }
 
-        const prev = new Gtk.Button({ child: new Gtk.Image({ icon_name: "media-skip-backward-symbolic" }), css_classes: ["cc-media-btn"] })
-        prev.connect("clicked", () => p.previous())
-
-        const play = new Gtk.Button({
-            child: new Gtk.Image({ icon_name: p.playback_status === AstalMpris.PlaybackStatus.PLAYING ? "media-playback-pause-symbolic" : "media-playback-start-symbolic" }),
-            css_classes: ["cc-media-btn"]
-        })
-        play.connect("clicked", () => p.play_pause())
-
-        const nextBtn = new Gtk.Button({ child: new Gtk.Image({ icon_name: "media-skip-forward-symbolic" }), css_classes: ["cc-media-btn"] })
-        nextBtn.connect("clicked", () => p.next())
-
-        controls.append(prev)
-        controls.append(play)
-        controls.append(nextBtn)
-
-        playerBox.append(art)
-        playerBox.append(info)
-        playerBox.append(controls)
-        box.append(playerBox)
+        // Signals & Actions
+        // @ts-ignore
+        if (player._connected) return
+        // @ts-ignore
+        player._connected = true
+        player.connect("notify::playback-status", sync)
+        player.connect("notify::metadata", sync)
+        prevBtn.connect("clicked", () => player.previous())
+        playBtn.connect("clicked", () => player.play_pause())
+        nextBtn.connect("clicked", () => player.next())
     }
 
-    mpris.connect("player-added", (_, p) => {
-        p.connect("notify::playback-status", sync)
-        p.connect("notify::metadata", sync)
-        sync()
-    })
+    mpris.connect("player-added", sync)
     mpris.connect("player-closed", sync)
-    mpris.players.forEach(p => {
-        p.connect("notify::playback-status", sync)
-        p.connect("notify::metadata", sync)
-    })
     sync()
-
     return box
 }
 
@@ -218,42 +217,79 @@ function GridControls() {
     const grid = new Gtk.Grid({
         column_spacing: 12,
         row_spacing: 12,
-        css_classes: ["cc-grid"]
+        css_classes: ["cc-grid"],
+        hexpand: true,
+        halign: Gtk.Align.FILL
     })
 
     const createToggle = (iconName: string | null, label: string, sublabel: string, active: boolean, onClick: () => void) => {
-        const box = new Gtk.Box({
-            spacing: 12,
-            css_classes: ["cc-toggle", active ? "active" : ""]
-        })
-        const btn = new Gtk.Button({ child: box, hexpand: true })
-        btn.connect("clicked", onClick)
-
-        const i = new Gtk.Image({ icon_name: iconName || "network-wired-symbolic", pixel_size: 20, css_classes: ["cc-toggle-icon"] })
-        const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
+        const icon = new Gtk.Image({ icon_name: iconName || "network-wired-symbolic", pixel_size: 20, css_classes: ["cc-toggle-icon"] })
         const l = new Gtk.Label({ label: label, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START })
         const sl = new Gtk.Label({ label: sublabel, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, ellipsize: (Pango as any).EllipsizeMode.END })
 
+        const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
         textStack.append(l)
         textStack.append(sl)
 
-        box.append(i)
+        const box = new Gtk.Box({
+            spacing: 12,
+            css_classes: ["cc-toggle-content"]
+        })
+        box.append(icon)
         box.append(textStack)
+
+        const btn = new Gtk.Button({
+            child: box,
+            hexpand: true,
+            focusable: false,
+            focus_on_click: false,
+            css_classes: ["cc-toggle", active ? "active" : ""]
+        })
+        btn.connect("clicked", onClick)
+
+        // Add refs for in-place updates
+        // @ts-ignore
+        btn._refs = { icon, l, sl }
 
         return btn
     }
 
-    const update = () => {
-        let child = grid.get_first_child()
-        while (child) {
-            const next = child.get_next_sibling()
-            grid.remove(child)
-            child = next
+    const updateBtn = (btn: Gtk.Button, iconName: string, label: string, sublabel: string, active: boolean) => {
+        // @ts-ignore
+        const refs = btn._refs
+
+        // Strict Zero-Churn Property Updates
+        if (refs.icon.icon_name !== iconName) refs.icon.icon_name = iconName
+        if (refs.l.label !== label) refs.l.label = label
+        if (refs.sl.label !== sublabel) refs.sl.label = sublabel
+
+        const classes = ["cc-toggle"]
+        if (active) classes.push("active")
+
+        // Only trigger CSS recalculation if classes actually changed
+        const currentClasses = btn.get_css_classes()
+        if (JSON.stringify(currentClasses) !== JSON.stringify(classes)) {
+            btn.set_css_classes(classes)
         }
+    }
 
-        let col = 0
-        let row = 0
+    // Persistent buttons
+    const netBtn = createToggle(null, "Red", "...", false, () => {
+        if (network?.wifi) network.wifi.enabled = !network.wifi.enabled
+    })
+    const btBtn = createToggle(null, "Bluetooth", "...", false, () => {
+        if (bluetooth) bluetooth.is_powered = !bluetooth.is_powered
+    })
+    const pwrBtn = createToggle("system-shutdown-symbolic", "Sesión", "Power Menu", false, () => {
+        (app as any).DistroIA?.togglePower();
+        (app as any).DistroIA?.toggleCC()
+    })
 
+    grid.attach(netBtn, 0, 0, 1, 1)
+    grid.attach(btBtn, 1, 0, 1, 1)
+    grid.attach(pwrBtn, 0, 1, 1, 1)
+
+    const update = () => {
         if (network) {
             let label = "Red"
             let sublabel = "Desconectado"
@@ -271,11 +307,7 @@ function GridControls() {
                 icon = network.wifi.icon_name || "network-wireless-signal-excellent-symbolic"
                 active = network.wifi.enabled
             }
-
-            const netBtn = createToggle(icon, label, sublabel, active, () => {
-                if (network!.wifi) network!.wifi.enabled = !network!.wifi.enabled
-            })
-            grid.attach(netBtn, col++, row, 1, 1)
+            updateBtn(netBtn, icon, label, sublabel, active)
         }
 
         if (bluetooth) {
@@ -283,18 +315,8 @@ function GridControls() {
             const label = "Bluetooth"
             const sublabel = active ? (bluetooth.devices.find(d => d.connected)?.name || "Activado") : "Desactivado"
             const icon = active ? "bluetooth-active-symbolic" : "bluetooth-disabled-symbolic"
-
-            const btBtn = createToggle(icon, label, sublabel, active, () => {
-                bluetooth!.is_powered = !bluetooth!.is_powered
-            })
-            grid.attach(btBtn, col++, row, 1, 1)
+            updateBtn(btBtn, icon, label, sublabel, active)
         }
-
-        const pwrBtn = createToggle("system-shutdown-symbolic", "Sesión", "Power Menu", false, () => {
-            (app as any).DistroIA?.togglePower();
-            (app as any).DistroIA?.toggleCC()
-        })
-        grid.attach(pwrBtn, col++, row, 1, 1)
     }
 
     if (network) {

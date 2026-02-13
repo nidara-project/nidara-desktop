@@ -48,17 +48,29 @@
 }
 
 /* --- Quick Toggles Grid --- */
-.cc-toggle {
+window#crystal-control-center button.cc-toggle {
     background-color: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background-image: none;
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 16px;
     padding: 14px 18px;
-    transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+    min-height: 0;
+    box-shadow: none;
+    outline: none;
 }
 
-.cc-toggle.active {
+window#crystal-control-center button.cc-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+window#crystal-control-center button.cc-toggle.active {
     background-color: #007aff;
     border-color: rgba(0, 122, 255, 0.4);
+}
+
+.cc-toggle-content {
+    background: transparent;
+    background-color: transparent;
 }
 
 .cc-toggle-label {
@@ -73,7 +85,7 @@
     margin-top: 2px;
 }
 
-.cc-toggle.active .cc-toggle-sublabel {
+window#crystal-control-center button.cc-toggle.active .cc-toggle-sublabel {
     color: rgba(255, 255, 255, 0.85);
 }
 
@@ -266,7 +278,7 @@ scale slider {
     font-size: 0.8em;
 }
 
-.cc-media-controls button {
+window#crystal-control-center .cc-media-controls button {
     background: transparent;
     border: none;
     color: rgba(255, 255, 255, 0.8);
@@ -274,11 +286,14 @@ scale slider {
     min-width: 32px;
     min-height: 32px;
     transition: all 0.2s;
+    box-shadow: none;
+    outline: none;
 }
 
-.cc-media-controls button:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-    color: white;
+window#crystal-control-center .cc-media-controls button:focus,
+window#crystal-control-center .cc-media-controls button:focus-visible {
+    outline: none;
+    box-shadow: none;
 }
 
 /* --- Section Titles --- */

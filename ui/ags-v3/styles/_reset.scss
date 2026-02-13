@@ -185,15 +185,13 @@ window#crystal-power-menu main {
     box-shadow: none;
 }
 
-/* --- CC Window: UNIVERSAL transparency killer --- */
-/* GTK4 can insert windowhandle, contents, headerbar, and other internal
-   nodes between window and child. This wildcard catches them ALL. */
+/* --- CC Window: Surgical transparency killer --- */
 window#crystal-control-center,
-window#crystal-control-center>*,
-window#crystal-control-center>*>*,
 window.control-center-win,
-window.control-center-win>*,
-window.control-center-win>*>* {
+window#crystal-control-center decoration,
+window.control-center-win decoration,
+window#crystal-control-center>box:not(.control-center),
+window#crystal-control-center overlay {
     background-color: transparent;
     background-image: none;
     background: transparent;
