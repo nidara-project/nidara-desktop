@@ -3,11 +3,13 @@
    Single source of truth for all design values
 */
 
-// GTK Theme Integration
-$theme_bg: unquote("@theme_bg_color");
-$theme_fg: unquote("@theme_fg_color");
-$theme_hover: unquote("@theme_selected_bg_color");
-$theme_hover_fg: unquote("@theme_selected_fg_color");
+@use "sass:string";
+
+// GTK Theme Integration (Modern GTK4/Libadwaita Variables)
+$theme_bg: string.unquote("var(--window-bg-color)");
+$theme_fg: string.unquote("var(--window-fg-color)");
+$theme_hover: string.unquote("var(--view-selected-bg-color)");
+$theme_hover_fg: string.unquote("var(--view-selected-fg-color)");
 $theme_border: rgba(255, 255, 255, 0.12);
 $theme_fg_dim: rgba(255, 255, 255, 0.5);
 

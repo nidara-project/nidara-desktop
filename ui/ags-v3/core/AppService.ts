@@ -65,8 +65,13 @@ class AppService {
         })
 
         theme.connect("changed", () => {
-            console.log(`[AppService] System theme changed to ${theme.get_theme_name()}, refreshing registry...`)
-            this.reload()
+            const name = theme.get_theme_name()
+            // Debounce theme changes to prevent GListStore conflicts during start-up
+            GLib.timeout_add(GLib.PRIORITY_LOW, 500, () => {
+                console.log(`[AppService] System theme changed to ${name}, refreshing registry...`)
+                this.reload()
+                return GLib.SOURCE_REMOVE
+            })
         })
     }
 

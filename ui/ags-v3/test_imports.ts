@@ -1,9 +1,1 @@
-import AstalBattery from "gi://AstalBattery?0.1"
-import AstalNetwork from "gi://AstalNetwork?0.1"
-import AstalMpris from "gi://AstalMpris?0.1"
-
-console.log("💎 [PREMIUM CHECK] 💎")
-if (AstalBattery) console.log("✅ AstalBattery loaded!")
-if (AstalNetwork) console.log("✅ AstalNetwork loaded!")
-if (AstalMpris) console.log("✅ AstalMpris loaded!")
-console.log("💎 [CHECK COMPLETE] 💎")
+import * as astal from "ags/gtk4/jsx-runtime"; console.log(Object.keys(astal));

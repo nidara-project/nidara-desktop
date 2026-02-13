@@ -2,6 +2,8 @@ import app from "ags/gtk4/app"
 import { Gdk, Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import Adw from "gi://Adw"
+
 // @ts-ignore
 import type { Monitor } from "gi://Gdk?version=4.0"
 // @ts-ignore
@@ -15,16 +17,18 @@ import NotificationPopups from "./widget/NotificationPopups"
 import ControlCenter from "./widget/ControlCenter"
 import PowerMenu from "./widget/PowerMenu"
 
-console.log("[DISTROIA] app.ts loading... (Phase 65: Mega-Main Stability)");
+console.log("[DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)");
 
 app.start({
   main() {
     console.log("[DISTROIA] main() started!");
 
-    // Force Dark Theme for GTK4
-    const settings = Gtk.Settings.get_default()
-    if (settings) {
-      settings.gtk_application_prefer_dark_theme = true
+    // Modern Gtk4 Theme Management via Libadwaita
+    try {
+      Adw.init()
+      Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
+    } catch (e) {
+      console.warn("[App] Adw.init failed")
     }
 
     const windows = new Set<any>()
@@ -102,8 +106,8 @@ app.start({
     if (display) {
       const monitors: any = display.get_monitors()
       for (let i = 0; i < monitors.get_n_items(); i++) {
-        if (i === 0) createUI(monitors.get_item(i) as any, i)
-        else GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 200, () => {
+        // Increase delay to 500ms-1s for settling period
+        GLib.timeout_add(GLib.PRIORITY_LOW, 500 + (i * 500), () => {
           createUI(monitors.get_item(i) as any, i)
           return GLib.SOURCE_REMOVE
         })

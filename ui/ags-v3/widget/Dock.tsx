@@ -374,7 +374,6 @@ export default function Dock(gdkmonitor: any) {
                 return bar
             }
 
-            console.error("[DockLifecycle] Update triggered")
             needsUpdate = false
             type ItemConfig = { id: string, width: number, syncData?: any, isPinned: boolean, factory: (vc: number) => Gtk.Widget }
             const configs: ItemConfig[] = []
@@ -385,7 +384,6 @@ export default function Dock(gdkmonitor: any) {
                 if (widgetCache.has(id)) {
                     return widgetCache.get(id)!
                 }
-                console.error(`[DockLifecycle] Creating NEW: ${id}`)
                 const widget = factory()
                 const revealer = new (Gtk as any).Revealer({
                     css_classes: ["cd-revealer"],
@@ -756,7 +754,6 @@ export default function Dock(gdkmonitor: any) {
 
             for (const [id, w] of widgetCache) {
                 if (!currentIds.has(id)) {
-                    console.error(`[DockLifecycle] Evicting from cache: ${id}`)
                     widgetCache.delete(id)
                     animRegistry.delete(id)
                 }

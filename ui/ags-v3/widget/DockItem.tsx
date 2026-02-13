@@ -637,11 +637,16 @@ export function DockItem(
     })
 
     itemBox.connect("destroy", () => {
-        hypr.disconnect(c1)
-        hypr.disconnect(c2)
+        try { hypr.disconnect(c1) } catch (e) { }
+        try { hypr.disconnect(c2) } catch (e) { }
         clientSignalIds.forEach(({ client, signalId }) => {
-            try { client.disconnect(signalId) } catch (e) { }
+            try {
+                if (GObject.signal_handler_is_connected(client, signalId)) {
+                    client.disconnect(signalId)
+                }
+            } catch (e) { }
         })
+        clientSignalIds.length = 0
     })
     sync()
 

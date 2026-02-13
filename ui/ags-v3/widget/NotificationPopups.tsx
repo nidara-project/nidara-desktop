@@ -135,7 +135,7 @@ export default function NotificationPopups(gdkmonitor: Gdk.Monitor) {
         // Auto remove from popups after 6s (history stays in NotificationCenter)
         setTimeout(() => {
             const w = notifMap.get(id)
-            if (w) {
+            if (w && w.get_parent() === box) {
                 box.remove(w)
                 notifMap.delete(id)
                 if (notifMap.size === 0) win.set_visible(false)

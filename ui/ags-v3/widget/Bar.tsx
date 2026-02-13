@@ -91,41 +91,39 @@ function Tray() {
     }
   }
 
-  // Sync initial set
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1500, () => {
-    getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
-      if (!tray) return;
+  // Sync Tray Mechanism 📥 (Simplified & Robust)
+  getServiceSafe(() => AstalTray.get_default(), "Tray").then(tray => {
+    if (!tray) return;
 
-      const syncVisibility = () => {
-        box.set_visible(items.size > 0)
-      }
+    const syncVisibility = () => box.set_visible(items.size > 0)
 
-      const addItem = (id: string) => {
-        createItem(tray, id)
-        syncVisibility()
-      }
-
-      const delItem = (id: string) => {
-        removeItem(id)
-        syncVisibility()
-      }
-
-      // Sync initial set
-      tray.items.forEach(item => addItem(item.item_id))
-
-      tray.connect("item-added", (_, id) => {
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-          addItem(id); return GLib.SOURCE_REMOVE;
-        })
-      })
-      tray.connect("item-removed", (_, id) => {
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-          delItem(id); return GLib.SOURCE_REMOVE;
-        })
-      })
+    const addItem = (id: string) => {
+      if (!id || items.has(id)) return
+      createItem(tray, id)
       syncVisibility()
+    }
+
+    const delItem = (id: string) => {
+      if (!id) return
+      removeItem(id)
+      syncVisibility()
+    }
+
+    // Connect signals first to catch new arrivals
+    tray.connect("item-added", (_, id) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { addItem(id); return GLib.SOURCE_REMOVE }))
+    tray.connect("item-removed", (_, id) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { delItem(id); return GLib.SOURCE_REMOVE }))
+
+    // Initial Sync on low priority next idle to ensure service list is stable
+    GLib.idle_add(GLib.PRIORITY_LOW, () => {
+      try {
+        const current = tray.items || []
+        current.forEach(item => {
+          if (item && item.item_id) addItem(item.item_id)
+        })
+      } catch (e) { }
+      syncVisibility()
+      return GLib.SOURCE_REMOVE
     })
-    return GLib.SOURCE_REMOVE
   })
 
   box.set_visible(false) // Start hidden

@@ -109,7 +109,7 @@ function SchematicMap(wsId: number, hyprland: any) {
         this.cachedDrawHeight = Math.round(logicalH * scale)
 
         if (this.wsId === focusedWs?.id) {
-            console.log(`[WO-Audit] WS:${this.wsId} Mon:${hMonitor.name} Phys:${physW}x${physH} Logic:${logicalW}x${logicalH} Scale:${scale}`)
+            // console.log(`[WO-Audit] WS:${this.wsId} Mon:${hMonitor.name} Phys:${physW}x${physH} Logic:${logicalW}x${logicalH} Scale:${scale}`)
         }
 
         wrapper.set_size_request(BASE_WIDTH, this.cachedDrawHeight)
