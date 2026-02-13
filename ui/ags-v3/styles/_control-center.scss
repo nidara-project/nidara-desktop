@@ -21,15 +21,17 @@
     background-color: rgba(18, 18, 28, 0.92);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 24px;
-    padding: 24px;
+    padding: 16px;
     min-width: 420px;
     box-shadow: none;
 }
 
 /* --- Date/Time Header --- */
 .cc-datetime {
-    text-align: right;
     margin-bottom: 16px;
+    margin-right: 8px;
+    margin-left: 8px;
+    /* XL symmetry with reduced 8px margins */
 }
 
 .cc-time {
@@ -103,6 +105,11 @@ window#crystal-control-center button.cc-toggle.active .cc-toggle-sublabel {
     margin-top: 12px;
 }
 
+.cc-fixed-container {
+    margin: 0 8px;
+    /* XL symmetry with reduced 8px margins */
+}
+
 .cc-slider-row {
     margin: 4px 0;
 }
@@ -149,13 +156,16 @@ scale slider {
     letter-spacing: 1.5px;
 }
 
+/* Separators removed at user request */
+
 /* --- Notification Items --- */
 .nc-notif-item {
     background-color: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 16px;
     padding: 14px 16px;
-    margin-bottom: 6px;
+    margin: 0 8px 10px 8px;
+    /* XL cards with symmetric 8px margins */
     transition: all 0.2s ease;
 }
 
@@ -175,6 +185,11 @@ scale slider {
     font-size: 0.85em;
     line-height: 1.4;
     margin-top: 4px;
+}
+
+.nc-notif-separator {
+    background-color: rgba(255, 255, 255, 0.04);
+    margin: 4px 0;
 }
 
 /* --- Notification Card (Popup) --- */
@@ -222,40 +237,91 @@ scale slider {
     font-size: 0.9em;
 }
 
-/* --- NC Header --- */
-.nc-header {
-    margin-bottom: 10px;
+/* --- Notifications Section (Structural Fix) --- */
+.cc-notifs-section {
+    margin-top: 24px;
+    /* This container holds the fixed header AND the scrollable list */
 }
 
-.nc-header-title {
-    color: white;
-    font-weight: 700;
+.cc-notifs-header {
+    margin-bottom: 12px;
+    padding: 0;
+    margin: 0 8px 12px 8px;
+    /* XL symmetry with reduced 8px margins */
 }
 
-.nc-clear-btn {
-    background-color: transparent;
-    border-radius: 8px;
-    padding: 4px 12px;
-    color: #007aff;
+.cc-section-title {
     font-size: 0.85em;
-    font-weight: 600;
-    transition: all 0.2s;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 2px;
 }
 
-.nc-clear-btn:hover {
-    background-color: rgba(0, 122, 255, 0.15);
+.cc-clear-btn {
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 6px 14px;
     color: #3395ff;
+    font-size: 0.8em;
+    font-weight: 700;
+    transition: all 0.2s;
+    box-shadow: none;
+    outline: none;
 }
 
-.nc-scroll {
-    margin-top: 8px;
-    min-height: 300px;
+.cc-clear-btn:hover {
+    background-color: rgba(51, 149, 255, 0.15);
+    border-color: rgba(51, 149, 255, 0.3);
+    color: #55aaff;
 }
 
-.nc-empty {
-    color: rgba(255, 255, 255, 0.3);
-    margin-top: 40px;
+.cc-scroll {
+    /* Expanding naturally via TSX vexpand property */
+}
+
+.cc-notifications-list {
+    margin: 0;
+    padding: 0;
+}
+
+/* --- Scrollbar Isolation (Auto-hide Hardened) --- */
+.cc-scroll scrollbar.vertical {
+    background-color: transparent;
+    border: none;
+    min-width: 10px;
+    /* Wider gutter for easier interaction */
+    margin: 0;
+}
+
+/* Hide the track background completely */
+.cc-scroll scrollbar.vertical contents {
+    background: transparent;
+    border: none;
+}
+
+.cc-scroll scrollbar.vertical slider {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    min-width: 6px;
+    /* Proportional sizing enabled by removing ONLY the height constraints */
+    margin: 2px;
+    transition: none;
+}
+
+.cc-scroll scrollbar.vertical slider:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.cc-scroll scrollbar.vertical slider:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+}
+
+.cc-notifs-empty {
+    color: rgba(255, 255, 255, 0.25);
     font-size: 0.9em;
+    font-style: italic;
 }
 
 /* --- Media Player --- */
@@ -276,6 +342,10 @@ scale slider {
 .cc-media-artist {
     color: rgba(255, 255, 255, 0.5);
     font-size: 0.8em;
+}
+
+.cc-media-controls {
+    margin-bottom: -4px;
 }
 
 window#crystal-control-center .cc-media-controls button {

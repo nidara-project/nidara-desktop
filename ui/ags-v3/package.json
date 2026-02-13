@@ -1,8 +1,8 @@
 {
   "scripts": {
-    "dev": "ags run app.ts",
+    "dev": "npx sass style.scss style.css && ags run app.ts",
     "run": "ags run app.ts",
-    "build": "ags bundle app.ts style.css"
+    "build": "mkdir -p build && npx sass style.scss style.css && ags bundle app.ts build/distroia"
   },
   "dependencies": {
     "ags": "*",
