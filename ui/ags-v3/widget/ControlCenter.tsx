@@ -109,7 +109,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         })
         if (active) btn.add_css_class("active")
 
-        const box = new Gtk.Box({ spacing: 12, css_classes: ["cc-toggle-content"] })
+        const box = new Gtk.Box({ spacing: 12, css_classes: ["cc-toggle-content"], halign: Gtk.Align.START })
         const icon = new Gtk.Image({ icon_name: iconName, pixel_size: 20, css_classes: ["cc-toggle-icon"] })
         const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
         const l = new Gtk.Label({ label: title, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START, focusable: false, can_focus: false })
@@ -258,10 +258,18 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     topSection.append(mediaContainer)
 
     const updateMedia = () => {
-        mediaContainer.get_first_child()?.unparent()
-        const player = mpris.players.filter(p => p.playback_status !== AstalMpris.PlaybackStatus.STOPPED)[0]
-        if (!player) return
+        const players = mpris.get_players()
+        if (players.length === 0) {
+            mediaContainer.get_first_child()?.unparent()
+            return
+        }
 
+        const player = players[0]
+        const stateKey = `${player.bus_name}-${player.playback_status}-${player.title}`
+        if ((mediaContainer as any)._lastState === stateKey) return
+        (mediaContainer as any)._lastState = stateKey
+
+        mediaContainer.get_first_child()?.unparent()
         mediaContainer.append(new Gtk.Box({ css_classes: ["cc-separator"], height_request: 1, margin_top: 8, margin_bottom: 8 }))
         const pBox = new Gtk.Box({ css_classes: ["cc-media-player"], spacing: 16 })
         const art = new Gtk.Box({ css_classes: ["cc-media-art"], valign: Gtk.Align.CENTER })
