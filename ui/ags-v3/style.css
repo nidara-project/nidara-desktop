@@ -649,10 +649,11 @@ window.crystal-bar {
 }
 
 /* --- Quick Toggles Grid --- */
-window#crystal-control-center button.cc-toggle {
-  background-color: rgba(255, 255, 255, 0.06);
+window#crystal-control-center button.cc-toggle,
+window#crystal-control-center button.cc-toggle:focus {
+  background-color: rgba(255, 255, 255, 0.3);
   background-image: none;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: 16px;
   padding: 14px 18px;
   min-height: 0;
@@ -762,8 +763,8 @@ scale slider {
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 16px;
   padding: 14px 16px;
-  margin: 0 8px 10px 8px;
-  /* XL cards with symmetric 8px margins */
+  margin: 0 0 10px 0;
+  /* Cards touch the panel edges to use panel padding (16px) accurately 💎 */
   transition: all 0.2s ease;
 }
 
@@ -888,8 +889,9 @@ scale slider {
 .cc-scroll scrollbar.vertical {
   background-color: transparent;
   border: none;
-  min-width: 10px;
-  /* Wider gutter for easier interaction */
+  min-width: 0;
+  width: 0;
+  /* Zero layout impact for absolute symmetry 💎 */
   margin: 0;
 }
 

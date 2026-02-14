@@ -75,7 +75,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const mainBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         css_classes: ["control-center"],
-        width_request: 420,
+        width_request: 420, // Original Masterpiece 💎
+        hexpand: false, // BLOQUEO ESTRUCTURAL: No estirar horizontalmente 🛡️
         halign: Gtk.Align.END,
         valign: Gtk.Align.FILL,
         vexpand: true,
@@ -122,6 +123,10 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         return { btn, icon, label: l, subLabel: sl }
     }
 
+    const wifiToggle = createToggle("network-wireless-offline-symbolic", "Wi-Fi", "...", false, () => {
+        if (network?.wifi) network.wifi.enabled = !network.wifi.enabled
+    })
+
     const updateNetwork = () => {
         let icon = "network-wireless-offline-symbolic"
         let label = "Network"
@@ -155,7 +160,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         else if (!active && hasActive) wifiToggle.btn.remove_css_class("active")
     }
 
-    wifiToggle.btn.width_request = 192 // Symmetry Lock �
+    wifiToggle.btn.width_request = 180 // Original Restoration 🛡️
     grid.attach(wifiToggle.btn, 0, 0, 1, 1)
     if (network) {
         network.connect("notify::primary", updateNetwork)
@@ -179,7 +184,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const btToggle = createToggle("bluetooth-disabled-symbolic", "Bluetooth", "...", false, () => {
         if (bluetooth) bluetooth.is_powered = !bluetooth.is_powered
     })
-    btToggle.btn.width_request = 192 // Symmetry Lock 💎
+    btToggle.btn.width_request = 180 // Original Restoration 🛡️
     grid.attach(btToggle.btn, 1, 0, 1, 1)
     if (bluetooth) bluetooth.connect("notify::is-powered", updateBT)
     updateBT()
@@ -198,7 +203,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const dndToggle = createToggle("notifications-symbolic", "No molestar", "...", false, () => {
         if (notifd) notifd.dont_disturb = !notifd.dont_disturb
     })
-    dndToggle.btn.width_request = 192 // Symmetry Lock 💎
+    dndToggle.btn.width_request = 180 // Original Restoration 🛡️
     grid.attach(dndToggle.btn, 0, 1, 1, 1)
     if (notifd) notifd.connect("notify::dont-disturb", updateDND)
     updateDND()
@@ -207,7 +212,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         (app as any).DistroIA?.togglePower();
         (app as any).DistroIA?.toggleCC();
     })
-    pwrToggle.btn.width_request = 192 // Symmetry Lock 💎
+    pwrToggle.btn.width_request = 180 // Original Restoration 🛡️
     grid.attach(pwrToggle.btn, 1, 1, 1, 1)
 
     /* --- Sliders --- */
