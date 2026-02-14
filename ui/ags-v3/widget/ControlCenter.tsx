@@ -134,6 +134,12 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             active = network.wifi.enabled
         }
 
+        // 🛡️ Flicker Guard: Skip if nothing changed
+        if (wifiToggle.icon.icon_name === icon &&
+            wifiToggle.label.label === label &&
+            wifiToggle.subLabel.label === sub &&
+            wifiToggle.btn.has_css_class("active") === active) return
+
         wifiToggle.icon.icon_name = icon
         wifiToggle.label.label = label
         wifiToggle.subLabel.label = sub
