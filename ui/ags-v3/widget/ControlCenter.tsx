@@ -272,7 +272,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 12,
         css_classes: ["cc-notifs-section"],
-        vexpand: true // Critical for solving the bottom cutoff
+        vexpand: true,
+        margin_top: 32 // Calibrated Section Separation 💎
     })
     mainBox.append(notifSection)
 
