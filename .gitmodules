@@ -1,3 +1,21 @@
 [submodule "docs/hyprland-wiki"]
 	path = docs/hyprland-wiki
 	url = https://github.com/hyprwm/hyprland-wiki.git
+[submodule "docs/ags-wiki"]
+	path = docs/ags-wiki
+	url = https://github.com/Aylur/ags.wiki.git
+[submodule "vendor/hyprland-plugins"]
+	path = vendor/hyprland-plugins
+	url = https://github.com/hyprwm/hyprland-plugins.git
+[submodule "docs/gtk4-tutorial"]
+	path = docs/gtk4-tutorial
+	url = https://github.com/ToshioCP/Gtk4-tutorial.git
+[submodule "vendor/gtk4-layer-shell"]
+	path = vendor/gtk4-layer-shell
+	url = https://github.com/wmww/gtk4-layer-shell.git
+[submodule "vendor/libadwaita"]
+	path = vendor/libadwaita
+	url = https://gitlab.gnome.org/GNOME/libadwaita.git
+[submodule "docs/hyprland-protocols"]
+	path = docs/hyprland-protocols
+	url = https://github.com/hyprwm/hyprland-protocols.git
