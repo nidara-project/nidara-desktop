@@ -52,8 +52,8 @@ app.start({
         const themeCss = `* { font-family: "${family}", "Symbols Nerd Font", sans-serif; }`
 
         // 🛡️ Flicker Guard: Skip if font hasn't changed
-        if ((appThis as any)._lastFont === fontName) return
-        (appThis as any)._lastFont = fontName;
+        if ((app as any)._lastFont === fontName) return
+        (app as any)._lastFont = fontName;
 
         themeProvider.load_from_data(themeCss, themeCss.length)
         console.log(`[Style] Sync: ${family} ${size}px`)
