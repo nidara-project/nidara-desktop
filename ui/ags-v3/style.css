@@ -462,8 +462,9 @@ window.crystal-bar {
   /* SUBTLE BORDER */
   border-radius: 999px;
   padding: 0px 12px;
-  min-height: 32px;
-  max-height: 32px;
+  min-height: 30px;
+  /* 30px content + 1px border * 2 = 32px TOTAL */
+  max-height: 30px;
   margin: 0;
   box-shadow: none;
 }

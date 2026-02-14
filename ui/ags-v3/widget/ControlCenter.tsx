@@ -88,27 +88,6 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     // Standard buttons and sliders will now correctly receive 
     // events as they are in the overlay layer above the catcher.
 
-    /* --- DateTime Section --- */
-    const dateTimeBox = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        css_classes: ["cc-datetime"],
-        halign: Gtk.Align.END,
-        margin_bottom: 24
-    })
-    const timeLabel = new Gtk.Label({ css_classes: ["cc-time"], halign: Gtk.Align.END })
-    const dateLabel = new Gtk.Label({ css_classes: ["cc-date"], halign: Gtk.Align.END })
-    dateTimeBox.append(timeLabel); dateTimeBox.append(dateLabel)
-    mainBox.append(dateTimeBox)
-
-    const updateTime = () => {
-        const now = new Date()
-        timeLabel.label = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })
-        dateLabel.label = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()
-        return true
-    }
-    updateTime()
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, updateTime)
-
     const topSection = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 24,

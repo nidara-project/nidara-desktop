@@ -488,19 +488,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   })
   centerSide.append(Workspaces())
 
-  const rightSide = new Gtk.Box({
-    spacing: 12,
-    halign: Gtk.Align.END,
-    valign: Gtk.Align.CENTER,
-    css_classes: ["bar-right"],
-    height_request: 32,
-    vexpand: false,
-    focusable: false,
-    can_focus: false
-  })
-  rightSide.append(SystemResources())
-  rightSide.append(Tray())
-
   const timeContent = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
   const timeLabel = new Gtk.Label({ name: "bar-time-label", css_classes: ["bar-time"], label: "...", valign: Gtk.Align.CENTER })
   const notifCluster = new Gtk.Box({ spacing: 6, css_classes: ["bar-notif-cluster"], valign: Gtk.Align.CENTER })
@@ -535,21 +522,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const sync = () => {
         const count = notifd.notifications.length
         const dnd = notifd.dont_disturb
-
         const anyNotif = count > 0 || dnd
-
-        if (!anyNotif) {
-          notifCluster.set_visible(false)
-          return
-        }
-
+        if (!anyNotif) { notifCluster.set_visible(false); return }
         notifCluster.set_visible(true)
-
-        // Icon Logic: Prioritize DND icon if active
         timeNotifIcon.icon_name = dnd ? "notifications-disabled-symbolic" : "notifications-symbolic"
         timeNotifIcon.set_visible(true)
-
-        // Count Logic: Always show if > 0
         if (count > 0) {
           timeNotifCount.label = count.toString()
           timeNotifCount.set_visible(true)
@@ -565,7 +542,46 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   })
 
   timeBtn.connect("clicked", () => { (app as any).DistroIA?.toggleCC() })
-  rightSide.append(timeBtn)
+
+  // Discrete Floating Capsules (Phase F) 💊
+  const ResourcePill = new Gtk.Box({
+    css_classes: ["bar-right"],
+    valign: Gtk.Align.CENTER,
+    height_request: 32,
+    focusable: false,
+    can_focus: false
+  })
+  ResourcePill.append(SystemResources())
+
+  const TrayPill = new Gtk.Box({
+    css_classes: ["bar-right"],
+    valign: Gtk.Align.CENTER,
+    height_request: 32,
+    focusable: false,
+    can_focus: false
+  })
+  TrayPill.append(Tray())
+
+  const TimePill = new Gtk.Box({
+    css_classes: ["bar-right"],
+    valign: Gtk.Align.CENTER,
+    height_request: 32,
+    focusable: false,
+    can_focus: false
+  })
+  TimePill.append(timeBtn)
+
+  const rightSide = new Gtk.Box({
+    spacing: 8,
+    halign: Gtk.Align.END,
+    valign: Gtk.Align.CENTER,
+    hexpand: false,
+    focusable: false,
+    can_focus: false
+  })
+  rightSide.append(ResourcePill)
+  rightSide.append(TrayPill)
+  rightSide.append(TimePill)
 
   centerBox.set_start_widget(leftSide)
   centerBox.set_center_widget(centerSide)
