@@ -498,9 +498,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   notifCluster.append(timeNotifIcon)
   notifCluster.append(timeNotifCount)
 
-  timeContent.append(timeLabel)
-  timeContent.append(timeSep)
   timeContent.append(notifCluster)
+  timeContent.append(timeSep)
+  timeContent.append(timeLabel)
 
   const timeBtn = new Gtk.Button({
     css_classes: ["bar-time-btn"],

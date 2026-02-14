@@ -415,6 +415,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         win.set_visible(!win.get_visible())
         if (win.get_visible()) {
             win.present()
+            win.set_focus(null) // 🛡️ KILL First-Element-Focus Flicker
             syncLevels()
         }
     }
