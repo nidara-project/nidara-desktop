@@ -2,6 +2,7 @@ import app from "ags/gtk4/app"
 import { Gdk, Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+// @ts-ignore
 import Adw from "gi://Adw"
 
 // @ts-ignore
