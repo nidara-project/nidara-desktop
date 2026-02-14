@@ -9,16 +9,41 @@ venv/
 .DS_Store
 *.swp
 *~
+*.zip
 
 # IDE
 .vscode/
 .idea/
 
-# Build
+# Build & Dist
 *.deb
 *.iso
 build/
 dist/
+target/
+
+# Media & Recordings
+*.mkv
+*.mp4
+*.webm
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+
+# Profiling & Local Cache
+ui/ags-v3/isolated_config/
+ui/ags-v3/astal-local/
+.gemini/
+brain/
+logs/
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Temp
 *.log
