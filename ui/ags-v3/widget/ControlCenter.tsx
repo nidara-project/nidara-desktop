@@ -155,10 +155,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         else if (!active && hasActive) wifiToggle.btn.remove_css_class("active")
     }
 
-    const wifiToggle = createToggle("network-wireless-offline-symbolic", "Wi-Fi", "...", false, () => {
-        if (network?.wifi) network.wifi.enabled = !network.wifi.enabled
-    })
-    wifiToggle.btn.width_request = 180 // Fixed width to stop layout jump flicker 🛡️
+    wifiToggle.btn.width_request = 192 // Symmetry Lock �
     grid.attach(wifiToggle.btn, 0, 0, 1, 1)
     if (network) {
         network.connect("notify::primary", updateNetwork)
@@ -182,6 +179,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const btToggle = createToggle("bluetooth-disabled-symbolic", "Bluetooth", "...", false, () => {
         if (bluetooth) bluetooth.is_powered = !bluetooth.is_powered
     })
+    btToggle.btn.width_request = 192 // Symmetry Lock 💎
     grid.attach(btToggle.btn, 1, 0, 1, 1)
     if (bluetooth) bluetooth.connect("notify::is-powered", updateBT)
     updateBT()
@@ -200,6 +198,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const dndToggle = createToggle("notifications-symbolic", "No molestar", "...", false, () => {
         if (notifd) notifd.dont_disturb = !notifd.dont_disturb
     })
+    dndToggle.btn.width_request = 192 // Symmetry Lock 💎
     grid.attach(dndToggle.btn, 0, 1, 1, 1)
     if (notifd) notifd.connect("notify::dont-disturb", updateDND)
     updateDND()
@@ -208,6 +207,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         (app as any).DistroIA?.togglePower();
         (app as any).DistroIA?.toggleCC();
     })
+    pwrToggle.btn.width_request = 192 // Symmetry Lock 💎
     grid.attach(pwrToggle.btn, 1, 1, 1, 1)
 
     /* --- Sliders --- */

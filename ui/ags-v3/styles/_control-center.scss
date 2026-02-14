@@ -50,7 +50,8 @@
 }
 
 /* --- Quick Toggles Grid --- */
-window#crystal-control-center button.cc-toggle {
+window#crystal-control-center button.cc-toggle,
+window#crystal-control-center button.cc-toggle:focus {
     background-color: rgba(255, 255, 255, 0.3);
     background-image: none;
     border: 1px solid rgba(255, 255, 255, 0.3);
