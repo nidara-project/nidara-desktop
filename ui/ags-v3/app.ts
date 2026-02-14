@@ -48,11 +48,13 @@ app.start({
         const fontName = settings.get_string("font-name")
         const [family, size] = fontName.match(/^(.*?) (\d+)$/)?.slice(1) || ["sans-serif", "11"]
 
-        const themeCss = `
-          * { 
-            font-family: "${family}", "Symbols Nerd Font", sans-serif; 
-          }
-        `
+        const configuredTheme = settings.get_string("icon-theme")
+        const themeCss = `* { font-family: "${family}", "Symbols Nerd Font", sans-serif; }`
+
+        // 🛡️ Flicker Guard: Skip if font hasn't changed
+        if ((appThis as any)._lastFont === fontName) return
+        (appThis as any)._lastFont = fontName;
+
         themeProvider.load_from_data(themeCss, themeCss.length)
         console.log(`[Style] Sync: ${family} ${size}px`)
       } catch (e) { console.error("[Style] GSettings error:", e) }
