@@ -164,8 +164,8 @@ scale slider {
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 16px;
     padding: 14px 16px;
-    margin: 0 8px 10px 8px;
-    /* XL cards with symmetric 8px margins */
+    margin: 0 0 10px 0;
+    /* Cards touch the panel edges to use panel padding (16px) accurately 💎 */
     transition: all 0.2s ease;
 }
 

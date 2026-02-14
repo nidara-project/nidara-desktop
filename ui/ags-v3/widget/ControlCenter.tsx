@@ -80,7 +80,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         valign: Gtk.Align.FILL,
         vexpand: true,
         margin_top: 8,
-        margin_end: 8, // Balanced with the 8px card margins 💎
+        margin_end: 0, // Kill asymmetric gap 💎
         margin_bottom: 0
     })
     overlay.add_overlay(mainBox)
@@ -146,11 +146,13 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             wifiToggle.subLabel.label === sub &&
             wifiToggle.btn.has_css_class("active") === active) return
 
-        wifiToggle.icon.icon_name = icon
-        wifiToggle.label.label = label
-        wifiToggle.subLabel.label = sub
-        if (active) wifiToggle.btn.add_css_class("active")
-        else wifiToggle.btn.remove_css_class("active")
+        if (wifiToggle.icon.icon_name !== icon) wifiToggle.icon.icon_name = icon
+        if (wifiToggle.label.label !== label) wifiToggle.label.label = label
+        if (wifiToggle.subLabel.label !== sub) wifiToggle.subLabel.label = sub
+
+        const hasActive = wifiToggle.btn.has_css_class("active")
+        if (active && !hasActive) wifiToggle.btn.add_css_class("active")
+        else if (!active && hasActive) wifiToggle.btn.remove_css_class("active")
     }
 
     const wifiToggle = createToggle("network-wireless-offline-symbolic", "Wi-Fi", "...", false, () => {
@@ -168,10 +170,14 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     const updateBT = () => {
         const powered = bluetooth?.is_powered || false
-        btToggle.icon.icon_name = powered ? "bluetooth-active-symbolic" : "bluetooth-disabled-symbolic"
-        btToggle.subLabel.label = powered ? "Encendido" : "Apagado"
-        if (powered) btToggle.btn.add_css_class("active")
-        else btToggle.btn.remove_css_class("active")
+        const icon = powered ? "bluetooth-active-symbolic" : "bluetooth-disabled-symbolic"
+        const sub = powered ? "Encendido" : "Apagado"
+        const hasActive = btToggle.btn.has_css_class("active")
+
+        if (btToggle.icon.icon_name !== icon) btToggle.icon.icon_name = icon
+        if (btToggle.subLabel.label !== sub) btToggle.subLabel.label = sub
+        if (powered && !hasActive) btToggle.btn.add_css_class("active")
+        else if (!powered && hasActive) btToggle.btn.remove_css_class("active")
     }
     const btToggle = createToggle("bluetooth-disabled-symbolic", "Bluetooth", "...", false, () => {
         if (bluetooth) bluetooth.is_powered = !bluetooth.is_powered
@@ -182,10 +188,14 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     const updateDND = () => {
         const dnd = notifd?.dont_disturb || false
-        dndToggle.icon.icon_name = dnd ? "notifications-disabled-symbolic" : "notifications-symbolic"
-        dndToggle.subLabel.label = dnd ? "Silencio" : "Normal"
-        if (dnd) dndToggle.btn.add_css_class("active")
-        else dndToggle.btn.remove_css_class("active")
+        const icon = dnd ? "notifications-disabled-symbolic" : "notifications-symbolic"
+        const sub = dnd ? "Silencio" : "Normal"
+        const hasActive = dndToggle.btn.has_css_class("active")
+
+        if (dndToggle.icon.icon_name !== icon) dndToggle.icon.icon_name = icon
+        if (dndToggle.subLabel.label !== sub) dndToggle.subLabel.label = sub
+        if (dnd && !hasActive) dndToggle.btn.add_css_class("active")
+        else if (!dnd && hasActive) dndToggle.btn.remove_css_class("active")
     }
     const dndToggle = createToggle("notifications-symbolic", "No molestar", "...", false, () => {
         if (notifd) notifd.dont_disturb = !notifd.dont_disturb
