@@ -80,7 +80,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         valign: Gtk.Align.FILL,
         vexpand: true,
         margin_top: 8,
-        margin_end: 0, // Kill asymmetric gap 💎
+        margin_end: 8,
         margin_bottom: 0
     })
     overlay.add_overlay(mainBox)
