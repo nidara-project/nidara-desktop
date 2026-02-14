@@ -79,7 +79,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         halign: Gtk.Align.END,
         valign: Gtk.Align.FILL,
         vexpand: true,
-        margin_top: 48,
+        margin_top: 8,
         margin_end: 8,
         margin_bottom: 0
     })

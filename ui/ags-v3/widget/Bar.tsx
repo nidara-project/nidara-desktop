@@ -442,10 +442,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
 
       // Precision Gaps: 8-32-8 UNIFIED CALIBRATION
-      Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 8)
+      Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 0)
       Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.LEFT, 0)
       Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, 0)
-      Gtk4LayerShell.set_exclusive_zone(win, 48)
+      Gtk4LayerShell.set_exclusive_zone(win, 40)
 
       // Focus Kill: Prevent accidental focus rings on the main bar
       win.focusable = false
