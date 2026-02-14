@@ -103,7 +103,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         const btn = new Gtk.Button({
             css_classes: ["cc-toggle"],
             hexpand: true,
-            focusable: false, // Flicker Fix 🛡️
+            focusable: false,
             can_focus: false,
             focus_on_click: false
         })

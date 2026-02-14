@@ -290,8 +290,9 @@ scale slider {
 .cc-scroll scrollbar.vertical {
     background-color: transparent;
     border: none;
-    min-width: 10px;
-    /* Wider gutter for easier interaction */
+    min-width: 0;
+    width: 0;
+    /* Zero layout impact for absolute symmetry 💎 */
     margin: 0;
 }
 
