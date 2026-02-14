@@ -80,7 +80,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         valign: Gtk.Align.FILL,
         vexpand: true,
         margin_top: 8,
-        margin_end: 8,
+        margin_end: 8, // Balanced with the 8px card margins 💎
         margin_bottom: 0
     })
     overlay.add_overlay(mainBox)
@@ -112,8 +112,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         const box = new Gtk.Box({ spacing: 12, css_classes: ["cc-toggle-content"] })
         const icon = new Gtk.Image({ icon_name: iconName, pixel_size: 20, css_classes: ["cc-toggle-icon"] })
         const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
-        const l = new Gtk.Label({ label: title, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START })
-        const sl = new Gtk.Label({ label: sub, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, ellipsize: 3 })
+        const l = new Gtk.Label({ label: title, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START, focusable: false, can_focus: false })
+        const sl = new Gtk.Label({ label: sub, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, ellipsize: 3, focusable: false, can_focus: false })
 
         text.append(l); text.append(sl)
         box.append(icon); box.append(text)
