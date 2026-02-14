@@ -156,6 +156,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const wifiToggle = createToggle("network-wireless-offline-symbolic", "Wi-Fi", "...", false, () => {
         if (network?.wifi) network.wifi.enabled = !network.wifi.enabled
     })
+    wifiToggle.btn.width_request = 180 // Fixed width to stop layout jump flicker 🛡️
     grid.attach(wifiToggle.btn, 0, 0, 1, 1)
     if (network) {
         network.connect("notify::primary", updateNetwork)
@@ -369,9 +370,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
                 n.dismiss()
             })
 
-            timeContent.append(notifCluster)
-            timeContent.append(timeSep)
-            timeContent.append(timeLabel)
+            item.append(iconBox); item.append(bodyBox); item.append(cls)
             notifList.append(item)
         })
 
