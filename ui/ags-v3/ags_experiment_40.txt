@@ -1,0 +1,22 @@
+
+(gjs:1513832): Adwaita-WARNING **: 01:07:59.109: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+Gjs-Console-Message: 01:07:59.149: [AppService] Synchronizing Registry...
+Gjs-Console-Message: 01:07:59.201: [AppService] Registry synced. 52 apps, 65 names cached in 52ms.
+Gjs-Console-Message: 01:07:59.209: [DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)
+ags-Message: 01:07:59.211: [DISTROIA] main() started!
+
+(gjs:1513832): Gtk-WARNING **: 01:07:59.211: Theme parser error: style.css:1:1-9: Unknown @ rule
+
+(gjs:1513832): Gtk-WARNING **: 01:07:59.212: Theme parser error: style.css:464:3-13: No property named "max-height"
+
+(gjs:1513832): Gtk-WARNING **: 01:07:59.212: Theme parser error: style.css:1318:3-18: No property named "backdrop-filter"
+ags-Message: 01:07:59.213: [Style] Loaded: /home/angel/Dev/DistroIA/ui/ags-v3/style.css
+ags-Message: 01:07:59.213: [Style] Sync: Noto Sans Medium 11px
+ags-Message: 01:07:59.714: [UI] Monitor 0
+
+(gjs:1513832): GLib-GIO-CRITICAL **: 01:07:59.871: g_list_store_remove: assertion '!g_sequence_iter_is_end (it)' failed
+ags-Message: 01:08:00.014: [AppService] System theme changed to Tela-circle-purple, refreshing registry...
+ags-Message: 01:08:00.014: [AppService] Synchronizing Registry...
+ags-Message: 01:08:00.021: [AppService] Registry synced. 52 apps, 65 names cached in 6ms.
+ags-Message: 01:08:04.201: [AppService] Synchronizing Registry...
+ags-Message: 01:08:04.208: [AppService] Registry synced. 52 apps, 65 names cached in 7ms.

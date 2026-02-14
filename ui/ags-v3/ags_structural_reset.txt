@@ -1,0 +1,34 @@
+
+(gjs:1496990): Adwaita-WARNING **: 00:15:42.620: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+Gjs-Console-Message: 00:15:42.662: [AppService] Synchronizing Registry...
+Gjs-Console-Message: 00:15:42.720: [AppService] Registry synced. 52 apps, 65 names cached in 58ms.
+Gjs-Console-Message: 00:15:42.729: [DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)
+ags-Message: 00:15:42.731: [DISTROIA] main() started!
+
+(gjs:1496990): Gtk-WARNING **: 00:15:42.731: Theme parser error: style.css:1:1-9: Unknown @ rule
+
+(gjs:1496990): Gtk-WARNING **: 00:15:42.732: Theme parser error: style.css:438:17-18: Expected a valid color.
+
+(gjs:1496990): Gtk-WARNING **: 00:15:42.732: Theme parser error: style.css:439:20-21: Junk at end of value for box-shadow
+
+(gjs:1496990): Gtk-WARNING **: 00:15:42.732: Theme parser error: style.css:440:26-27: Junk at end of value for -gtk-icon-shadow
+
+(gjs:1496990): Gtk-WARNING **: 00:15:42.732: Theme parser error: style.css:469:3-13: No property named "max-height"
+
+(gjs:1496990): Gtk-WARNING **: 00:15:42.732: Theme parser error: style.css:470:3-9: No property named "height"
+
+(gjs:1496990): Gtk-WARNING **: 00:15:42.732: Theme parser error: style.css:479:3-8: No property named "width"
+
+(gjs:1496990): Gtk-WARNING **: 00:15:42.732: Theme parser error: style.css:484:3-8: No property named "width"
+
+(gjs:1496990): Gtk-WARNING **: 00:15:42.732: Theme parser error: style.css:490:3-8: No property named "width"
+
+(gjs:1496990): Gtk-WARNING **: 00:15:42.733: Theme parser error: style.css:1241:3-18: No property named "backdrop-filter"
+ags-Message: 00:15:42.734: [Style] Loaded: /home/angel/Dev/DistroIA/ui/ags-v3/style.css
+ags-Message: 00:15:42.734: [Style] Sync: Noto Sans Medium 11px
+ags-Message: 00:15:43.235: [UI] Monitor 0
+ags-Message: 00:15:43.491: [AppService] System theme changed to Tela-circle-purple, refreshing registry...
+ags-Message: 00:15:43.491: [AppService] Synchronizing Registry...
+ags-Message: 00:15:43.497: [AppService] Registry synced. 52 apps, 65 names cached in 6ms.
+ags-Message: 00:15:47.721: [AppService] Synchronizing Registry...
+ags-Message: 00:15:47.727: [AppService] Registry synced. 52 apps, 65 names cached in 5ms.

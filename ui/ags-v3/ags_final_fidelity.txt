@@ -1,0 +1,35 @@
+
+(gjs:1484561): Adwaita-WARNING **: 23:36:34.148: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+Gjs-Console-Message: 23:36:34.189: [AppService] Synchronizing Registry...
+Gjs-Console-Message: 23:36:34.241: [AppService] Registry synced. 52 apps, 65 names cached in 52ms.
+Gjs-Console-Message: 23:36:34.249: [DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)
+ags-Message: 23:36:34.251: [DISTROIA] main() started!
+
+(gjs:1484561): Gtk-WARNING **: 23:36:34.252: Theme parser error: style.css:1:1-9: Unknown @ rule
+
+(gjs:1484561): Gtk-WARNING **: 23:36:34.253: Theme parser error: style.css:1401:3-18: No property named "backdrop-filter"
+ags-Message: 23:36:34.254: [Style] Loaded: /home/angel/Dev/DistroIA/ui/ags-v3/style.css
+ags-Message: 23:36:34.255: [Style] Sync: Noto Sans Medium 11px
+ags-Message: 23:36:34.755: [UI] Monitor 0
+
+(gjs:1484561): Gjs-WARNING **: 23:36:34.895: Unhandled promise rejection. To suppress this warning, add an error handler to your promise chain with .catch() or a try-catch block around your await expression. Stack trace of the failed promise:
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+
+
+(gjs:1484561): GLib-GIO-CRITICAL **: 23:36:34.917: g_list_store_remove: assertion '!g_sequence_iter_is_end (it)' failed
+ags-Message: 23:36:35.062: [AppService] System theme changed to Tela-circle-purple, refreshing registry...
+ags-Message: 23:36:35.062: [AppService] Synchronizing Registry...
+ags-Message: 23:36:35.069: [AppService] Registry synced. 52 apps, 65 names cached in 7ms.
+ags-Message: 23:36:39.241: [AppService] Synchronizing Registry...
+ags-Message: 23:36:39.247: [AppService] Registry synced. 52 apps, 65 names cached in 6ms.
+ags-Message: 23:37:21.835: [Toggle] CC (Count: 1)
+ags-Message: 23:37:21.835: [CC] Toggle called. Vis: false
+ags-Message: 23:37:56.185: [Toggle] Power (Count: 1)
+ags-Message: 23:37:56.185: [PowerMenu] Toggle called
+ags-Message: 23:37:56.194: [Toggle] CC (Count: 1)
+ags-Message: 23:37:56.194: [CC] Toggle called. Vis: true
+ags-Message: 23:38:00.095: [Toggle] CC (Count: 1)
+ags-Message: 23:38:00.095: [CC] Toggle called. Vis: false
+ags-Message: 23:38:57.962: [CC] Background click detected, closing...
+
+(gjs:1484561): Gtk-WARNING **: 23:38:57.964: Broken accounting of active state for widget 0x55d48dd20540(GtkWindow)

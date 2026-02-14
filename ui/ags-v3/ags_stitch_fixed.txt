@@ -1,0 +1,28 @@
+
+(gjs:1507399): Adwaita-WARNING **: 00:54:08.298: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+Gjs-Console-Message: 00:54:08.336: [AppService] Synchronizing Registry...
+Gjs-Console-Message: 00:54:08.388: [AppService] Registry synced. 52 apps, 65 names cached in 52ms.
+Gjs-Console-Message: 00:54:08.396: [DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)
+ags-Message: 00:54:08.398: [DISTROIA] main() started!
+
+(gjs:1507399): Gtk-WARNING **: 00:54:08.398: Theme parser error: style.css:1:1-9: Unknown @ rule
+
+(gjs:1507399): Gtk-WARNING **: 00:54:08.398: Theme parser error: style.css:464:3-13: No property named "max-height"
+
+(gjs:1507399): Gtk-WARNING **: 00:54:08.399: Theme parser error: style.css:1281:3-18: No property named "backdrop-filter"
+ags-Message: 00:54:08.400: [Style] Loaded: /home/angel/Dev/DistroIA/ui/ags-v3/style.css
+ags-Message: 00:54:08.400: [Style] Sync: Noto Sans Medium 11px
+ags-Message: 00:54:08.901: [UI] Monitor 0
+
+(gjs:1507399): ags-CRITICAL **: 00:54:08.910: [UI] Error: Error: Expected an object of type GtkWidget for argument 'child' but got type undefined
+SystemResources@file:///run/user/1000/ags.js:4036:7
+Bar@file:///run/user/1000/ags.js:4107:20
+createUI@file:///run/user/1000/ags.js:4822:27
+main/<@file:///run/user/1000/ags.js:4849:19
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+  
+ags-Message: 00:54:08.911: [AppService] System theme changed to Tela-circle-purple, refreshing registry...
+ags-Message: 00:54:08.911: [AppService] Synchronizing Registry...
+ags-Message: 00:54:08.917: [AppService] Registry synced. 52 apps, 65 names cached in 6ms.
+ags-Message: 00:54:13.389: [AppService] Synchronizing Registry...
+ags-Message: 00:54:13.395: [AppService] Registry synced. 52 apps, 65 names cached in 6ms.

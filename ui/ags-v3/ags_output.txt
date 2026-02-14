@@ -1,0 +1,179 @@
+
+(gjs:1402597): Adwaita-WARNING **: 19:37:03.835: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+Gjs-Console-Message: 19:37:03.876: [AppService] Synchronizing Registry...
+Gjs-Console-Message: 19:37:03.927: [AppService] Registry synced. 52 apps, 65 names cached in 51ms.
+Gjs-Console-Message: 19:37:03.935: [DISTROIA] app.ts loading... (Phase 65: Mega-Main Stability)
+ags-Message: 19:37:03.937: [DISTROIA] main() started!
+
+(gjs:1402597): Adwaita-WARNING **: 19:37:03.937: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+
+(gjs:1402597): Gtk-WARNING **: 19:37:03.937: Theme parser error: style.css:32:3-22: No property named "-gtk-outline-radius"
+
+(gjs:1402597): Gtk-WARNING **: 19:37:03.937: Theme parser error: style.css:241:3-13: No property named "max-height"
+
+(gjs:1402597): Gtk-WARNING **: 19:37:03.937: Theme parser error: style.css:242:28-34: Junk at end of value for transform-origin
+
+(gjs:1402597): Gtk-WARNING **: 19:37:03.937: Theme parser error: style.css:250:28-34: Junk at end of value for transform-origin
+
+(gjs:1402597): Gtk-WARNING **: 19:37:03.937: Theme parser error: style.css:263:3-11: No property named "overflow"
+
+(gjs:1402597): Gtk-WARNING **: 19:37:03.938: Theme parser error: style.css:710:3-13: No property named "text-align"
+
+(gjs:1402597): Gtk-WARNING **: 19:37:03.938: Theme parser error: style.css:989:20-21: Junk at end of value for transition
+ags-Message: 19:37:03.939: [Style] Loaded: /home/angel/Dev/DistroIA/ui/ags-v3/style.css
+ags-Message: 19:37:03.939: [Style] Sync: Noto Sans Medium 11px
+ags-Message: 19:37:03.940: [UI] Monitor 0
+
+(gjs:1402597): ags-CRITICAL **: 19:37:03.986: [DockLifecycle] Update triggered
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.002: [DockLifecycle] Creating NEW: home-shortcut
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.032: [DockLifecycle] Creating NEW: launcher
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.034: [DockLifecycle] Creating NEW: chrome-lodlkdfmihgonocnmddehnfgiljnadcf-default
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.045: [DockLifecycle] Creating NEW: google-chrome
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.049: [DockLifecycle] Creating NEW: chrome-agimnkijcaahngcdmfeangaknmldooml-default
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.051: [DockLifecycle] Creating NEW: chrome-gdfaincndogidkdcdkhapmbffkckdkhn-default
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.053: [DockLifecycle] Creating NEW: antigravity
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.063: [DockLifecycle] Creating NEW: kitty
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.065: [DockLifecycle] Creating NEW: org.telegram
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.068: [DockLifecycle] Creating NEW: org.pulseaudio.pavucontrol
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.070: [DockLifecycle] Creating NEW: thunar
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.073: [DockLifecycle] Creating NEW: sep-trash
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.073: [DockLifecycle] Creating NEW: special:trash
+ags-Message: 19:37:04.106: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 19:37:04.108: [AppService] System theme changed to Tela-circle-purple, refreshing registry...
+ags-Message: 19:37:04.108: [AppService] Synchronizing Registry...
+ags-Message: 19:37:04.114: [AppService] Registry synced. 52 apps, 65 names cached in 6ms.
+
+(gjs:1402597): ags-CRITICAL **: 19:37:04.232: [DockLifecycle] Update triggered
+
+(gjs:1402597): GLib-GIO-CRITICAL **: 19:37:05.449: g_list_store_remove: assertion '!g_sequence_iter_is_end (it)' failed
+ags-Message: 19:37:06.108: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 19:37:08.917: [Toggle] CC (Count: 1)
+ags-Message: 19:37:08.918: [CC] Toggle called. Vis: false
+ags-Message: 19:37:09.027: [AppService] Synchronizing Registry...
+ags-Message: 19:37:09.034: [AppService] Registry synced. 52 apps, 65 names cached in 7ms.
+
+(gjs:1402597): ags-CRITICAL **: 19:37:09.134: [DockLifecycle] Update triggered
+ags-Message: 19:37:17.963: [Toggle] CC (Count: 1)
+ags-Message: 19:37:17.963: [CC] Toggle called. Vis: true
+ags-Message: 19:37:17.965: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 19:37:17.965: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 19:37:28.304: [Toggle] CC (Count: 1)
+ags-Message: 19:37:28.304: [CC] Toggle called. Vis: false
+ags-Message: 19:37:30.750: [Toggle] CC (Count: 1)
+ags-Message: 19:37:30.750: [CC] Toggle called. Vis: true
+ags-Message: 19:37:30.752: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 19:37:30.753: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 19:38:55.851: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 19:38:55.851: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 19:38:55.855: [WO-Debug] REACTIVE Hypr Event: workspace
+ags-Message: 19:38:55.855: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 19:38:55.856: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 19:38:55.856: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 19:38:55.861: [WO-Debug] Signal: focused-workspace
+ags-Message: 19:38:55.861: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 19:38:55.892: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 19:38:55.892: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+
+(gjs:1402597): ags-CRITICAL **: 19:38:55.959: [DockLifecycle] Update triggered
+ags-Message: 19:46:12.024: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 19:46:12.025: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 19:48:27.033: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 19:48:27.035: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 19:51:06.049: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 19:51:06.050: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 19:52:43.029: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 19:52:43.030: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 19:59:05.455: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 19:59:05.457: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+
+(gjs:1402597): ags-CRITICAL **: 19:59:05.558: [DockLifecycle] Update triggered
+ags-Message: 19:59:07.174: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 19:59:07.175: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+
+(gjs:1402597): ags-CRITICAL **: 19:59:07.276: [DockLifecycle] Update triggered
+ags-Message: 20:05:46.023: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:05:46.024: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:06:55.519: [Toggle] CC (Count: 1)
+ags-Message: 20:06:55.520: [CC] Toggle called. Vis: false
+ags-Message: 20:07:32.025: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:07:32.025: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:08:17.024: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:08:17.024: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:10:57.826: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:10:57.827: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:11:08.083: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:11:08.083: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:15:49.024: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:15:49.025: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:15:50.647: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:15:50.648: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:16:14.630: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:16:14.632: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:16:19.556: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:16:19.556: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:17:05.539: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:17:05.541: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:17:40.150: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:17:40.151: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:20:21.025: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:20:21.026: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:20:21.027: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:20:21.027: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:23:11.475: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:23:11.475: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:25:18.245: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:25:18.246: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:27:53.025: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:27:53.025: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:28:53.024: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:28:53.024: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:36:18.333: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:36:18.333: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:38:23.032: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:38:23.033: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:38:41.220: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:38:41.220: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:40:34.501: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:40:34.502: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 20:47:18.025: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 20:47:18.026: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 21:02:52.025: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 21:02:52.027: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 21:08:57.721: [Toggle] CC (Count: 1)
+ags-Message: 21:08:57.722: [CC] Toggle called. Vis: true
+ags-Message: 21:08:57.723: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 21:08:57.724: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 21:08:59.549: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 21:08:59.549: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 21:08:59.551: [WO-Debug] REACTIVE Hypr Event: workspace
+ags-Message: 21:08:59.552: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 21:08:59.552: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 21:08:59.553: [WO-Audit] WS:4 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 21:08:59.555: [WO-Debug] Signal: focused-workspace
+ags-Message: 21:08:59.555: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+
+(gjs:1402597): ags-CRITICAL **: 21:08:59.653: [DockLifecycle] Update triggered
+ags-Message: 21:09:22.605: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 21:09:22.606: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 21:09:44.609: [Toggle] CC (Count: 1)
+ags-Message: 21:09:44.610: [CC] Toggle called. Vis: false
+ags-Message: 21:10:02.846: [CC] Background click, closing...
+ags-Message: 21:10:02.848: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 21:10:02.848: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+
+(gjs:1402597): Gtk-WARNING **: 21:10:02.850: Broken accounting of active state for widget 0x55f81eb08650(GtkWindow)
+ags-Message: 21:11:11.214: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 21:11:11.214: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875

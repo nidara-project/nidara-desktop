@@ -12,7 +12,10 @@ import AstalNetwork from "gi://AstalNetwork"
 import AstalNotifd from "gi://AstalNotifd"
 import AstalTray from "gi://AstalTray"
 import WorkspaceOverview from "./WorkspaceOverview"
+import WorkspacePreview from "./WorkspacePreview"
 import { getWordmark } from "../utils"
+
+// ... (skipping Tray logic for brevity in match) ...
 
 /**
  * System Tray Module (Right) 📥
@@ -161,19 +164,24 @@ async function getServiceSafe<T>(getter: () => T, name: string): Promise<T | nul
 function AppMenu() {
   const box = new Gtk.Box({
     name: "bar-app-menu",
-    css_classes: ["bar-app-menu", "bar-app-menu-btn"], // V141: Added capsule class
-    spacing: 12 // Tighten a bit for capsule
+    css_classes: ["bar-app-menu", "bar-app-menu-btn"],
+    spacing: 12,
+    valign: Gtk.Align.CENTER,
+    focusable: false,
+    can_focus: false
   })
 
   const distroIcon = new Gtk.Image({
     icon_name: "archlinux-symbolic",
-    pixel_size: 16,
+    pixel_size: 24,
     css_classes: ["bar-app-distro-icon"]
   })
 
   const sep = new Gtk.Separator({
     orientation: Gtk.Orientation.VERTICAL,
-    css_classes: ["bar-app-sep"]
+    css_classes: ["bar-app-sep"],
+    valign: Gtk.Align.CENTER,
+    height_request: 12 // Strict separator height
   })
 
 
@@ -220,92 +228,161 @@ function AppMenu() {
 }
 
 /**
- * Workspace Indicator (Center) ⚪️
+ * Stitch-style Workspace Module (Fixed 5 Dots) 🔘
  */
 function Workspaces() {
+  const hypr = AstalHyprland.get_default()
+
   const box = new Gtk.Box({
     name: "bar-workspaces",
     css_classes: ["bar-workspaces"],
-    halign: Gtk.Align.CENTER,
-    valign: Gtk.Align.CENTER,
-    hexpand: false // Prevent unwanted expansion! 🛡️
-  })
-
-  // 1. Permanent Pill Structure
-  const label = new Gtk.Label({ label: "1", css_classes: ["bar-ws-pill"] })
-  const pillBox = new Gtk.Box({
     spacing: 8,
-    halign: Gtk.Align.CENTER,
     valign: Gtk.Align.CENTER
   })
-  pillBox.append(new Gtk.Image({ icon_name: "computer-symbolic", pixel_size: 16 }))
-  pillBox.append(label)
 
-  const btn = new Gtk.Button({
-    css_classes: ["bar-ws-btn"],
-    child: pillBox,
-    cursor: Gdk.Cursor.new_from_name("pointer", null),
-    hexpand: false, // Strict bounding! 🛡️
-    vexpand: false
-  })
+  // Fixed 5 dots (Stitch aesthetic)
+  const dots = Array.from({ length: 5 }, (_, i) => {
+    const id = i + 1
+    const dot = new Gtk.Box({
+      css_classes: ["workspace-dot"],
+      valign: Gtk.Align.CENTER,
+      halign: Gtk.Align.CENTER
+    })
 
-  box.append(btn)
+    const update = () => {
+      const active = hypr.focusedWorkspace.id === id
+      const occupied = hypr.get_workspace(id)?.clients.length > 0
 
-  // 2. Data & Cockpit Initialization
-  getServiceSafe(() => AstalHyprland.get_default(), "Hyprland (WS)").then(hyprland => {
-    if (!hyprland) return;
+      dot.remove_css_class("active")
+      dot.remove_css_class("occupied")
+      dot.remove_css_class("empty")
 
-    // Standalone Cockpit Window (Surface-Isolation)
-    const monitor = (btn.get_root() as any)?.gdk_monitor ||
-      (btn.get_root() as any)?.gdkmonitor ||
-      app.get_monitors()[0]
-    const cockpit = WorkspaceOverview(monitor, hyprland)
-    app.add_window(cockpit) // Register with app! 🛡️🚨
-
-    const updateUI = () => {
-      const id = hyprland.focused_workspace?.id || 1
-      label.label = id.toString()
+      if (active) dot.add_css_class("active")
+      else if (occupied) dot.add_css_class("occupied")
+      else dot.add_css_class("empty")
     }
 
-    // Explicit Triggers
-    btn.connect("clicked", () => {
-      const target = !cockpit.get_visible()
-      console.log(`[Cockpit] Toggle visibility to: ${target}`)
-      cockpit.set_visible(target)
-      if (target) cockpit.present()
-    })
+    hypr.connect("notify::focused-workspace", update)
+    hypr.connect("workspace-added", update)
+    hypr.connect("workspace-removed", update)
+    hypr.connect("client-added", update)
+    hypr.connect("client-removed", update)
+    update()
 
-    let hoverTimeout: number | null = null
-    const motion = new Gtk.EventControllerMotion()
-    motion.connect("enter", () => {
-      if (hoverTimeout) GLib.source_remove(hoverTimeout)
-      hoverTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => {
-        hoverTimeout = null
-        if (!cockpit.get_visible()) {
-          cockpit.set_visible(true)
-          cockpit.present()
-        }
-        return GLib.SOURCE_REMOVE
-      })
-    })
-    motion.connect("leave", () => {
-      if (hoverTimeout) {
-        GLib.source_remove(hoverTimeout)
-        hoverTimeout = null
-      }
-    })
-    btn.add_controller(motion)
-
-    hyprland.connect("notify::focused-workspace", updateUI)
-    updateUI()
+    return dot
   })
 
-  return box
+  dots.forEach(d => box.append(d))
+
+  const btn = new Gtk.Button({
+    child: box,
+    css_classes: ["bar-ws-btn"],
+    cursor: Gdk.Cursor.new_from_name("pointer", null),
+    hexpand: false,
+    vexpand: false,
+    focusable: false,
+    can_focus: false,
+    focus_on_click: false
+  })
+  btn.connect("clicked", () => execAsync("ags toggle mission-control"))
+
+  return btn
 }
 
 /**
- * System Status Modules (Right) 🔋📶🔊🔔🎛️🕒
+ * Circular Resource Gauge (Cairo-based) ⭕
  */
+function ResourceCircle(iconName: string, update: (cb: (val: number) => void) => void, interval = 2000) {
+  const canvas = new Gtk.DrawingArea({
+    css_classes: ["resource-canvas"],
+    width_request: 24,
+    height_request: 24,
+    valign: Gtk.Align.CENTER,
+    halign: Gtk.Align.CENTER
+  })
+
+  let percentage = 0
+
+  canvas.set_draw_func((area, cr, width, height) => {
+    const radius = Math.min(width, height) / 2 - 2
+    const xc = width / 2
+    const yc = height / 2
+
+    // Background track
+    cr.setSourceRGBA(0.2, 0.2, 0.2, 0.3)
+    cr.setLineWidth(2.5)
+    cr.arc(xc, yc, radius, 0, 2 * Math.PI)
+    cr.stroke()
+
+    // Progress arc
+    if (percentage > 0) {
+      const isCpu = iconName === "cpu-symbolic"
+      if (isCpu) cr.setSourceRGBA(0.79, 0.65, 0.97, 1.0) // accent_purple
+      else cr.setSourceRGBA(0.54, 0.81, 0.94, 1.0) // accent_blue approx
+
+      cr.setLineWidth(2.5)
+      cr.setLineCap(1) // Round caps
+      const angle = (percentage / 100) * 2 * Math.PI
+      cr.arc(xc, yc, radius, -Math.PI / 2, angle - Math.PI / 2)
+      cr.stroke()
+    }
+
+    // DRAW INNER SYMBOL (Bespoke Cairo Icons) 💎
+    const isCpu = iconName === "cpu-symbolic"
+    cr.setLineCap(1)
+    cr.setLineWidth(1.5)
+
+    if (isCpu) {
+      cr.setSourceRGBA(0.79, 0.65, 0.97, 1.0) // accent_purple
+      // Center Chip
+      const s = 6
+      cr.rectangle(xc - s / 2, yc - s / 2, s, s)
+      cr.stroke()
+      // Pins
+      const len = 2
+      for (let i = -1; i <= 1; i += 2) {
+        // Top/Bottom
+        cr.moveTo(xc + i * 2, yc - s / 2); cr.lineTo(xc + i * 2, yc - s / 2 - len);
+        cr.moveTo(xc + i * 2, yc + s / 2); cr.lineTo(xc + i * 2, yc + s / 2 + len);
+        // Left/Right
+        cr.moveTo(xc - s / 2, yc + i * 2); cr.lineTo(xc - s / 2 - len, yc + i * 2);
+        cr.moveTo(xc + s / 2, yc + i * 2); cr.lineTo(xc + s / 2 + len, yc + i * 2);
+      }
+      cr.stroke()
+    } else {
+      cr.setSourceRGBA(0.54, 0.81, 0.94, 1.0) // accent_blue
+      // RAM Stick
+      const w = 4, h = 10
+      cr.rectangle(xc - w / 2, yc - h / 2, w, h)
+      cr.stroke()
+      // Segments
+      cr.moveTo(xc - w / 2, yc); cr.lineTo(xc + w / 2, yc)
+      cr.moveTo(xc - w / 2, yc - 2); cr.lineTo(xc + w / 2, yc - 2)
+      cr.moveTo(xc - w / 2, yc + 2); cr.lineTo(xc + w / 2, yc + 2)
+      cr.stroke()
+    }
+  })
+
+  const overlay = new Gtk.Overlay({
+    css_classes: ["resource-circle"],
+    child: canvas,
+    valign: Gtk.Align.CENTER,
+    halign: Gtk.Align.CENTER
+  })
+
+  const sync = () => {
+    update((val) => {
+      percentage = val
+      canvas.queue_draw()
+    })
+    return true
+  }
+
+  sync()
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, sync)
+
+  return overlay
+}
 
 /**
  * CPU and RAM Monitor Module 📊
@@ -314,45 +391,26 @@ function SystemResources() {
   const box = new Gtk.Box({
     name: "bar-resources",
     css_classes: ["bar-resources"],
-    spacing: 12
+    spacing: 10,
+    valign: Gtk.Align.CENTER
   })
 
-  // CPU Monitor
-  const cpuIcon = new Gtk.Label({ label: "CPU", css_classes: ["bar-res-icon"] })
-  const cpuLabel = new Gtk.Label({ label: "...", css_classes: ["bar-res-label"] })
-  const cpuBox = new Gtk.Box({ spacing: 4, css_classes: ["bar-res-item"] })
-  cpuBox.append(cpuIcon); cpuBox.append(cpuLabel)
-
-  const updateCPU = () => {
-    // Use bash -c to correctly handle environment variables and pipes
+  const cpu = ResourceCircle("cpu-symbolic", (cb) => {
     execAsync(["bash", "-c", "LC_ALL=C top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'"]).then(out => {
       const val = parseFloat(out.trim().replace(",", "."))
-      cpuLabel.label = isNaN(val) ? "0%" : `${Math.floor(val)}%`
-    }).catch(() => { cpuLabel.label = "0%" })
-    return true
-  }
-  updateCPU()
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, updateCPU)
+      cb(isNaN(val) ? 0 : Math.floor(val))
+    })
+  }, 2000)
 
-  // RAM Monitor
-  const ramIcon = new Gtk.Label({ label: "RAM", css_classes: ["bar-res-icon"] })
-  const ramLabel = new Gtk.Label({ label: "...", css_classes: ["bar-res-label"] })
-  const ramBox = new Gtk.Box({ spacing: 4, css_classes: ["bar-res-item"] })
-  ramBox.append(ramIcon); ramBox.append(ramLabel)
-
-  const updateRAM = () => {
-    // Use bash -c for free command too
+  const ram = ResourceCircle("media-memory-symbolic", (cb) => {
     execAsync(["bash", "-c", "LC_ALL=C free -m | grep Mem | awk '{print $3/$2 * 100}'"]).then(out => {
       const val = parseFloat(out.trim().replace(",", "."))
-      ramLabel.label = isNaN(val) ? "0%" : `${Math.floor(val)}%`
-    }).catch(() => { ramLabel.label = "0%" })
-    return true
-  }
-  updateRAM()
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 5000, updateRAM)
+      cb(isNaN(val) ? 0 : Math.floor(val))
+    })
+  }, 5000)
 
-  box.append(cpuBox)
-  box.append(ramBox)
+  box.append(cpu)
+  box.append(ram)
 
   return box
 }
@@ -382,7 +440,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
       Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-      Gtk4LayerShell.set_exclusive_zone(win, 40) // 8px margin + 32px pill
+
+      // Precision Gaps: 8-32-8 UNIFIED CALIBRATION
+      Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 0)
+      Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.LEFT, 0)
+      Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, 0)
+      Gtk4LayerShell.set_exclusive_zone(win, 40)
+
+      // Focus Kill: Prevent accidental focus rings on the main bar
+      win.focusable = false
+      win.can_focus = false
+
       // @ts-ignore
       win.gdkmonitor = gdkmonitor
     } catch (e) {
@@ -398,29 +466,64 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     valign: Gtk.Align.FILL
   })
 
-  const leftSide = new Gtk.Box({ spacing: 12, halign: Gtk.Align.START, valign: Gtk.Align.CENTER, css_classes: ["bar-left"] })
+  const leftSide = new Gtk.Box({
+    halign: Gtk.Align.START,
+    valign: Gtk.Align.CENTER,
+    css_classes: ["bar-left"],
+    height_request: 32,
+    vexpand: false,
+    focusable: false,
+    can_focus: false
+  })
   leftSide.append(AppMenu())
 
-  const centerSide = new Gtk.Box({ halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, css_classes: ["bar-center"] })
+  const centerSide = new Gtk.Box({
+    halign: Gtk.Align.CENTER,
+    valign: Gtk.Align.CENTER,
+    css_classes: ["bar-center"],
+    height_request: 32,
+    vexpand: false,
+    focusable: false,
+    can_focus: false
+  })
   centerSide.append(Workspaces())
 
-  const rightSide = new Gtk.Box({ spacing: 12, halign: Gtk.Align.END, valign: Gtk.Align.CENTER, css_classes: ["bar-right"] })
+  const rightSide = new Gtk.Box({
+    spacing: 12,
+    halign: Gtk.Align.END,
+    valign: Gtk.Align.CENTER,
+    css_classes: ["bar-right"],
+    height_request: 32,
+    vexpand: false,
+    focusable: false,
+    can_focus: false
+  })
   rightSide.append(SystemResources())
   rightSide.append(Tray())
 
-  const timeContent = new Gtk.Box({ spacing: 8 })
-  const timeLabel = new Gtk.Label({ name: "bar-time-label", css_classes: ["bar-time"], label: "..." })
-  const notifCluster = new Gtk.Box({ spacing: 6, css_classes: ["bar-notif-cluster"] })
-  const timeNotifIcon = new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 14 })
-  const timeNotifCount = new Gtk.Label({ label: "", css_classes: ["bar-time-notif-count"] })
+  const timeContent = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+  const timeLabel = new Gtk.Label({ name: "bar-time-label", css_classes: ["bar-time"], label: "...", valign: Gtk.Align.CENTER })
+  const notifCluster = new Gtk.Box({ spacing: 6, css_classes: ["bar-notif-cluster"], valign: Gtk.Align.CENTER })
+  const timeNotifIcon = new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 14, valign: Gtk.Align.CENTER })
+  const timeNotifCount = new Gtk.Label({ label: "", css_classes: ["bar-time-notif-count"], valign: Gtk.Align.CENTER })
+  const timeSep = new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["bar-time-sep"], valign: Gtk.Align.CENTER })
 
   notifCluster.append(timeNotifIcon)
   notifCluster.append(timeNotifCount)
 
   timeContent.append(notifCluster)
+  timeContent.append(timeSep)
   timeContent.append(timeLabel)
 
-  const timeBtn = new Gtk.Button({ css_classes: ["bar-time-btn"], child: timeContent })
+  const timeBtn = new Gtk.Button({
+    css_classes: ["bar-time-btn"],
+    child: timeContent,
+    valign: Gtk.Align.CENTER,
+    height_request: 32,
+    focusable: false,
+    can_focus: false,
+    focus_on_click: false
+  })
 
   const timeAccessor = createPoll("...", 1000, "date +'%a %b %d  %H:%M'", (out) => out.trim())
   timeAccessor.subscribe(() => { timeLabel.label = timeAccessor.get() })
@@ -457,7 +560,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       notifd.connect("notify::notifications", sync)
       notifd.connect("notify::dont-disturb", sync)
       sync()
-    })
+    }).catch(e => console.error("[Bar] Notifd fetch failed:", e))
     return GLib.SOURCE_REMOVE
   })
 

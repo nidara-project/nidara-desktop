@@ -1,0 +1,18 @@
+
+(gjs:1497399): Adwaita-WARNING **: 00:16:20.698: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+Gjs-Console-Message: 00:16:20.739: [AppService] Synchronizing Registry...
+Gjs-Console-Message: 00:16:20.791: [AppService] Registry synced. 52 apps, 65 names cached in 51ms.
+Gjs-Console-Message: 00:16:20.798: [DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)
+ags-Message: 00:16:20.800: [DISTROIA] main() started!
+
+(gjs:1497399): Gtk-WARNING **: 00:16:20.801: Theme parser error: style.css:1:1-9: Unknown @ rule
+
+(gjs:1497399): Gtk-WARNING **: 00:16:20.802: Theme parser error: style.css:1237:3-18: No property named "backdrop-filter"
+ags-Message: 00:16:20.803: [Style] Loaded: /home/angel/Dev/DistroIA/ui/ags-v3/style.css
+ags-Message: 00:16:20.803: [Style] Sync: Noto Sans Medium 11px
+ags-Message: 00:16:21.304: [UI] Monitor 0
+ags-Message: 00:16:21.563: [AppService] System theme changed to Tela-circle-purple, refreshing registry...
+ags-Message: 00:16:21.564: [AppService] Synchronizing Registry...
+ags-Message: 00:16:21.570: [AppService] Registry synced. 52 apps, 65 names cached in 5ms.
+ags-Message: 00:16:25.791: [AppService] Synchronizing Registry...
+ags-Message: 00:16:25.797: [AppService] Registry synced. 52 apps, 65 names cached in 6ms.

@@ -1,3 +1,4 @@
+@charset "UTF-8";
 /* 
    CRYSTAL UI - Main Entry Point
    ================================
@@ -428,10 +429,15 @@ window#crystal-dock .cd-squircle-plate:hover {
    Edit the corresponding partial for each component.
 */
 /* ==========================================================================
-   CRYSTAL BAR
-   Window, centerbox, capsules, app menu, workspaces, time, tray, monitors
+   CRYSTAL BAR - STITCH FIDELITY (Pills, Dots & Cairo Circles)
    ========================================================================== */
-/* --- Window --- */
+/* --- Focus Kill --- */
+* {
+  outline-width: 0;
+  outline-color: transparent;
+  box-shadow: none;
+}
+
 window#crystal-bar,
 window.crystal-bar {
   background: transparent;
@@ -439,235 +445,151 @@ window.crystal-bar {
   margin: 0;
 }
 
-/* --- Nuclear: Kill GTK4 default button min-height inside bar --- */
-window#crystal-bar button,
-window#crystal-bar box:not(.bar-centerbox),
-.bar-centerbox button,
-.bar-centerbox > box {
-  min-height: 0;
-}
-
-/* --- Centerbox (the visible pill) --- */
+/* --- Centerbox --- */
 .bar-centerbox {
-  padding: 0 12px;
-  min-height: 32px;
-  background-color: rgba(255, 255, 255, 0.12);
+  background-color: transparent;
   border: none;
-  border-radius: 999px;
-  margin: 8px 12px;
+  margin-top: 8px;
+  /* INTERNAL TOP MARGIN */
 }
 
-/* --- Left/Center/Right containers: don't stretch children --- */
+/* --- Left/Center/Right capsules --- */
 .bar-left,
 .bar-center,
 .bar-right {
-  margin-top: 3px;
-  margin-bottom: 3px;
+  background-color: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  /* SUBTLE BORDER */
+  border-radius: 999px;
+  padding: 0px 12px;
+  min-height: 32px;
+  max-height: 32px;
+  margin: 0;
+  box-shadow: none;
 }
 
-/* --- App Menu (left) --- */
-.bar-app-distro-icon {
-  margin-right: 4px;
-  color: white;
+.bar-left {
+  margin-left: 8px;
 }
 
-.bar-app-sep {
-  background-color: rgba(255, 255, 255, 0.2);
-  min-width: 1px;
-  margin: 4px 4px;
+.bar-right {
+  margin-right: 8px;
 }
 
-.bar-app-name {
-  color: white;
-  font-weight: 600;
+/* --- Global Bar Button Reset --- */
+.bar-left button,
+.bar-center button,
+.bar-right button,
+.bar-tray-btn,
+.bar-ws-btn,
+.workspace-dot {
+  background: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  min-height: 0;
 }
 
-.bar-app-arrow {
-  margin-left: 4px;
-  opacity: 0.7;
-}
-
-.bar-menu-item {
-  color: rgba(255, 255, 255, 0.82);
-  margin-right: 14px;
-}
-
-.bar-menu-item:hover {
-  color: white;
-}
-
-/* --- Workspaces (center) --- */
-.bar-ws-dot {
+/* Re-apply dot color since I just made it transparent above */
+.workspace-dot {
   min-width: 6px;
   min-height: 6px;
-  border-radius: 6px;
-  background-color: rgba(255, 255, 255, 0.25);
-  margin: 0 6px;
-  transition: all 0.3s ease;
-}
-
-.bar-ws-dot.occupied {
-  background-color: rgba(255, 255, 255, 0.5);
-}
-
-.bar-ws-dot.active {
-  background-color: white;
-  min-width: 22px;
-}
-
-.bar-ws-btn {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 12px;
-  padding: 0px 14px;
-  min-width: 80px;
-  min-height: 0;
-  margin-top: 0;
-  margin-bottom: 0;
-  transition: all 0.3s ease;
-}
-
-.bar-ws-btn:hover {
-  background-color: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-.bar-ws-pill {
-  color: white;
-}
-
-.bar-center {
-  min-width: 100px;
-}
-
-/* --- Status & Buttons (all bar capsule-like buttons) --- */
-.bar-status label {
-  color: rgba(255, 255, 255, 0.95);
-}
-
-.bar-time {
-  color: white;
-}
-
-.bar-cockpit-btn,
-.bar-time-btn,
-.bar-status-btn,
-.bar-app-menu-btn {
-  background-color: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 999px;
-  padding: 0px 10px;
-  min-height: 0;
-  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-}
-
-/* --- Tray --- */
-.bar-tray {
-  margin-right: 6px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
 }
 
 .bar-tray-btn {
+  padding: 0 4px;
+}
+
+/* --- Workspace Dots (Stitch Style) --- */
+.bar-workspaces {
+  background: none;
+  background-color: transparent;
+  border: none;
+  padding: 0 4px;
+}
+
+.bar-ws-btn {
   background: transparent;
   border: none;
-  border-radius: 999px;
-  min-width: 28px;
-  min-height: 28px;
-  padding: 0px;
-  transition: all 0.2s ease;
 }
 
-/* --- Tray Menu --- */
-popover.bar-tray-menu contents {
-  background-color: var(--window-bg-color);
-  padding: 8px;
-  border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+.workspace-dot {
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-popover.bar-tray-menu modelbutton {
-  padding: 10px 16px;
-  border-radius: 10px;
-  min-width: 180px;
-  margin: 2px 4px;
+.workspace-dot.occupied {
+  background-color: rgba(175, 82, 222, 0.6);
+}
+
+.workspace-dot.active {
+  min-width: 18px;
+  border-radius: 4px;
+  background-color: #af52de;
+}
+
+.workspace-dot.empty {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* --- Resource Circles (Cairo) --- */
+.resource-circle {
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.resource-canvas {
+  /* Background circle logic handled in Cairo, but we can set opacity here */
+}
+
+.resource-label {
+  font-size: 10px;
+  font-weight: 900;
+  color: white;
+  margin-bottom: 1px;
+  /* Optical centering */
+}
+
+.resource-label-cpu {
+  color: #af52de;
+}
+
+.resource-label-media,
+.resource-label-memory {
+  color: #007aff;
+}
+
+/* --- Time Module --- */
+.bar-time-btn {
   background: transparent;
-  color: var(--window-fg-color);
-  transition: all 0.2s ease;
-}
-
-popover.bar-tray-menu modelbutton:hover {
-  background-color: var(--view-selected-bg-color);
+  border: none;
+  padding: 0 8px;
   color: white;
+  font-weight: 500;
 }
 
-popover.bar-tray-menu separator {
-  margin: 8px 4px;
-  background-color: rgba(255, 255, 255, 0.12);
-  min-height: 1px;
+.bar-app-menu {
+  border-radius: 12px;
+  padding: 4px 8px;
+  transition: background 0.2s;
 }
 
-/* --- System Monitors (CPU / RAM capsules) --- */
-.bar-resources {
-  margin-right: 12px;
+.bar-app-menu:hover {
+  background: rgba(255, 255, 255, 0.05);
 }
 
-.bar-res-item {
-  background-color: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 999px;
-  padding: 0px 10px;
-  min-height: 0;
-  transition: all 0.2s ease;
-}
-
-.bar-res-item:hover {
-  background-color: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
-.bar-res-icon {
-  font-size: 14px;
-}
-
-.bar-res-icon.cpu {
-  color: #34c759;
-}
-
-.bar-res-icon.ram {
-  color: #5856d6;
-}
-
-.bar-res-label {
-  font-size: 12px;
-  font-weight: bold;
-  color: white;
-  min-width: 32px;
-}
-
-.bar-res-label,
-.bar-res-icon {
-  color: #FFFFFF;
-  font-weight: bold;
-}
-
-/* --- Capsule Hardening (generic) --- */
-.bar-capsule {
-  border-radius: 999px;
-  padding: 0px 10px;
-  min-height: 0;
-  background-color: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  transition: all 0.2s ease;
-}
-
-.bar-capsule:hover {
-  background-color: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
-.bar-res-item.bar-capsule {
-  padding: 0px 10px;
-  background-color: rgba(255, 255, 255, 0.05);
+.bar-app-sep {
+  background: rgba(255, 255, 255, 0.1);
+  min-width: 1px;
+  margin: 0 4px;
 }
 
 /* 
@@ -1262,6 +1184,26 @@ window.workspace-cockpit {
   background: transparent;
 }
 
+/* --- Search Bar --- */
+.cockpit-search-box {
+  margin-bottom: 20px;
+}
+
+.cockpit-search {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 10px 20px;
+  color: white;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+.cockpit-search:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.05);
+}
+
 /* --- Overview Panel --- */
 .workspace-overview {
   background: #0c0c0c;
@@ -1284,6 +1226,19 @@ window.workspace-cockpit {
   background-color: rgba(0, 122, 255, 0.05);
   border: 1px solid rgba(0, 122, 255, 0.6);
   box-shadow: 0 0 60px rgba(0, 122, 255, 0.25);
+}
+
+.bar-ws-dot {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.bar-ws-dot.active {
+  background-color: #007aff;
+  box-shadow: 0 0 10px rgba(0, 122, 255, 0.5);
+}
+.bar-ws-dot.occupied {
+  background-color: rgba(255, 255, 255, 0.5);
 }
 
 /* --- Buttons --- */
@@ -1369,6 +1324,35 @@ window.workspace-cockpit {
 .wo-schematic-win-icon {
   opacity: 0.85;
   filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+}
+
+/* --- Workspace Preview Popover 🖼️ --- */
+.ws-preview-popover {
+  background-color: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.ws-preview-popover contents {
+  background: transparent;
+  padding: 0px;
+  border: none;
+  box-shadow: none;
+}
+
+.ws-preview-popover-box {
+  padding: 12px;
+}
+
+.ws-preview-title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 6px;
 }
 
 /* Cockpit Window Duplicate Safety */

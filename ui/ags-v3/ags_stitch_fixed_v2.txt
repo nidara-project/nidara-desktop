@@ -1,0 +1,166 @@
+
+(gjs:1507662): Adwaita-WARNING **: 00:54:34.745: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+Gjs-Console-Message: 00:54:34.786: [AppService] Synchronizing Registry...
+Gjs-Console-Message: 00:54:34.837: [AppService] Registry synced. 52 apps, 65 names cached in 51ms.
+Gjs-Console-Message: 00:54:34.845: [DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)
+ags-Message: 00:54:34.847: [DISTROIA] main() started!
+
+(gjs:1507662): Gtk-WARNING **: 00:54:34.847: Theme parser error: style.css:1:1-9: Unknown @ rule
+
+(gjs:1507662): Gtk-WARNING **: 00:54:34.848: Theme parser error: style.css:464:3-13: No property named "max-height"
+
+(gjs:1507662): Gtk-WARNING **: 00:54:34.849: Theme parser error: style.css:1281:3-18: No property named "backdrop-filter"
+ags-Message: 00:54:34.850: [Style] Loaded: /home/angel/Dev/DistroIA/ui/ags-v3/style.css
+ags-Message: 00:54:34.850: [Style] Sync: Noto Sans Medium 11px
+ags-Message: 00:54:35.351: [UI] Monitor 0
+
+(gjs:1507662): GLib-GIO-CRITICAL **: 00:54:35.508: g_list_store_remove: assertion '!g_sequence_iter_is_end (it)' failed
+ags-Message: 00:54:35.656: [AppService] System theme changed to Tela-circle-purple, refreshing registry...
+ags-Message: 00:54:35.656: [AppService] Synchronizing Registry...
+ags-Message: 00:54:35.662: [AppService] Registry synced. 52 apps, 65 names cached in 6ms.
+ags-Message: 00:54:39.838: [AppService] Synchronizing Registry...
+ags-Message: 00:54:39.844: [AppService] Registry synced. 52 apps, 65 names cached in 6ms.
+
+(gjs:1507662): ags-CRITICAL **: 00:56:57.656: Error: no window registered with name "mission-control"
+toggle_window@file:///run/user/1000/ags.js:1141:21
+ToggleWindow@file:///run/user/1000/ags.js:713:38
+methodAsync/</<@file:///run/user/1000/ags.js:693:23
+#handleMethodCall@file:///run/user/1000/ags.js:436:37
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+  
+
+(gjs:1507662): ags-CRITICAL **: 00:56:58.348: Error: no window registered with name "mission-control"
+toggle_window@file:///run/user/1000/ags.js:1141:21
+ToggleWindow@file:///run/user/1000/ags.js:713:38
+methodAsync/</<@file:///run/user/1000/ags.js:693:23
+#handleMethodCall@file:///run/user/1000/ags.js:436:37
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+  
+
+(gjs:1507662): Gjs-WARNING **: 00:56:58.348: Unhandled promise rejection. To suppress this warning, add an error handler to your promise chain with .catch() or a try-catch block around your await expression. Stack trace of the failed promise:
+execAsyncv@file:///run/user/1000/ags.js:1472:12
+execAsync@file:///run/user/1000/ags.js:1496:21
+execAsync@file:///run/user/1000/ags.js:1533:20
+Workspaces/<@file:///run/user/1000/ags.js:3964:41
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+
+
+(gjs:1507662): Gjs-WARNING **: 00:56:58.402: Unhandled promise rejection. To suppress this warning, add an error handler to your promise chain with .catch() or a try-catch block around your await expression. Stack trace of the failed promise:
+execAsyncv@file:///run/user/1000/ags.js:1472:12
+execAsync@file:///run/user/1000/ags.js:1496:21
+execAsync@file:///run/user/1000/ags.js:1533:20
+Workspaces/<@file:///run/user/1000/ags.js:3964:41
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+
+
+(gjs:1507662): ags-CRITICAL **: 00:56:58.774: Error: no window registered with name "mission-control"
+toggle_window@file:///run/user/1000/ags.js:1141:21
+ToggleWindow@file:///run/user/1000/ags.js:713:38
+methodAsync/</<@file:///run/user/1000/ags.js:693:23
+#handleMethodCall@file:///run/user/1000/ags.js:436:37
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+  
+
+(gjs:1507662): ags-CRITICAL **: 00:56:59.095: Error: no window registered with name "mission-control"
+toggle_window@file:///run/user/1000/ags.js:1141:21
+ToggleWindow@file:///run/user/1000/ags.js:713:38
+methodAsync/</<@file:///run/user/1000/ags.js:693:23
+#handleMethodCall@file:///run/user/1000/ags.js:436:37
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+  
+
+(gjs:1507662): Gjs-WARNING **: 00:56:59.095: Unhandled promise rejection. To suppress this warning, add an error handler to your promise chain with .catch() or a try-catch block around your await expression. Stack trace of the failed promise:
+execAsyncv@file:///run/user/1000/ags.js:1472:12
+execAsync@file:///run/user/1000/ags.js:1496:21
+execAsync@file:///run/user/1000/ags.js:1533:20
+Workspaces/<@file:///run/user/1000/ags.js:3964:41
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+
+
+(gjs:1507662): ags-CRITICAL **: 00:56:59.305: Error: no window registered with name "mission-control"
+toggle_window@file:///run/user/1000/ags.js:1141:21
+ToggleWindow@file:///run/user/1000/ags.js:713:38
+methodAsync/</<@file:///run/user/1000/ags.js:693:23
+#handleMethodCall@file:///run/user/1000/ags.js:436:37
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+  
+
+(gjs:1507662): Gjs-WARNING **: 00:56:59.305: Unhandled promise rejection. To suppress this warning, add an error handler to your promise chain with .catch() or a try-catch block around your await expression. Stack trace of the failed promise:
+execAsyncv@file:///run/user/1000/ags.js:1472:12
+execAsync@file:///run/user/1000/ags.js:1496:21
+execAsync@file:///run/user/1000/ags.js:1533:20
+Workspaces/<@file:///run/user/1000/ags.js:3964:41
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+
+
+(gjs:1507662): Gjs-WARNING **: 00:56:59.402: Unhandled promise rejection. To suppress this warning, add an error handler to your promise chain with .catch() or a try-catch block around your await expression. Stack trace of the failed promise:
+execAsyncv@file:///run/user/1000/ags.js:1472:12
+execAsync@file:///run/user/1000/ags.js:1496:21
+execAsync@file:///run/user/1000/ags.js:1533:20
+Workspaces/<@file:///run/user/1000/ags.js:3964:41
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+
+
+(gjs:1507662): ags-CRITICAL **: 00:56:59.548: Error: no window registered with name "mission-control"
+toggle_window@file:///run/user/1000/ags.js:1141:21
+ToggleWindow@file:///run/user/1000/ags.js:713:38
+methodAsync/</<@file:///run/user/1000/ags.js:693:23
+#handleMethodCall@file:///run/user/1000/ags.js:436:37
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+  
+
+(gjs:1507662): Gjs-WARNING **: 00:56:59.608: Unhandled promise rejection. To suppress this warning, add an error handler to your promise chain with .catch() or a try-catch block around your await expression. Stack trace of the failed promise:
+execAsyncv@file:///run/user/1000/ags.js:1472:12
+execAsync@file:///run/user/1000/ags.js:1496:21
+execAsync@file:///run/user/1000/ags.js:1533:20
+Workspaces/<@file:///run/user/1000/ags.js:3964:41
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+
+
+(gjs:1507662): ags-CRITICAL **: 00:57:00.041: Error: no window registered with name "mission-control"
+toggle_window@file:///run/user/1000/ags.js:1141:21
+ToggleWindow@file:///run/user/1000/ags.js:713:38
+methodAsync/</<@file:///run/user/1000/ags.js:693:23
+#handleMethodCall@file:///run/user/1000/ags.js:436:37
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+  
+
+(gjs:1507662): Gjs-WARNING **: 00:57:00.396: Unhandled promise rejection. To suppress this warning, add an error handler to your promise chain with .catch() or a try-catch block around your await expression. Stack trace of the failed promise:
+execAsyncv@file:///run/user/1000/ags.js:1472:12
+execAsync@file:///run/user/1000/ags.js:1496:21
+execAsync@file:///run/user/1000/ags.js:1533:20
+Workspaces/<@file:///run/user/1000/ags.js:3964:41
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+
+
+(gjs:1507662): ags-CRITICAL **: 00:57:01.824: Error: no window registered with name "mission-control"
+toggle_window@file:///run/user/1000/ags.js:1141:21
+ToggleWindow@file:///run/user/1000/ags.js:713:38
+methodAsync/</<@file:///run/user/1000/ags.js:693:23
+#handleMethodCall@file:///run/user/1000/ags.js:436:37
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+  
+
+(gjs:1507662): Gjs-WARNING **: 00:57:02.403: Unhandled promise rejection. To suppress this warning, add an error handler to your promise chain with .catch() or a try-catch block around your await expression. Stack trace of the failed promise:
+execAsyncv@file:///run/user/1000/ags.js:1472:12
+execAsync@file:///run/user/1000/ags.js:1496:21
+execAsync@file:///run/user/1000/ags.js:1533:20
+Workspaces/<@file:///run/user/1000/ags.js:3964:41
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+
+
+(gjs:1507662): ags-CRITICAL **: 00:57:02.445: Error: no window registered with name "mission-control"
+toggle_window@file:///run/user/1000/ags.js:1141:21
+ToggleWindow@file:///run/user/1000/ags.js:713:38
+methodAsync/</<@file:///run/user/1000/ags.js:693:23
+#handleMethodCall@file:///run/user/1000/ags.js:436:37
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+  
+
+(gjs:1507662): Gjs-WARNING **: 00:57:03.402: Unhandled promise rejection. To suppress this warning, add an error handler to your promise chain with .catch() or a try-catch block around your await expression. Stack trace of the failed promise:
+execAsyncv@file:///run/user/1000/ags.js:1472:12
+execAsync@file:///run/user/1000/ags.js:1496:21
+execAsync@file:///run/user/1000/ags.js:1533:20
+Workspaces/<@file:///run/user/1000/ags.js:3964:41
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+

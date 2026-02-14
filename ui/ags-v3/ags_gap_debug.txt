@@ -1,0 +1,31 @@
+
+(gjs:1512063): Adwaita-WARNING **: 01:04:21.534: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+Gjs-Console-Message: 01:04:21.575: [AppService] Synchronizing Registry...
+Gjs-Console-Message: 01:04:21.626: [AppService] Registry synced. 52 apps, 65 names cached in 51ms.
+Gjs-Console-Message: 01:04:21.635: [DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)
+ags-Message: 01:04:21.637: [DISTROIA] main() started!
+
+(gjs:1512063): Gtk-WARNING **: 01:04:21.637: Theme parser error: style.css:1:1-9: Unknown @ rule
+
+(gjs:1512063): Gtk-WARNING **: 01:04:21.638: Theme parser error: style.css:464:3-13: No property named "max-height"
+
+(gjs:1512063): Gtk-WARNING **: 01:04:21.638: Theme parser error: style.css:1318:3-18: No property named "backdrop-filter"
+ags-Message: 01:04:21.640: [Style] Loaded: /home/angel/Dev/DistroIA/ui/ags-v3/style.css
+ags-Message: 01:04:21.640: [Style] Sync: Noto Sans Medium 11px
+ags-Message: 01:04:22.140: [UI] Monitor 0
+
+(gjs:1512063): GLib-GIO-CRITICAL **: 01:04:22.294: g_list_store_remove: assertion '!g_sequence_iter_is_end (it)' failed
+ags-Message: 01:04:22.465: [AppService] System theme changed to Tela-circle-purple, refreshing registry...
+ags-Message: 01:04:22.465: [AppService] Synchronizing Registry...
+ags-Message: 01:04:22.473: [AppService] Registry synced. 52 apps, 65 names cached in 8ms.
+ags-Message: 01:04:26.627: [AppService] Synchronizing Registry...
+ags-Message: 01:04:26.633: [AppService] Registry synced. 52 apps, 65 names cached in 5ms.
+ags-Message: 01:05:15.264: [Toggle] CC (Count: 1)
+ags-Message: 01:05:15.265: [CC] Toggle called. Vis: false
+ags-Message: 01:05:22.194: [CC] Dismissing notif: 1
+ags-Message: 01:05:24.337: [CC] Dismissing notif: 28
+ags-Message: 01:05:25.370: [CC] Dismissing notif: 22
+ags-Message: 01:05:26.734: [CC] Dismissing notif: 25
+ags-Message: 01:05:32.428: [CC] Background click detected, closing...
+
+(gjs:1512063): Gtk-WARNING **: 01:05:32.431: Broken accounting of active state for widget 0x56543ad80350(GtkWindow)

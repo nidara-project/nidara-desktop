@@ -269,13 +269,27 @@ export default function WorkspaceOverview(monitor: any, hyprland: any) {
 
     const overview = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 24,
+        spacing: 32,
         css_classes: ["workspace-overview", "crystal-glass"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER,
-        hexpand: false,
-        vexpand: false
     })
+
+    // Search Bar 🔍
+    const searchEntry = new Gtk.Entry({
+        placeholder_text: "Search windows, apps, or files...",
+        css_classes: ["cockpit-search"],
+        hexpand: true,
+        halign: Gtk.Align.CENTER,
+        width_request: 500
+    })
+
+    const searchBox = new Gtk.Box({
+        css_classes: ["cockpit-search-box"],
+        halign: Gtk.Align.CENTER
+    })
+    searchBox.append(searchEntry)
+    overview.append(searchBox)
 
     const windowContent = new Gtk.Box({
         css_classes: ["cockpit-window-content"],

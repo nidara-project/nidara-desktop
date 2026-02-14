@@ -1,0 +1,99 @@
+
+(gjs:1526657): Adwaita-WARNING **: 01:39:44.203: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+Gjs-Console-Message: 01:39:44.242: [AppService] Synchronizing Registry...
+Gjs-Console-Message: 01:39:44.293: [AppService] Registry synced. 52 apps, 65 names cached in 51ms.
+Gjs-Console-Message: 01:39:44.301: [DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)
+ags-Message: 01:39:44.303: [DISTROIA] main() started!
+
+(gjs:1526657): Gtk-WARNING **: 01:39:44.303: Theme parser error: style.css:1:1-9: Unknown @ rule
+
+(gjs:1526657): Gtk-WARNING **: 01:39:44.303: Theme parser error: style.css:466:3-13: No property named "max-height"
+
+(gjs:1526657): Gtk-WARNING **: 01:39:44.304: Theme parser error: style.css:1321:3-18: No property named "backdrop-filter"
+ags-Message: 01:39:44.305: [Style] Loaded: /home/angel/Dev/DistroIA/ui/ags-v3/style.css
+ags-Message: 01:39:44.305: [Style] Sync: Noto Sans Medium 11px
+ags-Message: 01:39:44.806: [UI] Monitor 0
+
+(gjs:1526657): GLib-GIO-CRITICAL **: 01:39:44.963: g_list_store_remove: assertion '!g_sequence_iter_is_end (it)' failed
+ags-Message: 01:39:45.057: [AppService] System theme changed to Tela-circle-purple, refreshing registry...
+ags-Message: 01:39:45.057: [AppService] Synchronizing Registry...
+ags-Message: 01:39:45.063: [AppService] Registry synced. 52 apps, 65 names cached in 6ms.
+ags-Message: 01:39:49.293: [AppService] Synchronizing Registry...
+ags-Message: 01:39:49.300: [AppService] Registry synced. 52 apps, 65 names cached in 7ms.
+ags-Message: 01:41:33.289: [Toggle] AppGrid (Count: 1)
+ags-Message: 01:41:33.290: [Grid] Internal toggle called
+time="2026-02-14T01:41:34+01:00" level=info msg=">>> Loading preferences"
+time="2026-02-14T01:41:34+01:00" level=info msg="lang: es_ES"
+time="2026-02-14T01:41:34+01:00" level=info msg=">>> Loading basic lang from '/usr/share/nwg-look/langs/en_US.json'"
+time="2026-02-14T01:41:34+01:00" level=info msg=">>> Reading gsettings"
+time="2026-02-14T01:41:34+01:00" level=info msg="gtk-theme: Tokyonight-Dark"
+time="2026-02-14T01:41:34+01:00" level=info msg="icon-theme: Tela-circle-purple"
+time="2026-02-14T01:41:34+01:00" level=info msg="font-name: Noto Sans Medium 11"
+time="2026-02-14T01:41:34+01:00" level=info msg="cursor-theme: default"
+time="2026-02-14T01:41:34+01:00" level=info msg="cursor-size: 24"
+time="2026-02-14T01:41:34+01:00" level=info msg="toolbar-style: both-horiz"
+time="2026-02-14T01:41:34+01:00" level=info msg="toolbar-icons-size: large"
+time="2026-02-14T01:41:34+01:00" level=info msg="font-hinting: medium"
+time="2026-02-14T01:41:34+01:00" level=info msg="font-antialiasing: rgba"
+time="2026-02-14T01:41:34+01:00" level=info msg="font-rgba-order: rgb"
+time="2026-02-14T01:41:34+01:00" level=info msg="text-scaling-factor: 1"
+time="2026-02-14T01:41:34+01:00" level=info msg="color-scheme: prefer-dark"
+time="2026-02-14T01:41:34+01:00" level=info msg="event-sounds: true"
+time="2026-02-14T01:41:34+01:00" level=info msg="input-feedback-sounds: false"
+
+(nwg-look:1527421): Gtk-WARNING **: 01:41:34.418: Theme parsing error: gtk-dark.css:1048:16: 'border-spacing' is not a valid property name
+time="2026-02-14T01:41:34+01:00" level=info msg=">>> Parsing original /home/angel/.config/gtk-3.0/settings.ini"
+
+(nwg-look:1527421): Gtk-WARNING **: 01:41:34.541: Theme parsing error: gtk-dark.css:1048:16: 'border-spacing' is not a valid property name
+
+(nwg-look:1527421): Gtk-WARNING **: 01:41:48.008: Theme parsing error: gtk-dark.css:1048:16: 'border-spacing' is not a valid property name
+
+(nwg-look:1527421): Gtk-WARNING **: 01:41:48.029: Theme parsing error: gtk-dark.css:1048:16: 'border-spacing' is not a valid property name
+time="2026-02-14T01:42:27+01:00" level=info msg=">>> Applying gsettings"
+time="2026-02-14T01:42:27+01:00" level=info msg=">> org.gnome.desktop.interface"
+time="2026-02-14T01:42:27+01:00" level=info msg="gtk-theme: Tokyonight-Dark OK"
+time="2026-02-14T01:42:27+01:00" level=info msg="icon-theme: Tela-circle-purple OK"
+time="2026-02-14T01:42:27+01:00" level=info msg="cursor-theme: default OK"
+time="2026-02-14T01:42:27+01:00" level=info msg="cursor-size: 24 OK"
+time="2026-02-14T01:42:28+01:00" level=info msg="font-name: Inter Display 11 OK"
+time="2026-02-14T01:42:28+01:00" level=info msg="font-hinting: medium OK"
+time="2026-02-14T01:42:28+01:00" level=info msg="font-antialiasing: rgba OK"
+time="2026-02-14T01:42:28+01:00" level=info msg="font-rgba-order: rgb OK"
+time="2026-02-14T01:42:28+01:00" level=info msg="text-scaling-factor: 1 OK"
+time="2026-02-14T01:42:28+01:00" level=info msg="toolbar-style: both-horiz OK"
+time="2026-02-14T01:42:28+01:00" level=info msg="toolbar-icons-size: large OK"
+time="2026-02-14T01:42:28+01:00" level=info msg="color-scheme: prefer-dark OK"
+time="2026-02-14T01:42:28+01:00" level=info msg=">> org.gnome.desktop.sound"
+time="2026-02-14T01:42:28+01:00" level=info msg="event-sounds: true OK"
+time="2026-02-14T01:42:28+01:00" level=info msg="input-feedback-sounds: false OK"
+time="2026-02-14T01:42:28+01:00" level=info msg=">>> Backing up gsettings to /home/angel/.local/share/nwg-look"
+time="2026-02-14T01:42:28+01:00" level=info msg=">>> Exporting /home/angel/.config/gtk-3.0/settings.ini"
+time="2026-02-14T01:42:28+01:00" level=info msg=">>> Exporting /home/angel/.gtkrc-2.0"
+time="2026-02-14T01:42:28+01:00" level=info msg=">>> Exporting /home/angel/.local/share/icons/default/index.theme"
+time="2026-02-14T01:42:28+01:00" level=info msg=">>> Exporting /home/angel/.config/xsettingsd/xsettingsd.conf"
+time="2026-02-14T01:42:28+01:00" level=info msg=">>> Symlinking files in /home/angel/.config/gtk-4.0"
+time="2026-02-14T01:42:28+01:00" level=info msg=">>> Exporting /home/angel/.config/gtk-4.0/settings.ini"
+time="2026-02-14T01:42:30+01:00" level=info msg=">>> Applying gsettings"
+time="2026-02-14T01:42:30+01:00" level=info msg=">> org.gnome.desktop.interface"
+time="2026-02-14T01:42:30+01:00" level=info msg="gtk-theme: Tokyonight-Dark OK"
+time="2026-02-14T01:42:30+01:00" level=info msg="icon-theme: Tela-circle-purple OK"
+time="2026-02-14T01:42:30+01:00" level=info msg="cursor-theme: default OK"
+time="2026-02-14T01:42:30+01:00" level=info msg="cursor-size: 24 OK"
+time="2026-02-14T01:42:30+01:00" level=info msg="font-name: Inter Display 11 OK"
+time="2026-02-14T01:42:30+01:00" level=info msg="font-hinting: medium OK"
+time="2026-02-14T01:42:30+01:00" level=info msg="font-antialiasing: rgba OK"
+time="2026-02-14T01:42:30+01:00" level=info msg="font-rgba-order: rgb OK"
+time="2026-02-14T01:42:30+01:00" level=info msg="text-scaling-factor: 1 OK"
+time="2026-02-14T01:42:30+01:00" level=info msg="toolbar-style: both-horiz OK"
+time="2026-02-14T01:42:30+01:00" level=info msg="toolbar-icons-size: large OK"
+time="2026-02-14T01:42:30+01:00" level=info msg="color-scheme: prefer-dark OK"
+time="2026-02-14T01:42:30+01:00" level=info msg=">> org.gnome.desktop.sound"
+time="2026-02-14T01:42:30+01:00" level=info msg="event-sounds: true OK"
+time="2026-02-14T01:42:30+01:00" level=info msg="input-feedback-sounds: false OK"
+time="2026-02-14T01:42:30+01:00" level=info msg=">>> Backing up gsettings to /home/angel/.local/share/nwg-look"
+time="2026-02-14T01:42:30+01:00" level=info msg=">>> Exporting /home/angel/.config/gtk-3.0/settings.ini"
+time="2026-02-14T01:42:30+01:00" level=info msg=">>> Exporting /home/angel/.gtkrc-2.0"
+time="2026-02-14T01:42:30+01:00" level=info msg=">>> Exporting /home/angel/.local/share/icons/default/index.theme"
+time="2026-02-14T01:42:30+01:00" level=info msg=">>> Exporting /home/angel/.config/xsettingsd/xsettingsd.conf"
+time="2026-02-14T01:42:30+01:00" level=info msg=">>> Symlinking files in /home/angel/.config/gtk-4.0"
+time="2026-02-14T01:42:30+01:00" level=info msg=">>> Exporting /home/angel/.config/gtk-4.0/settings.ini"

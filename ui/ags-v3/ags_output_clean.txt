@@ -1,0 +1,58 @@
+
+(gjs:1429972): Adwaita-WARNING **: 21:11:38.888: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+Gjs-Console-Message: 21:11:38.929: [AppService] Synchronizing Registry...
+Gjs-Console-Message: 21:11:38.980: [AppService] Registry synced. 52 apps, 65 names cached in 51ms.
+Gjs-Console-Message: 21:11:38.988: [DISTROIA] app.ts loading... (Phase 65: Mega-Main Stability)
+ags-Message: 21:11:38.990: [DISTROIA] main() started!
+
+(gjs:1429972): Adwaita-WARNING **: 21:11:38.990: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+
+(gjs:1429972): Gtk-WARNING **: 21:11:38.990: Theme parser error: style.css:985:20-21: Junk at end of value for transition
+ags-Message: 21:11:38.992: [Style] Loaded: /home/angel/Dev/DistroIA/ui/ags-v3/style.css
+ags-Message: 21:11:38.992: [Style] Sync: Noto Sans Medium 11px
+ags-Message: 21:11:38.992: [UI] Monitor 0
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.038: [DockLifecycle] Update triggered
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.057: [DockLifecycle] Creating NEW: home-shortcut
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.088: [DockLifecycle] Creating NEW: launcher
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.090: [DockLifecycle] Creating NEW: chrome-lodlkdfmihgonocnmddehnfgiljnadcf-default
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.101: [DockLifecycle] Creating NEW: google-chrome
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.104: [DockLifecycle] Creating NEW: chrome-agimnkijcaahngcdmfeangaknmldooml-default
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.107: [DockLifecycle] Creating NEW: chrome-gdfaincndogidkdcdkhapmbffkckdkhn-default
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.109: [DockLifecycle] Creating NEW: antigravity
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.119: [DockLifecycle] Creating NEW: kitty
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.121: [DockLifecycle] Creating NEW: org.telegram
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.124: [DockLifecycle] Creating NEW: org.pulseaudio.pavucontrol
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.126: [DockLifecycle] Creating NEW: thunar
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.129: [DockLifecycle] Creating NEW: sep-trash
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.129: [DockLifecycle] Creating NEW: special:trash
+ags-Message: 21:11:39.160: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 21:11:39.162: [AppService] System theme changed to Tela-circle-purple, refreshing registry...
+ags-Message: 21:11:39.162: [AppService] Synchronizing Registry...
+ags-Message: 21:11:39.169: [AppService] Registry synced. 52 apps, 65 names cached in 7ms.
+
+(gjs:1429972): ags-CRITICAL **: 21:11:39.270: [DockLifecycle] Update triggered
+
+(gjs:1429972): GLib-GIO-CRITICAL **: 21:11:40.503: g_list_store_remove: assertion '!g_sequence_iter_is_end (it)' failed
+ags-Message: 21:11:41.162: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 21:11:43.980: [AppService] Synchronizing Registry...
+ags-Message: 21:11:43.987: [AppService] Registry synced. 52 apps, 65 names cached in 7ms.
+
+(gjs:1429972): ags-CRITICAL **: 21:11:44.087: [DockLifecycle] Update triggered
+ags-Message: 21:13:21.848: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 21:13:21.848: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875
+ags-Message: 21:13:22.347: [WO-Debug] REACTIVE Hypr Event: activewindow
+ags-Message: 21:13:22.347: [WO-Audit] WS:1 Mon:DP-1 Phys:2560x1440 Logic:2560x1440 Scale:0.1171875

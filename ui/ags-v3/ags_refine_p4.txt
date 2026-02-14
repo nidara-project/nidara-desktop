@@ -1,0 +1,24 @@
+
+(gjs:1487138): Adwaita-WARNING **: 23:42:58.536: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+Gjs-Console-Message: 23:42:58.580: [AppService] Synchronizing Registry...
+Gjs-Console-Message: 23:42:58.632: [AppService] Registry synced. 52 apps, 65 names cached in 52ms.
+Gjs-Console-Message: 23:42:58.640: [DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)
+ags-Message: 23:42:58.642: [DISTROIA] main() started!
+
+(gjs:1487138): Gtk-WARNING **: 23:42:58.642: Theme parser error: style.css:1:1-9: Unknown @ rule
+
+(gjs:1487138): Gtk-WARNING **: 23:42:58.643: Theme parser error: style.css:1442:3-18: No property named "backdrop-filter"
+ags-Message: 23:42:58.644: [Style] Loaded: /home/angel/Dev/DistroIA/ui/ags-v3/style.css
+ags-Message: 23:42:58.644: [Style] Sync: Noto Sans Medium 11px
+ags-Message: 23:42:59.145: [UI] Monitor 0
+
+(gjs:1487138): Gjs-WARNING **: 23:42:59.282: Unhandled promise rejection. To suppress this warning, add an error handler to your promise chain with .catch() or a try-catch block around your await expression. Stack trace of the failed promise:
+_init/GLib.MainLoop.prototype.runAsync/</<@resource:///org/gnome/gjs/modules/core/overrides/GLib.js:263:34
+
+
+(gjs:1487138): GLib-GIO-CRITICAL **: 23:42:59.302: g_list_store_remove: assertion '!g_sequence_iter_is_end (it)' failed
+ags-Message: 23:42:59.438: [AppService] System theme changed to Tela-circle-purple, refreshing registry...
+ags-Message: 23:42:59.438: [AppService] Synchronizing Registry...
+ags-Message: 23:42:59.445: [AppService] Registry synced. 52 apps, 65 names cached in 6ms.
+ags-Message: 23:43:03.632: [AppService] Synchronizing Registry...
+ags-Message: 23:43:03.638: [AppService] Registry synced. 52 apps, 65 names cached in 6ms.
