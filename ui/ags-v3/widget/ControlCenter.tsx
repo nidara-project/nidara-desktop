@@ -100,7 +100,13 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     topSection.append(grid)
 
     const createToggle = (iconName: string, title: string, sub: string, active: boolean, onClick: () => void) => {
-        const btn = new Gtk.Button({ css_classes: ["cc-toggle"], hexpand: true })
+        const btn = new Gtk.Button({
+            css_classes: ["cc-toggle"],
+            hexpand: true,
+            focusable: false, // Flicker Fix 🛡️
+            can_focus: false,
+            focus_on_click: false
+        })
         if (active) btn.add_css_class("active")
 
         const box = new Gtk.Box({ spacing: 12, css_classes: ["cc-toggle-content"] })
@@ -293,7 +299,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         vexpand: true,
-        overlay_scrolling: false,
+        overlay_scrolling: true, // Symmetric Fix 💎
         css_classes: ["cc-scroll"]
     })
     notifSection.append(scroll)
@@ -363,7 +369,9 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
                 n.dismiss()
             })
 
-            item.append(iconBox); item.append(bodyBox); item.append(cls)
+            timeContent.append(notifCluster)
+            timeContent.append(timeSep)
+            timeContent.append(timeLabel)
             notifList.append(item)
         })
 
