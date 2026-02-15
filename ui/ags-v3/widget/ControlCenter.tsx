@@ -82,9 +82,10 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         halign: Gtk.Align.END,
         valign: Gtk.Align.FILL,
         vexpand: true,
-        margin_top: 8,
+        margin_top: 8, // Symmetrical Harmony 💎
         margin_end: 8,
-        margin_bottom: 0
+        margin_bottom: 8,
+        margin_start: 8
     })
     overlay.add_overlay(mainBox)
 
@@ -112,22 +113,49 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         })
         if (active) btn.add_css_class("active")
 
-        const box = new Gtk.Box({ spacing: 12, css_classes: ["cc-toggle-content"], halign: Gtk.Align.START })
-        const icon = new Gtk.Image({ icon_name: iconName, pixel_size: 20, css_classes: ["cc-toggle-icon"] })
+        const box = new Gtk.Box({
+            spacing: 12,
+            css_classes: ["cc-toggle-content"],
+            halign: Gtk.Align.START, // Left align text for readability
+            valign: Gtk.Align.CENTER
+        })
+
+        // Icon Box Container 📦
+        const iconBox = new Gtk.Box({
+            css_classes: ["cc-toggle-icon-box"],
+            halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.CENTER,
+            width_request: 38,
+            height_request: 38,
+            hexpand: false,
+            vexpand: false
+        })
+        const icon = new Gtk.Image({
+            icon_name: iconName,
+            pixel_size: 18,
+            css_classes: ["cc-toggle-icon"],
+            halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.CENTER,
+            hexpand: true, // Required to claim space in Box 🛡️
+            vexpand: true
+        })
+        iconBox.append(icon)
+
         const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
-        const l = new Gtk.Label({ label: title, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START, focusable: false, can_focus: false, xalign: 0, max_width_chars: 28, ellipsize: 3 })
-        const sl = new Gtk.Label({ label: sub, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, focusable: false, can_focus: false, xalign: 0, max_width_chars: 28, ellipsize: 3 })
+        const l = new Gtk.Label({ label: title, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 28, ellipsize: 3 })
+        const sl = new Gtk.Label({ label: sub, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 28, ellipsize: 3 })
 
         text.append(l); text.append(sl)
-        box.append(icon); box.append(text)
+        box.append(iconBox); box.append(text)
         btn.set_child(box)
         btn.connect("clicked", onClick)
-        return { btn, icon, label: l, subLabel: sl }
+        return { btn, icon, label: l, subLabel: sl, iconBox }
     }
 
     const wifiToggle = createToggle("network-wireless-offline-symbolic", "Wi-Fi", "...", false, () => {
         if (network?.wifi) network.wifi.enabled = !network.wifi.enabled
     })
+    wifiToggle.btn.width_request = 180 // Original Restoration 🛡️
 
     const updateNetwork = () => {
         let icon = "network-wireless-offline-symbolic"
@@ -162,7 +190,6 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         else if (!active && hasActive) wifiToggle.btn.remove_css_class("active")
     }
 
-    wifiToggle.btn.width_request = 180 // Original Restoration 🛡️
     grid.attach(wifiToggle.btn, 0, 0, 1, 1)
     if (network) {
         network.connect("notify::primary", updateNetwork)
@@ -277,19 +304,27 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         (mediaContainer as any)._lastState = stateKey
 
         mediaContainer.get_first_child()?.unparent()
-        mediaContainer.append(new Gtk.Box({ css_classes: ["cc-separator"], height_request: 1, margin_top: 8, margin_bottom: 8 }))
-        const pBox = new Gtk.Box({ css_classes: ["cc-media-player"], spacing: 16 })
+
+        const card = new Gtk.Box({ css_classes: ["cc-media-card"], orientation: Gtk.Orientation.VERTICAL, overflow: Gtk.Overflow.HIDDEN })
+
+        // Background Overlay for subtle depth
+        const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 16, css_classes: ["cc-media-content"] })
+
+        const topRow = new Gtk.Box({ spacing: 16 })
         const art = new Gtk.Box({ css_classes: ["cc-media-art"], valign: Gtk.Align.CENTER })
         const img = new Gtk.Image({ pixel_size: 64, css_classes: ["cc-media-art-img"] })
         if (player.cover_art) { img.file = player.cover_art; art.add_css_class("with-cover") }
         else { img.icon_name = "audio-x-generic-symbolic"; img.pixel_size = 32 }
         art.append(img)
 
-        const info = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, valign: Gtk.Align.CENTER })
+        const info = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, valign: Gtk.Align.CENTER, spacing: 2 })
         info.append(new Gtk.Label({ label: player.title || "Unknown", css_classes: ["cc-media-title"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 30, ellipsize: 3 }))
         info.append(new Gtk.Label({ label: player.artist || "Unknown", css_classes: ["cc-media-artist"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 30, ellipsize: 3 }))
 
-        const ctrl = new Gtk.Box({ css_classes: ["cc-media-controls"], spacing: 24, halign: Gtk.Align.CENTER, margin_top: 8 })
+        topRow.append(art); topRow.append(info)
+        content.append(topRow)
+
+        const ctrl = new Gtk.Box({ css_classes: ["cc-media-controls"], spacing: 32, halign: Gtk.Align.CENTER })
         const prev = new Gtk.Button({ child: new Gtk.Image({ icon_name: "media-skip-backward-symbolic" }), css_classes: ["cc-media-btn"] })
         prev.connect("clicked", () => player.previous())
         const play = new Gtk.Button({ child: new Gtk.Image({ icon_name: player.playback_status === AstalMpris.PlaybackStatus.PLAYING ? "media-playback-pause-symbolic" : "media-playback-start-symbolic" }), css_classes: ["cc-media-btn"] })
@@ -298,9 +333,10 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         next.connect("clicked", () => player.next())
 
         ctrl.append(prev); ctrl.append(play); ctrl.append(next)
-        info.append(ctrl)
-        pBox.append(art); pBox.append(info)
-        mediaContainer.append(pBox)
+        content.append(ctrl)
+
+        card.append(content)
+        mediaContainer.append(card)
     }
     mpris.connect("notify::players", updateMedia)
     updateMedia()
@@ -311,7 +347,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         spacing: 12,
         css_classes: ["cc-notifs-section"],
         vexpand: true,
-        margin_top: 32 // Calibrated Section Separation 💎
+        margin_top: 16 // Harmonized Section Separation 💎
     })
     mainBox.append(notifSection)
 
@@ -325,7 +361,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         vexpand: true,
-        overlay_scrolling: true, // Symmetric Fix 💎
+        overlay_scrolling: false, // Prevent overlapping cards 📏
         css_classes: ["cc-scroll"]
     })
     notifSection.append(scroll)
@@ -348,7 +384,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         notifd.notifications.forEach(n => {
             const item = new Gtk.Box({
                 css_classes: ["nc-notif-item"],
-                spacing: 12,
+                spacing: 16, // Matching structural spacing 📏
                 halign: Gtk.Align.FILL,
                 hexpand: true
             })

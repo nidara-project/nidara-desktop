@@ -28,54 +28,57 @@
     box-shadow: none;
 }
 
-/* --- Date/Time Header --- */
-.cc-datetime {
-    margin-bottom: 16px;
-    margin-right: 8px;
-    margin-left: 8px;
-    /* XL symmetry with reduced 8px margins */
-}
-
-.cc-time {
-    font-size: 2.8em;
-    font-weight: 300;
-    color: white;
-    letter-spacing: -1px;
-}
-
-.cc-date {
-    font-size: 0.8em;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.5);
+/* --- Section Titles --- */
+.cc-section-title {
+    font-size: 0.75em;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.4);
     text-transform: uppercase;
     letter-spacing: 1.5px;
+    margin-bottom: 12px;
+    margin-left: 2px;
 }
 
 /* --- Quick Toggles Grid --- */
 window#crystal-control-center button.cc-toggle,
 window#crystal-control-center button.cc-toggle:focus {
-    background-color: rgba(255, 255, 255, 0.3);
+    background-color: rgba(255, 255, 255, 0.05);
     background-image: none;
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    border-radius: 16px;
-    padding: 14px 18px;
-    min-height: 0;
+    border: 1px solid rgba(255, 255, 255, 0.08); // Precision Border 📏
+    border-radius: 20px;
+    padding: 10px;
+    min-height: 64px;
     box-shadow: none;
     outline: none;
+    transition: all 0.2s ease;
 }
 
 window#crystal-control-center button.cc-toggle:hover {
     background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.15);
 }
 
 window#crystal-control-center button.cc-toggle.active {
-    background-color: #007aff;
-    border-color: rgba(0, 122, 255, 0.4);
+    background-color: #3b82f6; // Stitch Primary 🔵
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
+/* --- Toggle Icons (Centered) --- */
+.cc-toggle-icon-box {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0;
+    /* Strict centering relying on GTK alignment */
+}
+
+window#crystal-control-center button.cc-toggle.active .cc-toggle-icon-box {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
 }
 
 .cc-toggle-content {
     background: transparent;
-    background-color: transparent;
 }
 
 .cc-toggle-label {
@@ -96,15 +99,15 @@ window#crystal-control-center button.cc-toggle.active .cc-toggle-sublabel {
 
 .cc-toggle-icon {
     font-size: 1.2em;
-    margin-right: 8px;
+    /* No margins to ensure perfect centering */
 }
 
 /* --- Sliders (Brightness / Volume) --- */
 .cc-sliders {
-    background-color: rgba(255, 255, 255, 0.04);
+    background-color: rgba(255, 255, 255, 0.03); // Minimalist depth
     border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: $crystal_radius_md;
-    padding: 14px 18px;
+    border-radius: 20px;
+    padding: 8px 16px;
     margin-top: 12px;
 }
 
@@ -164,11 +167,10 @@ scale slider {
 /* --- Notification Items --- */
 .nc-notif-item {
     background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 16px;
-    padding: 14px 16px;
-    margin: 0 0 10px 0;
-    /* Cards touch the panel edges to use panel padding (16px) accurately 💎 */
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px; // Matching card standards 📏
+    padding: 16px; // Harmonized CC padding
+    margin: 0 0 12px 0;
     transition: all 0.2s ease;
 }
 
@@ -294,32 +296,30 @@ scale slider {
     background-color: transparent;
     border: none;
     min-width: 0;
-    width: 0;
-    /* Zero layout impact for absolute symmetry 💎 */
     margin: 0;
 }
 
 /* Hide the track background completely */
-.cc-scroll scrollbar.vertical contents {
+.cc-scroll scrollbar.vertical contents,
+.cc-scroll scrollbar.vertical trough {
     background: transparent;
     border: none;
+    min-width: 0;
 }
 
 .cc-scroll scrollbar.vertical slider {
-    background-color: rgba(255, 255, 255, 0.15);
-    border-radius: 8px;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+    min-width: 4px;
+    min-height: 48px;
+    margin: 0 4px 0 0;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.cc-scroll scrollbar.vertical slider:hover {
+    background-color: rgba(255, 255, 255, 0.3);
     min-width: 6px;
-    /* Proportional sizing enabled by removing ONLY the height constraints */
-    margin: 2px;
-    transition: none;
-}
-
-.cc-scroll scrollbar.vertical slider:hover {
-    background-color: rgba(255, 255, 255, 0.2);
-}
-
-.cc-scroll scrollbar.vertical slider:hover {
-    background-color: rgba(255, 255, 255, 0.2);
+    margin: 0 2px 0 0;
 }
 
 .cc-notifs-empty {
@@ -330,17 +330,33 @@ scale slider {
 
 /* --- Media Player --- */
 .cc-media {
-    background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 16px;
-    padding: 12px 16px;
     margin-top: 12px;
+}
+
+.cc-media-card {
+    background-color: rgba(255, 255, 255, 0.05); // Structural card
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 16px;
+}
+
+.cc-media-content {
+    // Layout container inside card
+}
+
+.cc-media-art {
+    background-color: rgba(255, 255, 255, 0.04);
+    border-radius: 12px;
+}
+
+.cc-media-art-img {
+    border-radius: 12px;
 }
 
 .cc-media-title {
     color: white;
-    font-weight: 600;
-    font-size: 0.9em;
+    font-weight: 700;
+    font-size: 0.95em;
 }
 
 .cc-media-artist {
@@ -349,19 +365,27 @@ scale slider {
 }
 
 .cc-media-controls {
-    margin-bottom: -4px;
+    // Precise spacing
 }
 
 window#crystal-control-center .cc-media-controls button {
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.8);
-    border-radius: 50%;
-    min-width: 32px;
-    min-height: 32px;
-    transition: all 0.2s;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+    border-radius: 24px; // Force perfect Circle if width=height 🔵
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    min-height: 48px;
+    padding: 0;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: none;
     outline: none;
+}
+
+window#crystal-control-center .cc-media-controls button:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: scale(1.05);
 }
 
 window#crystal-control-center .cc-media-controls button:focus,
@@ -376,10 +400,11 @@ window#crystal-control-center .cc-media-controls button:focus-visible {
     font-weight: 700;
     color: rgba(255, 255, 255, 0.4);
     text-transform: uppercase;
-    letter-spacing: 1px;
-    margin-bottom: 8px;
+    letter-spacing: 1.5px;
+    margin-bottom: 12px;
     margin-left: 2px;
 }
+
 
 /* --- Audio Sinks --- */
 .cc-audio-sinks {
