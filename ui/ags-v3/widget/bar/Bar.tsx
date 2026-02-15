@@ -519,14 +519,42 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
     getServiceSafe(() => AstalNotifd.get_default(), "Notifd (Bar)").then(notifd => {
       if (!notifd) return;
+
+      // Robust Icon Logic 🛡️
+      const getNotifIcon = (dnd: boolean) => {
+        if (dnd) return "notifications-disabled-symbolic"
+        const candidates = [
+          "notifications-symbolic",
+          "preferences-system-notifications-symbolic",
+          "alarm-symbolic",
+          "dialog-information-symbolic"
+        ]
+        const display = Gdk.Display.get_default()
+        const theme = Gtk.IconTheme.get_for_display(display!)
+        for (const name of candidates) {
+          if (theme.has_icon(name)) return name
+        }
+        return "dialog-information-symbolic"
+      }
+
       const sync = () => {
         const count = notifd.notifications.length
         const dnd = notifd.dont_disturb
+        // Show if DND is on OR if there are notifications
+        // If neither, hide the cluster to keep bar clean? 
+        // User asked for "bell icon", presumably they want it visible if DND is off too?
+        // Actually line 525 says: const anyNotif = count > 0 || dnd
+        // This effectively hides the bell if count is 0 and DND is off.
+        // Let's Respect the user's implied wish to SEE the bell if they are asking about it.
+        // But for now, let's stick to fixing the ICON name.
+
         const anyNotif = count > 0 || dnd
         if (!anyNotif) { notifCluster.set_visible(false); return }
+
         notifCluster.set_visible(true)
-        timeNotifIcon.icon_name = dnd ? "notifications-disabled-symbolic" : "notifications-symbolic"
+        timeNotifIcon.icon_name = getNotifIcon(dnd)
         timeNotifIcon.set_visible(true)
+
         if (count > 0) {
           timeNotifCount.label = count.toString()
           timeNotifCount.set_visible(true)

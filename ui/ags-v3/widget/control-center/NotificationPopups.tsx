@@ -121,6 +121,9 @@ export default function NotificationPopups(gdkmonitor: Gdk.Monitor) {
         const n = notifd.get_notification(id)
         if (!n) return
 
+        // DND Check: If enabled, do not show popup 🔕
+        if (notifd.dont_disturb) return
+
         // Remove existing if any (re-notified)
         if (notifMap.has(id)) {
             box.remove(notifMap.get(id)!)
