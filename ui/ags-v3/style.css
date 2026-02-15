@@ -622,6 +622,8 @@ window.crystal-bar {
   border-radius: 24px;
   padding: 16px;
   min-width: 420px;
+  max-width: 420px;
+  overflow: hidden;
   box-shadow: none;
 }
 

@@ -115,8 +115,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         const box = new Gtk.Box({ spacing: 12, css_classes: ["cc-toggle-content"], halign: Gtk.Align.START })
         const icon = new Gtk.Image({ icon_name: iconName, pixel_size: 20, css_classes: ["cc-toggle-icon"] })
         const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
-        const l = new Gtk.Label({ label: title, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START, focusable: false, can_focus: false })
-        const sl = new Gtk.Label({ label: sub, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, ellipsize: 3, focusable: false, can_focus: false })
+        const l = new Gtk.Label({ label: title, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START, focusable: false, can_focus: false, xalign: 0, max_width_chars: 28, ellipsize: 3 })
+        const sl = new Gtk.Label({ label: sub, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, focusable: false, can_focus: false, xalign: 0, max_width_chars: 28, ellipsize: 3 })
 
         text.append(l); text.append(sl)
         box.append(icon); box.append(text)
@@ -286,8 +286,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         art.append(img)
 
         const info = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, valign: Gtk.Align.CENTER })
-        info.append(new Gtk.Label({ label: player.title || "Unknown", css_classes: ["cc-media-title"], halign: Gtk.Align.START, ellipsize: 3 }))
-        info.append(new Gtk.Label({ label: player.artist || "Unknown", css_classes: ["cc-media-artist"], halign: Gtk.Align.START, ellipsize: 3 }))
+        info.append(new Gtk.Label({ label: player.title || "Unknown", css_classes: ["cc-media-title"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 30, ellipsize: 3 }))
+        info.append(new Gtk.Label({ label: player.artist || "Unknown", css_classes: ["cc-media-artist"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 30, ellipsize: 3 }))
 
         const ctrl = new Gtk.Box({ css_classes: ["cc-media-controls"], spacing: 24, halign: Gtk.Align.CENTER, margin_top: 8 })
         const prev = new Gtk.Button({ child: new Gtk.Image({ icon_name: "media-skip-backward-symbolic" }), css_classes: ["cc-media-btn"] })
@@ -381,8 +381,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             iconBox.append(img)
 
             const bodyBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
-            bodyBox.append(new Gtk.Label({ label: n.summary, css_classes: ["nc-notif-title"], halign: Gtk.Align.START, ellipsize: 3 }))
-            bodyBox.append(new Gtk.Label({ label: n.body || "", css_classes: ["nc-notif-body"], halign: Gtk.Align.START, wrap: true, lines: 2, ellipsize: 3 }))
+            bodyBox.append(new Gtk.Label({ label: n.summary, css_classes: ["nc-notif-title"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 35, ellipsize: 3 }))
+            bodyBox.append(new Gtk.Label({ label: n.body || "", css_classes: ["nc-notif-body"], halign: Gtk.Align.START, xalign: 0, wrap: true, lines: 2, max_width_chars: 35, ellipsize: 3 }))
 
             const cls = new Gtk.Button({
                 child: new Gtk.Image({ icon_name: "window-close-symbolic" }),
