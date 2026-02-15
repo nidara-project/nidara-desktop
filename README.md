@@ -24,7 +24,7 @@ El proyecto incluye un script de aprovisionamiento robusto para **Arch Linux** q
     cd ~/Dev/Distroia
     ./provision.sh
     ```
-3.  **Reiniciar**: El sistema iniciará en SDDM. Loguéate y disfrutarás de la sesión Hyprland configurada.
+3.  **Iniciar Sesión**: Reinicia el equipo **O** ejecuta `sudo systemctl start sddm` para entrar en el entorno gráfico.
 
 ---
 

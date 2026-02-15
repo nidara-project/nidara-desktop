@@ -163,5 +163,5 @@ fi
 ln -sf "$HOME/Dev/Distroia/config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf"
 
 echo "✅ Provisioning Complete!"
-echo "👉 Restart now to enter SDDM -> Hyprland."
+echo "👉 Restart (or run 'sudo systemctl start sddm') to enter SDDM."
 
