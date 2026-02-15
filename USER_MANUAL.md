@@ -37,7 +37,7 @@ En DistroIA trabajamos con dos niveles de archivos para que nada se pierda nunca
 1.  **NIVEL USUARIO (EN VIVO)**: Se encuentra en `~/.config/`.
     - Es lo que el sistema lee **realmente** para funcionar.
     - Si cambias algo aquí y pulsas `SUPER + SHIFT + C`, lo verás aplicado al momento.
-2.  **NIVEL PROYECTO (SOURCE OF TRUTH)**: Se encuentra en `~/Dev/MiDistroIA/config/`.
+2.  **NIVEL PROYECTO (SOURCE OF TRUTH)**: Se encuentra en `~/Dev/Distroia/config/`.
     - Es nuestra "Copia de Oro". Está protegida por **Git**.
     - Sirve para que, si rompes algo en tu carpeta de usuario o el PC falla, podamos restaurar todo en un segundo desde el repositorio.
 
@@ -50,17 +50,17 @@ Cada vez que terminamos un cambio exitoso, yo (tu asistente) copio los archivos 
 
 ## ⚓ EL DOCK (Barra Inferior)
 El Dock es una aplicación inteligente desarrollada en **AGS v3**. 
-- **Efecto de Magnificación**: Los iconos crecen dinámicamente al pasar el ratón, siguiendo una física de interpolación lineal para máxima suavidad.
+- **Efecto de Magnificación**: Los iconos crecen dinámicamente al pasar el ratón.
 - **Gestión de Pinned Apps**: Puedes fijar o desanclar aplicaciones directamente.
-- **Indicadores de Estado**: Puntos de estilo premium indican si una aplicación está activa o tiene ventanas abiertas.
+- **Indicadores de Estado**: Puntos de estilo premium indican si una aplicación está activa.
 
 ---
 
 ## 🎛️ CENTRO DE CONTROL
 El Centro de Control (`SUPER + O` o clic en el icono de la barra) permite gestionar:
 - **Sliders rápidos**: Ajuste instantáneo de Volumen y Brillo.
-- **Conectividad**: Estado y toggle de Wi-Fi y Bluetooth (si las librerías están presentes).
-- **Media Player**: Control de reproducción MRPIS (Play/Pause, Prev/Next) con visualización de carátulas.
+- **Conectividad**: Estado y toggle de Wi-Fi y Bluetooth.
+- **Media Player**: Control de reproducción MRPIS con visualización de carátulas.
 
 ---
 
@@ -73,12 +73,11 @@ Actualmente estamos usando **swaybg** por estabilidad.
 
 ### "No aparecen los iconos de Red o Batería"
 Esto sucede si las librerías **Astal** no están instaladas o no se encuentran en el `GI_TYPELIB_PATH`.
-- Revisa el archivo `package.json` para asegurar que las rutas `/usr/local/lib/...` están presentes o usa `provision.sh`.
+- Usa `provision.sh` en la raíz del proyecto para arreglarlo.
 
 ---
 
 ## 🏗️ ARQUITECTURA TÉCNICA
 - **Compositor**: Hyprland (Wayland).
 - **Librería UI**: AGS v3 (GJS + GTK4 + Gtk4LayerShell).
-- **Optimización**: Widget caching y physics engine personalizado en TypeScript.
-- **Provisión**: Script `provision.sh` para instalación rápida de dependencias.
+- **Provisión**: Script `provision.sh` para instalación rápida dependencias en Arch.

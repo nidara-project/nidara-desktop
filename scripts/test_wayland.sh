@@ -8,7 +8,7 @@ if ! command -v Hyprland &> /dev/null; then
     exit 1
 fi
 
-PROJECT_ROOT="$HOME/Dev/MiDistroIA"
+PROJECT_ROOT="$HOME/Dev/Distroia"
 CONFIG_FILE="$PROJECT_ROOT/config/hypr/hyprland.conf"
 
 # --- AQUAMARINE FIXES (New Hyprland Backend) ---

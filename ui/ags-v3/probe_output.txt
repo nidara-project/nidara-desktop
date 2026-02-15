@@ -1,2 +1,0 @@
-[31merror: [0mFailed to infer Gtk version from entry file.
-[36mtip: [0mspecify it with the --gtk flag

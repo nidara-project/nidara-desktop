@@ -11,12 +11,13 @@ import type { Monitor } from "gi://Gdk?version=4.0"
 import type { Window } from "gi://Gtk?version=4.0"
 
 // Widget Imports
-import Dock from "./widget/Dock"
-import AppGrid from "./widget/AppGrid"
-import Bar from "./widget/Bar"
-import NotificationPopups from "./widget/NotificationPopups"
-import ControlCenter from "./widget/ControlCenter"
-import PowerMenu from "./widget/PowerMenu"
+// Widget Imports
+import Dock from "./widget/dock/Dock"
+import AppGrid from "./widget/app-grid/AppGrid"
+import Bar from "./widget/bar/Bar"
+import NotificationPopups from "./widget/control-center/NotificationPopups"
+import ControlCenter from "./widget/control-center/ControlCenter"
+import PowerMenu from "./widget/power-menu/PowerMenu"
 
 console.log("[DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)");
 
