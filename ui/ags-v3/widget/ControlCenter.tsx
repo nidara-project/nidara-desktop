@@ -95,18 +95,28 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const topSection = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 24,
-        css_classes: ["cc-fixed-container"]
+        css_classes: ["cc-fixed-container"],
+        hexpand: true, // Force container expansion 📏
+        halign: Gtk.Align.FILL
     })
     mainBox.append(topSection)
 
     /* --- Grid Controls --- */
-    const grid = new Gtk.Grid({ column_spacing: 12, row_spacing: 12, css_classes: ["cc-grid"] })
+    const grid = new Gtk.Grid({
+        column_spacing: 12,
+        row_spacing: 12,
+        css_classes: ["cc-grid"],
+        column_homogeneous: true, // Force full width alignment (196px per btn) 📏
+        hexpand: true,
+        halign: Gtk.Align.FILL // Ensure grid stretches to container limits 📏
+    })
     topSection.append(grid)
 
     const createToggle = (iconName: string, title: string, sub: string, active: boolean, onClick: () => void) => {
         const btn = new Gtk.Button({
             css_classes: ["cc-toggle"],
             hexpand: true,
+            halign: Gtk.Align.FILL, // Force full width stretch 📏
             focusable: false,
             can_focus: false,
             focus_on_click: false
@@ -155,7 +165,6 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const wifiToggle = createToggle("network-wireless-offline-symbolic", "Wi-Fi", "...", false, () => {
         if (network?.wifi) network.wifi.enabled = !network.wifi.enabled
     })
-    wifiToggle.btn.width_request = 180 // Original Restoration 🛡️
 
     const updateNetwork = () => {
         let icon = "network-wireless-offline-symbolic"
@@ -213,7 +222,6 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const btToggle = createToggle("bluetooth-disabled-symbolic", "Bluetooth", "...", false, () => {
         if (bluetooth) bluetooth.is_powered = !bluetooth.is_powered
     })
-    btToggle.btn.width_request = 180 // Original Restoration 🛡️
     grid.attach(btToggle.btn, 1, 0, 1, 1)
     if (bluetooth) bluetooth.connect("notify::is-powered", updateBT)
     updateBT()
@@ -232,7 +240,6 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const dndToggle = createToggle("notifications-symbolic", "No molestar", "...", false, () => {
         if (notifd) notifd.dont_disturb = !notifd.dont_disturb
     })
-    dndToggle.btn.width_request = 180 // Original Restoration 🛡️
     grid.attach(dndToggle.btn, 0, 1, 1, 1)
     if (notifd) notifd.connect("notify::dont-disturb", updateDND)
     updateDND()
@@ -241,7 +248,6 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         (app as any).DistroIA?.togglePower();
         (app as any).DistroIA?.toggleCC();
     })
-    pwrToggle.btn.width_request = 180 // Original Restoration 🛡️
     grid.attach(pwrToggle.btn, 1, 1, 1, 1)
 
     /* --- Sliders --- */
@@ -291,14 +297,40 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const mediaContainer = new Gtk.Box({ css_classes: ["cc-media"], orientation: Gtk.Orientation.VERTICAL })
     topSection.append(mediaContainer)
 
+    // Media State Management 🎵
+    let lastPlayer: AstalMpris.Player | null = null
+    let playerSignals: number[] = []
+
     const updateMedia = () => {
         const players = mpris.get_players()
+
+        // 1. No players? Cleanup and return.
         if (players.length === 0) {
             mediaContainer.get_first_child()?.unparent()
+            if (lastPlayer) {
+                playerSignals.forEach(id => lastPlayer?.disconnect(id))
+                playerSignals = []
+                lastPlayer = null
+            }
             return
         }
 
         const player = players[0]
+
+        // 2. New player detected? Re-bind signals.
+        if (lastPlayer !== player) {
+            if (lastPlayer) {
+                playerSignals.forEach(id => lastPlayer?.disconnect(id))
+                playerSignals = []
+            }
+            lastPlayer = player
+            // Bind to critical properties for instant updates ⚡
+            playerSignals.push(player.connect("notify::playback-status", updateMedia))
+            playerSignals.push(player.connect("notify::title", updateMedia))
+            playerSignals.push(player.connect("notify::artist", updateMedia))
+            playerSignals.push(player.connect("notify::cover-art", updateMedia))
+        }
+
         const stateKey = `${player.bus_name}-${player.playback_status}-${player.title}`
         if ((mediaContainer as any)._lastState === stateKey) return
         (mediaContainer as any)._lastState = stateKey
@@ -347,7 +379,9 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         spacing: 12,
         css_classes: ["cc-notifs-section"],
         vexpand: true,
-        margin_top: 16 // Harmonized Section Separation 💎
+        hexpand: true, // Force full width 📏
+        halign: Gtk.Align.FILL,
+        margin_top: 8 // Harmonized Section Separation 💎
     })
     mainBox.append(notifSection)
 
@@ -361,7 +395,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         vexpand: true,
-        overlay_scrolling: false, // Prevent overlapping cards 📏
+        overlay_scrolling: true, // Alignment Restoration �
         css_classes: ["cc-scroll"]
     })
     notifSection.append(scroll)

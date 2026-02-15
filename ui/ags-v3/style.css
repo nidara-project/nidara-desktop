@@ -621,6 +621,7 @@ window.crystal-bar {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 24px;
   padding: 16px;
+  /* Restored Structure 🏗️ */
   min-width: 420px;
   max-width: 420px;
   overflow: hidden;
@@ -849,8 +850,8 @@ scale slider {
 .cc-notifs-header {
   margin-bottom: 12px;
   padding: 0;
-  margin: 0 8px 12px 8px;
-  /* XL symmetry with reduced 8px margins */
+  margin: 0 0 12px 0;
+  /* Zero margin to align with Toggles/Cards 📏 */
 }
 
 .cc-section-title {
@@ -882,6 +883,11 @@ scale slider {
 
 .cc-scroll {
   /* Expanding naturally via TSX vexpand property */
+  background: transparent;
+  border: none;
+  /* No phantom borders */
+  padding: 0;
+  margin: 0;
 }
 
 .cc-notifications-list {
@@ -908,16 +914,16 @@ scale slider {
 .cc-scroll scrollbar.vertical slider {
   background-color: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
-  min-width: 4px;
+  min-width: 6px;
+  /* Constant width 📏 */
   min-height: 48px;
-  margin: 0 4px 0 0;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  margin: 0;
+  transition: background-color 0.2s ease;
 }
 
 .cc-scroll scrollbar.vertical slider:hover {
   background-color: rgba(255, 255, 255, 0.3);
-  min-width: 6px;
-  margin: 0 2px 0 0;
+  /* No distinct width change to prevent layout shifts */
 }
 
 .cc-notifs-empty {
@@ -958,11 +964,11 @@ scale slider {
   font-size: 0.8em;
 }
 
-window#crystal-control-center .cc-media-controls button {
+.cc-media-btn {
   background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   color: white;
-  border-radius: 24px;
+  border-radius: 50%;
   width: 48px;
   height: 48px;
   min-width: 48px;
@@ -971,15 +977,17 @@ window#crystal-control-center .cc-media-controls button {
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: none;
   outline: none;
+  margin: 0;
 }
 
-window#crystal-control-center .cc-media-controls button:hover {
+.cc-media-btn:hover {
   background-color: rgba(255, 255, 255, 0.1);
   transform: scale(1.05);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
-window#crystal-control-center .cc-media-controls button:focus,
-window#crystal-control-center .cc-media-controls button:focus-visible {
+.cc-media-btn:focus,
+.cc-media-btn:focus-visible {
   outline: none;
   box-shadow: none;
 }
@@ -1023,6 +1031,13 @@ window#crystal-control-center .cc-media-controls button:focus-visible {
 .cc-sink-item label {
   font-size: 0.9em;
   color: rgba(255, 255, 255, 0.85);
+}
+
+/* --- Fixed Container (Layout Stabilizer) --- */
+.cc-fixed-container {
+  margin: 0;
+  padding: 0;
+  /* This explicit reset was the key fix confirmed by user 🔑 */
 }
 
 /* 
