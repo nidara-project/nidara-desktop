@@ -40,7 +40,22 @@ sudo pacman -Sy --needed --noconfirm \
     npm \
     gjs \
     go \
-    accountsservice
+    accountsservice \
+    sddm \
+    pavucontrol \
+    rust \
+    cargo
+
+# 1.1 SWWW (Wallpaper Daemon) - Rust Build
+if ! command -v swww &> /dev/null; then
+    echo "🖼️ Installing SWWW (Wallpaper Daemon)..."
+    # Ensure cargo bin is in path for this session
+    export PATH="$HOME/.cargo/bin:$PATH"
+    cargo install --locked swww
+    # Symlink to /usr/bin for global access if needed, or rely on cargo path
+    sudo ln -sf "$HOME/.cargo/bin/swww" /usr/bin/swww
+    sudo ln -sf "$HOME/.cargo/bin/swww-daemon" /usr/bin/swww-daemon
+fi
 
 # 2. Build & Install Dependencies (Vala Panel Appmenu)
 # Required for AstalTray
