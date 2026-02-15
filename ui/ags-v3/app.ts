@@ -144,11 +144,15 @@ app.start({
     const engine = (app as any).DistroIA
     if (!engine) return res("error: engine not ready")
 
+    if (!argv || argv.length === 0) return res("ok")
     if (argv[0] === "toggleAppGrid()") { engine.toggleAppGrid(); res("ok") }
     else if (argv[0] === "toggleCC()") { engine.toggleCC(); res("ok") }
     else if (argv[0] === "toggleControlCenter()") { engine.toggleCC(); res("ok") }
     else if (argv[0] === "toggleNotificationCenter()") { engine.toggleNC(); res("ok") }
     else if (argv[0] === "togglePowerMenu()") { engine.togglePower(); res("ok") }
-    else res("unknown command")
+    else {
+      console.warn(`[Handler] Unknown command: ${argv[0]}`)
+      res("unknown command")
+    }
   }
 })

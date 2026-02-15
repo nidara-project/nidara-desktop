@@ -5,6 +5,7 @@ import AstalMpris from "gi://AstalMpris"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalBluetooth from "gi://AstalBluetooth"
 import AstalNotifd from "gi://AstalNotifd"
+import AstalWp from "gi://AstalWp" // Standard architecture 🏛️
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import GObject from "gi://GObject"
@@ -17,6 +18,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const mpris = AstalMpris.get_default()
     const network = AstalNetwork.get_default()
     const bluetooth = AstalBluetooth.get_default()
+    const audio = AstalWp.get_default()?.audio
 
     const win = new Gtk.Window({
         name: "crystal-control-center",

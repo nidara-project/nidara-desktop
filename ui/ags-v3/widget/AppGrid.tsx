@@ -190,7 +190,10 @@ export default function AppGrid(monitor: Gdk.Monitor) {
 
     const click = new Gtk.GestureClick()
     click.connect("pressed", () => {
-        win.visible = false
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            win.visible = false
+            return GLib.SOURCE_REMOVE
+        })
     })
     overlayTrigger.add_controller(click)
 
@@ -383,17 +386,21 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         // Global toggle mechanism
         ; (win as any).toggle = () => {
             console.log("[Grid] Internal toggle called")
-            win.set_visible(!win.get_visible())
-            if (win.get_visible()) {
-                win.present()
-                searchEntry.text = ""
-                // V136: Focus fix with timeout
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-                    searchEntry.grab_focus()
-                    return GLib.SOURCE_REMOVE
-                })
-                filterApps()
-            }
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                const isVis = win.get_visible()
+                win.set_visible(!isVis)
+                if (!isVis) {
+                    win.present()
+                    searchEntry.text = ""
+                    // V136: Focus fix with timeout
+                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+                        searchEntry.grab_focus()
+                        return GLib.SOURCE_REMOVE
+                    })
+                    filterApps()
+                }
+                return GLib.SOURCE_REMOVE
+            })
         }
 
     return win

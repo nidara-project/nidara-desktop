@@ -27,7 +27,12 @@ cd "$AGS_DIR"
 # Arch Linux standard paths
 GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0:$AGS_DIR/astal-local/lib/linux/girepository-1.0:$GI_TYPELIB_PATH" \
 LD_LIBRARY_PATH="/usr/lib:/usr/local/lib:$AGS_DIR/astal-local/lib/linux:$LD_LIBRARY_PATH" \
-nohup ags run --gtk 4 . > /tmp/ags.log 2>&1 &
+AGS_BIN="ags"
+if [ -f "$HOME/.local/bin/ags" ]; then
+    AGS_BIN="$HOME/.local/bin/ags"
+fi
+
+nohup "$AGS_BIN" run --gtk 4 . > /tmp/ags.log 2>&1 &
 disown
 
 # 4. Fondo de pantalla (swww con transiciones animadas) 💎

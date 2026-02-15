@@ -464,7 +464,7 @@ window.crystal-bar {
   padding: 0px 12px;
   min-height: 30px;
   /* 30px content + 1px border * 2 = 32px TOTAL */
-  max-height: 30px;
+  /* max-height: 30px; REMOVED: Invalid GTK Prop */
   margin: 0;
   box-shadow: none;
 }
@@ -1332,7 +1332,7 @@ window.workspace-cockpit {
 /* --- Workspace Preview Popover 🖼️ --- */
 .ws-preview-popover {
   background-color: rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(12px);
+  /* backdrop-filter: blur(12px); REMOVED: Invalid GTK Prop */
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 18px;
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);

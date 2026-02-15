@@ -284,7 +284,7 @@ function Workspaces() {
     can_focus: false,
     focus_on_click: false
   })
-  btn.connect("clicked", () => execAsync("ags toggle mission-control"))
+  btn.connect("clicked", () => execAsync("ags request 'toggleAppGrid()'"))
 
   return btn
 }

@@ -165,7 +165,7 @@ window.workspace-cockpit {
 /* --- Workspace Preview Popover 🖼️ --- */
 .ws-preview-popover {
     background-color: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(12px);
+    /* backdrop-filter: blur(12px); REMOVED: Invalid GTK Prop */
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 18px;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
