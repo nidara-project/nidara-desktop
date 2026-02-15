@@ -50,7 +50,9 @@ sudo pacman -Sy --needed --noconfirm \
     thunar \
     ttf-jetbrains-mono-nerd \
     noto-fonts-emoji \
-    xfce4-settings
+    xfce4-settings \
+    hyprlauncher
+
 
 # 1.1 SWWW (Wallpaper Daemon) - Rust Build
 if ! command -v swww &> /dev/null; then
