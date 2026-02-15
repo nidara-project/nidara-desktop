@@ -416,15 +416,67 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     })
     scroll.set_child(notifList)
 
+    // Notification History Management 📜
+    const HISTORY_KEY = "notification_history"
+    // Simple in-memory history for now (could be persisted to file if needed)
+    // We merge active notifications with history
+
+    // We need a way to track which notifications are "active" vs "history"
+    // But for the user request: "all notifications... appear through cc"
+    // The issue is likely that they auto-dismiss and disappear.
+
+    // We will maintain a local list of "StoredNotifications"
+    interface StoredNotification {
+        id: number
+        app_name: string
+        app_icon: string
+        summary: string
+        body: string
+        time: number
+        image?: string
+    }
+
+    // Use a Ref-like pattern or just a variable since we rebuild UI on update
+    // Actually, we can just use a static list at module level or a closure variable if we want it to persist across re-renders of the widget function (which shouldn't happen often)
+    // But better to attach it to the app or essentially just rely on notifd ensuring we don't auto-dismiss them?
+
+    // BETTER FIX: prevent auto-dismissal?
+    // AstalNotifd doesn't seem to have a "persist" flag.
+    // The "NotificationPopups" dismisses them visually, but doesn't call dismiss() on the object unless clicked.
+    // BUT the daemon (AGS) might expire them based on "expire_timeout".
+
+    // Let's create a robust history array
+    const notifHistory: StoredNotification[] = []
+
     const updateNotifs = () => {
+        // Sync active notifications into history if not already present
+        notifd.notifications.forEach(n => {
+            if (!notifHistory.some(h => h.id === n.id)) {
+                notifHistory.unshift({
+                    id: n.id,
+                    app_name: n.app_name,
+                    app_icon: n.app_icon,
+                    summary: n.summary,
+                    body: n.body,
+                    time: Date.now(),
+                    image: n.image
+                })
+            }
+        })
+
         while (notifList.get_first_child()) {
             notifList.get_first_child()?.unparent()
         }
 
-        notifd.notifications.forEach(n => {
+        if (notifHistory.length === 0) {
+            notifList.append(new Gtk.Label({ label: "No hay notificaciones recientes", css_classes: ["cc-notifs-empty"], halign: Gtk.Align.CENTER, margin_top: 24 }))
+            return
+        }
+
+        notifHistory.forEach(n => {
             const item = new Gtk.Box({
                 css_classes: ["nc-notif-item"],
-                spacing: 16, // Matching structural spacing 📏
+                spacing: 16,
                 halign: Gtk.Align.FILL,
                 hexpand: true
             })
@@ -435,9 +487,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             // Hardened icon logic using AppService
             const getIcon = () => {
                 if (n.image) return { file: n.image }
-                if (n.gicon) return { gicon: n.gicon }
 
-                // Try to resolve app icon via AppService
                 const resolved = appService.getIconName(n.app_icon || n.app_name || "")
                 if (resolved) {
                     if (resolved.startsWith("/") || resolved.startsWith("file://")) return { file: resolved.replace("file://", "") }
@@ -450,14 +500,19 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
             const res = getIcon()
             if (res.file) img.file = res.file
-            else if (res.gicon) img.gicon = res.gicon
-            else img.icon_name = res.iconName
-
+            else img.icon_name = res.iconName // Simplified gicon handling for stored objects
             img.pixel_size = (res.file) ? 48 : 38
             iconBox.append(img)
 
             const bodyBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
-            bodyBox.append(new Gtk.Label({ label: n.summary, css_classes: ["nc-notif-title"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 35, ellipsize: 3 }))
+            const timeAgo = Math.floor((Date.now() - n.time) / 60000)
+            const timeStr = timeAgo < 1 ? "Ahora" : `${timeAgo}m`
+
+            const titleBox = new Gtk.Box({ spacing: 8 })
+            titleBox.append(new Gtk.Label({ label: n.summary, css_classes: ["nc-notif-title"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 25, ellipsize: 3 }))
+            titleBox.append(new Gtk.Label({ label: timeStr, css_classes: ["nc-notif-time"], halign: Gtk.Align.END, hexpand: true }))
+
+            bodyBox.append(titleBox)
             bodyBox.append(new Gtk.Label({ label: n.body || "", css_classes: ["nc-notif-body"], halign: Gtk.Align.START, xalign: 0, wrap: true, lines: 2, max_width_chars: 35, ellipsize: 3 }))
 
             const cls = new Gtk.Button({
@@ -467,29 +522,31 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
                 halign: Gtk.Align.END
             })
             cls.connect("clicked", () => {
-                console.log(`[CC] Dismissing notif: ${n.id}`)
-                n.dismiss()
+                const idx = notifHistory.indexOf(n)
+                if (idx > -1) {
+                    notifHistory.splice(idx, 1)
+                    // Also try to dismiss from daemon if it exists
+                    const active = notifd.get_notification(n.id)
+                    if (active) active.dismiss()
+                    updateNotifs()
+                }
             })
 
             item.append(iconBox); item.append(bodyBox); item.append(cls)
             notifList.append(item)
         })
-
-        if (notifd.notifications.length === 0) {
-            notifList.append(new Gtk.Label({ label: "No hay notificaciones", css_classes: ["cc-notifs-empty"], halign: Gtk.Align.CENTER, margin_top: 24 }))
-        }
     }
 
     clear.connect("clicked", () => {
-        console.log("[CC] Clear All clicked")
-        const toDismiss = [...notifd.notifications]
-        toDismiss.forEach(n => n.dismiss())
-        // Explicitly refresh logic
+        // Clear all history
+        notifHistory.length = 0
+        // Dismiss all active
+        notifd.notifications.forEach(n => n.dismiss())
         updateNotifs()
     })
 
     notifd.connect("notified", updateNotifs)
-    notifd.connect("resolved", updateNotifs)
+    // We do NOT listen to "resolved" to remove items, so they stay in history!
     updateNotifs()
 
     // @ts-ignore

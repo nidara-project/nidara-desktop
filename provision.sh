@@ -1,10 +1,10 @@
 #!/bin/bash
-# MiDistroIA - ISO Provisioning Script 💎
+# Distroia - ISO Provisioning Script 💎
 # Designed for EndeavourOS / Arch Linux 🚀
 
 set -e
 
-echo "🚀 Starting MiDistroIA Provisioning (Arch Linux Mode)..."
+echo "🚀 Starting Distroia Provisioning (Arch Linux Mode)..."
 
 # 1. System Dependencies
 echo "📦 Installing system dependencies via pacman..."
@@ -25,6 +25,7 @@ sudo pacman -Sy --needed --noconfirm \
     networkmanager \
     bluez-libs \
     upower \
+    libnotify \
     intltool \
     scdoc \
     brightnessctl \
