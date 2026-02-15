@@ -146,6 +146,22 @@ npm install
 echo "🔊 Enabling Audio Services..."
 systemctl --user enable --now wireplumber pipewire pipewire-pulse
 
+# 8. Configure System Session (SDDM & Hyprland)
+echo "🎬 Configuring Session Start..."
+
+# Enable SDDM (Display Manager)
+echo "Login Manager (SDDM)..."
+sudo systemctl enable sddm
+
+# Link Hyprland Config
+echo "🔗 Linking Hyprland Configuration..."
+mkdir -p "$HOME/.config/hypr"
+# Backup existing config if it's not a symlink
+if [ -f "$HOME/.config/hypr/hyprland.conf" ] && [ ! -L "$HOME/.config/hypr/hyprland.conf" ]; then
+    mv "$HOME/.config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf.bak"
+fi
+ln -sf "$HOME/Dev/Distroia/config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf"
+
 echo "✅ Provisioning Complete!"
-echo "👉 To enable graphical login: sudo systemctl enable --now sddm"
-echo "👉 To start manually: Hyprland"
+echo "👉 Restart now to enter SDDM -> Hyprland."
+

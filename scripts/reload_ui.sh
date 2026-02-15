@@ -42,13 +42,14 @@ if ! pgrep -x "swww-daemon" > /dev/null; then
 fi
 
 # Cargar configuración si existe
-CONFIG_WALLPAPER="/home/angel/Dev/DistroIA/config/wallpaper.sh"
+# Cargar configuración si existe
+CONFIG_WALLPAPER="$PROJECT_ROOT/config/wallpaper.sh"
 if [ -f "$CONFIG_WALLPAPER" ]; then
     source "$CONFIG_WALLPAPER"
 fi
 
 # Fallback si las variables no están definidas
-WALLPAPER_PATH="${WALLPAPER_PATH:-/home/angel/Dev/DistroIA/config/wallpaper.png}"
+WALLPAPER_PATH="${WALLPAPER_PATH:-$PROJECT_ROOT/config/wallpaper.png}"
 TRANSITION_TYPE="${TRANSITION_TYPE:-grow}"
 
 if [ -f "$WALLPAPER_PATH" ]; then
