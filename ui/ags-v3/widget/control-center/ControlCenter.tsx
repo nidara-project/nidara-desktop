@@ -331,7 +331,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             playerSignals.push(player.connect("notify::cover-art", updateMedia))
         }
 
-        const stateKey = `${player.bus_name}-${player.playback_status}-${player.title}`
+        const stateKey = `${player.bus_name}-${player.playback_status}-${player.title}-${player.artist}-${player.cover_art}`
         if ((mediaContainer as any)._lastState === stateKey) return
         (mediaContainer as any)._lastState = stateKey
 
@@ -345,8 +345,14 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         const topRow = new Gtk.Box({ spacing: 16 })
         const art = new Gtk.Box({ css_classes: ["cc-media-art"], valign: Gtk.Align.CENTER })
         const img = new Gtk.Image({ pixel_size: 64, css_classes: ["cc-media-art-img"] })
-        if (player.cover_art) { img.file = player.cover_art; art.add_css_class("with-cover") }
-        else { img.icon_name = "audio-x-generic-symbolic"; img.pixel_size = 32 }
+        if (player.cover_art && GLib.file_test(player.cover_art, GLib.FileTest.EXISTS)) {
+            img.file = player.cover_art
+            art.add_css_class("with-cover")
+        } else {
+            // Fallback: Use generic icon or try to use player entry as icon name?
+            img.icon_name = "audio-x-generic-symbolic"
+            img.pixel_size = 32
+        }
         art.append(img)
 
         const info = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, valign: Gtk.Align.CENTER, spacing: 2 })
