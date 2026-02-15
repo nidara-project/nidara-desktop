@@ -228,7 +228,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     const updateDND = () => {
         const dnd = notifd?.dont_disturb || false
-        const icon = dnd ? "notifications-disabled-symbolic" : "notifications-symbolic"
+        const icon = dnd ? "notifications-disabled-symbolic" : "preferences-system-notifications-symbolic"
         const sub = dnd ? "Silencio" : "Normal"
         const hasActive = dndToggle.btn.has_css_class("active")
 
@@ -237,8 +237,12 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         if (dnd && !hasActive) dndToggle.btn.add_css_class("active")
         else if (!dnd && hasActive) dndToggle.btn.remove_css_class("active")
     }
-    const dndToggle = createToggle("notifications-symbolic", "No molestar", "...", false, () => {
-        if (notifd) notifd.dont_disturb = !notifd.dont_disturb
+    const dndToggle = createToggle("preferences-system-notifications-symbolic", "No molestar", "...", false, () => {
+        if (notifd) {
+            notifd.dont_disturb = !notifd.dont_disturb
+            // Force UI update immediately for responsiveness
+            updateDND()
+        }
     })
     grid.attach(dndToggle.btn, 0, 1, 1, 1)
     if (notifd) notifd.connect("notify::dont-disturb", updateDND)
