@@ -44,7 +44,13 @@ sudo pacman -Sy --needed --noconfirm \
     sddm \
     pavucontrol \
     rust \
-    cargo
+    cargo \
+    hyprland \
+    kitty \
+    thunar \
+    ttf-jetbrains-mono-nerd \
+    noto-fonts-emoji \
+    xfce4-settings
 
 # 1.1 SWWW (Wallpaper Daemon) - Rust Build
 if ! command -v swww &> /dev/null; then
