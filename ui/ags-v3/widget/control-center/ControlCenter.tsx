@@ -122,23 +122,30 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         // Dimensions preserved from original button layout
         const container = new Gtk.Box({
             hexpand: true,
+            vexpand: false, // Prevent "Giant Square" expansion 🛡️
             css_classes: ["cc-toggle-container"],
             height_request: 64 // Explicitly restore height 🛡️
         })
 
-        const da = new Gtk.DrawingArea({ hexpand: true, vexpand: true })
+        const da = new Gtk.DrawingArea({
+            hexpand: true,
+            vexpand: false // Ensure drawing area doesn't force expansion either
+        })
         da.set_draw_func((_, cr, w, h) => {
-            const blue = { r: 0.53, g: 0.70, b: 0.98 }
-            const dark = { r: 0.15, g: 0.16, b: 0.2 }
-            const hover = { r: 0.25, g: 0.26, b: 0.3 }
+            // Stitch Primary Blue: #3b82f6 -> R:59 G:130 B:246
+            const blue = { r: 0.231, g: 0.510, b: 0.965 }
+            // Neutral Glass: White with low opacity to match original CSS
+            const neutral = { r: 1, g: 1, b: 1 }
 
             cr.setSourceRGBA(0, 0, 0, 0); cr.paint()
 
+            const radius = 20 // Restored "Like Before" Radius 📐
+
             if (isActive) {
-                drawSquircle(cr, w, h, undefined, 1.0, true, blue)
+                drawSquircle(cr, w, h, undefined, 1.0, false, blue, radius)
             } else {
-                if (isHovered) drawSquircle(cr, w, h, undefined, 0.5, true, hover)
-                else drawSquircle(cr, w, h, undefined, 0.4, true, dark)
+                if (isHovered) drawSquircle(cr, w, h, undefined, 0.1, false, neutral, radius)
+                else drawSquircle(cr, w, h, undefined, 0.05, false, neutral, radius)
             }
         })
 
@@ -183,19 +190,20 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         motion.connect("leave", () => { isHovered = false; da.queue_draw() })
         container.add_controller(motion)
 
-            // API Compatibility 🛡️
-            ; (container as any).setActive = (state: boolean) => {
-                isActive = state
-                da.queue_draw()
-                if (state) { l.add_css_class("active-text"); icon.add_css_class("active-icon") }
-                else { l.remove_css_class("active-text"); icon.remove_css_class("active-icon") }
-            }
+        // API Compatibility 🛡️
+        const setActive = (state: boolean) => {
+            isActive = state
+            da.queue_draw()
+            if (state) { l.add_css_class("active-text"); icon.add_css_class("active-icon") }
+            else { l.remove_css_class("active-text"); icon.remove_css_class("active-icon") }
+        }
+            ; (container as any).setActive = setActive
 
         // Initial State
         if (isActive) { l.add_css_class("active-text"); icon.add_css_class("active-icon") }
 
-        // Adapter to match previous return signature where accessible properties were on 'btn'
-        return { btn: container, icon, label: l, subLabel: sl, iconBox }
+        // Adapter: Expose setActive directly
+        return { btn: container, icon, label: l, subLabel: sl, iconBox, setActive }
     }
 
     const wifiToggle = createToggle("network-wireless-offline-symbolic", "Wi-Fi", "...", false, () => {
@@ -230,9 +238,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         if (wifiToggle.label.label !== label) wifiToggle.label.label = label
         if (wifiToggle.subLabel.label !== sub) wifiToggle.subLabel.label = sub
 
-        const hasActive = wifiToggle.btn.has_css_class("active")
-        if (active && !hasActive) wifiToggle.btn.add_css_class("active")
-        else if (!active && hasActive) wifiToggle.btn.remove_css_class("active")
+        wifiToggle.setActive(active);
+        (wifiToggle.btn as any)._isActive = active
     }
 
     grid.attach(wifiToggle.btn, 0, 0, 1, 1)
@@ -252,8 +259,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
         if (btToggle.icon.icon_name !== icon) btToggle.icon.icon_name = icon
         if (btToggle.subLabel.label !== sub) btToggle.subLabel.label = sub
-        if (powered && !hasActive) btToggle.btn.add_css_class("active")
-        else if (!powered && hasActive) btToggle.btn.remove_css_class("active")
+
+        btToggle.setActive(powered)
     }
     const btToggle = createToggle("bluetooth-disabled-symbolic", "Bluetooth", "...", false, () => {
         if (bluetooth) bluetooth.is_powered = !bluetooth.is_powered
@@ -294,8 +301,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
         if (dndToggle.icon.icon_name !== icon) dndToggle.icon.icon_name = icon
         if (dndToggle.subLabel.label !== sub) dndToggle.subLabel.label = sub
-        if (dnd && !hasActive) dndToggle.btn.add_css_class("active")
-        else if (!dnd && hasActive) dndToggle.btn.remove_css_class("active")
+
+        dndToggle.setActive(dnd)
     }
     // Restore preferred default, getDNDIcon will fix it anyway
     const dndToggle = createToggle("preferences-system-notifications-symbolic", "No molestar", "...", false, () => {
