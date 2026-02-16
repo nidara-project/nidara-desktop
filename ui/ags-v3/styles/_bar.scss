@@ -30,24 +30,20 @@ window.crystal-bar {
 .bar-left,
 .bar-center,
 .bar-right {
-    background-color: $crystal_bg;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    /* SUBTLE BORDER */
-    border-radius: 999px;
-    padding: 0px 12px;
-    min-height: 30px;
-    /* 30px content + 1px border * 2 = 32px TOTAL */
-    /* max-height: 30px; REMOVED: Invalid GTK Prop */
-    margin: 0;
+    background: none;
+    background-color: transparent;
+    border: none;
     box-shadow: none;
+    padding: 0;
+    margin: 0;
 }
 
 .bar-left {
-    margin-left: 8px;
+    /* margin-left: 8px; REMOVED - Handled in TSX */
 }
 
 .bar-right {
-    margin-right: 8px;
+    /* margin-right: 8px; REMOVED - Handled in TSX */
 }
 
 /* --- Global Bar Button Reset --- */
@@ -150,15 +146,7 @@ window.crystal-bar {
     font-weight: 500;
 }
 
-.bar-app-menu {
-    border-radius: 12px;
-    padding: 4px 8px;
-    transition: background 0.2s;
-}
-
-.bar-app-menu:hover {
-    background: rgba(255, 255, 255, 0.05);
-}
+/* .bar-app-menu removed - handled by SquircleContainer */
 
 .bar-app-sep {
     background: rgba(255, 255, 255, 0.1);

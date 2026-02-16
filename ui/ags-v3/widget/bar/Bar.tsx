@@ -14,6 +14,7 @@ import AstalTray from "gi://AstalTray"
 import WorkspaceOverview from "../overview/WorkspaceOverview"
 import WorkspacePreview from "../overview/WorkspacePreview"
 import { getWordmark } from "../../utils"
+import SquircleContainer from "../common/SquircleContainer" // 🔵 Import Squircle
 
 // ... (skipping Tray logic for brevity in match) ...
 
@@ -24,7 +25,12 @@ function Tray() {
   const box = new Gtk.Box({
     name: "bar-tray",
     css_classes: ["bar-tray"],
-    spacing: 8
+    spacing: 8,
+    height_request: 24,
+    margin_start: 16,
+    margin_end: 16,
+    margin_top: 4,
+    margin_bottom: 4
   })
 
   const items = new Map<string, Gtk.Button>()
@@ -163,12 +169,28 @@ async function getServiceSafe<T>(getter: () => T, name: string): Promise<T | nul
  */
 function AppMenu() {
   const box = new Gtk.Box({
-    name: "bar-app-menu",
-    css_classes: ["bar-app-menu", "bar-app-menu-btn"],
+    name: "bar-app-menu-content",
+    css_classes: ["bar-app-menu-content"],
     spacing: 12,
     valign: Gtk.Align.CENTER,
     focusable: false,
-    can_focus: false
+    can_focus: false,
+    // Add margin to simulate padding inside Squircle
+    margin_start: 16,
+    margin_end: 16,
+    margin_top: 4,
+    margin_bottom: 4
+  })
+
+  // 🔵 WRAPPER: Squircle Pill
+  const pill = SquircleContainer({
+    child: box,
+    radius: undefined, // Auto Pill 💊
+    gloss: true,
+    css_classes: ["bar-app-menu-pill"],
+    color: { r: 0.07, g: 0.07, b: 0.11 }, // Dark Tint
+    alpha: 0.2,
+    onClick: () => execAsync("ags request 'toggleAppGrid()'")
   })
 
   const distroIcon = new Gtk.Image({
@@ -224,8 +246,12 @@ function AppMenu() {
     return GLib.SOURCE_REMOVE
   })
 
-  return box
+
+
+  return pill
 }
+
+
 
 /**
  * Stitch-style Workspace Module (Fixed 5 Dots) 🔘
@@ -236,8 +262,12 @@ function Workspaces() {
   const box = new Gtk.Box({
     name: "bar-workspaces",
     css_classes: ["bar-workspaces"],
-    spacing: 8,
-    valign: Gtk.Align.CENTER
+    spacing: 12, // Increased spacing for dots
+    valign: Gtk.Align.CENTER,
+    margin_start: 16,
+    margin_end: 16,
+    margin_top: 4,
+    margin_bottom: 4
   })
 
   // Fixed 5 dots (Stitch aesthetic)
@@ -274,19 +304,20 @@ function Workspaces() {
 
   dots.forEach(d => box.append(d))
 
-  const btn = new Gtk.Button({
+  // 🔵 WRAPPER: Squircle Pill
+  const pill = SquircleContainer({
     child: box,
-    css_classes: ["bar-ws-btn"],
-    cursor: Gdk.Cursor.new_from_name("pointer", null),
-    hexpand: false,
-    vexpand: false,
-    focusable: false,
-    can_focus: false,
-    focus_on_click: false
+    radius: undefined, // Auto Pill 💊
+    gloss: true,
+    css_classes: ["bar-ws-pill"],
+    color: { r: 0.07, g: 0.07, b: 0.11 },
+    alpha: 0.2,
+    // Workspaces clicks are handled by individual dots or we can add a global click here?
+    // User requested click to toggle AppGrid on the container
+    onClick: () => execAsync("ags request 'toggleAppGrid()'")
   })
-  btn.connect("clicked", () => execAsync("ags request 'toggleAppGrid()'"))
 
-  return btn
+  return pill
 }
 
 /**
@@ -389,10 +420,14 @@ function ResourceCircle(iconName: string, update: (cb: (val: number) => void) =>
  */
 function SystemResources() {
   const box = new Gtk.Box({
-    name: "bar-resources",
+    name: "bar-resources-box",
     css_classes: ["bar-resources"],
-    spacing: 10,
-    valign: Gtk.Align.CENTER
+    spacing: 12,
+    valign: Gtk.Align.CENTER,
+    margin_start: 16,
+    margin_end: 16,
+    margin_top: 4,
+    margin_bottom: 4
   })
 
   const cpu = ResourceCircle("cpu-symbolic", (cb) => {
@@ -473,7 +508,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     height_request: 32,
     vexpand: false,
     focusable: false,
-    can_focus: false
+    can_focus: false,
+    margin_start: 8
   })
   leftSide.append(AppMenu())
 
@@ -488,7 +524,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   })
   centerSide.append(Workspaces())
 
-  const timeContent = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+  const timeContent = new Gtk.Box({
+    spacing: 12,
+    valign: Gtk.Align.CENTER,
+    margin_start: 16,
+    margin_end: 16,
+    margin_top: 4,
+    margin_bottom: 4
+  })
   const timeLabel = new Gtk.Label({ name: "bar-time-label", css_classes: ["bar-time"], label: "...", valign: Gtk.Align.CENTER })
   const notifCluster = new Gtk.Box({ spacing: 6, css_classes: ["bar-notif-cluster"], valign: Gtk.Align.CENTER })
   const timeNotifIcon = new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 14, valign: Gtk.Align.CENTER })
@@ -502,15 +545,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeContent.append(timeSep)
   timeContent.append(timeLabel)
 
-  const timeBtn = new Gtk.Button({
-    css_classes: ["bar-time-btn"],
-    child: timeContent,
-    valign: Gtk.Align.CENTER,
-    height_request: 32,
-    focusable: false,
-    can_focus: false,
-    focus_on_click: false
-  })
 
   const timeAccessor = createPoll("...", 1000, "date +'%a %b %d  %H:%M'", (out) => out.trim())
   timeAccessor.subscribe(() => { timeLabel.label = timeAccessor.get() })
@@ -540,13 +574,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const sync = () => {
         const count = notifd.notifications.length
         const dnd = notifd.dont_disturb
-        // Show if DND is on OR if there are notifications
-        // If neither, hide the cluster to keep bar clean? 
-        // User asked for "bell icon", presumably they want it visible if DND is off too?
-        // Actually line 525 says: const anyNotif = count > 0 || dnd
-        // This effectively hides the bell if count is 0 and DND is off.
-        // Let's Respect the user's implied wish to SEE the bell if they are asking about it.
-        // But for now, let's stick to fixing the ICON name.
 
         const anyNotif = count > 0 || dnd
         if (!anyNotif) { notifCluster.set_visible(false); return }
@@ -569,35 +596,44 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     return GLib.SOURCE_REMOVE
   })
 
-  timeBtn.connect("clicked", () => { (app as any).DistroIA?.toggleCC() })
 
   // Discrete Floating Capsules (Phase F) 💊
-  const ResourcePill = new Gtk.Box({
-    css_classes: ["bar-right"],
-    valign: Gtk.Align.CENTER,
-    height_request: 32,
-    focusable: false,
-    can_focus: false
-  })
-  ResourcePill.append(SystemResources())
+  // Discrete Floating Capsules (Phase F) 💊
 
-  const TrayPill = new Gtk.Box({
-    css_classes: ["bar-right"],
-    valign: Gtk.Align.CENTER,
-    height_request: 32,
-    focusable: false,
-    can_focus: false
+  // 1. Resources
+  const resContent = SystemResources()
+  const ResourcePill = SquircleContainer({
+    child: resContent,
+    radius: undefined,
+    gloss: true,
+    color: { r: 0.07, g: 0.07, b: 0.11 },
+    alpha: 0.2
   })
-  TrayPill.append(Tray())
 
-  const TimePill = new Gtk.Box({
-    css_classes: ["bar-right"],
-    valign: Gtk.Align.CENTER,
-    height_request: 32,
-    focusable: false,
-    can_focus: false
+  // 2. Tray
+  const trayContent = Tray()
+  const TrayPill = SquircleContainer({
+    child: trayContent,
+    radius: undefined,
+    gloss: true,
+    color: { r: 0.07, g: 0.07, b: 0.11 },
+    alpha: 0.2
   })
-  TimePill.append(timeBtn)
+
+  // 3. Time
+  // Extract content from timeBtn since we are replacing the button container
+  // Actually, timeBtn has connect logic. Let's wrap the BTN itself? 
+  // SquircleContainer takes a child. The child can be the button.
+  // BUT the visual styling of Squircle replaces the button background.
+
+  const TimePill = SquircleContainer({
+    child: timeContent, // Use internal content directly
+    radius: undefined,
+    gloss: true,
+    color: { r: 0.07, g: 0.07, b: 0.11 },
+    alpha: 0.2,
+    onClick: () => (app as any).DistroIA?.toggleCC()
+  })
 
   const rightSide = new Gtk.Box({
     spacing: 8,
@@ -605,10 +641,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     valign: Gtk.Align.CENTER,
     hexpand: false,
     focusable: false,
-    can_focus: false
+    can_focus: false,
+    height_request: 32,
+    margin_end: 8
   })
   rightSide.append(ResourcePill)
   rightSide.append(TrayPill)
+  // Ensure TimePill is appended and visible
+  TimePill.visible = true
   rightSide.append(TimePill)
 
   centerBox.set_start_widget(leftSide)

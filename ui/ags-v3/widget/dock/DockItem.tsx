@@ -326,10 +326,13 @@ export function DockItem(
             focusable: false
         })
 
+        const PLATE_OPACITY = 0.9 // V414: Tweakable opacity (lower = more blur visible)
+
         da.set_draw_func((_, cr, w, h) => {
             // V413: Use shared drawSquircle for consistent geometry
             // passes w,h to match the widget size
-            drawSquircle(cr, w, h)
+            // V430: Enable Gloss/Border effect
+            drawSquircle(cr, w, h, undefined, PLATE_OPACITY, true)
         })
 
         plate = da

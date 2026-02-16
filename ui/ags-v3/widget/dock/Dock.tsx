@@ -411,7 +411,8 @@ export default function Dock(gdkmonitor: any) {
     })
 
     da.set_draw_func((_, cr, w, h) => {
-        drawSquircle(cr, w, h)
+        // V430: Enable Gloss/Border effect for main dock
+        drawSquircle(cr, w, h, undefined, 0.2, true)
     })
 
     const updateSize = () => {
