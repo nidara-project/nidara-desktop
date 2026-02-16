@@ -190,13 +190,13 @@ function AppMenu() {
     css_classes: ["bar-app-menu-pill"],
     color: { r: 0.07, g: 0.07, b: 0.11 }, // Dark Tint
     alpha: 0.2,
-    perfect: true,
-    onClick: () => execAsync("ags request 'toggleAppGrid()'")
+    perfect: true
+    // onClick removed as per user request
   })
 
   const distroIcon = new Gtk.Image({
-    icon_name: "archlinux-symbolic",
-    pixel_size: 24,
+    icon_name: "archlinux-symbolic", // Back to theme icon
+    pixel_size: 20,
     css_classes: ["bar-app-distro-icon"]
   })
 
