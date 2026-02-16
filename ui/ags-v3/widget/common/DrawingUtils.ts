@@ -9,7 +9,8 @@ export const drawSquircle = (
     alpha: number = 0.3,
     enableGloss: boolean = false,
     color: { r: number, g: number, b: number } = { r: 1, g: 1, b: 1 }, // Default to white
-    cornerRadius?: number // New parameter for fixed radius
+    cornerRadius?: number, // New parameter for fixed radius
+    perfect: boolean = false // New parameter for geometric pill
 ) => {
     if (width <= 0 || height <= 0) return
 
@@ -35,53 +36,66 @@ export const drawSquircle = (
 
     cr.setAntialias(3)
     const path = (d = 0) => {
-        const rd = Math.max(0, r + d)
         cr.newPath()
 
-        // Top Edge
-        cr.moveTo(x + r, y - d)
-        cr.lineTo(x + drawW - r, y - d)
+        if (perfect) {
+            // GEOMETRIC PILL 💊 (Standard Arcs)
+            const r_eff = Math.max(0, r + d) // Adjust radius for expanding border
+            const safe_r = Math.min(r_eff, Math.min(drawW, drawH) / 2)
 
-        // Top-right Corner
-        for (let i = 64; i >= 0; i--) {
-            let t = (i / 64) * (Math.PI / 2)
-            let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
-            let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
-            cr.lineTo(x + drawW - r + px, y + r - py)
-        }
+            // Standard Rounded Rect
+            cr.arc(x + drawW - safe_r, y + safe_r, safe_r, -Math.PI / 2, 0)
+            cr.arc(x + drawW - safe_r, y + drawH - safe_r, safe_r, 0, Math.PI / 2)
+            cr.arc(x + safe_r, y + drawH - safe_r, safe_r, Math.PI / 2, Math.PI)
+            cr.arc(x + safe_r, y + safe_r, safe_r, Math.PI, 3 * Math.PI / 2)
+        } else {
+            // SQUIRCLE (Superellipse)
+            const rd = Math.max(0, r + d)
+            // Top Edge
+            cr.moveTo(x + r, y - d)
+            cr.lineTo(x + drawW - r, y - d)
 
-        // Right Edge
-        cr.lineTo(x + drawW + d, y + drawH - r)
+            // Top-right Corner
+            for (let i = 64; i >= 0; i--) {
+                let t = (i / 64) * (Math.PI / 2)
+                let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
+                let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
+                cr.lineTo(x + drawW - r + px, y + r - py)
+            }
 
-        // Bottom-right Corner
-        for (let i = 0; i <= 64; i++) {
-            let t = (i / 64) * (Math.PI / 2)
-            let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
-            let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
-            cr.lineTo(x + drawW - r + px, y + drawH - r + py)
-        }
+            // Right Edge
+            cr.lineTo(x + drawW + d, y + drawH - r)
 
-        // Bottom Edge
-        cr.lineTo(x + drawW - r, y + drawH + d) // Fixed Lineto x coord (was x+r)
-        cr.lineTo(x + r, y + drawH + d)
+            // Bottom-right Corner
+            for (let i = 0; i <= 64; i++) {
+                let t = (i / 64) * (Math.PI / 2)
+                let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
+                let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
+                cr.lineTo(x + drawW - r + px, y + drawH - r + py)
+            }
 
-        // Bottom-left Corner
-        for (let i = 64; i >= 0; i--) {
-            let t = (i / 64) * (Math.PI / 2)
-            let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
-            let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
-            cr.lineTo(x + r - px, y + drawH - r + py)
-        }
+            // Bottom Edge
+            cr.lineTo(x + drawW - r, y + drawH + d)
+            cr.lineTo(x + r, y + drawH + d)
 
-        // Left Edge
-        cr.lineTo(x - d, y + r)
+            // Bottom-left Corner
+            for (let i = 64; i >= 0; i--) {
+                let t = (i / 64) * (Math.PI / 2)
+                let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
+                let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
+                cr.lineTo(x + r - px, y + drawH - r + py)
+            }
 
-        // Top-left Corner
-        for (let i = 0; i <= 64; i++) {
-            let t = (i / 64) * (Math.PI / 2)
-            let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
-            let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
-            cr.lineTo(x + r - px, y + r - py)
+            // Left Edge
+            cr.lineTo(x - d, y + r)
+
+            // Top-left Corner
+            for (let i = 0; i <= 64; i++) {
+                let t = (i / 64) * (Math.PI / 2)
+                let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
+                let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
+                cr.lineTo(x + r - px, y + r - py)
+            }
         }
         cr.closePath()
     }

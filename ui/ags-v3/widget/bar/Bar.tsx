@@ -190,6 +190,7 @@ function AppMenu() {
     css_classes: ["bar-app-menu-pill"],
     color: { r: 0.07, g: 0.07, b: 0.11 }, // Dark Tint
     alpha: 0.2,
+    perfect: true,
     onClick: () => execAsync("ags request 'toggleAppGrid()'")
   })
 
@@ -312,6 +313,7 @@ function Workspaces() {
     css_classes: ["bar-ws-pill"],
     color: { r: 0.07, g: 0.07, b: 0.11 },
     alpha: 0.2,
+    perfect: true,
     // Workspaces clicks are handled by individual dots or we can add a global click here?
     // User requested click to toggle AppGrid on the container
     onClick: () => execAsync("ags request 'toggleAppGrid()'")
@@ -607,7 +609,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     radius: undefined,
     gloss: true,
     color: { r: 0.07, g: 0.07, b: 0.11 },
-    alpha: 0.2
+    alpha: 0.2,
+    perfect: true
   })
 
   // 2. Tray
@@ -617,7 +620,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     radius: undefined,
     gloss: true,
     color: { r: 0.07, g: 0.07, b: 0.11 },
-    alpha: 0.2
+    alpha: 0.2,
+    perfect: true
   })
 
   // 3. Time
@@ -632,6 +636,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     gloss: true,
     color: { r: 0.07, g: 0.07, b: 0.11 },
     alpha: 0.2,
+    perfect: true,
     onClick: () => (app as any).DistroIA?.toggleCC()
   })
 
