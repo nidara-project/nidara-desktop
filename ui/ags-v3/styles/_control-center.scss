@@ -40,46 +40,18 @@
     margin-left: 2px;
 }
 
-/* --- Quick Toggles Grid --- */
-window#crystal-control-center button.cc-toggle,
-window#crystal-control-center button.cc-toggle:focus {
-    background-color: rgba(255, 255, 255, 0.05);
-    background-image: none;
-    border: 1px solid rgba(255, 255, 255, 0.08); // Precision Border 📏
-    border-radius: 20px;
-    padding: 10px;
-    min-height: 64px;
+/* --- Quick Toggles (Custom Drawing) --- */
+.cc-toggle-container {
+    background: none;
     box-shadow: none;
-    outline: none;
-    transition: all 0.2s ease;
+    border: none;
 }
 
-window#crystal-control-center button.cc-toggle:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.15);
-}
-
-window#crystal-control-center button.cc-toggle.active {
-    background-color: #3b82f6; // Stitch Primary 🔵
-    border-color: rgba(59, 130, 246, 0.4);
-}
-
-/* --- Toggle Icons (Centered) --- */
+/* Icons are now handled in the TSX layout */
 .cc-toggle-icon-box {
     background-color: rgba(255, 255, 255, 0.06);
     border-radius: 12px;
     color: rgba(255, 255, 255, 0.6);
-    margin: 0;
-    /* Strict centering relying on GTK alignment */
-}
-
-window#crystal-control-center button.cc-toggle.active .cc-toggle-icon-box {
-    background-color: rgba(255, 255, 255, 0.2);
-    color: white;
-}
-
-.cc-toggle-content {
-    background: transparent;
 }
 
 .cc-toggle-label {
@@ -94,13 +66,14 @@ window#crystal-control-center button.cc-toggle.active .cc-toggle-icon-box {
     margin-top: 2px;
 }
 
-window#crystal-control-center button.cc-toggle.active .cc-toggle-sublabel {
-    color: rgba(255, 255, 255, 0.85);
+/* Active states handled by add_css_class in TSX */
+.active-text {
+    color: white;
 }
 
-.cc-toggle-icon {
-    font-size: 1.2em;
-    /* No margins to ensure perfect centering */
+.active-icon {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
 }
 
 /* --- Sliders (Brightness / Volume) --- */
@@ -432,38 +405,7 @@ scale slider {
     -gtk-icon-shadow: none;
 }
 
-/* 💣 SPECIFICITY BOMB: Kill internal nodes with ID-based path */
-window#crystal-control-center button.cc-toggle>ripple,
-window#crystal-control-center button.cc-toggle>highlight,
-window#crystal-control-center button.cc-toggle:hover>ripple,
-window#crystal-control-center button.cc-toggle:hover>highlight,
-window#crystal-control-center button.cc-toggle:active>ripple,
-window#crystal-control-center button.cc-toggle:active>highlight,
-window#crystal-control-center button.cc-toggle:focus>ripple,
-window#crystal-control-center button.cc-toggle:focus>highlight,
-window#crystal-control-center button.cc-toggle>focus-ring,
-window#crystal-control-center button.cc-toggle>outline {
-    background-image: none;
-    background-color: transparent;
-    box-shadow: none;
-    opacity: 0;
-}
-
-/* 🧠 SKILL OFFICIAL SOLUTION: Kill button decoration & icon effects */
-.cc-toggle decoration,
-.cc-toggle:hover decoration,
-.cc-toggle:active decoration,
-.cc-toggle:focus decoration {
-    background: transparent;
-    box-shadow: none;
-    border: none;
-    transition: none;
-    -gtk-icon-effect: none;
-}
-
-.cc-toggle:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-}
+/* Legacy button overrides removed */
 
 .cc-sink-item:hover {
     background-color: rgba(255, 255, 255, 0.08);

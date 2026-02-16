@@ -12,6 +12,7 @@ import GObject from "gi://GObject"
 // @ts-ignore
 import Pango from "gi://Pango?version=1.0"
 import appService from "../../core/AppService"
+import { drawSquircle } from "../common/DrawingUtils"
 
 export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const notifd = AstalNotifd.get_default()
@@ -115,53 +116,86 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     topSection.append(grid)
 
     const createToggle = (iconName: string, title: string, sub: string, active: boolean, onClick: () => void) => {
-        const btn = new Gtk.Button({
-            css_classes: ["cc-toggle"],
+        let isActive = active
+        let isHovered = false
+
+        // Dimensions preserved from original button layout
+        const container = new Gtk.Box({
             hexpand: true,
-            halign: Gtk.Align.FILL, // Force full width stretch 📏
-            focusable: false,
-            can_focus: false,
-            focus_on_click: false
+            css_classes: ["cc-toggle-container"],
+            height_request: 64 // Explicitly restore height 🛡️
         })
-        if (active) btn.add_css_class("active")
+
+        const da = new Gtk.DrawingArea({ hexpand: true, vexpand: true })
+        da.set_draw_func((_, cr, w, h) => {
+            const blue = { r: 0.53, g: 0.70, b: 0.98 }
+            const dark = { r: 0.15, g: 0.16, b: 0.2 }
+            const hover = { r: 0.25, g: 0.26, b: 0.3 }
+
+            cr.setSourceRGBA(0, 0, 0, 0); cr.paint()
+
+            if (isActive) {
+                drawSquircle(cr, w, h, undefined, 1.0, true, blue)
+            } else {
+                if (isHovered) drawSquircle(cr, w, h, undefined, 0.5, true, hover)
+                else drawSquircle(cr, w, h, undefined, 0.4, true, dark)
+            }
+        })
+
+        const contentOverlay = new Gtk.Overlay()
+        contentOverlay.set_child(da)
 
         const box = new Gtk.Box({
             spacing: 12,
             css_classes: ["cc-toggle-content"],
-            halign: Gtk.Align.START, // Left align text for readability
-            valign: Gtk.Align.CENTER
+            halign: Gtk.Align.START,
+            valign: Gtk.Align.CENTER,
+            margin_start: 12
         })
 
-        // Icon Box Container 📦
         const iconBox = new Gtk.Box({
             css_classes: ["cc-toggle-icon-box"],
-            halign: Gtk.Align.CENTER,
-            valign: Gtk.Align.CENTER,
-            width_request: 38,
-            height_request: 38,
-            hexpand: false,
-            vexpand: false
+            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+            width_request: 38, height_request: 38 // Preserved Dimensions 🛡️
         })
         const icon = new Gtk.Image({
-            icon_name: iconName,
-            pixel_size: 18,
+            icon_name: iconName, pixel_size: 18,
             css_classes: ["cc-toggle-icon"],
-            halign: Gtk.Align.CENTER,
-            valign: Gtk.Align.CENTER,
-            hexpand: true, // Required to claim space in Box 🛡️
-            vexpand: true
+            hexpand: true, vexpand: true
         })
         iconBox.append(icon)
 
         const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
-        const l = new Gtk.Label({ label: title, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 28, ellipsize: 3 })
-        const sl = new Gtk.Label({ label: sub, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 28, ellipsize: 3 })
-
+        const l = new Gtk.Label({ label: title, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 28 })
+        const sl = new Gtk.Label({ label: sub, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 28 })
         text.append(l); text.append(sl)
+
         box.append(iconBox); box.append(text)
-        btn.set_child(box)
-        btn.connect("clicked", onClick)
-        return { btn, icon, label: l, subLabel: sl, iconBox }
+        contentOverlay.add_overlay(box)
+        container.append(contentOverlay)
+
+        const click = new Gtk.GestureClick()
+        click.connect("pressed", () => onClick())
+        container.add_controller(click)
+
+        const motion = new Gtk.EventControllerMotion()
+        motion.connect("enter", () => { isHovered = true; da.queue_draw() })
+        motion.connect("leave", () => { isHovered = false; da.queue_draw() })
+        container.add_controller(motion)
+
+            // API Compatibility 🛡️
+            ; (container as any).setActive = (state: boolean) => {
+                isActive = state
+                da.queue_draw()
+                if (state) { l.add_css_class("active-text"); icon.add_css_class("active-icon") }
+                else { l.remove_css_class("active-text"); icon.remove_css_class("active-icon") }
+            }
+
+        // Initial State
+        if (isActive) { l.add_css_class("active-text"); icon.add_css_class("active-icon") }
+
+        // Adapter to match previous return signature where accessible properties were on 'btn'
+        return { btn: container, icon, label: l, subLabel: sl, iconBox }
     }
 
     const wifiToggle = createToggle("network-wireless-offline-symbolic", "Wi-Fi", "...", false, () => {
