@@ -12,9 +12,60 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { calculateDockItemMetrics, DOCK_CONSTANTS, getProjectedMouseX } from "./DockPhysics"
-import appService from "../../core/AppService" // Ensure path correctness
+import appService from "../../core/AppService"
 import { DockItem, Separator } from "./DockItem"
 import { drawSquircle } from "./DockUtils"
+
+console.log("[Dock] Module Loaded")
+// @ts-ignore
+print("[Dock] Module Loaded (print)")
+
+// BFS/DFS Traversal for Deep Debugging
+function traverse(widget: any, depth = 0) {
+    if (!widget) return ""
+    let indent = "  ".repeat(depth)
+
+    let name = widget.get_name ? widget.get_name() : "unnamed"
+    let classes = (widget.get_css_classes?.() || []).join(".")
+    let flagsStr = ""
+
+    try {
+        const state = widget.get_state_flags()
+        const f: string[] = []
+        if (state & Gtk.StateFlags.PRELIGHT) f.push("HOVER")
+        if (state & Gtk.StateFlags.FOCUSED) f.push("FOCUSED")
+        if (state & Gtk.StateFlags.FOCUS_WITHIN) f.push("FOCUS_WITHIN")
+        if (state & Gtk.StateFlags.ACTIVE) f.push("ACTIVE")
+        if (state & Gtk.StateFlags.CHECKED) f.push("CHECKED")
+        if (state & Gtk.StateFlags.SELECTED) f.push("SELECTED")
+        if (f.length > 0) flagsStr = ` [${f.join(" ")}]`
+    } catch (e) { }
+
+    let out = `${indent}<${widget.constructor.name || 'Widget'} name="${name}" class="${classes}"${flagsStr}>\n`
+
+    let child = widget.get_first_child?.()
+    while (child) {
+        out += traverse(child, depth + 1)
+        child = child.get_next_sibling?.()
+    }
+    return out
+}
+
+function debugLauncherState(widget: Gtk.Widget) {
+    if (!widget) return
+    const dump = () => {
+        try {
+            const tree = traverse(widget)
+            // @ts-ignore
+            print(`[StateDebug Dump] \n${tree}`)
+        } catch (e) {
+            // @ts-ignore
+            print(e)
+        }
+        return GLib.SOURCE_CONTINUE
+    }
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, dump) // Slower interval, full dump
+}
 
 // V127: Native Gtk Resolution - No mapping needed
 
@@ -58,7 +109,9 @@ const mouseBus = {
     subscribe(l: (x: number) => void) { this.listeners.add(l); return () => this.listeners.delete(l) }
 }
 
+
 export default function Dock(gdkmonitor: any) {
+    console.log("[Dock] Function Called for monitor")
     // V180: Sync initial width with pinned items to prevent "One-Time Jump" on startup
     const initialCount = pinnedList.length + 3 // Launcher + Home + Trash
     let totalStaticWidth = initialCount * 82
@@ -184,20 +237,42 @@ export default function Dock(gdkmonitor: any) {
                         // Robust Search for the Plate
                         let iconBox = overlay.get_child() as Gtk.Box
                         let plate: Gtk.Widget | null = null
+                        let isNewOverlayStructure = false
 
                         if (iconBox && (iconBox as any).get_first_child) {
                             const first = (iconBox as any).get_first_child()
-                            if (first && first.get_css_classes().includes("cd-squircle-plate")) {
-                                plate = first
+                            if (first) {
+                                const classes = first.get_css_classes()
+                                if (classes.includes("cd-squircle-plate")) {
+                                    plate = first
+                                } else if (classes.includes("cd-plate-container")) {
+                                    plate = first
+                                    isNewOverlayStructure = true
+                                }
                             }
                         }
 
                         const targetPixelSize = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
 
                         if (plate) {
+                            // Resize the main container/plate
                             plate.set_size_request(drawIconW, targetPixelSize)
-                            const icon = (plate as any).get_first_child()
-                            if (icon) icon.set_size_request(targetPixelSize, targetPixelSize)
+
+                            if (isNewOverlayStructure) {
+                                // NEW STRUCTURE: Overlay -> [DA, Icon]
+                                // We must resize the Overlay children explicitly if they don't fill automatically
+                                // The DA is the first child (main child of overlay)
+                                const da = (plate as any).get_child()
+                                if (da) da.set_size_request(targetPixelSize, targetPixelSize)
+
+                                // The Icon is an added overlay (sibling in the widget tree)
+                                const icon = da ? da.get_next_sibling() : null
+                                if (icon) icon.set_size_request(targetPixelSize, targetPixelSize)
+                            } else {
+                                // OLD STRUCTURE: Box -> Icon
+                                const icon = (plate as any).get_first_child()
+                                if (icon) icon.set_size_request(targetPixelSize, targetPixelSize)
+                            }
                         } else if (iconBox) {
                             iconBox.set_size_request(drawIconW, targetPixelSize)
                         }
@@ -277,6 +352,15 @@ export default function Dock(gdkmonitor: any) {
         // V300: Surgical Input Region for 200px window.
         // The window is 200px high to allow icon magnification, but we ONLY 
         // capture mouse events in the bottom 110px (Dock area).
+
+        // V421: SMART INPUT REGION
+        // If a menu is open, we MUST allow input on the full window (200px) so the menu can receive clicks.
+        // If no menu is open, we MUST clip to the bottom 110px so we don't block windows behind the dock.
+        if ((globalThis as any).isAnyMenuOpen) {
+            surface.set_input_region(null) // Full window input
+            return
+        }
+
         const width = totalWidth + 80
         const x = (monitorWidth - width) / 2
         const y = 200 - 110
@@ -512,7 +596,10 @@ export default function Dock(gdkmonitor: any) {
             const homeItem = {
                 name: prettyName,
                 icon_name: ["user-home", "folder-home", "folder"],
-                launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
+                launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(e => {
+                    // @ts-ignore
+                    print(e)
+                })
             }
             configs.push({
                 id: "home-shortcut", width: DOCK_CONSTANTS.APP_SLOT,
@@ -530,6 +617,12 @@ export default function Dock(gdkmonitor: any) {
                         isPinned: true, // Special item logic handles actions
                         cleanId: "home-shortcut"
                     }, bar)
+
+                    // V402: Debug Home Shortcut (First Item)
+                    // @ts-ignore
+                    print("[Dock] Home Shortcut exposed for debugging")
+                    debugLauncherState(w)
+
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
                 }
@@ -556,6 +649,7 @@ export default function Dock(gdkmonitor: any) {
                         isPinned: true,
                         cleanId: "launcher"
                     }, bar)
+
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
                 }
@@ -729,7 +823,6 @@ export default function Dock(gdkmonitor: any) {
 
             const screenWidth = gdkmonitor.get_geometry().width
             const startX = (screenWidth - totalWidth) / 2
-
             let currentX = startX
             // Ensure NO DUPLICATE IDs in final mapping
             const processed = new Set<string>()
@@ -897,6 +990,16 @@ export default function Dock(gdkmonitor: any) {
 
     update()
     // V197: Redundant late-update timeouts removed. initialCount logic handles it.
+
     win.present()
+
+    // V401: Late Focus Clear (The "Ghost" Fix)
+    // Run after window manager has successfully mapped and focused the window
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+        win.set_focus_visible(false)
+        win.set_focus(null)
+        return GLib.SOURCE_REMOVE
+    })
+
     return win
 }

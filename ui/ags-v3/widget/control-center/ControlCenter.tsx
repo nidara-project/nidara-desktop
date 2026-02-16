@@ -24,7 +24,9 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         name: "crystal-control-center",
         application: app,
         css_classes: ["control-center-win"],
-        visible: false
+        visible: false,
+        // @ts-ignore
+        focus_visible: false // V305: Force Disable Focus Ring
     })
 
     try {
@@ -36,7 +38,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
-        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
         // @ts-ignore
         win.gdkmonitor = gdkmonitor
     } catch (e) { }
@@ -226,9 +228,33 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     if (bluetooth) bluetooth.connect("notify::is-powered", updateBT)
     updateBT()
 
+    // Resilient Icon Logic 🛡️
+    const getDNDIcon = () => {
+        const dnd = notifd?.dont_disturb || false
+        if (dnd) return "notifications-disabled-symbolic" // This seems to work for the user
+
+        // Fallback chain for "Active" state
+        const candidates = [
+            "notifications-symbolic",
+            "preferences-system-notifications-symbolic",
+            "alarm-symbolic", // Confirmed existence via find
+            "dialog-information-symbolic" // Absolute fallback
+        ]
+
+        // Check theme for existence
+        const display = Gdk.Display.get_default()
+        const theme = Gtk.IconTheme.get_for_display(display!) // GTK4 API
+
+        for (const name of candidates) {
+            if (theme.has_icon(name)) return name
+        }
+        return "dialog-information-symbolic"
+    }
+
     const updateDND = () => {
         const dnd = notifd?.dont_disturb || false
-        const icon = dnd ? "notifications-disabled-symbolic" : "preferences-system-notifications-symbolic"
+        const icon = getDNDIcon()
+
         const sub = dnd ? "Silencio" : "Normal"
         const hasActive = dndToggle.btn.has_css_class("active")
 
@@ -237,14 +263,15 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         if (dnd && !hasActive) dndToggle.btn.add_css_class("active")
         else if (!dnd && hasActive) dndToggle.btn.remove_css_class("active")
     }
+    // Restore preferred default, getDNDIcon will fix it anyway
     const dndToggle = createToggle("preferences-system-notifications-symbolic", "No molestar", "...", false, () => {
         if (notifd) {
             notifd.dont_disturb = !notifd.dont_disturb
-            // Force UI update immediately for responsiveness
             updateDND()
         }
     })
     grid.attach(dndToggle.btn, 0, 1, 1, 1)
+
     if (notifd) notifd.connect("notify::dont-disturb", updateDND)
     updateDND()
 

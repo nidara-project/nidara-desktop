@@ -10,6 +10,7 @@ import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import appService from "../../core/AppService" // Ensure import path is correct relative to this file
 import { DOCK_CONSTANTS } from "./DockPhysics"
+import { drawSquircle } from "./DockUtils"
 
 const hypr = AstalHyprland.get_default()
 
@@ -137,6 +138,7 @@ export function DockItem(
         width_request: DOCK_CONSTANTS.APP_SLOT,
         height_request: DOCK_CONSTANTS.PILL_HEIGHT,
         can_focus: false,
+        focusable: false, // V405: Explicitly disable focus
         has_tooltip: false,
     })
 
@@ -158,6 +160,8 @@ export function DockItem(
         hexpand: false,
         margin_bottom: 18,
         has_tooltip: false,
+        can_focus: false, // V405: Explicitly disable focus
+        focusable: false
     })
 
     const getIcon = (): { name?: string, path?: string, gicon?: any } => {
@@ -302,28 +306,49 @@ export function DockItem(
     const isApp = (!!res.name || !!res.path || !!res.gicon)
     const nameStr = (appItem.name || "").toLowerCase()
     let iconToDisplay: Gtk.Widget = child
+    // V410: Lift plate variable scope for manual bg control
+    let plate: Gtk.Widget | null = null
 
     if (isApp) {
-        const plate = new Gtk.Box({
-            css_classes: ["cd-squircle-plate"],
-            halign: Gtk.Align.CENTER,
-            valign: Gtk.Align.CENTER,
+        // V412: THE NUCLEAR OPTION
+        // We replace Gtk.Box with Gtk.DrawingArea for the background plate.
+        // A DrawingArea has NO internal CSS nodes, NO ripple gadgets, and NO focus rings.
+        // It is just raw pixels. This explicitly kills the "Ghost Ripple/Glow".
+        const da = new Gtk.DrawingArea({
+            css_classes: ["cd-squircle-plate-drawing"],
+            halign: Gtk.Align.FILL,
+            valign: Gtk.Align.FILL,
             hexpand: false,
             vexpand: false,
-            overflow: Gtk.Overflow.HIDDEN,
             width_request: DOCK_CONSTANTS.ICON_SIZE,
             height_request: DOCK_CONSTANTS.ICON_SIZE,
+            can_focus: false,
+            focusable: false
         })
-        // V134: Revert to FILL
-        // We want the DrawingArea to fill the plate so our internal draw_func controls the padding relative to the full plate size.
-        child.set_halign(Gtk.Align.FILL)
-        child.set_valign(Gtk.Align.FILL)
-        child.set_hexpand(true)
-        child.set_vexpand(true)
+
+        da.set_draw_func((_, cr, w, h) => {
+            // V413: Use shared drawSquircle for consistent geometry
+            // passes w,h to match the widget size
+            drawSquircle(cr, w, h)
+        })
+
+        plate = da
+
+        // Container Architecture: Overlay [Background=DA, Foreground=Icon]
+        const plateOverlay = new Gtk.Overlay({
+            css_classes: ["cd-plate-container"],
+            halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.CENTER,
+        })
+        plateOverlay.set_child(da)
+
+        // Center the icon strictly
+        child.set_valign(Gtk.Align.CENTER)
+        child.set_halign(Gtk.Align.CENTER)
         child.set_size_request(DOCK_CONSTANTS.ICON_SIZE, DOCK_CONSTANTS.ICON_SIZE)
 
-        plate.append(child)
-        iconToDisplay = plate
+        plateOverlay.add_overlay(child)
+        iconToDisplay = plateOverlay
     }
 
     const isAntigravity = appId.includes("antigravity") || nameStr.includes("antigravity")
@@ -389,7 +414,7 @@ export function DockItem(
     })
     motion.connect("motion", (controller, x, y) => {
         // Removed: itemBox.set_cursor(Gdk.Cursor.new_from_name("pointer", null))
-        if (popover.visible) return // Don't show tooltip if menu is open
+        if (popover && popover.visible) return // Don't show tooltip if menu is open
 
         if (!tooltip.visible && !tooltipTimeout) {
             tooltipTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
@@ -398,25 +423,37 @@ export function DockItem(
         }
     })
     motion.connect("leave", () => {
-        // Removed: itemBox.set_cursor(null)
+        // V411: Reverted manual BG toggle (user requires always visible)
+        // if (plate) plate.remove_css_class("show-bg")
         if (tooltipTimeout) { GLib.source_remove(tooltipTimeout); tooltipTimeout = null }
         tooltip.popdown()
     })
     iconBox.add_controller(motion)
+    iconBox.add_controller(motion)
 
     // MENU
-    const checkId = (cleanId || appId).toLowerCase()
-    const popover = new Gtk.Popover({ css_classes: ["cd-popover"], has_tooltip: false })
-    popover.set_parent(iconBox)
-    popover.connect("notify::visible", () => {
-        (globalThis as any).isAnyMenuOpen = popover.visible
-        console.error(`[DockMenu] Popover visible change: ${popover.visible} for ${appId}`)
-    })
+    // V406: Lazy Popover Creation to prevent startup artifacts
+    let popover: Gtk.Popover | null = null
+
+    const createPopover = () => {
+        if (popover) return popover
+
+        console.log(`[Dock] Creating Lazy Popover for ${appId}`)
+        const newPopover = new Gtk.Popover({ css_classes: ["cd-popover"], has_tooltip: false })
+        newPopover.set_parent(iconBox)
+        newPopover.connect("notify::visible", () => {
+            (globalThis as any).isAnyMenuOpen = newPopover.visible
+            console.error(`[DockMenu] Popover visible change: ${newPopover.visible} for ${appId}`)
+        })
+        popover = newPopover
+        return newPopover
+    }
 
     const toSentenceCase = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : ""
 
     const rebuildMenu = () => {
-        if (popover.visible) {
+        const p = createPopover()
+        if (p.visible) {
             console.error(`[DockMenu] Skip rebuild for ${appId} - already visible`)
             return
         }
@@ -454,7 +491,7 @@ export function DockItem(
                     label: label,
                     action: () => {
                         try {
-                            if (gAppInfo && gAppInfo.launch_action) gAppInfo.launch_action(rawLabel, null)
+                            if (gAppInfo && gAppInfo.launch_action) gAppInfo.launch_action(actionName, null)
                         } catch (e) { console.error(e) }
                     }
                 })
@@ -463,12 +500,11 @@ export function DockItem(
         }
 
         const isSpecialItem = appId.startsWith("special:") || appId === "launcher" || appId === "home-shortcut" || appId === "trash"
-        // console.log(`[DockItem] Rebuilding menu for ${appId}, isPinned: ${isPinned}, isSpecial: ${isSpecialItem}`)
         if (!isSpecialItem) {
             actions.push({
                 label: isPinned ? "Desanclar del dock" : "Mantener en el dock",
                 action: () => {
-                    const cid = cleanId || rawId
+                    const cid = cleanId || appId
                     if (isPinned) onUnpin(cid)
                     else onPin(cid)
                 }
@@ -497,17 +533,21 @@ export function DockItem(
                 const l = new Gtk.Label({ label: a.label, xalign: 0, css_classes: ["cd-menu-header"] })
                 menu.append(l)
             } else {
-                const b = new Gtk.Button({ label: a.label, css_classes: ["cd-menu-action"] })
+                const b = new Gtk.Button({
+                    css_classes: ["cd-menu-action"],
+                    child: new Gtk.Label({ label: a.label, xalign: 0 })
+                })
                 if (a.isDestructive) b.add_css_class("destructive")
                 b.connect("clicked", () => {
                     console.log(`[DockMenu] Action clicked, popping down: ${appId}`)
                     a.action();
-                    popover.popdown()
+                    p.popdown()
                 })
                 menu.append(b)
             }
         })
-        popover.set_child(menu)
+
+        p.set_child(menu)
     }
 
     const rightClick = new Gtk.GestureClick({ button: 3 })
@@ -516,7 +556,7 @@ export function DockItem(
         rebuildMenu()
         // V320: Delay popup by 1 frame to ensure GTK has processed the new child/layout
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-            popover.popup()
+            if (popover) popover.popup()
             return GLib.SOURCE_REMOVE
         })
     })
@@ -526,7 +566,7 @@ export function DockItem(
     const source = new Gtk.DragSource({ actions: Gdk.DragAction.COPY | Gdk.DragAction.MOVE })
     source.connect("prepare", (s, x, y) => {
         s.set_icon(Gtk.WidgetPaintable.new(child), x, y)
-        return (Gdk as any).ContentProvider.new_for_value(cleanId || rawId)
+        return (Gdk as any).ContentProvider.new_for_value(cleanId || rawId || appId)
     })
     itemBox.add_controller(source)
 
@@ -538,22 +578,14 @@ export function DockItem(
             const idx = addresses.indexOf(focusedAddr || "")
             const nextIdx = (idx + 1) % addresses.length
             let target = addresses[nextIdx]
-            if (!target.startsWith("0x")) target = "0x" + target
-            try { hypr.dispatch("focuswindow", `address:${target} `) } catch (e) { console.error(e) }
+            if (target) {
+                if (!target.startsWith("0x")) target = "0x" + target
+                execAsync(`hyprctl dispatch focuswindow address:${target}`).catch(print)
+            }
         } else {
-            const match = hypr.clients.find(c => {
-                const cClass = (c.class || "").toLowerCase()
-                const cTitle = (c.initialTitle || "").toLowerCase()
-                return cClass === appId || cTitle === appId || cClass.includes(appId)
-            })
-            if (match) {
-                let matchAddr = match.address
-                if (!matchAddr.startsWith("0x")) matchAddr = "0x" + matchAddr
-                hypr.dispatch("focuswindow", `address:${matchAddr} `)
-            } else {
-                try { appItem.launch() } catch (e) {
-                    execAsync(`gtk-launch ${appId}`).catch(print)
-                }
+            // Fallback or Launch
+            try { appItem.launch() } catch (e) {
+                execAsync(`gtk-launch ${appId}`).catch(print)
             }
         }
     })
@@ -595,7 +627,6 @@ export function DockItem(
         })
         itemBox.add_controller(target)
     }
-
     // SYNC LOGIC
     const sync = () => {
         const focused = hypr.focusedClient

@@ -21,9 +21,12 @@ import PowerMenu from "./widget/power-menu/PowerMenu"
 
 console.log("[DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)");
 
+console.log("[DISTROIA] Calling app.start()...");
+const randomId = Math.floor(Math.random() * 10000);
 app.start({
+  applicationId: `distroia.desktop.debug.${randomId}`,
   main() {
-    console.log("[DISTROIA] main() started!");
+    console.log(`[DISTROIA] main() started! (ID: ${randomId})`);
 
     // Modern Gtk4 Theme Management via Libadwaita
     try {
@@ -106,17 +109,21 @@ app.start({
       } catch (e) { console.error(`[UI] Error:`, e) }
     }
 
-    const display = Gdk.Display.get_default()
-    if (display) {
-      const monitors: any = display.get_monitors()
-      for (let i = 0; i < monitors.get_n_items(); i++) {
-        // Increase delay to 500ms-1s for settling period
-        GLib.timeout_add(GLib.PRIORITY_LOW, 500 + (i * 500), () => {
+    // V127: Native Gtk Resolution
+    try {
+      const display = Gdk.Display.get_default()
+      // @ts-ignore
+      print("Display found: " + !!display)
+      if (display) {
+        const monitors: any = display.get_monitors()
+        // @ts-ignore
+        print("Monitor count: " + monitors.get_n_items())
+        for (let i = 0; i < monitors.get_n_items(); i++) {
           createUI(monitors.get_item(i) as any, i)
-          return GLib.SOURCE_REMOVE
-        })
+        }
       }
-    }
+    } catch (e) { console.error(`[UI] Error:`, e) }
+
 
     // 🕹️ Toggles Logic
     const toggleAppGrid = () => {

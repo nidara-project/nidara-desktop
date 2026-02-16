@@ -5,6 +5,33 @@
    GTK background/shadow/border/focus overrides for Layer Shell windows
    ========================================================================== */
 
+/* --- GTK4 Internal Node Neutralization (Surgical Fix) 🧠 --- */
+/* Fixes "ghost" backgrounds, color bleeding on hover, and unwanted shadows */
+ripple,
+highlight,
+cursor-handle,
+selection,
+box.star,
+focus-ring,
+outline {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    border: none;
+    transition: none;
+    opacity: 0;
+}
+
+/* Fix for scrolling artifacts (Overshoot/Undershoot) */
+scrolledwindow undershoot,
+scrolledwindow overshoot {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    border: none;
+    min-height: 0;
+}
+
 /* --- GLOBAL: Kill GTK Focus/Selection Borders --- */
 *:focus,
 *:active,
