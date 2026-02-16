@@ -13,6 +13,7 @@ import GObject from "gi://GObject"
 import Pango from "gi://Pango?version=1.0"
 import appService from "../../core/AppService"
 import { drawSquircle } from "../common/DrawingUtils"
+import SquircleContainer from "../common/SquircleContainer"
 
 export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const notifd = AstalNotifd.get_default()
@@ -77,20 +78,38 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     })
     catcher.add_controller(clickGesture)
 
-    const mainBox = new Gtk.Box({
+    const contentBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        css_classes: ["control-center"],
-        width_request: 420, // Original Masterpiece 💎
-        hexpand: false, // BLOQUEO ESTRUCTURAL: No estirar horizontalmente 🛡️
-        halign: Gtk.Align.END,
-        valign: Gtk.Align.FILL,
-        vexpand: true,
-        margin_top: 8, // Symmetrical Harmony 💎
-        margin_end: 8,
-        margin_bottom: 8,
-        margin_start: 8
+        // css_classes: ["control-center-content"],
+        margin_top: 16,
+        margin_start: 16,
+        margin_end: 16,
+        margin_bottom: 16
     })
-    overlay.add_overlay(mainBox)
+
+    const ccContainer = SquircleContainer({
+        child: contentBox,
+        radius: 24,
+        css_classes: ["cc-panel-structure"], // Clean Structure Only 🏛️
+        hexpand: false,
+        vexpand: true,
+        color: { r: 0.07, g: 0.07, b: 0.11 }, // Dark Background #12121c 🌑
+        alpha: 0.6 // Increased opacity for better contrast
+    })
+
+    // Layout Properties (moved from Box to Container)
+    ccContainer.width_request = 420
+    ccContainer.halign = Gtk.Align.END
+    ccContainer.valign = Gtk.Align.FILL
+    ccContainer.margin_top = 8
+    ccContainer.margin_end = 8
+    ccContainer.margin_bottom = 8
+    ccContainer.margin_start = 8
+
+    overlay.add_overlay(ccContainer)
+
+    // Alias for compatibility with rest of the code that appends to mainBox
+    const mainBox = contentBox
 
     // Standard buttons and sliders will now correctly receive 
     // events as they are in the overlay layer above the catcher.
@@ -323,7 +342,23 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     grid.attach(pwrToggle.btn, 1, 1, 1, 1)
 
     /* --- Sliders --- */
-    const sliders = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 16, css_classes: ["cc-sliders"] })
+    const slidersContent = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 16,
+        css_classes: ["cc-sliders-content"],
+        margin_top: 16,
+        margin_start: 16,
+        margin_end: 16,
+        margin_bottom: 16
+    })
+
+    const sliders = SquircleContainer({
+        child: slidersContent,
+        radius: 20,
+        css_classes: ["cc-sliders-structure"], // Clean Structure Only 🎚️
+        color: { r: 0, g: 0, b: 0 },
+        alpha: 0.2
+    })
     topSection.append(sliders)
 
     const volScale = new Gtk.Scale({
@@ -355,8 +390,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         return row
     }
 
-    sliders.append(createSlider("audio-volume-high-symbolic", volScale))
-    sliders.append(createSlider("display-brightness-symbolic", brightScale))
+    slidersContent.append(createSlider("audio-volume-high-symbolic", volScale))
+    slidersContent.append(createSlider("display-brightness-symbolic", brightScale))
 
     const syncLevels = () => {
         execAsync("wpctl get-volume @DEFAULT_AUDIO_SINK@").then(out => {
@@ -409,10 +444,16 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
         mediaContainer.get_first_child()?.unparent()
 
-        const card = new Gtk.Box({ css_classes: ["cc-media-card"], orientation: Gtk.Orientation.VERTICAL, overflow: Gtk.Overflow.HIDDEN })
-
-        // Background Overlay for subtle depth
-        const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 16, css_classes: ["cc-media-content"] })
+        // Content (Inner Layout)
+        const content = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 16,
+            css_classes: ["cc-media-content"],
+            margin_top: 16,
+            margin_start: 16,
+            margin_end: 16,
+            margin_bottom: 16
+        })
 
         const topRow = new Gtk.Box({ spacing: 16 })
         const art = new Gtk.Box({ css_classes: ["cc-media-art"], valign: Gtk.Align.CENTER })
@@ -445,7 +486,15 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         ctrl.append(prev); ctrl.append(play); ctrl.append(next)
         content.append(ctrl)
 
-        card.append(content)
+        // Card Container (Squircle)
+        const card = SquircleContainer({
+            child: content,
+            radius: 20, // "Card" Style 🃏
+            css_classes: ["cc-media-card"],
+            color: { r: 0, g: 0, b: 0 },
+            alpha: 0.2 // Darker card background
+        })
+
         mediaContainer.append(card)
     }
     mpris.connect("notify::players", updateMedia)
@@ -459,7 +508,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         vexpand: true,
         hexpand: true, // Force full width 📏
         halign: Gtk.Align.FILL,
-        margin_top: 8 // Harmonized Section Separation 💎
+        margin_top: 24 // Harmonized with topSection spacing (24px) 💎
     })
     mainBox.append(notifSection)
 
@@ -546,11 +595,14 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         }
 
         notifHistory.forEach(n => {
-            const item = new Gtk.Box({
-                css_classes: ["nc-notif-item"],
+            const content = new Gtk.Box({
                 spacing: 16,
                 halign: Gtk.Align.FILL,
-                hexpand: true
+                hexpand: true,
+                margin_top: 16,
+                margin_start: 16,
+                margin_end: 16,
+                margin_bottom: 16
             })
             const iconBox = new Gtk.Box({ css_classes: ["nc-notif-icon-box"], valign: Gtk.Align.START })
 
@@ -598,13 +650,26 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
                 if (idx > -1) {
                     notifHistory.splice(idx, 1)
                     // Also try to dismiss from daemon if it exists
-                    const active = notifd.get_notification(n.id)
-                    if (active) active.dismiss()
+                    notifd.notifications.find(an => an.id === n.id)?.dismiss()
                     updateNotifs()
                 }
             })
 
-            item.append(iconBox); item.append(bodyBox); item.append(cls)
+            content.append(iconBox)
+            content.append(bodyBox)
+            content.append(cls)
+
+            // Wrap in Squircle "Card"
+            const item = SquircleContainer({
+                child: content,
+                radius: 20,
+                css_classes: ["nc-notif-item"],
+                hexpand: true,
+                color: { r: 0, g: 0, b: 0 },
+                alpha: 0.2, // Darker notification item background
+                hoverAlpha: 0.4 // Darker on hover (handled by Squircle, no CSS)
+            })
+
             notifList.append(item)
         })
     }

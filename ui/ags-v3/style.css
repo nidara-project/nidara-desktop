@@ -719,17 +719,21 @@ window.crystal-bar {
 }
 
 /* --- Main Panel (ONLY the inner box, NOT the window) --- */
+/* DistroIA UI Architect: Specificity Override (No !important) */
+.control-center-win box.control-center,
 .control-center-win .control-center,
 .control-center {
-  background-color: rgba(18, 18, 28, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 24px;
-  padding: 16px;
+  /* Background handled by SquircleContainer */
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
   /* Restored Structure 🏗️ */
   min-width: 420px;
   max-width: 420px;
   overflow: hidden;
-  box-shadow: none;
 }
 
 /* --- Section Titles --- */
@@ -743,46 +747,18 @@ window.crystal-bar {
   margin-left: 2px;
 }
 
-/* --- Quick Toggles Grid --- */
-window#crystal-control-center button.cc-toggle,
-window#crystal-control-center button.cc-toggle:focus {
-  background-color: rgba(255, 255, 255, 0.05);
-  background-image: none;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  padding: 10px;
-  min-height: 64px;
+/* --- Quick Toggles (Custom Drawing) --- */
+.cc-toggle-container {
+  background: none;
   box-shadow: none;
-  outline: none;
-  transition: all 0.2s ease;
+  border: none;
 }
 
-window#crystal-control-center button.cc-toggle:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.15);
-}
-
-window#crystal-control-center button.cc-toggle.active {
-  background-color: #3b82f6;
-  border-color: rgba(59, 130, 246, 0.4);
-}
-
-/* --- Toggle Icons (Centered) --- */
+/* Icons are now handled in the TSX layout */
 .cc-toggle-icon-box {
   background-color: rgba(255, 255, 255, 0.06);
   border-radius: 12px;
-  color: rgba(255, 255, 255, 0.6);
-  margin: 0;
-  /* Strict centering relying on GTK alignment */
-}
-
-window#crystal-control-center button.cc-toggle.active .cc-toggle-icon-box {
-  background-color: rgba(255, 255, 255, 0.2);
-  color: white;
-}
-
-.cc-toggle-content {
-  background: transparent;
+  color: rgba(255, 255, 255, 0.3);
 }
 
 .cc-toggle-label {
@@ -797,22 +773,30 @@ window#crystal-control-center button.cc-toggle.active .cc-toggle-icon-box {
   margin-top: 2px;
 }
 
-window#crystal-control-center button.cc-toggle.active .cc-toggle-sublabel {
-  color: rgba(255, 255, 255, 0.85);
+/* Active states handled by add_css_class in TSX */
+.active-text {
+  color: white;
 }
 
-.cc-toggle-icon {
-  font-size: 1.2em;
-  /* No margins to ensure perfect centering */
+.active-icon {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 12px;
+  /* Fix: Restore rounded corners in active state 🟢 */
 }
 
 /* --- Sliders (Brightness / Volume) --- */
+/* DistroIA UI Architect: Specificity Override (No !important) */
+.control-center-win box.cc-sliders,
 .cc-sliders {
-  background-color: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 20px;
-  padding: 8px 16px;
-  margin-top: 12px;
+  /* Background handled by SquircleContainer */
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  /* margin-top: 12px; REMOVED to rely on topSection spacing */
 }
 
 .cc-fixed-container {
@@ -869,17 +853,18 @@ scale slider {
 /* Separators removed at user request */
 /* --- Notification Items --- */
 .nc-notif-item {
-  background-color: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  padding: 16px;
+  /* Background handled by SquircleContainer */
+  background: none;
+  border: none;
+  box-shadow: none;
+  /* padding: 16px; -> Moved to TSX margin */
   margin: 0 0 12px 0;
   transition: all 0.2s ease;
 }
 
 .nc-notif-item:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.2);
+  /* Background & Radius handled by SquircleContainer JS 🛡️ */
 }
 
 .nc-notif-title {
@@ -999,6 +984,19 @@ scale slider {
   padding: 0;
 }
 
+/* --- Zero-Artifacts Protocol 🛡️ --- */
+.cc-scroll > viewport {
+  background-color: transparent;
+}
+
+.cc-scroll undershoot,
+.cc-scroll overshoot {
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+  min-height: 0;
+}
+
 /* --- Scrollbar Isolation (Auto-hide Hardened) --- */
 .cc-scroll scrollbar.vertical {
   background-color: transparent;
@@ -1038,14 +1036,15 @@ scale slider {
 
 /* --- Media Player --- */
 .cc-media {
-  margin-top: 12px;
+  /* margin-top: 12px; REMOVED to rely on topSection spacing */
 }
 
 .cc-media-card {
-  background-color: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 20px;
-  padding: 16px;
+  /* Background handled by SquircleContainer */
+  background: none;
+  border: none;
+  box-shadow: none;
+  /* padding: 16px; -> Moved to TSX */
 }
 
 .cc-media-art {
@@ -1125,39 +1124,7 @@ scale slider {
   -gtk-icon-shadow: none;
 }
 
-/* 💣 SPECIFICITY BOMB: Kill internal nodes with ID-based path */
-window#crystal-control-center button.cc-toggle > ripple,
-window#crystal-control-center button.cc-toggle > highlight,
-window#crystal-control-center button.cc-toggle:hover > ripple,
-window#crystal-control-center button.cc-toggle:hover > highlight,
-window#crystal-control-center button.cc-toggle:active > ripple,
-window#crystal-control-center button.cc-toggle:active > highlight,
-window#crystal-control-center button.cc-toggle:focus > ripple,
-window#crystal-control-center button.cc-toggle:focus > highlight,
-window#crystal-control-center button.cc-toggle > focus-ring,
-window#crystal-control-center button.cc-toggle > outline {
-  background-image: none;
-  background-color: transparent;
-  box-shadow: none;
-  opacity: 0;
-}
-
-/* 🧠 SKILL OFFICIAL SOLUTION: Kill button decoration & icon effects */
-.cc-toggle decoration,
-.cc-toggle:hover decoration,
-.cc-toggle:active decoration,
-.cc-toggle:focus decoration {
-  background: transparent;
-  box-shadow: none;
-  border: none;
-  transition: none;
-  -gtk-icon-effect: none;
-}
-
-.cc-toggle:hover {
-  background-color: rgba(255, 255, 255, 0.08);
-}
-
+/* Legacy button overrides removed */
 .cc-sink-item:hover {
   background-color: rgba(255, 255, 255, 0.08);
 }
