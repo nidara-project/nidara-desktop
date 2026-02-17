@@ -1,37 +1,1728 @@
-window {
-    background-color: transparent;
+/* 
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
+*/
+/* 
+   CRYSTAL UI - DESIGN TOKENS
+   Single source of truth for all design values
+*/
+/* 
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
+*/
+/* ==========================================================================
+   SYSTEM NEUTRALIZATION & NUCLEAR HACKS
+   GTK background/shadow/border/focus overrides for Layer Shell windows
+   ========================================================================== */
+/* --- GTK4 Internal Node Neutralization (Surgical Fix) 🧠 --- */
+/* Fixes "ghost" backgrounds, color bleeding on hover, and unwanted shadows */
+ripple,
+highlight,
+cursor-handle,
+selection,
+box.star,
+focus-ring,
+outline {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+  transition: none;
+  opacity: 0;
 }
 
-#dock-box {
-    background-color: rgba(20, 20, 20, 0.8);
-    border-radius: 20px;
-    padding: 10px;
-    margin-bottom: 20px; /* Floating effect */
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+/* Fix for scrolling artifacts (Overshoot/Undershoot) */
+scrolledwindow undershoot,
+scrolledwindow overshoot {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+  min-height: 0;
 }
 
-button {
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-    padding: 10px;
-    border-radius: 12px;
-    transition: all 0.2s ease-in-out;
+/* --- GLOBAL: Kill GTK Focus/Selection Borders --- */
+*:focus,
+*:active,
+*:checked {
+  outline: none;
+  outline-width: 0;
+  outline-style: none;
+  outline-color: transparent;
+  box-shadow: none;
 }
 
-button:hover {
-    background-color: rgba(255, 255, 255, 0.15);
-    transform: scale(1.1);
+button:focus,
+button:active,
+button:checked,
+togglebutton:focus,
+togglebutton:checked,
+modelbutton:focus {
+  outline: none;
+  outline-width: 0;
+  box-shadow: none;
+  border-color: transparent;
 }
 
-button:active {
-    background-color: rgba(255, 255, 255, 0.3);
-    transform: scale(0.95);
+/* --- GTK theme border killer --- */
+.cc-toggle:focus,
+.cc-toggle:active,
+.cc-toggle:checked,
+.bar-capsule:focus,
+.bar-capsule:active,
+.bar-res-item:focus,
+.bar-res-item:active,
+.bar-cockpit-btn:focus,
+.bar-ws-btn:focus,
+.bar-time-btn:focus,
+.bar-status-btn:focus,
+.bar-app-menu-btn:focus,
+.bar-tray-btn:focus {
+  outline: none;
+  outline-width: 0;
+  box-shadow: none;
+  border-color: rgba(255, 255, 255, 0.1);
 }
 
-.active-app {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-bottom: 2px solid #3584e4; 
-    border-radius: 12px; /* Re-apply radius to avoid square bottom from border */
+/* --- Dock Window Neutralization --- */
+#crystal-dock {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
 }
+
+.dock-window.fullscreen .cd-dock-container .dock-overlay .cd-bar {
+  background-color: transparent;
+  border: none;
+}
+
+/* --- ID Hierarchy Selectors --- */
+window#crystal-dock,
+window#crystal-dock > box#dock-main-container,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widget,
+window#crystal-dock > box#dock-main-container > overlay#dock-main-overlay > widget > box#the-dock-bar {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}
+
+/* --- Fullscreen Background Kill --- */
+window#crystal-dock,
+window#crystal-dock decoration,
+window#crystal-dock main {
+  background-color: rgba(0, 0, 0, 0);
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* --- Intermediate Container Kill --- */
+#crystal-dock #dock-main-container,
+#crystal-dock #dock-main-overlay,
+#crystal-dock .cd-dock-container,
+#crystal-dock .cd-main-overlay,
+#crystal-dock .cd-overlay,
+#crystal-dock #dock-drawing-area,
+#crystal-dock .cd-drawing-area,
+#crystal-dock #the-dock-bar,
+#crystal-dock .cd-dock-bar {
+  background-color: transparent;
+  background-image: none;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* --- Dock Item Contents Kill --- */
+.cd-item,
+.cd-item > contents,
+box.cd-item {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}
+
+/* --- App Grid Cleanup --- */
+.launcher-grid,
+.launcher-item,
+.app-item {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+/* --- Dock Window Final Cleanup --- */
+window#crystal-dock,
+window#crystal-dock.fullscreen,
+window#crystal-dock decoration,
+#crystal-dock,
+#crystal-dock.fullscreen {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}
+
+/* --- App Grid Window Cleanup --- */
+window#app-grid-window,
+.app-grid-window {
+  background-color: transparent;
+}
+
+/* --- Double Background Killer --- */
+#crystal-dock #crystal-dock-bg,
+.crystal-dock,
+window#crystal-dock box.crystal-dock {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+#crystal-dock #the-dock-bar,
+.cd-dock-bar {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* --- Atomic Window Neutralization --- */
+window#crystal-bar,
+window#crystal-control-center,
+window#crystal-app-launcher,
+window#crystal-power-menu,
+.control-center-win,
+.app-grid-window,
+.power-menu-win {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}
+
+window#crystal-bar decoration,
+window#crystal-bar main,
+window#crystal-control-center decoration,
+window#crystal-control-center main,
+window#crystal-app-launcher decoration,
+window#crystal-app-launcher main,
+window#crystal-power-menu decoration,
+window#crystal-power-menu main {
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* --- CC Window: Surgical transparency killer --- */
+window#crystal-control-center,
+window.control-center-win,
+window#crystal-control-center decoration,
+window.control-center-win decoration,
+window#crystal-control-center > box:not(.control-center),
+window#crystal-control-center overlay {
+  background-color: transparent;
+  background-image: none;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+/* Re-apply the actual panel background ONLY to .control-center box */
+window#crystal-control-center .control-center {
+  background-color: rgba(18, 18, 28, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  padding: 24px;
+  min-width: 420px;
+  box-shadow: none;
+}
+
+/* 
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
+*/
+/* ==========================================================================
+   CRYSTAL DOCK
+   Items, squircles, indicators, menus, separators
+   ========================================================================== */
+#the-dock-bar {
+  padding: 0;
+  min-height: 100px;
+  transform-origin: bottom;
+}
+
+.cd-item {
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  background-image: none;
+  transform-origin: bottom;
+  border: none;
+  box-shadow: none;
+  transition: background-color 200ms ease;
+  min-height: 100px;
+  min-width: 64px;
+  -gtk-icon-effect: none;
+  -gtk-icon-shadow: none;
+}
+
+/* 💣 SPECIFICITY BOMB: Kill internal nodes with ID-based path */
+window#crystal-dock box.cd-item > ripple,
+window#crystal-dock box.cd-item > highlight,
+window#crystal-dock box.cd-item:hover > ripple,
+window#crystal-dock box.cd-item:hover > highlight,
+window#crystal-dock box.cd-item:active > ripple,
+window#crystal-dock box.cd-item:active > highlight,
+window#crystal-dock box.cd-item:focus > ripple,
+window#crystal-dock box.cd-item:focus > highlight,
+window#crystal-dock box.cd-item > outline,
+window#crystal-dock box.cd-item > focus-ring {
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+  opacity: 0;
+}
+
+/* 🛑 STOP THE BLEED: Kill internal nodes specifically for dock items */
+.cd-item > ripple,
+.cd-item > highlight,
+.cd-item:hover > ripple,
+.cd-item:hover > highlight,
+.cd-item:active > ripple,
+.cd-item:active > highlight,
+.cd-item:focus > ripple,
+.cd-item:focus > highlight {
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+  opacity: 0;
+}
+
+/* 🧠 SKILL OFFICIAL SOLUTION: Kill button decoration & icon effects */
+.cd-item decoration,
+.cd-item:hover decoration,
+.cd-item:active decoration,
+.cd-item:focus decoration {
+  background: transparent;
+  box-shadow: none;
+  border: none;
+  transition: none;
+  -gtk-icon-effect: none;
+}
+
+.cd-item:hover {
+  background-color: transparent;
+  padding: 0;
+  margin: 0;
+  transition: none;
+}
+
+.cd-revealer {
+  background-color: transparent;
+  padding: 0;
+  margin: 0;
+  transition: none;
+}
+
+.cd-item:hover {
+  background-color: transparent;
+}
+
+/* Drag Gap */
+window#crystal-dock box.cd-drag-gap,
+.cd-drag-gap {
+  margin-left: 72px;
+  transition: margin-left 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+/* Transition Override */
+.cd-item {
+  transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1);
+  margin-left: 0px;
+}
+
+.cd-item:hover {
+  background-color: transparent;
+  box-shadow: none;
+  outline: none;
+  background-image: none;
+}
+
+.cd-icon-container {
+  margin: 0;
+  padding: 0;
+  background-color: transparent;
+  transition: none;
+}
+
+/* --- Squircle Icon Plates --- */
+window#crystal-dock box.cd-squircle-plate {
+  background-color: #ffffff;
+  /* V411: Reverted - Visible by default */
+  border-radius: 28%;
+  min-width: 32px;
+  min-height: 32px;
+  margin: 0;
+  padding: 0;
+  opacity: 1;
+  box-shadow: none;
+  border: none;
+}
+
+/* V411: KILL ALL RIPPLES INSIDE PLATE */
+window#crystal-dock box.cd-squircle-plate > ripple,
+window#crystal-dock box.cd-squircle-plate > highlight,
+window#crystal-dock box.cd-squircle-plate > focus-ring,
+window#crystal-dock box.cd-squircle-plate > outline,
+window#crystal-dock box.cd-squircle-plate:focus > ripple,
+window#crystal-dock box.cd-squircle-plate:hover > ripple,
+window#crystal-dock box.cd-squircle-plate:active > ripple {
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+  opacity: 0;
+  -gtk-icon-effect: none;
+}
+
+window#crystal-dock box.cd-squircle-plate image,
+window#crystal-dock box.cd-squircle-plate widget,
+window#crystal-dock box.cd-squircle-plate drawingarea {
+  box-shadow: none;
+  -gtk-icon-shadow: none;
+  border: none;
+  background: none;
+}
+
+window#crystal-dock box.cd-squircle-plate.show-bg {
+  background-color: #ffffff;
+  /* Explicit hover state */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  /* Optional: add explicit shadow on hover */
+}
+
+/* Removed ineffective specificity fixes */
+/* --- Dock Menu --- */
+.cd-menu-action {
+  min-width: 160px;
+  padding: 8px 12px;
+  margin: 0;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+
+popover.cd-popover contents {
+  background-color: var(--window-bg-color);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+}
+
+button.cd-menu-action {
+  background: transparent;
+  color: var(--window-fg-color);
+  border-radius: 10px;
+  padding: 10px 16px;
+  transition: all 0.2s ease;
+}
+
+button.cd-menu-action:hover {
+  background-color: var(--view-selected-bg-color);
+  color: white;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+/* --- Indicators (Dots) --- */
+window#crystal-dock button.cd-dot,
+window#crystal-dock box.cd-dot {
+  min-height: 5px;
+  min-width: 5px;
+  border-radius: 50%;
+  margin-top: 4px;
+  background-color: transparent;
+  transition: all 0.2s ease;
+}
+
+window#crystal-dock box.cd-dot.open,
+window#crystal-dock box.cd-dot.focused {
+  background-color: rgba(255, 255, 255, 0.5);
+  box-shadow: none;
+  border: none;
+  opacity: 1;
+  min-height: 5px;
+  min-width: 5px;
+}
+
+/* --- Separator --- */
+window#crystal-dock box.cd-separator,
+window#crystal-dock box#cd-separator {
+  min-height: 48px;
+  min-width: 2px;
+  background-color: rgba(255, 255, 255, 0.4);
+  margin: 0 10px;
+  box-shadow: none;
+  border-radius: 1px;
+}
+
+/* --- Hover Shadow Killer --- */
+window#crystal-dock .cd-item:hover,
+window#crystal-dock .cd-squircle-plate:hover {
+  box-shadow: none;
+  -gtk-icon-shadow: none;
+  filter: none;
+}
+
+/* --- Menu Layout --- */
+.cd-menu-separator {
+  min-height: 1px;
+  margin: 6px 4px;
+  background-color: rgba(255, 255, 255, 0.12);
+}
+
+.cd-menu-action {
+  padding: 8px 12px;
+  border-radius: 8px;
+  min-width: 140px;
+  margin-bottom: 2px;
+  background: transparent;
+  transition: background-color 0.2s;
+}
+
+.cd-menu-action:hover {
+  background-color: var(--view-selected-bg-color);
+  color: white;
+}
+
+.cd-menu-header {
+  padding: 8px 12px;
+  margin-bottom: 4px;
+  font-size: 0.9em;
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* --- Launcher Icon Visibility --- */
+#cd-icon-box-launcher image {
+  color: #ffffff;
+  -gtk-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+}
+
+/* 
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
+*/
+/* ==========================================================================
+   CRYSTAL BAR - STITCH FIDELITY (Pills, Dots & Cairo Circles)
+   ========================================================================== */
+/* --- Focus Kill --- */
+* {
+  outline-width: 0;
+  outline-color: transparent;
+  box-shadow: none;
+}
+
+window#crystal-bar,
+window.crystal-bar {
+  background: transparent;
+  padding: 0;
+  margin: 0;
+}
+
+/* --- Centerbox --- */
+.bar-centerbox {
+  background-color: transparent;
+  border: none;
+  margin-top: 8px;
+  /* INTERNAL TOP MARGIN */
+}
+
+/* --- Left/Center/Right capsules --- */
+.bar-left,
+.bar-center,
+.bar-right {
+  background: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+}
+
+.bar-left {
+  /* margin-left: 8px; REMOVED - Handled in TSX */
+}
+
+.bar-right {
+  /* margin-right: 8px; REMOVED - Handled in TSX */
+}
+
+/* --- Global Bar Button Reset --- */
+.bar-left button,
+.bar-center button,
+.bar-right button,
+.bar-tray-btn,
+.bar-ws-btn,
+.workspace-dot {
+  background: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* Re-apply dot color since I just made it transparent above */
+.workspace-dot {
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.bar-tray-btn {
+  padding: 0 4px;
+}
+
+/* --- Workspace Dots (Stitch Style) --- */
+.bar-workspaces {
+  background: none;
+  background-color: transparent;
+  border: none;
+  padding: 0 4px;
+}
+
+.bar-ws-btn {
+  background: transparent;
+  border: none;
+}
+
+.workspace-dot {
+  min-width: 6px;
+  min-height: 6px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.2);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.workspace-dot.occupied {
+  background-color: rgba(175, 82, 222, 0.6);
+}
+
+.workspace-dot.active {
+  min-width: 18px;
+  border-radius: 4px;
+  background-color: #af52de;
+}
+
+.workspace-dot.empty {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+
+/* --- Resource Circles (Cairo) --- */
+.resource-circle {
+  min-width: 24px;
+  min-height: 24px;
+}
+
+.resource-canvas {
+  /* Background circle logic handled in Cairo, but we can set opacity here */
+}
+
+.resource-label {
+  font-size: 10px;
+  font-weight: 900;
+  color: white;
+  margin-bottom: 1px;
+  /* Optical centering */
+}
+
+.resource-label-cpu {
+  color: #af52de;
+}
+
+.resource-label-media,
+.resource-label-memory {
+  color: #3b82f6;
+}
+
+/* --- Time Module --- */
+.bar-time-btn {
+  background: transparent;
+  border: none;
+  padding: 0 8px;
+  color: white;
+  font-weight: 500;
+}
+
+/* .bar-app-menu removed - handled by SquircleContainer */
+.bar-app-sep {
+  background: rgba(255, 255, 255, 0.1);
+  min-width: 1px;
+  margin: 0 4px;
+}
+
+/* 
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
+*/
+/* ==========================================================================
+   CONTROL CENTER & NOTIFICATIONS
+   Based on Stitch "Refined Notification Center" designs
+   ========================================================================== */
+/* --- Panel Structure (SquircleContainer Wrapper) --- */
+.cc-panel-structure {
+  /* Shadow applied to the Grid wrapper */
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25);
+  /* Slightly darker for depth */
+  /* Background moved to CSS for perfect shadow alignment */
+  background-color: rgba(18, 18, 28, 0.7);
+  /* Deep Space #12121c @ 70% */
+  /* Border moved to CSS - Use specific color to avoid mismatch */
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  /* Radius needed for shadow shape, even if background is Cairo */
+  border-radius: 24px;
+  /* FLICKER/GHOST FIX: Clip background to border */
+  background-clip: padding-box;
+  /* Ensure no extra outlines from GTK theme */
+  outline: none;
+}
+
+.control-center-win,
+.notification-center-win {
+  background-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* NUCLEAR TRANSPARENCY 💎 */
+window#crystal-control-center,
+window[name=crystal-control-center],
+window.control-center-win {
+  background-color: transparent !important;
+  background-image: none !important;
+  border-style: none !important;
+  box-shadow: none !important;
+  outline-style: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+window.control-center-win decoration,
+window.control-center-win > box,
+window.control-center-win > box > widget {
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Hide ALL scale sub-nodes to prevent clipping/straight-edges 🛡️ */
+.cc-slider-structure scale {
+  all: unset;
+  background: transparent !important;
+}
+.cc-slider-structure scale contents,
+.cc-slider-structure scale trough,
+.cc-slider-structure scale highlight,
+.cc-slider-structure scale slider {
+  all: unset;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* --- Main Panel (ONLY the inner box, NOT the window) --- */
+/* DistroIA UI Architect: Specificity Override (No !important) */
+.control-center-win box.control-center,
+.control-center-win .control-center,
+.control-center {
+  /* Background handled by SquircleContainer */
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  /* Restored Structure 🏗️ */
+  min-width: 420px;
+  max-width: 420px;
+  overflow: hidden;
+}
+
+/* --- Sliders Section --- */
+.cc-sliders-row,
+.cc-sliders-column,
+.cc-slider-structure,
+.cc-slider-overlay {
+  overflow: visible !important;
+}
+
+/* Hide ALL scale sub-nodes BROADLY (Nuclear Fix) 🛡️ */
+.cc-slider-structure scale,
+scale.cc-slider-scale-input,
+scale.cc-slider-scale-input > * {
+  all: unset;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  opacity: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: transparent !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+.cc-slider-structure scale contents,
+.cc-slider-structure scale trough,
+.cc-slider-structure scale highlight,
+.cc-slider-structure scale slider,
+.cc-slider-structure scale fill,
+.cc-slider-structure scale marks,
+.cc-slider-structure scale value,
+scale.cc-slider-scale-input contents,
+scale.cc-slider-scale-input trough,
+scale.cc-slider-scale-input highlight,
+scale.cc-slider-scale-input slider,
+scale.cc-slider-scale-input fill,
+scale.cc-slider-scale-input marks,
+scale.cc-slider-scale-input value,
+scale.cc-slider-scale-input > * contents,
+scale.cc-slider-scale-input > * trough,
+scale.cc-slider-scale-input > * highlight,
+scale.cc-slider-scale-input > * slider,
+scale.cc-slider-scale-input > * fill,
+scale.cc-slider-scale-input > * marks,
+scale.cc-slider-scale-input > * value {
+  all: unset !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  opacity: 0 !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  min-height: 0 !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  color: transparent !important;
+}
+
+/* Icons are now handled in the TSX layout */
+.cc-toggle-icon-box {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.cc-toggle-label {
+  font-weight: 600;
+  font-size: 0.95em;
+  color: white;
+}
+
+.cc-toggle-sublabel {
+  font-size: 0.8em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 2px;
+}
+
+/* Active states handled by add_css_class in TSX */
+.active-text {
+  color: white;
+}
+
+.active-icon {
+  background-color: rgba(255, 255, 255, 0.2);
+  color: white;
+  border-radius: 12px;
+  /* Fix: Restore rounded corners in active state 🟢 */
+}
+
+/* --- Sliders (Brightness / Volume) --- */
+/* DistroIA UI Architect: Specificity Override (No !important) */
+.control-center-win box.cc-sliders,
+.cc-sliders {
+  /* Background handled by SquircleContainer */
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  /* margin-top: 12px; REMOVED to rely on topSection spacing */
+}
+
+.cc-fixed-container {
+  margin: 0 8px;
+  /* XL symmetry with reduced 8px margins */
+}
+
+/* --- Unified Overlay Sliders (Apple Style) --- */
+.cc-slider-overlay {
+  margin: 4px 0;
+}
+
+/* --- Bulletproof Sliders (Input Only) --- */
+scale.cc-slider-scale-input {
+  all: unset;
+  min-height: 48px;
+  background: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: transparent;
+}
+scale.cc-slider-scale-input trough,
+scale.cc-slider-scale-input highlight,
+scale.cc-slider-scale-input slider {
+  all: unset;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  min-height: 48px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  transition: none !important;
+  animation: none !important;
+}
+
+.cc-slider-icon {
+  color: #12121c;
+  /* Dark icon on white fill (when full) - Dynamic color is hard in CSS only */
+  /* Use a mix-blend-mode or just keep it dark/light based on preference */
+  color: rgba(0, 0, 0, 0.8);
+  font-weight: 900;
+}
+
+/* --- Notifications Section --- */
+.cc-notifs-section {
+  margin-top: 16px;
+}
+
+.cc-notifs-header {
+  margin-bottom: 8px;
+}
+
+.cc-notifs-title {
+  font-size: 0.75em;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+}
+
+/* Separators removed at user request */
+/* --- Notification Items --- */
+.nc-notif-item {
+  /* Background handled by SquircleContainer */
+  background: none;
+  border: none;
+  box-shadow: none;
+  /* padding: 16px; -> Moved to TSX margin */
+  margin: 0 0 12px 0;
+  transition: all 0.2s ease;
+}
+
+.nc-notif-item:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  /* Background & Radius handled by SquircleContainer JS 🛡️ */
+}
+
+.nc-notif-title {
+  color: white;
+  font-weight: 600;
+  font-size: 0.9em;
+}
+
+.nc-notif-body {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.85em;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.nc-notif-separator {
+  background-color: rgba(255, 255, 255, 0.04);
+  margin: 4px 0;
+}
+
+/* --- Notification Card (Popup) --- */
+.notif-card {
+  background-color: rgba(18, 18, 28, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 18px;
+  min-width: 380px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.notif-close-btn,
+.nc-notif-close {
+  background-color: rgba(255, 255, 255, 0.06);
+  border-radius: 50%;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  color: rgba(255, 255, 255, 0.5);
+  transition: all 0.2s ease;
+}
+
+.notif-close-btn:hover,
+.nc-notif-close:hover {
+  background-color: rgba(255, 59, 48, 0.3);
+  color: #ff6961;
+}
+
+.notif-app-name {
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-size: 0.75em;
+  font-weight: 600;
+}
+
+.notif-summary {
+  color: white;
+  font-weight: 600;
+}
+
+.notif-body {
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.9em;
+}
+
+/* --- Notifications Section (Structural Fix) --- */
+.cc-notifs-section {
+  margin-top: 24px;
+  /* This container holds the fixed header AND the scrollable list */
+}
+
+.cc-notifs-header {
+  margin-bottom: 12px;
+  padding: 0;
+  margin: 0 0 12px 0;
+  /* Zero margin to align with Toggles/Cards 📏 */
+}
+
+.cc-section-title {
+  font-size: 0.85em;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 2px;
+}
+
+.cc-clear-btn {
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 8px;
+  padding: 6px 14px;
+  color: #3395ff;
+  font-size: 0.8em;
+  font-weight: 700;
+  transition: all 0.2s;
+  box-shadow: none;
+  outline: none;
+}
+
+.cc-clear-btn:hover {
+  background-color: rgba(51, 149, 255, 0.15);
+  border-color: rgba(51, 149, 255, 0.3);
+  color: #55aaff;
+}
+
+.cc-scroll {
+  /* Expanding naturally via TSX vexpand property */
+  background: transparent;
+  border: none;
+  /* No phantom borders */
+  padding: 0;
+  margin: 0;
+}
+
+.cc-notifications-list {
+  margin: 0;
+  padding: 0;
+}
+
+/* --- Zero-Artifacts Protocol 🛡️ --- */
+.cc-scroll > viewport {
+  background-color: transparent;
+}
+
+.cc-scroll undershoot,
+.cc-scroll overshoot {
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+  min-height: 0;
+}
+
+/* --- Scrollbar Isolation (Auto-hide Hardened) --- */
+.cc-scroll scrollbar.vertical {
+  background-color: transparent;
+  border: none;
+  min-width: 0;
+  margin: 0;
+}
+
+/* Hide the track background completely */
+.cc-scroll scrollbar.vertical contents,
+.cc-scroll scrollbar.vertical trough {
+  background: transparent;
+  border: none;
+  min-width: 0;
+}
+
+.cc-scroll scrollbar.vertical slider {
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  min-width: 6px;
+  /* Constant width 📏 */
+  min-height: 48px;
+  margin: 0;
+  transition: background-color 0.2s ease;
+}
+
+.cc-scroll scrollbar.vertical slider:hover {
+  background-color: rgba(255, 255, 255, 0.3);
+  /* No distinct width change to prevent layout shifts */
+}
+
+.cc-notifs-empty {
+  color: rgba(255, 255, 255, 0.25);
+  font-size: 0.9em;
+  font-style: italic;
+}
+
+/* --- Media Player --- */
+.cc-media {
+  /* margin-top: 12px; REMOVED to rely on topSection spacing */
+}
+
+.cc-media-card {
+  /* Background handled by SquircleContainer */
+  background: none;
+  border: none;
+  box-shadow: none;
+  /* padding: 16px; -> Moved to TSX */
+}
+
+.cc-media-art {
+  background-color: rgba(255, 255, 255, 0.04);
+  border-radius: 12px;
+}
+
+.cc-media-art-img {
+  border-radius: 12px;
+}
+
+.cc-media-title {
+  color: white;
+  font-weight: 700;
+  font-size: 0.95em;
+}
+
+.cc-media-artist {
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.8em;
+}
+
+.cc-media-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: white;
+  border-radius: 50%;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: none;
+  outline: none;
+  margin: 0;
+}
+
+.cc-media-btn:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: scale(1.05);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.cc-media-btn:focus,
+.cc-media-btn:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* --- Section Titles --- */
+.cc-section-title {
+  font-size: 0.75em;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 12px;
+  margin-left: 2px;
+}
+
+/* --- Audio Sinks --- */
+.cc-audio-sinks {
+  margin-bottom: 12px;
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 16px;
+  padding: 14px;
+}
+
+.cc-sink-item {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: transparent;
+  transition: all 0.2s ease;
+  -gtk-icon-effect: none;
+  -gtk-icon-shadow: none;
+}
+
+/* Legacy button overrides removed */
+.cc-sink-item:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.cc-sink-item.active {
+  background-color: rgba(0, 122, 255, 0.15);
+  border: 1px solid rgba(0, 122, 255, 0.25);
+}
+
+.cc-sink-item label {
+  font-size: 0.9em;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* --- Fixed Container (Layout Stabilizer) --- */
+.cc-fixed-container {
+  margin: 0;
+  padding: 0;
+  /* This explicit reset was the key fix confirmed by user 🔑 */
+}
+
+/* --- Window Transparency Fix (NUCLEAR OPTION ☢️) --- */
+window.control-center-win,
+window.control-center-win > decoration,
+window.control-center-win > box,
+window.control-center-win > widget {
+  background: none !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+}
+
+/* 
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
+*/
+/* ==========================================================================
+   APP GRID
+   Based on Stitch "Spotlight-style App Launcher" design
+   ========================================================================== */
+/* --- Window & Overlay --- */
+window#app-grid-window,
+window.app-grid-window {
+  background-color: transparent;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+#app-grid-overlay,
+.app-grid-catcher {
+  background-color: transparent;
+  background: none;
+  border: none;
+  box-shadow: none;
+}
+
+/* --- Main Card (Spotlight Panel) --- */
+#crystal-app-launcher #app-grid-content,
+window#crystal-app-launcher #app-grid-content,
+.app-grid-window #app-grid-content,
+.app-grid-content {
+  background-color: rgba(245, 245, 250, 0.95);
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 24px;
+  padding: 32px 40px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.35), 0 0 1px rgba(0, 0, 0, 0.2);
+  min-width: 600px;
+}
+
+/* --- Search Bar --- */
+.app-grid-search {
+  background-color: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 0;
+  color: rgba(0, 0, 0, 0.85);
+  padding: 12px 8px;
+  font-size: 1.2em;
+  font-weight: 300;
+  caret-color: #007aff;
+  transition: all 0.2s ease;
+  box-shadow: none;
+}
+
+.app-grid-search:focus {
+  background-color: transparent;
+  border-color: rgba(0, 122, 255, 0.3);
+  box-shadow: none;
+}
+
+/* Placeholder text */
+.app-grid-search-placeholder {
+  color: rgba(0, 0, 0, 0.35);
+  font-weight: 300;
+}
+
+/* --- Section Labels --- */
+.app-grid-section-title {
+  font-size: 0.7em;
+  font-weight: 700;
+  color: rgba(0, 0, 0, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin: 16px 0 8px 4px;
+}
+
+/* --- Scroll & Layout --- */
+.app-grid-scroll,
+.app-grid-flow,
+.app-grid-scroll viewport,
+.app-grid-scroll scrollbar,
+.app-grid-scroll undershoot,
+.app-grid-scroll overshoot {
+  background-color: transparent;
+  background: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+/* --- App Items --- */
+.app-grid-item {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.app-grid-button {
+  background: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 16px;
+  padding: 10px;
+  transition: all 0.2s ease;
+}
+
+.app-grid-button:hover {
+  background-color: rgba(0, 122, 255, 0.08);
+}
+
+.app-grid-icon {
+  border-radius: 22%;
+}
+
+.app-grid-label {
+  color: rgba(0, 0, 0, 0.7);
+  font-size: 0.8em;
+  font-weight: 500;
+  margin-top: 6px;
+}
+
+/* --- FlowBox Neutralization --- */
+flowboxchild {
+  background: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+flowboxchild:selected,
+flowboxchild:active,
+flowboxchild:hover {
+  background: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+/* --- System Action Strip --- */
+.system-action-strip {
+  background: rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  border-radius: 100px;
+  padding: 4px 10px;
+  margin-top: 12px;
+}
+
+.system-action-btn {
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  min-width: 40px;
+  min-height: 40px;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.system-action-btn:hover {
+  background: rgba(0, 122, 255, 0.1);
+  color: #007aff;
+  transform: scale(1.08);
+}
+
+/* ==========================================================================
+   WORKSPACE COCKPIT
+   ========================================================================== */
+/* --- Window --- */
+window.workspace-cockpit {
+  background: transparent;
+  box-shadow: none;
+}
+
+.cockpit-window-content {
+  padding-top: 100px;
+  padding-bottom: 250px;
+  background: transparent;
+}
+
+/* --- Search Bar --- */
+.cockpit-search-box {
+  margin-bottom: 20px;
+}
+
+.cockpit-search {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 14px;
+  padding: 10px 20px;
+  color: white;
+  font-size: 16px;
+  transition: all 0.2s ease;
+}
+.cockpit-search:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.3);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.05);
+}
+
+/* --- Overview Panel --- */
+.workspace-overview {
+  background: #0c0c0c;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 32px;
+  padding: 32px;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95);
+}
+
+/* --- Workspace Items --- */
+.wo-item {
+  padding: 16px;
+  border-radius: 24px;
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.wo-item.active {
+  background-color: rgba(0, 122, 255, 0.05);
+  border: 1px solid rgba(0, 122, 255, 0.6);
+  box-shadow: 0 0 60px rgba(0, 122, 255, 0.25);
+}
+
+.bar-ws-dot {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.bar-ws-dot.active {
+  background-color: #007aff;
+  box-shadow: 0 0 10px rgba(0, 122, 255, 0.5);
+}
+.bar-ws-dot.occupied {
+  background-color: rgba(255, 255, 255, 0.5);
+}
+
+/* --- Buttons --- */
+.wo-btn {
+  background: transparent;
+  border: none;
+  padding: 0;
+  border-radius: 24px;
+  outline: none;
+  box-shadow: none;
+}
+
+.wo-btn:focus,
+.wo-btn:active {
+  outline: none;
+  box-shadow: none;
+  border: none;
+}
+
+.wo-btn:hover .wo-item {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-6px);
+}
+
+.wo-btn:hover .wo-item.active {
+  background-color: rgba(0, 122, 255, 0.08);
+  border-color: rgba(0, 122, 255, 0.8);
+  box-shadow: 0 0 60px rgba(0, 122, 255, 0.35);
+}
+
+/* --- Labels --- */
+.wo-label {
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 2px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.wo-label.active {
+  color: #007aff;
+  text-shadow: 0 0 15px rgba(0, 122, 255, 0.8);
+}
+
+/* --- Reserved Areas --- */
+.wo-reserved-area {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+}
+.wo-reserved-area.bar {
+  border-radius: 0 0 12px 12px;
+}
+.wo-reserved-area.dock {
+  border-radius: 12px 12px 0 0;
+}
+
+/* --- Schematic Preview --- */
+.wo-schematic-win {
+  background-color: rgba(255, 255, 255, 0.2);
+  border: 1.5px solid rgba(255, 255, 255, 0.8);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.wo-schematic-win image {
+  margin: 0;
+  padding: 0;
+  -gtk-icon-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.wo-count {
+  font-size: 14px;
+  font-weight: 200;
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.wo-schematic-preview {
+  background-color: rgba(0, 0, 0, 0.7);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 20px 40px rgba(0, 0, 0, 0.5);
+}
+
+.wo-schematic-win-icon {
+  opacity: 0.85;
+  filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
+}
+
+/* --- Workspace Preview Popover 🖼️ --- */
+.ws-preview-popover {
+  background-color: rgba(0, 0, 0, 0.4);
+  /* backdrop-filter: blur(12px); REMOVED: Invalid GTK Prop */
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+}
+
+.ws-preview-popover contents {
+  background: transparent;
+  padding: 0px;
+  border: none;
+  box-shadow: none;
+}
+
+.ws-preview-popover-box {
+  padding: 12px;
+}
+
+.ws-preview-title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 6px;
+}
+
+/* Cockpit Window Duplicate Safety */
+window.workspace-cockpit {
+  background: transparent;
+}
+
+/* ==========================================================================
+   POWER MENU
+   Based on Stitch "Minimalist Power Menu" design
+   ========================================================================== */
+.power-menu-win {
+  background-color: transparent;
+}
+
+.power-main-box {
+  background-color: rgba(22, 22, 32, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 28px;
+  padding: 48px 64px;
+  box-shadow: 0 40px 100px rgba(0, 0, 0, 0.7);
+}
+
+/* --- User Greeting --- */
+.power-header {
+  font-size: 2.4em;
+  font-weight: 300;
+  color: white;
+  margin-bottom: 4px;
+}
+
+.power-header-accent {
+  color: #4cd964;
+  font-weight: 500;
+}
+
+.power-uptime {
+  font-size: 0.85em;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-top: 8px;
+}
+
+/* --- Action Buttons --- */
+.power-action-box {
+  margin: 40px 0 20px;
+}
+
+.power-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  padding: 0;
+  min-width: 72px;
+  min-height: 72px;
+  transition: all 0.3s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.power-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  transform: scale(1.08);
+}
+
+.power-btn-icon {
+  font-size: 1.4em;
+  color: white;
+}
+
+.power-btn.shutdown:hover {
+  background-color: rgba(255, 59, 48, 0.25);
+  border-color: rgba(255, 59, 48, 0.5);
+}
+
+.power-btn.reboot:hover {
+  background-color: rgba(52, 199, 89, 0.25);
+  border-color: rgba(52, 199, 89, 0.5);
+}
+
+.power-btn.logout:hover {
+  background-color: rgba(0, 122, 255, 0.25);
+  border-color: rgba(0, 122, 255, 0.5);
+}
+
+.power-btn.lock:hover {
+  background-color: rgba(175, 82, 222, 0.25);
+  border-color: rgba(175, 82, 222, 0.5);
+}
+
+.power-btn-label {
+  font-size: 0.8em;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.6);
+  margin-top: 8px;
+}
+
+/* --- Cancel --- */
+.power-cancel-btn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 100px;
+  padding: 8px 28px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 0.85em;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  transition: all 0.2s;
+}
+
+.power-cancel-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.25);
+  color: white;
+}
+
+/*# sourceMappingURL=style.css.map */

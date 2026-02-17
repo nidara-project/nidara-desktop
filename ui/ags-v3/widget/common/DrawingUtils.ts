@@ -10,7 +10,8 @@ export const drawSquircle = (
     enableGloss: boolean = false,
     color: { r: number, g: number, b: number } = { r: 1, g: 1, b: 1 }, // Default to white
     cornerRadius?: number, // New parameter for fixed radius
-    perfect: boolean = false // New parameter for geometric pill
+    perfect: boolean = false, // New parameter for geometric pill
+    borderColor?: { r: number, g: number, b: number, a: number } // New: Custom Border
 ) => {
     if (width <= 0 || height <= 0) return
 
@@ -40,14 +41,27 @@ export const drawSquircle = (
 
         if (perfect) {
             // GEOMETRIC PILL 💊 (Standard Arcs)
-            const r_eff = Math.max(0, r + d) // Adjust radius for expanding border
-            const safe_r = Math.min(r_eff, Math.min(drawW, drawH) / 2)
+            // V461: Added 1px inset (marginX=1, marginY=1) to prevent edge clipping
+            const insX = 1
+            const insY = 1
+            const r_eff = Math.max(0, r + d)
+            const safe_r = Math.min(r_eff, Math.min(drawW - insX * 2, drawH - insY * 2) / 2)
 
-            // Standard Rounded Rect
-            cr.arc(x + drawW - safe_r, y + safe_r, safe_r, -Math.PI / 2, 0)
-            cr.arc(x + drawW - safe_r, y + drawH - safe_r, safe_r, 0, Math.PI / 2)
-            cr.arc(x + safe_r, y + drawH - safe_r, safe_r, Math.PI / 2, Math.PI)
-            cr.arc(x + safe_r, y + safe_r, safe_r, Math.PI, 3 * Math.PI / 2)
+            const x1 = x + insX
+            const y1 = y + insY
+            const w1 = drawW - insX * 2
+            const h1 = drawH - insY * 2
+
+            // Standard Rounded Rect with explicit lineTo for robustness 🛡️
+            // V462: Standard Order TR -> BR -> BL -> TL
+            cr.arc(x1 + w1 - safe_r, y1 + safe_r, safe_r, -Math.PI / 2, 0) // TR
+            cr.lineTo(x1 + w1, y1 + h1 - safe_r)
+            cr.arc(x1 + w1 - safe_r, y1 + h1 - safe_r, safe_r, 0, Math.PI / 2) // BR
+            cr.lineTo(x1 + safe_r, y1 + h1)
+            cr.arc(x1 + safe_r, y1 + h1 - safe_r, safe_r, Math.PI / 2, Math.PI) // BL
+            cr.lineTo(x1, y1 + safe_r)
+            cr.arc(x1 + safe_r, y1 + safe_r, safe_r, Math.PI, 3 * Math.PI / 2) // TL
+            cr.lineTo(x1 + w1 - safe_r, y1)
         } else {
             // SQUIRCLE (Superellipse)
             const rd = Math.max(0, r + d)
@@ -113,8 +127,16 @@ export const drawSquircle = (
     }
     cr.fill()
 
-    // 2. SUBTLE BORDER (The "3D Edge")
-    if (enableGloss) {
+    // 2. BORDER (Custom or Gloss)
+    if (borderColor) {
+        path() // default d=0, maybe strict border?
+        // Stitch suggested 0.5px, but Cairo often renders <1px poorly without careful alignment. 
+        // 1px is safer.
+        cr.setLineWidth(1)
+        cr.setSourceRGBA(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
+        cr.stroke()
+    } else if (enableGloss) {
+        // Legacy Gloss Border
         path()
         const borderPat = new Cairo.LinearGradient(x, y, x, y + drawH)
         borderPat.addColorStopRGBA(0, 1, 1, 1, 0.4)   // Top Edge: Highlight

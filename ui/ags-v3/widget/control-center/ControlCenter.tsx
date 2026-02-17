@@ -6,6 +6,7 @@ import AstalNetwork from "gi://AstalNetwork"
 import AstalBluetooth from "gi://AstalBluetooth"
 import AstalNotifd from "gi://AstalNotifd"
 import AstalWp from "gi://AstalWp" // Standard architecture 🏛️
+import GdkPixbuf from "gi://GdkPixbuf"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import GObject from "gi://GObject"
@@ -61,6 +62,17 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         hexpand: true,
         vexpand: true
     })
+
+    // SACRIFICIAL WIDGET ⚔️ (Global Root)
+    // We add a dummy 1x1 transparent box as the first overlay child.
+    overlay.add_overlay(new Gtk.Box({
+        width_request: 1,
+        height_request: 1,
+        can_target: false,
+        opacity: 0,
+        css_classes: ["sacrificial-widget"]
+    }))
+
     win.set_child(overlay)
 
     // Transparent background catcher
@@ -87,18 +99,18 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         margin_bottom: 16
     })
 
-    const ccContainer = SquircleContainer({
-        child: contentBox,
-        radius: 24,
+    // Fix: "Ghost" Border Artifacts 👻
+    // Replaced SquircleContainer (Cairo) with standard Box (CSS).
+    // The .cc-panel-structure class now handles background, border, and shadow perfectly.
+    const ccContainer = new Gtk.Box({
         css_classes: ["cc-panel-structure"], // Clean Structure Only 🏛️
         hexpand: false,
         vexpand: true,
-        color: { r: 0.07, g: 0.07, b: 0.11 }, // Dark Background #12121c 🌑
-        alpha: 0.6 // Increased opacity for better contrast
+        width_request: 420 // Explicit width
     })
+    ccContainer.append(contentBox)
 
     // Layout Properties (moved from Box to Container)
-    ccContainer.width_request = 420
     ccContainer.halign = Gtk.Align.END
     ccContainer.valign = Gtk.Align.FILL
     ccContainer.margin_top = 8
@@ -116,16 +128,17 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     const topSection = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 24,
+        spacing: 16, // Reduced from 24 for tighter Apple layout 📏
         css_classes: ["cc-fixed-container"],
         hexpand: true, // Force container expansion 📏
         halign: Gtk.Align.FILL
     })
+
     mainBox.append(topSection)
 
     /* --- Grid Controls --- */
     const grid = new Gtk.Grid({
-        column_spacing: 12,
+        column_spacing: 12, // Keep 12 for touch targets, 8 is too tight for toggles
         row_spacing: 12,
         css_classes: ["cc-grid"],
         column_homogeneous: true, // Force full width alignment (196px per btn) 📏
@@ -151,20 +164,22 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             vexpand: false // Ensure drawing area doesn't force expansion either
         })
         da.set_draw_func((_, cr, w, h) => {
-            // Stitch Primary Blue: #3b82f6 -> R:59 G:130 B:246
-            const blue = { r: 0.231, g: 0.510, b: 0.965 }
-            // Neutral Glass: White with low opacity to match original CSS
+            // Apple System Blue: #0A84FF -> R:0.039 G:0.517 B:1.0
+            const blue = { r: 0.039, g: 0.517, b: 1.0 }
+            // Inactive: Quaternary White (Solid, Low Alpha)
             const neutral = { r: 1, g: 1, b: 1 }
 
             cr.setSourceRGBA(0, 0, 0, 0); cr.paint()
 
-            const radius = 20 // Restored "Like Before" Radius 📐
+            const radius = 20
+            const border = { r: 1, g: 1, b: 1, a: 0.08 } // Subtle internal border
 
             if (isActive) {
-                drawSquircle(cr, w, h, undefined, 1.0, false, blue, radius)
+                drawSquircle(cr, w, h, undefined, 1.0, false, blue, radius, false, border)
             } else {
-                if (isHovered) drawSquircle(cr, w, h, undefined, 0.1, false, neutral, radius)
-                else drawSquircle(cr, w, h, undefined, 0.05, false, neutral, radius)
+                // Inactive State: 10% Opacity White (Quaternary)
+                if (isHovered) drawSquircle(cr, w, h, undefined, 0.15, false, neutral, radius, false, border)
+                else drawSquircle(cr, w, h, undefined, 0.10, false, neutral, radius, false, border)
             }
         })
 
@@ -346,7 +361,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 16,
         css_classes: ["cc-sliders-content"],
-        margin_top: 16,
+        margin_top: 16, // Balanced symmetry 📏
         margin_start: 16,
         margin_end: 16,
         margin_bottom: 16
@@ -357,7 +372,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         radius: 20,
         css_classes: ["cc-sliders-structure"], // Clean Structure Only 🎚️
         color: { r: 0, g: 0, b: 0 },
-        alpha: 0.2
+        alpha: 0.2,
+        borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
     })
     topSection.append(sliders)
 
@@ -383,11 +399,129 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     })
 
     const createSlider = (iconName: string, scale: Gtk.Scale) => {
-        const row = new Gtk.Box({ spacing: 12, css_classes: ["cc-slider-row"] })
-        const icon = new Gtk.Image({ icon_name: iconName, pixel_size: 18, css_classes: ["cc-slider-icon"] })
-        row.append(icon)
-        row.append(scale)
-        return row
+        // V450: BULLETPROOF CAIRO 🛡️
+        // Draw EVERYTHING (Plate, Level, Icon) in one context to avoid flickers.
+        const da = new Gtk.DrawingArea({
+            hexpand: true,
+            vexpand: false, // V451: Mandatory for visibility 📏
+            height_request: 48,
+            can_focus: false,
+        })
+
+        // PRE-LOAD ICON (Symbolic)
+        let iconPixbuf: any = null
+        try {
+            const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default()!)
+            const info = theme.lookup_icon(iconName, [], 20, 1, Gtk.TextDirection.NONE, Gtk.IconLookupFlags.FORCE_SYMBOLIC)
+            if (info) {
+                const file = info.get_file()
+                if (file) {
+                    iconPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(file.get_path(), 20, 20, true)
+                }
+            }
+        } catch (e) { }
+
+        da.set_draw_func((_, cr, w, h) => {
+            const r = 24
+            const insY = 2
+            const insX = 2 // V540: RESTORE ORIGINAL 2PX INSET 🍎
+            const x1 = insX
+            const y1 = insY
+            const w1 = w - insX * 2
+            const h1 = h - insY * 2
+            const safe_r = Math.min(r, h1 / 2)
+
+            const drawPill = (x: number, y: number, width: number, height: number, radius: number) => {
+                cr.newPath()
+                cr.arc(x + width - radius, y + radius, radius, -Math.PI / 2, 0)
+                cr.lineTo(x + width, y + height - radius)
+                cr.arc(x + width - radius, y + height - radius, radius, 0, Math.PI / 2)
+                cr.lineTo(x + radius, y + height)
+                cr.arc(x + radius, y + height - radius, radius, Math.PI / 2, Math.PI)
+                cr.lineTo(x, y + radius)
+                cr.arc(x + radius, y + radius, radius, Math.PI, 3 * Math.PI / 2)
+                cr.lineTo(x + width - radius, y)
+                cr.closePath()
+            }
+
+            // 1. Background Plate (Pill 💊)
+            cr.save()
+            cr.setSourceRGBA(1, 1, 1, 0.1) // 10% White Plate
+            drawPill(x1, y1, w1, h1, safe_r)
+            cr.fill()
+            cr.restore()
+
+            // 2. Level Fill (Smooth Growth 🛡️)
+            const value = scale.get_value() / 100
+            const fillWidth = w1 * value
+            if (fillWidth > 0) {
+                cr.save()
+                cr.setSourceRGBA(1, 1, 1, 1) // Pure White Fill ⚪
+
+                // CLIP TO MAIN PILL
+                drawPill(x1, y1, w1, h1, safe_r)
+                cr.clip()
+
+                // DRAW FILL AS DYNAMIC PILL (avoids "pop" at 0%)
+                // V570: Radius grows with width until it hits full height
+                const curRadius = Math.min(safe_r, fillWidth / 2)
+                drawPill(x1, y1, fillWidth, h1, curRadius)
+                cr.fill()
+                cr.restore()
+            }
+
+            // 3. Icon Rendering (Clean Split 🍎)
+            if (iconPixbuf) {
+                const iconX = 18
+                const iconY = (h - 20) / 2
+                const invertX = x1 + fillWidth
+
+                const drawIconStencil = (color: { r: number, g: number, b: number, a: number }) => {
+                    cr.save()
+                    Gdk.cairo_set_source_pixbuf(cr, iconPixbuf, iconX, iconY)
+                    let maskPattern = cr.getSource()
+                    cr.setSourceRGBA(color.r, color.g, color.b, color.a)
+                    cr.mask(maskPattern)
+                    cr.restore()
+                }
+
+                // A. White State (Only where NOT covered by fill)
+                cr.save()
+                cr.rectangle(invertX, 0, w - invertX, h)
+                cr.clip()
+                drawIconStencil({ r: 1, g: 1, b: 1, a: 0.9 }) // Consistent 90% White
+                cr.restore()
+
+                // B. Dark State (Only where covered by fill)
+                if (invertX > iconX) {
+                    cr.save()
+                    cr.rectangle(0, 0, invertX, h)
+                    cr.clip()
+                    drawIconStencil({ r: 0, g: 0, b: 0, a: 0.6 }) // Consistent 60% Black
+                    cr.restore()
+                }
+            }
+        })
+
+        // Value Change -> Redraw
+        scale.connect("value-changed", () => da.queue_draw())
+
+        const sliderOverlay = new Gtk.Overlay({
+            css_classes: ["cc-slider-overlay"],
+            hexpand: true
+        })
+
+        // V511: SWAP ORDER - Visuals on top! 🛡️
+        scale.hexpand = true
+        scale.set_size_request(-1, 48)
+        scale.add_css_class("cc-slider-scale-input")
+
+        sliderOverlay.set_child(scale) // Base: Input
+        sliderOverlay.add_overlay(da) // Overlay: Visuals
+        da.can_target = false // Click-thru
+        da.hexpand = true
+
+        return sliderOverlay
     }
 
     slidersContent.append(createSlider("audio-volume-high-symbolic", volScale))
@@ -457,16 +591,48 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
         const topRow = new Gtk.Box({ spacing: 16 })
         const art = new Gtk.Box({ css_classes: ["cc-media-art"], valign: Gtk.Align.CENTER })
-        const img = new Gtk.Image({ pixel_size: 64, css_classes: ["cc-media-art-img"] })
+        // V455: BULLETPROOF MEDIA ART 🛡️
+        // Use DrawingArea for image to avoid flickering.
+        const artDa = new Gtk.DrawingArea({
+            width_request: 64,
+            height_request: 64,
+            css_classes: ["cc-media-art-da"]
+        })
+
+        let artPixbuf: any = null
         if (player.cover_art && GLib.file_test(player.cover_art, GLib.FileTest.EXISTS)) {
-            img.file = player.cover_art
-            art.add_css_class("with-cover")
-        } else {
-            // Fallback: Use generic icon or try to use player entry as icon name?
-            img.icon_name = "audio-x-generic-symbolic"
-            img.pixel_size = 32
+            try {
+                artPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(player.cover_art, 64, 64, true)
+                art.add_css_class("with-cover")
+            } catch (e) { }
         }
-        art.append(img)
+
+        artDa.set_draw_func((_, cr, w, h) => {
+            if (artPixbuf) {
+                cr.save()
+                // Clip to small squircle
+                const r = 12
+                cr.newPath()
+                cr.arc(w - r, r, r, -Math.PI / 2, 0)
+                cr.arc(w - r, h - r, r, 0, Math.PI / 2)
+                cr.arc(r, h - r, r, Math.PI / 2, Math.PI)
+                cr.arc(r, r, r, Math.PI, 3 * Math.PI / 2)
+                cr.closePath()
+                cr.clip()
+                Gdk.cairo_set_source_pixbuf(cr, artPixbuf, 0, 0)
+                cr.paint()
+                cr.restore()
+            } else {
+                // Fallback icon drawn in Cairo
+                cr.save()
+                cr.setSourceRGBA(1, 1, 1, 0.1)
+                cr.newPath()
+                cr.arc(w / 2, h / 2, 16, 0, 2 * Math.PI)
+                cr.fill()
+                cr.restore()
+            }
+        })
+        art.append(artDa)
 
         const info = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, valign: Gtk.Align.CENTER, spacing: 2 })
         info.append(new Gtk.Label({ label: player.title || "Unknown", css_classes: ["cc-media-title"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 30, ellipsize: 3 }))
@@ -492,7 +658,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             radius: 20, // "Card" Style 🃏
             css_classes: ["cc-media-card"],
             color: { r: 0, g: 0, b: 0 },
-            alpha: 0.2 // Darker card background
+            alpha: 0.2, // Darker card background
+            borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
         })
 
         mediaContainer.append(card)
@@ -508,7 +675,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         vexpand: true,
         hexpand: true, // Force full width 📏
         halign: Gtk.Align.FILL,
-        margin_top: 24 // Harmonized with topSection spacing (24px) 💎
+        margin_top: 16 // Harmonized with topSection spacing (16px) 💎
     })
     mainBox.append(notifSection)
 
@@ -606,7 +773,12 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             })
             const iconBox = new Gtk.Box({ css_classes: ["nc-notif-icon-box"], valign: Gtk.Align.START })
 
-            const img = new Gtk.Image({ pixel_size: 44, css_classes: ["nc-notif-image"] })
+            // V460: BULLETPROOF NOTIF ICON 🛡️
+            const iconDa = new Gtk.DrawingArea({
+                width_request: 48,
+                height_request: 48,
+                css_classes: ["nc-notif-da"]
+            })
 
             // Hardened icon logic using AppService
             const getIcon = () => {
@@ -623,10 +795,35 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             }
 
             const res = getIcon()
-            if (res.file) img.file = res.file
-            else img.icon_name = res.iconName // Simplified gicon handling for stored objects
-            img.pixel_size = (res.file) ? 48 : 38
-            iconBox.append(img)
+            let iconPixbuf: any = null
+            try {
+                if (res.file) {
+                    iconPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(res.file, 48, 48, true)
+                } else if (res.iconName) {
+                    const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default()!)
+                    const info = theme.lookup_icon(res.iconName, [], 32, 1, Gtk.TextDirection.NONE, Gtk.IconLookupFlags.FORCE_SYMBOLIC)
+                    if (info) {
+                        const file = info.get_file()
+                        if (file) iconPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(file.get_path(), 32, 32, true)
+                    }
+                }
+            } catch (e) { }
+
+            iconDa.set_draw_func((_, cr, w, h) => {
+                if (iconPixbuf) {
+                    cr.save()
+                    // If it's a small symbolic icon, center it
+                    const iw = iconPixbuf.get_width()
+                    const ih = iconPixbuf.get_height()
+                    const ix = (w - iw) / 2
+                    const iy = (h - ih) / 2
+
+                    Gdk.cairo_set_source_pixbuf(cr, iconPixbuf, ix, iy)
+                    cr.paint()
+                    cr.restore()
+                }
+            })
+            iconBox.append(iconDa)
 
             const bodyBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
             const timeAgo = Math.floor((Date.now() - n.time) / 60000)
@@ -667,7 +864,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
                 hexpand: true,
                 color: { r: 0, g: 0, b: 0 },
                 alpha: 0.2, // Darker notification item background
-                hoverAlpha: 0.4 // Darker on hover (handled by Squircle, no CSS)
+                hoverAlpha: 0.3, // Slightly brighter on hover
+                borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
             })
 
             notifList.append(item)

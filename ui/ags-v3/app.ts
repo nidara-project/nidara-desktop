@@ -24,7 +24,7 @@ console.log("[DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)");
 console.log("[DISTROIA] Calling app.start()...");
 const randomId = Math.floor(Math.random() * 10000);
 app.start({
-  applicationId: `distroia.desktop.debug.${randomId}`,
+  applicationId: "com.distroia.crystal",
   main() {
     console.log(`[DISTROIA] main() started! (ID: ${randomId})`);
 
@@ -41,7 +41,7 @@ app.start({
     const ccWindows: any[] = []
     const powerWindows: any[] = []
 
-    // 🎨 Dynamic Style Sync
+    // 🎨 Dynamic Style Sync: Loads from the current working directory
     const styleFile = `${GLib.get_current_dir()}/style.css`
     const mainProvider = new Gtk.CssProvider()
     const themeProvider = new Gtk.CssProvider()

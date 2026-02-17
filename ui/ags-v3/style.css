@@ -394,11 +394,11 @@ window#crystal-dock box.cd-squircle-plate > outline,
 window#crystal-dock box.cd-squircle-plate:focus > ripple,
 window#crystal-dock box.cd-squircle-plate:hover > ripple,
 window#crystal-dock box.cd-squircle-plate:active > ripple {
-  background-image: none !important;
-  background-color: transparent !important;
-  box-shadow: none !important;
-  opacity: 0 !important;
-  -gtk-icon-effect: none !important;
+  background-image: none;
+  background-color: transparent;
+  box-shadow: none;
+  opacity: 0;
+  -gtk-icon-effect: none;
 }
 
 window#crystal-dock box.cd-squircle-plate image,
@@ -695,14 +695,75 @@ window.crystal-bar {
    CONTROL CENTER & NOTIFICATIONS
    Based on Stitch "Refined Notification Center" designs
    ========================================================================== */
-/* --- Window --- */
+/* --- Panel Structure (SquircleContainer Wrapper) --- */
+.cc-panel-structure {
+  /* Shadow applied to the Grid wrapper */
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25);
+  /* Slightly darker for depth */
+  /* Background moved to CSS for perfect shadow alignment */
+  background-color: rgba(18, 18, 28, 0.7);
+  /* Deep Space #12121c @ 70% */
+  /* Border moved to CSS - Use specific color to avoid mismatch */
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  /* Radius needed for shadow shape, even if background is Cairo */
+  border-radius: 24px;
+  /* FLICKER/GHOST FIX: Clip background to border */
+  background-clip: padding-box;
+  /* Ensure no extra outlines from GTK theme */
+  outline: none;
+}
+
 .control-center-win,
-.notification-center-win,
-.notif-win {
-  background-color: transparent;
-  background: none;
-  box-shadow: none;
-  border: none;
+.notification-center-win {
+  background-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  border: none !important;
+}
+
+/* NUCLEAR TRANSPARENCY 💎 */
+window#crystal-control-center,
+window[name=crystal-control-center],
+window.control-center-win {
+  background-color: transparent !important;
+  background-image: none !important;
+  border-style: none !important;
+  box-shadow: none !important;
+  outline-style: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+window.control-center-win decoration,
+window.control-center-win > box,
+window.control-center-win > box > widget {
+  background-color: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* Hide ALL scale sub-nodes to prevent clipping/straight-edges 🛡️ */
+.cc-slider-structure scale {
+  all: unset;
+  background: transparent !important;
+}
+.cc-slider-structure scale contents,
+.cc-slider-structure scale trough,
+.cc-slider-structure scale highlight,
+.cc-slider-structure scale slider {
+  all: unset;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
 }
 
 /* --- Main Panel (ONLY the inner box, NOT the window) --- */
@@ -723,22 +784,35 @@ window.crystal-bar {
   overflow: hidden;
 }
 
-/* --- Section Titles --- */
-.cc-section-title {
-  font-size: 0.75em;
-  font-weight: 700;
-  color: rgba(255, 255, 255, 0.4);
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  margin-bottom: 12px;
-  margin-left: 2px;
+/* --- Sliders Section --- */
+.cc-sliders-row,
+.cc-sliders-column,
+.cc-slider-structure,
+.cc-slider-overlay {
+  overflow: visible !important;
 }
 
-/* --- Quick Toggles (Custom Drawing) --- */
-.cc-toggle-container {
-  background: none;
-  box-shadow: none;
-  border: none;
+/* Hide ALL scale sub-nodes to prevent clipping/straight-edges 🛡️ */
+.cc-slider-structure scale {
+  all: unset;
+  background: transparent !important;
+  opacity: 0 !important;
+}
+.cc-slider-structure scale contents,
+.cc-slider-structure scale trough,
+.cc-slider-structure scale highlight,
+.cc-slider-structure scale slider {
+  all: unset;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  opacity: 0 !important;
 }
 
 /* Icons are now handled in the TSX layout */
@@ -791,33 +865,46 @@ window.crystal-bar {
   /* XL symmetry with reduced 8px margins */
 }
 
-.cc-slider-row {
+/* --- Unified Overlay Sliders (Apple Style) --- */
+.cc-slider-overlay {
   margin: 4px 0;
 }
 
+/* --- Bulletproof Sliders (Input Only) --- */
+scale.cc-slider-scale-input {
+  all: unset;
+  min-height: 48px;
+  background: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  color: transparent;
+}
+scale.cc-slider-scale-input trough,
+scale.cc-slider-scale-input highlight,
+scale.cc-slider-scale-input slider {
+  all: unset;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
+  min-height: 48px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  transition: none !important;
+  animation: none !important;
+}
+
 .cc-slider-icon {
-  color: rgba(255, 255, 255, 0.6);
-  margin-right: 10px;
-  font-size: 1.1em;
-}
-
-scale trough {
-  background-color: rgba(255, 255, 255, 0.1);
-  border-radius: 4px;
-  min-height: 4px;
-}
-
-scale trough highlight {
-  background-color: white;
-  border-radius: 4px;
-}
-
-scale slider {
-  background-color: white;
-  border-radius: 50%;
-  min-width: 16px;
-  min-height: 16px;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  color: #12121c;
+  /* Dark icon on white fill (when full) - Dynamic color is hard in CSS only */
+  /* Use a mix-blend-mode or just keep it dark/light based on preference */
+  color: rgba(0, 0, 0, 0.8);
+  font-weight: 900;
 }
 
 /* --- Notifications Section --- */
@@ -1059,8 +1146,6 @@ scale slider {
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: white;
   border-radius: 50%;
-  width: 48px;
-  height: 48px;
   min-width: 48px;
   min-height: 48px;
   padding: 0;
@@ -1131,6 +1216,18 @@ scale slider {
   margin: 0;
   padding: 0;
   /* This explicit reset was the key fix confirmed by user 🔑 */
+}
+
+/* --- Window Transparency Fix (NUCLEAR OPTION ☢️) --- */
+window.control-center-win,
+window.control-center-win > decoration,
+window.control-center-win > box,
+window.control-center-win > widget {
+  background: none !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
 /* 

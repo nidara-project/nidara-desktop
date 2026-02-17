@@ -14,6 +14,8 @@ interface SquircleContainerProps {
     hoverAlpha?: number
     onClick?: () => void
     perfect?: boolean
+    borderColor?: { r: number, g: number, b: number, a: number }
+    hoverBorderColor?: { r: number, g: number, b: number, a: number }
 }
 
 export default function SquircleContainer({
@@ -28,7 +30,9 @@ export default function SquircleContainer({
     hoverColor,
     hoverAlpha,
     onClick,
-    perfect = false
+    perfect = false,
+    borderColor,
+    hoverBorderColor
 }: SquircleContainerProps) {
     // Use Gtk.Grid as a Z-Stack.
     const container = new Gtk.Grid({
@@ -51,16 +55,17 @@ export default function SquircleContainer({
 
         let shareColor = baseColor
         let shareAlpha = baseAlpha
+        let shareBorder = borderColor
 
         if (isHovered) {
             if (hoverColor) shareColor = hoverColor
             if (hoverAlpha !== undefined) shareAlpha = hoverAlpha
-            // If only one is provided, mix? For now simple replacement.
+            if (hoverBorderColor) shareBorder = hoverBorderColor
         }
 
         cr.setSourceRGBA(0, 0, 0, 0); cr.paint()
 
-        drawSquircle(cr, w, h, undefined, shareAlpha, gloss, shareColor, radius, perfect)
+        drawSquircle(cr, w, h, undefined, shareAlpha, gloss, shareColor, radius, perfect, shareBorder)
     })
 
     // 1. Attach Background (Behind)
