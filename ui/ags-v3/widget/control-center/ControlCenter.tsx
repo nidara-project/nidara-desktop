@@ -700,15 +700,16 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         vexpand: true,
-        overlay_scrolling: true, // Alignment Restoration 
+        overlay_scrolling: true, // Restoration: Perfect Symmetry �
         css_classes: ["cc-scroll"]
     })
     notifSection.append(scroll)
 
     const notifList = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 8, // User-requested separation 🏝️
+        spacing: 8, // Standardized Island Gap 🏝️
         css_classes: ["cc-notifications-list"],
+        margin_end: 0, // Zero out to match cards above 📏
         margin_bottom: 0,
         halign: Gtk.Align.FILL,
         hexpand: true
@@ -851,7 +852,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
                 child: new Gtk.Image({ icon_name: "window-close-symbolic" }),
                 css_classes: ["nc-notif-close"],
                 valign: Gtk.Align.CENTER,
-                halign: Gtk.Align.END
+                halign: Gtk.Align.END,
+                margin_end: 12 // Escape Gutter: avoid overlay scrollbar 🛡️
             })
             cls.connect("clicked", () => {
                 const idx = notifHistory.indexOf(n)

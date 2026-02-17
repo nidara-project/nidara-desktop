@@ -957,7 +957,7 @@ scale.cc-slider-scale-input slider {
 }
 
 .nc-notif-item:hover {
-  border-color: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.12);
   /* Background & Radius handled by SquircleContainer JS 🛡️ */
 }
 
@@ -965,6 +965,13 @@ scale.cc-slider-scale-input slider {
   color: white;
   font-weight: 600;
   font-size: 0.9em;
+}
+
+.nc-notif-time {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.75em;
+  font-weight: 500;
+  margin-right: 4px;
 }
 
 .nc-notif-body {
@@ -1091,9 +1098,8 @@ scale.cc-slider-scale-input slider {
   background-color: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   min-width: 6px;
-  /* Constant width 📏 */
-  min-height: 48px;
   margin: 0;
+  min-height: 48px;
   transition: background-color 0.2s ease;
 }
 
