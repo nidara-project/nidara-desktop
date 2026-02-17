@@ -92,7 +92,6 @@ window.control-center-win>box>widget {
     background-image: none;
     border: none;
     box-shadow: none;
-    padding: 0;
 
     /* Restored Structure 🏗️ */
     min-width: 420px;
@@ -241,24 +240,21 @@ scale.cc-slider-scale-input {
     font-weight: 900;
 }
 
-/* --- Notifications Section --- */
 .cc-notifs-section {
-    margin-top: 16px;
+    // Structural layout in TSX
 }
 
 .cc-notifs-header {
-    margin-bottom: 8px;
+    padding: 0;
 }
 
-.cc-notifs-title {
-    font-size: 0.75em;
-    font-weight: 700;
-    color: rgba(255, 255, 255, 0.4);
+.cc-section-title {
+    font-size: 0.85em;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.5);
     text-transform: uppercase;
-    letter-spacing: 1.5px;
+    letter-spacing: 2px;
 }
-
-/* Separators removed at user request */
 
 /* --- Notification Items --- */
 .nc-notif-item {
@@ -266,8 +262,6 @@ scale.cc-slider-scale-input {
     background: none;
     border: none;
     box-shadow: none;
-    /* padding: 16px; -> Moved to TSX margin */
-    margin: 0 0 12px 0;
     transition: all 0.2s ease;
 }
 
@@ -339,26 +333,7 @@ scale.cc-slider-scale-input {
     font-size: 0.9em;
 }
 
-/* --- Notifications Section (Structural Fix) --- */
-.cc-notifs-section {
-    margin-top: 24px;
-    /* This container holds the fixed header AND the scrollable list */
-}
-
-.cc-notifs-header {
-    margin-bottom: 12px;
-    padding: 0;
-    margin: 0 0 12px 0;
-    /* Zero margin to align with Toggles/Cards 📏 */
-}
-
-.cc-section-title {
-    font-size: 0.85em;
-    font-weight: 800;
-    color: rgba(255, 255, 255, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 2px;
-}
+/* Section Structure Handled Above 🆙 */
 
 .cc-clear-btn {
     background-color: rgba(255, 255, 255, 0.04);
@@ -453,7 +428,6 @@ scale.cc-slider-scale-input {
     background: none;
     border: none;
     box-shadow: none;
-    /* padding: 16px; -> Moved to TSX */
 }
 
 .cc-media-content {

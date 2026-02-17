@@ -92,6 +92,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     const contentBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
+        spacing: 16, // Consistent Island Spacing 🏝️
         // css_classes: ["control-center-content"],
         margin_top: 16,
         margin_start: 16,
@@ -171,7 +172,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
             cr.setSourceRGBA(0, 0, 0, 0); cr.paint()
 
-            const radius = 20
+            const radius = 16 // Nested Radius Rule (24-8=16) 📐
             const border = { r: 1, g: 1, b: 1, a: 0.08 } // Subtle internal border
 
             if (isActive) {
@@ -369,7 +370,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     const sliders = SquircleContainer({
         child: slidersContent,
-        radius: 20,
+        radius: 16, // Nested Radius Rule (24-8=16) 📐
         css_classes: ["cc-sliders-structure"], // Clean Structure Only 🎚️
         color: { r: 0, g: 0, b: 0 },
         alpha: 0.2,
@@ -536,7 +537,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     /* --- Media --- */
     const mediaContainer = new Gtk.Box({ css_classes: ["cc-media"], orientation: Gtk.Orientation.VERTICAL })
-    topSection.append(mediaContainer)
+    mainBox.append(mediaContainer) // V580: MEDIA AS INDEPENDENT ISLAND 🏝️
 
     // Media State Management 🎵
     let lastPlayer: AstalMpris.Player | null = null
@@ -589,29 +590,39 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             margin_bottom: 16
         })
 
-        const topRow = new Gtk.Box({ spacing: 16 })
+        const topRow = new Gtk.Box({
+            spacing: 16,
+            halign: Gtk.Align.CENTER // Center Art + Info unit 🎯
+        })
         const art = new Gtk.Box({ css_classes: ["cc-media-art"], valign: Gtk.Align.CENTER })
         // V455: BULLETPROOF MEDIA ART 🛡️
         // Use DrawingArea for image to avoid flickering.
         const artDa = new Gtk.DrawingArea({
-            width_request: 64,
-            height_request: 64,
-            css_classes: ["cc-media-art-da"]
+            css_classes: ["cc-media-art-da"],
+            valign: Gtk.Align.CENTER, // Center vertically in row 🎯
+            halign: Gtk.Align.CENTER
         })
 
         let artPixbuf: any = null
         if (player.cover_art && GLib.file_test(player.cover_art, GLib.FileTest.EXISTS)) {
             try {
-                artPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(player.cover_art, 64, 64, true)
+                // Scaling: Max 80x80 while preserving aspect ratio 📏
+                artPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(player.cover_art, 80, 80, true)
+                if (artPixbuf) {
+                    artDa.set_size_request(artPixbuf.width, artPixbuf.height)
+                }
                 art.add_css_class("with-cover")
             } catch (e) { }
+        } else {
+            // Default size if no art
+            artDa.set_size_request(80, 80)
         }
 
         artDa.set_draw_func((_, cr, w, h) => {
             if (artPixbuf) {
                 cr.save()
-                // Clip to small squircle
-                const r = 12
+                // Clip to nested squircle
+                const r = 16
                 cr.newPath()
                 cr.arc(w - r, r, r, -Math.PI / 2, 0)
                 cr.arc(w - r, h - r, r, 0, Math.PI / 2)
@@ -655,7 +666,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         // Card Container (Squircle)
         const card = SquircleContainer({
             child: content,
-            radius: 20, // "Card" Style 🃏
+            radius: 16, // Standalone 'Island' Card �️
             css_classes: ["cc-media-card"],
             color: { r: 0, g: 0, b: 0 },
             alpha: 0.2, // Darker card background
@@ -670,12 +681,12 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     /* --- Notifications Section --- */
     const notifSection = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12,
+        spacing: 8, // Gap between Title and Scrollable list
         css_classes: ["cc-notifs-section"],
         vexpand: true,
-        hexpand: true, // Force full width 📏
+        hexpand: true,
         halign: Gtk.Align.FILL,
-        margin_top: 16 // Harmonized with topSection spacing (16px) 💎
+        margin_top: 0 // Visual gap tuning: 16 - 4 = 12px total gap 📐
     })
     mainBox.append(notifSection)
 
@@ -689,14 +700,14 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         vexpand: true,
-        overlay_scrolling: true, // Alignment Restoration �
+        overlay_scrolling: true, // Alignment Restoration 
         css_classes: ["cc-scroll"]
     })
     notifSection.append(scroll)
 
     const notifList = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 16,
+        spacing: 8, // User-requested separation 🏝️
         css_classes: ["cc-notifications-list"],
         margin_bottom: 0,
         halign: Gtk.Align.FILL,
@@ -766,7 +777,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
                 spacing: 16,
                 halign: Gtk.Align.FILL,
                 hexpand: true,
-                margin_top: 16,
+                margin_top: 16, // Unified Internal Padding 📐
                 margin_start: 16,
                 margin_end: 16,
                 margin_bottom: 16
@@ -859,7 +870,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             // Wrap in Squircle "Card"
             const item = SquircleContainer({
                 child: content,
-                radius: 20,
+                radius: 16, // Nested Radius Rule (24-8=16) 📐
                 css_classes: ["nc-notif-item"],
                 hexpand: true,
                 color: { r: 0, g: 0, b: 0 },
