@@ -302,6 +302,12 @@ export default function Dock(gdkmonitor: any) {
                     active = true
                 } else state.currentTranslateY = state.targetTranslateY
 
+                const hDiff = Math.abs((state.targetHeight || 0) - (state.currentHeight || 0))
+                if (hDiff > 0.01) {
+                    state.currentHeight = lerp(state.currentHeight || 0, state.targetHeight || 0, DOCK_CONSTANTS.LERP_FACTOR)
+                    active = true
+                } else state.currentHeight = state.targetHeight
+
                 const floatSlotW = state.currentWidth + (state.currentMargin * 2)
                 const floatIconStart = currentFloatX + state.currentMargin
                 const floatIconEnd = floatIconStart + state.currentWidth
@@ -337,27 +343,26 @@ export default function Dock(gdkmonitor: any) {
                         }
                     }
 
-                    if (!state.isSeparator) {
+                    if (state.isSeparator) {
+                        const centerBox = itemBox as Gtk.CenterBox
+                        const line = centerBox?.get_center_widget() as Gtk.Box
+                        if (line) line.set_size_request(-1, Math.round(state.currentHeight))
+                    } else if (!state.isSeparator) {
                         const targetPixelSize = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
                         const overlay = itemBox?.get_first_child() as Gtk.Overlay
                         if (overlay) {
                             const iconBox = overlay.get_child() as Gtk.Box
                             if (iconBox) {
-                                // V612: Precision scaling for background bar alignment
                                 iconBox.set_size_request(drawIconW, targetPixelSize)
-
                                 const plateOverlay = iconBox.get_first_child() as Gtk.Overlay
                                 if (plateOverlay && plateOverlay.get_child) {
-                                    // Plate/Squircle
                                     const da = plateOverlay.get_child()
                                     if (da) {
                                         da.set_size_request(drawIconW, targetPixelSize)
-                                        // Icon Image
                                         const icon = (da as any).get_next_sibling()
                                         if (icon) icon.set_size_request(targetPixelSize, targetPixelSize)
                                     }
                                 } else {
-                                    // Fallback for non-plated items
                                     const icon = iconBox.get_first_child()
                                     if (icon) icon.set_size_request(targetPixelSize, targetPixelSize)
                                 }
@@ -461,7 +466,9 @@ export default function Dock(gdkmonitor: any) {
                 )
                 state.targetScale = metrics.scale
                 state.targetWidth = metrics.width
+                state.targetHeight = metrics.height || DOCK_CONSTANTS.PILL_HEIGHT
                 state.targetMargin = metrics.margin
+                state.targetTranslateY = metrics.translateY
             }
         })
         runUnifiedTick()
@@ -1065,7 +1072,9 @@ export default function Dock(gdkmonitor: any) {
                 const metrics = calculateDockItemMetrics(pX_sync, state.staticCenter, state.isSeparator)
                 state.targetScale = metrics.scale
                 state.targetWidth = metrics.width
+                state.targetHeight = metrics.height || DOCK_CONSTANTS.PILL_HEIGHT
                 state.targetMargin = metrics.margin
+                state.targetTranslateY = metrics.translateY
 
                 // V603: Sync immediate state for first render OR when tick is not active 
                 // to prevent background width "lag/strips"

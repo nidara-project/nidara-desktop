@@ -71,6 +71,10 @@ export interface AnimState {
     currentMargin: number
     velocityMargin: number     // V600: Spring Velocity
 
+    targetHeight: number       // V618: Dynamic separator height
+    currentHeight: number
+    velocityHeight: number     // V600: Spring Velocity
+
     targetTranslateY: number   // V600: For Bounce/Vertical Shift
     currentTranslateY: number
     velocityY: number          // V600: Spring Velocity
