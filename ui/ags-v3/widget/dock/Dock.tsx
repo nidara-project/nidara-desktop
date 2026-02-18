@@ -220,10 +220,35 @@ export default function Dock(gdkmonitor: any) {
 
     const dockMonitorWidth = gdkmonitor.get_geometry().width
 
+    const da = new Gtk.DrawingArea({
+        name: "dock-gloss-layer",
+        valign: Gtk.Align.END,
+        halign: Gtk.Align.START, // V615: Unified START anchor
+        height_request: DOCK_CONSTANTS.PILL_HEIGHT,
+        margin_bottom: 10,
+        can_focus: false,
+    })
+
+    da.set_draw_func((_, cr, w, h) => {
+        // V430: Enable Gloss/Border effect for main dock
+        drawSquircle(cr, w, h, undefined, 0.2, true)
+    })
+
+    const updateSize = () => {
+        if (!bar || !win) return
+        bar.set_size_request(smoothedBarWidth, -1)
+        const targetW = smoothedBarWidth + 18
+        if (da) {
+            da.set_size_request(targetW, DOCK_CONSTANTS.PILL_HEIGHT)
+            da.queue_draw()
+        }
+    }
+
     // V615: PRE-EMPTIVE CENTERING
     // Set the margin immediately so the very first frame is correct.
     const initialMargin = Math.round((dockMonitorWidth - totalStaticWidth) / 2)
     bar.margin_start = Math.max(0, initialMargin)
+    if (da) da.margin_start = Math.max(0, initialMargin - 9) // V616: Center background pill
 
     // --- V17 PHYSICS ENGINE ---
     // AnimState imported from ./state
@@ -347,6 +372,7 @@ export default function Dock(gdkmonitor: any) {
 
             if (bar.margin_start !== manualMarginStart) {
                 bar.margin_start = manualMarginStart
+                if (da) da.margin_start = manualMarginStart - 9 // V614: Perfect background sync
             }
 
             if (active || Math.abs(smoothedBarWidth - totalIntWidth) > 0.01) {
@@ -451,7 +477,7 @@ export default function Dock(gdkmonitor: any) {
         const region = new Cairo.Region()
 
         // V300: Surgical Input Region for 200px window.
-        // The window is 200px high to allow icon magnification, but we ONLY 
+        // The window is 200px high to allow icon magnification, but we ONLY
         // capture mouse events in the bottom 110px (Dock area).
 
         // V421: SMART INPUT REGION
@@ -463,7 +489,7 @@ export default function Dock(gdkmonitor: any) {
         }
 
         // V422: GENEROUS INPUT REGION
-        // We expand the interaction zone by 250px on each side to ensure 
+        // We expand the interaction zone by 250px on each side to ensure
         // the magnification starts growing SMOOTHLY before the mouse hits the icons.
         // This eliminates the "jump" reported by the user.
         const width = totalWidth + 500
@@ -516,34 +542,6 @@ export default function Dock(gdkmonitor: any) {
             return GLib.SOURCE_REMOVE
         })
     })
-
-    const da = new Gtk.DrawingArea({
-        name: "dock-gloss-layer",
-        // css_classes: ["crystal-dock"], // REMOVED: Causes "Double Background" artifact
-        valign: Gtk.Align.END,
-        halign: Gtk.Align.CENTER,
-        height_request: DOCK_CONSTANTS.PILL_HEIGHT,
-        margin_bottom: 10,
-        can_focus: false,
-    })
-
-    da.set_draw_func((_, cr, w, h) => {
-        // V430: Enable Gloss/Border effect for main dock
-        drawSquircle(cr, w, h, undefined, 0.2, true)
-    })
-
-    const updateSize = () => {
-        if (!bar || !win) return
-        // V606: Restore bar width for CENTER alignment consistency.
-        bar.set_size_request(smoothedBarWidth, -1)
-
-        const targetW = smoothedBarWidth + 18
-        if (da) {
-            // V608: Removed threshold for maximum responsiveness.
-            da.set_size_request(targetW, DOCK_CONSTANTS.PILL_HEIGHT)
-            da.queue_draw()
-        }
-    }
 
     const shim = new Gtk.Box({
         valign: Gtk.Align.END, halign: Gtk.Align.START, // V601: Logic Anchor
@@ -1084,6 +1082,7 @@ export default function Dock(gdkmonitor: any) {
                 smoothedBarWidth = totalCurrentWidth
                 const manualMarginStart = Math.round((dockMonitorWidth - smoothedBarWidth) / 2)
                 bar.margin_start = manualMarginStart
+                if (da) da.margin_start = manualMarginStart - 9
                 updateSize()
                 firstRender = false
             }

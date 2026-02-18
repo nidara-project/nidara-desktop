@@ -9,7 +9,7 @@ export const DOCK_CONSTANTS = {
     // PHYSICS
     minSize: 64,        // Tamaño base
     maxSize: 96,        // Magnificación máxima
-    range: 3.2,         // V143: Balanced range for smooth entry
+    range: 4.8,         // V144: Broad 4.8 range for monotonic total width (no pulsing)
     sensitivity: 0.35,
     // LAYOUT
     ICON_SIZE: 64,
@@ -54,11 +54,9 @@ export function getProjectedMouseX(qX: number, screenWidth: number, totalStaticW
     // Normalize relative position (-1 to 1) 
     const relPos = (qX - center) / (totalStaticWidth / 2 || 1);
 
-    // V612: Anchored Expansion Correction
-    // This value exactly compensates for the Dock starting at (screenWidth-width)/2.
-    // As it expands, the start position moves left. We shift the projected mouse
-    // to "follow" the icons in their new positions.
-    const maxShift = 42;
+    // V613: Calibrated MaxShift for 4.8 Range
+    // A wider range expands the dock more. We use 50px to keep the icon-under-mouse stationary.
+    const maxShift = 50;
 
     return qX + (relPos * maxShift);
 }
