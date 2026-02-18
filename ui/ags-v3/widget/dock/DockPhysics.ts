@@ -68,8 +68,8 @@ export function calculateDockItemMetrics(qX: number, staticCenter: number, isSep
         return {
             scale: 1.0,
             width: DOCK_CONSTANTS.SEPARATOR_SLOT,
-            height: 48 + (intensity * 24), // V618: Separator grows vertically!
-            translateY: intensity * -4,    // Subtle lift for separator
+            height: 48, // V620: Authentically static macOS separator
+            translateY: 0, // No lift
             margin: 0
         };
     }
@@ -78,9 +78,9 @@ export function calculateDockItemMetrics(qX: number, staticCenter: number, isSep
     const targetWidth = DOCK_CONSTANTS.minSize * targetScale;
     const dynamicMargin = DOCK_CONSTANTS.BASE_MARGIN;
 
-    // V619: VERTICAL LIFT (The macOS Signature)
-    // Icons float up 10px when fully magnified
-    const translateY = intensity * -10;
+    // V620: PURE macOS ANCHOR
+    // Icons stay anchored to the bottom, no "lifting" or "floating".
+    const translateY = 0;
 
     return {
         width: targetWidth,
