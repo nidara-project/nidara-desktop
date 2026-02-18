@@ -27,53 +27,54 @@
     outline: none;
 }
 
-.control-center-win,
-.notification-center-win {
-    background-color: transparent !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    border: none !important;
+window#crystal-control-center,
+window.control-center-win,
+window.notification-center-win {
+    background-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    border: none;
 }
 
 /* NUCLEAR TRANSPARENCY 💎 */
 window#crystal-control-center,
 window[name="crystal-control-center"],
 window.control-center-win {
-    background-color: transparent !important;
-    background-image: none !important;
-    border-style: none !important;
-    box-shadow: none !important;
-    outline-style: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    background-color: transparent;
+    background-image: none;
+    border-style: none;
+    box-shadow: none;
+    outline-style: none;
+    margin: 0;
+    padding: 0;
 }
 
 window.control-center-win decoration,
 window.control-center-win>box,
 window.control-center-win>box>widget {
-    background-color: transparent !important;
-    background-image: none !important;
-    box-shadow: none !important;
-    border: none !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    border: none;
+    margin: 0;
+    padding: 0;
 }
 
 /* Hide ALL scale sub-nodes to prevent clipping/straight-edges 🛡️ */
 .cc-slider-structure scale {
     all: unset;
-    background: transparent !important;
+    background: transparent;
 
     contents,
     trough,
     highlight,
     slider {
         all: unset;
-        background: transparent !important;
-        background-color: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        outline: none !important;
+        background: transparent;
+        background-color: transparent;
+        border: none;
+        box-shadow: none;
+        outline: none;
         min-height: 0;
         min-width: 0;
         margin: 0;
@@ -104,7 +105,7 @@ window.control-center-win>box>widget {
 .cc-sliders-column,
 .cc-slider-structure,
 .cc-slider-overlay {
-    overflow: visible !important;
+    overflow: visible;
 }
 
 /* Hide ALL scale sub-nodes BROADLY (Nuclear Fix) 🛡️ */
@@ -112,18 +113,18 @@ window.control-center-win>box>widget {
 scale.cc-slider-scale-input,
 scale.cc-slider-scale-input>* {
     all: unset;
-    background: transparent !important;
-    background-color: transparent !important;
-    background-image: none !important;
-    opacity: 0 !important;
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
-    color: transparent !important;
-    min-height: 0 !important;
-    min-width: 0 !important;
-    margin: 0 !important;
-    padding: 0 !important;
+    background: transparent;
+    background-color: transparent;
+    background-image: none;
+    opacity: 0;
+    border: none;
+    box-shadow: none;
+    outline: none;
+    color: transparent;
+    min-height: 0;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
 
     contents,
     trough,
@@ -132,18 +133,18 @@ scale.cc-slider-scale-input>* {
     fill,
     marks,
     value {
-        all: unset !important;
-        background: transparent !important;
-        background-color: transparent !important;
-        opacity: 0 !important;
-        border: none !important;
-        box-shadow: none !important;
-        outline: none !important;
-        min-height: 0 !important;
-        min-width: 0 !important;
-        margin: 0 !important;
-        padding: 0 !important;
-        color: transparent !important;
+        all: unset;
+        background: transparent;
+        background-color: transparent;
+        opacity: 0;
+        border: none;
+        box-shadow: none;
+        outline: none;
+        min-height: 0;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        color: transparent;
     }
 }
 
@@ -206,29 +207,29 @@ scale.cc-slider-scale-input>* {
 scale.cc-slider-scale-input {
     all: unset;
     min-height: 48px;
-    background: transparent !important;
-    background-image: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
+    background: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    outline: none;
     color: transparent;
 
     trough,
     highlight,
     slider {
         all: unset;
-        background: transparent !important;
-        background-color: transparent !important;
-        background-image: none !important;
-        border: none !important;
-        box-shadow: none !important;
-        outline: none !important;
+        background: transparent;
+        background-color: transparent;
+        background-image: none;
+        border: none;
+        box-shadow: none;
+        outline: none;
         min-height: 48px;
         min-width: 0;
         margin: 0;
         padding: 0;
-        transition: none !important;
-        animation: none !important;
+        transition: none;
+        animation: none;
     }
 }
 
@@ -548,9 +549,9 @@ window.control-center-win,
 window.control-center-win>decoration,
 window.control-center-win>box,
 window.control-center-win>widget {
-    background: none !important;
-    background-color: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
+    background: none;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    outline: none;
 }

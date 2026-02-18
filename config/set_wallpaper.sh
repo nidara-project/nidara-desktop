@@ -9,7 +9,7 @@ DEFAULT_WALLPAPER="wallpaper.jpg"
 # Si escribes algo después del script, usa eso ($1). Si no, usa el default.
 SELECTED=${1:-$DEFAULT_WALLPAPER}
 
-# 3. Ejecución con SWWW (Estética MiDistroIA)
+# 3. Ejecución con SWWW
 swww img "$WALLPAPER_DIR/$SELECTED" \
     --transition-type grow \
     --transition-fps 60 \
@@ -17,4 +17,4 @@ swww img "$WALLPAPER_DIR/$SELECTED" \
     --transition-duration 2
     
 
-echo "Arquitecto: Fondo actualizado a $SELECTED"
+echo "Fondo actualizado a $SELECTED"

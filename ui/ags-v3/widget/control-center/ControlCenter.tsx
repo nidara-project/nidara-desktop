@@ -92,22 +92,23 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     const contentBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 16, // Consistent Island Spacing 🏝️
-        // css_classes: ["control-center-content"],
-        margin_top: 16,
-        margin_start: 16,
-        margin_end: 16,
-        margin_bottom: 16
+        spacing: 16, // Global Spacing between Islands 📏
+        css_classes: ["control-center"], // Layout-only container ️
+        margin_top: 0,
+        margin_start: 0,
+        margin_end: 0,
+        margin_bottom: 0,
+        vexpand: true,
+        hexpand: true,
+        halign: Gtk.Align.FILL,
+        valign: Gtk.Align.FILL
     })
 
-    // Fix: "Ghost" Border Artifacts 👻
-    // Replaced SquircleContainer (Cairo) with standard Box (CSS).
-    // The .cc-panel-structure class now handles background, border, and shadow perfectly.
     const ccContainer = new Gtk.Box({
-        css_classes: ["cc-panel-structure"], // Clean Structure Only 🏛️
+        css_classes: ["cc-panel-structure"], // The ONLY source of background/border �
         hexpand: false,
         vexpand: true,
-        width_request: 420 // Explicit width
+        width_request: 420
     })
     ccContainer.append(contentBox)
 
@@ -115,7 +116,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     ccContainer.halign = Gtk.Align.END
     ccContainer.valign = Gtk.Align.FILL
     ccContainer.margin_top = 8
-    ccContainer.margin_end = 8
+    ccContainer.margin_end = 8 // Restore 8px distance from screen edge 🛡️
     ccContainer.margin_bottom = 8
     ccContainer.margin_start = 8
 
@@ -129,10 +130,13 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     const topSection = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 16, // Reduced from 24 for tighter Apple layout 📏
+        spacing: 16,
         css_classes: ["cc-fixed-container"],
-        hexpand: true, // Force container expansion 📏
-        halign: Gtk.Align.FILL
+        hexpand: true,
+        halign: Gtk.Align.FILL,
+        margin_top: 16, // Top Island spacing 📐
+        margin_start: 16,
+        margin_end: 16
     })
 
     mainBox.append(topSection)
@@ -473,7 +477,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
             // 3. Icon Rendering (Clean Split 🍎)
             if (iconPixbuf) {
-                const iconX = 18
+                const iconX = 16 // Standardized for 32px Total Alignment (16+16) 📐
                 const iconY = (h - 20) / 2
                 const invertX = x1 + fillWidth
 
@@ -536,7 +540,12 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     }
 
     /* --- Media --- */
-    const mediaContainer = new Gtk.Box({ css_classes: ["cc-media"], orientation: Gtk.Orientation.VERTICAL })
+    const mediaContainer = new Gtk.Box({
+        css_classes: ["cc-media"],
+        orientation: Gtk.Orientation.VERTICAL,
+        margin_start: 16, // Standard Island Symmetry 📏
+        margin_end: 16
+    })
     mainBox.append(mediaContainer) // V580: MEDIA AS INDEPENDENT ISLAND 🏝️
 
     // Media State Management 🎵
@@ -666,7 +675,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         // Card Container (Squircle)
         const card = SquircleContainer({
             child: content,
-            radius: 16, // Standalone 'Island' Card �️
+            radius: 16, // Standalone 'Island' Card ️
             css_classes: ["cc-media-card"],
             color: { r: 0, g: 0, b: 0 },
             alpha: 0.2, // Darker card background
@@ -679,18 +688,24 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     updateMedia()
 
     /* --- Notifications Section --- */
+    /* --- Notifications Section --- */
     const notifSection = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 8, // Gap between Title and Scrollable list
+        spacing: 8,
         css_classes: ["cc-notifs-section"],
         vexpand: true,
         hexpand: true,
         halign: Gtk.Align.FILL,
-        margin_top: 0 // Visual gap tuning: 16 - 4 = 12px total gap 📐
+        margin_bottom: 16 // Bottom panel padding
     })
     mainBox.append(notifSection)
 
-    const header = new Gtk.Box({ spacing: 12, css_classes: ["cc-notifs-header"] })
+    const header = new Gtk.Box({
+        spacing: 12,
+        css_classes: ["cc-notifs-header"],
+        margin_start: 16, // Explicit Island Gutter 📐
+        margin_end: 16
+    })
     header.append(new Gtk.Label({ label: "Notificaciones", css_classes: ["cc-section-title"], hexpand: true, halign: Gtk.Align.START }))
     const clear = new Gtk.Button({ label: "Borrar", css_classes: ["cc-clear-btn"] })
     header.append(clear)
@@ -700,8 +715,9 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         vexpand: true,
-        overlay_scrolling: true, // Restoration: Perfect Symmetry �
-        css_classes: ["cc-scroll"]
+        overlay_scrolling: true,
+        css_classes: ["cc-scroll"],
+        margin_end: 0 // NO negative margins anymore! Hits 0px edge 🛡️
     })
     notifSection.append(scroll)
 
@@ -709,7 +725,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 8, // Standardized Island Gap 🏝️
         css_classes: ["cc-notifications-list"],
-        margin_end: 0, // Zero out to match cards above 📏
+        margin_start: 16,
+        margin_end: 16, // Symmetry for the internal cards
         margin_bottom: 0,
         halign: Gtk.Align.FILL,
         hexpand: true
@@ -842,18 +859,35 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             const timeStr = timeAgo < 1 ? "Ahora" : `${timeAgo}m`
 
             const titleBox = new Gtk.Box({ spacing: 8 })
-            titleBox.append(new Gtk.Label({ label: n.summary, css_classes: ["nc-notif-title"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 25, ellipsize: 3 }))
+            titleBox.append(new Gtk.Label({
+                label: n.summary,
+                use_markup: true, // Render bold, italics etc 🎨
+                css_classes: ["nc-notif-title"],
+                halign: Gtk.Align.START,
+                xalign: 0,
+                max_width_chars: 25,
+                ellipsize: 3
+            }))
             titleBox.append(new Gtk.Label({ label: timeStr, css_classes: ["nc-notif-time"], halign: Gtk.Align.END, hexpand: true }))
 
             bodyBox.append(titleBox)
-            bodyBox.append(new Gtk.Label({ label: n.body || "", css_classes: ["nc-notif-body"], halign: Gtk.Align.START, xalign: 0, wrap: true, lines: 2, max_width_chars: 35, ellipsize: 3 }))
+            bodyBox.append(new Gtk.Label({
+                label: n.body || "",
+                use_markup: true, // Finalize "Clean" look 🛡️
+                css_classes: ["nc-notif-body"],
+                halign: Gtk.Align.START,
+                xalign: 0,
+                wrap: true,
+                lines: 2,
+                max_width_chars: 35,
+                ellipsize: 3
+            }))
 
             const cls = new Gtk.Button({
                 child: new Gtk.Image({ icon_name: "window-close-symbolic" }),
                 css_classes: ["nc-notif-close"],
                 valign: Gtk.Align.CENTER,
-                halign: Gtk.Align.END,
-                margin_end: 12 // Escape Gutter: avoid overlay scrollbar 🛡️
+                halign: Gtk.Align.END
             })
             cls.connect("clicked", () => {
                 const idx = notifHistory.indexOf(n)

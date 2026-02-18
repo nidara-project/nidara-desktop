@@ -77,19 +77,42 @@ function debugLauncherState(widget: Gtk.Widget) {
 
 export default function Dock(gdkmonitor: any) {
     // V180: Sync initial width with pinned items to prevent "One-Time Jump" on startup
-    const initialCount = pinnedState.list.length + 3 // Launcher + Home + Trash
-    let totalStaticWidth = initialCount * 82
+    const norm = (s: string) => (s || "").toLowerCase().replace(".desktop", "")
+
+    // V475: Synchronous Width Helper
+    // This allows updateAllTargets and update to always see the same base width
+    // regardless of when they are called.
+    const calculateStableWidth = (effectivePinned: string[]) => {
+        const groupedClients: { [key: string]: any } = {}
+        hypr.clients.forEach(c => {
+            if (c.class?.toLowerCase().includes("ags")) return
+            groupedClients[c.class.toLowerCase()] = true
+        })
+        const runningUnpinnedCount = Object.keys(groupedClients).filter(c =>
+            !effectivePinned.some(p => norm(p) === c)
+        ).length
+
+        // Total = Launcher(1) + Home(1) + Pinned + Running + Trash(1) + Separators(2)
+        const apps = 3 + effectivePinned.length + runningUnpinnedCount
+        return (apps * DOCK_CONSTANTS.APP_SLOT) + (2 * DOCK_CONSTANTS.SEPARATOR_SLOT)
+    }
+
+    const initialPinned = [...pinnedState.list]
+    let totalStaticWidth = calculateStableWidth(initialPinned)
     const widgetCache = new Map<string, Gtk.Widget>()
     let firstRender = true
-    const norm = (s: string) => (s || "").toLowerCase().replace(".desktop", "")
+    // V608: Initial Population for stable startup
+    let orderedIds: string[] = []
+    let smoothedBarWidth = totalStaticWidth
+    let velocityBarWidth = 0
+    let currentTotalItems = 0
 
     // Create Layout First
     const layout = new Gtk.Overlay({
-        name: "dock-main-overlay",
-        css_classes: ["cd-main-overlay"],
-        valign: Gtk.Align.FILL,
-        halign: Gtk.Align.FILL,
-        overflow: Gtk.Overflow.VISIBLE
+        name: "cd-layout",
+        css_classes: ["cd-layout"],
+        halign: Gtk.Align.FILL, // V609: Allow manual centering
+        valign: Gtk.Align.END,
     })
 
     let previewIdx = -1
@@ -127,7 +150,7 @@ export default function Dock(gdkmonitor: any) {
             finalIdx = Math.floor(relX / DOCK_CONSTANTS.APP_SLOT)
         }
 
-        console.log(`[Dock] Drop COMMIT: ${nsid} -> Slot ${finalIdx}`)
+        // console.log(`[Dock] Drop COMMIT: ${nsid} -> Slot ${finalIdx}`)
 
         const wasPinned = pinnedState.list.some(p => norm(p) === nsid)
         const pinnedCount = pinnedState.list.filter(p => norm(p) !== nsid).length
@@ -137,7 +160,7 @@ export default function Dock(gdkmonitor: any) {
 
         // ZONE DECISION:
         // Index 0: Launcher, Index 1: Home
-        if (finalIdx === initialCount - 1) { // Trash is last
+        if (finalIdx === currentTotalItems - 1) { // Trash is last
             console.log(`[Dock] Dropped on TRASH. Unpinning.`)
             onUnpin(draggingId)
             return
@@ -174,21 +197,6 @@ export default function Dock(gdkmonitor: any) {
         update()
     }
 
-    // V475: Synchronous Width Helper
-    // This allows updateAllTargets and update to always see the same base width
-    // regardless of when they are called.
-    const calculateStableWidth = (effectivePinned: string[]) => {
-        const groupedClients: { [key: string]: any } = {}
-        hypr.clients.forEach(c => {
-            if (c.class?.toLowerCase().includes("ags")) return
-            groupedClients[c.class.toLowerCase()] = true
-        })
-        const runningUnpinnedCount = Object.keys(groupedClients).filter(c =>
-            !effectivePinned.some(p => norm(p) === c)
-        ).length
-
-        return (effectivePinned.length + runningUnpinnedCount + 3) * DOCK_CONSTANTS.APP_SLOT + (2 * DOCK_CONSTANTS.SEPARATOR_SLOT)
-    }
 
     const win = new Gtk.Window({
         name: "crystal-dock",
@@ -202,166 +210,146 @@ export default function Dock(gdkmonitor: any) {
     })
     win.set_child(layout)
     const bar = new Gtk.Box({
-        name: "the-dock-bar",
-        css_classes: ["cd-dock-bar"],
-        valign: Gtk.Align.END,
-        halign: Gtk.Align.START,
-        overflow: Gtk.Overflow.VISIBLE,
-        height_request: DOCK_CONSTANTS.PILL_HEIGHT,
+        name: "cd-bar",
+        css_classes: ["cd-bar"],
         spacing: 0,
-        can_focus: false,
+        halign: Gtk.Align.START,
+        valign: Gtk.Align.END,
+        hexpand: false,
     })
 
+    const monitorWidth = gdkmonitor.get_geometry().width
+
+    // V615: PRE-EMPTIVE CENTERING
+    // Set the margin immediately so the very first frame is correct.
+    const initialMargin = Math.round((monitorWidth - totalStaticWidth) / 2)
+    bar.margin_start = Math.max(0, initialMargin)
+
     // --- V17 PHYSICS ENGINE ---
-    type AnimState = {
-        targetScale: number, currentScale: number,
-        targetWidth: number, currentWidth: number,
-        targetMargin: number, currentMargin: number,
-        virtualCenter: number, staticCenter: number, isSeparator: boolean,
-        widget?: Gtk.Widget
-    }
-    const animRegistry = new Map<string, AnimState>()
-    let smoothedBarWidth = totalStaticWidth
+    // AnimState imported from ./state
+    const animRegistry = new Map<string, import("./state").AnimState>()
 
-    const lerp = (start: number, end: number, factor: number) => start + (end - start) * factor
-
+    let lastFrameTime = 0
     let tickId: number | null = null
 
     const runUnifiedTick = () => {
         if (tickId !== null) return
 
+        const lerp = (start: number, end: number, factor: number) => start + (end - start) * factor
+
         tickId = bar.add_tick_callback((_, clock) => {
-            // V320: Also pause the animation shift if a menu is open
             if ((globalThis as any).isAnyMenuOpen) return true
 
             let active = false
             let currentFloatX = 0
+            // monitorWidth already declared at top
 
-            animRegistry.forEach((state, id) => {
+            if (orderedIds.length === 0) {
+                tickId = null
+                return false
+            }
+
+            orderedIds.forEach((id) => {
+                const state = animRegistry.get(id)
+                if (!state) return
+
                 const scaleDiff = Math.abs(state.targetScale - state.currentScale)
-                if (scaleDiff > 0.00001) {
-                    state.currentScale = lerp(state.currentScale, state.targetScale, 0.12)
+                if (scaleDiff > 0.0001) {
+                    state.currentScale = lerp(state.currentScale, state.targetScale, DOCK_CONSTANTS.LERP_FACTOR)
                     active = true
                 } else state.currentScale = state.targetScale
 
                 const widthDiff = Math.abs(state.targetWidth - state.currentWidth)
-                if (widthDiff > 0.001) {
-                    state.currentWidth = lerp(state.currentWidth, state.targetWidth, 0.12)
+                if (widthDiff > 0.01) {
+                    state.currentWidth = lerp(state.currentWidth, state.targetWidth, DOCK_CONSTANTS.LERP_FACTOR)
                     active = true
                 } else state.currentWidth = state.targetWidth
 
                 const marginDiff = Math.abs(state.targetMargin - state.currentMargin)
-                if (marginDiff > 0.001) {
-                    state.currentMargin = lerp(state.currentMargin, state.targetMargin, 0.12)
+                if (marginDiff > 0.01) {
+                    state.currentMargin = lerp(state.currentMargin, state.targetMargin, DOCK_CONSTANTS.LERP_FACTOR)
                     active = true
                 } else state.currentMargin = state.targetMargin
 
-                const widget = widgetCache.get(id)
+                const tyDiff = Math.abs((state.targetTranslateY || 0) - (state.currentTranslateY || 0))
+                if (tyDiff > 0.01) {
+                    state.currentTranslateY = lerp(state.currentTranslateY || 0, state.targetTranslateY || 0, DOCK_CONSTANTS.LERP_FACTOR)
+                    active = true
+                } else state.currentTranslateY = state.targetTranslateY
+
+                const floatSlotW = state.currentWidth + (state.currentMargin * 2)
+                const floatIconStart = currentFloatX + state.currentMargin
+                const floatIconEnd = floatIconStart + state.currentWidth
+                const floatSlotEnd = currentFloatX + floatSlotW
+
+                const intSlotStart = Math.round(currentFloatX)
+                const intSlotEnd = Math.round(floatSlotEnd)
+                const intIconStart = Math.round(floatIconStart)
+                const intIconEnd = Math.round(floatIconEnd)
+
+                currentFloatX = floatSlotEnd
+
+                const widget = state.widget || widgetCache.get(id)
                 if (widget) {
                     const revealer = widget as any
-                    const itemBox = revealer.get_child() as Gtk.Box
-
-                    const floatSlotW = state.currentWidth + (state.currentMargin * 2)
-                    const floatIconStart = currentFloatX + state.currentMargin
-                    const floatIconEnd = floatIconStart + state.currentWidth
-                    const floatSlotEnd = currentFloatX + floatSlotW
-
-                    const intSlotStart = Math.round(currentFloatX)
-                    const intIconStart = Math.round(floatIconStart)
-                    const intIconEnd = Math.round(floatIconEnd)
-                    const intSlotEnd = Math.round(floatSlotEnd)
+                    const itemBox = revealer.get_child ? (revealer.get_child() as Gtk.Box) : revealer
 
                     const drawSlotW = intSlotEnd - intSlotStart
                     const drawIconW = intIconEnd - intIconStart
                     const drawMarginS = intIconStart - intSlotStart
-
-                    currentFloatX = floatSlotEnd
+                    const drawMarginE = drawSlotW - (drawIconW + drawMarginS)
 
                     if (revealer.width_request !== drawSlotW) {
                         revealer.width_request = drawSlotW
                         if (itemBox) itemBox.width_request = drawIconW
                     }
-                    if (itemBox) {
-                        if (itemBox.get_halign() !== Gtk.Align.START) itemBox.set_halign(Gtk.Align.START)
 
-                        if (itemBox.margin_start !== drawMarginS) {
+                    if (itemBox) {
+                        itemBox.margin_bottom = Math.round(0 - state.currentTranslateY)
+                        if (itemBox.margin_start !== drawMarginS || itemBox.margin_end !== drawMarginE) {
                             itemBox.margin_start = drawMarginS
-                            itemBox.margin_end = 0
+                            itemBox.margin_end = drawMarginE
                         }
                     }
 
                     if (!state.isSeparator) {
+                        const targetPixelSize = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
                         const overlay = itemBox?.get_first_child() as Gtk.Overlay
-                        if (!overlay) {
-                            console.warn(`[Dock] No overlay for ${id}`)
-                            return
-                        }
+                        if (overlay) {
+                            const iconBox = overlay.get_child() as Gtk.Box
+                            if (iconBox) {
+                                // V612: Precision scaling for background bar alignment
+                                iconBox.set_size_request(drawIconW, targetPixelSize)
 
-                        // Robust Search for the Plate
-                        let iconBox = overlay.get_child() as Gtk.Box
-                        let plate: Gtk.Widget | null = null
-                        let isNewOverlayStructure = false
-
-                        if (iconBox && (iconBox as any).get_first_child) {
-                            const first = (iconBox as any).get_first_child()
-                            if (first) {
-                                const classes = first.get_css_classes()
-                                if (classes.includes("cd-squircle-plate")) {
-                                    plate = first
-                                } else if (classes.includes("cd-plate-container")) {
-                                    plate = first
-                                    isNewOverlayStructure = true
+                                const plateOverlay = iconBox.get_first_child() as Gtk.Overlay
+                                if (plateOverlay && plateOverlay.get_child) {
+                                    // Plate/Squircle
+                                    const da = plateOverlay.get_child()
+                                    if (da) {
+                                        da.set_size_request(drawIconW, targetPixelSize)
+                                        // Icon Image
+                                        const icon = (da as any).get_next_sibling()
+                                        if (icon) icon.set_size_request(targetPixelSize, targetPixelSize)
+                                    }
+                                } else {
+                                    // Fallback for non-plated items
+                                    const icon = iconBox.get_first_child()
+                                    if (icon) icon.set_size_request(targetPixelSize, targetPixelSize)
                                 }
                             }
-                        }
-
-                        const targetPixelSize = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
-
-                        if (plate) {
-                            // Resize the main container/plate
-                            plate.set_size_request(drawIconW, targetPixelSize)
-
-                            if (isNewOverlayStructure) {
-                                // NEW STRUCTURE: Overlay -> [DA, Icon]
-                                // We must resize the Overlay children explicitly if they don't fill automatically
-                                // The DA is the first child (main child of overlay)
-                                const da = (plate as any).get_child()
-                                if (da) da.set_size_request(targetPixelSize, targetPixelSize)
-
-                                // The Icon is an added overlay (sibling in the widget tree)
-                                const icon = da ? da.get_next_sibling() : null
-                                if (icon) icon.set_size_request(targetPixelSize, targetPixelSize)
-                            } else {
-                                // OLD STRUCTURE: Box -> Icon
-                                const icon = (plate as any).get_first_child()
-                                if (icon) icon.set_size_request(targetPixelSize, targetPixelSize)
-                            }
-                        } else if (iconBox) {
-                            iconBox.set_size_request(drawIconW, targetPixelSize)
                         }
                     }
                 }
             })
 
             const totalIntWidth = Math.round(currentFloatX)
-            if (totalIntWidth === 0 && animRegistry.size > 0) {
-                console.warn("[Dock] Bar width is 0! Check physics constants.")
-            }
-            const monitorWidth = gdkmonitor.get_geometry().width
-
-            // V466: NATURAL CENTERING
-            // Always center the dock based on its LIVE animated width (totalIntWidth).
-            // This ensures perfect visual symmetry and smoothness during magnification.
             const manualMarginStart = Math.round((monitorWidth - totalIntWidth) / 2)
 
-            if (bar.get_halign() !== Gtk.Align.START) bar.set_halign(Gtk.Align.START)
             if (bar.margin_start !== manualMarginStart) {
                 bar.margin_start = manualMarginStart
             }
 
-            // V490: VISUAL SMOOTHNESS
-            // Follow the animated width for the container size.
-            if (Math.abs(smoothedBarWidth - totalIntWidth) > 0.1) {
+            if (active || Math.abs(smoothedBarWidth - totalIntWidth) > 0.01) {
                 smoothedBarWidth = totalIntWidth
                 updateSize()
                 updateInputRegion(smoothedBarWidth)
@@ -369,22 +357,24 @@ export default function Dock(gdkmonitor: any) {
             }
 
             if (!active) {
-                tickId = null
+                tickId = null; lastFrameTime = 0
                 return false
             }
-
             return true
         })
     }
 
-    let currentTotalItems = 0
     let lastMouseX = -1000
     const updateAllTargets = (mouseX: number) => {
         // V320: Freeze magnification shifts while a menu is open to prevent "ghost menu" flickering
         if ((globalThis as any).isAnyMenuOpen) return
 
+        const screenWidth = gdkmonitor.get_geometry().width
         lastMouseX = mouseX
-        const qX = mouseX
+
+        // V609: STABLE STATIC PROJECTION
+        // Mouse is projected into static space to match visual wave.
+        const pX = lastMouseX === -1000 ? -1000 : getProjectedMouseX(lastMouseX, screenWidth, totalStaticWidth)
 
         const draggingId = dragBus.draggingId
         if (draggingId) {
@@ -393,7 +383,7 @@ export default function Dock(gdkmonitor: any) {
             // This makes slot calculation absolute and immune to visual shifts.
             const relX = lastMouseX - lockedStartX
 
-            // V482: 70% STICKY SLOT HYSTERESIS
+            // V482: 50% STICKY SLOT HYSTERESIS
             const slotSize = DOCK_CONSTANTS.APP_SLOT
             // Re-calculate targetIdx with fresh logic
             let targetIdx = Math.floor(relX / slotSize)
@@ -401,7 +391,7 @@ export default function Dock(gdkmonitor: any) {
             if (previewIdx !== -1) {
                 const currentSlotCenterX = previewIdx * slotSize + slotSize / 2
                 const distToCenter = relX - currentSlotCenterX
-                if (Math.abs(distToCenter) < slotSize * 0.70) {
+                if (Math.abs(distToCenter) < slotSize * 0.50) {
                     targetIdx = previewIdx
                 }
             }
@@ -418,19 +408,18 @@ export default function Dock(gdkmonitor: any) {
 
             // V535: HOVER RESTORATION
             // Map targetIdx back to an appId to restore plates/visual feedback
-            // This replaces the removed DropTarget.enter/leave logic.
+            // For now, clear hover if out of bounds, else set it.
+            // (Detailed mapping is complex, simplest is to let magnification guide it)
             const hoverTotal = currentTotalItems || 10
             if (targetIdx >= 0 && targetIdx <= hoverTotal) {
                 // We'll let update() loop handle the mapping or do a rough estimate
-                // For now, clear hover if out of bounds, else set it.
-                // (Detailed mapping is complex, simplest is to let magnification guide it)
             } else {
                 dragBus.clearHover()
             }
         }
 
-        animRegistry.forEach((state) => {
-            if (qX === -1000) {
+        animRegistry.forEach((state, id) => {
+            if (pX === -1000) {
                 state.targetScale = 1.0
                 if (state.isSeparator) {
                     state.targetWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.targetMargin = 0
@@ -438,10 +427,7 @@ export default function Dock(gdkmonitor: any) {
                     state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.targetMargin = DOCK_CONSTANTS.BASE_MARGIN
                 }
             } else {
-                // V483: Sync Magnification with LIVE layout for alignment
-                // We use totalStaticWidth (current unmagnified width) so magnification 
-                // stays centered over the actual widgets as they reshuffle.
-                const pX = getProjectedMouseX(qX, gdkmonitor.get_geometry().width, totalStaticWidth)
+                // If dragging, we use the projected mouse to hit the static slots
                 const metrics = calculateDockItemMetrics(
                     pX,
                     state.staticCenter,
@@ -461,7 +447,7 @@ export default function Dock(gdkmonitor: any) {
         const surface = win.get_native()?.get_surface()
         if (!surface) return
 
-        const monitorWidth = gdkmonitor.get_geometry().width
+        // monitorWidth already declared at top
         const region = new Cairo.Region()
 
         // V300: Surgical Input Region for 200px window.
@@ -476,7 +462,11 @@ export default function Dock(gdkmonitor: any) {
             return
         }
 
-        const width = totalWidth + 80
+        // V422: GENEROUS INPUT REGION
+        // We expand the interaction zone by 250px on each side to ensure 
+        // the magnification starts growing SMOOTHLY before the mouse hits the icons.
+        // This eliminates the "jump" reported by the user.
+        const width = totalWidth + 500
         const x = (monitorWidth - width) / 2
         const y = 200 - 110
 
@@ -543,19 +533,20 @@ export default function Dock(gdkmonitor: any) {
     })
 
     const updateSize = () => {
+        if (!bar || !win) return
+        // V606: Restore bar width for CENTER alignment consistency.
+        bar.set_size_request(smoothedBarWidth, -1)
+
         const targetW = smoothedBarWidth + 18
-        const currentW = da.get_allocated_width()
-        // V141: Only resize if significant change (>1px) to prevent Wayland buffer thrashing / jitter
-        if (Math.abs(currentW - targetW) > 1) {
+        if (da) {
+            // V608: Removed threshold for maximum responsiveness.
             da.set_size_request(targetW, DOCK_CONSTANTS.PILL_HEIGHT)
             da.queue_draw()
-        } else {
-            da.queue_draw() // Just redraw if size is close enough
         }
     }
 
     const shim = new Gtk.Box({
-        valign: Gtk.Align.END, halign: Gtk.Align.START,
+        valign: Gtk.Align.END, halign: Gtk.Align.START, // V601: Logic Anchor
         margin_bottom: 10,
         height_request: DOCK_CONSTANTS.PILL_HEIGHT,
         vexpand: true,
@@ -666,7 +657,7 @@ export default function Dock(gdkmonitor: any) {
                 runningUnpinnedKeys = groupedKeys.filter(k => !pinnedState.list.some(p => norm(p) === k))
             }
 
-            type ItemConfig = { id: string, width: number, syncData?: any, isPinned: boolean, factory: (vc: number) => Gtk.Widget }
+            type ItemConfig = { id: string, width: number, syncData?: any, isPinned: boolean, factory: (vc: number) => Gtk.Widget, isSeparator?: boolean }
             const configs: ItemConfig[] = []
             const currentIds = new Set<string>()
 
@@ -923,6 +914,7 @@ export default function Dock(gdkmonitor: any) {
                 id: separatorId, width: DOCK_CONSTANTS.SEPARATOR_SLOT,
                 syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
                 isPinned: true,
+                isSeparator: true,
                 factory: (vc) => {
                     const w = Separator(separatorId, update, (id, s) => animRegistry.set(id, s), 64, onReorder)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
@@ -969,6 +961,7 @@ export default function Dock(gdkmonitor: any) {
                 id: "sep-trash", width: DOCK_CONSTANTS.SEPARATOR_SLOT,
                 syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
                 isPinned: true,
+                isSeparator: true,
                 factory: (vc) => {
                     const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 64, onReorder)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
@@ -1002,25 +995,31 @@ export default function Dock(gdkmonitor: any) {
                 }
             })
 
-            currentTotalItems = configs.length
-            totalStaticWidth = configs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
-            const totalWidth = totalStaticWidth
-
-            const screenWidth = gdkmonitor.get_geometry().width
-            const startX = (screenWidth - totalWidth) / 2
-            let currentX = startX
-            // Ensure NO DUPLICATE IDs in final mapping
             const processed = new Set<string>()
-            const finalItems = configs.filter(c => {
+            const validConfigs = configs.filter(c => {
                 if (processed.has(c.id)) return false
                 processed.add(c.id); return true
-            }).map((c) => {
+            })
+
+            orderedIds = validConfigs.map(c => c.id)
+            currentTotalItems = validConfigs.length
+
+            totalStaticWidth = validConfigs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
+
+            const screenWidth = gdkmonitor.get_geometry().width
+            const startX = (screenWidth - totalStaticWidth) / 2
+            let runningX = startX
+
+            const finalItems = validConfigs.map((c) => {
                 const slotWidth = c.width || DOCK_CONSTANTS.APP_SLOT
-                const myCenter = currentX + (slotWidth / 2)
-                currentX += slotWidth
+                const myCenter = runningX + (slotWidth / 2)
+                runningX += slotWidth
 
                 const widget = getOrCreateItem(c.id, () => c.factory(myCenter))
-                const inner = (widget as any).get_child()
+                const state = animRegistry.get(c.id)
+                if (state) state.staticCenter = myCenter
+
+                const inner = (widget as any).get_child ? (widget as any).get_child() : widget
                 if (inner && (inner as any).setVirtualCenter) (inner as any).setVirtualCenter(myCenter)
 
                 if (inner && (inner as any).syncState && (c as any).syncData) {
@@ -1059,14 +1058,20 @@ export default function Dock(gdkmonitor: any) {
             }
 
             let totalCurrentWidth = 0
-            animRegistry.forEach((state, id) => {
-                const metrics = calculateDockItemMetrics(lastMouseX, state.staticCenter, state.isSeparator)
+            const screenWidth2 = gdkmonitor.get_geometry().width
+            const pX_sync = lastMouseX === -1000 ? -1000 : getProjectedMouseX(lastMouseX, screenWidth2, totalStaticWidth)
+
+            orderedIds.forEach((id) => {
+                const state = animRegistry.get(id)
+                if (!state) return
+                const metrics = calculateDockItemMetrics(pX_sync, state.staticCenter, state.isSeparator)
                 state.targetScale = metrics.scale
                 state.targetWidth = metrics.width
                 state.targetMargin = metrics.margin
 
-                if (firstRender) {
-                    // Force immediate only for first frame
+                // V603: Sync immediate state for first render OR when tick is not active 
+                // to prevent background width "lag/strips"
+                if (firstRender || !tickId) {
                     state.currentScale = metrics.scale
                     state.currentWidth = metrics.width
                     state.currentMargin = metrics.margin
@@ -1074,12 +1079,13 @@ export default function Dock(gdkmonitor: any) {
                 totalCurrentWidth += state.currentWidth + (state.currentMargin * 2)
             })
 
-            // Sync alignment to prevent "bad load" shift - ONLY on first load
-            if (firstRender) {
+            // Sync alignment to prevent "bad load" shift
+            if (firstRender || !tickId) {
                 smoothedBarWidth = totalCurrentWidth
-                const monitorWidth = gdkmonitor.get_geometry().width
                 const manualMarginStart = Math.round((monitorWidth - smoothedBarWidth) / 2)
                 bar.margin_start = manualMarginStart
+                updateSize()
+                firstRender = false
             }
 
             if (!tickId) runUnifiedTick()
@@ -1098,7 +1104,7 @@ export default function Dock(gdkmonitor: any) {
         }
     }
 
-    const monitorWidth = gdkmonitor.get_geometry().width
+    // monitorWidth already declared at line 221
     win.set_default_size(monitorWidth, 200) // V300: High window prevents icon clipping
     let layerInit = false
     try {
@@ -1126,11 +1132,12 @@ export default function Dock(gdkmonitor: any) {
             Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true);
             Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true);
             Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 0);
-            if (animRegistry.size > 0) {
+            if (orderedIds.length > 0) {
                 let total = 0
-                for (const s of animRegistry.values()) {
-                    total += s.currentWidth + (s.currentMargin * 2)
-                }
+                orderedIds.forEach(id => {
+                    const s = animRegistry.get(id)
+                    if (s) total += s.currentWidth + (s.currentMargin * 2)
+                })
                 updateInputRegion(total)
             }
 
@@ -1138,11 +1145,12 @@ export default function Dock(gdkmonitor: any) {
 
             win.connect("realize", () => {
                 // V300: Delegate to surgical updateInputRegion on realize
-                if (animRegistry.size > 0) {
+                if (orderedIds.length > 0) {
                     let total = 0
-                    for (const s of animRegistry.values()) {
-                        total += s.currentWidth + (s.currentMargin * 2)
-                    }
+                    orderedIds.forEach(id => {
+                        const s = animRegistry.get(id)
+                        if (s) total += s.currentWidth + (s.currentMargin * 2)
+                    })
                     updateInputRegion(total)
                 } else {
                     updateInputRegion(totalStaticWidth)
@@ -1223,7 +1231,7 @@ export default function Dock(gdkmonitor: any) {
     })
 
     update()
-    // V197: Redundant late-update timeouts removed. initialCount logic handles it.
+    // V197: Redundant late-update timeouts removed. initialPinned logic handles it.
 
     win.present()
 

@@ -1,0 +1,6 @@
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mUnexpected ")"[0m
+
+    widget/dock/Dock.tsx:396:17:
+[37m      396 │                 }[32m)[37m
+          ╵                  [32m^[0m
+

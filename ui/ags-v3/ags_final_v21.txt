@@ -1,0 +1,12 @@
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mThe symbol "monitorWidth" has already been declared[0m
+
+    widget/dock/Dock.tsx:1107:10:
+[37m      1107 │     const [32mmonitorWidth[37m = gdkmonitor.get_geometry().width
+           ╵           [32m~~~~~~~~~~~~[0m
+
+  The symbol "monitorWidth" was originally declared here:
+
+    widget/dock/Dock.tsx:221:10:
+[37m      221 │     const [32mmonitorWidth[37m = gdkmonitor.get_geometry().width
+          ╵           [32m~~~~~~~~~~~~[0m
+

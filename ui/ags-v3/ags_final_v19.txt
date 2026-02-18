@@ -1,0 +1,102 @@
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.523: Theme parser error: gtk.css:1:1-52: Failed to import: El recurso en «/org/gnome/theme/gtk.css» no existe
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.527: Theme parser error: gtk-dark.css:3792:126-133: Expected a number
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.527: Theme parser error: gtk-dark.css:3792:138-139: Expected color stop to contain a color
+
+(gjs:1525821): Adwaita-WARNING **: 18:58:03.542: Using GtkSettings:gtk-application-prefer-dark-theme with libadwaita is unsupported. Please use AdwStyleManager:color-scheme instead.
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.584: Theme parser error: gtk.css:1:1-52: Failed to import: El recurso en «/org/gnome/theme/gtk.css» no existe
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.584: Theme parser error: gtk.css:1:1-52: Failed to import: El recurso en «/org/gnome/theme/gtk.css» no existe
+Gjs-Console-Message: 18:58:03.586: [AppService] Synchronizing Registry...
+Gjs-Console-Message: 18:58:03.636: [AppService] Registry synced. 34 apps, 41 names cached in 50ms.
+Gjs-Console-Message: 18:58:03.639: [Dock] Module Loaded
+[Dock] Module Loaded (print)
+Gjs-Console-Message: 18:58:03.642: [DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)
+Gjs-Console-Message: 18:58:03.642: [DISTROIA] Calling app.start()...
+ags-Message: 18:58:03.643: [DISTROIA] main() started! (ID: 2080)
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.664: Theme parser error: gtk.css:1:1-52: Failed to import: El recurso en «/org/gnome/theme/gtk.css» no existe
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.664: Theme parser error: style.css:1:1-9: Unknown @ rule
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.664: Theme parser error: style.css:281:3-19: No property named "-gtk-icon-effect"
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.664: Theme parser error: style.css:330:3-19: No property named "-gtk-icon-effect"
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.664: Theme parser error: style.css:398:3-19: No property named "-gtk-icon-effect"
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.664: Theme parser error: style.css:724:7-8: Expected a valid selector
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.665: Theme parser error: style.css:780:3-12: No property named "max-width"
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.665: Theme parser error: style.css:781:3-11: No property named "overflow"
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.665: Theme parser error: style.css:789:3-11: No property named "overflow"
+
+(gjs:1525821): Gtk-WARNING **: 18:58:03.665: Theme parser error: style.css:1199:3-19: No property named "-gtk-icon-effect"
+ags-Message: 18:58:03.666: [Style] Loaded: /home/angel/Dev/Distroia/ui/ags-v3/style.css
+ags-Message: 18:58:03.667: [Style] Sync: Inter Variable Medium 11px
+Display found: true
+Monitor count: 1
+ags-Message: 18:58:03.667: [UI] Monitor 0
+
+(gjs:1525821): Gtk-CRITICAL **: 18:58:03.751: gtk_widget_add_controller: assertion 'gtk_event_controller_get_widget (controller) == NULL' failed
+[Dock] Home Shortcut exposed for debugging
+
+(gjs:1525821): Gtk-CRITICAL **: 18:58:03.754: gtk_widget_add_controller: assertion 'gtk_event_controller_get_widget (controller) == NULL' failed
+
+(gjs:1525821): Gtk-CRITICAL **: 18:58:03.756: gtk_widget_add_controller: assertion 'gtk_event_controller_get_widget (controller) == NULL' failed
+
+(gjs:1525821): Gtk-CRITICAL **: 18:58:03.777: gtk_widget_add_controller: assertion 'gtk_event_controller_get_widget (controller) == NULL' failed
+
+(gjs:1525821): Gtk-CRITICAL **: 18:58:03.780: gtk_widget_add_controller: assertion 'gtk_event_controller_get_widget (controller) == NULL' failed
+
+(gjs:1525821): Gtk-CRITICAL **: 18:58:03.783: gtk_widget_add_controller: assertion 'gtk_event_controller_get_widget (controller) == NULL' failed
+
+(gjs:1525821): Gtk-CRITICAL **: 18:58:03.785: gtk_widget_add_controller: assertion 'gtk_event_controller_get_widget (controller) == NULL' failed
+
+(gjs:1525821): Gtk-CRITICAL **: 18:58:03.787: gtk_widget_add_controller: assertion 'gtk_event_controller_get_widget (controller) == NULL' failed
+
+(gjs:1525821): Gtk-CRITICAL **: 18:58:03.789: gtk_widget_add_controller: assertion 'gtk_event_controller_get_widget (controller) == NULL' failed
+
+(gjs:1525821): GLib-GIO-CRITICAL **: 18:58:03.812: g_list_store_remove: assertion '!g_sequence_iter_is_end (it)' failed
+
+** (gjs:1525821): CRITICAL **: 18:58:04.188: player.vala:715: Failed to cache cover art with url "data:image/jpeg;base64,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": La ubicación especificada no está soportada
+
+** (gjs:1525821): CRITICAL **: 18:58:04.189: player.vala:715: Failed to cache cover art with url "data:image/jpeg;base64,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": La ubicación especificada no está soportada
+ags-Message: 18:58:04.313: [AppService] System theme changed to Tela-circle-purple, refreshing registry...
+ags-Message: 18:58:04.313: [AppService] Synchronizing Registry...
+ags-Message: 18:58:04.317: [AppService] Registry synced. 34 apps, 41 names cached in 4ms.
+[StateDebug Dump] 
+<Gtk_Box name="cd-item-home-shortcut" class="cd-item">
+  <Gtk_Overlay name="cd-overlay-home-shortcut" class="overlay.cd-overlay">
+    <Gtk_Box name="cd-icon-box-home-shortcut" class="cd-icon-container">
+      <Gtk_Overlay name="GtkOverlay" class="cd-plate-container">
+        <Gtk_DrawingArea name="GtkDrawingArea" class="cd-squircle-plate-drawing">
+        <Gtk_DrawingArea name="cd-icon-image-home-shortcut" class="">
+      <Gtk_Popover name="GtkPopover" class="cd-tooltip">
+        <unknown_GtkPopoverContent name="GtkPopoverContent" class="">
+          <Gtk_Box name="GtkBox" class="cd-tooltip-content">
+            <Gtk_Label name="GtkLabel" class="cd-tooltip-label">
+    <Gtk_Box name="cd-indicator-home-shortcut" class="cd-indicator-container">
+      <Gtk_Box name="cd-dot-home-shortcut" class="cd-dot">
+
+[StateDebug Dump] 
+<Gtk_Box name="cd-item-home-shortcut" class="cd-item">
+  <Gtk_Overlay name="cd-overlay-home-shortcut" class="overlay.cd-overlay">
+    <Gtk_Box name="cd-icon-box-home-shortcut" class="cd-icon-container">
+      <Gtk_Overlay name="GtkOverlay" class="cd-plate-container">
+        <Gtk_DrawingArea name="GtkDrawingArea" class="cd-squircle-plate-drawing">
+        <Gtk_DrawingArea name="cd-icon-image-home-shortcut" class="">
+      <Gtk_Popover name="GtkPopover" class="cd-tooltip">
+        <unknown_GtkPopoverContent name="GtkPopoverContent" class="">
+          <Gtk_Box name="GtkBox" class="cd-tooltip-content">
+            <Gtk_Label name="GtkLabel" class="cd-tooltip-label">
+    <Gtk_Box name="cd-indicator-home-shortcut" class="cd-indicator-container">
+      <Gtk_Box name="cd-dot-home-shortcut" class="cd-dot">
+
+ags-Message: 18:58:08.636: [AppService] Synchronizing Registry...
+ags-Message: 18:58:08.641: [AppService] Registry synced. 34 apps, 41 names cached in 5ms.

@@ -227,10 +227,9 @@ window#crystal-control-center overlay {
 
 /* Re-apply the actual panel background ONLY to .control-center box */
 window#crystal-control-center .control-center {
-    background-color: rgba(18, 18, 28, 0.3);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 24px;
-    padding: 24px;
-    min-width: 420px;
+    /* CLEAN RESET: Aesthetics moved to .cc-panel-structure 🏛️ */
+    background: transparent;
+    border: none;
+    padding: 0;
     box-shadow: none;
 }

@@ -8,6 +8,7 @@ import AstalHyprland from "gi://AstalHyprland"
 import AstalApps from "gi://AstalApps"
 import GObject from "gi://GObject"
 import Gio from "gi://Gio"
+import Cairo from "gi://cairo"
 import appService from "../../core/AppService" // Ensure import path is correct relative to this file
 import { DOCK_CONSTANTS } from "./DockPhysics"
 import { drawSquircle } from "./DockUtils"
@@ -54,9 +55,10 @@ export function Separator(id: string, updateDock: () => void, register: (id: str
     box.set_center_widget(line)
 
     const state = {
-        targetScale: 1.0, currentScale: 1.0,
-        targetWidth: baseWidth, currentWidth: baseWidth,
-        targetMargin: 0, currentMargin: 0,
+        targetScale: 1.0, currentScale: 1.0, velocityScale: 0,
+        targetWidth: baseWidth, currentWidth: baseWidth, velocityWidth: 0,
+        targetMargin: 0, currentMargin: 0, velocityMargin: 0,
+        targetTranslateY: 0, currentTranslateY: 0, velocityY: 0,
         staticCenter: 0,
         virtualCenter: 0,
         isSeparator: true,
@@ -108,7 +110,7 @@ export function DockItem(
         name: "cd-item-" + appId,
         css_classes: ["cd-item"],
         valign: Gtk.Align.END,
-        halign: Gtk.Align.CENTER,
+        halign: Gtk.Align.START,
         hexpand: false,
         width_request: DOCK_CONSTANTS.APP_SLOT,
         height_request: DOCK_CONSTANTS.PILL_HEIGHT,
@@ -262,9 +264,10 @@ export function DockItem(
     // Removed override: child.set_size_request(..., ...) - Size is handled by DrawingArea setup or Plate logic
 
     const state = {
-        targetScale: 1.0, currentScale: 1.0,
-        targetWidth: DOCK_CONSTANTS.ICON_SIZE, currentWidth: DOCK_CONSTANTS.ICON_SIZE,
-        targetMargin: DOCK_CONSTANTS.BASE_MARGIN, currentMargin: DOCK_CONSTANTS.BASE_MARGIN,
+        targetScale: 1.0, currentScale: 1.0, velocityScale: 0,
+        targetWidth: DOCK_CONSTANTS.ICON_SIZE, currentWidth: DOCK_CONSTANTS.ICON_SIZE, velocityWidth: 0,
+        targetMargin: DOCK_CONSTANTS.BASE_MARGIN, currentMargin: DOCK_CONSTANTS.BASE_MARGIN, velocityMargin: 0,
+        targetTranslateY: 0, currentTranslateY: 0, velocityY: 0,
         staticCenter: 0,
         virtualCenter: 0,
         isSeparator: false,
@@ -568,7 +571,10 @@ export function DockItem(
             }
         } else {
             // Fallback or Launch
-            try { appItem.launch() } catch (e) {
+            try {
+                if ((globalThis as any).triggerDockBounce) (globalThis as any).triggerDockBounce(appId)
+                appItem.launch()
+            } catch (e) {
                 execAsync(`gtk-launch ${appId}`).catch(print)
             }
         }

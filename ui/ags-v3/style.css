@@ -243,11 +243,10 @@ window#crystal-control-center overlay {
 
 /* Re-apply the actual panel background ONLY to .control-center box */
 window#crystal-control-center .control-center {
-  background-color: rgba(18, 18, 28, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 24px;
-  padding: 24px;
-  min-width: 420px;
+  /* CLEAN RESET: Aesthetics moved to .cc-panel-structure 🏛️ */
+  background: transparent;
+  border: none;
+  padding: 0;
   box-shadow: none;
 }
 
@@ -281,6 +280,10 @@ window#crystal-control-center .control-center {
   min-width: 64px;
   -gtk-icon-effect: none;
   -gtk-icon-shadow: none;
+}
+
+.cd-item.cd-dragging {
+  opacity: 0.3;
 }
 
 /* 💣 SPECIFICITY BOMB: Kill internal nodes with ID-based path */
@@ -345,13 +348,7 @@ window#crystal-dock box.cd-item > focus-ring {
   background-color: transparent;
 }
 
-/* Drag Gap */
-window#crystal-dock box.cd-drag-gap,
-.cd-drag-gap {
-  margin-left: 72px;
-  transition: margin-left 0.2s cubic-bezier(0.2, 0, 0, 1);
-}
-
+/* Drag Gap Removed: Handled by live reordering */
 /* Transition Override */
 .cd-item {
   transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1);
@@ -713,53 +710,54 @@ window.crystal-bar {
   outline: none;
 }
 
-.control-center-win,
-.notification-center-win {
-  background-color: transparent !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  border: none !important;
+window#crystal-control-center,
+window.control-center-win,
+window.notification-center-win {
+  background-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  border: none;
 }
 
 /* NUCLEAR TRANSPARENCY 💎 */
 window#crystal-control-center,
 window[name=crystal-control-center],
 window.control-center-win {
-  background-color: transparent !important;
-  background-image: none !important;
-  border-style: none !important;
-  box-shadow: none !important;
-  outline-style: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
+  background-color: transparent;
+  background-image: none;
+  border-style: none;
+  box-shadow: none;
+  outline-style: none;
+  margin: 0;
+  padding: 0;
 }
 
 window.control-center-win decoration,
 window.control-center-win > box,
 window.control-center-win > box > widget {
-  background-color: transparent !important;
-  background-image: none !important;
-  box-shadow: none !important;
-  border: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+  margin: 0;
+  padding: 0;
 }
 
 /* Hide ALL scale sub-nodes to prevent clipping/straight-edges 🛡️ */
 .cc-slider-structure scale {
   all: unset;
-  background: transparent !important;
+  background: transparent;
 }
 .cc-slider-structure scale contents,
 .cc-slider-structure scale trough,
 .cc-slider-structure scale highlight,
 .cc-slider-structure scale slider {
   all: unset;
-  background: transparent !important;
-  background-color: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
+  background: transparent;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
   min-height: 0;
   min-width: 0;
   margin: 0;
@@ -788,7 +786,7 @@ window.control-center-win > box > widget {
 .cc-sliders-column,
 .cc-slider-structure,
 .cc-slider-overlay {
-  overflow: visible !important;
+  overflow: visible;
 }
 
 /* Hide ALL scale sub-nodes BROADLY (Nuclear Fix) 🛡️ */
@@ -796,18 +794,18 @@ window.control-center-win > box > widget {
 scale.cc-slider-scale-input,
 scale.cc-slider-scale-input > * {
   all: unset;
-  background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
-  opacity: 0 !important;
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
-  color: transparent !important;
-  min-height: 0 !important;
-  min-width: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  opacity: 0;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  color: transparent;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
 }
 .cc-slider-structure scale contents,
 .cc-slider-structure scale trough,
@@ -830,18 +828,18 @@ scale.cc-slider-scale-input > * slider,
 scale.cc-slider-scale-input > * fill,
 scale.cc-slider-scale-input > * marks,
 scale.cc-slider-scale-input > * value {
-  all: unset !important;
-  background: transparent !important;
-  background-color: transparent !important;
-  opacity: 0 !important;
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
-  min-height: 0 !important;
-  min-width: 0 !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  color: transparent !important;
+  all: unset;
+  background: transparent;
+  background-color: transparent;
+  opacity: 0;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  min-height: 0;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  color: transparent;
 }
 
 /* Icons are now handled in the TSX layout */
@@ -903,29 +901,29 @@ scale.cc-slider-scale-input > * value {
 scale.cc-slider-scale-input {
   all: unset;
   min-height: 48px;
-  background: transparent !important;
-  background-image: none !important;
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
   color: transparent;
 }
 scale.cc-slider-scale-input trough,
 scale.cc-slider-scale-input highlight,
 scale.cc-slider-scale-input slider {
   all: unset;
-  background: transparent !important;
-  background-color: transparent !important;
-  background-image: none !important;
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
   min-height: 48px;
   min-width: 0;
   margin: 0;
   padding: 0;
-  transition: none !important;
-  animation: none !important;
+  transition: none;
+  animation: none;
 }
 
 .cc-slider-icon {
@@ -1092,14 +1090,14 @@ scale.cc-slider-scale-input slider {
 .cc-scroll scrollbar.vertical trough {
   background: transparent;
   border: none;
-  min-width: 8px;
+  min-width: 0;
 }
 
 .cc-scroll scrollbar.vertical slider {
-  background-color: rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.1);
   border-radius: 10px;
   min-width: 6px;
-  margin: 2px;
+  margin: 0;
   min-height: 48px;
   transition: background-color 0.2s ease;
 }
@@ -1229,11 +1227,11 @@ window.control-center-win,
 window.control-center-win > decoration,
 window.control-center-win > box,
 window.control-center-win > widget {
-  background: none !important;
-  background-color: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  outline: none !important;
+  background: none;
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
 }
 
 /* 

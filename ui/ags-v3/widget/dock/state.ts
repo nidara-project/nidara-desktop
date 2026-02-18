@@ -61,15 +61,26 @@ export const savePinned = () => {
 export interface AnimState {
     targetScale: number
     currentScale: number
+    velocityScale: number      // V600: Spring Velocity
+
     targetWidth: number
     currentWidth: number
+    velocityWidth: number      // V600: Spring Velocity
+
     targetMargin: number
     currentMargin: number
+    velocityMargin: number     // V600: Spring Velocity
+
+    targetTranslateY: number   // V600: For Bounce/Vertical Shift
+    currentTranslateY: number
+    velocityY: number          // V600: Spring Velocity
+
     virtualCenter: number
     staticCenter: number
     isSeparator: boolean
     addresses?: string[]
     clientTitle?: string
+    widget: Gtk.Widget // This is a bit of a hack but needed for quick access in loop
 }
 
 // --- EVENT BUSES ---
