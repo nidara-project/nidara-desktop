@@ -274,39 +274,35 @@ export default function Dock(gdkmonitor: any) {
                 return false
             }
 
+            const stiffness = DOCK_CONSTANTS.STIFFNESS
+            const damping = DOCK_CONSTANTS.DAMPING
+            const dt = 1 / 60 // Fixed time step for stability
+
             orderedIds.forEach((id) => {
                 const state = animRegistry.get(id)
                 if (!state) return
 
-                const scaleDiff = Math.abs(state.targetScale - state.currentScale)
-                if (scaleDiff > 0.0001) {
-                    state.currentScale = lerp(state.currentScale, state.targetScale, DOCK_CONSTANTS.LERP_FACTOR)
-                    active = true
-                } else state.currentScale = state.targetScale
+                // SPRING SCALE
+                const forceScale = stiffness * (state.targetScale - state.currentScale) - damping * state.velocityScale
+                state.velocityScale += forceScale * dt
+                state.currentScale += state.velocityScale * dt
 
-                const widthDiff = Math.abs(state.targetWidth - state.currentWidth)
-                if (widthDiff > 0.01) {
-                    state.currentWidth = lerp(state.currentWidth, state.targetWidth, DOCK_CONSTANTS.LERP_FACTOR)
-                    active = true
-                } else state.currentWidth = state.targetWidth
+                // SPRING WIDTH
+                const forceWidth = stiffness * (state.targetWidth - state.currentWidth) - damping * state.velocityWidth
+                state.velocityWidth += forceWidth * dt
+                state.currentWidth += state.velocityWidth * dt
 
-                const marginDiff = Math.abs(state.targetMargin - state.currentMargin)
-                if (marginDiff > 0.01) {
-                    state.currentMargin = lerp(state.currentMargin, state.targetMargin, DOCK_CONSTANTS.LERP_FACTOR)
-                    active = true
-                } else state.currentMargin = state.targetMargin
+                // SPRING MARGIN
+                const forceMargin = stiffness * (state.targetMargin - state.currentMargin) - damping * state.velocityMargin
+                state.velocityMargin += forceMargin * dt
+                state.currentMargin += state.velocityMargin * dt
 
-                const tyDiff = Math.abs((state.targetTranslateY || 0) - (state.currentTranslateY || 0))
-                if (tyDiff > 0.01) {
-                    state.currentTranslateY = lerp(state.currentTranslateY || 0, state.targetTranslateY || 0, DOCK_CONSTANTS.LERP_FACTOR)
+                // Check Activity
+                if (Math.abs(state.velocityScale) > 0.001 || Math.abs(state.targetScale - state.currentScale) > 0.001 ||
+                    Math.abs(state.velocityWidth) > 0.01 || Math.abs(state.targetWidth - state.currentWidth) > 0.01 ||
+                    Math.abs(state.velocityMargin) > 0.01 || Math.abs(state.targetMargin - state.currentMargin) > 0.01) {
                     active = true
-                } else state.currentTranslateY = state.targetTranslateY
-
-                const hDiff = Math.abs((state.targetHeight || 0) - (state.currentHeight || 0))
-                if (hDiff > 0.01) {
-                    state.currentHeight = lerp(state.currentHeight || 0, state.targetHeight || 0, DOCK_CONSTANTS.LERP_FACTOR)
-                    active = true
-                } else state.currentHeight = state.targetHeight
+                }
 
                 const floatSlotW = state.currentWidth + (state.currentMargin * 2)
                 const floatIconStart = currentFloatX + state.currentMargin
@@ -403,9 +399,14 @@ export default function Dock(gdkmonitor: any) {
         const screenWidth = gdkmonitor.get_geometry().width
         lastMouseX = mouseX
 
-        // V609: STABLE STATIC PROJECTION
-        // Mouse is projected into static space to match visual wave.
-        const pX = lastMouseX === -1000 ? -1000 : getProjectedMouseX(lastMouseX, screenWidth, totalStaticWidth)
+        // V621: DYNAMIC PEAK PROJECTION
+        // Instead of hardcoded maxShift, we use the real-time expansion factor.
+        const pX = lastMouseX === -1000 ? -1000 : getProjectedMouseX(
+            lastMouseX,
+            screenWidth,
+            totalStaticWidth,
+            smoothedBarWidth || totalStaticWidth
+        )
 
         const draggingId = dragBus.draggingId
         if (draggingId) {
@@ -1064,7 +1065,7 @@ export default function Dock(gdkmonitor: any) {
 
             let totalCurrentWidth = 0
             const screenWidth2 = gdkmonitor.get_geometry().width
-            const pX_sync = lastMouseX === -1000 ? -1000 : getProjectedMouseX(lastMouseX, screenWidth2, totalStaticWidth)
+            const pX_sync = lastMouseX === -1000 ? -1000 : getProjectedMouseX(lastMouseX, screenWidth2, totalStaticWidth, smoothedBarWidth || totalStaticWidth)
 
             orderedIds.forEach((id) => {
                 const state = animRegistry.get(id)
