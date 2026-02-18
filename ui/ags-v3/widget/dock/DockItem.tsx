@@ -112,7 +112,7 @@ export function DockItem(
         valign: Gtk.Align.END,
         halign: Gtk.Align.START,
         hexpand: false,
-        width_request: DOCK_CONSTANTS.APP_SLOT,
+        width_request: DOCK_CONSTANTS.ICON_SIZE,
         height_request: DOCK_CONSTANTS.PILL_HEIGHT,
         can_focus: false,
         focusable: false, // V405: Explicitly disable focus

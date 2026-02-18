@@ -218,11 +218,11 @@ export default function Dock(gdkmonitor: any) {
         hexpand: false,
     })
 
-    const monitorWidth = gdkmonitor.get_geometry().width
+    const dockMonitorWidth = gdkmonitor.get_geometry().width
 
     // V615: PRE-EMPTIVE CENTERING
     // Set the margin immediately so the very first frame is correct.
-    const initialMargin = Math.round((monitorWidth - totalStaticWidth) / 2)
+    const initialMargin = Math.round((dockMonitorWidth - totalStaticWidth) / 2)
     bar.margin_start = Math.max(0, initialMargin)
 
     // --- V17 PHYSICS ENGINE ---
@@ -242,7 +242,7 @@ export default function Dock(gdkmonitor: any) {
 
             let active = false
             let currentFloatX = 0
-            // monitorWidth already declared at top
+            // dockMonitorWidth already declared at top
 
             if (orderedIds.length === 0) {
                 tickId = null
@@ -343,7 +343,7 @@ export default function Dock(gdkmonitor: any) {
             })
 
             const totalIntWidth = Math.round(currentFloatX)
-            const manualMarginStart = Math.round((monitorWidth - totalIntWidth) / 2)
+            const manualMarginStart = Math.round((dockMonitorWidth - totalIntWidth) / 2)
 
             if (bar.margin_start !== manualMarginStart) {
                 bar.margin_start = manualMarginStart
@@ -447,7 +447,7 @@ export default function Dock(gdkmonitor: any) {
         const surface = win.get_native()?.get_surface()
         if (!surface) return
 
-        // monitorWidth already declared at top
+        // dockMonitorWidth already declared at top
         const region = new Cairo.Region()
 
         // V300: Surgical Input Region for 200px window.
@@ -467,7 +467,7 @@ export default function Dock(gdkmonitor: any) {
         // the magnification starts growing SMOOTHLY before the mouse hits the icons.
         // This eliminates the "jump" reported by the user.
         const width = totalWidth + 500
-        const x = (monitorWidth - width) / 2
+        const x = (dockMonitorWidth - width) / 2
         const y = 200 - 110
 
         // @ts-ignore
@@ -1082,7 +1082,7 @@ export default function Dock(gdkmonitor: any) {
             // Sync alignment to prevent "bad load" shift
             if (firstRender || !tickId) {
                 smoothedBarWidth = totalCurrentWidth
-                const manualMarginStart = Math.round((monitorWidth - smoothedBarWidth) / 2)
+                const manualMarginStart = Math.round((dockMonitorWidth - smoothedBarWidth) / 2)
                 bar.margin_start = manualMarginStart
                 updateSize()
                 firstRender = false
@@ -1104,8 +1104,8 @@ export default function Dock(gdkmonitor: any) {
         }
     }
 
-    // monitorWidth already declared at line 221
-    win.set_default_size(monitorWidth, 200) // V300: High window prevents icon clipping
+    // dockMonitorWidth already declared at line 221
+    win.set_default_size(dockMonitorWidth, 200) // V300: High window prevents icon clipping
     let layerInit = false
     try {
         Gtk4LayerShell.init_for_window(win)
@@ -1113,7 +1113,7 @@ export default function Dock(gdkmonitor: any) {
     } catch (e) {
         console.warn("Gtk4LayerShell init failed (not on Wayland?): " + e)
     }
-    win.set_size_request(monitorWidth, 200)
+    win.set_size_request(dockMonitorWidth, 200)
     win.set_decorated(false)
 
     try {
