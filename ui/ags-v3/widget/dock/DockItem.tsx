@@ -11,6 +11,7 @@ import Gio from "gi://Gio"
 import appService from "../../core/AppService" // Ensure import path is correct relative to this file
 import { DOCK_CONSTANTS } from "./DockPhysics"
 import { drawSquircle } from "./DockUtils"
+import { dragBus, mouseBus } from "./state"
 
 const hypr = AstalHyprland.get_default()
 
@@ -26,18 +27,7 @@ const hypr = AstalHyprland.get_default()
 // Option 2 is cleaner for "simplification". Let's create a simple state manager or valid approach.
 // For this step, I'll keep it simple: Pass callbacks for pinning logic.
 
-// --- STATE: Pure JS EventBus (No GObject complexity) ---
-export const dragBus = {
-    listeners: [] as ((id: string) => void)[],
-    subscribe(fn: (id: string) => void) {
-        this.listeners.push(fn)
-        return () => { this.listeners = this.listeners.filter(l => l !== fn) }
-    },
-    update(id: string) {
-        // console.log(`[DragBus] Update: "${id}"`) // Explicit Log
-        this.listeners.forEach(fn => fn(id))
-    }
-}
+// --- STATE: Removed local dragBus (now using shared state from ./state) ---
 
 // SEPARATOR COMPONENT
 export function Separator(id: string, updateDock: () => void, register: (id: string, s: any) => void, height = 48,
@@ -79,22 +69,7 @@ export function Separator(id: string, updateDock: () => void, register: (id: str
             state.staticCenter = v
         }
 
-    const target = new Gtk.DropTarget({ actions: Gdk.DragAction.COPY | Gdk.DragAction.MOVE, formats: null })
-    target.set_gtypes([GObject.TYPE_STRING])
-
-    target.connect("enter", () => Gdk.DragAction.COPY)
-
-    target.connect("drop", (t, val) => {
-        let sourceId = ""
-        if (typeof val === "string") sourceId = val
-        else if (val && (val as any).get_string) sourceId = (val as any).get_string()
-
-        if (!sourceId || sourceId === "void") return false
-
-        onDrop(sourceId)
-        return true
-    })
-    box.add_controller(target)
+    // V540: REDUNDANT DROP TARGET REMOVED. Consolidated in global handler.
     return box
 }
 
@@ -142,12 +117,13 @@ export function DockItem(
         has_tooltip: false,
     })
 
-    const unsub = dragBus.subscribe((hoverId) => {
-        const isTarget = hoverId === appId
-        if (isTarget && appItem.name !== "Papelera") {
-            itemBox.add_css_class("cd-drag-gap")
+    // V457: Live reordering handler for visual states
+    const unsub = dragBus.subscribe((draggingId, hoverId) => {
+        const isDraggingMe = draggingId === appId || draggingId === cleanId
+        if (isDraggingMe) {
+            itemBox.add_css_class("cd-dragging")
         } else {
-            itemBox.remove_css_class("cd-drag-gap")
+            itemBox.remove_css_class("cd-dragging")
         }
     })
     itemBox.connect("destroy", unsub)
@@ -569,7 +545,12 @@ export function DockItem(
     const source = new Gtk.DragSource({ actions: Gdk.DragAction.COPY | Gdk.DragAction.MOVE })
     source.connect("prepare", (s, x, y) => {
         s.set_icon(Gtk.WidgetPaintable.new(child), x, y)
+        dragBus.setDragging(cleanId || appId)
         return (Gdk as any).ContentProvider.new_for_value(cleanId || rawId || appId)
+    })
+    source.connect("drag-end", () => {
+        dragBus.setDragging("")
+        dragBus.clearHover()
     })
     itemBox.add_controller(source)
 
@@ -594,42 +575,7 @@ export function DockItem(
     })
     iconBox.add_controller(leftClick)
 
-    // DROP TARGET
-    const acceptDrop = true
-    if (acceptDrop) {
-        const target = new Gtk.DropTarget({ actions: Gdk.DragAction.COPY | Gdk.DragAction.MOVE, formats: null })
-        target.set_gtypes([GObject.TYPE_STRING])
-        target.connect("enter", () => { dragBus.update(appId); return Gdk.DragAction.COPY })
-        target.connect("motion", () => { dragBus.update(appId); return Gdk.DragAction.COPY })
-        target.connect("leave", () => { /* dragBus.update("") */ })
-        target.connect("drop", (t, val) => {
-            dragBus.update("")
-            let dragId = ""
-            if (typeof val === "string") dragId = val
-            else if (val && (val as any).get_string) dragId = (val as any).get_string()
-
-            const sourceId = dragId ? dragId.toLowerCase().replace(".desktop", "") : ""
-            const targetId = appId.toLowerCase()
-
-            if (!sourceId || sourceId === "void") return false
-
-            // Logic delegated to callbacks
-            if (appItem.name === "Papelera" || targetId.includes("trash")) {
-                onUnpin(sourceId)
-                return true
-            }
-            if (appItem.name === "Angel" || targetId.includes("home-shortcut")) {
-                onPin(sourceId)
-                return true
-            }
-            if (sourceId !== targetId) {
-                onReorder(sourceId, targetId)
-                return true
-            }
-            return false
-        })
-        itemBox.add_controller(target)
-    }
+    // V540: REDUNDANT DROP TARGET REMOVED. Consolidated in global handler.
     // SYNC LOGIC
     const sync = () => {
         const focused = hypr.focusedClient

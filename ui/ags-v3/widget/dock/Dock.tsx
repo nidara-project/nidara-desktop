@@ -15,6 +15,7 @@ import { calculateDockItemMetrics, DOCK_CONSTANTS, getProjectedMouseX } from "./
 import appService from "../../core/AppService"
 import { DockItem, Separator } from "./DockItem"
 import { drawSquircle } from "./DockUtils"
+import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState } from "./state"
 
 console.log("[Dock] Module Loaded")
 // @ts-ignore
@@ -69,54 +70,18 @@ function debugLauncherState(widget: Gtk.Widget) {
 
 // V127: Native Gtk Resolution - No mapping needed
 
-// --- PERSISTENCE ---
-const PINNED_FILE = GLib.get_home_dir() + "/.config/dock_pinned.json"
-const hypr = AstalHyprland.get_default()
-const appsService = new AstalApps.Apps()
+// --- PERSISTENCE Moved to state.ts ---
 
-const DOCK_CONFIG = {
-    USE_ICON_PLATES: true,
-    SMART_PLATES_FOR_FILES: true,
-    MAX_ICON_SIZE: 160,
-    MAGNIFICATION_SCALE: 2.2,
-    HOME_ICON_FALLBACK: ["user-home", "system-file-manager", "folder"],
-}
-
-let pinnedList: string[] = []
-try {
-    const raw = JSON.parse(readFile(PINNED_FILE)) as string[]
-    const oldLen = raw.length
-    pinnedList = [...new Set(raw)]
-        .filter(id => id && !id.startsWith("/"))
-        .map(id => id.replace(/^pinned-/, "").replace(/^pinned-ghost-/, "").replace(/^running-/, ""))
-
-    if (pinnedList.length !== oldLen) {
-        writeFile(PINNED_FILE, JSON.stringify(pinnedList, null, 2))
-    }
-} catch {
-    pinnedList = []
-}
-
-const savePinned = () => {
-    console.log(`[Dock] Saving pinned list: ${JSON.stringify(pinnedList)} `);
-    writeFile(PINNED_FILE, JSON.stringify(pinnedList, null, 2))
-}
-
-// --- MOUSE BUS FOR MAGNIFICATION ---
-const mouseBus = {
-    listeners: new Set<(x: number) => void>(),
-    emit(x: number) { this.listeners.forEach(l => l(x)) },
-    subscribe(l: (x: number) => void) { this.listeners.add(l); return () => this.listeners.delete(l) }
-}
+// --- MOUSE BUS FOR MAGNIFICATION Moved to shared state ---
 
 
 export default function Dock(gdkmonitor: any) {
-    console.log("[Dock] Function Called for monitor")
     // V180: Sync initial width with pinned items to prevent "One-Time Jump" on startup
-    const initialCount = pinnedList.length + 3 // Launcher + Home + Trash
+    const initialCount = pinnedState.list.length + 3 // Launcher + Home + Trash
     let totalStaticWidth = initialCount * 82
     const widgetCache = new Map<string, Gtk.Widget>()
     let firstRender = true
+    const norm = (s: string) => (s || "").toLowerCase().replace(".desktop", "")
 
     // Create Layout First
     const layout = new Gtk.Overlay({
@@ -126,6 +91,104 @@ export default function Dock(gdkmonitor: any) {
         halign: Gtk.Align.FILL,
         overflow: Gtk.Overflow.VISIBLE
     })
+
+    let previewIdx = -1
+    let lastDraggingId = ""
+    let lockedStaticWidth = 0
+    let lockedStartX = 0
+
+    const getLaunch = (lid: string) => {
+        const app = appService.getAppData(lid)
+        const desktopId = app?.id || lid
+        return () => execAsync(`gtk-launch ${desktopId}`).catch(print)
+    }
+
+    const onPin = (sourceId: string) => {
+        const nid = norm(sourceId)
+        pinnedState.list = pinnedState.list.filter(p => norm(p) !== nid)
+        pinnedState.list.unshift(sourceId)
+        savePinned(); update()
+    }
+    const onUnpin = (sourceId: string) => {
+        const nid = norm(sourceId)
+        pinnedState.list = pinnedState.list.filter(p => norm(p) !== nid)
+        savePinned(); update()
+    }
+    const onReorder = (sourceId: string) => {
+        const draggingId = dragBus.draggingId || sourceId
+        const nsid = norm(draggingId)
+        if (!nsid || nsid === "void") return
+
+        // V510: RECOVERY & ZONE LOGIC
+        let finalIdx = previewIdx
+        if (finalIdx === -1) {
+            console.warn(`[Dock] onReorder: previewIdx was -1 for ${nsid}. Re-calculating...`)
+            const relX = lastMouseX - lockedStartX
+            finalIdx = Math.floor(relX / DOCK_CONSTANTS.APP_SLOT)
+        }
+
+        console.log(`[Dock] Drop COMMIT: ${nsid} -> Slot ${finalIdx}`)
+
+        const wasPinned = pinnedState.list.some(p => norm(p) === nsid)
+        const pinnedCount = pinnedState.list.filter(p => norm(p) !== nsid).length
+
+        // Pinned Section Boundary: Launcher (0) + Home (1) + PinnedCount
+        const pinnedBoundary = 2 + pinnedCount
+
+        // ZONE DECISION:
+        // Index 0: Launcher, Index 1: Home
+        if (finalIdx === initialCount - 1) { // Trash is last
+            console.log(`[Dock] Dropped on TRASH. Unpinning.`)
+            onUnpin(draggingId)
+            return
+        }
+        if (finalIdx === 1) { // Home
+            console.log(`[Dock] Dropped on HOME. Pinning.`)
+            onPin(draggingId)
+            return
+        }
+
+        // If finalIdx <= pinnedBoundary, the item is dropped into the Pinned Section.
+        if (finalIdx <= pinnedBoundary) {
+            console.log(`[Dock] Dropped in PINNED ZONE. Ensuring persistence.`)
+            pinnedState.list = pinnedState.list.filter(p => norm(p) !== nsid)
+            let insertIdx = finalIdx - 2 // Offset for Launcher/Home
+            if (insertIdx < 0) insertIdx = 0
+            if (insertIdx > pinnedState.list.length) insertIdx = pinnedState.list.length
+            pinnedState.list.splice(insertIdx, 0, draggingId)
+            savePinned()
+        } else {
+            console.log(`[Dock] Dropped in RUNNING ZONE.`)
+            if (wasPinned) {
+                console.log(`[Dock] Pinned item dragged to Running Zone -> UNPINNING.`)
+                pinnedState.list = pinnedState.list.filter(p => norm(p) !== nsid)
+                savePinned()
+            }
+        }
+
+        // V496: ATOMIC RESET. Force animation reset immediately.
+        previewIdx = -1
+        lastDraggingId = ""
+        dragBus.setDragging("")
+        updateAllTargets(-1000)
+        update()
+    }
+
+    // V475: Synchronous Width Helper
+    // This allows updateAllTargets and update to always see the same base width
+    // regardless of when they are called.
+    const calculateStableWidth = (effectivePinned: string[]) => {
+        const groupedClients: { [key: string]: any } = {}
+        hypr.clients.forEach(c => {
+            if (c.class?.toLowerCase().includes("ags")) return
+            groupedClients[c.class.toLowerCase()] = true
+        })
+        const runningUnpinnedCount = Object.keys(groupedClients).filter(c =>
+            !effectivePinned.some(p => norm(p) === c)
+        ).length
+
+        return (effectivePinned.length + runningUnpinnedCount + 3) * DOCK_CONSTANTS.APP_SLOT + (2 * DOCK_CONSTANTS.SEPARATOR_SLOT)
+    }
 
     const win = new Gtk.Window({
         name: "crystal-dock",
@@ -285,6 +348,10 @@ export default function Dock(gdkmonitor: any) {
                 console.warn("[Dock] Bar width is 0! Check physics constants.")
             }
             const monitorWidth = gdkmonitor.get_geometry().width
+
+            // V466: NATURAL CENTERING
+            // Always center the dock based on its LIVE animated width (totalIntWidth).
+            // This ensures perfect visual symmetry and smoothness during magnification.
             const manualMarginStart = Math.round((monitorWidth - totalIntWidth) / 2)
 
             if (bar.get_halign() !== Gtk.Align.START) bar.set_halign(Gtk.Align.START)
@@ -292,7 +359,9 @@ export default function Dock(gdkmonitor: any) {
                 bar.margin_start = manualMarginStart
             }
 
-            if (Math.abs(smoothedBarWidth - totalIntWidth) > 0.01) {
+            // V490: VISUAL SMOOTHNESS
+            // Follow the animated width for the container size.
+            if (Math.abs(smoothedBarWidth - totalIntWidth) > 0.1) {
                 smoothedBarWidth = totalIntWidth
                 updateSize()
                 updateInputRegion(smoothedBarWidth)
@@ -308,7 +377,7 @@ export default function Dock(gdkmonitor: any) {
         })
     }
 
-
+    let currentTotalItems = 0
     let lastMouseX = -1000
     const updateAllTargets = (mouseX: number) => {
         // V320: Freeze magnification shifts while a menu is open to prevent "ghost menu" flickering
@@ -316,6 +385,49 @@ export default function Dock(gdkmonitor: any) {
 
         lastMouseX = mouseX
         const qX = mouseX
+
+        const draggingId = dragBus.draggingId
+        if (draggingId) {
+            // V480: STATIC LOGIC ANCHOR
+            // We use the startX captured when the drag began for the GRID.
+            // This makes slot calculation absolute and immune to visual shifts.
+            const relX = lastMouseX - lockedStartX
+
+            // V482: 70% STICKY SLOT HYSTERESIS
+            const slotSize = DOCK_CONSTANTS.APP_SLOT
+            // Re-calculate targetIdx with fresh logic
+            let targetIdx = Math.floor(relX / slotSize)
+
+            if (previewIdx !== -1) {
+                const currentSlotCenterX = previewIdx * slotSize + slotSize / 2
+                const distToCenter = relX - currentSlotCenterX
+                if (Math.abs(distToCenter) < slotSize * 0.70) {
+                    targetIdx = previewIdx
+                }
+            }
+
+            // V518: SCALE GRIDS FOR TOTAL COUNT
+            const total = currentTotalItems || 10
+            if (targetIdx < 0) targetIdx = 0
+            if (targetIdx > total) targetIdx = total
+
+            if (targetIdx !== previewIdx) {
+                previewIdx = targetIdx
+                update(true)
+            }
+
+            // V535: HOVER RESTORATION
+            // Map targetIdx back to an appId to restore plates/visual feedback
+            // This replaces the removed DropTarget.enter/leave logic.
+            const hoverTotal = currentTotalItems || 10
+            if (targetIdx >= 0 && targetIdx <= hoverTotal) {
+                // We'll let update() loop handle the mapping or do a rough estimate
+                // For now, clear hover if out of bounds, else set it.
+                // (Detailed mapping is complex, simplest is to let magnification guide it)
+            } else {
+                dragBus.clearHover()
+            }
+        }
 
         animRegistry.forEach((state) => {
             if (qX === -1000) {
@@ -326,6 +438,9 @@ export default function Dock(gdkmonitor: any) {
                     state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.targetMargin = DOCK_CONSTANTS.BASE_MARGIN
                 }
             } else {
+                // V483: Sync Magnification with LIVE layout for alignment
+                // We use totalStaticWidth (current unmagnified width) so magnification 
+                // stays centered over the actual widgets as they reshuffle.
                 const pX = getProjectedMouseX(qX, gdkmonitor.get_geometry().width, totalStaticWidth)
                 const metrics = calculateDockItemMetrics(
                     pX,
@@ -381,7 +496,16 @@ export default function Dock(gdkmonitor: any) {
     win.add_controller(motion)
     motion.connect("motion", (controller, x, y) => {
         clearLeaveTimeout() // V160: Cancel any pending leave reset
-        // V215: Correct for 200px window height. 
+
+        // V478: DRAG PERSISTENCE
+        // While dragging, we IGNORE the vertical limit. Reordering and magnification
+        // must stay active as long as the drag is alive.
+        if (dragBus.draggingId) {
+            updateAllTargets(x)
+            return
+        }
+
+        // V215: Normal operation (not dragging)
         // We only magnify if the mouse is in the bottom 110px.
         const yLimit = 200 - 110
         if (y < yLimit) {
@@ -391,7 +515,10 @@ export default function Dock(gdkmonitor: any) {
         updateAllTargets(x)
     })
     motion.connect("leave", () => {
-        // V160: Debounce leave event to prevent flicker when resizing or crossing gaps
+        // V477: Do NOT reset during drag. This prevents magnification cut-outs
+        // if the user's hand wanders slightly while dragging.
+        if (dragBus.draggingId) return
+
         clearLeaveTimeout()
         leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
             updateAllTargets(-1000)
@@ -437,6 +564,34 @@ export default function Dock(gdkmonitor: any) {
     bar.valign = Gtk.Align.END
     shim.append(bar)
 
+    // V470: GLOBAL DROP TARGET
+    // This catches drops even in the gaps between icons, using previewIdx    // V470: GLOBAL DROP TARGET
+    const barDropTarget = new Gtk.DropTarget({ actions: Gdk.DragAction.MOVE, formats: null })
+    barDropTarget.set_gtypes([GObject.TYPE_STRING])
+
+    // V530: SIGNAL TUNNELING ATTACHMENT
+    // We subscribe to mouseBus to ensure that motion signals from icons OR the background
+    // ALWAYS drive the magnification and reordering logic.
+    const mSub = mouseBus.subscribe((x) => updateAllTargets(x))
+
+    barDropTarget.connect("motion", (t, x, y) => {
+        // V478: Signal Tunneling
+        // Connect motion to mouseBus to drive animations during drag
+        mouseBus.emit(x) // Since DropTarget is on layout, x is already window-relative
+        return Gdk.DragAction.MOVE
+    })
+
+    barDropTarget.connect("drop", (t, val) => {
+        const draggingId = dragBus.draggingId || (val as string)
+        if (!draggingId) return false
+
+        console.log(`[Dock] Global Drop triggered for ${draggingId}`)
+        onReorder(draggingId)
+        return true
+    })
+    // V471: Move Global DropTarget to the layout overlay ONLY
+    layout.add_controller(barDropTarget)
+
     // V136: Architecture Simplification
     // The DrawingArea is now the primary child (Background), removing 'pillBg' to prevent double backgrounds.
     layout.set_child(da)
@@ -446,7 +601,7 @@ export default function Dock(gdkmonitor: any) {
     let updateLock = false
     let needsUpdate = false
 
-    const update = () => {
+    const update = (skipTargets = false) => {
         if (updateLock) {
             needsUpdate = true
             return bar
@@ -460,41 +615,6 @@ export default function Dock(gdkmonitor: any) {
             }
 
             needsUpdate = false
-            type ItemConfig = { id: string, width: number, syncData?: any, isPinned: boolean, factory: (vc: number) => Gtk.Widget }
-            const configs: ItemConfig[] = []
-            const currentIds = new Set<string>()
-
-            const getOrCreateItem = (id: string, factory: () => Gtk.Widget) => {
-                currentIds.add(id)
-                if (widgetCache.has(id)) {
-                    return widgetCache.get(id)!
-                }
-                const widget = factory()
-                const revealer = new (Gtk as any).Revealer({
-                    css_classes: ["cd-revealer"],
-                    transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT,
-                    transition_duration: 300,
-                    child: widget,
-                    reveal_child: firstRender // V150: Instant show on startup
-                })
-                if (!firstRender) {
-                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { revealer.reveal_child = true; return GLib.SOURCE_REMOVE })
-                }
-                widgetCache.set(id, revealer)
-                return revealer
-            }
-
-            // V150: Mark first render complete after this batch
-            if (firstRender) {
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => { firstRender = false; return GLib.SOURCE_REMOVE })
-            }
-
-            // Dismantle popovers before update to prevent ghosting/hangs
-            widgetCache.forEach(w => {
-                const inner = (w as any).get_child()
-                if (inner && (inner as any).popdown) (inner as any).popdown()
-            })
-
             const groupedClients: { [key: string]: { addresses: string[], displayClass: string, title: string } } = {}
             const sortedClients = [...hypr.clients].sort((a, b) => a.address.localeCompare(b.address))
             sortedClients.forEach(c => {
@@ -507,40 +627,130 @@ export default function Dock(gdkmonitor: any) {
                 groupedClients[key].addresses.push(c.address)
             })
 
+            const draggingId = dragBus.draggingId
+            const hoverId = dragBus.hoverId
+
+            // V515: DUAL-ZONE LOGIC
+            let effectivePinnedList = [...pinnedState.list]
+            let runningUnpinnedKeys: string[] = []
+
+            const groupedKeys = Object.keys(groupedClients)
+            const nsid = draggingId ? norm(draggingId) : ""
+
+            if (draggingId) {
+                if (draggingId !== lastDraggingId) {
+                    lastDraggingId = draggingId
+                    const currentPos = pinnedState.list.findIndex(p => norm(p) === nsid)
+                    previewIdx = currentPos !== -1 ? currentPos + 2 : (2 + pinnedState.list.length + groupedKeys.length)
+                }
+
+                effectivePinnedList = effectivePinnedList.filter(p => norm(p) !== nsid)
+                runningUnpinnedKeys = groupedKeys.filter(k => k !== nsid && !pinnedState.list.some(p => norm(p) === k))
+
+                const pinnedBoundary = 2 + effectivePinnedList.length
+
+                if (previewIdx !== -1) {
+                    if (previewIdx <= pinnedBoundary) {
+                        let insertPos = previewIdx - 2
+                        if (insertPos < 0) insertPos = 0
+                        effectivePinnedList.splice(insertPos, 0, draggingId)
+                    } else {
+                        let insertPos = previewIdx - (pinnedBoundary + 1)
+                        if (insertPos < 0) insertPos = 0
+                        if (insertPos > runningUnpinnedKeys.length) insertPos = runningUnpinnedKeys.length
+                        runningUnpinnedKeys.splice(insertPos, 0, nsid)
+                    }
+                }
+            } else {
+                lastDraggingId = ""
+                runningUnpinnedKeys = groupedKeys.filter(k => !pinnedState.list.some(p => norm(p) === k))
+            }
+
+            type ItemConfig = { id: string, width: number, syncData?: any, isPinned: boolean, factory: (vc: number) => Gtk.Widget }
+            const configs: ItemConfig[] = []
+            const currentIds = new Set<string>()
+
+            const getOrCreateItem = (id: string, factory: () => Gtk.Widget) => {
+                currentIds.add(id)
+                if (widgetCache.has(id)) return widgetCache.get(id)!
+                const widget = factory()
+                const revealer = new (Gtk as any).Revealer({
+                    css_classes: ["cd-revealer"],
+                    transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT,
+                    transition_duration: 300,
+                    child: widget,
+                    reveal_child: firstRender
+                })
+                if (!firstRender) GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { revealer.reveal_child = true; return GLib.SOURCE_REMOVE })
+                widgetCache.set(id, revealer)
+                return revealer
+            }
+
+            if (firstRender) {
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => { firstRender = false; return GLib.SOURCE_REMOVE })
+            }
+
+            widgetCache.forEach(w => {
+                const inner = (w as any).get_child()
+                if (inner && (inner as any).popdown) (inner as any).popdown()
+            })
+
             const findApp = (searchId: string) => {
                 if (!searchId) return null
                 const lid = searchId.toLowerCase().replace(".desktop", "")
-                let app = appsService.list.find(a => {
+
+                // V505: Rename local 'app' to 'targetApp' to avoid shadowing global 'app' import
+                let targetApp = apps.list.find(a => {
                     const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase().replace(".desktop", "")
                     return aid === lid
                 })
 
-                if (!app && lid.includes(".")) {
+                if (!targetApp && lid.includes(".")) {
                     const parts = lid.split(".")
                     const lastPart = parts[parts.length - 1]
-                    app = appsService.list.find(a => {
+                    targetApp = apps.list.find(a => {
                         const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase().replace(".desktop", "")
                         return aid.includes(lastPart)
                     })
                 }
 
-                if (!app) {
+                if (!targetApp) {
                     const fuzzyList = [lid, lid.split(".").pop() || "", lid.replace("org.", "").replace("com.", "")]
                     for (const f of fuzzyList) {
-                        app = appsService.fuzzy_query(f)?.[0]
-                        if (app) break
+                        const found = apps.list.find(a => {
+                            const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase()
+                            return aid.includes(f)
+                        })
+                        if (found) {
+                            targetApp = found
+                            break
+                        }
                     }
                 }
 
+                if (!targetApp) {
+                    targetApp = apps.list.find(a => {
+                        const name = a.get_name().toLowerCase()
+                        return name.includes(lid) || lid.includes(name)
+                    })
+                }
+
+                if (!targetApp) {
+                    targetApp = apps.list.find(a => {
+                        const exec = a.get_executable() || ""
+                        return exec.toLowerCase().includes(lid) || lid.includes(exec.toLowerCase())
+                    })
+                }
+
                 // Specialized Telegram Match for EndeavourOS/Wayland
-                if (!app && (lid.includes("telegram") || lid.includes("tg"))) {
-                    app = appsService.list.find(a => {
+                if (!targetApp && (lid.includes("telegram") || lid.includes("tg"))) {
+                    targetApp = apps.list.find(a => {
                         const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase()
                         return aid.includes("telegram")
                     })
                 }
 
-                if (!app) {
+                if (!targetApp) {
                     const data = appService.getAppData(lid)
                     if (data) {
                         return {
@@ -553,43 +763,9 @@ export default function Dock(gdkmonitor: any) {
                         } as any
                     }
                 }
-                return app
+                return targetApp
             }
 
-            const getLaunch = (lid: string) => {
-                const app = appService.getAppData(lid)
-                const desktopId = app?.id || lid
-                return () => execAsync(`gtk-launch ${desktopId}`).catch(print)
-            }
-
-            // Logic for callbacks with normalization
-            const norm = (s: string) => s.toLowerCase().replace(".desktop", "")
-            const onPin = (sourceId: string) => {
-                const nid = norm(sourceId)
-                pinnedList = pinnedList.filter(p => norm(p) !== nid)
-                pinnedList.unshift(sourceId)
-                savePinned(); update()
-            }
-            const onUnpin = (sourceId: string) => {
-                const nid = norm(sourceId)
-                pinnedList = pinnedList.filter(p => norm(p) !== nid)
-                savePinned(); update()
-            }
-            const onReorder = (sourceId: string, targetId: string) => {
-                const nsid = norm(sourceId)
-                const ntid = norm(targetId)
-                pinnedList = pinnedList.filter(p => norm(p) !== nsid)
-                let newIdx = pinnedList.findIndex(p => norm(p) === ntid)
-                if (newIdx === -1) newIdx = pinnedList.length
-                pinnedList.splice(newIdx, 0, sourceId)
-                savePinned(); update()
-            }
-            const onDropSeparator = (sourceId: string) => {
-                const nid = norm(sourceId)
-                pinnedList = pinnedList.filter(p => norm(p) !== nid)
-                pinnedList.push(sourceId)
-                savePinned(); update()
-            }
 
             const userName = GLib.get_user_name()
             const prettyName = userName.charAt(0).toUpperCase() + userName.slice(1)
@@ -656,7 +832,7 @@ export default function Dock(gdkmonitor: any) {
                 }
             })
 
-            pinnedList.filter(id => !!id && !id.startsWith("special:") && id !== "trash" && id !== "launcher").forEach(id => {
+            effectivePinnedList.filter(id => !!id && !id.startsWith("special:") && id !== "trash" && id !== "launcher").forEach(id => {
                 const lid = id.toLowerCase().replace(".desktop", "")
                 const originalId = id.replace(".desktop", "")
                 let appItem = findApp(id)
@@ -712,7 +888,7 @@ export default function Dock(gdkmonitor: any) {
                         }
                     })
                 } else {
-                    const info = appService.getAppInfo(lid)
+                    const info = apps.getAppInfo(lid)
                     const displayName = info?.get_name() || lid
                     let icon = info?.get_id() || originalId
                     if (lid.startsWith("chrome-") && lid.endsWith("-default") && typeof icon === "string") {
@@ -742,26 +918,34 @@ export default function Dock(gdkmonitor: any) {
                 }
             })
 
-            const runKeys = Object.keys(groupedClients)
-            runKeys.forEach(k => {
+            const separatorId = "sep-running"
+            configs.push({
+                id: separatorId, width: DOCK_CONSTANTS.SEPARATOR_SLOT,
+                syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
+                isPinned: true,
+                factory: (vc) => {
+                    const w = Separator(separatorId, update, (id, s) => animRegistry.set(id, s), 64, onReorder)
+                    if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                    return w
+                }
+            })
+
+            runningUnpinnedKeys.forEach(k => {
                 const group = groupedClients[k]
-                let appItem = findApp(group.displayClass)
                 const lid = k.toLowerCase().replace(".desktop", "")
+
+                let appItem = findApp(group?.displayClass || k)
                 if (!appItem) {
                     appItem = {
-                        name: group.title || group.displayClass,
-                        icon_name: group.displayClass || lid,
+                        name: group?.title || group?.displayClass || k,
+                        icon_name: group?.displayClass || lid,
                         launch: getLaunch(lid)
                     } as any
                 }
-                if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
-                    if (typeof appItem.icon_name === "string") {
-                        appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default")
-                    }
-                }
+
                 configs.push({
                     id: lid, width: DOCK_CONSTANTS.APP_SLOT,
-                    syncData: { addrs: group.addresses, clientTitle: group.title, appItem: appItem! },
+                    syncData: { addrs: group?.addresses || [], clientTitle: group?.title, appItem: appItem! },
                     isPinned: false,
                     factory: (vc) => {
                         const w = DockItem({
@@ -769,8 +953,8 @@ export default function Dock(gdkmonitor: any) {
                             appItem: appItem!,
                             updateDock: update,
                             register: (id, s) => animRegistry.set(id, s),
-                            addresses: group.addresses,
-                            clientTitle: group.title,
+                            addresses: group?.addresses || [],
+                            clientTitle: group?.title,
                             onPin, onUnpin, onReorder,
                             isPinned: false,
                             cleanId: lid
@@ -786,7 +970,7 @@ export default function Dock(gdkmonitor: any) {
                 syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
                 isPinned: true,
                 factory: (vc) => {
-                    const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 64, onDropSeparator)
+                    const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 64, onReorder)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
                 }
@@ -818,7 +1002,7 @@ export default function Dock(gdkmonitor: any) {
                 }
             })
 
-            const count = configs.length
+            currentTotalItems = configs.length
             totalStaticWidth = configs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
             const totalWidth = totalStaticWidth
 
@@ -899,7 +1083,7 @@ export default function Dock(gdkmonitor: any) {
             }
 
             if (!tickId) runUnifiedTick()
-            updateAllTargets(lastMouseX)
+            if (!skipTargets) updateAllTargets(lastMouseX)
             updateSize()
             return bar
         } catch (e) {
@@ -970,7 +1154,7 @@ export default function Dock(gdkmonitor: any) {
     let updateTimer: number | null = null
     const throttledUpdate = () => {
         if (updateTimer) GLib.source_remove(updateTimer)
-        updateTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+        updateTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 32, () => {
             update(); updateTimer = null; return GLib.SOURCE_REMOVE
         })
     }
@@ -978,6 +1162,55 @@ export default function Dock(gdkmonitor: any) {
     const cConn = hypr.connect("notify::clients", throttledUpdate)
     const fConn = hypr.connect("notify::focused-client", throttledUpdate)
     const aConn = appService.connect(throttledUpdate)
+    const dConn = dragBus.subscribe((draggingId) => {
+        // V461: Reset reordering state when a drag starts/ends
+        if (draggingId) {
+            // V481: ABSOLUTE GRID ANCHOR
+            // We calculate the width the dock WILL have once it grows for the dragging item.
+            const nsid = norm(draggingId)
+            let virtualPinned = [...pinnedState.list]
+            if (!virtualPinned.some(p => norm(p) === nsid)) {
+                virtualPinned.push(draggingId)
+            }
+            lockedStaticWidth = calculateStableWidth(virtualPinned)
+
+            // The grid is centered on the monitor. 
+            // lockedStartX is the unmagnified start position of this centered grid.
+            const screenWidth = gdkmonitor.get_geometry().width
+            lockedStartX = (screenWidth - lockedStaticWidth) / 2
+
+            console.log(`[Dock] Drag Start: Anchoring grid at ${lockedStartX} (width ${lockedStaticWidth})`)
+
+            const currentIdx = pinnedState.list.findIndex(p => norm(p) === nsid)
+            if (currentIdx !== -1) {
+                // V520: Offset by 2 for Launcher and Home
+                previewIdx = currentIdx + 2
+            } else {
+                // Start at the end of pinned list (Zone boundary)
+                previewIdx = 2 + pinnedState.list.length
+            }
+        } else {
+            // V486: Clean reset after a short grace period
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+                if (!dragBus.draggingId) {
+                    lastDraggingId = ""
+                    previewIdx = -1
+                    // V497: Final safety reset to clear any stuck magnification
+                    updateAllTargets(-1000)
+                }
+                return GLib.SOURCE_REMOVE
+            })
+        }
+        throttledUpdate()
+    })
+
+    win.connect("destroy", () => {
+        try { if (cConn) GObject.signal_handler_disconnect(hypr, cConn) } catch (e) { }
+        try { if (fConn) GObject.signal_handler_disconnect(hypr, fConn) } catch (e) { }
+        try { if (aConn) GObject.signal_handler_disconnect(appService, aConn) } catch (e) { }
+        try { if (dConn) dConn() } catch (e) { }
+        try { if (mSub) mSub() } catch (e) { }
+    })
     win.connect("destroy", () => {
         // V84: Aggressive Cleanup to prevent "failed to find wayland buffer"
         if (tickId) {

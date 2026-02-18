@@ -8,7 +8,7 @@ import { writeFile, readFile } from "ags/file"
 import GLib from "gi://GLib"
 import AstalHyprland from "gi://AstalHyprland"
 import AstalApps from "gi://AstalApps"
-import { DOCK_CONSTANTS } from "../DockPhysics"
+import { DOCK_CONSTANTS } from "./DockPhysics"
 
 // --- PERSISTENCE ---
 const PINNED_FILE = GLib.get_home_dir() + "/.config/dock_pinned.json"
@@ -27,50 +27,34 @@ export const DOCK_CONFIG = {
 }
 
 // --- PINNED LIST MANAGEMENT ---
-let pinnedList: string[] = []
+export const pinnedState = {
+    list: [] as string[]
+}
+
 try {
     const raw = JSON.parse(readFile(PINNED_FILE)) as string[]
     const oldLen = raw.length
-    pinnedList = [...new Set(raw)]
+    pinnedState.list = [...new Set(raw)]
         .filter(id => id && !id.startsWith("/"))
         .map(id => id.replace(/^pinned-/, "").replace(/^pinned-ghost-/, "").replace(/^running-/, ""))
 
-    if (pinnedList.length !== oldLen) {
-        writeFile(PINNED_FILE, JSON.stringify(pinnedList, null, 2))
+    if (pinnedState.list.length !== oldLen) {
+        writeFile(PINNED_FILE, JSON.stringify(pinnedState.list, null, 2))
     }
 } catch {
-    pinnedList = []
+    pinnedState.list = []
 }
-
-export const getPinnedList = () => pinnedList
-export const setPinnedList = (list: string[]) => { pinnedList = list }
 
 export const savePinned = () => {
-    console.log(`[Dock] Saving pinned list: ${JSON.stringify(pinnedList)}`);
-    writeFile(PINNED_FILE, JSON.stringify(pinnedList, null, 2))
-}
-
-export const addPinned = (id: string) => {
-    if (!pinnedList.some(p => p.toLowerCase() === id.toLowerCase())) {
-        pinnedList.push(id)
-        savePinned()
+    const list = pinnedState.list
+    console.log(`[DockAudit] COMMIT: saving ${list.length} items to ${PINNED_FILE}`);
+    console.log(`[DockAudit] DATA: ${JSON.stringify(list)}`);
+    try {
+        writeFile(PINNED_FILE, JSON.stringify(list, null, 2))
+        console.log(`[DockAudit] SUCCESS.`);
+    } catch (e) {
+        console.error(`[DockAudit] FAILURE:`, e);
     }
-}
-
-export const removePinned = (id: string) => {
-    pinnedList = pinnedList.filter(p => p.toLowerCase() !== id.toLowerCase())
-    savePinned()
-}
-
-export const movePinned = (id: string, toIndex: number) => {
-    const lower = id.toLowerCase()
-    pinnedList = pinnedList.filter(p => p.toLowerCase() !== lower)
-    pinnedList.splice(toIndex, 0, id)
-    savePinned()
-}
-
-export const isPinned = (id: string): boolean => {
-    return pinnedList.some(p => p.toLowerCase() === id.toLowerCase())
 }
 
 // --- ANIMATION STATE ---
@@ -89,14 +73,31 @@ export interface AnimState {
 }
 
 // --- EVENT BUSES ---
+// V499: Unified dragBus to ensure Dock and DockItem share the exact same state.
 export const dragBus = {
-    listeners: [] as ((id: string) => void)[],
-    subscribe(fn: (id: string) => void) {
+    listeners: [] as ((draggingId: string, hoverId: string) => void)[],
+    draggingId: "",
+    hoverId: "",
+    subscribe(fn: (draggingId: string, hoverId: string) => void) {
         this.listeners.push(fn)
         return () => { this.listeners = this.listeners.filter(l => l !== fn) }
     },
-    update(id: string) {
-        this.listeners.forEach(fn => fn(id))
+    emit() {
+        this.listeners.forEach(fn => fn(this.draggingId, this.hoverId))
+    },
+    setDragging(id: string) {
+        this.draggingId = id
+        this.emit()
+    },
+    setHover(id: string) {
+        if (!id && this.draggingId) return // Sticky
+        if (this.hoverId === id) return
+        this.hoverId = id
+        this.emit()
+    },
+    clearHover() {
+        this.hoverId = ""
+        this.emit()
     }
 }
 
