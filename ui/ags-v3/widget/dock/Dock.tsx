@@ -286,21 +286,33 @@ export default function Dock(gdkmonitor: any) {
                 const forceScale = stiffness * (state.targetScale - state.currentScale) - damping * state.velocityScale
                 state.velocityScale += forceScale * dt
                 state.currentScale += state.velocityScale * dt
+                if (Math.abs(state.targetScale - state.currentScale) < 0.001 && Math.abs(state.velocityScale) < 0.01) {
+                    state.currentScale = state.targetScale
+                    state.velocityScale = 0
+                }
 
                 // SPRING WIDTH
                 const forceWidth = stiffness * (state.targetWidth - state.currentWidth) - damping * state.velocityWidth
                 state.velocityWidth += forceWidth * dt
                 state.currentWidth += state.velocityWidth * dt
+                if (Math.abs(state.targetWidth - state.currentWidth) < 0.01 && Math.abs(state.velocityWidth) < 0.1) {
+                    state.currentWidth = state.targetWidth
+                    state.velocityWidth = 0
+                }
 
                 // SPRING MARGIN
                 const forceMargin = stiffness * (state.targetMargin - state.currentMargin) - damping * state.velocityMargin
                 state.velocityMargin += forceMargin * dt
                 state.currentMargin += state.velocityMargin * dt
+                if (Math.abs(state.targetMargin - state.currentMargin) < 0.01 && Math.abs(state.velocityMargin) < 0.1) {
+                    state.currentMargin = state.targetMargin
+                    state.velocityMargin = 0
+                }
 
                 // Check Activity
-                if (Math.abs(state.velocityScale) > 0.001 || Math.abs(state.targetScale - state.currentScale) > 0.001 ||
-                    Math.abs(state.velocityWidth) > 0.01 || Math.abs(state.targetWidth - state.currentWidth) > 0.01 ||
-                    Math.abs(state.velocityMargin) > 0.01 || Math.abs(state.targetMargin - state.currentMargin) > 0.01) {
+                if (state.currentScale !== state.targetScale ||
+                    state.currentWidth !== state.targetWidth ||
+                    state.currentMargin !== state.targetMargin) {
                     active = true
                 }
 
@@ -332,7 +344,11 @@ export default function Dock(gdkmonitor: any) {
                     }
 
                     if (itemBox) {
-                        itemBox.margin_bottom = Math.round(0 - state.currentTranslateY)
+                        const subpixelShift = (currentFloatX + (floatSlotW / 2)) - (intSlotStart + (drawSlotW / 2))
+                        const scale = state.currentScale
+                        itemBox.set_style(`transform: translateX(${subpixelShift.toFixed(3)}px);`)
+
+                        itemBox.margin_bottom = Math.round(0 - (state.currentTranslateY || 0))
                         if (itemBox.margin_start !== drawMarginS || itemBox.margin_end !== drawMarginE) {
                             itemBox.margin_start = drawMarginS
                             itemBox.margin_end = drawMarginE
@@ -368,13 +384,19 @@ export default function Dock(gdkmonitor: any) {
                 }
             })
 
-            const totalIntWidth = Math.round(currentFloatX)
-            const manualMarginStart = Math.round((dockMonitorWidth - totalIntWidth) / 2)
+            const totalFloatWidth = currentFloatX
+            const totalIntWidth = Math.round(totalFloatWidth)
+            const floatMarginStart = (dockMonitorWidth - totalFloatWidth) / 2
+            const intMarginStart = Math.round(floatMarginStart)
+            const marginShift = floatMarginStart - intMarginStart
 
-            if (bar.margin_start !== manualMarginStart) {
-                bar.margin_start = manualMarginStart
-                if (da) da.margin_start = manualMarginStart - 9 // V614: Perfect background sync
+            if (bar.margin_start !== intMarginStart) {
+                bar.margin_start = intMarginStart
+                if (da) da.margin_start = intMarginStart - 9
             }
+
+            // V624: BAR SUB-PIXEL SHIFT
+            bar.set_style(`transform: translateX(${marginShift.toFixed(3)}px);`)
 
             if (active || Math.abs(smoothedBarWidth - totalIntWidth) > 0.01) {
                 smoothedBarWidth = totalIntWidth
@@ -399,13 +421,25 @@ export default function Dock(gdkmonitor: any) {
         const screenWidth = gdkmonitor.get_geometry().width
         lastMouseX = mouseX
 
-        // V621: DYNAMIC PEAK PROJECTION
-        // Instead of hardcoded maxShift, we use the real-time expansion factor.
+        // V622: STABLE PROJECTION REFERENCE
+        // We calculate what the TOTAL width WILL be if the current mouse position 
+        // stays where it is. This breaks the feedback loop between animating icons 
+        // and its own projection source.
+        let targetTotalWidth = 0
+        orderedIds.forEach(id => {
+            const state = animRegistry.get(id)
+            if (state) {
+                // Approximate target expansion for this frame's pX estimation
+                const m = calculateDockItemMetrics(mouseX, state.staticCenter, state.isSeparator)
+                targetTotalWidth += m.width + (m.margin * 2)
+            }
+        })
+
         const pX = lastMouseX === -1000 ? -1000 : getProjectedMouseX(
             lastMouseX,
             screenWidth,
             totalStaticWidth,
-            smoothedBarWidth || totalStaticWidth
+            targetTotalWidth || totalStaticWidth
         )
 
         const draggingId = dragBus.draggingId
@@ -1065,7 +1099,16 @@ export default function Dock(gdkmonitor: any) {
 
             let totalCurrentWidth = 0
             const screenWidth2 = gdkmonitor.get_geometry().width
-            const pX_sync = lastMouseX === -1000 ? -1000 : getProjectedMouseX(lastMouseX, screenWidth2, totalStaticWidth, smoothedBarWidth || totalStaticWidth)
+            let targetTotalWidth = 0
+            orderedIds.forEach(id => {
+                const state = animRegistry.get(id)
+                if (state) {
+                    const m = calculateDockItemMetrics(lastMouseX, state.staticCenter, state.isSeparator)
+                    targetTotalWidth += m.width + (m.margin * 2)
+                }
+            })
+
+            const pX_sync = lastMouseX === -1000 ? -1000 : getProjectedMouseX(lastMouseX, screenWidth2, totalStaticWidth, targetTotalWidth || totalStaticWidth)
 
             orderedIds.forEach((id) => {
                 const state = animRegistry.get(id)
