@@ -11,7 +11,7 @@ import Gio from "gi://Gio"
 import Cairo from "gi://cairo"
 import appService from "../../core/AppService" // Ensure import path is correct relative to this file
 import { DOCK_CONSTANTS } from "./DockPhysics"
-import { drawSquircle } from "./DockUtils"
+import { drawSquircle } from "../common/DrawingUtils"
 import { dragBus, mouseBus } from "./state"
 
 const hypr = AstalHyprland.get_default()
@@ -412,7 +412,6 @@ export function DockItem(
         if (tooltipTimeout) { GLib.source_remove(tooltipTimeout); tooltipTimeout = null }
         tooltip.popdown()
     })
-    iconBox.add_controller(motion)
     iconBox.add_controller(motion)
 
     // MENU

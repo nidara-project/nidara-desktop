@@ -1,72 +1,18 @@
 import app from "ags/gtk4/app"
-import { Astal, Gtk, Gdk } from "ags/gtk4"
-import { writeFile, readFile } from "ags/file"
+import { Gtk, Gdk } from "ags/gtk4"
 import { execAsync } from "ags/process"
-import * as astal from "ags/gtk4/jsx-runtime"
 import GLib from "gi://GLib"
-import AstalHyprland from "gi://AstalHyprland"
-import AstalApps from "gi://AstalApps"
 import GObject from "gi://GObject"
-import Gio from "gi://Gio"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
-import GdkPixbuf from "gi://GdkPixbuf"
-import { calculateDockItemMetrics, DOCK_CONSTANTS, getProjectedMouseX } from "./DockPhysics"
+import { calculateDockItemMetrics, DOCK_CONSTANTS, springStep, calculateLayout } from "./DockPhysics"
+import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
 import { DockItem, Separator } from "./DockItem"
-import { drawSquircle } from "./DockUtils"
+import { drawSquircle } from "../common/DrawingUtils"
 import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState } from "./state"
 
-console.log("[Dock] Module Loaded")
-// @ts-ignore
-print("[Dock] Module Loaded (print)")
-
-// BFS/DFS Traversal for Deep Debugging
-function traverse(widget: any, depth = 0) {
-    if (!widget) return ""
-    let indent = "  ".repeat(depth)
-
-    let name = widget.get_name ? widget.get_name() : "unnamed"
-    let classes = (widget.get_css_classes?.() || []).join(".")
-    let flagsStr = ""
-
-    try {
-        const state = widget.get_state_flags()
-        const f: string[] = []
-        if (state & Gtk.StateFlags.PRELIGHT) f.push("HOVER")
-        if (state & Gtk.StateFlags.FOCUSED) f.push("FOCUSED")
-        if (state & Gtk.StateFlags.FOCUS_WITHIN) f.push("FOCUS_WITHIN")
-        if (state & Gtk.StateFlags.ACTIVE) f.push("ACTIVE")
-        if (state & Gtk.StateFlags.CHECKED) f.push("CHECKED")
-        if (state & Gtk.StateFlags.SELECTED) f.push("SELECTED")
-        if (f.length > 0) flagsStr = ` [${f.join(" ")}]`
-    } catch (e) { }
-
-    let out = `${indent}<${widget.constructor.name || 'Widget'} name="${name}" class="${classes}"${flagsStr}>\n`
-
-    let child = widget.get_first_child?.()
-    while (child) {
-        out += traverse(child, depth + 1)
-        child = child.get_next_sibling?.()
-    }
-    return out
-}
-
-function debugLauncherState(widget: Gtk.Widget) {
-    if (!widget) return
-    const dump = () => {
-        try {
-            const tree = traverse(widget)
-            // @ts-ignore
-            print(`[StateDebug Dump] \n${tree}`)
-        } catch (e) {
-            // @ts-ignore
-            print(e)
-        }
-        return GLib.SOURCE_CONTINUE
-    }
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, dump) // Slower interval, full dump
-}
+// V127: Native Gtk Resolution
 
 // V127: Native Gtk Resolution - No mapping needed
 
@@ -250,156 +196,121 @@ export default function Dock(gdkmonitor: any) {
     bar.margin_start = Math.max(0, initialMargin)
     if (da) da.margin_start = Math.max(0, initialMargin - 9) // V616: Center background pill
 
-    // --- V17 PHYSICS ENGINE ---
-    // AnimState imported from ./state
+    // --- PHYSICS ENGINE ---
     const animRegistry = new Map<string, import("./state").AnimState>()
 
     let lastFrameTime = 0
     let tickId: number | null = null
 
+
     const runUnifiedTick = () => {
         if (tickId !== null) return
 
-        const lerp = (start: number, end: number, factor: number) => start + (end - start) * factor
-
         tickId = bar.add_tick_callback((_, clock) => {
             if ((globalThis as any).isAnyMenuOpen) return true
-
-            let active = false
-            let currentFloatX = 0
-            // dockMonitorWidth already declared at top
 
             if (orderedIds.length === 0) {
                 tickId = null
                 return false
             }
 
-            const stiffness = DOCK_CONSTANTS.STIFFNESS
-            const damping = DOCK_CONSTANTS.DAMPING
             const dt = 1 / 60 // Fixed time step for stability
+            let active = false
+
+
+            // Step 1: Advance ALL icon springs
+            // Springs act as temporal filters: they make float values change
+            // gradually and proportionally, so integer boundary crossings
+            // happen in a coordinated wave rather than one-at-a-time.
+            orderedIds.forEach((id) => {
+                const state = animRegistry.get(id)
+                if (!state) return
+
+                const scaleChannel: SpringChannel = { target: state.targetScale, current: state.currentScale, velocity: state.velocityScale }
+                const widthChannel: SpringChannel = { target: state.targetWidth, current: state.currentWidth, velocity: state.velocityWidth }
+                const marginChannel: SpringChannel = { target: state.targetMargin, current: state.currentMargin, velocity: state.velocityMargin }
+
+                const a1 = springStep(scaleChannel, dt)
+                const a2 = springStep(widthChannel, dt)
+                const a3 = springStep(marginChannel, dt)
+
+                state.currentScale = scaleChannel.current; state.velocityScale = scaleChannel.velocity
+                state.currentWidth = widthChannel.current; state.velocityWidth = widthChannel.velocity
+                state.currentMargin = marginChannel.current; state.velocityMargin = marginChannel.velocity
+
+                if (a1 || a2 || a3) active = true
+            })
+
+            // Step 2: Apply per-icon layout + accumulate bar width
+            let totalBarWidth = 0
 
             orderedIds.forEach((id) => {
                 const state = animRegistry.get(id)
                 if (!state) return
 
-                // SPRING SCALE
-                const forceScale = stiffness * (state.targetScale - state.currentScale) - damping * state.velocityScale
-                state.velocityScale += forceScale * dt
-                state.currentScale += state.velocityScale * dt
-                if (Math.abs(state.targetScale - state.currentScale) < 0.001 && Math.abs(state.velocityScale) < 0.01) {
-                    state.currentScale = state.targetScale
-                    state.velocityScale = 0
-                }
-
-                // SPRING WIDTH
-                const forceWidth = stiffness * (state.targetWidth - state.currentWidth) - damping * state.velocityWidth
-                state.velocityWidth += forceWidth * dt
-                state.currentWidth += state.velocityWidth * dt
-                if (Math.abs(state.targetWidth - state.currentWidth) < 0.01 && Math.abs(state.velocityWidth) < 0.1) {
-                    state.currentWidth = state.targetWidth
-                    state.velocityWidth = 0
-                }
-
-                // SPRING MARGIN
-                const forceMargin = stiffness * (state.targetMargin - state.currentMargin) - damping * state.velocityMargin
-                state.velocityMargin += forceMargin * dt
-                state.currentMargin += state.velocityMargin * dt
-                if (Math.abs(state.targetMargin - state.currentMargin) < 0.01 && Math.abs(state.velocityMargin) < 0.1) {
-                    state.currentMargin = state.targetMargin
-                    state.velocityMargin = 0
-                }
-
-                // Check Activity
-                if (state.currentScale !== state.targetScale ||
-                    state.currentWidth !== state.targetWidth ||
-                    state.currentMargin !== state.targetMargin) {
-                    active = true
-                }
-
-                const floatSlotW = state.currentWidth + (state.currentMargin * 2)
-                const floatIconStart = currentFloatX + state.currentMargin
-                const floatIconEnd = floatIconStart + state.currentWidth
-                const floatSlotEnd = currentFloatX + floatSlotW
-
-                const intSlotStart = Math.round(currentFloatX)
-                const intSlotEnd = Math.round(floatSlotEnd)
-                const intIconStart = Math.round(floatIconStart)
-                const intIconEnd = Math.round(floatIconEnd)
-
-                currentFloatX = floatSlotEnd
-
                 const widget = state.widget || widgetCache.get(id)
-                if (widget) {
-                    const revealer = widget as any
-                    const itemBox = revealer.get_child ? (revealer.get_child() as Gtk.Box) : revealer
+                if (!widget) return
 
-                    const drawSlotW = intSlotEnd - intSlotStart
-                    const drawIconW = intIconEnd - intIconStart
-                    const drawMarginS = intIconStart - intSlotStart
-                    const drawMarginE = drawSlotW - (drawIconW + drawMarginS)
+                const revealer = widget as any
+                const itemBox = revealer.get_child ? (revealer.get_child() as Gtk.Box) : revealer
 
-                    if (revealer.width_request !== drawSlotW) {
-                        revealer.width_request = drawSlotW
-                        if (itemBox) itemBox.width_request = drawIconW
-                    }
+                if (state.isSeparator) {
+                    const slotW = DOCK_CONSTANTS.SEPARATOR_SLOT
+                    if (revealer.width_request !== slotW) revealer.width_request = slotW
+                    totalBarWidth += slotW
 
+                    const centerBox = itemBox as Gtk.CenterBox
+                    const line = centerBox?.get_center_widget() as Gtk.Box
+                    if (line) line.set_size_request(-1, Math.round(state.currentHeight))
+                } else {
+                    // THE key integer — drives everything for this icon
+                    const tps = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
+                    const margin = Math.round(state.currentMargin)
+                    const slotW = tps + (margin * 2)
+
+                    // Slot sizing — changes in sync with icon
+                    if (revealer.width_request !== slotW) revealer.width_request = slotW
                     if (itemBox) {
-                        const subpixelShift = (currentFloatX + (floatSlotW / 2)) - (intSlotStart + (drawSlotW / 2))
-                        const scale = state.currentScale
-                        itemBox.set_style(`transform: translateX(${subpixelShift.toFixed(3)}px);`)
-
+                        if (itemBox.width_request !== tps) itemBox.width_request = tps
+                        if (itemBox.margin_start !== margin) itemBox.margin_start = margin
+                        if (itemBox.margin_end !== margin) itemBox.margin_end = margin
                         itemBox.margin_bottom = Math.round(0 - (state.currentTranslateY || 0))
-                        if (itemBox.margin_start !== drawMarginS || itemBox.margin_end !== drawMarginE) {
-                            itemBox.margin_start = drawMarginS
-                            itemBox.margin_end = drawMarginE
-                        }
                     }
 
-                    if (state.isSeparator) {
-                        const centerBox = itemBox as Gtk.CenterBox
-                        const line = centerBox?.get_center_widget() as Gtk.Box
-                        if (line) line.set_size_request(-1, Math.round(state.currentHeight))
-                    } else if (!state.isSeparator) {
-                        const targetPixelSize = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
-                        const overlay = itemBox?.get_first_child() as Gtk.Overlay
-                        if (overlay) {
-                            const iconBox = overlay.get_child() as Gtk.Box
-                            if (iconBox) {
-                                iconBox.set_size_request(drawIconW, targetPixelSize)
-                                const plateOverlay = iconBox.get_first_child() as Gtk.Overlay
-                                if (plateOverlay && plateOverlay.get_child) {
-                                    const da = plateOverlay.get_child()
-                                    if (da) {
-                                        da.set_size_request(drawIconW, targetPixelSize)
-                                        const icon = (da as any).get_next_sibling()
-                                        if (icon) icon.set_size_request(targetPixelSize, targetPixelSize)
-                                    }
-                                } else {
-                                    const icon = iconBox.get_first_child()
-                                    if (icon) icon.set_size_request(targetPixelSize, targetPixelSize)
+                    // Visual sizing — all from the SAME integer
+                    const overlay = itemBox?.get_first_child() as Gtk.Overlay
+                    if (overlay) {
+                        const iconBox = overlay.get_child() as Gtk.Box
+                        if (iconBox) {
+                            iconBox.set_size_request(tps, tps)
+                            const plateOverlay = iconBox.get_first_child() as Gtk.Overlay
+                            if (plateOverlay && plateOverlay.get_child) {
+                                const da = plateOverlay.get_child()
+                                if (da) {
+                                    da.set_size_request(tps, tps)
+                                    const icon = (da as any).get_next_sibling()
+                                    if (icon) icon.set_size_request(tps, tps)
                                 }
+                            } else {
+                                const icon = iconBox.get_first_child()
+                                if (icon) icon.set_size_request(tps, tps)
                             }
                         }
                     }
+
+                    totalBarWidth += slotW
                 }
             })
 
-            const totalFloatWidth = currentFloatX
-            const totalIntWidth = Math.round(totalFloatWidth)
-            const floatMarginStart = (dockMonitorWidth - totalFloatWidth) / 2
-            const intMarginStart = Math.round(floatMarginStart)
-            const marginShift = floatMarginStart - intMarginStart
-
-            if (bar.margin_start !== intMarginStart) {
-                bar.margin_start = intMarginStart
-                if (da) da.margin_start = intMarginStart - 9
+            // Step 3: Bar width/position — same integers as slots
+            const barM = Math.round((dockMonitorWidth - totalBarWidth) / 2)
+            if (bar.margin_start !== barM) {
+                bar.margin_start = barM
+                if (da) da.margin_start = barM - 9
             }
 
-            // V624: BAR SUB-PIXEL SHIFT
-            bar.set_style(`transform: translateX(${marginShift.toFixed(3)}px);`)
-
-            if (active || Math.abs(smoothedBarWidth - totalIntWidth) > 0.01) {
-                smoothedBarWidth = totalIntWidth
+            if (active || smoothedBarWidth !== totalBarWidth) {
+                smoothedBarWidth = totalBarWidth
                 updateSize()
                 updateInputRegion(smoothedBarWidth)
                 active = true
@@ -421,26 +332,9 @@ export default function Dock(gdkmonitor: any) {
         const screenWidth = gdkmonitor.get_geometry().width
         lastMouseX = mouseX
 
-        // V622: STABLE PROJECTION REFERENCE
-        // We calculate what the TOTAL width WILL be if the current mouse position 
-        // stays where it is. This breaks the feedback loop between animating icons 
-        // and its own projection source.
-        let targetTotalWidth = 0
-        orderedIds.forEach(id => {
-            const state = animRegistry.get(id)
-            if (state) {
-                // Approximate target expansion for this frame's pX estimation
-                const m = calculateDockItemMetrics(mouseX, state.staticCenter, state.isSeparator)
-                targetTotalWidth += m.width + (m.margin * 2)
-            }
-        })
-
-        const pX = lastMouseX === -1000 ? -1000 : getProjectedMouseX(
-            lastMouseX,
-            screenWidth,
-            totalStaticWidth,
-            targetTotalWidth || totalStaticWidth
-        )
+        // Static centers are in screen coordinates, so pass mouseX directly.
+        // NO projection feedback loop — eliminates the vibration bug.
+        const pX = lastMouseX
 
         const draggingId = dragBus.draggingId
         if (draggingId) {
@@ -826,11 +720,6 @@ export default function Dock(gdkmonitor: any) {
                         cleanId: "home-shortcut"
                     }, bar)
 
-                    // V402: Debug Home Shortcut (First Item)
-                    // @ts-ignore
-                    print("[Dock] Home Shortcut exposed for debugging")
-                    debugLauncherState(w)
-
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
                 }
@@ -1098,17 +987,7 @@ export default function Dock(gdkmonitor: any) {
             }
 
             let totalCurrentWidth = 0
-            const screenWidth2 = gdkmonitor.get_geometry().width
-            let targetTotalWidth = 0
-            orderedIds.forEach(id => {
-                const state = animRegistry.get(id)
-                if (state) {
-                    const m = calculateDockItemMetrics(lastMouseX, state.staticCenter, state.isSeparator)
-                    targetTotalWidth += m.width + (m.margin * 2)
-                }
-            })
-
-            const pX_sync = lastMouseX === -1000 ? -1000 : getProjectedMouseX(lastMouseX, screenWidth2, totalStaticWidth, targetTotalWidth || totalStaticWidth)
+            const pX_sync = lastMouseX
 
             orderedIds.forEach((id) => {
                 const state = animRegistry.get(id)
