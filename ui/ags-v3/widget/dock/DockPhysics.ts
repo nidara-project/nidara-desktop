@@ -1,5 +1,5 @@
 /**
- * MiDistroIA - Dock Physics Engine
+ * Distroia - Dock Physics Engine
  * Unified animation math: constants, magnification curve, spring stepping, and integer layout.
  */
 

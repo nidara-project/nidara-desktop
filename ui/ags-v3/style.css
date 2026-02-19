@@ -1700,4 +1700,172 @@ window.workspace-cockpit {
   color: white;
 }
 
+/* 
+   CRYSTAL UI - Main Entry Point
+   ================================
+   DO NOT add CSS rules here.
+   All styles live in styles/_component.scss partials.
+   Edit the corresponding partial for each component.
+*/
+.settings-main-box {
+  background-color: transparent;
+  border-radius: 24px;
+  overflow: hidden;
+}
+
+.settings-sidebar-scroll {
+  background-color: rgba(255, 255, 255, 0.05);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.settings-sidebar {
+  background-color: transparent;
+  padding: 12px 0;
+}
+.settings-sidebar row {
+  background-color: transparent;
+  transition: all 0.2s ease;
+  margin: 2px 8px;
+  border-radius: 12px;
+}
+.settings-sidebar row:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+.settings-sidebar row:selected {
+  background-color: #3b82f6;
+  color: white;
+}
+.settings-sidebar row:selected image {
+  color: white;
+}
+
+.settings-stack {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.settings-page {
+  padding: 40px;
+}
+
+.settings-page-title {
+  font-size: 2.5rem;
+  font-weight: 800;
+  margin-bottom: 8px;
+  color: var(--window-fg-color);
+}
+
+.settings-page-subtitle {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 24px;
+}
+
+.settings-section-title {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--window-fg-color);
+  margin-top: 16px;
+  margin-bottom: 8px;
+}
+
+.settings-list {
+  background-color: rgba(255, 255, 255, 0.03);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.settings-list row {
+  background-color: transparent;
+  padding: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.settings-list row:last-child {
+  border-bottom: none;
+}
+.settings-list row.active-profile {
+  background-color: rgba(59, 130, 246, 0.15);
+}
+.settings-list row.active-profile .profile-check {
+  visible: true;
+  color: #3b82f6;
+}
+
+.settings-row-btn {
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+  transition: all 0.2s ease;
+  padding: 0;
+}
+.settings-row-btn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.settings-icon-btn {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 8px;
+  border: 1px solid transparent;
+  transition: all 0.2s ease;
+}
+.settings-icon-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+}
+.settings-icon-btn.muted {
+  color: #ff3b30;
+  background-color: rgba(255, 59, 48, 0.1);
+}
+
+.endpoint-name {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.connected-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #34c759;
+  background-color: rgba(52, 199, 89, 0.1);
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-right: 8px;
+}
+
+.settings-placeholder {
+  font-size: 1.1rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 20px;
+}
+
+.settings-window {
+  background-color: rgba(20, 20, 20, 0.9);
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+.settings-window scale.horizontal {
+  margin: 4px 0;
+}
+.settings-window scale.horizontal contents {
+  margin: 0;
+  padding: 0;
+}
+.settings-window scale.horizontal trough {
+  min-height: 8px;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+.settings-window scale.horizontal highlight {
+  background-color: #3b82f6;
+  border-radius: 4px;
+}
+.settings-window scale.horizontal slider {
+  min-width: 16px;
+  min-height: 16px;
+  margin: -4px 0;
+  background-color: white;
+  border-radius: 50%;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+  border: none;
+}
+
 /*# sourceMappingURL=style.css.map */

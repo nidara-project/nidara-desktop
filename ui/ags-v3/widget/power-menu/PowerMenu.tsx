@@ -49,6 +49,7 @@ export default function PowerMenu(monitor: Gdk.Monitor) {
     const actions = [
         { icon: "system-shutdown-symbolic", label: "Apagar", cmd: "shutdown now", class: "shutdown" },
         { icon: "system-reboot-symbolic", label: "Reiniciar", cmd: "reboot", class: "reboot" },
+        { icon: "system-suspend-symbolic", label: "Suspender", cmd: "systemctl suspend", class: "suspend" },
         { icon: "system-log-out-symbolic", label: "Cerrar Sesión", cmd: "hyprctl dispatch exit", class: "logout" },
         { icon: "changes-prevent-symbolic", label: "Bloquear", cmd: "hyprlock", class: "lock" },
     ]

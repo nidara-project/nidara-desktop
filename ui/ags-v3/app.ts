@@ -18,6 +18,7 @@ import Bar from "./widget/bar/Bar"
 import NotificationPopups from "./widget/control-center/NotificationPopups"
 import ControlCenter from "./widget/control-center/ControlCenter"
 import PowerMenu from "./widget/power-menu/PowerMenu"
+import Settings from "./widget/settings/Settings"
 
 console.log("[DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)");
 
@@ -40,6 +41,7 @@ app.start({
     const gridWindows: any[] = []
     const ccWindows: any[] = []
     const powerWindows: any[] = []
+    const settingsWindows: any[] = []
 
     // 🎨 Dynamic Style Sync: Loads from the current working directory
     const styleFile = `${GLib.get_current_dir()}/style.css`
@@ -93,17 +95,22 @@ app.start({
         windows.add(barWin); windows.add(dockWin)
 
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-          const gridWin = AppGrid(monitor)
-          const notifWin = NotificationPopups(monitor)
-          const ccWin = ControlCenter(monitor)
-          const powerWin = PowerMenu(monitor)
+          const initWin = (ctor: any, array: any[]) => {
+            try {
+              const win = ctor(monitor)
+              windows.add(win)
+              if (array) array.push(win)
+            } catch (err) {
+              console.error(`[UI] Failed to init ${ctor.name} on monitor ${idx}:`, err)
+            }
+          }
 
-          windows.add(gridWin); windows.add(notifWin)
-          windows.add(ccWin); windows.add(powerWin)
+          initWin(AppGrid, gridWindows)
+          initWin(NotificationPopups, [])
+          initWin(ControlCenter, ccWindows)
+          initWin(PowerMenu, powerWindows)
+          initWin(Settings, settingsWindows)
 
-          gridWindows.push(gridWin)
-          ccWindows.push(ccWin)
-          powerWindows.push(powerWin)
           return GLib.SOURCE_REMOVE
         })
       } catch (e) { console.error(`[UI] Error:`, e) }
@@ -138,15 +145,20 @@ app.start({
       console.log(`[Toggle] Power (Count: ${powerWindows.length})`)
       powerWindows.forEach(p => { try { p.toggle() } catch (e) { console.error(e) } })
     }
+    const toggleSettings = () => {
+      console.log(`[Toggle] Settings (Count: ${settingsWindows.length})`)
+      settingsWindows.forEach(s => { try { s.toggle() } catch (e) { console.error(e) } })
+    }
 
     // Expose Globals
     (globalThis as any).toggleAppGrid = toggleAppGrid;
     (globalThis as any).toggleControlCenter = toggleCC;
     (globalThis as any).toggleNotificationCenter = toggleCC; // Redirect for safety
     (globalThis as any).togglePowerMenu = togglePower;
+    (globalThis as any).toggleSettings = toggleSettings;
 
     // Local request mapper
-    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleControlCenter: toggleCC, toggleNC: toggleCC, togglePower }
+    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleControlCenter: toggleCC, toggleNC: toggleCC, togglePower, toggleSettings }
   },
   requestHandler(argv, res) {
     const engine = (app as any).DistroIA
@@ -158,6 +170,7 @@ app.start({
     else if (argv[0] === "toggleControlCenter()") { engine.toggleCC(); res("ok") }
     else if (argv[0] === "toggleNotificationCenter()") { engine.toggleNC(); res("ok") }
     else if (argv[0] === "togglePowerMenu()") { engine.togglePower(); res("ok") }
+    else if (argv[0] === "toggleSettings()") { engine.toggleSettings(); res("ok") }
     else {
       console.warn(`[Handler] Unknown command: ${argv[0]}`)
       res("unknown command")

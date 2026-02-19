@@ -1,0 +1,182 @@
+@use "tokens" as *;
+
+.settings-main-box {
+    background-color: transparent;
+    border-radius: $crystal_radius_lg;
+    overflow: hidden;
+}
+
+.settings-sidebar-scroll {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-right: 1px solid $crystal_border;
+}
+
+.settings-sidebar {
+    background-color: transparent;
+    padding: 12px 0;
+
+    row {
+        background-color: transparent;
+        transition: all 0.2s ease;
+        margin: 2px 8px;
+        border-radius: $crystal_radius_sm;
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        &:selected {
+            background-color: $accent_blue;
+            color: white;
+
+            image {
+                color: white;
+            }
+        }
+    }
+}
+
+.settings-stack {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+
+.settings-page {
+    padding: 40px;
+}
+
+.settings-page-title {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 8px;
+    color: $theme_fg;
+}
+
+.settings-page-subtitle {
+    font-size: 1rem;
+    color: $theme_fg_dim;
+    margin-bottom: 24px;
+}
+
+.settings-section-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: $theme_fg;
+    margin-top: 16px;
+    margin-bottom: 8px;
+}
+
+.settings-list {
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: $crystal_radius_md;
+    border: 1px solid $crystal_border;
+    overflow: hidden;
+
+    row {
+        background-color: transparent;
+        padding: 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+
+        &:last-child {
+            border-bottom: none;
+        }
+
+        &.active-profile {
+            background-color: rgba($accent_blue, 0.15);
+
+            .profile-check {
+                visible: true;
+                color: $accent_blue;
+            }
+        }
+    }
+}
+
+.settings-row-btn {
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    transition: all 0.2s ease;
+    padding: 0;
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+}
+
+.settings-icon-btn {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: $crystal_radius_sm;
+    padding: 8px;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.15);
+    }
+
+    &.muted {
+        color: $accent_red;
+        background-color: rgba($accent_red, 0.1);
+    }
+}
+
+.endpoint-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+}
+
+.connected-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: $accent_green;
+    background-color: rgba($accent_green, 0.1);
+    padding: 2px 8px;
+    border-radius: 10px;
+    margin-right: 8px;
+}
+
+.settings-placeholder {
+    font-size: 1.1rem;
+    color: $theme_fg_dim;
+    margin-top: 20px;
+}
+
+// Window Styling
+.settings-window {
+    background-color: rgba(20, 20, 20, 0.9);
+    border-radius: $crystal_radius_lg;
+    border: 1px solid $crystal_border_vibrant;
+
+    // Slider (Scale) Styling
+    scale {
+        &.horizontal {
+            margin: 4px 0;
+
+            contents {
+                margin: 0;
+                padding: 0;
+            }
+
+            trough {
+                min-height: 8px;
+                background-color: rgba(255, 255, 255, 0.1);
+                border-radius: 4px;
+            }
+
+            highlight {
+                background-color: $accent_blue;
+                border-radius: 4px;
+            }
+
+            slider {
+                min-width: 16px;
+                min-height: 16px;
+                margin: -4px 0;
+                background-color: white;
+                border-radius: 50%;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+                border: none;
+            }
+        }
+    }
+}

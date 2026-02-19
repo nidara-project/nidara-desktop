@@ -1,1 +1,0 @@
-import { Gdk } from 'ags/gtk4'; const d = Gdk.Display.get_default(); const m = d.get_monitors().get_item(0) as Gdk.Monitor; console.log('GDK Monitor 0: ' + m.get_geometry().width + 'x' + m.get_geometry().height)
