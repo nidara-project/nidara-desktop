@@ -232,7 +232,7 @@ export function DockItem(
 
                 // Full-frame icons (Antigravity, custom apps) use factor 1.0 (Edge to Edge)
                 // Themed icons (Chrome, Telegram) keep factor 0.8 to preserve their internal design
-                const factor = isThemed ? 0.8 : 1.0
+                const factor = isThemed ? 0.8 : 1.05 // 🛡️ V138: 105% Safe Overscale for full-frame icons
 
                 // Calculate available size including padding
                 const availW = w * factor
@@ -257,9 +257,9 @@ export function DockItem(
                 cr.save()
 
                 // V135: Apply Squircle Clipping for full-frame icons
-                // We use EXACTly 0,0,w,h to ensure the icon reaches the very edge.
+                // V139: Use 10% reduction in squircle radius (0.45 instead of 0.5) to allow icon more "breathing room" in corners
                 if (!isThemed) {
-                    createSquirclePath(cr, 0, 0, w, h, w * 0.5, 3.2, false, 0)
+                    createSquirclePath(cr, -1, -1, w + 2, h + 2, w * 0.45, 3.2, false, 0)
                     cr.clip()
                 }
 
@@ -273,7 +273,8 @@ export function DockItem(
                 // V136: Universal Apple-Style Glassy Highlight (Refined: Inset 1px)
                 cr.save()
                 // Inset by 0.5px so 1.0px stroke stays perfectly within bounds
-                createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 3.2, false, 0)
+                // Sync radius with factor 0.45 for consistent squircle curvature
+                createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.45) - 0.5, 3.2, false, 0)
 
                 const highlightPat = new Cairo.LinearGradient(0, 0, 0, h)
                 // TOP: Glassy White Highlight (Refined)
