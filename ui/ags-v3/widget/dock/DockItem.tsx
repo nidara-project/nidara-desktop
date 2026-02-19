@@ -137,7 +137,7 @@ export function DockItem(
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
         hexpand: false,
-        margin_bottom: 18,
+        margin_bottom: 24, // 🛡️ V141: Increased margin for 120px PILL_HEIGHT
         has_tooltip: false,
         can_focus: false, // V405: Explicitly disable focus
         focusable: false
@@ -230,9 +230,9 @@ export function DockItem(
             ; (child as any).set_draw_func((area: any, cr: any, w: number, h: number) => {
                 if (!pixbuf) return
 
-                // Full-frame icons (Antigravity, custom apps) use factor 1.0 (Edge to Edge)
-                // Themed icons (Chrome, Telegram) keep factor 0.8 to preserve their internal design
-                const factor = isThemed ? 0.8 : 1.05 // 🛡️ V138: 105% Safe Overscale for full-frame icons
+                // Full-frame icons (Antigravity) use factor 0.95 for a slight "Safe Inset"
+                // Themed icons (Chrome) keep factor 0.8 to preserve their internal design
+                const factor = isThemed ? 0.8 : 0.95 // 🛡️ V142: 95% scaling for full-frame to ensure no edge bleed
 
                 // Calculate available size including padding
                 const availW = w * factor
@@ -257,9 +257,9 @@ export function DockItem(
                 cr.save()
 
                 // V135: Apply Squircle Clipping for full-frame icons
-                // V139: Use 10% reduction in squircle radius (0.45 instead of 0.5) to allow icon more "breathing room" in corners
+                // V143: Sync radius with factor 0.5 (Full Squircle) for sizing parity
                 if (!isThemed) {
-                    createSquirclePath(cr, -1, -1, w + 2, h + 2, w * 0.45, 3.2, false, 0)
+                    createSquirclePath(cr, 0, 0, w, h, w * 0.5, 3.2, false, 0)
                     cr.clip()
                 }
 
@@ -273,8 +273,8 @@ export function DockItem(
                 // V136: Universal Apple-Style Glassy Highlight (Refined: Inset 1px)
                 cr.save()
                 // Inset by 0.5px so 1.0px stroke stays perfectly within bounds
-                // Sync radius with factor 0.45 for consistent squircle curvature
-                createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.45) - 0.5, 3.2, false, 0)
+                // V144: Sync radius with 0.5 to match background plate
+                createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 3.2, false, 0)
 
                 const highlightPat = new Cairo.LinearGradient(0, 0, 0, h)
                 // TOP: Glassy White Highlight (Refined)
@@ -355,10 +355,8 @@ export function DockItem(
         const PLATE_OPACITY = 0.9 // V414: Tweakable opacity (lower = more blur visible)
 
         da.set_draw_func((_, cr, w, h) => {
-            // V137: Don't draw the glassy plate for full-frame icons.
-            // The icon itself covers 100% of the area, and drawing a plate underneath 
-            // creates sub-pixel 'white rim' artifacts due to anti-aliasing.
-            if (!isThemed) return;
+            // V145: ALWAYS draw the glassy plate to ensure visual weight parity.
+            // Even if the icon is full-frame, having the plate ensures consistency in magnification limits.
 
             // V413: Use shared drawSquircle for consistent geometry
             // V430: Enable Gloss/Border effect
