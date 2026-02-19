@@ -11,7 +11,7 @@ import Gio from "gi://Gio"
 import Cairo from "gi://cairo"
 import appService from "../../core/AppService" // Ensure import path is correct relative to this file
 import { DOCK_CONSTANTS } from "./DockPhysics"
-import { drawSquircle } from "../common/DrawingUtils"
+import { drawSquircle, createSquirclePath } from "../common/DrawingUtils"
 import { dragBus, mouseBus } from "./state"
 
 const hypr = AstalHyprland.get_default()
@@ -174,8 +174,14 @@ export function DockItem(
     const res = getIcon()
     let child: Gtk.Widget
 
+    // HEURISTIC: Is this a themed icon or a full-frame external icon?
+    // We will finalize this after resolving the path for system icons.
+    let isThemed = true
+
+
     // V132: Custom DrawingArea for Pixel-Perfect Scaling (Zero Popping / Zero Layout Shift)
     let pixbuf: any = null
+    let resolvedPath = res.path || ""
     const sourceSize = 128 // Load high-res once
 
     try {
@@ -187,21 +193,30 @@ export function DockItem(
                 const info = theme.lookup_icon(res.name, [], sourceSize, 1, Gtk.TextDirection.NONE, Gtk.IconLookupFlags.FORCE_REGULAR)
                 if (info) {
                     const file = info.get_file()
-                    if (file) {
-                        pixbuf = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(file.get_path()!, sourceSize, sourceSize, true)
+                    if (file && file.get_path()) {
+                        resolvedPath = file.get_path()!
+                        pixbuf = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(resolvedPath, sourceSize, sourceSize, true)
                     }
                 }
             }
         } else if (res.gicon) {
             const gicon = res.gicon as any
             if (gicon.get_file && gicon.get_file()) {
-                const p = gicon.get_file()!.get_path()
-                if (p) pixbuf = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(p, sourceSize, sourceSize, true)
+                resolvedPath = gicon.get_file()!.get_path() || ""
+                if (resolvedPath) pixbuf = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(resolvedPath, sourceSize, sourceSize, true)
             }
         }
     } catch (e) {
         // console.error(`[DockItem] Failed to load pixbuf for ${appId}:`, e)
     }
+
+    // Finalize Heuristic: Check the resolved path to see if it's truly external
+    isThemed = (resolvedPath.includes("/usr/share/icons") || resolvedPath.includes(".local/share/icons"))
+        && !resolvedPath.includes("hicolor")
+        && !resolvedPath.includes("branding")
+        && !resolvedPath.includes("antigravity")
+        && !appId.includes("antigravity")
+
 
     if (pixbuf) {
         // Custom Drawing
@@ -215,10 +230,9 @@ export function DockItem(
             ; (child as any).set_draw_func((area: any, cr: any, w: number, h: number) => {
                 if (!pixbuf) return
 
-                // V133: Internal Padding Enforcement
-                // Even if layout alignment fails and we get full size, we force padding here.
-                const isAg = appId.includes("antigravity") || nameStr.includes("antigravity")
-                const factor = isAg ? 0.65 : 0.8
+                // Full-frame icons (Antigravity, custom apps) use factor 1.0 (Edge to Edge)
+                // Themed icons (Chrome, Telegram) keep factor 0.8 to preserve their internal design
+                const factor = isThemed ? 0.8 : 1.0
 
                 // Calculate available size including padding
                 const availW = w * factor
@@ -231,7 +245,8 @@ export function DockItem(
                 // Scale to fit available padded area
                 const scaleX = availW / iconW
                 const scaleY = availH / iconH
-                const scale = Math.min(scaleX, scaleY)
+                // Scale strategy: 'Contain' for themed icons, 'Cover' for full-frame to ensure zero gaps
+                const scale = isThemed ? Math.min(scaleX, scaleY) : Math.max(scaleX, scaleY)
 
                 // Center in the FULL widget area (w, h)
                 const drawW = iconW * scale
@@ -240,11 +255,40 @@ export function DockItem(
                 const y = (h - drawH) / 2
 
                 cr.save()
+
+                // V135: Apply Squircle Clipping for full-frame icons
+                // We use EXACTly 0,0,w,h to ensure the icon reaches the very edge.
+                if (!isThemed) {
+                    createSquirclePath(cr, 0, 0, w, h, w * 0.5, 3.2, false, 0)
+                    cr.clip()
+                }
+
                 cr.translate(x, y)
                 cr.scale(scale, scale)
 
                 Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
                 cr.paint()
+                cr.restore()
+
+                // V136: Universal Apple-Style Glassy Highlight (Refined: Inset 1px)
+                cr.save()
+                // Inset by 0.5px so 1.0px stroke stays perfectly within bounds
+                createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 3.2, false, 0)
+
+                const highlightPat = new Cairo.LinearGradient(0, 0, 0, h)
+                // TOP: Glassy White Highlight (Refined)
+                highlightPat.addColorStopRGBA(0, 1, 1, 1, 0.45)
+                highlightPat.addColorStopRGBA(0.4, 1, 1, 1, 0.05)
+
+                // MID: Transparent
+                highlightPat.addColorStopRGBA(0.5, 1, 1, 1, 0.0)
+
+                // BOTTOM: Subtle White Rim (Apple style)
+                highlightPat.addColorStopRGBA(1, 1, 1, 1, 0.15)
+
+                cr.setLineWidth(1.0)
+                cr.setSource(highlightPat)
+                cr.stroke()
                 cr.restore()
             })
     } else {
@@ -310,8 +354,12 @@ export function DockItem(
         const PLATE_OPACITY = 0.9 // V414: Tweakable opacity (lower = more blur visible)
 
         da.set_draw_func((_, cr, w, h) => {
+            // V137: Don't draw the glassy plate for full-frame icons.
+            // The icon itself covers 100% of the area, and drawing a plate underneath 
+            // creates sub-pixel 'white rim' artifacts due to anti-aliasing.
+            if (!isThemed) return;
+
             // V413: Use shared drawSquircle for consistent geometry
-            // passes w,h to match the widget size
             // V430: Enable Gloss/Border effect
             drawSquircle(cr, w, h, undefined, PLATE_OPACITY, true)
         })
