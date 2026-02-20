@@ -171,7 +171,7 @@ export default function Dock(gdkmonitor: any) {
         valign: Gtk.Align.END,
         halign: Gtk.Align.START, // V615: Unified START anchor
         height_request: DOCK_CONSTANTS.PILL_HEIGHT,
-        margin_bottom: 10,
+        margin_bottom: 8,
         can_focus: false,
     })
 

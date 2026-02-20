@@ -447,12 +447,14 @@ button.cd-menu-action:hover {
   box-shadow: none;
 }
 
-/* --- Indicators (Dots) --- */
+/* --- Indicators (Dots) — macOS Tahoe: small black circles --- */
 window#crystal-dock button.cd-dot,
 window#crystal-dock box.cd-dot {
-  min-height: 5px;
-  min-width: 5px;
-  border-radius: 50%;
+  min-height: 4px;
+  min-width: 4px;
+  max-height: 4px;
+  max-width: 4px;
+  border-radius: 2px;
   margin-top: 4px;
   background-color: transparent;
   transition: all 0.2s ease;
@@ -460,23 +462,25 @@ window#crystal-dock box.cd-dot {
 
 window#crystal-dock box.cd-dot.open,
 window#crystal-dock box.cd-dot.focused {
-  background-color: rgba(255, 255, 255, 0.5);
+  background-color: rgb(0, 0, 0);
   box-shadow: none;
   border: none;
   opacity: 1;
-  min-height: 5px;
-  min-width: 5px;
+  min-height: 4px;
+  min-width: 4px;
+  max-height: 4px;
+  max-width: 4px;
 }
 
-/* --- Separator --- */
+/* --- Separator — macOS Tahoe: dark hairline --- */
 window#crystal-dock box.cd-separator,
 window#crystal-dock box#cd-separator {
-  min-height: 48px;
-  min-width: 2px;
-  background-color: rgba(255, 255, 255, 0.4);
+  min-height: 72px;
+  min-width: 1px;
+  background-color: rgba(0, 0, 0, 0.35);
   margin: 0;
   box-shadow: none;
-  border-radius: 1px;
+  border-radius: 0px;
 }
 
 /* --- Hover Shadow Killer --- */

@@ -118,6 +118,15 @@ export const drawSquircle = (
 
     cr.setAntialias(3)
 
+    // 0. STRUCTURAL SHADOW (macOS Tahoe: depth separation from wallpaper)
+    if (enableGloss) {
+        cr.save()
+        createSquirclePath(cr, x, y + 4, drawW, drawH, r, 3.2, perfect, 0)
+        cr.setSourceRGBA(0, 0, 0, 0.08)
+        cr.fill()
+        cr.restore()
+    }
+
     // 1. CLEAN GLASS BODY
     createSquirclePath(cr, x, y, drawW, drawH, r, 3.2, perfect, 0)
     if (enableGloss) {
@@ -131,22 +140,17 @@ export const drawSquircle = (
     }
     cr.fill()
 
-    // 2. BORDER (Custom or Gloss)
+    // 2. BORDER (Custom or Uniform)
     if (borderColor) {
         createSquirclePath(cr, x, y, drawW, drawH, r, 3.2, perfect, 0)
         cr.setLineWidth(1)
         cr.setSourceRGBA(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
         cr.stroke()
     } else if (enableGloss) {
-        // Legacy Gloss Border
+        // macOS Tahoe: Uniform subtle border all around
         createSquirclePath(cr, x, y, drawW, drawH, r, 3.2, perfect, 0)
-        const borderPat = new Cairo.LinearGradient(x, y, x, y + drawH)
-        borderPat.addColorStopRGBA(0, 1, 1, 1, 0.4)   // Top Edge: Highlight
-        borderPat.addColorStopRGBA(0.5, 1, 1, 1, 0.05) // Middle: Faded
-        borderPat.addColorStopRGBA(1, 1, 1, 1, 0.0)   // Bottom: Gone
-
         cr.setLineWidth(1)
-        cr.setSource(borderPat)
+        cr.setSourceRGBA(1, 1, 1, 0.2)
         cr.stroke()
     }
 }

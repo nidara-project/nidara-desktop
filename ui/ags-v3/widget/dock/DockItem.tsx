@@ -31,7 +31,7 @@ const hypr = AstalHyprland.get_default()
 // --- STATE: Removed local dragBus (now using shared state from ./state) ---
 
 // SEPARATOR COMPONENT
-export function Separator(id: string, updateDock: () => void, register: (id: string, s: any) => void, height = 48,
+export function Separator(id: string, updateDock: () => void, register: (id: string, s: any) => void, height = 72,
     // Callbacks for drop logic
     onDrop: (sourceId: string) => void
 ) {
@@ -389,7 +389,35 @@ export function DockItem(
     child.set_name("cd-icon-image-" + appId)
     iconBox.append(iconToDisplay)
 
-    const dot = new Gtk.Box({ name: "cd-dot-" + appId, css_classes: ["cd-dot"], width_request: 5, height_request: 5, has_tooltip: false })
+    // macOS Tahoe: 4px perfect black circle — Cairo-drawn for pixel-perfect rendering
+    const DOT_SIZE = 4
+    const dot = new Gtk.DrawingArea({
+        name: "cd-dot-" + appId,
+        css_classes: ["cd-dot"],
+        width_request: DOT_SIZE,
+        height_request: DOT_SIZE,
+        has_tooltip: false,
+    })
+        ; (dot as any).set_content_width(DOT_SIZE)
+        ; (dot as any).set_content_height(DOT_SIZE)
+        ; (dot as any).set_draw_func((_a: any, cr: any, w: number, h: number) => {
+            // Best-quality anti-aliasing
+            cr.setAntialias(3) // CAIRO_ANTIALIAS_BEST
+
+            const cx = w / 2
+            const cy = h / 2
+            const r = DOT_SIZE / 2
+
+            // 1. Subtle shadow halo (macOS depth effect)
+            cr.arc(cx, cy + 0.5, r + 0.3, 0, Math.PI * 2)
+            cr.setSourceRGBA(0, 0, 0, 0.25)
+            cr.fill()
+
+            // 2. Crisp main dot
+            cr.arc(cx, cy, r, 0, Math.PI * 2)
+            cr.setSourceRGBA(0, 0, 0, 0.9)
+            cr.fill()
+        })
     const indicator = new Gtk.Box({
         name: "cd-indicator-" + appId,
         css_classes: ["cd-indicator-container"],
@@ -397,7 +425,7 @@ export function DockItem(
         valign: Gtk.Align.END,
         margin_bottom: 4,
         has_tooltip: false,
-        width_request: 5, height_request: 5,
+        width_request: DOT_SIZE, height_request: DOT_SIZE,
     })
     indicator.append(dot)
 
