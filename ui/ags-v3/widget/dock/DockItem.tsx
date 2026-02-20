@@ -137,7 +137,7 @@ export function DockItem(
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
         hexpand: false,
-        margin_bottom: 24, // 🛡️ V141: Increased margin for 120px PILL_HEIGHT
+        margin_bottom: 18,
         has_tooltip: false,
         can_focus: false, // V405: Explicitly disable focus
         focusable: false
@@ -230,9 +230,9 @@ export function DockItem(
             ; (child as any).set_draw_func((area: any, cr: any, w: number, h: number) => {
                 if (!pixbuf) return
 
-                // Full-frame icons (Antigravity) use factor 0.95 for a slight "Safe Inset"
-                // Themed icons (Chrome) keep factor 0.8 to preserve their internal design
-                const factor = isThemed ? 0.8 : 0.95 // 🛡️ V142: 95% scaling for full-frame to ensure no edge bleed
+                // Full-frame icons (Antigravity, custom apps) use factor 1.0 (Edge to Edge)
+                // Themed icons (Chrome, Telegram) keep factor 0.8 to preserve their internal design
+                const factor = isThemed ? 1.10 : 1.0
 
                 // Calculate available size including padding
                 const availW = w * factor
@@ -355,8 +355,10 @@ export function DockItem(
         const PLATE_OPACITY = 0.9 // V414: Tweakable opacity (lower = more blur visible)
 
         da.set_draw_func((_, cr, w, h) => {
-            // V145: ALWAYS draw the glassy plate to ensure visual weight parity.
-            // Even if the icon is full-frame, having the plate ensures consistency in magnification limits.
+            // V137: Don't draw the glassy plate for full-frame icons.
+            // The icon itself covers 100% of the area, and drawing a plate underneath 
+            // creates sub-pixel 'white rim' artifacts due to anti-aliasing.
+            if (!isThemed) return;
 
             // V413: Use shared drawSquircle for consistent geometry
             // V430: Enable Gloss/Border effect

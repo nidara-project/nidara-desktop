@@ -32,9 +32,9 @@ export const DOCK_CONSTANTS = {
     SNAP_VEL: 0.5,        // px/s — snap if velocity below this
 
     // WINDOW GEOMETRY
-    PILL_HEIGHT: 120,     // 🛡️ V140: Increased to allow 96px icons + margins
-    WINDOW_HEIGHT: 240,
-    EXCLUSIVE_ZONE: 130,
+    PILL_HEIGHT: 100,
+    WINDOW_HEIGHT: 200,
+    EXCLUSIVE_ZONE: 110,
 };
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
