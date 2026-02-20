@@ -5,6 +5,7 @@ import { drawSquircle } from "../common/DrawingUtils"
 // Page Imports
 import NetworkPage from "./pages/Network"
 import AudioPage from "./pages/Audio"
+import DockPage from "./pages/Dock"
 import PowerPage from "./pages/Power"
 
 /**
@@ -30,6 +31,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     const categories = [
         { id: "network", label: "Red", icon: "network-workgroup-symbolic", component: NetworkPage },
         { id: "audio", label: "Sonido", icon: "audio-speakers-symbolic", component: AudioPage },
+        { id: "dock", label: "Dock", icon: "dock-bottom-symbolic", component: DockPage },
         { id: "power", label: "Energía", icon: "power-profile-balanced-symbolic", component: PowerPage },
         { id: "appearance", label: "Apariencia", icon: "preferences-desktop-theme-symbolic", component: null },
         { id: "input", label: "Entrada", icon: "input-mouse-symbolic", component: null },

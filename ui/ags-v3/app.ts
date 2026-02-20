@@ -11,8 +11,9 @@ import type { Monitor } from "gi://Gdk?version=4.0"
 import type { Window } from "gi://Gtk?version=4.0"
 
 // Widget Imports
-// Widget Imports
 import Dock from "./widget/dock/Dock"
+import { syncConstants } from "./widget/dock/DockPhysics"
+import { onDockSettingsChanged } from "./widget/dock/state"
 import AppGrid from "./widget/app-grid/AppGrid"
 import Bar from "./widget/bar/Bar"
 import NotificationPopups from "./widget/control-center/NotificationPopups"
@@ -93,6 +94,32 @@ app.start({
         const barWin = Bar(monitor)
         const dockWin = Dock(monitor)
         windows.add(barWin); windows.add(dockWin)
+
+        // Dock rebuild on settings change (debounced)
+        let rebuildTimer: number | null = null
+        onDockSettingsChanged(() => {
+          if (rebuildTimer) GLib.source_remove(rebuildTimer)
+          rebuildTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+            rebuildTimer = null
+            try {
+              syncConstants()
+              // Find and destroy old dock window
+              windows.forEach(w => {
+                if ((w as any).name === "crystal-dock") {
+                  windows.delete(w)
+                    ; (w as any).close()
+                }
+              })
+              // Create new dock with updated constants
+              const newDock = Dock(monitor)
+              windows.add(newDock)
+              console.log("[DockSettings] Dock rebuilt with new settings")
+            } catch (e) {
+              console.error("[DockSettings] Dock rebuild failed:", e)
+            }
+            return GLib.SOURCE_REMOVE
+          })
+        })
 
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
           const initWin = (ctor: any, array: any[]) => {

@@ -263,7 +263,6 @@ window#crystal-control-center .control-center {
    ========================================================================== */
 #the-dock-bar {
   padding: 0;
-  min-height: 100px;
   transform-origin: bottom;
 }
 
@@ -276,8 +275,6 @@ window#crystal-control-center .control-center {
   border: none;
   box-shadow: none;
   transition: background-color 200ms ease;
-  min-height: 100px;
-  min-width: 64px;
   -gtk-icon-effect: none;
   -gtk-icon-shadow: none;
 }
@@ -475,7 +472,6 @@ window#crystal-dock box.cd-dot.focused {
 /* --- Separator — macOS Tahoe: dark hairline --- */
 window#crystal-dock box.cd-separator,
 window#crystal-dock box#cd-separator {
-  min-height: 72px;
   min-width: 1px;
   background-color: rgba(0, 0, 0, 0.35);
   margin: 0;
@@ -1870,6 +1866,32 @@ window.workspace-cockpit {
   border-radius: 50%;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
   border: none;
+}
+
+/* Preset Button Group */
+.settings-preset-group {
+  margin-top: 4px;
+}
+
+.settings-preset-btn {
+  min-height: 32px;
+  padding: 4px 12px;
+  background-color: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+.settings-preset-btn:hover {
+  background-color: rgba(255, 255, 255, 0.15);
+  color: white;
+}
+.settings-preset-btn.settings-preset-active {
+  background-color: #3b82f6;
+  color: white;
+  border-color: transparent;
 }
 
 /*# sourceMappingURL=style.css.map */

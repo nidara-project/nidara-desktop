@@ -3,39 +3,77 @@
  * Unified animation math: constants, magnification curve, spring stepping, and integer layout.
  */
 
+import { dockSettings } from "./state"
+
 // ─── CONSTANTS ───────────────────────────────────────────────────────────────
+// Values derived from dockSettings. Call syncConstants() before dock recreation.
+// FIXED values (gaps/paddings) stay constant. SCALED values derive from iconSize.
 
-export const DOCK_CONSTANTS = {
-    // PHYSICS — Critical Damping Spring
-    minSize: 64,
-    maxSize: 96,
-    range: 2.5,           // Soft range multiplier
-    SIGMA: 1.1,           // Narrower Gaussian standard deviation
-    sensitivity: 0.35,
-    STIFFNESS: 320,
-    DAMPING: 38,
+function deriveConstants(iconSize: number, maxSize: number, magnification: boolean, screenGap: number) {
+    // ── PROPORTIONAL RATIOS (Based on user-provided table) ──
+    // Total Gap = 0.25 * size. Each icon margin is half of that = 0.125 * size.
+    const MARGIN = Math.round(iconSize * 0.125)        // 4@32, 6@48, 8@64, 12@96
+    const PILL_PAD = Math.round(iconSize * 0.25)      // 8@32, 12@48, 16@64, 24@96
+    const INDICATOR_PAD = 4                           // Fixed 4px indicator-to-bottom gap
 
-    // LAYOUT
-    ICON_SIZE: 64,
-    APP_SLOT: 82,         // 64 + 18 (9px margin each side)
-    SEPARATOR_SLOT: 20,   // 2px line + 9px margin each side
-    SEPARATOR_LINE: 1,
-    SEPARATOR_OFFSET: 9,
-    BASE_MARGIN: 9,       // 18 / 2
+    // ── DERIVED ──
+    const pillHeight = iconSize + PILL_PAD * 2        // Perfect vertical symmetry
+    const separatorHeight = Math.round(iconSize * 0.875)
 
-    // ANIMATION
-    TICK_INTERVAL: 16,
-    TOOLTIP_DELAY: 500,
+    return {
+        // PHYSICS — Critical Damping Spring
+        minSize: iconSize,
+        maxSize: magnification ? maxSize : iconSize,
+        range: 2.5,
+        SIGMA: 1.1,
+        sensitivity: 0.35,
+        STIFFNESS: 320,
+        DAMPING: 38,
 
-    // Snap thresholds — aggressive to kill vibration
-    SNAP_POS: 0.3,        // px — snap if closer than this
-    SNAP_VEL: 0.5,        // px/s — snap if velocity below this
+        // LAYOUT
+        ICON_SIZE: iconSize,
+        APP_SLOT: iconSize + MARGIN * 2,
+        SEPARATOR_SLOT: MARGIN * 2,
+        SEPARATOR_LINE: 1,
+        SEPARATOR_OFFSET: MARGIN,
+        SEPARATOR_HEIGHT: separatorHeight,
+        BASE_MARGIN: MARGIN,
+        INDICATOR_GAP: INDICATOR_PAD,
+        PILL_PADDING: PILL_PAD,
 
-    // WINDOW GEOMETRY
-    PILL_HEIGHT: 100,
-    WINDOW_HEIGHT: 200,
-    EXCLUSIVE_ZONE: 110,
-};
+        // ANIMATION
+        TICK_INTERVAL: 16,
+        TOOLTIP_DELAY: 500,
+
+        // Snap thresholds
+        SNAP_POS: 0.3,
+        SNAP_VEL: 0.5,
+
+        // WINDOW GEOMETRY
+        PILL_HEIGHT: pillHeight,
+        WINDOW_HEIGHT: Math.max(200, pillHeight + maxSize + PILL_PAD),
+        EXCLUSIVE_ZONE: pillHeight + screenGap,
+    }
+}
+
+export let DOCK_CONSTANTS = deriveConstants(
+    dockSettings.iconSize,
+    dockSettings.maxIconSize,
+    dockSettings.magnification,
+    dockSettings.screenGap,
+)
+
+/** Re-derive constants from current dockSettings. Call before dock rebuild. */
+export function syncConstants() {
+    DOCK_CONSTANTS = deriveConstants(
+        dockSettings.iconSize,
+        dockSettings.maxIconSize,
+        dockSettings.magnification,
+        dockSettings.screenGap,
+    )
+}
+
+
 
 // ─── TYPES ───────────────────────────────────────────────────────────────────
 

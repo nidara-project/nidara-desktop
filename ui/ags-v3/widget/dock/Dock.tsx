@@ -10,7 +10,7 @@ import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
 import { DockItem, Separator } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
-import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState } from "./state"
+import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState, dockSettings } from "./state"
 
 // V127: Native Gtk Resolution
 
@@ -152,7 +152,7 @@ export default function Dock(gdkmonitor: any) {
         can_focus: false,
         can_target: true,
         resizable: false,
-        default_height: 120, // Reverted per user request
+        default_height: DOCK_CONSTANTS.WINDOW_HEIGHT,
     })
     win.set_child(layout)
     const bar = new Gtk.Box({
@@ -171,7 +171,7 @@ export default function Dock(gdkmonitor: any) {
         valign: Gtk.Align.END,
         halign: Gtk.Align.START, // V615: Unified START anchor
         height_request: DOCK_CONSTANTS.PILL_HEIGHT,
-        margin_bottom: 8,
+        margin_bottom: dockSettings.screenGap,
         can_focus: false,
     })
 
@@ -183,7 +183,7 @@ export default function Dock(gdkmonitor: any) {
     const updateSize = () => {
         if (!bar || !win) return
         bar.set_size_request(smoothedBarWidth, -1)
-        const targetW = smoothedBarWidth + 18
+        const targetW = smoothedBarWidth + (DOCK_CONSTANTS.BASE_MARGIN * 2)
         if (da) {
             da.set_size_request(targetW, DOCK_CONSTANTS.PILL_HEIGHT)
             da.queue_draw()
@@ -194,7 +194,7 @@ export default function Dock(gdkmonitor: any) {
     // Set the margin immediately so the very first frame is correct.
     const initialMargin = Math.round((dockMonitorWidth - totalStaticWidth) / 2)
     bar.margin_start = Math.max(0, initialMargin)
-    if (da) da.margin_start = Math.max(0, initialMargin - 9) // V616: Center background pill
+    if (da) da.margin_start = Math.max(0, initialMargin - DOCK_CONSTANTS.BASE_MARGIN) // V616: Center background pill
 
     // --- PHYSICS ENGINE ---
     const animRegistry = new Map<string, import("./state").AnimState>()
@@ -306,7 +306,7 @@ export default function Dock(gdkmonitor: any) {
             const barM = Math.round((dockMonitorWidth - totalBarWidth) / 2)
             if (bar.margin_start !== barM) {
                 bar.margin_start = barM
-                if (da) da.margin_start = barM - 9
+                if (da) da.margin_start = barM - DOCK_CONSTANTS.BASE_MARGIN
             }
 
             if (active || smoothedBarWidth !== totalBarWidth) {
@@ -430,10 +430,10 @@ export default function Dock(gdkmonitor: any) {
         // This eliminates the "jump" reported by the user.
         const width = totalWidth + 500
         const x = (dockMonitorWidth - width) / 2
-        const y = 200 - 110
+        const y = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT
 
         // @ts-ignore
-        region.unionRectangle({ x: Math.round(x), y: Math.round(y), width: Math.round(width), height: 110 })
+        region.unionRectangle({ x: Math.round(x), y: Math.round(y), width: Math.round(width), height: DOCK_CONSTANTS.PILL_HEIGHT })
         surface.set_input_region(region)
     }
 
@@ -459,7 +459,7 @@ export default function Dock(gdkmonitor: any) {
 
         // V215: Normal operation (not dragging)
         // We only magnify if the mouse is in the bottom 110px.
-        const yLimit = 200 - 110
+        const yLimit = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT
         if (y < yLimit) {
             updateAllTargets(-1000)
             return
@@ -481,7 +481,7 @@ export default function Dock(gdkmonitor: any) {
 
     const shim = new Gtk.Box({
         valign: Gtk.Align.END, halign: Gtk.Align.START, // V601: Logic Anchor
-        margin_bottom: 10,
+        margin_bottom: dockSettings.screenGap,
         height_request: DOCK_CONSTANTS.PILL_HEIGHT,
         vexpand: true,
         overflow: Gtk.Overflow.VISIBLE,
@@ -845,7 +845,7 @@ export default function Dock(gdkmonitor: any) {
                 isPinned: true,
                 isSeparator: true,
                 factory: (vc) => {
-                    const w = Separator(separatorId, update, (id, s) => animRegistry.set(id, s), 64, onReorder)
+                    const w = Separator(separatorId, update, (id, s) => animRegistry.set(id, s), onReorder)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
                 }
@@ -892,7 +892,7 @@ export default function Dock(gdkmonitor: any) {
                 isPinned: true,
                 isSeparator: true,
                 factory: (vc) => {
-                    const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), 64, onReorder)
+                    const w = Separator("sep-trash", update, (id, s) => animRegistry.set(id, s), onReorder)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
                 }
@@ -1014,7 +1014,7 @@ export default function Dock(gdkmonitor: any) {
                 smoothedBarWidth = totalCurrentWidth
                 const manualMarginStart = Math.round((dockMonitorWidth - smoothedBarWidth) / 2)
                 bar.margin_start = manualMarginStart
-                if (da) da.margin_start = manualMarginStart - 9
+                if (da) da.margin_start = manualMarginStart - DOCK_CONSTANTS.BASE_MARGIN
                 updateSize()
                 firstRender = false
             }
@@ -1036,7 +1036,7 @@ export default function Dock(gdkmonitor: any) {
     }
 
     // dockMonitorWidth already declared at line 221
-    win.set_default_size(dockMonitorWidth, 200) // V300: High window prevents icon clipping
+    win.set_default_size(dockMonitorWidth, DOCK_CONSTANTS.WINDOW_HEIGHT)
     let layerInit = false
     try {
         Gtk4LayerShell.init_for_window(win)
@@ -1044,7 +1044,7 @@ export default function Dock(gdkmonitor: any) {
     } catch (e) {
         console.warn("Gtk4LayerShell init failed (not on Wayland?): " + e)
     }
-    win.set_size_request(dockMonitorWidth, 200)
+    win.set_size_request(dockMonitorWidth, DOCK_CONSTANTS.WINDOW_HEIGHT)
     win.set_decorated(false)
 
     try {

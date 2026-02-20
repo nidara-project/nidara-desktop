@@ -12,7 +12,7 @@ import Cairo from "gi://cairo"
 import appService from "../../core/AppService" // Ensure import path is correct relative to this file
 import { DOCK_CONSTANTS } from "./DockPhysics"
 import { drawSquircle, createSquirclePath } from "../common/DrawingUtils"
-import { dragBus, mouseBus } from "./state"
+import { dragBus, mouseBus, dockSettings } from "./state"
 
 const hypr = AstalHyprland.get_default()
 
@@ -31,7 +31,7 @@ const hypr = AstalHyprland.get_default()
 // --- STATE: Removed local dragBus (now using shared state from ./state) ---
 
 // SEPARATOR COMPONENT
-export function Separator(id: string, updateDock: () => void, register: (id: string, s: any) => void, height = 72,
+export function Separator(id: string, updateDock: () => void, register: (id: string, s: any) => void,
     // Callbacks for drop logic
     onDrop: (sourceId: string) => void
 ) {
@@ -48,7 +48,7 @@ export function Separator(id: string, updateDock: () => void, register: (id: str
     const line = new Gtk.Box({
         name: "cd-separator", css_classes: ["cd-separator"],
         valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
-        width_request: DOCK_CONSTANTS.SEPARATOR_LINE, height_request: height,
+        width_request: DOCK_CONSTANTS.SEPARATOR_LINE, height_request: DOCK_CONSTANTS.SEPARATOR_HEIGHT,
         hexpand: false,
     })
 
@@ -58,7 +58,7 @@ export function Separator(id: string, updateDock: () => void, register: (id: str
         targetScale: 1.0, currentScale: 1.0, velocityScale: 0,
         targetWidth: baseWidth, currentWidth: baseWidth, velocityWidth: 0,
         targetMargin: 0, currentMargin: 0, velocityMargin: 0,
-        targetHeight: height, currentHeight: height, velocityHeight: 0,
+        targetHeight: DOCK_CONSTANTS.SEPARATOR_HEIGHT, currentHeight: DOCK_CONSTANTS.SEPARATOR_HEIGHT, velocityHeight: 0,
         targetTranslateY: 0, currentTranslateY: 0, velocityY: 0,
         staticCenter: 0,
         virtualCenter: 0,
@@ -137,7 +137,7 @@ export function DockItem(
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
         hexpand: false,
-        margin_bottom: 18,
+        margin_bottom: DOCK_CONSTANTS.PILL_PADDING,
         has_tooltip: false,
         can_focus: false, // V405: Explicitly disable focus
         focusable: false
@@ -423,7 +423,7 @@ export function DockItem(
         css_classes: ["cd-indicator-container"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.END,
-        margin_bottom: 4,
+        margin_bottom: DOCK_CONSTANTS.INDICATOR_GAP,
         has_tooltip: false,
         width_request: DOT_SIZE, height_request: DOT_SIZE,
     })
@@ -666,7 +666,7 @@ export function DockItem(
         const isOpen = addresses.length > 0
         const isFocused = focused && addresses.includes(focused.address)
 
-        if (isOpen) {
+        if (isOpen && dockSettings.showIndicators) {
             dot.set_visible(true)
             dot.add_css_class("open")
             if (isFocused) dot.add_css_class("focused")

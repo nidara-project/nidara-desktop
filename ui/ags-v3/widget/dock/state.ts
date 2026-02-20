@@ -8,7 +8,6 @@ import { writeFile, readFile } from "ags/file"
 import GLib from "gi://GLib"
 import AstalHyprland from "gi://AstalHyprland"
 import AstalApps from "gi://AstalApps"
-import { DOCK_CONSTANTS } from "./DockPhysics"
 
 // --- PERSISTENCE ---
 const PINNED_FILE = GLib.get_home_dir() + "/.config/dock_pinned.json"
@@ -24,6 +23,56 @@ export const DOCK_CONFIG = {
     MAX_ICON_SIZE: 160,
     MAGNIFICATION_SCALE: 2.2,
     HOME_ICON_FALLBACK: ["user-home", "system-file-manager", "folder"],
+}
+
+// --- DOCK SETTINGS (Reactive, Persisted) ---
+const SETTINGS_FILE = GLib.get_home_dir() + "/.config/dock_settings.json"
+
+export interface DockSettings {
+    iconSize: number        // 32–96, default 48
+    magnification: boolean  // default true
+    maxIconSize: number     // 64–128, default 108
+    showIndicators: boolean // default true
+    screenGap: number       // 4–16, default 8
+}
+
+const DOCK_DEFAULTS: DockSettings = {
+    iconSize: 48,
+    magnification: true,
+    maxIconSize: 108,
+    showIndicators: true,
+    screenGap: 8,
+}
+
+// Load persisted settings or use defaults
+let _dockSettings: DockSettings = { ...DOCK_DEFAULTS }
+try {
+    const raw = JSON.parse(readFile(SETTINGS_FILE)) as Partial<DockSettings>
+    _dockSettings = { ...DOCK_DEFAULTS, ...raw }
+} catch {
+    // First run — will persist on first change
+}
+
+export const dockSettings: DockSettings = _dockSettings
+
+// Change listeners
+const _settingsListeners = new Set<(s: DockSettings) => void>()
+
+export function onDockSettingsChanged(fn: (s: DockSettings) => void) {
+    _settingsListeners.add(fn)
+    return () => _settingsListeners.delete(fn)
+}
+
+export function updateDockSettings(partial: Partial<DockSettings>) {
+    Object.assign(dockSettings, partial)
+    // Persist
+    try {
+        writeFile(SETTINGS_FILE, JSON.stringify(dockSettings, null, 2))
+    } catch (e) {
+        console.error("[DockSettings] Failed to persist:", e)
+    }
+    // Notify
+    _settingsListeners.forEach(fn => fn(dockSettings))
 }
 
 // --- PINNED LIST MANAGEMENT ---
@@ -122,5 +171,3 @@ export const mouseBus = {
     subscribe(l: (x: number) => void) { this.listeners.add(l); return () => this.listeners.delete(l) }
 }
 
-// Re-export physics constants for convenience
-export { DOCK_CONSTANTS }
