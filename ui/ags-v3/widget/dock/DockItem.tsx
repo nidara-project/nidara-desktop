@@ -257,8 +257,8 @@ export function DockItem(
 
                 // V135: The clip mask is mathematically pure at the FULL 100% boundary limit!
                 // Any native icons that DO bleed (or Antigravity) will instantly be clipped perfectly.
-                // We use Apple's n=5.0 continuous formula.
-                createSquirclePath(cr, 0, 0, w, h, w * 0.5, 5.0, false, 0)
+                // We use Apple's continuous formula. Testing n=6.0 to make it slightly more squarish.
+                createSquirclePath(cr, 0, 0, w, h, w * 0.5, 6.0, false, 0)
                 cr.clip()
 
                 cr.translate(x, y)
@@ -271,8 +271,8 @@ export function DockItem(
                 // V136: Universal Apple-Style Glassy Highlight (Refined: Inset 1px)
                 cr.save()
                 // Inset by 0.5px so 1.0px stroke stays perfectly within bounds
-                // V144: Sync radius with 0.5 and n=5.0 to perfectly match the clip mask and plate
-                createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 5.0, false, 0)
+                // V144: Sync radius with 0.5 and n=6.0 to perfectly match the clip mask and plate
+                createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 6.0, false, 0)
 
                 const highlightPat = new Cairo.LinearGradient(0, 0, 0, h)
                 // TOP: Glassy White Highlight (Refined)
@@ -364,8 +364,8 @@ export function DockItem(
 
             // V413: Use shared drawSquircle for consistent geometry
             // V430: Enable Gloss/Border effect
-            // V603: True Apple shape uses r=0.5 and n=5.0 continuous superellipse
-            drawSquircle(cr, w, h, undefined, PLATE_OPACITY, true, undefined, Math.min(w, h) * 0.5, false, undefined, 5.0)
+            // V603: Testing Apple shape r=0.5 and n=6.0 continuous superellipse
+            drawSquircle(cr, w, h, undefined, PLATE_OPACITY, true, undefined, Math.min(w, h) * 0.5, false, undefined, 6.0)
         })
 
         plate = da
