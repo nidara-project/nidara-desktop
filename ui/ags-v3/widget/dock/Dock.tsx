@@ -698,7 +698,7 @@ export default function Dock(gdkmonitor: any) {
 
             const homeItem = {
                 name: prettyName,
-                icon_name: ["user-home", "folder-home", "folder"],
+                icon_name: ["finder", "system-file-manager", "user-home", "folder-home", "folder"],
                 launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(e => {
                     // @ts-ignore
                     print(e)
