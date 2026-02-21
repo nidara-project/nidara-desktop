@@ -255,11 +255,16 @@ export function DockItem(
 
                 cr.save()
 
+                const isTrash = appId === "trash" || appId === "special:trash"
+
                 // V135: The clip mask is mathematically pure at the FULL 100% boundary limit!
                 // Any native icons that DO bleed (or Antigravity) will instantly be clipped perfectly.
                 // We use Apple's continuous formula. Testing n=4.0 for a rounder, less inflated shape.
-                createSquirclePath(cr, 0, 0, w, h, w * 0.5, 4.0, false, 0)
-                cr.clip()
+                // V610: Do not clip the Trash icon, it should be free-floating
+                if (!isTrash) {
+                    createSquirclePath(cr, 0, 0, w, h, w * 0.5, 4.0, false, 0)
+                    cr.clip()
+                }
 
                 cr.translate(x, y)
                 cr.scale(scale, scale)
@@ -268,27 +273,32 @@ export function DockItem(
                 cr.paint()
                 cr.restore()
 
+                cr.translate(-x, -y)
+
                 // V136: Universal Apple-Style Glassy Highlight (Refined: Inset 1px)
-                cr.save()
-                // Inset by 0.5px so 1.0px stroke stays perfectly within bounds
-                // V144: Sync radius with 0.5 and n=4.0 to perfectly match the clip mask and plate
-                createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 4.0, false, 0)
+                // V610: Trash icon does not get a glass highlight
+                if (!isTrash) {
+                    cr.save()
+                    // Inset by 0.5px so 1.0px stroke stays perfectly within bounds
+                    // V144: Sync radius with 0.5 and n=4.0 to perfectly match the clip mask and plate
+                    createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 4.0, false, 0)
 
-                const highlightPat = new Cairo.LinearGradient(0, 0, 0, h)
-                // TOP: Glassy White Highlight (Refined)
-                highlightPat.addColorStopRGBA(0, 1, 1, 1, 0.45)
-                highlightPat.addColorStopRGBA(0.4, 1, 1, 1, 0.05)
+                    const highlightPat = new Cairo.LinearGradient(0, 0, 0, h)
+                    // TOP: Glassy White Highlight (Refined)
+                    highlightPat.addColorStopRGBA(0, 1, 1, 1, 0.45)
+                    highlightPat.addColorStopRGBA(0.4, 1, 1, 1, 0.05)
 
-                // MID: Transparent
-                highlightPat.addColorStopRGBA(0.5, 1, 1, 1, 0.0)
+                    // MID: Transparent
+                    highlightPat.addColorStopRGBA(0.5, 1, 1, 1, 0.0)
 
-                // BOTTOM: Subtle White Rim (Apple style)
-                highlightPat.addColorStopRGBA(1, 1, 1, 1, 0.15)
+                    // BOTTOM: Subtle White Rim (Apple style)
+                    highlightPat.addColorStopRGBA(1, 1, 1, 1, 0.15)
 
-                cr.setLineWidth(1.0)
-                cr.setSource(highlightPat)
-                cr.stroke()
-                cr.restore()
+                    cr.setLineWidth(1.0)
+                    cr.setSource(highlightPat)
+                    cr.stroke()
+                    cr.restore()
+                }
             })
     } else {
         // Fallback for system icons
@@ -352,6 +362,9 @@ export function DockItem(
         const PLATE_OPACITY = 0.9 // V414: Tweakable opacity (lower = more blur visible)
 
         da.set_draw_func((_, cr, w, h) => {
+            const isTrash = appId === "trash" || appId === "special:trash"
+            if (isTrash) return
+
             // We draw the glassy plate for all icons now to ensure uniformity
 
             // macOS HIG: Matched scaling for the Plate to follow the 90% icon rule
