@@ -256,25 +256,8 @@ export function DockItem(
                 cr.save()
 
                 // V610: macOS Tahoe Launch Bounce Animation
-                let bounceOffsetY = 0
-                if (state.isBouncing) {
-                    const elapsed = Date.now() - state.bounceStartTime
-                    const duration = 1200 // 1.2 seconds total bounce animation
-                    if (elapsed > duration) {
-                        state.isBouncing = false
-                    } else {
-                        // Damped sine wave: y = A * e^(-decay * t) * sin(freq * t)
-                        const t = elapsed / duration
-                        const amplitude = w * 0.35 // Max bounce height is 35% of icon width
-                        const decay = 4.0
-                        const freq = Math.PI * 3.5 // roughly 1.75 full bounces
-                        bounceOffsetY = amplitude * Math.exp(-decay * t) * Math.sin(freq * t)
-                        // Absolute sine for continuous bouncing above ground, or regular sine for springy?
-                        // macOS actually springs up, comes down flat, then springs up slightly less.
-                        // Math.abs(sin) makes it bounce on a hard floor.
-                        bounceOffsetY = Math.abs(bounceOffsetY)
-                    }
-                }
+                // Read the pre-calculated offset from state to ensure perfect sync with plate
+                const bounceOffsetY = state.bounceOffsetY || 0
 
                 const isTrash = appId === "trash" || appId === "special:trash"
 
@@ -360,7 +343,7 @@ export function DockItem(
         clientTitle: clientTitle as string | undefined,
         widget: itemBox as Gtk.Widget,
         isBouncing: false,
-        bounceStartTime: 0
+        bounceOffsetY: 0
     }
     register(appId, state)
         ; (itemBox as any).setVirtualCenter = (v: number) => {
@@ -406,20 +389,8 @@ export function DockItem(
             const cy = h / 2
 
             // V610: macOS Tahoe Launch Bounce Animation (Plate Sync)
-            let bounceOffsetY = 0
-            if (state.isBouncing) {
-                const elapsed = Date.now() - state.bounceStartTime
-                const duration = 1200
-                if (elapsed > duration) {
-                    state.isBouncing = false // normally controlled by child, but safe to set here too
-                } else {
-                    const t = elapsed / duration
-                    const amplitude = w * 0.35
-                    const decay = 4.0
-                    const freq = Math.PI * 3.5
-                    bounceOffsetY = Math.abs(amplitude * Math.exp(-decay * t) * Math.sin(freq * t))
-                }
-            }
+            // Use pre-calculated offset to prevent physics tearing between layers
+            const bounceOffsetY = state.bounceOffsetY || 0
 
             // Apply bounce offset to the entire plate assembly
             cr.translate(0, -bounceOffsetY)
@@ -457,11 +428,6 @@ export function DockItem(
             // V610: Disable enableGloss (false) here so the plate doesn't draw its own generic border, 
             // since we now draw our own pixel-perfect custom diagonal highlight over the icon!
             drawSquircle(cr, w, h, undefined, PLATE_OPACITY, false, undefined, Math.min(w, h) * 0.5, false, undefined, 4.0)
-
-            // If animating, schedule next frame for the plate too
-            if (state.isBouncing) {
-                da.queue_draw()
-            }
         })
 
         plate = da
@@ -752,8 +718,60 @@ export function DockItem(
             try {
                 if (!state.isBouncing) {
                     state.isBouncing = true
-                    state.bounceStartTime = Date.now()
-                    child.queue_draw() // Kick off the animation loop
+                    const startTime = Date.now()
+                    const duration = 1200
+                    const amplitude = DOCK_CONSTANTS.ICON_SIZE * 0.35
+
+                    const animLoop = () => {
+                        if (!state.isBouncing) return GLib.SOURCE_REMOVE
+
+                        // V610: Aggressive window detection during launch phase
+                        // If the app successfully opens a window before the animation finishes,
+                        // immediately terminate the bounce and illuminate the indicator.
+                        const currentAddrs = hypr.clients
+                            .filter(c => {
+                                const cClass = (c.class || "").toLowerCase();
+                                const cTitle = (c.title || "").toLowerCase();
+                                const aId = appId.toLowerCase();
+                                const aClass = (appItem.wmClass || "").toLowerCase();
+                                return cClass.includes(aId) || cClass.includes(aClass) || (appItem.name && cTitle.includes(appItem.name.toLowerCase()));
+                            })
+                            .map(c => c.address);
+
+                        if (currentAddrs.length > 0) {
+                            state.isBouncing = false
+                            state.bounceOffsetY = 0
+                            // Force update addresses array so sync() sees it early
+                            addresses.length = 0
+                            addresses.push(...currentAddrs)
+                            sync()
+                            child.queue_draw()
+                            if (plate) plate.queue_draw()
+                            return GLib.SOURCE_REMOVE
+                        }
+
+                        const elapsed = Date.now() - startTime
+                        if (elapsed > duration) {
+                            state.isBouncing = false
+                            state.bounceOffsetY = 0
+                            child.queue_draw()
+                            if (plate) plate.queue_draw()
+                            return GLib.SOURCE_REMOVE
+                        }
+
+                        // Calculate unified physics tick
+                        const t = elapsed / duration
+                        const decay = 4.0
+                        const freq = Math.PI * 3.5
+                        state.bounceOffsetY = Math.abs(amplitude * Math.exp(-decay * t) * Math.sin(freq * t))
+
+                        // Force both layers to draw with identical offset this frame
+                        child.queue_draw()
+                        if (plate) plate.queue_draw()
+
+                        return GLib.SOURCE_CONTINUE
+                    }
+                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, animLoop)
                 }
                 appItem.launch()
             } catch (e) {
@@ -770,7 +788,8 @@ export function DockItem(
         const isOpen = addresses.length > 0
         const isFocused = focused && addresses.includes(focused.address)
 
-        if (isOpen && dockSettings.showIndicators) {
+        // V610: Show indicator immediately if bouncing (launching) OR if explicitly open
+        if ((isOpen || state.isBouncing) && dockSettings.showIndicators) {
             dot.set_visible(true)
             dot.add_css_class("open")
             if (isFocused) dot.add_css_class("focused")
