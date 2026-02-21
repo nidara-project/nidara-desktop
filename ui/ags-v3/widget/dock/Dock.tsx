@@ -245,6 +245,14 @@ export default function Dock(gdkmonitor: any) {
             // Step 2: Apply per-icon layout + accumulate bar width
             let totalBarWidth = 0
 
+            // V610: Subpixel Accumulator (1D Error Diffusion)
+            // GTK4 requires integer dimensions. If we independently round each icon, the overall 
+            // sequence vibrates as random icons flip between floor and ceil. By tracking the exact 
+            // floating point X-coordinate of every edge and subtracting, we lock the integer layout 
+            // perfectly to the continuous math model.
+            let currentFloatX = 0
+            let lastRoundedX = 0
+
             orderedIds.forEach((id) => {
                 const state = animRegistry.get(id)
                 if (!state) return
@@ -256,36 +264,54 @@ export default function Dock(gdkmonitor: any) {
                 const itemBox = revealer.get_child ? (revealer.get_child() as Gtk.Box) : revealer
 
                 if (state.isSeparator) {
-                    // V610: Dynamic Separators
-                    // Accumulate exact float width for smooth bar growth
                     totalBarWidth += state.currentWidth
+                    currentFloatX += state.currentWidth
 
-                    const slotW = Math.round(state.currentWidth)
+                    const newRoundedX = Math.round(currentFloatX)
+                    const slotW = newRoundedX - lastRoundedX
+                    lastRoundedX = newRoundedX
+
                     if (revealer.width_request !== slotW) revealer.width_request = slotW
 
                     const centerBox = itemBox as Gtk.CenterBox
                     const line = centerBox?.get_center_widget() as Gtk.Box
                     if (line) line.set_size_request(-1, Math.round(state.currentHeight))
                 } else {
-                    // Float accumulation prevents ±1px jitter cascade across 15+ icons
+                    const exactMargin = state.currentMargin
                     const exactIconSize = DOCK_CONSTANTS.ICON_SIZE * state.currentScale
-                    totalBarWidth += exactIconSize + (state.currentMargin * 2)
 
-                    // THE key integer — drives physical GTK layout for this icon
-                    const tps = Math.round(exactIconSize)
-                    const margin = Math.round(state.currentMargin)
-                    const slotW = tps + (margin * 2)
+                    totalBarWidth += exactIconSize + (exactMargin * 2)
 
-                    // Slot sizing — changes in sync with icon
+                    // 1. Left Margin Edge
+                    currentFloatX += exactMargin
+                    let newX = Math.round(currentFloatX)
+                    const marginL = newX - lastRoundedX
+                    lastRoundedX = newX
+
+                    // 2. Icon Body Edge
+                    currentFloatX += exactIconSize
+                    newX = Math.round(currentFloatX)
+                    const tps = newX - lastRoundedX
+                    lastRoundedX = newX
+
+                    // 3. Right Margin Edge
+                    currentFloatX += exactMargin
+                    newX = Math.round(currentFloatX)
+                    const marginR = newX - lastRoundedX
+                    lastRoundedX = newX
+
+                    const slotW = marginL + tps + marginR
+
+                    // Sizing allocations
                     if (revealer.width_request !== slotW) revealer.width_request = slotW
                     if (itemBox) {
                         if (itemBox.width_request !== tps) itemBox.width_request = tps
-                        if (itemBox.margin_start !== margin) itemBox.margin_start = margin
-                        if (itemBox.margin_end !== margin) itemBox.margin_end = margin
+                        if (itemBox.margin_start !== marginL) itemBox.margin_start = marginL
+                        if (itemBox.margin_end !== marginR) itemBox.margin_end = marginR
                         itemBox.margin_bottom = Math.round(0 - (state.currentTranslateY || 0))
                     }
 
-                    // Visual sizing — all from the SAME integer
+                    // Visual nested sizing
                     const overlay = itemBox?.get_first_child() as Gtk.Overlay
                     if (overlay) {
                         const iconBox = overlay.get_child() as Gtk.Box
