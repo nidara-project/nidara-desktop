@@ -211,11 +211,9 @@ export function DockItem(
     }
 
     // Finalize Heuristic: Check the resolved path to see if it's truly external
-    isThemed = (resolvedPath.includes("/usr/share/icons") || resolvedPath.includes(".local/share/icons"))
-        && !resolvedPath.includes("hicolor")
-        && !resolvedPath.includes("branding")
-        && !resolvedPath.includes("antigravity")
-        && !appId.includes("antigravity")
+    // V601: User requested removing all special handling for Antigravity or non-themed icons.
+    // We treat everything as "themed" now so they all get the exact same background plate and scale.
+    isThemed = true
 
 
     if (pixbuf) {
@@ -230,9 +228,8 @@ export function DockItem(
             ; (child as any).set_draw_func((area: any, cr: any, w: number, h: number) => {
                 if (!pixbuf) return
 
-                // Full-frame icons (Antigravity, custom apps) use factor 1.0 (Edge to Edge)
-                // Themed icons (Chrome, Telegram) keep factor 0.8 to preserve their internal design
-                const factor = isThemed ? 1.10 : 1.0
+                // User requested keeping factor 1.0 for everything to avoid inconsistencies
+                const factor = 1.0
 
                 // Calculate available size including padding
                 const availW = w * factor
@@ -256,12 +253,10 @@ export function DockItem(
 
                 cr.save()
 
-                // V135: Apply Squircle Clipping for full-frame icons
-                // V143: Sync radius with factor 0.5 (Full Squircle) for sizing parity
-                if (!isThemed) {
-                    createSquirclePath(cr, 0, 0, w, h, w * 0.5, 3.2, false, 0)
-                    cr.clip()
-                }
+                // V135: Apply Squircle Clipping uniformly to everything to ensure it stays inside the plate
+                // V603: Apple's native macOS icon shape is a continuous superellipse with approximately n=5.0 and r=0.5
+                createSquirclePath(cr, 0, 0, w, h, w * 0.5, 5.0, false, 0)
+                cr.clip()
 
                 cr.translate(x, y)
                 cr.scale(scale, scale)
@@ -273,8 +268,8 @@ export function DockItem(
                 // V136: Universal Apple-Style Glassy Highlight (Refined: Inset 1px)
                 cr.save()
                 // Inset by 0.5px so 1.0px stroke stays perfectly within bounds
-                // V144: Sync radius with 0.5 to match background plate
-                createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 3.2, false, 0)
+                // V144: Sync radius with 0.5 and n=5.0 to perfectly match the clip mask and plate
+                createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 5.0, false, 0)
 
                 const highlightPat = new Cairo.LinearGradient(0, 0, 0, h)
                 // TOP: Glassy White Highlight (Refined)
@@ -330,7 +325,6 @@ export function DockItem(
         }
 
     const isApp = (!!res.name || !!res.path || !!res.gicon)
-    const nameStr = (appItem.name || "").toLowerCase()
     let iconToDisplay: Gtk.Widget = child
     // V410: Lift plate variable scope for manual bg control
     let plate: Gtk.Widget | null = null
@@ -355,14 +349,12 @@ export function DockItem(
         const PLATE_OPACITY = 0.9 // V414: Tweakable opacity (lower = more blur visible)
 
         da.set_draw_func((_, cr, w, h) => {
-            // V137: Don't draw the glassy plate for full-frame icons.
-            // The icon itself covers 100% of the area, and drawing a plate underneath 
-            // creates sub-pixel 'white rim' artifacts due to anti-aliasing.
-            if (!isThemed) return;
+            // We draw the glassy plate for all icons now to ensure uniformity
 
             // V413: Use shared drawSquircle for consistent geometry
             // V430: Enable Gloss/Border effect
-            drawSquircle(cr, w, h, undefined, PLATE_OPACITY, true)
+            // V603: True Apple shape uses r=0.5 and n=5.0 continuous superellipse
+            drawSquircle(cr, w, h, undefined, PLATE_OPACITY, true, undefined, Math.min(w, h) * 0.5, false, undefined, 5.0)
         })
 
         plate = da
@@ -381,10 +373,11 @@ export function DockItem(
         child.set_size_request(DOCK_CONSTANTS.ICON_SIZE, DOCK_CONSTANTS.ICON_SIZE)
 
         plateOverlay.add_overlay(child)
+
         iconToDisplay = plateOverlay
     }
 
-    const isAntigravity = appId.includes("antigravity") || nameStr.includes("antigravity")
+    // (isAntigravity moved up)
 
     child.set_name("cd-icon-image-" + appId)
     iconBox.append(iconToDisplay)

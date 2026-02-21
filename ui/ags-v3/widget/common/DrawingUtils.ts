@@ -8,7 +8,7 @@ export const createSquirclePath = (
     w: number,
     h: number,
     r: number,
-    n: number = 3.2,
+    n: number = 4.0,
     perfect: boolean = false,
     offset: number = 0
 ) => {
@@ -95,7 +95,8 @@ export const drawSquircle = (
     color: { r: number, g: number, b: number } = { r: 1, g: 1, b: 1 }, // Default to white
     cornerRadius?: number, // New parameter for fixed radius
     perfect: boolean = false, // New parameter for geometric pill
-    borderColor?: { r: number, g: number, b: number, a: number } // New: Custom Border
+    borderColor?: { r: number, g: number, b: number, a: number }, // New: Custom Border
+    n: number = 4.0 // NEW: superellipse factor
 ) => {
     if (width <= 0 || height <= 0) return
 
@@ -121,14 +122,14 @@ export const drawSquircle = (
     // 0. STRUCTURAL SHADOW (macOS Tahoe: depth separation from wallpaper)
     if (enableGloss) {
         cr.save()
-        createSquirclePath(cr, x, y + 4, drawW, drawH, r, 3.2, perfect, 0)
+        createSquirclePath(cr, x, y + 4, drawW, drawH, r, n, perfect, 0)
         cr.setSourceRGBA(0, 0, 0, 0.08)
         cr.fill()
         cr.restore()
     }
 
     // 1. CLEAN GLASS BODY
-    createSquirclePath(cr, x, y, drawW, drawH, r, 3.2, perfect, 0)
+    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
     if (enableGloss) {
         // Softened Linear Gradient for "Glass" Look
         const pattern = new Cairo.LinearGradient(x, y, x, y + drawH)
@@ -140,15 +141,16 @@ export const drawSquircle = (
     }
     cr.fill()
 
+    cr.save()
     // 2. BORDER (Custom or Uniform)
     if (borderColor) {
-        createSquirclePath(cr, x, y, drawW, drawH, r, 3.2, perfect, 0)
+        createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
         cr.setLineWidth(1)
         cr.setSourceRGBA(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
         cr.stroke()
     } else if (enableGloss) {
         // macOS Tahoe: Uniform subtle border all around
-        createSquirclePath(cr, x, y, drawW, drawH, r, 3.2, perfect, 0)
+        createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
         cr.setLineWidth(1)
         cr.setSourceRGBA(1, 1, 1, 0.2)
         cr.stroke()
