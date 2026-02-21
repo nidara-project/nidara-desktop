@@ -378,9 +378,9 @@ export function DockItem(
             cr.translate(-cx, -cy)
 
             // V413: Use shared drawSquircle for consistent geometry
-            // V430: Enable Gloss/Border effect
-            // V603: Testing Apple shape r=0.5 and n=4.0 for rounder continuous superellipse
-            drawSquircle(cr, w, h, undefined, PLATE_OPACITY, true, undefined, Math.min(w, h) * 0.5, false, undefined, 4.0)
+            // V610: Disable enableGloss (false) here so the plate doesn't draw its own generic border, 
+            // since we now draw our own pixel-perfect custom diagonal highlight over the icon!
+            drawSquircle(cr, w, h, undefined, PLATE_OPACITY, false, undefined, Math.min(w, h) * 0.5, false, undefined, 4.0)
         })
 
         plate = da
