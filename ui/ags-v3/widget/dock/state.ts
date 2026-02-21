@@ -34,6 +34,7 @@ export interface DockSettings {
     maxIconSize: number     // 64–128, default 108
     showIndicators: boolean // default true
     screenGap: number       // 4–16, default 8
+    iconThemeScale: number  // 0.0 to 0.20, default 0.0
 }
 
 const DOCK_DEFAULTS: DockSettings = {
@@ -42,6 +43,7 @@ const DOCK_DEFAULTS: DockSettings = {
     maxIconSize: 108,
     showIndicators: true,
     screenGap: 8,
+    iconThemeScale: 0.0,
 }
 
 // Load persisted settings or use defaults

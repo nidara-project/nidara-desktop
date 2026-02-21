@@ -232,6 +232,14 @@ export default function DockPage() {
         ),
     }))
 
+    geoList.append(new Gtk.ListBoxRow({
+        child: sliderRow(
+            "Escala del tema de iconos", "Aumenta el tamaño interno para compensar iconos pequeños",
+            0, 20, 1, dockSettings.iconThemeScale, "%",
+            (v) => updateDockSettings({ iconThemeScale: v }),
+        ),
+    }))
+
     geoSection.append(geoList)
     page.append(geoSection)
 

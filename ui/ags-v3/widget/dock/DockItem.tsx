@@ -230,7 +230,9 @@ export function DockItem(
 
                 // macOS HIG: The actual icon shape only occupies ~82% of the total canvas.
                 // We use Cairo Matrix Scaling to scale exactly from the center.
-                const SAFE_RATIO = 0.90
+                // V610: Apply user's extra scale for icon themes with padding
+                const baseScale = 0.90
+                const SAFE_RATIO = baseScale + (dockSettings.iconThemeScale / 100)
                 const cx = w / 2
                 const cy = h / 2
                 cr.translate(cx, cy)
@@ -368,7 +370,9 @@ export function DockItem(
             // We draw the glassy plate for all icons now to ensure uniformity
 
             // macOS HIG: Matched scaling for the Plate to follow the 90% icon rule
-            const SAFE_RATIO = 0.90
+            // V610: Include the iconThemeScale so the plate scales with the icon
+            const baseScale = 0.90
+            const SAFE_RATIO = baseScale + (dockSettings.iconThemeScale / 100)
             const cx = w / 2
             const cy = h / 2
             cr.translate(cx, cy)
