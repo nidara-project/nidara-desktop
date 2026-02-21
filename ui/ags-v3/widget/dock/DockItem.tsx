@@ -255,10 +255,6 @@ export function DockItem(
 
                 cr.save()
 
-                // V610: macOS Tahoe Launch Bounce Animation
-                // Read the pre-calculated offset from state to ensure perfect sync with plate
-                const bounceOffsetY = state.bounceOffsetY || 0
-
                 const isTrash = appId === "trash" || appId === "special:trash"
 
                 // V135: The clip mask is mathematically pure at the FULL 100% boundary limit!
@@ -266,12 +262,11 @@ export function DockItem(
                 // We use Apple's continuous formula. Testing n=4.0 for a rounder, less inflated shape.
                 // V610: Do not clip the Trash icon, it should be free-floating
                 if (!isTrash) {
-                    // Offset the clip mask itself so the icon moves physically
-                    createSquirclePath(cr, 0, -bounceOffsetY, w, h, w * 0.5, 4.0, false, 0)
+                    createSquirclePath(cr, 0, 0, w, h, w * 0.5, 4.0, false, 0)
                     cr.clip()
                 }
 
-                cr.translate(x, y - bounceOffsetY)
+                cr.translate(x, y)
                 cr.scale(scale, scale)
 
                 Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
@@ -284,12 +279,12 @@ export function DockItem(
                     cr.save()
                     // Inset by 0.5px so 1.0px stroke stays perfectly within bounds
                     // V144: Sync radius with 0.5 and n=4.0 to perfectly match the clip mask and plate
-                    createSquirclePath(cr, 0.5, 0.5 - bounceOffsetY, w - 1, h - 1, (w * 0.5) - 0.5, 4.0, false, 0)
+                    createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 4.0, false, 0)
 
                     // V610: Diagonal lighting (Top-Left to Bottom-Right) matching macOS HIG
                     // The gradient vector is slightly compressed inward to stretch the light
                     // iso-bands across a wider crescent of the top and left edges.
-                    const highlightPat = new Cairo.LinearGradient(w * 0.1, (h * 0.1) - bounceOffsetY, w * 0.9, (h * 0.9) - bounceOffsetY)
+                    const highlightPat = new Cairo.LinearGradient(w * 0.1, (h * 0.1), w * 0.9, (h * 0.9))
 
                     // TOP-LEFT: Strong bright sweep that extends further along the edges
                     highlightPat.addColorStopRGBA(0.0, 1, 1, 1, 0.65)
@@ -387,13 +382,6 @@ export function DockItem(
             const SAFE_RATIO = 0.90
             const cx = w / 2
             const cy = h / 2
-
-            // V610: macOS Tahoe Launch Bounce Animation (Plate Sync)
-            // Use pre-calculated offset to prevent physics tearing between layers
-            const bounceOffsetY = state.bounceOffsetY || 0
-
-            // Apply bounce offset to the entire plate assembly
-            cr.translate(0, -bounceOffsetY)
 
             // V610: Individual Icon Drop Shadow (macOS Tahoe)
             // Simulating a blurred drop shadow using stacked low-opacity passes
@@ -721,6 +709,7 @@ export function DockItem(
                     const startTime = Date.now()
                     const duration = 1200
                     const amplitude = DOCK_CONSTANTS.ICON_SIZE * 0.35
+                    const originalMargin = iconToDisplay.margin_bottom
 
                     sync() // Instantly turn on indicator when clicked
 
@@ -730,7 +719,7 @@ export function DockItem(
                         const elapsed = Date.now() - startTime
                         if (elapsed > duration) {
                             state.isBouncing = false
-                            state.bounceOffsetY = 0
+                            iconToDisplay.margin_bottom = originalMargin
                             child.queue_draw()
                             if (plate) plate.queue_draw()
                             sync() // Re-evaluate indicator now that bounce is done
@@ -741,9 +730,12 @@ export function DockItem(
                         const t = elapsed / duration
                         const decay = 4.0
                         const freq = Math.PI * 3.5
-                        state.bounceOffsetY = Math.abs(amplitude * Math.exp(-decay * t) * Math.sin(freq * t))
+                        const offset = Math.abs(amplitude * Math.exp(-decay * t) * Math.sin(freq * t))
 
-                        // Force both layers to draw with identical offset this frame
+                        // V610: Apply offset physically to the layout margin instead of drawing matrix
+                        iconToDisplay.margin_bottom = originalMargin + offset
+
+                        // Force both layers to draw (although primarily to refresh shadow/bounds)
                         child.queue_draw()
                         if (plate) plate.queue_draw()
 
