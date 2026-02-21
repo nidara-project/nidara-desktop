@@ -284,7 +284,7 @@ export function DockItem(
                     cr.save()
                     // Inset by 0.5px so 1.0px stroke stays perfectly within bounds
                     // V144: Sync radius with 0.5 and n=4.0 to perfectly match the clip mask and plate
-                    createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 4.0, false, 0)
+                    createSquirclePath(cr, 0.5, 0.5 - bounceOffsetY, w - 1, h - 1, (w * 0.5) - 0.5, 4.0, false, 0)
 
                     // V610: Diagonal lighting (Top-Left to Bottom-Right) matching macOS HIG
                     // The gradient vector is slightly compressed inward to stretch the light
