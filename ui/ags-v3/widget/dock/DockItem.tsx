@@ -722,33 +722,10 @@ export function DockItem(
                     const duration = 1200
                     const amplitude = DOCK_CONSTANTS.ICON_SIZE * 0.35
 
+                    sync() // Instantly turn on indicator when clicked
+
                     const animLoop = () => {
                         if (!state.isBouncing) return GLib.SOURCE_REMOVE
-
-                        // V610: Aggressive window detection during launch phase
-                        // If the app successfully opens a window before the animation finishes,
-                        // immediately terminate the bounce and illuminate the indicator.
-                        const currentAddrs = hypr.clients
-                            .filter(c => {
-                                const cClass = (c.class || "").toLowerCase();
-                                const cTitle = (c.title || "").toLowerCase();
-                                const aId = appId.toLowerCase();
-                                const aClass = (appItem.wmClass || "").toLowerCase();
-                                return cClass.includes(aId) || cClass.includes(aClass) || (appItem.name && cTitle.includes(appItem.name.toLowerCase()));
-                            })
-                            .map(c => c.address);
-
-                        if (currentAddrs.length > 0) {
-                            state.isBouncing = false
-                            state.bounceOffsetY = 0
-                            // Force update addresses array so sync() sees it early
-                            addresses.length = 0
-                            addresses.push(...currentAddrs)
-                            sync()
-                            child.queue_draw()
-                            if (plate) plate.queue_draw()
-                            return GLib.SOURCE_REMOVE
-                        }
 
                         const elapsed = Date.now() - startTime
                         if (elapsed > duration) {
@@ -756,6 +733,7 @@ export function DockItem(
                             state.bounceOffsetY = 0
                             child.queue_draw()
                             if (plate) plate.queue_draw()
+                            sync() // Re-evaluate indicator now that bounce is done
                             return GLib.SOURCE_REMOVE
                         }
 
