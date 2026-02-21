@@ -255,6 +255,27 @@ export function DockItem(
 
                 cr.save()
 
+                // V610: macOS Tahoe Launch Bounce Animation
+                let bounceOffsetY = 0
+                if (state.isBouncing) {
+                    const elapsed = Date.now() - state.bounceStartTime
+                    const duration = 1200 // 1.2 seconds total bounce animation
+                    if (elapsed > duration) {
+                        state.isBouncing = false
+                    } else {
+                        // Damped sine wave: y = A * e^(-decay * t) * sin(freq * t)
+                        const t = elapsed / duration
+                        const amplitude = w * 0.35 // Max bounce height is 35% of icon width
+                        const decay = 4.0
+                        const freq = Math.PI * 3.5 // roughly 1.75 full bounces
+                        bounceOffsetY = amplitude * Math.exp(-decay * t) * Math.sin(freq * t)
+                        // Absolute sine for continuous bouncing above ground, or regular sine for springy?
+                        // macOS actually springs up, comes down flat, then springs up slightly less.
+                        // Math.abs(sin) makes it bounce on a hard floor.
+                        bounceOffsetY = Math.abs(bounceOffsetY)
+                    }
+                }
+
                 const isTrash = appId === "trash" || appId === "special:trash"
 
                 // V135: The clip mask is mathematically pure at the FULL 100% boundary limit!
@@ -262,11 +283,12 @@ export function DockItem(
                 // We use Apple's continuous formula. Testing n=4.0 for a rounder, less inflated shape.
                 // V610: Do not clip the Trash icon, it should be free-floating
                 if (!isTrash) {
-                    createSquirclePath(cr, 0, 0, w, h, w * 0.5, 4.0, false, 0)
+                    // Offset the clip mask itself so the icon moves physically
+                    createSquirclePath(cr, 0, -bounceOffsetY, w, h, w * 0.5, 4.0, false, 0)
                     cr.clip()
                 }
 
-                cr.translate(x, y)
+                cr.translate(x, y - bounceOffsetY)
                 cr.scale(scale, scale)
 
                 Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
@@ -284,7 +306,7 @@ export function DockItem(
                     // V610: Diagonal lighting (Top-Left to Bottom-Right) matching macOS HIG
                     // The gradient vector is slightly compressed inward to stretch the light
                     // iso-bands across a wider crescent of the top and left edges.
-                    const highlightPat = new Cairo.LinearGradient(w * 0.1, h * 0.1, w * 0.9, h * 0.9)
+                    const highlightPat = new Cairo.LinearGradient(w * 0.1, (h * 0.1) - bounceOffsetY, w * 0.9, (h * 0.9) - bounceOffsetY)
 
                     // TOP-LEFT: Strong bright sweep that extends further along the edges
                     highlightPat.addColorStopRGBA(0.0, 1, 1, 1, 0.65)
@@ -301,6 +323,11 @@ export function DockItem(
                     cr.setSource(highlightPat)
                     cr.stroke()
                     cr.restore()
+                }
+
+                // If animating, schedule next frame
+                if (state.isBouncing) {
+                    child.queue_draw()
                 }
             })
     } else {
@@ -331,7 +358,9 @@ export function DockItem(
         isSeparator: false,
         addresses: addresses as string[],
         clientTitle: clientTitle as string | undefined,
-        widget: itemBox as Gtk.Widget
+        widget: itemBox as Gtk.Widget,
+        isBouncing: false,
+        bounceStartTime: 0
     }
     register(appId, state)
         ; (itemBox as any).setVirtualCenter = (v: number) => {
@@ -375,6 +404,45 @@ export function DockItem(
             const SAFE_RATIO = 0.90
             const cx = w / 2
             const cy = h / 2
+
+            // V610: macOS Tahoe Launch Bounce Animation (Plate Sync)
+            let bounceOffsetY = 0
+            if (state.isBouncing) {
+                const elapsed = Date.now() - state.bounceStartTime
+                const duration = 1200
+                if (elapsed > duration) {
+                    state.isBouncing = false // normally controlled by child, but safe to set here too
+                } else {
+                    const t = elapsed / duration
+                    const amplitude = w * 0.35
+                    const decay = 4.0
+                    const freq = Math.PI * 3.5
+                    bounceOffsetY = Math.abs(amplitude * Math.exp(-decay * t) * Math.sin(freq * t))
+                }
+            }
+
+            // Apply bounce offset to the entire plate assembly
+            cr.translate(0, -bounceOffsetY)
+
+            // V610: Individual Icon Drop Shadow (macOS Tahoe)
+            // Simulating a blurred drop shadow using stacked low-opacity passes
+            // drawn into the 5% margin outside the 90% scaled icon.
+            cr.save()
+            cr.translate(cx, cy)
+            for (let i = 1; i <= 4; i++) {
+                cr.save()
+                // Shift down slightly and expand outward
+                cr.translate(0, i * 1.0)
+                const shadowScale = SAFE_RATIO + (i * 0.015)
+                cr.scale(shadowScale, shadowScale)
+                cr.translate(-cx, -cy)
+                createSquirclePath(cr, 0, 0, w, h, w * 0.5, 4.0, false, 0)
+                cr.setSourceRGBA(0, 0, 0, 0.04) // exceptionally soft black
+                cr.fill()
+                cr.restore()
+            }
+            cr.restore()
+
             cr.translate(cx, cy)
             cr.scale(SAFE_RATIO, SAFE_RATIO)
 
@@ -389,6 +457,11 @@ export function DockItem(
             // V610: Disable enableGloss (false) here so the plate doesn't draw its own generic border, 
             // since we now draw our own pixel-perfect custom diagonal highlight over the icon!
             drawSquircle(cr, w, h, undefined, PLATE_OPACITY, false, undefined, Math.min(w, h) * 0.5, false, undefined, 4.0)
+
+            // If animating, schedule next frame for the plate too
+            if (state.isBouncing) {
+                da.queue_draw()
+            }
         })
 
         plate = da
@@ -677,7 +750,11 @@ export function DockItem(
         } else {
             // Fallback or Launch
             try {
-                if ((globalThis as any).triggerDockBounce) (globalThis as any).triggerDockBounce(appId)
+                if (!state.isBouncing) {
+                    state.isBouncing = true
+                    state.bounceStartTime = Date.now()
+                    child.queue_draw() // Kick off the animation loop
+                }
                 appItem.launch()
             } catch (e) {
                 execAsync(`gtk-launch ${appId}`).catch(print)
