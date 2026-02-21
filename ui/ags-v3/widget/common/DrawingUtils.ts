@@ -131,11 +131,10 @@ export const drawSquircle = (
     // 1. CLEAN GLASS BODY
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
     if (enableGloss) {
-        // Softened Linear Gradient for "Glass" Look
-        const pattern = new Cairo.LinearGradient(x, y, x, y + drawH)
-        pattern.addColorStopRGBA(0, color.r, color.g, color.b, alpha + 0.10) // Top: Brighter
-        pattern.addColorStopRGBA(1, color.r, color.g, color.b, alpha - 0.05) // Bottom: Translucent
-        cr.setSource(pattern)
+        // V604: Removed top-to-bottom gradient at user request.
+        // Using a solid color matching the old "bottom" value (alpha - 0.05) for consistency.
+        const solidAlpha = Math.max(0, alpha - 0.05)
+        cr.setSourceRGBA(color.r, color.g, color.b, solidAlpha)
     } else {
         cr.setSourceRGBA(color.r, color.g, color.b, alpha)
     }
