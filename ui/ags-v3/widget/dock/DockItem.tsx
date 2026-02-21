@@ -226,13 +226,9 @@ export function DockItem(
             ; (child as any).set_content_height(DOCK_CONSTANTS.ICON_SIZE)
 
             ; (child as any).set_draw_func((area: any, cr: any, w: number, h: number) => {
-                if (!pixbuf) return
-
                 // macOS HIG: The actual icon shape only occupies ~82% of the total canvas.
-                // We use Cairo Matrix Scaling to scale exactly from the center.
-                // V610: Apply user's extra scale for icon themes with padding
-                const baseScale = 0.90
-                const SAFE_RATIO = baseScale + (dockSettings.iconThemeScale / 100)
+                // V610: The global clipping and plate scale is locked at exactly 90%
+                const SAFE_RATIO = 0.90
                 const cx = w / 2
                 const cy = h / 2
                 cr.translate(cx, cy)
@@ -243,11 +239,13 @@ export function DockItem(
                 const iconW = pixbuf.get_width()
                 const iconH = pixbuf.get_height()
 
-                // Scale to fit available area (in the 0.82 scaled context, space is w,h)
+                // Scale to fit available area (in the 0.90 scaled context, space is w,h)
                 const scaleX = w / iconW
                 const scaleY = h / iconH
                 // Contain strategy to guarantee it fits 
-                const scale = Math.min(scaleX, scaleY)
+                // V610: Apply the user's extra scale only to the internal graphic itself,
+                // so the fixed 90% clip mask will punch a perfect squircle.
+                const scale = Math.min(scaleX, scaleY) * (1.0 + (dockSettings.iconThemeScale / 100))
 
                 // Center in the widget area (w, h)
                 const drawW = iconW * scale
@@ -370,9 +368,8 @@ export function DockItem(
             // We draw the glassy plate for all icons now to ensure uniformity
 
             // macOS HIG: Matched scaling for the Plate to follow the 90% icon rule
-            // V610: Include the iconThemeScale so the plate scales with the icon
-            const baseScale = 0.90
-            const SAFE_RATIO = baseScale + (dockSettings.iconThemeScale / 100)
+            // The plate represents the physical bounds, keeping it completely static.
+            const SAFE_RATIO = 0.90
             const cx = w / 2
             const cy = h / 2
             cr.translate(cx, cy)
