@@ -281,16 +281,19 @@ export function DockItem(
                     // V144: Sync radius with 0.5 and n=4.0 to perfectly match the clip mask and plate
                     createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 4.0, false, 0)
 
-                    const highlightPat = new Cairo.LinearGradient(0, 0, 0, h)
-                    // TOP: Glassy White Highlight (Refined)
-                    highlightPat.addColorStopRGBA(0, 1, 1, 1, 0.45)
-                    highlightPat.addColorStopRGBA(0.4, 1, 1, 1, 0.05)
+                    // V610: Diagonal lighting (Top-Left to Bottom-Right) matching macOS HIG
+                    const highlightPat = new Cairo.LinearGradient(0, 0, w, h)
 
-                    // MID: Transparent
+                    // TOP-LEFT: Strongest light catch
+                    highlightPat.addColorStopRGBA(0, 1, 1, 1, 0.50)
+                    highlightPat.addColorStopRGBA(0.35, 1, 1, 1, 0.0)
+
+                    // MID: Completely transparent so sides aren't illuminated
                     highlightPat.addColorStopRGBA(0.5, 1, 1, 1, 0.0)
 
-                    // BOTTOM: Subtle White Rim (Apple style)
-                    highlightPat.addColorStopRGBA(1, 1, 1, 1, 0.15)
+                    // BOTTOM-RIGHT: Subtle rim light reflection
+                    highlightPat.addColorStopRGBA(0.8, 1, 1, 1, 0.0)
+                    highlightPat.addColorStopRGBA(1, 1, 1, 1, 0.20)
 
                     cr.setLineWidth(1.0)
                     cr.setSource(highlightPat)
