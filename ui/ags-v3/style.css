@@ -23,13 +23,16 @@
    ========================================================================== */
 /* --- GTK4 Internal Node Neutralization (Surgical Fix) 🧠 --- */
 /* Fixes "ghost" backgrounds, color bleeding on hover, and unwanted shadows */
-ripple,
-highlight,
+/* --- GTK4 Internal Node Neutralization (Surgical Fix) 🧠 --- */
+/* Fixes "ghost" backgrounds, color bleeding on hover, and unwanted shadows */
+/* V700: Protect native menu nodes so system themes like WhiteSur can style them */
+:not(popover):not(.menu):not(.menuitem) > ripple,
+:not(popover):not(.menu):not(.menuitem) > highlight,
 cursor-handle,
 selection,
 box.star,
-focus-ring,
-outline {
+:not(popover):not(.menu):not(.menuitem) > focus-ring,
+:not(popover):not(.menu):not(.menuitem) > outline {
   background-color: transparent;
   background-image: none;
   box-shadow: none;
@@ -49,9 +52,11 @@ scrolledwindow overshoot {
 }
 
 /* --- GLOBAL: Kill GTK Focus/Selection Borders --- */
-*:focus,
-*:active,
-*:checked {
+/* --- GLOBAL: Kill GTK Focus/Selection Borders --- */
+/* V700: Protect menu items from global transparency */
+*:not(popover):not(.menu):not(.menuitem):not(menuitem):focus,
+*:not(popover):not(.menu):not(.menuitem):not(menuitem):active,
+*:not(popover):not(.menu):not(.menuitem):not(menuitem):checked {
   outline: none;
   outline-width: 0;
   outline-style: none;
@@ -59,9 +64,9 @@ scrolledwindow overshoot {
   box-shadow: none;
 }
 
-button:focus,
-button:active,
-button:checked,
+button:not(.menuitem):not(menuitem):focus,
+button:not(.menuitem):not(menuitem):active,
+button:not(.menuitem):not(menuitem):checked,
 togglebutton:focus,
 togglebutton:checked,
 modelbutton:focus {
@@ -412,38 +417,6 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
 }
 
 /* Removed ineffective specificity fixes */
-/* --- Dock Menu --- */
-.cd-menu-action {
-  min-width: 160px;
-  padding: 8px 12px;
-  margin: 0;
-  border: 1px solid transparent;
-  background-clip: padding-box;
-}
-
-popover.cd-popover contents {
-  background-color: var(--window-bg-color);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
-  padding: 8px;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
-}
-
-button.cd-menu-action {
-  background: transparent;
-  color: var(--window-fg-color);
-  border-radius: 10px;
-  padding: 10px 16px;
-  transition: all 0.2s ease;
-}
-
-button.cd-menu-action:hover {
-  background-color: var(--view-selected-bg-color);
-  color: white;
-  border-color: transparent;
-  box-shadow: none;
-}
-
 /* --- Indicators (Dots) — macOS Tahoe: small black circles --- */
 window#crystal-dock button.cd-dot,
 window#crystal-dock box.cd-dot {
@@ -485,35 +458,6 @@ window#crystal-dock .cd-squircle-plate:hover {
   box-shadow: none;
   -gtk-icon-shadow: none;
   filter: none;
-}
-
-/* --- Menu Layout --- */
-.cd-menu-separator {
-  min-height: 1px;
-  margin: 6px 4px;
-  background-color: rgba(255, 255, 255, 0.12);
-}
-
-.cd-menu-action {
-  padding: 8px 12px;
-  border-radius: 8px;
-  min-width: 140px;
-  margin-bottom: 2px;
-  background: transparent;
-  transition: background-color 0.2s;
-}
-
-.cd-menu-action:hover {
-  background-color: var(--view-selected-bg-color);
-  color: white;
-}
-
-.cd-menu-header {
-  padding: 8px 12px;
-  margin-bottom: 4px;
-  font-size: 0.9em;
-  font-weight: bold;
-  color: rgba(255, 255, 255, 0.5);
 }
 
 /* --- Launcher Icon Visibility --- */

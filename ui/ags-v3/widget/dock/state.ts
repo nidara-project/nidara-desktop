@@ -167,9 +167,20 @@ export const dragBus = {
     }
 }
 
+
 export const mouseBus = {
     listeners: new Set<(x: number) => void>(),
     emit(x: number) { this.listeners.forEach(l => l(x)) },
     subscribe(l: (x: number) => void) { this.listeners.add(l); return () => this.listeners.delete(l) }
+}
+
+// --- SHARED UI STATE ---
+export const menuState = {
+    openCount: 0
+}
+
+export function changeMenuCount(delta: number) {
+    menuState.openCount += delta
+    if (menuState.openCount < 0) menuState.openCount = 0
 }
 

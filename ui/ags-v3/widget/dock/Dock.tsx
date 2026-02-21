@@ -10,7 +10,7 @@ import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
 import { DockItem, Separator } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
-import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState, dockSettings } from "./state"
+import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState, dockSettings, menuState } from "./state"
 
 // V127: Native Gtk Resolution
 
@@ -208,7 +208,7 @@ export default function Dock(gdkmonitor: any) {
         if (tickId !== null) return
 
         tickId = bar.add_tick_callback((_, clock) => {
-            if ((globalThis as any).isAnyMenuOpen) return true
+            if (menuState.openCount > 0) return true
 
             if (orderedIds.length === 0) {
                 tickId = null
@@ -355,7 +355,7 @@ export default function Dock(gdkmonitor: any) {
     let lastMouseX = -1000
     const updateAllTargets = (mouseX: number) => {
         // V320: Freeze magnification shifts while a menu is open to prevent "ghost menu" flickering
-        if ((globalThis as any).isAnyMenuOpen) return
+        if (menuState.openCount > 0) return
 
         const screenWidth = gdkmonitor.get_geometry().width
         lastMouseX = mouseX
@@ -447,7 +447,7 @@ export default function Dock(gdkmonitor: any) {
         // V421: SMART INPUT REGION
         // If a menu is open, we MUST allow input on the full window (200px) so the menu can receive clicks.
         // If no menu is open, we MUST clip to the bottom 110px so we don't block windows behind the dock.
-        if ((globalThis as any).isAnyMenuOpen) {
+        if (menuState.openCount > 0) {
             surface.set_input_region(null) // Full window input
             return
         }
@@ -562,7 +562,7 @@ export default function Dock(gdkmonitor: any) {
         updateLock = true
         try {
             // V310: PROTECTION. If a menu is open, skip reconciliation to prevent widget tree shifts (the "ghost menu" fix).
-            if ((globalThis as any).isAnyMenuOpen) {
+            if (menuState.openCount > 0) {
                 needsUpdate = true // Try again later
                 return bar
             }

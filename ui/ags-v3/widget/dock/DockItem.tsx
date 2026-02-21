@@ -12,7 +12,7 @@ import Cairo from "gi://cairo"
 import appService from "../../core/AppService" // Ensure import path is correct relative to this file
 import { DOCK_CONSTANTS } from "./DockPhysics"
 import { drawSquircle, createSquirclePath } from "../common/DrawingUtils"
-import { dragBus, mouseBus, dockSettings } from "./state"
+import { dragBus, mouseBus, dockSettings, changeMenuCount, menuState } from "./state"
 
 const hypr = AstalHyprland.get_default()
 
@@ -497,10 +497,10 @@ export function DockItem(
     itemBox.append(overlay)
 
     // TOOLTIP
-    const tooltip = new Gtk.Popover({ css_classes: ["cd-tooltip"], position: Gtk.PositionType.TOP, autohide: false, has_arrow: true })
-    tooltip.set_offset(0, -12)
-    const label = new Gtk.Label({ css_classes: ["cd-tooltip-label"] })
-    const content = new Gtk.Box({ css_classes: ["cd-tooltip-content"] })
+    // V700: Use standard GTK theme classes instead of custom 'cd-tooltip'
+    const tooltip = new Gtk.Popover({ css_classes: ["tooltip"], position: Gtk.PositionType.TOP, autohide: false, has_arrow: true })
+    const label = new Gtk.Label({ css_classes: ["label"] })
+    const content = new Gtk.Box()
     content.append(label)
     tooltip.set_child(content)
 
@@ -546,38 +546,44 @@ export function DockItem(
     iconBox.add_controller(motion)
 
     // MENU
-    // V406: Lazy Popover Creation to prevent startup artifacts
+    // V700: Fully Native GTK4 PopoverMenu
     let popover: Gtk.Popover | null = null
-
-    const createPopover = () => {
-        if (popover) return popover
-
-        console.log(`[Dock] Creating Lazy Popover for ${appId}`)
-        const newPopover = new Gtk.Popover({ css_classes: ["cd-popover"], has_tooltip: false })
-        newPopover.set_parent(iconBox)
-        newPopover.connect("notify::visible", () => {
-            (globalThis as any).isAnyMenuOpen = newPopover.visible
-            console.error(`[DockMenu] Popover visible change: ${newPopover.visible} for ${appId}`)
-        })
-        popover = newPopover
-        return newPopover
-    }
 
     const toSentenceCase = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : ""
 
     const rebuildMenu = () => {
-        const p = createPopover()
-        if (p.visible) {
-            console.error(`[DockMenu] Skip rebuild for ${appId} - already visible`)
-            return
+        if (popover) {
+            if (popover.visible) return
+            popover.unparent()
+            popover = null
         }
-        console.error(`[DockMenu] Rebuilding menu for: ${appId}`)
 
-        const menu = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
-        const actions: any[] = []
+        console.error(`[DockMenu] Rebuilding native menu for: ${appId}`)
 
-        actions.push({ label: appItem.name || "App", header: true })
-        actions.push({ separator: true })
+        const menuModel = new Gio.Menu()
+        const actionGroup = new Gio.SimpleActionGroup()
+        let actionIdx = 0
+
+        const addAction = (callback: () => void) => {
+            const actionName = `act_${actionIdx++}`
+            const action = new Gio.SimpleAction({ name: actionName })
+            action.connect("activate", callback)
+            actionGroup.add_action(action)
+            return `dock.${actionName}`
+        }
+
+        const addSection = (title: string | null) => {
+            const section = new Gio.Menu()
+            menuModel.append_section(title, section)
+            return section
+        }
+
+        // Section 1: Main App (Standardize special names)
+        let mainTitle = appItem.name || "App"
+        if (appId === "launcher" || appId === "special:launcher") mainTitle = "Aplicaciones"
+        if (appId === "home-shortcut" || appId === "special:home") mainTitle = "Archivos"
+        if (appId === "trash" || appId === "special:trash") mainTitle = "Papelera"
+        const mainSection = addSection(mainTitle)
 
         let desktopActions: string[] = []
         const gAppInfo = appService.getAppInfo(appId)
@@ -586,82 +592,99 @@ export function DockItem(
         }
 
         if (appId === "launcher" || appId === "special:launcher") {
-            actions.push({ label: "Abrir", action: () => appItem.launch() })
-            actions.push({ separator: true })
+            mainSection.append("Abrir", addAction(() => appItem.launch()))
         } else if (appId === "home-shortcut" || appId === "special:home") {
-            actions.push({ label: "Abrir", action: () => appItem.launch() })
-            actions.push({ separator: true })
+            // V700: Force system default GUI file manager instead of terminal fallback
+            mainSection.append("Abrir", addAction(() => {
+                execAsync(`xdg-open ${GLib.get_home_dir()}`).catch(print)
+            }))
         } else if (appId === "trash" || appId === "special:trash") {
-            actions.push({ label: "Abrir", action: () => appItem.launch() })
-            actions.push({ label: "Vaciar Papelera", action: () => execAsync("gio trash --empty").catch(print) })
-            actions.push({ separator: true })
+            mainSection.append("Abrir", addAction(() => appItem.launch()))
+            mainSection.append("Vaciar Papelera", addAction(() => execAsync("gio trash --empty").catch(print)))
         }
 
         if (desktopActions.length > 0) {
+            const desktopSection = addSection(null)
             desktopActions.forEach((actionName: string) => {
                 const rawLabel = actionName
                 const label = gAppInfo ? gAppInfo.get_action_name(actionName) : toSentenceCase(rawLabel.replace(/[-_]/g, " "))
-                actions.push({
-                    label: label,
-                    action: () => {
-                        try {
-                            if (gAppInfo && gAppInfo.launch_action) gAppInfo.launch_action(actionName, null)
-                        } catch (e) { console.error(e) }
-                    }
-                })
+                desktopSection.append(label, addAction(() => {
+                    try {
+                        if (gAppInfo && gAppInfo.launch_action) gAppInfo.launch_action(actionName, null)
+                    } catch (e) { console.error(e) }
+                }))
             })
-            actions.push({ separator: true })
         }
 
         const isSpecialItem = appId.startsWith("special:") || appId === "launcher" || appId === "home-shortcut" || appId === "trash"
         if (!isSpecialItem) {
-            actions.push({
-                label: isPinned ? "Desanclar del dock" : "Mantener en el dock",
-                action: () => {
+            const pinSection = addSection(null)
+            pinSection.append(
+                isPinned ? "Desanclar del dock" : "Mantener en el dock",
+                addAction(() => {
                     const cid = cleanId || appId
                     if (isPinned) onUnpin(cid)
                     else onPin(cid)
-                }
-            })
+                })
+            )
         }
 
         if (state.addresses && state.addresses.length > 0) {
-            actions.push({ separator: true })
             const winCount = state.addresses.length
-            actions.push({
-                label: winCount > 1 ? `Cerrar todas (${winCount})` : "Salir",
-                isDestructive: true,
-                action: () => {
+
+            // 1. List all open windows natively (Only if there's more than 1)
+            if (winCount > 1) {
+                const windowsSection = addSection(null)
+                state.addresses.forEach((addr) => {
+                    const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
+                    // Try to find the title from hypr.clients (Astal might omit the 0x in its internally mapped address)
+                    const rawAddr = addr.replace(/^0x/, '')
+                    const hyprClient = hypr.clients.find(c => c.address === cleanAddr || c.address === rawAddr)
+
+                    // Use a substring to prevent gigantic unreadable menus
+                    let winTitle = hyprClient?.title || `Ventana de ${appItem.name || "App"}`
+                    if (winTitle.length > 35) winTitle = winTitle.substring(0, 32) + "..."
+
+                    // Add the window to the menu. Clicking it focuses the window.
+                    windowsSection.append(
+                        winTitle,
+                        addAction(() => {
+                            execAsync(`hyprctl dispatch focuswindow address:${cleanAddr}`).catch(print)
+                        })
+                    )
+                })
+            }
+
+            // 2. Add the destructive "Close All" action at the very bottom
+            const closeSection = addSection(null)
+            closeSection.append(
+                winCount > 1 ? `Cerrar todas (${winCount})` : "Salir",
+                addAction(() => {
                     state.addresses.forEach(addr => {
                         const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
-                        execAsync(`hyprctl dispatch closewindow address:${cleanAddr} `).catch(print)
+                        execAsync(`hyprctl dispatch closewindow address:${cleanAddr}`).catch(print)
                     })
-                }
-            })
+                })
+            )
         }
 
-        actions.forEach(a => {
-            if (a.separator) {
-                menu.append(new Gtk.Separator({ orientation: Gtk.Orientation.HORIZONTAL, css_classes: ["cd-menu-separator"] }))
-            } else if (a.header) {
-                const l = new Gtk.Label({ label: a.label, xalign: 0, css_classes: ["cd-menu-header"] })
-                menu.append(l)
+        iconBox.insert_action_group("dock", actionGroup)
+        popover = Gtk.PopoverMenu.new_from_model(menuModel) as unknown as Gtk.Popover
+        popover.set_has_tooltip(false)
+        popover.set_parent(iconBox)
+
+        popover.connect("notify::visible", () => {
+            if (popover?.visible) {
+                changeMenuCount(1)
             } else {
-                const b = new Gtk.Button({
-                    css_classes: ["cd-menu-action"],
-                    child: new Gtk.Label({ label: a.label, xalign: 0 })
+                // V700: Keep dock frozen for 250ms while the GTK menu plays its fade-out animation.
+                // If we unfreeze instantly, the dock shrinks and visually clips the fading menu.
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+                    changeMenuCount(-1)
+                    return GLib.SOURCE_REMOVE
                 })
-                if (a.isDestructive) b.add_css_class("destructive")
-                b.connect("clicked", () => {
-                    console.log(`[DockMenu] Action clicked, popping down: ${appId}`)
-                    a.action();
-                    p.popdown()
-                })
-                menu.append(b)
             }
         })
-
-        p.set_child(menu)
     }
 
     const rightClick = new Gtk.GestureClick({ button: 3 })
@@ -743,9 +766,20 @@ export function DockItem(
                     }
                     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, animLoop)
                 }
-                appItem.launch()
-            } catch (e) {
-                execAsync(`gtk-launch ${appId}`).catch(print)
+
+                // V700: Force system file manager for Home shortcut
+                if (appId === "special:home" || appId === "home-shortcut") {
+                    execAsync(`xdg-open ${GLib.get_home_dir()}`).catch(print)
+                } else {
+                    try {
+                        appItem.launch()
+                    } catch (e) {
+                        execAsync(`gtk-launch ${appId}`).catch(print)
+                    }
+                }
+            } catch (fallbackError) {
+                // If the entire block fails, don't crash the dock
+                console.error(fallbackError)
             }
         }
     })
@@ -769,8 +803,10 @@ export function DockItem(
             dot.remove_css_class("open")
             dot.remove_css_class("focused")
         }
-
         let targetTitle = appItem.name || "App"
+        if (appId === "launcher" || appId === "special:launcher") targetTitle = "Aplicaciones"
+        if (appId === "home-shortcut" || appId === "special:home") targetTitle = "Archivos"
+        if (appId === "trash" || appId === "special:trash") targetTitle = "Papelera"
         if (focused && addresses.includes(focused.address)) {
             targetTitle = focused.title
         } else if (addresses.length > 0) {

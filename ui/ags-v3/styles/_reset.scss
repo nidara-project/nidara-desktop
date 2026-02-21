@@ -7,13 +7,16 @@
 
 /* --- GTK4 Internal Node Neutralization (Surgical Fix) 🧠 --- */
 /* Fixes "ghost" backgrounds, color bleeding on hover, and unwanted shadows */
-ripple,
-highlight,
+/* --- GTK4 Internal Node Neutralization (Surgical Fix) 🧠 --- */
+/* Fixes "ghost" backgrounds, color bleeding on hover, and unwanted shadows */
+/* V700: Protect native menu nodes so system themes like WhiteSur can style them */
+:not(popover):not(.menu):not(.menuitem)>ripple,
+:not(popover):not(.menu):not(.menuitem)>highlight,
 cursor-handle,
 selection,
 box.star,
-focus-ring,
-outline {
+:not(popover):not(.menu):not(.menuitem)>focus-ring,
+:not(popover):not(.menu):not(.menuitem)>outline {
     background-color: transparent;
     background-image: none;
     box-shadow: none;
@@ -33,9 +36,11 @@ scrolledwindow overshoot {
 }
 
 /* --- GLOBAL: Kill GTK Focus/Selection Borders --- */
-*:focus,
-*:active,
-*:checked {
+/* --- GLOBAL: Kill GTK Focus/Selection Borders --- */
+/* V700: Protect menu items from global transparency */
+*:not(popover):not(.menu):not(.menuitem):not(menuitem):focus,
+*:not(popover):not(.menu):not(.menuitem):not(menuitem):active,
+*:not(popover):not(.menu):not(.menuitem):not(menuitem):checked {
     outline: none;
     outline-width: 0;
     outline-style: none;
@@ -43,9 +48,9 @@ scrolledwindow overshoot {
     box-shadow: none;
 }
 
-button:focus,
-button:active,
-button:checked,
+button:not(.menuitem):not(menuitem):focus,
+button:not(.menuitem):not(menuitem):active,
+button:not(.menuitem):not(menuitem):checked,
 togglebutton:focus,
 togglebutton:checked,
 modelbutton:focus {
