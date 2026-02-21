@@ -273,8 +273,6 @@ export function DockItem(
                 cr.paint()
                 cr.restore()
 
-                cr.translate(-x, -y)
-
                 // V136: Universal Apple-Style Glassy Highlight (Refined: Inset 1px)
                 // V610: Trash icon does not get a glass highlight
                 if (!isTrash) {
