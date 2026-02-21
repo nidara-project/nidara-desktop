@@ -228,24 +228,26 @@ export function DockItem(
             ; (child as any).set_draw_func((area: any, cr: any, w: number, h: number) => {
                 if (!pixbuf) return
 
-                // User requested keeping factor 1.0 for everything to avoid inconsistencies
-                const factor = 1.0
-
-                // Calculate available size including padding
-                const availW = w * factor
-                const availH = h * factor
+                // macOS HIG: The actual icon shape only occupies ~82% of the total canvas.
+                // We use Cairo Matrix Scaling to scale exactly from the center.
+                const SAFE_RATIO = 0.90
+                const cx = w / 2
+                const cy = h / 2
+                cr.translate(cx, cy)
+                cr.scale(SAFE_RATIO, SAFE_RATIO)
+                cr.translate(-cx, -cy)
 
                 // Native aspect ratio
                 const iconW = pixbuf.get_width()
                 const iconH = pixbuf.get_height()
 
-                // Scale to fit available padded area
-                const scaleX = availW / iconW
-                const scaleY = availH / iconH
-                // Scale strategy: 'Contain' for themed icons, 'Cover' for full-frame to ensure zero gaps
-                const scale = isThemed ? Math.min(scaleX, scaleY) : Math.max(scaleX, scaleY)
+                // Scale to fit available area (in the 0.82 scaled context, space is w,h)
+                const scaleX = w / iconW
+                const scaleY = h / iconH
+                // Contain strategy to guarantee it fits 
+                const scale = Math.min(scaleX, scaleY)
 
-                // Center in the FULL widget area (w, h)
+                // Center in the widget area (w, h)
                 const drawW = iconW * scale
                 const drawH = iconH * scale
                 const x = (w - drawW) / 2
@@ -253,8 +255,9 @@ export function DockItem(
 
                 cr.save()
 
-                // V135: Apply Squircle Clipping uniformly to everything to ensure it stays inside the plate
-                // V603: Apple's native macOS icon shape is a continuous superellipse with approximately n=5.0 and r=0.5
+                // V135: The clip mask is mathematically pure at the FULL 100% boundary limit!
+                // Any native icons that DO bleed (or Antigravity) will instantly be clipped perfectly.
+                // We use Apple's n=5.0 continuous formula.
                 createSquirclePath(cr, 0, 0, w, h, w * 0.5, 5.0, false, 0)
                 cr.clip()
 
@@ -350,6 +353,14 @@ export function DockItem(
 
         da.set_draw_func((_, cr, w, h) => {
             // We draw the glassy plate for all icons now to ensure uniformity
+
+            // macOS HIG: Matched scaling for the Plate to follow the 90% icon rule
+            const SAFE_RATIO = 0.90
+            const cx = w / 2
+            const cy = h / 2
+            cr.translate(cx, cy)
+            cr.scale(SAFE_RATIO, SAFE_RATIO)
+            cr.translate(-cx, -cy)
 
             // V413: Use shared drawSquircle for consistent geometry
             // V430: Enable Gloss/Border effect

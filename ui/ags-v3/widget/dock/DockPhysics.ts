@@ -18,7 +18,7 @@ function deriveConstants(iconSize: number, maxSize: number, magnification: boole
 
     // ── DERIVED ──
     const pillHeight = iconSize + PILL_PAD * 2        // Perfect vertical symmetry
-    const separatorHeight = Math.round(iconSize * 0.875)
+    const separatorHeight = Math.round(iconSize * 1.0) // Apple HIG: Separator spans almost full height
 
     return {
         // PHYSICS — Critical Damping Spring
