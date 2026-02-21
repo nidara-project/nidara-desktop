@@ -257,17 +257,22 @@ export default function Dock(gdkmonitor: any) {
 
                 if (state.isSeparator) {
                     // V610: Dynamic Separators
-                    // Use the spring-smoothed width instead of a static constant
+                    // Accumulate exact float width for smooth bar growth
+                    totalBarWidth += state.currentWidth
+
                     const slotW = Math.round(state.currentWidth)
                     if (revealer.width_request !== slotW) revealer.width_request = slotW
-                    totalBarWidth += slotW
 
                     const centerBox = itemBox as Gtk.CenterBox
                     const line = centerBox?.get_center_widget() as Gtk.Box
                     if (line) line.set_size_request(-1, Math.round(state.currentHeight))
                 } else {
-                    // THE key integer — drives everything for this icon
-                    const tps = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
+                    // Float accumulation prevents ±1px jitter cascade across 15+ icons
+                    const exactIconSize = DOCK_CONSTANTS.ICON_SIZE * state.currentScale
+                    totalBarWidth += exactIconSize + (state.currentMargin * 2)
+
+                    // THE key integer — drives physical GTK layout for this icon
+                    const tps = Math.round(exactIconSize)
                     const margin = Math.round(state.currentMargin)
                     const slotW = tps + (margin * 2)
 
@@ -300,20 +305,21 @@ export default function Dock(gdkmonitor: any) {
                             }
                         }
                     }
-
-                    totalBarWidth += slotW
                 }
             })
 
-            // Step 3: Bar width/position — same integers as slots
-            const barM = Math.round((dockMonitorWidth - totalBarWidth) / 2)
+            // Step 3: Bar width/position
+            // We only round the FINAL sum, completely eliminating the stepped jitter vibration
+            const roundedTotalWidth = Math.round(totalBarWidth)
+            const barM = Math.round((dockMonitorWidth - roundedTotalWidth) / 2)
+
             if (bar.margin_start !== barM) {
                 bar.margin_start = barM
                 if (da) da.margin_start = barM - DOCK_CONSTANTS.BASE_MARGIN
             }
 
-            if (active || smoothedBarWidth !== totalBarWidth) {
-                smoothedBarWidth = totalBarWidth
+            if (active || smoothedBarWidth !== roundedTotalWidth) {
+                smoothedBarWidth = roundedTotalWidth
                 updateSize()
                 updateInputRegion(smoothedBarWidth)
                 active = true
