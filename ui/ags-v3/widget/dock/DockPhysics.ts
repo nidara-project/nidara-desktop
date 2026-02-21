@@ -117,9 +117,12 @@ export function calculateDockItemMetrics(
     const intensity = Math.exp(-0.5 * Math.pow(distance / sigma, 2));
 
     if (isSeparator) {
+        // V610: Dynamic Separators (macOS Tahoe)
+        // Separators expand slightly when neighbors magnify to provide breathing room
+        const targetScale = 1.0 + (intensity * 0.4); // Max 40% expansion when fully focused
         return {
-            scale: 1.0,
-            width: DOCK_CONSTANTS.SEPARATOR_SLOT,
+            scale: targetScale,
+            width: DOCK_CONSTANTS.SEPARATOR_SLOT * targetScale,
             height: 48,
             translateY: 0,
             margin: 0,

@@ -256,7 +256,9 @@ export default function Dock(gdkmonitor: any) {
                 const itemBox = revealer.get_child ? (revealer.get_child() as Gtk.Box) : revealer
 
                 if (state.isSeparator) {
-                    const slotW = DOCK_CONSTANTS.SEPARATOR_SLOT
+                    // V610: Dynamic Separators
+                    // Use the spring-smoothed width instead of a static constant
+                    const slotW = Math.round(state.currentWidth)
                     if (revealer.width_request !== slotW) revealer.width_request = slotW
                     totalBarWidth += slotW
 
