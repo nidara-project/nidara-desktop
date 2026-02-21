@@ -546,7 +546,13 @@ export default function Dock(gdkmonitor: any) {
             sortedClients.forEach(c => {
                 const rawClass = c.class || ""
                 if (rawClass.toLowerCase().includes("ags")) return
-                const key = rawClass.toLowerCase()
+                let key = rawClass.toLowerCase()
+
+                // V610: File Manager Integration -> Map any detected file manager window to our Home/Finder shortcut
+                if (["org.gnome.nautilus", "nautilus", "thunar", "dolphin", "pcmanfm", "nemo", "nemo-desktop"].includes(key)) {
+                    key = "home-shortcut"
+                }
+
                 if (!groupedClients[key]) {
                     groupedClients[key] = { addresses: [], displayClass: rawClass, title: c.title }
                 }
@@ -571,7 +577,7 @@ export default function Dock(gdkmonitor: any) {
                 }
 
                 effectivePinnedList = effectivePinnedList.filter(p => norm(p) !== nsid)
-                runningUnpinnedKeys = groupedKeys.filter(k => k !== nsid && !pinnedState.list.some(p => norm(p) === k))
+                runningUnpinnedKeys = groupedKeys.filter(k => k !== nsid && k !== "home-shortcut" && !pinnedState.list.some(p => norm(p) === k))
 
                 const pinnedBoundary = 2 + effectivePinnedList.length
 
@@ -589,7 +595,7 @@ export default function Dock(gdkmonitor: any) {
                 }
             } else {
                 lastDraggingId = ""
-                runningUnpinnedKeys = groupedKeys.filter(k => !pinnedState.list.some(p => norm(p) === k))
+                runningUnpinnedKeys = groupedKeys.filter(k => k !== "home-shortcut" && !pinnedState.list.some(p => norm(p) === k))
             }
 
             type ItemConfig = { id: string, width: number, syncData?: any, isPinned: boolean, factory: (vc: number) => Gtk.Widget, isSeparator?: boolean }
@@ -704,9 +710,10 @@ export default function Dock(gdkmonitor: any) {
                     print(e)
                 })
             }
+            const homeAddrs = groupedClients["home-shortcut"]?.addresses || []
             configs.push({
                 id: "home-shortcut", width: DOCK_CONSTANTS.APP_SLOT,
-                syncData: { addrs: [], clientTitle: undefined, appItem: homeItem as any },
+                syncData: { addrs: homeAddrs, clientTitle: undefined, appItem: homeItem as any },
                 isPinned: true,
                 factory: (vc) => {
                     const w = DockItem({
@@ -714,7 +721,7 @@ export default function Dock(gdkmonitor: any) {
                         appItem: homeItem as any,
                         updateDock: update,
                         register: (id, s) => animRegistry.set(id, s),
-                        addresses: [],
+                        addresses: homeAddrs,
                         clientTitle: undefined,
                         onPin, onUnpin, onReorder,
                         isPinned: true, // Special item logic handles actions
@@ -725,6 +732,8 @@ export default function Dock(gdkmonitor: any) {
                     return w
                 }
             })
+            // Fully consumed, remove from group mapping
+            delete groupedClients["home-shortcut"]
 
             const launcherItem = {
                 name: "Lanzador",
