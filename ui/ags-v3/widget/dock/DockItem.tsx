@@ -375,6 +375,12 @@ export function DockItem(
             const cy = h / 2
             cr.translate(cx, cy)
             cr.scale(SAFE_RATIO, SAFE_RATIO)
+
+            // V610: Anti-aliasing bleed fix! 
+            // Shrink the white background plate by 1% so it perfectly hides BEHIND 
+            // the clipped icon, preventing its white antialiased edges from causing a halo.
+            cr.scale(0.99, 0.99)
+
             cr.translate(-cx, -cy)
 
             // V413: Use shared drawSquircle for consistent geometry
