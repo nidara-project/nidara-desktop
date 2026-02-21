@@ -91,15 +91,7 @@ export interface SpringChannel {
     velocity: number;
 }
 
-/** Layout slot computed with integer-only arithmetic */
-export interface SlotLayout {
-    slotStart: number;    // integer px
-    slotWidth: number;    // integer px
-    iconStart: number;    // integer px
-    iconWidth: number;    // integer px
-    marginStart: number;  // integer px
-    marginEnd: number;    // integer px
-}
+
 
 // ─── MAGNIFICATION CURVE ─────────────────────────────────────────────────────
 
@@ -169,98 +161,4 @@ export function springStep(ch: SpringChannel, dt: number): boolean {
     return true;
 }
 
-// ─── INTEGER LAYOUT CALCULATOR ───────────────────────────────────────────────
 
-/**
- * Computes pixel-perfect integer layout for all dock items.
- *
- * Uses CONSTRAINED ROUNDING (largest-remainder method) to ensure:
- * 1. Total width is maximally stable (only changes at .5 crossings)
- * 2. Individual slot changes are coordinated (no uncoordinated ±1px jumps)
- * 3. Icon and slot widths always sum to exactly the integer total
- *
- * This is the same algorithm used in proportional representation elections
- * and display pixel distribution.
- */
-export function calculateLayout(
-    items: Array<{ currentWidth: number; currentMargin: number; isSeparator: boolean }>,
-    screenWidth: number
-): { slots: SlotLayout[]; totalWidth: number; marginStart: number; floatTotalWidth: number; floatMarginStart: number } {
-    const n = items.length;
-    if (n === 0) return { slots: [], totalWidth: 0, marginStart: Math.round(screenWidth / 2), floatTotalWidth: 0, floatMarginStart: screenWidth / 2 };
-
-    // Pass 1: compute float values for each slot
-    const floatSlotWidths: number[] = [];
-    const floatIconWidths: number[] = [];
-    const floatMargins: number[] = [];
-    let totalFloat = 0;
-
-    for (const item of items) {
-        const slotW = item.currentWidth + (item.currentMargin * 2);
-        floatSlotWidths.push(slotW);
-        floatIconWidths.push(item.currentWidth);
-        floatMargins.push(item.currentMargin);
-        totalFloat += slotW;
-    }
-
-    // Authoritative integer total — only changes at .5 boundary crossings
-    const totalWidth = Math.round(totalFloat);
-    const centerOffset = (screenWidth - totalFloat) / 2;
-    const marginStart = Math.round(centerOffset);
-
-    // Pass 2: Constrained rounding for SLOT widths
-    // Floor all, then distribute leftover pixels to largest remainders
-    const intSlotWidths = floatSlotWidths.map(w => Math.floor(w));
-    let sumFloored = intSlotWidths.reduce((a, b) => a + b, 0);
-    let deficit = totalWidth - sumFloored;
-
-    if (deficit > 0) {
-        // Build remainder index, sort by descending fractional part
-        const remainders = floatSlotWidths
-            .map((w, i) => ({ idx: i, frac: w - Math.floor(w) }))
-            .sort((a, b) => b.frac - a.frac);
-        for (let i = 0; i < deficit && i < n; i++) {
-            intSlotWidths[remainders[i].idx]++;
-        }
-    } else if (deficit < 0) {
-        // Rare: rounding pushed total above, remove from smallest remainders
-        const remainders = floatSlotWidths
-            .map((w, i) => ({ idx: i, frac: w - Math.floor(w) }))
-            .sort((a, b) => a.frac - b.frac);
-        for (let i = 0; i < -deficit && i < n; i++) {
-            intSlotWidths[remainders[i].idx]--;
-        }
-    }
-
-    // Pass 3: Constrained rounding for ICON widths within each slot
-    // Icon width must be <= slot width - reasonable margins
-    const intIconWidths = floatIconWidths.map((w, i) => {
-        const iconW = Math.round(w);
-        // Clamp to slot width (icon can't be wider than its slot)
-        return Math.min(iconW, intSlotWidths[i]);
-    });
-
-    // Pass 4: Build slot descriptors with positions
-    const slots: SlotLayout[] = [];
-    let runningX = 0;
-
-    for (let i = 0; i < n; i++) {
-        const slotWidth = intSlotWidths[i];
-        const iconWidth = intIconWidths[i];
-        const marginLeft = Math.round(floatMargins[i]);
-        const marginRight = slotWidth - iconWidth - marginLeft;
-
-        slots.push({
-            slotStart: runningX,
-            slotWidth,
-            iconStart: runningX + marginLeft,
-            iconWidth,
-            marginStart: marginLeft,
-            marginEnd: Math.max(0, marginRight),
-        });
-
-        runningX += slotWidth;
-    }
-
-    return { slots, totalWidth, marginStart, floatTotalWidth: totalFloat, floatMarginStart: centerOffset };
-}

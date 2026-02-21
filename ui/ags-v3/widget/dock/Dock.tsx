@@ -5,7 +5,7 @@ import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
-import { calculateDockItemMetrics, DOCK_CONSTANTS, springStep, calculateLayout } from "./DockPhysics"
+import { calculateDockItemMetrics, DOCK_CONSTANTS, springStep } from "./DockPhysics"
 import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
 import { DockItem, Separator } from "./DockItem"
@@ -654,8 +654,13 @@ export default function Dock(gdkmonitor: any) {
                 if (inner && (inner as any).popdown) (inner as any).popdown()
             })
 
+            // V620: Memoize heavy app lookups that run on every window focus change
+            const appLookupCache = new Map<string, any>()
+
             const findApp = (searchId: string) => {
                 if (!searchId) return null
+                if (appLookupCache.has(searchId)) return appLookupCache.get(searchId)
+
                 const lid = searchId.toLowerCase().replace(".desktop", "")
 
                 // V505: Rename local 'app' to 'targetApp' to avoid shadowing global 'app' import
@@ -712,7 +717,7 @@ export default function Dock(gdkmonitor: any) {
                 if (!targetApp) {
                     const data = appService.getAppData(lid)
                     if (data) {
-                        return {
+                        const customApp = {
                             name: data.name,
                             icon_name: data.icon || lid,
                             id: data.id,
@@ -720,8 +725,12 @@ export default function Dock(gdkmonitor: any) {
                             get_name: () => data.name,
                             launch: () => execAsync(`gtk-launch ${data.id || lid}`).catch(print)
                         } as any
+                        appLookupCache.set(searchId, customApp)
+                        return customApp
                     }
                 }
+
+                appLookupCache.set(searchId, targetApp)
                 return targetApp
             }
 
