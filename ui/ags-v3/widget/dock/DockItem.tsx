@@ -282,20 +282,20 @@ export function DockItem(
                     createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 4.0, false, 0)
 
                     // V610: Diagonal lighting (Top-Left to Bottom-Right) matching macOS HIG
-                    // The squircle cuts off the absolute corners of the w,h bounding box,
-                    // so we pull the color stops inward to ensure the light hits the visible curve.
-                    const highlightPat = new Cairo.LinearGradient(0, 0, w, h)
+                    // The gradient vector is slightly compressed inward to stretch the light
+                    // iso-bands across a wider crescent of the top and left edges.
+                    const highlightPat = new Cairo.LinearGradient(w * 0.1, h * 0.1, w * 0.9, h * 0.9)
 
-                    // TOP-LEFT: Strongest light catch
-                    highlightPat.addColorStopRGBA(0.05, 1, 1, 1, 0.60)
-                    highlightPat.addColorStopRGBA(0.25, 1, 1, 1, 0.0)
+                    // TOP-LEFT: Strong bright sweep that extends further along the edges
+                    highlightPat.addColorStopRGBA(0.0, 1, 1, 1, 0.65)
+                    highlightPat.addColorStopRGBA(0.40, 1, 1, 1, 0.0)
 
                     // MID: Completely transparent so sides aren't illuminated
                     highlightPat.addColorStopRGBA(0.5, 1, 1, 1, 0.0)
 
                     // BOTTOM-RIGHT: Subtle rim light reflection
-                    highlightPat.addColorStopRGBA(0.75, 1, 1, 1, 0.0)
-                    highlightPat.addColorStopRGBA(0.95, 1, 1, 1, 0.30)
+                    highlightPat.addColorStopRGBA(0.65, 1, 1, 1, 0.0)
+                    highlightPat.addColorStopRGBA(1.0, 1, 1, 1, 0.35)
 
                     cr.setLineWidth(1.0)
                     cr.setSource(highlightPat)
