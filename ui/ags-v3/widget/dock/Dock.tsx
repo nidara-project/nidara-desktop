@@ -280,27 +280,20 @@ export default function Dock(gdkmonitor: any) {
                     const exactMargin = state.currentMargin
                     const exactIconSize = DOCK_CONSTANTS.ICON_SIZE * state.currentScale
 
-                    totalBarWidth += exactIconSize + (exactMargin * 2)
+                    const exactSlotW = exactIconSize + (exactMargin * 2)
+                    totalBarWidth += exactSlotW
 
-                    // 1. Left Margin Edge
-                    currentFloatX += exactMargin
-                    let newX = Math.round(currentFloatX)
-                    const marginL = newX - lastRoundedX
-                    lastRoundedX = newX
+                    currentFloatX += exactSlotW
+                    const newRoundedX = Math.round(currentFloatX)
+                    const slotW = newRoundedX - lastRoundedX
+                    lastRoundedX = newRoundedX
 
-                    // 2. Icon Body Edge
-                    currentFloatX += exactIconSize
-                    newX = Math.round(currentFloatX)
-                    const tps = newX - lastRoundedX
-                    lastRoundedX = newX
-
-                    // 3. Right Margin Edge
-                    currentFloatX += exactMargin
-                    newX = Math.round(currentFloatX)
-                    const marginR = newX - lastRoundedX
-                    lastRoundedX = newX
-
-                    const slotW = marginL + tps + marginR
+                    // V610: The key integer — ALWAYS visually lock the icon to its strict integer scale 
+                    // This prevents unscaled, far-away icons from receiving 1px diffusion jitters
+                    const tps = Math.round(exactIconSize)
+                    const remaining = slotW - tps
+                    const marginL = Math.floor(remaining / 2)
+                    const marginR = Math.ceil(remaining / 2)
 
                     // Sizing allocations
                     if (revealer.width_request !== slotW) revealer.width_request = slotW
