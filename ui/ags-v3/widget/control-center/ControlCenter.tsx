@@ -376,8 +376,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         child: slidersContent,
         radius: 16, // Nested Radius Rule (24-8=16) 📐
         css_classes: ["cc-sliders-structure"], // Clean Structure Only 🎚️
-        color: { r: 0, g: 0, b: 0 },
-        alpha: 0.2,
+        alpha: 0.15,
         borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
     })
     topSection.append(sliders)
@@ -677,8 +676,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             child: content,
             radius: 16, // Standalone 'Island' Card ️
             css_classes: ["cc-media-card"],
-            color: { r: 0, g: 0, b: 0 },
-            alpha: 0.2, // Darker card background
+            alpha: 0.15, // Unified Liquid Glass
             borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
         })
 
@@ -906,11 +904,10 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             // Wrap in Squircle "Card"
             const item = SquircleContainer({
                 child: content,
-                radius: 16, // Nested Radius Rule (24-8=16) 📐
+                radius: 16, // Nested 16px Radius 📐
                 css_classes: ["nc-notif-item"],
                 hexpand: true,
-                color: { r: 0, g: 0, b: 0 },
-                alpha: 0.2, // Darker notification item background
+                alpha: 0.15,
                 hoverAlpha: 0.3, // Slightly brighter on hover
                 borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
             })

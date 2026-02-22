@@ -7,11 +7,13 @@ import NetworkPage from "./pages/Network"
 import AudioPage from "./pages/Audio"
 import DockPage from "./pages/Dock"
 import PowerPage from "./pages/Power"
+import AppearancePage from "./pages/Appearance"
 
 /**
  * Settings - System Configuration Panel 🛠️
  */
 export default function Settings(monitor: Gdk.Monitor) {
+
     const win = new Gtk.Window({
         name: "crystal-settings",
         application: app,
@@ -33,7 +35,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "audio", label: "Sonido", icon: "audio-speakers-symbolic", component: AudioPage },
         { id: "dock", label: "Dock", icon: "dock-bottom-symbolic", component: DockPage },
         { id: "power", label: "Energía", icon: "power-profile-balanced-symbolic", component: PowerPage },
-        { id: "appearance", label: "Apariencia", icon: "preferences-desktop-theme-symbolic", component: null },
+        { id: "appearance", label: "Apariencia", icon: "preferences-desktop-theme-symbolic", component: AppearancePage },
         { id: "input", label: "Entrada", icon: "input-mouse-symbolic", component: null },
     ]
 

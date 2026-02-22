@@ -854,7 +854,7 @@ export default function Dock(gdkmonitor: any) {
                         }
                     })
                 } else {
-                    const info = apps.getAppInfo(lid)
+                    const info = appService.getAppInfo(lid)
                     const displayName = info?.get_name() || lid
                     let icon = info?.get_id() || originalId
                     if (lid.startsWith("chrome-") && lid.endsWith("-default") && typeof icon === "string") {

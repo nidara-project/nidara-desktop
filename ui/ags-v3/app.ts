@@ -3,7 +3,7 @@ import { Gdk, Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 // @ts-ignore
-import Adw from "gi://Adw"
+import Adw from "gi://Adw?version=1"
 
 // @ts-ignore
 import type { Monitor } from "gi://Gdk?version=4.0"
@@ -21,22 +21,59 @@ import ControlCenter from "./widget/control-center/ControlCenter"
 import PowerMenu from "./widget/power-menu/PowerMenu"
 import Settings from "./widget/settings/Settings"
 
-console.log("[DISTROIA] app.ts loading... (Phase 66: Libadwaita Integration)");
+console.log("[DISTROIA] app.ts loading... (Phase 67: Theme Hardening)");
+
+// 🛠️ HEALING PROTOCOL: Silence Adwaita/GTK Warnings 🛡️
+// We run this at the top level to intercept initialization warnings.
+try {
+  // 1. Force explicit Adwaita theme name to avoid broken GNOME resource lookups
+  GLib.setenv("GTK_THEME", "Adwaita:dark", true);
+  const gtkSettings = Gtk.Settings.get_default()
+  if (gtkSettings) {
+    gtkSettings.gtk_theme_name = "Adwaita"
+    // 2. Disable legacy prefer-dark-theme to satisfy Libadwaita's AdwStyleManager
+    gtkSettings.gtk_application_prefer_dark_theme = false
+  }
+
+  // 3. Initialize Adwaita BEFORE anything else
+  Adw.init()
+  const styleManager = Adw.StyleManager.get_default()
+  // 4. Force Pure Dark Mode for the Liquid Glass aesthetic
+  styleManager.set_color_scheme(Adw.ColorScheme.PREFER_DARK)
+  console.log("[App] Libadwaita Hardened at Top-Level.");
+} catch (e) {
+  console.warn("[App] Top-level initialization failed:", e)
+}
+
 
 console.log("[DISTROIA] Calling app.start()...");
-const randomId = Math.floor(Math.random() * 10000);
 app.start({
   applicationId: "com.distroia.crystal",
+  // 🛠️ HEALING PROTOCOL: Silence Adwaita/GTK Warnings 🛡️
+  setup: () => {
+    try {
+      // 1. Force explicit Adwaita theme name to avoid broken GNOME resource lookups
+      const gtkSettings = Gtk.Settings.get_default()
+      if (gtkSettings) {
+        gtkSettings.gtk_theme_name = "Adwaita"
+        // 2. Disable legacy prefer-dark-theme to satisfy Libadwaita's AdwStyleManager
+        gtkSettings.gtk_application_prefer_dark_theme = false
+      }
+
+      // 3. Initialize Adwaita
+      Adw.init()
+      const styleManager = Adw.StyleManager.get_default()
+      // 4. Force Pure Dark Mode
+      styleManager.set_color_scheme(Adw.ColorScheme.PREFER_DARK)
+      console.log("[App] Theme Hardening applied via setup()");
+    } catch (e) {
+      console.warn("[App] Setup hardening failed:", e)
+    }
+  },
   main() {
+    const randomId = Math.floor(Math.random() * 10000);
     console.log(`[DISTROIA] main() started! (ID: ${randomId})`);
 
-    // Modern Gtk4 Theme Management via Libadwaita
-    try {
-      Adw.init()
-      Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
-    } catch (e) {
-      console.warn("[App] Adw.init failed")
-    }
 
     const windows = new Set<any>()
     const gridWindows: any[] = []

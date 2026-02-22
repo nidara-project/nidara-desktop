@@ -7,12 +7,12 @@
 
 /* --- Panel Structure (SquircleContainer Wrapper) --- */
 .cc-panel-structure {
-    /* Shadow applied to the Grid wrapper */
-    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.25);
-    /* Slightly darker for depth */
+    /* Liquid Glass: No shadows for integrated look */
+    box-shadow: none;
 
-    /* Background moved to CSS for perfect shadow alignment */
-    background-color: rgba(18, 18, 28, 0.7);
+    /* Background: Unified 15% White Tint */
+    background-color: rgba(255, 255, 255, 0.15);
+
     /* Deep Space #12121c @ 70% */
 
     /* Border moved to CSS - Use specific color to avoid mismatch */
