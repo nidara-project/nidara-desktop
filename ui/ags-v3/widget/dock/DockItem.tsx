@@ -11,7 +11,7 @@ import Gio from "gi://Gio"
 import Cairo from "gi://cairo"
 import appService from "../../core/AppService" // Ensure import path is correct relative to this file
 import { DOCK_CONSTANTS } from "./DockPhysics"
-import { drawSquircle, createSquirclePath } from "../common/DrawingUtils"
+
 import { dragBus, mouseBus, dockSettings, changeMenuCount, menuState } from "./state"
 
 const hypr = AstalHyprland.get_default()
@@ -228,12 +228,9 @@ export function DockItem(
             ; (child as any).set_draw_func((area: any, cr: any, w: number, h: number) => {
                 // macOS HIG: The actual icon shape only occupies ~82% of the total canvas.
                 // V610: The global clipping and plate scale is locked at exactly 90%
-                const SAFE_RATIO = 0.90
+                // V700: No artificial SAFE_RATIO. Use full canvas area.
                 const cx = w / 2
                 const cy = h / 2
-                cr.translate(cx, cy)
-                cr.scale(SAFE_RATIO, SAFE_RATIO)
-                cr.translate(-cx, -cy)
 
                 // Native aspect ratio
                 const iconW = pixbuf.get_width()
@@ -257,51 +254,12 @@ export function DockItem(
 
                 const isTrash = appId === "trash" || appId === "special:trash"
 
-                // V135: The clip mask is mathematically pure at the FULL 100% boundary limit!
-                // Any native icons that DO bleed (or Antigravity) will instantly be clipped perfectly.
-                // We use Apple's continuous formula. Testing n=4.0 for a rounder, less inflated shape.
-                // V610: Do not clip the Trash icon, it should be free-floating
-                if (!isTrash) {
-                    createSquirclePath(cr, 0, 0, w, h, w * 0.5, 4.0, false, 0)
-                    cr.clip()
-                }
-
                 cr.translate(x, y)
                 cr.scale(scale, scale)
 
                 Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
                 cr.paint()
                 cr.restore()
-
-                // V136: Universal Apple-Style Glassy Highlight (Refined: Inset 1px)
-                // V610: Trash icon does not get a glass highlight
-                if (!isTrash) {
-                    cr.save()
-                    // Inset by 0.5px so 1.0px stroke stays perfectly within bounds
-                    // V144: Sync radius with 0.5 and n=4.0 to perfectly match the clip mask and plate
-                    createSquirclePath(cr, 0.5, 0.5, w - 1, h - 1, (w * 0.5) - 0.5, 4.0, false, 0)
-
-                    // V610: Diagonal lighting (Top-Left to Bottom-Right) matching macOS HIG
-                    // The gradient vector is slightly compressed inward to stretch the light
-                    // iso-bands across a wider crescent of the top and left edges.
-                    const highlightPat = new Cairo.LinearGradient(w * 0.1, (h * 0.1), w * 0.9, (h * 0.9))
-
-                    // TOP-LEFT: Strong bright sweep that extends further along the edges
-                    highlightPat.addColorStopRGBA(0.0, 1, 1, 1, 0.65)
-                    highlightPat.addColorStopRGBA(0.40, 1, 1, 1, 0.0)
-
-                    // MID: Completely transparent so sides aren't illuminated
-                    highlightPat.addColorStopRGBA(0.5, 1, 1, 1, 0.0)
-
-                    // BOTTOM-RIGHT: Subtle rim light reflection
-                    highlightPat.addColorStopRGBA(0.65, 1, 1, 1, 0.0)
-                    highlightPat.addColorStopRGBA(1.0, 1, 1, 1, 0.35)
-
-                    cr.setLineWidth(1.0)
-                    cr.setSource(highlightPat)
-                    cr.stroke()
-                    cr.restore()
-                }
 
                 // If animating, schedule next frame
                 if (state.isBouncing) {
@@ -347,96 +305,9 @@ export function DockItem(
             state.staticCenter = v
         }
 
-    const isApp = (!!res.name || !!res.path || !!res.gicon)
-    let iconToDisplay: Gtk.Widget = child
-    // V410: Lift plate variable scope for manual bg control
-    let plate: Gtk.Widget | null = null
-
-    if (isApp) {
-        // V412: THE NUCLEAR OPTION
-        // We replace Gtk.Box with Gtk.DrawingArea for the background plate.
-        // A DrawingArea has NO internal CSS nodes, NO ripple gadgets, and NO focus rings.
-        // It is just raw pixels. This explicitly kills the "Ghost Ripple/Glow".
-        const da = new Gtk.DrawingArea({
-            css_classes: ["cd-squircle-plate-drawing"],
-            halign: Gtk.Align.FILL,
-            valign: Gtk.Align.FILL,
-            hexpand: false,
-            vexpand: false,
-            width_request: DOCK_CONSTANTS.ICON_SIZE,
-            height_request: DOCK_CONSTANTS.ICON_SIZE,
-            can_focus: false,
-            focusable: false
-        })
-
-        const PLATE_OPACITY = 0.9 // V414: Tweakable opacity (lower = more blur visible)
-
-        da.set_draw_func((_, cr, w, h) => {
-            const isTrash = appId === "trash" || appId === "special:trash"
-            if (isTrash) return
-
-            // We draw the glassy plate for all icons now to ensure uniformity
-
-            // macOS HIG: Matched scaling for the Plate to follow the 90% icon rule
-            // The plate represents the physical bounds, keeping it completely static.
-            const SAFE_RATIO = 0.90
-            const cx = w / 2
-            const cy = h / 2
-
-            // V610: Individual Icon Drop Shadow (macOS Tahoe)
-            // Simulating a blurred drop shadow using stacked low-opacity passes
-            // drawn into the 5% margin outside the 90% scaled icon.
-            cr.save()
-            cr.translate(cx, cy)
-            for (let i = 1; i <= 4; i++) {
-                cr.save()
-                // Shift down slightly and expand outward
-                cr.translate(0, i * 1.0)
-                const shadowScale = SAFE_RATIO + (i * 0.015)
-                cr.scale(shadowScale, shadowScale)
-                cr.translate(-cx, -cy)
-                createSquirclePath(cr, 0, 0, w, h, w * 0.5, 4.0, false, 0)
-                cr.setSourceRGBA(0, 0, 0, 0.04) // exceptionally soft black
-                cr.fill()
-                cr.restore()
-            }
-            cr.restore()
-
-            cr.translate(cx, cy)
-            cr.scale(SAFE_RATIO, SAFE_RATIO)
-
-            // V610: Anti-aliasing bleed fix! 
-            // Shrink the white background plate by 1% so it perfectly hides BEHIND 
-            // the clipped icon, preventing its white antialiased edges from causing a halo.
-            cr.scale(0.99, 0.99)
-
-            cr.translate(-cx, -cy)
-
-            // V413: Use shared drawSquircle for consistent geometry
-            // V610: Disable enableGloss (false) here so the plate doesn't draw its own generic border, 
-            // since we now draw our own pixel-perfect custom diagonal highlight over the icon!
-            drawSquircle(cr, w, h, undefined, PLATE_OPACITY, false, undefined, Math.min(w, h) * 0.5, false, undefined, 4.0)
-        })
-
-        plate = da
-
-        // Container Architecture: Overlay [Background=DA, Foreground=Icon]
-        const plateOverlay = new Gtk.Overlay({
-            css_classes: ["cd-plate-container"],
-            halign: Gtk.Align.CENTER,
-            valign: Gtk.Align.CENTER,
-        })
-        plateOverlay.set_child(da)
-
-        // Center the icon strictly
-        child.set_valign(Gtk.Align.CENTER)
-        child.set_halign(Gtk.Align.CENTER)
-        child.set_size_request(DOCK_CONSTANTS.ICON_SIZE, DOCK_CONSTANTS.ICON_SIZE)
-
-        plateOverlay.add_overlay(child)
-
-        iconToDisplay = plateOverlay
-    }
+    // V700: Reverted to vanilla icons. No background plate or squircle clipping.
+    const iconToDisplay = child
+    child.set_size_request(DOCK_CONSTANTS.ICON_SIZE, DOCK_CONSTANTS.ICON_SIZE)
 
     // (isAntigravity moved up)
 
@@ -744,7 +615,6 @@ export function DockItem(
                             state.isBouncing = false
                             iconToDisplay.margin_bottom = originalMargin
                             child.queue_draw()
-                            if (plate) plate.queue_draw()
                             sync() // Re-evaluate indicator now that bounce is done
                             return GLib.SOURCE_REMOVE
                         }
@@ -760,7 +630,6 @@ export function DockItem(
 
                         // Force both layers to draw (although primarily to refresh shadow/bounds)
                         child.queue_draw()
-                        if (plate) plate.queue_draw()
 
                         return GLib.SOURCE_CONTINUE
                     }

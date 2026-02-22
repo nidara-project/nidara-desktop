@@ -38,7 +38,7 @@ export interface DockSettings {
 }
 
 const DOCK_DEFAULTS: DockSettings = {
-    iconSize: 48,
+    iconSize: 64,
     magnification: true,
     maxIconSize: 108,
     showIndicators: true,

@@ -119,15 +119,6 @@ export const drawSquircle = (
 
     cr.setAntialias(3)
 
-    // 0. STRUCTURAL SHADOW (macOS Tahoe: depth separation from wallpaper)
-    if (enableGloss) {
-        cr.save()
-        createSquirclePath(cr, x, y + 4, drawW, drawH, r, n, perfect, 0)
-        cr.setSourceRGBA(0, 0, 0, 0.08)
-        cr.fill()
-        cr.restore()
-    }
-
     // 1. CLEAN GLASS BODY
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
     if (enableGloss) {
