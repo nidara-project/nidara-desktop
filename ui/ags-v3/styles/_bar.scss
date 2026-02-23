@@ -148,7 +148,8 @@ window.crystal-bar {
 
 /* .bar-app-menu removed - handled by SquircleContainer */
 
-.bar-app-sep {
+.bar-app-sep,
+.bar-time-sep {
     background: rgba(255, 255, 255, 0.1);
     min-width: 1px;
     margin: 0 4px;

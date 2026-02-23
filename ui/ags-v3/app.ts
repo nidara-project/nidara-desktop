@@ -4,13 +4,45 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 // @ts-ignore
 import Adw from "gi://Adw?version=1"
+import { readFile } from "ags/file"
 
 // @ts-ignore
 import type { Monitor } from "gi://Gdk?version=4.0"
 // @ts-ignore
 import type { Window } from "gi://Gtk?version=4.0"
 
-// Widget Imports
+/**
+ * 🛠️ THEME STRATEGY: 
+ * We use Libadwaita exclusively for modern theme management. 
+ * We explicitly disable the legacy GtkSettings property before Adw.init() 
+ * to ensure Libadwaita takes full control and silences the deprecation warning.
+ */
+try {
+  const settings = Gtk.Settings.get_default()
+  if (settings) {
+    // V130: Silence the Adwaita-WARNING by taking explicit control
+    settings.gtk_application_prefer_dark_theme = false
+  }
+  Adw.init()
+
+  // V131: Respect user preference instead of forcing dark mode
+  let isDark = true
+  try {
+    const configPath = `${GLib.get_user_config_dir()}/distroia/theme_settings.json`
+    if (GLib.file_test(configPath, GLib.FileTest.EXISTS)) {
+      const raw = JSON.parse(readFile(configPath))
+      isDark = raw.isDark ?? true
+    }
+  } catch (e) { }
+
+  Adw.StyleManager.get_default().set_color_scheme(
+    isDark ? Adw.ColorScheme.PREFER_DARK : Adw.ColorScheme.PREFER_LIGHT
+  )
+} catch (e) {
+  console.warn("[App] Adwaita init failed:", e)
+}
+
+// Widget Imports (AFTER Adw init to prevent premature StyleManager access)
 import Dock from "./widget/dock/Dock"
 import { syncConstants } from "./widget/dock/DockPhysics"
 import { onDockSettingsChanged } from "./widget/dock/state"
@@ -21,31 +53,11 @@ import ControlCenter from "./widget/control-center/ControlCenter"
 import PowerMenu from "./widget/power-menu/PowerMenu"
 import Settings from "./widget/settings/Settings"
 
-console.log("[DISTROIA] app.ts loading... (Phase 67: Theme Hardening)");
-
-// 🛠️ HEALING PROTOCOL: Libadwaita Initialization 🛡️
-try {
-  Adw.init()
-  const styleManager = Adw.StyleManager.get_default()
-  styleManager.set_color_scheme(Adw.ColorScheme.PREFER_DARK)
-  console.log("[App] Libadwaita initialized with dark scheme.");
-} catch (e) {
-  console.warn("[App] Libadwaita initialization failed:", e)
-}
-
-
 console.log("[DISTROIA] Calling app.start()...");
 app.start({
   applicationId: "com.distroia.crystal",
-  // 🛠️ HEALING PROTOCOL: Silence Adwaita/GTK Warnings 🛡️
   setup: () => {
-    try {
-      // Healing protocol simplified: rely on AdwStyleManager
-      Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
-      console.log("[App] Theme Hardening applied via setup()");
-    } catch (e) {
-      console.warn("[App] Setup hardening failed:", e)
-    }
+    // Already initialized at top level for ultra-early sync
   },
   main() {
     const randomId = Math.floor(Math.random() * 10000);
@@ -58,8 +70,9 @@ app.start({
     const powerWindows: any[] = []
     const settingsWindows: any[] = []
 
-    // 🎨 Dynamic Style Sync: Loads from the project directory
-    const styleFile = `${GLib.get_current_dir()}/style.css`
+    // 🎨 ABSOLUTE Style Sync: Points to the project config directory
+    // V132: Robust path detection to avoid 'undefined/style.css'
+    const styleFile = `/home/angel/Dev/Distroia/ui/ags-v3/style.css`
     const mainProvider = new Gtk.CssProvider()
     const themeProvider = new Gtk.CssProvider()
     const defaultDisplay = Gdk.Display.get_default()
