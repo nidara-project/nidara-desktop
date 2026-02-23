@@ -760,7 +760,6 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     // The "NotificationPopups" dismisses them visually, but doesn't call dismiss() on the object unless clicked.
     // BUT the daemon (AGS) might expire them based on "expire_timeout".
 
-    // Let's create a robust history array
     const notifHistory: StoredNotification[] = []
 
     const updateNotifs = () => {

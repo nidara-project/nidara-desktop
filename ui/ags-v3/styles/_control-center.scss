@@ -38,7 +38,6 @@ window.notification-center-win {
 
 /* NUCLEAR TRANSPARENCY 💎 */
 window#crystal-control-center,
-window[name="crystal-control-center"],
 window.control-center-win {
     background-color: transparent;
     background-image: none;
@@ -96,8 +95,6 @@ window.control-center-win>box>widget {
 
     /* Restored Structure 🏗️ */
     min-width: 420px;
-    max-width: 420px;
-    overflow: hidden;
 }
 
 /* --- Sliders Section --- */
@@ -105,7 +102,7 @@ window.control-center-win>box>widget {
 .cc-sliders-column,
 .cc-slider-structure,
 .cc-slider-overlay {
-    overflow: visible;
+    /* overflow: visible; - UNSUPPORTED in standard GTK4 CSS */
 }
 
 /* Hide ALL scale sub-nodes BROADLY (Nuclear Fix) 🛡️ */
@@ -517,8 +514,6 @@ scale.cc-slider-scale-input {
     border-radius: 10px;
     background: transparent;
     transition: all 0.2s ease;
-    -gtk-icon-effect: none;
-    -gtk-icon-shadow: none;
 }
 
 /* Legacy button overrides removed */

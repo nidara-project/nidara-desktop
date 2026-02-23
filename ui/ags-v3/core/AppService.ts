@@ -67,7 +67,7 @@ class AppService {
         theme.connect("changed", () => {
             const name = theme.get_theme_name()
             // Debounce theme changes to prevent GListStore conflicts during start-up
-            GLib.timeout_add(GLib.PRIORITY_LOW, 500, () => {
+            GLib.timeout_add(GLib.PRIORITY_LOW, 1000, () => {
                 console.log(`[AppService] System theme changed to ${name}, refreshing registry...`)
                 this.reload()
                 return GLib.SOURCE_REMOVE

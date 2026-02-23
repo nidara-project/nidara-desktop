@@ -23,26 +23,14 @@ import Settings from "./widget/settings/Settings"
 
 console.log("[DISTROIA] app.ts loading... (Phase 67: Theme Hardening)");
 
-// 🛠️ HEALING PROTOCOL: Silence Adwaita/GTK Warnings 🛡️
-// We run this at the top level to intercept initialization warnings.
+// 🛠️ HEALING PROTOCOL: Libadwaita Initialization 🛡️
 try {
-  // 1. Force explicit Adwaita theme name to avoid broken GNOME resource lookups
-  GLib.setenv("GTK_THEME", "Adwaita:dark", true);
-  const gtkSettings = Gtk.Settings.get_default()
-  if (gtkSettings) {
-    gtkSettings.gtk_theme_name = "Adwaita"
-    // 2. Disable legacy prefer-dark-theme to satisfy Libadwaita's AdwStyleManager
-    gtkSettings.gtk_application_prefer_dark_theme = false
-  }
-
-  // 3. Initialize Adwaita BEFORE anything else
   Adw.init()
   const styleManager = Adw.StyleManager.get_default()
-  // 4. Force Pure Dark Mode for the Liquid Glass aesthetic
   styleManager.set_color_scheme(Adw.ColorScheme.PREFER_DARK)
-  console.log("[App] Libadwaita Hardened at Top-Level.");
+  console.log("[App] Libadwaita initialized with dark scheme.");
 } catch (e) {
-  console.warn("[App] Top-level initialization failed:", e)
+  console.warn("[App] Libadwaita initialization failed:", e)
 }
 
 
@@ -52,19 +40,8 @@ app.start({
   // 🛠️ HEALING PROTOCOL: Silence Adwaita/GTK Warnings 🛡️
   setup: () => {
     try {
-      // 1. Force explicit Adwaita theme name to avoid broken GNOME resource lookups
-      const gtkSettings = Gtk.Settings.get_default()
-      if (gtkSettings) {
-        gtkSettings.gtk_theme_name = "Adwaita"
-        // 2. Disable legacy prefer-dark-theme to satisfy Libadwaita's AdwStyleManager
-        gtkSettings.gtk_application_prefer_dark_theme = false
-      }
-
-      // 3. Initialize Adwaita
-      Adw.init()
-      const styleManager = Adw.StyleManager.get_default()
-      // 4. Force Pure Dark Mode
-      styleManager.set_color_scheme(Adw.ColorScheme.PREFER_DARK)
+      // Healing protocol simplified: rely on AdwStyleManager
+      Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
       console.log("[App] Theme Hardening applied via setup()");
     } catch (e) {
       console.warn("[App] Setup hardening failed:", e)
@@ -81,7 +58,7 @@ app.start({
     const powerWindows: any[] = []
     const settingsWindows: any[] = []
 
-    // 🎨 Dynamic Style Sync: Loads from the current working directory
+    // 🎨 Dynamic Style Sync: Loads from the project directory
     const styleFile = `${GLib.get_current_dir()}/style.css`
     const mainProvider = new Gtk.CssProvider()
     const themeProvider = new Gtk.CssProvider()
@@ -115,7 +92,7 @@ app.start({
 
       if (defaultDisplay) {
         Gtk.StyleContext.add_provider_for_display(defaultDisplay, mainProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
-        Gtk.StyleContext.add_provider_for_display(defaultDisplay, themeProvider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+        Gtk.StyleContext.add_provider_for_display(defaultDisplay, themeProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
         syncTheme()
 
         // Listen for changes

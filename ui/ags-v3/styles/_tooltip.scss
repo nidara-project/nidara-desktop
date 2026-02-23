@@ -1,0 +1,36 @@
+@use "tokens" as *;
+
+/* 
+   ANCHORED THEMED TOOLTIPS 🏷️
+   Positions tooltips fixed above icons while matching GTK theme
+*/
+
+popover.cd-tooltip {
+    padding: 0;
+
+    contents {
+        background-color: $theme_bg;
+        color: $theme_fg;
+        border: 1px solid $theme_border;
+        border-radius: $crystal_radius_sm;
+        padding: 6px 12px;
+        box-shadow: $crystal_shadow;
+
+        // Liquid Glass integration (optional overlay)
+        background-image: linear-gradient(to bottom,
+                rgba(255, 255, 255, 0.05),
+                transparent);
+    }
+
+    label {
+        font-weight: 600;
+        font-size: 0.9rem;
+        color: inherit;
+    }
+
+    // Arrow styling to match the background
+    arrow {
+        background-color: $theme_bg;
+        border: 1px solid $theme_border;
+    }
+}

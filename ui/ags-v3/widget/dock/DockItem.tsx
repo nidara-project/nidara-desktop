@@ -281,6 +281,7 @@ export function DockItem(
     // Common props
     child.set_halign(Gtk.Align.CENTER)
     child.set_valign(Gtk.Align.CENTER)
+    child.set_has_tooltip(false)
     // Removed override: child.set_size_request(..., ...) - Size is handled by DrawingArea setup or Plate logic
 
     const state = {
@@ -368,8 +369,8 @@ export function DockItem(
     itemBox.append(overlay)
 
     // TOOLTIP
-    // V700: Use standard GTK theme classes instead of custom 'cd-tooltip'
-    const tooltip = new Gtk.Popover({ css_classes: ["tooltip"], position: Gtk.PositionType.TOP, autohide: false, has_arrow: true })
+    // Re-implemented Popover for anchored positioning with GTK theme styling
+    const tooltip = new Gtk.Popover({ css_classes: ["cd-tooltip"], position: Gtk.PositionType.TOP, autohide: false, has_arrow: true })
     const label = new Gtk.Label({ css_classes: ["label"] })
     const content = new Gtk.Box()
     content.append(label)
@@ -399,7 +400,6 @@ export function DockItem(
         if (tooltipTimeout) GLib.source_remove(tooltipTimeout)
     })
     motion.connect("motion", (controller, x, y) => {
-        // Removed: itemBox.set_cursor(Gdk.Cursor.new_from_name("pointer", null))
         if (popover && popover.visible) return // Don't show tooltip if menu is open
 
         if (!tooltip.visible && !tooltipTimeout) {
@@ -409,8 +409,6 @@ export function DockItem(
         }
     })
     motion.connect("leave", () => {
-        // V411: Reverted manual BG toggle (user requires always visible)
-        // if (plate) plate.remove_css_class("show-bg")
         if (tooltipTimeout) { GLib.source_remove(tooltipTimeout); tooltipTimeout = null }
         tooltip.popdown()
     })
