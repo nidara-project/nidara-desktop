@@ -31,7 +31,7 @@ const BAD_ICONS = [
 
 class AppService {
     private cache = new Map<string, AppData>()
-    private gAppCache = new Map<string, Gio.DesktopAppInfo>()
+    private gAppCache = new Map<string, any>()
     private nameMap = new Map<string, string>()
     private wmMap = new Map<string, string>() // Map wmClass -> Desktop ID
     private listeners = new Set<() => void>()
@@ -223,7 +223,7 @@ class AppService {
             }
 
             this.cache.set(id.toLowerCase(), data)
-            this.gAppCache.set(id.toLowerCase(), app as Gio.DesktopAppInfo)
+            this.gAppCache.set(id.toLowerCase(), app as any)
 
             if (data.wmClass) {
                 this.nameMap.set(data.wmClass, canonical!)
@@ -285,9 +285,9 @@ class AppService {
      * V94.10: UNIVERSAL RESOLVER 🚀
      * Finds the real DesktopAppInfo using any identifier (ID, WM_CLASS, or Variant)
      */
-    getAppInfo(query: string): Gio.DesktopAppInfo | null {
-        if (!query) return null
-        const q = query.toLowerCase().replace(".desktop", "")
+    getAppInfo(lid: string): any | null {
+        if (!lid) return null
+        const q = lid.toLowerCase().replace(".desktop", "")
 
         // 1. Exact ID match (case-insensitive)
         let info = this.gAppCache.get(q)

@@ -65,3 +65,13 @@ hyprwayland-scanner/
 hyprwire/
 local/
 temp_deps/
+
+# Debug & Temp files
+debug_*.js
+*_debug.txt
+*_json.txt
+settings_addr.txt
+
+# Generated CSS
+ui/ags-v3/style.css
+ui/ags-v3/style.css.map
