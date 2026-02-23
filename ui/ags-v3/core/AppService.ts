@@ -35,6 +35,7 @@ class AppService {
     private nameMap = new Map<string, string>()
     private wmMap = new Map<string, string>() // Map wmClass -> Desktop ID
     private listeners = new Set<() => void>()
+    private isReloading = false // V138: Lock to avoid concurrent reloads during boot 🛡️
 
     constructor() {
         // Global Theme Discovery
@@ -174,10 +175,14 @@ class AppService {
     }
 
     reload() {
+        if (this.isReloading) return // V138: Prevention of concurrent GListStore churn
+        this.isReloading = true
+
         console.log("[AppService] Synchronizing Registry...")
         const start = Date.now()
         this.cache.clear()
         this.nameMap.clear()
+        this.wmMap.clear() // V138: Ensure full wipe
 
         // V133: FLUSH GTK ICON CACHE
         // Force a fresh theme context lookup to ensure we aren't using stale paths
@@ -237,6 +242,7 @@ class AppService {
 
         this.applyOverrides()
         console.log(`[AppService] Registry synced. ${this.cache.size} apps, ${this.nameMap.size} names cached in ${Date.now() - start}ms.`)
+        this.isReloading = false
         this.emit()
     }
 

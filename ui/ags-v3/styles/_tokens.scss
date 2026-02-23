@@ -6,10 +6,10 @@
 @use "sass:string";
 
 // GTK Theme Integration (Modern GTK4/Libadwaita Variables)
-$theme_bg: string.unquote("var(--window-bg-color)");
-$theme_fg: string.unquote("var(--window-fg-color)");
-$theme_hover: string.unquote("var(--view-selected-bg-color)");
-$theme_hover_fg: string.unquote("var(--view-selected-fg-color)");
+$theme_bg: string.unquote("var(--window-bg-color, #1a1b26)");
+$theme_fg: string.unquote("var(--window-fg-color, #c0caf5)");
+$theme_hover: string.unquote("var(--view-selected-bg-color, #3b82f6)");
+$theme_hover_fg: string.unquote("var(--view-selected-fg-color, #ffffff)");
 $theme_border: rgba(255, 255, 255, 0.12);
 $theme_fg_dim: rgba(255, 255, 255, 0.5);
 

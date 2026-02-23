@@ -8,11 +8,7 @@
 /* --- GTK4 Internal Node Neutralization (Surgical Fix) 🧠 --- */
 /* Fixes "ghost" backgrounds, color bleeding on hover, and unwanted shadows */
 /* V700: Surgically target only our custom shell components to avoid hitting native menus/popovers */
-window {
-    background: transparent;
-    box-shadow: none;
-    border: none;
-}
+/* V700: Removed global window reset to protect native menus. surfaces are handled below by ID/Class */
 
 .bar-capsule,
 .cd-item,
@@ -222,7 +218,7 @@ window#crystal-control-center,
 window.control-center-win,
 window#crystal-control-center decoration,
 window.control-center-win decoration,
-window#crystal-control-center>box:not(.control-center),
+window#crystal-control-center>box,
 window#crystal-control-center overlay {
     background-color: transparent;
     background-image: none;

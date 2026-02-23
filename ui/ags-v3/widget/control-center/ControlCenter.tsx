@@ -858,7 +858,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             const titleBox = new Gtk.Box({ spacing: 8 })
             titleBox.append(new Gtk.Label({
                 label: n.summary,
-                use_markup: true, // Render bold, italics etc 🎨
+                use_markup: false, // Avoid markup errors with raw text 🛡️
                 css_classes: ["nc-notif-title"],
                 halign: Gtk.Align.START,
                 xalign: 0,
@@ -870,7 +870,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             bodyBox.append(titleBox)
             bodyBox.append(new Gtk.Label({
                 label: n.body || "",
-                use_markup: true, // Finalize "Clean" look 🛡️
+                use_markup: false, // Avoid markup errors with raw text 🛡️
                 css_classes: ["nc-notif-body"],
                 halign: Gtk.Align.START,
                 xalign: 0,

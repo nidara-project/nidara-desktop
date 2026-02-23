@@ -51,6 +51,7 @@ function Notification(n: any) {
 
     const summary = new Gtk.Label({
         label: n.summary,
+        use_markup: false, // Ensure raw text doesn't break markup parsing 🛡️
         css_classes: ["notif-summary"],
         halign: Gtk.Align.START,
         wrap: true,
@@ -61,6 +62,7 @@ function Notification(n: any) {
 
     const body = new Gtk.Label({
         label: n.body,
+        use_markup: false, // Ensure raw text doesn't break markup parsing 🛡️
         css_classes: ["notif-body"],
         halign: Gtk.Align.START,
         wrap: true,
