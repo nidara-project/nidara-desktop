@@ -1,44 +1,18 @@
 @use "tokens" as *;
 
 .settings-main-box {
-    background-color: transparent;
     border-radius: $crystal_radius_lg;
-    overflow: hidden;
 }
 
 .settings-sidebar-scroll {
-    background-color: rgba(255, 255, 255, 0.05);
-    border-right: 1px solid $crystal_border;
+    border-right: 1px solid rgba(128, 128, 128, 0.1);
 }
 
 .settings-sidebar {
-    background-color: transparent;
     padding: 12px 0;
-
-    row {
-        background-color: transparent;
-        transition: all 0.2s ease;
-        margin: 2px 8px;
-        border-radius: $crystal_radius_sm;
-
-        &:hover {
-            background-color: rgba(255, 255, 255, 0.1);
-        }
-
-        &:selected {
-            background-color: $accent_blue;
-            color: white;
-
-            image {
-                color: white;
-            }
-        }
-    }
 }
 
-.settings-stack {
-    background-color: rgba(255, 255, 255, 0.02);
-}
+.settings-stack {}
 
 .settings-page {
     padding: 40px;
@@ -48,76 +22,27 @@
     font-size: 2.5rem;
     font-weight: 800;
     margin-bottom: 8px;
-    color: $theme_fg;
 }
 
 .settings-page-subtitle {
     font-size: 1rem;
-    color: $theme_fg_dim;
+    opacity: 0.6;
     margin-bottom: 24px;
 }
 
 .settings-section-title {
     font-size: 1.2rem;
     font-weight: 700;
-    color: $theme_fg;
     margin-top: 16px;
     margin-bottom: 8px;
 }
 
-.settings-list {
-    background-color: rgba(255, 255, 255, 0.03);
-    border-radius: $crystal_radius_md;
-    border: 1px solid $crystal_border;
-    overflow: hidden;
-
-    row {
-        background-color: transparent;
-        padding: 0;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-
-        &:last-child {
-            border-bottom: none;
-        }
-
-        &.active-profile {
-            background-color: rgba($accent_blue, 0.15);
-
-            .profile-check {
-                visible: true;
-                color: $accent_blue;
-            }
-        }
-    }
-}
-
-.settings-row-btn {
-    background-color: transparent;
-    border: none;
-    border-radius: 0;
-    transition: all 0.2s ease;
-    padding: 0;
-
-    &:hover {
-        background-color: rgba(255, 255, 255, 0.05);
-    }
-}
 
 .settings-icon-btn {
-    background-color: rgba(255, 255, 255, 0.08);
-    border-radius: $crystal_radius_sm;
     padding: 8px;
     border: 1px solid transparent;
     transition: all 0.2s ease;
 
-    &:hover {
-        background-color: rgba(255, 255, 255, 0.15);
-    }
-
-    &.muted {
-        color: $accent_red;
-        background-color: rgba($accent_red, 0.1);
-    }
 }
 
 .endpoint-name {
@@ -137,46 +62,39 @@
 
 .settings-placeholder {
     font-size: 1.1rem;
-    color: $theme_fg_dim;
+    opacity: 0.5;
     margin-top: 20px;
 }
 
-// Window Styling
-.settings-window {
-    background-color: rgba(20, 20, 20, 0.9);
-    border-radius: $crystal_radius_lg;
-    border: 1px solid $crystal_border_vibrant;
+// Slider (Scale) Styling
+scale {
+    &.horizontal {
+        margin: 4px 0;
 
-    // Slider (Scale) Styling
-    scale {
-        &.horizontal {
-            margin: 4px 0;
+        contents {
+            margin: 0;
+            padding: 0;
+        }
 
-            contents {
-                margin: 0;
-                padding: 0;
-            }
+        trough {
+            min-height: 8px;
+            background-color: rgba(128, 128, 128, 0.1);
+            border-radius: 4px;
+        }
 
-            trough {
-                min-height: 8px;
-                background-color: rgba(255, 255, 255, 0.1);
-                border-radius: 4px;
-            }
+        highlight {
+            background-color: $accent_blue;
+            border-radius: 4px;
+        }
 
-            highlight {
-                background-color: $accent_blue;
-                border-radius: 4px;
-            }
-
-            slider {
-                min-width: 16px;
-                min-height: 16px;
-                margin: -4px 0;
-                background-color: white;
-                border-radius: 50%;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-                border: none;
-            }
+        slider {
+            min-width: 16px;
+            min-height: 16px;
+            margin: -4px 0;
+            background-color: white;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+            border: none;
         }
     }
 }
@@ -186,30 +104,7 @@
     margin-top: 4px;
 }
 
-.settings-preset-btn {
-    min-height: 32px;
-    padding: 4px 12px;
-    background-color: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 8px;
-    font-size: 13px;
-    font-weight: 500;
-    transition: all 0.2s ease;
-
-    &:hover {
-        background-color: rgba(255, 255, 255, 0.15);
-        color: white;
-    }
-
-    &.settings-preset-active {
-        background-color: $accent_blue;
-        color: white;
-        border-color: transparent;
-    }
-}
-
-/* Appearance & Input Refinement */
+/* Appearance & Input Refinement - STYLES STRIPPED TO ALLOW NATIVE THEME INHERITANCE */
 .settings-row {
     margin: 12px 16px;
 }
@@ -217,51 +112,12 @@
 .settings-row-label {
     font-size: 1.05rem;
     font-weight: 700;
-    color: white;
 }
 
 .settings-row-subtitle {
     font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.5);
+    opacity: 0.6;
 }
 
-.settings-dropdown {
-    margin-top: 8px;
-    background-color: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    padding: 6px 12px;
-    min-height: 44px;
-    color: white;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-
-    &:hover {
-        background-color: rgba(255, 255, 255, 0.12);
-        border-color: rgba(255, 255, 255, 0.2);
-    }
-
-    &>button {
-        background: none;
-        border: none;
-        box-shadow: none;
-        color: white;
-    }
-}
-
-.settings-entry {
-    background-color: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    padding: 10px 14px;
-    color: white;
-    caret-color: $accent_blue;
-
-    &:focus {
-        border-color: $accent_blue;
-        background-color: rgba(255, 255, 255, 0.1);
-    }
-}
-
-.cc-clear-btn {
-    margin: 0 16px 16px 16px;
-}
+// Custom dropdown and entry styles removed to allow GTK theme to apply.
+// Libadwaita/GTK will now use native backgrounds and borders.

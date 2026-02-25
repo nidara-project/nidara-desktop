@@ -1,6 +1,8 @@
 import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
+import { Gdk, Gtk } from "ags/gtk4"
+// @ts-ignore
 import Adw from "gi://Adw?version=1"
 import { execAsync } from "ags/process"
 import { readFile, writeFile } from "ags/file"
@@ -38,6 +40,8 @@ class ThemeManager extends GObject.Object {
 
     constructor() {
         super()
+        // Limpiamos la variable de entorno para este proceso
+        GLib.setenv("GTK_THEME", "", true)
         this.loadSettings()
         // Ensure initial sync
         this.applyAll()
@@ -95,8 +99,9 @@ class ThemeManager extends GObject.Object {
     get cursorTheme() { return this.state.cursorTheme }
     get isDark() { return this.state.isDark }
 
-    async setThemeFamily(family: string) {
-        this.state.themeFamily = family
+    async setGtkTheme(theme: string) {
+        console.log(`[ThemeManager] Setting GTK Theme to: ${theme}`)
+        this.state.themeFamily = theme // Keep property name in state for JSON compatibility, or rename if preferred
         await this.syncGtkTheme()
         this.saveSettings()
         this.emit("changed")
@@ -106,7 +111,6 @@ class ThemeManager extends GObject.Object {
         console.log(`[ThemeManager] Setting icon theme to: ${icons}`)
         this.state.iconTheme = icons
         try {
-            // Use --type string to be explicit
             await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", icons])
             this.saveSettings()
             this.emit("changed")
@@ -125,18 +129,10 @@ class ThemeManager extends GObject.Object {
     async setDarkMode(dark: boolean) {
         this.state.isDark = dark
 
-        // 1. GSettings Color Scheme
-        const scheme = dark ? "prefer-dark" : "default"
+        // 1. GSettings Color Scheme - Solo actualizamos el valor global
+        const scheme = dark ? "prefer-dark" : "prefer-light"
+        console.log(`[ThemeManager] Global Preference: ${scheme}`)
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", scheme])
-
-        // 2. Libadwaita Integration
-        try {
-            const styleManager = Adw.StyleManager.get_default()
-            styleManager.set_color_scheme(dark ? Adw.ColorScheme.PREFER_DARK : Adw.ColorScheme.PREFER_LIGHT)
-        } catch (e) { console.warn("[ThemeManager] Adw sync failed", e) }
-
-        // 3. GTK Theme Suffix Logic
-        await this.syncGtkTheme()
 
         this.saveSettings()
         this.emit("changed")
@@ -144,18 +140,95 @@ class ThemeManager extends GObject.Object {
 
     // --- Private Logic ---
 
-    private async syncGtkTheme() {
-        // Dynamic Family Logic: We try to find the best match
-        let finalName = this.state.themeFamily
+    private themeProvider = new Gtk.CssProvider()
+    private providersLinked = false
 
-        // If it's a family name (no -Dark/-Light), append it
-        if (!finalName.includes("-Dark") && !finalName.includes("-Light") && !finalName.includes("-dark") && !finalName.includes("-light")) {
-            const suffix = this.state.isDark ? "-Dark" : "-Light"
-            finalName = `${this.state.themeFamily}${suffix}`
+    private ensureProvidersLinked() {
+        if (this.providersLinked) return
+        try {
+            const display = Gdk.Display.get_default()
+            if (display) {
+                // V165: Aumentamos la prioridad a USER para que el tema GTK mande sobre Adwaita
+                Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+                this.providersLinked = true
+                console.log("[ThemeManager] Theme CSS Provider vinculado con prioridad USER.")
+            }
+        } catch (e) { }
+    }
+
+    private registeredResource: any | null = null
+
+    /**
+     * V140: DYNAMIC RESOURCE REGISTRATION 🚀
+     */
+    private registerThemeResource(themeName: string) {
+        this.ensureProvidersLinked()
+        try {
+            if (this.registeredResource) {
+                try {
+                    // @ts-ignore
+                    this.registeredResource._unregister()
+                } catch (e) { }
+            }
+
+            const searchPaths = [
+                `/usr/share/themes/${themeName}`,
+                `${GLib.get_home_dir()}/.local/share/themes/${themeName}`,
+                `${GLib.get_home_dir()}/.themes/${themeName}`
+            ]
+
+            for (const base of searchPaths) {
+                const resPath = `${base}/gtk-4.0/gtk.gresource`
+                const cssPath = `${base}/gtk-4.0/gtk.css`
+
+                // 1. Try GResource (Critical for many themes)
+                if (GLib.file_test(resPath, GLib.FileTest.EXISTS)) {
+                    this.registeredResource = Gio.Resource.load(resPath)
+                    // @ts-ignore
+                    this.registeredResource._register()
+                    console.log(`[ThemeManager] GResource registered: ${resPath}`)
+                }
+
+                // 2. Try GTK4 CSS (Critical for Libadwaita to follow the theme) 🚀
+                if (GLib.file_test(cssPath, GLib.FileTest.EXISTS)) {
+                    this.themeProvider.load_from_path(cssPath)
+                    console.log(`[ThemeManager] CSS loaded into provider: ${cssPath}`)
+                    return // Found it
+                }
+            }
+        } catch (e) {
+            console.warn("[ThemeManager] Error registering theme assets:", e)
         }
+    }
 
-        await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", finalName])
-        console.log(`[ThemeManager] Applied GTK Theme: ${finalName}`)
+    private async syncGtkTheme() {
+        const theme = this.state.themeFamily
+        console.log(`[ThemeManager] syncGtkTheme -> Aplicando: ${theme}`)
+
+        // 1. REGISTRAR RECURSOS
+        this.registerThemeResource(theme)
+
+        // 2. Aplicar a GSettings (Para el resto del sistema)
+        await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", theme])
+
+        // 3. ACTUALIZACIÓN LOCAL 🚀
+        // Usamos el estado del toggle (this.state.isDark) para la preferencia de color, 
+        // sin que el nombre del tema influya para nada.
+        try {
+            const settings = Gtk.Settings.get_default()
+            if (settings) {
+                settings.gtk_theme_name = theme
+                // @ts-ignore
+                settings.gtk_application_prefer_dark_theme = this.state.isDark
+            }
+
+            // Libadwaita obedece al toggle, no al nombre del tema
+            Adw.StyleManager.get_default().set_color_scheme(
+                this.state.isDark ? Adw.ColorScheme.PREFER_DARK : Adw.ColorScheme.PREFER_LIGHT
+            )
+        } catch (e) {
+            console.warn("[ThemeManager] Error en la aplicación local:", e)
+        }
     }
 
     private async applyAll() {
@@ -163,14 +236,8 @@ class ThemeManager extends GObject.Object {
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", this.state.iconTheme])
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", this.state.cursorTheme])
 
-        const scheme = this.state.isDark ? "prefer-dark" : "default"
+        const scheme = this.state.isDark ? "prefer-dark" : "prefer-light"
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", scheme])
-
-        try {
-            Adw.StyleManager.get_default().set_color_scheme(
-                this.state.isDark ? Adw.ColorScheme.PREFER_DARK : Adw.ColorScheme.PREFER_LIGHT
-            )
-        } catch (e) { }
     }
 
     private saveSettings() {
@@ -218,8 +285,7 @@ class ThemeManager extends GObject.Object {
             this.state.cursorTheme = cursor
             this.state.isDark = scheme === "prefer-dark"
 
-            // Heuristic for theme family: remove -Dark/-Light
-            this.state.themeFamily = gtk.replace(/-Dark$|-Light$|-dark$|-light$/, "")
+            this.state.themeFamily = gtk
 
             console.log("[ThemeManager] Registry sync done:", this.state)
         } catch (e) {

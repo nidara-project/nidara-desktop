@@ -18,38 +18,12 @@ import type { Window } from "gi://Gtk?version=4.0"
  * to ensure Libadwaita takes full control and silences the deprecation warning.
  */
 try {
-  // V131: NEW STRATEGY: Read config FIRST before any GTK initialization
-  let isDark = true
-  let themeFamily = "WhiteSur"
-  try {
-    const configPath = `${GLib.get_user_config_dir()}/distroia/theme_settings.json`
-    if (GLib.file_test(configPath, GLib.FileTest.EXISTS)) {
-      const raw = JSON.parse(readFile(configPath))
-      isDark = raw.isDark ?? true
-      themeFamily = raw.themeFamily ?? "WhiteSur"
-    }
-  } catch (e) { }
+  // Limpiamos la variable de entorno que bloquea los temas en GTK4
+  GLib.setenv("GTK_THEME", "", true)
 
-  // V135: MANUALLY LOAD THEME RESOURCES 🚀
-  // GTK4/Libadwaita apps often fail to load resources from /usr/share/themes automatically.
-  // We explicitly load the .gresource file to enable the internal gtk.css @imports.
-  try {
-    const themeResPath = `/usr/share/themes/${themeFamily}/gtk-4.0/gtk.gresource`
-    if (GLib.file_test(themeResPath, GLib.FileTest.EXISTS)) {
-      const resource = Gio.Resource.load(themeResPath)
-      resource._register()
-      console.log(`[App] Registered Theme Resource: ${themeResPath}`)
-    }
-  } catch (err) {
-    console.warn("[App] Failed to load theme resource:", err)
-  }
-
-  // V130: Initialize Adwaita
   Adw.init()
-
-  Adw.StyleManager.get_default().set_color_scheme(
-    isDark ? Adw.ColorScheme.PREFER_DARK : Adw.ColorScheme.PREFER_LIGHT
-  )
+  // No forzamos esquema de color. Dejamos que Libadwaita intente seguir el tema.
+  Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.DEFAULT)
 } catch (e) {
   console.warn("[App] Initialization failed:", e)
 }

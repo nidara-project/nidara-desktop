@@ -9,14 +9,11 @@ popover.cd-tooltip {
     padding: 0;
 
     contents {
-        background-color: $crystal_bg; // Safety fallback
-        background-color: $theme_bg;
-        color: white; // Safety fallback
-        color: $theme_fg;
-        border: 1px solid $crystal_border;
+        background-color: transparent;
+        color: inherit;
+        border: 1px solid rgba(128, 128, 128, 0.2);
         border-radius: $crystal_radius_sm;
         padding: 6px 12px;
-        box-shadow: $crystal_shadow;
 
         // Liquid Glass integration (optional overlay)
         background-image: linear-gradient(to bottom,
@@ -32,8 +29,7 @@ popover.cd-tooltip {
 
     // Arrow styling to match the background
     arrow {
-        background-color: $crystal_bg;
-        background-color: $theme_bg;
-        border: 1px solid $crystal_border;
+        background-color: transparent;
+        border: 1px solid rgba(128, 128, 128, 0.2);
     }
 }

@@ -1,32 +1,25 @@
-/* 
-   CRYSTAL UI - DESIGN TOKENS
-   Single source of truth for all design values
-*/
-
+/* TOKENS STRIPPED TO BARE ESSENTIALS - NO THEME OVERRIDES */
 @use "sass:string";
 
-// GTK Theme Integration (Modern GTK4/Libadwaita Variables)
-$theme_bg: string.unquote("var(--window-bg-color, #1a1b26)");
-$theme_fg: string.unquote("var(--window-fg-color, #c0caf5)");
-$theme_hover: string.unquote("var(--view-selected-bg-color, #3b82f6)");
-$theme_hover_fg: string.unquote("var(--view-selected-fg-color, #ffffff)");
-$theme_border: rgba(255, 255, 255, 0.12);
-$theme_fg_dim: rgba(255, 255, 255, 0.5);
-
-// Crystal Design System
-$crystal_bg: rgba(255, 255, 255, 0.12);
-$crystal_bg_light: rgba(255, 255, 255, 0.06);
-$crystal_blur: 32px;
-$crystal_border: rgba(255, 255, 255, 0.12);
-$crystal_border_vibrant: rgba(255, 255, 255, 0.2);
-$crystal_radius_lg: 24px;
-$crystal_radius_md: 16px;
-$crystal_radius_sm: 12px;
-$crystal_shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-
-// Accent Colors
-$accent_blue: #3b82f6; // Stitch Primary 🔵
+// Basic Crystal variables to avoid build errors
+$accent_blue: #3b82f6;
 $accent_green: #34c759;
 $accent_red: #ff3b30;
 $accent_purple: #af52de;
 $accent_indigo: #5856d6;
+
+$crystal_radius_lg: 24px;
+$crystal_radius_md: 16px;
+$crystal_radius_sm: 12px;
+$crystal_border: rgba(255, 255, 255, 0.1);
+$crystal_border_vibrant: rgba(255, 255, 255, 0.2);
+$crystal_bg: rgba(255, 255, 255, 0.1);
+$crystal_shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+
+// Standard GTK variables as fallback, but NOT forced
+$theme_bg: transparent;
+$theme_fg: inherit;
+$theme_hover: #3b82f6;
+$theme_hover_fg: #ffffff;
+$theme_border: rgba(128, 128, 128, 0.1);
+$theme_fg_dim: inherit;

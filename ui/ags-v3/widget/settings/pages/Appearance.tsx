@@ -34,18 +34,6 @@ export default function AppearancePage() {
     }))
     page.append(headerBox)
 
-    // --- Action Button ---
-    const applyBtn = new Gtk.Button({
-        label: "Sincronizar Todo",
-        css_classes: ["suggested-action"], // Libadwaita/Standard GTK pattern for primary actions
-        halign: Gtk.Align.END,
-        margin_bottom: 12
-    })
-    applyBtn.connect("clicked", () => {
-        Theme.setDarkMode(Theme.isDark)
-    })
-    page.append(applyBtn)
-
     // ── Helper: Boxed List Header ──
     const listGroup = (title: string) => {
         const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
@@ -100,22 +88,22 @@ export default function AppearancePage() {
             }))
         }
 
-        // Gtk4 DropDown
-        const stringList = Gtk.StringList.new(options)
-        const dropdown = new Gtk.DropDown({
-            model: stringList,
+        // Usamos ComboBoxText para que use el estilo real de "desplegable" del tema GTK
+        const dropdown = new Gtk.ComboBoxText({
             valign: Gtk.Align.CENTER,
-            css_classes: ["settings-dropdown"]
+            hexpand: false
         })
+
+        options.forEach(opt => dropdown.append_text(opt))
 
         // Initial Selection
         const idx = options.indexOf(initial)
-        if (idx !== -1) dropdown.selected = idx
+        if (idx !== -1) dropdown.active = idx
 
-        dropdown.connect("notify::selected", () => {
-            const selected = options[dropdown.selected]
+        dropdown.connect("changed", () => {
+            const selected = dropdown.get_active_text()
             if (selected) {
-                console.log(`[Appearance] DropDown selected: ${selected}`)
+                console.log(`[Appearance] ComboBoxText selected: ${selected}`)
                 onChange(selected)
             }
         })
@@ -175,29 +163,29 @@ export default function AppearancePage() {
     // --- Sections ---
 
     // 1. General Style
-    const styleGroup = listGroup("Estilo General")
+    const styleGroup = listGroup("Estilo general")
     styleGroup.listBox.append(toggleRow(
-        "Modo Oscuro",
-        "Alterna entre temas claros y oscuros globalmente",
+        "Modo oscuro",
+        "Preferencia global para aplicaciones modernas",
         Theme.isDark,
         (active) => Theme.setDarkMode(active)
     ))
     page.append(styleGroup.box)
 
     // 2. Theme Family
-    const themesGroup = listGroup("Temas y Recursos")
+    const themesGroup = listGroup("Temas y recursos")
     const gtkThemes = Theme.getAvailableGtkThemes()
     themesGroup.listBox.append(dropdownRow(
-        "Familia de Tema GTK",
-        "Selecciona el tema base para el sistema",
+        "Tema GTK",
+        "Selecciona el tema visual para el sistema",
         Theme.themeFamily,
         gtkThemes,
-        (v) => Theme.setThemeFamily(v)
+        (v) => Theme.setGtkTheme(v)
     ))
 
     const iconThemes = Theme.getAvailableIconThemes()
     themesGroup.listBox.append(dropdownRow(
-        "Tema de Iconos",
+        "Tema de iconos",
         "Selecciona el paquete de iconos del sistema",
         Theme.iconTheme,
         iconThemes,
@@ -206,7 +194,7 @@ export default function AppearancePage() {
 
     const cursorThemes = Theme.getAvailableCursorThemes()
     themesGroup.listBox.append(dropdownRow(
-        "Tema del Cursor",
+        "Tema del cursor",
         "Selecciona el estilo del puntero",
         Theme.cursorTheme,
         cursorThemes,
