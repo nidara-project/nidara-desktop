@@ -49,6 +49,8 @@ sudo pacman -Sy --needed --noconfirm \
     hyprland \
     kitty \
     thunar \
+    nautilus \
+    xdg-desktop-portal-gtk \
     ttf-jetbrains-mono-nerd \
     noto-fonts-emoji \
     xfce4-settings \
