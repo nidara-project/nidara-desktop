@@ -57,11 +57,13 @@ export default function PowerPage() {
         }).catch(err => console.error("[PowerPage] Failed to get profile:", err))
     }
 
+    const checkIcons: Map<string, Gtk.Image> = new Map()
+
     profiles.forEach(p => {
         const rowContent = new Gtk.Box({
-            spacing: 16,
-            margin_start: 12,
-            margin_end: 12,
+            spacing: 12,
+            margin_start: 16,
+            margin_end: 16,
             margin_top: 10,
             margin_bottom: 10,
         })
@@ -71,10 +73,12 @@ export default function PowerPage() {
 
         const checkIcon = new Gtk.Image({
             icon_name: "object-select-symbolic",
-            css_classes: ["profile-check"],
-            pixel_size: 16
+            css_classes: ["profile-check", "suggested-action"],
+            pixel_size: 16,
+            visible: false // Hidden by default
         })
         rowContent.append(checkIcon)
+        checkIcons.set(p.id, checkIcon)
 
         const row = new Gtk.ListBoxRow({ child: rowContent })
         row.set_name(p.id)
@@ -82,9 +86,16 @@ export default function PowerPage() {
     })
 
     profileList.connect("row-selected", (_, row) => {
+        // Hide all checks first
+        checkIcons.forEach(icon => icon.visible = false)
+
         if (row) {
             const profileId = row.get_name()
             if (profileId) {
+                // Show only the selected one
+                const icon = checkIcons.get(profileId)
+                if (icon) icon.visible = true
+
                 execAsync(["powerprofilesctl", "set", profileId])
                     .catch(err => console.error("[PowerPage] Failed to set profile:", err))
             }

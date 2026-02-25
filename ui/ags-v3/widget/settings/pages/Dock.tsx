@@ -201,9 +201,9 @@ export default function DockPage() {
         box.append(text)
 
         const btnBox = new Gtk.Box({
-            spacing: 8,
+            spacing: 0,
             homogeneous: true,
-            css_classes: ["settings-preset-group"],
+            css_classes: ["settings-preset-group", "linked"],
         })
 
         const buttons: Gtk.Button[] = []
@@ -211,12 +211,12 @@ export default function DockPage() {
             const btn = new Gtk.Button({
                 label: `${val}${unit}`,
                 css_classes: val === initial
-                    ? ["settings-preset-btn", "active"]
+                    ? ["settings-preset-btn", "suggested-action"]
                     : ["settings-preset-btn"],
             })
             btn.connect("clicked", () => {
-                buttons.forEach(b => b.remove_css_class("active"))
-                btn.add_css_class("active")
+                buttons.forEach(b => b.remove_css_class("suggested-action"))
+                btn.add_css_class("suggested-action")
                 onChange(val)
             })
             buttons.push(btn)

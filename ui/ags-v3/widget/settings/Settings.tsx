@@ -16,7 +16,7 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     const header = new Gtk.HeaderBar({
         title_widget: new Gtk.Label({
-            label: "Configuración del Sistema",
+            label: "Configuración del sistema",
             css_classes: ["title"]
         }),
         show_title_buttons: true,
