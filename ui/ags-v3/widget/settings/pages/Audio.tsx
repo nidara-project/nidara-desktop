@@ -13,39 +13,36 @@ export default function AudioPage() {
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 24,
         css_classes: ["settings-page"],
-        margin_start: 40,
-        margin_end: 40,
-        margin_top: 40
+        margin_start: 30,
+        margin_end: 30,
+        margin_top: 30,
+        margin_bottom: 30,
     })
 
-    const title = new Gtk.Label({
+    // Header Section
+    const headerBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 4,
+        margin_bottom: 12
+    })
+    headerBox.append(new Gtk.Label({
         label: "Sonido",
         css_classes: ["settings-page-title"],
         halign: Gtk.Align.START
-    })
-
-    page.append(title)
-    page.append(new Gtk.Separator())
-
-    // Speakers Section
-    const speakerBox = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12
-    })
-
-    speakerBox.append(new Gtk.Label({
-        label: "Dispositivos de Entrada/Salida",
-        css_classes: ["settings-section-title"],
+    }))
+    headerBox.append(new Gtk.Label({
+        label: "Administra tus dispositivos de entrada y salida",
+        css_classes: ["settings-page-subtitle"],
         halign: Gtk.Align.START
     }))
+    page.append(headerBox)
 
     const speakerList = new Gtk.ListBox({
-        css_classes: ["settings-list"],
+        css_classes: ["settings-list-box", "boxed-list"],
         selection_mode: Gtk.SelectionMode.NONE
     })
 
     const refreshSpeakers = () => {
-        // Clear children
         let child = speakerList.get_first_child()
         while (child) {
             speakerList.remove(child)
@@ -62,29 +59,29 @@ export default function AudioPage() {
 
             const rowContent = new Gtk.Box({
                 orientation: Gtk.Orientation.VERTICAL,
-                spacing: 8,
+                spacing: 12,
                 margin_start: 16,
                 margin_end: 16,
-                margin_top: 16,
-                margin_bottom: 16,
-                halign: Gtk.Align.FILL
+                margin_top: 12,
+                margin_bottom: 12,
             })
 
             const header = new Gtk.Box({ spacing: 12 })
             header.append(new Gtk.Image({
                 icon_name: isMic ? "audio-input-microphone-symbolic" : "audio-speakers-symbolic",
-                pixel_size: 20
+                pixel_size: 18
             }))
             header.append(new Gtk.Label({
                 label: endpoint.description || endpoint.name || "Endpoint",
                 halign: Gtk.Align.START,
-                css_classes: ["endpoint-name"],
+                css_classes: ["settings-row-label"],
                 hexpand: true
             }))
 
             const muteBtn = new Gtk.Button({
                 icon_name: endpoint.mute ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic",
-                css_classes: ["settings-icon-btn", endpoint.mute ? "muted" : ""]
+                css_classes: ["settings-icon-btn", endpoint.mute ? "muted" : ""],
+                valign: Gtk.Align.CENTER
             })
 
             muteBtn.connect("clicked", () => {
@@ -111,8 +108,15 @@ export default function AudioPage() {
         })
     }
 
-    speakerBox.append(speakerList)
-    page.append(speakerBox)
+    const groupBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+    groupBox.append(new Gtk.Label({
+        label: "Dispositivos del Sistema",
+        css_classes: ["settings-group-title"],
+        halign: Gtk.Align.START,
+        margin_start: 6
+    }))
+    groupBox.append(speakerList)
+    page.append(groupBox)
 
     // Initial sync
     refreshSpeakers()

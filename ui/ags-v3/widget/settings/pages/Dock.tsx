@@ -10,24 +10,48 @@ export default function DockPage() {
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 24,
         css_classes: ["settings-page"],
-        margin_start: 40,
-        margin_end: 40,
-        margin_top: 40,
+        margin_start: 30,
+        margin_end: 30,
+        margin_top: 30,
+        margin_bottom: 30,
     })
 
-    page.append(new Gtk.Label({
+    // Header Section
+    const headerBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 4,
+        margin_bottom: 12
+    })
+    headerBox.append(new Gtk.Label({
         label: "Dock",
         css_classes: ["settings-page-title"],
         halign: Gtk.Align.START,
     }))
-
-    page.append(new Gtk.Label({
+    headerBox.append(new Gtk.Label({
         label: "Personaliza el tamaño, animación e indicadores del dock",
         css_classes: ["settings-page-subtitle"],
         halign: Gtk.Align.START,
     }))
+    page.append(headerBox)
 
-    page.append(new Gtk.Separator())
+    // ── Helper: Boxed List Group ──
+    const listGroup = (title: string) => {
+        const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+        if (title) {
+            box.append(new Gtk.Label({
+                label: title,
+                css_classes: ["settings-group-title"],
+                halign: Gtk.Align.START,
+                margin_start: 6
+            }))
+        }
+        const listBox = new Gtk.ListBox({
+            css_classes: ["settings-list-box", "boxed-list"],
+            selection_mode: Gtk.SelectionMode.NONE
+        })
+        box.append(listBox)
+        return { box, listBox }
+    }
 
     // ── Helper: Labeled Slider Row ──
     const sliderRow = (
@@ -43,11 +67,10 @@ export default function DockPage() {
         const box = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
             spacing: 8,
-            css_classes: ["settings-row"],
-            margin_start: 16,
-            margin_end: 16,
-            margin_top: 8,
-            margin_bottom: 8,
+            margin_start: 12,
+            margin_end: 12,
+            margin_top: 10,
+            margin_bottom: 10,
         })
 
         const header = new Gtk.Box({ spacing: 8 })
@@ -60,17 +83,19 @@ export default function DockPage() {
 
         const valueLabel = new Gtk.Label({
             label: `${Math.round(initial)}${unit}`,
-            css_classes: ["settings-row-value"],
+            css_classes: ["settings-row-status"],
             halign: Gtk.Align.END,
         })
         header.append(valueLabel)
         box.append(header)
 
-        box.append(new Gtk.Label({
-            label: subtitle,
-            css_classes: ["settings-row-subtitle"],
-            halign: Gtk.Align.START,
-        }))
+        if (subtitle) {
+            box.append(new Gtk.Label({
+                label: subtitle,
+                css_classes: ["settings-row-subtitle"],
+                halign: Gtk.Align.START,
+            }))
+        }
 
         const scale = new Gtk.Scale({
             orientation: Gtk.Orientation.HORIZONTAL,
@@ -83,7 +108,6 @@ export default function DockPage() {
                 page_increment: step * 5,
                 value: initial,
             }),
-            css_classes: ["settings-scale"],
         })
 
         scale.connect("value-changed", () => {
@@ -93,7 +117,7 @@ export default function DockPage() {
         })
 
         box.append(scale)
-        return box
+        return new Gtk.ListBoxRow({ child: box })
     }
 
     // ── Helper: Toggle Row ──
@@ -105,28 +129,30 @@ export default function DockPage() {
     ) => {
         const box = new Gtk.Box({
             spacing: 12,
-            css_classes: ["settings-row"],
-            margin_start: 16,
-            margin_end: 16,
-            margin_top: 8,
-            margin_bottom: 8,
+            margin_start: 12,
+            margin_end: 12,
+            margin_top: 10,
+            margin_bottom: 10,
         })
 
         const labels = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
             spacing: 2,
             hexpand: true,
+            valign: Gtk.Align.CENTER
         })
         labels.append(new Gtk.Label({
             label,
             css_classes: ["settings-row-label"],
             halign: Gtk.Align.START,
         }))
-        labels.append(new Gtk.Label({
-            label: subtitle,
-            css_classes: ["settings-row-subtitle"],
-            halign: Gtk.Align.START,
-        }))
+        if (subtitle) {
+            labels.append(new Gtk.Label({
+                label: subtitle,
+                css_classes: ["settings-row-subtitle"],
+                halign: Gtk.Align.START,
+            }))
+        }
         box.append(labels)
 
         const sw = new Gtk.Switch({
@@ -138,24 +164,8 @@ export default function DockPage() {
         })
         box.append(sw)
 
-        return box
+        return new Gtk.ListBoxRow({ child: box })
     }
-
-    // ── Section: Geometry ──
-    const geoSection = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12,
-    })
-    geoSection.append(new Gtk.Label({
-        label: "Geometría",
-        css_classes: ["settings-section-title"],
-        halign: Gtk.Align.START,
-    }))
-
-    const geoList = new Gtk.ListBox({
-        css_classes: ["settings-list"],
-        selection_mode: Gtk.SelectionMode.NONE,
-    })
 
     // ── Helper: Discrete Preset Row ──
     const presetRow = (
@@ -168,31 +178,32 @@ export default function DockPage() {
     ) => {
         const box = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
-            spacing: 8,
-            css_classes: ["settings-row"],
-            margin_start: 16,
-            margin_end: 16,
-            margin_top: 8,
-            margin_bottom: 8,
+            spacing: 12,
+            margin_start: 12,
+            margin_end: 12,
+            margin_top: 12,
+            margin_bottom: 12,
         })
 
-        box.append(new Gtk.Label({
+        const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
+        text.append(new Gtk.Label({
             label,
             css_classes: ["settings-row-label"],
             halign: Gtk.Align.START,
         }))
-
-        box.append(new Gtk.Label({
-            label: subtitle,
-            css_classes: ["settings-row-subtitle"],
-            halign: Gtk.Align.START,
-        }))
+        if (subtitle) {
+            text.append(new Gtk.Label({
+                label: subtitle,
+                css_classes: ["settings-row-subtitle"],
+                halign: Gtk.Align.START,
+            }))
+        }
+        box.append(text)
 
         const btnBox = new Gtk.Box({
             spacing: 8,
             homogeneous: true,
             css_classes: ["settings-preset-group"],
-            margin_top: 4,
         })
 
         const buttons: Gtk.Button[] = []
@@ -200,12 +211,12 @@ export default function DockPage() {
             const btn = new Gtk.Button({
                 label: `${val}${unit}`,
                 css_classes: val === initial
-                    ? ["settings-preset-btn", "settings-preset-active"]
+                    ? ["settings-preset-btn", "active"]
                     : ["settings-preset-btn"],
             })
             btn.connect("clicked", () => {
-                buttons.forEach(b => b.remove_css_class("settings-preset-active"))
-                btn.add_css_class("settings-preset-active")
+                buttons.forEach(b => b.remove_css_class("active"))
+                btn.add_css_class("active")
                 onChange(val)
             })
             buttons.push(btn)
@@ -213,97 +224,50 @@ export default function DockPage() {
         })
 
         box.append(btnBox)
-        return box
+        return new Gtk.ListBoxRow({ child: box })
     }
 
-    geoList.append(new Gtk.ListBoxRow({
-        child: presetRow(
-            "Tamaño de icono", "Tamaño base en reposo",
-            [32, 48, 64, 80, 96], dockSettings.iconSize, "px",
-            (v) => updateDockSettings({ iconSize: v }),
-        ),
-    }))
-
-    geoList.append(new Gtk.ListBoxRow({
-        child: sliderRow(
-            "Margen inferior", "Distancia al borde de la pantalla",
-            4, 16, 1, dockSettings.screenGap, "px",
-            (v) => updateDockSettings({ screenGap: v }),
-        ),
-    }))
-
-    geoList.append(new Gtk.ListBoxRow({
-        child: sliderRow(
-            "Escala del tema de iconos", "Aumenta el tamaño interno para compensar iconos pequeños",
-            0, 20, 1, dockSettings.iconThemeScale, "%",
-            (v) => updateDockSettings({ iconThemeScale: v }),
-        ),
-    }))
-
-    geoSection.append(geoList)
-    page.append(geoSection)
+    // ── Section: Geometry ──
+    const geoGroup = listGroup("Geometría")
+    geoGroup.listBox.append(presetRow(
+        "Tamaño de icono", "Tamaño base en reposo",
+        [32, 48, 64, 80, 96], dockSettings.iconSize, "px",
+        (v) => updateDockSettings({ iconSize: v }),
+    ))
+    geoGroup.listBox.append(sliderRow(
+        "Margen inferior", "Distancia al borde de la pantalla",
+        4, 16, 1, dockSettings.screenGap, "px",
+        (v) => updateDockSettings({ screenGap: v }),
+    ))
+    geoGroup.listBox.append(sliderRow(
+        "Escala del tema de iconos", "Compensa iconos pequeños",
+        0, 20, 1, dockSettings.iconThemeScale, "%",
+        (v) => updateDockSettings({ iconThemeScale: v }),
+    ))
+    page.append(geoGroup.box)
 
     // ── Section: Magnification ──
-    const magSection = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12,
-    })
-    magSection.append(new Gtk.Label({
-        label: "Magnificación",
-        css_classes: ["settings-section-title"],
-        halign: Gtk.Align.START,
-    }))
-
-    const magList = new Gtk.ListBox({
-        css_classes: ["settings-list"],
-        selection_mode: Gtk.SelectionMode.NONE,
-    })
-
-    magList.append(new Gtk.ListBoxRow({
-        child: toggleRow(
-            "Magnificación activa", "Efecto de zoom al pasar el cursor",
-            dockSettings.magnification,
-            (v) => updateDockSettings({ magnification: v }),
-        ),
-    }))
-
-    magList.append(new Gtk.ListBoxRow({
-        child: sliderRow(
-            "Tamaño máximo", "Tamaño al máximo zoom",
-            64, 128, 4, dockSettings.maxIconSize, "px",
-            (v) => updateDockSettings({ maxIconSize: v }),
-        ),
-    }))
-
-    magSection.append(magList)
-    page.append(magSection)
+    const magGroup = listGroup("Efectos")
+    magGroup.listBox.append(toggleRow(
+        "Magnificación activa", "Efecto de zoom al pasar el cursor",
+        dockSettings.magnification,
+        (v) => updateDockSettings({ magnification: v }),
+    ))
+    magGroup.listBox.append(sliderRow(
+        "Tamaño máximo", "Tamaño al máximo zoom",
+        64, 128, 4, dockSettings.maxIconSize, "px",
+        (v) => updateDockSettings({ maxIconSize: v }),
+    ))
+    page.append(magGroup.box)
 
     // ── Section: Behavior ──
-    const behSection = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12,
-    })
-    behSection.append(new Gtk.Label({
-        label: "Comportamiento",
-        css_classes: ["settings-section-title"],
-        halign: Gtk.Align.START,
-    }))
-
-    const behList = new Gtk.ListBox({
-        css_classes: ["settings-list"],
-        selection_mode: Gtk.SelectionMode.NONE,
-    })
-
-    behList.append(new Gtk.ListBoxRow({
-        child: toggleRow(
-            "Mostrar indicadores", "Punto bajo los iconos de apps abiertas",
-            dockSettings.showIndicators,
-            (v) => updateDockSettings({ showIndicators: v }),
-        ),
-    }))
-
-    behSection.append(behList)
-    page.append(behSection)
+    const behGroup = listGroup("Comportamiento")
+    behGroup.listBox.append(toggleRow(
+        "Mostrar indicadores", "Punto bajo los iconos de apps abiertas",
+        dockSettings.showIndicators,
+        (v) => updateDockSettings({ showIndicators: v }),
+    ))
+    page.append(behGroup.box)
 
     return page
 }

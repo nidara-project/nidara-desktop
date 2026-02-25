@@ -14,18 +14,26 @@ import AppearancePage from "./pages/Appearance"
  */
 export default function Settings(monitor: Gdk.Monitor) {
 
+    const header = new Gtk.HeaderBar({
+        title_widget: new Gtk.Label({
+            label: "Configuración del Sistema",
+            css_classes: ["title"]
+        }),
+        show_title_buttons: true,
+    })
+
     const win = new Gtk.Window({
         name: "crystal-settings",
         application: app,
-        title: "Configuración del Sistema",
         default_width: 900,
         default_height: 650,
         visible: false,
+        titlebar: header,
     })
 
     // Sidebar: Categories
     const sidebar = new Gtk.ListBox({
-        css_classes: ["settings-sidebar"],
+        css_classes: ["settings-sidebar", "navigation-sidebar"],
         selection_mode: Gtk.SelectionMode.SINGLE,
         width_request: 220,
     })
@@ -53,22 +61,29 @@ export default function Settings(monitor: Gdk.Monitor) {
             css_classes: ["settings-sidebar-row"],
             margin_start: 12,
             margin_end: 12,
-            margin_top: 8,
-            margin_bottom: 8
+            margin_top: 10,
+            margin_bottom: 10
         })
-        row.append(new Gtk.Image({ icon_name: cat.icon, pixel_size: 20 }))
+        row.append(new Gtk.Image({ icon_name: cat.icon, pixel_size: 18 }))
         row.append(new Gtk.Label({ label: cat.label }))
 
         const listRow = new Gtk.ListBoxRow({ child: row })
         listRow.set_name(cat.id)
         sidebar.append(listRow)
 
-        // Use component if available, otherwise placeholder
-        let page
+        // Wrapper for pages to handle margins/scrolling consistently
+        const pageScroll = new Gtk.ScrolledWindow({
+            hscrollbar_policy: Gtk.PolicyType.NEVER,
+            vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+            hexpand: true,
+            vexpand: true,
+        })
+
+        let pageContent
         if (cat.component) {
-            page = cat.component()
+            pageContent = cat.component()
         } else {
-            page = new Gtk.Box({
+            pageContent = new Gtk.Box({
                 orientation: Gtk.Orientation.VERTICAL,
                 spacing: 20,
                 css_classes: ["settings-page", `page-${cat.id}`],
@@ -76,19 +91,20 @@ export default function Settings(monitor: Gdk.Monitor) {
                 margin_end: 40,
                 margin_top: 40
             })
-            page.append(new Gtk.Label({
+            pageContent.append(new Gtk.Label({
                 label: cat.label,
                 css_classes: ["settings-page-title"],
                 halign: Gtk.Align.START
             }))
-            page.append(new Gtk.Separator())
-            page.append(new Gtk.Label({
+            pageContent.append(new Gtk.Separator())
+            pageContent.append(new Gtk.Label({
                 label: `Configuración de ${cat.label} próximamente...`,
                 css_classes: ["settings-placeholder"]
             }))
         }
 
-        stack.add_titled(page, cat.id, cat.label)
+        pageScroll.set_child(pageContent)
+        stack.add_titled(pageScroll, cat.id, cat.label)
     })
 
     sidebar.connect("row-selected", (_, row) => {
@@ -121,6 +137,10 @@ export default function Settings(monitor: Gdk.Monitor) {
             win.visible = !win.visible
             if (win.visible) win.present()
         }
+
+    // Default selection
+    const firstRow = sidebar.get_row_at_index(0)
+    if (firstRow) sidebar.select_row(firstRow)
 
     return win
 }

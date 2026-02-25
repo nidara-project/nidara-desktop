@@ -10,32 +10,29 @@ export default function PowerPage() {
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 24,
         css_classes: ["settings-page"],
-        margin_start: 40,
-        margin_end: 40,
-        margin_top: 40
+        margin_start: 30,
+        margin_end: 30,
+        margin_top: 30,
+        margin_bottom: 30,
     })
 
-    const title = new Gtk.Label({
+    // Header Section
+    const headerBox = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 4,
+        margin_bottom: 12
+    })
+    headerBox.append(new Gtk.Label({
         label: "Energía",
         css_classes: ["settings-page-title"],
         halign: Gtk.Align.START
-    })
-
-    const subtitle = new Gtk.Label({
+    }))
+    headerBox.append(new Gtk.Label({
         label: "Administra el rendimiento y el consumo de batería",
         css_classes: ["settings-page-subtitle"],
         halign: Gtk.Align.START
-    })
-
-    page.append(title)
-    page.append(subtitle)
-    page.append(new Gtk.Separator())
-
-    // Profiles Section
-    const profileBox = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12
-    })
+    }))
+    page.append(headerBox)
 
     const profiles = [
         { id: "performance", label: "Alto Rendimiento", icon: "power-profile-performance-symbolic" },
@@ -44,21 +41,17 @@ export default function PowerPage() {
     ]
 
     const profileList = new Gtk.ListBox({
-        css_classes: ["settings-list"],
-        selection_mode: Gtk.SelectionMode.NONE
+        css_classes: ["settings-list-box", "boxed-list"],
+        selection_mode: Gtk.SelectionMode.SINGLE // Better for profiles
     })
 
     const updateCurrentProfile = () => {
         execAsync(["powerprofilesctl", "get"]).then(current => {
             const cleanCurrent = current.trim()
             profiles.forEach((p, idx) => {
-                const row = profileList.get_row_at_index(idx)
-                if (row) {
-                    if (p.id === cleanCurrent) {
-                        row.add_css_class("active-profile")
-                    } else {
-                        row.remove_css_class("active-profile")
-                    }
+                if (p.id === cleanCurrent) {
+                    const row = profileList.get_row_at_index(idx)
+                    if (row) profileList.select_row(row)
                 }
             })
         }).catch(err => console.error("[PowerPage] Failed to get profile:", err))
@@ -67,45 +60,46 @@ export default function PowerPage() {
     profiles.forEach(p => {
         const rowContent = new Gtk.Box({
             spacing: 16,
-            margin_start: 16,
-            margin_end: 16,
-            margin_top: 12,
-            margin_bottom: 12,
-            halign: Gtk.Align.FILL
+            margin_start: 12,
+            margin_end: 12,
+            margin_top: 10,
+            margin_bottom: 10,
         })
 
-        rowContent.append(new Gtk.Image({ icon_name: p.icon, pixel_size: 24 }))
-        rowContent.append(new Gtk.Label({ label: p.label, hexpand: true, halign: Gtk.Align.START }))
+        rowContent.append(new Gtk.Image({ icon_name: p.icon, pixel_size: 20 }))
+        rowContent.append(new Gtk.Label({ label: p.label, hexpand: true, halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
 
         const checkIcon = new Gtk.Image({
             icon_name: "object-select-symbolic",
             css_classes: ["profile-check"],
-            visible: false
+            pixel_size: 16
         })
         rowContent.append(checkIcon)
 
-        const btn = new Gtk.Button({
-            child: rowContent,
-            css_classes: ["settings-row-btn"]
-        })
-
-        btn.connect("clicked", () => {
-            execAsync(["powerprofilesctl", "set", p.id])
-                .then(() => updateCurrentProfile())
-                .catch(err => console.error("[PowerPage] Failed to set profile:", err))
-        })
-
-        const row = new Gtk.ListBoxRow({ child: btn })
+        const row = new Gtk.ListBoxRow({ child: rowContent })
+        row.set_name(p.id)
         profileList.append(row)
     })
 
-    profileBox.append(new Gtk.Label({
+    profileList.connect("row-selected", (_, row) => {
+        if (row) {
+            const profileId = row.get_name()
+            if (profileId) {
+                execAsync(["powerprofilesctl", "set", profileId])
+                    .catch(err => console.error("[PowerPage] Failed to set profile:", err))
+            }
+        }
+    })
+
+    const groupBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+    groupBox.append(new Gtk.Label({
         label: "Perfil de Rendimiento",
-        css_classes: ["settings-section-title"],
-        halign: Gtk.Align.START
+        css_classes: ["settings-group-title"],
+        halign: Gtk.Align.START,
+        margin_start: 6
     }))
-    profileBox.append(profileList)
-    page.append(profileBox)
+    groupBox.append(profileList)
+    page.append(groupBox)
 
     // Initial sync
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
