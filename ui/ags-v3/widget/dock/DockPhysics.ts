@@ -11,9 +11,9 @@ import { dockSettings } from "./state"
 
 function deriveConstants(iconSize: number, maxSize: number, magnification: boolean, screenGap: number) {
     // ── PROPORTIONAL RATIOS (Based on user-provided table) ──
-    // Total Gap = 0.25 * size. Each icon margin is half of that = 0.125 * size.
-    const MARGIN = Math.round(iconSize * 0.125)        // 4@32, 6@48, 8@64, 12@96
-    const PILL_PAD = Math.round(iconSize * 0.25)      // 8@32, 12@48, 16@64, 24@96
+    const MARGIN = Math.round(iconSize * 0.109375)      // 3.5@32, 5.25@48, 7@64, 10.5@96
+    const ICON_GAP = Math.round(iconSize * 0.09375)       // 3@32, 4.5@48, 6@64, 9@96
+    const PILL_PAD = MARGIN * 2                          // 7@32, 10.5@48, 14@64, 21@96
     const INDICATOR_PAD = 4                           // Fixed 4px indicator-to-bottom gap
 
     // ── DERIVED ──
@@ -32,12 +32,13 @@ function deriveConstants(iconSize: number, maxSize: number, magnification: boole
 
         // LAYOUT
         ICON_SIZE: iconSize,
-        APP_SLOT: iconSize + MARGIN * 2,
+        APP_SLOT: iconSize + ICON_GAP * 2,            // Slot uses ICON_GAP, not MARGIN
         SEPARATOR_SLOT: MARGIN * 2,
         SEPARATOR_LINE: 1,
         SEPARATOR_OFFSET: MARGIN,
         SEPARATOR_HEIGHT: separatorHeight,
-        BASE_MARGIN: MARGIN,
+        BASE_MARGIN: Math.round(iconSize * 0.125),   // 4@32, 6@48, 8@64, 12@96
+        ICON_MARGIN: ICON_GAP,                        // Per-icon margin (smaller than BASE_MARGIN)
         INDICATOR_GAP: INDICATOR_PAD,
         PILL_PADDING: PILL_PAD,
 
@@ -129,7 +130,7 @@ export function calculateDockItemMetrics(
         height: targetWidth,
         scale: targetScale,
         translateY: 0,
-        margin: DOCK_CONSTANTS.BASE_MARGIN,
+        margin: DOCK_CONSTANTS.ICON_MARGIN,
     };
 }
 

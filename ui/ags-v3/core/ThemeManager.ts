@@ -211,7 +211,32 @@ class ThemeManager extends GObject.Object {
         // 2. Aplicar a GSettings (Para el resto del sistema)
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", theme])
 
-        // 3. ACTUALIZACIÓN LOCAL 🚀
+        // 3. ACTUALIZACIÓN DE LIBADWAITA (Symlink Hack) 🚀
+        try {
+            const configDir = `${GLib.get_user_config_dir()}/gtk-4.0`
+            const userThemeDir = `${GLib.get_home_dir()}/.themes/${theme}/gtk-4.0`
+            const systemThemeDir = `/usr/share/themes/${theme}/gtk-4.0`
+
+            let sourceDir = ""
+            if (GLib.file_test(userThemeDir, GLib.FileTest.EXISTS)) sourceDir = userThemeDir
+            else if (GLib.file_test(systemThemeDir, GLib.FileTest.EXISTS)) sourceDir = systemThemeDir
+
+            if (sourceDir) {
+                const targetCss = `${configDir}/gtk.css`
+                const targetDarkCss = `${configDir}/gtk-dark.css`
+                const themeCss = `${sourceDir}/gtk.css`
+
+                // Borramos lo que haya (podrían ser archivos físicos del instalador de MacTahoe)
+                execAsync(["rm", "-f", targetCss, targetDarkCss])
+                execAsync(["ln", "-sf", themeCss, targetCss])
+                execAsync(["ln", "-sf", themeCss, targetDarkCss])
+                console.log(`[ThemeManager] Libadwaita symlinks updated to: ${themeCss}`)
+            }
+        } catch (e) {
+            console.warn("[ThemeManager] Error configurando symlinks de Libadwaita:", e)
+        }
+
+        // 4. ACTUALIZACIÓN LOCAL 🚀
         // Usamos el estado del toggle (this.state.isDark) para la preferencia de color, 
         // sin que el nombre del tema influya para nada.
         try {

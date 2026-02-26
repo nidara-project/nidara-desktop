@@ -172,6 +172,16 @@ if [ -f "$HOME/.config/hypr/hyprland.conf" ] && [ ! -L "$HOME/.config/hypr/hyprl
     mv "$HOME/.config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf.bak"
 fi
 ln -sf "$HOME/Dev/Distroia/config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf"
+ 
+ # 9. Configure XDG Portals (Modern Apps Theme Support)
+ echo "🎨 Configuring XDG Desktkop Portals..."
+ mkdir -p "$HOME/.config/xdg-desktop-portal"
+ cat <<EOF > "$HOME/.config/xdg-desktop-portal/portals.conf"
+ [preferred]
+ default=gtk
+ org.freedesktop.impl.portal.ScreenCast=hyprland
+ org.freedesktop.impl.portal.Screenshot=hyprland
+ EOF
 
 echo "✅ Provisioning Complete!"
 echo "👉 Restart (or run 'sudo systemctl start sddm') to enter SDDM."

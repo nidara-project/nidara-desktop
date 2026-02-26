@@ -174,7 +174,8 @@ export default function AppearancePage() {
 
     // 2. Theme Family
     const themesGroup = listGroup("Temas y recursos")
-    const gtkThemes = Theme.getAvailableGtkThemes()
+    const gtkThemes = Theme.getAvailableGtkThemes().sort()
+
     themesGroup.listBox.append(dropdownRow(
         "Tema GTK",
         "Selecciona el tema visual para el sistema",

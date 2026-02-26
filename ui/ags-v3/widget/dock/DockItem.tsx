@@ -287,7 +287,7 @@ export function DockItem(
     const state = {
         targetScale: 1.0, currentScale: 1.0, velocityScale: 0,
         targetWidth: DOCK_CONSTANTS.ICON_SIZE, currentWidth: DOCK_CONSTANTS.ICON_SIZE, velocityWidth: 0,
-        targetMargin: DOCK_CONSTANTS.BASE_MARGIN, currentMargin: DOCK_CONSTANTS.BASE_MARGIN, velocityMargin: 0,
+        targetMargin: DOCK_CONSTANTS.ICON_MARGIN, currentMargin: DOCK_CONSTANTS.ICON_MARGIN, velocityMargin: 0,
         targetHeight: DOCK_CONSTANTS.PILL_HEIGHT, currentHeight: DOCK_CONSTANTS.PILL_HEIGHT, velocityHeight: 0,
         targetTranslateY: 0, currentTranslateY: 0, velocityY: 0,
         staticCenter: 0,

@@ -32,9 +32,20 @@ export default function Dock(gdkmonitor: any) {
         const groupedClients: { [key: string]: any } = {}
         hypr.clients.forEach(c => {
             if (c.class?.toLowerCase().includes("ags")) return
-            groupedClients[c.class.toLowerCase()] = true
+            let key = c.class.toLowerCase()
+
+            // V625: Mirror mapping logic from update()
+            if (["org.gnome.nautilus", "nautilus", "thunar", "dolphin", "pcmanfm", "nemo", "nemo-desktop"].includes(key)) {
+                key = "home-shortcut"
+            }
+            groupedClients[key] = true
         })
+
         const runningUnpinnedCount = Object.keys(groupedClients).filter(c =>
+            c !== "home-shortcut" && // Already handled as special 
+            c !== "launcher" &&
+            c !== "trash" &&
+            c !== "special:trash" &&
             !effectivePinned.some(p => norm(p) === c)
         ).length
 
@@ -412,7 +423,7 @@ export default function Dock(gdkmonitor: any) {
                 if (state.isSeparator) {
                     state.targetWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.targetMargin = 0
                 } else {
-                    state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.targetMargin = DOCK_CONSTANTS.BASE_MARGIN
+                    state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.targetMargin = DOCK_CONSTANTS.ICON_MARGIN
                 }
             } else {
                 // If dragging, we use the projected mouse to hit the static slots
