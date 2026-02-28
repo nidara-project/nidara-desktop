@@ -9,10 +9,12 @@ import { readFile, writeFile } from "ags/file"
 import {
     type FluidCrystalConfig,
     type AccentKey,
+    type TintPanels,
     DEFAULT_CONFIG,
     ACCENT_PALETTE,
     writeGeneratedTheme,
     generateTokensCss,
+    generateTintCss,
     installFluidCrystalSymlinks,
     loadConfig as loadFCConfig,
     saveConfig as saveFCConfig,
@@ -116,6 +118,7 @@ class ThemeManager extends GObject.Object {
     get accentColor(): AccentKey { return this.fcConfig.accent }
     get transparency() { return this.fcConfig.transparency }
     get tintStrength() { return this.fcConfig.tintStrength }
+    get tintPanels() { return this.fcConfig.tintPanels }
     get accentPalette() { return ACCENT_PALETTE }
 
     // ── Theme Switching ──────────────────────────────────────────────
@@ -192,15 +195,27 @@ class ThemeManager extends GObject.Object {
     async setTintStrength(value: number) {
         this.fcConfig.tintStrength = Math.max(0, Math.min(1, value))
         if (this.isFluidCrystal) {
-            this.regenerateFluidCrystal()
+            this.refreshTintCss()
         }
         saveFCConfig(this.fcConfig)
         this.emit("changed")
     }
 
+    async setTintPanel(panel: keyof TintPanels, enabled: boolean) {
+        this.fcConfig.tintPanels[panel] = enabled
+        if (this.isFluidCrystal) {
+            this.refreshTintCss()
+        }
+        saveFCConfig(this.fcConfig)
+        this.emit("changed")
+    }
+
+
+
     // ── Private Logic ────────────────────────────────────────────────
 
     private themeProvider = new Gtk.CssProvider()
+    private tintProvider = new Gtk.CssProvider()
     private providersLinked = false
 
     private ensureProvidersLinked() {
@@ -209,8 +224,9 @@ class ThemeManager extends GObject.Object {
             const display = Gdk.Display.get_default()
             if (display) {
                 Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
+                Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1)
                 this.providersLinked = true
-                console.log("[ThemeManager] Theme CSS Provider linked (PRIORITY_USER)")
+                console.log("[ThemeManager] Theme CSS Providers linked (PRIORITY_APPLICATION)")
             }
         } catch (e) { }
     }
@@ -233,10 +249,24 @@ class ThemeManager extends GObject.Object {
             this.ensureProvidersLinked()
             const tokensCss = generateTokensCss(this.fcConfig)
             this.themeProvider.load_from_string(tokensCss)
-            console.log(`[ThemeManager] AGS CssProvider loaded with tokens only`)
+
+            // Also update tint CSS
+            this.refreshTintCss()
+
+            console.log(`[ThemeManager] AGS CssProviders loaded (tokens + tint)`)
         } catch (e) {
             console.error(`[ThemeManager] Fluid Crystal generation failed: ${e}`)
         }
+    }
+
+    /**
+     * Refresh only the tint CSS (lightweight, no file I/O)
+     */
+    private refreshTintCss() {
+        this.ensureProvidersLinked()
+        const tintCss = generateTintCss(this.fcConfig)
+        this.tintProvider.load_from_string(tintCss)
+        console.log(`[ThemeManager] Tint CSS refreshed`)
     }
 
     /**

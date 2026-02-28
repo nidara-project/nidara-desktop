@@ -13,6 +13,8 @@ import GObject from "gi://GObject"
 // @ts-ignore
 import Pango from "gi://Pango?version=1.0"
 import appService from "../../core/AppService"
+import Theme from "../../core/ThemeManager"
+import { ACCENT_PALETTE } from "../../core/FluidCrystal"
 import { drawSquircle } from "../common/DrawingUtils"
 import SquircleContainer from "../common/SquircleContainer"
 
@@ -169,8 +171,13 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             vexpand: false // Ensure drawing area doesn't force expansion either
         })
         da.set_draw_func((_, cr, w, h) => {
-            // Apple System Blue: #0A84FF -> R:0.039 G:0.517 B:1.0
-            const blue = { r: 0.039, g: 0.517, b: 1.0 }
+            // Dynamic accent color from Fluid Crystal
+            const accentHex = ACCENT_PALETTE[Theme.accentColor].color
+            const accent = {
+                r: parseInt(accentHex.slice(1, 3), 16) / 255,
+                g: parseInt(accentHex.slice(3, 5), 16) / 255,
+                b: parseInt(accentHex.slice(5, 7), 16) / 255
+            }
             // Inactive: Quaternary White (Solid, Low Alpha)
             const neutral = { r: 1, g: 1, b: 1 }
 
@@ -180,7 +187,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             const border = { r: 1, g: 1, b: 1, a: 0.08 } // Subtle internal border
 
             if (isActive) {
-                drawSquircle(cr, w, h, undefined, 1.0, false, blue, radius, false, border)
+                drawSquircle(cr, w, h, undefined, 1.0, false, accent, radius, false, border)
             } else {
                 // Inactive State: 10% Opacity White (Quaternary)
                 if (isHovered) drawSquircle(cr, w, h, undefined, 0.15, false, neutral, radius, false, border)
@@ -403,127 +410,29 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     })
 
     const createSlider = (iconName: string, scale: Gtk.Scale) => {
-        // V450: BULLETPROOF CAIRO 🛡️
-        // Draw EVERYTHING (Plate, Level, Icon) in one context to avoid flickers.
-        const da = new Gtk.DrawingArea({
-            hexpand: true,
-            vexpand: false, // V451: Mandatory for visibility 📏
-            height_request: 48,
-            can_focus: false,
+        // Pure CSS approach: style the GTK Scale directly, icon as overlay
+        scale.hexpand = true
+        scale.set_size_request(-1, 48)
+        scale.add_css_class("cc-pill-slider")
+
+        // Icon overlay (sits on top of the scale, click-through)
+        const icon = new Gtk.Image({
+            icon_name: iconName,
+            pixel_size: 20,
+            css_classes: ["cc-pill-slider-icon"],
+            can_target: false,
+            halign: Gtk.Align.START,
+            valign: Gtk.Align.CENTER,
+            margin_start: 16,
         })
-
-        // PRE-LOAD ICON (Symbolic)
-        let iconPixbuf: any = null
-        try {
-            const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default()!)
-            const info = theme.lookup_icon(iconName, [], 20, 1, Gtk.TextDirection.NONE, Gtk.IconLookupFlags.FORCE_SYMBOLIC)
-            if (info) {
-                const file = info.get_file()
-                if (file) {
-                    iconPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(file.get_path(), 20, 20, true)
-                }
-            }
-        } catch (e) { }
-
-        da.set_draw_func((_, cr, w, h) => {
-            const r = 24
-            const insY = 2
-            const insX = 2 // V540: RESTORE ORIGINAL 2PX INSET 🍎
-            const x1 = insX
-            const y1 = insY
-            const w1 = w - insX * 2
-            const h1 = h - insY * 2
-            const safe_r = Math.min(r, h1 / 2)
-
-            const drawPill = (x: number, y: number, width: number, height: number, radius: number) => {
-                cr.newPath()
-                cr.arc(x + width - radius, y + radius, radius, -Math.PI / 2, 0)
-                cr.lineTo(x + width, y + height - radius)
-                cr.arc(x + width - radius, y + height - radius, radius, 0, Math.PI / 2)
-                cr.lineTo(x + radius, y + height)
-                cr.arc(x + radius, y + height - radius, radius, Math.PI / 2, Math.PI)
-                cr.lineTo(x, y + radius)
-                cr.arc(x + radius, y + radius, radius, Math.PI, 3 * Math.PI / 2)
-                cr.lineTo(x + width - radius, y)
-                cr.closePath()
-            }
-
-            // 1. Background Plate (Pill 💊)
-            cr.save()
-            cr.setSourceRGBA(1, 1, 1, 0.1) // 10% White Plate
-            drawPill(x1, y1, w1, h1, safe_r)
-            cr.fill()
-            cr.restore()
-
-            // 2. Level Fill (Smooth Growth 🛡️)
-            const value = scale.get_value() / 100
-            const fillWidth = w1 * value
-            if (fillWidth > 0) {
-                cr.save()
-                cr.setSourceRGBA(1, 1, 1, 1) // Pure White Fill ⚪
-
-                // CLIP TO MAIN PILL
-                drawPill(x1, y1, w1, h1, safe_r)
-                cr.clip()
-
-                // DRAW FILL AS DYNAMIC PILL (avoids "pop" at 0%)
-                // V570: Radius grows with width until it hits full height
-                const curRadius = Math.min(safe_r, fillWidth / 2)
-                drawPill(x1, y1, fillWidth, h1, curRadius)
-                cr.fill()
-                cr.restore()
-            }
-
-            // 3. Icon Rendering (Clean Split 🍎)
-            if (iconPixbuf) {
-                const iconX = 16 // Standardized for 32px Total Alignment (16+16) 📐
-                const iconY = (h - 20) / 2
-                const invertX = x1 + fillWidth
-
-                const drawIconStencil = (color: { r: number, g: number, b: number, a: number }) => {
-                    cr.save()
-                    Gdk.cairo_set_source_pixbuf(cr, iconPixbuf, iconX, iconY)
-                    let maskPattern = cr.getSource()
-                    cr.setSourceRGBA(color.r, color.g, color.b, color.a)
-                    cr.mask(maskPattern)
-                    cr.restore()
-                }
-
-                // A. White State (Only where NOT covered by fill)
-                cr.save()
-                cr.rectangle(invertX, 0, w - invertX, h)
-                cr.clip()
-                drawIconStencil({ r: 1, g: 1, b: 1, a: 0.9 }) // Consistent 90% White
-                cr.restore()
-
-                // B. Dark State (Only where covered by fill)
-                if (invertX > iconX) {
-                    cr.save()
-                    cr.rectangle(0, 0, invertX, h)
-                    cr.clip()
-                    drawIconStencil({ r: 0, g: 0, b: 0, a: 0.6 }) // Consistent 60% Black
-                    cr.restore()
-                }
-            }
-        })
-
-        // Value Change -> Redraw
-        scale.connect("value-changed", () => da.queue_draw())
 
         const sliderOverlay = new Gtk.Overlay({
             css_classes: ["cc-slider-overlay"],
             hexpand: true
         })
 
-        // V511: SWAP ORDER - Visuals on top! 🛡️
-        scale.hexpand = true
-        scale.set_size_request(-1, 48)
-        scale.add_css_class("cc-slider-scale-input")
-
-        sliderOverlay.set_child(scale) // Base: Input
-        sliderOverlay.add_overlay(da) // Overlay: Visuals
-        da.can_target = false // Click-thru
-        da.hexpand = true
+        sliderOverlay.set_child(scale)
+        sliderOverlay.add_overlay(icon)
 
         return sliderOverlay
     }

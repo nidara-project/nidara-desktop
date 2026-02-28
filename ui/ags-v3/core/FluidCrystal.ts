@@ -27,12 +27,20 @@ export const ACCENT_PALETTE = {
 
 export type AccentKey = keyof typeof ACCENT_PALETTE
 
+// ── PANEL TINT TARGETS ──────────────────────────────────────────────
+// Note: Top bar and Dock use Cairo rendering, so CSS tinting doesn't apply
+export interface TintPanels {
+    controlCenter: boolean
+    appGrid: boolean
+}
+
 // ── USER-CONFIGURABLE STATE ──────────────────────────────────────────
 export interface FluidCrystalConfig {
     accent: AccentKey
     isDark: boolean         // Passed to Libadwaita's color-scheme (NOT used in CSS)
     transparency: number    // 0.0 (solid) → 1.0 (full glass)
     tintStrength: number    // 0.0 → 1.0 (how much accent tints surfaces)
+    tintPanels: TintPanels  // Which panels get accent tinting
 }
 
 export const DEFAULT_CONFIG: FluidCrystalConfig = {
@@ -40,6 +48,48 @@ export const DEFAULT_CONFIG: FluidCrystalConfig = {
     isDark: true,
     transparency: 0.75,
     tintStrength: 0.0,
+    tintPanels: {
+        controlCenter: false,
+        appGrid: false,
+    },
+}
+
+// ── PANEL CSS SELECTORS ──────────────────────────────────────────────
+const PANEL_SELECTORS: Record<keyof TintPanels, string[]> = {
+    controlCenter: [".cc-panel-structure"],
+    appGrid: [".app-grid-content"],
+}
+
+/**
+ * Generate dynamic CSS for panel accent tinting.
+ * This CSS is loaded into a CssProvider for real-time updates.
+ */
+export function generateTintCss(config: FluidCrystalConfig): string {
+    const accent = ACCENT_PALETTE[config.accent].color
+    const strength = config.tintStrength
+
+    if (strength <= 0) return "/* No tint applied */"
+
+    // Convert hex accent to rgba for alpha compositing
+    const r = parseInt(accent.slice(1, 3), 16)
+    const g = parseInt(accent.slice(3, 5), 16)
+    const b = parseInt(accent.slice(5, 7), 16)
+    const alpha = (strength * 0.3).toFixed(3) // Max 30% tint to keep it subtle
+
+    let css = `/* ── Fluid Crystal Panel Tint ── */\n`
+    css += `/* Accent: ${accent} | Strength: ${(strength * 100).toFixed(0)}% */\n\n`
+
+    for (const [panel, selectors] of Object.entries(PANEL_SELECTORS)) {
+        if (!config.tintPanels[panel as keyof TintPanels]) continue
+
+        for (const sel of selectors) {
+            css += `${sel} {\n`
+            css += `    background-color: rgba(${r}, ${g}, ${b}, ${alpha});\n`
+            css += `}\n\n`
+        }
+    }
+
+    return css
 }
 
 // ── ADWAITA COLOR PALETTE (always included) ──────────────────────────
@@ -133,14 +183,20 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
         `@define-color error_color #ED5F5D;`,
         ``,
         `/* ── Transparency Overrides (reference Libadwaita's dynamic colors) ── */`,
-        `/* These add transparency ON TOP of whatever dark/light colors Libadwaita provides */`,
-        `@define-color sidebar_bg_color alpha(@window_bg_color, ${(0.96 * t).toFixed(2)});`,
-        `@define-color sidebar_backdrop_color alpha(@window_bg_color, ${(0.96 * t).toFixed(2)});`,
+        `/* transparency: 0 = solid, 1 = full glass */`,
+        `/* Sidebar: can go very transparent (MacTahoe sidebar look) */`,
+        `@define-color sidebar_bg_color alpha(@window_bg_color, ${(1.0 - t * 0.85).toFixed(2)});`,
+        `@define-color sidebar_backdrop_color alpha(@window_bg_color, ${(1.0 - t * 0.85).toFixed(2)});`,
         `@define-color sidebar_shade_color rgba(0, 0, 0, 0.25);`,
         `@define-color sidebar_border_color alpha(@window_fg_color, 0.08);`,
-        `@define-color dialog_bg_color alpha(@view_bg_color, ${(0.96 * t).toFixed(2)});`,
-        `@define-color popover_bg_color alpha(@window_bg_color, ${(0.96 * t).toFixed(2)});`,
+        `/* Dialogs & popovers: never fully transparent (min 85% opaque) */`,
+        `@define-color dialog_bg_color alpha(@view_bg_color, ${Math.max(0.85, 1.0 - t * 0.5).toFixed(2)});`,
+        `@define-color popover_bg_color alpha(@window_bg_color, ${Math.max(0.85, 1.0 - t * 0.5).toFixed(2)});`,
         `@define-color popover_shade_color rgba(0, 0, 0, 0.25);`,
+        `/* Headerbar backdrop: ensure solid when unfocused (critical for Hyprland CSD) */`,
+        `@define-color headerbar_backdrop_color @window_bg_color;`,
+        `/* Headerbar bg: Libadwaita color used by headerbar.flat apps (Calculator etc.) */`,
+        `@define-color headerbar_bg_color @window_bg_color;`,
         ``,
         `/* ── CSS Custom Properties for accent palette ── */`,
     ]

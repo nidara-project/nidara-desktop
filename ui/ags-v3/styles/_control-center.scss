@@ -59,93 +59,70 @@ window.control-center-win>box>widget {
     padding: 0;
 }
 
-/* Hide ALL scale sub-nodes to prevent clipping/straight-edges 🛡️ */
-.cc-slider-structure scale {
+/* --- Pill Sliders (Apple-style capsule, CSS only) --- */
+.cc-pill-slider {
     all: unset;
+    min-height: 48px;
     background: transparent;
+    padding: 0;
+    margin: 0;
+    border-radius: 9999px;
 
-    contents,
-    trough,
-    highlight,
+    contents {
+        all: unset;
+        min-height: 48px;
+        padding: 0;
+        margin: 0;
+        border-radius: 9999px;
+    }
+
+    trough {
+        all: unset;
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 9999px;
+        min-height: 48px;
+        padding: 0;
+        margin: 0;
+    }
+
+    highlight {
+        all: unset;
+        background-color: white;
+        border-radius: 9999px;
+        min-height: 48px;
+    }
+
     slider {
         all: unset;
-        background: transparent;
-        background-color: transparent;
-        border: none;
-        box-shadow: none;
-        outline: none;
-        min-height: 0;
         min-width: 0;
+        min-height: 0;
         margin: 0;
         padding: 0;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        opacity: 0;
     }
 }
 
-/* --- Main Panel (ONLY the inner box, NOT the window) --- */
-/* DistroIA UI Architect: Specificity Override (No !important) */
+/* Pill Slider Icon (overlay, click-through) */
+.cc-pill-slider-icon {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* --- Main Panel --- */
 .control-center-win box.control-center,
 .control-center-win .control-center,
 .control-center {
-    /* Background handled by SquircleContainer */
     background: transparent;
     background-color: transparent;
     background-image: none;
     border: none;
     box-shadow: none;
-
-    /* Restored Structure 🏗️ */
     min-width: 420px;
 }
 
-/* --- Sliders Section --- */
-.cc-sliders-row,
-.cc-sliders-column,
-.cc-slider-structure,
-.cc-slider-overlay {
-    /* overflow: visible; - UNSUPPORTED in standard GTK4 CSS */
-}
-
-/* Hide ALL scale sub-nodes BROADLY (Nuclear Fix) 🛡️ */
-.cc-slider-structure scale,
-scale.cc-slider-scale-input,
-scale.cc-slider-scale-input>* {
-    all: unset;
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-    opacity: 0;
-    border: none;
-    box-shadow: none;
-    outline: none;
-    color: transparent;
-    min-height: 0;
-    min-width: 0;
-    margin: 0;
-    padding: 0;
-
-    contents,
-    trough,
-    highlight,
-    slider,
-    fill,
-    marks,
-    value {
-        all: unset;
-        background: transparent;
-        background-color: transparent;
-        opacity: 0;
-        border: none;
-        box-shadow: none;
-        outline: none;
-        min-height: 0;
-        min-width: 0;
-        margin: 0;
-        padding: 0;
-        color: transparent;
-    }
-}
-
-/* Icons are now handled in the TSX layout */
+/* --- Toggle Icons & Labels --- */
 .cc-toggle-icon-box {
     background-color: rgba(255, 255, 255, 0.06);
     border-radius: 12px;
@@ -164,7 +141,6 @@ scale.cc-slider-scale-input>* {
     margin-top: 2px;
 }
 
-/* Active states handled by add_css_class in TSX */
 .active-text {
     color: white;
 }
@@ -173,69 +149,25 @@ scale.cc-slider-scale-input>* {
     background-color: rgba(255, 255, 255, 0.2);
     color: white;
     border-radius: 12px;
-    /* Fix: Restore rounded corners in active state 🟢 */
 }
 
-/* --- Sliders (Brightness / Volume) --- */
-/* DistroIA UI Architect: Specificity Override (No !important) */
+/* --- Sliders Section --- */
 .control-center-win box.cc-sliders,
 .cc-sliders {
-    /* Background handled by SquircleContainer */
     background: transparent;
     background-color: transparent;
     background-image: none;
     border: none;
     box-shadow: none;
     padding: 0;
-    /* margin-top: 12px; REMOVED to rely on topSection spacing */
 }
 
 .cc-fixed-container {
     margin: 0 8px;
-    /* XL symmetry with reduced 8px margins */
 }
 
-/* --- Unified Overlay Sliders (Apple Style) --- */
 .cc-slider-overlay {
     margin: 4px 0;
-}
-
-/* --- Bulletproof Sliders (Input Only) --- */
-scale.cc-slider-scale-input {
-    all: unset;
-    min-height: 48px;
-    background: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    outline: none;
-    color: transparent;
-
-    trough,
-    highlight,
-    slider {
-        all: unset;
-        background: transparent;
-        background-color: transparent;
-        background-image: none;
-        border: none;
-        box-shadow: none;
-        outline: none;
-        min-height: 48px;
-        min-width: 0;
-        margin: 0;
-        padding: 0;
-        transition: none;
-        animation: none;
-    }
-}
-
-.cc-slider-icon {
-    color: #12121c;
-    /* Dark icon on white fill (when full) - Dynamic color is hard in CSS only */
-    /* Use a mix-blend-mode or just keep it dark/light based on preference */
-    color: rgba(0, 0, 0, 0.8);
-    font-weight: 900;
 }
 
 .cc-notifs-section {
@@ -305,18 +237,24 @@ scale.cc-slider-scale-input {
 
 .notif-close-btn,
 .nc-notif-close {
+    background: none;
     background-color: rgba(255, 255, 255, 0.06);
+    background-image: none;
     border-radius: 50%;
     min-width: 28px;
     min-height: 28px;
     padding: 0;
     color: rgba(255, 255, 255, 0.5);
     transition: all 0.2s ease;
+    border: none;
+    box-shadow: none;
 }
 
 .notif-close-btn:hover,
 .nc-notif-close:hover {
+    background: none;
     background-color: rgba(255, 59, 48, 0.3);
+    background-image: none;
     color: #ff6961;
 }
 
@@ -341,11 +279,13 @@ scale.cc-slider-scale-input {
 /* Section Structure Handled Above 🆙 */
 
 .cc-clear-btn {
-    background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
+    background: none;
+    background-color: transparent;
+    background-image: none;
+    border: none;
     border-radius: 8px;
     padding: 6px 14px;
-    color: #3395ff;
+    color: #{"@accent_bg_color"};
     font-size: 0.8em;
     font-weight: 700;
     transition: all 0.2s;
@@ -354,9 +294,8 @@ scale.cc-slider-scale-input {
 }
 
 .cc-clear-btn:hover {
-    background-color: rgba(51, 149, 255, 0.15);
-    border-color: rgba(51, 149, 255, 0.3);
-    color: #55aaff;
+    background-color: #{"alpha(@accent_bg_color, 0.15)"};
+    color: #{"@accent_bg_color"};
 }
 
 .cc-scroll {
@@ -523,8 +462,8 @@ scale.cc-slider-scale-input {
 }
 
 .cc-sink-item.active {
-    background-color: rgba(0, 122, 255, 0.15);
-    border: 1px solid rgba(0, 122, 255, 0.25);
+    background-color: #{"alpha(@accent_bg_color, 0.15)"};
+    border: 1px solid #{"alpha(@accent_bg_color, 0.25)"};
 }
 
 .cc-sink-item label {

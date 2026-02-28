@@ -46,14 +46,14 @@ window#crystal-app-launcher #app-grid-content,
     padding: 12px 8px;
     font-size: 1.2em;
     font-weight: 300;
-    caret-color: #007aff;
+    caret-color: #{"@accent_bg_color"};
     transition: all 0.2s ease;
     box-shadow: none;
 }
 
 .app-grid-search:focus {
     background-color: transparent;
-    border-color: rgba(0, 122, 255, 0.3);
+    border-color: #{"alpha(@accent_bg_color, 0.3)"};
     box-shadow: none;
 }
 
@@ -102,7 +102,7 @@ window#crystal-app-launcher #app-grid-content,
 }
 
 .app-grid-button:hover {
-    background-color: rgba(0, 122, 255, 0.08);
+    background-color: #{"alpha(@accent_bg_color, 0.08)"};
 }
 
 .app-grid-icon {
@@ -155,7 +155,7 @@ flowboxchild:hover {
 }
 
 .system-action-btn:hover {
-    background: rgba(0, 122, 255, 0.1);
-    color: #007aff;
+    background: #{"alpha(@accent_bg_color, 0.1)"};
+    color: #{"@accent_bg_color"};
     transform: scale(1.08);
 }

@@ -53,8 +53,8 @@
 .connected-label {
     font-size: 0.8rem;
     font-weight: 700;
-    color: $accent_green;
-    background-color: rgba($accent_green, 0.1);
+    color: #{"@accent_bg_color"};
+    background-color: #{"alpha(@accent_bg_color, 0.1)"};
     padding: 2px 8px;
     border-radius: 10px;
     margin-right: 8px;
@@ -83,7 +83,7 @@ scale {
         }
 
         highlight {
-            background-color: $accent_blue;
+            background-color: #{"@accent_bg_color"};
             border-radius: 4px;
         }
 

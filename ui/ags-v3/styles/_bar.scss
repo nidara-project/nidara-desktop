@@ -100,13 +100,13 @@ window.crystal-bar {
 }
 
 .workspace-dot.occupied {
-    background-color: rgba($accent_purple, 0.6);
+    background-color: #{"alpha(@accent_bg_color, 0.6)"};
 }
 
 .workspace-dot.active {
     min-width: 18px;
     border-radius: 4px;
-    background-color: $accent_purple;
+    background-color: #{"@accent_bg_color"};
 }
 
 .workspace-dot.empty {
@@ -132,12 +132,12 @@ window.crystal-bar {
 }
 
 .resource-label-cpu {
-    color: $accent_purple;
+    color: #{"@accent_bg_color"};
 }
 
 .resource-label-media,
 .resource-label-memory {
-    color: $accent_blue;
+    color: #{"@accent_bg_color"};
 }
 
 /* --- Time Module --- */

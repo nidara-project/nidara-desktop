@@ -54,9 +54,9 @@ window.workspace-cockpit {
 }
 
 .wo-item.active {
-    background-color: rgba(0, 122, 255, 0.05);
-    border: 1px solid rgba(0, 122, 255, 0.6);
-    box-shadow: 0 0 60px rgba(0, 122, 255, 0.25);
+    background-color: #{"alpha(@accent_bg_color, 0.05)"};
+    border: 1px solid #{"alpha(@accent_bg_color, 0.6)"};
+    box-shadow: 0 0 60px #{"alpha(@accent_bg_color, 0.25)"};
 }
 
 .bar-ws-dot {
@@ -65,8 +65,8 @@ window.workspace-cockpit {
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
     &.active {
-        background-color: #007aff;
-        box-shadow: 0 0 10px rgba(0, 122, 255, 0.5);
+        background-color: #{"@accent_bg_color"};
+        box-shadow: 0 0 10px #{"alpha(@accent_bg_color, 0.5)"};
     }
 
     &.occupied {
@@ -98,9 +98,9 @@ window.workspace-cockpit {
 }
 
 .wo-btn:hover .wo-item.active {
-    background-color: rgba(0, 122, 255, 0.08);
-    border-color: rgba(0, 122, 255, 0.8);
-    box-shadow: 0 0 60px rgba(0, 122, 255, 0.35);
+    background-color: #{"alpha(@accent_bg_color, 0.08)"};
+    border-color: #{"alpha(@accent_bg_color, 0.8)"};
+    box-shadow: 0 0 60px #{"alpha(@accent_bg_color, 0.35)"};
 }
 
 /* --- Labels --- */
@@ -112,8 +112,8 @@ window.workspace-cockpit {
 }
 
 .wo-label.active {
-    color: #007aff;
-    text-shadow: 0 0 15px rgba(0, 122, 255, 0.8);
+    color: #{"@accent_bg_color"};
+    text-shadow: 0 0 15px #{"alpha(@accent_bg_color, 0.8)"};
 }
 
 /* --- Reserved Areas --- */
