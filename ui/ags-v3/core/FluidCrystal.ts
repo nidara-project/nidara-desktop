@@ -184,6 +184,8 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
         ``,
         `/* ── Transparency Overrides (reference Libadwaita's dynamic colors) ── */`,
         `/* transparency: 0 = solid, 1 = full glass */`,
+        `/* General Window Background: mapped seamlessly to the UI slider (Solid 100% -> Glass 10%) */`,
+        `@define-color fc_window_bg alpha(@window_bg_color, ${(1.0 - t * 0.90).toFixed(2)});`,
         `/* Sidebar: can go very transparent (MacTahoe sidebar look) */`,
         `@define-color sidebar_bg_color alpha(@window_bg_color, ${(1.0 - t * 0.85).toFixed(2)});`,
         `@define-color sidebar_backdrop_color alpha(@window_bg_color, ${(1.0 - t * 0.85).toFixed(2)});`,
@@ -206,9 +208,9 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
     for (const [key, { color }] of Object.entries(ACCENT_PALETTE)) {
         lines.push(`  --accent-${key}: ${color};`)
     }
-    lines.push(`  --accent-color: @accent_bg_color;`)
-    lines.push(`  --accent-bg-color: @accent_bg_color;`)
-    lines.push(`  --accent-fg-color: @accent_fg_color;`)
+    lines.push(`  --accent-color: ${accent};`)
+    lines.push(`  --accent-bg-color: ${accent};`)
+    lines.push(`  --accent-fg-color: #ffffff;`)
     lines.push(`}`)
     lines.push(``)
 

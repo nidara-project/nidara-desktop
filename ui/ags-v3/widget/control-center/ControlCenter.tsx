@@ -28,7 +28,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const win = new Gtk.Window({
         name: "crystal-control-center",
         application: app,
-        css_classes: ["control-center-win"],
+        css_classes: ["control-center-win", "background"],
         visible: false,
         // @ts-ignore
         focus_visible: false // V305: Force Disable Focus Ring
@@ -784,6 +784,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
                 halign: Gtk.Align.START,
                 xalign: 0,
                 wrap: true,
+                wrap_mode: Pango.WrapMode.WORD_CHAR,
                 lines: 2,
                 max_width_chars: 35,
                 ellipsize: 3

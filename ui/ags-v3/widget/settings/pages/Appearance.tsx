@@ -225,45 +225,50 @@ export default function AppearancePage() {
     ))
     page.append(styleGroup.box)
 
-    // 2. Fluid Crystal — Accent & Transparency (only when FC is active)
-    if (Theme.isFluidCrystal) {
-        const fcGroup = listGroup("Fluid Crystal")
+    // 2. Fluid Crystal — Accent & Transparency (dynamically visible)
+    const fcGroup = listGroup("Fluid Crystal")
+    fcGroup.box.visible = Theme.isFluidCrystal
 
-        // ── Accent Color Picker (macOS-style colored circles) ──
-        const accentRow = new Gtk.Box({
-            spacing: 12,
-            margin_start: 12,
-            margin_end: 12,
-            margin_top: 8,
-            margin_bottom: 8,
-        })
+    Theme.connect("changed", () => {
+        fcGroup.box.visible = Theme.isFluidCrystal
+    })
 
-        const accentText = new Gtk.Box({
-            orientation: Gtk.Orientation.VERTICAL,
-            spacing: 2,
-            hexpand: true,
-            valign: Gtk.Align.CENTER
-        })
-        accentText.append(new Gtk.Label({
-            label: "Color de acento",
-            css_classes: ["settings-row-label"],
-            halign: Gtk.Align.START,
-        }))
-        accentText.append(new Gtk.Label({
-            label: "Aplica a botones, toggles y elementos activos",
-            css_classes: ["settings-row-subtitle"],
-            halign: Gtk.Align.START,
-        }))
-        accentRow.append(accentText)
 
-        // Generate CSS for all accent circles via a single provider
-        const accentProvider = new Gtk.CssProvider()
+    // ── Accent Color Picker (macOS-style colored circles) ──
+    const accentRow = new Gtk.Box({
+        spacing: 12,
+        margin_start: 12,
+        margin_end: 12,
+        margin_top: 8,
+        margin_bottom: 8,
+    })
 
-        const buildAccentCss = (activeKey: string) => {
-            let css = ""
-            for (const [key, { color }] of Object.entries(ACCENT_PALETTE)) {
-                const isActive = key === activeKey
-                css += `
+    const accentText = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 2,
+        hexpand: true,
+        valign: Gtk.Align.CENTER
+    })
+    accentText.append(new Gtk.Label({
+        label: "Color de acento",
+        css_classes: ["settings-row-label"],
+        halign: Gtk.Align.START,
+    }))
+    accentText.append(new Gtk.Label({
+        label: "Aplica a botones, toggles y elementos activos",
+        css_classes: ["settings-row-subtitle"],
+        halign: Gtk.Align.START,
+    }))
+    accentRow.append(accentText)
+
+    // Generate CSS for all accent circles via a single provider
+    const accentProvider = new Gtk.CssProvider()
+
+    const buildAccentCss = (activeKey: string) => {
+        let css = ""
+        for (const [key, { color }] of Object.entries(ACCENT_PALETTE)) {
+            const isActive = key === activeKey
+            css += `
                     .accent-${key} {
                         background: ${color};
                         background-image: none;
@@ -288,81 +293,80 @@ export default function AppearancePage() {
                         background-image: none;
                     }
                 `
-            }
-            return css
         }
+        return css
+    }
 
-        accentProvider.load_from_string(buildAccentCss(Theme.accentColor))
-        const display = Gdk.Display.get_default()
-        if (display) {
-            Gtk.StyleContext.add_provider_for_display(display, accentProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1)
-        }
+    accentProvider.load_from_string(buildAccentCss(Theme.accentColor))
+    const display = Gdk.Display.get_default()
+    if (display) {
+        Gtk.StyleContext.add_provider_for_display(display, accentProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1)
+    }
 
-        // Color circles container
-        const colorsBox = new Gtk.Box({
-            spacing: 6,
-            valign: Gtk.Align.CENTER,
+    // Color circles container
+    const colorsBox = new Gtk.Box({
+        spacing: 6,
+        valign: Gtk.Align.CENTER,
+    })
+
+    const accentKeys = Object.keys(ACCENT_PALETTE) as AccentKey[]
+    for (const key of accentKeys) {
+        const { name } = ACCENT_PALETTE[key]
+        const btn = new Gtk.Button({
+            css_classes: [`accent-${key}`],
+            tooltip_text: name,
+            width_request: 24,
+            height_request: 24,
         })
 
-        const accentKeys = Object.keys(ACCENT_PALETTE) as AccentKey[]
-        for (const key of accentKeys) {
-            const { name } = ACCENT_PALETTE[key]
-            const btn = new Gtk.Button({
-                css_classes: [`accent-${key}`],
-                tooltip_text: name,
-                width_request: 24,
-                height_request: 24,
-            })
+        btn.connect("clicked", () => {
+            Theme.setAccentColor(key)
+            accentProvider.load_from_string(buildAccentCss(key))
+        })
 
-            btn.connect("clicked", () => {
-                Theme.setAccentColor(key)
-                accentProvider.load_from_string(buildAccentCss(key))
-            })
-
-            colorsBox.append(btn)
-        }
-
-        accentRow.append(colorsBox)
-        fcGroup.listBox.append(new Gtk.ListBoxRow({ child: accentRow }))
-
-        // ── Transparency Slider ──
-        fcGroup.listBox.append(sliderRow(
-            "Transparencia",
-            "Menús y sidebars de apps GTK (requiere reiniciar las apps)",
-            Theme.transparency,
-            0.0,
-            1.0,
-            (v) => Theme.setTransparency(v)
-        ))
-
-        // ── Tint Strength Slider ──
-        fcGroup.listBox.append(sliderRow(
-            "Tintado de acento",
-            "Intensidad del color de acento en los paneles",
-            Theme.tintStrength,
-            0.0,
-            1.0,
-            (v) => Theme.setTintStrength(v)
-        ))
-
-        // ── Per-Panel Tint Toggles ──
-        const tintPanels = Theme.tintPanels
-        const panelLabels: [keyof typeof tintPanels, string, string][] = [
-            ["controlCenter", "Control Center", "Centro de control"],
-            ["appGrid", "App Grid", "Grid de aplicaciones"],
-        ]
-
-        for (const [key, , label] of panelLabels) {
-            fcGroup.listBox.append(toggleRow(
-                label,
-                "Tintar con el color de acento",
-                tintPanels[key],
-                (active) => Theme.setTintPanel(key, active)
-            ))
-        }
-
-        page.append(fcGroup.box)
+        colorsBox.append(btn)
     }
+
+    accentRow.append(colorsBox)
+    fcGroup.listBox.append(new Gtk.ListBoxRow({ child: accentRow }))
+
+    // ── Transparency Slider ──
+    fcGroup.listBox.append(sliderRow(
+        "Transparencia",
+        "Menús y sidebars de apps GTK (requiere reiniciar las apps)",
+        Theme.transparency,
+        0.0,
+        1.0,
+        (v) => Theme.setTransparency(v)
+    ))
+
+    // ── Tint Strength Slider ──
+    fcGroup.listBox.append(sliderRow(
+        "Tintado de acento",
+        "Intensidad del color de acento en los paneles",
+        Theme.tintStrength,
+        0.0,
+        1.0,
+        (v) => Theme.setTintStrength(v)
+    ))
+
+    // ── Per-Panel Tint Toggles ──
+    const tintPanels = Theme.tintPanels
+    const panelLabels: [keyof typeof tintPanels, string, string][] = [
+        ["controlCenter", "Control Center", "Centro de control"],
+        ["appGrid", "App Grid", "Grid de aplicaciones"],
+    ]
+
+    for (const [key, , label] of panelLabels) {
+        fcGroup.listBox.append(toggleRow(
+            label,
+            "Tintar con el color de acento",
+            tintPanels[key],
+            (active) => Theme.setTintPanel(key, active)
+        ))
+    }
+
+    page.append(fcGroup.box)
 
     // 3. Theme Family
     const themesGroup = listGroup("Temas y recursos")

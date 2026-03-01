@@ -158,13 +158,11 @@ class ThemeManager extends GObject.Object {
         console.log(`[ThemeManager] Global Preference: ${scheme}`)
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", scheme])
 
-        // No need to regenerate Fluid Crystal CSS here —
-        // Libadwaita handles dark/light switching in real-time via color-scheme.
-        // Our CSS only defines accent, transparency, etc. (mode-independent).
-
-        // Update settings.ini
+        // FluidCrystal builds natively on MacTahoe now (not Adwaita)
         if (this.isFluidCrystal) {
-            this.updateSettingsIni("Adwaita")
+            const baseTheme = dark ? "MacTahoe-Dark" : "MacTahoe-Light"
+            await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", baseTheme])
+            this.updateSettingsIni(baseTheme)
         }
 
         this.saveSettings()
@@ -339,12 +337,13 @@ class ThemeManager extends GObject.Object {
             // ── Fluid Crystal path ──
             this.regenerateFluidCrystal()
 
-            // Set gtk-theme to "Adwaita" so Libadwaita apps (Nautilus, etc.)
-            // use the default engine and pick up our ~/.config/gtk-4.0/gtk.css override
-            await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita"])
+            // Set gtk-theme to MacTahoe so GTK3 and window frames pick up native styling 
+            // Our ~/.config/gtk-4.0/gtk.css override applies translucency on top
+            const baseTheme = this.state.isDark ? "MacTahoe-Dark" : "MacTahoe-Light"
+            await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", baseTheme])
 
             // Update settings.ini to match
-            this.updateSettingsIni("Adwaita")
+            this.updateSettingsIni(baseTheme)
         } else {
             // ── External theme path ──
             this.registerExternalTheme(theme)
@@ -357,7 +356,7 @@ class ThemeManager extends GObject.Object {
         try {
             const settings = Gtk.Settings.get_default()
             if (settings) {
-                settings.gtk_theme_name = theme === FLUID_CRYSTAL_ID ? "Adwaita" : theme
+                settings.gtk_theme_name = theme === FLUID_CRYSTAL_ID ? (this.state.isDark ? "MacTahoe-Dark" : "MacTahoe-Light") : theme
                 // @ts-ignore
                 settings.gtk_application_prefer_dark_theme = this.state.isDark
             }

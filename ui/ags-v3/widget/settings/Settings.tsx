@@ -25,6 +25,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     const win = new Gtk.Window({
         name: "crystal-settings",
         application: app,
+        css_classes: ["background"],
         default_width: 900,
         default_height: 650,
         visible: false,
