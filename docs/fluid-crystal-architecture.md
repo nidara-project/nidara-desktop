@@ -4,7 +4,7 @@
 
 ## Overview
 
-```
+```text
 ┌─────────────────────────────────────────────────────┐
 │                  fluid-crystal.json                  │
 │         (accent, isDark, transparency, tint)         │
@@ -24,155 +24,118 @@
 
 | File | Purpose |
 |---|---|
-| `core/FluidCrystal.ts` | Token engine: generates CSS from config, manages palette |
+| `core/FluidCrystal.ts` | Token engine: generates CSS from config, manages palette and glass calculations |
 | `core/ThemeManager.ts` | Orchestrator: GSettings, symlinks, CssProviders, config I/O |
 | `styles/_tokens.scss` | SCSS fallbacks (build-time); runtime overridden by CssProvider |
-| `themes/fluid-crystal/` | Generated GTK4 CSS output + window button assets |
+| `themes/fluid-crystal/` | Generated GTK4 CSS output + structural GTK bindings (`template-*.css`) |
 | `~/.config/distroia/fluid-crystal.json` | Persisted user config |
 
-## How Each Feature Works
+---
 
-### 1. Dark / Light Mode
+## 💎 The Glassmorphism Architecture (Absolute Root Targeting)
+
+The hardest technical challenge in GTK4/Libadwaita theming is achieving a globally controlled, single-layer frosted glass effect without causing CSS compiler infinite loops, 100% invisible windows, or ugly "double-tinting" (where nested panels multiply the darkness). 
+
+Fluid Crystal resolves this using **Absolute Root Node Targeting**, bypassing GTK CSS variables entirely for the transparency layer.
+
+### 1. The Direct Window Injection
+
+Instead of overriding `@window_bg_color` (which causes circular references and crashes native apps), Fluid Crystal injects the slider-controlled transparency variable (`@fc_window_bg`) directly into the physical root nodes of GTK applications:
+
+```css
+window.background:not(.popup):not(#Z):not(#Y):not(#X),
+window.background.csd:not(.popup):not(#Z):not(#Y):not(#X),
+dialog.background:not(.popup):not(#Z):not(#Y):not(#X) {
+  background-color: @fc_window_bg;
+  background-image: none;
+}
+```
+
+This guarantees that **exactly one** sheet of slider-controlled glass is spawned at the absolute bottom of every native GTK4 application. 
+
+### 2. The Opaque Layer Penetration Sledgehammer
+
+Native GTK apps are built like onions. If we make the root transparent, the internal `GtkBox`, `AdwView`, or `GtkScrolledWindow` will just draw their own solid gray squares, burying our glass. 
+
+We solve this using a monolithic `:not()` specificity injection that mathematically out-ranks all deep Libadwaita bindings, violently stripping all structural internal panels to `transparent`:
+
+```css
+/* Strips internal component layering so purely the base window provides the single unified glass tint */
+.view:not(#Z):not(#Y):not(#X),
+.content-pane:not(#Z):not(#Y):not(#X),
+.sidebar-pane:not(#Z):not(#Y):not(#X),
+scrolledwindow:not(#Z):not(#Y):not(#X),
+mathwindow:not(#Z):not(#Y):not(#X),
+carousel:not(#Z):not(#Y):not(#X) {
+  background-color: transparent;
+  background-image: none;
+}
+```
+*Result: Nautilus, Calculator, and Loupe achieve flawless edge-to-edge glass without double-tinted sidebars or opaque content views.*
+
+### 3. AGS Overlay Isolation vs. Opt-In
+
+AGS creates many invisible utility windows (like the Dock, Top Bar, and OSDs). If we targeted `window:not(.popup)`, these utilities would suddenly get a glass background, drawing giant tinted rectangles on the screen edges.
+
+**The Isolation:** By strictly targeting `window.background`, raw AGS `Gtk.Window` instances remain 100% invisible because they do not have the `.background` class natively.
+
+**The Opt-In (Unified AGS Glass):** For our visible desktop applications (Settings UI, Control Center), we manually opt them into the glass architecture by adding the `"background"` CSS class in TypeScript:
+```typescript
+const win = new Gtk.Window({
+    name: "crystal-control-center",
+    css_classes: ["control-center-win", "background"], // Explicitly requests the GTK4 glass layer
+})
+```
+
+### 4. Popover Defenses
+
+Context menus (`popover`) must remain totally solid to maintain UX readability. They are shielded defensively:
+```css
+popover.background>contents:not(#Z):not(#Y):not(#X) {
+  background-color: @popover_bg_color;
+  background-image: none;
+}
+```
+
+---
+
+## How Other Features Work
+
+### Dark / Light Mode
 
 **Managed by Libadwaita**, not by us.
 
-```
+```text
 ThemeManager.setDarkMode(true)
   → GSettings: color-scheme = "prefer-dark"
   → Libadwaita handles all surface colors (window_bg, view_bg, etc.)
   → Apps react in real-time (Nautilus, Loupe, Chrome)
 ```
 
-We do **NOT** override `window_bg_color` or `view_bg_color` — Libadwaita manages those dynamically. This is why dark/light mode works in real-time for external apps.
+We do **NOT** modify GTK base variables for lightness/darkness, we only modify them to be `transparent` where necessary to let the base node shine through.
 
-### 2. Accent Color
+### Accent Color (The `ACCENT_PALETTE`)
 
-**9 colors** defined in `ACCENT_PALETTE` (blue, teal, green, yellow, orange, red, pink, purple, slate).
+**9 colors** defined (blue, teal, green, yellow, orange, red, pink, purple, slate).
 
 Two delivery mechanisms:
+1. **For external apps (restart required):** Written to `gtk.css` as `@define-color accent_bg_color #...` and heavily forced into Libadwaita components via specific CSS rules in `template-x.css`.
+2. **For AGS shell (real-time):** Loaded directly via `ThemeManager.themeProvider` so SCSS buttons can bind it live. 
 
-#### For external GTK4 apps (restart required):
-```
-FluidCrystal.ts → generateTokensCss(config)
-  → @define-color accent_bg_color #0088FF;
-  → Written to themes/fluid-crystal/gtk-4.0/gtk.css
-  → Symlinked to ~/.config/gtk-4.0/gtk.css
-```
-
-#### For AGS shell (real-time):
-```
-ThemeManager.themeProvider (CssProvider, PRIORITY_USER)
-  → Loads @define-color accent_bg_color ...
-  → SCSS references it via #{"@accent_bg_color"} passthrough
-```
-
-**SCSS escape pattern**: GTK named colors (`@name`) conflict with SCSS `@` directives. Solution:
+***CRITICAL SCSS Escape Pattern***: GTK named colors (`@name`) conflict with SCSS `@` variable directives. 
 ```scss
 // WRONG — SCSS tries to parse as directive
 color: @accent_bg_color;
 
 // CORRECT — passes through literally to compiled CSS
 color: #{"@accent_bg_color"};
-background: #{"alpha(@accent_bg_color, 0.5)"};
 ```
 
-### 3. Panel Tinting
+### Theme Orchestration (GSettings & Symlinks)
 
-**Dynamic CssProvider** (`ThemeManager.tintProvider`, PRIORITY_USER + 1).
+When Fluid Crystal initializes:
+1. Generates `gtk.css` based on current Accent Color and Transparency Slider.
+2. Symlinks the theme folder to `~/.config/gtk-4.0/`.
+3. Sets `gtk-theme = "FluidCrystal"` in GSettings (or "MacTahoe" if globally turning off FC).
 
-Generates CSS rules that apply `rgba(accent, strength * 0.3)` as background-color on selected panels.
-
-**Tintable panels** (CSS backgrounds):
-- `.cc-panel-structure` — Control Center ✅
-- `.app-grid-content` — App Grid ✅
-
-**Not tintable** (Cairo-drawn backgrounds):
-- Top Bar — Cairo pills
-- Dock — Cairo background
-
-Config:
-```json
-{
-  "tintStrength": 0.5,
-  "tintPanels": { "controlCenter": true, "appGrid": false }
-}
-```
-
-### 4. Transparency
-
-Stored in config as `transparency: 0.0–1.0`. Currently a placeholder for future integration with Hyprland blur rules and surface alpha.
-
-### 5. GTK Theme Switching (non-FC themes)
-
-When user selects a theme other than "FluidCrystal":
-```
-ThemeManager.setGtkTheme("MacTahoe")
-  → GSettings: gtk-theme = "MacTahoe"
-  → Removes FC symlinks from ~/.config/gtk-4.0/
-  → Registers external theme's CSS via Gtk.CssProvider
-```
-
-The "Fluid Crystal" section in Settings only appears when FC is the active theme.
-
-## CssProvider Priority Stack
-
-```
-PRIORITY_FALLBACK (1)     — GTK defaults
-PRIORITY_THEME (200)      — System theme
-PRIORITY_APPLICATION (600) — AGS compiled SCSS (style.css)
-PRIORITY_USER (800)       — FC tokens (@define-color) ← themeProvider
-PRIORITY_USER+1 (801)     — FC tint CSS ← tintProvider
-PRIORITY_USER+1 (801)     — Accent circle CSS (Appearance page)
-```
-
-## Symlink Layout (when FC is active)
-
-```
-~/.config/gtk-4.0/
-├── gtk.css          → ~/Dev/Distroia/themes/fluid-crystal/gtk-4.0/gtk.css
-├── gtk-dark.css     → (same target)
-├── assets/          → ~/Dev/Distroia/themes/fluid-crystal/gtk-4.0/assets/
-└── windows-assets/  → ~/Dev/Distroia/themes/fluid-crystal/gtk-4.0/windows-assets/
-```
-
-GTK resolves `url()` paths relative to the symlink location, so `assets/` and `windows-assets/` must also be symlinked.
-
-## Config File Format
-
-`~/.config/distroia/fluid-crystal.json`:
-```json
-{
-  "accent": "blue",
-  "isDark": true,
-  "transparency": 0.75,
-  "tintStrength": 0.0,
-  "tintPanels": {
-    "controlCenter": false,
-    "appGrid": false
-  }
-}
-```
-
-## Cairo vs CSS Components
-
-| Component | Background | Accent follow? |
-|---|---|---|
-| CC Toggle buttons | Cairo (drawSquircle) | ✅ Reads `ACCENT_PALETTE[Theme.accentColor]` |
-| CC Pill sliders | CSS (.cc-pill-slider) | ✅ Via `@accent_bg_color` in SCSS |
-| CC Clear button | CSS | ✅ Via `@accent_bg_color` |
-| Bar workspace dots | CSS | ✅ Via `@accent_bg_color` |
-| Top bar pills | Cairo | ❌ Hardcoded (would need Cairo changes) |
-| Dock background | Cairo | ❌ Hardcoded |
-| Dock indicators | Cairo | ❌ Adaptive to mode, not accent |
-| Settings sliders | CSS | ✅ Via `@accent_bg_color` |
-
-## Adding a New Accent-Aware Component
-
-1. **CSS-based**: Use `#{"@accent_bg_color"}` in SCSS, or `#{"alpha(@accent_bg_color, 0.X)"}` for transparency
-2. **Cairo-based**: Read `ACCENT_PALETTE[Theme.accentColor].color`, convert hex to RGB:
-   ```typescript
-   const hex = ACCENT_PALETTE[Theme.accentColor].color
-   const r = parseInt(hex.slice(1, 3), 16) / 255
-   const g = parseInt(hex.slice(3, 5), 16) / 255
-   const b = parseInt(hex.slice(5, 7), 16) / 255
-   ```
+The "Fluid Crystal" section in our Settings menu only appears while FC is physically set as the active theme.
