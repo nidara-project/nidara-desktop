@@ -34,16 +34,31 @@ export interface TintPanels {
     appGrid: boolean
 }
 
+// ── X-RAY GLASS TARGETS (Modular Sledgehammer) ──────────────────────
+// Lets the user systematically remove opaque nodes from modern Libadwaita apps
+export interface GlassTargets {
+    globalWindow: boolean
+    headerbars: boolean
+    sidebars: boolean
+    mainViews: boolean
+    cardsAndLists: boolean
+    popovers: boolean
+    separators: boolean
+}
+
 // ── USER-CONFIGURABLE STATE ──────────────────────────────────────────
 export interface FluidCrystalConfig {
+    enabled: boolean
     accent: AccentKey
     isDark: boolean         // Passed to Libadwaita's color-scheme (NOT used in CSS)
     transparency: number    // 0.0 (solid) → 1.0 (full glass)
     tintStrength: number    // 0.0 → 1.0 (how much accent tints surfaces)
     tintPanels: TintPanels  // Which panels get accent tinting
+    glassTargets: GlassTargets // Granular control over which GTK nodes get stripped
 }
 
 export const DEFAULT_CONFIG: FluidCrystalConfig = {
+    enabled: true,
     accent: "blue",
     isDark: true,
     transparency: 0.75,
@@ -52,7 +67,113 @@ export const DEFAULT_CONFIG: FluidCrystalConfig = {
         controlCenter: false,
         appGrid: false,
     },
+    glassTargets: {
+        globalWindow: true,
+        headerbars: true,
+        sidebars: true,
+        mainViews: true,
+        cardsAndLists: false,
+        popovers: true,
+        separators: true,
+    }
 }
+
+// ── CSS TEMPLATES FOR SELECTIVE STRIPPING ────────────────────────────
+const GLASS_TEMPLATES: Record<keyof GlassTargets, string> = {
+    globalWindow: `
+/* 1. THE GLASS SHELL (Root Window & Popovers) */
+window.background:not(.popup):not(#Z), 
+window.background.csd:not(.popup):not(#Z), 
+dialog.background:not(.popup):not(#Z),
+popover.background > contents:not(#Z),
+popover > contents:not(#Z) {
+  background-color: @fc_window_bg;
+  background-image: none;
+}`,
+    headerbars: `
+/* 2. STRUCTURAL STRIPPING (Headerbars & Toolbars) */
+window headerbar:not(#Z), window .titlebar:not(#Z), window actionbar:not(#Z), window searchbar:not(#Z), window toolbar:not(#Z), window tabbar:not(#Z) {
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}`,
+    sidebars: `
+/* 3. STRUCTURAL STRIPPING (Sidebars) */
+window .navigation-sidebar:not(#Z), window .sidebar:not(#Z), window placessidebar:not(#Z) {
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}`,
+    mainViews: `
+/* 4. STRUCTURAL STRIPPING (Views & Containers) */
+/* This X-Rays the entire GTK routing and view structure universally */
+window view:not(#Z), window .view:not(#Z), window textview:not(#Z), window textview > text:not(#Z),
+window scrolledwindow:not(#Z), window viewport:not(#Z), window list:not(#Z), window grid:not(#Z),
+window stack:not(#Z), window deck:not(#Z), window leaflet:not(#Z), window flap:not(#Z), window paned:not(#Z), window overlay:not(#Z),
+window .navigation-sidebar:not(#Z), window .sidebar:not(#Z), window placessidebar:not(#Z),
+window notebook:not(#Z), window carousel:not(#Z), window > contents:not(#Z),
+window * > .background:not(window):not(dialog):not(popover):not(#Z),
+window widget:not(#Z) {
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+}`,
+    separators: `
+/* 4.5 SEPARATORS & BORDERS */
+window separator:not(#Z), window paned > separator:not(#Z), 
+popover separator:not(#Z), headerbar > separator:not(#Z) {
+  background-color: alpha(@window_fg_color, 0.10);
+  background-image: none;
+}`,
+    cardsAndLists: `
+/* 5. ELEVATED SURFACES (Cards & Boxed Lists) */
+window card:not(#Z), window boxed-list:not(#Z), window list.boxed:not(#Z), window .card:not(#Z) {
+  background-color: alpha(@window_fg_color, 0.05);
+  background-image: none;
+  border: 1px solid alpha(@window_fg_color, 0.08);
+}`,
+    popovers: `
+/* (Popovers are handled in the Glass Shell to avoid duplicate complexity) */
+`
+}
+
+const FORCE_ACCENT_CSS = `
+/* 7. BRUTE-FORCE ACCENT INJECTION */
+/* Overrides external compiled SASS themes that hardcode static hex values instead of using GTK named colors */
+window .suggested-action:not(#Z), window .accent:not(#Z), window selection:not(#Z), window .selection:not(#Z), window button.suggested-action:not(#Z), window switch:checked:not(#Z), window scale highlight:not(#Z), window entry selection:not(#Z), window spinbutton selection:not(#Z), window label selection:not(#Z),
+window row:selected:not(#Z), window child:selected:not(#Z), window .selected:not(#Z),
+* toast:not(#Z):not(#Y):not(#X):not(#W), * .toast:not(#Z):not(#Y):not(#X):not(#W), * .app-notification:not(#Z):not(#Y):not(#X):not(#W), * snackbar:not(#Z):not(#Y):not(#X):not(#W),
+* .floating-bar:not(#Z):not(#Y):not(#X):not(#W), .floating-bar:not(#Z):not(#Y):not(#X):not(#W) > widget,
+toast:not(#Z):not(#Y):not(#X):not(#W) > widget, .toast:not(#Z):not(#Y):not(#X):not(#W) > widget, toast * > .background:not(#Z),
+* check:checked:not(#Z):not(#Y):not(#X):not(#W), * radio:checked:not(#Z):not(#Y):not(#X):not(#W),
+* button.circular:checked:not(#Z):not(#Y):not(#X):not(#W), * button.tick:checked:not(#Z):not(#Y):not(#X):not(#W),
+popover.menu button:hover:not(#Z), popover.menu modelbutton:hover:not(#Z), popover.menu menuitem:hover:not(#Z), 
+popover.menu button:active:not(#Z), popover.menu modelbutton:active:not(#Z), popover.menu menuitem:active:not(#Z),
+popover.menu button:selected:not(#Z), popover.menu modelbutton:selected:not(#Z), popover.menu menuitem:selected:not(#Z) {
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+/* 7.5 KILL GRADIENT BACKGROUNDS ON ACCENTS */
+/* Prevents MacTahoe from drawing static gradients or SVG images over our background */
+* check:checked:not(#Z):not(#Y):not(#X):not(#W), * radio:checked:not(#Z):not(#Y):not(#X):not(#W),
+* toast:not(#Z):not(#Y):not(#X):not(#W), * .toast:not(#Z):not(#Y):not(#X):not(#W), toast:not(#Z):not(#Y):not(#X):not(#W) > widget,
+* .floating-bar:not(#Z):not(#Y):not(#X):not(#W), .floating-bar:not(#Z):not(#Y):not(#X):not(#W) > widget,
+window switch:checked:not(#Z):not(#Y):not(#X) {
+  background-image: none;
+  background: none;
+  background-color: @accent_bg_color;
+}
+
+window switch:checked:not(#Z) {
+  border-color: @accent_bg_color;
+}
+`
 
 // ── PANEL CSS SELECTORS ──────────────────────────────────────────────
 const PANEL_SELECTORS: Record<keyof TintPanels, string[]> = {
@@ -182,23 +303,8 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
         `@define-color error_fg_color #ffffff;`,
         `@define-color error_color #ED5F5D;`,
         ``,
-        `/* ── Transparency Overrides (reference Libadwaita's dynamic colors) ── */`,
-        `/* transparency: 0 = solid, 1 = full glass */`,
-        `/* General Window Background: mapped seamlessly to the UI slider (Solid 100% -> Glass 10%) */`,
-        `@define-color fc_window_bg alpha(@window_bg_color, ${(1.0 - t * 0.90).toFixed(2)});`,
-        `/* Sidebar: can go very transparent (MacTahoe sidebar look) */`,
-        `@define-color sidebar_bg_color alpha(@window_bg_color, ${(1.0 - t * 0.85).toFixed(2)});`,
-        `@define-color sidebar_backdrop_color alpha(@window_bg_color, ${(1.0 - t * 0.85).toFixed(2)});`,
-        `@define-color sidebar_shade_color rgba(0, 0, 0, 0.25);`,
-        `@define-color sidebar_border_color alpha(@window_fg_color, 0.08);`,
-        `/* Dialogs & popovers: never fully transparent (min 85% opaque) */`,
-        `@define-color dialog_bg_color alpha(@view_bg_color, ${Math.max(0.85, 1.0 - t * 0.5).toFixed(2)});`,
-        `@define-color popover_bg_color alpha(@window_bg_color, ${Math.max(0.85, 1.0 - t * 0.5).toFixed(2)});`,
-        `@define-color popover_shade_color rgba(0, 0, 0, 0.25);`,
-        `/* Headerbar backdrop: ensure solid when unfocused (critical for Hyprland CSD) */`,
-        `@define-color headerbar_backdrop_color @window_bg_color;`,
-        `/* Headerbar bg: Libadwaita color used by headerbar.flat apps (Calculator etc.) */`,
-        `@define-color headerbar_bg_color @window_bg_color;`,
+        `/* ── Transparency Core Override (Fluid Crystal X-Ray Shell) ── */`,
+        `@define-color fc_window_bg alpha(@window_bg_color, ${(0.96 * t).toFixed(2)});`,
         ``,
         `/* ── CSS Custom Properties for accent palette ── */`,
     ]
@@ -218,19 +324,37 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
 }
 
 /**
- * Generate a complete GTK4 CSS file by combining token header + template body.
+ * Generate a complete GTK4 CSS file by combining token header + Sledgehammer.
  * ONE file works for BOTH dark and light modes.
  * Used for: ~/.config/gtk-4.0/gtk.css (system apps like Nautilus)
  */
-export function generateGtkCss(config: FluidCrystalConfig): string {
-    const projectDir = GLib.getenv("DISTROIA_DIR") || `${GLib.get_home_dir()}/Dev/Distroia`
-    const themeDir = `${projectDir}/themes/fluid-crystal`
+export function generateGtkCss(config: FluidCrystalConfig, baseThemeCssPath?: string): string {
+    // We construct a Universal Glass Overlay: a minimal, non-destructive CSS payload 
+    // that targets the absolute base roots of GTK applications. It strips the solid
+    // base layers and replaces them with our calculated @fc_window_bg tokens.
+    // The rest of the styling (buttons, fonts, borders) is deferred gracefully to 
+    // whatever GTK theme the user has currently selected in GNOME Tweaks/nwg-look!
 
-    // We use the dark template as base since it has color-mix() and @define-color references
-    // that resolve dynamically against Libadwaita's colors
-    const template = readFile(`${themeDir}/template-dark.css`) || ""
+    let importStatement = ""
+    if (baseThemeCssPath) {
+        // BUG FIX: @import MUST be the first line of a GTK CSS file, otherwise our variables are ignored.
+        importStatement = `@import url("file://${baseThemeCssPath}");\n\n`
+    }
 
-    return generateTokenHeader(config) + "\n" + template
+    let overlayTemplate = `\n/* ── FLUID CRYSTAL MODULAR X-RAY ENGINE ── */\n`
+
+    // Dynamically punch through the GTK layers based on the user's switches
+    for (const [key, enabled] of Object.entries(config.glassTargets)) {
+        if (enabled) {
+            overlayTemplate += GLASS_TEMPLATES[key as keyof GlassTargets] + "\n"
+        }
+    }
+
+    // Unconditionally append the brute-force accent color override
+    overlayTemplate += "\n" + FORCE_ACCENT_CSS + "\n"
+
+    // Generate output with the mathematically correct CSS cascade priority
+    return importStatement + generateTokenHeader(config) + "\n" + overlayTemplate
 }
 
 /**
@@ -245,8 +369,8 @@ export function generateTokensCss(config: FluidCrystalConfig): string {
  * Write generated CSS to the Fluid Crystal output directory.
  * ONE file for both modes — Libadwaita handles dark/light switching.
  */
-export function writeGeneratedTheme(config: FluidCrystalConfig): void {
-    const css = generateGtkCss(config)
+export function writeGeneratedTheme(config: FluidCrystalConfig, baseThemeCssPath?: string): void {
+    const css = generateGtkCss(config, baseThemeCssPath)
     const projectDir = GLib.getenv("DISTROIA_DIR") || `${GLib.get_home_dir()}/Dev/Distroia`
     const outDir = `${projectDir}/themes/fluid-crystal/gtk-4.0`
 
