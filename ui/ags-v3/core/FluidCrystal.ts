@@ -92,18 +92,36 @@ popover > contents:not(#Z) {
 }`,
     headerbars: `
 /* 2. STRUCTURAL STRIPPING (Headerbars & Toolbars) */
-window headerbar:not(#Z), window .titlebar:not(#Z), window actionbar:not(#Z), window searchbar:not(#Z), window toolbar:not(#Z), window tabbar:not(#Z) {
+window headerbar:not(#Z):not(#Y):not(#X):not(#W), 
+window .titlebar:not(#Z):not(#Y):not(#X):not(#W), 
+window actionbar:not(#Z):not(#Y):not(#X):not(#W), 
+window searchbar:not(#Z):not(#Y):not(#X):not(#W), 
+window toolbar:not(#Z):not(#Y):not(#X):not(#W), 
+window tabbar:not(#Z):not(#Y):not(#X):not(#W) {
   background: transparent;
   background-color: transparent;
   background-image: none;
   box-shadow: none;
   border: none;
+  border-bottom: none;
+}
+/* Eliminate horizontal lines under titlebars (e.g. Calculator, Text Editor) */
+window headerbar > separator:not(#Z):not(#Y), 
+window .titlebar > separator:not(#Z):not(#Y), 
+window separator.titlebar:not(#Z):not(#Y),
+window > separator.horizontal:not(#Z):not(#Y) {
+  background: transparent;
+  background-color: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+  min-height: 0;
 }`,
     sidebars: `
 /* 3. STRUCTURAL STRIPPING (Sidebars) */
 window .navigation-sidebar:not(#Z), window .sidebar:not(#Z), window placessidebar:not(#Z) {
-  background: transparent;
-  background-color: transparent;
+  background: alpha(@window_fg_color, 0.03);
+  background-color: alpha(@window_fg_color, 0.03);
   background-image: none;
   border: none;
   box-shadow: none;
@@ -124,9 +142,10 @@ window widget:not(#Z) {
   border: none;
 }`,
     separators: `
-/* 4.5 SEPARATORS & BORDERS */
+/* 4.5 INTERNAL PANEL SEPARATORS */
+/* Vertical dividers between sidebars and content panes stay slightly visible for structure */
 window separator:not(#Z), window paned > separator:not(#Z), 
-popover separator:not(#Z), headerbar > separator:not(#Z) {
+popover separator:not(#Z), window > separator.vertical:not(#Z) {
   background-color: alpha(@window_fg_color, 0.10);
   background-image: none;
 }`,
@@ -159,19 +178,69 @@ popover.menu button:selected:not(#Z), popover.menu modelbutton:selected:not(#Z),
   color: @accent_fg_color;
 }
 
-/* 7.5 KILL GRADIENT BACKGROUNDS ON ACCENTS */
-/* Prevents MacTahoe from drawing static gradients or SVG images over our background */
-* check:checked:not(#Z):not(#Y):not(#X):not(#W), * radio:checked:not(#Z):not(#Y):not(#X):not(#W),
-* toast:not(#Z):not(#Y):not(#X):not(#W), * .toast:not(#Z):not(#Y):not(#X):not(#W), toast:not(#Z):not(#Y):not(#X):not(#W) > widget,
-* .floating-bar:not(#Z):not(#Y):not(#X):not(#W), .floating-bar:not(#Z):not(#Y):not(#X):not(#W) > widget,
-window switch:checked:not(#Z):not(#Y):not(#X) {
+/* 7.5 THE UNIVERSAL GTK ACCENT MAP (Sledgehammer Vectors) */
+/* 
+   By targeting the absolute base semantic nodes of GTK with 400-point specificity, 
+   we seize control of all interactive colored elements universally across ANY theme.
+*/
+
+/* Checkboxes, Radios, and Switches */
+check:checked:not(#Z):not(#Y):not(#X):not(#W), 
+radio:checked:not(#Z):not(#Y):not(#X):not(#W),
+switch:checked:not(#Z):not(#Y):not(#X):not(#W) {
   background-image: none;
   background: none;
   background-color: @accent_bg_color;
+  border-color: @accent_bg_color;
 }
 
-window switch:checked:not(#Z) {
-  border-color: @accent_bg_color;
+/* Base Primary Buttons */
+button.suggested-action:not(#Z):not(#Y):not(#X):not(#W),
+button.primary:not(#Z):not(#Y):not(#X):not(#W) {
+  background-image: none;
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+  border-color: alpha(@window_fg_color, 0.1);
+}
+
+/* Selected List Rows & TreeViews */
+row:selected:not(#Z):not(#Y):not(#X):not(#W),
+treeview:selected:not(#Z):not(#Y):not(#X):not(#W),
+infobar.info:not(#Z):not(#Y):not(#X):not(#W) {
+  background-image: none;
+  background-color: alpha(@accent_bg_color, 0.2);
+  color: @window_fg_color;
+}
+
+/* Progressbars and Scales/Sliders */
+progressbar > trough > progress:not(#Z):not(#Y):not(#X),
+scale > trough > highlight:not(#Z):not(#Y):not(#X),
+levelbar > trough > block.filled:not(#Z):not(#Y):not(#X) {
+  background-image: none;
+  background-color: @accent_bg_color;
+  border-color: alpha(@window_fg_color, 0.1);
+}
+
+/* Tooltips & Toasts Wrapper */
+toast:not(#Z):not(#Y):not(#X):not(#W), 
+.toast:not(#Z):not(#Y):not(#X):not(#W), 
+toast:not(#Z):not(#Y):not(#X):not(#W) > widget,
+.floating-bar:not(#Z):not(#Y):not(#X):not(#W), 
+.floating-bar:not(#Z):not(#Y):not(#X):not(#W) > widget {
+  background-image: none;
+  background: none;
+  background-color: @accent_bg_color;
+  color: @accent_fg_color;
+}
+
+/* 8. INPUT FIELD FOCUS RING FIX (Universal Text Entries) */
+entry:focus:not(#Z):not(#Y):not(#X):not(#W),
+entry:focus-within:not(#Z):not(#Y):not(#X):not(#W),
+textview:focus:not(#Z):not(#Y):not(#X):not(#W),
+#NautilusPathBar entry:focus:not(#Z):not(#Y) {
+  background-image: none;
+  background-color: rgba(255, 255, 255, 0.05);
+  box-shadow: 0 5px 12px rgba(0, 0, 0, 0.2), inset 0 0 0 2px @accent_bg_color;
 }
 `
 
@@ -332,7 +401,7 @@ export function generateGtkCss(config: FluidCrystalConfig, baseThemeCssPath?: st
     // We construct a Universal Glass Overlay: a minimal, non-destructive CSS payload 
     // that targets the absolute base roots of GTK applications. It strips the solid
     // base layers and replaces them with our calculated @fc_window_bg tokens.
-    // The rest of the styling (buttons, fonts, borders) is deferred gracefully to 
+    // The rest of the styling (buttons, fonts, metrics) is deferred gracefully to 
     // whatever GTK theme the user has currently selected in GNOME Tweaks/nwg-look!
 
     let importStatement = ""
@@ -341,7 +410,7 @@ export function generateGtkCss(config: FluidCrystalConfig, baseThemeCssPath?: st
         importStatement = `@import url("file://${baseThemeCssPath}");\n\n`
     }
 
-    let overlayTemplate = `\n/* ── FLUID CRYSTAL MODULAR X-RAY ENGINE ── */\n`
+    let overlayTemplate = `/* ── FLUID CRYSTAL MODULAR X-RAY ENGINE ── */\n`
 
     // Dynamically punch through the GTK layers based on the user's switches
     for (const [key, enabled] of Object.entries(config.glassTargets)) {
@@ -353,7 +422,10 @@ export function generateGtkCss(config: FluidCrystalConfig, baseThemeCssPath?: st
     // Unconditionally append the brute-force accent color override
     overlayTemplate += "\n" + FORCE_ACCENT_CSS + "\n"
 
-    // Generate output with the mathematically correct CSS cascade priority
+    // Generate output with the mathematically correct CSS cascade priority:
+    // 1. @import Base Theme
+    // 2. Token Definitions
+    // 3. Fluid Crystal X-Ray Templates
     return importStatement + generateTokenHeader(config) + "\n" + overlayTemplate
 }
 
