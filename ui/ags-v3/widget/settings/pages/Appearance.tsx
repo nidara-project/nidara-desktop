@@ -225,13 +225,18 @@ export default function AppearancePage() {
     ))
     page.append(styleGroup.box)
 
-    // 2. Fluid Crystal — Accent & Transparency (dynamically visible)
+    // 2. Fluid Crystal — Accent & Transparency
     const fcGroup = listGroup("Fluid Crystal")
-    fcGroup.box.visible = Theme.isFluidCrystal
 
-    Theme.connect("changed", () => {
-        fcGroup.box.visible = Theme.isFluidCrystal
-    })
+    const masterToggleRow = toggleRow(
+        "Motor Óptico",
+        "Inyecta cristalmorfismo sobre tu tema GTK actual",
+        Theme.isFluidCrystal,
+        (active) => Theme.setFluidCrystalEnabled(active)
+    )
+    fcGroup.listBox.append(masterToggleRow)
+
+    const childRows: any[] = []
 
 
     // ── Accent Color Picker (macOS-style colored circles) ──
@@ -328,27 +333,33 @@ export default function AppearancePage() {
     }
 
     accentRow.append(colorsBox)
-    fcGroup.listBox.append(new Gtk.ListBoxRow({ child: accentRow }))
+    const accentListRow = new Gtk.ListBoxRow({ child: accentRow })
+    fcGroup.listBox.append(accentListRow)
+    childRows.push(accentListRow)
 
     // ── Transparency Slider ──
-    fcGroup.listBox.append(sliderRow(
+    const tRow = sliderRow(
         "Transparencia",
         "Menús y sidebars de apps GTK (requiere reiniciar las apps)",
         Theme.transparency,
         0.0,
         1.0,
         (v) => Theme.setTransparency(v)
-    ))
+    )
+    fcGroup.listBox.append(tRow)
+    childRows.push(tRow)
 
     // ── Tint Strength Slider ──
-    fcGroup.listBox.append(sliderRow(
+    const tintRow = sliderRow(
         "Tintado de acento",
         "Intensidad del color de acento en los paneles",
         Theme.tintStrength,
         0.0,
         1.0,
         (v) => Theme.setTintStrength(v)
-    ))
+    )
+    fcGroup.listBox.append(tintRow)
+    childRows.push(tintRow)
 
     // ── Per-Panel Tint Toggles ──
     const tintPanels = Theme.tintPanels
@@ -358,15 +369,51 @@ export default function AppearancePage() {
     ]
 
     for (const [key, , label] of panelLabels) {
-        fcGroup.listBox.append(toggleRow(
+        const pRow = toggleRow(
             label,
             "Tintar con el color de acento",
             tintPanels[key],
             (active) => Theme.setTintPanel(key, active)
+        )
+        fcGroup.listBox.append(pRow)
+        childRows.push(pRow)
+    }
+
+    // ── X-Ray Glass Targets ──
+    const xrayGroup = listGroup("Capas de Cristal (Sledgehammer)")
+    const glassTargets = Theme.glassTargets
+    const xrayLabels: [keyof typeof glassTargets, string, string][] = [
+        ["globalWindow", "Fondo Global (Raíz)", "La capa base de todas las ventanas"],
+        ["headerbars", "Barras de título", "Cabeceras y controles superiores"],
+        ["sidebars", "Paneles Laterales", "Contenidos de navegación (ej. Archivos)"],
+        ["mainViews", "Vistas Principales", "El contenido central de las apps"],
+        ["cardsAndLists", "Listas y Tarjetas", "Filas de opciones y contenedores internos"],
+        ["popovers", "Menús y Popovers", "Menús contextuales y desplegables"],
+    ]
+
+    for (const [key, label, subtitle] of xrayLabels) {
+        xrayGroup.listBox.append(toggleRow(
+            label,
+            subtitle,
+            glassTargets[key],
+            (active) => Theme.setGlassTarget(key, active)
         ))
     }
 
+    const updateFcVisibility = () => {
+        const isFc = Theme.isFluidCrystal
+        childRows.forEach(row => row.visible = isFc)
+        xrayGroup.box.visible = isFc
+        try {
+            const sw = (masterToggleRow.get_child() as any).get_last_child() as any
+            if (sw && sw.active !== isFc) sw.active = isFc
+        } catch (e) { }
+    }
+    updateFcVisibility()
+    Theme.connect("changed", updateFcVisibility)
+
     page.append(fcGroup.box)
+    page.append(xrayGroup.box)
 
     // 3. Theme Family
     const themesGroup = listGroup("Temas y recursos")

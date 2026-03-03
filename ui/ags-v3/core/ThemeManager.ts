@@ -10,6 +10,7 @@ import {
     type FluidCrystalConfig,
     type AccentKey,
     type TintPanels,
+    type GlassTargets, // Added GlassTargets
     DEFAULT_CONFIG,
     ACCENT_PALETTE,
     writeGeneratedTheme,
@@ -21,7 +22,8 @@ import {
 } from "./FluidCrystal"
 
 // ── CONSTANTS ────────────────────────────────────────────────────────
-const FLUID_CRYSTAL_ID = "FluidCrystal"
+// The default fallback theme name if nothing is selected
+const DEFAULT_SYSTEM_THEME = "MacTahoe-Dark"
 
 /**
  * ThemeEngine State Interface
@@ -46,7 +48,7 @@ class ThemeManager extends GObject.Object {
     }
 
     private state: ThemeState = {
-        themeFamily: FLUID_CRYSTAL_ID,
+        themeFamily: DEFAULT_SYSTEM_THEME,
         iconTheme: "MacTahoe",
         cursorTheme: "macOS",
         isDark: true
@@ -67,8 +69,7 @@ class ThemeManager extends GObject.Object {
     getAvailableGtkThemes(): string[] {
         const paths = ["/usr/share/themes", `${GLib.get_home_dir()}/.local/share/themes`, `${GLib.get_home_dir()}/.themes`]
         const external = this.listDirs(paths).filter(t => !["Default", "Emacs"].includes(t))
-        // Always include Fluid Crystal as the first option
-        return [FLUID_CRYSTAL_ID, ...external]
+        return external
     }
 
     getAvailableIconThemes(): string[] {
@@ -114,11 +115,12 @@ class ThemeManager extends GObject.Object {
     get cursorTheme() { return this.state.cursorTheme }
     get isDark() { return this.state.isDark }
 
-    get isFluidCrystal() { return this.state.themeFamily === FLUID_CRYSTAL_ID }
+    get isFluidCrystal() { return this.fcConfig.enabled }
     get accentColor(): AccentKey { return this.fcConfig.accent }
     get transparency() { return this.fcConfig.transparency }
     get tintStrength() { return this.fcConfig.tintStrength }
     get tintPanels() { return this.fcConfig.tintPanels }
+    get glassTargets() { return this.fcConfig.glassTargets }
     get accentPalette() { return ACCENT_PALETTE }
 
     // ── Theme Switching ──────────────────────────────────────────────
@@ -158,12 +160,8 @@ class ThemeManager extends GObject.Object {
         console.log(`[ThemeManager] Global Preference: ${scheme}`)
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", scheme])
 
-        // FluidCrystal builds natively on MacTahoe now (not Adwaita)
-        if (this.isFluidCrystal) {
-            const baseTheme = dark ? "MacTahoe-Dark" : "MacTahoe-Light"
-            await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", baseTheme])
-            this.updateSettingsIni(baseTheme)
-        }
+        // Update the CSS to reflect potential dark mode changes in Libadwaita
+        await this.syncGtkTheme()
 
         this.saveSettings()
         this.emit("changed")
@@ -171,11 +169,29 @@ class ThemeManager extends GObject.Object {
 
     // ── Fluid Crystal API ────────────────────────────────────────────
 
+    async setFluidCrystalEnabled(enabled: boolean) {
+        console.log(`[ThemeManager] Fluid Crystal overlay toggled: ${enabled}`)
+        this.fcConfig.enabled = enabled
+        saveFCConfig(this.fcConfig)
+        await this.syncGtkTheme()
+        this.emit("changed")
+    }
+
+    async setGlassTarget(key: keyof GlassTargets, enabled: boolean) {
+        console.log(`[ThemeManager] Glass target toggled: ${key} = ${enabled}`)
+        this.fcConfig.glassTargets[key] = enabled
+        if (this.isFluidCrystal) {
+            this.syncGtkTheme() // Need full sync to overwrite CSS file
+        }
+        saveFCConfig(this.fcConfig)
+        this.emit("changed")
+    }
+
     async setAccentColor(accent: AccentKey) {
         console.log(`[ThemeManager] Setting accent: ${accent}`)
         this.fcConfig.accent = accent
         if (this.isFluidCrystal) {
-            this.regenerateFluidCrystal()
+            this.syncGtkTheme() // Need full sync to overwrite CSS file
         }
         saveFCConfig(this.fcConfig)
         this.emit("changed")
@@ -184,7 +200,7 @@ class ThemeManager extends GObject.Object {
     async setTransparency(value: number) {
         this.fcConfig.transparency = Math.max(0, Math.min(1, value))
         if (this.isFluidCrystal) {
-            this.regenerateFluidCrystal()
+            this.syncGtkTheme() // Need full sync to overwrite CSS file
         }
         saveFCConfig(this.fcConfig)
         this.emit("changed")
@@ -232,30 +248,8 @@ class ThemeManager extends GObject.Object {
     private registeredResource: any | null = null
 
     /**
-     * Regenerate Fluid Crystal theme from current config.
-     * CSS is mode-independent (works for both dark and light).
+     * Delete the regenerateFluidCrystal function block since syncGtkTheme handles all logic now.
      */
-    private regenerateFluidCrystal() {
-        console.log("[ThemeManager] Regenerating Fluid Crystal theme...")
-        try {
-            // Write full CSS (tokens + MacTahoe template) for system apps
-            writeGeneratedTheme(this.fcConfig)
-            installFluidCrystalSymlinks()
-
-            // Load ONLY tokens into AGS CssProvider (not the MacTahoe template)
-            // Our AGS widgets are styled by our SCSS, not MacTahoe rules
-            this.ensureProvidersLinked()
-            const tokensCss = generateTokensCss(this.fcConfig)
-            this.themeProvider.load_from_string(tokensCss)
-
-            // Also update tint CSS
-            this.refreshTintCss()
-
-            console.log(`[ThemeManager] AGS CssProviders loaded (tokens + tint)`)
-        } catch (e) {
-            console.error(`[ThemeManager] Fluid Crystal generation failed: ${e}`)
-        }
-    }
 
     /**
      * Refresh only the tint CSS (lightweight, no file I/O)
@@ -330,33 +324,59 @@ class ThemeManager extends GObject.Object {
     }
 
     private async syncGtkTheme() {
-        const theme = this.state.themeFamily
-        console.log(`[ThemeManager] syncGtkTheme → ${theme}`)
+        const theme = this.state.themeFamily || DEFAULT_SYSTEM_THEME
 
-        if (theme === FLUID_CRYSTAL_ID) {
-            // ── Fluid Crystal path ──
-            this.regenerateFluidCrystal()
+        console.log(`[ThemeManager] syncGtkTheme → Base Theme: ${theme} | FC Engine: ${this.isFluidCrystal}`)
 
-            // Set gtk-theme to MacTahoe so GTK3 and window frames pick up native styling 
-            // Our ~/.config/gtk-4.0/gtk.css override applies translucency on top
-            const baseTheme = this.state.isDark ? "MacTahoe-Dark" : "MacTahoe-Light"
-            await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", baseTheme])
+        // 1. Process external theme resources (buttons, headers, assets)
+        this.registerExternalTheme(theme)
 
-            // Update settings.ini to match
-            this.updateSettingsIni(baseTheme)
-        } else {
-            // ── External theme path ──
-            this.registerExternalTheme(theme)
-            this.symlinkExternalTheme(theme)
-            await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", theme])
-            this.updateSettingsIni(theme)
+        // 2. Discover the physical CSS file of the base theme
+        let baseThemeCssPath = ""
+        const searchPaths = [
+            `${GLib.get_home_dir()}/.local/share/themes/${theme}/gtk-4.0/gtk.css`,
+            `${GLib.get_home_dir()}/.themes/${theme}/gtk-4.0/gtk.css`,
+            `/usr/share/themes/${theme}/gtk-4.0/gtk.css`
+        ]
+
+        for (const p of searchPaths) {
+            if (GLib.file_test(p, GLib.FileTest.EXISTS)) {
+                baseThemeCssPath = p
+                break
+            }
         }
 
-        // Local settings update
+        // 3. Fluid Crystal Overlay Routing
+        if (this.isFluidCrystal) {
+            console.log(`[ThemeManager] Fluid Crystal Engine ENABLED. Generating @import overlay...`)
+            // Write the overlay to ~/.config/gtk-4.0/gtk.css with the @import tag
+            writeGeneratedTheme(this.fcConfig, baseThemeCssPath)
+            installFluidCrystalSymlinks()
+
+            // Wire our CSS tokens into AGS explicitly
+            this.ensureProvidersLinked()
+            const tokensCss = generateTokensCss(this.fcConfig)
+            this.themeProvider.load_from_string(tokensCss)
+            this.refreshTintCss()
+        } else {
+            console.log(`[ThemeManager] Fluid Crystal Engine DISABLED. Forwarding raw base theme...`)
+            // Raw base theme forwarding: replace ~/.config/gtk-4.0/gtk.css with base theme symlink
+            this.symlinkExternalTheme(theme)
+
+            // We must clear our AGS custom provider so raw base theme colors are used
+            this.themeProvider.load_from_string("")
+            this.tintProvider.load_from_string("")
+        }
+
+        // 4. Force GTK & System bindings to align with the chosen Base Theme structurally
+        await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", theme])
+        this.updateSettingsIni(theme)
+
+        // Local settings update (force the current settings daemon process to obey)
         try {
             const settings = Gtk.Settings.get_default()
             if (settings) {
-                settings.gtk_theme_name = theme === FLUID_CRYSTAL_ID ? (this.state.isDark ? "MacTahoe-Dark" : "MacTahoe-Light") : theme
+                settings.gtk_theme_name = theme
                 // @ts-ignore
                 settings.gtk_application_prefer_dark_theme = this.state.isDark
             }
@@ -447,7 +467,8 @@ gtk-application-prefer-dark-theme=${this.state.isDark ? 1 : 0}
             this.state.iconTheme = icons
             this.state.cursorTheme = cursor
             this.state.isDark = scheme === "prefer-dark"
-            this.state.themeFamily = gtk
+            // Re-sync base theme if GTK was changed externally
+            if (gtk) this.state.themeFamily = gtk
 
             console.log("[ThemeManager] Registry sync done:", this.state)
         } catch (e) {
