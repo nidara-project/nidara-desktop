@@ -133,6 +133,12 @@ popover.background > contents,
 popover > contents {
   background-color: @fc_window_bg;
   background-image: none;
+}
+
+window.background:backdrop:not(.popup), 
+window.background.csd:backdrop:not(.popup), 
+dialog.background:backdrop:not(.popup) {
+  background-color: @fc_window_bg_backdrop;
 }`,
     headerbars: `
 window headerbar, window .titlebar, window actionbar, 
@@ -142,25 +148,60 @@ window searchbar, window toolbar, window tabbar {
   background-image: none;
   box-shadow: none;
   border: none;
+  border-bottom: 1px solid alpha(@window_fg_color, 0.05);
 }`,
     sidebars: `
-window .navigation-sidebar, window .sidebar, window placessidebar {
-  background: alpha(@window_fg_color, 0.03);
-  background-color: alpha(@window_fg_color, 0.03);
+window .navigation-sidebar, 
+window .sidebar, 
+window placessidebar,
+window.csd > contents > box > stack > box > scrolledwindow { /* Covers some Settings sidebars */
+  background-color: alpha(@window_fg_color, 0.04);
   background-image: none;
-  border: none;
+  border-none;
+  border-right: 1px solid alpha(@window_fg_color, 0.05);
+}
+
+window .navigation-sidebar:backdrop, 
+window .sidebar:backdrop, 
+window placessidebar:backdrop,
+window.csd > contents > box > stack > box > scrolledwindow:backdrop {
+  background-color: transparent;
+  border-color: transparent;
 }`,
     mainViews: `
-window view, window .view, window textview, window textview > text,
-window scrolledwindow, window viewport, window list, window grid,
-window stack, window deck, window leaflet, window flap, window paned, window overlay,
-window notebook, window carousel, window > contents,
-window * > .background:not(window):not(dialog):not(popover) {
-  background-color: transparent;
+/* V833: TRULY SCOPED APP OVERRIDES
+   Instead of violently fighting AGS with '!important' or ':not(#id)' hacks, 
+   we simply restrict the opacity rules to the APPS that really need them, 
+   leaving the base GTK 'window' layer blank so AGS can be naturally transparent.
+*/
+
+/* Nautilus Depth System */
+.nautilus-window view, .nautilus-window .view,
+.nautilus-window textview, .nautilus-window textview > text,
+.nautilus-window scrolledwindow, .nautilus-window viewport,
+.nautilus-window list, .nautilus-window grid,
+.nautilus-window stack, .nautilus-window deck,
+.nautilus-window leaflet, .nautilus-window flap,
+.nautilus-window paned, .nautilus-window overlay,
+.nautilus-window notebook, .nautilus-window carousel,
+.nautilus-window > contents,
+.nautilus-window flap,
+.nautilus-window > deck > box > paned > separator {
+  background-color: alpha(@window_bg_color, 0.65); /* Opaque for readability */
   background-image: none;
   box-shadow: none;
   border: none;
-}`,
+}
+
+.nautilus-window view:backdrop, .nautilus-window .view:backdrop {
+  background-color: transparent;
+}
+
+/* Settings Depth System (Optional generic fallback for non-AGS windows) */
+window.csd:not(.popup):not(.osd) > contents > box > stack > stack > stack > box > scrolledwindow > viewport > clamp > box > box > list {
+  background-color: alpha(@window_bg_color, 0.65);
+}
+`,
     separators: `
 window separator, window paned > separator, 
 popover separator, window > separator.vertical {
@@ -178,8 +219,10 @@ popover.background > contents,
 popover > contents,
 .menu,
 .background.popup {
-  background-color: @fc_window_bg;
+  background-color: @fc_popover_bg;
   background-image: none;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  border: 1px solid alpha(@window_fg_color, 0.1);
 }`
 }
 
@@ -187,14 +230,14 @@ const FORCE_ACCENT_CSS = `
 /* 10. UNIVERSAL GTK ACCENT DICTIONARY (Phase 10: The Absolute Complete Map) */
 
 /* Block A: General Selection & Basic Interactives (400-600 points) */
-:not(#Z):not(#Y):not(#X):not(#W) .suggested-action,
-:not(#Z):not(#Y):not(#X):not(#W) .accent,
-:not(#Z):not(#Y):not(#X):not(#W) selection,
-:not(#Z):not(#Y):not(#X):not(#W) .selected,
-:not(#Z):not(#Y):not(#X):not(#W) row:selected,
-:not(#Z):not(#Y):not(#X):not(#W) button.suggested-action,
-:not(#Z):not(#Y):not(#X):not(#W) menuitem:hover,
-:not(#Z):not(#Y):not(#X):not(#W) .menu menuitem:hover {
+:not(:disabled):not(:backdrop) .suggested-action,
+:not(:disabled):not(:backdrop) .accent,
+:not(:disabled):not(:backdrop) selection,
+:not(:disabled):not(:backdrop) .selected,
+:not(:disabled):not(:backdrop) row:selected,
+:not(:disabled):not(:backdrop) button.suggested-action,
+:not(:disabled):not(:backdrop) menuitem:hover,
+:not(:disabled):not(:backdrop) .menu menuitem:hover {
   background-color: @accent_bg_color;
   background-image: none;
   border-color: @accent_bg_color;
@@ -202,14 +245,14 @@ const FORCE_ACCENT_CSS = `
 }
 
 /* Block B: Checkboxes & Trees (The "Otto" Universal Fix) */
-:not(#Z):not(#Y):not(#X):not(#W) check:checked,
-:not(#Z):not(#Y):not(#X):not(#W) radio:checked,
-:not(#Z):not(#Y):not(#X):not(#W) treeview.view check:checked,
-:not(#Z):not(#Y):not(#X):not(#W) columnview row check:checked,
-:not(#Z):not(#Y):not(#X):not(#W) row check:checked,
-:not(#Z):not(#Y):not(#X):not(#W) check:indeterminate,
-:not(#Z):not(#Y):not(#X):not(#W) .view.check:checked,
-:not(#Z):not(#Y):not(#X):not(#W) .cell.check:checked {
+:not(:disabled):not(:backdrop) check:checked,
+:not(:disabled):not(:backdrop) radio:checked,
+:not(:disabled):not(:backdrop) treeview.view check:checked,
+:not(:disabled):not(:backdrop) columnview row check:checked,
+:not(:disabled):not(:backdrop) row check:checked,
+:not(:disabled):not(:backdrop) check:indeterminate,
+:not(:disabled):not(:backdrop) .view.check:checked,
+:not(:disabled):not(:backdrop) .cell.check:checked {
   background-color: @accent_bg_color;
   background-image: none;
   border-color: @accent_bg_color;
@@ -218,38 +261,48 @@ const FORCE_ACCENT_CSS = `
 }
 
 /* Block C: Switches */
-:not(#Z):not(#Y):not(#X):not(#W) switch:checked {
+:not(:disabled):not(:backdrop) switch:checked {
   background-color: @accent_bg_color;
   background-image: none;
   border-color: @accent_bg_color;
 }
-:not(#Z):not(#Y):not(#X):not(#W) switch:checked > slider {
+:not(:disabled):not(:backdrop) switch:checked > slider {
   background-color: white;
   border: 1px solid alpha(black, 0.1);
 }
 
 /* Block D: Scales & Progress */
-:not(#Z):not(#Y):not(#X):not(#W) scale highlight,
-:not(#Z):not(#Y):not(#X):not(#W) progressbar > trough > progress,
-:not(#Z):not(#Y):not(#X):not(#W) levelbar > trough > block,
-:not(#Z):not(#Y):not(#X):not(#W) scale.vertical highlight {
+:not(:disabled):not(:backdrop) scale highlight,
+:not(:disabled):not(:backdrop) progressbar > trough > progress,
+:not(:disabled):not(:backdrop) levelbar > trough > block,
+:not(:disabled):not(:backdrop) scale.vertical highlight {
   background-color: @accent_bg_color;
   background-image: none;
 }
 
 /* Block E: Entries & Search */
-:not(#Z):not(#Y):not(#X):not(#W) entry:focus,
-:not(#Z):not(#Y):not(#X):not(#W) searchbar entry:focus,
-:not(#Z):not(#Y):not(#X):not(#W) .linked entry:focus {
+:not(:disabled):not(:backdrop) entry:focus,
+:not(:disabled):not(:backdrop) searchbar entry:focus,
+:not(:disabled):not(:backdrop) .linked entry:focus {
   border-color: @accent_bg_color;
   box-shadow: inset 0 0 0 1px @accent_bg_color;
 }
 
 /* Block F: Icons & Miscellaneous Symbols */
-:not(#Z):not(#Y):not(#X):not(#W) .symbolic.accent,
-:not(#Z):not(#Y):not(#X):not(#W) image.accent,
-:not(#Z):not(#Y):not(#X):not(#W) .titlebutton.close:hover {
+:not(:disabled):not(:backdrop) .symbolic.accent,
+:not(:disabled):not(:backdrop) image.accent,
+:not(:disabled):not(:backdrop) .titlebutton.close:hover {
   color: @accent_bg_color;
+}
+
+/* Block G: Backdrop Fallbacks (Subdued Accents) */
+:backdrop .suggested-action,
+:backdrop .selected,
+:backdrop check:checked,
+:backdrop switch:checked {
+  background-color: alpha(@window_fg_color, 0.15);
+  border-color: transparent;
+  color: alpha(@window_fg_color, 0.5);
 }
 `
 
@@ -263,13 +316,20 @@ const PANEL_SELECTORS: Record<keyof TintPanels, string[]> = {
 function generateTokenHeader(config: FluidCrystalConfig): string {
     const accent = ACCENT_PALETTE[config.accent].color
     const t = config.transparency
+    // Base window glass logic based on user transparency setting
+    const baseAlpha = (1.0 - t).toFixed(2)
+    const backdropAlpha = Math.min(1.0, 1.0 - t * 0.5 + 0.2).toFixed(2)
+    const popoverAlpha = (1.0 - t * 0.3).toFixed(2)
+
     const lines = [
         `/* Fluid Crystal Generated Settings */`,
         ADWAITA_PALETTE,
         `@define-color accent_bg_color ${accent};`,
         `@define-color accent_fg_color #ffffff;`,
         `@define-color accent_color ${accent};`,
-        `@define-color fc_window_bg alpha(@window_bg_color, ${(1.0 - t * 0.5).toFixed(2)});`,
+        `@define-color fc_window_bg alpha(@window_bg_color, ${baseAlpha});`,
+        `@define-color fc_window_bg_backdrop alpha(@window_bg_color, ${backdropAlpha});`,
+        `@define-color fc_popover_bg alpha(@window_bg_color, ${popoverAlpha});`,
         `@define-color destructive_bg_color #ED5F5D;`,
         `@define-color success_bg_color #79B757;`,
         `:root {`,

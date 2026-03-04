@@ -1,1 +1,39 @@
-/* RESET DISABLED BY USER REQUEST */
+/* V831: INTERNAL AGS TRANSPARENCY RESET */
+window#crystal-bar,
+window#crystal-dock,
+window#crystal-control-center,
+window#crystal-app-launcher,
+window#app-grid-workspaces,
+window#app-grid-system-actions,
+window#notif-win,
+window#crystal-power-menu,
+window#crystal-settings,
+window#workspace-cockpit {
+    background-color: transparent;
+    background-image: none;
+    box-shadow: none;
+    border: none;
+
+    .background,
+    box,
+    >contents,
+    carousel,
+    overlay,
+    deck,
+    stack,
+    paned,
+    flap,
+    leaflet,
+    grid,
+    list,
+    viewport,
+    scrolledwindow,
+    textview,
+    .view,
+    view {
+        background-color: transparent;
+        background-image: none;
+        box-shadow: none;
+        border: none;
+    }
+}

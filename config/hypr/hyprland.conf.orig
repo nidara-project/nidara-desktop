@@ -192,7 +192,7 @@ layerrule = blur on, match:namespace notif-win
 layerrule = ignore_alpha 0.05, match:namespace notif-win
 
 layerrule = blur on, match:namespace app-grid-window
-layerrule = ignore_alpha 0.5, match:namespace app-grid-window
+layerrule = ignore_alpha 0.1, match:namespace app-grid-window
 
 misc {
     disable_hyprland_logo = true

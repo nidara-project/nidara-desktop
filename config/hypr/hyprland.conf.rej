@@ -1,0 +1,31 @@
+--- hyprland.conf
++++ hyprland.conf
+@@ -171,6 +171,28 @@
+ 
+ # --- "WIKI-STRICT" LAYER RULES ---
+ layerrule = blur on, match:namespace crystal-bar
++layerrule = ignore_alpha 0.05, match:namespace crystal-bar
++
++layerrule = blur on, match:namespace crystal-dock
++layerrule = ignore_alpha 0.05, match:namespace crystal-dock
++
++layerrule = blur on, match:namespace waybar
++layerrule = ignore_alpha 0.10, match:namespace waybar
++
++layerrule = blur on, match:namespace launcher
++layerrule = ignore_alpha 0.05, match:namespace launcher
++
++layerrule = blur on, match:namespace notification-center
++layerrule = ignore_alpha 0.05, match:namespace notification-center
++
++layerrule = blur on, match:namespace control-center
++layerrule = ignore_alpha 0.05, match:namespace control-center
++
++layerrule = blur on, match:namespace notif-win
++layerrule = ignore_alpha 0.05, match:namespace notif-win
++
++layerrule = blur on, match:namespace app-grid-window
++layerrule = ignore_alpha 0.5, match:namespace app-grid-window
+ 
+ misc {
+     disable_hyprland_logo = true
