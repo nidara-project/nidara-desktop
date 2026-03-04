@@ -200,7 +200,14 @@ class ThemeManager extends GObject.Object {
     async setTransparency(value: number) {
         this.fcConfig.transparency = Math.max(0, Math.min(1, value))
         if (this.isFluidCrystal) {
-            this.syncGtkTheme() // Need full sync to overwrite CSS file
+            await this.syncGtkTheme() // Regenerate CSS
+
+            // Force GTK apps to instantly reload the CSS by briefly toggling the theme string
+            const theme = this.state.themeFamily || "MacTahoe-Dark"
+            try {
+                await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita"])
+                await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", theme])
+            } catch (e) { }
         }
         saveFCConfig(this.fcConfig)
         this.emit("changed")

@@ -51,6 +51,7 @@ export default function SquircleContainer({
     da.set_draw_func((_, cr, w, h) => {
         // Determine current style
         const baseColor = color || { r: 1, g: 1, b: 1 }
+
         const baseAlpha = alpha !== undefined ? alpha : 0.05
 
         let shareColor = baseColor

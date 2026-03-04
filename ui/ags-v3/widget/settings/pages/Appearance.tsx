@@ -1,6 +1,7 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import Theme from "../../../core/ThemeManager"
 import { ACCENT_PALETTE, type AccentKey } from "../../../core/FluidCrystal"
+import GLib from "gi://GLib"
 
 /**
  * Appearance Page 🎨
@@ -202,8 +203,14 @@ export default function AppearancePage() {
         scale.set_value(initial)
         scale.set_draw_value(false)
 
+        let debounceId = 0
         scale.connect("value-changed", () => {
-            onChange(scale.get_value())
+            if (debounceId > 0) GLib.source_remove(debounceId)
+            debounceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+                onChange(scale.get_value())
+                debounceId = 0
+                return GLib.SOURCE_REMOVE
+            })
         })
 
         box.append(text)

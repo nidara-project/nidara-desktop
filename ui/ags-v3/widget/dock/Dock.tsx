@@ -11,6 +11,7 @@ import appService from "../../core/AppService"
 import { DockItem, Separator } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
 import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState, dockSettings, menuState } from "./state"
+import Theme from "core/ThemeManager"
 
 // V127: Native Gtk Resolution
 
