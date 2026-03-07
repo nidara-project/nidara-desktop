@@ -18,8 +18,8 @@ import type { Window } from "gi://Gtk?version=4.0"
  * to ensure Libadwaita takes full control and silences the deprecation warning.
  */
 try {
-  // Limpiamos la variable de entorno que bloquea los temas en GTK4
-  GLib.setenv("GTK_THEME", "", true)
+  // No envenenamos el entorno por defecto.
+  GLib.unsetenv("GTK_THEME")
 
   Adw.init()
   // No forzamos esquema de color. Dejamos que Libadwaita intente seguir el tema.

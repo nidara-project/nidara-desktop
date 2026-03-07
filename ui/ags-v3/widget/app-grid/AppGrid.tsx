@@ -2,6 +2,7 @@ import { Astal, Gtk, Gdk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import * as astal from "ags/gtk4/jsx-runtime"
 import GLib from "gi://GLib"
+// @ts-ignore
 import Pango from "gi://Pango"
 import AstalApps from "gi://AstalApps"
 import GObject from "gi://GObject"

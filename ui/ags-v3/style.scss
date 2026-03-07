@@ -1,11 +1,3 @@
-/* 
-   CRYSTAL UI - Main Entry Point
-   ================================
-   DO NOT add CSS rules here.
-   All styles live in styles/_component.scss partials.
-   Edit the corresponding partial for each component.
-*/
-
 @use 'styles/tokens';
 // @use 'styles/reset';
 @use 'styles/dock';
@@ -15,4 +7,3 @@
 @use 'styles/workspace';
 @use 'styles/power-menu';
 @use 'styles/settings';
-@use 'styles/tooltip';

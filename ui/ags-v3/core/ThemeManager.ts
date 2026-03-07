@@ -14,6 +14,7 @@ import {
     DEFAULT_CONFIG,
     ACCENT_PALETTE,
     writeGeneratedTheme,
+    writeTokens,
     generateTokensCss,
     generateTintCss,
     installFluidCrystalSymlinks,
@@ -187,29 +188,46 @@ class ThemeManager extends GObject.Object {
         this.emit("changed")
     }
 
+    private persistenceDebounceId = 0
+    private schedulePersistence() {
+        if (this.persistenceDebounceId > 0) GLib.source_remove(this.persistenceDebounceId)
+        this.persistenceDebounceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+            console.log(`[ThemeManager] Ghost-Token persistence triggered (File & Settings)`)
+            writeTokens(this.fcConfig)
+            this.saveSettings()
+            this.persistenceDebounceId = 0
+            return GLib.SOURCE_REMOVE
+        })
+    }
+
     async setAccentColor(accent: AccentKey) {
-        console.log(`[ThemeManager] Setting accent: ${accent}`)
+        console.log(`[ThemeManager] Setting ghost-accent: ${accent}`)
         this.fcConfig.accent = accent
         if (this.isFluidCrystal) {
-            this.syncGtkTheme() // Need full sync to overwrite CSS file
+            // Instant in-memory boost
+            this.ensureProvidersLinked()
+            const tokensCss = generateTokensCss(this.fcConfig)
+            this.themeProvider.load_from_string(tokensCss)
+            this.schedulePersistence()
+        } else {
+            saveFCConfig(this.fcConfig)
         }
-        saveFCConfig(this.fcConfig)
         this.emit("changed")
     }
 
     async setTransparency(value: number) {
         this.fcConfig.transparency = Math.max(0, Math.min(1, value))
         if (this.isFluidCrystal) {
-            await this.syncGtkTheme() // Regenerate CSS
+            // Instant 0ms In-Memory Update (No Disk IO)
+            this.ensureProvidersLinked()
+            const tokensCss = generateTokensCss(this.fcConfig)
+            this.themeProvider.load_from_string(tokensCss)
 
-            // Force GTK apps to instantly reload the CSS by briefly toggling the theme string
-            const theme = this.state.themeFamily || "MacTahoe-Dark"
-            try {
-                await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", "Adwaita"])
-                await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", theme])
-            } catch (e) { }
+            // Background persistence for other apps
+            this.schedulePersistence()
+        } else {
+            saveFCConfig(this.fcConfig)
         }
-        saveFCConfig(this.fcConfig)
         this.emit("changed")
     }
 
@@ -299,8 +317,10 @@ class ThemeManager extends GObject.Object {
                 }
 
                 if (GLib.file_test(cssPath, GLib.FileTest.EXISTS)) {
-                    this.themeProvider.load_from_path(cssPath)
-                    console.log(`[ThemeManager] CSS loaded: ${cssPath}`)
+                    // We don't load the theme CSS into the provider here anymore.
+                    // The provider is reserved for our dynamic tokens/overrides.
+                    // The system loads the theme natively via ~/.config/gtk-4.0/gtk.css symlink.
+                    console.log(`[ThemeManager] Theme found: ${cssPath} (handled via symlink)`)
                     return
                 }
             }
@@ -312,7 +332,10 @@ class ThemeManager extends GObject.Object {
     /**
      * Symlink an external theme's CSS to ~/.config/gtk-4.0/
      */
-    private symlinkExternalTheme(themeName: string) {
+    /**
+     * Symlink an external theme's CSS and assets to ~/.config/gtk-4.0/
+     */
+    private async symlinkExternalTheme(themeName: string) {
         const configDir = `${GLib.get_user_config_dir()}/gtk-4.0`
         const userThemeDir = `${GLib.get_home_dir()}/.themes/${themeName}/gtk-4.0`
         const systemThemeDir = `/usr/share/themes/${themeName}/gtk-4.0`
@@ -322,11 +345,50 @@ class ThemeManager extends GObject.Object {
         else if (GLib.file_test(systemThemeDir, GLib.FileTest.EXISTS)) sourceDir = systemThemeDir
 
         if (sourceDir) {
+            console.log(`[ThemeManager] Restoring base theme links from: ${sourceDir}`)
+
+            // 1. Clear previous links/files safely
+            const targets = ["gtk.css", "gtk-dark.css", "assets", "windows-assets", "_tokens.css"]
+            for (const target of targets) {
+                await execAsync(["rm", "-rf", `${configDir}/${target}`]).catch(() => { })
+            }
+
+            // 2. Restore standard links
             const themeCss = `${sourceDir}/gtk.css`
-            execAsync(["rm", "-f", `${configDir}/gtk.css`, `${configDir}/gtk-dark.css`])
-            execAsync(["ln", "-sf", themeCss, `${configDir}/gtk.css`])
-            execAsync(["ln", "-sf", themeCss, `${configDir}/gtk-dark.css`])
-            console.log(`[ThemeManager] External symlinks → ${themeCss}`)
+            await execAsync(["ln", "-sf", themeCss, `${configDir}/gtk.css`])
+            await execAsync(["ln", "-sf", themeCss, `${configDir}/gtk-dark.css`])
+
+            // 3. Restore assets if they exist in the theme
+            const assetDirs = ["assets", "windows-assets"]
+            for (const ads of assetDirs) {
+                const sourceAds = `${sourceDir}/${ads}`
+                if (GLib.file_test(sourceAds, GLib.FileTest.EXISTS)) {
+                    await execAsync(["ln", "-sf", sourceAds, `${configDir}/${ads}`])
+                }
+            }
+
+            console.log(`[ThemeManager] Base theme symlinks restored.`)
+        }
+    }
+
+    /**
+     * Delete symlinks in ~/.config/gtk-4.0/ to restore native theme behavior
+     */
+    private async clearConfigSymlinks() {
+        const configDir = `${GLib.get_user_config_dir()}/gtk-4.0`
+        const targets = ["gtk.css", "gtk-dark.css", "_tokens.css", "assets", "windows-assets"]
+
+        for (const name of targets) {
+            const path = `${configDir}/${name}`
+            try {
+                const file = Gio.File.new_for_path(path)
+                if (file.query_exists(null)) {
+                    file.delete(null)
+                    console.log(`[ThemeManager] Deleted override: ${path}`)
+                }
+            } catch (e) {
+                // Ignore errors (file might not exist)
+            }
         }
     }
 
@@ -365,14 +427,21 @@ class ThemeManager extends GObject.Object {
             const tokensCss = generateTokensCss(this.fcConfig)
             this.themeProvider.load_from_string(tokensCss)
             this.refreshTintCss()
-        } else {
-            console.log(`[ThemeManager] Fluid Crystal Engine DISABLED. Forwarding raw base theme...`)
-            // Raw base theme forwarding: replace ~/.config/gtk-4.0/gtk.css with base theme symlink
-            this.symlinkExternalTheme(theme)
 
-            // We must clear our AGS custom provider so raw base theme colors are used
-            this.themeProvider.load_from_string("")
+            // FORCE OVERLAY: When ON, we force apps to read local config via empty GTK_THEME
+            GLib.setenv("GTK_THEME", "", true)
+        } else {
+            console.log(`[ThemeManager] Fluid Crystal Engine DISABLED. RESTORING NATIVE THEME...`)
+            // PURGE OVERLAY: Remove files so child apps load the real system theme natively
+            await this.clearConfigSymlinks()
+
+            // We update our AGS custom provider with "opaque" tokens so accents still work
+            const tokensCss = generateTokensCss(this.fcConfig)
+            this.themeProvider.load_from_string(tokensCss)
             this.tintProvider.load_from_string("")
+
+            // RESTORE NATIVE: Unset env var so children inherit the real environment/GSettings
+            GLib.unsetenv("GTK_THEME")
         }
 
         // 4. Force GTK & System bindings to align with the chosen Base Theme structurally

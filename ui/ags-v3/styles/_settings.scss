@@ -67,34 +67,36 @@
 }
 
 // Slider (Scale) Styling
-scale {
-    &.horizontal {
-        margin: 4px 0;
+.settings-page {
+    scale {
+        &.horizontal {
+            margin: 4px 0;
 
-        contents {
-            margin: 0;
-            padding: 0;
-        }
+            contents {
+                margin: 0;
+                padding: 0;
+            }
 
-        trough {
-            min-height: 8px;
-            background-color: rgba(128, 128, 128, 0.1);
-            border-radius: 4px;
-        }
+            trough {
+                min-height: 8px;
+                background-color: rgba(128, 128, 128, 0.1);
+                border-radius: 4px;
+            }
 
-        highlight {
-            background-color: #{"@accent_bg_color"};
-            border-radius: 4px;
-        }
+            highlight {
+                background-color: #{"@accent_bg_color"};
+                border-radius: 4px;
+            }
 
-        slider {
-            min-width: 16px;
-            min-height: 16px;
-            margin: -4px 0;
-            background-color: white;
-            border-radius: 50%;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-            border: none;
+            slider {
+                min-width: 16px;
+                min-height: 16px;
+                margin: -4px 0;
+                background-color: white;
+                border-radius: 50%;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
+                border: none;
+            }
         }
     }
 }

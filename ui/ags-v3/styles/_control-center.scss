@@ -31,32 +31,23 @@ window#crystal-control-center,
 window.control-center-win,
 window.notification-center-win {
     background-color: transparent;
-    background: transparent;
-    box-shadow: none;
-    border: none;
-}
-
-/* NUCLEAR TRANSPARENCY 💎 */
-window#crystal-control-center,
-window.control-center-win {
-    background-color: transparent;
     background-image: none;
-    border-style: none;
+    border: none;
     box-shadow: none;
-    outline-style: none;
+    outline: none;
     margin: 0;
     padding: 0;
-}
 
-window.control-center-win decoration,
-window.control-center-win>box,
-window.control-center-win>box>widget {
-    background-color: transparent;
-    background-image: none;
-    box-shadow: none;
-    border: none;
-    margin: 0;
-    padding: 0;
+    decoration,
+    &>box,
+    &>box>widget {
+        background-color: transparent;
+        background-image: none;
+        box-shadow: none;
+        border: none;
+        margin: 0;
+        padding: 0;
+    }
 }
 
 /* --- Pill Sliders (Apple-style capsule, CSS only) --- */

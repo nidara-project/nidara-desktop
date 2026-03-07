@@ -54,8 +54,7 @@ window.crystal-bar {
 .bar-center button,
 .bar-right button,
 .bar-tray-btn,
-.bar-ws-btn,
-.workspace-dot {
+.bar-ws-btn {
     background: none;
     background-color: transparent;
     border: none;
@@ -66,18 +65,6 @@ window.crystal-bar {
     min-height: 0;
 }
 
-/* Re-apply dot color since I just made it transparent above */
-.workspace-dot {
-    min-width: 6px;
-    min-height: 6px;
-    border-radius: 50%;
-    background-color: rgba(255, 255, 255, 0.2);
-}
-
-.bar-tray-btn {
-    padding: 0 4px;
-}
-
 /* --- Workspace Dots (Stitch Style) --- */
 .bar-workspaces {
     background: none;
@@ -86,17 +73,14 @@ window.crystal-bar {
     padding: 0 4px;
 }
 
-.bar-ws-btn {
-    background: transparent;
-    border: none;
-}
-
 .workspace-dot {
     min-width: 6px;
     min-height: 6px;
     border-radius: 50%;
     background-color: rgba(255, 255, 255, 0.2);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    margin: 0;
+    padding: 0;
 }
 
 .workspace-dot.occupied {

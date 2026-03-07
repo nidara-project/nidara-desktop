@@ -370,7 +370,7 @@ export function DockItem(
 
     // TOOLTIP
     // Re-implemented Popover for anchored positioning with GTK theme styling
-    const tooltip = new Gtk.Popover({ css_classes: ["cd-tooltip"], position: Gtk.PositionType.TOP, autohide: false, has_arrow: true })
+    const tooltip = new Gtk.Popover({ position: Gtk.PositionType.TOP, autohide: false, has_arrow: true })
     const label = new Gtk.Label({ css_classes: ["label"] })
     const content = new Gtk.Box()
     content.append(label)

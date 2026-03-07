@@ -7,17 +7,11 @@
 
 /* --- Window & Overlay --- */
 window#app-grid-window,
-window.app-grid-window {
-    background-color: transparent;
-    background: none;
-    border: none;
-    box-shadow: none;
-}
-
+window.app-grid-window,
 #app-grid-overlay,
 .app-grid-catcher {
-    background-color: transparent;
-    background: none;
+    background: transparent;
+    background-image: none;
     border: none;
     box-shadow: none;
 }
@@ -27,7 +21,7 @@ window.app-grid-window {
 window#crystal-app-launcher #app-grid-content,
 .app-grid-window #app-grid-content,
 .app-grid-content {
-    background-color: rgba(245, 245, 250, 0.95);
+    background-color: rgba(245, 245, 250, 0.3);
     border: 1px solid rgba(0, 0, 0, 0.08);
     border-radius: 24px;
     padding: 32px 40px;
@@ -117,22 +111,24 @@ window#crystal-app-launcher #app-grid-content,
 }
 
 /* --- FlowBox Neutralization --- */
-flowboxchild {
-    background: none;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-    outline: none;
-}
+.app-grid-flow {
+    flowboxchild {
+        background: none;
+        background-color: transparent;
+        border: none;
+        box-shadow: none;
+        outline: none;
+    }
 
-flowboxchild:selected,
-flowboxchild:active,
-flowboxchild:hover {
-    background: none;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-    outline: none;
+    flowboxchild:selected,
+    flowboxchild:active,
+    flowboxchild:hover {
+        background: none;
+        background-color: transparent;
+        border: none;
+        box-shadow: none;
+        outline: none;
+    }
 }
 
 /* --- System Action Strip --- */

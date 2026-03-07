@@ -203,14 +203,8 @@ export default function AppearancePage() {
         scale.set_value(initial)
         scale.set_draw_value(false)
 
-        let debounceId = 0
         scale.connect("value-changed", () => {
-            if (debounceId > 0) GLib.source_remove(debounceId)
-            debounceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
-                onChange(scale.get_value())
-                debounceId = 0
-                return GLib.SOURCE_REMOVE
-            })
+            onChange(scale.get_value())
         })
 
         box.append(text)

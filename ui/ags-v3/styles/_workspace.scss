@@ -82,116 +82,23 @@ window.workspace-cockpit {
     border-radius: 24px;
     outline: none;
     box-shadow: none;
-}
 
-.wo-btn:focus,
-.wo-btn:active {
-    outline: none;
-    box-shadow: none;
-    border: none;
-}
-
-.wo-btn:hover .wo-item {
-    background-color: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.12);
-    transform: translateY(-6px);
-}
-
-.wo-btn:hover .wo-item.active {
-    background-color: #{"alpha(@accent_bg_color, 0.08)"};
-    border-color: #{"alpha(@accent_bg_color, 0.8)"};
-    box-shadow: 0 0 60px #{"alpha(@accent_bg_color, 0.35)"};
-}
-
-/* --- Labels --- */
-.wo-label {
-    font-size: 11px;
-    font-weight: 900;
-    letter-spacing: 2px;
-    color: rgba(255, 255, 255, 0.4);
-}
-
-.wo-label.active {
-    color: #{"@accent_bg_color"};
-    text-shadow: 0 0 15px #{"alpha(@accent_bg_color, 0.8)"};
-}
-
-/* --- Reserved Areas --- */
-.wo-reserved-area {
-    background-color: rgba(255, 255, 255, 0.05);
-    border: 1px dashed rgba(255, 255, 255, 0.15);
-
-    &.bar {
-        border-radius: 0 0 12px 12px;
+    &:focus,
+    &:active {
+        outline: none;
+        box-shadow: none;
+        border: none;
     }
 
-    &.dock {
-        border-radius: 12px 12px 0 0;
+    &:hover .wo-item {
+        background-color: rgba(255, 255, 255, 0.05);
+        border-color: rgba(255, 255, 255, 0.12);
+        transform: translateY(-6px);
+
+        &.active {
+            background-color: #{"alpha(@accent_bg_color, 0.08)"};
+            border-color: #{"alpha(@accent_bg_color, 0.8)"};
+            box-shadow: 0 0 60px #{"alpha(@accent_bg_color, 0.35)"};
+        }
     }
-}
-
-/* --- Schematic Preview --- */
-.wo-schematic-win {
-    background-color: rgba(255, 255, 255, 0.2);
-    border: 1.5px solid rgba(255, 255, 255, 0.8);
-    border-radius: 6px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-
-    image {
-        margin: 0;
-        padding: 0;
-        -gtk-icon-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
-    }
-}
-
-.wo-count {
-    font-size: 14px;
-    font-weight: 200;
-    color: rgba(255, 255, 255, 0.2);
-}
-
-.wo-schematic-preview {
-    background-color: rgba(0, 0, 0, 0.7);
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.03);
-    box-shadow: inset 0 20px 40px rgba(0, 0, 0, 0.5);
-}
-
-.wo-schematic-win-icon {
-    opacity: 0.85;
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
-}
-
-/* --- Workspace Preview Popover 🖼️ --- */
-.ws-preview-popover {
-    background-color: rgba(0, 0, 0, 0.4);
-    /* backdrop-filter: blur(12px); REMOVED: Invalid GTK Prop */
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 18px;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-}
-
-.ws-preview-popover contents {
-    background: transparent;
-    padding: 0px;
-    border: none;
-    box-shadow: none;
-}
-
-.ws-preview-popover-box {
-    padding: 12px;
-}
-
-.ws-preview-title {
-    font-size: 10px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    color: rgba(255, 255, 255, 0.6);
-    margin-bottom: 6px;
-}
-
-/* Cockpit Window Duplicate Safety */
-window.workspace-cockpit {
-    background: transparent;
 }

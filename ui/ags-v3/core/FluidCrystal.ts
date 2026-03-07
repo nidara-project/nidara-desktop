@@ -126,7 +126,7 @@ export const DEFAULT_CONFIG: FluidCrystalConfig = {
 
 // V840: AGS SAFE EXCLUSION 
 // We explicitly stop GTK from painting generic window styles onto our AGS panels.
-const AGS_EXCLUDE = `:not(#crystal-dock):not(#crystal-bar):not(#crystal-control-center):not(#crystal-app-launcher):not(#app-grid-workspaces):not(#app-grid-system-actions):not(#notif-win):not(#crystal-power-menu):not(#workspace-cockpit)`
+const AGS_EXCLUDE = `:not(#crystal-dock):not(#crystal-bar):not(#crystal-control-center):not(#crystal-app-launcher):not(#app-grid-workspaces):not(#app-grid-system-actions):not(#notif-win):not(#crystal-power-menu):not(#workspace-cockpit):not(#crystal-settings)`
 
 const GLASS_TEMPLATES: Record<keyof GlassTargets, string> = {
   globalWindow: `
@@ -137,12 +137,6 @@ dialog.background:APP_OVERRIDE:not(.popup) {
   background-image: none;
 }
 
-popover.background > contents,
-popover > contents {
-  background-color: @fc_popover_bg;
-  background-image: none;
-}
-
 window.background:backdrop:APP_OVERRIDE:not(.popup), 
 window.background.csd:backdrop:APP_OVERRIDE:not(.popup), 
 dialog.background:backdrop:APP_OVERRIDE:not(.popup) {
@@ -150,76 +144,51 @@ dialog.background:backdrop:APP_OVERRIDE:not(.popup) {
 }
 `,
   headerbars: `
-window:APP_OVERRIDE headerbar, window:APP_OVERRIDE .titlebar, window:APP_OVERRIDE actionbar, 
-window:APP_OVERRIDE searchbar, window:APP_OVERRIDE toolbar, window:APP_OVERRIDE tabbar {
-  background: transparent;
+window.background:APP_OVERRIDE headerbar, 
+window.background:APP_OVERRIDE .titlebar {
   background-color: transparent;
-  background-image: none;
-  box-shadow: none;
-  border: none;
-  border-bottom: 1px solid alpha(@window_fg_color, 0.05);
 }`,
   sidebars: `
-window:APP_OVERRIDE .navigation-sidebar, 
-window:APP_OVERRIDE .sidebar, 
-window:APP_OVERRIDE placessidebar,
-window:APP_OVERRIDE.csd > contents > box > stack > box > scrolledwindow { /* Covers some Settings sidebars */
-  background-color: alpha(@window_fg_color, 0.04);
-  background-image: none;
-  border: none;
-  border-right: 1px solid alpha(@window_fg_color, 0.05);
+window.background:APP_OVERRIDE .navigation-sidebar, 
+window.background:APP_OVERRIDE .sidebar, 
+window.background:APP_OVERRIDE placessidebar,
+window.background:APP_OVERRIDE .sidebar-pane {
+  background-color: transparent;
 }
 
-window:APP_OVERRIDE .navigation-sidebar:backdrop, 
-window:APP_OVERRIDE .sidebar:backdrop, 
-window:APP_OVERRIDE placessidebar:backdrop,
-window:APP_OVERRIDE.csd > contents > box > stack > box > scrolledwindow:backdrop {
+window.background:APP_OVERRIDE .navigation-sidebar:backdrop, 
+window.background:APP_OVERRIDE .sidebar:backdrop, 
+window.background:APP_OVERRIDE placessidebar:backdrop,
+window.background:APP_OVERRIDE .sidebar-pane:backdrop {
   background-color: transparent;
-  border-color: transparent;
 }`,
   mainViews: `
-/* V845: BULLETPROOF APP OVERRIDES */
-window:APP_OVERRIDE view, window:APP_OVERRIDE .view, window:APP_OVERRIDE textview, window:APP_OVERRIDE textview > text,
-window:APP_OVERRIDE scrolledwindow, window:APP_OVERRIDE viewport, window:APP_OVERRIDE list, window:APP_OVERRIDE grid,
-window:APP_OVERRIDE stack, window:APP_OVERRIDE deck, window:APP_OVERRIDE leaflet, window:APP_OVERRIDE flap, 
-window:APP_OVERRIDE paned, window:APP_OVERRIDE overlay, window:APP_OVERRIDE notebook, window:APP_OVERRIDE carousel, 
-window:APP_OVERRIDE > contents,
-window:APP_OVERRIDE * > .background:not(window):not(dialog):not(popover),
-window:APP_OVERRIDE calendar, window:APP_OVERRIDE calendar > view,
-.nautilus-window flap, .nautilus-window statuspage, .nautilus-window statusbox,
-.nautilus-window > deck > box > paned > separator {
-  background-color: @fc_window_bg;
-  background-image: none;
-  box-shadow: none;
-  border: none;
-}
-
-window:APP_OVERRIDE view:backdrop, window:APP_OVERRIDE .view:backdrop {
-  background-color: @fc_window_bg_backdrop;
+window.background:APP_OVERRIDE view, window.background:APP_OVERRIDE .view, 
+window.background:APP_OVERRIDE textview, window.background:APP_OVERRIDE textview > text,
+window.background:APP_OVERRIDE scrolledwindow, window.background:APP_OVERRIDE viewport, 
+window.background:APP_OVERRIDE list, window.background:APP_OVERRIDE grid,
+window.background:APP_OVERRIDE stack, window.background:APP_OVERRIDE notebook, 
+window.background:APP_OVERRIDE carousel, 
+window.background:APP_OVERRIDE calendar {
+  background-color: transparent;
 }
 `,
-  separators: `
-window separator, window paned > separator, 
-popover separator, window > separator.vertical {
-  background-color: alpha(@window_fg_color, 0.10);
-  background-image: none;
-}`,
+  separators: ``,
   cardsAndLists: `
-window:APP_OVERRIDE card, window:APP_OVERRIDE boxed-list, window:APP_OVERRIDE list.boxed, window:APP_OVERRIDE .card {
-  background-color: alpha(@window_fg_color, 0.05);
-  background-image: none;
-  border: 1px solid alpha(@window_fg_color, 0.08);
+window.background:APP_OVERRIDE card, 
+window.background:APP_OVERRIDE boxed-list, 
+window.background:APP_OVERRIDE list.boxed {
+  background-color: transparent;
 }`,
   popovers: `
-popover.background > contents,
 popover > contents,
+popover.background > contents,
 .menu,
-.background.popup {
+.background.popup,
+tooltip > box.background {
   background-color: @fc_popover_bg;
-  background-image: none;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  border: 1px solid alpha(@window_fg_color, 0.1);
-}`
+}
+`
 }
 
 const FORCE_ACCENT_CSS = `
@@ -229,9 +198,9 @@ const FORCE_ACCENT_CSS = `
    ================================================================ */
 
 /* --- 1. THE CHECKED STATE (Toggles, Radios, Checks, Switches, Buttons) --- */
-check:checked:APP_OVERRIDE,
-radio:checked:APP_OVERRIDE,
-check:indeterminate:APP_OVERRIDE,
+check:checked:APP_OVERRIDE, 
+radio:checked:APP_OVERRIDE, 
+check:indeterminate:APP_OVERRIDE, 
 radio:indeterminate:APP_OVERRIDE,
 .view.check:checked:APP_OVERRIDE,
 .cell.check:checked:APP_OVERRIDE,
@@ -245,7 +214,6 @@ button.flat:checked:APP_OVERRIDE,
 tab:checked:APP_OVERRIDE {
   background-color: @accent_bg_color;
   background-image: none;
-  border-color: @accent_bg_color;
   color: @accent_fg_color;
   -gtk-icon-source: builtin;
 }
@@ -253,19 +221,15 @@ tab:checked:APP_OVERRIDE {
 switch:checked:APP_OVERRIDE {
   background-color: @accent_bg_color;
   background-image: none;
-  border-color: @accent_bg_color;
 }
 switch:checked:hover:APP_OVERRIDE {
   background-color: mix(@accent_bg_color, white, 0.1);
-  border-color: mix(@accent_bg_color, white, 0.1);
 }
 switch:checked:active:APP_OVERRIDE {
   background-color: mix(@accent_bg_color, black, 0.1);
-  border-color: mix(@accent_bg_color, black, 0.1);
 }
 switch:checked > slider:APP_OVERRIDE {
   background-color: white;
-  border: 1px solid rgba(0,0,0,0.1);
 }
 
 /* --- 2. THE SELECTED STATE (Rows, Grids, Trees, Flowboxes, Text, Menus) --- */
@@ -279,8 +243,8 @@ menuitem:hover:APP_OVERRIDE,
 .menu menuitem:hover:APP_OVERRIDE,
 popover menuitem:hover:APP_OVERRIDE,
 popover .menuitem:hover:APP_OVERRIDE,
-popover.emoji-picker emoji:hover:APP_OVERRIDE,
-popover.emoji-picker emoji:focus:APP_OVERRIDE,
+popover .emoji-picker emoji:hover:APP_OVERRIDE,
+popover .emoji-picker emoji:focus:APP_OVERRIDE,
 treeview.view:selected:APP_OVERRIDE,
 columnview.view:selected:APP_OVERRIDE,
 iconview:selected:APP_OVERRIDE,
@@ -292,7 +256,6 @@ spinbutton > selection:APP_OVERRIDE,
 modelbutton.flat:selected:APP_OVERRIDE {
   background-color: @accent_bg_color;
   background-image: none;
-  border-color: @accent_bg_color;
   color: @accent_fg_color;
 }
 
@@ -307,7 +270,6 @@ infobar.question > revealer > box button:APP_OVERRIDE,
 modelbutton.flat:active:APP_OVERRIDE {
   background-color: @accent_bg_color;
   background-image: none;
-  border-color: @accent_bg_color;
   color: @accent_fg_color;
 }
 
@@ -324,7 +286,6 @@ button.toggle:checked:hover:APP_OVERRIDE,
 button:checked:hover:APP_OVERRIDE,
 infobar.info > revealer > box button:hover:APP_OVERRIDE {
   background-color: mix(@accent_bg_color, white, 0.1);
-  border-color: mix(@accent_bg_color, white, 0.1);
 }
 
 /* --- ACTIVE STATES FOR SELECTIONS & ACTIONS --- */
@@ -341,7 +302,6 @@ button.toggle:checked:active:APP_OVERRIDE,
 button:checked:active:APP_OVERRIDE,
 infobar.info > revealer > box button:active:APP_OVERRIDE {
   background-color: mix(@accent_bg_color, black, 0.1);
-  border-color: mix(@accent_bg_color, black, 0.1);
 }
 
 /* --- 4. GAUGES, SCALES & LEVELS (Sliders, Volume, Brightness, Meters) --- */
@@ -370,8 +330,7 @@ spinbutton:focus:APP_OVERRIDE,
 searchbar entry:focus-within:APP_OVERRIDE,
 .linked entry:focus-within:APP_OVERRIDE,
 combobox entry:focus-within:APP_OVERRIDE {
-  border-color: @accent_bg_color;
-  box-shadow: inset 0 0 0 1px @accent_bg_color;
+  outline: none;
 }
 
 /* --- 6. TYPOGRAPHY & FOREGROUNDS (Links, Symbols, Colored Text) --- */
@@ -418,7 +377,6 @@ check:indeterminate:backdrop:APP_OVERRIDE,
 radio:indeterminate:backdrop:APP_OVERRIDE,
 switch:checked:backdrop:APP_OVERRIDE {
   background-color: alpha(@accent_bg_color, 0.3);
-  border-color: transparent;
   color: alpha(@accent_fg_color, 0.5);
 }
 
@@ -444,7 +402,7 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
   // Base window glass logic based on user transparency setting
   const baseAlpha = (1.0 - t).toFixed(2)
   const backdropAlpha = baseAlpha
-  const popoverAlpha = (1.0 - t * 0.3).toFixed(2)
+  const popoverAlpha = baseAlpha // Match window transparency as requested
 
   // Libadwaita Base Colors
   const baseBg = config.isDark ? "#242424" : "#fafafa"
@@ -454,7 +412,7 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
   const sidebarBg = config.isDark ? "#242424" : "#f6f5f4"
 
   const lines = [
-    `/* Fluid Crystal Generated Settings */`,
+    `/* Fluid Crystal Generated Tokens (V2650) */`,
     ADWAITA_PALETTE,
     `@define-color accent_bg_color ${accent};`,
     `@define-color accent_fg_color #ffffff;`,
@@ -464,15 +422,36 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
     `@define-color fc_popover_bg alpha(${popoverBg}, ${popoverAlpha});`,
     `@define-color destructive_bg_color #ED5F5D;`,
     `@define-color success_bg_color #79B757;`,
-    `/* GTK4 Global Overrides */`,
-    `@define-color window_bg_color alpha(${baseBg}, ${baseAlpha});`,
-    `@define-color view_bg_color alpha(${viewBg}, ${baseAlpha});`,
-    `@define-color headerbar_bg_color alpha(${headerBg}, ${baseAlpha});`,
-    `@define-color headerbar_backdrop_color alpha(${headerBg}, ${backdropAlpha});`,
-    `@define-color popover_bg_color alpha(${popoverBg}, ${popoverAlpha});`,
-    `@define-color sidebar_bg_color alpha(${sidebarBg}, ${baseAlpha});`,
-    `:root {`,
   ]
+
+  if (config.enabled) {
+    lines.push(
+      `/* THEME TRANSPARENCY DEFINITIONS (ENGINE ACTIVE) */`,
+      `@define-color card_bg_color transparent;`,
+      `@define-color window_bg_color @fc_window_bg;`,
+      `@define-color view_bg_color transparent;`,
+      `@define-color headerbar_bg_color transparent;`,
+      `@define-color popover_bg_color @fc_popover_bg;`,
+      `@define-color sidebar_bg_color transparent;`
+    )
+  } else {
+    lines.push(
+      `/* THEME TRANSPARENCY DEFINITIONS (ENGINE INACTIVE) */`,
+      `/* We force transparency OFF for system colors and structural windows. */`,
+      `@define-color card_bg_color @card_bg_color;`,
+      `@define-color window_bg_color ${baseBg};`,
+      `@define-color view_bg_color ${viewBg};`,
+      `@define-color headerbar_bg_color ${headerBg};`,
+      `@define-color popover_bg_color ${popoverBg};`,
+      `@define-color sidebar_bg_color ${sidebarBg};`
+    )
+  }
+
+  lines.push(
+    `:root {`,
+    `  --fc-transparency: ${t};`,
+    `  --fc-accent: ${accent};`,
+  )
   for (const [key, { color }] of Object.entries(ACCENT_PALETTE)) {
     lines.push(`  --accent-${key}: ${color};`)
   }
@@ -483,38 +462,34 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
   return lines.join("\n")
 }
 
-export function generateGtkCss(config: FluidCrystalConfig, baseThemeCssPath?: string): string {
+export function generateTokensCss(config: FluidCrystalConfig): string {
+  return generateTokenHeader(config)
+}
+
+export function generateMasterCss(config: FluidCrystalConfig, baseThemeCssPath?: string): string {
   let css = `
 /* =====================================================================
- * FLUID CRYSTAL OVERLAY ENGINE (V846: The Stable Blueprint)
- * Custom generated overlay that hooks into the base GTK theme.
+ * FLUID CRYSTAL MASTER (V2650: The Crystal Hybrid)
+ * Structural blueprint + Base Theme Integration.
  * ===================================================================== */
 `
   if (baseThemeCssPath) {
-    css += `@import url("file://${baseThemeCssPath}");\n\n`
+    css += `@import url("file://${baseThemeCssPath}");\n`
   }
 
-  css += `/* Fluid Crystal Generated Settings */\n`
-  css += generateTokensCss(config) + `\n`
+  css += `@import url("_tokens.css");\n\n`
 
-  // Add Glass Components explicitly using String Replacement instead of raw templating
-  css += `/* Overlay */\n`
+  css += `/* Overlay Structural Logic */\n`
   const activeTargets = Object.entries(config.glassTargets)
     .filter(([_, enabled]) => enabled)
     .map(([key, _]) => GLASS_TEMPLATES[key as keyof GlassTargets])
 
-  // Replace :APP_OVERRIDE with the explicit exclusion string so AGS panels never receive GTK defaults
   const combinedGlass = activeTargets.join("\n\n").split(":APP_OVERRIDE").join(AGS_EXCLUDE)
   css += combinedGlass
 
-  // Add Accent Override using String Replacement
   css += `\n\n` + FORCE_ACCENT_CSS.split(":APP_OVERRIDE").join(AGS_EXCLUDE)
 
   return css
-}
-
-export function generateTokensCss(config: FluidCrystalConfig): string {
-  return generateTokenHeader(config)
 }
 
 export function generateTintCss(config: FluidCrystalConfig): string {
@@ -535,40 +510,53 @@ export function generateTintCss(config: FluidCrystalConfig): string {
   return css
 }
 
+/**
+ * High-Speed Token Sync (No GSettings flickers)
+ */
+export function writeTokens(config: FluidCrystalConfig): void {
+  const configDir = `${GLib.get_user_config_dir()}/gtk-4.0`
+  const tokens = generateTokensCss(config)
+  writeFile(`${configDir}/_tokens.css`, tokens)
+}
+
+/**
+ * Full Theme Writing (Only on theme change or glass target toggle)
+ */
 export function writeGeneratedTheme(config: FluidCrystalConfig, baseThemeCssPath?: string): void {
-  const css = generateGtkCss(config, baseThemeCssPath)
-  const projectDir = GLib.getenv("DISTROIA_DIR") || `${GLib.get_home_dir()}/Dev/Distroia`
-  const outDir = `${projectDir}/themes/fluid-crystal/gtk-4.0`
-  writeFile(`${outDir}/gtk.css`, css)
-  writeFile(`${outDir}/gtk-dark.css`, css)
+  const configDir = `${GLib.get_user_config_dir()}/gtk-4.0`
+
+  // 1. Write the dynamic tokens
+  writeTokens(config)
+
+  // 2. Write the structural master
+  const master = generateMasterCss(config, baseThemeCssPath)
+  writeFile(`${configDir}/gtk.css`, master)
+  writeFile(`${configDir}/gtk-dark.css`, master)
 }
 
 export function installFluidCrystalSymlinks(): void {
   const projectDir = GLib.getenv("DISTROIA_DIR") || `${GLib.get_home_dir()}/Dev/Distroia`
-  const outDir = `${projectDir}/themes/fluid-crystal/gtk-4.0`
-  const gtkDir = `${GLib.get_home_dir()}/.config/gtk-4.0`
-  const targets = ["gtk.css", "gtk-dark.css"]
+  const themeAssetsDir = `${projectDir}/ui/ags-v3/assets/fluid-crystal`
+  const configDir = `${GLib.get_user_config_dir()}/gtk-4.0`
 
-  // Ensure the config directory exists
-  const configDir = Gio.File.new_for_path(gtkDir)
-  if (!configDir.query_exists(null)) {
-    configDir.make_directory_with_parents(null)
-  }
+  const targets = ["assets", "windows-assets"]
 
   for (const name of targets) {
     try {
-      const file = Gio.File.new_for_path(`${gtkDir}/${name}`)
+      const source = `${themeAssetsDir}/${name}`
+      const link = `${configDir}/${name}`
+      const file = Gio.File.new_for_path(link)
+
       if (file.query_exists(null)) {
-        // Check if it's already the correct symlink to avoid redundant ops
-        const info = file.query_info("standard::is-symlink,standard::symlink-target", Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, null)
-        if (info.get_is_symlink() && info.get_symlink_target() === `${outDir}/${name}`) {
-          continue
-        }
         file.delete(null)
       }
-      file.make_symbolic_link(`${outDir}/${name}`, null)
+
+      const sourceFile = Gio.File.new_for_path(source)
+      if (sourceFile.query_exists(null)) {
+        file.make_symbolic_link(source, null)
+      }
     } catch (e) {
-      console.warn(`[FluidCrystal] Could not handle ${name} symlink: ${e}`)
+      console.warn(`[FluidCrystal] Could not link ${name}: ${e}`)
     }
   }
 }
