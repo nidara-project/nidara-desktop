@@ -188,7 +188,7 @@ window.notification-center-win {
 
 .nc-notif-item:hover {
     border-color: rgba(255, 255, 255, 0.12);
-    /* Background & Radius handled by SquircleContainer JS 🛡️ */
+    /* Background & Radius handled by SquircleContainer JS \ud83d\udee1\ufe0f */
 }
 
 .nc-notif-title {
@@ -267,7 +267,7 @@ window.notification-center-win {
     font-size: 0.9em;
 }
 
-/* Section Structure Handled Above 🆙 */
+/* Section Structure Handled Above \ud83c\udd99 */
 
 .cc-clear-btn {
     background: none;
@@ -303,7 +303,7 @@ window.notification-center-win {
     padding: 0;
 }
 
-/* --- Zero-Artifacts Protocol 🛡️ --- */
+/* --- Zero-Artifacts Protocol \ud83d\udee1\ufe0f --- */
 .cc-scroll>viewport {
     background-color: transparent;
 }
@@ -396,7 +396,7 @@ window.notification-center-win {
     background: rgba(255, 255, 255, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.08); // Subtle border
     color: white;
-    border-radius: 50%; // Force Perfect Circle ⚫
+    border-radius: 50%; // Force Perfect Circle \u26ab
     min-width: 48px;
     min-height: 48px;
     padding: 0;
@@ -466,10 +466,10 @@ window.notification-center-win {
 .cc-fixed-container {
     margin: 0;
     padding: 0;
-    /* This explicit reset was the key fix confirmed by user 🔑 */
+    /* This explicit reset was the key fix confirmed by user \ud83d\udd11 */
 }
 
-/* --- Window Transparency Fix (NUCLEAR OPTION ☢️) --- */
+/* --- Window Transparency Fix (NUCLEAR OPTION \u2622\ufe0f) --- */
 window.control-center-win,
 window.control-center-win>decoration,
 window.control-center-win>box,
@@ -479,4 +479,79 @@ window.control-center-win>widget {
     border: none;
     box-shadow: none;
     outline: none;
+}
+
+/* --- Notification Center Panel --- */
+.notification-center-panel {
+    background: transparent;
+    min-width: 420px;
+
+    .nc-widgets-section {
+        /* Standard spacing handled in TSX */
+    }
+
+    .nc-calendar {
+        background: transparent;
+        border: none;
+        color: white;
+        padding: 8px;
+        font-size: 0.9em;
+
+        header {
+            background: transparent;
+            border: none;
+            color: white;
+            font-weight: 700;
+        }
+
+        button {
+            background: transparent;
+            color: rgba(255, 255, 255, 0.8);
+            border: none;
+            border-radius: 8px;
+
+            &:hover {
+                background: rgba(255, 255, 255, 0.1);
+            }
+
+            &.selected {
+                background: #{"@accent_bg_color"};
+                color: white;
+            }
+        }
+    }
+}
+
+.nc-header {
+    margin-bottom: 8px;
+}
+
+.nc-title {
+    font-size: 0.85em;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+.nc-empty {
+    color: rgba(255, 255, 255, 0.3);
+    font-style: italic;
+    font-size: 0.9em;
+}
+
+.nc-scroll {
+    background: transparent;
+}
+
+.nc-item-title {
+    color: white;
+    font-weight: 600;
+    font-size: 0.95em;
+}
+
+.nc-item-body {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.85em;
+    margin-top: 2px;
 }

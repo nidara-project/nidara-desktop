@@ -36,6 +36,7 @@ import AppGrid from "./widget/app-grid/AppGrid"
 import Bar from "./widget/bar/Bar"
 import NotificationPopups from "./widget/control-center/NotificationPopups"
 import ControlCenter from "./widget/control-center/ControlCenter"
+import NotificationCenter from "./widget/control-center/NotificationCenter"
 import PowerMenu from "./widget/power-menu/PowerMenu"
 import Settings from "./widget/settings/Settings"
 import Theme from "./core/ThemeManager"
@@ -54,6 +55,7 @@ app.start({
     const windows = new Set<any>()
     const gridWindows: any[] = []
     const ccWindows: any[] = []
+    const notifCenterWindows: any[] = []
     const powerWindows: any[] = []
     const settingsWindows: any[] = []
 
@@ -156,6 +158,7 @@ app.start({
           initWin(AppGrid, gridWindows)
           initWin(NotificationPopups, [])
           initWin(ControlCenter, ccWindows)
+          initWin(NotificationCenter, notifCenterWindows)
           initWin(PowerMenu, powerWindows)
           initWin(Settings, settingsWindows)
 
@@ -189,6 +192,10 @@ app.start({
       console.log(`[Toggle] CC (Count: ${ccWindows.length})`)
       ccWindows.forEach(cc => { try { cc.toggle() } catch (e) { console.error(e) } })
     }
+    const toggleNC = () => {
+      console.log(`[Toggle] NC (Count: ${notifCenterWindows.length})`)
+      notifCenterWindows.forEach(nc => { try { nc.toggle() } catch (e) { console.error(e) } })
+    }
     const togglePower = () => {
       console.log(`[Toggle] Power (Count: ${powerWindows.length})`)
       powerWindows.forEach(p => { try { p.toggle() } catch (e) { console.error(e) } })
@@ -201,12 +208,12 @@ app.start({
     // Expose Globals
     (globalThis as any).toggleAppGrid = toggleAppGrid;
     (globalThis as any).toggleControlCenter = toggleCC;
-    (globalThis as any).toggleNotificationCenter = toggleCC; // Redirect for safety
+    (globalThis as any).toggleNotificationCenter = toggleNC;
     (globalThis as any).togglePowerMenu = togglePower;
     (globalThis as any).toggleSettings = toggleSettings;
 
     // Local request mapper
-    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleControlCenter: toggleCC, toggleNC: toggleCC, togglePower, toggleSettings }
+    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleControlCenter: toggleCC, toggleNC, togglePower, toggleSettings }
   },
   requestHandler(argv, res) {
     const engine = (app as any).DistroIA

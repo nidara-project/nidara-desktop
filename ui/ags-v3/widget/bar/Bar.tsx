@@ -370,13 +370,20 @@ function ResourceCircle(iconName: string, update: (cb: (val: number) => void) =>
     }
   })
 
-  const icon = new Gtk.Image({
-    icon_name: iconName,
+  const iconProps: any = {
     pixel_size: 12,
     valign: Gtk.Align.CENTER,
     halign: Gtk.Align.CENTER,
     css_classes: ["resource-icon"]
-  })
+  }
+
+  if (iconName.startsWith("/") || iconName.startsWith("file://")) {
+    iconProps.file = iconName.replace("file://", "")
+  } else {
+    iconProps.icon_name = iconName
+  }
+
+  const icon = new Gtk.Image(iconProps)
 
   const overlay = new Gtk.Overlay({
     css_classes: ["resource-circle"],
@@ -415,14 +422,14 @@ function SystemResources() {
     margin_bottom: 4
   })
 
-  const cpu = ResourceCircle("cpu-symbolic", (cb) => {
+  const cpu = ResourceCircle("/home/angel/Dev/Distroia/ui/ags-v3/assets/logos/cpu.svg", (cb) => {
     execAsync(["bash", "-c", "LC_ALL=C top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'"]).then(out => {
       const val = parseFloat(out.trim().replace(",", "."))
       cb(isNaN(val) ? 0 : Math.floor(val))
     })
   }, 2000)
 
-  const ram = ResourceCircle("ram-symbolic", (cb) => {
+  const ram = ResourceCircle("/home/angel/Dev/Distroia/ui/ags-v3/assets/logos/ram.svg", (cb) => {
     execAsync(["bash", "-c", "LC_ALL=C free -m | grep Mem | awk '{print $3/$2 * 100}'"]).then(out => {
       const val = parseFloat(out.trim().replace(",", "."))
       cb(isNaN(val) ? 0 : Math.floor(val))
@@ -442,12 +449,12 @@ function ControlCenterMenu() {
   const box = new Gtk.Box({
     spacing: 8,
     valign: Gtk.Align.CENTER,
-    margin_start: 12,
-    margin_end: 12
+    margin_start: 10,
+    margin_end: 10
   })
 
   const icon = new Gtk.Image({
-    icon_name: "preferences-system-symbolic",
+    file: "/home/angel/Dev/Distroia/ui/ags-v3/assets/logos/toggles.svg",
     pixel_size: 14,
     valign: Gtk.Align.CENTER
   })
@@ -460,7 +467,7 @@ function ControlCenterMenu() {
     gloss: true,
     color: { r: 0.07, g: 0.07, b: 0.11 },
     alpha: 0.2,
-    perfect: true,
+    perfect: true, // V698: Restoring fidelity 🛡️
     onClick: () => (app as any).DistroIA?.toggleCC()
   })
 }
@@ -496,7 +503,7 @@ function SystemStatus() {
     gloss: true,
     color: { r: 0.07, g: 0.07, b: 0.11 },
     alpha: 0.2,
-    perfect: true
+    perfect: true // V698: Restoring fidelity 🛡️
   })
 }
 
@@ -653,23 +660,23 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // 1. Resources
   const resContent = SystemResources()
   const ResourcePill = SquircleContainer({
-    child: resContent,
+    child: SystemResources(),
     radius: undefined,
     gloss: true,
     color: { r: 0.07, g: 0.07, b: 0.11 },
     alpha: 0.2,
-    perfect: true
+    perfect: true // V698: Restoring fidelity 🛡️
   })
 
   // 2. Tray
   const trayContent = Tray()
   const TrayPill = SquircleContainer({
-    child: trayContent,
+    child: Tray(),
     radius: undefined,
     gloss: true,
     color: { r: 0.07, g: 0.07, b: 0.11 },
     alpha: 0.2,
-    perfect: true
+    perfect: true // V698: Restoring fidelity 🛡️
   })
 
   // 3. Time
@@ -684,8 +691,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     gloss: true,
     color: { r: 0.07, g: 0.07, b: 0.11 },
     alpha: 0.2,
-    perfect: true,
-    onClick: () => (app as any).DistroIA?.toggleCC()
+    perfect: true, // V698: Restoring fidelity 🛡️
+    onClick: () => (app as any).DistroIA?.toggleNC()
   })
 
   const rightSide = new Gtk.Box({
