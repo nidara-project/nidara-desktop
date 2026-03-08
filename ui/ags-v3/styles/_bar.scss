@@ -107,30 +107,30 @@ window.crystal-bar {
     /* Background circle logic handled in Cairo, but we can set opacity here */
 }
 
-.resource-label {
+.resource-label,
+.resource-icon {
     font-size: 10px;
     font-weight: 900;
     color: white;
-    margin-bottom: 1px;
-    /* Optical centering */
+    margin-bottom: 0px;
 }
 
-.resource-label-cpu {
-    color: #{"@accent_bg_color"};
+.resource-canvas {
+    /* Background logic handled in Cairo */
 }
 
-.resource-label-media,
-.resource-label-memory {
-    color: #{"@accent_bg_color"};
-}
-
-/* --- Time Module --- */
-.bar-time-btn {
-    background: transparent;
-    border: none;
-    padding: 0 8px;
+/* Ensure all symbolic icons in the bar are white */
+.bar-right image,
+.bar-left image {
+    -gtk-icon-palette: success white, warning white, error white;
     color: white;
-    font-weight: 500;
+}
+
+/* Specific styling for the Control Center pill icon */
+.bar-app-menu-pill image,
+.bar-ws-pill image,
+.bar-right image {
+    opacity: 0.9;
 }
 
 /* .bar-app-menu removed - handled by SquircleContainer */

@@ -210,7 +210,7 @@ function AppMenu() {
     })
   }
 
-  const distroIcon = getIcon("archlinux-symbolic")
+  const distroIcon = getIcon("/home/angel/Dev/Distroia/ui/ags-v3/assets/logos/arch-white.svg")
 
   const sep = new Gtk.Separator({
     orientation: Gtk.Orientation.VERTICAL,
@@ -354,58 +354,28 @@ function ResourceCircle(iconName: string, update: (cb: (val: number) => void) =>
     const yc = height / 2
 
     // Background track
-    cr.setSourceRGBA(0.2, 0.2, 0.2, 0.3)
-    cr.setLineWidth(2.5)
+    cr.setSourceRGBA(1, 1, 1, 0.1) // Subtle white track
+    cr.setLineWidth(2)
     cr.arc(xc, yc, radius, 0, 2 * Math.PI)
     cr.stroke()
 
     // Progress arc
     if (percentage > 0) {
-      const isCpu = iconName === "cpu-symbolic"
-      if (isCpu) cr.setSourceRGBA(0.79, 0.65, 0.97, 1.0) // accent_purple
-      else cr.setSourceRGBA(0.54, 0.81, 0.94, 1.0) // accent_blue approx
-
-      cr.setLineWidth(2.5)
+      cr.setSourceRGBA(1, 1, 1, 0.8) // Solid white progress
+      cr.setLineWidth(2)
       cr.setLineCap(1) // Round caps
       const angle = (percentage / 100) * 2 * Math.PI
       cr.arc(xc, yc, radius, -Math.PI / 2, angle - Math.PI / 2)
       cr.stroke()
     }
+  })
 
-    // DRAW INNER SYMBOL (Bespoke Cairo Icons) 💎
-    const isCpu = iconName === "cpu-symbolic"
-    cr.setLineCap(1)
-    cr.setLineWidth(1.5)
-
-    if (isCpu) {
-      cr.setSourceRGBA(0.79, 0.65, 0.97, 1.0) // accent_purple
-      // Center Chip
-      const s = 6
-      cr.rectangle(xc - s / 2, yc - s / 2, s, s)
-      cr.stroke()
-      // Pins
-      const len = 2
-      for (let i = -1; i <= 1; i += 2) {
-        // Top/Bottom
-        cr.moveTo(xc + i * 2, yc - s / 2); cr.lineTo(xc + i * 2, yc - s / 2 - len);
-        cr.moveTo(xc + i * 2, yc + s / 2); cr.lineTo(xc + i * 2, yc + s / 2 + len);
-        // Left/Right
-        cr.moveTo(xc - s / 2, yc + i * 2); cr.lineTo(xc - s / 2 - len, yc + i * 2);
-        cr.moveTo(xc + s / 2, yc + i * 2); cr.lineTo(xc + s / 2 + len, yc + i * 2);
-      }
-      cr.stroke()
-    } else {
-      cr.setSourceRGBA(0.54, 0.81, 0.94, 1.0) // accent_blue
-      // RAM Stick
-      const w = 4, h = 10
-      cr.rectangle(xc - w / 2, yc - h / 2, w, h)
-      cr.stroke()
-      // Segments
-      cr.moveTo(xc - w / 2, yc); cr.lineTo(xc + w / 2, yc)
-      cr.moveTo(xc - w / 2, yc - 2); cr.lineTo(xc + w / 2, yc - 2)
-      cr.moveTo(xc - w / 2, yc + 2); cr.lineTo(xc + w / 2, yc + 2)
-      cr.stroke()
-    }
+  const icon = new Gtk.Image({
+    icon_name: iconName,
+    pixel_size: 12,
+    valign: Gtk.Align.CENTER,
+    halign: Gtk.Align.CENTER,
+    css_classes: ["resource-icon"]
   })
 
   const overlay = new Gtk.Overlay({
@@ -414,6 +384,7 @@ function ResourceCircle(iconName: string, update: (cb: (val: number) => void) =>
     halign: Gtk.Align.CENTER
   })
   overlay.set_child(canvas)
+  overlay.add_overlay(icon)
 
   const sync = () => {
     update((val) => {
@@ -438,8 +409,8 @@ function SystemResources() {
     css_classes: ["bar-resources"],
     spacing: 12,
     valign: Gtk.Align.CENTER,
-    margin_start: 16,
-    margin_end: 16,
+    margin_start: 12,
+    margin_end: 12,
     margin_top: 4,
     margin_bottom: 4
   })
@@ -451,7 +422,7 @@ function SystemResources() {
     })
   }, 2000)
 
-  const ram = ResourceCircle("media-memory-symbolic", (cb) => {
+  const ram = ResourceCircle("ram-symbolic", (cb) => {
     execAsync(["bash", "-c", "LC_ALL=C free -m | grep Mem | awk '{print $3/$2 * 100}'"]).then(out => {
       const val = parseFloat(out.trim().replace(",", "."))
       cb(isNaN(val) ? 0 : Math.floor(val))
@@ -462,6 +433,71 @@ function SystemResources() {
   box.append(ram)
 
   return box
+}
+
+/**
+ * Control Center Toggle Pill 🎛️
+ */
+function ControlCenterMenu() {
+  const box = new Gtk.Box({
+    spacing: 8,
+    valign: Gtk.Align.CENTER,
+    margin_start: 12,
+    margin_end: 12
+  })
+
+  const icon = new Gtk.Image({
+    icon_name: "preferences-system-symbolic",
+    pixel_size: 14,
+    valign: Gtk.Align.CENTER
+  })
+
+  box.append(icon)
+
+  return SquircleContainer({
+    child: box,
+    radius: undefined,
+    gloss: true,
+    color: { r: 0.07, g: 0.07, b: 0.11 },
+    alpha: 0.2,
+    perfect: true,
+    onClick: () => (app as any).DistroIA?.toggleCC()
+  })
+}
+
+
+/**
+ * System Status (Network & Battery) Pill 🔋
+ */
+function SystemStatus() {
+  const box = new Gtk.Box({
+    spacing: 8,
+    valign: Gtk.Align.CENTER,
+    margin_start: 12,
+    margin_end: 12
+  })
+
+  const netIcon = new Gtk.Image({
+    icon_name: "network-wireless-signal-excellent-symbolic",
+    pixel_size: 14
+  })
+
+  const battIcon = new Gtk.Image({
+    icon_name: "battery-level-100-charged-symbolic",
+    pixel_size: 14
+  })
+
+  box.append(netIcon)
+  box.append(battIcon)
+
+  return SquircleContainer({
+    child: box,
+    radius: undefined,
+    gloss: true,
+    color: { r: 0.07, g: 0.07, b: 0.11 },
+    alpha: 0.2,
+    perfect: true
+  })
 }
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
@@ -664,6 +700,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   })
   rightSide.append(ResourcePill)
   rightSide.append(TrayPill)
+  rightSide.append(SystemStatus())
+  rightSide.append(ControlCenterMenu())
   // Ensure TimePill is appended and visible
   TimePill.visible = true
   rightSide.append(TimePill)
