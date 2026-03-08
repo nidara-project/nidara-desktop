@@ -38,6 +38,7 @@ import NotificationPopups from "./widget/control-center/NotificationPopups"
 import ControlCenter from "./widget/control-center/ControlCenter"
 import PowerMenu from "./widget/power-menu/PowerMenu"
 import Settings from "./widget/settings/Settings"
+import Theme from "./core/ThemeManager"
 
 console.log("[DISTROIA] Calling app.start()...");
 app.start({
@@ -61,6 +62,11 @@ app.start({
     const styleFile = `/home/angel/Dev/Distroia/ui/ags-v3/style.css`
     const mainProvider = new Gtk.CssProvider()
     const themeProvider = new Gtk.CssProvider()
+
+    // V145: THE "GENEVA CONVENTION" FIX REFINED 🕊️
+    // We restore global display providers for AGS internal styles.
+    // This is safe because our CSS is ID-scoped (#crystal-bar, etc.).
+
     const defaultDisplay = Gdk.Display.get_default()
 
     const syncTheme = () => {
@@ -106,6 +112,8 @@ app.start({
       try {
         const barWin = Bar(monitor)
         const dockWin = Dock(monitor)
+
+
         windows.add(barWin); windows.add(dockWin)
 
         // Dock rebuild on settings change (debounced)

@@ -437,13 +437,7 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
   } else {
     lines.push(
       `/* THEME TRANSPARENCY DEFINITIONS (ENGINE INACTIVE) */`,
-      `/* We force transparency OFF for system colors and structural windows. */`,
-      `@define-color card_bg_color @card_bg_color;`,
-      `@define-color window_bg_color ${baseBg};`,
-      `@define-color view_bg_color ${viewBg};`,
-      `@define-color headerbar_bg_color ${headerBg};`,
-      `@define-color popover_bg_color ${popoverBg};`,
-      `@define-color sidebar_bg_color ${sidebarBg};`
+      `/* We STOP overriding internal GTK colors to allow native theme inheritance. */`
     )
   }
 

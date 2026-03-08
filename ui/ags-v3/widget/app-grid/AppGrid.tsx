@@ -10,6 +10,7 @@ import Gio from "gi://Gio"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import AstalHyprland from "gi://AstalHyprland"
 import appService from "../../core/AppService"
+import Theme from "../../core/ThemeManager"
 // V127: Native Gtk Resolution - No mapping needed
 
 const appsService = new AstalApps.Apps()
@@ -271,7 +272,35 @@ export default function AppGrid(monitor: Gdk.Monitor) {
             ; (button as any)._appName = name.toLowerCase()
 
         button.connect("clicked", () => {
-            app.launch()
+            try {
+                // V148: ABSOLUTE UNIFIED ISOLATION 🛰️
+                const realInfo = appService.getAppInfo(app.id)
+                let rawCommand = realInfo?.get_commandline() || app.executable || ""
+
+                // Nuclear Sanitizer: Surgical removal of field codes (%U, %f, etc.)
+                let command = rawCommand.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
+
+                console.log(`[AppGrid] Launch: ${name} (ID: ${app.id})`)
+                console.log(`[AppGrid]   - Raw Cmd: ${rawCommand}`)
+                console.log(`[AppGrid]   - Final Cmd: ${command}`)
+
+                if (!command) {
+                    console.warn(`[AppGrid] No stable command found for ${name}, falling back...`)
+                    app.launch()
+                    win.visible = false
+                    return
+                }
+
+                // Call Hyprland for 100% environment isolation
+                execAsync(["hyprctl", "dispatch", "exec", command])
+                    .catch(err => {
+                        console.error(`[AppGrid] Hyprland launch failed for ${name}:`, err)
+                        app.launch() // Emergency fallback
+                    })
+            } catch (e) {
+                console.error(`[AppGrid] Launch failure:`, e)
+                app.launch() // Emergency fallback
+            }
             win.visible = false
         })
 

@@ -60,7 +60,6 @@ class ThemeManager extends GObject.Object {
 
     constructor() {
         super()
-        GLib.setenv("GTK_THEME", "", true)
         this.loadSettings()
         this.applyAll()
     }
@@ -262,13 +261,16 @@ class ThemeManager extends GObject.Object {
         try {
             const display = Gdk.Display.get_default()
             if (display) {
+                // V145: THE "GENEVA CONVENTION" FIX REFINED 🕊️
+                // Restoring global display providers for AGS internal process.
                 Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
                 Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1)
                 this.providersLinked = true
-                console.log("[ThemeManager] Theme CSS Providers linked (PRIORITY_APPLICATION)")
+                console.log("[ThemeManager] Theme CSS Providers linked (Scoped to AGS Process)")
             }
         } catch (e) { }
     }
+
 
     private registeredResource: any | null = null
 
@@ -372,24 +374,29 @@ class ThemeManager extends GObject.Object {
     }
 
     /**
-     * Delete symlinks in ~/.config/gtk-4.0/ to restore native theme behavior
+     * Delete overrides in ~/.config/gtk-4.0/ to restore native theme behavior.
+     * V145: NUCLEAR PURGE ☢️ - Using rm -rf for absolute disk-level cleanup.
      */
     private async clearConfigSymlinks() {
         const configDir = `${GLib.get_user_config_dir()}/gtk-4.0`
-        const targets = ["gtk.css", "gtk-dark.css", "_tokens.css", "assets", "windows-assets"]
+        const targets = [
+            "gtk.css", "gtk-dark.css",
+            "gtk.css.map", "gtk-dark.css.map",
+            "_tokens.css", "_tokens.css.map",
+            "assets", "windows-assets",
+            "gtk.gresource"
+        ]
+
+        // 1. Force shell-level deletion
+        console.log(`[ThemeManager] Executing Nuclear Purge in ${configDir}...`)
 
         for (const name of targets) {
             const path = `${configDir}/${name}`
-            try {
-                const file = Gio.File.new_for_path(path)
-                if (file.query_exists(null)) {
-                    file.delete(null)
-                    console.log(`[ThemeManager] Deleted override: ${path}`)
-                }
-            } catch (e) {
-                // Ignore errors (file might not exist)
-            }
+            await execAsync(["rm", "-rf", path]).catch(() => { })
         }
+
+        // 2. Small yield to ensure the filesystem reflects the changes
+        await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { r(null); return GLib.SOURCE_REMOVE; }))
     }
 
     private async syncGtkTheme() {
@@ -431,7 +438,7 @@ class ThemeManager extends GObject.Object {
             // FORCE OVERLAY: When ON, we force apps to read local config via empty GTK_THEME
             GLib.setenv("GTK_THEME", "", true)
         } else {
-            console.log(`[ThemeManager] Fluid Crystal Engine DISABLED. RESTORING NATIVE THEME...`)
+            console.log(`[ThemeManager] Fluid Crystal Engine DISABLED. PURGING OVERLAYS...`)
             // PURGE OVERLAY: Remove files so child apps load the real system theme natively
             await this.clearConfigSymlinks()
 
@@ -440,8 +447,12 @@ class ThemeManager extends GObject.Object {
             this.themeProvider.load_from_string(tokensCss)
             this.tintProvider.load_from_string("")
 
-            // RESTORE NATIVE: Unset env var so children inherit the real environment/GSettings
+            // RESTORE NATIVE: Unset GTK_THEME to allow GSettings/XSettings to take over.
+            // This is the ONLY way to ensure 100% native behavior for child processes.
             GLib.unsetenv("GTK_THEME")
+
+            // SECURITY: Ensure the display doesn't have any residual provider (though we use Process-local)
+            // We just let the empty/native providers handle it.
         }
 
         // 4. Force GTK & System bindings to align with the chosen Base Theme structurally

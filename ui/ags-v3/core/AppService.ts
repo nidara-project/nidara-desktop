@@ -222,7 +222,9 @@ class AppService {
             const data: AppData = {
                 id: id, // V94.2: PRESERVE ORIGINAL CASE (Critical for gtk-launch)
                 name: app.get_name(),
-                exec: app.get_executable()?.split(" ").pop()?.split("/").pop()?.replace(/["']/g, "").toLowerCase() || "",
+                // V147: ROBUST BINARY RESOLUTION 💎
+                // We take the FIRST part of the executable string (the binary), then the filename.
+                exec: app.get_executable()?.split(" ")[0].split("/").pop()?.replace(/["']/g, "").toLowerCase() || "",
                 icon: canonical,
                 wmClass: wmClass
             }
