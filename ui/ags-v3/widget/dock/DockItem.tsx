@@ -167,7 +167,23 @@ export function DockItem(
             }
             return { name: candidate }
         }
-        if (appItem.get_icon) return { gicon: appItem.get_icon() }
+
+        // V149.3: THEMED ICON RESOLUTION (GIO) 🛰️
+        // If we have a raw Gio.AppInfo, we extract the GIcon and resolve its names.
+        if (appItem.get_icon) {
+            const gicon = appItem.get_icon()
+            if (gicon instanceof Gio.ThemedIcon) {
+                for (const n of gicon.get_names()) {
+                    const res = appService.getIconName(n)
+                    if (res) {
+                        if (res.startsWith("/") || res.startsWith("file://")) return { path: res.replace("file://", "") }
+                        return { name: res }
+                    }
+                }
+            }
+            return { gicon: gicon }
+        }
+
         return { name: "image-missing" }
     }
 

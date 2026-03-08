@@ -89,84 +89,57 @@ class AppService {
         if (!n || n === "void") return null
         if (n.startsWith("/") || n.startsWith("file://")) return n
 
-        // V127: NATIVE GTK RESOLUTION 💎
         const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+
+        // V150: DISTROIA OVERLAY PRIORITY 🛰️
+        const overlayBase = `${GLib.get_home_dir()}/.local/share/icons/distroia`
+        const extensions = [".svg", ".png", ""]
+        for (const ext of extensions) {
+            const path = `${overlayBase}/scalable/apps/${n}${ext}`.replace("//", "/")
+            if (GLib.file_test(path, GLib.FileTest.EXISTS)) return path
+            // Try flat fallback
+            const flat = `${overlayBase}/${n}${ext}`.replace("//", "/")
+            if (GLib.file_test(flat, GLib.FileTest.EXISTS)) return flat
+        }
+
+        // V127: NATIVE GTK RESOLUTION 💎
         if (theme.has_icon(n)) {
-            // V136: Verify it resolves to a GOOD icon
-            // If Gtk maps 'kitty' -> 'preferences-system', we must reject it!
             const paintable = theme.lookup_icon(n, null, 48, 1, Gtk.TextDirection.LTR, 0)
             const path = paintable?.get_file()?.get_path()
 
-            if (path && !BAD_ICONS.some(bad => path.includes(bad))) {
-                return n // It's a specific, good icon. Use it.
+            // Reject Pixmaps from native resolution to force themed search ☢️
+            const isPixmap = path && path.includes("/usr/share/pixmaps")
+            if (path && !isPixmap && !BAD_ICONS.some(bad => path.includes(bad))) {
+                return n
             }
-            // If path is missing or generic, fall through to Brute Force ☢️
         }
 
         // V129: DEEP BRUTE FORCE FALLBACK (The "Nuclear Option") ☢️
-        // If Gtk can't find it, we look for it ourselves in every possible folder.
         let themeName = theme.get_theme_name()
-
-        // V130: Force Read from GSettings if Gtk is stuck on standard/Adwaita
         if (themeName === "Adwaita" || themeName === "hicolor") {
             try {
                 const settings = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
                 const configuredTheme = settings.get_string("icon-theme")
-                if (configuredTheme) {
-                    // console.log(`[AppService] Gtk reports '${themeName}', but GSettings says '${configuredTheme}'. Using GSettings.`)
-                    themeName = configuredTheme
-                }
-            } catch (e) {
-                console.error("[AppService] Failed to read GSettings icon-theme:", e)
-            }
+                if (configuredTheme) themeName = configuredTheme
+            } catch (e) { }
         }
 
         const visited = new Set<string>()
-
-        // Prioritized list of bases
         const bases = [
-            `/usr/share/icons/${themeName}`,
-            `/usr/local/share/icons/${themeName}`,
             `${GLib.get_home_dir()}/.local/share/icons/${themeName}`,
+            `/usr/share/icons/${themeName}`,
             `/usr/share/icons/hicolor`,
-            `/usr/local/share/icons/hicolor`,
-            `${GLib.get_home_dir()}/.local/share/icons/hicolor`,
             `/usr/share/pixmaps`
         ]
 
-        // Prioritized list of subdirs (Quality first)
-        const subdirs = [
-            "apps",
-            "scalable/apps",
-            "48x48/apps",
-            "32x32/apps",
-            "64x64/apps",
-            "128x128/apps",
-            "256x256/apps",
-            "512x512/apps",
-            "symbolic/apps",
-            "24x24/apps",
-            "22x22/apps",
-            "16x16/apps",
-            "" // For pixmaps flat structure
-        ]
-
-        const exts = [".svg", ".png", ".xpm", ""]
+        const subdirs = ["scalable/apps", "apps", "48x48/apps", "32x32/apps", ""]
 
         for (const base of bases) {
             for (const sub of subdirs) {
-                for (const ext of exts) {
-                    // Try exact name
-                    let path = `${base}/${sub}/${n}${ext}`.replace("//", "/")
+                for (const ext of extensions) {
+                    const path = `${base}/${sub}/${n}${ext}`.replace("//", "/")
                     if (!visited.has(path) && GLib.file_test(path, GLib.FileTest.EXISTS)) return path
                     visited.add(path)
-
-                    // Try symbolic variant if not already present
-                    if (!n.endsWith("-symbolic")) {
-                        path = `${base}/${sub}/${n}-symbolic${ext}`.replace("//", "/")
-                        if (!visited.has(path) && GLib.file_test(path, GLib.FileTest.EXISTS)) return path
-                        visited.add(path)
-                    }
                 }
             }
         }
@@ -193,10 +166,15 @@ class AppService {
         }
 
         const apps = Gio.AppInfo.get_all()
+        const visitedIds = new Set<string>()
 
         apps.forEach(app => {
-            const id = app.get_id()?.replace(".desktop", "")
-            if (!id) return
+            // V149.3: ROBUST ID CAPTURE (GIO) 💎
+            // Canonical source is get_id(), fallback to Desktop filename if available
+            const rawId = app.get_id() || (app as any).get_filename?.()?.split("/").pop() || ""
+            const id = rawId.replace(".desktop", "")
+            if (!id || visitedIds.has(id.toLowerCase())) return
+            visitedIds.add(id.toLowerCase())
 
             const icon = app.get_icon()
             let canonical: string | null = null
@@ -253,11 +231,27 @@ class AppService {
     }
 
     /**
-     * V127: UNIVERSAL RESOLVER 🚀
-     * Resolves an icon name or array of names to the best match in the current theme.
+     * V127: UNIVERSAL RESOLVER    /**
+     * Resuelve un nombre de icono o GIcon a una ruta absoluta o nombre de tema válido.
      */
-    getIconName(key: string | string[]): string | null {
+    getIconName(key: any): string | null {
         if (!key) return null
+
+        // V150: NATIVE GICON RESOLUTION 🛰️ (Safe handling for non-string inputs)
+        if (typeof key !== "string" && !Array.isArray(key)) {
+            try {
+                if (key instanceof Gio.ThemedIcon) {
+                    return this.getIconName(key.get_names())
+                }
+                if (key instanceof Gio.FileIcon) {
+                    return key.get_file().get_path()
+                }
+                // Fallback for generic GIcon
+                if (key.to_string) return this.getIconName(key.to_string())
+            } catch (e) {
+                console.error("[AppService] GIcon resolution failed:", e)
+            }
+        }
 
         // Handle array of fallbacks
         if (Array.isArray(key)) {
@@ -272,16 +266,23 @@ class AppService {
         const k = key.toLowerCase().replace(".desktop", "")
         let hit = this.nameMap.get(k) || this.getCanonicalName(key)
 
-        // V132: GENERIC ROBUSTNESS 🛡️
-        // If the theme returns a generic/fallback icon, force a brute-force search for the original name.
-        if (hit && BAD_ICONS.some(bad => hit!.includes(bad))) {
-            // console.log(`[AppService] Detected generic icon for '${key}': ${hit}. Forcing brute force lookup.`)
+        // V150: PIXMAP DE-PRIORITIZATION ☢️
+        const isPixmap = hit && hit.includes("/usr/share/pixmaps")
+        const isGeneric = hit && BAD_ICONS.some(f => hit!.includes(f))
+
+        if (isPixmap || isGeneric) {
             const deep = this.getCanonicalName(k)
-            if (deep && !BAD_ICONS.some(bad => deep.includes(bad))) {
+            if (deep && !deep.includes("/usr/share/pixmaps") && !BAD_ICONS.some(f => deep.includes(f))) {
                 hit = deep
             }
         }
 
+        // V150: LOGGING & CACHING 🛰️
+        if (hit && hit.includes("distroia")) {
+            console.log(`[AppService] Resolved '${key}' -> DISTROIA OVERLAY: ${hit}`)
+        }
+
+        if (hit) this.nameMap.set(k, hit)
         return hit
     }
 
@@ -310,21 +311,26 @@ class AppService {
         const idFromWm = this.wmMap.get(q)
         if (idFromWm) return this.gAppCache.get(idFromWm) || null
 
-        // 3. Reverse search for fuzzy matches and substring IDs
+        // 3. Search for best match in cache
+        let fallbackMatch = null
         for (const [id, data] of this.cache.entries()) {
-            // V94.12: HEURISTIC MATCHING 💎
+            // V149.2: STRICT FUZZY MATCHING 💎
             // Handle cases like "org.telegram" -> "org.telegram.desktop"
-            if (id.includes(q) || q.includes(id)) {
-                return this.gAppCache.get(id) || null
-            }
+            const match = id === q || id.startsWith(q + ".") || id.startsWith(q + "-")
+            if (match) return this.gAppCache.get(id) || null
 
-            // Handle metadata matches
+            // Metadata matches (WM_CLASS, etc.)
             if (data.wmClass === q || data.exec === q || data.name.toLowerCase() === q) {
                 return this.gAppCache.get(id) || null
             }
+
+            // Substring fallback (only if nothing better found)
+            if (id.includes(q) && !fallbackMatch) {
+                fallbackMatch = this.gAppCache.get(id) || null
+            }
         }
 
-        return null
+        return fallbackMatch
     }
 
     /**

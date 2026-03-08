@@ -669,81 +669,37 @@ export default function Dock(gdkmonitor: any) {
             // V620: Memoize heavy app lookups that run on every window focus change
             const appLookupCache = new Map<string, any>()
 
+            // V149.3: UNIFIED APP SHIM 🛰️
+            // Restores a property-compatible object for DockItem while using centered resolution.
             const findApp = (searchId: string) => {
                 if (!searchId) return null
                 if (appLookupCache.has(searchId)) return appLookupCache.get(searchId)
 
                 const lid = searchId.toLowerCase().replace(".desktop", "")
+                const info = appService.getAppInfo(lid)
+                const data = appService.getAppData(lid)
 
-                // V505: Rename local 'app' to 'targetApp' to avoid shadowing global 'app' import
-                let targetApp = apps.list.find(a => {
-                    const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase().replace(".desktop", "")
-                    return aid === lid
-                })
+                if (!info && !data) return null
 
-                if (!targetApp && lid.includes(".")) {
-                    const parts = lid.split(".")
-                    const lastPart = parts[parts.length - 1]
-                    targetApp = apps.list.find(a => {
-                        const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase().replace(".desktop", "")
-                        return aid.includes(lastPart)
-                    })
-                }
-
-                if (!targetApp) {
-                    const fuzzyList = [lid, lid.split(".").pop() || "", lid.replace("org.", "").replace("com.", "")]
-                    for (const f of fuzzyList) {
-                        const found = apps.list.find(a => {
-                            const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase()
-                            return aid.includes(f)
-                        })
-                        if (found) {
-                            targetApp = found
-                            break
-                        }
+                const shim = {
+                    id: data?.id || info?.get_id()?.replace(".desktop", "") || lid,
+                    name: data?.name || info?.get_name() || lid,
+                    icon_name: data?.icon || info?.get_icon() || "application-x-executable",
+                    get_id: () => data?.id || info?.get_id() || lid,
+                    get_name: () => data?.name || info?.get_name() || lid,
+                    get_icon: () => info?.get_icon(),
+                    launch: () => {
+                        const launchId = data?.id || info?.get_id() || lid
+                        const freshInfo = appService.getAppInfo(launchId)
+                        let command = freshInfo?.get_commandline() || data?.exec || launchId
+                        // Absolute Isolation Sanitization
+                        command = command.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
+                        execAsync(["hyprctl", "dispatch", "exec", command]).catch(print)
                     }
                 }
 
-                if (!targetApp) {
-                    targetApp = apps.list.find(a => {
-                        const name = a.get_name().toLowerCase()
-                        return name.includes(lid) || lid.includes(name)
-                    })
-                }
-
-                if (!targetApp) {
-                    targetApp = apps.list.find(a => {
-                        const exec = a.get_executable() || ""
-                        return exec.toLowerCase().includes(lid) || lid.includes(exec.toLowerCase())
-                    })
-                }
-
-                // Specialized Telegram Match for EndeavourOS/Wayland
-                if (!targetApp && (lid.includes("telegram") || lid.includes("tg"))) {
-                    targetApp = apps.list.find(a => {
-                        const aid = (a.get_id ? a.get_id() : a.id || "").toLowerCase()
-                        return aid.includes("telegram")
-                    })
-                }
-
-                if (!targetApp) {
-                    const data = appService.getAppData(lid)
-                    if (data) {
-                        const customApp = {
-                            name: data.name,
-                            icon_name: data.icon || lid,
-                            id: data.id,
-                            get_id: () => data.id,
-                            get_name: () => data.name,
-                            launch: () => execAsync(`gtk-launch ${data.id || lid}`).catch(print)
-                        } as any
-                        appLookupCache.set(searchId, customApp)
-                        return customApp
-                    }
-                }
-
-                appLookupCache.set(searchId, targetApp)
-                return targetApp
+                appLookupCache.set(searchId, shim)
+                return shim
             }
 
 

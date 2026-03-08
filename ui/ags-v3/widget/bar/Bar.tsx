@@ -15,6 +15,8 @@ import WorkspaceOverview from "../overview/WorkspaceOverview"
 import WorkspacePreview from "../overview/WorkspacePreview"
 import { getWordmark } from "../../utils"
 import SquircleContainer from "../common/SquircleContainer" // 🔵 Import Squircle
+import appService from "../../core/AppService"
+import Gio from "gi://Gio"
 
 // ... (skipping Tray logic for brevity in match) ...
 
@@ -194,11 +196,21 @@ function AppMenu() {
     // onClick removed as per user request
   })
 
-  const distroIcon = new Gtk.Image({
-    icon_name: "archlinux-symbolic", // Back to theme icon
-    pixel_size: 20,
-    css_classes: ["bar-app-distro-icon"]
-  })
+  const getIcon = (name: string) => {
+    const res = appService.getIconName(name)
+    if (res && (res.startsWith("/") || res.startsWith("file://"))) {
+      return new Gtk.Image({
+        file: res.replace("file://", ""),
+        css_classes: ["bar-app-distro-icon"]
+      })
+    }
+    return new Gtk.Image({
+      icon_name: res || name,
+      css_classes: ["bar-app-distro-icon"]
+    })
+  }
+
+  const distroIcon = getIcon("archlinux-symbolic")
 
   const sep = new Gtk.Separator({
     orientation: Gtk.Orientation.VERTICAL,
