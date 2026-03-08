@@ -463,9 +463,10 @@ export function DockItem(
         if (appId === "launcher" || appId === "special:launcher") {
             mainSection.append("Abrir", addAction(() => appItem.launch()))
         } else if (appId === "home-shortcut" || appId === "special:home") {
-            // V700: Force system default GUI file manager instead of terminal fallback
+            // V149: UNIVERSAL HOME ISOLATION (Right Click) 🛰️
             mainSection.append("Abrir", addAction(() => {
-                execAsync(`xdg-open ${GLib.get_home_dir()}`).catch(print)
+                const command = appService.getDefaultFileManagerCommand()
+                execAsync(["hyprctl", "dispatch", "exec", command]).catch(print)
             }))
         } else if (appId === "trash" || appId === "special:trash") {
             mainSection.append("Abrir", addAction(() => appItem.launch()))
@@ -634,9 +635,10 @@ export function DockItem(
                     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, animLoop)
                 }
 
-                // V700: Force system file manager for Home shortcut
+                // V149: UNIVERSAL HOME ISOLATION (Left Click) 🛰️
                 if (appId === "special:home" || appId === "home-shortcut") {
-                    execAsync(`xdg-open ${GLib.get_home_dir()}`).catch(print)
+                    const command = appService.getDefaultFileManagerCommand()
+                    execAsync(["hyprctl", "dispatch", "exec", command]).catch(print)
                 } else {
                     try {
                         appItem.launch()

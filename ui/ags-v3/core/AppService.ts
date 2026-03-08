@@ -295,7 +295,12 @@ class AppService {
      */
     getAppInfo(lid: string): any | null {
         if (!lid) return null
-        const q = lid.toLowerCase().replace(".desktop", "")
+
+        // V149: ROBUST BASENAME RESOLUTION 💎
+        // We ensure that if we get a full path, we extract the ID (e.g. org.gnome.Nautilus)
+        const q = lid.toLowerCase()
+            .split("/").pop()! // Get filename
+            .replace(".desktop", "") // Remove extension
 
         // 1. Exact ID match (case-insensitive)
         let info = this.gAppCache.get(q)
@@ -320,6 +325,23 @@ class AppService {
         }
 
         return null
+    }
+
+    /**
+     * V149: UNIVERSAL FILE MANAGER RESOLUTION 🛰️
+     * Returns the sanitized command for the system's default file manager.
+     */
+    getDefaultFileManagerCommand(): string {
+        try {
+            const app = Gio.AppInfo.get_default_for_type("inode/directory", false)
+            if (app) {
+                const cmd = app.get_commandline()
+                if (cmd) return cmd.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
+            }
+        } catch (e) {
+            console.error("[AppService] Failed to get default file manager:", e)
+        }
+        return "xdg-open ." // Absolute fallback (Terminal-safe)
     }
 }
 

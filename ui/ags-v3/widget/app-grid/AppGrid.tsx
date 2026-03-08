@@ -273,8 +273,10 @@ export default function AppGrid(monitor: Gdk.Monitor) {
 
         button.connect("clicked", () => {
             try {
-                // V148: ABSOLUTE UNIFIED ISOLATION 🛰️
-                const realInfo = appService.getAppInfo(app.id)
+                // V149: STABLE ID RESOLUTION 🛰️
+                // Crucial: We use the local 'id' which is derived from app.entry,
+                // because app.id is undefined in AstalApps. 🦾
+                const realInfo = appService.getAppInfo(id || app.executable)
                 let rawCommand = realInfo?.get_commandline() || app.executable || ""
 
                 // Nuclear Sanitizer: Surgical removal of field codes (%U, %f, etc.)
