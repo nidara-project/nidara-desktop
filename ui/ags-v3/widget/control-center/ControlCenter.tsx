@@ -5,7 +5,7 @@ import AstalMpris from "gi://AstalMpris"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalBluetooth from "gi://AstalBluetooth"
 import AstalNotifd from "gi://AstalNotifd"
-import AstalWp from "gi://AstalWp" // Standard architecture 🏛️
+import AstalWp from "gi://AstalWp"
 import GdkPixbuf from "gi://GdkPixbuf"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
@@ -15,7 +15,7 @@ import Pango from "gi://Pango?version=1.0"
 import appService from "../../core/AppService"
 import Theme from "../../core/ThemeManager"
 import { ACCENT_PALETTE } from "../../core/FluidCrystal"
-import { drawSquircle } from "../common/DrawingUtils"
+import { drawSquircle, createSquirclePath } from "../common/DrawingUtils"
 import SquircleContainer from "../common/SquircleContainer"
 
 export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
@@ -31,14 +31,13 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         css_classes: ["control-center-win", "background"],
         visible: false,
         // @ts-ignore
-        focus_visible: false // V305: Force Disable Focus Ring
+        focus_visible: false
     })
 
     try {
         Gtk4LayerShell.init_for_window(win)
         Gtk4LayerShell.set_namespace(win, "control-center")
         Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
-        // Set full screen anchor to detect clicks outside the panel
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true)
@@ -58,15 +57,12 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     })
     win.add_controller(keyController)
 
-    // Root container covering the whole screen
     const overlay = new Gtk.Overlay({
         css_classes: ["cc-window-root"],
         hexpand: true,
         vexpand: true
     })
 
-    // SACRIFICIAL WIDGET ⚔️ (Global Root)
-    // We add a dummy 1x1 transparent box as the first overlay child.
     overlay.add_overlay(new Gtk.Box({
         width_request: 1,
         height_request: 1,
@@ -77,7 +73,6 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     win.set_child(overlay)
 
-    // Transparent background catcher
     const catcher = new Gtk.Box({
         hexpand: true,
         vexpand: true,
@@ -87,19 +82,14 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     const clickGesture = new Gtk.GestureClick()
     clickGesture.connect("pressed", () => {
-        console.log("[CC] Background click detected, closing...")
         win.visible = false
     })
     catcher.add_controller(clickGesture)
 
     const contentBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 16, // Global Spacing between Islands 📏
-        css_classes: ["control-center"], // Layout-only container ️
-        margin_top: 0,
-        margin_start: 0,
-        margin_end: 0,
-        margin_bottom: 0,
+        spacing: 12, // Gap between islands
+        css_classes: ["control-center"],
         vexpand: true,
         hexpand: true,
         halign: Gtk.Align.FILL,
@@ -107,91 +97,90 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     })
 
     const ccContainer = new Gtk.Box({
-        css_classes: ["cc-panel-structure"], // The ONLY source of background/border �
+        css_classes: ["cc-islands-container"], // Independent Islands Mode 🏝️
         hexpand: false,
         vexpand: true,
         width_request: 420
     })
     ccContainer.append(contentBox)
 
-    // Layout Properties (moved from Box to Container)
     ccContainer.halign = Gtk.Align.END
     ccContainer.valign = Gtk.Align.FILL
     ccContainer.margin_top = 8
-    ccContainer.margin_end = 8 // Restore 8px distance from screen edge 🛡️
+    ccContainer.margin_end = 8
     ccContainer.margin_bottom = 8
     ccContainer.margin_start = 8
 
     overlay.add_overlay(ccContainer)
 
-    // Alias for compatibility with rest of the code that appends to mainBox
     const mainBox = contentBox
 
-    // Standard buttons and sliders will now correctly receive 
-    // events as they are in the overlay layer above the catcher.
-
-    const topSection = new Gtk.Box({
+    /* --- ISLAND 1: Connectivity --- */
+    const connectivityContent = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 16,
-        css_classes: ["cc-fixed-container"],
-        hexpand: true,
-        halign: Gtk.Align.FILL,
-        margin_top: 16, // Top Island spacing 📐
+        spacing: 12,
+        css_classes: ["cc-connectivity-content"],
+        margin_top: 16,
         margin_start: 16,
-        margin_end: 16
+        margin_end: 16,
+        margin_bottom: 16
     })
 
-    mainBox.append(topSection)
+    const connectivityIsland = SquircleContainer({
+        child: connectivityContent,
+        radius: 32,
+        n: 4.5,
+        css_classes: ["cc-island", "cc-connectivity-island"],
+        alpha: 0.15,
+        gloss: true,
+        borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
+    })
+    mainBox.append(connectivityIsland)
 
-    /* --- Grid Controls --- */
     const grid = new Gtk.Grid({
-        column_spacing: 12, // Keep 12 for touch targets, 8 is too tight for toggles
+        column_spacing: 12,
         row_spacing: 12,
         css_classes: ["cc-grid"],
-        column_homogeneous: true, // Force full width alignment (196px per btn) 📏
+        column_homogeneous: true,
         hexpand: true,
-        halign: Gtk.Align.FILL // Ensure grid stretches to container limits 📏
+        halign: Gtk.Align.FILL
     })
-    topSection.append(grid)
+    connectivityContent.append(grid)
 
     const createToggle = (iconName: string, title: string, sub: string, active: boolean, onClick: () => void) => {
         let isActive = active
         let isHovered = false
 
-        // Dimensions preserved from original button layout
         const container = new Gtk.Box({
             hexpand: true,
-            vexpand: false, // Prevent "Giant Square" expansion 🛡️
+            vexpand: false,
             css_classes: ["cc-toggle-container"],
-            height_request: 64 // Explicitly restore height 🛡️
+            height_request: 64
         })
 
         const da = new Gtk.DrawingArea({
             hexpand: true,
-            vexpand: false // Ensure drawing area doesn't force expansion either
+            vexpand: false
         })
         da.set_draw_func((_, cr, w, h) => {
-            // Dynamic accent color from Fluid Crystal
             const accentHex = ACCENT_PALETTE[Theme.accentColor].color
             const accent = {
                 r: parseInt(accentHex.slice(1, 3), 16) / 255,
                 g: parseInt(accentHex.slice(3, 5), 16) / 255,
                 b: parseInt(accentHex.slice(5, 7), 16) / 255
             }
-            // Inactive: Quaternary White (Solid, Low Alpha)
             const neutral = { r: 1, g: 1, b: 1 }
 
             cr.setSourceRGBA(0, 0, 0, 0); cr.paint()
 
-            const radius = 16 // Nested Radius Rule (24-8=16) 📐
-            const border = { r: 1, g: 1, b: 1, a: 0.08 } // Subtle internal border
+            const radius = 16
+            const border = { r: 1, g: 1, b: 1, a: 0.08 }
 
             if (isActive) {
                 drawSquircle(cr, w, h, undefined, 1.0, false, accent, radius, false, border)
             } else {
-                // Inactive State: 10% Opacity White (Quaternary)
-                if (isHovered) drawSquircle(cr, w, h, undefined, 0.15, false, neutral, radius, false, border)
-                else drawSquircle(cr, w, h, undefined, 0.10, false, neutral, radius, false, border)
+                // Tahoe: Inactive toggles are transparent unless hovered to avoid card stacking look 🏝️
+                if (isHovered) drawSquircle(cr, w, h, undefined, 0.08, false, neutral, radius, false, border)
             }
         })
 
@@ -209,7 +198,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         const iconBox = new Gtk.Box({
             css_classes: ["cc-toggle-icon-box"],
             halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-            width_request: 38, height_request: 38 // Preserved Dimensions 🛡️
+            width_request: 38, height_request: 38
         })
         const icon = new Gtk.Image({
             icon_name: iconName, pixel_size: 18,
@@ -236,7 +225,6 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         motion.connect("leave", () => { isHovered = false; da.queue_draw() })
         container.add_controller(motion)
 
-        // API Compatibility 🛡️
         const setActive = (state: boolean) => {
             isActive = state
             da.queue_draw()
@@ -245,10 +233,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         }
             ; (container as any).setActive = setActive
 
-        // Initial State
         if (isActive) { l.add_css_class("active-text"); icon.add_css_class("active-icon") }
 
-        // Adapter: Expose setActive directly
         return { btn: container, icon, label: l, subLabel: sl, iconBox, setActive }
     }
 
@@ -274,7 +260,6 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             active = network.wifi.enabled
         }
 
-        // 🛡️ Flicker Guard: Skip if nothing changed
         if (wifiToggle.icon.icon_name === icon &&
             wifiToggle.label.label === label &&
             wifiToggle.subLabel.label === sub &&
@@ -284,8 +269,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         if (wifiToggle.label.label !== label) wifiToggle.label.label = label
         if (wifiToggle.subLabel.label !== sub) wifiToggle.subLabel.label = sub
 
-        wifiToggle.setActive(active);
-        (wifiToggle.btn as any)._isActive = active
+        wifiToggle.setActive(active)
     }
 
     grid.attach(wifiToggle.btn, 0, 0, 1, 1)
@@ -301,11 +285,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         const powered = bluetooth?.is_powered || false
         const icon = powered ? "bluetooth-active-symbolic" : "bluetooth-disabled-symbolic"
         const sub = powered ? "Encendido" : "Apagado"
-        const hasActive = btToggle.btn.has_css_class("active")
-
         if (btToggle.icon.icon_name !== icon) btToggle.icon.icon_name = icon
         if (btToggle.subLabel.label !== sub) btToggle.subLabel.label = sub
-
         btToggle.setActive(powered)
     }
     const btToggle = createToggle("bluetooth-disabled-symbolic", "Bluetooth", "...", false, () => {
@@ -315,50 +296,18 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     if (bluetooth) bluetooth.connect("notify::is-powered", updateBT)
     updateBT()
 
-    // Resilient Icon Logic 🛡️
-    const getDNDIcon = () => {
-        const dnd = notifd?.dont_disturb || false
-        if (dnd) return "notifications-disabled-symbolic" // This seems to work for the user
-
-        // Fallback chain for "Active" state
-        const candidates = [
-            "notifications-symbolic",
-            "preferences-system-notifications-symbolic",
-            "alarm-symbolic", // Confirmed existence via find
-            "dialog-information-symbolic" // Absolute fallback
-        ]
-
-        // Check theme for existence
-        const display = Gdk.Display.get_default()
-        const theme = Gtk.IconTheme.get_for_display(display!) // GTK4 API
-
-        for (const name of candidates) {
-            if (theme.has_icon(name)) return name
-        }
-        return "dialog-information-symbolic"
-    }
-
     const updateDND = () => {
         const dnd = notifd?.dont_disturb || false
-        const icon = getDNDIcon()
-
+        const icon = dnd ? "notifications-disabled-symbolic" : "notifications-symbolic"
         const sub = dnd ? "Silencio" : "Normal"
-        const hasActive = dndToggle.btn.has_css_class("active")
-
         if (dndToggle.icon.icon_name !== icon) dndToggle.icon.icon_name = icon
         if (dndToggle.subLabel.label !== sub) dndToggle.subLabel.label = sub
-
         dndToggle.setActive(dnd)
     }
-    // Restore preferred default, getDNDIcon will fix it anyway
-    const dndToggle = createToggle("preferences-system-notifications-symbolic", "No molestar", "...", false, () => {
-        if (notifd) {
-            notifd.dont_disturb = !notifd.dont_disturb
-            updateDND()
-        }
+    const dndToggle = createToggle("notifications-symbolic", "No molestar", "...", false, () => {
+        if (notifd) notifd.dont_disturb = !notifd.dont_disturb
     })
     grid.attach(dndToggle.btn, 0, 1, 1, 1)
-
     if (notifd) notifd.connect("notify::dont-disturb", updateDND)
     updateDND()
 
@@ -368,25 +317,27 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     })
     grid.attach(pwrToggle.btn, 1, 1, 1, 1)
 
-    /* --- Sliders --- */
+    /* --- ISLAND 2: Sliders --- */
     const slidersContent = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 16,
         css_classes: ["cc-sliders-content"],
-        margin_top: 16, // Balanced symmetry 📏
+        margin_top: 16,
         margin_start: 16,
         margin_end: 16,
         margin_bottom: 16
     })
 
-    const sliders = SquircleContainer({
+    const slidersIsland = SquircleContainer({
         child: slidersContent,
-        radius: 16, // Nested Radius Rule (24-8=16) 📐
-        css_classes: ["cc-sliders-structure"], // Clean Structure Only 🎚️
+        radius: 32,
+        n: 4.5,
+        css_classes: ["cc-island", "cc-sliders-island"],
         alpha: 0.15,
+        gloss: true,
         borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
     })
-    topSection.append(sliders)
+    mainBox.append(slidersIsland)
 
     const volScale = new Gtk.Scale({
         orientation: Gtk.Orientation.HORIZONTAL,
@@ -405,17 +356,14 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         adjustment: new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 1, page_increment: 10 })
     })
     brightScale.connect("value-changed", () => {
-        // Fallback to brightnessctl if available, else nothing for now
         execAsync(`brightnessctl s ${Math.floor(brightScale.get_value())}%`).catch(() => { })
     })
 
     const createSlider = (iconName: string, scale: Gtk.Scale) => {
-        // Pure CSS approach: style the GTK Scale directly, icon as overlay
         scale.hexpand = true
         scale.set_size_request(-1, 48)
         scale.add_css_class("cc-pill-slider")
 
-        // Icon overlay (sits on top of the scale, click-through)
         const icon = new Gtk.Image({
             icon_name: iconName,
             pixel_size: 20,
@@ -447,162 +395,120 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         }).catch(() => { })
     }
 
-    /* --- Media --- */
+    /* --- ISLAND 3: Media --- */
     const mediaContainer = new Gtk.Box({
         css_classes: ["cc-media"],
-        orientation: Gtk.Orientation.VERTICAL,
-        margin_start: 16, // Standard Island Symmetry 📏
-        margin_end: 16
+        orientation: Gtk.Orientation.VERTICAL
     })
-    mainBox.append(mediaContainer) // V580: MEDIA AS INDEPENDENT ISLAND 🏝️
+    mainBox.append(mediaContainer)
 
-    // Media State Management 🎵
     let lastPlayer: AstalMpris.Player | null = null
     let playerSignals: number[] = []
 
     const updateMedia = () => {
         const players = mpris.get_players()
-
-        // 1. No players? Cleanup and return.
         if (players.length === 0) {
             mediaContainer.get_first_child()?.unparent()
-            if (lastPlayer) {
-                playerSignals.forEach(id => lastPlayer?.disconnect(id))
-                playerSignals = []
-                lastPlayer = null
-            }
+            if (lastPlayer) { playerSignals.forEach(id => lastPlayer?.disconnect(id)); playerSignals = []; lastPlayer = null }
             return
         }
 
         const player = players[0]
-
-        // 2. New player detected? Re-bind signals.
         if (lastPlayer !== player) {
-            if (lastPlayer) {
-                playerSignals.forEach(id => lastPlayer?.disconnect(id))
-                playerSignals = []
-            }
+            if (lastPlayer) { playerSignals.forEach(id => lastPlayer?.disconnect(id)); playerSignals = [] }
             lastPlayer = player
-            // Bind to critical properties for instant updates ⚡
             playerSignals.push(player.connect("notify::playback-status", updateMedia))
             playerSignals.push(player.connect("notify::title", updateMedia))
             playerSignals.push(player.connect("notify::artist", updateMedia))
             playerSignals.push(player.connect("notify::cover-art", updateMedia))
         }
 
-        const stateKey = `${player.bus_name}-${player.playback_status}-${player.title}-${player.artist}-${player.cover_art}`
-        if ((mediaContainer as any)._lastState === stateKey) return
-        (mediaContainer as any)._lastState = stateKey
-
         mediaContainer.get_first_child()?.unparent()
 
-        // Content (Inner Layout)
         const content = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
             spacing: 16,
             css_classes: ["cc-media-content"],
-            margin_top: 16,
-            margin_start: 16,
-            margin_end: 16,
-            margin_bottom: 16
+            margin_top: 16, margin_start: 16, margin_end: 16, margin_bottom: 16
         })
 
-        const topRow = new Gtk.Box({
-            spacing: 16,
-            halign: Gtk.Align.CENTER // Center Art + Info unit 🎯
-        })
+        const topRow = new Gtk.Box({ spacing: 16, halign: Gtk.Align.CENTER })
         const art = new Gtk.Box({ css_classes: ["cc-media-art"], valign: Gtk.Align.CENTER })
-        // V455: BULLETPROOF MEDIA ART 🛡️
-        // Use DrawingArea for image to avoid flickering.
-        const artDa = new Gtk.DrawingArea({
-            css_classes: ["cc-media-art-da"],
-            valign: Gtk.Align.CENTER, // Center vertically in row 🎯
-            halign: Gtk.Align.CENTER
-        })
+        const artDa = new Gtk.DrawingArea({ css_classes: ["cc-media-art-da"], valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER })
 
         let artPixbuf: any = null
         if (player.cover_art && GLib.file_test(player.cover_art, GLib.FileTest.EXISTS)) {
             try {
-                // Scaling: Max 80x80 while preserving aspect ratio 📏
                 artPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(player.cover_art, 80, 80, true)
-                if (artPixbuf) {
-                    artDa.set_size_request(artPixbuf.width, artPixbuf.height)
-                }
-                art.add_css_class("with-cover")
+                if (artPixbuf) artDa.set_size_request(artPixbuf.width, artPixbuf.height)
             } catch (e) { }
         } else {
-            // Default size if no art
             artDa.set_size_request(80, 80)
         }
 
         artDa.set_draw_func((_, cr, w, h) => {
             if (artPixbuf) {
                 cr.save()
-                // Clip to nested squircle
-                const r = 16
-                cr.newPath()
-                cr.arc(w - r, r, r, -Math.PI / 2, 0)
-                cr.arc(w - r, h - r, r, 0, Math.PI / 2)
-                cr.arc(r, h - r, r, Math.PI / 2, Math.PI)
-                cr.arc(r, r, r, Math.PI, 3 * Math.PI / 2)
-                cr.closePath()
+                // Clip to nested Squircle (matching Tahoe geometry) 📐
+                createSquirclePath(cr, 0, 0, w, h, 16, 4.5)
                 cr.clip()
                 Gdk.cairo_set_source_pixbuf(cr, artPixbuf, 0, 0)
                 cr.paint()
-                cr.restore()
-            } else {
-                // Fallback icon drawn in Cairo
-                cr.save()
-                cr.setSourceRGBA(1, 1, 1, 0.1)
-                cr.newPath()
-                cr.arc(w / 2, h / 2, 16, 0, 2 * Math.PI)
-                cr.fill()
                 cr.restore()
             }
         })
         art.append(artDa)
 
         const info = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true, valign: Gtk.Align.CENTER, spacing: 2 })
-        info.append(new Gtk.Label({ label: player.title || "Unknown", css_classes: ["cc-media-title"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 30, ellipsize: 3 }))
-        info.append(new Gtk.Label({ label: player.artist || "Unknown", css_classes: ["cc-media-artist"], halign: Gtk.Align.START, xalign: 0, max_width_chars: 30, ellipsize: 3 }))
+        info.append(new Gtk.Label({ label: player.title || "Unknown", css_classes: ["cc-media-title"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3 }))
+        info.append(new Gtk.Label({ label: player.artist || "Unknown", css_classes: ["cc-media-artist"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3 }))
 
         topRow.append(art); topRow.append(info)
         content.append(topRow)
 
-        const ctrl = new Gtk.Box({ css_classes: ["cc-media-controls"], spacing: 32, halign: Gtk.Align.CENTER })
-        const prev = new Gtk.Button({ child: new Gtk.Image({ icon_name: "media-skip-backward-symbolic" }), css_classes: ["cc-media-btn"] })
+        const ctrl = new Gtk.Box({ css_classes: ["cc-media-controls"], spacing: 24, halign: Gtk.Align.CENTER })
+        const prev = new Gtk.Button({
+            child: new Gtk.Image({ icon_name: "media-skip-backward-symbolic" }),
+            css_classes: ["cc-media-btn", "flat"], // Added "flat" class 🛡️
+            has_frame: false // Force remove frame drawing 🛡️
+        })
         prev.connect("clicked", () => player.previous())
-        const play = new Gtk.Button({ child: new Gtk.Image({ icon_name: player.playback_status === AstalMpris.PlaybackStatus.PLAYING ? "media-playback-pause-symbolic" : "media-playback-start-symbolic" }), css_classes: ["cc-media-btn"] })
+        const play = new Gtk.Button({
+            child: new Gtk.Image({ icon_name: player.playback_status === AstalMpris.PlaybackStatus.PLAYING ? "media-playback-pause-symbolic" : "media-playback-start-symbolic" }),
+            css_classes: ["cc-media-btn", "flat"],
+            has_frame: false
+        })
         play.connect("clicked", () => player.play_pause())
-        const next = new Gtk.Button({ child: new Gtk.Image({ icon_name: "media-skip-forward-symbolic" }), css_classes: ["cc-media-btn"] })
+        const next = new Gtk.Button({
+            child: new Gtk.Image({ icon_name: "media-skip-forward-symbolic" }),
+            css_classes: ["cc-media-btn", "flat"],
+            has_frame: false
+        })
         next.connect("clicked", () => player.next())
 
         ctrl.append(prev); ctrl.append(play); ctrl.append(next)
         content.append(ctrl)
 
-        // Card Container (Squircle)
         const card = SquircleContainer({
             child: content,
-            radius: 16, // Standalone 'Island' Card ️
-            css_classes: ["cc-media-card"],
-            alpha: 0.15, // Unified Liquid Glass
+            radius: 32,
+            n: 4.5,
+            css_classes: ["cc-island", "cc-media-card"],
+            alpha: 0.15,
+            gloss: true,
             borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
         })
-
         mediaContainer.append(card)
     }
     mpris.connect("notify::players", updateMedia)
     updateMedia()
 
-    /* Notifications Section Removed - Now in NotificationCenter.tsx 🔔 */
-
     // @ts-ignore
     win.toggle = () => {
-        console.log("[CC] Toggle called. Vis:", win.get_visible())
         win.set_visible(!win.get_visible())
         if (win.get_visible()) {
             win.present()
-            win.set_focus(null) // 🛡️ KILL First-Element-Focus Flicker
+            win.set_focus(null)
             syncLevels()
         }
     }

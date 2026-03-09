@@ -1,33 +1,35 @@
 @use 'tokens' as *;
 
 /* ==========================================================================
-   CONTROL CENTER & NOTIFICATIONS
-   Based on Stitch "Refined Notification Center" designs
+   CONTROL CENTER (macOS Tahoe "Islands of Glass" Edition)
    ========================================================================== */
 
-/* --- Panel Structure (SquircleContainer Wrapper) --- */
-.cc-panel-structure {
-    /* Liquid Glass: No shadows for integrated look */
+/* --- Islands Layout --- */
+.cc-islands-container {
+    background: transparent;
+    border: none;
     box-shadow: none;
+    margin: 8px;
+    padding: 0;
 
-    /* Background: Unified 15% White Tint */
-    background-color: rgba(255, 255, 255, 0.15);
-
-    /* Deep Space #12121c @ 70% */
-
-    /* Border moved to CSS - Use specific color to avoid mismatch */
-    border: 1px solid rgba(255, 255, 255, 0.08);
-
-    /* Radius needed for shadow shape, even if background is Cairo */
-    border-radius: 24px;
-
-    /* FLICKER/GHOST FIX: Clip background to border */
-    background-clip: padding-box;
-    /* Ensure no extra outlines from GTK theme */
-    outline: none;
+    .control-center {
+        background: transparent;
+        padding: 0;
+    }
 }
 
-window#crystal-control-center,
+.cc-island {
+    /* Each island has its Cairo background from SquircleContainer */
+    margin: 0 16px;
+    /* Side margins */
+
+    /* Ensure no GTK defaults */
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+/* --- Window Transparency Logic --- */
 window.control-center-win,
 window.notification-center-win {
     background-color: transparent;
@@ -41,76 +43,38 @@ window.notification-center-win {
     decoration,
     &>box,
     &>box>widget {
-        background-color: transparent;
-        background-image: none;
-        box-shadow: none;
-        border: none;
-        margin: 0;
-        padding: 0;
+        background-color: transparent !important;
+        background-image: none !important;
+        box-shadow: none !important;
+        border: none !important;
     }
 }
 
-/* --- Pill Sliders (Apple-style capsule, CSS only) --- */
+/* --- Pill Sliders (macOS Style) --- */
 .cc-pill-slider {
     all: unset;
     min-height: 48px;
     background: transparent;
-    padding: 0;
-    margin: 0;
     border-radius: 9999px;
 
-    contents {
-        all: unset;
-        min-height: 48px;
-        padding: 0;
-        margin: 0;
-        border-radius: 9999px;
-    }
-
     trough {
-        all: unset;
         background-color: rgba(255, 255, 255, 0.1);
         border-radius: 9999px;
         min-height: 48px;
-        padding: 0;
-        margin: 0;
     }
 
     highlight {
-        all: unset;
-        background-color: white;
+        background-color: rgba(255, 255, 255, 0.6); // Less "blindly white" 🤍
         border-radius: 9999px;
-        min-height: 48px;
     }
 
     slider {
-        all: unset;
-        min-width: 0;
-        min-height: 0;
-        margin: 0;
-        padding: 0;
-        background: transparent;
-        border: none;
-        box-shadow: none;
         opacity: 0;
     }
 }
 
-/* Pill Slider Icon (overlay, click-through) */
 .cc-pill-slider-icon {
     color: rgba(255, 255, 255, 0.9);
-}
-
-/* --- Main Panel --- */
-.control-center-win box.control-center,
-.control-center-win .control-center,
-.control-center {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    min-width: 420px;
 }
 
 /* --- Toggle Icons & Labels --- */
@@ -142,239 +106,16 @@ window.notification-center-win {
     border-radius: 12px;
 }
 
-/* --- Sliders Section --- */
-.control-center-win box.cc-sliders,
-.cc-sliders {
-    background: transparent;
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    padding: 0;
-}
-
-.cc-fixed-container {
-    margin: 0 8px;
-}
-
-.cc-slider-overlay {
-    margin: 4px 0;
-}
-
-.cc-notifs-section {
-    // Structural layout in TSX
-}
-
-.cc-notifs-header {
-    padding: 0;
-}
-
-.cc-section-title {
-    font-size: 0.85em;
-    font-weight: 800;
-    color: rgba(255, 255, 255, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 2px;
-}
-
-/* --- Notification Items --- */
-.nc-notif-item {
-    /* Background handled by SquircleContainer */
-    background: none;
-    border: none;
-    box-shadow: none;
-    transition: all 0.2s ease;
-}
-
-.nc-notif-item:hover {
-    border-color: rgba(255, 255, 255, 0.12);
-    /* Background & Radius handled by SquircleContainer JS \ud83d\udee1\ufe0f */
-}
-
-.nc-notif-title {
-    color: white;
-    font-weight: 600;
-    font-size: 0.9em;
-}
-
-.nc-notif-time {
-    color: rgba(255, 255, 255, 0.4);
-    font-size: 0.75em;
-    font-weight: 500;
-    margin-right: 4px;
-}
-
-.nc-notif-body {
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 0.85em;
-    line-height: 1.4;
-    margin-top: 4px;
-}
-
-.nc-notif-separator {
-    background-color: rgba(255, 255, 255, 0.04);
-    margin: 4px 0;
-}
-
-/* --- Notification Card (Popup) --- */
-.notif-card {
-    background-color: rgba(18, 18, 28, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 20px;
-    padding: 18px;
-    min-width: 380px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-}
-
-.notif-close-btn,
-.nc-notif-close {
-    background: none;
-    background-color: rgba(255, 255, 255, 0.06);
-    background-image: none;
-    border-radius: 50%;
-    min-width: 28px;
-    min-height: 28px;
-    padding: 0;
-    color: rgba(255, 255, 255, 0.5);
-    transition: all 0.2s ease;
-    border: none;
-    box-shadow: none;
-}
-
-.notif-close-btn:hover,
-.nc-notif-close:hover {
-    background: none;
-    background-color: rgba(255, 59, 48, 0.3);
-    background-image: none;
-    color: #ff6961;
-}
-
-.notif-app-name {
-    color: rgba(255, 255, 255, 0.4);
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    font-size: 0.75em;
-    font-weight: 600;
-}
-
-.notif-summary {
-    color: white;
-    font-weight: 600;
-}
-
-.notif-body {
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 0.9em;
-}
-
-/* Section Structure Handled Above \ud83c\udd99 */
-
-.cc-clear-btn {
-    background: none;
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    border-radius: 8px;
-    padding: 6px 14px;
-    color: #{"@accent_bg_color"};
-    font-size: 0.8em;
-    font-weight: 700;
-    transition: all 0.2s;
-    box-shadow: none;
-    outline: none;
-}
-
-.cc-clear-btn:hover {
-    background-color: #{"alpha(@accent_bg_color, 0.15)"};
-    color: #{"@accent_bg_color"};
-}
-
-.cc-scroll {
-    /* Expanding naturally via TSX vexpand property */
-    background: transparent;
-    border: none;
-    /* No phantom borders */
-    padding: 0;
-    margin: 0;
-}
-
-.cc-notifications-list {
-    margin: 0;
-    padding: 0;
-}
-
-/* --- Zero-Artifacts Protocol \ud83d\udee1\ufe0f --- */
-.cc-scroll>viewport {
-    background-color: transparent;
-}
-
-.cc-scroll undershoot,
-.cc-scroll overshoot {
-    background-image: none;
-    background-color: transparent;
-    box-shadow: none;
-    min-height: 0;
-}
-
-/* --- Scrollbar Isolation (Auto-hide Hardened) --- */
-.cc-scroll scrollbar.vertical {
-    background-color: transparent;
-    border: none;
-    min-width: 0;
-    margin: 0;
-}
-
-/* Hide the track background completely */
-.cc-scroll scrollbar.vertical contents,
-.cc-scroll scrollbar.vertical trough {
-    background: transparent;
-    border: none;
-    min-width: 0;
-}
-
-.cc-scroll scrollbar.vertical slider {
-    background-color: rgba(255, 255, 255, 0.1);
-    border-radius: 10px;
-    min-width: 6px;
-    margin: 0;
-    min-height: 48px;
-    transition: background-color 0.2s ease;
-}
-
-.cc-scroll scrollbar.vertical slider:hover {
-    background-color: rgba(255, 255, 255, 0.3);
-    /* No distinct width change to prevent layout shifts */
-}
-
-.cc-notifs-empty {
-    color: rgba(255, 255, 255, 0.25);
-    font-size: 0.9em;
-    font-style: italic;
-}
-
 /* --- Media Player --- */
-.cc-media {
-    /* margin-top: 12px; REMOVED to rely on topSection spacing */
-}
-
 .cc-media-card {
-    /* Background handled by SquircleContainer */
-    background: none;
-    border: none;
+    /* Integrated glass look - no extra shadows */
     box-shadow: none;
-}
-
-.cc-media-content {
-    // Layout container inside card
 }
 
 .cc-media-art {
-    background-color: rgba(255, 255, 255, 0.04);
-    border-radius: 12px;
-}
-
-.cc-media-art-img {
-    border-radius: 12px;
+    /* Background handled by Cairo in artDa */
+    background-color: transparent;
+    border-radius: 16px;
 }
 
 .cc-media-title {
@@ -388,136 +129,58 @@ window.notification-center-win {
     font-size: 0.8em;
 }
 
-.cc-media-controls {
-    // Precise spacing
-}
-
 .cc-media-btn {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.08); // Subtle border
+    background: transparent;
+    border: none;
     color: white;
-    border-radius: 50%; // Force Perfect Circle \u26ab
+    border-radius: 50%;
     min-width: 48px;
     min-height: 48px;
-    padding: 0;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow: none;
     outline: none;
-    margin: 0;
 }
 
 .cc-media-btn:hover {
     background-color: rgba(255, 255, 255, 0.1);
     transform: scale(1.05);
-    border-color: rgba(255, 255, 255, 0.2);
 }
 
-.cc-media-btn:focus,
-.cc-media-btn:focus-visible {
-    outline: none;
-    box-shadow: none;
+.cc-media-controls {
+    /* Tighten spacing for a more Apple-like control row */
+    margin-top: 8px;
 }
 
-/* --- Section Titles --- */
-.cc-section-title {
-    font-size: 0.75em;
-    font-weight: 700;
-    color: rgba(255, 255, 255, 0.4);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin-bottom: 12px;
-    margin-left: 2px;
-}
-
-
-/* --- Audio Sinks --- */
-.cc-audio-sinks {
-    margin-bottom: 12px;
-    background-color: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 16px;
-    padding: 14px;
-}
-
-.cc-sink-item {
-    padding: 8px 12px;
-    border-radius: 10px;
-    background: transparent;
-    transition: all 0.2s ease;
-}
-
-/* Legacy button overrides removed */
-
-.cc-sink-item:hover {
-    background-color: rgba(255, 255, 255, 0.08);
-}
-
-.cc-sink-item.active {
-    background-color: #{"alpha(@accent_bg_color, 0.15)"};
-    border: 1px solid #{"alpha(@accent_bg_color, 0.25)"};
-}
-
-.cc-sink-item label {
-    font-size: 0.9em;
-    color: rgba(255, 255, 255, 0.85);
-}
-
-/* --- Fixed Container (Layout Stabilizer) --- */
-.cc-fixed-container {
-    margin: 0;
-    padding: 0;
-    /* This explicit reset was the key fix confirmed by user \ud83d\udd11 */
-}
-
-/* --- Window Transparency Fix (NUCLEAR OPTION \u2622\ufe0f) --- */
-window.control-center-win,
-window.control-center-win>decoration,
-window.control-center-win>box,
-window.control-center-win>widget {
-    background: none;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-    outline: none;
-}
-
-/* --- Notification Center Panel --- */
+/* --- Notification Center Integration --- */
 .notification-center-panel {
     background: transparent;
     min-width: 420px;
+}
 
-    .nc-widgets-section {
-        /* Standard spacing handled in TSX */
+.nc-calendar {
+    background: transparent;
+    color: white;
+    padding: 8px;
+    font-size: 0.9em;
+
+    header {
+        background: transparent;
+        color: white;
+        font-weight: 700;
     }
 
-    .nc-calendar {
+    button {
         background: transparent;
-        border: none;
-        color: white;
-        padding: 8px;
-        font-size: 0.9em;
+        color: rgba(255, 255, 255, 0.8);
+        border-radius: 8px;
 
-        header {
-            background: transparent;
-            border: none;
-            color: white;
-            font-weight: 700;
+        &:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
 
-        button {
-            background: transparent;
-            color: rgba(255, 255, 255, 0.8);
-            border: none;
-            border-radius: 8px;
-
-            &:hover {
-                background: rgba(255, 255, 255, 0.1);
-            }
-
-            &.selected {
-                background: #{"@accent_bg_color"};
-                color: white;
-            }
+        &.selected {
+            background: #{"@accent_bg_color"};
+            color: white;
         }
     }
 }
@@ -532,26 +195,4 @@ window.control-center-win>widget {
     color: rgba(255, 255, 255, 0.5);
     text-transform: uppercase;
     letter-spacing: 2px;
-}
-
-.nc-empty {
-    color: rgba(255, 255, 255, 0.3);
-    font-style: italic;
-    font-size: 0.9em;
-}
-
-.nc-scroll {
-    background: transparent;
-}
-
-.nc-item-title {
-    color: white;
-    font-weight: 600;
-    font-size: 0.95em;
-}
-
-.nc-item-body {
-    color: rgba(255, 255, 255, 0.6);
-    font-size: 0.85em;
-    margin-top: 2px;
 }

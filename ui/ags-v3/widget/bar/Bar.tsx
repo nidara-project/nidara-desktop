@@ -29,7 +29,7 @@ function Tray() {
     css_classes: ["bar-tray"],
     spacing: 8,
     height_request: 24,
-    margin_start: 16,
+    margin_start: 16, // Standardized 16px 📐
     margin_end: 16,
     margin_top: 4,
     margin_bottom: 4
@@ -178,7 +178,7 @@ function AppMenu() {
     focusable: false,
     can_focus: false,
     // Add margin to simulate padding inside Squircle
-    margin_start: 16,
+    margin_start: 16, // Standardized 16px 📐
     margin_end: 16,
     margin_top: 4,
     margin_bottom: 4
@@ -190,8 +190,9 @@ function AppMenu() {
     radius: undefined, // Auto Pill 💊
     gloss: true,
     css_classes: ["bar-app-menu-pill"],
-    color: { r: 0.07, g: 0.07, b: 0.11 }, // Dark Tint
-    alpha: 0.2,
+    color: { r: 1, g: 1, b: 1 }, // Standard White Glass ⚪
+    alpha: 0.15,
+    borderColor: { r: 1, g: 1, b: 1, a: 0.25 }, // Definition 🖌️
     perfect: true
     // onClick removed as per user request
   })
@@ -277,7 +278,7 @@ function Workspaces() {
     css_classes: ["bar-workspaces"],
     spacing: 12, // Increased spacing for dots
     valign: Gtk.Align.CENTER,
-    margin_start: 16,
+    margin_start: 16, // Standardized 16px 📐
     margin_end: 16,
     margin_top: 4,
     margin_bottom: 4
@@ -323,8 +324,9 @@ function Workspaces() {
     radius: undefined, // Auto Pill 💊
     gloss: true,
     css_classes: ["bar-ws-pill"],
-    color: { r: 0.07, g: 0.07, b: 0.11 },
-    alpha: 0.2,
+    color: { r: 1, g: 1, b: 1 }, // Standard White Glass ⚪
+    alpha: 0.15,
+    borderColor: { r: 1, g: 1, b: 1, a: 0.25 }, // Definition 🖌️
     perfect: true,
     // Workspaces clicks are handled by individual dots or we can add a global click here?
     // User requested click to toggle AppGrid on the container
@@ -416,8 +418,8 @@ function SystemResources() {
     css_classes: ["bar-resources"],
     spacing: 12,
     valign: Gtk.Align.CENTER,
-    margin_start: 12,
-    margin_end: 12,
+    margin_start: 16, // Standardized 16px 📐
+    margin_end: 16,
     margin_top: 4,
     margin_bottom: 4
   })
@@ -449,12 +451,12 @@ function ControlCenterMenu() {
   const box = new Gtk.Box({
     spacing: 8,
     valign: Gtk.Align.CENTER,
-    margin_start: 10,
-    margin_end: 10
+    margin_start: 16, // Standardized 16px 📐
+    margin_end: 16
   })
 
   const icon = new Gtk.Image({
-    file: "/home/angel/Dev/Distroia/ui/ags-v3/assets/logos/toggles.svg",
+    file: "/home/angel/Dev/Distroia/ui/ags-v3/assets/logos/cc.svg",
     pixel_size: 14,
     valign: Gtk.Align.CENTER
   })
@@ -465,8 +467,9 @@ function ControlCenterMenu() {
     child: box,
     radius: undefined,
     gloss: true,
-    color: { r: 0.07, g: 0.07, b: 0.11 },
-    alpha: 0.2,
+    color: { r: 1, g: 1, b: 1 }, // Standard White Glass ⚪
+    alpha: 0.15,
+    borderColor: { r: 1, g: 1, b: 1, a: 0.25 }, // Definition 🖌️
     perfect: true, // V698: Restoring fidelity 🛡️
     onClick: () => (app as any).DistroIA?.toggleCC()
   })
@@ -480,8 +483,8 @@ function SystemStatus() {
   const box = new Gtk.Box({
     spacing: 8,
     valign: Gtk.Align.CENTER,
-    margin_start: 12,
-    margin_end: 12
+    margin_start: 16, // Standardized 16px 📐
+    margin_end: 16
   })
 
   const netIcon = new Gtk.Image({
@@ -501,8 +504,9 @@ function SystemStatus() {
     child: box,
     radius: undefined,
     gloss: true,
-    color: { r: 0.07, g: 0.07, b: 0.11 },
-    alpha: 0.2,
+    color: { r: 1, g: 1, b: 1 }, // Standard White Glass ⚪
+    alpha: 0.15,
+    borderColor: { r: 1, g: 1, b: 1, a: 0.25 }, // Definition 🖌️
     perfect: true // V698: Restoring fidelity 🛡️
   })
 }
@@ -584,7 +588,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const timeContent = new Gtk.Box({
     spacing: 12,
     valign: Gtk.Align.CENTER,
-    margin_start: 16,
+    margin_start: 16, // Standardized 16px 📐
     margin_end: 16,
     margin_top: 4,
     margin_bottom: 4
@@ -663,8 +667,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     child: SystemResources(),
     radius: undefined,
     gloss: true,
-    color: { r: 0.07, g: 0.07, b: 0.11 },
-    alpha: 0.2,
+    color: { r: 1, g: 1, b: 1 }, // Standard White Glass ⚪
+    alpha: 0.15,
+    borderColor: { r: 1, g: 1, b: 1, a: 0.25 }, // Definition 🖌️
     perfect: true // V698: Restoring fidelity 🛡️
   })
 
@@ -674,8 +679,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     child: Tray(),
     radius: undefined,
     gloss: true,
-    color: { r: 0.07, g: 0.07, b: 0.11 },
-    alpha: 0.2,
+    color: { r: 1, g: 1, b: 1 }, // Standard White Glass ⚪
+    alpha: 0.15,
+    borderColor: { r: 1, g: 1, b: 1, a: 0.25 }, // Definition 🖌️
     perfect: true // V698: Restoring fidelity 🛡️
   })
 
@@ -689,8 +695,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     child: timeContent, // Use internal content directly
     radius: undefined,
     gloss: true,
-    color: { r: 0.07, g: 0.07, b: 0.11 },
-    alpha: 0.2,
+    color: { r: 1, g: 1, b: 1 }, // Standard White Glass ⚪
+    alpha: 0.15,
+    borderColor: { r: 1, g: 1, b: 1, a: 0.25 }, // Definition 🖌️
     perfect: true, // V698: Restoring fidelity 🛡️
     onClick: () => (app as any).DistroIA?.toggleNC()
   })
@@ -705,11 +712,29 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     height_request: 32,
     margin_end: 8
   })
+  const SpotlightPill = SquircleContainer({
+    child: new Gtk.Image({
+      icon_name: "edit-find-symbolic",
+      pixel_size: 16,
+      margin_start: 16, // Standardized 16px �
+      margin_end: 16,
+      halign: Gtk.Align.CENTER,
+      valign: Gtk.Align.CENTER
+    }),
+    radius: 16, // Half of 32 height
+    gloss: true,
+    color: { r: 1, g: 1, b: 1 }, // Lighter glass for bar
+    alpha: 0.15,
+    borderColor: { r: 1, g: 1, b: 1, a: 0.25 }, // Definition 🖌️
+    perfect: true, // Perfect geometric pill 💊
+    css_classes: ["bar-pill", "spotlight-pill"],
+    onClick: () => (app as any).DistroIA?.toggleSpotlight()
+  })
+
   rightSide.append(ResourcePill)
-  rightSide.append(TrayPill)
-  rightSide.append(SystemStatus())
+  rightSide.append(SpotlightPill)
   rightSide.append(ControlCenterMenu())
-  // Ensure TimePill is appended and visible
+  rightSide.append(TrayPill)
   TimePill.visible = true
   rightSide.append(TimePill)
 

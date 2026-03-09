@@ -204,6 +204,10 @@ app.start({
       console.log(`[Toggle] Settings (Count: ${settingsWindows.length})`)
       settingsWindows.forEach(s => { try { s.toggle() } catch (e) { console.error(e) } })
     }
+    const toggleSpotlight = () => {
+      console.log("[Toggle] Spotlight")
+      GLib.spawn_command_line_async("hyprlauncher")
+    }
 
     // Expose Globals
     (globalThis as any).toggleAppGrid = toggleAppGrid;
@@ -211,9 +215,10 @@ app.start({
     (globalThis as any).toggleNotificationCenter = toggleNC;
     (globalThis as any).togglePowerMenu = togglePower;
     (globalThis as any).toggleSettings = toggleSettings;
+    (globalThis as any).toggleSpotlight = toggleSpotlight;
 
     // Local request mapper
-    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleControlCenter: toggleCC, toggleNC, togglePower, toggleSettings }
+    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleControlCenter: toggleCC, toggleNC, togglePower, toggleSettings, toggleSpotlight }
   },
   requestHandler(argv, res) {
     const engine = (app as any).DistroIA
@@ -226,6 +231,7 @@ app.start({
     else if (argv[0] === "toggleNotificationCenter()") { engine.toggleNC(); res("ok") }
     else if (argv[0] === "togglePowerMenu()") { engine.togglePower(); res("ok") }
     else if (argv[0] === "toggleSettings()") { engine.toggleSettings(); res("ok") }
+    else if (argv[0] === "toggleSpotlight()") { engine.toggleSpotlight(); res("ok") }
     else {
       console.warn(`[Handler] Unknown command: ${argv[0]}`)
       res("unknown command")

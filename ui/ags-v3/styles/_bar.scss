@@ -141,3 +141,14 @@ window.crystal-bar {
     min-width: 1px;
     margin: 0 4px;
 }
+/* --- Spotlight Pill Refinement --- */
+.spotlight-pill {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    
+    image {
+        padding: 0;
+        margin: 0;
+    }
+}

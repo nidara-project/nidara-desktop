@@ -7,17 +7,13 @@ import { drawSquircle } from "../common/DrawingUtils"
 import SquircleContainer from "../common/SquircleContainer"
 import appService from "../../core/AppService"
 
-/**
- * macOS Tahoe-style Notification Center 🔔
- * Includes Widgets (Calendar) and Notification History.
- */
 export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
     const notifd = AstalNotifd.get_default()
 
     const win = new Gtk.Window({
         name: "crystal-notification-center",
         application: app,
-        css_classes: ["notification-center-win", "background"],
+        css_classes: ["notification-center-win", "transparent"],
         visible: false,
     })
 
@@ -39,74 +35,79 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
     })
     win.set_child(overlay)
 
-    // Transparent background catcher to close on click outside
     const catcher = new Gtk.Box({ hexpand: true, vexpand: true })
     overlay.set_child(catcher)
     const clickGesture = new Gtk.GestureClick()
     clickGesture.connect("pressed", () => { win.visible = false })
     catcher.add_controller(clickGesture)
 
-    const mainBox = new Gtk.Box({
+    const contentBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 16,
+        spacing: 12, // Island spacing
         css_classes: ["notification-center-panel"],
         width_request: 420,
-        halign: Gtk.Align.END,
-        valign: Gtk.Align.FILL,
-        margin_top: 8,
-        margin_end: 8,
-        margin_bottom: 8,
-        margin_start: 8
+        vexpand: true,
+        hexpand: false
     })
-    overlay.add_overlay(mainBox)
 
-    /* --- Widgets Section (macOS Tahoe Style) --- */
-    const widgetsSection = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 16,
-        css_classes: ["nc-widgets-section"],
-        margin_top: 16,
-        margin_start: 16,
-        margin_end: 16
+    const ncContainer = new Gtk.Box({
+        css_classes: ["cc-islands-container"], // Matching CC islands logic
+        hexpand: false,
+        vexpand: true,
+        width_request: 420
     })
-    mainBox.append(widgetsSection)
+    ncContainer.append(contentBox)
 
-    // Calendar Widget 📅
+    ncContainer.halign = Gtk.Align.END
+    ncContainer.valign = Gtk.Align.FILL
+    ncContainer.margin_top = 8
+    ncContainer.margin_end = 8
+    ncContainer.margin_bottom = 8
+    ncContainer.margin_start = 8
+
+    overlay.add_overlay(ncContainer)
+
+    /* --- ISLAND 1: Calendar Widget --- */
     const calendar = new Gtk.Calendar({
         hexpand: true,
         css_classes: ["nc-calendar"]
     })
 
-    const calendarCard = SquircleContainer({
+    const calendarIsland = SquircleContainer({
         child: calendar,
-        radius: 20,
+        radius: 32,
+        n: 4.5,
         gloss: true,
-        alpha: 0.1,
-        borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
+        alpha: 0.15,
+        borderColor: { r: 1, g: 1, b: 1, a: 0.05 },
+        css_classes: ["cc-island", "nc-calendar-island"],
+        onClick: () => {
+            GLib.spawn_command_line_async("gnome-calendar")
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+                GLib.spawn_command_line_async("hyprctl dispatch focuswindow class:gnome-calendar || hyprctl dispatch focuswindow class:org.gnome.Calendar")
+                return GLib.SOURCE_REMOVE
+            })
+            win.visible = false
+        }
     })
-    widgetsSection.append(calendarCard)
+    contentBox.append(calendarIsland)
 
-    /* --- Notifications Section --- */
-    const notifSection = new Gtk.Box({
+    /* --- ISLAND 2: Notifications History --- */
+    const notifContent = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 12,
-        css_classes: ["nc-notifications-section"],
-        vexpand: true,
-        margin_top: 8,
-        margin_bottom: 16
-    })
-    mainBox.append(notifSection)
-
-    const header = new Gtk.Box({
-        spacing: 12,
-        css_classes: ["nc-header"],
+        margin_top: 16,
         margin_start: 16,
-        margin_end: 16
+        margin_end: 16,
+        margin_bottom: 16,
+        vexpand: true
     })
+
+    const header = new Gtk.Box({ spacing: 12, css_classes: ["nc-header"] })
     header.append(new Gtk.Label({ label: "Notificaciones", css_classes: ["nc-title"], hexpand: true, halign: Gtk.Align.START }))
     const clear = new Gtk.Button({ label: "Borrar", css_classes: ["nc-clear-btn"] })
     header.append(clear)
-    notifSection.append(header)
+    notifContent.append(header)
 
     const scroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
@@ -114,18 +115,28 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
         vexpand: true,
         css_classes: ["nc-scroll"]
     })
-    notifSection.append(scroll)
+    notifContent.append(scroll)
 
     const notifList = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 8,
         css_classes: ["nc-list"],
-        margin_start: 16,
-        margin_end: 16,
         halign: Gtk.Align.FILL,
         hexpand: true
     })
     scroll.set_child(notifList)
+
+    const notificationsIsland = SquircleContainer({
+        child: notifContent,
+        radius: 32,
+        n: 4.5,
+        alpha: 0.15,
+        gloss: true,
+        borderColor: { r: 1, g: 1, b: 1, a: 0.05 },
+        css_classes: ["cc-island", "nc-history-island"],
+        vexpand: true
+    })
+    contentBox.append(notificationsIsland)
 
     const updateNotifs = () => {
         while (notifList.get_first_child()) {
@@ -146,10 +157,7 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
         notifications.forEach(n => {
             const content = new Gtk.Box({
                 spacing: 12,
-                margin_top: 12,
-                margin_start: 12,
-                margin_end: 12,
-                margin_bottom: 12
+                margin_top: 12, margin_start: 12, margin_end: 12, margin_bottom: 12
             })
 
             const body = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
@@ -161,7 +169,7 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
             const item = SquircleContainer({
                 child: content,
                 radius: 16,
-                alpha: 0.15,
+                alpha: 0.1, // Double-layered glass look
                 borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
             })
             notifList.append(item)
