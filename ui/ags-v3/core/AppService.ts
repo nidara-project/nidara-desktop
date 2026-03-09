@@ -349,6 +349,29 @@ class AppService {
         }
         return "xdg-open ." // Absolute fallback (Terminal-safe)
     }
+
+    /**
+     * V151: Search functionality for Prism 💎
+     */
+    search(query: string): AppData[] {
+        if (!query) return []
+        const q = query.toLowerCase()
+        const results: AppData[] = []
+
+        for (const app of this.cache.values()) {
+            if (app.name.toLowerCase().includes(q) || (app.id && app.id.toLowerCase().includes(q))) {
+                results.push(app)
+            }
+        }
+
+        return results.sort((a, b) => {
+            const aName = a.name.toLowerCase()
+            const bName = b.name.toLowerCase()
+            if (aName.startsWith(q) && !bName.startsWith(q)) return -1
+            if (!aName.startsWith(q) && bName.startsWith(q)) return 1
+            return aName.localeCompare(bName)
+        }).slice(0, 8)
+    }
 }
 
 export const appService = new AppService()

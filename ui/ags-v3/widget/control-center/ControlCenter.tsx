@@ -6,6 +6,7 @@ import AstalNetwork from "gi://AstalNetwork"
 import AstalBluetooth from "gi://AstalBluetooth"
 import AstalNotifd from "gi://AstalNotifd"
 import AstalWp from "gi://AstalWp"
+import AstalBattery from "gi://AstalBattery"
 import GdkPixbuf from "gi://GdkPixbuf"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
@@ -23,7 +24,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const mpris = AstalMpris.get_default()
     const network = AstalNetwork.get_default()
     const bluetooth = AstalBluetooth.get_default()
-    const audio = AstalWp.get_default()?.audio
+    const battery = AstalBattery.get_default()
 
     const win = new Gtk.Window({
         name: "crystal-control-center",
@@ -88,7 +89,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     const contentBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12, // Gap between islands
+        spacing: 12,
         css_classes: ["control-center"],
         vexpand: true,
         hexpand: true,
@@ -97,10 +98,10 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     })
 
     const ccContainer = new Gtk.Box({
-        css_classes: ["cc-islands-container"], // Independent Islands Mode 🏝️
+        css_classes: ["cc-islands-container"],
         hexpand: false,
         vexpand: true,
-        width_request: 420
+        width_request: 380 // 📐 Adjusted width
     })
     ccContainer.append(contentBox)
 
@@ -115,38 +116,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
 
     const mainBox = contentBox
 
-    /* --- ISLAND 1: Connectivity --- */
-    const connectivityContent = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12,
-        css_classes: ["cc-connectivity-content"],
-        margin_top: 16,
-        margin_start: 16,
-        margin_end: 16,
-        margin_bottom: 16
-    })
-
-    const connectivityIsland = SquircleContainer({
-        child: connectivityContent,
-        radius: 32,
-        n: 4.5,
-        css_classes: ["cc-island", "cc-connectivity-island"],
-        alpha: 0.15,
-        gloss: true,
-        borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
-    })
-    mainBox.append(connectivityIsland)
-
-    const grid = new Gtk.Grid({
-        column_spacing: 12,
-        row_spacing: 12,
-        css_classes: ["cc-grid"],
-        column_homogeneous: true,
-        hexpand: true,
-        halign: Gtk.Align.FILL
-    })
-    connectivityContent.append(grid)
-
+    /* --- HELPERS --- */
     const createToggle = (iconName: string, title: string, sub: string, active: boolean, onClick: () => void) => {
         let isActive = active
         let isHovered = false
@@ -177,9 +147,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             const border = { r: 1, g: 1, b: 1, a: 0.08 }
 
             if (isActive) {
-                drawSquircle(cr, w, h, undefined, 1.0, false, accent, radius, false, border)
+                drawSquircle(cr, w, h, undefined, 0.2, false, accent, radius, false, border)
             } else {
-                // Tahoe: Inactive toggles are transparent unless hovered to avoid card stacking look 🏝️
                 if (isHovered) drawSquircle(cr, w, h, undefined, 0.08, false, neutral, radius, false, border)
             }
         })
@@ -208,8 +177,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         iconBox.append(icon)
 
         const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
-        const l = new Gtk.Label({ label: title, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 28 })
-        const sl = new Gtk.Label({ label: sub, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 28 })
+        const l = new Gtk.Label({ label: title, css_classes: ["cc-toggle-label"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 18 })
+        const sl = new Gtk.Label({ label: sub, css_classes: ["cc-toggle-sublabel"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 18 })
         text.append(l); text.append(sl)
 
         box.append(iconBox); box.append(text)
@@ -238,10 +207,59 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         return { btn: container, icon, label: l, subLabel: sl, iconBox, setActive }
     }
 
+    /* --- ISLAND 1: Connectivity & Network --- */
+    const connectivityContent = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 12,
+        css_classes: ["cc-connectivity-content"],
+        margin_top: 16, margin_start: 16, margin_end: 16, margin_bottom: 16
+    })
+
+    const connectivityIsland = SquircleContainer({
+        child: connectivityContent,
+        radius: 32,
+        n: 4.5,
+        css_classes: ["cc-island", "cc-connectivity-island"],
+        alpha: 0.15,
+        gloss: true,
+        borderColor: { r: 1, g: 1, b: 1, a: 0.05 }
+    })
+    mainBox.append(connectivityIsland)
+
+    // Battery Row (Conditional 🔋)
+    const statusRow = new Gtk.Box({ spacing: 12, margin_bottom: 4, css_classes: ["cc-status-row"] })
+    const battIcon = new Gtk.Image({ icon_name: "battery-level-100-charged-symbolic", pixel_size: 14 })
+    const battLabel = new Gtk.Label({ label: "100%", css_classes: ["cc-status-label"] })
+    statusRow.append(battIcon); statusRow.append(battLabel)
+    connectivityContent.append(statusRow)
+
+    if (battery && battery.is_present) {
+        statusRow.visible = true
+        const updateBatt = () => {
+            battIcon.icon_name = battery.battery_icon_name
+            battLabel.label = `${Math.floor(battery.percentage * 100)}%`
+        }
+        battery.connect("notify::percentage", updateBatt)
+        battery.connect("notify::battery-icon-name", updateBatt)
+        updateBatt()
+    } else {
+        statusRow.visible = false
+    }
+
+    const grid = new Gtk.Grid({
+        column_spacing: 12,
+        row_spacing: 12,
+        css_classes: ["cc-grid"],
+        column_homogeneous: true,
+        hexpand: true,
+        halign: Gtk.Align.FILL
+    })
+    connectivityContent.append(grid)
+
+    // WI-FI Toggle
     const wifiToggle = createToggle("network-wireless-offline-symbolic", "Wi-Fi", "...", false, () => {
         if (network?.wifi) network.wifi.enabled = !network.wifi.enabled
     })
-
     const updateNetwork = () => {
         let icon = "network-wireless-offline-symbolic"
         let label = "Network"
@@ -260,57 +278,50 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             active = network.wifi.enabled
         }
 
-        if (wifiToggle.icon.icon_name === icon &&
-            wifiToggle.label.label === label &&
-            wifiToggle.subLabel.label === sub &&
-            wifiToggle.btn.has_css_class("active") === active) return
-
-        if (wifiToggle.icon.icon_name !== icon) wifiToggle.icon.icon_name = icon
-        if (wifiToggle.label.label !== label) wifiToggle.label.label = label
-        if (wifiToggle.subLabel.label !== sub) wifiToggle.subLabel.label = sub
-
+        wifiToggle.icon.icon_name = icon
+        wifiToggle.label.label = label
+        wifiToggle.subLabel.label = sub
         wifiToggle.setActive(active)
     }
-
     grid.attach(wifiToggle.btn, 0, 0, 1, 1)
-    if (network) {
-        network.connect("notify::primary", updateNetwork)
-        network.wifi?.connect("notify::enabled", updateNetwork)
-        network.wifi?.connect("notify::ssid", updateNetwork)
-        if (network.wired) network.wired.connect("notify::state", updateNetwork)
+    if (network) network.connect("notify::primary", updateNetwork)
+    if (network?.wifi) {
+        network.wifi.connect("notify::enabled", updateNetwork)
+        network.wifi.connect("notify::ssid", updateNetwork)
     }
     updateNetwork()
 
-    const updateBT = () => {
-        const powered = bluetooth?.is_powered || false
-        const icon = powered ? "bluetooth-active-symbolic" : "bluetooth-disabled-symbolic"
-        const sub = powered ? "Encendido" : "Apagado"
-        if (btToggle.icon.icon_name !== icon) btToggle.icon.icon_name = icon
-        if (btToggle.subLabel.label !== sub) btToggle.subLabel.label = sub
-        btToggle.setActive(powered)
-    }
+    // BLUETOOTH Toggle
     const btToggle = createToggle("bluetooth-disabled-symbolic", "Bluetooth", "...", false, () => {
         if (bluetooth) bluetooth.is_powered = !bluetooth.is_powered
     })
+    const updateBT = () => {
+        if (!bluetooth) return
+        const powered = bluetooth.is_powered
+        btToggle.icon.icon_name = powered ? "bluetooth-active-symbolic" : "bluetooth-disabled-symbolic"
+        btToggle.subLabel.label = powered ? "Encendido" : "Apagado"
+        btToggle.setActive(powered)
+    }
     grid.attach(btToggle.btn, 1, 0, 1, 1)
     if (bluetooth) bluetooth.connect("notify::is-powered", updateBT)
     updateBT()
 
-    const updateDND = () => {
-        const dnd = notifd?.dont_disturb || false
-        const icon = dnd ? "notifications-disabled-symbolic" : "notifications-symbolic"
-        const sub = dnd ? "Silencio" : "Normal"
-        if (dndToggle.icon.icon_name !== icon) dndToggle.icon.icon_name = icon
-        if (dndToggle.subLabel.label !== sub) dndToggle.subLabel.label = sub
-        dndToggle.setActive(dnd)
-    }
+    // DND Toggle
     const dndToggle = createToggle("notifications-symbolic", "No molestar", "...", false, () => {
         if (notifd) notifd.dont_disturb = !notifd.dont_disturb
     })
+    const updateDND = () => {
+        if (!notifd) return
+        const state = notifd.dont_disturb
+        dndToggle.icon.icon_name = state ? "notifications-disabled-symbolic" : "notifications-symbolic"
+        dndToggle.subLabel.label = state ? "Activado" : "Desactivado"
+        dndToggle.setActive(state)
+    }
     grid.attach(dndToggle.btn, 0, 1, 1, 1)
     if (notifd) notifd.connect("notify::dont-disturb", updateDND)
     updateDND()
 
+    // POWER Toggle
     const pwrToggle = createToggle("system-shutdown-symbolic", "Sesión", "Power Menu", false, () => {
         (app as any).DistroIA?.togglePower();
         (app as any).DistroIA?.toggleCC();
@@ -322,10 +333,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 16,
         css_classes: ["cc-sliders-content"],
-        margin_top: 16,
-        margin_start: 16,
-        margin_end: 16,
-        margin_bottom: 16
+        margin_top: 16, margin_start: 16, margin_end: 16, margin_bottom: 16
     })
 
     const slidersIsland = SquircleContainer({
@@ -343,55 +351,90 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         orientation: Gtk.Orientation.HORIZONTAL,
         hexpand: true,
         draw_value: false,
-        adjustment: new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 1, page_increment: 10 })
-    })
-    volScale.connect("value-changed", () => {
-        execAsync(`wpctl set-volume @DEFAULT_AUDIO_SINK@ ${volScale.get_value() / 100}`).catch(() => { })
+        adjustment: new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 2, page_increment: 10 })
     })
 
     const brightScale = new Gtk.Scale({
         orientation: Gtk.Orientation.HORIZONTAL,
         hexpand: true,
         draw_value: false,
-        adjustment: new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 1, page_increment: 10 })
-    })
-    brightScale.connect("value-changed", () => {
-        execAsync(`brightnessctl s ${Math.floor(brightScale.get_value())}%`).catch(() => { })
+        adjustment: new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 2, page_increment: 10 })
     })
 
-    const createSlider = (iconName: string, scale: Gtk.Scale) => {
-        scale.hexpand = true
+    const createSlider = (iconName: string, scale: Gtk.Scale, onChanged: (v: number) => void) => {
         scale.set_size_request(-1, 48)
         scale.add_css_class("cc-pill-slider")
 
         const icon = new Gtk.Image({
             icon_name: iconName,
-            pixel_size: 20,
+            pixel_size: 16,
             css_classes: ["cc-pill-slider-icon"],
             can_target: false,
-            halign: Gtk.Align.START,
-            valign: Gtk.Align.CENTER,
-            margin_start: 16,
+            halign: Gtk.Align.START, valign: Gtk.Align.CENTER,
+            margin_start: 16
         })
 
-        const sliderOverlay = new Gtk.Overlay({
-            css_classes: ["cc-slider-overlay"],
-            hexpand: true
-        })
-
+        const sliderOverlay = new Gtk.Overlay({ css_classes: ["cc-slider-overlay"], hexpand: true })
         sliderOverlay.set_child(scale)
         sliderOverlay.add_overlay(icon)
+
+        // Command implementation
+        scale.connect("value-changed", () => {
+            onChanged(scale.get_value() / 100)
+        })
+
+        // Scroll implementation 🖱️
+        const scroll = new Gtk.EventControllerScroll({ flags: Gtk.EventControllerScrollFlags.VERTICAL })
+        scroll.connect("scroll", (_, __, dy) => {
+            const cur = scale.get_value()
+            const step = 5
+            const next = dy < 0 ? Math.min(100, cur + step) : Math.max(0, cur - step)
+            scale.set_value(next)
+            return true
+        })
+        sliderOverlay.add_controller(scroll)
 
         return sliderOverlay
     }
 
-    slidersContent.append(createSlider("audio-volume-high-symbolic", volScale))
-    slidersContent.append(createSlider("display-brightness-symbolic", brightScale))
+    const volSlider = createSlider("audio-volume-high-symbolic", volScale, (v) => {
+        execAsync(`wpctl set-volume @DEFAULT_AUDIO_SINK@ ${v.toFixed(2)}`).catch(() => { })
+    })
+
+    const brightSlider = createSlider("display-brightness-symbolic", brightScale, (v) => {
+        execAsync(`brightnessctl s ${Math.floor(v * 100)}%`).catch(() => { })
+    })
+
+    slidersContent.append(volSlider)
+
+    // Check for backlight device 💡
+    execAsync("brightnessctl -l").then(out => {
+        if (out.includes("backlight")) {
+            slidersContent.append(brightSlider)
+            brightSlider.visible = true
+        } else {
+            brightSlider.visible = false
+        }
+    }).catch(() => {
+        brightSlider.visible = false
+    })
 
     const syncLevels = () => {
+        // Force volume sync via wpctl (Source of Truth)
         execAsync("wpctl get-volume @DEFAULT_AUDIO_SINK@").then(out => {
             const match = out.match(/Volume: (\d+\.\d+)/)
-            if (match) volScale.set_value(parseFloat(match[1]) * 100)
+            if (match) {
+                const vol = parseFloat(match[1]) * 100
+                volScale.set_value(vol)
+            }
+        }).catch(() => { })
+
+        // Force brightness sync
+        execAsync("brightnessctl g").then(curr => {
+            execAsync("brightnessctl m").then(max => {
+                const val = (parseInt(curr) / parseInt(max)) * 100
+                brightScale.set_value(val)
+            })
         }).catch(() => { })
     }
 
@@ -449,7 +492,6 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         artDa.set_draw_func((_, cr, w, h) => {
             if (artPixbuf) {
                 cr.save()
-                // Clip to nested Squircle (matching Tahoe geometry) 📐
                 createSquirclePath(cr, 0, 0, w, h, 16, 4.5)
                 cr.clip()
                 Gdk.cairo_set_source_pixbuf(cr, artPixbuf, 0, 0)
@@ -469,8 +511,8 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         const ctrl = new Gtk.Box({ css_classes: ["cc-media-controls"], spacing: 24, halign: Gtk.Align.CENTER })
         const prev = new Gtk.Button({
             child: new Gtk.Image({ icon_name: "media-skip-backward-symbolic" }),
-            css_classes: ["cc-media-btn", "flat"], // Added "flat" class 🛡️
-            has_frame: false // Force remove frame drawing 🛡️
+            css_classes: ["cc-media-btn", "flat"],
+            has_frame: false
         })
         prev.connect("clicked", () => player.previous())
         const play = new Gtk.Button({
@@ -512,6 +554,9 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
             syncLevels()
         }
     }
+
+    // Initial Sync
+    syncLevels()
 
     return win
 }

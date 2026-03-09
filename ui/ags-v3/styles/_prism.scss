@@ -1,0 +1,68 @@
+.prism-window-root {
+    background-color: transparent;
+}
+
+.prism-container {
+    background-color: transparent;
+}
+
+.prism-box {
+    background-color: rgba(25, 25, 25, 0.4);
+    backdrop-filter: blur(40px);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+    padding: 12px;
+}
+
+.prism-search-box {
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 8px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.prism-search-entry {
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.4rem;
+    caret-color: white;
+    box-shadow: none;
+}
+
+.prism-results-list {
+    background: transparent;
+    margin-top: 12px;
+}
+
+.prism-result-row {
+    background: transparent;
+    padding: 8px 12px;
+    border-radius: 10px;
+    transition: background 0.2s ease;
+}
+
+.prism-result-row:hover,
+.prism-result-row:selected {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.prism-result-content {
+    spacing: 12px;
+}
+
+.prism-result-icon {
+    border-radius: 8px;
+}
+
+.prism-result-title {
+    color: white;
+    font-weight: 500;
+    font-size: 1.1rem;
+}
+
+.prism-result-description {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.9rem;
+}

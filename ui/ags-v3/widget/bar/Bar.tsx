@@ -728,7 +728,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     borderColor: { r: 1, g: 1, b: 1, a: 0.25 }, // Definition 🖌️
     perfect: true, // Perfect geometric pill 💊
     css_classes: ["bar-pill", "spotlight-pill"],
-    onClick: () => (app as any).DistroIA?.toggleSpotlight()
+    onClick: () => (app as any).DistroIA?.togglePrism()
   })
 
   rightSide.append(ResourcePill)
