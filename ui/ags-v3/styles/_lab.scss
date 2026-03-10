@@ -1,0 +1,84 @@
+.prism-lab-window {
+    background: transparent;
+}
+
+.prism-lab-box {
+    background-color: transparent;
+    padding: 24px;
+}
+
+.lab-header {
+    color: white;
+    font-weight: 700;
+    font-size: 1.4rem;
+    margin-bottom: 12px;
+}
+
+.lab-section-title {
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-top: 16px;
+    margin-bottom: 8px;
+}
+
+.lab-slider-row {
+    spacing: 16px;
+    margin-bottom: 8px;
+}
+
+.lab-label {
+    color: white;
+    font-size: 1rem;
+    min-width: 140px;
+}
+
+.lab-value {
+    color: #34d399;
+    /* Emerald accent */
+    font-family: monospace;
+    font-weight: bold;
+    min-width: 40px;
+}
+
+.lab-button-grid {
+    margin-top: 24px;
+}
+
+.lab-test-btn {
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.btn-refraction-test {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: white;
+}
+
+.btn-refraction-test:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.btn-capture {
+    background: #6366f1;
+    /* Indigo */
+    color: white;
+    border: none;
+}
+
+.btn-clear {
+    background: #ef4444;
+    color: white;
+    border: none;
+}
+
+.prism-satellite {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}

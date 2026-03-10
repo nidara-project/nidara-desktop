@@ -39,6 +39,16 @@ window.crystal-bar {
     box-shadow: none;
     padding: 0;
     margin: 0;
+
+    /* Universal high-contrast shadow for all text and icons */
+    label,
+    image {
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7), 0 0 10px rgba(0, 0, 0, 0.2);
+    }
+
+    image {
+        filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.7));
+    }
 }
 
 .bar-left {
@@ -78,6 +88,7 @@ window.crystal-bar {
     min-height: 6px;
     border-radius: 50%;
     background-color: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     margin: 0;
     padding: 0;
@@ -107,6 +118,17 @@ window.crystal-bar {
     /* Background circle logic handled in Cairo, but we can set opacity here */
 }
 
+/* Universal high-contrast shadow for all text and icons in the whole bar */
+window.crystal-bar {
+    label {
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7), 0 0 10px rgba(0, 0, 0, 0.2);
+    }
+
+    image {
+        filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.7));
+    }
+}
+
 .resource-label,
 .resource-icon {
     font-size: 10px;
@@ -115,13 +137,15 @@ window.crystal-bar {
     margin-bottom: 0px;
 }
 
-.resource-canvas {
-    /* Background logic handled in Cairo */
+.bar-time,
+.bar-app-name {
+    /* Inherited from universal rule above */
 }
 
 /* Ensure all symbolic icons in the bar are white */
 .bar-right image,
-.bar-left image {
+.bar-left image,
+.bar-center image {
     -gtk-icon-palette: success white, warning white, error white;
     color: white;
 }
@@ -130,23 +154,25 @@ window.crystal-bar {
 .bar-app-menu-pill image,
 .bar-ws-pill image,
 .bar-right image {
-    opacity: 0.9;
+    opacity: 1;
+    /* Full opacity for better contrast */
 }
-
-/* .bar-app-menu removed - handled by SquircleContainer */
 
 .bar-app-sep,
 .bar-time-sep {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.3);
+    /* Stronger separators */
     min-width: 1px;
     margin: 0 4px;
+    box-shadow: 1px 0 2px rgba(0, 0, 0, 0.5);
 }
+
 /* --- Spotlight Pill Refinement --- */
 .spotlight-pill {
     background: transparent;
     border: none;
     box-shadow: none;
-    
+
     image {
         padding: 0;
         margin: 0;

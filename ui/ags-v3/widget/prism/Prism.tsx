@@ -69,6 +69,8 @@ export default function Prism(monitor: Gdk.Monitor) {
         visible: false
     })
 
+    win.set_default_size(650, 400)
+
     try {
         Gtk4LayerShell.init_for_window(win)
         Gtk4LayerShell.set_namespace(win, "prism")
@@ -116,10 +118,10 @@ export default function Prism(monitor: Gdk.Monitor) {
         child: contentBox,
         radius: 32,
         n: 4.5,
-        css_classes: ["prism-container"],
-        alpha: 0.2, // Depth 🪟
+        css_classes: ["prism-wrapper"],
+        alpha: 0.15,
         gloss: true,
-        borderColor: { r: 1, g: 1, b: 1, a: 0.1 }
+        borderColor: { r: 1, g: 1, b: 1, a: 0.15 }
     })
 
     win.set_child(prismWrapper)
@@ -217,10 +219,12 @@ export default function Prism(monitor: Gdk.Monitor) {
         // For now, Escape and Enter are the primary ways.
 
         ; (win as any).toggle = () => {
-            const isVis = win.get_visible()
+            const isVis = win.visible
+            console.log(`[Prism] Toggle: currently ${isVis ? 'visible' : 'hidden'}`)
             win.set_visible(!isVis)
             if (!isVis) {
                 win.present()
+                console.log("[Prism] Presenting window and focusing entry")
                 entry.text = ""
                 resultsList.visible = false
                 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {

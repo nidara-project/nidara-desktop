@@ -40,6 +40,7 @@ import NotificationCenter from "./widget/control-center/NotificationCenter"
 import PowerMenu from "./widget/power-menu/PowerMenu"
 import Settings from "./widget/settings/Settings"
 import Prism from "./widget/prism/Prism"
+import PrismLab from "./widget/lab/PrismLab"
 import Theme from "./core/ThemeManager"
 
 console.log("[DISTROIA] Calling app.start()...");
@@ -60,6 +61,7 @@ app.start({
     const powerWindows: any[] = []
     const settingsWindows: any[] = []
     const prismWindows: any[] = []
+    const labWindows: any[] = []
 
     // 🎨 ABSOLUTE Style Sync: Points to the project config directory
     // V132: Robust path detection to avoid 'undefined/style.css'
@@ -164,6 +166,7 @@ app.start({
           initWin(PowerMenu, powerWindows)
           initWin(Settings, settingsWindows)
           initWin(Prism, prismWindows)
+          initWin(PrismLab, labWindows)
 
           return GLib.SOURCE_REMOVE
         })
@@ -221,6 +224,17 @@ app.start({
       }
       prismWindows.forEach(p => { try { p.toggle() } catch (e) { console.error(e) } })
     }
+    const togglePrismLab = () => {
+      console.log(`[Toggle] PrismLab (Count: ${labWindows.length})`)
+      const isOpening = labWindows.some(l => !l.get_visible())
+      if (isOpening) {
+        ccWindows.forEach(cc => cc.set_visible(false))
+        notifCenterWindows.forEach(nc => nc.set_visible(false))
+        gridWindows.forEach(g => g.set_visible(false))
+        prismWindows.forEach(p => p.set_visible(false))
+      }
+      labWindows.forEach(l => { try { l.toggle() } catch (e) { console.error(e) } })
+    }
 
     // Expose Globals
     (globalThis as any).toggleAppGrid = toggleAppGrid;
@@ -230,9 +244,10 @@ app.start({
     (globalThis as any).toggleSettings = toggleSettings;
     (globalThis as any).toggleSpotlight = togglePrism;
     (globalThis as any).togglePrism = togglePrism;
+    (globalThis as any).togglePrismLab = togglePrismLab;
 
     // Local request mapper
-    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleControlCenter: toggleCC, toggleNC, togglePower, toggleSettings, toggleSpotlight: togglePrism, togglePrism }
+    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleControlCenter: toggleCC, toggleNC, togglePower, toggleSettings, toggleSpotlight: togglePrism, togglePrism, togglePrismLab }
   },
   requestHandler(argv, res) {
     const engine = (app as any).DistroIA
@@ -247,6 +262,7 @@ app.start({
     else if (argv[0] === "toggleSettings()") { engine.toggleSettings(); res("ok") }
     else if (argv[0] === "toggleSpotlight()") { engine.toggleSpotlight(); res("ok") }
     else if (argv[0] === "togglePrism()") { engine.toggleSpotlight(); res("ok") }
+    else if (argv[0] === "togglePrismLab()") { engine.togglePrismLab(); res("ok") }
     else {
       console.warn(`[Handler] Unknown command: ${argv[0]}`)
       res("unknown command")

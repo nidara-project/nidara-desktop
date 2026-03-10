@@ -173,7 +173,7 @@ function AppMenu() {
   const box = new Gtk.Box({
     name: "bar-app-menu-content",
     css_classes: ["bar-app-menu-content"],
-    spacing: 12,
+    spacing: 32,
     valign: Gtk.Align.CENTER,
     focusable: false,
     can_focus: false,
@@ -213,12 +213,6 @@ function AppMenu() {
 
   const distroIcon = getIcon("/home/angel/Dev/Distroia/ui/ags-v3/assets/logos/arch-white.svg")
 
-  const sep = new Gtk.Separator({
-    orientation: Gtk.Orientation.VERTICAL,
-    css_classes: ["bar-app-sep"],
-    valign: Gtk.Align.CENTER,
-    height_request: 12 // Strict separator height
-  })
 
 
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
@@ -228,7 +222,8 @@ function AppMenu() {
       const appName = new Gtk.Label({
         name: "bar-app-name",
         css_classes: ["bar-app-name"],
-        label: "Finder"
+        label: "Finder",
+        valign: Gtk.Align.CENTER
       })
 
       let lastClient: any = null;
@@ -254,7 +249,6 @@ function AppMenu() {
       sync()
 
       box.append(distroIcon)
-      box.append(sep)
       box.append(appName)
     })
     return GLib.SOURCE_REMOVE
@@ -586,7 +580,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   centerSide.append(Workspaces())
 
   const timeContent = new Gtk.Box({
-    spacing: 12,
+    spacing: 32,
     valign: Gtk.Align.CENTER,
     margin_start: 16, // Standardized 16px 📐
     margin_end: 16,
@@ -597,13 +591,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const notifCluster = new Gtk.Box({ spacing: 6, css_classes: ["bar-notif-cluster"], valign: Gtk.Align.CENTER })
   const timeNotifIcon = new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 14, valign: Gtk.Align.CENTER })
   const timeNotifCount = new Gtk.Label({ label: "", css_classes: ["bar-time-notif-count"], valign: Gtk.Align.CENTER })
-  const timeSep = new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["bar-time-sep"], valign: Gtk.Align.CENTER })
 
   notifCluster.append(timeNotifIcon)
   notifCluster.append(timeNotifCount)
 
   timeContent.append(notifCluster)
-  timeContent.append(timeSep)
   timeContent.append(timeLabel)
 
 
@@ -723,9 +715,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     }),
     radius: 16, // Half of 32 height
     gloss: true,
-    color: { r: 1, g: 1, b: 1 }, // Lighter glass for bar
-    alpha: 0.15,
-    borderColor: { r: 1, g: 1, b: 1, a: 0.25 }, // Definition 🖌️
+    color: { r: 1, g: 1, b: 1 }, // Standard White Glass ⚪
+    alpha: 0.25,
+    borderColor: { r: 1, g: 1, b: 1, a: 0.35 }, // Definition 🖌️
     perfect: true, // Perfect geometric pill 💊
     css_classes: ["bar-pill", "spotlight-pill"],
     onClick: () => (app as any).DistroIA?.togglePrism()
