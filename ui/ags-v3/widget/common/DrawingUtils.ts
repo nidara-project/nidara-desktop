@@ -8,7 +8,7 @@ export const createSquirclePath = (
     w: number,
     h: number,
     r: number,
-    n: number = 4.0,
+    n: number = 3.2,
     perfect: boolean = false,
     offset: number = 0
 ) => {
@@ -96,17 +96,17 @@ export const drawSquircle = (
     cornerRadius?: number, // New parameter for fixed radius
     perfect: boolean = false, // New parameter for geometric pill
     borderColor?: { r: number, g: number, b: number, a: number }, // New: Custom Border
-    n: number = 4.0 // NEW: superellipse factor
+    n: number = 3.2 // NEW: superellipse factor
 ) => {
     if (width <= 0 || height <= 0) return
 
     // CLEAR BUFFER
     cr.setOperator(0); cr.paint(); cr.setOperator(2)
 
-    // SAFE MARGINS
-    const marginY = 0
+    // SAFE MARGINS: Avoid touching buffer edges to prevent rectangular artifacts
+    const marginY = 2
     const drawH = height - (marginY * 2)
-    const drawW = (targetW || width)
+    const drawW = (targetW || width) - (marginY * 2)
     const x = (width - drawW) / 2
     const y = marginY
 
@@ -132,10 +132,15 @@ export const drawSquircle = (
         cr.setSourceRGBA(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
         cr.stroke()
     } else if (enableGloss) {
-        // macOS Tahoe: Uniform subtle border all around
+        // macOS Style: Directional gloss (Top-Left Highlight, Bottom-Right Rim)
         createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
         cr.setLineWidth(1)
-        cr.setSourceRGBA(1, 1, 1, 0.2)
+        const lg = new Cairo.LinearGradient(x, y, x + drawW, y + drawH)
+        lg.add_color_stop_rgba(0.0, 1, 1, 1, 0.45) // Stronger highlight top-left
+        lg.add_color_stop_rgba(0.15, 1, 1, 1, 0.0) // Fade out quickly
+        lg.add_color_stop_rgba(0.85, 1, 1, 1, 0.0) // Invisible middle
+        lg.add_color_stop_rgba(1.0, 1, 1, 1, 0.15) // Very subtle rim bottom-right
+        cr.setSource(lg)
         cr.stroke()
     }
 }

@@ -63,7 +63,7 @@ export default function ConnectivityIsland(gdkmonitor: Gdk.Monitor, topMargin: n
 
             cr.setSourceRGBA(0, 0, 0, 0); cr.paint()
 
-            const radius = 16
+            const radius = 24
             const border = { r: 1, g: 1, b: 1, a: 0.08 }
 
             if (isActive) {

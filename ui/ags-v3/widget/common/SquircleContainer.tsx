@@ -29,7 +29,7 @@ interface SquircleContainerProps {
 
 export default function SquircleContainer({
     child,
-    radius = 20,
+    radius = 24,
     gloss = false,
     css_classes = [],
     hexpand = false,
@@ -80,7 +80,10 @@ export default function SquircleContainer({
         let drawN = n
         let drawPerfect = perfect
 
-        if (shape === Shape.CIRCLE) {
+        if (shape === Shape.SQUIRCLE) {
+            drawRadius = 24
+            drawN = 3.2
+        } else if (shape === Shape.CIRCLE) {
             drawRadius = Math.min(w, h) / 2
             drawN = 2.0 // Perfect Circle
             drawPerfect = true
@@ -90,7 +93,7 @@ export default function SquircleContainer({
             drawPerfect = true
         } else if (shape === Shape.DOCK_PILL) {
             drawRadius = 24 // Standardized dock radius
-            drawN = 4.5
+            drawN = 3.2
         }
 
         drawSquircle(cr, w, h, undefined, shareAlpha, gloss, shareColor, drawRadius, drawPerfect, shareBorder, drawN)

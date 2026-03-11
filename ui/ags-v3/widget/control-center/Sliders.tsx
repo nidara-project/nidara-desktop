@@ -44,7 +44,7 @@ export function SliderWidget(id: string, name: string, iconName: string, label: 
         id,
         name,
         grid: { ...grid, w: 4, h: 1 },
-        shape: Shape.DOCK_PILL,
+        shape: Shape.SQUIRCLE,
         child: box
     }
 }
