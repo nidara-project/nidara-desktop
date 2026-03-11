@@ -121,14 +121,7 @@ export const drawSquircle = (
 
     // 1. CLEAN GLASS BODY
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
-    if (enableGloss) {
-        // V604: Removed top-to-bottom gradient at user request.
-        // Using a solid color matching the old "bottom" value (alpha - 0.05) for consistency.
-        const solidAlpha = Math.max(0, alpha - 0.05)
-        cr.setSourceRGBA(color.r, color.g, color.b, solidAlpha)
-    } else {
-        cr.setSourceRGBA(color.r, color.g, color.b, alpha)
-    }
+    cr.setSourceRGBA(color.r, color.g, color.b, alpha)
     cr.fill()
 
     cr.save()

@@ -309,3 +309,13 @@ window.atomic-island-win box {
     background: transparent !important;
     -gtk-outline-radius: 0;
 }
+
+/* Final Purge of GTK4 Window Decorators */
+window.atomic-island-win, 
+window.atomic-island-win decoration, 
+window.atomic-island-win box {
+    outline: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    background-image: none !important;
+}
