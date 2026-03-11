@@ -33,8 +33,9 @@ export default function BaseIsland({
     const win = new Gtk.Window({
         name: `atomic-island-${name}`,
         application: app,
-        width_request: width,
-        height_request: height,
+        width_request: width ? width + 4 : undefined,
+        height_request: height ? height + 4 : undefined,
+        decorated: false,
         css_classes: ["atomic-island-win", "transparent"],
         visible: false
     })

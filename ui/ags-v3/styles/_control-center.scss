@@ -245,39 +245,25 @@ window.notification-center-win {
     color: white;
 }
 
-/* Forzando la transparencia absoluta de la ventana Gtk independiente */
+/* Forzando la transparencia absoluta y eliminación de decoraciones GTK4 */
 window.atomic-island-win {
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    outline: none;
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
     margin: 0;
     padding: 0;
-}
 
-.cc-island {
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
-}
-
-/* Forzando la transparencia absoluta de la ventana Gtk independiente */
-window.atomic-island-win,
-window.atomic-island-win>box {
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    outline: none;
-    margin: 0;
-    padding: 0;
-}
-
-.cc-island {
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
+    &,
+    &>box,
+    & decoration,
+    & .cc-island {
+        background: transparent !important;
+        background-color: transparent !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
 }
 
 /* --- Atomic Grid Magic CSS --- */
@@ -312,4 +298,14 @@ window.atomic-island-win>box {
     font-size: 0.8em;
     font-weight: 700;
     color: white;
+}
+/* Kill any residual focus outlines or GTK decoration borders */
+window.atomic-island-win,
+window.atomic-island-win decoration,
+window.atomic-island-win box {
+    outline: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    -gtk-outline-radius: 0;
 }
