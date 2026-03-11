@@ -35,8 +35,8 @@ import { onDockSettingsChanged } from "./widget/dock/state"
 import AppGrid from "./widget/app-grid/AppGrid"
 import Bar from "./widget/bar/Bar"
 import NotificationPopups from "./widget/control-center/NotificationPopups"
-import ControlCenter from "./widget/control-center/ControlCenter"
 import NotificationCenter from "./widget/control-center/NotificationCenter"
+import IslandGrid from "./widget/control-center/IslandGrid"
 import PowerMenu from "./widget/power-menu/PowerMenu"
 import Settings from "./widget/settings/Settings"
 import Prism from "./widget/prism/Prism"
@@ -160,9 +160,8 @@ app.start({
           }
 
           initWin(AppGrid, gridWindows)
-          initWin(NotificationPopups, [])
-          initWin(ControlCenter, ccWindows)
           initWin(NotificationCenter, notifCenterWindows)
+          initWin(IslandGrid, ccWindows)
           initWin(PowerMenu, powerWindows)
           initWin(Settings, settingsWindows)
           initWin(Prism, prismWindows)

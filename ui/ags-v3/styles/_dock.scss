@@ -1,9 +1,24 @@
-@use 'tokens' as *;
+/* --- Window Transparency Logic --- */
+window.crystal-dock-window,
+window#crystal-dock {
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    margin: 0;
+    padding: 0;
 
-/* ==========================================================================
-   CRYSTAL DOCK
-   Items, squircles, indicators, menus, separators
-   ========================================================================== */
+    decoration,
+    &>box {
+        background-color: transparent !important;
+        background-image: none !important;
+        box-shadow: none !important;
+        border: none !important;
+    }
+}
+
+/* --- Islands Layout --- */
 
 #the-dock-bar {
     padding: 0;

@@ -19,3 +19,6 @@
 [submodule "docs/hyprland-protocols"]
 	path = docs/hyprland-protocols
 	url = https://github.com/hyprwm/hyprland-protocols.git
+[submodule ".hyprglass_manual"]
+	path = .hyprglass_manual
+	url = https://github.com/hyprnux/hyprglass.git

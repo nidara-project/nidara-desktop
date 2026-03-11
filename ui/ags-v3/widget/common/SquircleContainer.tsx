@@ -1,6 +1,13 @@
 import { Gtk } from "ags/gtk4"
 import { drawSquircle } from "./DrawingUtils"
 
+export enum Shape {
+    SQUIRCLE,
+    CIRCLE,
+    CAPSULE,
+    DOCK_PILL
+}
+
 interface SquircleContainerProps {
     child: Gtk.Widget
     radius?: number
@@ -17,6 +24,7 @@ interface SquircleContainerProps {
     borderColor?: { r: number, g: number, b: number, a: number }
     hoverBorderColor?: { r: number, g: number, b: number, a: number }
     n?: number
+    shape?: Shape
 }
 
 export default function SquircleContainer({
@@ -34,7 +42,8 @@ export default function SquircleContainer({
     perfect = false,
     borderColor,
     hoverBorderColor,
-    n = 4.0
+    n = 4.0,
+    shape = Shape.SQUIRCLE
 }: SquircleContainerProps) {
     // Use Gtk.Grid as a Z-Stack.
     const container = new Gtk.Grid({
@@ -53,7 +62,6 @@ export default function SquircleContainer({
     da.set_draw_func((_, cr, w, h) => {
         // Determine current style
         const baseColor = color || { r: 1, g: 1, b: 1 }
-
         const baseAlpha = alpha !== undefined ? alpha : 0.05
 
         let shareColor = baseColor
@@ -68,11 +76,36 @@ export default function SquircleContainer({
 
         cr.setSourceRGBA(0, 0, 0, 0); cr.paint()
 
-        drawSquircle(cr, w, h, undefined, shareAlpha, gloss, shareColor, radius, perfect, shareBorder, n)
+        let drawRadius = radius
+        let drawN = n
+        let drawPerfect = perfect
+
+        if (shape === Shape.CIRCLE) {
+            drawRadius = Math.min(w, h) / 2
+            drawN = 2.0 // Perfect Circle
+            drawPerfect = true
+        } else if (shape === Shape.CAPSULE) {
+            drawRadius = Math.min(w, h) / 2
+            drawN = 5.0 // Higher curvature for pill ends
+            drawPerfect = true
+        } else if (shape === Shape.DOCK_PILL) {
+            drawRadius = 24 // Standardized dock radius
+            drawN = 4.5
+        }
+
+        drawSquircle(cr, w, h, undefined, shareAlpha, gloss, shareColor, drawRadius, drawPerfect, shareBorder, drawN)
     })
 
     // 1. Attach Background (Behind)
     container.attach(da, 0, 0, 1, 1)
+
+    // Center content for semantic shapes
+    if (shape === Shape.CIRCLE || shape === Shape.CAPSULE || shape === Shape.DOCK_PILL) {
+        child.halign = Gtk.Align.CENTER
+        child.valign = Gtk.Align.CENTER
+        child.hexpand = true
+        child.vexpand = true
+    }
 
     // 2. Attach Content (On Top)
     container.attach(child, 0, 0, 1, 1)
