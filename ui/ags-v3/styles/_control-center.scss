@@ -20,7 +20,7 @@
 
 .cc-island {
     /* Each island has its Cairo background from SquircleContainer */
-    margin: 0 16px;
+
     /* Side margins */
 
     /* Ensure no GTK defaults */
@@ -43,10 +43,10 @@ window.notification-center-win {
     decoration,
     &>box,
     &>box>widget {
-        background-color: transparent !important;
-        background-image: none !important;
-        box-shadow: none !important;
-        border: none !important;
+        background-color: transparent;
+        background-image: none;
+        box-shadow: none;
+        border: none;
     }
 }
 
@@ -206,6 +206,7 @@ window.notification-center-win {
     text-transform: uppercase;
     letter-spacing: 2px;
 }
+
 /* --- Atomic Grid Magic CSS --- */
 .cc-atomic-round-btn {
     all: unset;
@@ -222,7 +223,7 @@ window.notification-center-win {
     &:hover {
         background: rgba(255, 255, 255, 0.1);
     }
-    
+
     &.active {
         background: rgba(255, 255, 255, 0.2);
     }
@@ -246,37 +247,37 @@ window.notification-center-win {
 
 /* Forzando la transparencia absoluta de la ventana Gtk independiente */
 window.atomic-island-win {
-    background-color: transparent !important;
-    background-image: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    outline: none;
     margin: 0;
     padding: 0;
 }
 
 .cc-island {
-    background-color: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 /* Forzando la transparencia absoluta de la ventana Gtk independiente */
 window.atomic-island-win,
-window.atomic-island-win > box {
-    background-color: transparent !important;
-    background-image: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
+window.atomic-island-win>box {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    outline: none;
     margin: 0;
     padding: 0;
 }
 
 .cc-island {
-    background-color: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 /* --- Atomic Grid Magic CSS --- */
@@ -292,10 +293,17 @@ window.atomic-island-win > box {
     min-height: 48px;
     color: white;
 }
-.cc-atomic-round-btn:hover { background: rgba(255, 255, 255, 0.1); }
-.cc-atomic-round-btn.active { background: rgba(255, 255, 255, 0.2); }
 
-.cc-wifi-widget, .cc-atomic-focus {
+.cc-atomic-round-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.cc-atomic-round-btn.active {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.cc-wifi-widget,
+.cc-atomic-focus {
     background: transparent;
     color: white;
 }
