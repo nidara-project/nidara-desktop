@@ -256,11 +256,13 @@ window.atomic-island-win {
     padding: 0;
 
     &,
+    &>contents,
     &>box,
     & decoration,
     & .cc-island {
         background: transparent !important;
         background-color: transparent !important;
+        background-image: none !important;
         box-shadow: none !important;
         border: none !important;
     }
@@ -299,6 +301,7 @@ window.atomic-island-win {
     font-weight: 700;
     color: white;
 }
+
 /* Kill any residual focus outlines or GTK decoration borders */
 window.atomic-island-win,
 window.atomic-island-win decoration,
@@ -311,11 +314,96 @@ window.atomic-island-win box {
 }
 
 /* Final Purge of GTK4 Window Decorators */
-window.atomic-island-win, 
-window.atomic-island-win decoration, 
-window.atomic-island-win box {
+window.atomic-island-win,
+window.atomic-island-win decoration,
+window.atomic-island-win box,
+window.atomic-island-win contents {
     outline: none !important;
     border: none !important;
     box-shadow: none !important;
     background-image: none !important;
+    background-color: transparent !important;
+    background: transparent !important;
+}
+
+.cc-atomic-focus-btn {
+    all: unset;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    outline: none;
+    color: white;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.08);
+    }
+
+    &:active {
+        background: rgba(255, 255, 255, 0.15);
+    }
+}
+
+/* --- Media Player Refinements --- */
+.cc-media-title-atomic {
+    font-size: 0.95em;
+    font-weight: 800;
+    color: white;
+    margin: 0;
+    padding: 0;
+}
+
+.cc-media-artist-atomic {
+    font-size: 0.8em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    margin: 0;
+    padding: 0;
+}
+
+.cc-media-controls-atomic {
+    margin-top: 0px;
+
+    button {
+        min-width: 34px;
+        min-height: 34px;
+        border-radius: 9999px;
+        background: rgba(255, 255, 255, 0.05);
+        color: white;
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.12);
+        }
+    }
+}
+
+/* --- Horizontal Atomic Sliders --- */
+.cc-atomic-slider-box-horizontal {
+    padding: 0 12px;
+}
+
+.cc-atomic-slider-icon-side {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+.cc-atomic-scale-native {
+    trough {
+        background-color: rgba(255, 255, 255, 0.1);
+        border-radius: 9999px;
+        min-height: 12px;
+    }
+
+    highlight {
+        background-color: white;
+        border-radius: 9999px;
+    }
+
+    slider {
+        background-color: white;
+        border: 2px solid rgba(0, 0, 0, 0.2);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        min-width: 24px;
+        min-height: 24px;
+        margin: -6px;
+        border-radius: 9999px;
+    }
 }

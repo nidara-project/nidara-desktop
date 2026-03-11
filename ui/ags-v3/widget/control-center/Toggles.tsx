@@ -60,16 +60,21 @@ export function RoundToggle(id: string, name: string, iconName: string, grid: { 
 
 export function FocusWidget(grid: { x: number, y: number }): AtomicWidget {
     const notifd = AstalNotifd.get_default()
-    const box = new Gtk.Box({
-        spacing: 12,
-        css_classes: ["cc-atomic-focus"],
+    const btn = new Gtk.Button({
+        css_classes: ["cc-atomic-focus-btn"],
         hexpand: true, vexpand: true,
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER
     })
 
+    const box = new Gtk.Box({ spacing: 12 })
     const icon = new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 18 })
     const label = new Gtk.Label({ label: "Do Not Disturb", css_classes: ["cc-atomic-label-small"] })
     box.append(icon); box.append(label)
+    btn.set_child(box)
+
+    btn.connect("clicked", () => {
+        if (notifd) notifd.dont_disturb = !notifd.dont_disturb
+    })
 
     const update = () => {
         if (!notifd) return
@@ -87,6 +92,6 @@ export function FocusWidget(grid: { x: number, y: number }): AtomicWidget {
         name: "Focus",
         grid: { ...grid, w: 2, h: 1 },
         shape: Shape.CAPSULE,
-        child: box
+        child: btn
     }
 }

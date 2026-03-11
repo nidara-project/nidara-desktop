@@ -99,13 +99,11 @@ export default function SquircleContainer({
     // 1. Attach Background (Behind)
     container.attach(da, 0, 0, 1, 1)
 
-    // Center content for semantic shapes
-    if (shape === Shape.CIRCLE || shape === Shape.CAPSULE || shape === Shape.DOCK_PILL) {
-        child.halign = Gtk.Align.CENTER
-        child.valign = Gtk.Align.CENTER
-        child.hexpand = true
-        child.vexpand = true
-    }
+    // Center content for all shapes
+    child.halign = Gtk.Align.CENTER
+    child.valign = Gtk.Align.CENTER
+    child.hexpand = true
+    child.vexpand = true
 
     // 2. Attach Content (On Top)
     container.attach(child, 0, 0, 1, 1)
