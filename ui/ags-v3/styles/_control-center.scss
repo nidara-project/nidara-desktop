@@ -206,3 +206,102 @@ window.notification-center-win {
     text-transform: uppercase;
     letter-spacing: 2px;
 }
+/* --- Atomic Grid Magic CSS --- */
+.cc-atomic-round-btn {
+    all: unset;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    outline: none;
+    border-radius: 9999px;
+    padding: 0;
+    min-width: 48px;
+    min-height: 48px;
+    color: white;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+    
+    &.active {
+        background: rgba(255, 255, 255, 0.2);
+    }
+}
+
+.cc-wifi-widget {
+    background: transparent;
+    color: white;
+}
+
+.cc-atomic-label-small {
+    font-size: 0.8em;
+    font-weight: 700;
+    color: white;
+}
+
+.cc-atomic-focus {
+    background: transparent;
+    color: white;
+}
+
+/* Forzando la transparencia absoluta de la ventana Gtk independiente */
+window.atomic-island-win {
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    margin: 0;
+    padding: 0;
+}
+
+.cc-island {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* Forzando la transparencia absoluta de la ventana Gtk independiente */
+window.atomic-island-win,
+window.atomic-island-win > box {
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    margin: 0;
+    padding: 0;
+}
+
+.cc-island {
+    background-color: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+/* --- Atomic Grid Magic CSS --- */
+.cc-atomic-round-btn {
+    all: unset;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    outline: none;
+    border-radius: 9999px;
+    padding: 0;
+    min-width: 48px;
+    min-height: 48px;
+    color: white;
+}
+.cc-atomic-round-btn:hover { background: rgba(255, 255, 255, 0.1); }
+.cc-atomic-round-btn.active { background: rgba(255, 255, 255, 0.2); }
+
+.cc-wifi-widget, .cc-atomic-focus {
+    background: transparent;
+    color: white;
+}
+
+.cc-atomic-label-small {
+    font-size: 0.8em;
+    font-weight: 700;
+    color: white;
+}

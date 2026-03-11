@@ -19,13 +19,13 @@ export default function ConnectivityIsland(gdkmonitor: Gdk.Monitor, topMargin: n
     const win = new Gtk.Window({
         name: "cc-connectivity-island-win",
         application: app,
-        css_classes: ["glass-test-win", "transparent"],
+        css_classes: ["control-center-win", "transparent"],
         visible: false,
     })
 
     try {
         Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, "glass-test")
+        Gtk4LayerShell.set_namespace(win, "control-center")
         Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
