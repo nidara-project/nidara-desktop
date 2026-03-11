@@ -25,6 +25,7 @@ interface SquircleContainerProps {
     hoverBorderColor?: { r: number, g: number, b: number, a: number }
     n?: number
     shape?: Shape
+    borderWidth?: number
 }
 
 export default function SquircleContainer({
@@ -43,7 +44,8 @@ export default function SquircleContainer({
     borderColor,
     hoverBorderColor,
     n = 4.0,
-    shape = Shape.SQUIRCLE
+    shape = Shape.SQUIRCLE,
+    borderWidth = 1.0
 }: SquircleContainerProps) {
     // Use Gtk.Grid as a Z-Stack.
     const container = new Gtk.Grid({
@@ -81,8 +83,8 @@ export default function SquircleContainer({
         let drawPerfect = perfect
 
         if (shape === Shape.SQUIRCLE) {
-            drawRadius = 24
-            drawN = 3.2
+            drawRadius = radius
+            drawN = n
         } else if (shape === Shape.CIRCLE) {
             drawRadius = Math.min(w, h) / 2
             drawN = 2.0 // Perfect Circle
@@ -96,7 +98,7 @@ export default function SquircleContainer({
             drawN = 3.2
         }
 
-        drawSquircle(cr, w, h, undefined, shareAlpha, gloss, shareColor, drawRadius, drawPerfect, shareBorder, drawN)
+        drawSquircle(cr, w, h, undefined, shareAlpha, gloss, shareColor, drawRadius, drawPerfect, shareBorder, drawN, borderWidth)
     })
 
     // 1. Attach Background (Behind)

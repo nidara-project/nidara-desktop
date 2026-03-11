@@ -26,7 +26,7 @@ export default function BaseIsland({
     width,
     height,
     alpha = 0.15,
-    radius = 24,
+    radius = 48,
     gloss = true,
     shape = Shape.SQUIRCLE
 }: BaseIslandProps): Gtk.Window {
@@ -61,11 +61,12 @@ export default function BaseIsland({
     const island = SquircleContainer({
         child,
         radius,
+        n: 3.5, // Apple G3 Geometry
+        borderWidth: 2.0, // Crystalline Edge
         gloss,
         alpha,
         shape,
-        css_classes: ["cc-island", `cc-${name}-island`],
-        borderColor: { r: 1, g: 1, b: 1, a: 0.02 }
+        css_classes: ["cc-island", `cc-${name}-island`]
     })
 
     island.hexpand = true

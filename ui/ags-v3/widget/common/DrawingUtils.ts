@@ -96,51 +96,65 @@ export const drawSquircle = (
     cornerRadius?: number, // New parameter for fixed radius
     perfect: boolean = false, // New parameter for geometric pill
     borderColor?: { r: number, g: number, b: number, a: number }, // New: Custom Border
-    n: number = 3.2 // NEW: superellipse factor
+    n: number = 3.2, // Superellipse factor
+    borderWidth: number = 1.0 // Isolated border width
 ) => {
     if (width <= 0 || height <= 0) return
 
     // CLEAR BUFFER
     cr.setOperator(0); cr.paint(); cr.setOperator(2)
 
-    // SAFE MARGINS: Avoid touching buffer edges to prevent rectangular artifacts
-    const marginY = 2
-    const drawH = height - (marginY * 2)
-    const drawW = (targetW || width) - (marginY * 2)
+    // SAFE MARGINS: 3.0px is the optimal buffer to prevent rectangular edge clipping ("rectas")
+    const margin = 3.0
+    const drawH = height - (margin * 2)
+    const drawW = (targetW || width) - (margin * 2)
     const x = (width - drawW) / 2
-    const y = marginY
+    const y = margin
 
-    // Calculate Radius: Use provided cornerRadius, or default to "Pill" (half min dim)
+    // Calculate Radius
     const minDim = Math.min(drawW, drawH)
     let r = cornerRadius ?? (minDim * 0.5)
-
-    // Safety clamp (can't be larger than half the smallest side to avoid self-intersection)
     if (r > minDim * 0.5) r = minDim * 0.5
 
     cr.setAntialias(3)
 
-    // 1. CLEAN GLASS BODY
+    // 1. MAIN GLASS BODY
+    cr.save()
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
     cr.setSourceRGBA(color.r, color.g, color.b, alpha)
     cr.fill()
+    cr.restore()
 
+    // 2. BASE BORDER
     cr.save()
-    // 2. BORDER (Custom or Uniform)
+    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
+    cr.setLineWidth(borderWidth)
+
     if (borderColor) {
-        createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
-        cr.setLineWidth(1)
         cr.setSourceRGBA(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-        cr.stroke()
-    } else if (enableGloss) {
-        // macOS Style: Directional gloss (Top-Left Highlight, Bottom-Right Rim)
-        createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
-        cr.setLineWidth(1)
+    } else {
+        const intensityTL = borderWidth > 1.0 ? 0.35 : 0.25
+        const intensityBR = borderWidth > 1.0 ? 0.2 : 0.1
         const lg = new Cairo.LinearGradient(x, y, x + drawW, y + drawH)
-        lg.add_color_stop_rgba(0.0, 1, 1, 1, 0.45) // Stronger highlight top-left
-        lg.add_color_stop_rgba(0.15, 1, 1, 1, 0.0) // Fade out quickly
-        lg.add_color_stop_rgba(0.85, 1, 1, 1, 0.0) // Invisible middle
-        lg.add_color_stop_rgba(1.0, 1, 1, 1, 0.15) // Very subtle rim bottom-right
+        lg.addColorStopRGBA(0.0, 1, 1, 1, intensityTL)
+        lg.addColorStopRGBA(0.4, 1, 1, 1, 0.05)
+        lg.addColorStopRGBA(0.6, 1, 1, 1, 0.05)
+        lg.addColorStopRGBA(1.0, 1, 1, 1, intensityBR)
         cr.setSource(lg)
-        cr.stroke()
     }
+    cr.stroke()
+    cr.restore()
+
+    // 3. SPECULAR RIM (Tahoe Edge)
+    cr.save()
+    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
+    cr.setLineWidth(1.0)
+    const rimIntensity = borderWidth > 1.0 ? 0.65 : 0.45
+    const rimGrad = new Cairo.LinearGradient(x, y, x + (drawW * 0.6), y + (drawH * 0.6))
+    rimGrad.addColorStopRGBA(0.0, 1, 1, 1, rimIntensity)
+    rimGrad.addColorStopRGBA(0.4, 1, 1, 1, 0.1)
+    rimGrad.addColorStopRGBA(1.0, 1, 1, 1, 0.0)
+    cr.setSource(rimGrad)
+    cr.stroke()
+    cr.restore()
 }
