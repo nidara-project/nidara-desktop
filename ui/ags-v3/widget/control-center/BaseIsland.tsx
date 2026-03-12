@@ -5,8 +5,9 @@ import SquircleContainer, { Shape } from "../common/SquircleContainer"
 import { WidgetSize } from "./Types"
 
 /**
- *  BaseIsland: The Absolute Law
- * I will NOT force expansion on children anymore. Let them decide.
+ *  BaseIsland: Geometric Identity
+ * - 2x1 (WIDE): Force perfect Capsules 💊
+ * - 2x2/4x1: Sync with Dock System (n=3.2)
  */
 interface BaseIslandProps {
     name: string
@@ -60,21 +61,35 @@ export default function BaseIsland({
         console.error(`[BaseIsland] Shell error for ${name}:`, e)
     }
 
+    //  GEOMETRIC RULES:
     let shape = Shape.SQUIRCLE
     let radius = 28
-    if (size === WidgetSize.SINGLE) { shape = Shape.CIRCLE; radius = width / 2 }
-    else if (size === WidgetSize.WIDE) { shape = Shape.CAPSULE; radius = height / 2 }
-    else if (size === WidgetSize.FULL_WIDTH) { shape = Shape.SQUIRCLE; radius = 32 }
+    let n = 3.2 // Tahoe Standard
 
-    //  ARCHITECTURAL CHANGE: DO NOT FORCE VEXPAND
-    // This allows children to stay together if they don't want to expand.
+    if (size === WidgetSize.SINGLE) {
+        shape = Shape.CIRCLE
+        radius = width / 2
+    } else if (size === WidgetSize.WIDE) {
+        // 🔒 2x1: CAPSULAS PERFECTAS (Semicircles)
+        shape = Shape.CAPSULE
+        radius = height / 2
+    } else if (size === WidgetSize.FULL_WIDTH) {
+        // 4x1: Sync with Dock profile
+        shape = Shape.DOCK_PILL
+        radius = height / 2
+    } else {
+        // 2x2: Squircle with Dock profile
+        shape = Shape.SQUIRCLE
+        radius = 32
+    }
+
     child.halign = Gtk.Align.FILL
     child.valign = Gtk.Align.FILL
 
     const island = SquircleContainer({
         child,
         radius,
-        n: 4.5,
+        n,
         borderWidth: 1.5,
         gloss,
         alpha,

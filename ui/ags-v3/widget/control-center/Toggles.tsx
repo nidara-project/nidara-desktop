@@ -6,8 +6,9 @@ import { Shape } from "../common/SquircleContainer"
 import { AtomicWidget, WidgetSize } from "./Types"
 
 /**
- *  Toggles - Grid Synchronization
- * Unified alignment for all widgets to match the Media carátula vertical.
+ *  Toggles - Visual Unification
+ * Icons: 28px
+ * Background Circles: 48px
  */
 
 export function WifiWidget(): AtomicWidget {
@@ -24,11 +25,11 @@ export function WifiWidget(): AtomicWidget {
     const iconBox = new Gtk.Box({
         css_classes: ["cc-atomic-icon-circle-bg"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        width_request: 38, height_request: 38
+        width_request: 48, height_request: 48 // 🎯 Unificado con RoundToggle
     })
     const icon = new Gtk.Image({
         icon_name: "network-wireless-signal-excellent-symbolic",
-        pixel_size: 18
+        pixel_size: 28 // 🎯 Unificado
     })
     iconBox.append(icon)
 
@@ -54,7 +55,8 @@ export function RoundToggle(id: string, name: string, iconName: string, active: 
     const btn = new Gtk.Button({
         css_classes: ["cc-atomic-round-btn", active ? "active" : ""],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        hexpand: true, vexpand: true
+        hexpand: true, vexpand: true,
+        width_request: 48, height_request: 48
     })
     const icon = new Gtk.Image({ icon_name: iconName, pixel_size: 28 })
     btn.set_child(icon)
@@ -76,14 +78,22 @@ export function FocusWidget(): AtomicWidget {
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER
     })
-    const icon = new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 18 })
+
+    const iconBox = new Gtk.Box({
+        css_classes: ["cc-atomic-icon-circle-bg"], // 🎯 Consistencia visual
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+        width_request: 48, height_request: 48
+    })
+    const icon = new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 28 })
+    iconBox.append(icon)
+
     const label = new Gtk.Label({
         label: "Do Not Disturb",
         css_classes: ["cc-atomic-label-small"],
         ellipsize: 3,
-        max_width_chars: 14 // 🔒 BLOQUEO PARA EVITAR ENSANCHAMIENTO
+        max_width_chars: 14
     })
-    box.append(icon); box.append(label)
+    box.append(iconBox); box.append(label)
     btn.set_child(box)
 
     btn.connect("clicked", () => {
