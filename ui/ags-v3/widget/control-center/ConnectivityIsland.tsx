@@ -135,7 +135,9 @@ export default function ConnectivityIsland(gdkmonitor: Gdk.Monitor, topMargin: n
         css_classes: ["cc-island", "cc-connectivity-island"],
         alpha: 0.15,
         gloss: true,
-        borderColor: { r: 1, g: 1, b: 1, a: 0.02 }
+        borderColor: { r: 1, g: 1, b: 1, a: 0.02 },
+        inset: 3.0,
+        padding: 8
     })
 
     const statusRow = new Gtk.Box({ spacing: 12, margin_bottom: 4 })

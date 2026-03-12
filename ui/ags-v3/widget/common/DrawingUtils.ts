@@ -12,73 +12,73 @@ export const createSquirclePath = (
     perfect: boolean = false,
     offset: number = 0
 ) => {
+    // REAL OFFSET LOGIC: BOX defined by (x, y, w, h)
+    // Positive offset grows box outward, Negative offset shrinks box inward.
+    const ox = x - offset
+    const oy = y - offset
+    const ow = w + (offset * 2)
+    const oh = h + (offset * 2)
+
+    // The visual radius must be adjusted by the same offset to maintain curvature intent
     const rd = Math.max(0, r + offset)
 
     if (perfect) {
         // GEOMETRIC PILL 💊 (Standard Arcs)
-        const insX = 1
-        const insY = 1
-        const r_eff = Math.max(0, r + offset)
-        const safe_r = Math.min(r_eff, Math.min(w - insX * 2, h - insY * 2) / 2)
+        const safe_r = Math.min(rd, Math.min(ow, oh) / 2)
 
-        const x1 = x + insX
-        const y1 = y + insY
-        const w1 = w - insX * 2
-        const h1 = h - insY * 2
-
-        cr.arc(x1 + w1 - safe_r, y1 + safe_r, safe_r, -Math.PI / 2, 0) // TR
-        cr.lineTo(x1 + w1, y1 + h1 - safe_r)
-        cr.arc(x1 + w1 - safe_r, y1 + h1 - safe_r, safe_r, 0, Math.PI / 2) // BR
-        cr.lineTo(x1 + safe_r, y1 + h1)
-        cr.arc(x1 + safe_r, y1 + h1 - safe_r, safe_r, Math.PI / 2, Math.PI) // BL
-        cr.lineTo(x1, y1 + safe_r)
-        cr.arc(x1 + safe_r, y1 + safe_r, safe_r, Math.PI, 3 * Math.PI / 2) // TL
-        cr.lineTo(x1 + w1 - safe_r, y1)
+        cr.arc(ox + ow - safe_r, oy + safe_r, safe_r, -Math.PI / 2, 0) // TR
+        cr.lineTo(ox + ow, oy + oh - safe_r)
+        cr.arc(ox + ow - safe_r, oy + oh - safe_r, safe_r, 0, Math.PI / 2) // BR
+        cr.lineTo(ox + safe_r, oy + oh)
+        cr.arc(ox + safe_r, oy + oh - safe_r, safe_r, Math.PI / 2, Math.PI) // BL
+        cr.lineTo(ox, oy + safe_r)
+        cr.arc(ox + safe_r, oy + safe_r, safe_r, Math.PI, 3 * Math.PI / 2) // TL
+        cr.lineTo(ox + ow - safe_r, oy)
     } else {
-        // SQUIRCLE (Superellipse)
-        cr.moveTo(x + r, y - offset)
-        cr.lineTo(x + w - r, y - offset)
+        // SQUIRCLE (Superellipse) - UNIFIED rd LOGIC
+        // Top edge
+        cr.moveTo(ox + rd, oy)
+        cr.lineTo(ox + ow - rd, oy)
 
-        // Top-right Corner
+        // Top-right Corner (t from PI/2 to 0)
         for (let i = 64; i >= 0; i--) {
             let t = (i / 64) * (Math.PI / 2)
             let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
             let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
-            cr.lineTo(x + w - r + px, y + r - py)
+            cr.lineTo(ox + ow - rd + px, oy + rd - py)
         }
 
         // Right Edge
-        cr.lineTo(x + w + offset, y + h - r)
+        cr.lineTo(ox + ow, oy + oh - rd)
 
-        // Bottom-right Corner
+        // Bottom-right Corner (t from 0 to PI/2)
         for (let i = 0; i <= 64; i++) {
             let t = (i / 64) * (Math.PI / 2)
             let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
             let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
-            cr.lineTo(x + w - r + px, y + h - r + py)
+            cr.lineTo(ox + ow - rd + px, oy + oh - rd + py)
         }
 
         // Bottom Edge
-        cr.lineTo(x + w - r, y + h + offset)
-        cr.lineTo(x + r, y + h + offset)
+        cr.lineTo(ox + rd, oy + oh)
 
-        // Bottom-left Corner
+        // Bottom-left Corner (t from PI/2 to 0)
         for (let i = 64; i >= 0; i--) {
             let t = (i / 64) * (Math.PI / 2)
             let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
             let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
-            cr.lineTo(x + r - px, y + h - r + py)
+            cr.lineTo(ox + rd - px, oy + oh - rd + py)
         }
 
         // Left Edge
-        cr.lineTo(x - offset, y + r)
+        cr.lineTo(ox, oy + rd)
 
-        // Top-left Corner
+        // Top-left Corner (t from 0 to PI/2)
         for (let i = 0; i <= 64; i++) {
             let t = (i / 64) * (Math.PI / 2)
             let px = rd * Math.pow(Math.abs(Math.cos(t)), 2 / n)
             let py = rd * Math.pow(Math.abs(Math.sin(t)), 2 / n)
-            cr.lineTo(x + r - px, y + r - py)
+            cr.lineTo(ox + rd - px, oy + rd - py)
         }
     }
     cr.closePath()
@@ -97,19 +97,19 @@ export const drawSquircle = (
     perfect: boolean = false, // New parameter for geometric pill
     borderColor?: { r: number, g: number, b: number, a: number }, // New: Custom Border
     n: number = 3.2, // Superellipse factor
-    borderWidth: number = 1.0 // Isolated border width
+    borderWidth: number = 1.0, // Isolated border width
+    inset: number = 2.5 // Configurable buffer to avoid edge clipping
 ) => {
     if (width <= 0 || height <= 0) return
 
     // CLEAR BUFFER
     cr.setOperator(0); cr.paint(); cr.setOperator(2)
 
-    // SAFE MARGINS: 3.0px is the optimal buffer to prevent rectangular edge clipping ("rectas")
-    const margin = 3.0
-    const drawH = height - (margin * 2)
-    const drawW = (targetW || width) - (margin * 2)
+    // SAFE DRAW AREA
+    const drawH = height - (inset * 2)
+    const drawW = (targetW || width) - (inset * 2)
     const x = (width - drawW) / 2
-    const y = margin
+    const y = inset
 
     // Calculate Radius
     const minDim = Math.min(drawW, drawH)
@@ -118,43 +118,51 @@ export const drawSquircle = (
 
     cr.setAntialias(3)
 
-    // 1. MAIN GLASS BODY
+    // 1. MAIN GLASS BODY (Inner-aligned)
     cr.save()
-    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
+    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, -0.5)
     cr.setSourceRGBA(color.r, color.g, color.b, alpha)
     cr.fill()
     cr.restore()
 
-    // 2. BASE BORDER
+    // 2. BASE BORDER (INNER STROKE LOGIC)
     cr.save()
-    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
+    const strokeOffset = -borderWidth / 2
+    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, strokeOffset)
     cr.setLineWidth(borderWidth)
 
     if (borderColor) {
         cr.setSourceRGBA(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
     } else {
-        const intensityTL = borderWidth > 1.0 ? 0.35 : 0.25
-        const intensityBR = borderWidth > 1.0 ? 0.2 : 0.1
+        const intensity = borderWidth > 1.0 ? 0.25 : 0.20
         const lg = new Cairo.LinearGradient(x, y, x + drawW, y + drawH)
-        lg.addColorStopRGBA(0.0, 1, 1, 1, intensityTL)
+        lg.addColorStopRGBA(0.0, 1, 1, 1, intensity)
         lg.addColorStopRGBA(0.4, 1, 1, 1, 0.05)
         lg.addColorStopRGBA(0.6, 1, 1, 1, 0.05)
-        lg.addColorStopRGBA(1.0, 1, 1, 1, intensityBR)
+        lg.addColorStopRGBA(1.0, 1, 1, 1, intensity)
         cr.setSource(lg)
     }
     cr.stroke()
     cr.restore()
 
-    // 3. SPECULAR RIM (Tahoe Edge)
+    // 3. SPECULAR RIMS (Symmetric Tahoe Edges 💎)
     cr.save()
-    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
+    const rimOffset = -0.5
+    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, rimOffset)
     cr.setLineWidth(1.0)
-    const rimIntensity = borderWidth > 1.0 ? 0.65 : 0.45
-    const rimGrad = new Cairo.LinearGradient(x, y, x + (drawW * 0.6), y + (drawH * 0.6))
-    rimGrad.addColorStopRGBA(0.0, 1, 1, 1, rimIntensity)
-    rimGrad.addColorStopRGBA(0.4, 1, 1, 1, 0.1)
-    rimGrad.addColorStopRGBA(1.0, 1, 1, 1, 0.0)
-    cr.setSource(rimGrad)
+
+    const rimIntensity = borderWidth > 1.0 ? 0.4 : 0.3
+    const rimGradTL = new Cairo.LinearGradient(x, y, x + (drawW * 0.5), y + (drawH * 0.5))
+    rimGradTL.addColorStopRGBA(0.0, 1, 1, 1, rimIntensity)
+    rimGradTL.addColorStopRGBA(0.4, 1, 1, 1, 0.0)
+    cr.setSource(rimGradTL)
+    cr.strokePreserve()
+
+    const rimGradBR = new Cairo.LinearGradient(x + drawW, y + drawH, x + (drawW * 0.5), y + (drawH * 0.5))
+    rimGradBR.addColorStopRGBA(0.0, 1, 1, 1, rimIntensity)
+    rimGradBR.addColorStopRGBA(0.4, 1, 1, 1, 0.0)
+    cr.setSource(rimGradBR)
     cr.stroke()
+
     cr.restore()
 }

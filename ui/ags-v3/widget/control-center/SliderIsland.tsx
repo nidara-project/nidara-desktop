@@ -41,7 +41,9 @@ export default function SliderIsland(gdkmonitor: Gdk.Monitor, topMargin: number 
         css_classes: ["cc-island", "cc-sliders-island"],
         alpha: 0.15,
         gloss: true,
-        borderColor: { r: 1, g: 1, b: 1, a: 0.02 }
+        borderColor: { r: 1, g: 1, b: 1, a: 0.02 },
+        inset: 3.0,
+        padding: 8
     })
 
     const volScale = new Gtk.Scale({

@@ -26,6 +26,9 @@ interface SquircleContainerProps {
     n?: number
     shape?: Shape
     borderWidth?: number
+    margin?: number
+    inset?: number
+    padding?: number
 }
 
 export default function SquircleContainer({
@@ -45,9 +48,10 @@ export default function SquircleContainer({
     hoverBorderColor,
     n = 4.0,
     shape = Shape.SQUIRCLE,
-    borderWidth = 1.0
+    borderWidth = 1.0,
+    inset,
+    padding
 }: SquircleContainerProps) {
-    // Use Gtk.Grid as a Z-Stack.
     const container = new Gtk.Grid({
         css_classes,
         hexpand,
@@ -60,12 +64,11 @@ export default function SquircleContainer({
     })
 
     let isHovered = false
+    const techInset = inset !== undefined ? inset : 2.0
 
     da.set_draw_func((_, cr, w, h) => {
-        // Determine current style
         const baseColor = color || { r: 1, g: 1, b: 1 }
         const baseAlpha = alpha !== undefined ? alpha : 0.05
-
         let shareColor = baseColor
         let shareAlpha = baseAlpha
         let shareBorder = borderColor
@@ -82,48 +85,41 @@ export default function SquircleContainer({
         let drawN = n
         let drawPerfect = perfect
 
-        if (shape === Shape.SQUIRCLE) {
-            drawRadius = radius
-            drawN = n
-        } else if (shape === Shape.CIRCLE) {
+        if (shape === Shape.CIRCLE || shape === Shape.CAPSULE) {
             drawRadius = Math.min(w, h) / 2
-            drawN = 2.0 // Perfect Circle
-            drawPerfect = true
-        } else if (shape === Shape.CAPSULE) {
-            drawRadius = Math.min(w, h) / 2
-            drawN = 5.0 // Higher curvature for pill ends
+            drawN = 2.0
             drawPerfect = true
         } else if (shape === Shape.DOCK_PILL) {
-            drawRadius = 24 // Standardized dock radius
+            drawRadius = radius || 24
             drawN = 3.2
         }
 
-        drawSquircle(cr, w, h, undefined, shareAlpha, gloss, shareColor, drawRadius, drawPerfect, shareBorder, drawN, borderWidth)
+        drawSquircle(
+            cr, w, h, undefined,
+            shareAlpha, gloss, shareColor,
+            drawRadius, drawPerfect, shareBorder,
+            drawN, borderWidth, techInset
+        )
     })
 
-    // 1. Attach Background (Behind)
     container.attach(da, 0, 0, 1, 1)
 
-    // Center content for all shapes
-    child.halign = Gtk.Align.CENTER
-    child.valign = Gtk.Align.CENTER
-    child.hexpand = true
-    child.vexpand = true
+    //  THE FIX: No forzamos expansión si el hijo no la pide.
+    // Esto evita que GTK meta "aire" artificial entre elementos como la imagen y el título.
 
-    // 2. Attach Content (On Top)
+    if (padding !== undefined) {
+        child.margin_top = padding
+        child.margin_bottom = padding
+        child.margin_start = padding
+        child.margin_end = padding
+    }
+
     container.attach(child, 0, 0, 1, 1)
 
-    // Interactive Controllers
     if (hoverColor || hoverAlpha !== undefined || onClick) {
         const motion = new Gtk.EventControllerMotion()
-        motion.connect("enter", () => {
-            isHovered = true
-            da.queue_draw()
-        })
-        motion.connect("leave", () => {
-            isHovered = false
-            da.queue_draw()
-        })
+        motion.connect("enter", () => { isHovered = true; da.queue_draw() })
+        motion.connect("leave", () => { isHovered = false; da.queue_draw() })
         container.add_controller(motion)
     }
 

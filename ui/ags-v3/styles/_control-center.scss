@@ -1,409 +1,82 @@
 @use 'tokens' as *;
 
 /* ==========================================================================
-   CONTROL CENTER (macOS Tahoe "Islands of Glass" Edition)
+   CONTROL CENTER - CLEAN GTK4 ARCHITECTURE
    ========================================================================== */
 
-/* --- Islands Layout --- */
-.cc-islands-container {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    margin: 8px;
-    padding: 0;
-
-    .control-center {
-        background: transparent;
-        padding: 0;
-    }
-}
-
-.cc-island {
-    /* Each island has its Cairo background from SquircleContainer */
-
-    /* Side margins */
-
-    /* Ensure no GTK defaults */
-    background: transparent;
-    border: none;
-    box-shadow: none;
-}
-
-/* --- Window Transparency Logic --- */
-window.control-center-win,
-window.notification-center-win {
+/* --- Transparent Window Context --- */
+window.atomic-island-win {
     background-color: transparent;
     background-image: none;
     border: none;
     box-shadow: none;
-    outline: none;
-    margin: 0;
-    padding: 0;
-
-    decoration,
-    &>box,
-    &>box>widget {
-        background-color: transparent;
-        background-image: none;
-        box-shadow: none;
-        border: none;
-    }
-}
-
-/* --- Pill Sliders (macOS Style) --- */
-.cc-pill-slider {
-    all: unset;
-    min-height: 48px;
-    background: transparent;
-    border-radius: 9999px;
-
-    trough {
-        background-color: rgba(255, 255, 255, 0.1);
-        border-radius: 9999px;
-        min-height: 48px;
-    }
-
-    highlight {
-        background-color: rgba(255, 255, 255, 0.6); // Less "blindly white" 🤍
-        border-radius: 9999px;
-    }
-
-    slider {
-        opacity: 0;
-    }
-}
-
-.cc-pill-slider-icon {
-    color: rgba(255, 255, 255, 0.9);
-}
-
-/* --- Toggle Icons & Labels --- */
-.cc-toggle-icon-box {
-    background-color: rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
-    color: rgba(255, 255, 255, 0.3);
-}
-
-.cc-toggle-label {
-    font-weight: 600;
-    font-size: 0.95em;
-    color: white;
-}
-
-.cc-toggle-sublabel {
-    font-size: 0.8em;
-    color: rgba(255, 255, 255, 0.5);
-    margin-top: 2px;
-}
-
-.cc-status-row {
-    margin-bottom: 8px;
-    color: rgba(255, 255, 255, 0.7);
-}
-
-.cc-status-label {
-    font-size: 0.8em;
-    font-weight: 700;
-}
-
-.active-text {
-    color: white;
-}
-
-.active-icon {
-    background-color: rgba(255, 255, 255, 0.2);
-    color: white;
-    border-radius: 12px;
-}
-
-/* --- Media Player --- */
-.cc-media-card {
-    /* Integrated glass look - no extra shadows */
-    box-shadow: none;
-}
-
-.cc-media-art {
-    /* Background handled by Cairo in artDa */
-    background-color: transparent;
-    border-radius: 16px;
-}
-
-.cc-media-title {
-    color: white;
-    font-weight: 700;
-    font-size: 0.95em;
-}
-
-.cc-media-artist {
-    color: rgba(255, 255, 255, 0.5);
-    font-size: 0.8em;
-}
-
-.cc-media-btn {
-    background: transparent;
-    border: none;
-    color: white;
-    border-radius: 50%;
-    min-width: 48px;
-    min-height: 48px;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: none;
-    outline: none;
-}
-
-.cc-media-btn:hover {
-    background-color: rgba(255, 255, 255, 0.1);
-    transform: scale(1.05);
-}
-
-.cc-media-controls {
-    /* Tighten spacing for a more Apple-like control row */
-    margin-top: 8px;
-}
-
-/* --- Notification Center Integration --- */
-.notification-center-panel {
-    background: transparent;
-    min-width: 420px;
-}
-
-.nc-calendar {
-    background: transparent;
-    color: white;
-    padding: 8px;
-    font-size: 0.9em;
-
-    header {
-        background: transparent;
-        color: white;
-        font-weight: 700;
-    }
-
-    button {
-        background: transparent;
-        color: rgba(255, 255, 255, 0.8);
-        border-radius: 8px;
-
-        &:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-
-        &.selected {
-            background: #{"@accent_bg_color"};
-            color: white;
-        }
-    }
-}
-
-.nc-header {
-    margin-bottom: 8px;
-}
-
-.nc-title {
-    font-size: 0.85em;
-    font-weight: 800;
-    color: rgba(255, 255, 255, 0.5);
-    text-transform: uppercase;
-    letter-spacing: 2px;
-}
-
-/* --- Atomic Grid Magic CSS --- */
-.cc-atomic-round-btn {
-    all: unset;
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    outline: none;
-    border-radius: 9999px;
-    padding: 0;
-    min-width: 48px;
-    min-height: 48px;
-    color: white;
-
-    &:hover {
-        background: rgba(255, 255, 255, 0.1);
-    }
-
-    &.active {
-        background: rgba(255, 255, 255, 0.2);
-    }
-}
-
-.cc-wifi-widget {
-    background: transparent;
-    color: white;
-}
-
-.cc-atomic-label-small {
-    font-size: 0.8em;
-    font-weight: 700;
-    color: white;
-}
-
-.cc-atomic-focus {
-    background: transparent;
-    color: white;
-}
-
-/* Forzando la transparencia absoluta y eliminación de decoraciones GTK4 */
-window.atomic-island-win {
-    background-color: transparent !important;
-    background-image: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
-    margin: 0;
-    padding: 0;
 
     &,
-    &>contents,
     &>box,
     & decoration,
-    & .cc-island {
-        background: transparent !important;
-        background-color: transparent !important;
-        background-image: none !important;
-        box-shadow: none !important;
-        border: none !important;
+    & contents {
+        background: transparent;
+        background-color: transparent;
+        background-image: none;
+        border: none;
+        box-shadow: none;
+        outline: none;
     }
 }
 
-/* --- Atomic Grid Magic CSS --- */
-.cc-atomic-round-btn {
-    all: unset;
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    outline: none;
-    border-radius: 9999px;
-    padding: 0;
-    min-width: 48px;
-    min-height: 48px;
-    color: white;
+/* --- Island Body --- */
+.cc-island {
+    background-color: transparent;
 }
 
-.cc-atomic-round-btn:hover {
-    background: rgba(255, 255, 255, 0.1);
-}
-
-.cc-atomic-round-btn.active {
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.cc-wifi-widget,
-.cc-atomic-focus {
-    background: transparent;
-    color: white;
-}
-
-.cc-atomic-label-small {
-    font-size: 0.8em;
-    font-weight: 700;
-    color: white;
-}
-
-/* Kill any residual focus outlines or GTK decoration borders */
-window.atomic-island-win,
-window.atomic-island-win decoration,
-window.atomic-island-win box {
-    outline: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    background: transparent !important;
-    -gtk-outline-radius: 0;
-}
-
-/* Final Purge of GTK4 Window Decorators */
-window.atomic-island-win,
-window.atomic-island-win decoration,
-window.atomic-island-win box,
-window.atomic-island-win contents {
-    outline: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    background-image: none !important;
-    background-color: transparent !important;
-    background: transparent !important;
-}
-
-.cc-atomic-focus-btn {
-    all: unset;
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    outline: none;
-    color: white;
-
-    &:hover {
-        background: rgba(255, 255, 255, 0.08);
-    }
-
-    &:active {
-        background: rgba(255, 255, 255, 0.15);
-    }
-}
-
-/* --- Media Player Refinements --- */
+/* --- Media Widget --- */
 .cc-media-title-atomic {
-    font-size: 0.95em;
+    font-size: 0.9em;
     font-weight: 800;
     color: white;
-    margin: 0;
-    padding: 0;
 }
 
 .cc-media-artist-atomic {
     font-size: 0.8em;
-    font-weight: 500;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.cc-media-btn-atomic {
+    color: white;
+}
+
+/* --- Connectivity Toggles --- */
+.cc-atomic-round-btn {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 9999px;
+    color: white;
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.12);
+    }
+
+    &.active {
+        background-color: rgba(255, 255, 255, 0.25);
+    }
+}
+
+.cc-atomic-label-bold {
+    font-size: 0.9em;
+    font-weight: 700;
+}
+
+.cc-atomic-label-dim {
+    font-size: 0.8em;
     color: rgba(255, 255, 255, 0.5);
-    margin: 0;
-    padding: 0;
 }
 
-.cc-media-controls-atomic {
-    margin-top: 0px;
+.cc-atomic-focus-btn {
+    background-color: rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+    color: white;
 
-    button {
-        min-width: 34px;
-        min-height: 34px;
-        border-radius: 9999px;
-        background: rgba(255, 255, 255, 0.05);
-        color: white;
-
-        &:hover {
-            background: rgba(255, 255, 255, 0.12);
-        }
-    }
-}
-
-/* --- Horizontal Atomic Sliders --- */
-.cc-atomic-slider-box-horizontal {
-    padding: 0 12px;
-}
-
-.cc-atomic-slider-icon-side {
-    color: rgba(255, 255, 255, 0.7);
-}
-
-.cc-atomic-scale-native {
-    trough {
-        background-color: rgba(255, 255, 255, 0.1);
-        border-radius: 9999px;
-        min-height: 12px;
-    }
-
-    highlight {
-        background-color: white;
-        border-radius: 9999px;
-    }
-
-    slider {
-        background-color: white;
-        border: 2px solid rgba(0, 0, 0, 0.2);
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        min-width: 24px;
-        min-height: 24px;
-        margin: -6px;
-        border-radius: 9999px;
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.12);
     }
 }

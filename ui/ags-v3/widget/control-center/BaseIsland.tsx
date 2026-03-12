@@ -2,19 +2,23 @@ import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import SquircleContainer, { Shape } from "../common/SquircleContainer"
+import { WidgetSize } from "./Types"
 
+/**
+ *  BaseIsland: The Absolute Law
+ * I will NOT force expansion on children anymore. Let them decide.
+ */
 interface BaseIslandProps {
     name: string
     child: Gtk.Widget
     monitor: Gdk.Monitor
-    x: number // Margin-Right
-    y: number // Margin-Top
-    width?: number
-    height?: number
+    x: number
+    y: number
+    width: number
+    height: number
+    size: WidgetSize
     alpha?: number
-    radius?: number
     gloss?: boolean
-    shape?: Shape
 }
 
 export default function BaseIsland({
@@ -25,20 +29,21 @@ export default function BaseIsland({
     y,
     width,
     height,
+    size,
     alpha = 0.15,
-    radius = 48,
-    gloss = true,
-    shape = Shape.SQUIRCLE
+    gloss = true
 }: BaseIslandProps): Gtk.Window {
     const win = new Gtk.Window({
         name: `atomic-island-${name}`,
         application: app,
-        width_request: width,
-        height_request: height,
         decorated: false,
+        resizable: false,
         css_classes: ["atomic-island-win", "transparent"],
         visible: false
     })
+
+    win.set_size_request(width, height)
+    win.set_default_size(width, height)
 
     try {
         Gtk4LayerShell.init_for_window(win)
@@ -46,9 +51,6 @@ export default function BaseIsland({
         Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, false)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, false)
-
         Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, y)
         Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, x)
 
@@ -58,25 +60,31 @@ export default function BaseIsland({
         console.error(`[BaseIsland] Shell error for ${name}:`, e)
     }
 
+    let shape = Shape.SQUIRCLE
+    let radius = 28
+    if (size === WidgetSize.SINGLE) { shape = Shape.CIRCLE; radius = width / 2 }
+    else if (size === WidgetSize.WIDE) { shape = Shape.CAPSULE; radius = height / 2 }
+    else if (size === WidgetSize.FULL_WIDTH) { shape = Shape.SQUIRCLE; radius = 32 }
+
+    //  ARCHITECTURAL CHANGE: DO NOT FORCE VEXPAND
+    // This allows children to stay together if they don't want to expand.
+    child.halign = Gtk.Align.FILL
+    child.valign = Gtk.Align.FILL
+
     const island = SquircleContainer({
         child,
         radius,
-        n: 3.5, // Apple G3 Geometry
-        borderWidth: 2.0, // Crystalline Edge
+        n: 4.5,
+        borderWidth: 1.5,
         gloss,
         alpha,
         shape,
-        css_classes: ["cc-island", `cc-${name}-island`]
+        css_classes: ["cc-island", `cc-${name}-island`],
+        inset: 2.0,
+        padding: 12
     })
 
-    island.hexpand = true
-    island.vexpand = true
-    island.halign = Gtk.Align.FILL
-    island.valign = Gtk.Align.FILL
-
-    if (width) island.width_request = width
-    if (height) island.height_request = height
-
+    island.set_size_request(width, height)
     win.set_child(island)
 
     // @ts-ignore

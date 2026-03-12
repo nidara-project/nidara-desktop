@@ -2,9 +2,9 @@ import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 
 import { Shape } from "../common/SquircleContainer"
-import { AtomicWidget } from "./Types"
+import { AtomicWidget, WidgetSize } from "./Types"
 
-export function SliderWidget(id: string, name: string, iconName: string, label: string, grid: { x: number, y: number }, initialValue: number, onChange: (v: number) => void): AtomicWidget {
+export function SliderWidget(id: string, name: string, iconName: string, label: string, initialValue: number, onChange: (v: number) => void): AtomicWidget {
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.HORIZONTAL,
         spacing: 12,
@@ -43,8 +43,7 @@ export function SliderWidget(id: string, name: string, iconName: string, label: 
     return {
         id,
         name,
-        grid: { ...grid, w: 4, h: 1 },
-        shape: Shape.SQUIRCLE,
+        size: WidgetSize.FULL_WIDTH,
         child: box
     }
 }
