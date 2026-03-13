@@ -44,9 +44,33 @@ window.atomic-island-win {
 
 .cc-media-btn-atomic {
     color: white;
+    background: transparent;
+    border: none;
 }
 
-/* --- Connectivity Toggles --- */
+/* --- Connectivity Toggles (Capsule & Round) --- */
+
+/* Wrapper button for 2x1 capsules */
+.cc-capsule-btn {
+    background-color: transparent;
+    border: none;
+    border-radius: 9999px; /* Will inherently be bounded by SquircleContainer anyway, but good for hover */
+    color: white;
+    padding: 0;
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+}
+
+/* 48x48 Circular Badge inside capsules */
+.cc-atomic-icon-circle-bg {
+    background-color: rgba(255, 255, 255, 0.15); /* Distinctive bubble */
+    border-radius: 9999px;
+    color: white;
+}
+
+/* 1x1 Round Toggles */
 .cc-atomic-round-btn {
     background-color: rgba(255, 255, 255, 0.06);
     border-radius: 9999px;
@@ -61,6 +85,7 @@ window.atomic-island-win {
     }
 }
 
+/* --- Typographical Utilities for Toggles --- */
 .cc-atomic-label-bold {
     font-size: 0.9em;
     font-weight: 700;
