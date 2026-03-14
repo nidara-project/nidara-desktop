@@ -55,7 +55,7 @@ export function MediaIslandContent(): AtomicWidget {
         halign: Gtk.Align.CENTER,
         ellipsize: 3,
         max_width_chars: 20,
-        margin_top: -2 // 📐 Kills gap between title and artist
+        margin_top: 0
     })
 
     header.append(artDa)
@@ -63,9 +63,7 @@ export function MediaIslandContent(): AtomicWidget {
     header.append(artist)
 
     const controls = new Gtk.Box({
-        spacing: 10,
         halign: Gtk.Align.CENTER,
-        margin_top: 14 // Controlled air between artist and buttons
     })
 
     const prev = new Gtk.Button({ icon_name: "media-skip-backward-symbolic", css_classes: ["cc-media-btn-atomic"] })
