@@ -64,7 +64,7 @@ function ResultRow(appData: AppData) {
 export default function Prism(monitor: Gdk.Monitor) {
     const win = new Gtk.Window({
         name: "crystal-prism",
-        css_classes: ["prism-window-root"],
+        css_classes: ["prism-window-root", "fc-ignore"],
         application: app,
         visible: false
     })

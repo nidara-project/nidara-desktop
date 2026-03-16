@@ -1,18 +1,18 @@
 /**
- * Fluid Crystal Token Engine 🔮
+ * Fluid Crystal Token Engine
  * Single source of truth for all theme colors.
  * 
  * Architecture:
  *  - Dark/Light mode: Managed by Libadwaita via color-scheme (real-time)
  *  - Accent, transparency, tint: Managed by Fluid Crystal via @define-color (restart for external apps)
- *  - Surface colors (window_bg, view_bg, etc.): NOT overridden — Libadwaita handles them dynamically
+ *  - Surface colors (window_bg, view_bg, etc.): NOT overridden - Libadwaita handles them dynamically
  */
 
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { readFile, writeFile } from "ags/file"
 
-// ── COLOR PALETTES ───────────────────────────────────────────────────
+// -- COLOR PALETTES ---------------------------------------------------
 
 export const ADWAITA_PALETTE = `@define-color blue_1 #99c1f1;
 @define-color blue_2 #62a0ea;
@@ -126,7 +126,8 @@ export const DEFAULT_CONFIG: FluidCrystalConfig = {
 
 // V840: AGS SAFE EXCLUSION 
 // We explicitly stop GTK from painting generic window styles onto our AGS panels.
-const AGS_EXCLUDE = `:not(#crystal-dock):not(#crystal-bar):not(#crystal-control-center):not(#crystal-app-launcher):not(#app-grid-workspaces):not(#app-grid-system-actions):not(#notif-win):not(#crystal-power-menu):not(#workspace-cockpit):not(#crystal-settings)`
+// Using a single class (.fc-ignore) is significantly more efficient than a long list of :not() selectors.
+const AGS_EXCLUDE = `:not(.fc-ignore)`
 
 const GLASS_TEMPLATES: Record<keyof GlassTargets, string> = {
   globalWindow: `
@@ -212,10 +213,6 @@ button.toggle:checked:APP_OVERRIDE,
 button.circular:checked:APP_OVERRIDE,
 button.flat:checked:APP_OVERRIDE,
 tab:checked:APP_OVERRIDE {
-  background-color: @accent_bg_color;
-  background-image: none;
-  color: @accent_fg_color;
-  -gtk-icon-source: builtin;
 }
 
 switch:checked:APP_OVERRIDE {

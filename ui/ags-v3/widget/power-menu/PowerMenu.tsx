@@ -9,7 +9,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 export default function PowerMenu(monitor: Gdk.Monitor) {
     const win = new Gtk.Window({
         name: "crystal-power-menu",
-        css_classes: ["power-menu-win"],
+        css_classes: ["power-menu-win", "fc-ignore"],
         visible: false
     })
     // @ts-ignore

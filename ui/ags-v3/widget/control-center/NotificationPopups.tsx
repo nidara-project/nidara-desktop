@@ -2,6 +2,7 @@ import { Astal, Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import AstalNotifd from "gi://AstalNotifd"
+import GLib from "gi://GLib"
 
 function Notification(n: any) {
     const box = new Gtk.Box({
@@ -92,7 +93,7 @@ export default function NotificationPopups(gdkmonitor: Gdk.Monitor) {
     const win = new Gtk.Window({
         name: "notif-win",
         application: app,
-        css_classes: ["notif-win"],
+        css_classes: ["notif-win", "fc-ignore"],
         child: box
     })
 
@@ -138,14 +139,15 @@ export default function NotificationPopups(gdkmonitor: Gdk.Monitor) {
         win.present()
 
         // Auto remove from popups after 6s (history stays in NotificationCenter)
-        setTimeout(() => {
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 6000, () => {
             const w = notifMap.get(id)
             if (w && w.get_parent() === box) {
                 box.remove(w)
                 notifMap.delete(id)
                 if (notifMap.size === 0) win.set_visible(false)
             }
-        }, 6000)
+            return GLib.SOURCE_REMOVE
+        })
     }
 
     const onResolved = (_: any, id: number) => {
@@ -159,8 +161,8 @@ export default function NotificationPopups(gdkmonitor: Gdk.Monitor) {
         }
     }
 
-    notifd.connect("notified", onNotified)
-    notifd.connect("resolved", onResolved)
+    notifd.connect("notified", (s, id) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { onNotified(s, id); return GLib.SOURCE_REMOVE }))
+    notifd.connect("resolved", (s, id) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { onResolved(s, id); return GLib.SOURCE_REMOVE }))
 
     return win
 }

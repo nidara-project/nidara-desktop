@@ -158,7 +158,7 @@ export default function Dock(gdkmonitor: any) {
 
     const win = new Gtk.Window({
         name: "crystal-dock",
-        css_classes: ["crystal-dock-window"],
+        css_classes: ["crystal-dock-window", "fc-ignore"],
         application: app,
         focusable: false,
         can_focus: false,

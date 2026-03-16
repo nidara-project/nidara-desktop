@@ -46,7 +46,7 @@ export default function SquircleContainer({
     perfect = false,
     borderColor,
     hoverBorderColor,
-    n = 4.0,
+    n = 3.2,
     shape = Shape.SQUIRCLE,
     borderWidth = 1.0,
     inset,

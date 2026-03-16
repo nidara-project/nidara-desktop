@@ -52,7 +52,7 @@ function deriveConstants(iconSize: number, maxSize: number, magnification: boole
 
         // WINDOW GEOMETRY
         PILL_HEIGHT: pillHeight,
-        WINDOW_HEIGHT: Math.max(200, pillHeight + maxSize + PILL_PAD),
+        WINDOW_HEIGHT: Math.round(pillHeight + (maxSize - iconSize) + (PILL_PAD * 2)),
         EXCLUSIVE_ZONE: pillHeight + screenGap,
     }
 }

@@ -29,7 +29,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const win = new Gtk.Window({
         name: "crystal-control-center",
         application: app,
-        css_classes: ["control-center-win", "background"],
+        css_classes: ["control-center-win"],
         visible: false,
         // @ts-ignore
         focus_visible: false
@@ -218,7 +218,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const connectivityIsland = SquircleContainer({
         child: connectivityContent,
         radius: 32,
-        n: 4.5,
+        n: 3.2,
         css_classes: ["cc-island", "cc-connectivity-island"],
         alpha: 0.15,
         gloss: true,
@@ -339,7 +339,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
     const slidersIsland = SquircleContainer({
         child: slidersContent,
         radius: 32,
-        n: 4.5,
+        n: 3.2,
         css_classes: ["cc-island", "cc-sliders-island"],
         alpha: 0.15,
         gloss: true,
@@ -492,7 +492,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         artDa.set_draw_func((_, cr, w, h) => {
             if (artPixbuf) {
                 cr.save()
-                createSquirclePath(cr, 0, 0, w, h, 16, 4.5)
+                createSquirclePath(cr, 0, 0, w, h, 16, 3.2)
                 cr.clip()
                 Gdk.cairo_set_source_pixbuf(cr, artPixbuf, 0, 0)
                 cr.paint()
@@ -534,7 +534,7 @@ export default function ControlCenter(gdkmonitor: Gdk.Monitor) {
         const card = SquircleContainer({
             child: content,
             radius: 32,
-            n: 4.5,
+            n: 3.2,
             css_classes: ["cc-island", "cc-media-card"],
             alpha: 0.15,
             gloss: true,

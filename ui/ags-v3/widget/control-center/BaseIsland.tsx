@@ -39,7 +39,7 @@ export default function BaseIsland({
         application: app,
         decorated: false,
         resizable: false,
-        css_classes: ["atomic-island-win", "transparent"],
+        css_classes: ["atomic-island-win", "fc-ignore"],
         visible: false
     })
 
@@ -48,8 +48,11 @@ export default function BaseIsland({
 
     try {
         Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, "glass-test")
+        Gtk4LayerShell.set_namespace(win, "control-center")
         Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
+        Gtk4LayerShell.set_monitor(win, monitor)
+        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
+        Gtk4LayerShell.set_exclusive_zone(win, -1)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
         Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, y)
@@ -94,7 +97,7 @@ export default function BaseIsland({
         gloss,
         alpha,
         shape,
-        css_classes: ["cc-island", `cc-${name}-island`],
+        css_classes: ["cc-island", `cc-${name}-island`, "fc-ignore"],
         inset: 2.0,
         padding: 12
     })
@@ -103,7 +106,7 @@ export default function BaseIsland({
     win.set_child(island)
 
     // @ts-ignore
-    win.toggle = () => win.visible = !win.visible
+    //win.toggle = () => win.visible = !win.visible
 
     return win
 }

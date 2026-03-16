@@ -65,10 +65,14 @@ class AppService {
             return GLib.SOURCE_REMOVE
         })
 
+        let lastTheme = theme.get_theme_name()
         theme.connect("changed", () => {
             const name = theme.get_theme_name()
+            if (name === lastTheme) return // V138: Skip if name hasn't changed to avoid redundant reloads
+            lastTheme = name
+
             // Debounce theme changes to prevent GListStore conflicts during start-up
-            GLib.timeout_add(GLib.PRIORITY_LOW, 1000, () => {
+            GLib.timeout_add(GLib.PRIORITY_LOW, 2000, () => {
                 console.log(`[AppService] System theme changed to ${name}, refreshing registry...`)
                 this.reload()
                 return GLib.SOURCE_REMOVE

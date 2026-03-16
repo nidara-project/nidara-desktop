@@ -508,7 +508,7 @@ function SystemStatus() {
 export default function Bar(gdkmonitor: Gdk.Monitor) {
   const win = new Gtk.Window({
     name: "crystal-bar",
-    css_classes: ["crystal-bar"],
+    css_classes: ["crystal-bar", "fc-ignore"],
     application: app,
   })
 
@@ -642,8 +642,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           timeNotifCount.set_visible(false)
         }
       }
-      notifd.connect("notify::notifications", sync)
-      notifd.connect("notify::dont-disturb", sync)
+      notifd.connect("notify::notifications", () => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { sync(); return GLib.SOURCE_REMOVE }))
+      notifd.connect("notify::dont-disturb", () => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { sync(); return GLib.SOURCE_REMOVE }))
       sync()
     }).catch(e => console.error("[Bar] Notifd fetch failed:", e))
     return GLib.SOURCE_REMOVE

@@ -1,20 +1,20 @@
 /* --- Window Transparency Logic --- */
 window.crystal-dock-window,
 window#crystal-dock {
-    background-color: transparent !important;
-    background-image: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    outline: none !important;
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    outline: none;
     margin: 0;
     padding: 0;
 
     decoration,
     &>box {
-        background-color: transparent !important;
-        background-image: none !important;
-        box-shadow: none !important;
-        border: none !important;
+        background-color: transparent;
+        background-image: none;
+        box-shadow: none;
+        border: none;
     }
 }
 
@@ -34,7 +34,6 @@ window#crystal-dock {
     border: none;
     box-shadow: none;
     transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1);
-    -gtk-icon-effect: none;
     -gtk-icon-shadow: none;
 
     &.cd-dragging {
@@ -59,7 +58,6 @@ window#crystal-dock {
         box-shadow: none;
         border: none;
         opacity: 0;
-        -gtk-icon-effect: none;
     }
 }
 
@@ -103,7 +101,6 @@ window#crystal-dock box.cd-squircle-plate:active>ripple {
     background-color: transparent;
     box-shadow: none;
     opacity: 0;
-    -gtk-icon-effect: none;
 }
 
 window#crystal-dock box.cd-squircle-plate image,
@@ -125,13 +122,11 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
 /* Removed ineffective specificity fixes */
 
 
-/* --- Indicators (Dots) — macOS Tahoe: small black circles --- */
+/* --- Indicators (Dots) - macOS Tahoe: small black circles --- */
 window#crystal-dock button.cd-dot,
 window#crystal-dock box.cd-dot {
     min-height: 4px;
     min-width: 4px;
-    max-height: 4px;
-    max-width: 4px;
     border-radius: 2px;
     margin-top: 4px;
     background-color: transparent;
@@ -146,11 +141,9 @@ window#crystal-dock box.cd-dot.focused {
     opacity: 1;
     min-height: 4px;
     min-width: 4px;
-    max-height: 4px;
-    max-width: 4px;
 }
 
-/* --- Separator — macOS Tahoe: dark hairline --- */
+/* --- Separator - macOS Tahoe: dark hairline --- */
 window#crystal-dock box.cd-separator,
 window#crystal-dock box#cd-separator {
     min-width: 1px;

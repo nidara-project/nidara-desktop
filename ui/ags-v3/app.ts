@@ -196,14 +196,30 @@ app.start({
     const toggleCC = () => {
       console.log(`[Toggle] CC (Count: ${ccWindows.length})`)
       const isOpening = ccWindows.some(cc => !cc.get_visible())
-      if (isOpening) notifCenterWindows.forEach(nc => nc.set_visible(false))
-      ccWindows.forEach(cc => { try { cc.toggle() } catch (e) { console.error(e) } })
+      if (isOpening) {
+        notifCenterWindows.forEach(nc => nc.set_visible(false))
+        // Stagger the CC show to avoid collision with NC hide
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+          ccWindows.forEach(cc => { try { cc.toggle() } catch (e) { console.error(e) } })
+          return GLib.SOURCE_REMOVE
+        })
+      } else {
+        ccWindows.forEach(cc => { try { cc.toggle() } catch (e) { console.error(e) } })
+      }
     }
     const toggleNC = () => {
       console.log(`[Toggle] NC (Count: ${notifCenterWindows.length})`)
       const isOpening = notifCenterWindows.some(nc => !nc.get_visible())
-      if (isOpening) ccWindows.forEach(cc => cc.set_visible(false))
-      notifCenterWindows.forEach(nc => { try { nc.toggle() } catch (e) { console.error(e) } })
+      if (isOpening) {
+        ccWindows.forEach(cc => cc.set_visible(false))
+        // Stagger the NC show to avoid collision with CC hide
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+          notifCenterWindows.forEach(nc => { try { nc.toggle() } catch (e) { console.error(e) } })
+          return GLib.SOURCE_REMOVE
+        })
+      } else {
+        notifCenterWindows.forEach(nc => { try { nc.toggle() } catch (e) { console.error(e) } })
+      }
     }
     const togglePower = () => {
       console.log(`[Toggle] Power (Count: ${powerWindows.length})`)

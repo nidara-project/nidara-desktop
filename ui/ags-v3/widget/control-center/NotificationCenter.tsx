@@ -13,7 +13,7 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
     const win = new Gtk.Window({
         name: "crystal-notification-center",
         application: app,
-        css_classes: ["notification-center-win", "transparent"],
+        css_classes: ["notification-center-win", "transparent", "fc-ignore"],
         visible: false,
     })
 
@@ -180,8 +180,8 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
         notifd.notifications.forEach(n => n.dismiss())
     })
 
-    notifd.connect("notified", updateNotifs)
-    notifd.connect("resolved", updateNotifs)
+    notifd.connect("notified", () => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { updateNotifs(); return GLib.SOURCE_REMOVE }))
+    notifd.connect("resolved", () => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { updateNotifs(); return GLib.SOURCE_REMOVE }))
     updateNotifs()
 
     // @ts-ignore

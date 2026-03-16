@@ -108,7 +108,7 @@ function SystemActionStrip(win: Gtk.Window) {
 export default function AppGrid(monitor: Gdk.Monitor) {
     const win = new Gtk.Window({
         name: "crystal-app-launcher",
-        css_classes: ["app-grid-window"],
+        css_classes: ["app-grid-window", "fc-ignore"],
     })
     // @ts-ignore
     win.app_paintable = true

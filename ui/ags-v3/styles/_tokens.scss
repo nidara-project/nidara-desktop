@@ -1,6 +1,6 @@
-/* ── Fluid Crystal Token Bridge ── */
+/* -- Fluid Crystal Token Bridge -- */
 /* Accent color comes from @define-color accent_bg_color via CssProvider */
-/* SCSS fallback for compilation — runtime value is overridden by GTK named color */
+/* SCSS fallback for compilation - runtime value is overridden by GTK named color */
 @use "sass:string";
 
 // These SCSS values are build-time fallbacks.

@@ -46,7 +46,7 @@ export function MediaIslandContent(): AtomicWidget {
         halign: Gtk.Align.CENTER,
         ellipsize: 3,
         max_width_chars: 18, // 🔓 Increased since buttons are wide anyway
-        margin_top: -6 // 📐 Kills the font's internal top air
+        margin_top: 0
     })
 
     const artist = new Gtk.Label({
@@ -101,10 +101,10 @@ export function MediaIslandContent(): AtomicWidget {
 
     artDa.set_draw_func((_, cr, w, h) => {
         if (artPixbuf) {
-            cr.save(); createSquirclePath(cr, 0, 0, w, h, 14, 4.5); cr.clip()
+            cr.save(); createSquirclePath(cr, 0, 0, w, h, 14, 3.2); cr.clip()
             Gdk.cairo_set_source_pixbuf(cr, artPixbuf, 0, 0); cr.paint(); cr.restore()
         } else {
-            cr.setSourceRGBA(1, 1, 1, 0.1); createSquirclePath(cr, 0, 0, w, h, 14, 4.5); cr.fill()
+            cr.setSourceRGBA(1, 1, 1, 0.1); createSquirclePath(cr, 0, 0, w, h, 14, 3.2); cr.fill()
         }
     })
 

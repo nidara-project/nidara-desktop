@@ -10,7 +10,6 @@ import { SliderWidget } from "./Sliders"
 import { MediaIslandContent } from "./MediaIsland"
 
 import { AtomicWidget, WidgetSize } from "./Types"
-import { Shape } from "../common/SquircleContainer"
 
 /**
  * Grid Constants (The "Source of Truth" for spacing and sizing) 📐
@@ -96,8 +95,8 @@ export default function IslandGrid(monitor: Gdk.Monitor) {
             { id: "calculator", x: 3, y: 2 }, // 1x1 (Bottom Left)
 
             // Sliders (Below the 3-row block)
-            { id: "brightness", x: 0, y: 3 }, // 4x1
-            { id: "volume", x: 0, y: 4 }, // 4x1
+	    { id: "brightness", x: 0, y: 3 }, // 4x1
+	    { id: "volume", x: 0, y: 4 }, // 4x1
 
             // Bottom Bar Utilities
             { id: "timer", x: 0, y: 5 }, // 1x1
