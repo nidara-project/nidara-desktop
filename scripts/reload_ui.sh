@@ -21,6 +21,7 @@ sleep 0.2
 
 # 2. Recargar Hyprland
 hyprctl reload
+hyprpm reload -n
 
 # 3. Lanzar AGS
 cd "$AGS_DIR"

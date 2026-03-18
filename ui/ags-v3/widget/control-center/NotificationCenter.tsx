@@ -13,7 +13,7 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
     const win = new Gtk.Window({
         name: "crystal-notification-center",
         application: app,
-        css_classes: ["notification-center-win", "transparent", "fc-ignore"],
+        css_classes: ["notification-center-win", "transparent"],
         visible: false,
     })
 

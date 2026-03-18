@@ -164,6 +164,7 @@ export default function AppearancePage() {
         min: number,
         max: number,
         onChange: (v: number) => void,
+        isPercentage: boolean = true
     ) => {
         const box = new Gtk.Box({
             spacing: 12,
@@ -192,11 +193,18 @@ export default function AppearancePage() {
             }))
         }
 
+        const valueLabel = new Gtk.Label({
+            label: isPercentage ? `${Math.round(initial * 100)}%` : initial.toFixed(2),
+            css_classes: ["settings-row-value-label"],
+            valign: Gtk.Align.CENTER,
+            width_request: 40,
+        })
+
         const scale = new Gtk.Scale({
             orientation: Gtk.Orientation.HORIZONTAL,
             valign: Gtk.Align.CENTER,
             hexpand: false,
-            width_request: 180,
+            width_request: 140, // Reduced slightly to fit terminal
             css_classes: ["horizontal"],
         })
         scale.set_range(min, max)
@@ -204,10 +212,13 @@ export default function AppearancePage() {
         scale.set_draw_value(false)
 
         scale.connect("value-changed", () => {
-            onChange(scale.get_value())
+            const v = scale.get_value()
+            valueLabel.label = isPercentage ? `${Math.round(v * 100)}%` : v.toFixed(2)
+            onChange(v)
         })
 
         box.append(text)
+        box.append(valueLabel)
         box.append(scale)
         return new Gtk.ListBoxRow({ child: box })
     }
@@ -427,6 +438,16 @@ export default function AppearancePage() {
         gtkThemes,
         (v) => Theme.setGtkTheme(v)
     ))
+
+    const qtThemes = Theme.getAvailableQtThemes()
+    themesGroup.listBox.append(dropdownRow(
+        "Tema Qt (Kvantum)",
+        "Selecciona el motor de temas para aplicaciones Qt",
+        Theme.qtTheme,
+        qtThemes,
+        (v) => Theme.setQtTheme(v)
+    ))
+
 
     const iconThemes = Theme.getAvailableIconThemes()
     themesGroup.listBox.append(dropdownRow(

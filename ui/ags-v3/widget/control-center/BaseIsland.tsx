@@ -39,7 +39,7 @@ export default function BaseIsland({
         application: app,
         decorated: false,
         resizable: false,
-        css_classes: ["atomic-island-win", "fc-ignore"],
+        css_classes: ["atomic-island-win"],
         visible: false
     })
 
@@ -97,7 +97,7 @@ export default function BaseIsland({
         gloss,
         alpha,
         shape,
-        css_classes: ["cc-island", `cc-${name}-island`, "fc-ignore"],
+        css_classes: ["cc-island", `cc-${name}-island`],
         inset: 2.0,
         padding: 12
     })

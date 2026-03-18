@@ -50,11 +50,16 @@ sudo pacman -Sy --needed --noconfirm \
     kitty \
     thunar \
     nautilus \
+    dolphin \
     xdg-desktop-portal-gtk \
     ttf-jetbrains-mono-nerd \
     noto-fonts-emoji \
     xfce4-settings \
-    hyprlauncher
+    hyprlauncher \
+    kvantum \
+    kvantum-qt5 \
+    qt5ct \
+    qt6ct
 
 
 # 1.1 SWWW (Wallpaper Daemon) - Rust Build

@@ -99,6 +99,7 @@ export interface FluidCrystalConfig {
   tintStrength: number
   tintPanels: TintPanels
   glassTargets: GlassTargets
+  qtTheme: string
 }
 
 export const DEFAULT_CONFIG: FluidCrystalConfig = {
@@ -119,15 +120,13 @@ export const DEFAULT_CONFIG: FluidCrystalConfig = {
     cardsAndLists: false,
     popovers: true,
     separators: true,
-  }
+  },
+  qtTheme: "Default"
 }
 
 // ── CSS TEMPLATES ────────────────────────────────────────────────────
 
-// V840: AGS SAFE EXCLUSION 
-// We explicitly stop GTK from painting generic window styles onto our AGS panels.
-// Using a single class (.fc-ignore) is significantly more efficient than a long list of :not() selectors.
-const AGS_EXCLUDE = `:not(.fc-ignore)`
+// V12942: Generic window override removed to follow user's direct CSS approach.
 
 const GLASS_TEMPLATES: Record<keyof GlassTargets, string> = {
   globalWindow: `
@@ -384,6 +383,36 @@ levelbar block.filled:backdrop:APP_OVERRIDE,
 levelbar block.high:backdrop:APP_OVERRIDE {
   background-color: alpha(@accent_bg_color, 0.4);
 }
+
+/* ================================================================
+   12. GTK3 SPECIFIC FIXES (Chrome, Steam, etc)
+   Normalizing excessive rounding and layout quirks.
+   ================================================================ */
+
+tooltip.background, 
+tooltip.background.csd,
+tooltip.csd decoration,
+tooltip > box,
+tooltip > box.background,
+tooltip decoration,
+/* .tooltip, */
+#tooltip,
+.status-bubble,
+.statusbubble {
+  border-radius: 8px;
+}
+
+popover > contents,
+popover.background > contents,
+popover decoration,
+.popover,
+.menu,
+.background.popup,
+.popup,
+#menu,
+.menu.popup {
+  border-radius: 12px;
+}
 `
 
 const PANEL_SELECTORS: Record<keyof TintPanels, string[]> = {
@@ -440,7 +469,7 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
 
   lines.push(
     `:root {`,
-    `  --fc-transparency: ${t};`,
+    `  --fc-transparency: ${t.toFixed(2)};`,
     `  --fc-accent: ${accent};`,
   )
   for (const [key, { color }] of Object.entries(ACCENT_PALETTE)) {
@@ -475,10 +504,10 @@ export function generateMasterCss(config: FluidCrystalConfig, baseThemeCssPath?:
     .filter(([_, enabled]) => enabled)
     .map(([key, _]) => GLASS_TEMPLATES[key as keyof GlassTargets])
 
-  const combinedGlass = activeTargets.join("\n\n").split(":APP_OVERRIDE").join(AGS_EXCLUDE)
+  const combinedGlass = activeTargets.join("\n\n").split(":APP_OVERRIDE").join("")
   css += combinedGlass
 
-  css += `\n\n` + FORCE_ACCENT_CSS.split(":APP_OVERRIDE").join(AGS_EXCLUDE)
+  css += `\n\n` + FORCE_ACCENT_CSS.split(":APP_OVERRIDE").join("")
 
   return css
 }
@@ -501,53 +530,304 @@ export function generateTintCss(config: FluidCrystalConfig): string {
   return css
 }
 
+let lastTokens = ""
+
 /**
- * High-Speed Token Sync (No GSettings flickers)
+ * High-Speed Token Sync (No GSettings flickers) ⚡
  */
 export function writeTokens(config: FluidCrystalConfig): void {
-  const configDir = `${GLib.get_user_config_dir()}/gtk-4.0`
   const tokens = generateTokensCss(config)
-  writeFile(`${configDir}/_tokens.css`, tokens)
+  if (tokens === lastTokens) return
+  lastTokens = tokens
+
+  const dirs = ["gtk-3.0", "gtk-4.0"]
+  for (const d of dirs) {
+    const configDir = `${GLib.get_user_config_dir()}/${d}`
+    const targetPath = `${configDir}/_tokens.css`
+    
+    GLib.mkdir_with_parents(configDir, 0o755)
+    writeFile(targetPath, tokens)
+  }
 }
+
+// generateQtColors removed to simplify and avoid legibility issues.
+// We now rely on Kvantum's native theme variants (KvGnome/KvGnomeDark).
+
+/**
+ * Helper to update INI-style config files (section [Appearance], etc)
+ */
+function updateIniValue(content: string, section: string, key: string, value: string): string {
+  const sectionHeader = `[${section}]`
+  const percentSectionHeader = `[%${section}]`
+  
+  if (!content.includes(sectionHeader) && !content.includes(percentSectionHeader)) {
+    return `${content}\n${sectionHeader}\n${key}=${value}\n`
+  }
+  
+  const lines = content.split("\n")
+  let currentSection = ""
+  let found = false
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim()
+    if (line.startsWith("[") && line.endsWith("]")) {
+      currentSection = line
+    }
+    
+    if ((currentSection === sectionHeader || currentSection === percentSectionHeader) && line.startsWith(`${key}=`)) {
+      lines[i] = `${key}=${value}`
+      found = true
+      // Continue searching to remove duplicates if they exist
+    }
+  }
+  
+  if (!found) {
+    // Insert after the first matching section header found
+    const index = lines.findIndex(l => {
+        const trimmed = l.trim()
+        return trimmed === sectionHeader || trimmed === percentSectionHeader
+    })
+    if (index !== -1) {
+        lines.splice(index + 1, 0, `${key}=${value}`)
+    } else {
+        lines.push(sectionHeader, `${key}=${value}`)
+    }
+  }
+  
+  return lines.join("\n")
+}
+
+/**
+ * Basic INI reader
+ */
+function readIniValue(content: string, section: string, key: string): string {
+    const sectionHeader = `[${section}]`
+    const percentHeader = `[%${section}]`
+    const lines = content.split("\n")
+    let inSection = false
+    
+    for (const line of lines) {
+        const trimmed = line.trim()
+        if (trimmed === sectionHeader || trimmed === percentHeader) {
+            inSection = true
+            continue
+        }
+        if (inSection && trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            inSection = false
+        }
+        
+        if (inSection && trimmed.startsWith(`${key}=`)) {
+            return trimmed.split("=")[1].trim()
+        }
+    }
+    return ""
+}
+
+/**
+ * Get the current Kvantum theme from system config
+ */
+export function getSystemQtTheme(): string {
+    try {
+        const home = GLib.get_home_dir()
+        const path = `${home}/.config/Kvantum/kvantum.kvconfig`
+        const content = readFile(path)
+        if (!content) return ""
+        return readIniValue(content, "General", "theme")
+    } catch (e) {
+        return ""
+    }
+}
+
+/**
+ * Find the actual .kvconfig file for a theme name
+ */
+function findThemeConfig(themeName: string): string | null {
+    if (!themeName || themeName === "Default") return null
+    
+    const paths = [`${GLib.get_home_dir()}/.config/Kvantum`, "/usr/share/Kvantum"]
+    const filename = `${themeName}.kvconfig`
+
+    for (const p of paths) {
+        if (!GLib.file_test(p, GLib.FileTest.EXISTS)) continue
+        
+        try {
+            const dir = Gio.File.new_for_path(p)
+            const enumerator = dir.enumerate_children("standard::name,standard::type", Gio.FileQueryInfoFlags.NONE, null)
+            let info
+            while ((info = enumerator.next_file(null))) {
+                const name = info.get_name()
+                if (name.endsWith("#")) continue
+                
+                const fullPath = `${p}/${name}`
+                
+                // Case 1: The theme is a direct .kvconfig file in the root Kvantum folder
+                if (name === filename) return fullPath
+                
+                // Case 2: The theme is inside a subdirectory
+                if (info.get_file_type() === Gio.FileType.DIRECTORY) {
+                    const themeDir = Gio.File.new_for_path(fullPath)
+                    try {
+                        const subEnum = themeDir.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null)
+                        let subInfo
+                        while ((subInfo = subEnum.next_file(null))) {
+                            if (subInfo.get_name() === filename) {
+                                return `${fullPath}/${filename}`
+                            }
+                        }
+                    } catch (e) {}
+                }
+            }
+        } catch (e) {}
+    }
+    return null
+}
+
+/**
+ * Update qt5ct and Kvantum settings to use the Fluid Crystal scheme
+ */
+export function writeQtSettings(config: FluidCrystalConfig, iconTheme?: string): void {
+  try {
+    const home = GLib.get_home_dir()
+    const target = config.qtTheme.replace(/#/g, "")
+    const opacity = Math.round(config.transparency * 100) 
+    
+    // 1. Update Kvantum Global Config 💎
+    const kvConfigPath = `${home}/.config/Kvantum/kvantum.kvconfig`
+    let kvContent = "[General]\n"
+    try { kvContent = readFile(kvConfigPath) || "[General]\n" } catch (ex) {}
+    
+    kvContent = updateIniValue(kvContent, "General", "theme", target)
+    kvContent = updateIniValue(kvContent, "General", "reduce_window_opacity", opacity.toString())
+    kvContent = updateIniValue(kvContent, "General", "reduce_menu_opacity", opacity.toString())
+    kvContent = updateIniValue(kvContent, "General", "translucent_windows", "true")
+    kvContent = updateIniValue(kvContent, "Hacks", "respect_darkness", "false")
+    try {
+      const existing = readFile(kvConfigPath)
+      if (existing === kvContent) {
+          // Already in sync
+      } else {
+        writeFile(kvConfigPath, kvContent)
+      }
+    } catch (e) {
+      writeFile(kvConfigPath, kvContent)
+    }
+
+    // 1b. Deep Transparency Sync (for themes with overrides like MacTahoeDark) 🌊
+    const activeConfigPath = findThemeConfig(target)
+    if (activeConfigPath && activeConfigPath.includes(home)) {
+        // Only update if it's a user theme (writable)
+        let themeContent = readFile(activeConfigPath)
+        if (themeContent) {
+            // Force the theme's own opacity fields to match our slider
+            themeContent = updateIniValue(themeContent, "General", "reduce_window_opacity", opacity.toString())
+            themeContent = updateIniValue(themeContent, "General", "reduce_menu_opacity", opacity.toString())
+            themeContent = updateIniValue(themeContent, "General", "translucent_windows", "true")
+            
+            try {
+              const existing = readFile(activeConfigPath)
+              if (existing !== themeContent) {
+                writeFile(activeConfigPath, themeContent)
+                console.log(`[FluidCrystal] Deep Qt Sync: ${activeConfigPath} updated.`)
+              }
+            } catch (e) {
+              writeFile(activeConfigPath, themeContent)
+            }
+        }
+    }
+
+    // 2. Sync Icon Theme to qt6ct/qt5ct and kdeglobals 🖼️
+    if (iconTheme) {
+      const ctConfigs = [`${home}/.config/qt6ct/qt6ct.conf`, `${home}/.config/qt5ct/qt5ct.conf`]
+      for (const path of ctConfigs) {
+        if (GLib.file_test(path, GLib.FileTest.EXISTS)) {
+          let content = readFile(path)
+          content = updateIniValue(content, "Appearance", "icon_theme", iconTheme)
+          try {
+            const existing = readFile(path)
+            if (existing !== content) writeFile(path, content)
+          } catch (e) {
+            writeFile(path, content)
+          }
+        }
+      }
+
+      // KDE Globals (Dolphin icons love this file)
+      const kdeGlobalsPath = `${home}/.config/kdeglobals`
+      let kdeContent = "[Icons]\n"
+      try { kdeContent = readFile(kdeGlobalsPath) || "[Icons]\n" } catch (ex) {}
+      kdeContent = updateIniValue(kdeContent, "Icons", "Theme", iconTheme)
+      try {
+        const existing = readFile(kdeGlobalsPath)
+        if (existing !== kdeContent) writeFile(kdeGlobalsPath, kdeContent)
+      } catch (e) {
+        writeFile(kdeGlobalsPath, kdeContent)
+      }
+    }
+
+    console.log(`[FluidCrystal] Qt Sync: Theme=${target}, IconTheme=${iconTheme || "N/A"}`)
+  } catch (e) {
+    console.error(`[FluidCrystal] Failed to write Qt settings: ${e}`)
+  }
+}
+
+let lastMaster = ""
 
 /**
  * Full Theme Writing (Only on theme change or glass target toggle)
  */
 export function writeGeneratedTheme(config: FluidCrystalConfig, baseThemeCssPath?: string): void {
-  const configDir = `${GLib.get_user_config_dir()}/gtk-4.0`
-
-  // 1. Write the dynamic tokens
+  // 1. Write the dynamic tokens (always guarded inside writeTokens)
   writeTokens(config)
 
   // 2. Write the structural master
   const master = generateMasterCss(config, baseThemeCssPath)
-  writeFile(`${configDir}/gtk.css`, master)
-  writeFile(`${configDir}/gtk-dark.css`, master)
+  if (master === lastMaster) return
+  lastMaster = master
+
+  const dirs = ["gtk-3.0", "gtk-4.0"]
+  for (const d of dirs) {
+    const configDir = `${GLib.get_user_config_dir()}/${d}`
+    const targetPath = `${configDir}/gtk.css`
+    
+    GLib.mkdir_with_parents(configDir, 0o755)
+    writeFile(targetPath, master)
+    writeFile(`${configDir}/gtk-dark.css`, master)
+  }
 }
 
 export function installFluidCrystalSymlinks(): void {
   const projectDir = GLib.getenv("DISTROIA_DIR") || `${GLib.get_home_dir()}/Dev/Distroia`
   const themeAssetsDir = `${projectDir}/ui/ags-v3/assets/fluid-crystal`
-  const configDir = `${GLib.get_user_config_dir()}/gtk-4.0`
-
+  const dirs = ["gtk-3.0", "gtk-4.0"]
   const targets = ["assets", "windows-assets"]
 
-  for (const name of targets) {
-    try {
-      const source = `${themeAssetsDir}/${name}`
-      const link = `${configDir}/${name}`
-      const file = Gio.File.new_for_path(link)
+  for (const d of dirs) {
+    const configDir = `${GLib.get_user_config_dir()}/${d}`
+    GLib.mkdir_with_parents(configDir, 0o755)
+    
+    for (const name of targets) {
+      try {
+        const source = `${themeAssetsDir}/${name}`
+        const link = `${configDir}/${name}`
+        const file = Gio.File.new_for_path(link)
 
-      if (file.query_exists(null)) {
-        file.delete(null)
-      }
+        if (file.query_exists(null)) {
+          try {
+            const info = file.query_info("standard::symlink-target", Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, null)
+            const target = info.get_symlink_target()
+            if (target === source) continue // Already correct target 🛡️
+          } catch (e) { }
+          file.delete(null)
+        }
 
-      const sourceFile = Gio.File.new_for_path(source)
-      if (sourceFile.query_exists(null)) {
-        file.make_symbolic_link(source, null)
+        const sourceFile = Gio.File.new_for_path(source)
+        if (sourceFile.query_exists(null)) {
+          file.make_symbolic_link(source, null)
+          console.log(`[FluidCrystal] Created symlink: ${link} -> ${source}`)
+        }
+      } catch (e) {
+        console.warn(`[FluidCrystal] Could not link ${name} for ${d}: ${e}`)
       }
-    } catch (e) {
-      console.warn(`[FluidCrystal] Could not link ${name}: ${e}`)
     }
   }
 }
