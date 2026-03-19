@@ -1,7 +1,9 @@
 import app from "ags/gtk4/app"
 import { Gdk, Gtk } from "ags/gtk4"
+import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import status from "./core/Status"
 // @ts-ignore
 import Adw from "gi://Adw?version=1"
 import { readFile } from "ags/file"
@@ -14,115 +16,53 @@ import type { Window } from "gi://Gtk?version=4.0"
 /**
  * 🛠️ THEME STRATEGY: 
  * We use Libadwaita exclusively for modern theme management. 
- * We explicitly disable the legacy GtkSettings property before Adw.init() 
- * to ensure Libadwaita takes full control and silences the deprecation warning.
  */
 try {
-  // No envenenamos el entorno por defecto.
   GLib.unsetenv("GTK_THEME")
-
   Adw.init()
-  // No forzamos esquema de color. Dejamos que Libadwaita intente seguir el tema.
   Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.DEFAULT)
 } catch (e) {
   console.warn("[App] Initialization failed:", e)
 }
 
-// Widget Imports (AFTER Adw init to prevent premature StyleManager access)
+// Widget Imports
 import Dock from "./widget/dock/Dock"
 import { syncConstants } from "./widget/dock/DockPhysics"
 import { onDockSettingsChanged } from "./widget/dock/state"
 import AppGrid from "./widget/app-grid/AppGrid"
 import Bar from "./widget/bar/Bar"
+import Overlays from "./widget/bar/Overlays"
 import NotificationPopups from "./widget/control-center/NotificationPopups"
-import NotificationCenter from "./widget/control-center/NotificationCenter"
-import IslandGrid from "./widget/control-center/IslandGrid"
 import PowerMenu from "./widget/power-menu/PowerMenu"
 import Settings from "./widget/settings/Settings"
-import Prism from "./widget/prism/Prism"
 import PrismLab from "./widget/lab/PrismLab"
 import Theme from "./core/ThemeManager"
 
 console.log("[DISTROIA] Calling app.start()...");
+
 app.start({
   applicationId: "com.distroia.crystal",
-  setup: () => {
-    // Already initialized at top level for ultra-early sync
-  },
   main() {
     const randomId = Math.floor(Math.random() * 10000);
     console.log(`[DISTROIA] main() started! (ID: ${randomId})`);
 
-
     const windows = new Set<any>()
-    const gridWindows: any[] = []
-    const ccWindows: any[] = []
-    const notifCenterWindows: any[] = []
+    const appLauncherWindows: any[] = []
     const powerWindows: any[] = []
     const settingsWindows: any[] = []
-    const prismWindows: any[] = []
     const labWindows: any[] = []
 
-    // 🎨 ABSOLUTE Style Sync: Points to the project config directory
-    // V132: Robust path detection to avoid 'undefined/style.css'
-    const styleFile = `/home/angel/Dev/Distroia/ui/ags-v3/style.css`
-    const mainProvider = new Gtk.CssProvider()
-    const themeProvider = new Gtk.CssProvider()
-
-    // V145: THE "GENEVA CONVENTION" FIX REFINED 🕊️
-    // We restore global display providers for AGS internal styles.
-    // This is safe because our CSS is ID-scoped (#crystal-bar, etc.).
-
-    const defaultDisplay = Gdk.Display.get_default()
-
-    const syncTheme = () => {
-      try {
-        const settings = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
-        const fontName = settings.get_string("font-name")
-        const [family, size] = fontName.match(/^(.*?) (\d+)$/)?.slice(1) || ["sans-serif", "11"]
-
-        const configuredTheme = settings.get_string("icon-theme")
-        const themeCss = `* { font-family: "${family}", "Symbols Nerd Font", sans-serif; }`
-
-        // 🛡️ Flicker Guard: Skip if font hasn't changed
-        if ((app as any)._lastFont === fontName) return
-        (app as any)._lastFont = fontName;
-
-        themeProvider.load_from_data(themeCss, themeCss.length)
-        console.log(`[Style] Sync: ${family} ${size}px`)
-      } catch (e) { console.error("[Style] GSettings error:", e) }
-    }
-
-    try {
-      if (GLib.file_test(styleFile, GLib.FileTest.EXISTS)) {
-        mainProvider.load_from_path(styleFile)
-        console.log(`[Style] Loaded: ${styleFile}`)
-      } else {
-        console.error(`[Style] NOT FOUND: ${styleFile}`)
-      }
-
-      if (defaultDisplay) {
-        Gtk.StyleContext.add_provider_for_display(defaultDisplay, mainProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
-        Gtk.StyleContext.add_provider_for_display(defaultDisplay, themeProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
-        syncTheme()
-
-        // Listen for changes
-        const settings = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
-        settings.connect("changed::font-name", syncTheme)
-      }
-    } catch (err) { console.error(`[Style] Error:`, err) }
-
-    // 🏗️ Internal UI Logic
-    const createUI = (monitor: any, idx: number) => {
-      console.log(`[UI] Monitor ${idx}`);
+    const createUI = (monitor: Gdk.Monitor, idx: number) => {
       try {
         const barWin = Bar(monitor)
         const dockWin = Dock(monitor)
+        const overlays = Overlays(monitor, idx)
 
+        windows.add(barWin); 
+        windows.add(dockWin);
+        overlays.forEach(w => windows.add(w))
 
-        windows.add(barWin); windows.add(dockWin)
-
-        // Dock rebuild on settings change (debounced)
+        // Dock rebuild on settings change
         let rebuildTimer: number | null = null
         onDockSettingsChanged(() => {
           if (rebuildTimer) GLib.source_remove(rebuildTimer)
@@ -130,157 +70,93 @@ app.start({
             rebuildTimer = null
             try {
               syncConstants()
-              // Find and destroy old dock window
               windows.forEach(w => {
                 if ((w as any).name === "crystal-dock") {
                   windows.delete(w)
-                    ; (w as any).close()
+                  ; (w as any).close()
                 }
               })
-              // Create new dock with updated constants
               const newDock = Dock(monitor)
               windows.add(newDock)
-              console.log("[DockSettings] Dock rebuilt with new settings")
-            } catch (e) {
-              console.error("[DockSettings] Dock rebuild failed:", e)
-            }
+            } catch (e) { console.error("[DockSettings] Dock rebuild failed:", e) }
             return GLib.SOURCE_REMOVE
           })
         })
 
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-          const initWin = (ctor: any, array: any[]) => {
-            try {
-              const win = ctor(monitor)
-              windows.add(win)
-              if (array) array.push(win)
-            } catch (err) {
-              console.error(`[UI] Failed to init ${ctor.name} on monitor ${idx}:`, err)
-            }
-          }
+        const initWin = (ctor: any, array: any[]) => {
+          try {
+            const win = ctor(monitor)
+            windows.add(win)
+            if (array) array.push(win)
+          } catch (err) { console.error(`[UI] Failed to init ${ctor.name}:`, err) }
+        }
 
-          initWin(AppGrid, gridWindows)
-          initWin(NotificationCenter, notifCenterWindows)
-          initWin(IslandGrid, ccWindows)
-          initWin(PowerMenu, powerWindows)
-          initWin(Settings, settingsWindows)
-          initWin(Prism, prismWindows)
-          initWin(PrismLab, labWindows)
+        initWin(PowerMenu, powerWindows)
+        initWin(Settings, settingsWindows)
+        initWin(PrismLab, labWindows)
+        initWin(AppGrid, appLauncherWindows)
 
-          return GLib.SOURCE_REMOVE
-        })
       } catch (e) { console.error(`[UI] Error:`, e) }
     }
 
-    // V127: Native Gtk Resolution
     try {
       const display = Gdk.Display.get_default()
-      // @ts-ignore
-      print("Display found: " + !!display)
       if (display) {
         const monitors: any = display.get_monitors()
-        // @ts-ignore
-        print("Monitor count: " + monitors.get_n_items())
-        for (let i = 0; i < monitors.get_n_items(); i++) {
+        const n = monitors.get_n_items()
+        for (let i = 0; i < n; i++) {
           createUI(monitors.get_item(i) as any, i)
         }
       }
     } catch (e) { console.error(`[UI] Error:`, e) }
 
-
     // 🕹️ Toggles Logic
     const toggleAppGrid = () => {
-      console.log(`[Toggle] AppGrid (Count: ${gridWindows.length})`)
-      gridWindows.forEach(g => { try { g.toggle() } catch (e) { console.error(e) } })
-    }
-    const toggleCC = () => {
-      console.log(`[Toggle] CC (Count: ${ccWindows.length})`)
-      const isOpening = ccWindows.some(cc => !cc.get_visible())
-      if (isOpening) {
-        notifCenterWindows.forEach(nc => nc.set_visible(false))
-        // Stagger the CC show to avoid collision with NC hide
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-          ccWindows.forEach(cc => { try { cc.toggle() } catch (e) { console.error(e) } })
-          return GLib.SOURCE_REMOVE
-        })
-      } else {
-        ccWindows.forEach(cc => { try { cc.toggle() } catch (e) { console.error(e) } })
-      }
-    }
-    const toggleNC = () => {
-      console.log(`[Toggle] NC (Count: ${notifCenterWindows.length})`)
-      const isOpening = notifCenterWindows.some(nc => !nc.get_visible())
-      if (isOpening) {
-        ccWindows.forEach(cc => cc.set_visible(false))
-        // Stagger the NC show to avoid collision with CC hide
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-          notifCenterWindows.forEach(nc => { try { nc.toggle() } catch (e) { console.error(e) } })
-          return GLib.SOURCE_REMOVE
-        })
-      } else {
-        notifCenterWindows.forEach(nc => { try { nc.toggle() } catch (e) { console.error(e) } })
-      }
+      appLauncherWindows.forEach(g => { try { g.toggle() } catch (e) { console.error(e) } })
     }
     const togglePower = () => {
-      console.log(`[Toggle] Power (Count: ${powerWindows.length})`)
       powerWindows.forEach(p => { try { p.toggle() } catch (e) { console.error(e) } })
     }
     const toggleSettings = () => {
-      console.log(`[Toggle] Settings (Count: ${settingsWindows.length})`)
       settingsWindows.forEach(s => { try { s.toggle() } catch (e) { console.error(e) } })
     }
-    const togglePrism = () => {
-      console.log(`[Toggle] Prism (Count: ${prismWindows.length})`)
-      const isOpening = prismWindows.some(p => !p.get_visible())
-      if (isOpening) {
-        ccWindows.forEach(cc => cc.set_visible(false))
-        notifCenterWindows.forEach(nc => nc.set_visible(false))
-        gridWindows.forEach(g => g.set_visible(false))
-      }
-      prismWindows.forEach(p => { try { p.toggle() } catch (e) { console.error(e) } })
-    }
     const togglePrismLab = () => {
-      console.log(`[Toggle] PrismLab (Count: ${labWindows.length})`)
-      const isOpening = labWindows.some(l => !l.get_visible())
-      if (isOpening) {
-        ccWindows.forEach(cc => cc.set_visible(false))
-        notifCenterWindows.forEach(nc => nc.set_visible(false))
-        gridWindows.forEach(g => g.set_visible(false))
-        prismWindows.forEach(p => p.set_visible(false))
-      }
       labWindows.forEach(l => { try { l.toggle() } catch (e) { console.error(e) } })
     }
 
     // Expose Globals
     (globalThis as any).toggleAppGrid = toggleAppGrid;
-    (globalThis as any).toggleControlCenter = toggleCC;
-    (globalThis as any).toggleNotificationCenter = toggleNC;
     (globalThis as any).togglePowerMenu = togglePower;
     (globalThis as any).toggleSettings = toggleSettings;
-    (globalThis as any).toggleSpotlight = togglePrism;
-    (globalThis as any).togglePrism = togglePrism;
     (globalThis as any).togglePrismLab = togglePrismLab;
 
-    // Local request mapper
-    (app as any).DistroIA = { toggleAppGrid, toggleCC, toggleControlCenter: toggleCC, toggleNC, togglePower, toggleSettings, toggleSpotlight: togglePrism, togglePrism, togglePrismLab }
   },
   requestHandler(argv, res) {
-    const engine = (app as any).DistroIA
-    if (!engine) return res("error: engine not ready")
-
     if (!argv || argv.length === 0) return res("ok")
-    if (argv[0] === "toggleAppGrid()") { engine.toggleAppGrid(); res("ok") }
-    else if (argv[0] === "toggleCC()") { engine.toggleCC(); res("ok") }
-    else if (argv[0] === "toggleControlCenter()") { engine.toggleCC(); res("ok") }
-    else if (argv[0] === "toggleNotificationCenter()") { engine.toggleNC(); res("ok") }
-    else if (argv[0] === "togglePowerMenu()") { engine.togglePower(); res("ok") }
-    else if (argv[0] === "toggleSettings()") { engine.toggleSettings(); res("ok") }
-    else if (argv[0] === "toggleSpotlight()") { engine.toggleSpotlight(); res("ok") }
-    else if (argv[0] === "togglePrism()") { engine.toggleSpotlight(); res("ok") }
-    else if (argv[0] === "togglePrismLab()") { engine.togglePrismLab(); res("ok") }
-    else {
-      console.warn(`[Handler] Unknown command: ${argv[0]}`)
-      res("unknown command")
+    const cmd = argv[0].replace("()", "")
+    
+    switch (cmd) {
+      case "toggleCC":
+      case "toggleControlCenter":
+        status.toggleCC(); break;
+      case "toggleNC":
+      case "toggleNotificationCenter":
+        status.toggleNC(); break;
+      case "togglePrism":
+      case "toggleSpotlight":
+        status.togglePrism(); break;
+      case "toggleAppGrid":
+        (globalThis as any).toggleAppGrid?.(); break;
+      case "togglePowerMenu":
+        (globalThis as any).togglePowerMenu?.(); break;
+      case "toggleSettings":
+        (globalThis as any).toggleSettings?.(); break;
+      case "togglePrismLab":
+        (globalThis as any).togglePrismLab?.(); break;
+      default:
+        console.warn(`[Handler] Unknown command: ${cmd}`)
+        return res("unknown command")
     }
+    res("ok")
   }
 })

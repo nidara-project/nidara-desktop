@@ -100,7 +100,10 @@ export default function PowerMenu(monitor: Gdk.Monitor) {
 
     // Close on click outside (ESC handled by GTK automatic if focus is correct)
     const gesture = new Gtk.GestureClick()
-    gesture.connect("released", () => { win.visible = false })
+    gesture.connect("released", () => { 
+        win.set_opacity(0.0)
+        win.set_sensitive(false)
+    })
     // win.add_controller(gesture) // Maybe too aggressive if clicking buttons? 
     // Usually overlays use ESC or a dedicated "Cancel" btn. 
 
@@ -110,7 +113,10 @@ export default function PowerMenu(monitor: Gdk.Monitor) {
         halign: Gtk.Align.CENTER,
         margin_top: 60
     })
-    cancelBtn.connect("clicked", () => { win.visible = false })
+    cancelBtn.connect("clicked", () => { 
+        win.set_opacity(0.0)
+        win.set_sensitive(false)
+    })
     mainBox.append(cancelBtn)
 
     win.child = mainBox

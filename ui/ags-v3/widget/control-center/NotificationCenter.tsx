@@ -6,39 +6,23 @@ import GLib from "gi://GLib"
 import { drawSquircle } from "../common/DrawingUtils"
 import SquircleContainer from "../common/SquircleContainer"
 import appService from "../../core/AppService"
+import status from "../../core/Status"
 
-export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
+export default function NotificationCenter() {
     const notifd = AstalNotifd.get_default()
 
-    const win = new Gtk.Window({
-        name: "crystal-notification-center",
-        application: app,
-        css_classes: ["notification-center-win", "transparent"],
-        visible: false,
-    })
-
-    try {
-        Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, "notification-center")
-        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
-        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
-    } catch (e) { }
-
     const overlay = new Gtk.Overlay({
-        css_classes: ["nc-window-root"],
+        css_classes: ["nc-window-root", "nc-overlay"],
         hexpand: true,
         vexpand: true
     })
-    win.set_child(overlay)
 
     const catcher = new Gtk.Box({ hexpand: true, vexpand: true })
     overlay.set_child(catcher)
     const clickGesture = new Gtk.GestureClick()
-    clickGesture.connect("pressed", () => { win.visible = false })
+    clickGesture.connect("pressed", () => {
+        status.nc_open = false
+    })
     catcher.add_controller(clickGesture)
 
     const contentBox = new Gtk.Box({
@@ -54,7 +38,8 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
         css_classes: ["cc-islands-container"], // Matching CC islands logic
         hexpand: false,
         vexpand: true,
-        width_request: 420
+        width_request: 420,
+        height_request: 800 // Explicit threshold to prevent clipping 📐
     })
     ncContainer.append(contentBox)
 
@@ -64,6 +49,8 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
     ncContainer.margin_end = 8
     ncContainer.margin_bottom = 8
     ncContainer.margin_start = 8
+    ncContainer.width_request = 420
+    ncContainer.height_request = 800
 
     overlay.add_overlay(ncContainer)
 
@@ -87,7 +74,7 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
                 GLib.spawn_command_line_async("hyprctl dispatch focuswindow class:gnome-calendar || hyprctl dispatch focuswindow class:org.gnome.Calendar")
                 return GLib.SOURCE_REMOVE
             })
-            win.visible = false
+            status.nc_open = false
         }
     })
     contentBox.append(calendarIsland)
@@ -184,11 +171,5 @@ export default function NotificationCenter(gdkmonitor: Gdk.Monitor) {
     notifd.connect("resolved", () => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { updateNotifs(); return GLib.SOURCE_REMOVE }))
     updateNotifs()
 
-    // @ts-ignore
-    win.toggle = () => {
-        win.visible = !win.visible
-        if (win.visible) win.present()
-    }
-
-    return win
+    return overlay
 }

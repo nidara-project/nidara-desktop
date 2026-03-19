@@ -111,6 +111,7 @@ export default function NotificationPopups(gdkmonitor: Gdk.Monitor) {
             Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
             Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 54)
             Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, 12)
+            Gtk4LayerShell.set_exclusive_zone(win, 0) // 💎 Never push
             // @ts-ignore
             win.gdkmonitor = gdkmonitor
         } catch (e) {

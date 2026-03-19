@@ -1,4 +1,28 @@
 import AstalHyprland from "gi://AstalHyprland"
+import GLib from "gi://GLib"
+
+/**
+ * Robust Service Fetcher with Exponential Backoff 🛡️
+ * Retries with increasing delays: 200ms, 400ms, 800ms, 1600ms, 3200ms
+ */
+export async function getServiceSafe<T>(getter: () => T, name: string): Promise<T | null> {
+    const MAX_RETRIES = 5;
+    const BASE_DELAY = 200;
+
+    for (let i = 0; i < MAX_RETRIES; i++) {
+        try {
+            const service = getter();
+            if (service) return service;
+        } catch (e) {
+            console.warn(`[Utils] Service ${name} not ready (attempt ${i + 1}/${MAX_RETRIES}), retrying...`);
+        }
+        // Exponential backoff: 200, 400, 800, 1600, 3200ms
+        const delay = BASE_DELAY * Math.pow(2, i);
+        await new Promise(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, delay, () => { r(null); return GLib.SOURCE_REMOVE }));
+    }
+    console.error(`[Utils] Service ${name} failed to initialize after ${MAX_RETRIES} attempts`);
+    return null;
+}
 
 /**
  * Parabolic Magnification Utils - Apple Signature Precision

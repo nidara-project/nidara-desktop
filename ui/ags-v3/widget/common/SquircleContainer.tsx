@@ -79,7 +79,8 @@ export default function SquircleContainer({
             if (hoverBorderColor) shareBorder = hoverBorderColor
         }
 
-        cr.setSourceRGBA(0, 0, 0, 0); cr.paint()
+        // Gtk4 provides a clean surface; OVER is the standard blending mode.
+        cr.setOperator(2) // OVER
 
         let drawRadius = radius
         let drawN = n
@@ -102,10 +103,18 @@ export default function SquircleContainer({
         )
     })
 
-    container.attach(da, 0, 0, 1, 1)
+    const grid = new Gtk.Grid({
+        css_classes,
+        hexpand,
+        vexpand
+    })
 
-    //  THE FIX: No forzamos expansión si el hijo no la pide.
-    // Esto evita que GTK meta "aire" artificial entre elementos como la imagen y el título.
+    // Background first (bottom)
+    da.hexpand = true
+    da.vexpand = true
+    da.halign = Gtk.Align.FILL
+    da.valign = Gtk.Align.FILL
+    grid.attach(da, 0, 0, 1, 1)
 
     if (padding !== undefined) {
         child.margin_top = padding
@@ -114,20 +123,21 @@ export default function SquircleContainer({
         child.margin_end = padding
     }
 
-    container.attach(child, 0, 0, 1, 1)
+    // Content second (top)
+    grid.attach(child, 0, 0, 1, 1)
 
     if (hoverColor || hoverAlpha !== undefined || onClick) {
         const motion = new Gtk.EventControllerMotion()
         motion.connect("enter", () => { isHovered = true; da.queue_draw() })
         motion.connect("leave", () => { isHovered = false; da.queue_draw() })
-        container.add_controller(motion)
+        grid.add_controller(motion)
     }
 
     if (onClick) {
         const click = new Gtk.GestureClick()
         click.connect("pressed", () => onClick())
-        container.add_controller(click)
+        grid.add_controller(click)
     }
 
-    return container
+    return grid
 }

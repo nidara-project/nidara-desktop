@@ -5,6 +5,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import { execAsync } from "ags/process"
 import appService, { AppData } from "../../core/AppService"
+import status from "../../core/Status"
 import SquircleContainer from "../common/SquircleContainer"
 
 /**
@@ -61,28 +62,13 @@ function ResultRow(appData: AppData) {
 /**
  * Prism - macOS Tahoe style search interface 💎
  */
-export default function Prism(monitor: Gdk.Monitor) {
-    const win = new Gtk.Window({
-        name: "crystal-prism",
-        css_classes: ["prism-window-root", "fc-ignore"],
-        application: app,
-        visible: false
+export default function Prism() {
+    const overlay = new Gtk.Overlay({
+        css_classes: ["prism-window-root", "prism-overlay"],
+        hexpand: true,
+        vexpand: true
     })
 
-    win.set_default_size(650, 400)
-
-    try {
-        Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, "prism")
-        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
-        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
-
-        // Exact Center 🎯
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, false)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, false)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, false)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, false)
-    } catch (e) { }
 
     const entry = new Gtk.Entry({
         placeholder_text: "Search apps, files, or settings...",
@@ -124,7 +110,16 @@ export default function Prism(monitor: Gdk.Monitor) {
         borderColor: { r: 1, g: 1, b: 1, a: 0.15 }
     })
 
-    win.set_child(prismWrapper)
+    const catcher = new Gtk.Box({ hexpand: true, vexpand: true })
+    const click = new Gtk.GestureClick()
+    click.connect("pressed", () => { status.prism_open = false })
+    catcher.add_controller(click)
+    overlay.set_child(catcher)
+
+    prismWrapper.halign = Gtk.Align.CENTER
+    prismWrapper.valign = Gtk.Align.START
+    prismWrapper.margin_top = 12
+    overlay.add_overlay(prismWrapper)
 
     const launchResult = (row: any) => {
         const data = (row as any).appData as AppData
@@ -137,7 +132,10 @@ export default function Prism(monitor: Gdk.Monitor) {
                 execAsync(["hyprctl", "dispatch", "exec", cmd]).catch(console.error)
             }
         }
-        win.visible = false
+    }
+
+    const closePrism = () => {
+        status.prism_open = false
     }
 
     resultsList.connect("row-activated", (_, row) => {
@@ -173,7 +171,7 @@ export default function Prism(monitor: Gdk.Monitor) {
     const key = new Gtk.EventControllerKey()
     key.connect("key-pressed", (_, keyval) => {
         if (keyval === Gdk.KEY_Escape) {
-            win.visible = false
+            closePrism()
             return true
         }
 
@@ -207,32 +205,7 @@ export default function Prism(monitor: Gdk.Monitor) {
 
         return false
     })
-    win.add_controller(key)
+    overlay.add_controller(key)
 
-    // Global focus handling
-    const click = new Gtk.GestureClick()
-    click.connect("pressed", () => {
-        win.visible = false
-    })
-        // Note: We don't add this to the whole window because it targets children.
-        // Instead, we can use an overlay if we want to catch "outside" clicks.
-        // For now, Escape and Enter are the primary ways.
-
-        ; (win as any).toggle = () => {
-            const isVis = win.visible
-            console.log(`[Prism] Toggle: currently ${isVis ? 'visible' : 'hidden'}`)
-            win.set_visible(!isVis)
-            if (!isVis) {
-                win.present()
-                console.log("[Prism] Presenting window and focusing entry")
-                entry.text = ""
-                resultsList.visible = false
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-                    entry.grab_focus()
-                    return GLib.SOURCE_REMOVE
-                })
-            }
-        }
-
-    return win
+    return overlay
 }

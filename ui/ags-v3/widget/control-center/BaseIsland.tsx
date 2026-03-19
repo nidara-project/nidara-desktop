@@ -12,9 +12,6 @@ import { WidgetSize } from "./Types"
 interface BaseIslandProps {
     name: string
     child: Gtk.Widget
-    monitor: Gdk.Monitor
-    x: number
-    y: number
     width: number
     height: number
     size: WidgetSize
@@ -25,44 +22,12 @@ interface BaseIslandProps {
 export default function BaseIsland({
     name,
     child,
-    monitor,
-    x,
-    y,
     width,
     height,
     size,
     alpha = 0.15,
     gloss = true
-}: BaseIslandProps): Gtk.Window {
-    const win = new Gtk.Window({
-        name: `atomic-island-${name}`,
-        application: app,
-        decorated: false,
-        resizable: false,
-        css_classes: ["atomic-island-win"],
-        visible: false
-    })
-
-    win.set_size_request(width, height)
-    win.set_default_size(width, height)
-
-    try {
-        Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, "control-center")
-        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
-        Gtk4LayerShell.set_monitor(win, monitor)
-        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
-        Gtk4LayerShell.set_exclusive_zone(win, -1)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, y)
-        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, x)
-
-        // @ts-ignore
-        win.gdkmonitor = monitor
-    } catch (e) {
-        console.error(`[BaseIsland] Shell error for ${name}:`, e)
-    }
+}: BaseIslandProps): Gtk.Widget {
 
     //  GEOMETRIC RULES:
     let shape = Shape.SQUIRCLE
@@ -103,10 +68,5 @@ export default function BaseIsland({
     })
 
     island.set_size_request(width, height)
-    win.set_child(island)
-
-    // @ts-ignore
-    //win.toggle = () => win.visible = !win.visible
-
-    return win
+    return island
 }

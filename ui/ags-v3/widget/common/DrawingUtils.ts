@@ -102,8 +102,8 @@ export const drawSquircle = (
 ) => {
     if (width <= 0 || height <= 0) return
 
-    // CLEAR BUFFER
-    cr.setOperator(0); cr.paint(); cr.setOperator(2)
+    // Gtk4 provides a clean surface; OVER is the standard blending mode.
+    cr.setOperator(2) // OVER
 
     // SAFE DRAW AREA
     const drawH = height - (inset * 2)

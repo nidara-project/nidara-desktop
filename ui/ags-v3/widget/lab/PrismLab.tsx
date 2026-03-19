@@ -59,7 +59,9 @@ export default function PrismLab(monitor: Gdk.Monitor) {
         name: "prism-lab",
         css_classes: ["prism-lab-window"],
         application: app,
-        visible: false
+        visible: true,
+        opacity: 0.0,
+        sensitive: false
     })
 
     win.set_size_request(550, 500)
@@ -73,7 +75,7 @@ export default function PrismLab(monitor: Gdk.Monitor) {
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, false)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, false)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, false)
-        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
     } catch (e) { console.error("[Lab] LayerShell Error:", e) }
 
     const content = new Gtk.Box({
@@ -235,10 +237,19 @@ export default function PrismLab(monitor: Gdk.Monitor) {
     win.set_child(labWrapper)
 
         ; (win as any).toggle = () => {
-            const isVis = win.get_visible()
-            console.log(`[PrismLab] Toggle: currently ${isVis ? 'visible' : 'hidden'}`)
-            win.set_visible(!isVis)
-            if (!isVis) {
+            const isVisible = win.get_opacity() > 0.5
+            console.log(`[PrismLab] Toggle: currently ${isVisible ? 'visible' : 'hidden'}`)
+            
+            if (isVisible) {
+                // Closing
+                win.set_opacity(0.0)
+                win.set_sensitive(false)
+                Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
+            } else {
+                // Opening
+                Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+                win.set_opacity(1.0)
+                win.set_sensitive(true)
                 win.present()
                 console.log("[PrismLab] Presenting window")
             }
