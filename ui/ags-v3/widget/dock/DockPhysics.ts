@@ -11,17 +11,24 @@ import { dockSettings } from "./state"
 
 function deriveConstants(iconSize: number, maxSize: number, magnification: boolean, screenGap: number) {
     // ── PROPORTIONAL RATIOS (Based on user-provided table) ──
-    const MARGIN = Math.round(iconSize * 0.109375)      // 3.5@32, 5.25@48, 7@64, 10.5@96
-    const ICON_GAP = Math.round(iconSize * 0.09375)       // 3@32, 4.5@48, 6@64, 9@96
-    const PILL_PAD = MARGIN * 2                          // 7@32, 10.5@48, 14@64, 21@96
-    const INDICATOR_PAD = 4                           // Fixed 4px indicator-to-bottom gap
+    // V24000: SLIGHT GAP BOOST
+    // External padding (22%) balanced with slightly wider gap (16%).
+    const PAD_RATIO = 0.22                               // ~10.5px for 48px
+    const GAP_RATIO = 0.16                               // ~7.7px for 48px
+    
+    const PILL_PAD = Math.round(iconSize * PAD_RATIO)    // Top/Bottom air
+    const GAP_TOTAL = Math.round(iconSize * GAP_RATIO)   // Total gap between icons
+    const IM = GAP_TOTAL / 2                             // Margin each side
+    const BASE_MARGIN = PILL_PAD - IM                    // Result: Side Air == PILL_PAD
+    
+    const INDICATOR_PAD = 4                              
 
     // ── DERIVED ──
-    const pillHeight = iconSize + PILL_PAD * 2        // Perfect vertical symmetry
-    const separatorHeight = Math.round(pillHeight * 0.75) // Apple HIG: Separator spans ~75% of the total pill height
+    const pillHeight = Math.round(iconSize + PILL_PAD * 2) 
+    const separatorHeight = Math.round(pillHeight * 0.75) 
 
     return {
-        // PHYSICS — Critical Damping Spring
+        // ... (physics constants stay same)
         minSize: iconSize,
         maxSize: magnification ? maxSize : iconSize,
         range: 2.5,
@@ -32,13 +39,13 @@ function deriveConstants(iconSize: number, maxSize: number, magnification: boole
 
         // LAYOUT
         ICON_SIZE: iconSize,
-        APP_SLOT: iconSize + ICON_GAP * 2,            // Slot uses ICON_GAP, not MARGIN
-        SEPARATOR_SLOT: MARGIN * 2,
+        APP_SLOT: iconSize + GAP_TOTAL,
+        SEPARATOR_SLOT: Math.round(GAP_TOTAL * 2),
         SEPARATOR_LINE: 1,
-        SEPARATOR_OFFSET: MARGIN,
+        SEPARATOR_OFFSET: GAP_TOTAL,
         SEPARATOR_HEIGHT: separatorHeight,
-        BASE_MARGIN: Math.round(iconSize * 0.125),   // 4@32, 6@48, 8@64, 12@96
-        ICON_MARGIN: ICON_GAP,                        // Per-icon margin (smaller than BASE_MARGIN)
+        BASE_MARGIN: BASE_MARGIN,
+        ICON_MARGIN: IM,                                 // Balanced gap
         INDICATOR_GAP: INDICATOR_PAD,
         PILL_PADDING: PILL_PAD,
 
