@@ -70,6 +70,8 @@ sudo pacman -Sy --needed --noconfirm \
     rust \
     cargo \
     hyprland \
+    hyprlock \
+    hypridle \
     kitty \
     thunar \
     nautilus \
