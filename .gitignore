@@ -90,3 +90,7 @@ HEARTBEAT.md
 SOUL.md
 USER.md
 IDENTITY.md
+
+# Build & External Dependencies
+vendor/
+plugins/
