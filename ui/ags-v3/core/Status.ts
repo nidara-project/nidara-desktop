@@ -14,6 +14,7 @@ export class UIStatus extends GObject.Object {
                 "cc-open": GObject.ParamSpec.boolean("cc-open", "CC Open", "Control Center visibility", GObject.ParamFlags.READWRITE, false),
                 "nc-open": GObject.ParamSpec.boolean("nc-open", "NC Open", "Notification Center visibility", GObject.ParamFlags.READWRITE, false),
                 "prism-open": GObject.ParamSpec.boolean("prism-open", "Prism Open", "Prism Search visibility", GObject.ParamFlags.READWRITE, false),
+                "notif-active": GObject.ParamSpec.boolean("notif-active", "Notif Active", "Popups visibility", GObject.ParamFlags.READWRITE, false),
             },
             Signals: {
                 "toggle-cc": {},
@@ -23,31 +24,58 @@ export class UIStatus extends GObject.Object {
         }, this)
     }
 
-    private _ccOpen = false
-    private _ncOpen = false
-    private _prismOpen = false
+    private _cc_open = false
+    private _nc_open = false
+    private _prism_open = false
+    private _notif_active = false
 
-    get cc_open() { return this._ccOpen }
-    set cc_open(v: boolean) { 
-        if (this._ccOpen === v) return
-        this._ccOpen = v
-        if (v) { this._ncOpen = false; this._prismOpen = false; this.notify("nc-open"); this.notify("prism-open") }
+    public get notif_active() { return this._notif_active }
+    public set notif_active(v: boolean) {
+        if (this._notif_active === v) return
+        this._notif_active = v
+        this.notify("notif-active")
+    }
+
+    public get cc_open() { return this._cc_open }
+    public set cc_open(v: boolean) { 
+        if (this._cc_open === v) return
+        this._cc_open = v
+        if (v) {
+            this._nc_open = false
+            this._prism_open = false
+            this._notif_active = false
+            this.notify("nc-open")
+            this.notify("prism-open")
+            this.notify("notif-active")
+        }
         this.notify("cc-open")
     }
 
-    get nc_open() { return this._ncOpen }
-    set nc_open(v: boolean) {
-        if (this._ncOpen === v) return
-        this._ncOpen = v
-        if (v) { this._ccOpen = false; this._prismOpen = false; this.notify("cc-open"); this.notify("prism-open") }
+    public get nc_open() { return this._nc_open }
+    public set nc_open(v: boolean) {
+        if (this._nc_open === v) return
+        this._nc_open = v
+        if (v) {
+            this._cc_open = false
+            this._prism_open = false
+            this._notif_active = false
+            this.notify("cc-open")
+            this.notify("prism-open")
+            this.notify("notif-active")
+        }
         this.notify("nc-open")
     }
 
-    get prism_open() { return this._prismOpen }
-    set prism_open(v: boolean) {
-        if (this._prismOpen === v) return
-        this._prismOpen = v
-        if (v) { this._ccOpen = false; this._ncOpen = false; this.notify("cc-open"); this.notify("nc-open") }
+    public get prism_open() { return this._prism_open }
+    public set prism_open(v: boolean) {
+        if (this._prism_open === v) return
+        this._prism_open = v
+        if (v) { 
+            this._cc_open = false
+            this._nc_open = false
+            this.notify("cc-open")
+            this.notify("nc-open")
+        }
         this.notify("prism-open")
     }
 

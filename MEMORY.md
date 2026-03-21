@@ -16,7 +16,9 @@
 
 ## ⚠️ Safety & Stability Protocol
 - **Plugin Handling:** NEVER modify, recompile, or update plugin files while they are loaded in the compositor. You MUST run `hyprctl plugin unload <path>` (or use `hyprpm`) to completely remove the plugin from memory BEFORE making any source or binary changes.
-- **Conversation History:** Protect the session at all costs. Hyprland crashes are the primary cause of lost conversation context. Stability is the absolute priority over visual experiments.
+- **Conversation History:** Protect the session at all costs. Hyprland crashes are the primary cause of lost conversation context.
+    - **Indexing:** If history is invisible, run `./restore_history.sh`.
+    - **Workspace Context:** History visibility is often linked to the active workspace. If a session seems "lost," verify that the correct workspace is open before assuming a database failure. Stability is the absolute priority over visual experiments.
 
 ## Project Notes
 - Developed by Angel & Antigravity.

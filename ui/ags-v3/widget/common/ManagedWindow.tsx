@@ -6,7 +6,7 @@ interface ManagedWindowProps {
     name: string
     child: Gtk.Widget
     monitor: Gdk.Monitor
-    statusProp: "cc_open" | "nc_open" | "prism_open"
+    statusProp: "cc_open" | "nc_open" | "prism_open" | "notif_active"
     layout?: {
         // @ts-ignore
         layer?: Gtk4LayerShell.Layer

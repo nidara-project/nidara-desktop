@@ -355,6 +355,45 @@ class AppService {
     }
 
     /**
+     *  THE ABSOLUTE TRUTH: Combined App Resolution 🛰️
+     * Consolidates getAppInfo, getAppData, and specialized hacks (Chrome/YouTube).
+     */
+    getResolvedApp(lid: string | null | undefined) {
+        if (!lid) return null
+        
+        const id = lid.toLowerCase().replace(".desktop", "").trim()
+        const info = this.getAppInfo(id)
+        const data = this.getAppData(id)
+
+        if (!info && !data) return null
+
+        // 1. Determine the Best Icon (The "Dock Logic")
+        let iconName: any = data?.icon || info?.get_icon() || "application-x-executable"
+        
+        // CHROME ID HACK (Synced with Dock)
+        if (typeof iconName === "string" && id.startsWith("chrome-") && id.endsWith("-default")) {
+            iconName = iconName.replace(/-default$/i, "-Default")
+        }
+
+        return {
+            id: data?.id || info?.get_id()?.replace(".desktop", "") || id,
+            name: data?.name || info?.get_name() || id,
+            icon_name: iconName,
+            get_id: () => data?.id || info?.get_id() || id,
+            get_name: () => data?.name || info?.get_name() || id,
+            get_icon: () => info?.get_icon(),
+            launch: () => {
+                const launchId = data?.id || info?.get_id() || id
+                const freshInfo = this.getAppInfo(launchId)
+                let command = freshInfo?.get_commandline() || data?.exec || launchId
+                // Absolute Isolation Sanitization
+                command = command.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
+                GLib.spawn_command_line_async(`hyprctl dispatch exec ${command}`)
+            }
+        }
+    }
+
+    /**
      * V151: Search functionality for Prism 💎
      */
     search(query: string): AppData[] {

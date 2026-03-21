@@ -57,9 +57,11 @@ app.start({
         const barWin = Bar(monitor)
         const dockWin = Dock(monitor)
         const overlays = Overlays(monitor, idx)
+        const notifPopups = NotificationPopups(monitor)
 
         windows.add(barWin); 
         windows.add(dockWin);
+        windows.add(notifPopups);
         overlays.forEach(w => windows.add(w))
 
         // Dock rebuild on settings change

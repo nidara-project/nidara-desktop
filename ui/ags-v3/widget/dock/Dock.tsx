@@ -671,37 +671,8 @@ export default function Dock(gdkmonitor: any) {
             const appLookupCache = new Map<string, any>()
 
             // V149.3: UNIFIED APP SHIM 🛰️
-            // Restores a property-compatible object for DockItem while using centered resolution.
-            const findApp = (searchId: string) => {
-                if (!searchId) return null
-                if (appLookupCache.has(searchId)) return appLookupCache.get(searchId)
-
-                const lid = searchId.toLowerCase().replace(".desktop", "")
-                const info = appService.getAppInfo(lid)
-                const data = appService.getAppData(lid)
-
-                if (!info && !data) return null
-
-                const shim = {
-                    id: data?.id || info?.get_id()?.replace(".desktop", "") || lid,
-                    name: data?.name || info?.get_name() || lid,
-                    icon_name: data?.icon || info?.get_icon() || "application-x-executable",
-                    get_id: () => data?.id || info?.get_id() || lid,
-                    get_name: () => data?.name || info?.get_name() || lid,
-                    get_icon: () => info?.get_icon(),
-                    launch: () => {
-                        const launchId = data?.id || info?.get_id() || lid
-                        const freshInfo = appService.getAppInfo(launchId)
-                        let command = freshInfo?.get_commandline() || data?.exec || launchId
-                        // Absolute Isolation Sanitization
-                        command = command.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
-                        execAsync(["hyprctl", "dispatch", "exec", command]).catch(print)
-                    }
-                }
-
-                appLookupCache.set(searchId, shim)
-                return shim
-            }
+            // Uses centered resolution from AppService for absolute truth.
+            const findApp = (searchId: string) => appService.getResolvedApp(searchId)
 
 
             const userName = GLib.get_user_name()

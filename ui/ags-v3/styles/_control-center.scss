@@ -6,6 +6,7 @@
 
 /* --- Component Transparency --- */
 window.notification-center-win,
+window.notif-win,
 window.atomic-island-win,
 window.control-center-win {
     background: none;
@@ -99,4 +100,76 @@ window.control-center-win {
     &:hover {
         background-color: rgba(255, 255, 255, 0.12);
     }
+}
+
+/* --- Notifications: Steel Symmetry --- */
+.nc-capsule-item {
+    margin: 4px 0;
+}
+
+.notif-card {
+    background: transparent;
+    margin-bottom: 8px;
+}
+
+.nc-item-clear-btn-compact,
+.nc-item-expand-btn-compact {
+    padding: 2px;
+    min-width: 18px;
+    min-height: 18px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 6px;
+    color: rgba(255, 255, 255, 0.4);
+    
+    &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        color: white;
+    }
+    
+    image { margin: 0; }
+}
+
+.nc-item-clear-btn-compact {
+    color: rgba(255, 100, 100, 0.5);
+    &:hover { background: rgba(255, 0, 0, 0.2); }
+}
+
+.nc-badge-header {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 10px;
+    font-weight: 800;
+    padding: 1px 6px;
+    border-radius: 12px;
+    margin-left: 6px;
+}
+
+.nc-item-expand-btn, .nc-item-clear-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+    padding: 6px;
+    min-width: 32px;
+    min-height: 32px;
+    transition: all 0.2s ease;
+    
+    &:hover { 
+        background: rgba(255, 255, 255, 0.15); 
+        color: white;
+    }
+}
+
+.nc-item-clear-btn:hover {
+    color: #ff3b30;
+}
+
+.nc-item-time {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.4);
+}
+
+.notif-app-icon,
+.nc-group-icon,
+.notif-item-icon {
+    -gtk-icon-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
