@@ -18,7 +18,7 @@ Crystal Shell es un entorno de escritorio (DE) personalizado basado en **Hyprlan
 ## 💿 Instalación (Usuarios)
 El proyecto incluye un script de aprovisionamiento robusto para **Arch Linux** que configura todo el sistema (SDDM, Hyprland, Audio, UI) automáticamente.
 
-1.  **Clonar Repo**: `git clone https://github.com/aalonx/Crystal Shell.git ~/.config/crystal-shell`
+1.  **Clonar Repo**: `git clone https://github.com/Fluid-Crystal/Crystal-Shell.git ~/.config/crystal-shell`
 2.  **Ejecutar Script**:
     ```bash
     cd ~/.config/crystal-shell
