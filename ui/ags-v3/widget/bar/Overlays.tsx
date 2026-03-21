@@ -102,7 +102,7 @@ export default function Overlays(monitor: Gdk.Monitor, mid: string | number = 0)
             layer: Gtk4LayerShell.Layer.OVERLAY,
             namespace: "crystal-nc",
             anchor: { top: true, bottom: true, right: true },
-            margin: { top: ncHideMargin, right: 0 }, // Right 0 because content is aligned inside
+            margin: { top: ncHideMargin, right: 0 },
             width: 450
         }
     })
@@ -141,7 +141,13 @@ export default function Overlays(monitor: Gdk.Monitor, mid: string | number = 0)
             entry.win.set_opacity(ccOpen ? 1 : 0)
         })
 
-        Gtk4LayerShell.set_margin(ncWindow, Gtk4LayerShell.Edge.TOP, ncOpen ? ncTopMargin : ncHideMargin)
+        const geometry = monitor.get_geometry()
+        const monitorHeight = geometry.height
+        const ncHideMarginTop = -(monitorHeight + 200)
+        const ncHideMarginBottom = monitorHeight + 200
+
+        Gtk4LayerShell.set_margin(ncWindow, Gtk4LayerShell.Edge.TOP, ncOpen ? ncTopMargin : ncHideMarginTop)
+        Gtk4LayerShell.set_margin(ncWindow, Gtk4LayerShell.Edge.BOTTOM, ncOpen ? 0 : ncHideMarginBottom)
         ncWindow.set_opacity(ncOpen ? 1 : 0)
 
         Gtk4LayerShell.set_margin(prismWindow, Gtk4LayerShell.Edge.TOP, prismOpen ? prismTopMargin : prismHideMargin)
