@@ -796,7 +796,7 @@ export function writeGeneratedTheme(config: FluidCrystalConfig, baseThemeCssPath
 }
 
 export function installFluidCrystalSymlinks(): void {
-  const projectDir = GLib.getenv("DISTROIA_DIR") || `${GLib.get_home_dir()}/Dev/Distroia`
+  const projectDir = GLib.getenv("CRYSTAL_SHELL_DIR") || `${GLib.get_home_dir()}/.config/crystal-shell`
   const themeAssetsDir = `${projectDir}/ui/ags-v3/assets/fluid-crystal`
   const dirs = ["gtk-3.0", "gtk-4.0"]
   const targets = ["assets", "windows-assets"]
@@ -832,10 +832,10 @@ export function installFluidCrystalSymlinks(): void {
   }
 }
 
-const CONFIG_PATH = `${GLib.get_home_dir()}/.config/distroia/fluid-crystal.json`
+const CONFIG_PATH = `${GLib.get_home_dir()}/.config/crystal-shell/fluid-crystal.json`
 
 export function saveConfig(config: FluidCrystalConfig): void {
-  const dir = `${GLib.get_home_dir()}/.config/distroia`
+  const dir = `${GLib.get_home_dir()}/.config/crystal-shell`
   GLib.mkdir_with_parents(dir, 0o755)
   writeFile(CONFIG_PATH, JSON.stringify(config, null, 2))
 }

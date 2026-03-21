@@ -1,8 +1,8 @@
 #!/bin/bash
-# wallpaper.sh - Configuración de fondo de pantalla para DistroIA
+# wallpaper.sh - Configuración de fondo de pantalla para Crystal Shell
 
 # Ruta a la imagen (Acepta JPG, PNG, GIF)
-WALLPAPER_PATH="/home/angel/Dev/DistroIA/config/wallpaper.jpg"
+WALLPAPER_PATH="$HOME/.config/crystal-shell/config/wallpaper.jpg"
 
 # Opciones de transición de SWWW
 # Tipos: none, simple, any, outer, random, wipe, wave, grow, center, sweep, step

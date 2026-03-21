@@ -4,7 +4,7 @@ import * as astal from "ags/gtk4/jsx-runtime"
 import GLib from "gi://GLib"
 
 /**
- * AIControl - Local AI Interface for DistroIA 💎
+ * AIControl - Local AI Interface for Crystal Shell 💎
  */
 export default function AIControl(monitor: Gdk.Monitor) {
     const box = new Gtk.Box({

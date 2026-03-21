@@ -1,9 +1,9 @@
 # Estrategia de Minimalismo: Purga y Optimización de Ubuntu
 
-Este documento define el protocolo técnico para transformar una base Ubuntu en el núcleo ligero de DistroIA.
+Este documento define el protocolo técnico para transformar una base Ubuntu en el núcleo ligero de Crystal Shell.
 
 ## 1. Protocolo Anti-Snap (Prioridad Máxima)
-Snap es considerado un "bug" en DistroIA. Su eliminación debe ser total y persistente.
+Snap es considerado un "bug" en Crystal Shell. Su eliminación debe ser total y persistente.
 
 ### Eliminación:
 1. Detener servicios: `sudo systemctl disable --now snapd.service snapd.socket snapd.seeded.service`.
@@ -19,7 +19,7 @@ Pin-Priority: -10
 ```
 
 ## 2. Purga de Entorno Gráfico Base
-Ubuntu Desktop viene con GNOME y X11. DistroIA utiliza Wayland/Hyprland exclusivamente.
+Ubuntu Desktop viene con GNOME y X11. Crystal Shell utiliza Wayland/Hyprland exclusivamente.
 
 ### Eliminación de Bloat UI:
 - Remover `gdm3`, `gnome-shell`, y aplicaciones `gnome-*`.

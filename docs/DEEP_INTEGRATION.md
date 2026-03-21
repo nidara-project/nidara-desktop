@@ -1,6 +1,6 @@
 # Arquitectura de Integración Profunda (Deep Integration)
 
-Esta guía documenta la estrategia de **Integración Profunda** utilizada en MiDistroIA para gestionar modificaciones del sistema operativo (SO) de forma versionada, segura y replicable.
+Esta guía documenta la estrategia de **Integración Profunda** utilizada en Crystal Shell para gestionar modificaciones del sistema operativo (SO) de forma versionada, segura y replicable.
 
 ## 1. El Problema: "El Síndrome de la Carpeta Dev"
 Tradicionalmente, los proyectos de software viven aislados en `/home/user/Dev/Proyecto`. Sin embargo, desarrollar un Sistema Operativo (o una distro personalizada) requiere modificar archivos fuera de esa carpeta:
@@ -64,5 +64,5 @@ El script de validación ahora verifica que la estructura de `system_root/` sea 
 
 ---
 **Resumen**:
-MiDistroIA no se "instala"; se **fusiona** con el sistema base.
+Crystal Shell no se "instala"; se **fusiona** con el sistema base.
 Todo cambio de estado debe reflejarse en `system_root` para ser inmortal.

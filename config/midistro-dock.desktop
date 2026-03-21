@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=MiDistroIA Dock
+Name=Crystal Shell Dock
 Comment=AI-Native Dock
-Exec=/home/angel/Dev/MiDistroIA/scripts/start_dock.sh
+Exec=$HOME/.config/crystal-shell/scripts/start_dock.sh
 Hidden=false
 NoDisplay=false
 X-GNOME-Autostart-enabled=true

@@ -1,6 +1,6 @@
 # Fluid Crystal — Theme System Architecture
 
-> Unified theming for Distroia: GTK4 apps, Libadwaita, and AGS shell components.
+> Unified theming for Crystal Shell: GTK4 apps, Libadwaita, and AGS shell components.
 
 ## Overview
 
@@ -28,7 +28,7 @@
 | `core/ThemeManager.ts` | Orchestrator: GSettings, symlinks, CssProviders, config I/O |
 | `styles/_tokens.scss` | SCSS fallbacks (build-time); runtime overridden by CssProvider |
 | `themes/fluid-crystal/` | Generated GTK4 CSS output + structural GTK bindings (`template-*.css`) |
-| `~/.config/distroia/fluid-crystal.json` | Persisted user config |
+| `~/.config/crystal-shell/fluid-crystal.json` | Persisted user config |
 
 ---
 

@@ -48,7 +48,7 @@ function AppMenu() {
     return new Gtk.Image({ icon_name: res || name, css_classes: ["bar-app-distro-icon"] })
   }
 
-  const distroIcon = getIcon("/home/angel/Dev/Distroia/ui/ags-v3/assets/logos/arch-white.svg")
+  const distroIcon = getIcon(`${GLib.get_home_dir()}/.config/crystal-shell/ui/ags-v3/assets/logos/arch-white.svg`)
 
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
     getServiceSafe(() => AstalHyprland.get_default(), "Hyprland").then(hyprland => {
@@ -118,7 +118,7 @@ function Workspaces() {
  */
 function ControlCenterMenu() {
   const box = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, margin_start: 16, margin_end: 16 })
-  box.append(new Gtk.Image({ file: "/home/angel/Dev/Distroia/ui/ags-v3/assets/logos/cc.svg", pixel_size: 14, valign: Gtk.Align.CENTER }))
+  box.append(new Gtk.Image({ file: `${GLib.get_home_dir()}/.config/crystal-shell/ui/ags-v3/assets/logos/cc.svg`, pixel_size: 14, valign: Gtk.Align.CENTER }))
 
   return SquircleContainer({
     child: box,

@@ -1,6 +1,6 @@
-# Guía de Configuración DistroIA
+# Guía de Configuración Crystal Shell
 
-En **DistroIA** (basada en Hyprland), la configuración se divide en dos partes principales. Aquí tienes qué herramienta usar para cada cosa:
+En **Crystal Shell** (basada en Hyprland), la configuración se divide en dos partes principales. Aquí tienes qué herramienta usar para cada cosa:
 
 ## 1. Usar "Ajustes de Ubuntu" (Panel Gráfico) 🛠️
 Usa el botón derecho en el Dock -> **Ajustes** para configurar todo lo relacionado con el **hardware y el sistema base**:

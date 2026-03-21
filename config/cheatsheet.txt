@@ -1,6 +1,6 @@
 
 ▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄
-█   ATAJOS DE DISTROIA   █
+█   ATAJOS DE CRYSTAL_SHELL   █
 ▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀
 
 VENTANAS:
@@ -19,7 +19,7 @@ ESPACIOS DE TRABAJO (WORKSPACES):
 
 APLICACIONES:
   [SUPER] + T          Terminal (GNOME Terminal)
-  [SUPER] + R          Lanzador de Apps (DistroIA Menu)
+  [SUPER] + R          Lanzador de Apps (Crystal Shell Menu)
   [SUPER] + D          Lanzador Rápido (Wofi)
   [SUPER] + H          Ver esta ayuda
 

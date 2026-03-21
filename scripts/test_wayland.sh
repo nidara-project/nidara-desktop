@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "🧪 Iniciando Sesión de Pruebas DistroIA (Wayland Nested)..."
+echo "🧪 Iniciando Sesión de Pruebas Crystal Shell (Wayland Nested)..."
 
 # Verificar si Hyprland existe
 if ! command -v Hyprland &> /dev/null; then
@@ -8,7 +8,7 @@ if ! command -v Hyprland &> /dev/null; then
     exit 1
 fi
 
-PROJECT_ROOT="$HOME/Dev/Distroia"
+PROJECT_ROOT="$HOME/.config/crystal-shell"
 CONFIG_FILE="$PROJECT_ROOT/config/hypr/hyprland.conf"
 
 # --- AQUAMARINE FIXES (New Hyprland Backend) ---

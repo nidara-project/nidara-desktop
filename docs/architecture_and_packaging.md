@@ -1,22 +1,22 @@
-# Arquitectura y Estrategia de Empaquetado de MiDistroIA 🛡️📦💎
+# Arquitectura y Estrategia de Empaquetado de Crystal Shell 🛡️📦💎
 
 Este documento define cómo estructuramos el código ahora (Desarrollo) y cómo se convertirá en una Distribución instalable (ISO).
 
 ## 1. El Concepto de las "Tres Capas"
 
 ### Capa A: El Código Fuente (Entorno de Desarrollo)
-*   **Ubicación**: `~/Dev/MiDistroIA`
+*   **Ubicación**: `~/.config/crystal-shell`
 *   **Tecnología**: Ags v3 (TypeScript), Hyprland Config.
 *   **Flujo**: Los cambios se aplican instantáneamente mediante `scripts/reload_ui.sh`.
 
 ### Capa B: El Sistema Base (La Producción)
-*   **Ubicación Futura**: `/usr/lib/midistroia` (Assets y scripts), `/etc/xdg/midistroia` (Configuraciones base).
+*   **Ubicación Futura**: `/usr/lib/crystal-shell` (Assets y scripts), `/etc/xdg/crystal-shell` (Configuraciones base).
 *   **Binarios**: Ags permite "bundles" (`ags bundle`) que empaquetan todo el JS/TS/CSS en un único archivo para su ejecución eficiente por el usuario final.
 *   **Instalación**: Se usará el motor `system_root/` para superponer los archivos sobre la raíz del sistema durante la creación de la ISO.
 
 ### Capa C: La Configuración de Usuario (Skeleton)
 *   **Ubicación**: `~/.config/hypr/`, `~/.config/ags/`.
-*   **Estrategia "Skel"**: Las configuraciones "maestras" guardadas en el repositorio se copian a `/etc/skel/` en la ISO, permitiendo que cada usuario nuevo empiece con la experiencia DistroIA completa y configurada.
+*   **Estrategia "Skel"**: Las configuraciones "maestras" guardadas en el repositorio se copian a `/etc/skel/` en la ISO, permitiendo que cada usuario nuevo empiece con la experiencia Crystal Shell completa y configurada.
 
 ---
 
@@ -32,7 +32,7 @@ El proceso de empaquetado seguirá este orden lógico:
 
 | Componente | Desarrollo (`~/Dev`) | Producción (ISO) |
 | :--- | :--- | :--- |
-| **Interfaz (Ags)** | `ui/ags-v3/app.ts` | `/usr/share/midistroia/ui/app.js` |
+| **Interfaz (Ags)** | `ui/ags-v3/app.ts` | `/usr/share/crystal-shell/ui/app.js` |
 | **Motor de Ventanas** | `config/hypr/hyprland.conf` | `/etc/skel/.config/hypr/hyprland.conf` |
 | **Servicios DBus** | Inyectados por Ags local | `/usr/share/dbus-1/services/` |
 | **Estilos CSS** | `ui/ags-v3/style.css` | Embebido en el bundle JS |

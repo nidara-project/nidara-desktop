@@ -1,5 +1,5 @@
 /**
- * Distroia - Dock Physics Engine
+ * Crystal Shell - Dock Physics Engine
  * Unified animation math: constants, magnification curve, spring stepping, and integer layout.
  */
 

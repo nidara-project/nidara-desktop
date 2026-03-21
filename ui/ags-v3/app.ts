@@ -38,13 +38,13 @@ import Settings from "./widget/settings/Settings"
 import PrismLab from "./widget/lab/PrismLab"
 import Theme from "./core/ThemeManager"
 
-console.log("[DISTROIA] Calling app.start()...");
+console.log("[CRYSTAL_SHELL] Calling app.start()...");
 
 app.start({
-  applicationId: "com.distroia.crystal",
+  applicationId: "com.crystalshell.fluid",
   main() {
     const randomId = Math.floor(Math.random() * 10000);
-    console.log(`[DISTROIA] main() started! (ID: ${randomId})`);
+    console.log(`[CRYSTAL_SHELL] main() started! (ID: ${randomId})`);
 
     const windows = new Set<any>()
     const appLauncherWindows: any[] = []

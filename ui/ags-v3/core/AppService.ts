@@ -95,8 +95,8 @@ class AppService {
 
         const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
 
-        // V150: DISTROIA OVERLAY PRIORITY 🛰️
-        const overlayBase = `${GLib.get_home_dir()}/.local/share/icons/distroia`
+        // V150: CRYSTAL_SHELL OVERLAY PRIORITY 🛰️
+        const overlayBase = `${GLib.get_home_dir()}/.local/share/icons/crystal-shell`
         const extensions = [".svg", ".png", ""]
         for (const ext of extensions) {
             const path = `${overlayBase}/scalable/apps/${n}${ext}`.replace("//", "/")
@@ -282,8 +282,8 @@ class AppService {
         }
 
         // V150: LOGGING & CACHING 🛰️
-        if (hit && hit.includes("distroia")) {
-            console.log(`[AppService] Resolved '${key}' -> DISTROIA OVERLAY: ${hit}`)
+        if (hit && hit.includes("crystal-shell")) {
+            console.log(`[AppService] Resolved '${key}' -> CRYSTAL_SHELL OVERLAY: ${hit}`)
         }
 
         if (hit) this.nameMap.set(k, hit)

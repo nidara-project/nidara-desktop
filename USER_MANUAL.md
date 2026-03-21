@@ -1,4 +1,4 @@
-# 📔 MANUAL DE USUARIO - DISTROIA
+# 📔 MANUAL DE USUARIO - CRYSTAL_SHELL
 
 Este documento es tu guía maestra para entender y controlar tu sistema. Aquí explicamos el "por qué" y el "cómo" de cada pieza para que no tengas que memorizarlo todo.
 
@@ -32,12 +32,12 @@ Estamos usando **swaybg** porque es la herramienta más estable para tu tarjeta 
 
 ## ⚙️ GESTIÓN DE CONFIGURACIÓN
 
-En DistroIA trabajamos con dos niveles de archivos para que nada se pierda nunca:
+En Crystal Shell trabajamos con dos niveles de archivos para que nada se pierda nunca:
 
 1.  **NIVEL USUARIO (EN VIVO)**: Se encuentra en `~/.config/`.
     - Es lo que el sistema lee **realmente** para funcionar.
     - Si cambias algo aquí y pulsas `SUPER + SHIFT + C`, lo verás aplicado al momento.
-2.  **NIVEL PROYECTO (SOURCE OF TRUTH)**: Se encuentra en `~/Dev/Distroia/config/`.
+2.  **NIVEL PROYECTO (SOURCE OF TRUTH)**: Se encuentra en `~/.config/crystal-shell/config/`.
     - Es nuestra "Copia de Oro". Está protegida por **Git**.
     - Sirve para que, si rompes algo en tu carpeta de usuario o el PC falla, podamos restaurar todo en un segundo desde el repositorio.
 
@@ -73,11 +73,11 @@ Actualmente estamos usando **swaybg** por estabilidad.
 
 ### "No aparecen los iconos de Red o Batería"
 Esto sucede si las librerías **Astal** no están instaladas o no se encuentran en el `GI_TYPELIB_PATH`.
-- Usa `provision.sh` en la raíz del proyecto para arreglarlo.
+- Usa `install.sh` en la raíz del proyecto para arreglarlo.
 
 ---
 
 ## 🏗️ ARQUITECTURA TÉCNICA
 - **Compositor**: Hyprland (Wayland).
 - **Librería UI**: AGS v3 (GJS + GTK4 + Gtk4LayerShell).
-- **Provisión**: Script `provision.sh` para instalación rápida dependencias en Arch.
+- **Instalación**: Script `install.sh` para instalación rápida dependencias en Arch.

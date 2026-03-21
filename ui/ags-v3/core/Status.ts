@@ -1,7 +1,7 @@
 import GObject from "gi://GObject"
 
 /**
- * 🛰️ DISTROIA UI STATUS ENGINE
+ * 🛰️ CRYSTAL_SHELL UI STATUS ENGINE
  * 
  * Centralized GObject-based state for overlays.
  * Allows reactive binding without App-level signal collision.
@@ -9,7 +9,7 @@ import GObject from "gi://GObject"
 export class UIStatus extends GObject.Object {
     static {
         GObject.registerClass({
-            GTypeName: "DistroiaUIStatus",
+            GTypeName: "Crystal ShellUIStatus",
             Properties: {
                 "cc-open": GObject.ParamSpec.boolean("cc-open", "CC Open", "Control Center visibility", GObject.ParamFlags.READWRITE, false),
                 "nc-open": GObject.ParamSpec.boolean("nc-open", "NC Open", "Notification Center visibility", GObject.ParamFlags.READWRITE, false),

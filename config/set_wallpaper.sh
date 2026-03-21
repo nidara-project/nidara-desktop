@@ -2,7 +2,7 @@
 # /scripts/set_wallpaper.sh
 
 # 1. Definimos la base (Ajustada a tu ruta de desarrollo)
-WALLPAPER_DIR="/home/angel/Pictures/Wallpapers"
+WALLPAPER_DIR="$HOME/.config/crystal-shell/config"
 DEFAULT_WALLPAPER="wallpaper.jpg"
 
 # 2. Lógica de selección:

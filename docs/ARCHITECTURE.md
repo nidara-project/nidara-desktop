@@ -1,4 +1,4 @@
-# MiDistroIA: Manifiesto de Arquitectura 🛡️🚀💎
+# Crystal Shell: Manifiesto de Arquitectura 🛡️🚀💎
 
 > *"No personalizamos Ubuntu. Construimos algo nuevo."*
 
@@ -6,7 +6,7 @@
 
 ## 1. Visión
 
-**MiDistroIA** es un sistema operativo diseñado desde cero para la era de la Inteligencia Artificial.
+**Crystal Shell** es un sistema operativo diseñado desde cero para la era de la Inteligencia Artificial.
 
 - **Para humanos**: Interfaz minimalista, elegante, sin fricción (Glassmorphism).
 - **Para IAs**: APIs abiertas, componentes modulares, estado legible y modificable.
@@ -84,7 +84,7 @@ graph TB
 ## 5. Estructura de Directorios (Ags v3)
 
 ```text
-~/Dev/MiDistroIA/
+~/.config/crystal-shell/
 ├── config/
 │   ├── hypr/               # Configuración estricta de Hyprland
 │   └── theme.json          # (Futuro) Tokens de diseño unificados

@@ -2,7 +2,7 @@
   "scripts": {
     "dev": "sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ags run app.ts",
     "run": "ags run app.ts",
-    "build": "mkdir -p build && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ags bundle app.ts build/distroia"
+    "build": "mkdir -p build && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ags bundle app.ts build/crystal-shell"
   },
   "dependencies": {
     "ags": "*",

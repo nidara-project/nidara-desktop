@@ -1,4 +1,4 @@
-# MiDistroIA Dock Specification: Gaussian V136 (Purist Glass) 🧸🍎💎
+# Crystal Shell Dock Specification: Gaussian V136 (Purist Glass) 🧸🍎💎
 
 This document defines the technical implementation, physics, and geometry of the Unified Dock Engine as of version 136 (Purist Glass Model).
 

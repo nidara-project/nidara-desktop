@@ -1,6 +1,6 @@
-# MiDistroIA - El futuro de mi escritorio 💎
+# Crystal Shell - El futuro de mi escritorio 💎
 
-MiDistroIA es un entorno de escritorio (DE) personalizado basado en **Hyprland** y **AGS v3 (Aylur's Gtk Shell)**, diseñado para ser extremadamente rápido, visualmente premium y altamente optimizado sobre **Arch Linux**.
+Crystal Shell es un entorno de escritorio (DE) personalizado basado en **Hyprland** y **AGS v3 (Aylur's Gtk Shell)**, diseñado para ser extremadamente rápido, visualmente premium y altamente optimizado sobre **Arch Linux**.
 
 ## 🚀 Características Clave
 - **Compositor**: Hyprland (Wayland) para animaciones ultra-fluidas y tiling window management.
@@ -18,11 +18,11 @@ MiDistroIA es un entorno de escritorio (DE) personalizado basado en **Hyprland**
 ## 💿 Instalación (Usuarios)
 El proyecto incluye un script de aprovisionamiento robusto para **Arch Linux** que configura todo el sistema (SDDM, Hyprland, Audio, UI) automáticamente.
 
-1.  **Clonar Repo**: `git clone https://github.com/aalonx/Distroia.git ~/Dev/Distroia`
+1.  **Clonar Repo**: `git clone https://github.com/aalonx/Crystal Shell.git ~/.config/crystal-shell`
 2.  **Ejecutar Script**:
     ```bash
-    cd ~/Dev/Distroia
-    ./provision.sh
+    cd ~/.config/crystal-shell
+    ./install.sh
     ```
 3.  **Iniciar Sesión**: Reinicia el equipo **O** ejecuta `sudo systemctl start sddm` para entrar en el entorno gráfico.
 
@@ -57,4 +57,4 @@ La lógica de la interfaz (AGS v3) se encuentra en `ui/ags-v3/`:
 3.  Modo ejecución: `ags run`
 
 ---
-💎 **MiDistroIA** - *Performance, Aesthetics, Intelligence.*
+💎 **Crystal Shell** - *Performance, Aesthetics, Intelligence.*

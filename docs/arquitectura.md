@@ -1,4 +1,4 @@
-# Documentación Técnica de MiDistroIA
+# Documentación Técnica de Crystal Shell
 
 Este es un documento de prueba para verificar que el agente puede acceder a documentos técnicos en el espacio de trabajo.
 

@@ -1,6 +1,6 @@
 # macOS Design Foundations (Technical Spec)
 
-Este documento detalla los principios técnicos de los efectos visuales de Apple para su implementación en DistroIA.
+Este documento detalla los principios técnicos de los efectos visuales de Apple para su implementación en Crystal Shell.
 
 ## 1. Materiales y Translucidez (Vibrancy)
 macOS utiliza un sistema llamado "Vibrancy" que no es solo un desenfoque (blur), sino una mezcla de capas:

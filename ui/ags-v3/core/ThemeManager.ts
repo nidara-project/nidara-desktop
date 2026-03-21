@@ -60,7 +60,7 @@ class ThemeManager extends GObject.Object {
     }
 
     private fcConfig: FluidCrystalConfig = { ...DEFAULT_CONFIG }
-    private configPath = `${GLib.get_user_config_dir()}/distroia/theme_settings.json`
+    private configPath = `${GLib.get_user_config_dir()}/crystal-shell/theme_settings.json`
     private lastRegisteredTheme: string = ""
     private _lastTokensCss: string = ""
     private _lastTintCss: string = ""
@@ -263,6 +263,7 @@ class ThemeManager extends GObject.Object {
         this.persistenceDebounceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
             console.log(`[ThemeManager] Ghost-Token persistence triggered`)
             writeTokens(this.fcConfig)
+            saveFCConfig(this.fcConfig)
             this.saveSettings()
             this.persistenceDebounceId = 0
             return GLib.SOURCE_REMOVE
@@ -320,7 +321,7 @@ class ThemeManager extends GObject.Object {
                 Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 2)
                 Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 3)
                 
-                const projectDir = GLib.getenv("DISTROIA_DIR") || `${GLib.get_home_dir()}/Dev/Distroia`
+                const projectDir = GLib.getenv("CRYSTAL_SHELL_DIR") || `${GLib.get_home_dir()}/.config/crystal-shell`
                 const stylePath = `${projectDir}/ui/ags-v3/style.css`
                 if (GLib.file_test(stylePath, GLib.FileTest.EXISTS)) {
                     this.mainProvider.load_from_path(stylePath)
@@ -437,7 +438,7 @@ class ThemeManager extends GObject.Object {
     }
 
     private saveSettings() {
-        const dir = `${GLib.get_user_config_dir()}/distroia`
+        const dir = `${GLib.get_user_config_dir()}/crystal-shell`
         if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
         writeFile(this.configPath, JSON.stringify(this.state, null, 2))
         writeQtSettings(this.fcConfig, this.state.iconTheme)

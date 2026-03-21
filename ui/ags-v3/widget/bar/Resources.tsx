@@ -90,14 +90,14 @@ export default function SystemResources() {
         margin_bottom: 4
     })
 
-    const cpu = ResourceCircle("/home/angel/Dev/Distroia/ui/ags-v3/assets/logos/cpu.svg", (cb) => {
+    const cpu = ResourceCircle(`${GLib.get_home_dir()}/.config/crystal-shell/ui/ags-v3/assets/logos/cpu.svg`, (cb) => {
         execAsync(["bash", "-c", "LC_ALL=C top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'"]).then(out => {
             const val = parseFloat(out.trim().replace(",", "."))
             cb(isNaN(val) ? 0 : Math.floor(val))
         }).catch(() => cb(0))
     }, 2000)
 
-    const ram = ResourceCircle("/home/angel/Dev/Distroia/ui/ags-v3/assets/logos/ram.svg", (cb) => {
+    const ram = ResourceCircle(`${GLib.get_home_dir()}/.config/crystal-shell/ui/ags-v3/assets/logos/ram.svg`, (cb) => {
         execAsync(["bash", "-c", "LC_ALL=C free -m | grep Mem | awk '{print $3/$2 * 100}'"]).then(out => {
             const val = parseFloat(out.trim().replace(",", "."))
             cb(isNaN(val) ? 0 : Math.floor(val))

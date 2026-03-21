@@ -1,10 +1,33 @@
 #!/bin/bash
-# Distroia - ISO Provisioning Script 💎
+# Crystal Shell - ISO Provisioning Script 💎
 # Designed for EndeavourOS / Arch Linux 🚀
 
 set -e
 
-echo "🚀 Starting Distroia Provisioning (Arch Linux Mode)..."
+echo "🚀 Starting Crystal Shell Provisioning (Arch Linux Mode)..."
+
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+INSTALL_DIR="$HOME/.config/crystal-shell"
+
+if [ "$REPO_DIR" != "$INSTALL_DIR" ]; then
+    echo "=========================================="
+    echo "💎 Crystal Shell Installation Mode"
+    echo "=========================================="
+    echo "Elige el modo de instalación para $INSTALL_DIR:"
+    echo "1) Instalación Normal (Copia de archivos - Recomendado para usuarios)"
+    echo "2) Instalación de Desarrollo (Symlink - Recomendado para programar)"
+    read -p ">> Selecciona [1/2] (por defecto 1): " INSTALL_MODE
+
+    if [ "$INSTALL_MODE" = "2" ]; then
+        echo "🔗 Creando enlace simbólico de desarrollo..."
+        rm -rf "$INSTALL_DIR"
+        ln -sfn "$REPO_DIR" "$INSTALL_DIR"
+    else
+        echo "📂 Copiando los archivos base..."
+        mkdir -p "$INSTALL_DIR"
+        cp -rT "$REPO_DIR" "$INSTALL_DIR"
+    fi
+fi
 
 # 1. System Dependencies
 echo "📦 Installing system dependencies via pacman..."
@@ -155,7 +178,7 @@ sudo meson install -C build
 
 # 6. UI Setup
 echo "🖥️ Setting up AGS UI..."
-cd "$HOME/Dev/Distroia/ui/ags-v3" || echo "⚠️ UI Directory not found, skipping npm install."
+cd "$INSTALL_DIR/ui/ags-v3" || echo "⚠️ UI Directory not found, skipping npm install."
 npm install
 
 # 7. Enable Audio Services
@@ -176,10 +199,10 @@ mkdir -p "$HOME/.config/hypr"
 if [ -f "$HOME/.config/hypr/hyprland.conf" ] && [ ! -L "$HOME/.config/hypr/hyprland.conf" ]; then
     mv "$HOME/.config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf.bak"
 fi
-ln -sf "$HOME/Dev/Distroia/config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf"
+ln -sf "$INSTALL_DIR/config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf"
  
  # 9. Configure XDG Portals (Modern Apps Theme Support)
- echo "🎨 Configuring XDG Desktkop Portals..."
+ echo "🎨 Configuring XDG Desktop Portals..."
  mkdir -p "$HOME/.config/xdg-desktop-portal"
  cat <<EOF > "$HOME/.config/xdg-desktop-portal/portals.conf"
  [preferred]
@@ -188,6 +211,16 @@ ln -sf "$HOME/Dev/Distroia/config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprla
  org.freedesktop.impl.portal.Screenshot=hyprland
  EOF
 
-echo "✅ Provisioning Complete!"
-echo "👉 Restart (or run 'sudo systemctl start sddm') to enter SDDM."
+ # 10. Desktop Session Entry
+ echo "📝 Creating Crystal Shell Desktop Entry for Display Managers..."
+ sudo mkdir -p /usr/share/wayland-sessions
+ cat <<EOF | sudo tee /usr/share/wayland-sessions/crystal-shell.desktop > /dev/null
+[Desktop Entry]
+Name=Crystal Shell
+Comment=A fluid, glassmorphic desktop environment based on Hyprland & AGS
+Exec=hyprland -c $HOME/.config/hypr/hyprland.conf
+Type=Application
+EOF
 
+echo "✅ Provisioning Complete!"
+echo "👉 Restart (or run 'sudo systemctl start sddm') and select 'Crystal Shell' from the login screen."

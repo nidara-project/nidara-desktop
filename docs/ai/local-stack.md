@@ -1,6 +1,6 @@
 # Arquitectura de Inteligencia Local (AI Stack)
 
-DistroIA se diferencia por integrar IA generativa como un **servicio nativo del sistema operativo**, no como una aplicación externa.
+Crystal Shell se diferencia por integrar IA generativa como un **servicio nativo del sistema operativo**, no como una aplicación externa.
 
 ## 1. El Motor: Ollama (System Daemon)
 Usamos **Ollama** por su eficiencia, soporte de hardware y API sencilla.

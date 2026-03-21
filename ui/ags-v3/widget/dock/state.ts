@@ -1,5 +1,5 @@
 /**
- * MiDistroIA Dock - Shared Types and State
+ * Crystal Shell Dock - Shared Types and State
  * V106: Extracted for modular architecture
  */
 

@@ -1,11 +1,11 @@
-# Long-term Memory: DistroIA Evolution
+# Long-term Memory: Crystal Shell Evolution
 
 ## Design Systems
 - **Fluid Crystal:** The official aesthetic name for the translucent, blurred glass look with superellipse (n=3.2) curvature.
 - **Grid Strategy:** All UI elements follow a strict mathematical grid (UNIT=80, GAP=12) to ensure perfect alignment across different widgets.
 
-## The Distroia Manifesto 
-- **Unified Identity:** Distroia is not just a collection of apps; it's a unified organism. Every pixel, from the dock to the control center, must share the same visual DNA (Fluid Crystal).
+## The Crystal Shell Manifesto 
+- **Unified Identity:** Crystal Shell is not just a collection of apps; it's a unified organism. Every pixel, from the dock to the control center, must share the same visual DNA (Fluid Crystal).
 - **The 90% Rule:** While 100% unification in Linux is hampered by fragmentation (GTK, Qt, Compositors), we aim for a "90% perceived unity" where the user feels a seamless, premium experience.
 - **Craft over Compromise:** We don't settle for "it works." We settle for "it's beautiful." If a technical limit (like Hyprglass framebuffers) blocks the vision, we research, fork, and push the boundaries.
 

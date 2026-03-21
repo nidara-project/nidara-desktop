@@ -103,7 +103,7 @@ function SystemActionStrip(win: Gtk.Window) {
 }
 
 /**
- * AppGrid - Fullscreen Launchpad for DistroIA 💎
+ * AppGrid - Fullscreen Launchpad for Crystal Shell 💎
  */
 export default function AppGrid(monitor: Gdk.Monitor) {
     const win = new Gtk.Window({

@@ -1,4 +1,4 @@
-# PROJECT_DNA: DistroIA 🦍
+# PROJECT_DNA: Crystal Shell 🦍
 
 > **DO NOT DELETE. THIS IS THE SEED.**
 
@@ -24,4 +24,4 @@
 
 ## 4. Continuity Strategy
 - Artifacts in `.antigravity/` are the backup of the "brain".
-- If the system is wiped, `git clone` + `./provision.sh` + reading this file restores the agent's soul.
+- If the system is wiped, `git clone` + `./install.sh` + reading this file restores the agent's soul.

@@ -32,9 +32,12 @@ target/
 *.gif
 *.webp
 
-# Profiling & Local Cache
-ui/ags-v3/isolated_config/
-ui/ags-v3/astal-local/
+# Antigravity / Agent
+.agent/
+.agents/
+_agent/
+_agents/
+.antigravity/
 .gemini/
 brain/
 logs/
@@ -75,6 +78,10 @@ settings_addr.txt
 # Generated CSS
 ui/ags-v3/style.css
 ui/ags-v3/style.css.map
+# User configs
+theme_settings.json
+fluid-crystal.json
+
+# Agent Memory
 MEMORY.md
-memory/2026-03-20.md
-MEMORY.md
+memory/

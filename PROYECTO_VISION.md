@@ -1,4 +1,4 @@
-# MiDistroIA: Especificaciones de Estructura Base 💎
+# Crystal Shell: Especificaciones de Estructura Base 💎
 
 ## Arquitectura de Capas:
 - **Nivel 0 (Kernel/Base):** Arch Linux / EndeavourOS.
