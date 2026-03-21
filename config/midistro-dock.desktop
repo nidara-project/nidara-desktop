@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Crystal Shell Dock
-Comment=AI-Native Dock
-Exec=$HOME/.config/crystal-shell/scripts/start_dock.sh
-Hidden=false
-NoDisplay=false
-X-GNOME-Autostart-enabled=true
-X-GNOME-Autostart-Delay=3
