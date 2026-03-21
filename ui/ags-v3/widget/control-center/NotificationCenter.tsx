@@ -104,7 +104,7 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
 export default function NotificationCenter() {
     const notifd = AstalNotifd.get_default()
     const expandedGroups = new Set<string>()
-    const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: Gtk.Revealer, subBox: Gtk.Box, sig: string }>()
+    const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string }>()
 
     const overlay = new Gtk.Overlay({ css_classes: ["nc-window-root", "nc-overlay"], hexpand: true, vexpand: true })
     const catcher = new Gtk.Box({ hexpand: true, vexpand: true }); overlay.set_child(catcher)
@@ -144,7 +144,7 @@ export default function NotificationCenter() {
             let cache = groupCache.get(id)
             if (!cache) {
                 const subBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_top: 4 })
-                const revealer = new Gtk.Revealer({ child: subBox, transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, transition_duration: 350 })
+                const revealer = new (Gtk as any).Revealer({ child: subBox, transition_type: (Gtk as any).RevealerTransitionType.SLIDE_DOWN, transition_duration: 350 })
                 const headerBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
                 const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_bottom: 8 })
                 container.append(headerBox); container.append(revealer)
