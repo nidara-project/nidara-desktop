@@ -102,7 +102,7 @@ export default function Overlays(monitor: Gdk.Monitor, mid: string | number = 0)
             layer: Gtk4LayerShell.Layer.OVERLAY,
             namespace: "crystal-nc",
             anchor: { top: true, bottom: true, right: true },
-            margin: { top: ncHideMargin, right: 12 },
+            margin: { top: ncHideMargin, right: 0 }, // Right 0 because content is aligned inside
             width: 450
         }
     })

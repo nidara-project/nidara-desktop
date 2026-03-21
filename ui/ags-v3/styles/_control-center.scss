@@ -8,7 +8,10 @@
 window.notification-center-win,
 window.notif-win,
 window.atomic-island-win,
-window.control-center-win {
+window.control-center-win,
+window.nc-window-0,
+window.nc-window-1,
+window.nc-window-2 {
     background: none;
     background-color: transparent;
     border: none;
@@ -85,11 +88,12 @@ window.control-center-win {
 .cc-atomic-label-bold {
     font-size: 0.9em;
     font-weight: 700;
+    color: white;
 }
 
 .cc-atomic-label-dim {
     font-size: 0.8em;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(255, 255, 255, 0.7);
 }
 
 .cc-atomic-focus-btn {
@@ -144,6 +148,22 @@ window.control-center-win {
     margin-left: 6px;
 }
 
+/* Calendar Cleanup */
+.nc-calendar-island {
+    calendar {
+        background: none;
+        background-color: transparent;
+        border: none;
+        box-shadow: none;
+        
+        &.view, & header, & button {
+            background: none;
+            background-color: transparent;
+            border: none;
+        }
+    }
+}
+
 .nc-item-expand-btn, .nc-item-clear-btn {
     background: rgba(255, 255, 255, 0.08);
     border-radius: 20px;
@@ -164,12 +184,76 @@ window.control-center-win {
 
 .nc-item-time {
     font-size: 0.75rem;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.4);
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.65);
 }
 
 .notif-app-icon,
 .nc-group-icon,
 .notif-item-icon {
     -gtk-icon-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* --- NC Global Layout --- */
+.nc-content-box {
+    padding: 0;
+    margin-right: 12px;
+}
+
+.nc-empty {
+    font-size: 1.1em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.2);
+}
+
+.nc-clear-all-pill {
+    margin-bottom: 20px;
+    transition: all 0.2s ease;
+
+    label {
+        font-size: 0.85em;
+        font-weight: 700;
+        color: rgba(255, 255, 255, 0.75);
+    }
+    
+    &:hover {
+        label { color: white; }
+    }
+}
+
+/* --- Crystal Scrollbar --- */
+scrollbar.nc-transparent-scroll {
+    background: transparent;
+    border: none;
+    
+    & contents, & trough {
+        background: transparent;
+        border: none;
+    }
+    
+    & slider {
+        min-width: 3px;
+        min-height: 20px;
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 20px;
+        margin-right: 2px;
+        transition: all 0.3s ease;
+        
+        &:hover {
+            background: rgba(255, 255, 255, 0.3);
+            min-width: 6px;
+        }
+    }
+    
+    &.vertical slider {
+        margin-left: 10px;
+    }
+}
+
+/* Remove default scrollbar buttons */
+scrollbar button {
+    display: none;
+    opacity: 0;
+    min-width: 0;
+    min-height: 0;
 }
