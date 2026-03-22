@@ -94,3 +94,4 @@ IDENTITY.md
 # Build & External Dependencies
 vendor/
 plugins/
+astal-local/
