@@ -760,8 +760,18 @@ export function writeGeneratedTheme(config: FluidCrystalConfig, baseThemeCssPath
     const targetPath = `${configDir}/gtk.css`
     
     GLib.mkdir_with_parents(configDir, 0o755)
-    writeFile(targetPath, master)
-    writeFile(`${configDir}/gtk-dark.css`, master)
+    
+    if (d === "gtk-4.0") {
+      writeFile(targetPath, master)
+      writeFile(`${configDir}/gtk-dark.css`, master)
+    } else {
+      let fallback = "/* GTK3 Fallback: Only tokens, no structural glass overrides (Fixes Chrome tooltips) */\n"
+      if (baseThemeCssPath) fallback += `@import url("file://${baseThemeCssPath}");\n`
+      fallback += `@import url("_tokens.css");\n\n`
+      
+      writeFile(targetPath, fallback)
+      writeFile(`${configDir}/gtk-dark.css`, fallback)
+    }
   }
 }
 
