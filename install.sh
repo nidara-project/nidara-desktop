@@ -57,6 +57,7 @@ sudo pacman -Sy --needed --noconfirm \
     jq \
     slurp \
     grim \
+    wl-clipboard \
     mesa \
     pam \
     git \
