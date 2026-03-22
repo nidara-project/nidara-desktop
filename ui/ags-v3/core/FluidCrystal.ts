@@ -183,9 +183,7 @@ window.background:APP_OVERRIDE list.boxed {
   popovers: `
 popover > contents,
 popover.background > contents,
-.menu,
-.background.popup,
-tooltip > box.background {
+.menu {
   background-color: @fc_popover_bg;
 }
 `
