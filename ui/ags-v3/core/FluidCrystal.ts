@@ -382,35 +382,7 @@ levelbar block.high:backdrop:APP_OVERRIDE {
   background-color: alpha(@accent_bg_color, 0.4);
 }
 
-/* ================================================================
-   12. GTK3 SPECIFIC FIXES (Chrome, Steam, etc)
-   Normalizing excessive rounding and layout quirks.
-   ================================================================ */
 
-tooltip.background, 
-tooltip.background.csd,
-tooltip.csd decoration,
-tooltip > box,
-tooltip > box.background,
-tooltip decoration,
-/* .tooltip, */
-#tooltip,
-.status-bubble,
-.statusbubble {
-  border-radius: 8px;
-}
-
-popover > contents,
-popover.background > contents,
-popover decoration,
-.popover,
-.menu,
-.background.popup,
-.popup,
-#menu,
-.menu.popup {
-  border-radius: 12px;
-}
 `
 
 const PANEL_SELECTORS: Record<keyof TintPanels, string[]> = {
