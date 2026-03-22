@@ -761,35 +761,9 @@ export function writeGeneratedTheme(config: FluidCrystalConfig, baseThemeCssPath
     
     GLib.mkdir_with_parents(configDir, 0o755)
     
-    if (d === "gtk-4.0") {
+    if (d === "gtk-4.0" || d === "gtk-3.0") {
       writeFile(targetPath, master)
       writeFile(`${configDir}/gtk-dark.css`, master)
-    } else {
-      let fallback = "/* GTK3 Fallback: Only tokens, no structural glass overrides (Fixes Chrome tooltips) */\n"
-      if (baseThemeCssPath) {
-        const gtk3Path = baseThemeCssPath.replace("/gtk-4.0/", "/gtk-3.0/")
-        fallback += `@import url("file://${gtk3Path}");\n`
-      }
-      fallback += `@import url("_tokens.css");\n\n`
-      
-      const CHROMIUM_GTK3_FIX = `
-/* ================================================================
-   CRITICAL CHROMIUM WAYLAND FIXES
-   Overrides excessive base GTK theme radii that break Chrome tooltips.
-   ================================================================ */
-tooltip, tooltip.background, tooltip.csd, tooltip > box.background {
-  border-radius: 6px;
-  box-shadow: none;
-}
-
-.status-bubble, .statusbubble {
-  border-radius: 4px;
-}
-`
-      fallback += CHROMIUM_GTK3_FIX
-      
-      writeFile(targetPath, fallback)
-      writeFile(`${configDir}/gtk-dark.css`, fallback)
     }
   }
 }
