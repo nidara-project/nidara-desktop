@@ -778,12 +778,12 @@ export function writeGeneratedTheme(config: FluidCrystalConfig, baseThemeCssPath
    Overrides excessive base GTK theme radii that break Chrome tooltips.
    ================================================================ */
 tooltip, tooltip.background, tooltip.csd, tooltip > box.background {
-  border-radius: 6px !important;
-  box-shadow: none !important;
+  border-radius: 6px;
+  box-shadow: none;
 }
 
 .status-bubble, .statusbubble {
-  border-radius: 4px !important;
+  border-radius: 4px;
 }
 `
       fallback += CHROMIUM_GTK3_FIX
