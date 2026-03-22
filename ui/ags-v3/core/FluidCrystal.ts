@@ -772,6 +772,22 @@ export function writeGeneratedTheme(config: FluidCrystalConfig, baseThemeCssPath
       }
       fallback += `@import url("_tokens.css");\n\n`
       
+      const CHROMIUM_GTK3_FIX = `
+/* ================================================================
+   CRITICAL CHROMIUM WAYLAND FIXES
+   Overrides excessive base GTK theme radii that break Chrome tooltips.
+   ================================================================ */
+tooltip, tooltip.background, tooltip.csd, tooltip > box.background {
+  border-radius: 6px !important;
+  box-shadow: none !important;
+}
+
+.status-bubble, .statusbubble {
+  border-radius: 4px !important;
+}
+`
+      fallback += CHROMIUM_GTK3_FIX
+      
       writeFile(targetPath, fallback)
       writeFile(`${configDir}/gtk-dark.css`, fallback)
     }
