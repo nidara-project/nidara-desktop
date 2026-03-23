@@ -31,8 +31,6 @@ import { syncConstants } from "./widget/dock/DockPhysics"
 import { onDockSettingsChanged } from "./widget/dock/state"
 import AppGrid from "./widget/app-grid/AppGrid"
 import Bar from "./widget/bar/Bar"
-import Overlays from "./widget/bar/Overlays"
-import NotificationPopups from "./widget/control-center/NotificationPopups"
 import PowerMenu from "./widget/power-menu/PowerMenu"
 import Settings from "./widget/settings/Settings"
 import PrismLab from "./widget/lab/PrismLab"
@@ -42,9 +40,15 @@ console.log("[CRYSTAL_SHELL] Calling app.start()...");
 
 app.start({
   applicationId: "com.crystalshell.fluid",
-  main() {
+    main() {
     const randomId = Math.floor(Math.random() * 10000);
     console.log(`[CRYSTAL_SHELL] main() started! (ID: ${randomId})`);
+
+    // 🚀 STABILIZATION: Set Hyprland rules
+    import("ags/process").then(({ execAsync }) => {
+        execAsync("hyprctl keyword layerrule 'blur, crystal-bar'").catch(() => {})
+        execAsync("hyprctl keyword layerrule 'ignorealpha 0.5, crystal-bar'").catch(() => {})
+    }).catch(() => {})
 
     const windows = new Set<any>()
     const appLauncherWindows: any[] = []
@@ -56,24 +60,20 @@ app.start({
       try {
         const barWin = Bar(monitor)
         const dockWin = Dock(monitor)
-        const overlays = Overlays(monitor, idx)
-        const notifPopups = NotificationPopups(monitor)
-
+        
         windows.add(barWin); 
         windows.add(dockWin);
-        windows.add(notifPopups);
-        overlays.forEach(w => windows.add(w))
 
         // Dock rebuild on settings change
         let rebuildTimer: number | null = null
         onDockSettingsChanged(() => {
           if (rebuildTimer) GLib.source_remove(rebuildTimer)
-          rebuildTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+          rebuildTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
             rebuildTimer = null
             try {
               syncConstants()
               windows.forEach(w => {
-                if ((w as any).name === "crystal-dock") {
+                if (w.name === "crystal-dock" && (w as any).gdkmonitor === monitor) {
                   windows.delete(w)
                   ; (w as any).close()
                 }

@@ -67,5 +67,6 @@ export default function ManagedWindow({
     }
 
     win.set_child(child)
+    win.present()
     return win
 }

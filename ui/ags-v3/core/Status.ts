@@ -9,7 +9,7 @@ import GObject from "gi://GObject"
 export class UIStatus extends GObject.Object {
     static {
         GObject.registerClass({
-            GTypeName: "Crystal ShellUIStatus",
+            GTypeName: "Crystal_ShellUIStatus",
             Properties: {
                 "cc-open": GObject.ParamSpec.boolean("cc-open", "CC Open", "Control Center visibility", GObject.ParamFlags.READWRITE, false),
                 "nc-open": GObject.ParamSpec.boolean("nc-open", "NC Open", "Notification Center visibility", GObject.ParamFlags.READWRITE, false),
