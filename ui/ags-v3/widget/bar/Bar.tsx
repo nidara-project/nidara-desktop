@@ -22,7 +22,7 @@ import Prism from "../prism/Prism"
 import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
 
 function AppMenu() {
-  const box = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, margin_start: 12, margin_end: 12 })
+  const box = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, margin_start: 16, margin_end: 16 })
   const getIcon = (name: string) => {
     const res = appService.getIconName(name)
     const file = res?.replace("file://", "")
@@ -46,7 +46,7 @@ function AppMenu() {
 
 function Workspaces() {
   const hypr = AstalHyprland.get_default()
-  const box = new Gtk.Box({ spacing: 10, margin_start: 12, margin_end: 12 })
+  const box = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16 })
   for (let i = 1; i <= 5; i++) {
     const dot = new Gtk.Box({ css_classes: ["workspace-dot"], valign: Gtk.Align.CENTER })
     const update = () => {
@@ -71,7 +71,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   })
   win.set_opacity(0)
 
-  const masterOverlay = new Gtk.Overlay({ vexpand: true, hexpand: true })
+  const masterOverlay = new Gtk.Overlay({ valign: Gtk.Align.FILL, vexpand: true })
   const barBox = new Gtk.CenterBox({ css_classes: ["bar-centerbox"], height_request: 40, valign: Gtk.Align.START, margin_start: 8, margin_end: 8 })
 
   const cc = ControlCenterWidget(gdkmonitor)
@@ -89,15 +89,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   cc.valign = Gtk.Align.START; cc.halign = Gtk.Align.END
   nc.valign = Gtk.Align.START; nc.halign = Gtk.Align.END
-  prism.valign = Gtk.Align.START; prism.halign = Gtk.Align.CENTER
+  prism.valign = Gtk.Align.CENTER; prism.halign = Gtk.Align.CENTER
   popups.valign = Gtk.Align.START; popups.halign = Gtk.Align.END
 
-  cc.margin_top = 40; cc.margin_end = 12
-  nc.margin_top = 40; nc.margin_end = 12
-  prism.margin_top = 60
+  cc.margin_top = 48; cc.margin_end = 8
+  nc.margin_top = 48; nc.margin_end = 8
+  prism.margin_top = 0
   popups.margin_top = 54; popups.margin_end = 12
 
-  const maxH = monGeo.height - 100
+  // 💎 TAHOE GEOMETRY: NC must end just before the dock
+  const maxH = monGeo.height - 160 // 40 (Bar) + 92 (Dock) + 28 (Safety)
   cc.height_request = 800; nc.height_request = maxH; prism.height_request = 500
 
   const updateInputRegion = () => {
@@ -141,27 +142,33 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     cc.set_visible(status.cc_open); nc.set_visible(status.nc_open); prism.set_visible(status.prism_open)
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })
   }
-  status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::prism-open", syncOverlays)
+  status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays)
+  status.connect("notify::prism-open", () => { 
+    syncOverlays() // Call syncOverlays to update visibility and input region
+    Gtk4LayerShell.set_keyboard_mode(win, status.prism_open ? Gtk4LayerShell.KeyboardMode.ON_DEMAND : Gtk4LayerShell.KeyboardMode.NONE)
+  })
   
   syncOverlays()
 
   const left = new Gtk.Box({ halign: Gtk.Align.START, spacing: 8 }); left.append(AppMenu())
   const center = new Gtk.Box({ halign: Gtk.Align.CENTER }); center.append(Workspaces())
-  const right = new Gtk.Box({ halign: Gtk.Align.END, spacing: 8 })
+  const right = new Gtk.Box({ halign: Gtk.Align.END, spacing: 10 }) // 💎 PURE AIR: Slightly more spacing
 
-  const timeContent = new Gtk.Box({ spacing: 12, margin_start: 12, margin_end: 12 })
+  const timeContent = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16 })
   const timeLabel = new Gtk.Label({ label: "..." })
   const timeAccessor = createPoll("...", 1000, "date +'%a %b %d  %H:%M'", (out) => out.trim())
   timeAccessor.subscribe(() => { timeLabel.label = timeAccessor.get() })
   timeContent.append(new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 14 })); timeContent.append(timeLabel)
 
   right.append(SquircleContainer({ child: SystemResources(), gloss: true, alpha: 0.15, perfect: true }))
-  right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: "edit-find-symbolic", pixel_size: 14, margin_start: 12, margin_end: 12 }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, perfect: true }))
-  right.append(SquircleContainer({ child: new Gtk.Image({ file: `${GLib.get_home_dir()}/.config/crystal-shell/ui/ags-v3/assets/logos/cc.svg`, pixel_size: 14, margin_start: 12, margin_end: 12 }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, perfect: true }))
+  right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: "edit-find-symbolic", pixel_size: 14, margin_start: 16, margin_end: 16 }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, perfect: true }))
+  right.append(SquircleContainer({ child: new Gtk.Image({ file: `${GLib.get_home_dir()}/.config/crystal-shell/ui/ags-v3/assets/logos/cc.svg`, pixel_size: 14, margin_start: 16, margin_end: 16 }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, perfect: true }))
   right.append(SquircleContainer({ child: Tray(), gloss: true, alpha: 0.15, perfect: true }))
   right.append(SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, alpha: 0.15, perfect: true }))
 
   barBox.set_start_widget(left); barBox.set_center_widget(center); barBox.set_end_widget(right)
+
+  const monitorHeight = gdkmonitor.get_geometry().height
 
   try {
     Gtk4LayerShell.init_for_window(win)
@@ -170,9 +177,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
+    // 🏗️ SURGICAL: No bottom anchor = proper exclusive zone for the top strip
+    Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
     Gtk4LayerShell.set_exclusive_zone(win, 40) // 💎 TRUE 40px RESERVE
     Gtk4LayerShell.set_monitor(win, gdkmonitor)
-    // 🏗️ SURGICAL: No bottom anchor = proper exclusive zone for the top strip
+    Gtk4LayerShell.set_size(win, 0, monitorHeight) // 🚀 Manual height for centering
   } catch (e) { console.error("[Bar] LayerShell failed:", e) }
 
   win.set_child(masterOverlay)

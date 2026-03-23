@@ -13,7 +13,7 @@ export default function Tray() {
         css_classes: ["bar-tray"],
         spacing: 8,
         height_request: 24,
-        margin_start: 16, // Standardized 16px 📐
+        margin_start: 16, // Unified 16px 📐
         margin_end: 16,
         margin_top: 4,
         margin_bottom: 4

@@ -84,7 +84,7 @@ export default function SystemResources() {
         css_classes: ["bar-resources"],
         spacing: 12,
         valign: Gtk.Align.CENTER,
-        margin_start: 16, // Standardized 16px 📐
+        margin_start: 16, // Unified 16px 📐
         margin_end: 16,
         margin_top: 4,
         margin_bottom: 4

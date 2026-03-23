@@ -23,7 +23,7 @@ function ResultRow(appData: AppData) {
 export default function Prism() {
     const entry = new Gtk.Entry({ placeholder_text: "Search apps, files, or settings...", css_classes: ["prism-search-entry"], hexpand: true, valign: Gtk.Align.CENTER })
     const resultsList = new Gtk.ListBox({ css_classes: ["prism-results-list"], selection_mode: Gtk.SelectionMode.SINGLE, activate_on_single_click: true })
-    const contentBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, css_classes: ["prism-box"], width_request: 650 })
+    const contentBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, css_classes: ["prism-box"], width_request: 650, halign: Gtk.Align.CENTER })
     const searchContainer = new Gtk.Box({ css_classes: ["prism-search-box"], spacing: 12 })
     searchContainer.append(new Gtk.Image({ icon_name: "system-search-symbolic", pixel_size: 20 })); searchContainer.append(entry)
     contentBox.append(searchContainer); contentBox.append(resultsList)
