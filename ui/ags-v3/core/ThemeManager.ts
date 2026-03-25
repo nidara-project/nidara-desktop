@@ -13,11 +13,9 @@ import {
     type GlassTargets,
     DEFAULT_CONFIG,
     ACCENT_PALETTE,
-    writeGeneratedTheme,
-    writeTokens,
     generateTokensCss,
+    generateMasterCss,
     generateTintCss,
-    installFluidCrystalSymlinks,
     loadConfig as loadFCConfig,
     saveConfig as saveFCConfig,
     writeQtSettings,
@@ -63,11 +61,13 @@ class ThemeManager extends GObject.Object {
     private configPath = `${GLib.get_user_config_dir()}/crystal-shell/theme_settings.json`
     private lastRegisteredTheme: string = ""
     private _lastTokensCss: string = ""
+    private _lastMasterCss: string = ""
     private _lastTintCss: string = ""
 
     private mainProvider = new Gtk.CssProvider()
     private fontProvider = new Gtk.CssProvider()
     private themeProvider = new Gtk.CssProvider()
+    private masterProvider = new Gtk.CssProvider() 
     private tintProvider = new Gtk.CssProvider()
     private providersLinked = false
 
@@ -261,8 +261,7 @@ class ThemeManager extends GObject.Object {
     private schedulePersistence() {
         if (this.persistenceDebounceId > 0) GLib.source_remove(this.persistenceDebounceId)
         this.persistenceDebounceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-            console.log(`[ThemeManager] Ghost-Token persistence triggered`)
-            writeTokens(this.fcConfig)
+            console.log(`[ThemeManager] Token persistence triggered`)
             saveFCConfig(this.fcConfig)
             this.saveSettings()
             this.persistenceDebounceId = 0
@@ -315,11 +314,11 @@ class ThemeManager extends GObject.Object {
         try {
             const display = Gdk.Display.get_default()
             if (display) {
-                // V127: Unified CSS Hierarchy 🏗️
                 Gtk.StyleContext.add_provider_for_display(display, this.mainProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
                 Gtk.StyleContext.add_provider_for_display(display, this.fontProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1)
                 Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 2)
-                Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 3)
+                Gtk.StyleContext.add_provider_for_display(display, this.masterProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 3)
+                Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 4)
                 
                 const projectDir = GLib.getenv("CRYSTAL_SHELL_DIR") || `${GLib.get_home_dir()}/.config/crystal-shell`
                 const stylePath = `${projectDir}/ui/ags-v3/style.css`
@@ -384,19 +383,29 @@ class ThemeManager extends GObject.Object {
         }
 
         if (this.isFluidCrystal) {
-            writeGeneratedTheme(this.fcConfig, baseThemeCssPath)
-            installFluidCrystalSymlinks()
+            // AGS Styling: Local Process Injection (Isolated from System GTK)
             this.ensureProvidersLinked()
+            
+            // 1. Apply Tokens (Dynamic Colors/Variables)
             const tokensCss = generateTokensCss(this.fcConfig)
             if (this._lastTokensCss !== tokensCss) {
                 this.themeProvider.load_from_string(tokensCss)
                 this._lastTokensCss = tokensCss
             }
+
+            // 2. Apply Master CSS (Structural Glass, etc.)
+            const masterCss = generateMasterCss(this.fcConfig, baseThemeCssPath)
+            if (this._lastMasterCss !== masterCss) {
+                this.masterProvider.load_from_string(masterCss)
+                this._lastMasterCss = masterCss
+            }
+
             this.refreshTintCss()
             GLib.setenv("GTK_THEME", "", true)
         } else {
             await this.clearConfigSymlinks()
             this.themeProvider.load_from_string(generateTokensCss(this.fcConfig))
+            this.masterProvider.load_from_string("")
             this.tintProvider.load_from_string("")
             GLib.unsetenv("GTK_THEME")
         }
@@ -405,17 +414,26 @@ class ThemeManager extends GObject.Object {
             const current = this.interfaceSettings.get_string("gtk-theme")
             if (current !== theme) {
                 await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", theme])
-                this.updateSettingsIni(theme)
             }
+            this.updateSettingsIni(theme)
+            
             const settings = Gtk.Settings.get_default()
-            if (settings) settings.gtk_theme_name = theme
-            Adw.StyleManager.get_default().set_color_scheme(this.state.isDark ? Adw.ColorScheme.PREFER_DARK : Adw.ColorScheme.PREFER_LIGHT)
+            if (settings) {
+                settings.gtk_theme_name = theme
+                // NO MORE gtk_application_prefer_dark_theme here! 🔇
+            }
+            
+            // USE Adw.StyleManager exclusively for dark-mode coordination
+            Adw.StyleManager.get_default().set_color_scheme(
+                this.state.isDark ? Adw.ColorScheme.PREFER_DARK : Adw.ColorScheme.PREFER_LIGHT
+            )
         } catch (e) { }
         writeQtSettings(this.fcConfig, this.state.iconTheme)
     }
 
     private updateSettingsIni(theme: string) {
-        const ini = `[Settings]\ngtk-theme-name=${theme}\ngtk-icon-theme-name=${this.state.iconTheme}\ngtk-font-name=Inter 11\ngtk-application-prefer-dark-theme=${this.state.isDark ? 1 : 0}\n`
+        // Only write standard properties; legacy dark-mode toggle is handled by Adw/GSettings
+        const ini = `[Settings]\ngtk-theme-name=${theme}\ngtk-icon-theme-name=${this.state.iconTheme}\ngtk-font-name=Inter 11\n`
         for (const d of ["gtk-3.0", "gtk-4.0"]) {
             writeFile(`${GLib.get_user_config_dir()}/${d}/settings.ini`, ini)
         }

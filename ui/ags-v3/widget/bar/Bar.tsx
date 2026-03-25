@@ -181,8 +181,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
     Gtk4LayerShell.set_exclusive_zone(win, 40) // 💎 TRUE 40px RESERVE
     Gtk4LayerShell.set_monitor(win, gdkmonitor)
-    Gtk4LayerShell.set_size(win, 0, monitorHeight) // 🚀 Manual height for centering
-  } catch (e) { console.error("[Bar] LayerShell failed:", e) }
+    
+    // Guard against missing set_size in some Gjs binding versions
+    if ((Gtk4LayerShell as any).set_size) {
+        (Gtk4LayerShell as any).set_size(win, 0, monitorHeight)
+    }
+  } catch (e) { 
+    console.error("[Bar] LayerShell failed:", e) 
+  }
 
   win.set_child(masterOverlay)
   win.connect("realize", () => updateInputRegion())

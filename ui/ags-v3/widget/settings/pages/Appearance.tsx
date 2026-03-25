@@ -1,74 +1,81 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import Theme from "../../../core/ThemeManager"
 import { ACCENT_PALETTE, type AccentKey } from "../../../core/FluidCrystal"
+// @ts-ignore
+import Adw from "gi://Adw?version=1"
 import GLib from "gi://GLib"
 
 /**
- * Appearance Page 🎨
+ * Appearance Page 🎨 - Crystal V3 (macOS Tahoe Inspired)
  * Controls Dark Mode, Fluid Crystal (accent, transparency), GTK themes, icons, cursor.
  */
 export default function AppearancePage() {
     const page = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 24,
-        css_classes: ["settings-page"],
-        margin_start: 30,
-        margin_end: 30,
-        margin_top: 30,
-        margin_bottom: 30,
+        spacing: 32,
+        css_classes: ["settings-page", "appearance-page"],
+        margin_start: 12,
+        margin_end: 12,
+        margin_top: 40,
+        margin_bottom: 40,
     })
 
-    // Header Section
+    // Header Section (Tahoe Style)
     const headerBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 4,
-        margin_bottom: 12
+        spacing: 8,
+        margin_bottom: 24,
+        margin_start: 6
     })
+    
     headerBox.append(new Gtk.Label({
         label: "Apariencia",
         css_classes: ["settings-page-title"],
         halign: Gtk.Align.START,
     }))
+    
     headerBox.append(new Gtk.Label({
-        label: "Personaliza el estilo visual, iconos y modo de iluminación del sistema",
+        label: "Personaliza el alma visual de tu sistema Crystal Shell",
         css_classes: ["settings-page-subtitle"],
         halign: Gtk.Align.START,
     }))
+    
     page.append(headerBox)
 
-    // ── Helper: Boxed List Header ──
+    // ── Helper: Boxed List Group ──
     const listGroup = (title: string) => {
-        const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+        const box = new Gtk.Box({ 
+            orientation: Gtk.Orientation.VERTICAL, 
+            spacing: 12,
+            css_classes: ["settings-group"] 
+        })
+        
         if (title) {
             box.append(new Gtk.Label({
-                label: title,
+                label: title.toUpperCase(),
                 css_classes: ["settings-group-title"],
                 halign: Gtk.Align.START,
-                margin_start: 6
+                margin_start: 10
             }))
         }
+        
         const listBox = new Gtk.ListBox({
             css_classes: ["settings-list-box", "boxed-list"],
             selection_mode: Gtk.SelectionMode.NONE
         })
+        
         box.append(listBox)
         return { box, listBox }
     }
 
-    // ── Helper: DropDown Row ──
-    const dropdownRow = (
-        label: string,
-        subtitle: string,
-        initial: string,
-        options: string[],
-        onChange: (v: string) => void,
-    ) => {
+    // ── Helper: Generic Row Builder ──
+    const createRow = (label: string, subtitle: string, widget: Gtk.Widget) => {
         const box = new Gtk.Box({
-            spacing: 12,
-            margin_start: 12,
-            margin_end: 12,
-            margin_top: 8,
-            margin_bottom: 8,
+            spacing: 16,
+            margin_start: 16,
+            margin_end: 16,
+            margin_top: 14,
+            margin_bottom: 14,
         })
 
         const text = new Gtk.Box({
@@ -77,11 +84,13 @@ export default function AppearancePage() {
             hexpand: true,
             valign: Gtk.Align.CENTER
         })
+        
         text.append(new Gtk.Label({
             label,
             css_classes: ["settings-row-label"],
             halign: Gtk.Align.START,
         }))
+        
         if (subtitle) {
             text.append(new Gtk.Label({
                 label: subtitle,
@@ -89,384 +98,180 @@ export default function AppearancePage() {
                 halign: Gtk.Align.START,
             }))
         }
-
-        const dropdown = new Gtk.ComboBoxText({
-            valign: Gtk.Align.CENTER,
-            hexpand: false
-        })
-
-        options.forEach(opt => dropdown.append_text(opt))
-        const idx = options.indexOf(initial)
-        if (idx !== -1) dropdown.active = idx
-
-        dropdown.connect("changed", () => {
-            const selected = dropdown.get_active_text()
-            if (selected) onChange(selected)
-        })
 
         box.append(text)
-        box.append(dropdown)
-        return new Gtk.ListBoxRow({ child: box })
+        box.append(widget)
+        
+        return new Gtk.ListBoxRow({ child: box, css_classes: ["settings-item-row"] })
     }
 
-    // ── Helper: Toggle Row ──
-    const toggleRow = (
-        label: string,
-        subtitle: string,
-        initial: boolean,
-        onChange: (active: boolean) => void,
-    ) => {
-        const box = new Gtk.Box({
-            spacing: 12,
-            margin_start: 12,
-            margin_end: 12,
-            margin_top: 8,
-            margin_bottom: 8,
+    // ── Concrete Row types ──
+    const toggleRow = (l: string, s: string, init: boolean, cb: (v: boolean) => void) => {
+        const sw = new Gtk.Switch({ active: init, valign: Gtk.Align.CENTER })
+        sw.connect("state-set", (_, state) => {
+            cb(state)
+            return false 
         })
-
-        const text = new Gtk.Box({
-            orientation: Gtk.Orientation.VERTICAL,
-            spacing: 2,
-            hexpand: true,
-            valign: Gtk.Align.CENTER
-        })
-        text.append(new Gtk.Label({
-            label,
-            css_classes: ["settings-row-label"],
-            halign: Gtk.Align.START,
-        }))
-        if (subtitle) {
-            text.append(new Gtk.Label({
-                label: subtitle,
-                css_classes: ["settings-row-subtitle"],
-                halign: Gtk.Align.START,
-            }))
-        }
-
-        const sw = new Gtk.Switch({
-            active: initial,
-            valign: Gtk.Align.CENTER,
-            halign: Gtk.Align.END,
-        })
-
-        sw.connect("notify::active", () => onChange(sw.active))
-
-        box.append(text)
-        box.append(sw)
-        return new Gtk.ListBoxRow({ child: box })
+        return createRow(l, s, sw)
     }
 
-    // ── Helper: Slider Row ──
-    const sliderRow = (
-        label: string,
-        subtitle: string,
-        initial: number,
-        min: number,
-        max: number,
-        onChange: (v: number) => void,
-        isPercentage: boolean = true
-    ) => {
-        const box = new Gtk.Box({
-            spacing: 12,
-            margin_start: 12,
-            margin_end: 12,
-            margin_top: 8,
-            margin_bottom: 8,
+    const dropdownRow = (l: string, s: string, init: string, opts: string[], cb: (v: string) => void) => {
+        const drp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
+        opts.forEach(o => drp.append_text(o))
+        drp.active = opts.indexOf(init)
+        drp.connect("changed", () => {
+            const val = drp.get_active_text()
+            if (val) cb(val)
         })
+        return createRow(l, s, drp)
+    }
 
-        const text = new Gtk.Box({
-            orientation: Gtk.Orientation.VERTICAL,
-            spacing: 2,
-            hexpand: true,
-            valign: Gtk.Align.CENTER
-        })
-        text.append(new Gtk.Label({
-            label,
-            css_classes: ["settings-row-label"],
-            halign: Gtk.Align.START,
-        }))
-        if (subtitle) {
-            text.append(new Gtk.Label({
-                label: subtitle,
-                css_classes: ["settings-row-subtitle"],
-                halign: Gtk.Align.START,
-            }))
-        }
-
-        const valueLabel = new Gtk.Label({
-            label: isPercentage ? `${Math.round(initial * 100)}%` : initial.toFixed(2),
-            css_classes: ["settings-row-value-label"],
-            valign: Gtk.Align.CENTER,
-            width_request: 40,
-        })
-
+    const sliderRow = (l: string, s: string, init: number, min: number, max: number, cb: (v: number) => void) => {
         const scale = new Gtk.Scale({
             orientation: Gtk.Orientation.HORIZONTAL,
             valign: Gtk.Align.CENTER,
-            hexpand: false,
-            width_request: 140, // Reduced slightly to fit terminal
-            css_classes: ["horizontal"],
+            width_request: 160,
+            css_classes: ["horizontal"]
         })
         scale.set_range(min, max)
-        scale.set_value(initial)
+        scale.set_value(init)
         scale.set_draw_value(false)
-
-        scale.connect("value-changed", () => {
-            const v = scale.get_value()
-            valueLabel.label = isPercentage ? `${Math.round(v * 100)}%` : v.toFixed(2)
-            onChange(v)
+        
+        const valueLabel = new Gtk.Label({
+            label: `${Math.round(init * 100)}%`,
+            css_classes: ["slider-value-label"]
         })
 
-        box.append(text)
-        box.append(valueLabel)
+        scale.connect("value-changed", () => {
+            const val = scale.get_value()
+            valueLabel.label = `${Math.round(val * 100)}%`
+            cb(val)
+        })
+        
+        const box = new Gtk.Box({ spacing: 12 })
         box.append(scale)
-        return new Gtk.ListBoxRow({ child: box })
+        box.append(valueLabel)
+        return createRow(l, s, box)
     }
 
     // ══════════════════════════════════════════════════════════════════
-    // SECTIONS
+    // PAGE CONSTRUCTION
     // ══════════════════════════════════════════════════════════════════
 
-    // 1. General Style (Dark Mode)
-    const styleGroup = listGroup("Estilo general")
+    // 1. General style
+    const styleGroup = listGroup("Diseño Base")
     styleGroup.listBox.append(toggleRow(
-        "Modo oscuro",
-        "Preferencia global para aplicaciones modernas",
+        "Modo Oscuro",
+        "Sincroniza el núcleo visual con la noche",
         Theme.isDark,
         (active) => Theme.setDarkMode(active)
     ))
     page.append(styleGroup.box)
 
-    // 2. Fluid Crystal — Accent & Transparency
-    const fcGroup = listGroup("Fluid Crystal")
-
-    const masterToggleRow = toggleRow(
-        "Motor Óptico",
-        "Inyecta cristalmorfismo sobre tu tema GTK actual",
+    // 2. Fluid Crystal Engine
+    const fcGroup = listGroup("Fluid Crystal Engine")
+    
+    fcGroup.listBox.append(toggleRow(
+        "Motor Óptico Crystal",
+        "Activa el renderizado avanzado de cristalmorfismo v3",
         Theme.isFluidCrystal,
         (active) => Theme.setFluidCrystalEnabled(active)
-    )
-    fcGroup.listBox.append(masterToggleRow)
+    ))
 
-    const childRows: any[] = []
+    // Accent Color Picker (macOS Style)
+    const accentPicker = new Gtk.Box({ spacing: 10, valign: Gtk.Align.CENTER })
+    const accentButtons: Record<string, Gtk.Button> = {}
 
-
-    // ── Accent Color Picker (macOS-style colored circles) ──
-    const accentRow = new Gtk.Box({
-        spacing: 12,
-        margin_start: 12,
-        margin_end: 12,
-        margin_top: 8,
-        margin_bottom: 8,
-    })
-
-    const accentText = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 2,
-        hexpand: true,
-        valign: Gtk.Align.CENTER
-    })
-    accentText.append(new Gtk.Label({
-        label: "Color de acento",
-        css_classes: ["settings-row-label"],
-        halign: Gtk.Align.START,
-    }))
-    accentText.append(new Gtk.Label({
-        label: "Aplica a botones, toggles y elementos activos",
-        css_classes: ["settings-row-subtitle"],
-        halign: Gtk.Align.START,
-    }))
-    accentRow.append(accentText)
-
-    // Generate CSS for all accent circles via a single provider
-    const accentProvider = new Gtk.CssProvider()
-
-    const buildAccentCss = (activeKey: string) => {
-        let css = ""
-        for (const [key, { color }] of Object.entries(ACCENT_PALETTE)) {
-            const isActive = key === activeKey
-            css += `
-                    .accent-${key} {
-                        background: ${color};
-                        background-image: none;
-                        border-radius: 50%;
-                        min-width: 24px;
-                        min-height: 24px;
-                        padding: 0;
-                        margin: 0;
-                        border: 2px solid ${isActive ? "white" : "transparent"};
-                        ${isActive ? `box-shadow: 0 0 0 1px ${color};` : "box-shadow: none;"}
-                        outline: none;
-                        -gtk-icon-size: 0px;
-                        transition: all 200ms ease;
-                    }
-                    .accent-${key}:hover {
-                        background: ${color};
-                        background-image: none;
-                        box-shadow: 0 0 0 2px ${color};
-                    }
-                    .accent-${key}:active {
-                        background: ${color};
-                        background-image: none;
-                    }
-                `
-        }
-        return css
-    }
-
-    accentProvider.load_from_string(buildAccentCss(Theme.accentColor))
-    const display = Gdk.Display.get_default()
-    if (display) {
-        Gtk.StyleContext.add_provider_for_display(display, accentProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1)
-    }
-
-    // Color circles container
-    const colorsBox = new Gtk.Box({
-        spacing: 6,
-        valign: Gtk.Align.CENTER,
-    })
-
-    const accentKeys = Object.keys(ACCENT_PALETTE) as AccentKey[]
-    for (const key of accentKeys) {
-        const { name } = ACCENT_PALETTE[key]
+    Object.keys(ACCENT_PALETTE).forEach(key => {
+        const { color, name } = ACCENT_PALETTE[key as AccentKey]
         const btn = new Gtk.Button({
-            css_classes: [`accent-${key}`],
             tooltip_text: name,
-            width_request: 24,
-            height_request: 24,
+            css_classes: [`accent-${key}`, "accent-circle-btn"],
+            width_request: 28,
+            height_request: 28,
         })
-
+        
+        if (Theme.accentColor === key) btn.add_css_class("selected")
+        
         btn.connect("clicked", () => {
-            Theme.setAccentColor(key)
-            accentProvider.load_from_string(buildAccentCss(key))
+            Theme.setAccentColor(key as AccentKey)
         })
-
-        colorsBox.append(btn)
-    }
-
-    accentRow.append(colorsBox)
-    const accentListRow = new Gtk.ListBoxRow({ child: accentRow })
-    fcGroup.listBox.append(accentListRow)
-    childRows.push(accentListRow)
-
-    // ── Transparency Slider ──
-    const tRow = sliderRow(
-        "Transparencia",
-        "Menús y sidebars de apps GTK (requiere reiniciar las apps)",
-        Theme.transparency,
-        0.0,
-        1.0,
-        (v) => Theme.setTransparency(v)
-    )
-    fcGroup.listBox.append(tRow)
-    childRows.push(tRow)
-
-    // ── Tint Strength Slider ──
-    const tintRow = sliderRow(
-        "Tintado de acento",
-        "Intensidad del color de acento en los paneles",
-        Theme.tintStrength,
-        0.0,
-        1.0,
-        (v) => Theme.setTintStrength(v)
-    )
-    fcGroup.listBox.append(tintRow)
-    childRows.push(tintRow)
-
-    // ── Per-Panel Tint Toggles ──
-    const tintPanels = Theme.tintPanels
-    const panelLabels: [keyof typeof tintPanels, string, string][] = [
-        ["controlCenter", "Control Center", "Centro de control"],
-        ["appGrid", "App Grid", "Grid de aplicaciones"],
-    ]
-
-    for (const [key, , label] of panelLabels) {
-        const pRow = toggleRow(
-            label,
-            "Tintar con el color de acento",
-            tintPanels[key],
-            (active) => Theme.setTintPanel(key, active)
-        )
-        fcGroup.listBox.append(pRow)
-        childRows.push(pRow)
-    }
-
-    // ── X-Ray Glass Targets ──
-    const xrayGroup = listGroup("Capas de Cristal (Sledgehammer)")
-    const glassTargets = Theme.glassTargets
-    const xrayLabels: [keyof typeof glassTargets, string, string][] = [
-        ["globalWindow", "Fondo Global (Raíz)", "La capa base de todas las ventanas"],
-        ["headerbars", "Barras de título", "Cabeceras y controles superiores"],
-        ["sidebars", "Paneles Laterales", "Contenidos de navegación (ej. Archivos)"],
-        ["mainViews", "Vistas Principales", "El contenido central de las apps"],
-        ["cardsAndLists", "Listas y Tarjetas", "Filas de opciones y contenedores internos"],
-        ["popovers", "Menús y Popovers", "Menús contextuales y desplegables"],
-    ]
-
-    for (const [key, label, subtitle] of xrayLabels) {
-        xrayGroup.listBox.append(toggleRow(
-            label,
-            subtitle,
-            glassTargets[key],
-            (active) => Theme.setGlassTarget(key, active)
-        ))
-    }
-
-    const updateFcVisibility = () => {
-        const isFc = Theme.isFluidCrystal
-        childRows.forEach(row => row.visible = isFc)
-        xrayGroup.box.visible = isFc
-        try {
-            const sw = (masterToggleRow.get_child() as any).get_last_child() as any
-            if (sw && sw.active !== isFc) sw.active = isFc
-        } catch (e) { }
-    }
-    updateFcVisibility()
-    Theme.connect("changed", updateFcVisibility)
-
+        
+        accentPicker.append(btn)
+        accentButtons[key] = btn
+    })
+    
+    fcGroup.listBox.append(createRow("Color de Acento", "Define el tono vibrante de la interfaz", accentPicker))
+    
+    fcGroup.listBox.append(sliderRow(
+        "Transparencia Profunda",
+        "Controla la permeabilidad de la luz en las ventanas",
+        Theme.transparency, 0, 1, (v) => Theme.setTransparency(v)
+    ))
+    
     page.append(fcGroup.box)
+
+    // 3. X-Ray Targets
+    const xrayGroup = listGroup("Zonas de Cristalización")
+    const targets = Theme.glassTargets
+    const xrayConfigs: [keyof typeof targets, string, string][] = [
+        ["globalWindow", "Estructura Global", "Fondo base del sistema"],
+        ["sidebars", "Sidebars", "Barras laterales de navegación"],
+        ["headerbars", "HeaderBars", "Controles de ventana superiores"],
+        ["popovers", "Popovers", "Menús flotantes y contextuales"]
+    ]
+
+    xrayConfigs.forEach(([key, title, subtitle]) => {
+        xrayGroup.listBox.append(toggleRow(title, subtitle, targets[key], (v) => Theme.setGlassTarget(key, v)))
+    })
+    
     page.append(xrayGroup.box)
 
-    // 3. Theme Family
-    const themesGroup = listGroup("Temas y recursos")
-    const gtkThemes = Theme.getAvailableGtkThemes().sort()
-
-    themesGroup.listBox.append(dropdownRow(
-        "Tema GTK",
-        "Selecciona el tema visual para el sistema",
-        Theme.themeFamily,
-        gtkThemes,
-        (v) => Theme.setGtkTheme(v)
+    // 4. System Assets
+    const assetsGroup = listGroup("Recursos del Sistema")
+    
+    assetsGroup.listBox.append(dropdownRow(
+        "Tema GTK", "Estética estructural de aplicaciones",
+        Theme.themeFamily, Theme.getAvailableGtkThemes(), (v) => Theme.setGtkTheme(v)
     ))
 
-    const qtThemes = Theme.getAvailableQtThemes()
-    themesGroup.listBox.append(dropdownRow(
-        "Tema Qt (Kvantum)",
-        "Selecciona el motor de temas para aplicaciones Qt",
-        Theme.qtTheme,
-        qtThemes,
-        (v) => Theme.setQtTheme(v)
+    // 💎 RESTORE QT THEME 💎
+    assetsGroup.listBox.append(dropdownRow(
+        "Tema Qt (Kvantum)", "Sincroniza el estilo con apps Qt/KDE",
+        Theme.qtTheme, Theme.getAvailableQtThemes(), (v) => Theme.setQtTheme(v)
+    ))
+    
+    assetsGroup.listBox.append(dropdownRow(
+        "Iconos", "Paquete de glifos del sistema",
+        Theme.iconTheme, Theme.getAvailableIconThemes(), (v) => Theme.setIconTheme(v)
     ))
 
-
-    const iconThemes = Theme.getAvailableIconThemes()
-    themesGroup.listBox.append(dropdownRow(
-        "Tema de iconos",
-        "Selecciona el paquete de iconos del sistema",
-        Theme.iconTheme,
-        iconThemes,
-        (v) => Theme.setIconTheme(v)
+    assetsGroup.listBox.append(dropdownRow(
+        "Cursor", "Estilo del puntero de precisión",
+        Theme.cursorTheme, Theme.getAvailableCursorThemes(), (v) => Theme.setCursorTheme(v)
     ))
 
-    const cursorThemes = Theme.getAvailableCursorThemes()
-    themesGroup.listBox.append(dropdownRow(
-        "Tema del cursor",
-        "Selecciona el estilo del puntero",
-        Theme.cursorTheme,
-        cursorThemes,
-        (v) => Theme.setCursorTheme(v)
-    ))
-    page.append(themesGroup.box)
+    page.append(assetsGroup.box)
+
+    // Visibility & State sync
+    const updateThemeState = () => {
+        const isFc = Theme.isFluidCrystal
+        const currentAccent = Theme.accentColor
+        
+        // Update visibility
+        fcGroup.listBox.get_row_at_index(1)!.visible = isFc
+        fcGroup.listBox.get_row_at_index(2)!.visible = isFc
+        xrayGroup.box.visible = isFc
+        
+        // Update accent circles
+        Object.keys(accentButtons).forEach(key => {
+            accentButtons[key].remove_css_class("selected")
+            if (key === currentAccent) accentButtons[key].add_css_class("selected")
+        })
+    }
+    
+    updateThemeState()
+    Theme.connect("changed", updateThemeState)
 
     return page
 }

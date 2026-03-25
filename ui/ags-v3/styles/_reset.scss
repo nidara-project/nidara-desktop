@@ -1,0 +1,48 @@
+/* ==========================================================================
+   CRYSTAL DESIGN SYSTEM - NEUTRALIZATION LAYER
+   ========================================================================== */
+
+/*
+   Targets explicit namespaced crystal components to ensure a clean slate
+   without breaking global GTK apps.
+*/
+
+#crystal-dock,
+#crystal-bar,
+#crystal-app-launcher,
+.crystal-control-center,
+.crystal-notification-center,
+.crystal-dock-window,
+.crystal-bar-window {
+    background-image: none;
+    box-shadow: none;
+    border: none;
+    outline: none;
+
+    /* Neutralize intrusive GTK internal nodes */
+    & ripple,
+    & highlight,
+    & outline,
+    & focus-ring,
+    decoration {
+        background-color: transparent;
+        background-image: none;
+        box-shadow: none;
+        border: none;
+    }
+}
+
+/* Specific resets for AdwWindow in Crystal Shell */
+window.crystal-settings-window {
+    &, & > contents {
+        background: transparent;
+        box-shadow: none;
+        border: none;
+    }
+    
+    // Hide standard Adwaita window shadows to use our custom .glass shadow
+    decoration-node {
+        box-shadow: none;
+        background-color: transparent;
+    }
+}

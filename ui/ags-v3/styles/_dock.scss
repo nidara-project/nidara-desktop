@@ -1,6 +1,8 @@
+@use 'base' as *;
+
 /* --- Window Transparency Logic --- */
 window.crystal-dock-window,
-window#crystal-dock {
+#crystal-dock {
     background-color: transparent;
     background-image: none;
     border: none;
@@ -76,10 +78,9 @@ window#crystal-dock {
 }
 
 /* --- Squircle Icon Plates --- */
-window#crystal-dock box.cd-squircle-plate {
-    background-color: #ffffff;
-    /* V411: Reverted - Visible by default */
-    border-radius: 28%;
+#crystal-dock box.cd-squircle-plate {
+    background-color: white;
+    border-radius: var(--crystal-radius-squircle);
     min-width: 32px;
     min-height: 32px;
     margin: 0;
@@ -123,29 +124,26 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
 
 
 /* --- Indicators (Dots) - macOS Tahoe: small black circles --- */
-window#crystal-dock button.cd-dot,
-window#crystal-dock box.cd-dot {
+#crystal-dock .cd-dot {
     min-height: 4px;
     min-width: 4px;
     border-radius: 2px;
     margin-top: 4px;
     background-color: transparent;
     transition: all 0.2s ease;
-}
 
-window#crystal-dock box.cd-dot.open,
-window#crystal-dock box.cd-dot.focused {
-    background-color: rgba(0, 0, 0, 1);
-    box-shadow: none;
-    border: none;
-    opacity: 1;
-    min-height: 4px;
-    min-width: 4px;
+    &.open, &.focused {
+        background-color: rgba(0, 0, 0, 1);
+        box-shadow: none;
+        border: none;
+        opacity: 1;
+        min-height: 4px;
+        min-width: 4px;
+    }
 }
 
 /* --- Separator - macOS Tahoe: dark hairline --- */
-window#crystal-dock box.cd-separator,
-window#crystal-dock box#cd-separator {
+#crystal-dock .cd-separator {
     min-width: 1px;
     background-color: rgba(0, 0, 0, 0.35);
     margin: 0;
@@ -154,8 +152,8 @@ window#crystal-dock box#cd-separator {
 }
 
 /* --- Hover Shadow Killer --- */
-window#crystal-dock .cd-item:hover,
-window#crystal-dock .cd-squircle-plate:hover {
+#crystal-dock .cd-item:hover,
+#crystal-dock .cd-squircle-plate:hover {
     box-shadow: none;
     -gtk-icon-shadow: none;
     filter: none;

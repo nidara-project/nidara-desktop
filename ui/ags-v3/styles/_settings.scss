@@ -1,125 +1,193 @@
-@use "tokens" as *;
+@use 'base' as *;
 
-.settings-main-box {
-    border-radius: $crystal_radius_lg;
+/* ==========================================================================
+   CRYSTAL SETTINGS - PREMIUM GLASS OVERRIDES 💎
+   ========================================================================== */
+
+// --- Main Window & Layout -------------------------------------------
+
+window#crystal-settings {
+    background: transparent;
+    border-radius: $crystal-radius-lg;
+
+    &.glass {
+        background: var(--crystal-bg);
+        border: 1px solid var(--crystal-border);
+        box-shadow: var(--crystal-shadow-lg);
+    }
 }
 
-.settings-sidebar-scroll {
-    border-right: 1px solid rgba(128, 128, 128, 0.1);
+.settings-sidebar-wrapper {
+    background: rgba(255, 255, 255, 0.05); /* 💎 Darker, more translucent island */
+    border-radius: $crystal-radius-md;
+    border: 1px solid var(--crystal-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .settings-sidebar {
-    padding: 12px 0;
-}
+    background: transparent;
+    padding: 16px 8px;
 
-.settings-stack {}
+    row {
+        margin: 4px 8px;
+        border-radius: $crystal-radius-xs; /* Slimmer rows for the slim container */
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        border: 1px solid transparent;
+        padding: 6px 14px;
 
-.settings-page {
-    padding: 40px;
-}
-
-.settings-page-title {
-    font-size: 2.5rem;
-    font-weight: 800;
-    margin-bottom: 8px;
-}
-
-.settings-page-subtitle {
-    font-size: 1rem;
-    opacity: 0.6;
-    margin-bottom: 24px;
-}
-
-.settings-section-title {
-    font-size: 1.2rem;
-    font-weight: 700;
-    margin-top: 16px;
-    margin-bottom: 8px;
-}
-
-
-.settings-icon-btn {
-    padding: 8px;
-    border: 1px solid transparent;
-    transition: all 0.2s ease;
-
-}
-
-.endpoint-name {
-    font-weight: 600;
-    font-size: 0.95rem;
-}
-
-.connected-label {
-    font-size: 0.8rem;
-    font-weight: 700;
-    color: #{"@accent_bg_color"};
-    background-color: #{"alpha(@accent_bg_color, 0.1)"};
-    padding: 2px 8px;
-    border-radius: 10px;
-    margin-right: 8px;
-}
-
-.settings-placeholder {
-    font-size: 1.1rem;
-    opacity: 0.5;
-    margin-top: 20px;
-}
-
-// Slider (Scale) Styling
-.settings-page {
-    scale {
-        &.horizontal {
-            margin: 4px 0;
-
-            contents {
-                margin: 0;
-                padding: 0;
+        &:selected {
+            background-color: rgba(var(--crystal-accent-rgb), 0.15);
+            border: 1px solid rgba(var(--crystal-accent-rgb), 0.2);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            
+            .sidebar-icon {
+                color: $crystal-accent;
+                transform: scale(1.1);
             }
-
-            trough {
-                min-height: 8px;
-                background-color: rgba(128, 128, 128, 0.1);
-                border-radius: 4px;
+            
+            .sidebar-label {
+                font-weight: 800;
+                color: $crystal-accent;
+                letter-spacing: -0.2px;
             }
+        }
 
-            highlight {
-                background-color: #{"@accent_bg_color"};
-                border-radius: 4px;
-            }
+        &:hover:not(:selected) {
+            background: rgba(255, 255, 255, 0.08);
+        }
 
-            slider {
-                min-width: 16px;
-                min-height: 16px;
-                margin: -4px 0;
-                background-color: white;
-                border-radius: 50%;
-                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-                border: none;
-            }
+        .sidebar-label {
+            font-size: 0.95rem;
+            font-weight: 600;
+            margin-left: 12px;
         }
     }
 }
 
-/* Preset Button Group */
-.settings-preset-group {
-    margin-top: 4px;
+// Header & Toolbar
+headerbar {
+    background: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    padding: 12px 20px;
+
+    .settings-title {
+        font-weight: 800;
+        font-size: 1.05rem;
+        opacity: 0.85;
+        letter-spacing: -0.3px;
+    }
 }
 
-/* Appearance & Input Refinement - STYLES STRIPPED TO ALLOW NATIVE THEME INHERITANCE */
-.settings-row {
-    margin: 12px 16px;
+// --- Specific Component Styles (Using Unified Components) -----------
+
+// Accent Pickers (macos Circle Style) - Premium Design
+button.accent-circle-btn {
+    background-image: none;
+    background-color: transparent;
+    border: 3px solid transparent; 
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+    outline: none;
+    padding: 0;
+    margin: 0;
+    min-width: 28px;
+    min-height: 28px;
+    border-radius: $crystal-radius-pill;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+
+    &:hover:not(.selected) {
+        transform: scale(1.15);
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    }
+
+    &.selected {
+        border-color: #ffffff;
+        transform: scale(1.25);
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
+        
+        // Inner ring effect
+        background-clip: padding-box;
+    }
+
+    /* Colors */
+    &.accent-blue { background-color: #0088FF; }
+    &.accent-teal { background-color: #2190a4; }
+    &.accent-green { background-color: #79B757; }
+    &.accent-yellow { background-color: #F3BA4B; }
+    &.accent-orange { background-color: #E9873A; }
+    &.accent-red { background-color: #ED5F5D; }
+    &.accent-pink { background-color: #E55E9C; }
+    &.accent-purple { background-color: #9A57A3; }
+    &.accent-slate { background-color: #6f8396; }
 }
 
-.settings-row-label {
-    font-size: 1.05rem;
-    font-weight: 700;
+// --- Page Layout refinements ----------------------------------------
+
+.settings-page-title {
+    font-size: 2.8rem;
+    font-weight: 900;
+    letter-spacing: -1.5px;
+    color: #ffffff;
+    margin-bottom: 8px;
 }
 
-.settings-row-subtitle {
-    font-size: 0.85rem;
+.settings-page-subtitle {
+    font-size: 1.1rem;
+    font-weight: 500;
     opacity: 0.6;
+    margin-bottom: 44px;
+    line-height: 1.4;
 }
 
-// Custom dropdown and entry styles removed to allow GTK theme to apply.
-// Libadwaita/GTK will now use native backgrounds and borders.
+.appearance-page {
+    .settings-group { margin-bottom: 40px; }
+    
+    .settings-group-title {
+        font-weight: 800;
+        font-size: 0.75rem;
+        opacity: 0.4;
+        letter-spacing: 1.5px;
+        margin-bottom: 12px;
+        margin-left: 2px;
+    }
+
+    list {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid var(--crystal-border);
+        border-radius: $crystal-radius-md;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+
+        row {
+            padding: 2px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            &:last-child { border-bottom: none; }
+            &:hover { background: rgba(255, 255, 255, 0.015); }
+        }
+    }
+
+    .slider-value-label {
+        font-variant-numeric: tabular-nums;
+        font-weight: 800;
+        color: $crystal-accent;
+        min-width: 52px;
+        font-size: 1rem;
+        letter-spacing: -0.2px;
+    }
+}
+
+// ComboBox Overrides for macOS look
+combobox {
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: $crystal-radius-sm;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    font-weight: 600;
+    
+    &:hover { background: rgba(255, 255, 255, 0.12); }
+    
+    button { color: #ffffff; background: none; border-radius: 0; box-shadow: none; }
+}
+
+separator {
+    background: var(--crystal-border);
+    min-height: 1px;
+}

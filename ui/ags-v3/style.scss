@@ -1,5 +1,6 @@
-@use 'styles/tokens';
-// @use 'styles/reset';
+@use 'styles/base';
+@use 'styles/reset';
+@use 'styles/components';
 @use 'styles/dock';
 @use 'styles/bar';
 @use 'styles/control-center';

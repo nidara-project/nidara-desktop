@@ -1,0 +1,48 @@
+/* ==========================================================================
+   CRYSTAL DESIGN SYSTEM - BASE TOKENS (V3000)
+   ========================================================================== */
+
+:root {
+    /* --- Brand Colors (Dynamic) --- */
+    /* These are injected by FluidCrystal.ts but we define fallbacks here */
+    --crystal-accent: #0088FF;
+    --crystal-accent-fg: #ffffff;
+    
+    /* --- Surface & Backgrounds --- */
+    --crystal-bg: rgba(30, 30, 30, 0.5);
+    --crystal-bg-backdrop: rgba(30, 30, 30, 0.4);
+    --crystal-surface: rgba(255, 255, 255, 0.08);
+    --crystal-surface-hover: rgba(255, 255, 255, 0.12);
+    --crystal-surface-active: rgba(255, 255, 255, 0.16);
+    
+    /* --- Typography --- */
+    --crystal-text: #ffffff;
+    --crystal-text-dim: rgba(255, 255, 255, 0.6);
+    --crystal-text-disabled: rgba(255, 255, 255, 0.3);
+    
+    /* --- Geometry --- */
+    --crystal-radius-lg: 24px;
+    --crystal-radius-md: 16px;
+    --crystal-radius-sm: 10px;
+    --crystal-radius-xs: 6px;
+    --crystal-radius-pill: 9999px;
+    --crystal-radius-squircle: 28%;
+    
+    /* --- Borders & Shadows --- */
+    --crystal-border: rgba(255, 255, 255, 0.1);
+    --crystal-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
+    --crystal-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* SCSS Variable Aliases for easier use in component files */
+$crystal-accent: var(--crystal-accent);
+$crystal-accent-fg: var(--crystal-accent-fg);
+$crystal-bg: var(--crystal-bg);
+$crystal-surface: var(--crystal-surface);
+$crystal-text: var(--crystal-text);
+$crystal-text-dim: var(--crystal-text-dim);
+$crystal-radius-lg: var(--crystal-radius-lg);
+$crystal-radius-md: var(--crystal-radius-md);
+$crystal-radius-sm: var(--crystal-radius-sm);
+$crystal-radius-xs: var(--crystal-radius-xs);
+$crystal-radius-pill: var(--crystal-radius-pill);
