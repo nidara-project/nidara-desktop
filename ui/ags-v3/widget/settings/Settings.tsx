@@ -17,14 +17,28 @@ import AppearancePage from "./pages/Appearance"
 export default function Settings(monitor: Gdk.Monitor) {
     console.log("[Settings] Initializing window components...");
 
-    const header = new Adw.HeaderBar({
-        title_widget: new Gtk.Label({
-            label: "Configuración del Sistema",
-            css_classes: ["settings-title"]
-        }),
-        show_end_title_buttons: true,
-        show_start_title_buttons: true,
+    // --- Navigation Controls (Tahoe Style) --- 🧭
+    const backBtn = new Gtk.Button({
+        icon_name: "go-previous-symbolic",
+        css_classes: ["navigation-btn", "flat"],
+        tooltip_text: "Atrás",
     })
+    const forwardBtn = new Gtk.Button({
+        icon_name: "go-next-symbolic",
+        css_classes: ["navigation-btn", "flat"],
+        tooltip_text: "Adelante",
+    })
+
+    // Navigation Capsule 💊 (True Pill Shape via CSS)
+    const navCapsule = new Gtk.Box({ 
+        css_classes: ["navigation-capsule"],
+        valign: Gtk.Align.CENTER,
+        halign: Gtk.Align.CENTER
+    })
+    navCapsule.append(backBtn)
+    navCapsule.append(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nav-separator"] }))
+    navCapsule.append(forwardBtn)
+
 
     const win = new Adw.Window({
         name: "crystal-settings",
@@ -34,6 +48,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         default_height: 700,
         visible: false,
     })
+    win.set_name("crystal-settings-window")
 
     // Sidebar: Categories
     const sidebar = new Gtk.ListBox({
@@ -55,9 +70,9 @@ export default function Settings(monitor: Gdk.Monitor) {
         hexpand: true,
         vexpand: true,
         margin_start: 8,
-        margin_end: 16, // Breathing room on the right
-        margin_top: 0,   // 💎 NO TOP MARGIN 💎
-        margin_bottom: 0, 
+        margin_end: 8, 
+        margin_top: 8,
+        margin_bottom: 8, 
     })
 
     categories.forEach(cat => {
@@ -136,54 +151,96 @@ export default function Settings(monitor: Gdk.Monitor) {
         stack.add_titled_with_icon(scroll, cat.id, cat.label, cat.icon)
     })
 
-    sidebar.connect("row-selected", (_, row) => {
-        if (row) {
-            const id = row.get_name() || "appearance"
-            stack.set_visible_child_name(id)
-            console.log(`[Settings] Sidebar selected: ${id}`)
-        }
-    })
+    sidebar.set_name("crystal-settings-sidebar-list")
 
-    // Layout Composition using ToolbarView
-    const toolbarView = new Adw.ToolbarView({
-        top_bar_style: Adw.ToolbarStyle.FLAT,
-        vexpand: true,
-    })
-    
-    toolbarView.add_top_bar(header)
-
-    const mainBox = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        css_classes: ["settings-content-wrapper"],
-        vexpand: true, // IMPORTANT: Allow full height
-    })
-
-    const sidebarWrapper = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        width_request: 260,
-        css_classes: ["crystal-sidebar-island"],
-        vexpand: true,
-        margin_start: 0,  // 💎 NO LEFT MARGIN 💎
-        margin_end: 8,    // Space between panels
-        margin_top: 0,   // 💎 NO TOP MARGIN 💎
-        margin_bottom: 0  
-    })
-
+    // --- Responsive Floating Architecture --- 🏔️
+    // Sidebar: Floating Pill (Directly in SplitView)
     const sidebarScroll = new Gtk.ScrolledWindow({
         child: sidebar,
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         css_classes: ["settings-sidebar-scroll"],
-        vexpand: true, // 💎 IMPORTANT: Allow full height
+        vexpand: true,
+    })
+    sidebarScroll.set_name("crystal-settings-sidebar-scroll")
+
+    // Content: Stack Area + Header
+    const contentToolbarView = new Adw.ToolbarView({
+        top_bar_style: Adw.ToolbarStyle.FLAT,
+        vexpand: true,
+        hexpand: true,
+    })
+    contentToolbarView.set_name("crystal-settings-content-view")
+
+    // Main Responsive Overlay Split View 🏔️
+    const splitView = new Adw.OverlaySplitView({
+        name: "settings-splitview",
+        sidebar: sidebarScroll,
+        content: contentToolbarView,
+        hexpand: true,
+        vexpand: true,
+        min_sidebar_width: 260,
+        max_sidebar_width: 300,
+        css_classes: ["crystal-settings-splitview", "glass"]
     })
 
-    sidebarWrapper.append(sidebarScroll)
-    
-    mainBox.append(sidebarWrapper)
-    mainBox.append(stack)
+    // Search Component 🔍
+    const searchEntry = new Gtk.SearchEntry({
+        placeholder_text: "Buscar ajustes...",
+        css_classes: ["settings-search", "pill"],
+        hexpand: true,
+        max_width_chars: 30,
+        valign: Gtk.Align.CENTER,
+    })
 
-    toolbarView.set_content(mainBox)
-    win.set_content(toolbarView)
+    // Sidebar Toggle Button 📲
+    const sidebarToggle = new Gtk.Button({
+        icon_name: "view-sidebar-symbolic",
+        css_classes: ["sidebar-toggle", "flat", "pill"],
+        tooltip_text: "Menú",
+        valign: Gtk.Align.CENTER,
+    })
+    sidebarToggle.connect("clicked", () => {
+        splitView.set_show_sidebar(!splitView.show_sidebar)
+    })
+
+    // Header Assembly (Pure GTK Design)
+    const headerStart = new Gtk.Box({ 
+        spacing: 12, 
+        valign: Gtk.Align.CENTER,
+        css_classes: ["header-start-box"] 
+    })
+    headerStart.append(sidebarToggle)
+    headerStart.append(navCapsule)
+
+    const header = new Adw.HeaderBar({
+        title_widget: searchEntry,
+        show_end_title_buttons: true,
+        show_start_title_buttons: false, 
+        css_classes: ["settings-headerbar", "compact"]
+    })
+    header.pack_start(headerStart)
+
+    contentToolbarView.add_top_bar(header)
+    contentToolbarView.set_content(stack)
+
+    // 💎 NATIVE RESPONSIVE BREAKPOINT 💎
+    const breakpoint = new Adw.Breakpoint({
+        condition: Adw.BreakpointCondition.parse("max-width: 850px") 
+    })
+    breakpoint.add_setter(splitView, "collapsed", true)
+    win.add_breakpoint(breakpoint)
+
+    // Synchronize window class for CSS gradient partitioning
+    splitView.connect("notify::collapsed", () => {
+        if (splitView.collapsed) {
+            win.add_css_class("collapsed-mode")
+        } else {
+            win.remove_css_class("collapsed-mode")
+        }
+    })
+
+    win.set_content(splitView)
 
     // Toggle Mechanism
     ; (win as any).toggle = () => {

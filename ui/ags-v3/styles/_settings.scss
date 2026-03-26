@@ -6,49 +6,173 @@
 
 // --- Main Window & Layout -------------------------------------------
 
-window#crystal-settings {
+/*  Tahoe Integration: Surgical Partition Architecture (No !important) */
+window#crystal-settings-window.crystal-settings-window {
     background: transparent;
     border-radius: $crystal-radius-lg;
+    border: 1px solid var(--crystal-border);
+    box-shadow: var(--crystal-shadow-lg);
+    overflow: hidden;
 
+    /* Base Nodes Purge (Specificity chaining to override Adwaita) */
+    &, &.background, .background, .contents, contents, .main {
+        background: transparent;
+        background-color: transparent;
+        background-image: none;
+        box-shadow: none;
+    }
+
+    /* THE GLASS PARTITION: Fixed Width Sync for Tahoe */
     &.glass {
-        background: var(--crystal-bg);
-        border: 1px solid var(--crystal-border);
-        box-shadow: var(--crystal-shadow-lg);
+        $sidebar-zone: 260px; // PERFECT MATCH to Settings.tsx
+        
+        // 1. Normal Mode: Pure window glass partition
+        background: linear-gradient(to right, transparent $sidebar-zone, var(--crystal-bg) $sidebar-zone);
+
+        // 2. Overlay Mode: Full window glass (Controlled by Reactivity in TSX)
+        &.collapsed-mode {
+            background: var(--crystal-bg);
+        }
+    }
+
+    /* NUCLEAR OVERLAY SPLITVIEW RESET (Chaining ID + Tag to win without !important) */
+    overlaysplitview#settings-splitview {
+        background: transparent;
+        background-color: transparent;
+
+        &, & > bin, & > sidebar {
+            background: transparent;
+            background-color: transparent;
+            background-image: none;
+            box-shadow: none;
+        }
+
+        // 1. Content Area (BIN): SHOW THROUGH TO WINDOW GLASS
+        & > bin#crystal-settings-content-view,
+        & > bin {
+            border-left: 1px solid var(--crystal-border); // Vertical partition line
+            
+            &, list, toolbarview, stack, scrolledwindow, viewport, .settings-page {
+                background: transparent;
+                background-color: transparent;
+                background-image: none;
+                border: none;
+                box-shadow: none;
+            }
+        }
+
+        // 2. Sidebar Area (GHOST ZONE): Absolute Transparency via Recursive Wildcard
+        & > sidebar#crystal-settings-sidebar-scroll,
+        & > sidebar,
+        #crystal-settings-sidebar-scroll {
+            background: transparent;
+            background-color: transparent;
+            
+            &, & * {
+                background: none;
+                background-color: transparent;
+                background-image: none;
+                border: none;
+                box-shadow: none;
+            }
+        }
+
+        // Pure Mode Transitions (Purge persistent overlays)
+        &:not(.collapsed) > sidebar { background: transparent; }
+        &.collapsed > sidebar { 
+            background: transparent;
+            box-shadow: none;
+            border: none;
+        }
+
+        /* Partition Separator (Tahoe Style) */
+        & > separator {
+            background: rgba(255, 255, 255, 0.05);
+            min-width: 1px;
+            margin: 0;
+            padding: 0;
+        }
     }
 }
 
-.settings-sidebar-wrapper {
-    background: rgba(255, 255, 255, 0.05); /*  Darker, more translucent island */
-    border-radius: $crystal-radius-md;
-    border: 1px solid var(--crystal-border);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+// THE SIDEBAR PILL (Floating Glass Capsule)
+scrolledwindow#crystal-settings-sidebar-scroll {
+    background: rgba(30, 31, 44, 0.94); // High-opacity glass for the nav-pills
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: $crystal-radius-lg;
+    margin: 8px;
+    box-shadow: var(--crystal-shadow-lg);
+}
+
+// REMOVE ALL COMPONENT CAPSULES (Native Content Integration)
+.crystal-settings-content-pane,
+.crystal-settings-content-pane.glass,
+.settings-headerbar,
+.settings-headerbar.glass,
+#crystal-settings-content-view,
+.settings-headerbar.compact {
+    background: transparent;
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    background-image: none;
+}
+
+/* The Glass Sidebar (Edge-to-Edge Container Reset) */
+.crystal-sidebar-drawer {
+    background: none;
+    background-color: transparent;
+    padding: 0;
+    margin: 0;
+    border: none;
+}
+
+.crystal-sidebar-island {
+    background: none;
+    background-color: transparent;
+    border-radius: $crystal-radius-lg;
+    box-shadow: none;
+}
+
+.settings-sidebar-scroll {
+    background: rgba(30, 31, 44, 0.94); // Increased opacity for readability (No overlap)
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: $crystal-radius-lg;
+    margin: 8px; // Encapsulated floating look inside the column
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
 }
 
 .settings-sidebar {
-    background: transparent;
-    padding: 16px 8px;
+    background: none;
+    background-color: transparent;
+    padding: 12px 0;
+
+    &,
+    list,
+    row,
+    scrolledwindow {
+        background: none;
+        background-color: transparent;
+    }
 
     row {
-        margin: 4px 8px;
-        border-radius: $crystal-radius-xs; /* Slimmer rows for the slim container */
-        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-        border: 1px solid transparent;
-        padding: 6px 14px;
+        margin: 2px 12px;
+        border-radius: $crystal-radius-xs;
+        transition: all 0.2s ease;
+        padding: 8px 16px;
 
         &:selected {
-            background-color: rgba(var(--crystal-accent-rgb), 0.15);
-            border: 1px solid rgba(var(--crystal-accent-rgb), 0.2);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            
+            background-color: rgba(var(--crystal-accent-rgb), 0.12);
+            color: $crystal-accent;
+
             .sidebar-icon {
-                color: $crystal-accent;
                 transform: scale(1.1);
-            }
-            
-            .sidebar-label {
-                font-weight: 800;
                 color: $crystal-accent;
-                letter-spacing: -0.2px;
+            }
+
+            .sidebar-label {
+                font-weight: 700;
+                color: $crystal-accent;
             }
         }
 
@@ -57,24 +181,129 @@ window#crystal-settings {
         }
 
         .sidebar-label {
-            font-size: 0.95rem;
-            font-weight: 600;
-            margin-left: 12px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            margin-left: 10px;
         }
     }
 }
 
-// Header & Toolbar
+// Header & Toolbar - Ultra-Compact Tahoe Master 
 headerbar {
     background: transparent;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    padding: 12px 20px;
+    padding: 0 16px;
 
-    .settings-title {
-        font-weight: 800;
-        font-size: 1.05rem;
-        opacity: 0.85;
-        letter-spacing: -0.3px;
+    /* Sidebar Toggle Button  */
+    .sidebar-toggle {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 99px;
+        min-width: 32px;
+        min-height: 32px;
+        margin-right: 12px;
+        color: rgba(255, 255, 255, 0.7);
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+
+        image {
+            -gtk-icon-size: 16px;
+        }
+    }
+
+    /* Navigation Capsule  - Perfectly Sized 32px Profile */
+    .navigation-capsule {
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 99px;
+        padding: 0 4px;
+        margin: 8px 0;
+
+        button {
+            padding: 0 8px;
+            min-width: 24px;
+            min-height: 24px;
+            color: rgba(255, 255, 255, 0.6);
+            border-radius: 99px;
+            background: none;
+
+            &:hover {
+                background: rgba(255, 255, 255, 0.1);
+                color: #ffffff;
+            }
+
+            image {
+                -gtk-icon-size: 14px;
+            }
+        }
+
+        .nav-separator {
+            background: rgba(255, 255, 255, 0.15);
+            margin: 8px 2px;
+            min-width: 1px;
+            min-height: 16px;
+        }
+    }
+
+    /* Centered Search Bar (macOS Pill) */
+    .settings-search {
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 99px;
+        padding: 0 12px;
+        margin: 8px 0;
+        min-height: 32px;
+
+        &:focus-within {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(var(--crystal-accent-rgb), 0.4);
+        }
+
+        entry {
+            background: none;
+            border: none;
+            box-shadow: none;
+            color: #ffffff;
+            font-size: 0.9rem;
+        }
+    }
+
+    /* Standardized Window Controls (Absolute Reset) */
+    windowcontrols {
+
+        &,
+        button {
+            background: none;
+            background-image: none;
+            border: none;
+            box-shadow: none;
+            padding: 0;
+            margin: 0;
+            min-width: 0;
+            min-height: 0;
+            outline: none;
+        }
+
+        button {
+            margin: 0 4px;
+
+            image {
+                background: rgba(255, 255, 255, 0.08);
+                border-radius: 99px;
+                padding: 6px;
+                min-width: 24px;
+                min-height: 24px;
+                -gtk-icon-size: 11px;
+                color: #ffffff;
+            }
+
+            &:hover image {
+                background: rgba(255, 255, 255, 0.15);
+            }
+        }
     }
 }
 
@@ -84,8 +313,8 @@ headerbar {
 button.accent-circle-btn {
     background-image: none;
     background-color: transparent;
-    border: 3px solid transparent; 
-    box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+    border: 3px solid transparent;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
     outline: none;
     padding: 0;
     margin: 0;
@@ -103,22 +332,49 @@ button.accent-circle-btn {
         border-color: #ffffff;
         transform: scale(1.25);
         box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
-        
+
         // Inner ring effect
         background-clip: padding-box;
     }
 
     /* Colors */
-    &.accent-blue { background-color: #0088FF; }
-    &.accent-teal { background-color: #2190a4; }
-    &.accent-green { background-color: #79B757; }
-    &.accent-yellow { background-color: #F3BA4B; }
-    &.accent-orange { background-color: #E9873A; }
-    &.accent-red { background-color: #ED5F5D; }
-    &.accent-pink { background-color: #E55E9C; }
-    &.accent-purple { background-color: #9A57A3; }
-    &.accent-slate { background-color: #6f8396; }
+    &.accent-blue {
+        background-color: #0088FF;
+    }
+
+    &.accent-teal {
+        background-color: #2190a4;
+    }
+
+    &.accent-green {
+        background-color: #79B757;
+    }
+
+    &.accent-yellow {
+        background-color: #F3BA4B;
+    }
+
+    &.accent-orange {
+        background-color: #E9873A;
+    }
+
+    &.accent-red {
+        background-color: #ED5F5D;
+    }
+
+    &.accent-pink {
+        background-color: #E55E9C;
+    }
+
+    &.accent-purple {
+        background-color: #9A57A3;
+    }
+
+    &.accent-slate {
+        background-color: #6f8396;
+    }
 }
+
 
 // --- Page Layout refinements ----------------------------------------
 
@@ -139,8 +395,10 @@ button.accent-circle-btn {
 }
 
 .appearance-page {
-    .settings-group { margin-bottom: 40px; }
-    
+    .settings-group {
+        margin-bottom: 40px;
+    }
+
     .settings-group-title {
         font-weight: 800;
         font-size: 0.75rem;
@@ -159,8 +417,14 @@ button.accent-circle-btn {
         row {
             padding: 2px 0;
             border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-            &:last-child { border-bottom: none; }
-            &:hover { background: rgba(255, 255, 255, 0.015); }
+
+            &:last-child {
+                border-bottom: none;
+            }
+
+            &:hover {
+                background: rgba(255, 255, 255, 0.015);
+            }
         }
     }
 
@@ -183,7 +447,7 @@ combobox {
 
     /* Target the internal button specifically to prevent double-backgrounds or opaque fallbacks */
     button {
-        background-color: rgba(255, 255, 255, 0.06); 
+        background-color: rgba(255, 255, 255, 0.06);
         border: 1px solid rgba(255, 255, 255, 0.1);
         border-radius: $crystal-radius-sm;
         padding: 6px 14px;
@@ -193,7 +457,8 @@ combobox {
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 
         /* Remove any internal decoration nodes from system themes */
-        &, & > box {
+        &,
+        &>box {
             background-image: none;
         }
 
