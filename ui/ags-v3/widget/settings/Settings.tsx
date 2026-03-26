@@ -11,7 +11,7 @@ import PowerPage from "./pages/Power"
 import AppearancePage from "./pages/Appearance"
 
 /**
- * Settings - System Configuration Panel 🛠️
+ * Settings - System Configuration Panel
  * macOS Tahoe Inspired Design
  */
 export default function Settings(monitor: Gdk.Monitor) {
@@ -54,6 +54,10 @@ export default function Settings(monitor: Gdk.Monitor) {
     const stack = new Adw.ViewStack({
         hexpand: true,
         vexpand: true,
+        margin_start: 8,
+        margin_end: 16, // Breathing room on the right
+        margin_top: 0,   // 💎 NO TOP MARGIN 💎
+        margin_bottom: 0, 
     })
 
     categories.forEach(cat => {
@@ -80,7 +84,7 @@ export default function Settings(monitor: Gdk.Monitor) {
 
         const listRow = new Gtk.ListBoxRow({ 
             child: rowContent,
-            css_classes: ["settings-row-container"],
+            css_classes: ["settings-row-container", "crystal-sidebar-row"],
             name: cat.id
         })
         sidebar.append(listRow)
@@ -151,18 +155,18 @@ export default function Settings(monitor: Gdk.Monitor) {
     const mainBox = new Gtk.Box({
         orientation: Gtk.Orientation.HORIZONTAL,
         css_classes: ["settings-content-wrapper"],
-        vexpand: true, // 💎 IMPORTANT: Allow full height
+        vexpand: true, // IMPORTANT: Allow full height
     })
 
     const sidebarWrapper = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         width_request: 260,
-        css_classes: ["settings-sidebar-wrapper"],
-        vexpand: true, // 💎 IMPORTANT: Allow full height
-        margin_start: 12,
-        margin_end: 12,
-        margin_top: 12,
-        margin_bottom: 12
+        css_classes: ["crystal-sidebar-island"],
+        vexpand: true,
+        margin_start: 0,  // 💎 NO LEFT MARGIN 💎
+        margin_end: 8,    // Space between panels
+        margin_top: 0,   // 💎 NO TOP MARGIN 💎
+        margin_bottom: 0  
     })
 
     const sidebarScroll = new Gtk.ScrolledWindow({

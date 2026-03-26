@@ -1,7 +1,7 @@
 @use 'base' as *;
 
 /* ==========================================================================
-   CRYSTAL SETTINGS - PREMIUM GLASS OVERRIDES 💎
+   CRYSTAL SETTINGS - PREMIUM GLASS OVERRIDES 
    ========================================================================== */
 
 // --- Main Window & Layout -------------------------------------------
@@ -18,7 +18,7 @@ window#crystal-settings {
 }
 
 .settings-sidebar-wrapper {
-    background: rgba(255, 255, 255, 0.05); /* 💎 Darker, more translucent island */
+    background: rgba(255, 255, 255, 0.05); /*  Darker, more translucent island */
     border-radius: $crystal-radius-md;
     border: 1px solid var(--crystal-border);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
@@ -174,17 +174,40 @@ button.accent-circle-btn {
     }
 }
 
-// ComboBox Overrides for macOS look
+// ComboBox Overrides for macOS look - Premium Glass Edition
 combobox {
-    padding: 4px 8px;
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: $crystal-radius-sm;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    font-weight: 600;
-    
-    &:hover { background: rgba(255, 255, 255, 0.12); }
-    
-    button { color: #ffffff; background: none; border-radius: 0; box-shadow: none; }
+    background: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+
+    /* Target the internal button specifically to prevent double-backgrounds or opaque fallbacks */
+    button {
+        background-color: rgba(255, 255, 255, 0.06); 
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: $crystal-radius-sm;
+        padding: 6px 14px;
+        color: #ffffff;
+        font-weight: 600;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+
+        /* Remove any internal decoration nodes from system themes */
+        &, & > box {
+            background-image: none;
+        }
+
+        &:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        &:active {
+            background-color: rgba(255, 255, 255, 0.14);
+            transform: scale(0.98);
+        }
+    }
 }
 
 separator {

@@ -14,7 +14,7 @@ import type { Monitor } from "gi://Gdk?version=4.0"
 import type { Window } from "gi://Gtk?version=4.0"
 
 /**
- * 🛠️ THEME STRATEGY: 
+ *  THEME STRATEGY: 
  * We use Libadwaita exclusively for modern theme management. 
  */
 try {
@@ -48,7 +48,7 @@ app.start({
     const randomId = Math.floor(Math.random() * 10000);
     console.log(`[CRYSTAL_SHELL] main() started! (ID: ${randomId})`);
 
-    // 🚀 STABILIZATION: Set Hyprland rules
+    //  STABILIZATION: Set Hyprland rules
     import("ags/process").then(({ execAsync }) => {
         execAsync("hyprctl keyword layerrule 'blur, crystal-bar'").catch(() => {})
         execAsync("hyprctl keyword layerrule 'ignorealpha 0.5, crystal-bar'").catch(() => {})
@@ -116,7 +116,7 @@ app.start({
       }
     } catch (e) { console.error(`[UI] Error:`, e) }
 
-    // 🕹️ Toggles Logic
+    //  Toggles Logic
     const toggleAppGrid = () => {
       appLauncherWindows.forEach(g => { try { g.toggle() } catch (e) { console.error(e) } })
     }

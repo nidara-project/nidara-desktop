@@ -1,13 +1,14 @@
 @use 'base' as *;
 
 /* ==========================================================================
-   CRYSTAL DESIGN SYSTEM - UNIFIED COMPONENTS 🍱
+   CRYSTAL DESIGN SYSTEM - UNIFIED COMPONENTS
    ========================================================================== */
 
 /* --- Toggles (Switches) --- */
-switch {
+switch,
+.crystal-switch {
     border-radius: $crystal-radius-pill;
-    min-width: 46px;
+    min-width: 44px;
     min-height: 24px;
     padding: 0;
     margin: 0;
@@ -20,7 +21,7 @@ switch {
     &:checked {
         background-color: $crystal-accent;
         border-color: rgba(0, 0, 0, 0.1);
-        box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.1), 0 0 8px rgba(var(--crystal-accent-rgb), 0.25);
+        box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.1), 0 0 12px rgba(var(--crystal-accent-rgb), 0.3);
     }
 
     slider {
@@ -31,63 +32,151 @@ switch {
         background-image: none;
         border: none;
         border-radius: $crystal-radius-pill;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
         transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     &:hover slider {
-        box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4);
+        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
     }
 }
 
-/* --- Sliders (Scales) --- */
-scale {
+/* --- Sliders (Scales) - macOS Tahoe Edition --- */
+/* 
+   TRICK: We use border-as-padding to make the trough APPEAR thin (8px) 
+   while physically being 14px, allowing the slider (14px) to fit without 
+   negative margins that cause GtkGizmo warnings.
+*/
+scale,
+.crystal-scale {
+    min-height: 24px;
+    margin: 4px 0;
+    padding: 0;
+    
     trough {
-        min-height: 8px;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: $crystal-radius-pill;
-        border: none;
+        min-height: 14px; // Match slider height
+        background-clip: padding-box; // Key for the trick
+        background-color: rgba(255, 255, 255, 0.12);
+        border: 3px solid transparent; // 14 - 3 - 3 = 8px visible area
+        border-radius: 99px;
+        margin: 0;
+        padding: 0;
+        transition: all 0.3s ease;
     }
     
     highlight {
-        background: $crystal-accent;
-        border-radius: $crystal-radius-pill;
+        min-height: 14px;
+        background-clip: padding-box;
+        background-color: $crystal-accent;
+        border: 3px solid transparent; // Match trough "slim" look
+        border-radius: 99px;
+        margin: 0;
+        padding: 0;
     }
     
     slider {
-        background: #ffffff;
+        /* TAHOE PILL: Horizontal Capsule */
+        background-color: #ffffff;
         background-image: none;
-        border: none;
-        border-radius: 50%;
+        border-radius: 99px;
+        border: 1px solid rgba(255, 255, 255, 0.3);
         box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
-        min-width: 16px;
-        min-height: 16px;
-        margin: -4px;
-        transition: transform 0.2s ease;
+        
+        min-width: 24px;   // Horizontal width
+        min-height: 14px;  // Fits perfectly in the 14px trough
+        margin: 0;         // ZERO margin = No GtkGizmo complaints
+        
+        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    /* GLASSY DYNAMIC: Translucent when clicked/grabbed */
+    &:active slider {
+        background-color: rgba(255, 255, 255, 0.45);
+        border-color: rgba(255, 255, 255, 0.6);
+        box-shadow: none;
+        transform: scale(0.95);
     }
 
     &:hover slider {
-        transform: scale(1.1);
+        transform: scale(1.05);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+}
+
+/* GLOBAL GJS STABILITY: Safe-guard for GtkGizmo (highlight) sizing errors */
+highlight {
+    min-height: 4px;
+    min-width: 4px;
+}
+
+/* --- Global Sidebar System (Tahoe Island) --- */
+.crystal-sidebar-island {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: $crystal-radius-md;
+    border: 1px solid var(--crystal-border);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    margin: 12px;
+    padding: 8px 0;
+    transition: all 0.3s ease;
+}
+
+.crystal-sidebar-row {
+    margin: 4px 10px;
+    border-radius: $crystal-radius-sm;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid transparent;
+    padding: 6px 14px;
+    color: var(--crystal-text-dim);
+
+    &:hover {
+        background-color: rgba(255, 255, 255, 0.05);
+        color: var(--crystal-text);
+    }
+
+    &:selected,
+    &.active {
+        background-color: rgba(var(--crystal-accent-rgb), 0.15);
+        color: $crystal-accent;
+        border-color: rgba(var(--crystal-accent-rgb), 0.2);
+    }
+}
+
+/* --- PillSlider Specific Reset --- */
+.cc-slider-scale-input {
+    min-height: 0;
+    margin: 0;
+    
+    trough, highlight, slider {
+        background: none;
+        background-image: none;
+        border: none;
+        box-shadow: none;
+        min-height: 0;
+        min-width: 0;
+        margin: 0;
+        outline: none;
     }
 }
 
 /* --- Buttons (Premium Crystal) --- */
-button.crystal-btn {
+button.crystal-btn,
+.crystal-button {
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: $crystal-radius-sm;
     padding: 6px 16px;
     font-weight: 600;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
     &:hover {
         background: rgba(255, 255, 255, 0.12);
         border-color: rgba(255, 255, 255, 0.15);
+        transform: translateY(-1px);
     }
 
     &:active {
         background: rgba(255, 255, 255, 0.16);
-        transform: scale(0.98);
+        transform: scale(0.96);
     }
 
     &.accent {
@@ -97,4 +186,12 @@ button.crystal-btn {
         
         &:hover { background: rgba(var(--crystal-accent-rgb), 0.85); }
     }
+}
+
+.crystal-card {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: $crystal-radius-md;
+    border: 1px solid var(--crystal-border);
+    padding: 16px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }

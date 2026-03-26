@@ -160,7 +160,7 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
   }
 
   lines.push(
-    `:root {`,
+    `* {`,
     `  --fc-transparency: ${t.toFixed(2)};`,
     `  --fc-accent: ${accent};`,
   )
@@ -388,7 +388,7 @@ export function writeQtSettings(config: FluidCrystalConfig, iconTheme?: string):
     const target = config.qtTheme.replace(/#/g, "")
     const opacity = Math.round(config.transparency * 100) 
     
-    // 1. Update Kvantum Global Config 💎
+    // 1. Update Kvantum Global Config 
     const kvConfigPath = `${home}/.config/Kvantum/kvantum.kvconfig`
     let kvContent = "[General]\n"
     try { kvContent = readFile(kvConfigPath) || "[General]\n" } catch (ex) {}

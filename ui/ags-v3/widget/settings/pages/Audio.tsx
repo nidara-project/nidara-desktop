@@ -3,7 +3,7 @@ import AstalWp from "gi://AstalWp"
 import PillSlider from "../../common/PillSlider"
 
 /**
- * Audio Settings Page 🔊
+ * Audio Settings Page 
  */
 export default function AudioPage() {
     const audio = AstalWp.get_default()?.audio

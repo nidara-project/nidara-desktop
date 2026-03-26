@@ -2,7 +2,7 @@ import { Astal, Gtk } from "ags/gtk4"
 import AstalNetwork from "gi://AstalNetwork"
 
 /**
- * Network Settings Page 🛰️
+ * Network Settings Page 
  */
 export default function NetworkPage() {
     const network = AstalNetwork.get_default()

@@ -2,6 +2,7 @@ import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { Gdk, Gtk } from "ags/gtk4"
+import app from "ags/gtk4/app"
 // @ts-ignore
 import Adw from "gi://Adw?version=1"
 import { execAsync } from "ags/process"
@@ -75,7 +76,7 @@ class ThemeManager extends GObject.Object {
 
     constructor() {
         super()
-        console.log("[ThemeManager] NEW instance created. 🚀")
+        console.log("[ThemeManager] NEW instance created. ")
         this.loadSettings()
         
         // V875: System Monitoring 📡
@@ -320,11 +321,19 @@ class ThemeManager extends GObject.Object {
                 Gtk.StyleContext.add_provider_for_display(display, this.masterProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 3)
                 Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 4)
                 
-                const projectDir = GLib.getenv("CRYSTAL_SHELL_DIR") || `${GLib.get_home_dir()}/.config/crystal-shell`
-                const stylePath = `${projectDir}/ui/ags-v3/style.css`
-                if (GLib.file_test(stylePath, GLib.FileTest.EXISTS)) {
-                    this.mainProvider.load_from_path(stylePath)
-                    console.log(`[ThemeManager] Static style.css loaded`)
+                // V921: Priority Path Discovery (Home-Linked Logic)
+                // We prefer ~/.config/ags/ explicitly as the user has it symlinked to the dev directory.
+                const configPaths = [
+                    `${GLib.get_user_config_dir()}/ags/style.css`,
+                    `${app.configDir}/style.css`
+                ]
+                
+                for (const stylePath of configPaths) {
+                    if (GLib.file_test(stylePath, GLib.FileTest.EXISTS)) {
+                        this.mainProvider.load_from_path(stylePath)
+                        console.log(`[ThemeManager] Static style.css loaded from: ${stylePath}`)
+                        break
+                    }
                 }
                 this.providersLinked = true
             }
@@ -452,7 +461,7 @@ class ThemeManager extends GObject.Object {
         
         this._isReady = true
         this.emit("ready")
-        console.log("[ThemeManager] Global Styles READY! 💎")
+        console.log("[ThemeManager] Global Styles READY! ")
     }
 
     private saveSettings() {

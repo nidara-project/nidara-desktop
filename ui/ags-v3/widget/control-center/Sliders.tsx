@@ -21,6 +21,7 @@ export function SliderWidget(id: string, name: string, iconName: string, label: 
     })
     scale.set_size_request(240, -1)
     scale.add_css_class("cc-atomic-scale-native")
+    scale.add_css_class("crystal-scale")
 
     const iconLow = new Gtk.Image({
         icon_name: id === "volume" ? "audio-volume-low-symbolic" : "display-brightness-symbolic",
