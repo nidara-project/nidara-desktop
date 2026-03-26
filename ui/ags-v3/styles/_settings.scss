@@ -1,145 +1,120 @@
 @use 'base' as *;
 
 /* ==========================================================================
-   CRYSTAL SETTINGS - PREMIUM GLASS OVERRIDES 
+   CRYSTAL SETTINGS - Scoped CSS (Only our own widgets)
    ========================================================================== */
 
-// --- Main Window & Layout -------------------------------------------
-
-/*  Tahoe Integration: Surgical Partition Architecture (No !important) */
+// -- 1. Main Window Glass ----------------------------------------------
+// Uses var(--crystal-bg) which is driven by the FluidCrystal fc_window_bg token.
+// All child nodes inherit transparency from the window glass surface.
 window#crystal-settings-window.crystal-settings-window {
-    background: transparent;
+    background: var(--crystal-bg);
     border-radius: $crystal-radius-lg;
     border: 1px solid var(--crystal-border);
     box-shadow: var(--crystal-shadow-lg);
-    overflow: hidden;
 
-    /* Base Nodes Purge (Specificity chaining to override Adwaita) */
-    &, &.background, .background, .contents, contents, .main {
+    // Force all generic container nodes to be transparent
+    // so only our intentional components have backgrounds.
+    > contents,
+    > .background,
+    > .main,
+    .background {
         background: transparent;
         background-color: transparent;
         background-image: none;
         box-shadow: none;
-    }
-
-    /* THE GLASS PARTITION: Fixed Width Sync for Tahoe */
-    &.glass {
-        $sidebar-zone: 260px; // PERFECT MATCH to Settings.tsx
-        
-        // 1. Normal Mode: Pure window glass partition
-        background: linear-gradient(to right, transparent $sidebar-zone, var(--crystal-bg) $sidebar-zone);
-
-        // 2. Overlay Mode: Full window glass (Controlled by Reactivity in TSX)
-        &.collapsed-mode {
-            background: var(--crystal-bg);
-        }
-    }
-
-    /* NUCLEAR OVERLAY SPLITVIEW RESET (Chaining ID + Tag to win without !important) */
-    overlaysplitview#settings-splitview {
-        background: transparent;
-        background-color: transparent;
-
-        &, & > bin, & > sidebar {
-            background: transparent;
-            background-color: transparent;
-            background-image: none;
-            box-shadow: none;
-        }
-
-        // 1. Content Area (BIN): SHOW THROUGH TO WINDOW GLASS
-        & > bin#crystal-settings-content-view,
-        & > bin {
-            border-left: 1px solid var(--crystal-border); // Vertical partition line
-            
-            &, list, toolbarview, stack, scrolledwindow, viewport, .settings-page {
-                background: transparent;
-                background-color: transparent;
-                background-image: none;
-                border: none;
-                box-shadow: none;
-            }
-        }
-
-        // 2. Sidebar Area (GHOST ZONE): Absolute Transparency via Recursive Wildcard
-        & > sidebar#crystal-settings-sidebar-scroll,
-        & > sidebar,
-        #crystal-settings-sidebar-scroll {
-            background: transparent;
-            background-color: transparent;
-            
-            &, & * {
-                background: none;
-                background-color: transparent;
-                background-image: none;
-                border: none;
-                box-shadow: none;
-            }
-        }
-
-        // Pure Mode Transitions (Purge persistent overlays)
-        &:not(.collapsed) > sidebar { background: transparent; }
-        &.collapsed > sidebar { 
-            background: transparent;
-            box-shadow: none;
-            border: none;
-        }
-
-        /* Partition Separator (Tahoe Style) */
-        & > separator {
-            background: rgba(255, 255, 255, 0.05);
-            min-width: 1px;
-            margin: 0;
-            padding: 0;
-        }
+        border: none;
     }
 }
 
-// THE SIDEBAR PILL (Floating Glass Capsule)
-scrolledwindow#crystal-settings-sidebar-scroll {
-    background: rgba(30, 31, 44, 0.94); // High-opacity glass for the nav-pills
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: $crystal-radius-lg;
-    margin: 8px;
-    box-shadow: var(--crystal-shadow-lg);
-}
-
-// REMOVE ALL COMPONENT CAPSULES (Native Content Integration)
-.crystal-settings-content-pane,
-.crystal-settings-content-pane.glass,
-.settings-headerbar,
-.settings-headerbar.glass,
-#crystal-settings-content-view,
-.settings-headerbar.compact {
+// -- 2. OverlaySplitView: Content area - only direct container transparent ---
+// NOTE: Do NOT wildcard 'bin *' here - it interferes with Adwaita's internal
+// overlay layout calculations and causes the sidebar to displace instead of float.
+bin#crystal-settings-content-view,
+bin#crystal-settings-content-view > toolbarview {
     background: transparent;
     background-color: transparent;
-    border: none;
-    box-shadow: none;
     background-image: none;
 }
 
-/* The Glass Sidebar (Edge-to-Edge Container Reset) */
-.crystal-sidebar-drawer {
+// -- 3. OverlaySplitView: Sidebar container transparent -------------------
+// The internal 'sidebar' node from Adwaita must be transparent so only
+// the floating pill capsule (scrolledwindow#crystal-settings-sidebar-scroll)
+// is visible. This works via the @define-color sidebar_bg_color we set in FluidCrystal.
+// The flat selectors below are an extra safety net.
+overlaysplitview#settings-splitview > sidebar,
+overlaysplitview#settings-splitview > sidebar:backdrop {
     background: none;
     background-color: transparent;
-    padding: 0;
-    margin: 0;
+    background-image: none;
+    box-shadow: none;
     border: none;
 }
 
-.crystal-sidebar-island {
+// Collapsed/overlay mode: sidebar floats over content
+overlaysplitview#settings-splitview.collapsed > sidebar,
+overlaysplitview#settings-splitview.collapsed > sidebar:backdrop,
+overlaysplitview#settings-splitview.collapsed sidebar,
+overlaysplitview#settings-splitview.collapsed .navigation-sidebar {
     background: none;
     background-color: transparent;
-    border-radius: $crystal-radius-lg;
+    background-image: none;
     box-shadow: none;
+    border: none;
 }
 
-.settings-sidebar-scroll {
-    background: rgba(30, 31, 44, 0.94); // Increased opacity for readability (No overlap)
-    border: 1px solid rgba(255, 255, 255, 0.1);
+// Kill the scrim/dimming overlay in collapsed mode
+overlaysplitview#settings-splitview > dimming,
+overlaysplitview#settings-splitview > .dimming,
+overlaysplitview#settings-splitview dimming,
+#settings-splitview > dimming,
+#settings-splitview dimming {
+    background: transparent;
+    background-color: transparent;
+    opacity: 0;
+}
+
+// -- 4. The Sidebar Pill (Floating Glass Capsule) ----------------------
+// Default (non-overlay): floating pill with margin and rounded corners
+scrolledwindow#crystal-settings-sidebar-scroll {
+    background: var(--crystal-bg);
+    border: 1px solid var(--crystal-border);
     border-radius: $crystal-radius-lg;
-    margin: 8px; // Encapsulated floating look inside the column
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    margin: 8px;
+    box-shadow: var(--crystal-shadow-lg);
+    transition: margin 0.25s ease, border-radius 0.25s ease;
+}
+
+// Overlay/collapsed mode: capsule fills the full sidebar area, hiding
+// Adwaita's dark sidebar background completely behind it.
+// The window gets the class 'collapsed-mode' via Settings.tsx.
+window#crystal-settings-window.collapsed-mode {
+    scrolledwindow#crystal-settings-sidebar-scroll {
+        margin: 8px 0 8px 0;
+        border-radius: $crystal-radius-lg;
+        border-left: 1px solid var(--crystal-border);
+        box-shadow: none;
+    }
+
+    // Maximum specificity to kill Adwaita's sidebar shadow in overlay mode.
+    // Libadwaita applies box-shadow to the sidebar node as part of its overlay elevation.
+    // We also kill the 'shadow' and 'dimming' internal nodes.
+    overlaysplitview#settings-splitview > sidebar,
+    overlaysplitview#settings-splitview > sidebar:backdrop,
+    #settings-splitview > sidebar,
+    #settings-splitview sidebar,
+    #settings-splitview > shadow,
+    #settings-splitview shadow,
+    #settings-splitview > dimming,
+    #settings-splitview dimming {
+        background: none;
+        background-color: transparent;
+        background-image: none;
+        box-shadow: none;
+        border: none;
+        outline: none;
+        opacity: 0;
+    }
 }
 
 .settings-sidebar {

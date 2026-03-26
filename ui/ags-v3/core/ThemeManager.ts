@@ -93,7 +93,22 @@ class ThemeManager extends GObject.Object {
         this.interfaceSettings.connect("changed::font-name", () => this.syncFont())
         this.syncFont()
         
+        // V950: Hot Reload (CSS Monitoring) 📡
+        this.setupStyleMonitor()
+        
         this.applyAll()
+    }
+
+    private setupStyleMonitor() {
+        const stylePath = `${GLib.get_user_config_dir()}/ags/style.css`
+        const file = Gio.File.new_for_path(stylePath)
+        try {
+            const monitor = file.monitor_file(Gio.FileMonitorFlags.NONE, null)
+            monitor.connect("changed", () => {
+                console.log(`[ThemeManager] Style Hot-Reload: ${stylePath}`)
+                this.mainProvider.load_from_path(stylePath)
+            })
+        } catch (e) { console.error(`[ThemeManager] Failed to monitor ${stylePath}:`, e) }
     }
 
     private syncFont() {
@@ -315,11 +330,12 @@ class ThemeManager extends GObject.Object {
         try {
             const display = Gdk.Display.get_default()
             if (display) {
-                Gtk.StyleContext.add_provider_for_display(display, this.mainProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER)
-                Gtk.StyleContext.add_provider_for_display(display, this.fontProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 1)
-                Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 2)
-                Gtk.StyleContext.add_provider_for_display(display, this.masterProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 3)
-                Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, Gtk.STYLE_PROVIDER_PRIORITY_USER + 4)
+                const priority = Gtk.STYLE_PROVIDER_PRIORITY_USER
+                Gtk.StyleContext.add_provider_for_display(display, this.mainProvider, priority)
+                Gtk.StyleContext.add_provider_for_display(display, this.fontProvider, priority)
+                Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, priority)
+                Gtk.StyleContext.add_provider_for_display(display, this.masterProvider, priority)
+                Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, priority)
                 
                 // V921: Priority Path Discovery (Home-Linked Logic)
                 // We prefer ~/.config/ags/ explicitly as the user has it symlinked to the dev directory.

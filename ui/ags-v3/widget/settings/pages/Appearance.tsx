@@ -211,22 +211,6 @@ export default function AppearancePage() {
     
     page.append(fcGroup.box)
 
-    // 3. X-Ray Targets
-    const xrayGroup = listGroup("Zonas de Cristalización")
-    const targets = Theme.glassTargets
-    const xrayConfigs: [keyof typeof targets, string, string][] = [
-        ["globalWindow", "Estructura Global", "Fondo base del sistema"],
-        ["sidebars", "Sidebars", "Barras laterales de navegación"],
-        ["headerbars", "HeaderBars", "Controles de ventana superiores"],
-        ["popovers", "Popovers", "Menús flotantes y contextuales"]
-    ]
-
-    xrayConfigs.forEach(([key, title, subtitle]) => {
-        xrayGroup.listBox.append(toggleRow(title, subtitle, targets[key], (v) => Theme.setGlassTarget(key, v)))
-    })
-    
-    page.append(xrayGroup.box)
-
     // 4. System Assets
     const assetsGroup = listGroup("Recursos del Sistema")
     
@@ -258,10 +242,9 @@ export default function AppearancePage() {
         const isFc = Theme.isFluidCrystal
         const currentAccent = Theme.accentColor
         
-        // Update visibility
+        // Update visibility of accent/transparency rows
         fcGroup.listBox.get_row_at_index(1)!.visible = isFc
         fcGroup.listBox.get_row_at_index(2)!.visible = isFc
-        xrayGroup.box.visible = isFc
         
         // Update accent circles
         Object.keys(accentButtons).forEach(key => {

@@ -159,7 +159,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         child: sidebar,
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        css_classes: ["settings-sidebar-scroll"],
+        css_classes: ["settings-sidebar-scroll", "crystal-settings-sidebar-view"],
         vexpand: true,
     })
     sidebarScroll.set_name("crystal-settings-sidebar-scroll")
@@ -179,8 +179,8 @@ export default function Settings(monitor: Gdk.Monitor) {
         content: contentToolbarView,
         hexpand: true,
         vexpand: true,
-        min_sidebar_width: 260,
-        max_sidebar_width: 300,
+        min_sidebar_width: 220,
+        max_sidebar_width: 280,
         css_classes: ["crystal-settings-splitview", "glass"]
     })
 
@@ -232,17 +232,19 @@ export default function Settings(monitor: Gdk.Monitor) {
     win.add_breakpoint(breakpoint)
 
     // Synchronize window class for CSS gradient partitioning
-    splitView.connect("notify::collapsed", () => {
+    const syncCollapsedMode = () => {
         if (splitView.collapsed) {
             win.add_css_class("collapsed-mode")
         } else {
             win.remove_css_class("collapsed-mode")
         }
-    })
+    }
+    splitView.connect("notify::collapsed", syncCollapsedMode)
+    syncCollapsedMode() // Run initial check
 
     win.set_content(splitView)
 
-    // Toggle Mechanism
+
     ; (win as any).toggle = () => {
         console.log(`[Settings] Toggling window visibility. Current: ${win.visible}`);
         win.visible = !win.visible

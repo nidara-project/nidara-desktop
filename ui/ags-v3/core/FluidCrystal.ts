@@ -85,26 +85,17 @@ export const DEFAULT_CONFIG: FluidCrystalConfig = {
 // V12942: Generic window override removed to follow user's direct CSS approach.
 
 const GLASS_TEMPLATES: Record<keyof GlassTargets, string> = {
-  globalWindow: `
-window.background:not(.popup), 
-window.background.csd:not(.popup), 
-dialog.background:not(.popup) {
-  background-color: @fc_window_bg;
-  background-image: none;
-}
-`,
+  // These templates are intentionally empty.
+  // Each component applies glass via its own scoped SCSS (e.g. _settings.scss).
+  // We do NOT use generic selectors (window.background, sidebar, etc.)
+  // to avoid leaking into the GTK theme for external apps.
+  globalWindow: ``,
   headerbars: ``,
   sidebars: ``,
   mainViews: ``,
   separators: ``,
   cardsAndLists: ``,
-  popovers: `
-popover > contents,
-popover.background > contents,
-.menu {
-  background-color: @fc_popover_bg;
-}
-`
+  popovers: ``
 }
 
 /* FORCE_ACCENT_CSS ("GOD MODE") REMOVED to simplify and avoid inconsistencies */
@@ -143,19 +134,16 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
 
   if (config.enabled) {
     lines.push(
-      `/* THEME TRANSPARENCY DEFINITIONS (ENGINE ACTIVE) */`,
-      `@define-color card_bg_color transparent;`,
-      `@define-color window_bg_color @fc_window_bg;`,
-      // `view_bg_color` and others removed from global override to avoid breaking apps like Nautilus/VSCode
-      // `@define-color view_bg_color transparent;`,
-      // `@define-color headerbar_bg_color transparent;`,
-      // `@define-color sidebar_bg_color transparent;`,
-      `@define-color popover_bg_color @fc_popover_bg;`
+      `/* ENGINE ACTIVE */`,
+      // NOTE: These @define-color tokens ONLY affect the AGS GJS process.
+      // GTK apps (Nautilus, terminal, etc.) run in their own process with
+      // their own CSS providers — they are NOT affected by these overrides.
+      `@define-color sidebar_bg_color transparent;`,
+      `@define-color sidebar_backdrop_color transparent;`
     )
   } else {
     lines.push(
-      `/* THEME TRANSPARENCY DEFINITIONS (ENGINE INACTIVE) */`,
-      `/* Native theme inheritance allowed. */`
+      `/* ENGINE INACTIVE */`
     )
   }
 
