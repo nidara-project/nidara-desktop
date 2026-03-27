@@ -369,7 +369,7 @@ button.accent-circle-btn {
     line-height: 1.4;
 }
 
-.appearance-page {
+.settings-page {
     .settings-group {
         margin-bottom: 40px;
     }
@@ -383,7 +383,8 @@ button.accent-circle-btn {
         margin-left: 2px;
     }
 
-    list {
+    list,
+    .boxed-list {
         background: rgba(255, 255, 255, 0.05);
         border: 1px solid var(--crystal-border);
         border-radius: $crystal-radius-md;

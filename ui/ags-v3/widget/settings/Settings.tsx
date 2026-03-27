@@ -152,6 +152,14 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
 
     sidebar.set_name("crystal-settings-sidebar-list")
+    
+    // Connect selection to stack navigation 💎
+    sidebar.connect("row-selected", (_, row) => {
+        if (row && row.name) {
+            stack.visible_child_name = row.name
+            console.log(`[Settings] Navigating to page: ${row.name}`)
+        }
+    })
 
     // --- Responsive Floating Architecture --- 🏔️
     // Sidebar: Floating Pill (Directly in SplitView)

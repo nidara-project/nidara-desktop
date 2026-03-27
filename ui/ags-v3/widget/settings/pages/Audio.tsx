@@ -3,7 +3,7 @@ import AstalWp from "gi://AstalWp"
 import PillSlider from "../../common/PillSlider"
 
 /**
- * Audio Settings Page 
+ * Audio Settings Page 🔊 - Crystal V3 (macOS Tahoe Inspired)
  */
 export default function AudioPage() {
     const audio = AstalWp.get_default()?.audio
@@ -11,117 +11,149 @@ export default function AudioPage() {
 
     const page = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 24,
-        css_classes: ["settings-page"],
-        margin_start: 30,
-        margin_end: 30,
-        margin_top: 30,
-        margin_bottom: 30,
+        spacing: 32,
+        css_classes: ["settings-page", "audio-page"],
+        margin_start: 12,
+        margin_end: 12,
+        margin_top: 40,
+        margin_bottom: 40,
     })
 
-    // Header Section
+    // Header Section (Tahoe Style)
     const headerBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 4,
-        margin_bottom: 12
+        spacing: 8,
+        margin_bottom: 24,
+        margin_start: 6
     })
+    
     headerBox.append(new Gtk.Label({
         label: "Sonido",
         css_classes: ["settings-page-title"],
-        halign: Gtk.Align.START
+        halign: Gtk.Align.START,
     }))
+    
     headerBox.append(new Gtk.Label({
         label: "Administra tus dispositivos de entrada y salida",
         css_classes: ["settings-page-subtitle"],
-        halign: Gtk.Align.START
+        halign: Gtk.Align.START,
     }))
+    
     page.append(headerBox)
 
-    const speakerList = new Gtk.ListBox({
-        css_classes: ["settings-list-box", "boxed-list"],
-        selection_mode: Gtk.SelectionMode.NONE
-    })
-
-    const refreshSpeakers = () => {
-        let child = speakerList.get_first_child()
-        while (child) {
-            speakerList.remove(child)
-            child = speakerList.get_first_child()
-        }
-
-        const endpoints = [
-            ...(audio.get_speakers ? audio.get_speakers() : []),
-            ...(audio.get_microphones ? audio.get_microphones() : [])
-        ]
-
-        endpoints.forEach(endpoint => {
-            const isMic = (endpoint.description || "").toLowerCase().includes("mic")
-
-            const rowContent = new Gtk.Box({
-                orientation: Gtk.Orientation.VERTICAL,
-                spacing: 12,
-                margin_start: 16,
-                margin_end: 16,
-                margin_top: 12,
-                margin_bottom: 12,
-            })
-
-            const header = new Gtk.Box({ spacing: 12 })
-            header.append(new Gtk.Image({
-                icon_name: isMic ? "audio-input-microphone-symbolic" : "audio-speakers-symbolic",
-                pixel_size: 18
-            }))
-            header.append(new Gtk.Label({
-                label: endpoint.description || endpoint.name || "Endpoint",
+    // ── Helper: Boxed List Group ──
+    const listGroup = (title: string) => {
+        const box = new Gtk.Box({ 
+            orientation: Gtk.Orientation.VERTICAL, 
+            spacing: 12,
+            css_classes: ["settings-group"] 
+        })
+        
+        if (title) {
+            box.append(new Gtk.Label({
+                label: title.toUpperCase(),
+                css_classes: ["settings-group-title"],
                 halign: Gtk.Align.START,
-                css_classes: ["settings-row-label"],
-                hexpand: true
+                margin_start: 10
             }))
+        }
+        
+        const listBox = new Gtk.ListBox({
+            css_classes: ["settings-list-box", "boxed-list"],
+            selection_mode: Gtk.SelectionMode.NONE
+        })
+        
+        box.append(listBox)
+        return { box, listBox }
+    }
 
-            const muteBtn = new Gtk.Button({
-                icon_name: endpoint.mute ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic",
-                css_classes: ["settings-icon-btn", endpoint.mute ? "muted" : ""],
-                valign: Gtk.Align.CENTER
-            })
+    const speakerGroup = listGroup("Dispositivos de Salida")
+    const micGroup = listGroup("Entrada (Micrófonos)")
 
-            muteBtn.connect("clicked", () => {
-                endpoint.mute = !endpoint.mute
-            })
+    const refreshDevices = () => {
+        [speakerGroup, micGroup].forEach(g => {
+            let child = g.listBox.get_first_child()
+            while (child) {
+                g.listBox.remove(child)
+                child = g.listBox.get_first_child()
+            }
+        })
 
-            endpoint.connect("notify::mute", () => {
-                muteBtn.icon_name = endpoint.mute ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic"
-                if (endpoint.mute) muteBtn.add_css_class("muted")
-                else muteBtn.remove_css_class("muted")
-            })
+        const speakers = audio.get_speakers ? audio.get_speakers() : []
+        const microphones = audio.get_microphones ? audio.get_microphones() : []
 
-            header.append(muteBtn)
-            rowContent.append(header)
+        speakers.forEach(endpoint => {
+            speakerGroup.listBox.append(createDeviceRow(endpoint, false))
+        })
 
-            const slider = PillSlider({
-                iconName: isMic ? "audio-input-microphone-symbolic" : "audio-volume-high-symbolic",
-                value: endpoint.volume,
-                onChanged: (v) => { endpoint.volume = v }
-            })
-
-            rowContent.append(slider)
-            speakerList.append(new Gtk.ListBoxRow({ child: rowContent }))
+        microphones.forEach(endpoint => {
+            micGroup.listBox.append(createDeviceRow(endpoint, true))
         })
     }
 
-    const groupBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
-    groupBox.append(new Gtk.Label({
-        label: "Dispositivos del Sistema",
-        css_classes: ["settings-group-title"],
-        halign: Gtk.Align.START,
-        margin_start: 6
-    }))
-    groupBox.append(speakerList)
-    page.append(groupBox)
+    const createDeviceRow = (endpoint: any, isMic: boolean) => {
+        const box = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 16,
+            margin_start: 16,
+            margin_end: 16,
+            margin_top: 14,
+            margin_bottom: 14,
+        })
 
-    // Initial sync
-    refreshSpeakers()
-    audio.connect("notify::speakers", refreshSpeakers)
-    audio.connect("notify::microphones", refreshSpeakers)
+        const header = new Gtk.Box({ spacing: 12 })
+        header.append(new Gtk.Image({
+            icon_name: isMic ? "audio-input-microphone-symbolic" : "audio-speakers-symbolic",
+            pixel_size: 18
+        }))
+        
+        const nameLabel = new Gtk.Label({
+            label: endpoint.description || endpoint.name || "Dispositivo",
+            halign: Gtk.Align.START,
+            css_classes: ["settings-row-label"],
+            hexpand: true
+        })
+        header.append(nameLabel)
+
+        const muteBtn = new Gtk.Button({
+            icon_name: endpoint.mute ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic",
+            css_classes: ["settings-icon-btn", endpoint.mute ? "muted" : ""],
+            valign: Gtk.Align.CENTER
+        })
+
+        muteBtn.connect("clicked", () => {
+            endpoint.mute = !endpoint.mute
+        })
+
+        endpoint.connect("notify::mute", () => {
+            muteBtn.icon_name = endpoint.mute ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic"
+            if (endpoint.mute) muteBtn.add_css_class("muted")
+            else muteBtn.remove_css_class("muted")
+        })
+
+        header.append(muteBtn)
+        box.append(header)
+
+        const slider = PillSlider({
+            iconName: isMic ? "audio-input-microphone-symbolic" : "audio-volume-high-symbolic",
+            value: endpoint.volume,
+            onChanged: (v) => { endpoint.volume = v }
+        })
+        box.append(slider)
+
+        return new Gtk.ListBoxRow({ child: box, css_classes: ["audio-device-row"] })
+    }
+
+    audio.connect("speaker-added", refreshDevices)
+    audio.connect("speaker-removed", refreshDevices)
+    audio.connect("microphone-added", refreshDevices)
+    audio.connect("microphone-removed", refreshDevices)
+    audio.connect("notify::default-speaker", refreshDevices)
+    audio.connect("notify::default-microphone", refreshDevices)
+    refreshDevices()
+
+    page.append(speakerGroup.box)
+    page.append(micGroup.box)
 
     return page
 }
