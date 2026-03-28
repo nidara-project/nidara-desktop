@@ -127,19 +127,35 @@ export default function AppearancePage() {
     }
 
     const sliderRow = (l: string, s: string, init: number, min: number, max: number, cb: (v: number) => void) => {
+        const box = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
+
+        const iconLow = new Gtk.Image({
+            icon_name: l.includes("Transparencia") ? "display-brightness-symbolic" : "view-paged-symbolic",
+            pixel_size: 16,
+            opacity: 0.5
+        })
+
         const scale = new Gtk.Scale({
             orientation: Gtk.Orientation.HORIZONTAL,
+            hexpand: true,
             valign: Gtk.Align.CENTER,
-            width_request: 160,
-            css_classes: ["horizontal"]
+            width_request: 120,
+            css_classes: ["crystal-scale", "cc-atomic-scale-native"]
         })
         scale.set_range(min, max)
         scale.set_value(init)
         scale.set_draw_value(false)
         
+        const iconHigh = new Gtk.Image({
+            icon_name: l.includes("Transparencia") ? "display-brightness-high-symbolic" : "view-paged-symbolic",
+            pixel_size: 16,
+            opacity: 0.5
+        })
+
         const valueLabel = new Gtk.Label({
             label: `${Math.round(init * 100)}%`,
-            css_classes: ["slider-value-label"]
+            css_classes: ["slider-value-label"],
+            width_chars: 4
         })
 
         scale.connect("value-changed", () => {
@@ -148,9 +164,11 @@ export default function AppearancePage() {
             cb(val)
         })
         
-        const box = new Gtk.Box({ spacing: 12 })
+        box.append(iconLow)
         box.append(scale)
+        box.append(iconHigh)
         box.append(valueLabel)
+
         return createRow(l, s, box)
     }
 

@@ -3,6 +3,7 @@ import AstalNetwork from "gi://AstalNetwork"
 
 /**
  * Network Settings Page 🎨 - Crystal V3 (macOS Tahoe Inspired)
+ * Enhanced with "Medical-Grade" technical details.
  */
 export default function NetworkPage() {
     const network = AstalNetwork.get_default()
@@ -18,7 +19,7 @@ export default function NetworkPage() {
         margin_bottom: 40,
     })
 
-    // Header Section (Tahoe Style)
+    // Header Section
     const headerBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 8,
@@ -33,7 +34,7 @@ export default function NetworkPage() {
     }))
     
     headerBox.append(new Gtk.Label({
-        label: "Administra las conexiones de red y Wi-Fi",
+        label: "Administra las conexiones de red y parámetros técnicos",
         css_classes: ["settings-page-subtitle"],
         halign: Gtk.Align.START,
     }))
@@ -66,7 +67,6 @@ export default function NetworkPage() {
         return { box, listBox }
     }
 
-    // ── Helper: Generic Row Builder ──
     const createRow = (label: string, subtitle: string, widget: Gtk.Widget) => {
         const box = new Gtk.Box({
             spacing: 16,
@@ -103,30 +103,59 @@ export default function NetworkPage() {
         return new Gtk.ListBoxRow({ child: box, css_classes: ["settings-item-row"] })
     }
 
+    const getIp = (service: any) => {
+        if (!service) return "None"
+        if (service.ip4_address && service.ip4_address !== "None") return String(service.ip4_address)
+        
+        try {
+            const dev = service.device
+            const config = dev?.get_ip4_config()
+            const addrs = config?.get_addresses()
+            if (addrs && addrs.length > 0) {
+                return String(addrs[0].get_address())
+            }
+        } catch (e) {
+            console.warn("[NetworkSettings] Failed to resolve IP from config:", e)
+        }
+        
+        return "None"
+    }
+
+    const staticLabel = (text: any) => new Gtk.Label({
+        label: String(text ?? "---"),
+        css_classes: ["settings-row-status", "dimmed"],
+        halign: Gtk.Align.END
+    })
+
     // ── Ethernet Section ──
     if (network.wired) {
         const wiredGroup = listGroup("Cableada (Ethernet)")
-        const wiredStatusLabel = new Gtk.Label({
-            label: network.wired.internet === AstalNetwork.Internet.CONNECTED ? "Conectada" : "Desconectada",
-            css_classes: ["settings-row-status"],
-            halign: Gtk.Align.END
-        })
         
-        network.wired.connect("notify::internet", () => {
-            wiredStatusLabel.label = network.wired.internet === AstalNetwork.Internet.CONNECTED ? "Conectada" : "Desconectada"
-        })
+        // Main Status
+        const wiredStatus = staticLabel(network.wired.internet === AstalNetwork.Internet.CONNECTED ? "Conectada" : "Desconectada")
+        wiredGroup.listBox.append(createRow("Conexión Ethernet", "Estado actual de la interfaz física", wiredStatus))
 
-        const wiredIcon = new Gtk.Image({ 
-            icon_name: "network-wired-symbolic", 
-            pixel_size: 18,
-            css_classes: [network.wired.internet === AstalNetwork.Internet.CONNECTED ? "accent-icon" : ""]
-        })
+        // Technical Details (Dynamically updated)
+        const interfaceName = network.wired.device?.interface || "---"
+        const interfaceLabel = staticLabel(interfaceName)
+        const ipLabel = staticLabel(getIp(network.wired))
+        
+        const updateWired = () => {
+            wiredStatus.label = network.wired.internet === AstalNetwork.Internet.CONNECTED ? "Conectada" : "Desconectada"
+            interfaceLabel.label = String(network.wired.device?.interface || "---")
+            ipLabel.label = getIp(network.wired)
+        }
 
-        wiredGroup.listBox.append(createRow("Conexión Ethernet", "Estado actual de la interfaz física", wiredStatusLabel))
+        network.wired.connect("notify::internet", updateWired)
+        network.wired.connect("notify::ip4-address", updateWired)
+
+        wiredGroup.listBox.append(createRow("Interfaz", "Nombre del dispositivo en el núcleo", interfaceLabel))
+        wiredGroup.listBox.append(createRow("Dirección IPv4", "Identificador único en la red local", ipLabel))
+        
         page.append(wiredGroup.box)
     }
 
-    // ── Wi-Fi Section (Conditional on Hardware) ──
+    // ── Wi-Fi Section ──
     if (network.wifi && network.wifi.get_devices().length > 0) {
         const wifiGroup = listGroup("Wi-Fi")
         
@@ -138,13 +167,38 @@ export default function NetworkPage() {
             network.wifi.enabled = wifiSwitch.active
         })
 
-        wifiGroup.listBox.append(createRow("Activar Wi-Fi", "Conéctate a redes inalámbricas cercanas", wifiSwitch))
+        wifiGroup.listBox.append(createRow("Activar Wi-Fi", "Habilita la sincronización del espectro inalámbrico", wifiSwitch))
+        
+        // Technical Details
+        const wifiSsidLabel = staticLabel("---")
+        const wifiIpLabel = staticLabel("---")
+        const wifiSpeedLabel = staticLabel("---")
+
+        const updateWifiInfo = () => {
+            if (!network.wifi) return
+            wifiSsidLabel.label = String(network.wifi.ssid || "Desconectado")
+            wifiIpLabel.label = getIp(network.wifi)
+            const speed = network.wifi.active_access_point?.speed || 0
+            wifiSpeedLabel.label = speed > 0 ? `${speed} Mbps` : "---"
+        }
+
+        network.wifi.connect("notify::enabled", updateWifiInfo)
+        network.wifi.connect("notify::ssid", updateWifiInfo)
+        network.wifi.connect("notify::ip4-address", updateWifiInfo)
+        updateWifiInfo()
+
+        const wifiInterface = staticLabel(String(network.wifi.device?.interface || "---"))
+        wifiGroup.listBox.append(createRow("Interfaz", "Nombre del adaptador inalámbrico", wifiInterface))
+        wifiGroup.listBox.append(createRow("Punto de Acceso", "Red conectada actualmente", wifiSsidLabel))
+        wifiGroup.listBox.append(createRow("Dirección IP", "Asignación actual de la red inalámbrica", wifiIpLabel))
+        wifiGroup.listBox.append(createRow("Velocidad", "Rendimiento máximo teórico", wifiSpeedLabel))
+
         page.append(wifiGroup.box)
 
         // AP List Section
-        const apListGroup = listGroup("Puntos de Acceso")
+        const apListGroup = listGroup("Puntos de Acceso Cercanos")
         
-        const refreshWifi = () => {
+        const refreshAps = () => {
             if (!network.wifi) return
 
             let child = apListGroup.listBox.get_first_child()
@@ -156,7 +210,7 @@ export default function NetworkPage() {
             const accessPoints = network.wifi.get_access_points() || []
             accessPoints.sort((a, b) => b.strength - a.strength)
 
-            accessPoints.forEach(ap => {
+            accessPoints.slice(0, 10).forEach(ap => {
                 if (!ap.ssid) return
 
                 const connectBtn = new Gtk.Button({
@@ -165,27 +219,21 @@ export default function NetworkPage() {
                     valign: Gtk.Align.CENTER
                 })
 
-                const row = createRow(ap.ssid, `Intensidad: ${ap.strength}%`, connectBtn)
+                const row = createRow(ap.ssid, `Intensidad: ${ap.strength}% | Band: ${ap.frequency}MHz`, connectBtn)
                 apListGroup.listBox.append(row)
             })
 
             apListGroup.box.visible = accessPoints.length > 0 && network.wifi.enabled
         }
 
-        network.wifi.connect("notify::enabled", refreshWifi)
-        network.wifi.connect("access-points-changed", refreshWifi)
-        refreshWifi()
-
+        network.wifi.connect("access-points-changed", refreshAps)
+        refreshAps()
         page.append(apListGroup.box)
+
     } else {
-        // Optional informative row when no Wifi hardware is found
         const noWifiGroup = listGroup("Inalámbrica")
-        const noWifiLabel = new Gtk.Label({
-            label: "Hardware Wi-Fi no detectado",
-            css_classes: ["settings-row-status", "dimmed"],
-            halign: Gtk.Align.END
-        })
-        noWifiGroup.listBox.append(createRow("Wi-Fi", "No se encontró ningún adaptador inalámbrico", noWifiLabel))
+        const noWifiLabel = staticLabel("Hardware Wi-Fi no detectado")
+        noWifiGroup.listBox.append(createRow("Estado del Hardware", "No se encontró ningún adaptador compatible", noWifiLabel))
         page.append(noWifiGroup.box)
     }
 

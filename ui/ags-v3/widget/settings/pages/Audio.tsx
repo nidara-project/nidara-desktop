@@ -1,6 +1,5 @@
 import { Astal, Gtk } from "ags/gtk4"
 import AstalWp from "gi://AstalWp"
-import PillSlider from "../../common/PillSlider"
 
 /**
  * Audio Settings Page 🔊 - Crystal V3 (macOS Tahoe Inspired)
@@ -94,13 +93,14 @@ export default function AudioPage() {
     const createDeviceRow = (endpoint: any, isMic: boolean) => {
         const box = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
-            spacing: 16,
+            spacing: 12,
             margin_start: 16,
             margin_end: 16,
             margin_top: 14,
             margin_bottom: 14,
         })
 
+        // Top Row: Icon + Name + Mute
         const header = new Gtk.Box({ spacing: 12 })
         header.append(new Gtk.Image({
             icon_name: isMic ? "audio-input-microphone-symbolic" : "audio-speakers-symbolic",
@@ -111,7 +111,9 @@ export default function AudioPage() {
             label: endpoint.description || endpoint.name || "Dispositivo",
             halign: Gtk.Align.START,
             css_classes: ["settings-row-label"],
-            hexpand: true
+            hexpand: true,
+            ellipsize: 3,
+            max_width_chars: 30
         })
         header.append(nameLabel)
 
@@ -134,12 +136,65 @@ export default function AudioPage() {
         header.append(muteBtn)
         box.append(header)
 
-        const slider = PillSlider({
-            iconName: isMic ? "audio-input-microphone-symbolic" : "audio-volume-high-symbolic",
-            value: endpoint.volume,
-            onChanged: (v) => { endpoint.volume = v }
+        // Bottom Row: Scale + Side Icons + Value
+        const sliderBox = new Gtk.Box({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            spacing: 8,
+            valign: Gtk.Align.CENTER
         })
-        box.append(slider)
+
+        const lowIcon = new Gtk.Image({
+            icon_name: isMic ? "audio-input-microphone-symbolic" : "audio-volume-low-symbolic",
+            pixel_size: 16,
+            opacity: 0.5
+        })
+
+        const scale = new Gtk.Scale({
+            orientation: Gtk.Orientation.HORIZONTAL,
+            hexpand: true,
+            draw_value: false,
+            css_classes: ["crystal-scale", "cc-atomic-scale-native"],
+            adjustment: new Gtk.Adjustment({
+                lower: 0,
+                upper: 100,
+                step_increment: 2,
+                page_increment: 10,
+                value: endpoint.volume * 100
+            })
+        })
+
+        const highIcon = new Gtk.Image({
+            icon_name: isMic ? "audio-input-microphone-symbolic" : "audio-volume-high-symbolic",
+            pixel_size: 16,
+            opacity: 0.5
+        })
+
+        const valueLabel = new Gtk.Label({
+            label: `${Math.round(endpoint.volume * 100)}%`,
+            css_classes: ["slider-value-label"],
+            width_chars: 4
+        })
+
+        scale.connect("value-changed", () => {
+            const val = scale.get_value()
+            valueLabel.label = `${Math.round(val)}%`
+            endpoint.volume = val / 100
+        })
+
+        endpoint.connect("notify::volume", () => {
+            const val = Math.round(endpoint.volume * 100)
+            if (Math.abs(scale.get_value() - val) > 1) {
+               scale.set_value(val)
+               valueLabel.label = `${val}%`
+            }
+        })
+
+        sliderBox.append(lowIcon)
+        sliderBox.append(scale)
+        sliderBox.append(highIcon)
+        sliderBox.append(valueLabel)
+        
+        box.append(sliderBox)
 
         return new Gtk.ListBoxRow({ child: box, css_classes: ["audio-device-row"] })
     }
