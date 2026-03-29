@@ -95,3 +95,7 @@ IDENTITY.md
 vendor/
 plugins/
 astal-local/
+
+restore_history.sh
+CRYSTAL_SHELL_ARCHITECTURE.md
+

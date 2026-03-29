@@ -196,7 +196,9 @@ export default function AudioPage() {
         
         box.append(sliderBox)
 
-        return new Gtk.ListBoxRow({ child: box, css_classes: ["audio-device-row"] })
+        const lbr = new Gtk.ListBoxRow({ css_classes: ["audio-device-row"] })
+        lbr.set_child(box)
+        return lbr
     }
 
     audio.connect("speaker-added", refreshDevices)

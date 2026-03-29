@@ -105,7 +105,8 @@ export default function PowerPage() {
         rowContent.append(checkIcon)
         checkIcons.set(p.id, checkIcon)
 
-        const row = new Gtk.ListBoxRow({ child: rowContent, css_classes: ["settings-item-row"] })
+        const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+        row.set_child(rowContent)
         row.set_name(p.id)
         profileGroup.listBox.append(row)
     })

@@ -20,12 +20,12 @@ export default function Settings(monitor: Gdk.Monitor) {
     // --- Navigation Controls (Tahoe Style) --- 🧭
     const backBtn = new Gtk.Button({
         icon_name: "go-previous-symbolic",
-        css_classes: ["navigation-btn", "flat"],
+        css_classes: ["nav-btn", "flat"],
         tooltip_text: "Atrás",
     })
     const forwardBtn = new Gtk.Button({
         icon_name: "go-next-symbolic",
-        css_classes: ["navigation-btn", "flat"],
+        css_classes: ["nav-btn", "flat"],
         tooltip_text: "Adelante",
     })
 
@@ -98,10 +98,10 @@ export default function Settings(monitor: Gdk.Monitor) {
         }))
 
         const listRow = new Gtk.ListBoxRow({ 
-            child: rowContent,
             css_classes: ["settings-row-container", "crystal-sidebar-row"],
-            name: cat.id
         })
+        listRow.set_child(rowContent)
+        listRow.set_name(cat.id)
         sidebar.append(listRow)
 
         // Modern Page Wrapper with Adw.Clamp
@@ -135,50 +135,61 @@ export default function Settings(monitor: Gdk.Monitor) {
         const clamp = new Adw.Clamp({
             maximum_size: 800,
             tightening_threshold: 600,
-            child: pageWidget,
             vexpand: true,
         })
+        clamp.set_child(pageWidget)
 
         const scroll = new Gtk.ScrolledWindow({
-            child: clamp,
             hscrollbar_policy: Gtk.PolicyType.NEVER,
             vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
             hexpand: true,
             vexpand: true,
             css_classes: ["settings-page-scroll"]
         })
+        scroll.set_child(clamp)
 
         stack.add_titled_with_icon(scroll, cat.id, cat.label, cat.icon)
     })
 
     sidebar.set_name("crystal-settings-sidebar-list")
-    
-    // Connect selection to stack navigation 💎
+
+    // Selection persistence logic 🧠
+    let isUserAction = false;
     sidebar.connect("row-selected", (_, row) => {
         if (row && row.name) {
             stack.visible_child_name = row.name
             console.log(`[Settings] Navigating to page: ${row.name}`)
+            isUserAction = true;
         }
     })
 
     // --- Responsive Floating Architecture --- 🏔️
     // Sidebar: Floating Pill (Directly in SplitView)
     const sidebarScroll = new Gtk.ScrolledWindow({
-        child: sidebar,
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        css_classes: ["settings-sidebar-scroll", "crystal-settings-sidebar-view"],
+        css_classes: ["settings-sidebar-scroll", "crystal-sidebar-capsule"],
         vexpand: true,
     })
+    sidebarScroll.set_child(sidebar)
     sidebarScroll.set_name("crystal-settings-sidebar-scroll")
 
-    // Content: Stack Area + Header
+    // Content Area: ToolbarView for correct Tahoe Header integration
     const contentToolbarView = new Adw.ToolbarView({
         top_bar_style: Adw.ToolbarStyle.FLAT,
         vexpand: true,
         hexpand: true,
     })
     contentToolbarView.set_name("crystal-settings-content-view")
+
+    // Master Scroll with Adw.Clamp
+    const clamp = new Adw.Clamp({
+        maximum_size: 800,
+        hexpand: true,
+        vexpand: true,
+    })
+    clamp.set_child(stack)
+    contentToolbarView.set_content(clamp)
 
     // Main Responsive Overlay Split View 🏔️
     const splitView = new Adw.OverlaySplitView({
@@ -187,10 +198,16 @@ export default function Settings(monitor: Gdk.Monitor) {
         content: contentToolbarView,
         hexpand: true,
         vexpand: true,
-        min_sidebar_width: 220,
-        max_sidebar_width: 280,
-        css_classes: ["crystal-settings-splitview", "glass"]
+        min_sidebar_width: 250,
+        max_sidebar_width: 250,
+        css_classes: ["crystal-split-view", "glass"]
     })
+
+    // DESACTIVAR SEPARADOR VERTICAL (Tahoe Clean Look)
+    try {
+        // @ts-ignore
+        if (splitView.set_show_sidebar_separator) splitView.set_show_sidebar_separator(false)
+    } catch (e) {}
 
     // Search Component 🔍
     const searchEntry = new Gtk.SearchEntry({
@@ -212,7 +229,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         splitView.set_show_sidebar(!splitView.show_sidebar)
     })
 
-    // Header Assembly (Pure GTK Design)
+    // Header Assembly
     const headerStart = new Gtk.Box({ 
         spacing: 12, 
         valign: Gtk.Align.CENTER,
@@ -222,36 +239,43 @@ export default function Settings(monitor: Gdk.Monitor) {
     headerStart.append(navCapsule)
 
     const header = new Adw.HeaderBar({
-        title_widget: searchEntry,
         show_end_title_buttons: true,
         show_start_title_buttons: false, 
-        css_classes: ["settings-headerbar", "compact"]
+        css_classes: ["settings-header", "compact"]
     })
+    header.set_title_widget(searchEntry)
     header.pack_start(headerStart)
 
+    // Integrate Header back into ToolbarView
     contentToolbarView.add_top_bar(header)
-    contentToolbarView.set_content(stack)
 
     // 💎 NATIVE RESPONSIVE BREAKPOINT 💎
     const breakpoint = new Adw.Breakpoint({
-        condition: Adw.BreakpointCondition.parse("max-width: 850px") 
+        condition: Adw.BreakpointCondition.parse("max-width: 1100px") 
     })
     breakpoint.add_setter(splitView, "collapsed", true)
     win.add_breakpoint(breakpoint)
 
-    // Synchronize window class for CSS gradient partitioning
-    const syncCollapsedMode = () => {
-        if (splitView.collapsed) {
-            win.add_css_class("collapsed-mode")
-        } else {
-            win.remove_css_class("collapsed-mode")
+    const mainContainer = new Gtk.Box({ css_classes: ["settings-main-glass"] })
+    mainContainer.set_name("settings-main-glass")
+    mainContainer.append(splitView)
+    win.set_content(mainContainer)
+
+    // Restauro la selección original tras redimensionado/colapso si ADW intenta resetearla
+    splitView.connect("notify::collapsed", () => {
+        const selected = sidebar.get_selected_row();
+        if (!selected && stack.visible_child_name) {
+            console.log(`[Settings] SplitView state changed. Restoring selection for: ${stack.visible_child_name}`);
+            // Re-seleccionar la fila que corresponde al stack actual
+            for (let i = 0; i < categories.length; i++) {
+                const row = sidebar.get_row_at_index(i);
+                if (row && row.get_name() === stack.visible_child_name) {
+                    sidebar.select_row(row);
+                    break;
+                }
+            }
         }
-    }
-    splitView.connect("notify::collapsed", syncCollapsedMode)
-    syncCollapsedMode() // Run initial check
-
-    win.set_content(splitView)
-
+    })
 
     ; (win as any).toggle = () => {
         console.log(`[Settings] Toggling window visibility. Current: ${win.visible}`);
@@ -262,9 +286,12 @@ export default function Settings(monitor: Gdk.Monitor) {
         }
     }
 
-    // Default selection
-    const firstRow = sidebar.get_row_at_index(0)
-    if (firstRow) sidebar.select_row(firstRow)
+    // Default selection (Ensuring it only occurs once and safely)
+    const currentSelection = sidebar.get_selected_row()
+    if (!currentSelection) {
+        const firstRow = sidebar.get_row_at_index(0)
+        if (firstRow) sidebar.select_row(firstRow)
+    }
 
     console.log("[Settings] window ready to return.");
     return win

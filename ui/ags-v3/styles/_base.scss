@@ -4,22 +4,30 @@
 
 * {
     /* --- Brand Colors (Dynamic) --- */
-    /* These are injected by FluidCrystal.ts but we define fallbacks here */
+    /* Real values are injected by FluidCrystal.ts generateTokensCss (mode-aware).
+       Fallbacks below are safe defaults for startup/non-fluid mode. */
     --crystal-accent: #0088FF;
     --crystal-accent-fg: #ffffff;
-    
+    --crystal-accent-rgb: 0, 136, 255;
+    --crystal-accent-60: rgba(0, 136, 255, 0.6);
+    --crystal-accent-30: rgba(0, 136, 255, 0.3);
+    --crystal-accent-10: rgba(0, 136, 255, 0.1);
+
     /* --- Surface & Backgrounds --- */
     --crystal-bg: rgba(30, 30, 30, 0.5);
     --crystal-bg-backdrop: rgba(30, 30, 30, 0.4);
     --crystal-surface: rgba(255, 255, 255, 0.08);
+    --crystal-surface-back: rgba(255, 255, 255, 0.04);
     --crystal-surface-hover: rgba(255, 255, 255, 0.12);
     --crystal-surface-active: rgba(255, 255, 255, 0.16);
-    
-    /* --- Typography --- */
-    --crystal-text: #ffffff;
-    --crystal-text-dim: rgba(255, 255, 255, 0.6);
+
+    /* --- Typography ---
+       FluidCrystal.ts overrides these at runtime with dark/light-aware values.
+       (#ffffff for dark, #000000 for light). These are just startup fallbacks. */
+    --crystal-text: rgba(255, 255, 255, 0.95);
+    --crystal-text-dim: rgba(255, 255, 255, 0.55);
     --crystal-text-disabled: rgba(255, 255, 255, 0.3);
-    
+
     /* --- Geometry --- */
     --crystal-radius-lg: 24px;
     --crystal-radius-md: 16px;
@@ -27,9 +35,9 @@
     --crystal-radius-xs: 6px;
     --crystal-radius-pill: 9999px;
     --crystal-radius-squircle: 28%;
-    
+
     /* --- Borders & Shadows --- */
-    --crystal-border: rgba(255, 255, 255, 0.1);
+    --crystal-border: rgba(127, 127, 127, 0.15);
     --crystal-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
     --crystal-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.2);
 }

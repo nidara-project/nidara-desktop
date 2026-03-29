@@ -299,9 +299,11 @@ class ThemeManager extends GObject.Object {
 
     async setTransparency(value: number) {
         this.fcConfig.transparency = Math.max(0, Math.min(1, value))
+        console.log(`[ThemeManager] Updating Transparency: ${this.fcConfig.transparency}`)
         if (this.isFluidCrystal) {
             this.ensureProvidersLinked()
-            this.themeProvider.load_from_string(generateTokensCss(this.fcConfig))
+            const tokens = generateTokensCss(this.fcConfig)
+            this.themeProvider.load_from_data(tokens, tokens.length)
             this.schedulePersistence()
         } else {
             saveFCConfig(this.fcConfig)
@@ -331,18 +333,31 @@ class ThemeManager extends GObject.Object {
             const display = Gdk.Display.get_default()
             if (display) {
                 const priority = Gtk.STYLE_PROVIDER_PRIORITY_USER
-                Gtk.StyleContext.add_provider_for_display(display, this.mainProvider, priority)
-                Gtk.StyleContext.add_provider_for_display(display, this.fontProvider, priority)
-                Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, priority)
+                const highPriority = priority + 10 
+                const tokenPriority = priority + 30 // 🚨 ABSOLUTE DOMINANCE FOR DYNAMIC TOKENS
+                
+                Gtk.StyleContext.add_provider_for_display(display, this.mainProvider, highPriority)
+                Gtk.StyleContext.add_provider_for_display(display, this.fontProvider, highPriority)
+                Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, tokenPriority) // 💎 TOP PRIORITY
                 Gtk.StyleContext.add_provider_for_display(display, this.masterProvider, priority)
                 Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, priority)
                 
-                // V921: Priority Path Discovery (Home-Linked Logic)
-                // We prefer ~/.config/ags/ explicitly as the user has it symlinked to the dev directory.
-                const configPaths = [
-                    `${GLib.get_user_config_dir()}/ags/style.css`,
-                    `${app.configDir}/style.css`
-                ]
+                // V921: Environment Isolation (Dev Sandbox)
+                const isDevMode = GLib.getenv("CRYSTAL_DEV_MODE") === "1";
+                const activeDir = GLib.get_current_dir();
+                
+                let configPaths: string[] = [];
+                
+                if (isDevMode) {
+                    console.log("[ThemeManager] 🛠️ DEV MODE DETECTED: Forcing local style.css ONLY.");
+                    configPaths = [`${activeDir}/style.css`];
+                } else {
+                    // Production behavior: check user config first, fallback to package dir
+                    configPaths = [
+                        `${GLib.get_user_config_dir()}/ags/style.css`,
+                        `${activeDir}/style.css`
+                    ];
+                }
                 
                 for (const stylePath of configPaths) {
                     if (GLib.file_test(stylePath, GLib.FileTest.EXISTS)) {

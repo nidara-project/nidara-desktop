@@ -3,6 +3,7 @@
 
 export GDK_BACKEND=wayland
 export XDG_SESSION_TYPE=wayland
+export CRYSTAL_DEV_MODE=1
 PROJECT_ROOT="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd )"
 AGS_DIR="$PROJECT_ROOT/ui/ags-v3"
 LOG_FILE="/tmp/ags_reload.log"
@@ -12,11 +13,14 @@ echo "[$(date)] 🔄 Restaurando estabilidad TOTAL (Poppi Edition)..."
 # 0. Compilar CSS con SASS
 if [ -f "$AGS_DIR/style.scss" ]; then
     echo "🎨 Compilando estilos..."
-    npx sass "$AGS_DIR/style.scss" "$AGS_DIR/style.css"
+    npx sass --no-charset "$AGS_DIR/style.scss" "$AGS_DIR/style.css"
+    sed -i '/@charset/d' "$AGS_DIR/style.css"
 fi
 
 # 1. Limpiar procesos de forma quirúrgica
 killall -9 ags gjs 2>/dev/null || true
+# DESTROY COMPILER CACHE: Astal was serving 3-hour old JS bundles!
+rm -rf ~/.cache/ags ~/.cache/astal /tmp/ags* /tmp/astal* 2>/dev/null || true
 # Evitamos matar swww-daemon para no perder el wallpaper durante el reload
 sleep 0.2
 

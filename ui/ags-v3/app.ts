@@ -60,6 +60,14 @@ app.start({
     const settingsWindows: any[] = []
     const labWindows: any[] = []
 
+    const initWinGlobal = (ctor: any, mon: Gdk.Monitor, array: any[]) => {
+      try {
+        const win = ctor(mon)
+        windows.add(win)
+        if (array) array.push(win)
+      } catch (err) { console.error(`[UI] Failed to init ${ctor.name}:`, err) }
+    }
+
     const createUI = (monitor: Gdk.Monitor, idx: number) => {
       try {
         const barWin = Bar(monitor)
@@ -89,18 +97,10 @@ app.start({
           })
         })
 
-        const initWin = (ctor: any, array: any[]) => {
-          try {
-            const win = ctor(monitor)
-            windows.add(win)
-            if (array) array.push(win)
-          } catch (err) { console.error(`[UI] Failed to init ${ctor.name}:`, err) }
-        }
-
-        initWin(PowerMenu, powerWindows)
-        initWin(Settings, settingsWindows)
-        initWin(PrismLab, labWindows)
-        initWin(AppGrid, appLauncherWindows)
+        initWinGlobal(PowerMenu, monitor, powerWindows)
+        // Settings deferred to toggleSettings (Lazy)
+        initWinGlobal(PrismLab, monitor, labWindows)
+        initWinGlobal(AppGrid, monitor, appLauncherWindows)
 
       } catch (e) { console.error(`[UI] Error:`, e) }
     }
@@ -121,9 +121,20 @@ app.start({
       appLauncherWindows.forEach(g => { try { g.toggle() } catch (e) { console.error(e) } })
     }
     const togglePower = () => {
-      powerWindows.forEach(p => { try { p.toggle() } catch (e) { console.error(e) } })
+      powerWindows.forEach(p => { try { p.toggle() } catch (e) { console.error(p) } })
     }
     const toggleSettings = () => {
+      // Lazy Init on first toggle
+      if (settingsWindows.length === 0) {
+        console.log("[App] First-time Settings initialization...");
+        const display = Gdk.Display.get_default()
+        if (display) {
+          const monitors: any = display.get_monitors()
+          for (let i = 0; i < monitors.get_n_items(); i++) {
+            initWinGlobal(Settings, monitors.get_item(i), settingsWindows)
+          }
+        }
+      }
       settingsWindows.forEach(s => { try { s.toggle() } catch (e) { console.error(e) } })
     }
     const togglePrismLab = () => {

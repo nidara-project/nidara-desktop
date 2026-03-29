@@ -102,7 +102,9 @@ export default function AppearancePage() {
         box.append(text)
         box.append(widget)
         
-        return new Gtk.ListBoxRow({ child: box, css_classes: ["settings-item-row"] })
+        const lbr = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+        lbr.set_child(box)
+        return lbr
     }
 
     // ── Concrete Row types ──
