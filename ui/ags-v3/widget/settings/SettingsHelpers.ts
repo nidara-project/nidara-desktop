@@ -1,0 +1,238 @@
+import { Gtk } from "ags/gtk4"
+
+/**
+ * Shared UI helpers for Settings pages.
+ * All pages use the same listGroup / createRow / toggleRow / sliderRow / etc.
+ */
+
+// ── Boxed List Group ──────────────────────────────────────────────────────────
+export const listGroup = (title: string) => {
+    const box = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 12,
+        css_classes: ["settings-group"],
+    })
+
+    if (title) {
+        box.append(new Gtk.Label({
+            label: title.toUpperCase(),
+            css_classes: ["settings-group-title"],
+            halign: Gtk.Align.START,
+            margin_start: 10,
+        }))
+    }
+
+    const listBox = new Gtk.ListBox({
+        css_classes: ["settings-list-box", "boxed-list"],
+        selection_mode: Gtk.SelectionMode.NONE,
+    })
+
+    box.append(listBox)
+    return { box, listBox }
+}
+
+// ── Generic Row ───────────────────────────────────────────────────────────────
+export const createRow = (label: string, subtitle: string, widget: Gtk.Widget) => {
+    const box = new Gtk.Box({
+        spacing: 16,
+        margin_start: 16,
+        margin_end: 16,
+        margin_top: 14,
+        margin_bottom: 14,
+    })
+
+    const text = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 2,
+        hexpand: true,
+        valign: Gtk.Align.CENTER,
+    })
+
+    text.append(new Gtk.Label({
+        label,
+        css_classes: ["settings-row-label"],
+        halign: Gtk.Align.START,
+    }))
+
+    if (subtitle) {
+        text.append(new Gtk.Label({
+            label: subtitle,
+            css_classes: ["settings-row-subtitle"],
+            halign: Gtk.Align.START,
+        }))
+    }
+
+    box.append(text)
+    box.append(widget)
+
+    const lbr = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+    lbr.set_child(box)
+    return lbr
+}
+
+// ── Toggle Row ────────────────────────────────────────────────────────────────
+export const toggleRow = (
+    label: string,
+    subtitle: string,
+    init: boolean,
+    cb: (v: boolean) => void,
+) => {
+    const sw = new Gtk.Switch({ active: init, valign: Gtk.Align.CENTER })
+    sw.connect("state-set", (_: any, state: boolean) => {
+        cb(state)
+        return false
+    })
+    return createRow(label, subtitle, sw)
+}
+
+// ── Dropdown Row ──────────────────────────────────────────────────────────────
+export const dropdownRow = (
+    label: string,
+    subtitle: string,
+    init: string,
+    opts: string[],
+    cb: (v: string) => void,
+) => {
+    const drp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
+    opts.forEach(o => drp.append_text(o))
+    drp.active = opts.indexOf(init)
+    drp.connect("changed", () => {
+        const val = drp.get_active_text()
+        if (val) cb(val)
+    })
+    return createRow(label, subtitle, drp)
+}
+
+// ── Slider Row ────────────────────────────────────────────────────────────────
+// opts.icons: [lowIconName, highIconName] — omit for no icons
+// opts.unit:  suffix for the value label (e.g. "px", "%") — default ""
+// opts.pct:   if true, value is treated as 0-1 float and displayed as percentage
+export const sliderRow = (
+    label: string,
+    subtitle: string,
+    init: number,
+    min: number,
+    max: number,
+    cb: (v: number) => void,
+    opts: { unit?: string; icons?: [string, string]; pct?: boolean } = {},
+) => {
+    const { unit = "", icons, pct = false } = opts
+
+    const formatVal = (v: number) =>
+        pct ? `${Math.round(v * 100)}%` : `${Math.round(v)}${unit}`
+
+    const container = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
+
+    if (icons) {
+        container.append(new Gtk.Image({ icon_name: icons[0], pixel_size: 16, opacity: 0.5 }))
+    }
+
+    const scale = new Gtk.Scale({
+        orientation: Gtk.Orientation.HORIZONTAL,
+        hexpand: true,
+        valign: Gtk.Align.CENTER,
+        width_request: 140,
+        css_classes: ["crystal-scale", "cc-atomic-scale-native"],
+    })
+    scale.set_range(min, max)
+    scale.set_value(init)
+    scale.set_draw_value(false)
+
+    if (icons) {
+        container.append(scale)
+        container.append(new Gtk.Image({ icon_name: icons[1], pixel_size: 16, opacity: 0.5 }))
+    } else {
+        container.append(scale)
+    }
+
+    const valueLabel = new Gtk.Label({
+        label: formatVal(init),
+        css_classes: ["slider-value-label"],
+        width_chars: 4,
+    })
+
+    scale.connect("value-changed", () => {
+        const v = scale.get_value()
+        valueLabel.label = formatVal(v)
+        cb(v)
+    })
+
+    container.append(valueLabel)
+    return createRow(label, subtitle, container)
+}
+
+// ── Preset Button Row ─────────────────────────────────────────────────────────
+export const presetRow = (
+    label: string,
+    subtitle: string,
+    presets: number[],
+    init: number,
+    unit: string,
+    cb: (v: number) => void,
+) => {
+    const btnBox = new Gtk.Box({
+        spacing: 0,
+        homogeneous: true,
+        css_classes: ["settings-preset-group", "linked"],
+        valign: Gtk.Align.CENTER,
+    })
+
+    const buttons: Gtk.Button[] = []
+    presets.forEach(val => {
+        const btn = new Gtk.Button({
+            label: `${val}${unit}`,
+            css_classes: val === init
+                ? ["settings-preset-btn", "suggested-action"]
+                : ["settings-preset-btn"],
+        })
+        btn.connect("clicked", () => {
+            buttons.forEach(b => b.remove_css_class("suggested-action"))
+            btn.add_css_class("suggested-action")
+            cb(val)
+        })
+        buttons.push(btn)
+        btnBox.append(btn)
+    })
+
+    return createRow(label, subtitle, btnBox)
+}
+
+// ── Static Info Label ─────────────────────────────────────────────────────────
+export const staticLabel = (text: any) => new Gtk.Label({
+    label: String(text ?? "---"),
+    css_classes: ["settings-row-status", "dimmed"],
+    halign: Gtk.Align.END,
+})
+
+// ── Page Header ───────────────────────────────────────────────────────────────
+export const pageHeader = (title: string, subtitle: string) => {
+    const box = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 8,
+        margin_bottom: 24,
+        margin_start: 6,
+    })
+    box.append(new Gtk.Label({
+        label: title,
+        css_classes: ["settings-page-title"],
+        halign: Gtk.Align.START,
+    }))
+    box.append(new Gtk.Label({
+        label: subtitle,
+        css_classes: ["settings-page-subtitle"],
+        halign: Gtk.Align.START,
+    }))
+    return box
+}
+
+// ── Page Root Box ─────────────────────────────────────────────────────────────
+export const pageBox = (...extraClasses: string[]) =>
+    new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 32,
+        css_classes: ["settings-page", ...extraClasses],
+        margin_start: 12,
+        margin_end: 12,
+        margin_top: 40,
+        margin_bottom: 40,
+    })
