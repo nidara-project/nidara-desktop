@@ -42,6 +42,7 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     const win = new Adw.Window({
         name: "crystal-settings",
+        title: "Crystal Shell Settings",
         application: app,
         css_classes: ["background", "glass", "fc-ignore", "crystal-settings-window"],
         default_width: 1000,
@@ -277,13 +278,15 @@ export default function Settings(monitor: Gdk.Monitor) {
         }
     })
 
+    // Hide instead of destroy so the window can be reopened later
+    win.connect("close-request", () => {
+        win.set_visible(false)
+        return true // Prevent GTK4 default destroy
+    })
+
     ; (win as any).toggle = () => {
-        console.log(`[Settings] Toggling window visibility. Current: ${win.visible}`);
         win.visible = !win.visible
-        if (win.visible) {
-            win.present()
-            console.log("[Settings] Window presented.");
-        }
+        if (win.visible) win.present()
     }
 
     // Default selection (Ensuring it only occurs once and safely)

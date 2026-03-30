@@ -737,16 +737,7 @@ export function DockItem(
             state.addresses = newAddrs
             state.clientTitle = newTitle
 
-            indicator.visible = newAddrs.length > 0
-            if (newAddrs.length > 0) {
-                itemBox.add_css_class("open")
-                const focusedAddr = hypr.focusedClient?.address
-                if (focusedAddr && newAddrs.includes(focusedAddr)) itemBox.add_css_class("focused")
-                else itemBox.remove_css_class("focused")
-            } else {
-                itemBox.remove_css_class("open")
-                itemBox.remove_css_class("focused")
-            }
+            sync()
         }
 
     return itemBox

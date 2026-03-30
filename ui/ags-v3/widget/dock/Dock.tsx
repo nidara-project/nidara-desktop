@@ -588,8 +588,14 @@ export default function Dock(gdkmonitor: any) {
             const sortedClients = [...hypr.clients].sort((a, b) => a.address.localeCompare(b.address))
             sortedClients.forEach(c => {
                 const rawClass = c.class || ""
-                if (rawClass.toLowerCase().includes("ags")) return
-                let key = rawClass.toLowerCase()
+                const rawClassLower = rawClass.toLowerCase()
+                // "io.Astal.ags" is our shell's only regular window (Settings Adw.Window) — map it, don't filter
+                // Layer shell windows (bar, dock, overlays) never appear in hypr.clients
+                if (rawClassLower.includes("ags") && rawClass !== "io.Astal.ags") return
+                let key = rawClassLower
+                if (key === "com.crystalshell.fluid" || key === "gjs" || key === "io.astal.ags") {
+                    key = "crystal-shell-settings"
+                }
 
                 // V610: File Manager Integration -> Map any detected file manager window to our Home/Finder shortcut
                 if (["org.gnome.nautilus", "nautilus", "thunar", "dolphin", "pcmanfm", "nemo", "nemo-desktop"].includes(key)) {
@@ -776,8 +782,13 @@ export default function Dock(gdkmonitor: any) {
                         // @ts-ignore
                         appItem.icon_name = originalId.replace(/-default$/i, "-Default")
                     }
-                    // Always use gtk-launch so PATH is fully resolved (needed for ags, flatpak, etc.)
-                    appItem.launch = getLaunch(lid)
+                    // Crystal Shell internal windows use global toggles directly (no external process)
+                    if (lid === "crystal-shell-settings") {
+                        appItem.launch = () => { (globalThis as any).toggleSettings?.() }
+                    } else {
+                        // Always use gtk-launch so PATH is fully resolved (needed for flatpak, etc.)
+                        appItem.launch = getLaunch(lid)
+                    }
                     configs.push({
                         id: lid, width: DOCK_CONSTANTS.APP_SLOT,
                         syncData: { addrs, clientTitle, appItem: appItem! },
@@ -805,7 +816,10 @@ export default function Dock(gdkmonitor: any) {
                     if (lid.startsWith("chrome-") && lid.endsWith("-default") && typeof icon === "string") {
                         icon = icon.replace(/-default$/i, "-Default")
                     }
-                    const ghost = { name: displayName, icon_name: icon, launch: getLaunch(lid) } as any
+                    const ghostLaunch = lid === "crystal-shell-settings"
+                        ? () => { (globalThis as any).toggleSettings?.() }
+                        : getLaunch(lid)
+                    const ghost = { name: displayName, icon_name: icon, launch: ghostLaunch } as any
                     configs.push({
                         id: lid, width: DOCK_CONSTANTS.APP_SLOT,
                         syncData: { addrs: [], clientTitle: undefined, appItem: ghost },
@@ -846,13 +860,18 @@ export default function Dock(gdkmonitor: any) {
                 const group = groupedClients[k]
                 const lid = k.toLowerCase().replace(".desktop", "")
 
-                let appItem = findApp(group?.displayClass || k)
+                // Try mapped key first (handles remapped classes like crystal-shell-settings),
+                // then fall back to original displayClass
+                let appItem = findApp(lid) || findApp(group?.displayClass || "")
                 if (!appItem) {
                     appItem = {
                         name: group?.title || group?.displayClass || k,
-                        icon_name: group?.displayClass || lid,
+                        icon_name: lid,
                         launch: getLaunch(lid)
                     } as any
+                }
+                if (lid === "crystal-shell-settings") {
+                    appItem.launch = () => { (globalThis as any).toggleSettings?.() }
                 }
 
                 configs.push({

@@ -1,127 +1,28 @@
-import { Astal, Gtk, Gdk } from "ags/gtk4"
+import { Gtk, Gdk } from "ags/gtk4"
 import { execAsync } from "ags/process"
-import * as astal from "ags/gtk4/jsx-runtime"
 import GLib from "gi://GLib"
 // @ts-ignore
 import Pango from "gi://Pango"
 import AstalApps from "gi://AstalApps"
-import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
-import AstalHyprland from "gi://AstalHyprland"
 import appService from "../../core/AppService"
-import Theme from "../../core/ThemeManager"
 import { pinnedState, savePinned } from "../dock/state"
 
 // Extract just the desktop basename, stripping path and .desktop extension
-// e.g. "/usr/share/applications/org.gnome.Nautilus.desktop" → "org.gnome.nautilus"
 const normId = (s: string) => {
     const base = (s || "").split("/").pop() || s || ""
     return base.toLowerCase().replace(/\.desktop$/, "")
 }
-// V127: Native Gtk Resolution - No mapping needed
 
 const appsService = new AstalApps.Apps()
-const hyprland = AstalHyprland.get_default()
 
-/**
- * WorkspaceStrip - Desktop indicator/switcher 💎
- */
-function WorkspaceStrip() {
-    const box = new Gtk.Box({
-        name: "app-grid-workspaces", // V114: Added ID
-        css_classes: ["app-grid-workspaces"],
-        halign: Gtk.Align.CENTER,
-        spacing: 12,
-        margin_bottom: 30,
-    })
-
-    const syncWorkspaces = () => {
-        let child = box.get_first_child()
-        while (child) {
-            const next = child.get_next_sibling()
-            box.remove(child)
-            child = next
-        }
-
-        const workspaces = hyprland.get_workspaces().sort((a, b) => a.id - b.id)
-        workspaces.forEach(ws => {
-            if (ws.id < 0) return
-
-            const active = hyprland.focused_workspace.id === ws.id
-            const btn = new Gtk.Button({
-                label: ws.id.toString(),
-                css_classes: ["workspace-item", active ? "active" : ""],
-            })
-            btn.connect("clicked", () => ws.focus())
-            box.append(btn)
-        })
-    }
-
-    hyprland.connect("notify::focused-workspace", syncWorkspaces)
-    hyprland.connect("workspace-added", syncWorkspaces)
-    hyprland.connect("workspace-removed", syncWorkspaces)
-
-    syncWorkspaces()
-    return box
-}
-
-/**
- * SystemActionStrip - Quick links 💎
- */
-function SystemActionStrip(win: Gtk.Window) {
-    const box = new Gtk.Box({
-        name: "app-grid-system-actions", // V114: Added ID
-        css_classes: ["app-grid-system-actions"],
-        halign: Gtk.Align.CENTER,
-        spacing: 60,
-        margin_top: 40,
-    })
-
-    const actions = [
-        { icon: "utilities-terminal", name: "Terminal", cmd: "kitty" },
-        { icon: "preferences-system-symbolic", name: "Ajustes", cmd: "toggleSettings()" },
-        { icon: "system-shutdown-symbolic", name: "Sesión", cmd: "togglePowerMenu()" },
-    ]
-
-    actions.forEach(a => {
-        const icon = new Gtk.Image({ icon_name: a.icon, pixel_size: 28 })
-        const btn = new Gtk.Button({
-            child: icon,
-            tooltip_text: a.name,
-            css_classes: ["system-action-btn"],
-        })
-        btn.connect("clicked", () => {
-            if (a.cmd.startsWith("toggle")) {
-                const funcName = a.cmd.replace("()", "")
-                if ((globalThis as any)[funcName]) {
-                    (globalThis as any)[funcName]()
-                } else {
-                    console.error(`[Grid] Global function ${funcName} not found`)
-                }
-            } else {
-                execAsync(a.cmd).catch(print)
-            }
-            win.visible = false
-        })
-        box.append(btn)
-    })
-
-    return box
-}
-
-/**
- * AppGrid - Fullscreen Launchpad for Crystal Shell 💎
- */
 export default function AppGrid(monitor: Gdk.Monitor) {
     const win = new Gtk.Window({
         name: "crystal-app-launcher",
-        css_classes: ["app-grid-window", "fc-ignore"],
+        css_classes: ["app-grid-window"],
     })
-    // @ts-ignore
-    win.app_paintable = true
 
-    // V135: Initialize LayerShell first
     let layerInit = false
     try {
         Gtk4LayerShell.init_for_window(win)
@@ -129,125 +30,166 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     } catch (e) { }
 
     if (layerInit) {
-        Gtk4LayerShell.set_namespace(win, "launcher") // Use "launcher" to match existing Hyprland blur rules
+        Gtk4LayerShell.set_namespace(win, "crystal-launcher")
         Gtk4LayerShell.set_monitor(win, monitor)
         Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true)
-        Gtk4LayerShell.set_exclusive_zone(win, -1)
+        // exclusive_zone = 0 → respeta los zones de barra y dock (no los cubre)
         Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
     }
 
+    // @ts-ignore
+    win.app_paintable = true
     win.visible = false
 
-
+    // ── Search bar ─────────────────────────────────────────────────────────
     const searchEntry = new Gtk.Entry({
         name: "app-grid-search-entry",
         placeholder_text: "Buscar aplicaciones...",
         halign: Gtk.Align.CENTER,
         css_classes: ["app-grid-search"],
-        width_request: 550,
-        margin_bottom: 50,
+        width_request: 500,
+        primary_icon_name: "system-search-symbolic",
+        primary_icon_activatable: false,
+        primary_icon_sensitive: false,
     })
 
+    // ── FlowBox ────────────────────────────────────────────────────────────
     const flowbox = new Gtk.FlowBox({
         name: "app-grid-flowbox",
-        halign: Gtk.Align.FILL,
+        halign: Gtk.Align.CENTER,
         valign: Gtk.Align.START,
         hexpand: true,
-        max_children_per_line: 7,
-        min_children_per_line: 4,
-        selection_mode: Gtk.SelectionMode.SINGLE, // V106: Enable keyboard navigation
-        column_spacing: 30,
-        row_spacing: 40,
+        max_children_per_line: 6,
+        min_children_per_line: 3,
+        selection_mode: Gtk.SelectionMode.SINGLE,
+        column_spacing: 8,
+        row_spacing: 16,
         css_classes: ["app-grid-flow"],
-        can_focus: true, // V106: Allow focus for keyboard nav
+        can_focus: true,
+        homogeneous: true,
     })
 
+    // ── No results ─────────────────────────────────────────────────────────
+    const noResults = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER,
+        vexpand: true,
+        spacing: 12,
+        visible: false,
+    })
+    const noResultsIcon = new Gtk.Image({
+        icon_name: "system-search-symbolic",
+        pixel_size: 48,
+        css_classes: ["app-grid-no-results-icon"],
+    })
+    const noResultsLabel = new Gtk.Label({
+        label: "Sin resultados",
+        css_classes: ["app-grid-no-results-label"],
+    })
+    noResults.append(noResultsIcon)
+    noResults.append(noResultsLabel)
+
     const scroll = new Gtk.ScrolledWindow({
-        name: "app-grid-scrolled-window", // V114: Added ID
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         vexpand: true,
         hexpand: true,
-        css_classes: ["app-grid-scroll"]
+        css_classes: ["app-grid-scroll"],
     })
     scroll.set_child(flowbox)
 
-    const contentBox = new Gtk.Box({
+    // ── Grid area (scroll + no-results) ───────────────────────────────────
+    const gridArea = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        vexpand: true,
+        hexpand: true,
+    })
+    gridArea.append(scroll)
+    gridArea.append(noResults)
+
+    // ── Main content column ────────────────────────────────────────────────
+    const contentCol = new Gtk.Box({
         name: "app-grid-content",
         orientation: Gtk.Orientation.VERTICAL,
         css_classes: ["app-grid-content"],
-        halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.CENTER,
-        width_request: 1000, // Slightly more compact
-        height_request: 800,
-    })
-
-    contentBox.append(WorkspaceStrip())
-    contentBox.append(searchEntry)
-    contentBox.append(scroll)
-    contentBox.append(SystemActionStrip(win))
-
-    const overlayTrigger = new Gtk.Box({
-        name: "app-grid-overlay",
-        css_classes: ["app-grid-catcher"], // Clear any "main" background here
+        halign: Gtk.Align.FILL,
+        valign: Gtk.Align.FILL,
         hexpand: true,
         vexpand: true,
     })
+    contentCol.append(searchEntry)
+    contentCol.append(gridArea)
 
-    const click = new Gtk.GestureClick()
-    click.connect("pressed", () => {
+    // ── Root container (background + click-to-close) ───────────────────────
+    // GestureClick with BUBBLE phase fires for clicks on empty areas not
+    // consumed by children (buttons, etc.)
+    const mainBox = new Gtk.Box({
+        name: "app-grid-main-overlay",
+        css_classes: ["app-grid-background"],
+        orientation: Gtk.Orientation.VERTICAL,
+        hexpand: true,
+        vexpand: true,
+    })
+    mainBox.append(contentCol)
+
+    const bgClick = new Gtk.GestureClick()
+    bgClick.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)
+    bgClick.connect("released", (_gesture, _n, x, y) => {
+        // Only close if click is outside the flowbox area
+        // (buttons stop propagation so they won't trigger this)
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
             win.visible = false
             return GLib.SOURCE_REMOVE
         })
     })
-    overlayTrigger.add_controller(click)
+    mainBox.add_controller(bgClick)
 
-    const mainOverlay = new Gtk.Overlay({
-        name: "app-grid-main-overlay"
-    })
-    mainOverlay.set_child(overlayTrigger)
-    mainOverlay.add_overlay(contentBox)
+    win.set_child(mainBox)
 
-    win.set_child(mainOverlay)
-
-    // V106: OPTIMIZED APP GRID - Widget Cache + FlowBox filter_func 🚀
+    // ── Widget state ───────────────────────────────────────────────────────
     const widgetCache = new Map<string, Gtk.Button>()
-    let cachedApps: any[] = []
     let cacheInitialized = false
     let currentQuery = ""
     let currentMatchIds: Set<string> | null = null
+    const sortOrder = new Map<string, number>()
 
-    // filter_func: no gaps, no set_visible hacks
     flowbox.set_filter_func((child) => {
         if (!currentMatchIds) return true
-        const button = child.get_child() as Gtk.Button
-        const appId: string = (button as any)._appId || ""
-        const appName: string = (button as any)._appName || ""
-        return currentMatchIds.has(appId) || appName.includes(currentQuery)
+        const appId: string = (child.get_child() as any)?._appId || ""
+        return currentMatchIds.has(appId)
     })
 
-    // Create widget for a single app (called once per app, cached)
-    const createAppWidget = (app: any, hostWin: Gtk.Window, hasLayerShell: boolean): Gtk.Button => {
-        // V125: Use entry basename as stable unique identifier (strip path + .desktop)
+    flowbox.set_sort_func((childA, childB) => {
+        const idA: string = (childA.get_child() as any)?._appId || ""
+        const idB: string = (childB.get_child() as any)?._appId || ""
+        if (sortOrder.size > 0) {
+            const rankA = sortOrder.has(idA) ? sortOrder.get(idA)! : 9999
+            const rankB = sortOrder.has(idB) ? sortOrder.get(idB)! : 9999
+            if (rankA !== rankB) return rankA - rankB
+        }
+        const nameA: string = (childA.get_child() as any)?._appName || ""
+        const nameB: string = (childB.get_child() as any)?._appName || ""
+        return nameA.localeCompare(nameB)
+    })
+
+    // ── App widget factory ─────────────────────────────────────────────────
+    const createAppWidget = (app: any): Gtk.Button => {
         const id = normId(app.entry || "")
         const name = app.get_name ? app.get_name() : (app as any).name || ""
-
         const iconName = app.icon_name || "image-missing"
-        // V127: Native Resolution (No mapping)
 
         const icon = new Gtk.Image({
-            pixel_size: 64,
+            pixel_size: 72,
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
             hexpand: true,
             vexpand: true,
         })
-
         const resolved = appService.getIconName(iconName)
         if (resolved && resolved.startsWith("/")) {
             icon.gicon = Gio.FileIcon.new(Gio.File.new_for_path(resolved))
@@ -256,9 +198,9 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         }
 
         const plate = new Gtk.Box({
-            css_classes: ["cd-squircle-plate"],
-            width_request: 92,
-            height_request: 92,
+            css_classes: ["app-grid-plate"],
+            width_request: 96,
+            height_request: 96,
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
         })
@@ -268,15 +210,20 @@ export default function AppGrid(monitor: Gdk.Monitor) {
             label: name,
             css_classes: ["app-grid-label"],
             halign: Gtk.Align.CENTER,
-            max_width_chars: 14,
-            ellipsize: (Pango as any).EllipsizeMode.END
+            justify: Gtk.Justification.CENTER,
+            max_width_chars: 13,
+            wrap: true,
+            wrap_mode: (Pango as any).WrapMode.WORD_CHAR,
+            lines: 2,
+            ellipsize: (Pango as any).EllipsizeMode.END,
         })
 
         const item = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
-            spacing: 12,
+            spacing: 10,
             css_classes: ["app-grid-item"],
             halign: Gtk.Align.CENTER,
+            valign: Gtk.Align.START,
         })
         item.append(plate)
         item.append(label)
@@ -289,38 +236,34 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         ;(button as any)._appId = id
         ;(button as any)._appName = name.toLowerCase()
 
-        // Right-click context menu — same pattern as DockItem (PopoverMenu + released)
+        // ── Context menu (pin/unpin) ───────────────────────────────────────
         let contextPopover: Gtk.Popover | null = null
 
         const buildContextMenu = () => {
-            if (contextPopover) {
-                if (contextPopover.visible) return
-                contextPopover.unparent()
-                contextPopover = null
-            }
+            if (contextPopover?.visible) return
+            contextPopover?.unparent()
+            contextPopover = null
 
             const isPinned = pinnedState.list.some(p => normId(p) === normId(id))
-            const actionName = isPinned ? "unpin" : "pin"
-            const actionLabel = isPinned ? "Desanclar del Dock" : "Anclar en Dock"
-
             const actionGroup = new Gio.SimpleActionGroup()
-            const action = new Gio.SimpleAction({ name: actionName })
-            action.connect("activate", () => {
+            const menuModel = new Gio.Menu()
+
+            const pinAction = new Gio.SimpleAction({ name: "pin" })
+            pinAction.connect("activate", () => {
                 if (isPinned) {
                     pinnedState.list = pinnedState.list.filter(p => normId(p) !== normId(id))
                 } else {
                     pinnedState.list.push(normId(id))
                 }
-                console.log(`[AppGrid] Pin toggled: ${id} → ${JSON.stringify(pinnedState.list)}`)
                 savePinned()
                 contextPopover?.popdown()
             })
-            actionGroup.add_action(action)
+            actionGroup.add_action(pinAction)
+            menuModel.append(
+                isPinned ? "Desanclar del Dock" : "Anclar en Dock",
+                "context.pin"
+            )
 
-            const menuModel = new Gio.Menu()
-            menuModel.append(actionLabel, `context.${actionName}`)
-
-            // Order matters: insert_action_group BEFORE set_parent (same as DockItem)
             item.insert_action_group("context", actionGroup)
             contextPopover = Gtk.PopoverMenu.new_from_model(menuModel) as unknown as Gtk.Popover
             contextPopover.set_parent(item)
@@ -329,126 +272,109 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         const rightClick = new Gtk.GestureClick({ button: 3 })
         rightClick.connect("released", () => {
             buildContextMenu()
-            // Release EXCLUSIVE keyboard grab so the popover can show and receive events
-            if (hasLayerShell) Gtk4LayerShell.set_keyboard_mode(hostWin, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+            if (layerInit) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
             GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
                 contextPopover?.popup()
-                // Restore EXCLUSIVE when popover closes
                 contextPopover?.connect("closed", () => {
-                    if (hasLayerShell) Gtk4LayerShell.set_keyboard_mode(hostWin, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+                    if (layerInit) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
                 })
                 return GLib.SOURCE_REMOVE
             })
         })
         item.add_controller(rightClick)
 
+        // ── Launch ─────────────────────────────────────────────────────────
         button.connect("clicked", () => {
-            try {
-                // V149: STABLE ID RESOLUTION 🛰️
-                // Crucial: We use the local 'id' which is derived from app.entry,
-                // because app.id is undefined in AstalApps. 🦾
-                const realInfo = appService.getAppInfo(id || app.executable)
-                let rawCommand = realInfo?.get_commandline() || app.executable || ""
-
-                // Nuclear Sanitizer: Surgical removal of field codes (%U, %f, etc.)
-                let command = rawCommand.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
-
-                console.log(`[AppGrid] Launch: ${name} (ID: ${app.id})`)
-                console.log(`[AppGrid]   - Raw Cmd: ${rawCommand}`)
-                console.log(`[AppGrid]   - Final Cmd: ${command}`)
-
-                if (!command) {
-                    console.warn(`[AppGrid] No stable command found for ${name}, falling back...`)
-                    app.launch()
-                    win.visible = false
-                    return
-                }
-
-                // Call Hyprland for 100% environment isolation
-                execAsync(["hyprctl", "dispatch", "exec", command])
-                    .catch(err => {
-                        console.error(`[AppGrid] Hyprland launch failed for ${name}:`, err)
-                        app.launch() // Emergency fallback
-                    })
-            } catch (e) {
-                console.error(`[AppGrid] Launch failure:`, e)
-                app.launch() // Emergency fallback
-            }
             win.visible = false
+            if (id === "crystal-shell-settings") {
+                ;(globalThis as any).toggleSettings?.()
+                return
+            }
+            try {
+                const realInfo = appService.getAppInfo(id || app.executable)
+                const rawCommand = realInfo?.get_commandline() || app.executable || ""
+                const command = rawCommand.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
+                if (!command) { app.launch(); return }
+                execAsync(["hyprctl", "dispatch", "exec", command]).catch(() => app.launch())
+            } catch (e) {
+                app.launch()
+            }
         })
 
         return button
     }
 
-    // Initialize cache with all apps (called once)
+    // ── Cache init ─────────────────────────────────────────────────────────
     const initCache = () => {
         if (cacheInitialized) return
-
-        cachedApps = appsService.get_list().sort((a, b) =>
+        const apps = appsService.get_list().sort((a, b) =>
             (a.name || "").localeCompare(b.name || "")
         )
-
-        cachedApps.forEach(app => {
-            const id = (app.entry || "").toLowerCase()
+        apps.forEach(app => {
+            const id = normId(app.entry || "")
             if (id && !widgetCache.has(id)) {
-                const widget = createAppWidget(app, win, layerInit)
+                const widget = createAppWidget(app)
                 widgetCache.set(id, widget)
                 flowbox.append(widget)
             }
         })
-
         cacheInitialized = true
     }
 
-    // Filter via filter_func — no gaps, proper reflow
+    // ── Filter + sort ──────────────────────────────────────────────────────
+    const updateNoResults = () => {
+        const empty = !!currentMatchIds && currentMatchIds.size === 0
+        noResults.set_visible(empty)
+        scroll.set_visible(!empty)
+    }
+
     const filterApps = (query = "") => {
         if (!cacheInitialized) initCache()
-
         currentQuery = query.trim().toLowerCase()
 
         if (!currentQuery) {
             currentMatchIds = null
+            sortOrder.clear()
         } else {
             const matches = appsService.fuzzy_query(query)
-            currentMatchIds = new Set(matches.map((a: any) => normId(a.entry || "")))
+            currentMatchIds = new Set<string>()
+            sortOrder.clear()
+            matches.forEach((a: any, i: number) => {
+                const id = normId(a.entry || "")
+                currentMatchIds!.add(id)
+                sortOrder.set(id, i)
+            })
         }
 
         flowbox.invalidate_filter()
+        flowbox.invalidate_sort()
+        updateNoResults()
 
-        // Select first visible item
-        const first = flowbox.get_first_child()
-        if (first && first.get_visible()) flowbox.select_child(first as any)
+        if (!noResults.visible) {
+            const first = flowbox.get_first_child()
+            if (first) flowbox.select_child(first as any)
+        }
     }
 
+    searchEntry.connect("changed", () => filterApps(searchEntry.text))
 
-    searchEntry.connect("changed", () => {
-        filterApps(searchEntry.text)
-    })
-
-    // V106: KEYBOARD NAVIGATION 🎹
+    // ── Keyboard navigation ────────────────────────────────────────────────
     const keyController = new Gtk.EventControllerKey()
-    keyController.connect("key-pressed", (controller, keyval, keycode, state) => {
-        // Escape: Close the grid
+    keyController.connect("key-pressed", (_c, keyval) => {
         if (keyval === Gdk.KEY_Escape) {
             win.visible = false
             return true
         }
-        // Down Arrow: Move focus from search to flowbox
         if (keyval === Gdk.KEY_Down && searchEntry.has_focus) {
             const first = flowbox.get_child_at_index(0)
-            if (first) {
-                flowbox.select_child(first)
-                first.grab_focus()
-            }
+            if (first) { flowbox.select_child(first); first.grab_focus() }
             return true
         }
-        // Enter: Launch selected app (when flowbox has focus)
         if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
             const selected = flowbox.get_selected_children()
-            if (selected && selected.length > 0) {
-                const child = selected[0]
-                const button = child.get_child() as Gtk.Button
-                if (button) button.emit("clicked")
+            if (selected?.length > 0) {
+                const btn = selected[0].get_child() as Gtk.Button
+                btn?.emit("clicked")
                 return true
             }
         }
@@ -456,34 +382,29 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     })
     win.add_controller(keyController)
 
-    // FlowBox: Activate on Enter when child is selected
-    flowbox.connect("child-activated", (fb, child) => {
-        const button = child.get_child() as Gtk.Button
-        if (button) button.emit("clicked")
+    flowbox.connect("child-activated", (_fb, child) => {
+        const btn = child.get_child() as Gtk.Button
+        btn?.emit("clicked")
     })
 
-    // Initialize on first show
     filterApps()
 
-        // Global toggle mechanism
-        ; (win as any).toggle = () => {
-            console.log("[Grid] Internal toggle called")
-            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-                const isVis = win.get_visible()
-                win.set_visible(!isVis)
-                if (!isVis) {
-                    win.present()
-                    searchEntry.text = ""
-                    // V136: Focus fix with timeout
-                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
-                        searchEntry.grab_focus()
-                        return GLib.SOURCE_REMOVE
-                    })
-                    filterApps()
-                }
-                return GLib.SOURCE_REMOVE
-            })
-        }
+    ;(win as any).toggle = () => {
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            const isVis = win.get_visible()
+            win.set_visible(!isVis)
+            if (!isVis) {
+                win.present()
+                searchEntry.text = ""
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+                    searchEntry.grab_focus()
+                    return GLib.SOURCE_REMOVE
+                })
+                filterApps()
+            }
+            return GLib.SOURCE_REMOVE
+        })
+    }
 
     return win
 }

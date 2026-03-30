@@ -52,6 +52,8 @@ app.start({
     import("ags/process").then(({ execAsync }) => {
         execAsync("hyprctl keyword layerrule 'blur, crystal-bar'").catch(() => {})
         execAsync("hyprctl keyword layerrule 'ignorealpha 0.5, crystal-bar'").catch(() => {})
+        execAsync("hyprctl keyword layerrule 'blur, crystal-launcher'").catch(() => {})
+        execAsync("hyprctl keyword layerrule 'ignorealpha 0.3, crystal-launcher'").catch(() => {})
     }).catch(() => {})
 
     const windows = new Set<any>()
@@ -137,7 +139,9 @@ app.start({
           }
         }
       }
-      settingsWindows.forEach(s => { try { s.toggle() } catch (e) { console.error(e) } })
+      settingsWindows.forEach(s => {
+          try { s.toggle() } catch (e) { console.error(e) }
+      })
     }
     const togglePrismLab = () => {
       labWindows.forEach(l => { try { l.toggle() } catch (e) { console.error(e) } })

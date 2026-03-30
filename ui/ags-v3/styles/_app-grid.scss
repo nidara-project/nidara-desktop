@@ -1,165 +1,148 @@
 @use 'base' as *;
 
 /* ==========================================================================
-   APP GRID
-   Based on Stitch "Spotlight-style App Launcher" design
+   APP GRID — Launchpad Style
    ========================================================================== */
 
-/* --- Window & Overlay --- */
-window#app-grid-window,
-window.app-grid-window,
-#app-grid-overlay,
-.app-grid-catcher {
+/* ── Window ── */
+window#crystal-app-launcher,
+.app-grid-window {
     background: transparent;
-    background-image: none;
     border: none;
     box-shadow: none;
 }
 
-/* --- Main Card (Spotlight Panel) --- */
-#crystal-app-launcher #app-grid-content,
-window#crystal-app-launcher #app-grid-content,
-.app-grid-window #app-grid-content,
+/* ── Background overlay (click to close) ── */
+.app-grid-background {
+    background: rgba(0, 0, 0, 0.62);
+}
+
+/* ── Main content column ── */
 .app-grid-content {
-    background-color: var(--crystal-bg-backdrop);
-    border: 1px solid var(--crystal-border);
-    border-radius: var(--crystal-radius-lg);
-    padding: 32px 40px;
-    box-shadow: var(--crystal-shadow-lg);
-    min-width: 600px;
+    background: transparent;
+    padding: 56px 100px 48px;
 }
 
-/* --- Search Bar --- */
-.app-grid-search {
-    background-color: transparent;
-    border: none;
-    border-bottom: 1px solid var(--crystal-border);
-    border-radius: 0;
-    color: var(--crystal-text);
-    padding: 12px 8px;
-    font-size: 1.2em;
-    font-weight: 300;
-    caret-color: $crystal-accent;
-    transition: all 0.2s ease;
-    box-shadow: none;
+/* ── Search bar ── */
+// GTK4 Entry: style the outer box AND the inner text node
+entry.app-grid-search,
+#app-grid-search-entry {
+    background: rgba(255, 255, 255, 0.13);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    border-radius: 100px; // Full pill
+    color: rgba(255, 255, 255, 0.95);
+    padding: 10px 20px;
+    font-size: 1.05em;
+    font-weight: 400;
+    caret-color: white;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+    margin-bottom: 40px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    outline: none;
+    min-height: 44px;
+
+    > text {
+        background: transparent;
+        color: rgba(255, 255, 255, 0.95);
+        padding: 0;
+    }
+
+    > image {
+        color: rgba(255, 255, 255, 0.5);
+        -gtk-icon-size: 18px;
+        margin-right: 6px;
+    }
+
+    &:focus {
+        background: rgba(255, 255, 255, 0.18);
+        border-color: rgba(255, 255, 255, 0.45);
+        box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
+    }
+
+    > placeholder {
+        color: rgba(255, 255, 255, 0.38);
+    }
 }
 
-.app-grid-search:focus {
-    background-color: transparent;
-    border-color: var(--crystal-accent-30);
-    box-shadow: none;
-}
-
-/* Placeholder text */
-.app-grid-search-placeholder {
-    color: rgba(0, 0, 0, 0.35);
-    font-weight: 300;
-}
-
-/* --- Section Labels --- */
-.app-grid-section-title {
-    font-size: 0.7em;
-    font-weight: 700;
-    color: var(--crystal-text-dim);
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    margin: 16px 0 8px 4px;
-}
-
-/* --- Scroll & Layout --- */
+/* ── Scroll + FlowBox ── */
 .app-grid-scroll,
 .app-grid-flow,
 .app-grid-scroll viewport,
 .app-grid-scroll scrollbar,
 .app-grid-scroll undershoot,
 .app-grid-scroll overshoot {
-    background-color: transparent;
-    background: none;
+    background: transparent;
     border: none;
     box-shadow: none;
     outline: none;
 }
 
-/* --- App Items --- */
-.app-grid-item {
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.app-grid-button {
-    background: none;
-    border: none;
-    box-shadow: none;
-    border-radius: 16px;
-    padding: 10px;
-    transition: all 0.2s ease;
-}
-
-.app-grid-button:hover {
-    background-color: var(--crystal-accent-08);
-}
-
-.app-grid-icon {
-    border-radius: 22%;
-}
-
-.app-grid-label {
-    color: var(--crystal-text);
-    font-size: 0.8em;
-    font-weight: 500;
-    margin-top: 6px;
-}
-
-/* --- FlowBox Neutralization --- */
-.app-grid-flow {
-    flowboxchild {
-        background: none;
-        background-color: transparent;
-        border: none;
-        box-shadow: none;
-        outline: none;
-    }
-
-    flowboxchild:selected,
-    flowboxchild:active,
-    flowboxchild:hover {
-        background: none;
-        background-color: transparent;
-        border: none;
-        box-shadow: none;
-        outline: none;
-    }
-}
-
-/* --- System Action Strip --- */
-.system-action-strip {
-    background: rgba(0, 0, 0, 0.04);
-    border: 1px solid rgba(0, 0, 0, 0.06);
-    border-radius: 100px;
-    padding: 4px 10px;
-    margin-top: 12px;
-}
-
-.system-action-btn {
+/* ── FlowBox children ── */
+.app-grid-flow flowboxchild {
     background: transparent;
     border: none;
-    border-radius: 50%;
-    min-width: 40px;
-    min-height: 40px;
-    transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
-    color: var(--crystal-text-dim);
+    box-shadow: none;
+    outline: none;
+    padding: 0;
+    border-radius: 18px;
+
+    &:selected,
+    &:focus,
+    &:active {
+        background: transparent;
+        outline: none;
+        box-shadow: none;
+    }
 }
 
-.system-action-btn:hover {
-    background: var(--crystal-accent-10);
-    color: $crystal-accent;
-    transform: scale(1.08);
+/* ── App button ── */
+.app-grid-button {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 18px;
+    padding: 12px 16px;
+    transition: background 0.15s ease, transform 0.12s ease;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        transform: scale(1.04);
+    }
+
+    &:active {
+        transform: scale(0.97);
+    }
 }
 
-/* Context menu popover */
-.context-menu-btn {
-    border-radius: $crystal-radius-sm;
-    padding: 6px 12px;
-    min-width: 160px;
-    color: var(--crystal-text);
-    &:hover { background: var(--crystal-surface-hover); }
+/* ── Icon plate (squircle container) ── */
+.app-grid-plate {
+    border-radius: 22%;
+    background: transparent;
+    halign: center;
+}
+
+/* ── App item (icon + label) ── */
+.app-grid-item {
+    min-width: 110px;
+}
+
+/* ── Label ── */
+.app-grid-label {
+    color: rgba(255, 255, 255, 0.92);
+    font-size: 0.82em;
+    font-weight: 500;
+    min-height: 2.5em; // Fixed height for 2 lines — keeps grid rows aligned
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+/* ── No results ── */
+.app-grid-no-results-icon {
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 4px;
+}
+
+.app-grid-no-results-label {
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 1em;
+    font-weight: 400;
 }

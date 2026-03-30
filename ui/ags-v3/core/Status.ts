@@ -15,6 +15,7 @@ export class UIStatus extends GObject.Object {
                 "nc-open": GObject.ParamSpec.boolean("nc-open", "NC Open", "Notification Center visibility", GObject.ParamFlags.READWRITE, false),
                 "prism-open": GObject.ParamSpec.boolean("prism-open", "Prism Open", "Prism Search visibility", GObject.ParamFlags.READWRITE, false),
                 "notif-active": GObject.ParamSpec.boolean("notif-active", "Notif Active", "Popups visibility", GObject.ParamFlags.READWRITE, false),
+                "settings-open": GObject.ParamSpec.boolean("settings-open", "Settings Open", "Settings window visibility", GObject.ParamFlags.READWRITE, false),
             },
             Signals: {
                 "toggle-cc": {},
@@ -28,6 +29,7 @@ export class UIStatus extends GObject.Object {
     private _nc_open = false
     private _prism_open = false
     private _notif_active = false
+    private _settings_open = false
 
     public get notif_active() { return this._notif_active }
     public set notif_active(v: boolean) {
@@ -77,6 +79,13 @@ export class UIStatus extends GObject.Object {
             this.notify("nc-open")
         }
         this.notify("prism-open")
+    }
+
+    public get settings_open() { return this._settings_open }
+    public set settings_open(v: boolean) {
+        if (this._settings_open === v) return
+        this._settings_open = v
+        this.notify("settings-open")
     }
 
     toggleCC() { this.cc_open = !this.cc_open }
