@@ -189,11 +189,11 @@ export default function AppearancePage() {
     page.append(styleGroup.box)
 
     // 2. Fluid Crystal Engine
-    const fcGroup = listGroup("Fluid Crystal Engine")
-    
+    const fcGroup = listGroup("Crystal Shell")
+
     fcGroup.listBox.append(toggleRow(
-        "Motor Óptico Crystal",
-        "Activa el renderizado avanzado de cristalmorfismo v3",
+        "Transparencia Crystal Shell",
+        "Aplica fondo translúcido a las ventanas del shell (bar, dock, paneles)",
         Theme.isFluidCrystal,
         (active) => Theme.setFluidCrystalEnabled(active)
     ))
@@ -259,14 +259,7 @@ export default function AppearancePage() {
 
     // Visibility & State sync
     const updateThemeState = () => {
-        const isFc = Theme.isFluidCrystal
         const currentAccent = Theme.accentColor
-        
-        // Update visibility of accent/transparency rows
-        fcGroup.listBox.get_row_at_index(1)!.visible = isFc
-        fcGroup.listBox.get_row_at_index(2)!.visible = isFc
-        
-        // Update accent circles
         Object.keys(accentButtons).forEach(key => {
             accentButtons[key].remove_css_class("selected")
             if (key === currentAccent) accentButtons[key].add_css_class("selected")

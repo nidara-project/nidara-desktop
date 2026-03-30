@@ -11,7 +11,6 @@ import {
     type FluidCrystalConfig,
     type AccentKey,
     type TintPanels,
-    type GlassTargets,
     DEFAULT_CONFIG,
     ACCENT_PALETTE,
     generateTokensCss,
@@ -100,7 +99,7 @@ class ThemeManager extends GObject.Object {
     }
 
     private setupStyleMonitor() {
-        const stylePath = `${GLib.get_user_config_dir()}/ags/style.css`
+        const stylePath = `${GLib.get_user_config_dir()}/crystal-shell/ui/ags-v3/style.css`
         const file = Gio.File.new_for_path(stylePath)
         try {
             const monitor = file.monitor_file(Gio.FileMonitorFlags.NONE, null)
@@ -212,7 +211,6 @@ class ThemeManager extends GObject.Object {
     get transparency() { return this.fcConfig.transparency }
     get tintStrength() { return this.fcConfig.tintStrength }
     get tintPanels() { return this.fcConfig.tintPanels }
-    get glassTargets() { return this.fcConfig.glassTargets }
     get qtTheme() { return this.fcConfig.qtTheme }
     get accentPalette() { return ACCENT_PALETTE }
 
@@ -263,13 +261,6 @@ class ThemeManager extends GObject.Object {
         this.fcConfig.enabled = enabled
         saveFCConfig(this.fcConfig)
         await this.syncGtkTheme()
-        this.emit("changed")
-    }
-
-    async setGlassTarget(key: keyof GlassTargets, enabled: boolean) {
-        this.fcConfig.glassTargets[key] = enabled
-        if (this.isFluidCrystal) await this.syncGtkTheme()
-        saveFCConfig(this.fcConfig)
         this.emit("changed")
     }
 
@@ -352,9 +343,9 @@ class ThemeManager extends GObject.Object {
                     console.log("[ThemeManager] 🛠️ DEV MODE DETECTED: Forcing local style.css ONLY.");
                     configPaths = [`${activeDir}/style.css`];
                 } else {
-                    // Production behavior: check user config first, fallback to package dir
+                    // Production behavior: crystal-shell config dir first, fallback to cwd
                     configPaths = [
-                        `${GLib.get_user_config_dir()}/ags/style.css`,
+                        `${GLib.get_user_config_dir()}/crystal-shell/ui/ags-v3/style.css`,
                         `${activeDir}/style.css`
                     ];
                 }

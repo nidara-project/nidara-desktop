@@ -81,7 +81,9 @@ export default function Dock(gdkmonitor: any) {
     const getLaunch = (lid: string) => {
         const app = appService.getAppData(lid)
         const desktopId = app?.id || lid
-        return () => execAsync(`gtk-launch ${desktopId}`).catch(print)
+        // Always use gtk-launch so the full user environment (PATH, etc.) is used.
+        // This is critical for apps like Crystal Shell Settings whose Exec uses `ags`.
+        return () => execAsync(["gtk-launch", desktopId]).catch(print)
     }
 
     const onPin = (sourceId: string) => {
@@ -166,6 +168,7 @@ export default function Dock(gdkmonitor: any) {
         resizable: false,
         default_height: DOCK_CONSTANTS.WINDOW_HEIGHT,
     })
+    ;(win as any).gdkmonitor = gdkmonitor
     win.set_child(layout)
     const bar = new Gtk.Box({
         name: "cd-bar",
@@ -773,6 +776,8 @@ export default function Dock(gdkmonitor: any) {
                         // @ts-ignore
                         appItem.icon_name = originalId.replace(/-default$/i, "-Default")
                     }
+                    // Always use gtk-launch so PATH is fully resolved (needed for ags, flatpak, etc.)
+                    appItem.launch = getLaunch(lid)
                     configs.push({
                         id: lid, width: DOCK_CONSTANTS.APP_SLOT,
                         syncData: { addrs, clientTitle, appItem: appItem! },

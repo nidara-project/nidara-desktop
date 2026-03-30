@@ -37,16 +37,6 @@ export interface TintPanels {
   appGrid: boolean
 }
 
-export interface GlassTargets {
-  globalWindow: boolean
-  headerbars: boolean
-  sidebars: boolean
-  mainViews: boolean
-  cardsAndLists: boolean
-  popovers: boolean
-  separators: boolean
-}
-
 export interface FluidCrystalConfig {
   enabled: boolean
   accent: AccentKey
@@ -54,7 +44,6 @@ export interface FluidCrystalConfig {
   transparency: number
   tintStrength: number
   tintPanels: TintPanels
-  glassTargets: GlassTargets
   qtTheme: string
 }
 
@@ -68,37 +57,12 @@ export const DEFAULT_CONFIG: FluidCrystalConfig = {
     controlCenter: false,
     appGrid: false,
   },
-  glassTargets: {
-    globalWindow: true,
-    headerbars: true,
-    sidebars: true,
-    mainViews: true,
-    cardsAndLists: false,
-    popovers: true,
-    separators: true,
-  },
   qtTheme: "Default"
 }
 
 // ── CSS TEMPLATES ────────────────────────────────────────────────────
-
-// V12942: Generic window override removed to follow user's direct CSS approach.
-
-const GLASS_TEMPLATES: Record<keyof GlassTargets, string> = {
-  // These templates are intentionally empty.
-  // Each component applies glass via its own scoped SCSS (e.g. _settings.scss).
-  // We do NOT use generic selectors (window.background, sidebar, etc.)
-  // to avoid leaking into the GTK theme for external apps.
-  globalWindow: ``,
-  headerbars: ``,
-  sidebars: ``,
-  mainViews: ``,
-  separators: ``,
-  cardsAndLists: ``,
-  popovers: ``
-}
-
-/* FORCE_ACCENT_CSS ("GOD MODE") REMOVED to simplify and avoid inconsistencies */
+// Glass effects are applied via scoped SCSS per component (e.g. _settings.scss).
+// We do NOT use generic GTK selectors to avoid leaking into external apps.
 
 const PANEL_SELECTORS: Record<keyof TintPanels, string[]> = {
   controlCenter: [".cc-panel-structure"],
@@ -191,26 +155,10 @@ export function generateTokensCss(config: FluidCrystalConfig): string {
 }
 
 export function generateMasterCss(config: FluidCrystalConfig, baseThemeCssPath?: string): string {
-  let css = `
-/* =====================================================================
- * FLUID CRYSTAL MASTER (V3000: Simplified Interface)
- * ===================================================================== */
-`
+  let css = `/* Fluid Crystal Master */\n`
   if (baseThemeCssPath) {
     css += `@import url("file://${baseThemeCssPath}");\n`
   }
-
-  css += `@import url("_tokens.css");\n\n`
-
-  css += `/* Structural Glass Elements */\n`
-  if (config.enabled) {
-      const activeTargets = Object.entries(config.glassTargets)
-        .filter(([_, enabled]) => enabled)
-        .map(([key, _]) => GLASS_TEMPLATES[key as keyof GlassTargets])
-    
-      css += activeTargets.join("\n\n")
-  }
-
   return css
 }
 

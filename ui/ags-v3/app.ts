@@ -32,7 +32,7 @@ try {
 // Widget Imports
 import Dock from "./widget/dock/Dock"
 import { syncConstants } from "./widget/dock/DockPhysics"
-import { onDockSettingsChanged } from "./widget/dock/state"
+import { onDockSettingsChanged, onPinnedChanged } from "./widget/dock/state"
 import AppGrid from "./widget/app-grid/AppGrid"
 import Bar from "./widget/bar/Bar"
 import PowerMenu from "./widget/power-menu/PowerMenu"
@@ -76,9 +76,9 @@ app.start({
         windows.add(barWin); 
         windows.add(dockWin);
 
-        // Dock rebuild on settings change
+        // Dock rebuild on settings or pinned list change
         let rebuildTimer: number | null = null
-        onDockSettingsChanged(() => {
+        const scheduleDockRebuild = () => {
           if (rebuildTimer) GLib.source_remove(rebuildTimer)
           rebuildTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
             rebuildTimer = null
@@ -92,10 +92,12 @@ app.start({
               })
               const newDock = Dock(monitor)
               windows.add(newDock)
-            } catch (e) { console.error("[DockSettings] Dock rebuild failed:", e) }
+            } catch (e) { console.error("[DockRebuild] Dock rebuild failed:", e) }
             return GLib.SOURCE_REMOVE
           })
-        })
+        }
+        onDockSettingsChanged(scheduleDockRebuild)
+        onPinnedChanged(scheduleDockRebuild)
 
         initWinGlobal(PowerMenu, monitor, powerWindows)
         // Settings deferred to toggleSettings (Lazy)

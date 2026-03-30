@@ -16,11 +16,19 @@ if [ "$REPO_DIR" != "$INSTALL_DIR" ]; then
     echo "Elige el modo de instalación para $INSTALL_DIR:"
     echo "1) Instalación Normal (Copia de archivos - Recomendado para usuarios)"
     echo "2) Instalación de Desarrollo (Symlink - Recomendado para programar)"
-    read -p ">> Selecciona [1/2] (por defecto 1): " INSTALL_MODE
+    
+    # V124: Robust Read with timeout & forced default
+    INSTALL_MODE="1"
+    read -p ">> Selecciona [1/2] (por defecto 1): " -t 30 USER_INPUT
+    INSTALL_MODE=${USER_INPUT:-1}
 
     if [ "$INSTALL_MODE" = "2" ]; then
         echo "🔗 Creando enlace simbólico de desarrollo..."
-        rm -rf "$INSTALL_DIR"
+        # Surgical swap: ensures no directory residues
+        if [ -d "$INSTALL_DIR" ] && [ ! -L "$INSTALL_DIR" ]; then
+            echo "⚠️  Detectada carpeta física instalada. Reemplazando por Symlink..."
+            rm -rf "$INSTALL_DIR"
+        fi
         ln -sfn "$REPO_DIR" "$INSTALL_DIR"
     else
         echo "📂 Copiando los archivos base..."
@@ -85,19 +93,11 @@ sudo pacman -Sy --needed --noconfirm \
     kvantum \
     kvantum-qt5 \
     qt5ct \
-    qt6ct
+    qt6ct \
+    awww \
+    lz4
 
 
-# 1.1 SWWW (Wallpaper Daemon) - Rust Build
-if ! command -v swww &> /dev/null; then
-    echo "🖼️ Installing SWWW (Wallpaper Daemon)..."
-    # Ensure cargo bin is in path for this session
-    export PATH="$HOME/.cargo/bin:$PATH"
-    cargo install --locked swww
-    # Symlink to /usr/bin for global access if needed, or rely on cargo path
-    sudo ln -sf "$HOME/.cargo/bin/swww" /usr/bin/swww
-    sudo ln -sf "$HOME/.cargo/bin/swww-daemon" /usr/bin/swww-daemon
-fi
 
 # 2. Build & Install Dependencies (Vala Panel Appmenu)
 # Required for AstalTray
@@ -221,9 +221,23 @@ ln -sf "$INSTALL_DIR/config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.con
 [Desktop Entry]
 Name=Crystal Shell
 Comment=A fluid, glassmorphic desktop environment based on Hyprland & AGS
-Exec=hyprland -c $HOME/.config/hypr/hyprland.conf
+Exec=start-hyprland
 Type=Application
+DesktopNames=Hyprland
 EOF
+
+# 11. Install Application Entries
+echo "📝 Installing application entries..."
+mkdir -p "$HOME/.local/share/applications"
+if [ "$INSTALL_MODE" = "2" ]; then
+    # Dev mode: symlink so changes in repo are reflected immediately
+    for f in "$INSTALL_DIR/config/applications/"*.desktop; do
+        ln -sf "$f" "$HOME/.local/share/applications/$(basename "$f")"
+    done
+else
+    cp "$INSTALL_DIR/config/applications/"*.desktop "$HOME/.local/share/applications/"
+fi
+update-desktop-database "$HOME/.local/share/applications/" 2>/dev/null || true
 
 echo "✅ Provisioning Complete!"
 echo "👉 Restart (or run 'sudo systemctl start sddm') and select 'Crystal Shell' from the login screen."

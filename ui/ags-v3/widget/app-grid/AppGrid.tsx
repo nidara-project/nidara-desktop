@@ -11,6 +11,14 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import AstalHyprland from "gi://AstalHyprland"
 import appService from "../../core/AppService"
 import Theme from "../../core/ThemeManager"
+import { pinnedState, savePinned } from "../dock/state"
+
+// Extract just the desktop basename, stripping path and .desktop extension
+// e.g. "/usr/share/applications/org.gnome.Nautilus.desktop" → "org.gnome.nautilus"
+const normId = (s: string) => {
+    const base = (s || "").split("/").pop() || s || ""
+    return base.toLowerCase().replace(/\.desktop$/, "")
+}
 // V127: Native Gtk Resolution - No mapping needed
 
 const appsService = new AstalApps.Apps()
@@ -72,7 +80,7 @@ function SystemActionStrip(win: Gtk.Window) {
 
     const actions = [
         { icon: "utilities-terminal", name: "Terminal", cmd: "kitty" },
-        { icon: "emblem-system", name: "Ajustes", cmd: "gnome-control-center" },
+        { icon: "preferences-system-symbolic", name: "Ajustes", cmd: "toggleSettings()" },
         { icon: "system-shutdown-symbolic", name: "Sesión", cmd: "togglePowerMenu()" },
     ]
 
@@ -207,16 +215,26 @@ export default function AppGrid(monitor: Gdk.Monitor) {
 
     win.set_child(mainOverlay)
 
-    // V106: OPTIMIZED APP GRID - Widget Cache + Visibility Filtering 🚀
-    // Apps are created once and filtered via visibility instead of destroying/recreating
+    // V106: OPTIMIZED APP GRID - Widget Cache + FlowBox filter_func 🚀
     const widgetCache = new Map<string, Gtk.Button>()
     let cachedApps: any[] = []
     let cacheInitialized = false
+    let currentQuery = ""
+    let currentMatchIds: Set<string> | null = null
+
+    // filter_func: no gaps, no set_visible hacks
+    flowbox.set_filter_func((child) => {
+        if (!currentMatchIds) return true
+        const button = child.get_child() as Gtk.Button
+        const appId: string = (button as any)._appId || ""
+        const appName: string = (button as any)._appName || ""
+        return currentMatchIds.has(appId) || appName.includes(currentQuery)
+    })
 
     // Create widget for a single app (called once per app, cached)
-    const createAppWidget = (app: any): Gtk.Button => {
-        // V125: Use entry (desktop file) as stable unique identifier
-        const id = (app.entry || "").toLowerCase()
+    const createAppWidget = (app: any, hostWin: Gtk.Window, hasLayerShell: boolean): Gtk.Button => {
+        // V125: Use entry basename as stable unique identifier (strip path + .desktop)
+        const id = normId(app.entry || "")
         const name = app.get_name ? app.get_name() : (app as any).name || ""
 
         const iconName = app.icon_name || "image-missing"
@@ -265,11 +283,64 @@ export default function AppGrid(monitor: Gdk.Monitor) {
 
         const button = new Gtk.Button({
             css_classes: ["app-grid-button"],
+            tooltip_text: name,
         })
         button.set_child(item)
-            // Store search metadata for filtering
-            ; (button as any)._appId = id
-            ; (button as any)._appName = name.toLowerCase()
+        ;(button as any)._appId = id
+        ;(button as any)._appName = name.toLowerCase()
+
+        // Right-click context menu — same pattern as DockItem (PopoverMenu + released)
+        let contextPopover: Gtk.Popover | null = null
+
+        const buildContextMenu = () => {
+            if (contextPopover) {
+                if (contextPopover.visible) return
+                contextPopover.unparent()
+                contextPopover = null
+            }
+
+            const isPinned = pinnedState.list.some(p => normId(p) === normId(id))
+            const actionName = isPinned ? "unpin" : "pin"
+            const actionLabel = isPinned ? "Desanclar del Dock" : "Anclar en Dock"
+
+            const actionGroup = new Gio.SimpleActionGroup()
+            const action = new Gio.SimpleAction({ name: actionName })
+            action.connect("activate", () => {
+                if (isPinned) {
+                    pinnedState.list = pinnedState.list.filter(p => normId(p) !== normId(id))
+                } else {
+                    pinnedState.list.push(normId(id))
+                }
+                console.log(`[AppGrid] Pin toggled: ${id} → ${JSON.stringify(pinnedState.list)}`)
+                savePinned()
+                contextPopover?.popdown()
+            })
+            actionGroup.add_action(action)
+
+            const menuModel = new Gio.Menu()
+            menuModel.append(actionLabel, `context.${actionName}`)
+
+            // Order matters: insert_action_group BEFORE set_parent (same as DockItem)
+            item.insert_action_group("context", actionGroup)
+            contextPopover = Gtk.PopoverMenu.new_from_model(menuModel) as unknown as Gtk.Popover
+            contextPopover.set_parent(item)
+        }
+
+        const rightClick = new Gtk.GestureClick({ button: 3 })
+        rightClick.connect("released", () => {
+            buildContextMenu()
+            // Release EXCLUSIVE keyboard grab so the popover can show and receive events
+            if (hasLayerShell) Gtk4LayerShell.set_keyboard_mode(hostWin, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                contextPopover?.popup()
+                // Restore EXCLUSIVE when popover closes
+                contextPopover?.connect("closed", () => {
+                    if (hasLayerShell) Gtk4LayerShell.set_keyboard_mode(hostWin, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+                })
+                return GLib.SOURCE_REMOVE
+            })
+        })
+        item.add_controller(rightClick)
 
         button.connect("clicked", () => {
             try {
@@ -320,7 +391,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         cachedApps.forEach(app => {
             const id = (app.entry || "").toLowerCase()
             if (id && !widgetCache.has(id)) {
-                const widget = createAppWidget(app)
+                const widget = createAppWidget(app, win, layerInit)
                 widgetCache.set(id, widget)
                 flowbox.append(widget)
             }
@@ -329,45 +400,24 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         cacheInitialized = true
     }
 
-    // Optimized filter: just toggle visibility instead of recreating
+    // Filter via filter_func — no gaps, proper reflow
     const filterApps = (query = "") => {
-        if (!cacheInitialized) {
-            initCache()
-        }
+        if (!cacheInitialized) initCache()
 
-        const q = query.trim().toLowerCase()
+        currentQuery = query.trim().toLowerCase()
 
-        if (q === "") {
-            // Show all apps
-            widgetCache.forEach((widget) => {
-                widget.set_visible(true)
-            })
+        if (!currentQuery) {
+            currentMatchIds = null
         } else {
-            // Fuzzy match results from service
             const matches = appsService.fuzzy_query(query)
-            const matchIds = new Set(
-                matches.map(app => (app.entry || "").toLowerCase())
-            )
-
-            widgetCache.forEach((widget, id) => {
-                const isMatch = matchIds.has(id) ||
-                    (widget as any)._appName?.includes(q) ||
-                    (widget as any)._appId?.includes(q)
-                widget.set_visible(isMatch)
-            })
+            currentMatchIds = new Set(matches.map((a: any) => normId(a.entry || "")))
         }
 
-        // Select first visible child if flowbox has focus
-        // Initialize LayerShell first - REMOVED REDUNDANT INIT
+        flowbox.invalidate_filter()
 
-        const monitorWidth = monitor.get_geometry().width
-        const monitorHeight = monitor.get_geometry().height
-        win.set_default_size(monitorWidth, monitorHeight)
-
+        // Select first visible item
         const first = flowbox.get_first_child()
-        if (first && first.get_visible()) {
-            flowbox.select_child(first as any)
-        }
+        if (first && first.get_visible()) flowbox.select_child(first as any)
     }
 
 

@@ -21,7 +21,7 @@ fi
 killall -9 ags gjs 2>/dev/null || true
 # DESTROY COMPILER CACHE: Astal was serving 3-hour old JS bundles!
 rm -rf ~/.cache/ags ~/.cache/astal /tmp/ags* /tmp/astal* 2>/dev/null || true
-# Evitamos matar swww-daemon para no perder el wallpaper durante el reload
+# Evitamos matar awww-daemon para no perder el wallpaper durante el reload
 sleep 0.2
 
 # 2. Recargar Hyprland
@@ -29,8 +29,10 @@ hyprctl reload
 
 # 3. Lanzar AGS con el entorno de Astal-local
 cd "$AGS_DIR"
-GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0:$AGS_DIR/astal-local/lib/linux/girepository-1.0:$GI_TYPELIB_PATH" \
-LD_LIBRARY_PATH="/usr/lib:/usr/local/lib:$AGS_DIR/astal-local/lib/linux:$LD_LIBRARY_PATH" \
+
+export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0:$AGS_DIR/astal-local/lib/linux/girepository-1.0:${GI_TYPELIB_PATH}"
+export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib:$AGS_DIR/astal-local/lib/linux:${LD_LIBRARY_PATH}"
+
 AGS_BIN="ags"
 if [ -f "$HOME/.local/bin/ags" ]; then
     AGS_BIN="$HOME/.local/bin/ags"

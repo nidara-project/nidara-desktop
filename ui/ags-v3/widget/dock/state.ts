@@ -96,13 +96,19 @@ try {
     pinnedState.list = []
 }
 
+const _pinnedListeners = new Set<() => void>()
+
+export function onPinnedChanged(fn: () => void) {
+    _pinnedListeners.add(fn)
+    return () => _pinnedListeners.delete(fn)
+}
+
 export const savePinned = () => {
     const list = pinnedState.list
     console.log(`[DockAudit] COMMIT: saving ${list.length} items to ${PINNED_FILE}`);
-    console.log(`[DockAudit] DATA: ${JSON.stringify(list)}`);
     try {
         writeFile(PINNED_FILE, JSON.stringify(list, null, 2))
-        console.log(`[DockAudit] SUCCESS.`);
+        _pinnedListeners.forEach(fn => fn())
     } catch (e) {
         console.error(`[DockAudit] FAILURE:`, e);
     }
