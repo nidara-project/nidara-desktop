@@ -22,11 +22,13 @@ export default function Settings(monitor: Gdk.Monitor) {
         icon_name: "go-previous-symbolic",
         css_classes: ["nav-btn", "flat"],
         tooltip_text: "Atrás",
+        sensitive: false,
     })
     const forwardBtn = new Gtk.Button({
         icon_name: "go-next-symbolic",
         css_classes: ["nav-btn", "flat"],
         tooltip_text: "Adelante",
+        sensitive: false,
     })
 
     // Navigation Capsule 💊 (True Pill Shape via CSS)
@@ -154,14 +156,47 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     sidebar.set_name("crystal-settings-sidebar-list")
 
-    // Selection persistence logic 🧠
-    let isUserAction = false;
-    sidebar.connect("row-selected", (_, row) => {
-        if (row && row.name) {
-            stack.visible_child_name = row.name
-            console.log(`[Settings] Navigating to page: ${row.name}`)
-            isUserAction = true;
+    // --- Navigation history ---
+    const history: string[] = []
+    let historyIdx = -1
+    let isProgrammaticNav = false
+
+    const syncSidebarSelection = (pageId: string) => {
+        isProgrammaticNav = true
+        for (let i = 0; i < categories.length; i++) {
+            const row = sidebar.get_row_at_index(i)
+            if (row?.get_name() === pageId) { sidebar.select_row(row); break }
         }
+        isProgrammaticNav = false
+    }
+
+    const updateNavButtons = () => {
+        backBtn.sensitive = historyIdx > 0
+        forwardBtn.sensitive = historyIdx < history.length - 1
+    }
+
+    const navigateTo = (pageId: string, addToHistory = true) => {
+        if (addToHistory) {
+            history.splice(historyIdx + 1) // discard forward history
+            history.push(pageId)
+            historyIdx = history.length - 1
+        }
+        stack.visible_child_name = pageId
+        syncSidebarSelection(pageId)
+        updateNavButtons()
+    }
+
+    sidebar.connect("row-selected", (_, row) => {
+        if (isProgrammaticNav || !row?.name) return
+        navigateTo(row.name)
+    })
+
+    backBtn.connect("clicked", () => {
+        if (historyIdx > 0) navigateTo(history[--historyIdx], false)
+    })
+
+    forwardBtn.connect("clicked", () => {
+        if (historyIdx < history.length - 1) navigateTo(history[++historyIdx], false)
     })
 
     // --- Responsive Floating Architecture --- 🏔️
@@ -219,6 +254,30 @@ export default function Settings(monitor: Gdk.Monitor) {
         valign: Gtk.Align.CENTER,
     })
 
+    sidebar.set_filter_func((row) => {
+        const query = searchEntry.text.toLowerCase().trim()
+        if (!query) return true
+        const cat = categories.find(c => c.id === row.get_name())
+        return !!cat && cat.label.toLowerCase().includes(query)
+    })
+
+    searchEntry.connect("search-changed", () => {
+        sidebar.invalidate_filter()
+        const query = searchEntry.text.toLowerCase().trim()
+        if (!query) return
+        // Auto-navigate to first visible match (without adding to history)
+        const match = categories.find(c => c.label.toLowerCase().includes(query))
+        if (match) {
+            stack.visible_child_name = match.id
+            syncSidebarSelection(match.id)
+        }
+    })
+
+    searchEntry.connect("stop-search", () => {
+        searchEntry.text = ""
+        sidebar.invalidate_filter()
+    })
+
     // Sidebar Toggle Button 📲
     const sidebarToggle = new Gtk.Button({
         icon_name: "view-sidebar-symbolic",
@@ -262,20 +321,10 @@ export default function Settings(monitor: Gdk.Monitor) {
     mainContainer.append(splitView)
     win.set_content(mainContainer)
 
-    // Restauro la selección original tras redimensionado/colapso si ADW intenta resetearla
+    // Restaura la selección tras colapso/expansión del SplitView
     splitView.connect("notify::collapsed", () => {
-        const selected = sidebar.get_selected_row();
-        if (!selected && stack.visible_child_name) {
-            console.log(`[Settings] SplitView state changed. Restoring selection for: ${stack.visible_child_name}`);
-            // Re-seleccionar la fila que corresponde al stack actual
-            for (let i = 0; i < categories.length; i++) {
-                const row = sidebar.get_row_at_index(i);
-                if (row && row.get_name() === stack.visible_child_name) {
-                    sidebar.select_row(row);
-                    break;
-                }
-            }
-        }
+        if (!sidebar.get_selected_row() && stack.visible_child_name)
+            syncSidebarSelection(stack.visible_child_name)
     })
 
     // Hide instead of destroy so the window can be reopened later
@@ -289,12 +338,8 @@ export default function Settings(monitor: Gdk.Monitor) {
         if (win.visible) win.present()
     }
 
-    // Default selection (Ensuring it only occurs once and safely)
-    const currentSelection = sidebar.get_selected_row()
-    if (!currentSelection) {
-        const firstRow = sidebar.get_row_at_index(0)
-        if (firstRow) sidebar.select_row(firstRow)
-    }
+    // Default selection — navigate to first page, seeding history
+    if (categories.length > 0) navigateTo(categories[0].id)
 
     console.log("[Settings] window ready to return.");
     return win
