@@ -312,15 +312,26 @@ export default function Settings(monitor: Gdk.Monitor) {
     sidebarScroll.set_child(sidebar)
     sidebarScroll.set_name("crystal-settings-sidebar-scroll")
 
-    // Content column: stack full-width (per-page Adw.Clamp limits content width)
-    const contentBox = new Gtk.Box({ hexpand: true, vexpand: true })
-    contentBox.append(stack)
+    // Sidebar wrapper: spacer (matches header height) + scroll
+    // The spacer border-bottom visually extends the header divider line into the sidebar
+    const sidebarWrapper = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+    sidebarWrapper.append(new Gtk.Box({ css_classes: ["sidebar-header-spacer"] }))
+    sidebarWrapper.append(sidebarScroll)
+
+    // Content Area: ToolbarView for correct Tahoe Header integration
+    const contentToolbarView = new Adw.ToolbarView({
+        top_bar_style: Adw.ToolbarStyle.FLAT,
+        hexpand: true,
+        vexpand: true,
+    })
+    contentToolbarView.set_name("crystal-settings-content-view")
+    contentToolbarView.set_content(stack)
 
     // Main Responsive Overlay Split View 🏔️
     const splitView = new Adw.OverlaySplitView({
         name: "settings-splitview",
-        sidebar: sidebarScroll,
-        content: contentBox,
+        sidebar: sidebarWrapper,
+        content: contentToolbarView,
         hexpand: true,
         vexpand: true,
         min_sidebar_width: 250,
@@ -388,22 +399,22 @@ export default function Settings(monitor: Gdk.Monitor) {
     headerStart.append(sidebarToggle)
     headerStart.append(navCapsule)
 
+    // Custom close button (full control over size/shape)
+    const closeBtn = new Gtk.Button({
+        css_classes: ["settings-close-btn"],
+        tooltip_text: "Cerrar",
+        valign: Gtk.Align.CENTER,
+    })
+    closeBtn.connect("clicked", () => win.set_visible(false))
+
     const header = new Adw.HeaderBar({
-        show_end_title_buttons: true,
+        show_end_title_buttons: false,
         show_start_title_buttons: false,
         css_classes: ["settings-header"],
     })
     header.set_title_widget(searchEntry)
     header.pack_start(headerStart)
-
-    // Root ToolbarView — header spans full width (sidebar + content)
-    const rootToolbarView = new Adw.ToolbarView({
-        top_bar_style: Adw.ToolbarStyle.FLAT,
-        hexpand: true,
-        vexpand: true,
-    })
-    rootToolbarView.add_top_bar(header)
-    rootToolbarView.set_content(splitView)
+    header.pack_end(closeBtn)
 
     // 💎 NATIVE RESPONSIVE BREAKPOINT 💎
     const breakpoint = new Adw.Breakpoint({
@@ -412,9 +423,11 @@ export default function Settings(monitor: Gdk.Monitor) {
     breakpoint.add_setter(splitView, "collapsed", true)
     win.add_breakpoint(breakpoint)
 
+    contentToolbarView.add_top_bar(header)
+
     const mainContainer = new Gtk.Box({ css_classes: ["settings-main-glass"] })
     mainContainer.set_name("settings-main-glass")
-    mainContainer.append(rootToolbarView)
+    mainContainer.append(splitView)
     win.set_content(mainContainer)
 
     // Restaura la selección tras colapso/expansión del SplitView

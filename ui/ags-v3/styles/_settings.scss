@@ -113,7 +113,7 @@ list row:selected .crystal-sidebar-row {
     }
 }
 
-// 5. HEADER — full width, compact macOS style
+// 5. HEADER — right column, compact macOS style
 .settings-header {
     background: transparent;
     border-bottom: 1px solid var(--crystal-border);
@@ -122,61 +122,67 @@ list row:selected .crystal-sidebar-row {
 
     & > box {
         min-height: 44px;
-        padding: 0;
-    }
-
-    // Native close button → macOS red circle
-    windowcontrols > button.close {
-        background: #ff5f57;
-        border-radius: 50%;
-        min-width: 13px;
-        min-height: 13px;
-        padding: 0;
-        margin: 0 2px;
-        border: none;
-        box-shadow: none;
-
-        > image { opacity: 0; min-width: 0; min-height: 0; padding: 0; }
-        &:hover > image { opacity: 1; color: rgba(0,0,0,0.55); }
-    }
-
-    windowcontrols {
-        padding: 0 4px;
-        spacing: 4px;
+        padding: 0 2px;
     }
 }
 
-// Sidebar toggle — circle button
+// Sidebar header spacer — same height as header, with matching border-bottom
+// This makes the divider line appear continuous across sidebar + content
+.sidebar-header-spacer {
+    min-height: 44px;
+    border-bottom: 1px solid var(--crystal-border);
+}
+
+// Custom close button — circle macOS style
+.settings-close-btn {
+    background: #ff5f57;
+    border-radius: 50%;
+    min-width: 14px;
+    min-height: 14px;
+    max-width: 14px;
+    max-height: 14px;
+    padding: 0;
+    margin: 0 4px;
+    border: none;
+    box-shadow: none;
+
+    // Hide icon (color dot only)
+    > image { min-width: 0; min-height: 0; opacity: 0; }
+    &:hover { background: #ff3b30; }
+    &:active { background: #e0342a; }
+}
+
+// Sidebar toggle — circle, same visual weight as nav capsule
 .sidebar-toggle {
     background: rgba(255, 255, 255, 0.08);
     border-radius: 50%;
-    min-width: 30px;
-    min-height: 30px;
+    min-width: 28px;
+    min-height: 28px;
+    max-width: 28px;
+    max-height: 28px;
     padding: 0;
     border: none;
     box-shadow: none;
     color: var(--crystal-text-dim);
 
-    &:hover {
-        background: rgba(255, 255, 255, 0.14);
-        color: var(--crystal-text);
-    }
+    &:hover { background: rgba(255, 255, 255, 0.14); color: var(--crystal-text); }
 }
 
-// Navigation capsule — pill with background
+// Navigation capsule — pill, same height as sidebar toggle
 .navigation-capsule {
     background: rgba(255, 255, 255, 0.07);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 999px;
-    padding: 2px 3px;
-    spacing: 0;
+    padding: 0 2px;
+    min-height: 28px;
+    max-height: 28px;
 
     > button.nav-btn {
         background: transparent;
         border-radius: 999px;
-        min-width: 26px;
-        min-height: 26px;
-        padding: 0;
+        min-width: 28px;
+        min-height: 0;
+        padding: 4px;
         border: none;
         box-shadow: none;
         color: var(--crystal-text-dim);
@@ -188,7 +194,7 @@ list row:selected .crystal-sidebar-row {
     > separator.nav-separator {
         background: rgba(255, 255, 255, 0.12);
         min-width: 1px;
-        margin: 5px 1px;
+        margin: 6px 0;
     }
 }
 
