@@ -133,33 +133,27 @@ list row:selected .crystal-sidebar-row {
     border-bottom: 1px solid var(--crystal-border);
 }
 
-// Custom close button — circle macOS style
+// Custom close button — circle macOS style (size locked in TSX via width_request/height_request)
 .settings-close-btn {
     background: #ff5f57;
     border-radius: 50%;
     min-width: 14px;
     min-height: 14px;
-    max-width: 14px;
-    max-height: 14px;
     padding: 0;
     margin: 0 4px;
     border: none;
     box-shadow: none;
 
-    // Hide icon (color dot only)
-    > image { min-width: 0; min-height: 0; opacity: 0; }
     &:hover { background: #ff3b30; }
     &:active { background: #e0342a; }
 }
 
-// Sidebar toggle — circle, same visual weight as nav capsule
+// Sidebar toggle — circle (size locked in TSX via width_request/height_request)
 .sidebar-toggle {
     background: rgba(255, 255, 255, 0.08);
     border-radius: 50%;
     min-width: 28px;
     min-height: 28px;
-    max-width: 28px;
-    max-height: 28px;
     padding: 0;
     border: none;
     box-shadow: none;
@@ -168,21 +162,20 @@ list row:selected .crystal-sidebar-row {
     &:hover { background: rgba(255, 255, 255, 0.14); color: var(--crystal-text); }
 }
 
-// Navigation capsule — pill, same height as sidebar toggle
+// Navigation capsule — pill, visually same height as sidebar toggle
 .navigation-capsule {
     background: rgba(255, 255, 255, 0.07);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 999px;
     padding: 0 2px;
     min-height: 28px;
-    max-height: 28px;
 
     > button.nav-btn {
         background: transparent;
         border-radius: 999px;
-        min-width: 28px;
-        min-height: 0;
-        padding: 4px;
+        min-width: 26px;
+        min-height: 26px;
+        padding: 0;
         border: none;
         box-shadow: none;
         color: var(--crystal-text-dim);
@@ -371,17 +364,15 @@ window.crystal-settings-window {
             outline: none;
         }
 
-        // Ocultar separador mediante dimensiones y opacidad (Legal Specificity)
-        & separator, & .sidebar-separator, & > separator, & > border { 
+        // Ocultar separador
+        & separator, & .sidebar-separator, & > separator, & > border {
             background: transparent;
             min-width: 0;
-            width: 0;
-            height: 0;
+            min-height: 0;
             opacity: 0;
             margin: 0;
             padding: 0;
             border: none;
-            display: none;
         }
         
         // Atacamos a los hijos directos para quitar sus bordes nativos
@@ -407,7 +398,7 @@ window.crystal-settings-window {
     background: rgba(255,255,255,0.07);
     border-radius: 100px;
     padding: 2px 10px;
-    margin-start: 4px;
+    margin-left: 4px;
 }
 
 .search-result-page-icon {

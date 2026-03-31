@@ -312,11 +312,6 @@ export default function Settings(monitor: Gdk.Monitor) {
     sidebarScroll.set_child(sidebar)
     sidebarScroll.set_name("crystal-settings-sidebar-scroll")
 
-    // Sidebar wrapper: spacer (matches header height) + scroll
-    // The spacer border-bottom visually extends the header divider line into the sidebar
-    const sidebarWrapper = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
-    sidebarWrapper.append(new Gtk.Box({ css_classes: ["sidebar-header-spacer"] }))
-    sidebarWrapper.append(sidebarScroll)
 
     // Content Area: ToolbarView for correct Tahoe Header integration
     const contentToolbarView = new Adw.ToolbarView({
@@ -330,7 +325,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     // Main Responsive Overlay Split View 🏔️
     const splitView = new Adw.OverlaySplitView({
         name: "settings-splitview",
-        sidebar: sidebarWrapper,
+        sidebar: sidebarScroll,
         content: contentToolbarView,
         hexpand: true,
         vexpand: true,
@@ -385,6 +380,8 @@ export default function Settings(monitor: Gdk.Monitor) {
         css_classes: ["sidebar-toggle"],
         tooltip_text: "Menú",
         valign: Gtk.Align.CENTER,
+        width_request: 28,
+        height_request: 28,
     })
     sidebarToggle.connect("clicked", () => {
         splitView.set_show_sidebar(!splitView.show_sidebar)
@@ -399,11 +396,13 @@ export default function Settings(monitor: Gdk.Monitor) {
     headerStart.append(sidebarToggle)
     headerStart.append(navCapsule)
 
-    // Custom close button (full control over size/shape)
+    // Custom close button — size locked via width_request/height_request (GTK CSS no tiene max-width)
     const closeBtn = new Gtk.Button({
         css_classes: ["settings-close-btn"],
         tooltip_text: "Cerrar",
         valign: Gtk.Align.CENTER,
+        width_request: 14,
+        height_request: 14,
     })
     closeBtn.connect("clicked", () => win.set_visible(false))
 
