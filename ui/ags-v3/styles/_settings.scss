@@ -113,10 +113,10 @@ list row:selected .crystal-sidebar-row {
     }
 }
 
-// 5. HEADER — right column, compact macOS style
+// 5. HEADER — full width above splitView, compact macOS style
 .settings-header {
     background: transparent;
-    border-bottom: 1px solid var(--crystal-border);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     padding: 0 6px;
     min-height: 44px;
 
@@ -256,16 +256,37 @@ button.accent-circle-btn {
 // 8. Search entry
 .settings-search {
     background: rgba(255, 255, 255, 0.07);
-    border: 1px solid var(--crystal-border);
+    border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 999px;
     padding: 0 12px;
     min-height: 30px;
-    entry {
-        background: transparent;
-        border: none;
+    outline: none;
+    box-shadow: none;
+
+    &:focus, &:focus-within {
+        border-color: rgba(255, 255, 255, 0.22);
         box-shadow: none;
-        color: var(--crystal-text);
+        outline: none;
     }
+
+    // Kill Adwaita blue focus ring
+    focus-ring { box-shadow: none; }
+
+    > text {
+        background: transparent;
+        color: var(--crystal-text);
+        caret-color: var(--crystal-text);
+    }
+}
+
+// Tooltips
+tooltip {
+    background: rgba(30, 30, 35, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 4px 8px;
+    color: rgba(255, 255, 255, 0.9);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 // 9. Nav buttons — styled via .navigation-capsule and .sidebar-toggle above
@@ -354,6 +375,14 @@ window.crystal-settings-window list.settings-list-box {
 // ═══════════════════════════════════════════════════════════════════════
 
 window.crystal-settings-window {
+    // Root ToolbarView transparent
+    toolbarview {
+        background: transparent;
+        & > toolbarview, & > stack, & > box, & > bin {
+            background: transparent;
+        }
+    }
+
     #settings-splitview, .crystal-split-view {
         background-color: transparent;
 

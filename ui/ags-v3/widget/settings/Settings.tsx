@@ -313,20 +313,15 @@ export default function Settings(monitor: Gdk.Monitor) {
     sidebarScroll.set_name("crystal-settings-sidebar-scroll")
 
 
-    // Content Area: ToolbarView for correct Tahoe Header integration
-    const contentToolbarView = new Adw.ToolbarView({
-        top_bar_style: Adw.ToolbarStyle.FLAT,
-        hexpand: true,
-        vexpand: true,
-    })
-    contentToolbarView.set_name("crystal-settings-content-view")
-    contentToolbarView.set_content(stack)
+    // Content column: stack directly, full width
+    const contentBox = new Gtk.Box({ hexpand: true, vexpand: true })
+    contentBox.append(stack)
 
     // Main Responsive Overlay Split View 🏔️
     const splitView = new Adw.OverlaySplitView({
         name: "settings-splitview",
         sidebar: sidebarScroll,
-        content: contentToolbarView,
+        content: contentBox,
         hexpand: true,
         vexpand: true,
         min_sidebar_width: 250,
@@ -422,11 +417,18 @@ export default function Settings(monitor: Gdk.Monitor) {
     breakpoint.add_setter(splitView, "collapsed", true)
     win.add_breakpoint(breakpoint)
 
-    contentToolbarView.add_top_bar(header)
+    // Root ToolbarView: header spans full width above sidebar+content
+    const rootView = new Adw.ToolbarView({
+        top_bar_style: Adw.ToolbarStyle.FLAT,
+        hexpand: true,
+        vexpand: true,
+    })
+    rootView.add_top_bar(header)
+    rootView.set_content(splitView)
 
     const mainContainer = new Gtk.Box({ css_classes: ["settings-main-glass"] })
     mainContainer.set_name("settings-main-glass")
-    mainContainer.append(splitView)
+    mainContainer.append(rootView)
     win.set_content(mainContainer)
 
     // Restaura la selección tras colapso/expansión del SplitView
