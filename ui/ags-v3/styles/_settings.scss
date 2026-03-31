@@ -113,26 +113,119 @@ list row:selected .crystal-sidebar-row {
     }
 }
 
-// 5. HEADER (40px, only in the content/right column)
+// 5. HEADER — full width, compact macOS style
 .settings-header {
     background: transparent;
     border-bottom: 1px solid var(--crystal-border);
-    padding: 0 8px;
-    margin: 0;
-    min-height: 40px;
+    padding: 0 6px;
+    min-height: 44px;
 
     & > box {
-        min-height: 40px;
-        margin: 0;
+        min-height: 44px;
         padding: 0;
+    }
+
+    // Native close button → macOS red circle
+    windowcontrols > button.close {
+        background: #ff5f57;
+        border-radius: 50%;
+        min-width: 13px;
+        min-height: 13px;
+        padding: 0;
+        margin: 0 2px;
+        border: none;
+        box-shadow: none;
+
+        > image { opacity: 0; min-width: 0; min-height: 0; padding: 0; }
+        &:hover > image { opacity: 1; color: rgba(0,0,0,0.55); }
+    }
+
+    windowcontrols {
+        padding: 0 4px;
+        spacing: 4px;
     }
 }
 
-// 6. THE STACK (page content area)
+// Sidebar toggle — circle button
+.sidebar-toggle {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 50%;
+    min-width: 30px;
+    min-height: 30px;
+    padding: 0;
+    border: none;
+    box-shadow: none;
+    color: var(--crystal-text-dim);
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.14);
+        color: var(--crystal-text);
+    }
+}
+
+// Navigation capsule — pill with background
+.navigation-capsule {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 999px;
+    padding: 2px 3px;
+    spacing: 0;
+
+    > button.nav-btn {
+        background: transparent;
+        border-radius: 999px;
+        min-width: 26px;
+        min-height: 26px;
+        padding: 0;
+        border: none;
+        box-shadow: none;
+        color: var(--crystal-text-dim);
+
+        &:hover { background: rgba(255,255,255,0.1); color: var(--crystal-text); }
+        &:disabled { opacity: 0.3; }
+    }
+
+    > separator.nav-separator {
+        background: rgba(255, 255, 255, 0.12);
+        min-width: 1px;
+        margin: 5px 1px;
+    }
+}
+
+// 6. THE STACK + SCROLL (full-width, content limited by per-page Adw.Clamp)
 stack.settings-stack {
     background: transparent;
     border: none;
     padding: 0;
+}
+
+.settings-page-scroll {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+
+    & > viewport {
+        background: transparent;
+        border: none;
+    }
+
+    // Scrollbar on the right — visible, subtle
+    & > scrollbar.vertical {
+        background: transparent;
+        border: none;
+        padding: 4px 2px;
+
+        > trough {
+            background: transparent;
+            border-radius: 999px;
+        }
+        > trough > slider {
+            background: rgba(255, 255, 255, 0.18);
+            border-radius: 999px;
+            min-width: 5px;
+            &:hover { background: rgba(255, 255, 255, 0.3); }
+        }
+    }
 }
 
 // 7. ACCENT PICKERS
@@ -176,23 +269,7 @@ button.accent-circle-btn {
     }
 }
 
-// 9. Nav buttons
-.window-close-btn {
-    border-radius: 999px;
-    min-width: 26px;
-    min-height: 26px;
-    color: var(--crystal-text-dim);
-    &:hover { background: #ef4444; color: #ffffff; }
-}
-
-.sidebar-toggle,
-.nav-btn {
-    border-radius: 999px;
-    min-width: 26px;
-    min-height: 26px;
-    color: var(--crystal-text-dim);
-    &:hover { background: var(--crystal-surface-hover); color: var(--crystal-text); }
-}
+// 9. Nav buttons — styled via .navigation-capsule and .sidebar-toggle above
 
 // ═══════════════════════════════════════════════════════════════════════
 // 10. PAGE CONTENT - Typography
