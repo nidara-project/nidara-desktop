@@ -309,3 +309,24 @@ window.crystal-settings-window {
         }
     }
 }
+
+// ── Search Results ────────────────────────────────────────────────────────────
+.search-results-list {
+    .search-result-row {
+        &:hover { background: rgba(255,255,255,0.04); }
+    }
+}
+
+.search-result-chip {
+    font-size: 0.75em;
+    font-weight: 500;
+    color: var(--crystal-accent, rgba(255,255,255,0.5));
+    background: rgba(255,255,255,0.07);
+    border-radius: 100px;
+    padding: 2px 10px;
+    margin-start: 4px;
+}
+
+.search-result-page-icon {
+    -gtk-icon-size: 18px;
+}

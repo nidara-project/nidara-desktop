@@ -1,4 +1,4 @@
-import { Astal, Gtk, Gdk } from "ags/gtk4"
+import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 // @ts-ignore
 import Adw from "gi://Adw?version=1"
@@ -9,6 +9,7 @@ import AudioPage from "./pages/Audio"
 import DockPage from "./pages/Dock"
 import PowerPage from "./pages/Power"
 import AppearancePage from "./pages/Appearance"
+import { beginPage, endPage, clearSearchIndex, getSearchIndex } from "./SettingsHelpers"
 
 /**
  * Settings - System Configuration Panel
@@ -16,6 +17,7 @@ import AppearancePage from "./pages/Appearance"
  */
 export default function Settings(monitor: Gdk.Monitor) {
     console.log("[Settings] Initializing window components...");
+    clearSearchIndex()
 
     // --- Navigation Controls (Tahoe Style) --- 🧭
     const backBtn = new Gtk.Button({
@@ -109,11 +111,14 @@ export default function Settings(monitor: Gdk.Monitor) {
 
         // Modern Page Wrapper with Adw.Clamp
         let pageWidget: Gtk.Widget;
-        
+
         if (cat.component) {
             try {
+                beginPage(cat.id, cat.label)
                 pageWidget = cat.component();
+                endPage()
             } catch (e) {
+                endPage()
                 console.error(`[Settings] Failed to load page ${cat.id}:`, e);
                 pageWidget = new Gtk.Label({ label: `Error cargando la página ${cat.label}` });
             }
@@ -155,6 +160,103 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
 
     sidebar.set_name("crystal-settings-sidebar-list")
+
+    // --- Search results page ---
+    const searchResultsList = new Gtk.ListBox({
+        css_classes: ["settings-list-box", "boxed-list", "search-results-list"],
+        selection_mode: Gtk.SelectionMode.NONE,
+        activate_on_single_click: true,
+    })
+
+    const searchResultsEmpty = new Gtk.Label({
+        label: "Sin resultados",
+        css_classes: ["settings-placeholder"],
+        margin_top: 40,
+        visible: false,
+    })
+
+    const searchResultsPage = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 8,
+        css_classes: ["settings-page"],
+        margin_start: 12,
+        margin_end: 12,
+        margin_top: 32,
+        margin_bottom: 32,
+    })
+    searchResultsPage.append(searchResultsList)
+    searchResultsPage.append(searchResultsEmpty)
+
+    const srClamp = new Adw.Clamp({ maximum_size: 800, tightening_threshold: 600, vexpand: true })
+    srClamp.set_child(searchResultsPage)
+    const srScroll = new Gtk.ScrolledWindow({
+        hscrollbar_policy: Gtk.PolicyType.NEVER,
+        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+        hexpand: true,
+        vexpand: true,
+        css_classes: ["settings-page-scroll"],
+    })
+    srScroll.set_child(srClamp)
+    stack.add_named(srScroll, "search-results")
+
+    const populateResults = (query: string) => {
+        let child = searchResultsList.get_first_child()
+        while (child) { searchResultsList.remove(child); child = searchResultsList.get_first_child() }
+
+        const q = query.toLowerCase().trim()
+        const matches = getSearchIndex().filter(item =>
+            item.label.toLowerCase().includes(q) ||
+            item.subtitle.toLowerCase().includes(q)
+        )
+
+        matches.forEach(item => {
+            const cat = categories.find(c => c.id === item.pageId)
+            const row = new Gtk.Box({
+                spacing: 12,
+                margin_start: 16,
+                margin_end: 16,
+                margin_top: 12,
+                margin_bottom: 12,
+            })
+
+            row.append(new Gtk.Image({
+                icon_name: cat?.icon || "preferences-symbolic",
+                pixel_size: 18,
+                css_classes: ["search-result-page-icon"],
+                opacity: 0.6,
+            }))
+
+            const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true })
+            text.append(new Gtk.Label({ label: item.label, css_classes: ["settings-row-label"], halign: Gtk.Align.START }))
+            if (item.subtitle) {
+                text.append(new Gtk.Label({
+                    label: item.subtitle, css_classes: ["settings-row-subtitle"],
+                    halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 50,
+                }))
+            }
+            row.append(text)
+
+            row.append(new Gtk.Label({ label: item.pageLabel, css_classes: ["search-result-chip"] }))
+            row.append(new Gtk.Image({ icon_name: "go-next-symbolic", pixel_size: 14, opacity: 0.4 }))
+
+            const lbr = new Gtk.ListBoxRow({ css_classes: ["settings-item-row", "search-result-row"] })
+            lbr.set_child(row)
+            ;(lbr as any)._targetPageId = item.pageId
+            searchResultsList.append(lbr)
+        })
+
+        searchResultsList.visible = matches.length > 0
+        searchResultsEmpty.visible = matches.length === 0
+    }
+
+    searchResultsList.connect("row-activated", (_: any, row: any) => {
+        const pageId = (row as any)._targetPageId
+        if (pageId) {
+            searchEntry.text = ""
+            sidebar.invalidate_filter()
+            navigateTo(pageId)
+        }
+    })
 
     // --- Navigation history ---
     const history: string[] = []
@@ -254,28 +356,29 @@ export default function Settings(monitor: Gdk.Monitor) {
         valign: Gtk.Align.CENTER,
     })
 
-    sidebar.set_filter_func((row) => {
-        const query = searchEntry.text.toLowerCase().trim()
-        if (!query) return true
-        const cat = categories.find(c => c.id === row.get_name())
-        return !!cat && cat.label.toLowerCase().includes(query)
-    })
+    let pageBeforeSearch = ""
 
     searchEntry.connect("search-changed", () => {
-        sidebar.invalidate_filter()
-        const query = searchEntry.text.toLowerCase().trim()
-        if (!query) return
-        // Auto-navigate to first visible match (without adding to history)
-        const match = categories.find(c => c.label.toLowerCase().includes(query))
-        if (match) {
-            stack.visible_child_name = match.id
-            syncSidebarSelection(match.id)
+        const query = searchEntry.text.trim()
+        if (query) {
+            if (stack.visible_child_name !== "search-results") {
+                pageBeforeSearch = stack.visible_child_name || categories[0]?.id || ""
+            }
+            populateResults(query)
+            stack.visible_child_name = "search-results"
+            isProgrammaticNav = true
+            sidebar.unselect_all()
+            isProgrammaticNav = false
+        } else {
+            sidebar.invalidate_filter()
+            const target = pageBeforeSearch || categories[0]?.id || ""
+            navigateTo(target, false)
+            pageBeforeSearch = ""
         }
     })
 
     searchEntry.connect("stop-search", () => {
         searchEntry.text = ""
-        sidebar.invalidate_filter()
     })
 
     // Sidebar Toggle Button 📲

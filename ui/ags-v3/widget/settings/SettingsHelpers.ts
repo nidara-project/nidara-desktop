@@ -5,6 +5,22 @@ import { Gtk } from "ags/gtk4"
  * All pages use the same listGroup / createRow / toggleRow / sliderRow / etc.
  */
 
+// ── Search index ──────────────────────────────────────────────────────────────
+export interface SearchItem {
+    pageId: string
+    pageLabel: string
+    label: string
+    subtitle: string
+}
+
+let _searchIndex: SearchItem[] = []
+let _pageCtx = { id: "", label: "" }
+
+export const beginPage = (id: string, label: string) => { _pageCtx = { id, label } }
+export const endPage = () => { _pageCtx = { id: "", label: "" } }
+export const clearSearchIndex = () => { _searchIndex = []; _pageCtx = { id: "", label: "" } }
+export const getSearchIndex = (): SearchItem[] => [..._searchIndex]
+
 // ── Boxed List Group ──────────────────────────────────────────────────────────
 export const listGroup = (title: string) => {
     const box = new Gtk.Box({
@@ -64,6 +80,11 @@ export const createRow = (label: string, subtitle: string, widget: Gtk.Widget) =
 
     box.append(text)
     box.append(widget)
+
+    // Auto-register in search index when inside a page build
+    if (_pageCtx.id) {
+        _searchIndex.push({ pageId: _pageCtx.id, pageLabel: _pageCtx.label, label, subtitle })
+    }
 
     const lbr = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
     lbr.set_child(box)
