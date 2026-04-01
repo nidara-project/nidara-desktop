@@ -183,6 +183,8 @@ sudo meson install -C build
 echo "🖥️ Setting up AGS UI..."
 cd "$INSTALL_DIR/ui/ags-v3" || echo "⚠️ UI Directory not found, skipping npm install."
 npm install
+echo "🎨 Compiling SCSS..."
+npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
 
 # 7. Enable Audio Services
 echo "🔊 Enabling Audio Services..."

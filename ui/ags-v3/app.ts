@@ -19,10 +19,6 @@ import type { Window } from "gi://Gtk?version=4.0"
  */
 try {
   GLib.unsetenv("GTK_THEME")
-  const settings = Gtk.Settings.get_default()
-  if (settings) {
-    settings.gtk_theme_name = "MacTahoe-Dark" // Initial fallback
-  }
   Adw.init()
   Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
 } catch (e) {
@@ -37,7 +33,6 @@ import AppGrid from "./widget/app-grid/AppGrid"
 import Bar from "./widget/bar/Bar"
 import PowerMenu from "./widget/power-menu/PowerMenu"
 import Settings from "./widget/settings/Settings"
-import PrismLab from "./widget/lab/PrismLab"
 import Theme from "./core/ThemeManager"
 
 console.log("[CRYSTAL_SHELL] Calling app.start()...");
@@ -60,7 +55,6 @@ app.start({
     const appLauncherWindows: any[] = []
     const powerWindows: any[] = []
     const settingsWindows: any[] = []
-    const labWindows: any[] = []
 
     const initWinGlobal = (ctor: any, mon: Gdk.Monitor, array: any[]) => {
       try {
@@ -103,7 +97,6 @@ app.start({
 
         initWinGlobal(PowerMenu, monitor, powerWindows)
         // Settings deferred to toggleSettings (Lazy)
-        initWinGlobal(PrismLab, monitor, labWindows)
         initWinGlobal(AppGrid, monitor, appLauncherWindows)
 
       } catch (e) { console.error(`[UI] Error:`, e) }
@@ -143,15 +136,10 @@ app.start({
           try { s.toggle() } catch (e) { console.error(e) }
       })
     }
-    const togglePrismLab = () => {
-      labWindows.forEach(l => { try { l.toggle() } catch (e) { console.error(e) } })
-    }
-
     // Expose Globals
     (globalThis as any).toggleAppGrid = toggleAppGrid;
     (globalThis as any).togglePowerMenu = togglePower;
     (globalThis as any).toggleSettings = toggleSettings;
-    (globalThis as any).togglePrismLab = togglePrismLab;
 
   },
   requestHandler(argv, res) {
@@ -174,8 +162,6 @@ app.start({
         (globalThis as any).togglePowerMenu?.(); break;
       case "toggleSettings":
         (globalThis as any).toggleSettings?.(); break;
-      case "togglePrismLab":
-        (globalThis as any).togglePrismLab?.(); break;
       default:
         console.warn(`[Handler] Unknown command: ${cmd}`)
         return res("unknown command")

@@ -14,7 +14,6 @@ import {
     DEFAULT_CONFIG,
     ACCENT_PALETTE,
     generateTokensCss,
-    generateMasterCss,
     generateTintCss,
     loadConfig as loadFCConfig,
     saveConfig as saveFCConfig,
@@ -23,7 +22,7 @@ import {
 } from "./FluidCrystal"
 
 // ── CONSTANTS ────────────────────────────────────────────────────────
-const DEFAULT_SYSTEM_THEME = "MacTahoe-Dark"
+// No default theme forced — themeFamily is read from system on first run via syncFromSystem()
 
 /**
  * ThemeEngine State Interface
@@ -51,23 +50,20 @@ class ThemeManager extends GObject.Object {
     }
 
     private state: ThemeState = {
-        themeFamily: DEFAULT_SYSTEM_THEME,
-        iconTheme: "MacTahoe",
-        cursorTheme: "macOS",
+        themeFamily: "",   // populated by syncFromSystem() on first run
+        iconTheme: "",     // populated by syncFromSystem() on first run
+        cursorTheme: "",   // populated by syncFromSystem() on first run
         isDark: true
     }
 
     private fcConfig: FluidCrystalConfig = { ...DEFAULT_CONFIG }
     private configPath = `${GLib.get_user_config_dir()}/crystal-shell/theme_settings.json`
-    private lastRegisteredTheme: string = ""
     private _lastTokensCss: string = ""
-    private _lastMasterCss: string = ""
     private _lastTintCss: string = ""
 
     private mainProvider = new Gtk.CssProvider()
     private fontProvider = new Gtk.CssProvider()
     private themeProvider = new Gtk.CssProvider()
-    private masterProvider = new Gtk.CssProvider() 
     private tintProvider = new Gtk.CssProvider()
     private providersLinked = false
 
@@ -324,21 +320,20 @@ class ThemeManager extends GObject.Object {
             const display = Gdk.Display.get_default()
             if (display) {
                 const priority = Gtk.STYLE_PROVIDER_PRIORITY_USER
-                const highPriority = priority + 10 
-                const tokenPriority = priority + 30 // 🚨 ABSOLUTE DOMINANCE FOR DYNAMIC TOKENS
-                
+                const highPriority = priority + 10
+                const tokenPriority = priority + 30
+
                 Gtk.StyleContext.add_provider_for_display(display, this.mainProvider, highPriority)
                 Gtk.StyleContext.add_provider_for_display(display, this.fontProvider, highPriority)
-                Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, tokenPriority) // 💎 TOP PRIORITY
-                Gtk.StyleContext.add_provider_for_display(display, this.masterProvider, priority)
+                Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, tokenPriority)
                 Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, priority)
                 
                 // V921: Environment Isolation (Dev Sandbox)
                 const isDevMode = GLib.getenv("CRYSTAL_DEV_MODE") === "1";
                 const activeDir = GLib.get_current_dir();
-                
+
                 let configPaths: string[] = [];
-                
+
                 if (isDevMode) {
                     console.log("[ThemeManager] 🛠️ DEV MODE DETECTED: Forcing local style.css ONLY.");
                     configPaths = [`${activeDir}/style.css`];
@@ -371,24 +366,6 @@ class ThemeManager extends GObject.Object {
         }
     }
 
-    private registerExternalTheme(themeName: string) {
-        if (this.lastRegisteredTheme === themeName) return
-        this.lastRegisteredTheme = themeName
-        
-        try {
-            const searchPaths = [`/usr/share/themes/${themeName}`, `${GLib.get_home_dir()}/.local/share/themes/${themeName}`, `${GLib.get_home_dir()}/.themes/${themeName}`]
-            for (const base of searchPaths) {
-                const resPath = `${base}/gtk-4.0/gtk.gresource`
-                if (GLib.file_test(resPath, GLib.FileTest.EXISTS)) {
-                    const res = Gio.Resource.load(resPath)
-                    // @ts-ignore
-                    res._register()
-                    break
-                }
-            }
-        } catch (e) { }
-    }
-
     private async clearConfigSymlinks() {
         const dirs = ["gtk-3.0", "gtk-4.0"]
         const list = ["gtk.css", "gtk-dark.css", "_tokens.css", "assets", "windows-assets"]
@@ -401,57 +378,35 @@ class ThemeManager extends GObject.Object {
     }
 
     private async syncGtkTheme() {
-        const theme = this.state.themeFamily || DEFAULT_SYSTEM_THEME
-        this.registerExternalTheme(theme)
-
-        let baseThemeCssPath = ""
-        const search = [`${GLib.get_home_dir()}/.themes/${theme}/gtk-4.0/gtk.css`, `/usr/share/themes/${theme}/gtk-4.0/gtk.css`]
-        for (const p of search) {
-            if (GLib.file_test(p, GLib.FileTest.EXISTS)) {
-                baseThemeCssPath = p
-                break
-            }
-        }
+        const theme = this.state.themeFamily
 
         if (this.isFluidCrystal) {
-            // AGS Styling: Local Process Injection (Isolated from System GTK)
             this.ensureProvidersLinked()
-            
-            // 1. Apply Tokens (Dynamic Colors/Variables)
+
             const tokensCss = generateTokensCss(this.fcConfig)
             if (this._lastTokensCss !== tokensCss) {
                 this.themeProvider.load_from_string(tokensCss)
                 this._lastTokensCss = tokensCss
             }
 
-            // 2. Apply Master CSS (Structural Glass, etc.)
-            const masterCss = generateMasterCss(this.fcConfig, baseThemeCssPath)
-            if (this._lastMasterCss !== masterCss) {
-                this.masterProvider.load_from_string(masterCss)
-                this._lastMasterCss = masterCss
-            }
-
             this.refreshTintCss()
-            GLib.setenv("GTK_THEME", "", true)
+            GLib.unsetenv("GTK_THEME")
         } else {
             await this.clearConfigSymlinks()
             this.themeProvider.load_from_string(generateTokensCss(this.fcConfig))
-            this.masterProvider.load_from_string("")
             this.tintProvider.load_from_string("")
             GLib.unsetenv("GTK_THEME")
         }
 
         try {
-            const current = this.interfaceSettings.get_string("gtk-theme")
-            if (current !== theme) {
-                await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", theme])
-            }
-            this.updateSettingsIni(theme)
-            
-            const settings = Gtk.Settings.get_default()
-            if (settings) {
-                settings.gtk_theme_name = theme
-                // NO MORE gtk_application_prefer_dark_theme here! 🔇
+            if (theme) {
+                const current = this.interfaceSettings.get_string("gtk-theme")
+                if (current !== theme) {
+                    await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "gtk-theme", theme])
+                }
+                this.updateSettingsIni(theme)
+                const settings = Gtk.Settings.get_default()
+                if (settings) settings.gtk_theme_name = theme
             }
             
             // USE Adw.StyleManager exclusively for dark-mode coordination

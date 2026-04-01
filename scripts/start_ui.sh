@@ -25,7 +25,7 @@ export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.
 export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib:${LD_LIBRARY_PATH}"
 
 cd "$AGS_DIR"
-nohup "$AGS_BIN" run --gtk 4 . > /tmp/ags.log 2>&1 &
+nohup "$AGS_BIN" run app.ts > /tmp/ags.log 2>&1 &
 disown
 
 echo "Crystal Shell started. Log: /tmp/ags.log"

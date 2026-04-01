@@ -5,8 +5,15 @@
    ========================================================================== */
 
 // 1. Root Purge
+// NOTA: NO usar "> .background" — ese selector pilla tooltip.background y borra su fondo.
+// Adw.Window tiene nodos: decoration, contents. Esos son los que hay que resetear.
 window#crystal-settings-window {
-    &, & > .background, & > .main-view {
+    background: none;
+    background-color: transparent;
+    box-shadow: none;
+    border: none;
+
+    > decoration, > contents {
         background: none;
         background-color: transparent;
         box-shadow: none;
@@ -25,9 +32,9 @@ window#crystal-settings-window {
 // 3. THE SIDEBAR (full-height capsule, macOS style)
 .crystal-sidebar-capsule {
     background: rgba(0, 0, 0, 0.25);
-    border-radius: $crystal-radius-lg; 
-    border-right: none; 
-    margin: 10px 10px 10px 10px; // El diseño original de cápsula perfecta de nuevo
+    border-radius: $crystal-radius-lg;
+    border-right: none;
+    margin: 5px 0 10px 10px; // top:5px → borde superior del panel alineado con borde superior de los botones cabecera
     min-width: 250px;
 
     // Nuke all Adwaita internal chrome
@@ -65,7 +72,7 @@ window#crystal-settings-window {
 // 4. OVERRIDE LIBADWAITA'S NAVIGATION SIDEBAR
 window.crystal-settings-window list.settings-sidebar.navigation-sidebar {
     background: transparent;
-    padding: 8px;
+    padding: 10px 8px 8px 8px;
     
     & > row {
         background: transparent;
@@ -113,17 +120,12 @@ list row:selected .crystal-sidebar-row {
     }
 }
 
-// 5. HEADER — full width above splitView, compact macOS style
+// 5. HEADER — plain Gtk.Box, we control it completely
 .settings-header {
     background: transparent;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding: 0 6px;
+    padding: 0 10px;
     min-height: 44px;
-
-    & > box {
-        min-height: 44px;
-        padding: 0 2px;
-    }
 }
 
 // Sidebar header spacer — same height as header, with matching border-bottom
@@ -133,61 +135,60 @@ list row:selected .crystal-sidebar-row {
     border-bottom: 1px solid var(--crystal-border);
 }
 
-// Custom close button — circle macOS style (size locked in TSX via width_request/height_request)
-.settings-close-btn {
-    background: #ff5f57;
-    border-radius: 50%;
-    min-width: 14px;
-    min-height: 14px;
-    padding: 0;
-    margin: 0 4px;
+// Crystal icon button — our own circular button, bypasses Adwaita entirely.
+// Equal padding on all sides = button is always square = true circle with border-radius.
+button.crystal-icon-btn {
+    padding: 7px;
+    min-width: 0;
+    min-height: 0;
+    border-radius: 9999px;
     border: none;
     box-shadow: none;
+    background: transparent;
+    background-image: none;
+    // Use color (not opacity) so states don't multiply — opacity would compound with color alpha
+    color: rgba(255, 255, 255, 0.6);
+    outline: none;
 
-    &:hover { background: #ff3b30; }
-    &:active { background: #e0342a; }
+    &:hover {
+        background: rgba(255, 255, 255, 0.1);
+        background-image: none;
+        box-shadow: none;
+        color: rgba(255, 255, 255, 1.0);
+    }
+    &:active {
+        background: rgba(255, 255, 255, 0.16);
+        background-image: none;
+        box-shadow: none;
+    }
+    // Disabled: clearly inactive but still readable — no opacity multiplication
+    &:disabled { color: rgba(255, 255, 255, 0.45); }
+    &:focus-visible { outline: 1px solid rgba(255, 255, 255, 0.3); outline-offset: 1px; }
 }
 
-// Sidebar toggle — circle (size locked in TSX via width_request/height_request)
-.sidebar-toggle {
-    background: rgba(255, 255, 255, 0.08);
-    border-radius: 50%;
-    min-width: 28px;
-    min-height: 28px;
-    padding: 0;
-    border: none;
-    box-shadow: none;
-    color: var(--crystal-text-dim);
-
-    &:hover { background: rgba(255, 255, 255, 0.14); color: var(--crystal-text); }
+// Sidebar toggle — matches nav capsule height (icon 16px + padding 8px*2 + border 1px*2 = 34px)
+button.crystal-icon-btn.sidebar-toggle {
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    &:hover { background: rgba(255, 255, 255, 0.18); }
 }
 
 // Navigation capsule — pill, visually same height as sidebar toggle
 .navigation-capsule {
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 999px;
-    padding: 0 2px;
+    padding: 2px;
     min-height: 28px;
 
-    > button.nav-btn {
-        background: transparent;
-        border-radius: 999px;
-        min-width: 26px;
-        min-height: 26px;
-        padding: 0;
-        border: none;
-        box-shadow: none;
-        color: var(--crystal-text-dim);
-
-        &:hover { background: rgba(255,255,255,0.1); color: var(--crystal-text); }
-        &:disabled { opacity: 0.3; }
-    }
+    // nav-btn inherits all styling from .crystal-icon-btn
 
     > separator.nav-separator {
-        background: rgba(255, 255, 255, 0.12);
+        background-color: rgba(255, 255, 255, 0.2);
         min-width: 1px;
-        margin: 6px 0;
+        min-height: 1px;
+        margin: 5px 1px;
     }
 }
 
@@ -279,15 +280,6 @@ button.accent-circle-btn {
     }
 }
 
-// Tooltips
-tooltip {
-    background: rgba(30, 30, 35, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 8px;
-    padding: 4px 8px;
-    color: rgba(255, 255, 255, 0.9);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
-}
 
 // 9. Nav buttons — styled via .navigation-capsule and .sidebar-toggle above
 
@@ -375,18 +367,11 @@ window.crystal-settings-window list.settings-list-box {
 // ═══════════════════════════════════════════════════════════════════════
 
 window.crystal-settings-window {
-    // Root ToolbarView transparent
-    toolbarview {
-        background: transparent;
-        & > toolbarview, & > stack, & > box, & > bin {
-            background: transparent;
-        }
-    }
-
     #settings-splitview, .crystal-split-view {
         background-color: transparent;
 
-        & stack, & bin, & box, & viewport, & navigationview {
+        & stack, & bin, & viewport, & navigationview,
+        & box:not(.navigation-capsule):not(.header-start-box) {
             background-color: transparent;
             border: none;
             box-shadow: none;
@@ -433,3 +418,4 @@ window.crystal-settings-window {
 .search-result-page-icon {
     -gtk-icon-size: 18px;
 }
+

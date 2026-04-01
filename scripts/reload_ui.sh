@@ -38,7 +38,7 @@ if [ -f "$HOME/.local/bin/ags" ]; then
     AGS_BIN="$HOME/.local/bin/ags"
 fi
 
-nohup "$AGS_BIN" run --gtk 4 . > /tmp/ags.log 2>&1 &
+nohup "$AGS_BIN" run app.ts > /tmp/ags.log 2>&1 &
 disown
 
 echo "✅ Sistema Zenith estable."

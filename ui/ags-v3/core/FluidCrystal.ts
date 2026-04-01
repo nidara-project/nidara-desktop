@@ -154,13 +154,6 @@ export function generateTokensCss(config: FluidCrystalConfig): string {
   return generateTokenHeader(config)
 }
 
-export function generateMasterCss(config: FluidCrystalConfig, baseThemeCssPath?: string): string {
-  let css = `/* Fluid Crystal Master */\n`
-  if (baseThemeCssPath) {
-    css += `@import url("file://${baseThemeCssPath}");\n`
-  }
-  return css
-}
 
 export function generateTintCss(config: FluidCrystalConfig): string {
   const accent = ACCENT_PALETTE[config.accent].color
@@ -179,9 +172,6 @@ export function generateTintCss(config: FluidCrystalConfig): string {
   }
   return css
 }
-
-// Internal cache for token generation
-let lastTokens = ""
 
 // generateQtColors removed to simplify and avoid legibility issues.
 // We now rely on Kvantum's native theme variants (KvGnome/KvGnomeDark).
@@ -402,9 +392,6 @@ export function writeQtSettings(config: FluidCrystalConfig, iconTheme?: string):
     console.error(`[FluidCrystal] Failed to write Qt settings: ${e}`)
   }
 }
-
-// Internal cache for master CSS generation
-let lastMaster = ""
 
 const CONFIG_PATH = `${GLib.get_home_dir()}/.config/crystal-shell/fluid-crystal.json`
 

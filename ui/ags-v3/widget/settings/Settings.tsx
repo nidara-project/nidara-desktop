@@ -20,17 +20,24 @@ export default function Settings(monitor: Gdk.Monitor) {
     clearSearchIndex()
 
     // --- Navigation Controls (Tahoe Style) --- 🧭
+    // NOTE: Adw.HeaderBar allocates its full height (44px) to packed children unless
+    // the button itself declares valign:CENTER. Use child Gtk.Image with explicit pixel_size
+    // to control content size independently of GTK's default icon sizing.
     const backBtn = new Gtk.Button({
-        icon_name: "go-previous-symbolic",
-        css_classes: ["nav-btn", "flat"],
+        child: new Gtk.Image({ icon_name: "go-previous-symbolic", pixel_size: 14 }),
+        css_classes: ["crystal-icon-btn", "nav-btn"],
         tooltip_text: "Atrás",
         sensitive: false,
+        valign: Gtk.Align.CENTER,
+        halign: Gtk.Align.CENTER,
     })
     const forwardBtn = new Gtk.Button({
-        icon_name: "go-next-symbolic",
-        css_classes: ["nav-btn", "flat"],
+        child: new Gtk.Image({ icon_name: "go-next-symbolic", pixel_size: 14 }),
+        css_classes: ["crystal-icon-btn", "nav-btn"],
         tooltip_text: "Adelante",
         sensitive: false,
+        valign: Gtk.Align.CENTER,
+        halign: Gtk.Align.CENTER,
     })
 
     // Navigation Capsule 💊 (True Pill Shape via CSS)
@@ -74,10 +81,6 @@ export default function Settings(monitor: Gdk.Monitor) {
     const stack = new Adw.ViewStack({
         hexpand: true,
         vexpand: true,
-        margin_start: 8,
-        margin_end: 8, 
-        margin_top: 8,
-        margin_bottom: 8, 
     })
 
     categories.forEach(cat => {
@@ -313,28 +316,6 @@ export default function Settings(monitor: Gdk.Monitor) {
     sidebarScroll.set_name("crystal-settings-sidebar-scroll")
 
 
-    // Content column: stack directly, full width
-    const contentBox = new Gtk.Box({ hexpand: true, vexpand: true })
-    contentBox.append(stack)
-
-    // Main Responsive Overlay Split View 🏔️
-    const splitView = new Adw.OverlaySplitView({
-        name: "settings-splitview",
-        sidebar: sidebarScroll,
-        content: contentBox,
-        hexpand: true,
-        vexpand: true,
-        min_sidebar_width: 250,
-        max_sidebar_width: 250,
-        css_classes: ["crystal-split-view", "glass"]
-    })
-
-    // DESACTIVAR SEPARADOR VERTICAL (Tahoe Clean Look)
-    try {
-        // @ts-ignore
-        if (splitView.set_show_sidebar_separator) splitView.set_show_sidebar_separator(false)
-    } catch (e) {}
-
     // Search Component 🔍
     const searchEntry = new Gtk.SearchEntry({
         placeholder_text: "Buscar ajustes...",
@@ -371,44 +352,71 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     // Sidebar Toggle Button 📲
     const sidebarToggle = new Gtk.Button({
-        icon_name: "view-sidebar-symbolic",
-        css_classes: ["sidebar-toggle"],
+        child: new Gtk.Image({ icon_name: "view-sidebar-symbolic", pixel_size: 16 }),
+        css_classes: ["crystal-icon-btn", "sidebar-toggle"],
         tooltip_text: "Menú",
         valign: Gtk.Align.CENTER,
-        width_request: 28,
-        height_request: 28,
-    })
-    sidebarToggle.connect("clicked", () => {
-        splitView.set_show_sidebar(!splitView.show_sidebar)
+        halign: Gtk.Align.CENTER,
     })
 
-    // Header Assembly
-    const headerStart = new Gtk.Box({ 
-        spacing: 12, 
+    // Header Assembly — plain Gtk.Box, we own this completely (no Adw.HeaderBar quirks)
+    const headerStart = new Gtk.Box({
+        spacing: 8,
         valign: Gtk.Align.CENTER,
-        css_classes: ["header-start-box"] 
+        css_classes: ["header-start-box"]
     })
     headerStart.append(sidebarToggle)
     headerStart.append(navCapsule)
 
-    // Custom close button — size locked via width_request/height_request (GTK CSS no tiene max-width)
     const closeBtn = new Gtk.Button({
-        css_classes: ["settings-close-btn"],
+        child: new Gtk.Image({ icon_name: "window-close-symbolic", pixel_size: 14 }),
+        css_classes: ["crystal-icon-btn"],
         tooltip_text: "Cerrar",
         valign: Gtk.Align.CENTER,
-        width_request: 14,
-        height_request: 14,
+        halign: Gtk.Align.CENTER,
     })
     closeBtn.connect("clicked", () => win.set_visible(false))
 
-    const header = new Adw.HeaderBar({
-        show_end_title_buttons: false,
-        show_start_title_buttons: false,
+    // Pure Gtk.Box header — no Adw.HeaderBar, no automatic height allocation to children
+    const contentHeader = new Gtk.Box({
+        orientation: Gtk.Orientation.HORIZONTAL,
+        spacing: 8,
         css_classes: ["settings-header"],
     })
-    header.set_title_widget(searchEntry)
-    header.pack_start(headerStart)
-    header.pack_end(closeBtn)
+    contentHeader.append(headerStart)
+    contentHeader.append(searchEntry)   // hexpand:true → takes remaining space
+    contentHeader.append(closeBtn)
+
+    // Content column: header on top, stack below
+    const contentColumn = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        hexpand: true,
+        vexpand: true,
+    })
+    contentColumn.append(contentHeader)
+    contentColumn.append(stack)
+
+    // Main Responsive Overlay Split View 🏔️
+    const splitView = new Adw.OverlaySplitView({
+        name: "settings-splitview",
+        sidebar: sidebarScroll,
+        content: contentColumn,
+        hexpand: true,
+        vexpand: true,
+        min_sidebar_width: 250,
+        max_sidebar_width: 250,
+        css_classes: ["crystal-split-view", "glass"]
+    })
+
+    sidebarToggle.connect("clicked", () => {
+        splitView.set_show_sidebar(!splitView.show_sidebar)
+    })
+
+    // DESACTIVAR SEPARADOR VERTICAL (Tahoe Clean Look)
+    try {
+        // @ts-ignore
+        if (splitView.set_show_sidebar_separator) splitView.set_show_sidebar_separator(false)
+    } catch (e) {}
 
     // 💎 NATIVE RESPONSIVE BREAKPOINT 💎
     const breakpoint = new Adw.Breakpoint({
@@ -417,18 +425,9 @@ export default function Settings(monitor: Gdk.Monitor) {
     breakpoint.add_setter(splitView, "collapsed", true)
     win.add_breakpoint(breakpoint)
 
-    // Root ToolbarView: header spans full width above sidebar+content
-    const rootView = new Adw.ToolbarView({
-        top_bar_style: Adw.ToolbarStyle.FLAT,
-        hexpand: true,
-        vexpand: true,
-    })
-    rootView.add_top_bar(header)
-    rootView.set_content(splitView)
-
     const mainContainer = new Gtk.Box({ css_classes: ["settings-main-glass"] })
     mainContainer.set_name("settings-main-glass")
-    mainContainer.append(rootView)
+    mainContainer.append(splitView)
     win.set_content(mainContainer)
 
     // Restaura la selección tras colapso/expansión del SplitView
