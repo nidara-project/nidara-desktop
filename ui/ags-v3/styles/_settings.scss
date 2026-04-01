@@ -64,7 +64,7 @@ window#crystal-settings-window {
     }
 
     &:hover {
-        background: rgba(255, 255, 255, 0.07);
+        background: var(--crystal-surface-back);
         color: var(--crystal-text);
     }
 }
@@ -85,7 +85,7 @@ window.crystal-settings-window list.settings-sidebar.navigation-sidebar {
         box-shadow: none;
         
         &:hover {
-            background-color: rgba(255, 255, 255, 0.05);
+            background-color: var(--crystal-surface-back);
         }
         
         // Selected state - Accent colored pill overriding Libadwaita legally
@@ -123,7 +123,7 @@ list row:selected .crystal-sidebar-row {
 // 5. HEADER — plain Gtk.Box, we control it completely
 .settings-header {
     background: transparent;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--crystal-border);
     padding: 0 10px;
     min-height: 44px;
 }
@@ -147,37 +147,37 @@ button.crystal-icon-btn {
     background: transparent;
     background-image: none;
     // Use color (not opacity) so states don't multiply — opacity would compound with color alpha
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--crystal-text-dim);
     outline: none;
 
     &:hover {
-        background: rgba(255, 255, 255, 0.1);
+        background: var(--crystal-surface);
         background-image: none;
         box-shadow: none;
-        color: rgba(255, 255, 255, 1.0);
+        color: var(--crystal-text);
     }
     &:active {
-        background: rgba(255, 255, 255, 0.16);
+        background: var(--crystal-surface-active);
         background-image: none;
         box-shadow: none;
     }
     // Disabled: clearly inactive but still readable — no opacity multiplication
-    &:disabled { color: rgba(255, 255, 255, 0.45); }
-    &:focus-visible { outline: 1px solid rgba(255, 255, 255, 0.3); outline-offset: 1px; }
+    &:disabled { color: var(--crystal-text-disabled); }
+    &:focus-visible { outline: 1px solid var(--crystal-text-disabled); outline-offset: 1px; }
 }
 
 // Sidebar toggle — matches nav capsule height (icon 16px + padding 8px*2 + border 1px*2 = 34px)
 button.crystal-icon-btn.sidebar-toggle {
     padding: 8px;
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    &:hover { background: rgba(255, 255, 255, 0.18); }
+    background: var(--crystal-surface);
+    border: 1px solid var(--crystal-border);
+    &:hover { background: var(--crystal-surface-hover); }
 }
 
 // Navigation capsule — pill, visually same height as sidebar toggle
 .navigation-capsule {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: var(--crystal-surface);
+    border: 1px solid var(--crystal-border);
     border-radius: 999px;
     padding: 2px;
     min-height: 28px;
@@ -185,7 +185,7 @@ button.crystal-icon-btn.sidebar-toggle {
     // nav-btn inherits all styling from .crystal-icon-btn
 
     > separator.nav-separator {
-        background-color: rgba(255, 255, 255, 0.2);
+        background-color: var(--crystal-border);
         min-width: 1px;
         min-height: 1px;
         margin: 5px 1px;
@@ -220,10 +220,10 @@ stack.settings-stack {
             border-radius: 999px;
         }
         > trough > slider {
-            background: rgba(255, 255, 255, 0.18);
+            background: var(--crystal-surface-active);
             border-radius: 999px;
             min-width: 5px;
-            &:hover { background: rgba(255, 255, 255, 0.3); }
+            &:hover { background: var(--crystal-surface-raised); }
         }
     }
 }
@@ -256,8 +256,8 @@ button.accent-circle-btn {
 
 // 8. Search entry
 .settings-search {
-    background: rgba(255, 255, 255, 0.07);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--crystal-surface-back);
+    border: 1px solid var(--crystal-border);
     border-radius: 999px;
     padding: 0 12px;
     min-height: 30px;
@@ -265,7 +265,7 @@ button.accent-circle-btn {
     box-shadow: none;
 
     &:focus, &:focus-within {
-        border-color: rgba(255, 255, 255, 0.22);
+        border-color: var(--crystal-surface-raised);
         box-shadow: none;
         outline: none;
     }
@@ -321,7 +321,7 @@ window.crystal-settings-window preferencespage preferencesgroup list.boxed-list,
 window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box,
 window.crystal-settings-window list.boxed-list,
 window.crystal-settings-window list.settings-list-box {
-    background-color: rgba(255, 255, 255, 0.04);
+    background-color: var(--crystal-surface-back);
     border: 1px solid var(--crystal-border);
     border-radius: $crystal-radius-md;
     padding: 2px;
@@ -338,7 +338,7 @@ window.crystal-settings-window list.settings-list-box {
         box-shadow: none;
 
         &:hover {
-            background-color: rgba(255, 255, 255, 0.05);
+            background-color: var(--crystal-surface-back);
         }
 
         & + row {
@@ -401,7 +401,7 @@ window.crystal-settings-window {
 // ── Search Results ────────────────────────────────────────────────────────────
 .search-results-list {
     .search-result-row {
-        &:hover { background: rgba(255,255,255,0.04); }
+        &:hover { background: var(--crystal-surface-back); }
     }
 }
 
@@ -409,7 +409,7 @@ window.crystal-settings-window {
     font-size: 0.75em;
     font-weight: 500;
     color: var(--crystal-accent, rgba(255,255,255,0.5));
-    background: rgba(255,255,255,0.07);
+    background: var(--crystal-surface-back);
     border-radius: 100px;
     padding: 2px 10px;
     margin-left: 4px;

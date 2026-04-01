@@ -134,13 +134,13 @@ window.nc-window-2 {
     padding: 2px;
     min-width: 18px;
     min-height: 18px;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--crystal-surface-back);
     border-radius: 6px;
-    color: rgba(255, 255, 255, 0.4);
-    
+    color: var(--crystal-text-disabled);
+
     &:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: white;
+        background: var(--crystal-surface);
+        color: var(--crystal-text);
     }
     
     image { margin: 0; }
@@ -155,8 +155,8 @@ window.nc-window-2 {
 }
 
 .nc-badge-header {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.6);
+    background: var(--crystal-surface);
+    color: var(--crystal-text-dim);
     font-size: 10px;
     font-weight: 800;
     padding: 1px 6px;
@@ -174,23 +174,23 @@ window.nc-window-2 {
 .nc-group-header-name {
     font-size: 0.8em;
     font-weight: 800;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--crystal-text-disabled);
 }
 
 .nc-group-collapse-btn {
     padding: 0;
     min-width: 28px;
     min-height: 28px;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background: var(--crystal-surface);
+    border: 1px solid var(--crystal-border);
     border-radius: 99px;
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--crystal-text-dim);
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    
+
     &:hover {
-        background: rgba(255, 255, 255, 0.15);
-        border-color: rgba(255, 255, 255, 0.1);
-        color: white;
+        background: var(--crystal-surface-hover);
+        border-color: var(--crystal-border);
+        color: var(--crystal-text);
         transform: scale(1.05) translateY(-1px);
     }
     
@@ -216,16 +216,16 @@ window.nc-window-2 {
 }
 
 .nc-item-expand-btn, .nc-item-clear-btn {
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--crystal-surface);
     border-radius: 20px;
     padding: 6px;
     min-width: 32px;
     min-height: 32px;
     transition: all 0.2s ease;
-    
-    &:hover { 
-        background: rgba(255, 255, 255, 0.15); 
-        color: white;
+
+    &:hover {
+        background: var(--crystal-surface-hover);
+        color: var(--crystal-text);
     }
 }
 
@@ -236,7 +236,7 @@ window.nc-window-2 {
 .nc-item-time {
     font-size: 0.75rem;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.65);
+    color: var(--crystal-text-dim);
 }
 
 .notif-app-icon,
@@ -254,7 +254,7 @@ window.nc-window-2 {
 .nc-empty {
     font-size: 1.1em;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.2);
+    color: var(--crystal-text-disabled);
 }
 
 .nc-clear-all-pill {
@@ -264,11 +264,11 @@ window.nc-window-2 {
     label {
         font-size: 0.85em;
         font-weight: 700;
-        color: rgba(255, 255, 255, 0.75);
+        color: var(--crystal-text-dim);
     }
-    
+
     &:hover {
-        label { color: white; }
+        label { color: var(--crystal-text); }
     }
 }
 
@@ -285,13 +285,13 @@ scrollbar.nc-transparent-scroll {
     & slider {
         min-width: 3px;
         min-height: 20px;
-        background: rgba(255, 255, 255, 0.12);
+        background: var(--crystal-surface);
         border-radius: 20px;
         margin-right: 2px;
         transition: all 0.3s ease;
-        
+
         &:hover {
-            background: rgba(255, 255, 255, 0.3);
+            background: var(--crystal-surface-raised);
             min-width: 6px;
         }
     }

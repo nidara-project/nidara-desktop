@@ -1,15 +1,13 @@
 import { Gtk } from "ags/gtk4"
+import { execAsync } from "ags/process"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalNotifd from "gi://AstalNotifd"
 import { AtomicWidget, WidgetSize } from "./Types"
 
-/**
- * Creates a standard 2x1 Capsule button layout (like Wi-Fi and DnD)
- */
 function createCapsuleButton(
     id: string,
     name: string,
-    iconSignal: { connect: (signal: string, callback: () => void) => number, disconnect?: (id: number) => void },
+    iconSignal: { connect: (signal: string, callback: () => void) => number },
     getIconName: () => string,
     getTitle: () => string,
     getSubTitle: () => string,
@@ -25,7 +23,7 @@ function createCapsuleButton(
         orientation: Gtk.Orientation.HORIZONTAL,
         spacing: 12,
         halign: Gtk.Align.START, valign: Gtk.Align.CENTER,
-        margin_start: 4 // Exactly 4px to align with the 48x48 RoundToggles (which have 4px centering margin)
+        margin_start: 4
     })
 
     const iconBox = new Gtk.Box({
@@ -34,12 +32,11 @@ function createCapsuleButton(
         width_request: 48, height_request: 48
     })
 
-    // The issue with bleeding icons is sometimes Gtk.Image expands. Setting halign/valign CENTER fixes it.
     const icon = new Gtk.Image({
         icon_name: getIconName(),
-        pixel_size: 28, // Using 28px for uniformity
+        pixel_size: 28,
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        hexpand: true, vexpand: true // Forces the image to sit mathematically within the 48x48 box
+        hexpand: true, vexpand: true
     })
     iconBox.append(icon)
 
@@ -61,30 +58,23 @@ function createCapsuleButton(
 
     textStack.append(label)
     textStack.append(subLabel)
-
     box.append(iconBox)
     box.append(textStack)
-
     btn.set_child(box)
     btn.connect("clicked", onClick)
 
     const update = () => {
         icon.icon_name = getIconName()
         label.label = getTitle()
-
         const sub = getSubTitle()
         subLabel.label = sub
         subLabel.visible = sub.length > 0
     }
 
-    if (iconSignal) {
-        // Just bind to the update function
-        if (typeof (iconSignal as any).connect === "function") {
-            // we re-run update on commonly changed properties
-            iconSignal.connect("notify", update)
-        }
+    if (iconSignal && typeof (iconSignal as any).connect === "function") {
+        iconSignal.connect("notify", update)
     }
-    update() // Init
+    update()
 
     return { id, name, size: WidgetSize.WIDE, child: btn }
 }
@@ -97,25 +87,52 @@ export function WifiWidget(): AtomicWidget {
         "wifi",
         "Wi-Fi",
         wifi as any,
-        () => wifi ? wifi.icon_name || "network-wireless-offline-symbolic" : "network-wireless-offline-symbolic",
+        () => wifi?.icon_name || "network-wireless-offline-symbolic",
         () => "Wi-Fi",
-        () => wifi ? (wifi.ssid || "Connected") : "Disconnected",
         () => {
-            // Wifi toggle logic here
+            if (!wifi) return "Off"
+            return (wifi as any).ssid || ((wifi as any).enabled === false ? "Off" : "Connected")
+        },
+        () => {
+            execAsync(["bash", "-c",
+                "nmcli radio wifi | grep -q enabled && nmcli radio wifi off || nmcli radio wifi on"
+            ]).catch(() => {})
         }
     )
 }
 
-export function RoundToggle(id: string, name: string, iconName: string, active: boolean, onClick: () => void): AtomicWidget {
+/**
+ * Round toggle button with reactive active state.
+ * `active` and `iconName` can be a static value or a getter function —
+ * if a getter is passed, the visual state updates on every click.
+ */
+export function RoundToggle(
+    id: string,
+    name: string,
+    iconName: string | (() => string),
+    active: boolean | (() => boolean),
+    onClick: () => void
+): AtomicWidget {
+    const getActive = typeof active === "function" ? active : () => active as boolean
+    const getIcon = typeof iconName === "function" ? iconName : () => iconName as string
+
+    const syncClasses = () => {
+        btn.set_css_classes(getActive() ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"])
+        icon.icon_name = getIcon()
+    }
+
     const btn = new Gtk.Button({
-        css_classes: ["cc-atomic-round-btn", active ? "active" : ""],
+        css_classes: getActive() ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         hexpand: true, vexpand: true,
         width_request: 48, height_request: 48
     })
-    const icon = new Gtk.Image({ icon_name: iconName, pixel_size: 28 })
+    const icon = new Gtk.Image({ icon_name: getIcon(), pixel_size: 28 })
     btn.set_child(icon)
-    btn.connect("clicked", onClick)
+    btn.connect("clicked", () => {
+        onClick()
+        syncClasses()
+    })
 
     return { id, name, size: WidgetSize.SINGLE, child: btn }
 }
@@ -129,9 +146,7 @@ export function FocusWidget(): AtomicWidget {
         notifd as any,
         () => notifd?.dont_disturb ? "notifications-disabled-symbolic" : "notifications-symbolic",
         () => notifd?.dont_disturb ? "DnD On" : "DnD",
-        () => "", // No subtitle for Focus usually, or we can use state
-        () => {
-            if (notifd) notifd.dont_disturb = !notifd.dont_disturb
-        }
+        () => notifd?.dont_disturb ? "Modo silencio" : "",
+        () => { if (notifd) notifd.dont_disturb = !notifd.dont_disturb }
     )
 }

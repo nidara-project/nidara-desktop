@@ -16,10 +16,11 @@
     /* --- Surface & Backgrounds --- */
     --crystal-bg: rgba(30, 30, 30, 0.5);
     --crystal-bg-backdrop: rgba(30, 30, 30, 0.4);
+    --crystal-surface-back: rgba(255, 255, 255, 0.04);   /* very subtle bg */
     --crystal-surface: rgba(255, 255, 255, 0.08);
-    --crystal-surface-back: rgba(255, 255, 255, 0.04);
     --crystal-surface-hover: rgba(255, 255, 255, 0.12);
     --crystal-surface-active: rgba(255, 255, 255, 0.16);
+    --crystal-surface-raised: rgba(255, 255, 255, 0.20); /* workspace dots, more visible elements */
 
     /* --- Typography ---
        FluidCrystal.ts overrides these at runtime with dark/light-aware values.

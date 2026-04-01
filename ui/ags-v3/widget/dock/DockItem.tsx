@@ -13,6 +13,7 @@ import appService from "../../core/AppService" // Ensure import path is correct 
 import { DOCK_CONSTANTS } from "./DockPhysics"
 
 import { dragBus, mouseBus, dockSettings, changeMenuCount, menuState } from "./state"
+import Theme from "../../core/ThemeManager"
 
 const hypr = AstalHyprland.get_default()
 
@@ -350,14 +351,16 @@ export function DockItem(
             const cy = h / 2
             const r = DOT_SIZE / 2
 
-            // 1. Subtle shadow halo (macOS depth effect)
+            const c = Theme.isDark ? 1 : 0 // white in dark mode, black in light mode
+
+            // 1. Subtle shadow halo (depth effect)
             cr.arc(cx, cy + 0.5, r + 0.3, 0, Math.PI * 2)
-            cr.setSourceRGBA(0, 0, 0, 0.25)
+            cr.setSourceRGBA(c, c, c, 0.15)
             cr.fill()
 
             // 2. Crisp main dot
             cr.arc(cx, cy, r, 0, Math.PI * 2)
-            cr.setSourceRGBA(0, 0, 0, 0.9)
+            cr.setSourceRGBA(c, c, c, 0.9)
             cr.fill()
         })
     const indicator = new Gtk.Box({

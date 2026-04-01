@@ -133,7 +133,7 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
     transition: all 0.2s ease;
 
     &.open, &.focused {
-        background-color: rgba(0, 0, 0, 1);
+        background-color: var(--crystal-text);
         box-shadow: none;
         border: none;
         opacity: 1;
@@ -145,7 +145,7 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
 /* --- Separator - macOS Tahoe: dark hairline --- */
 #crystal-dock .cd-separator {
     min-width: 1px;
-    background-color: rgba(0, 0, 0, 0.35);
+    background-color: var(--crystal-text-disabled);
     margin: 0;
     box-shadow: none;
     border-radius: 0px;
@@ -162,6 +162,6 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
 
 /* --- Launcher Icon Visibility --- */
 #cd-icon-box-launcher image {
-    color: #ffffff;
+    color: var(--crystal-text);
     -gtk-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
 }

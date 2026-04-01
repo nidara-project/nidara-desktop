@@ -40,11 +40,9 @@
     padding: 0;
     margin: 0;
 
-    /* Universal high-contrast shadow for all text and icons */
     label,
     image {
         color: var(--crystal-text);
-        text-shadow: var(--crystal-shadow-md);
     }
 }
 
@@ -84,7 +82,7 @@
     min-width: 6px;
     min-height: 6px;
     border-radius: 50%;
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: var(--crystal-surface-raised);
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     margin: 0;
@@ -102,7 +100,7 @@
 }
 
 .workspace-dot.empty {
-    background-color: rgba(255, 255, 255, 0.15);
+    background-color: var(--crystal-surface-hover);
 }
 
 /* --- Resource Circles (Cairo) --- */
@@ -115,22 +113,12 @@
     /* Background circle logic handled in Cairo, but we can set opacity here */
 }
 
-/* Universal high-contrast shadow for all text and icons in the whole bar */
-window.crystal-bar {
-    label {
-        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7), 0 0 10px rgba(0, 0, 0, 0.2);
-    }
-
-    image {
-        filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.7));
-    }
-}
 
 .resource-label,
 .resource-icon {
     font-size: 10px;
     font-weight: 900;
-    color: white;
+    color: var(--crystal-text);
     margin-bottom: 0px;
 }
 
@@ -139,12 +127,12 @@ window.crystal-bar {
     /* Inherited from universal rule above */
 }
 
-/* Ensure all symbolic icons in the bar are white */
+/* Ensure all symbolic icons in the bar use adaptive text color */
 .bar-right image,
 .bar-left image,
 .bar-center image {
     -gtk-icon-palette: success white, warning white, error white;
-    color: white;
+    color: var(--crystal-text);
 }
 
 /* Specific styling for the Control Center pill icon */
@@ -157,8 +145,8 @@ window.crystal-bar {
 
 .bar-app-sep,
 .bar-time-sep {
-    background: rgba(255, 255, 255, 0.3);
-    /* Stronger separators */
+    background: var(--crystal-text-disabled);
+    /* Adaptive separators */
     min-width: 1px;
     margin: 0 4px;
     box-shadow: 1px 0 2px rgba(0, 0, 0, 0.5);

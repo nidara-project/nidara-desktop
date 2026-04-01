@@ -10,6 +10,7 @@ import { WifiWidget, RoundToggle, FocusWidget } from "./Toggles"
 import { SliderWidget } from "./Sliders"
 import { MediaIslandContent } from "./MediaIsland"
 import status from "../../core/Status"
+import Theme from "../../core/ThemeManager"
 
 import { AtomicWidget, WidgetSize } from "./Types"
 
@@ -49,7 +50,7 @@ export function getWidgetById(id: string): AtomicWidget | null {
             wifi: () => WifiWidget(),
             focus: () => FocusWidget(),
             airdrop: () => RoundToggle("airdrop", "AirDrop", "network-transmit-receive-symbolic", true, () => { }),
-            bt: () => RoundToggle("bt", "BT", "bluetooth-active-symbolic", btSvc?.is_powered || false, () => {
+            bt: () => RoundToggle("bt", "BT", "bluetooth-active-symbolic", () => btSvc?.is_powered || false, () => {
                 if (btSvc) btSvc.is_powered = !btSvc.is_powered
             }),
             brightness: () => SliderWidget("brightness", "Brightness", "display-brightness-symbolic", "Display", 70, (v) => {
@@ -58,7 +59,11 @@ export function getWidgetById(id: string): AtomicWidget | null {
             volume: () => SliderWidget("volume", "Volume", "audio-volume-high-symbolic", "Sound", 50, (v) => {
                 execAsync(`wpctl set-volume @DEFAULT_AUDIO_SINK@ ${v.toFixed(2)}`).catch(() => { })
             }),
-            dark_mode: () => RoundToggle("dark-mode", "Appearance", "night-light-symbolic", true, () => { }),
+            dark_mode: () => RoundToggle("dark-mode", "Appearance",
+                () => Theme.isDark ? "weather-clear-night-symbolic" : "weather-clear-symbolic",
+                () => Theme.isDark,
+                () => Theme.setDarkMode(!Theme.isDark)
+            ),
             calculator: () => RoundToggle("calc", "Calculator", "accessories-calculator-symbolic", false, () => { execAsync("gnome-calculator").catch(() => { }) }),
             timer: () => RoundToggle("timer", "Timer", "alarm-symbolic", false, () => { }),
             camera: () => RoundToggle("camera", "Camera", "camera-photo-symbolic", false, () => { })

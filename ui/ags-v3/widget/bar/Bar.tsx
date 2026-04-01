@@ -29,7 +29,7 @@ function AppMenu() {
     if (file && (file.startsWith("/") || file.includes("logo"))) return new Gtk.Image({ file: file, pixel_size: 16 })
     return new Gtk.Image({ icon_name: res || name, pixel_size: 16 })
   }
-  const distroIcon = getIcon(`${GLib.get_home_dir()}/.config/crystal-shell/ui/ags-v3/assets/logos/arch-white.svg`)
+  const distroIcon = new Gtk.Image({ icon_name: "start-here-symbolic", pixel_size: 16, css_classes: ["bar-distro-icon"] })
   const appName = new Gtk.Label({ label: "Finder", css_classes: ["bar-app-name"] })
 
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
@@ -150,9 +150,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   
   syncOverlays()
 
-  const left = new Gtk.Box({ halign: Gtk.Align.START, spacing: 8 }); left.append(AppMenu())
-  const center = new Gtk.Box({ halign: Gtk.Align.CENTER }); center.append(Workspaces())
-  const right = new Gtk.Box({ halign: Gtk.Align.END, spacing: 10 }) // 💎 PURE AIR: Slightly more spacing
+  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, spacing: 8 }); left.append(AppMenu())
+  const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER }); center.append(Workspaces())
+  const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 10 })
 
   const timeContent = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16 })
   const timeLabel = new Gtk.Label({ label: "..." })
@@ -161,9 +161,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeContent.append(new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 14 })); timeContent.append(timeLabel)
 
   right.append(SquircleContainer({ child: SystemResources(), gloss: true, alpha: 0.15, perfect: true }))
-  right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: "edit-find-symbolic", pixel_size: 14, margin_start: 16, margin_end: 16 }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, perfect: true }))
-  right.append(SquircleContainer({ child: new Gtk.Image({ file: `${GLib.get_home_dir()}/.config/crystal-shell/ui/ags-v3/assets/logos/cc.svg`, pixel_size: 14, margin_start: 16, margin_end: 16 }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, perfect: true }))
   right.append(SquircleContainer({ child: Tray(), gloss: true, alpha: 0.15, perfect: true }))
+  right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: "edit-find-symbolic", pixel_size: 14, margin_start: 16, margin_end: 16 }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, perfect: true }))
+  right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: "open-menu-symbolic", pixel_size: 14, margin_start: 16, margin_end: 16 }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, perfect: true }))
   right.append(SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, alpha: 0.15, perfect: true }))
 
   barBox.set_start_widget(left); barBox.set_center_widget(center); barBox.set_end_widget(right)
