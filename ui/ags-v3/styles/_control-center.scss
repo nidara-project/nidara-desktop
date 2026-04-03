@@ -26,6 +26,23 @@ window.nc-window-2 {
 /* --- Island Body --- */
 .cc-island {
     background-color: transparent;
+
+    // Reset Adwaita button defaults inside CC islands
+    button {
+        background: none;
+        background-color: transparent;
+        border: none;
+        box-shadow: none;
+        outline: none;
+    }
+}
+
+.cc-atomic-slider-box-horizontal {
+    background: transparent;
+}
+
+.cc-atomic-scale-native {
+    background: transparent;
 }
 
 /* --- Media Widget --- */
@@ -48,40 +65,40 @@ window.nc-window-2 {
 }
 
 /* --- Connectivity Toggles (Capsule & Round) --- */
+.cc-island {
+    /* Wrapper button for 2x1 capsules */
+    .cc-capsule-btn {
+        background-color: transparent;
+        border-radius: var(--crystal-radius-lg);
+        color: var(--crystal-text);
+        padding: 0;
 
-/* Wrapper button for 2x1 capsules */
-.cc-capsule-btn {
-    background-color: transparent;
-    border: none;
-    border-radius: var(--crystal-radius-lg);
-    color: var(--crystal-text);
-    padding: 0;
+        &:hover {
+            background-color: var(--crystal-surface-hover);
+        }
+    }
 
-    &:hover {
-        background-color: var(--crystal-surface-hover);
+    /* 1x1 Round Toggles */
+    .cc-atomic-round-btn {
+        background-color: var(--crystal-surface);
+        border-radius: 9999px;
+        color: var(--crystal-text);
+
+        &:hover {
+            background-color: var(--crystal-surface-hover);
+        }
+
+        &.active {
+            background-color: var(--crystal-surface-active);
+        }
     }
 }
 
-/* 48x48 Circular Badge inside capsules */
+/* 48x48 Circular Badge inside capsules (no override needed, is a box not a button) */
 .cc-atomic-icon-circle-bg {
     background-color: var(--crystal-surface);
     border-radius: 9999px;
     color: var(--crystal-text);
-}
-
-/* 1x1 Round Toggles */
-.cc-atomic-round-btn {
-    background-color: var(--crystal-surface);
-    border-radius: 9999px;
-    color: var(--crystal-text);
-
-    &:hover {
-        background-color: var(--crystal-surface-hover);
-    }
-
-    &.active {
-        background-color: var(--crystal-surface-active);
-    }
 }
 
 /* --- Typographical Utilities for Toggles --- */

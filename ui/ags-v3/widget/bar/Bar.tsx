@@ -93,6 +93,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   popups.valign = Gtk.Align.START; popups.halign = Gtk.Align.END
 
   cc.margin_top = 48; cc.margin_end = 8
+
+  const CC_WIDTH = 356
+  const centerCCUnderIcon = () => {
+    const alloc = ccBtn.get_allocation()
+    if (alloc.width <= 1) return // not yet laid out
+    const [ok, tx] = ccBtn.translate_coordinates(masterOverlay, 0, 0)
+    if (!ok) return
+    const iconCenter = tx + alloc.width / 2
+    const margin = Math.round(monGeo.width - iconCenter - CC_WIDTH / 2)
+    cc.margin_end = Math.max(8, margin)
+  }
   nc.margin_top = 48; nc.margin_end = 8
   prism.margin_top = 0
   popups.margin_top = 54; popups.margin_end = 12
@@ -139,6 +150,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const syncOverlays = () => {
     const isAnyOpen = status.cc_open || status.nc_open || status.prism_open
     catcher.set_visible(isAnyOpen)
+    if (status.cc_open) centerCCUnderIcon()
     cc.set_visible(status.cc_open); nc.set_visible(status.nc_open); prism.set_visible(status.prism_open)
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })
   }
@@ -163,7 +175,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   right.append(SquircleContainer({ child: SystemResources(), gloss: true, alpha: 0.15, perfect: true }))
   right.append(SquircleContainer({ child: Tray(), gloss: true, alpha: 0.15, perfect: true }))
   right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: "edit-find-symbolic", pixel_size: 14, margin_start: 16, margin_end: 16 }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, perfect: true }))
-  right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: "open-menu-symbolic", pixel_size: 14, margin_start: 16, margin_end: 16 }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, perfect: true }))
+  const ccBtn = SquircleContainer({ child: new Gtk.Image({ icon_name: "open-menu-symbolic", pixel_size: 14, margin_start: 16, margin_end: 16 }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, perfect: true })
+  right.append(ccBtn)
   right.append(SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, alpha: 0.15, perfect: true }))
 
   barBox.set_start_widget(left); barBox.set_center_widget(center); barBox.set_end_widget(right)

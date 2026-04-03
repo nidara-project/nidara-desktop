@@ -36,10 +36,7 @@ export const LAYOUT_CONFIG = [
     { id: "bt", x: 3, y: 1 },
     { id: "dark_mode", x: 2, y: 2 },
     { id: "calculator", x: 3, y: 2 },
-    { id: "brightness", x: 0, y: 3 },
-    { id: "volume", x: 0, y: 4 },
-    { id: "timer", x: 0, y: 5 },
-    { id: "camera", x: 1, y: 5 },
+    { id: "volume", x: 0, y: 3 },
 ]
 
 export function getWidgetById(id: string): AtomicWidget | null {
@@ -53,9 +50,6 @@ export function getWidgetById(id: string): AtomicWidget | null {
             bt: () => RoundToggle("bt", "BT", "bluetooth-active-symbolic", () => btSvc?.is_powered || false, () => {
                 if (btSvc) btSvc.is_powered = !btSvc.is_powered
             }),
-            brightness: () => SliderWidget("brightness", "Brightness", "display-brightness-symbolic", "Display", 70, (v) => {
-                execAsync(`brightnessctl s ${Math.floor(v * 100)}%`).catch(() => { })
-            }),
             volume: () => SliderWidget("volume", "Volume", "audio-volume-high-symbolic", "Sound", 50, (v) => {
                 execAsync(`wpctl set-volume @DEFAULT_AUDIO_SINK@ ${v.toFixed(2)}`).catch(() => { })
             }),
@@ -64,9 +58,7 @@ export function getWidgetById(id: string): AtomicWidget | null {
                 () => Theme.isDark,
                 () => Theme.setDarkMode(!Theme.isDark)
             ),
-            calculator: () => RoundToggle("calc", "Calculator", "accessories-calculator-symbolic", false, () => { execAsync("gnome-calculator").catch(() => { }) }),
-            timer: () => RoundToggle("timer", "Timer", "alarm-symbolic", false, () => { }),
-            camera: () => RoundToggle("camera", "Camera", "camera-photo-symbolic", false, () => { })
+            calculator: () => RoundToggle("calc", "Calculator", "accessories-calculator-symbolic", false, () => { execAsync("gnome-calculator").catch(() => { }) })
         }
         const factory = registry[id]
         return factory ? factory() : null
