@@ -1,5 +1,4 @@
 import { Gtk } from "ags/gtk4"
-import { Shape } from "../common/SquircleContainer"
 
 export enum WidgetSize {
     SINGLE = "1x1",
@@ -11,7 +10,8 @@ export enum WidgetSize {
 
 export interface AtomicWidget {
     id: string
-    size: WidgetSize
-    child: Gtk.Widget
     name: string
+    defaultSize: WidgetSize
+    supportedSizes: WidgetSize[]
+    buildContent: (size: WidgetSize) => Gtk.Widget
 }

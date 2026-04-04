@@ -9,6 +9,7 @@ import AudioPage from "./pages/Audio"
 import DockPage from "./pages/Dock"
 import PowerPage from "./pages/Power"
 import AppearancePage from "./pages/Appearance"
+import ControlCenterPage from "./pages/ControlCenter"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex } from "./SettingsHelpers"
 
 /**
@@ -74,6 +75,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "network", label: "Red", icon: "network-workgroup-symbolic", component: NetworkPage },
         { id: "audio", label: "Sonido", icon: "audio-speakers-symbolic", component: AudioPage },
         { id: "dock", label: "Dock / Panel", icon: "dock-bottom-symbolic", component: DockPage },
+        { id: "controlcenter", label: "Centro de Control", icon: "view-grid-symbolic", component: ControlCenterPage },
         { id: "power", label: "Energía", icon: "power-profile-balanced-symbolic", component: PowerPage },
         { id: "input", label: "Dispositivos", icon: "input-mouse-symbolic", component: null },
     ]

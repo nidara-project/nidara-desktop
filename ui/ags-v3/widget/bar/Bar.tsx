@@ -81,7 +81,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   // 💎 THE CATCHER: Invisible button to close overlays
   const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
-  catcher.connect("clicked", () => { status.cc_open = false; status.nc_open = false; status.prism_open = false })
+  catcher.connect("clicked", () => {
+    if (status.cc_edit_mode) return   // don't close CC while in edit mode
+    status.cc_open = false; status.nc_open = false; status.prism_open = false
+  })
 
   masterOverlay.set_child(barBox)
   masterOverlay.add_overlay(catcher) // 💎 Behind panels, above BarBox base child
@@ -122,8 +125,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       region.unionRectangle({ x: 0, y: 0, width: Math.round(monGeo.width), height: 40 })
 
       const isAnyOpen = status.cc_open || status.nc_open || status.prism_open
-      if (isAnyOpen) {
+      if (isAnyOpen && !status.cc_edit_mode) {
           // 🛰️ SURGICAL: Catcher region (Everything below Bar to catch outside clicks)
+          // In edit mode we skip this so other windows remain interactive
           // @ts-ignore
           region.unionRectangle({ x: 0, y: 40, width: Math.round(monGeo.width), height: Math.round(monGeo.height - 40) })
       }
@@ -149,12 +153,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   const syncOverlays = () => {
     const isAnyOpen = status.cc_open || status.nc_open || status.prism_open
-    catcher.set_visible(isAnyOpen)
+    catcher.set_visible(isAnyOpen && !status.cc_edit_mode)
     if (status.cc_open) centerCCUnderIcon()
     cc.set_visible(status.cc_open); nc.set_visible(status.nc_open); prism.set_visible(status.prism_open)
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays)
+  status.connect("notify::cc-edit-mode", () => {
+    syncOverlays()
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })
+  })
   status.connect("notify::prism-open", () => { 
     syncOverlays() // Call syncOverlays to update visibility and input region
     Gtk4LayerShell.set_keyboard_mode(win, status.prism_open ? Gtk4LayerShell.KeyboardMode.ON_DEMAND : Gtk4LayerShell.KeyboardMode.NONE)

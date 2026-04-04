@@ -16,6 +16,7 @@ export class UIStatus extends GObject.Object {
                 "prism-open": GObject.ParamSpec.boolean("prism-open", "Prism Open", "Prism Search visibility", GObject.ParamFlags.READWRITE, false),
                 "notif-active": GObject.ParamSpec.boolean("notif-active", "Notif Active", "Popups visibility", GObject.ParamFlags.READWRITE, false),
                 "settings-open": GObject.ParamSpec.boolean("settings-open", "Settings Open", "Settings window visibility", GObject.ParamFlags.READWRITE, false),
+                "cc-edit-mode": GObject.ParamSpec.boolean("cc-edit-mode", "CC Edit Mode", "CC edit mode active", GObject.ParamFlags.READWRITE, false),
             },
             Signals: {
                 "toggle-cc": {},
@@ -30,6 +31,7 @@ export class UIStatus extends GObject.Object {
     private _prism_open = false
     private _notif_active = false
     private _settings_open = false
+    private _cc_edit_mode  = false
 
     public get notif_active() { return this._notif_active }
     public set notif_active(v: boolean) {
@@ -86,6 +88,13 @@ export class UIStatus extends GObject.Object {
         if (this._settings_open === v) return
         this._settings_open = v
         this.notify("settings-open")
+    }
+
+    public get cc_edit_mode() { return this._cc_edit_mode }
+    public set cc_edit_mode(v: boolean) {
+        if (this._cc_edit_mode === v) return
+        this._cc_edit_mode = v
+        this.notify("cc-edit-mode")
     }
 
     toggleCC() { this.cc_open = !this.cc_open }

@@ -109,6 +109,14 @@ highlight {
     min-width: 4px;
 }
 
+/* Override #crystal-bar reset (ID specificity 1,0,1) for scale fill highlights.
+   scale highlight = 1,0,2 > 1,0,1, so this wins. */
+#crystal-bar scale highlight,
+#crystal-bar .crystal-scale highlight {
+    background-color: $crystal-accent;
+    background-image: none;
+}
+
 /* --- Global Sidebar System (Tahoe Island) --- */
 .crystal-sidebar-island {
     background: var(--crystal-surface-back);

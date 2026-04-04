@@ -1,64 +1,62 @@
 import { Gtk, Gdk } from "ags/gtk4"
+import GObject from "gi://GObject"
 import AstalBluetooth from "gi://AstalBluetooth"
-import AstalNetwork from "gi://AstalNetwork"
-import AstalNotifd from "gi://AstalNotifd"
-import Gtk4LayerShell from "gi://Gtk4LayerShell"
-import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import BaseIsland from "./BaseIsland"
-import { WifiWidget, RoundToggle, FocusWidget } from "./Toggles"
-import { SliderWidget } from "./Sliders"
+import { WifiWidget, EthernetWidget, RoundToggle, FocusWidget } from "./Toggles"
+import { VolumeWidget } from "./Sliders"
 import { MediaIslandContent } from "./MediaIsland"
-import status from "../../core/Status"
 import Theme from "../../core/ThemeManager"
-
+import ccLayout, { UNIT, GAP, GRID_COLS, GRID_WIDTH, GRID_HEIGHT, SIZE_MAP } from "./CCLayoutManager"
 import { AtomicWidget, WidgetSize } from "./Types"
+import status from "../../core/Status"
 
-/**
- * Grid Constants (The "Source of Truth" for spacing and sizing) 📐
- */
-export const UNIT = 80
-export const GAP = 12
+const pixelX = (gx: number) => gx * (UNIT + GAP)
+const pixelY = (gy: number) => gy * (UNIT + GAP)
 
-export const SIZE_MAP: Record<WidgetSize, { w: number, h: number }> = {
-    [WidgetSize.SINGLE]: { w: 1, h: 1 },
-    [WidgetSize.WIDE]: { w: 2, h: 1 },
-    [WidgetSize.TALL]: { w: 1, h: 2 },
-    [WidgetSize.SQUARE]: { w: 2, h: 2 },
-    [WidgetSize.FULL_WIDTH]: { w: 4, h: 1 }
+const sizeLabel = (size: WidgetSize) => {
+    const { w, h } = SIZE_MAP[size]
+    return `${w}×${h}`
 }
 
-export const LAYOUT_CONFIG = [
-    { id: "media", x: 0, y: 0 },
-    { id: "focus", x: 0, y: 2 },
-    { id: "wifi", x: 2, y: 0 },
-    { id: "airdrop", x: 2, y: 1 },
-    { id: "bt", x: 3, y: 1 },
-    { id: "dark_mode", x: 2, y: 2 },
-    { id: "calculator", x: 3, y: 2 },
-    { id: "volume", x: 0, y: 3 },
-]
+// Compute the pixel height needed to show all placed widgets (no extra padding)
+function computeContentHeight(): number {
+    if (ccLayout.layout.length === 0) return UNIT
+    let maxRow = 0
+    for (const entry of ccLayout.layout) {
+        const { h } = SIZE_MAP[ccLayout.effectiveSize(entry.id)]
+        maxRow = Math.max(maxRow, entry.y + h)
+    }
+    return maxRow * (UNIT + GAP) - GAP
+}
+
+// Per-drag state (only one drag at a time)
+let dragOffsetX = 0
+let dragOffsetY = 0
+let dragWidgetId = ""
 
 export function getWidgetById(id: string): AtomicWidget | null {
     try {
         const btSvc = AstalBluetooth.get_default()
         const registry: Record<string, () => AtomicWidget> = {
-            media: () => MediaIslandContent(),
-            wifi: () => WifiWidget(),
-            focus: () => FocusWidget(),
-            airdrop: () => RoundToggle("airdrop", "AirDrop", "network-transmit-receive-symbolic", true, () => { }),
-            bt: () => RoundToggle("bt", "BT", "bluetooth-active-symbolic", () => btSvc?.is_powered || false, () => {
-                if (btSvc) btSvc.is_powered = !btSvc.is_powered
-            }),
-            volume: () => SliderWidget("volume", "Volume", "audio-volume-high-symbolic", "Sound", 50, (v) => {
-                execAsync(`wpctl set-volume @DEFAULT_AUDIO_SINK@ ${v.toFixed(2)}`).catch(() => { })
-            }),
-            dark_mode: () => RoundToggle("dark-mode", "Appearance",
-                () => Theme.isDark ? "weather-clear-night-symbolic" : "weather-clear-symbolic",
-                () => Theme.isDark,
-                () => Theme.setDarkMode(!Theme.isDark)
-            ),
-            calculator: () => RoundToggle("calc", "Calculator", "accessories-calculator-symbolic", false, () => { execAsync("gnome-calculator").catch(() => { }) })
+            media:       () => MediaIslandContent(),
+            wifi:        () => WifiWidget(),
+            focus:       () => FocusWidget(),
+            ethernet:    () => EthernetWidget(),
+            bt:          () => RoundToggle("bt", "Bluetooth",
+                             "bluetooth-active-symbolic",
+                             () => btSvc?.is_powered || false,
+                             () => { if (btSvc) btSvc.is_powered = !btSvc.is_powered },
+                             () => btSvc?.is_powered ? "Activo" : "Inactivo"),
+            volume:      () => VolumeWidget(),
+            dark_mode:   () => RoundToggle("dark-mode", "Apariencia",
+                             () => Theme.isDark ? "weather-clear-night-symbolic" : "weather-clear-symbolic",
+                             () => Theme.isDark,
+                             () => Theme.setDarkMode(!Theme.isDark),
+                             () => Theme.isDark ? "Oscuro" : "Claro"),
+            calculator:  () => RoundToggle("calculator", "Calculadora",
+                             "accessories-calculator-symbolic", false,
+                             () => execAsync("gnome-calculator").catch(() => {})),
         }
         const factory = registry[id]
         return factory ? factory() : null
@@ -68,38 +66,233 @@ export function getWidgetById(id: string): AtomicWidget | null {
     }
 }
 
-/**
- * Backward compatibility: Single-window CC mode (Optional)
- */
-export default function IslandGrid() {
-    const container = new Gtk.Fixed({
-        name: "island-grid-root",
-        css_classes: ["island-grid-container"],
-        width_request: 356,
-        height_request: 540,
-        halign: Gtk.Align.END
+// Snap pixel coords (relative to fixed) to nearest valid grid cell
+function snapToGrid(id: string, dropX: number, dropY: number): { gx: number; gy: number } | null {
+    const size  = ccLayout.effectiveSize(id)
+    const { w, h } = SIZE_MAP[size]
+    let gx = Math.round((dropX - dragOffsetX) / (UNIT + GAP))
+    let gy = Math.round((dropY - dragOffsetY) / (UNIT + GAP))
+    gx = Math.max(0, Math.min(GRID_COLS - w, gx))
+    gy = Math.max(0, gy)
+    return { gx, gy }
+}
+
+function makeIslandWidget(
+    id: string,
+    editMode: boolean,
+    onRemove: () => void,
+    onResize: () => void,
+    fixed: Gtk.Fixed,
+    removeGhost: () => void,
+): Gtk.Widget | null {
+    const entry = ccLayout.layout.find(e => e.id === id)
+    if (!entry) return null
+
+    const def = getWidgetById(id)
+    if (!def) return null
+
+    const effectiveSize = ccLayout.effectiveSize(id)
+    const { w, h } = SIZE_MAP[effectiveSize]
+    const width  = w * UNIT + (w - 1) * GAP
+    const height = h * UNIT + (h - 1) * GAP
+
+    const content = def.buildContent(effectiveSize)
+    const island  = BaseIsland({ name: def.id, child: content, width, height, size: effectiveSize })
+
+    if (!editMode) return island
+
+    const overlay = new Gtk.Overlay()
+    overlay.set_child(island)
+    overlay.set_size_request(width, height)
+
+    // × remove
+    const removeBtn = new Gtk.Button({
+        icon_name: "window-close-symbolic",
+        css_classes: ["cc-remove-btn"],
+        halign: Gtk.Align.END, valign: Gtk.Align.START,
+        margin_top: 4, margin_end: 4,
+    })
+    removeBtn.connect("clicked", onRemove)
+    overlay.add_overlay(removeBtn)
+
+    // Resize pill
+    const nextSize = ccLayout.nextResizeSize(id)
+    if (nextSize !== null) {
+        const resizeBtn = new Gtk.Button({
+            label: `${sizeLabel(effectiveSize)} → ${sizeLabel(nextSize)}`,
+            css_classes: ["cc-resize-btn"],
+            halign: Gtk.Align.END, valign: Gtk.Align.END,
+            margin_bottom: 6, margin_end: 6,
+        })
+        resizeBtn.connect("clicked", onResize)
+        overlay.add_overlay(resizeBtn)
+    }
+
+    // Drag source
+    const dragSrc = new Gtk.DragSource({ actions: Gdk.DragAction.MOVE })
+
+    dragSrc.connect("prepare", (_: any, x: number, y: number) => {
+        dragOffsetX  = x
+        dragOffsetY  = y
+        dragWidgetId = id
+        const val = new GObject.Value()
+        val.init(GObject.TYPE_STRING)
+        val.set_string(id)
+        return Gdk.ContentProvider.new_for_value(val)
     })
 
-    const pixelX = (gx: number) => gx * (UNIT + GAP)
-    const pixelY = (gy: number) => gy * (UNIT + GAP)
+    dragSrc.connect("drag-begin", (_: any, drag: any) => {
+        // Snapshot the island (without edit-mode decorations) as drag icon
+        try {
+            const paintable = new Gtk.WidgetPaintable({ widget: island })
+            Gtk.DragIcon.set_from_paintable(drag, paintable,
+                Math.round(dragOffsetX), Math.round(dragOffsetY))
+        } catch {}
+        removeGhost()
+    })
 
-    LAYOUT_CONFIG.forEach(item => {
-        const def = getWidgetById(item.id)
-        if (def) {
-            const { w, h } = SIZE_MAP[def.size]
-            const width = w * UNIT + (w - 1) * GAP
-            const height = h * UNIT + (h - 1) * GAP
+    dragSrc.connect("drag-end", () => {
+        removeGhost()
+    })
 
-            const widget = BaseIsland({
-                name: def.id,
-                child: def.child,
-                width,
-                height,
-                size: def.size
-            })
-            container.put(widget, pixelX(item.x), pixelY(item.y))
+    overlay.add_controller(dragSrc)
+    return overlay
+}
+
+export default function IslandGrid() {
+    let editMode = false
+
+    const outer = new Gtk.Box({
+        name: "island-grid-root",
+        orientation: Gtk.Orientation.VERTICAL,
+        halign: Gtk.Align.END,
+    })
+
+    const fixed = new Gtk.Fixed({
+        css_classes: ["island-grid-container"],
+        width_request: GRID_WIDTH,
+        height_request: GRID_HEIGHT,
+        halign: Gtk.Align.END,
+    })
+
+    // Active ghost widget — recreated on every motion event to guarantee correct size
+    let ghost: Gtk.Box | null = null
+    const removeGhost = () => {
+        if (ghost && ghost.get_parent() === fixed) fixed.remove(ghost)
+        ghost = null
+    }
+
+    // Drop target — always present, only activates when drag sources are added (edit mode)
+    const dropTarget = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.MOVE)
+
+    dropTarget.connect("motion", (_: any, x: number, y: number) => {
+        if (!dragWidgetId) return Gdk.DragAction.MOVE
+        const snap = snapToGrid(dragWidgetId, x, y)
+        if (!snap) return Gdk.DragAction.MOVE
+
+        const size = ccLayout.effectiveSize(dragWidgetId)
+        const { w, h } = SIZE_MAP[size]
+        const gw = w * UNIT + (w - 1) * GAP
+        const gh = h * UNIT + (h - 1) * GAP
+
+        // Recreate ghost each motion event — guarantees Gtk.Fixed measures it fresh
+        removeGhost()
+        ghost = new Gtk.Box({
+            css_classes: ["cc-drop-ghost"],
+            width_request: gw,
+            height_request: gh,
+        })
+        fixed.put(ghost, pixelX(snap.gx), pixelY(snap.gy))
+
+        return Gdk.DragAction.MOVE
+    })
+
+    dropTarget.connect("drop", (_: any, value: any, x: number, y: number) => {
+        removeGhost()
+        const id = typeof value === "string" ? value : (value as any).get_string?.() ?? ""
+        if (!id) return false
+        const snap = snapToGrid(id, x, y)
+        if (!snap) return false
+        ccLayout.move(id, snap.gx, snap.gy)
+        dragWidgetId = ""
+        return true
+    })
+
+    dropTarget.connect("leave", () => {
+        removeGhost()
+    })
+
+    fixed.add_controller(dropTarget)
+
+    const editBtn = new Gtk.Button({
+        label: "Editar",
+        css_classes: ["cc-edit-btn"],
+        halign: Gtk.Align.END,
+        margin_top: 8, margin_end: 4, margin_bottom: 4,
+    })
+
+    outer.append(fixed)
+    outer.append(editBtn)
+
+    const rebuild = () => {
+        removeGhost()
+
+        let child = fixed.get_first_child()
+        while (child) {
+            const next = child.get_next_sibling()
+            fixed.remove(child)
+            child = next
+        }
+
+        // Resize fixed to match actual content in normal mode; full grid in edit mode
+        fixed.height_request = editMode ? GRID_HEIGHT : computeContentHeight()
+
+        // Empty slot placeholders — only in edit mode, plain boxes (no cairo drawing)
+        if (editMode) {
+            for (const cell of ccLayout.getEmptyCells()) {
+                const slot = new Gtk.Box({
+                    css_classes: ["cc-slot-placeholder"],
+                    width_request: UNIT,
+                    height_request: UNIT,
+                })
+                slot.set_can_target(false)
+                fixed.put(slot, pixelX(cell.x), pixelY(cell.y))
+            }
+        }
+
+        for (const entry of ccLayout.layout) {
+            const widget = makeIslandWidget(
+                entry.id, editMode,
+                () => ccLayout.remove(entry.id),
+                () => {
+                    const next = ccLayout.nextResizeSize(entry.id)
+                    if (next !== null) ccLayout.resize(entry.id, next)
+                },
+                fixed,
+                removeGhost,
+            )
+            if (widget) fixed.put(widget, pixelX(entry.x), pixelY(entry.y))
+        }
+
+        editBtn.label = editMode ? "Listo" : "Editar"
+    }
+
+    editBtn.connect("clicked", () => {
+        editMode = !editMode
+        status.cc_edit_mode = editMode
+        rebuild()
+    })
+    ccLayout.connect("changed", () => rebuild())
+
+    // Reset edit mode when CC is closed
+    status.connect("notify::cc-open", () => {
+        if (!status.cc_open && editMode) {
+            editMode = false
+            status.cc_edit_mode = false
+            rebuild()
         }
     })
 
-    return container
+    rebuild()
+    return outer
 }
