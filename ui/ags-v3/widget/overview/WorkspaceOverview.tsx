@@ -337,10 +337,6 @@ export default function WorkspaceOverview(monitor: any) {
         }
     }
 
-    const runPulse = (times = 20) => {
-        syncAll()
-        if (times > 0) GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => { runPulse(times - 1); return GLib.SOURCE_REMOVE })
-    }
 
     const signals = [
         hyprland.connect("notify::focused-workspace", () => {
@@ -361,27 +357,30 @@ export default function WorkspaceOverview(monitor: any) {
     status.connect("notify::overview-open", () => {
         if (status.overview_open) {
             syncAll()
-            runPulse(15)
         }
     })
 
-    const heartbeat = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-        if (status.overview_open) {
+    // V8.0: On-demand heartbeat — only runs while overview is open, stops automatically when closed.
+    // Hyprland event signals handle real-time changes; this acts as a safety net for edge cases.
+    const scheduleHeartbeat = () => {
+        GLib.timeout_add(GLib.PRIORITY_LOW, 1000, () => {
+            if (!status.overview_open) return GLib.SOURCE_REMOVE
             syncAll()
-        }
-        return GLib.SOURCE_CONTINUE
+            return GLib.SOURCE_CONTINUE
+        })
+    }
+    status.connect("notify::overview-open", () => {
+        if (status.overview_open) scheduleHeartbeat()
     })
 
     windowContent.connect("unrealize", () => {
         signals.forEach(id => hyprland.disconnect(id))
-        GLib.source_remove(heartbeat)
     })
 
     overview.append(list)
 
     GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
         syncAll()
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => { syncAll(); return GLib.SOURCE_REMOVE })
         return GLib.SOURCE_REMOVE
     })
 

@@ -202,7 +202,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // @ts-ignore
       region.unionRectangle({ x: 0, y: 0, width: Math.round(monGeo.width), height: 40 })
 
-      const isAnyOpen = status.cc_open || status.nc_open || status.prism_open || status.system_menu_open || status.overview_open || status.power_menu_open
+      const isAnyOpen = status.isAnyOverlayOpen
       if (isAnyOpen && !status.cc_edit_mode) {
           // 🛰️ SURGICAL: Catcher region (Everything below Bar to catch outside clicks)
           // In edit mode we skip this so other windows remain interactive
@@ -230,8 +230,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
 
   const syncOverlays = () => {
-    const isAnyOpen = status.cc_open || status.nc_open || status.prism_open || status.system_menu_open || status.overview_open || status.power_menu_open
-    catcher.set_visible(isAnyOpen && !status.cc_edit_mode)
+    catcher.set_visible(status.isAnyOverlayOpen && !status.cc_edit_mode)
     if (status.cc_open) centerCCUnderIcon()
     cc.set_visible(status.cc_open); nc.set_visible(status.nc_open); prism.set_visible(status.prism_open); systemMenu.set_visible(status.system_menu_open)
     overview.set_visible(status.overview_open); powerMenu.set_visible(status.power_menu_open)
@@ -239,10 +238,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
   status.connect("notify::overview-open", syncOverlays); status.connect("notify::power-menu-open", syncOverlays)
-  status.connect("notify::cc-edit-mode", () => {
-    syncOverlays()
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })
-  })
+  status.connect("notify::cc-edit-mode", syncOverlays)
   status.connect("notify::prism-open", () => { 
     syncOverlays() // Call syncOverlays to update visibility and input region
     Gtk4LayerShell.set_keyboard_mode(win, status.prism_open ? Gtk4LayerShell.KeyboardMode.ON_DEMAND : Gtk4LayerShell.KeyboardMode.NONE)
