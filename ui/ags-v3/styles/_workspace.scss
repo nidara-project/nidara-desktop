@@ -53,6 +53,20 @@ window.workspace-cockpit {
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+.wo-schematic-container {
+    border-radius: 12px;
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.wo-schematic-win {
+    background-color: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s ease;
+}
+
 .wo-item.active {
     background-color: #{"alpha(@accent_bg_color, 0.05)"};
     border: 1px solid #{"alpha(@accent_bg_color, 0.6)"};

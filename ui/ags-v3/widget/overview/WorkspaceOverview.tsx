@@ -7,6 +7,7 @@ import GLib from "gi://GLib"
 import Pango from "gi://Pango"
 import app from "ags/gtk4/app"
 import appService from "../../core/AppService"
+import Gio from "gi://Gio"
 
 const BASE_WIDTH = 300
 const BASE_HEIGHT = 170
@@ -227,7 +228,11 @@ function SchematicMap(wsId: number, hyprland: any) {
                 appService.getIconName(c.initialTitle || "") ||
                 "application-x-executable"
 
-            widget.icon.set_from_icon_name(resolved)
+            if (resolved.startsWith("/")) {
+                widget.icon.set_from_gicon(Gio.FileIcon.new(Gio.File.new_for_path(resolved)))
+            } else {
+                widget.icon.set_from_icon_name(resolved)
+            }
 
             widget.icon.pixel_size = Math.min(w * 0.7, h * 0.7, 32)
             widget.icon.visible = w > 12 && h > 12
@@ -247,7 +252,8 @@ function SchematicMap(wsId: number, hyprland: any) {
     return wrapper as any
 }
 
-export default function WorkspaceOverview(monitor: any, hyprland: any) {
+export default function WorkspaceOverview(monitor: any) {
+    const hyprland = AstalHyprland.get_default()
     const win = new Gtk.Window({
         name: "workspace-cockpit",
         css_classes: ["workspace-cockpit"],
@@ -275,22 +281,6 @@ export default function WorkspaceOverview(monitor: any, hyprland: any) {
         valign: Gtk.Align.CENTER,
     })
 
-    // Search Bar 🔍
-    const searchEntry = new Gtk.Entry({
-        placeholder_text: "Search windows, apps, or files...",
-        css_classes: ["cockpit-search"],
-        hexpand: true,
-        halign: Gtk.Align.CENTER,
-        width_request: 500
-    })
-
-    const searchBox = new Gtk.Box({
-        css_classes: ["cockpit-search-box"],
-        halign: Gtk.Align.CENTER
-    })
-    searchBox.append(searchEntry)
-    overview.append(searchBox)
-
     const windowContent = new Gtk.Box({
         css_classes: ["cockpit-window-content"],
         halign: Gtk.Align.CENTER,
@@ -309,7 +299,7 @@ export default function WorkspaceOverview(monitor: any, hyprland: any) {
 
     const slots = new Map<number, { btn: Gtk.Button, schematic: any }>()
 
-    for (let i = 1; i <= 10; i++) {
+    for (let i = 1; i <= 5; i++) {
         const schematic = SchematicMap(i, hyprland)
         const label = new Gtk.Label({ label: `WS ${i}`, css_classes: ["wo-label"] })
         const count = new Gtk.Label({ css_classes: ["wo-count"] })
@@ -427,6 +417,18 @@ export default function WorkspaceOverview(monitor: any, hyprland: any) {
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => { syncAll(); return GLib.SOURCE_REMOVE })
         return GLib.SOURCE_REMOVE
     })
+
+    ;(win as any).toggle = () => {
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            const isVis = win.get_visible()
+            win.set_visible(!isVis)
+            if (!isVis) {
+                win.present()
+                syncAll()
+            }
+            return GLib.SOURCE_REMOVE
+        })
+    }
 
     return win
 }

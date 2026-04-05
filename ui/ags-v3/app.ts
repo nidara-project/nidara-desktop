@@ -33,6 +33,7 @@ import AppGrid from "./widget/app-grid/AppGrid"
 import Bar from "./widget/bar/Bar"
 import PowerMenu from "./widget/power-menu/PowerMenu"
 import Settings from "./widget/settings/Settings"
+import WorkspaceOverview from "./widget/overview/WorkspaceOverview"
 import Theme from "./core/ThemeManager"
 
 console.log("[CRYSTAL_SHELL] Calling app.start()...");
@@ -55,6 +56,7 @@ app.start({
     const appLauncherWindows: any[] = []
     const powerWindows: any[] = []
     const settingsWindows: any[] = []
+    const overviewWindows: any[] = []
 
     const initWinGlobal = (ctor: any, mon: Gdk.Monitor, array: any[]) => {
       try {
@@ -98,6 +100,7 @@ app.start({
         initWinGlobal(PowerMenu, monitor, powerWindows)
         // Settings deferred to toggleSettings (Lazy)
         initWinGlobal(AppGrid, monitor, appLauncherWindows)
+        initWinGlobal(WorkspaceOverview, monitor, overviewWindows)
 
       } catch (e) { console.error(`[UI] Error:`, e) }
     }
@@ -136,10 +139,14 @@ app.start({
           try { s.toggle() } catch (e) { console.error(e) }
       })
     }
+    const toggleOverview = () => {
+      overviewWindows.forEach(o => { try { o.toggle() } catch (e) { console.error(e) } })
+    }
     // Expose Globals
     (globalThis as any).toggleAppGrid = toggleAppGrid;
     (globalThis as any).togglePowerMenu = togglePower;
     (globalThis as any).toggleSettings = toggleSettings;
+    (globalThis as any).toggleOverview = toggleOverview;
 
   },
   requestHandler(argv, res) {
@@ -162,6 +169,8 @@ app.start({
         (globalThis as any).togglePowerMenu?.(); break;
       case "toggleSettings":
         (globalThis as any).toggleSettings?.(); break;
+      case "toggleOverview":
+        (globalThis as any).toggleOverview?.(); break;
       default:
         console.warn(`[Handler] Unknown command: ${cmd}`)
         return res("unknown command")

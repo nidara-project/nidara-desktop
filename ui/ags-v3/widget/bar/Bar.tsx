@@ -1,4 +1,5 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
+import Pango from "gi://Pango"
 import { execAsync } from "ags/process"
 import { createPoll } from "ags/time"
 import app from "ags/gtk4/app"
@@ -21,27 +22,51 @@ import NotificationCenter from "../control-center/NotificationCenter"
 import Prism from "../prism/Prism"
 import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
 
-function AppMenu() {
+function AppMenu(monitorWidth: number): { widget: Gtk.Widget; appName: Gtk.Label } {
   const box = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, margin_start: 16, margin_end: 16 })
-  const getIcon = (name: string) => {
-    const res = appService.getIconName(name)
-    const file = res?.replace("file://", "")
-    if (file && (file.startsWith("/") || file.includes("logo"))) return new Gtk.Image({ file: file, pixel_size: 16 })
-    return new Gtk.Image({ icon_name: res || name, pixel_size: 16 })
-  }
   const distroIcon = new Gtk.Image({ icon_name: "start-here-symbolic", pixel_size: 16, css_classes: ["bar-distro-icon"] })
-  const appName = new Gtk.Label({ label: "Finder", css_classes: ["bar-app-name"] })
+  // Max label width = half monitor - center capsule est. (100px) - icon/padding overhead (80px)
+  const labelMaxChars = Math.max(15, Math.floor((monitorWidth / 2 - 180) / 8))
+  const appName = new Gtk.Label({
+    label: "Finder",
+    css_classes: ["bar-app-name"],
+    ellipsize: Pango.EllipsizeMode.END,
+    max_width_chars: labelMaxChars,
+  })
 
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
     getServiceSafe(() => AstalHyprland.get_default(), "Hyprland").then(hyprland => {
-      if (!hyprland) return;
-      const sync = () => { appName.label = getWordmark(hyprland.focused_client, hyprland) || "Finder" }
-      hyprland.connect("notify::focused-client", sync); hyprland.connect("notify::focused-workspace", sync); sync()
+      if (!hyprland) return
+
+      let trackedClient: AstalHyprland.Client | null = null
+      let titleHandlerId = 0
+
+      const sync = () => {
+        const client = hyprland.focused_client
+        const label = getWordmark(client, hyprland)
+        // Only update when we have a real value — avoids momentary "App" on window init
+        if (label) appName.label = label
+
+        // Re-subscribe to title changes on the newly focused client
+        if (trackedClient && titleHandlerId) {
+          trackedClient.disconnect(titleHandlerId)
+          titleHandlerId = 0
+        }
+        trackedClient = client
+        if (client) {
+          titleHandlerId = client.connect("notify::title", sync)
+        }
+      }
+
+      hyprland.connect("notify::focused-client", sync)
+      hyprland.connect("notify::focused-workspace", sync)
+      sync()
     })
     return GLib.SOURCE_REMOVE
   })
   box.append(distroIcon); box.append(appName)
-  return SquircleContainer({ child: box, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  const widget = SquircleContainer({ child: box, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  return { widget, appName }
 }
 
 function Workspaces() {
@@ -56,7 +81,7 @@ function Workspaces() {
     hypr.connect("notify::focused-workspace", update); hypr.connect("workspace-added", update); hypr.connect("workspace-removed", update); update()
     box.append(dot)
   }
-  return SquircleContainer({ child: box, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => execAsync("ags request 'toggleAppGrid()'") })
+  return SquircleContainer({ child: box, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => execAsync("ags request 'toggleOverview()'") })
 }
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
@@ -170,7 +195,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   
   syncOverlays()
 
-  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, spacing: 8 }); left.append(AppMenu())
+  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 8 })
+  left.append(AppMenu(monGeo.width).widget)
   const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER }); center.append(Workspaces())
   const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 10 })
 

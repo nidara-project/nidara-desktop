@@ -660,9 +660,14 @@ export function DockItem(
                     execAsync(["hyprctl", "dispatch", "exec", command]).catch(print)
                 } else {
                     try {
-                        appItem.launch()
+                        // Igualar lógica robusta del AppGrid
+                        const realInfo = appService.getAppInfo(appId || (appItem as any).executable)
+                        const rawCommand = realInfo?.get_commandline() || (appItem as any).executable || ""
+                        const command = rawCommand.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
+                        if (!command) { appItem.launch() } 
+                        else { execAsync(["hyprctl", "dispatch", "exec", command]).catch(() => appItem.launch()) }
                     } catch (e) {
-                        execAsync(`gtk-launch ${appId}`).catch(print)
+                        try { appItem.launch() } catch (e2) { execAsync(`gtk-launch ${appId}`).catch(print) }
                     }
                 }
             } catch (fallbackError) {
