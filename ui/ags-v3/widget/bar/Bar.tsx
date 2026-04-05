@@ -229,11 +229,27 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (surface.set_input_region) surface.set_input_region(region)
   }
 
+  // V9.0: Animated Overview — CSS transition driven by class toggle
+  let overviewHideTimer: number | null = null
+  const setOverviewVisible = (open: boolean) => {
+      if (overviewHideTimer) { GLib.source_remove(overviewHideTimer); overviewHideTimer = null }
+      if (open) {
+          overview.set_visible(true)
+          GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => { overview.add_css_class("overview-open"); return GLib.SOURCE_REMOVE })
+      } else {
+          overview.remove_css_class("overview-open")
+          overviewHideTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 260, () => {
+              if (!status.overview_open) overview.set_visible(false)
+              overviewHideTimer = null; return GLib.SOURCE_REMOVE
+          })
+      }
+  }
+
   const syncOverlays = () => {
     catcher.set_visible(status.isAnyOverlayOpen && !status.cc_edit_mode)
     if (status.cc_open) centerCCUnderIcon()
     cc.set_visible(status.cc_open); nc.set_visible(status.nc_open); prism.set_visible(status.prism_open); systemMenu.set_visible(status.system_menu_open)
-    overview.set_visible(status.overview_open); powerMenu.set_visible(status.power_menu_open)
+    setOverviewVisible(status.overview_open); powerMenu.set_visible(status.power_menu_open)
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
