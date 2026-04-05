@@ -15,12 +15,14 @@ venv/
 .vscode/
 .idea/
 
-# Build & Dist
+# Build & Dist (system-level, not app bundle)
 *.deb
 *.iso
-build/
 dist/
 target/
+# Allow ui/ags-v3/build/ (app bundle needed for production)
+!ui/ags-v3/build/
+!ui/ags-v3/build/**
 
 # Media & Recordings
 *.mkv
@@ -75,8 +77,8 @@ debug_*.js
 *_json.txt
 settings_addr.txt
 
-# Generated CSS
-ui/ags-v3/style.css
+# Generated CSS (kept in repo as pre-compiled convenience for users)
+# ui/ags-v3/style.css  ← intentionally NOT ignored
 ui/ags-v3/style.css.map
 # User configs
 theme_settings.json

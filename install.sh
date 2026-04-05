@@ -85,7 +85,9 @@ sudo pacman -Sy --needed --noconfirm \
     thunar \
     nautilus \
     dolphin \
+    polkit-gnome \
     xdg-desktop-portal-gtk \
+    xdg-desktop-portal-hyprland \
     ttf-jetbrains-mono-nerd \
     noto-fonts-emoji \
     xfce4-settings \
@@ -181,10 +183,28 @@ sudo meson install -C build
 
 # 6. UI Setup
 echo "🖥️ Setting up AGS UI..."
-cd "$INSTALL_DIR/ui/ags-v3" || echo "⚠️ UI Directory not found, skipping npm install."
-npm install
-echo "🎨 Compiling SCSS..."
-npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
+if [ -d "$INSTALL_DIR/ui/ags-v3" ]; then
+    cd "$INSTALL_DIR/ui/ags-v3"
+
+    if [ "$INSTALL_MODE" = "2" ]; then
+        # Dev mode: install npm deps for IDE support (TypeScript types, sass)
+        echo "📦 Installing npm dev dependencies (IDE support)..."
+        npm install
+        echo "🎨 Compiling SCSS..."
+        npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
+    else
+        # User mode: style.css comes pre-compiled in the repo
+        echo "ℹ️  Using pre-compiled style.css"
+    fi
+
+    # Bundle app into standalone binary (both modes)
+    echo "📦 Bundling Crystal Shell (ags bundle)..."
+    mkdir -p build
+    ags bundle app.ts build/crystal-shell
+    echo "✅ Bundle created at $INSTALL_DIR/ui/ags-v3/build/crystal-shell"
+else
+    echo "⚠️  UI directory not found at $INSTALL_DIR/ui/ags-v3, skipping."
+fi
 
 # 7. Enable Audio Services
 echo "🔊 Enabling Audio Services..."
@@ -205,25 +225,68 @@ if [ -f "$HOME/.config/hypr/hyprland.conf" ] && [ ! -L "$HOME/.config/hypr/hyprl
     mv "$HOME/.config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf.bak"
 fi
 ln -sf "$INSTALL_DIR/config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf"
- 
- # 9. Configure XDG Portals (Modern Apps Theme Support)
- echo "🎨 Configuring XDG Desktop Portals..."
- mkdir -p "$HOME/.config/xdg-desktop-portal"
- cat <<EOF > "$HOME/.config/xdg-desktop-portal/portals.conf"
- [preferred]
- default=gtk
- org.freedesktop.impl.portal.ScreenCast=hyprland
- org.freedesktop.impl.portal.Screenshot=hyprland
- EOF
 
- # 10. Desktop Session Entry
- echo "📝 Creating Crystal Shell Desktop Entry for Display Managers..."
- sudo mkdir -p /usr/share/wayland-sessions
- cat <<EOF | sudo tee /usr/share/wayland-sessions/crystal-shell.desktop > /dev/null
+# Hyprlock config
+if [ -f "$HOME/.config/hypr/hyprlock.conf" ] && [ ! -L "$HOME/.config/hypr/hyprlock.conf" ]; then
+    mv "$HOME/.config/hypr/hyprlock.conf" "$HOME/.config/hypr/hyprlock.conf.bak"
+fi
+ln -sf "$INSTALL_DIR/config/hypr/hyprlock.conf" "$HOME/.config/hypr/hyprlock.conf"
+
+# Hypridle config
+if [ -f "$HOME/.config/hypr/hypridle.conf" ] && [ ! -L "$HOME/.config/hypr/hypridle.conf" ]; then
+    mv "$HOME/.config/hypr/hypridle.conf" "$HOME/.config/hypr/hypridle.conf.bak"
+fi
+ln -sf "$INSTALL_DIR/config/hypr/hypridle.conf" "$HOME/.config/hypr/hypridle.conf"
+
+# User overrides file (never overwritten by updates)
+USER_CONF="$HOME/.config/hypr/hyprland-user.conf"
+if [ ! -f "$USER_CONF" ]; then
+    cat > "$USER_CONF" <<'EOF'
+# ── hyprland-user.conf ──────────────────────────────────────────────────────
+# Este archivo es TUYO. Las actualizaciones de Crystal Shell nunca lo tocarán.
+# Añade aquí tus personalizaciones: teclado, monitores, apps al inicio, etc.
+#
+# Ejemplos:
+#   input {
+#       kb_layout = es  # Cambia 'es' por tu idioma (latam, us, uk...)
+#   }
+#   monitor = HDMI-A-1, 1920x1080@60, 0x0, 1
+#   bind = SUPER, F1, exec, mi-aplicacion
+#   exec-once = mi-daemon-personalizado
+#
+# 🟢 OPTIMIZACIÓN NVIDIA (¡Descomenta esto si usas tarjeta NVIDIA!)
+#   env = LIBVA_DRIVER_NAME,nvidia
+#   env = XDG_SESSION_TYPE,wayland
+#   env = GBM_BACKEND,nvidia-drm
+#   env = __GLX_VENDOR_LIBRARY_NAME,nvidia
+#   cursor {
+#       no_hardware_cursors = true
+#   }
+# ─────────────────────────────────────────────────────────────────────────────
+EOF
+    echo "✅ Created user config: $USER_CONF"
+else
+    echo "ℹ️  User config already exists, keeping it: $USER_CONF"
+fi
+
+# 9. Configure XDG Portals (Modern Apps Theme Support)
+echo "🎨 Configuring XDG Desktop Portals..."
+mkdir -p "$HOME/.config/xdg-desktop-portal"
+cat > "$HOME/.config/xdg-desktop-portal/portals.conf" <<'EOF'
+[preferred]
+default=gtk
+org.freedesktop.impl.portal.ScreenCast=hyprland
+org.freedesktop.impl.portal.Screenshot=hyprland
+EOF
+
+# 10. Desktop Session Entry
+echo "📝 Creating Crystal Shell Desktop Entry for Display Managers..."
+sudo mkdir -p /usr/share/wayland-sessions
+cat <<'EOF' | sudo tee /usr/share/wayland-sessions/crystal-shell.desktop > /dev/null
 [Desktop Entry]
 Name=Crystal Shell
 Comment=A fluid, glassmorphic desktop environment based on Hyprland & AGS
-Exec=start-hyprland
+Exec=Hyprland
 Type=Application
 DesktopNames=Hyprland
 EOF

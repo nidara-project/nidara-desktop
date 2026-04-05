@@ -13,7 +13,7 @@ echo "[$(date)] 🔄 Restaurando estabilidad TOTAL (Poppi Edition)..."
 # 0. Compilar CSS con SASS
 if [ -f "$AGS_DIR/style.scss" ]; then
     echo "🎨 Compilando estilos..."
-    npx sass --no-charset "$AGS_DIR/style.scss" "$AGS_DIR/style.css"
+    sass --no-charset "$AGS_DIR/style.scss" "$AGS_DIR/style.css"
     sed -i '/@charset/d' "$AGS_DIR/style.css"
 fi
 
@@ -30,8 +30,8 @@ hyprctl reload
 # 3. Lanzar AGS con el entorno de Astal-local
 cd "$AGS_DIR"
 
-export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0:$AGS_DIR/astal-local/lib/linux/girepository-1.0:${GI_TYPELIB_PATH}"
-export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib:$AGS_DIR/astal-local/lib/linux:${LD_LIBRARY_PATH}"
+export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0:${GI_TYPELIB_PATH}"
+export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib:${LD_LIBRARY_PATH}"
 
 AGS_BIN="ags"
 if [ -f "$HOME/.local/bin/ags" ]; then
