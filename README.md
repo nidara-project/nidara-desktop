@@ -113,16 +113,14 @@ Crystal-Shell/
         └── crystal-shell # Bundle standalone (incluido en el repo)
 ```
 
-### Flujo de trabajo diario
+### Flujo de Trabajo y Contribuciones
 
-| Acción | Comando |
-| :--- | :--- |
-| Recargar UI completa | `Super + Shift + C` |
-| Reiniciar solo AGS | `Super + Shift + R` |
-| Ver logs en tiempo real | `tail -f /tmp/ags.log` |
-| Recompilar CSS | `cd ui/ags-v3 && npx sass --no-charset style.scss style.css` |
+Si quieres contribuir al proyecto (Pull Requests):
+1. Modifica **solo** los archivos fuente (`.ts`, `.tsx`, `.scss`).
+2. Para probar tus cambios en vivo: `Super + Shift + C` o `npx sass --no-charset style.scss style.css`.
+3. ⚠️ **IMPORTANTE:** No incluyas `style.css` ni el contenido de `build/` en tus Pull Requests. Los binarios y CSS pre-compilados los generamos los mantenedores cuando publicamos una versión oficial.
 
-### Publicar un release
+### Publicar un release (Solo Mantenedores)
 
 Cuando tengas lista una versión para usuarios:
 
