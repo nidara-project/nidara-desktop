@@ -162,6 +162,10 @@ export class UIStatus extends GObject.Object {
         this.notify("overview-open")
     }
 
+    public get isAnyOverlayOpen(): boolean {
+        return this._cc_open || this._nc_open || this._prism_open || this._system_menu_open || this._overview_open || this._power_menu_open
+    }
+
     public get power_menu_open() { return this._power_menu_open }
     public set power_menu_open(v: boolean) {
         if (this._power_menu_open === v) return

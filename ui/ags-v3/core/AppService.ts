@@ -235,6 +235,32 @@ class AppService {
     }
 
     /**
+     * V160: HYPRLAND CLASS RESOLVER 💎
+     * Extract specific heuristics from components (like Dock) to Core.
+     * Returns the normalized identifier or null if it should be ignored.
+     */
+    resolveHyprlandClass(rawClass: string): string | null {
+        if (!rawClass) return null
+        const rawClassLower = rawClass.toLowerCase()
+
+        // "io.Astal.ags" is our shell's only regular window (Settings Adw.Window).
+        // Layer shell windows never appear in hypr.clients, but just in case:
+        if (rawClassLower.includes("ags") && rawClass !== "io.Astal.ags") return null
+
+        let key = rawClassLower
+        if (key === "com.crystalshell.fluid" || key === "gjs" || key === "io.astal.ags") {
+            key = "crystal-shell-settings"
+        }
+
+        // File Manager Integration -> Map any detected file manager window to our Home/Finder shortcut
+        if (["org.gnome.nautilus", "nautilus", "thunar", "dolphin", "pcmanfm", "nemo", "nemo-desktop"].includes(key)) {
+            key = "home-shortcut"
+        }
+
+        return key
+    }
+
+    /**
      * V127: UNIVERSAL RESOLVER    /**
      * Resuelve un nombre de icono o GIcon a una ruta absoluta o nombre de tema válido.
      */

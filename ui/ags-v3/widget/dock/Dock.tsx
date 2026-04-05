@@ -11,6 +11,7 @@ import appService from "../../core/AppService"
 import { DockItem, Separator } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
 import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState, dockSettings, menuState } from "./state"
+import status from "../../core/Status"
 import Theme from "core/ThemeManager"
 
 // V127: Native Gtk Resolution
@@ -578,7 +579,9 @@ export default function Dock(gdkmonitor: any) {
         updateLock = true
         try {
             // V310: PROTECTION. If a menu is open, skip reconciliation to prevent widget tree shifts (the "ghost menu" fix).
-            if (menuState.openCount > 0) {
+            // V170: Also skip rendering entirely if any fullscreen overlay is active consuming the screen.
+            if (menuState.openCount > 0 || status.isAnyOverlayOpen) {
+                console.log(`[Dock] Skipping render. menuCount: ${menuState.openCount}, isAnyOverlayOpen: ${status.isAnyOverlayOpen}`)
                 needsUpdate = true // Try again later
                 return bar
             }
@@ -588,19 +591,9 @@ export default function Dock(gdkmonitor: any) {
             const sortedClients = [...hypr.clients].sort((a, b) => a.address.localeCompare(b.address))
             sortedClients.forEach(c => {
                 const rawClass = c.class || ""
-                const rawClassLower = rawClass.toLowerCase()
-                // "io.Astal.ags" is our shell's only regular window (Settings Adw.Window) — map it, don't filter
-                // Layer shell windows (bar, dock, overlays) never appear in hypr.clients
-                if (rawClassLower.includes("ags") && rawClass !== "io.Astal.ags") return
-                let key = rawClassLower
-                if (key === "com.crystalshell.fluid" || key === "gjs" || key === "io.astal.ags") {
-                    key = "crystal-shell-settings"
-                }
+                const key = appService.resolveHyprlandClass(rawClass)
+                if (!key) return
 
-                // V610: File Manager Integration -> Map any detected file manager window to our Home/Finder shortcut
-                if (["org.gnome.nautilus", "nautilus", "thunar", "dolphin", "pcmanfm", "nemo", "nemo-desktop"].includes(key)) {
-                    key = "home-shortcut"
-                }
 
                 if (!groupedClients[key]) {
                     groupedClients[key] = { addresses: [], displayClass: rawClass, title: c.title }
