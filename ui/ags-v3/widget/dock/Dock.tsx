@@ -581,7 +581,6 @@ export default function Dock(gdkmonitor: any) {
             // V310: PROTECTION. If a menu is open, skip reconciliation to prevent widget tree shifts (the "ghost menu" fix).
             // V170: Also skip rendering entirely if any fullscreen overlay is active consuming the screen.
             if (menuState.openCount > 0 || status.isAnyOverlayOpen) {
-                console.log(`[Dock] Skipping render. menuCount: ${menuState.openCount}, isAnyOverlayOpen: ${status.isAnyOverlayOpen}`)
                 needsUpdate = true // Try again later
                 return bar
             }
@@ -1121,8 +1120,6 @@ export default function Dock(gdkmonitor: any) {
             const screenWidth = gdkmonitor.get_geometry().width
             lockedStartX = (screenWidth - lockedStaticWidth) / 2
 
-            console.log(`[Dock] Drag Start: Anchoring grid at ${lockedStartX} (width ${lockedStaticWidth})`)
-
             const currentIdx = pinnedState.list.findIndex(p => norm(p) === nsid)
             if (currentIdx !== -1) {
                 // V520: Offset by 2 for Launcher and Home
@@ -1147,21 +1144,13 @@ export default function Dock(gdkmonitor: any) {
     })
 
     win.connect("destroy", () => {
+        if (tickId) { bar.remove_tick_callback(tickId); tickId = null }
+        if (updateTimer) { GLib.source_remove(updateTimer); updateTimer = null }
         try { if (cConn) GObject.signal_handler_disconnect(hypr, cConn) } catch (e) { }
         try { if (fConn) GObject.signal_handler_disconnect(hypr, fConn) } catch (e) { }
-        try { if (aConn) GObject.signal_handler_disconnect(appService, aConn) } catch (e) { }
+        try { if (aConn) aConn() } catch (e) { }
         try { if (dConn) dConn() } catch (e) { }
         try { if (mSub) mSub() } catch (e) { }
-    })
-    win.connect("destroy", () => {
-        // V84: Aggressive Cleanup to prevent "failed to find wayland buffer"
-        if (tickId) {
-            bar.remove_tick_callback(tickId)
-            tickId = null
-        }
-        hypr.disconnect(cConn)
-        hypr.disconnect(fConn)
-        aConn()
     })
 
     update()
