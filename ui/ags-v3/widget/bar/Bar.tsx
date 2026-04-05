@@ -64,9 +64,54 @@ function AppMenu(monitorWidth: number): { widget: Gtk.Widget; appName: Gtk.Label
     })
     return GLib.SOURCE_REMOVE
   })
+
   box.append(distroIcon); box.append(appName)
-  const widget = SquircleContainer({ child: box, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  
+  const widget = SquircleContainer({ child: box, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => {
+    status.toggleSystemMenu()
+  }})
+
   return { widget, appName }
+}
+
+function SystemMenuOverlay() {
+  const pBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, margin_top: 6, margin_bottom: 6, margin_start: 6, margin_end: 6 })
+
+  const makeRow = (ico: string, txt: string, cmd: () => void) => {
+    const lbl = new Gtk.Label({ label: txt, halign: Gtk.Align.START, css_classes: ["system-menu-label"] })
+    const img = new Gtk.Image({ icon_name: ico, pixel_size: 16 })
+    const b = new Gtk.Box({ spacing: 12, margin_top: 2, margin_bottom: 2, margin_start: 4, margin_end: 16 })
+    b.append(img); b.append(lbl)
+    const btn = new Gtk.Button({ child: b, css_classes: ["system-menu-row"], hexpand: true })
+    btn.connect("clicked", () => { status.system_menu_open = false; cmd() })
+    return btn
+  }
+
+  pBox.append(makeRow("dialog-information-symbolic", "Acerca de este equipo", () => execAsync(["bash", "-c", "missioncenter || gnome-system-monitor || hwinfo --gui || kitty --class float -e fastfetch"]).catch(console.error)))
+  pBox.append(new Gtk.Separator({ css_classes: ["system-menu-sep"], margin_top: 4, margin_bottom: 4 }))
+  pBox.append(makeRow("preferences-system-symbolic", "Configuración del Sistema...", () => execAsync("ags request 'toggleSettings()'").catch(console.error)))
+  pBox.append(new Gtk.Separator({ css_classes: ["system-menu-sep"], margin_top: 4, margin_bottom: 4 }))
+  pBox.append(makeRow("system-log-out-symbolic", "Opciones de Energía...", () => execAsync("ags request 'togglePowerMenu()'").catch(console.error)))
+
+  const squircleWrapper = SquircleContainer({ 
+      child: pBox, 
+      radius: 16, 
+      gloss: true, 
+      alpha: 0.15, 
+      borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, 
+      css_classes: ["system-menu-dropdown"] 
+  })
+
+  const outerBox = new Gtk.Box({
+      valign: Gtk.Align.START,
+      halign: Gtk.Align.START,
+      margin_top: 48,
+      margin_start: 8,
+      visible: false
+  })
+  
+  outerBox.append(squircleWrapper)
+  return outerBox
 }
 
 function Workspaces() {
@@ -103,17 +148,18 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const nc = NotificationCenter()
   const prism = Prism()
   const popups = NotificationPopupsWidget()
+  const systemMenu = SystemMenuOverlay()
 
   // 💎 THE CATCHER: Invisible button to close overlays
   const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
   catcher.connect("clicked", () => {
     if (status.cc_edit_mode) return   // don't close CC while in edit mode
-    status.cc_open = false; status.nc_open = false; status.prism_open = false
+    status.cc_open = false; status.nc_open = false; status.prism_open = false; status.system_menu_open = false
   })
 
   masterOverlay.set_child(barBox)
   masterOverlay.add_overlay(catcher) // 💎 Behind panels, above BarBox base child
-  masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups)
+  masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu)
 
   cc.valign = Gtk.Align.START; cc.halign = Gtk.Align.END
   nc.valign = Gtk.Align.START; nc.halign = Gtk.Align.END
@@ -149,7 +195,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // @ts-ignore
       region.unionRectangle({ x: 0, y: 0, width: Math.round(monGeo.width), height: 40 })
 
-      const isAnyOpen = status.cc_open || status.nc_open || status.prism_open
+      const isAnyOpen = status.cc_open || status.nc_open || status.prism_open || status.system_menu_open
       if (isAnyOpen && !status.cc_edit_mode) {
           // 🛰️ SURGICAL: Catcher region (Everything below Bar to catch outside clicks)
           // In edit mode we skip this so other windows remain interactive
@@ -164,7 +210,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           // @ts-ignore
           region.unionRectangle({ x: Math.round(alloc.x), y: Math.round(alloc.y), width: Math.round(alloc.width), height: Math.round(alloc.height) })
       }
-      addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism)
+      addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism); addWidgetToRegion(systemMenu)
       
       // 🛰️ ATOMIC: Add every individual popup to the region
       let child = popups.get_first_child()
@@ -177,13 +223,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
 
   const syncOverlays = () => {
-    const isAnyOpen = status.cc_open || status.nc_open || status.prism_open
+    const isAnyOpen = status.cc_open || status.nc_open || status.prism_open || status.system_menu_open
     catcher.set_visible(isAnyOpen && !status.cc_edit_mode)
     if (status.cc_open) centerCCUnderIcon()
-    cc.set_visible(status.cc_open); nc.set_visible(status.nc_open); prism.set_visible(status.prism_open)
+    cc.set_visible(status.cc_open); nc.set_visible(status.nc_open); prism.set_visible(status.prism_open); systemMenu.set_visible(status.system_menu_open)
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })
   }
-  status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays)
+  status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
   status.connect("notify::cc-edit-mode", () => {
     syncOverlays()
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })

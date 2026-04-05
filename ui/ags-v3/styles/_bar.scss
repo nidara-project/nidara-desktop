@@ -170,3 +170,49 @@
     border: none;
     box-shadow: none;
 }
+
+/* --- System Menu Dropdown (Native Overlay) --- */
+.system-menu-dropdown {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 6px;
+    color: var(--crystal-text);
+    -gtk-icon-palette: success white, warning white, error white;
+}
+
+.system-menu-row {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 6px;
+    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    min-height: 32px;
+}
+
+.system-menu-row:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.system-menu-row:active {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.system-menu-label {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.system-menu-label.danger, .system-menu-row:hover .danger {
+    color: #ff5555;
+}
+
+.danger-icon {
+    color: #ff5555;
+    -gtk-icon-palette: success white, warning white, error #ff5555;
+}
+
+.system-menu-sep {
+    background: rgba(255, 255, 255, 0.1);
+    min-height: 1px;
+}
