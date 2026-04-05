@@ -1,34 +1,14 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
-import Gtk4LayerShell from "gi://Gtk4LayerShell"
+import status from "../../core/Status"
+
+import SquircleContainer, { Shape } from "../common/SquircleContainer"
 
 /**
  * Power Menu - Minimalist Session Management 💎
  */
-export default function PowerMenu(monitor: Gdk.Monitor) {
-    const win = new Gtk.Window({
-        name: "crystal-power-menu",
-        css_classes: ["power-menu-win", "fc-ignore"],
-        visible: false
-    })
-    // @ts-ignore
-    win.app_paintable = true
-
-    // LayerShell - Fullscreen Overlay
-    try {
-        Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, "crystal-power-menu") // Critical for Blur
-        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
-    } catch (e) {
-        console.error("[Power] LayerShell failed:", e)
-    }
-
+export default function PowerMenu() {
     const userName = GLib.get_user_name()
     const header = new Gtk.Label({
         label: `Goodbye, ${userName.charAt(0).toUpperCase() + userName.slice(1)}`,
@@ -79,7 +59,7 @@ export default function PowerMenu(monitor: Gdk.Monitor) {
         })
 
         btn.connect("clicked", () => {
-            win.visible = false
+            status.power_menu_open = false
             execAsync(["bash", "-c", a.cmd]).catch(console.error)
         })
 
@@ -98,15 +78,6 @@ export default function PowerMenu(monitor: Gdk.Monitor) {
     mainBox.append(actionBox)
     mainBox.append(uptimeLabel)
 
-    // Close on click outside (ESC handled by GTK automatic if focus is correct)
-    const gesture = new Gtk.GestureClick()
-    gesture.connect("released", () => { 
-        win.set_opacity(0.0)
-        win.set_sensitive(false)
-    })
-    // win.add_controller(gesture) // Maybe too aggressive if clicking buttons? 
-    // Usually overlays use ESC or a dedicated "Cancel" btn. 
-
     const cancelBtn = new Gtk.Button({
         label: "Cancelar",
         css_classes: ["power-cancel-btn"],
@@ -114,22 +85,23 @@ export default function PowerMenu(monitor: Gdk.Monitor) {
         margin_top: 60
     })
     cancelBtn.connect("clicked", () => { 
-        win.set_opacity(0.0)
-        win.set_sensitive(false)
+        status.power_menu_open = false
     })
     mainBox.append(cancelBtn)
 
-    win.child = mainBox
-
-        // Global toggle mechanism
-        ; (win as any).toggle = () => {
-            console.log("[PowerMenu] Toggle called")
-            win.visible = !win.visible
-            if (win.visible) {
-                updateUptime()
-                win.present()
-            }
+    // Update uptime when it becomes visible
+    status.connect("notify::power-menu-open", () => {
+        if (status.power_menu_open) {
+            updateUptime()
         }
+    })
 
-    return win
+    return SquircleContainer({ 
+        child: mainBox, 
+        n: 3.2, 
+        radius: 32,
+        alpha: 0.15, 
+        gloss: true, 
+        borderColor: { r: 1, g: 1, b: 1, a: 0.1 }
+    })
 }

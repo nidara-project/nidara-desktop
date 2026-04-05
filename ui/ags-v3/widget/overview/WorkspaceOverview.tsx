@@ -1,18 +1,19 @@
 import GObject from "gi://GObject"
 import { Astal, Gtk, Gdk } from "ags/gtk4"
 import AstalHyprland from "gi://AstalHyprland"
-import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 // @ts-ignore
 import Pango from "gi://Pango"
 import app from "ags/gtk4/app"
 import appService from "../../core/AppService"
 import Gio from "gi://Gio"
+import status from "../../core/Status"
+import SquircleContainer, { Shape } from "../common/SquircleContainer"
 
 const BASE_WIDTH = 300
 const BASE_HEIGHT = 170
 
-// V7.27: Constant Physical Architecture �️
+// V7.27: Constant Physical Architecture ️
 const MonitorCache = new Map<string, { w: number, h: number }>()
 const REFRESH_RATE = 500 // Generic heartbeat
 function SchematicMap(wsId: number, hyprland: any) {
@@ -58,7 +59,6 @@ function SchematicMap(wsId: number, hyprland: any) {
         if (!hMonitor || !hMonitor.width) return
 
         // V7.27: Geometric Unity 🛰️
-        // We recover physical truth from Cache or GDK once.
         let physW = hMonitor.width
         let physH = hMonitor.height
 
@@ -92,14 +92,12 @@ function SchematicMap(wsId: number, hyprland: any) {
             } catch (e) { }
         }
 
-        // Rigid normalization fallback (2K / 1080p standards)
         if (physH > 1000 && physH < 1500) physH = 1440;
         if (physH > 800 && physH <= 1000) physH = 1080;
         if (physW > 3000) physW = 3840;
         else if (physW > 2000) physW = 2560;
         else if (physW > 1800) physW = 1920;
 
-        // V7.28: Immutable Aspect Ratio (Force 16:9 ground truth) 📐
         const ratio = physW / physH
         if (ratio > 1.7 && ratio < 1.8) physH = (physW * 9) / 16;
         else if (ratio > 1.5 && ratio < 1.7) physH = (physW * 10) / 16; // 16:10
@@ -109,14 +107,9 @@ function SchematicMap(wsId: number, hyprland: any) {
         const scale = BASE_WIDTH / logicalW
         this.cachedDrawHeight = Math.round(logicalH * scale)
 
-        if (this.wsId === focusedWs?.id) {
-            // console.log(`[WO-Audit] WS:${this.wsId} Mon:${hMonitor.name} Phys:${physW}x${physH} Logic:${logicalW}x${logicalH} Scale:${scale}`)
-        }
-
         wrapper.set_size_request(BASE_WIDTH, this.cachedDrawHeight)
         this.set_size_request(BASE_WIDTH, this.cachedDrawHeight)
 
-        // Update Reserved Overlays 🛡️
         const bH = Math.round(44 * scale)
         const dH = Math.round(110 * scale)
         this.barArea.set_size_request(BASE_WIDTH, bH)
@@ -126,13 +119,10 @@ function SchematicMap(wsId: number, hyprland: any) {
         const wsClients = clients.filter((c: any) => c.workspace.id === this.wsId)
             .sort((a: any, b: any) => (b.focus_history_id || 0) - (a.focus_history_id || 0))
 
-        // V7.13: Proper Reserved Indices and Geometry Compensation �️
-        // V7.15: Proper Reserved Property Access 🛰️
         const rTop = (hMonitor as any).reserved_top || 0
         const rBottom = (hMonitor as any).reserved_bottom || 0
         const rLeft = (hMonitor as any).reserved_left || 0
         const rRight = (hMonitor as any).reserved_right || 0
-
 
         const activeAddresses = new Set(wsClients.map((c: any) => c.address))
         this.winWidgets.forEach((_: any, addr: string) => {
@@ -144,7 +134,6 @@ function SchematicMap(wsId: number, hyprland: any) {
         })
 
         wsClients.forEach((c: any) => {
-            // V7.28: Constant Physical Grounds 🛡️📐
             const isPrimary = (hMonitor.x || 0) === 0 && (hMonitor.y || 0) === 0
             const barH = 44
             const dockH = 110
@@ -155,12 +144,10 @@ function SchematicMap(wsId: number, hyprland: any) {
             let rawH = c.height
 
             if (isPrimary && !c.floating) {
-                // If windows are reported with full monitor height at cold-start
-                // We force them down regardless of reported reserved areas
                 if (rawY < barH) {
                     const diff = barH - rawY
                     rawY = barH
-                    if (rawH > (logicalH - barH - dockH)) rawH -= (diff + 10) // +10 for gap
+                    if (rawH > (logicalH - barH - dockH)) rawH -= (diff + 10) 
                 }
                 if (rawY + rawH > (logicalH - dockH)) {
                     rawH = Math.max(10, (logicalH - dockH) - rawY - 4)
@@ -172,8 +159,6 @@ function SchematicMap(wsId: number, hyprland: any) {
             const w = Math.round(rawW * scale)
             const h = Math.round(rawH * scale)
 
-
-            // V7.27: Simple & Centered Icon Architecture 🛡️✨
             const iconSize = Math.min(w * 0.7, h * 0.7, 28)
 
             let widget = this.winWidgets.get(c.address)
@@ -204,18 +189,12 @@ function SchematicMap(wsId: number, hyprland: any) {
                 fixed.move(widget.box, x, y)
             }
 
-            if (this.wsId === (this.hyprland as any).focused_workspace?.id && c.address === this.hyprland.focused_client?.address) {
-                // console.log(`[WO-Debug] WS ${this.wsId} | Win: ${c.class} | RawY: ${c.y} | RawH: ${c.height} | ScaledY: ${y} | ScaledH: ${h}`)
-            }
-
             widget.box.set_size_request(Math.max(1, w), Math.max(1, h))
             widget.box.set_css_classes(["wo-schematic-win"])
 
-            // Icon Logic 🖼️ (Robust lookup for Webapps)
             let iconId = c.class || "application-x-executable"
             const instance = (c as any).initialClass || (c as any).instance || ""
 
-            // Webapp heuristic: chrome-google.com-default -> google.com
             let webAppIcon = null
             if (iconId.startsWith("chrome-") && iconId.endsWith("-default")) {
                 const parts = iconId.split("-")
@@ -238,8 +217,6 @@ function SchematicMap(wsId: number, hyprland: any) {
             widget.icon.visible = w > 12 && h > 12
         })
 
-        // V7.15-V7.16: Bring Reserved Areas to FRONT 🛡️✨
-        // Use remove and put for Gtk.Fixed reordering (Z-order)
         try {
             this.remove(this.barArea)
             this.put(this.barArea, 0, 0)
@@ -254,29 +231,11 @@ function SchematicMap(wsId: number, hyprland: any) {
 
 export default function WorkspaceOverview(monitor: any) {
     const hyprland = AstalHyprland.get_default()
-    const win = new Gtk.Window({
-        name: "workspace-cockpit",
-        css_classes: ["workspace-cockpit"],
-        visible: false
-    })
-
-    try {
-        Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, "workspace-cockpit")
-        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true) // Full center! 🎯
-        Gtk4LayerShell.set_exclusive_zone(win, 0)
-        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
-        if (monitor) Gtk4LayerShell.set_monitor(win, monitor)
-    } catch (e) { }
 
     const overview = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 32,
-        css_classes: ["workspace-overview", "crystal-glass"],
+        css_classes: ["workspace-overview"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER,
     })
@@ -288,7 +247,18 @@ export default function WorkspaceOverview(monitor: any) {
         hexpand: true,
         vexpand: true
     })
-    windowContent.append(overview)
+    
+    // El SquircleContainer ahora envuelve TODO el overview, proveyendo un único fondo cristal unificado
+    const overviewSquircle = SquircleContainer({
+        child: overview,
+        n: 3.2,
+        radius: 36,
+        alpha: 0.15,
+        gloss: true,
+        borderColor: { r: 1, g: 1, b: 1, a: 0.1 }
+    })
+    
+    windowContent.append(overviewSquircle)
 
     const list = new Gtk.Grid({
         column_spacing: 16,
@@ -297,33 +267,37 @@ export default function WorkspaceOverview(monitor: any) {
         valign: Gtk.Align.CENTER
     })
 
-    const slots = new Map<number, { btn: Gtk.Button, schematic: any }>()
+    const slots = new Map<number, { wrapperBtn: Gtk.Button, itemBox: Gtk.Box, schematic: any, headerBox: Gtk.Box }>()
 
     for (let i = 1; i <= 5; i++) {
         const schematic = SchematicMap(i, hyprland)
-        const label = new Gtk.Label({ label: `WS ${i}`, css_classes: ["wo-label"] })
+        const label = new Gtk.Label({ label: `Workspace ${i}`, css_classes: ["wo-label"] })
         const count = new Gtk.Label({ css_classes: ["wo-count"] })
-        const header = new Gtk.Box({ spacing: 8, halign: Gtk.Align.CENTER })
+        const header = new Gtk.Box({ 
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 2, 
+            halign: Gtk.Align.CENTER,
+            margin_bottom: 4
+        })
         header.append(label); header.append(count)
 
-        const item = new Gtk.Box({
+        const itemBox = new Gtk.Box({
             orientation: Gtk.Orientation.VERTICAL,
             spacing: 12,
             css_classes: ["wo-item"],
             width_request: BASE_WIDTH + 24,
-            height_request: 280, // V7.17: Increased for breathing room 🛡️
             hexpand: false
         })
-        item.append(header); item.append(schematic)
+        itemBox.append(header); itemBox.append(schematic)
 
-        const btn = new Gtk.Button({ child: item, css_classes: ["wo-btn"] })
-        btn.set_focus_on_click(false) // Disable GTK focus 🛡️
+        const btn = new Gtk.Button({ child: itemBox, css_classes: ["wo-btn"] })
+        btn.set_focus_on_click(false) 
         btn.connect("clicked", () => {
             hyprland.dispatch("workspace", i.toString())
-            win.visible = false
+            status.overview_open = false
         })
 
-        slots.set(i, { btn, schematic: (schematic as any).schematic })
+        slots.set(i, { wrapperBtn: btn, itemBox: itemBox, schematic: (schematic as any).schematic, headerBox: header })
         const col = (i - 1) % 5
         const row = Math.floor((i - 1) / 5)
         list.attach(btn, col, row, 1, 1)
@@ -341,18 +315,18 @@ export default function WorkspaceOverview(monitor: any) {
             slots.forEach((ctx, i) => {
                 const isActive = focusedId === i
                 const isOccupied = occupied.has(i)
-                ctx.btn.visible = true // V7.10: Force all 10 to be visible 🎯
+                ctx.wrapperBtn.visible = true
 
-                const item = ctx.btn.child as Gtk.Box
-                const header = item.get_first_child() as Gtk.Box
-                const label = header.get_first_child() as Gtk.Label
-                const count = header.get_last_child() as Gtk.Label
+                const label = ctx.headerBox.get_first_child() as Gtk.Label
+                const count = ctx.headerBox.get_last_child() as Gtk.Label
 
-                item.set_css_classes(["wo-item", isActive ? "active" : ""])
+                if (ctx.itemBox && ctx.itemBox.set_css_classes) {
+                    ctx.itemBox.set_css_classes(["wo-item", isActive ? "active" : ""])
+                }
                 label.set_css_classes(["wo-label", isActive ? "active" : ""])
 
                 const wsClients = clients.filter(c => c.workspace.id === i)
-                count.label = wsClients.length > 0 ? wsClients.length.toString() : "󰝦"
+                count.label = wsClients.length === 0 ? "Vacío" : (wsClients.length === 1 ? "1 ventana" : `${wsClients.length} ventanas`)
 
                 if (ctx.schematic && ctx.schematic.sync) {
                     ctx.schematic.sync(workspaces, monitors, clients)
@@ -370,47 +344,40 @@ export default function WorkspaceOverview(monitor: any) {
 
     const signals = [
         hyprland.connect("notify::focused-workspace", () => {
-            console.log("[WO-Debug] Signal: focused-workspace")
             syncAll()
         }),
         hyprland.connect("notify::clients", () => {
-            console.log("[WO-Debug] Signal: clients notify")
             syncAll()
         }),
         hyprland.connect("monitor-added", () => syncAll()),
         hyprland.connect("monitor-removed", () => syncAll()),
         hyprland.connect("event", (h, name, data) => {
-            // Log ALL events for deep audit 🚀
-            // console.log(`[WO-Debug] Raw Hypr Event: ${name}`)
             if (["workspace", "activewindow", "movewindow", "resizewindow", "openwindow", "closewindow", "fullscreen", "focusedmon"].includes(name)) {
-                console.log(`[WO-Debug] REACTIVE Hypr Event: ${name}`)
                 syncAll()
-            }
-        }),
-        win.connect("map", () => runPulse(10)),
-        win.connect("notify::visible", () => {
-            if (win.visible) {
-                syncAll()
-                runPulse(15) // Progressive sync for 15 seconds to catch layout stability 🛡️
             }
         })
     ]
 
-    // V7.11: Faster Heart-beat sync (500ms) 💓
+    status.connect("notify::overview-open", () => {
+        if (status.overview_open) {
+            syncAll()
+            runPulse(15)
+        }
+    })
+
     const heartbeat = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-        if (win.get_visible()) {
+        if (status.overview_open) {
             syncAll()
         }
         return GLib.SOURCE_CONTINUE
     })
 
-    win.connect("unrealize", () => {
+    windowContent.connect("unrealize", () => {
         signals.forEach(id => hyprland.disconnect(id))
         GLib.source_remove(heartbeat)
     })
 
     overview.append(list)
-    win.set_child(windowContent)
 
     GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
         syncAll()
@@ -418,17 +385,5 @@ export default function WorkspaceOverview(monitor: any) {
         return GLib.SOURCE_REMOVE
     })
 
-    ;(win as any).toggle = () => {
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-            const isVis = win.get_visible()
-            win.set_visible(!isVis)
-            if (!isVis) {
-                win.present()
-                syncAll()
-            }
-            return GLib.SOURCE_REMOVE
-        })
-    }
-
-    return win
+    return windowContent
 }

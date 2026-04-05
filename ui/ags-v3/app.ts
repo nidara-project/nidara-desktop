@@ -31,9 +31,7 @@ import { syncConstants } from "./widget/dock/DockPhysics"
 import { onDockSettingsChanged, onPinnedChanged } from "./widget/dock/state"
 import AppGrid from "./widget/app-grid/AppGrid"
 import Bar from "./widget/bar/Bar"
-import PowerMenu from "./widget/power-menu/PowerMenu"
 import Settings from "./widget/settings/Settings"
-import WorkspaceOverview from "./widget/overview/WorkspaceOverview"
 import Theme from "./core/ThemeManager"
 
 console.log("[CRYSTAL_SHELL] Calling app.start()...");
@@ -54,9 +52,7 @@ app.start({
 
     const windows = new Set<any>()
     const appLauncherWindows: any[] = []
-    const powerWindows: any[] = []
     const settingsWindows: any[] = []
-    const overviewWindows: any[] = []
 
     const initWinGlobal = (ctor: any, mon: Gdk.Monitor, array: any[]) => {
       try {
@@ -97,10 +93,8 @@ app.start({
         onDockSettingsChanged(scheduleDockRebuild)
         onPinnedChanged(scheduleDockRebuild)
 
-        initWinGlobal(PowerMenu, monitor, powerWindows)
         // Settings deferred to toggleSettings (Lazy)
         initWinGlobal(AppGrid, monitor, appLauncherWindows)
-        initWinGlobal(WorkspaceOverview, monitor, overviewWindows)
 
       } catch (e) { console.error(`[UI] Error:`, e) }
     }
@@ -121,7 +115,7 @@ app.start({
       appLauncherWindows.forEach(g => { try { g.toggle() } catch (e) { console.error(e) } })
     }
     const togglePower = () => {
-      powerWindows.forEach(p => { try { p.toggle() } catch (e) { console.error(p) } })
+      status.togglePowerMenu()
     }
     const toggleSettings = () => {
       // Lazy Init on first toggle
@@ -140,7 +134,7 @@ app.start({
       })
     }
     const toggleOverview = () => {
-      overviewWindows.forEach(o => { try { o.toggle() } catch (e) { console.error(e) } })
+      status.toggleOverview()
     }
     // Expose Globals
     (globalThis as any).toggleAppGrid = toggleAppGrid;

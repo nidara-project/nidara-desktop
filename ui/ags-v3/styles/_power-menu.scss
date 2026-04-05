@@ -10,11 +10,10 @@
 }
 
 .power-main-box {
-    background-color: var(--crystal-bg-backdrop);
-    border: 1px solid var(--crystal-border);
-    border-radius: var(--crystal-radius-lg);
+    background-color: transparent;
+    border: none;
     padding: 48px 64px;
-    box-shadow: var(--crystal-shadow-lg);
+    box-shadow: none;
 }
 
 /* --- User Greeting --- */

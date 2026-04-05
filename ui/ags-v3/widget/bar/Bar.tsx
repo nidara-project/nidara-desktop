@@ -21,6 +21,8 @@ import { ControlCenterWidget } from "../control-center/ControlCenter"
 import NotificationCenter from "../control-center/NotificationCenter"
 import Prism from "../prism/Prism"
 import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
+import WorkspaceOverview from "../overview/WorkspaceOverview"
+import PowerMenu from "../power-menu/PowerMenu"
 
 function AppMenu(monitorWidth: number): { widget: Gtk.Widget; appName: Gtk.Label } {
   const box = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, margin_start: 16, margin_end: 16 })
@@ -149,22 +151,27 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const prism = Prism()
   const popups = NotificationPopupsWidget()
   const systemMenu = SystemMenuOverlay()
+  const overview = WorkspaceOverview(gdkmonitor)
+  const powerMenu = PowerMenu()
 
   // 💎 THE CATCHER: Invisible button to close overlays
   const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
   catcher.connect("clicked", () => {
     if (status.cc_edit_mode) return   // don't close CC while in edit mode
     status.cc_open = false; status.nc_open = false; status.prism_open = false; status.system_menu_open = false
+    status.overview_open = false; status.power_menu_open = false
   })
 
   masterOverlay.set_child(barBox)
   masterOverlay.add_overlay(catcher) // 💎 Behind panels, above BarBox base child
-  masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu)
+  masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu); masterOverlay.add_overlay(overview); masterOverlay.add_overlay(powerMenu)
 
   cc.valign = Gtk.Align.START; cc.halign = Gtk.Align.END
   nc.valign = Gtk.Align.START; nc.halign = Gtk.Align.END
   prism.valign = Gtk.Align.CENTER; prism.halign = Gtk.Align.CENTER
   popups.valign = Gtk.Align.START; popups.halign = Gtk.Align.END
+  overview.valign = Gtk.Align.CENTER; overview.halign = Gtk.Align.CENTER
+  powerMenu.valign = Gtk.Align.CENTER; powerMenu.halign = Gtk.Align.CENTER
 
   cc.margin_top = 48; cc.margin_end = 8
 
@@ -195,7 +202,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // @ts-ignore
       region.unionRectangle({ x: 0, y: 0, width: Math.round(monGeo.width), height: 40 })
 
-      const isAnyOpen = status.cc_open || status.nc_open || status.prism_open || status.system_menu_open
+      const isAnyOpen = status.cc_open || status.nc_open || status.prism_open || status.system_menu_open || status.overview_open || status.power_menu_open
       if (isAnyOpen && !status.cc_edit_mode) {
           // 🛰️ SURGICAL: Catcher region (Everything below Bar to catch outside clicks)
           // In edit mode we skip this so other windows remain interactive
@@ -210,7 +217,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           // @ts-ignore
           region.unionRectangle({ x: Math.round(alloc.x), y: Math.round(alloc.y), width: Math.round(alloc.width), height: Math.round(alloc.height) })
       }
-      addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism); addWidgetToRegion(systemMenu)
+      addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism); addWidgetToRegion(systemMenu); addWidgetToRegion(overview); addWidgetToRegion(powerMenu)
       
       // 🛰️ ATOMIC: Add every individual popup to the region
       let child = popups.get_first_child()
@@ -223,13 +230,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
 
   const syncOverlays = () => {
-    const isAnyOpen = status.cc_open || status.nc_open || status.prism_open || status.system_menu_open
+    const isAnyOpen = status.cc_open || status.nc_open || status.prism_open || status.system_menu_open || status.overview_open || status.power_menu_open
     catcher.set_visible(isAnyOpen && !status.cc_edit_mode)
     if (status.cc_open) centerCCUnderIcon()
     cc.set_visible(status.cc_open); nc.set_visible(status.nc_open); prism.set_visible(status.prism_open); systemMenu.set_visible(status.system_menu_open)
+    overview.set_visible(status.overview_open); powerMenu.set_visible(status.power_menu_open)
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
+  status.connect("notify::overview-open", syncOverlays); status.connect("notify::power-menu-open", syncOverlays)
   status.connect("notify::cc-edit-mode", () => {
     syncOverlays()
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })

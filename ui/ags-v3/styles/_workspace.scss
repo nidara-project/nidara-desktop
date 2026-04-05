@@ -9,8 +9,6 @@ window.workspace-cockpit {
 }
 
 .cockpit-window-content {
-    padding-top: 100px;
-    padding-bottom: 250px;
     background: transparent;
 }
 
@@ -37,11 +35,10 @@ window.workspace-cockpit {
 
 /* --- Overview Panel --- */
 .workspace-overview {
-    background: #0c0c0c;
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 32px;
+    background: transparent;
+    border: none;
     padding: 32px;
-    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.95);
+    box-shadow: none;
 }
 
 /* --- Workspace Items --- */
@@ -59,6 +56,24 @@ window.workspace-cockpit {
     border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
+.wo-label {
+    font-size: 1.1em;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.9);
+    transition: all 0.2s;
+    
+    &.active {
+        color: #{"@accent_bg_color"};
+    }
+}
+
+.wo-count {
+    font-size: 0.8em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 8px;
+}
+
 .wo-schematic-win {
     background-color: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.15);
@@ -70,7 +85,6 @@ window.workspace-cockpit {
 .wo-item.active {
     background-color: #{"alpha(@accent_bg_color, 0.05)"};
     border: 1px solid #{"alpha(@accent_bg_color, 0.6)"};
-    box-shadow: 0 0 60px #{"alpha(@accent_bg_color, 0.25)"};
 }
 
 .bar-ws-dot {
@@ -112,7 +126,6 @@ window.workspace-cockpit {
         &.active {
             background-color: #{"alpha(@accent_bg_color, 0.08)"};
             border-color: #{"alpha(@accent_bg_color, 0.8)"};
-            box-shadow: 0 0 60px #{"alpha(@accent_bg_color, 0.35)"};
         }
     }
 }
