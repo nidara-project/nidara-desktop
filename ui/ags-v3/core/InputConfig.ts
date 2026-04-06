@@ -1,0 +1,132 @@
+import GObject from "gi://GObject"
+import GLib from "gi://GLib"
+import { execAsync } from "ags/process"
+
+class InputConfig extends GObject.Object {
+    static {
+        GObject.registerClass({
+            GTypeName: "InputConfigManager",
+            Signals: {
+                changed: {},
+            },
+        }, this)
+    }
+
+    private _pointerSpeed = 0.0
+    private _accelProfile = "adaptive"
+    private _touchpadNaturalScroll = false
+    private _touchpadTap = true
+    private _numlockOnBoot = false
+
+    private initialized = false
+
+    constructor() {
+        super()
+        this.syncFromHyprland()
+    }
+
+    get pointerSpeed() { return this._pointerSpeed }
+    get accelProfile() { return this._accelProfile }
+    get touchpadNaturalScroll() { return this._touchpadNaturalScroll }
+    get touchpadTap() { return this._touchpadTap }
+    get numlockOnBoot() { return this._numlockOnBoot }
+
+    // Parse options directly from Hyprland live state
+    private async syncFromHyprland() {
+        try {
+            const out = await execAsync(["hyprctl", "getoption", "-j", "input:sensitivity"])
+            this._pointerSpeed = JSON.parse(out).float || 0.0
+        } catch {}
+
+        try {
+            const out = await execAsync(["hyprctl", "getoption", "-j", "input:accel_profile"])
+            this._accelProfile = JSON.parse(out).str || "adaptive"
+        } catch {}
+
+        try {
+            const out = await execAsync(["hyprctl", "getoption", "-j", "input:touchpad:natural_scroll"])
+            this._touchpadNaturalScroll = JSON.parse(out).int === 1
+        } catch {}
+
+        try {
+            const out = await execAsync(["hyprctl", "getoption", "-j", "input:touchpad:tap-to-click"])
+            this._touchpadTap = JSON.parse(out).int === 1
+        } catch {}
+
+        try {
+            const out = await execAsync(["hyprctl", "getoption", "-j", "input:numlock_by_default"])
+            this._numlockOnBoot = JSON.parse(out).int === 1
+        } catch {}
+
+        this.initialized = true
+        this.emit("changed")
+    }
+
+    private applyAndSave(option: string, value: string | number) {
+        if (!this.initialized) return
+
+        // 1. Live apply
+        execAsync(["hyprctl", "keyword", option, String(value)]).catch(console.error)
+
+        // 2. Save to persistent UI-owned file
+        const configPath = GLib.build_filenamev([GLib.get_home_dir(), ".config", "hypr", "crystal-settings.conf"])
+        
+        // Build the contents of the UI overriding file
+        const contents = `
+# ── CRYSTAL SHELL SETTINGS ──────────────────────────────────────────────────
+# Archivo autogenerado por la interfaz gráfica de Crystal Shell (Panel Settings)
+# NO EDITAR MANUALMENTE. Usa la interfaz de usuario en su lugar.
+
+input {
+    sensitivity = ${this._pointerSpeed.toFixed(2)}
+    accel_profile = ${this._accelProfile}
+    numlock_by_default = ${this._numlockOnBoot}
+    
+    touchpad {
+        natural_scroll = ${this._touchpadNaturalScroll}
+        tap-to-click = ${this._touchpadTap}
+    }
+}
+        `.trim()
+
+        try {
+            const targetDir = GLib.path_get_dirname(configPath)
+            if (!GLib.file_test(targetDir, GLib.FileTest.EXISTS)) {
+                GLib.mkdir_with_parents(targetDir, 0o755)
+            }
+            GLib.file_set_contents(configPath, contents)
+        } catch (e) {
+            console.error("Failed to write crystal settings:", e)
+        }
+
+        this.emit("changed")
+    }
+
+    setPointerSpeed(val: number) {
+        this._pointerSpeed = val
+        this.applyAndSave("input:sensitivity", val)
+    }
+
+    setAccelProfile(val: string) {
+        this._accelProfile = val
+        this.applyAndSave("input:accel_profile", val)
+    }
+
+    setTouchpadNaturalScroll(val: boolean) {
+        this._touchpadNaturalScroll = val
+        this.applyAndSave("input:touchpad:natural_scroll", val ? 1 : 0)
+    }
+
+    setTouchpadTap(val: boolean) {
+        this._touchpadTap = val
+        this.applyAndSave("input:touchpad:tap-to-click", val ? 1 : 0)
+    }
+
+    setNumlockOnBoot(val: boolean) {
+        this._numlockOnBoot = val
+        this.applyAndSave("input:numlock_by_default", val ? 1 : 0)
+    }
+}
+
+const inputConfig = new InputConfig()
+export default inputConfig
