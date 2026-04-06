@@ -113,6 +113,34 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     gridArea.append(scroll)
     gridArea.append(noResults)
 
+    // ── Massive Clock ──────────────────────────────────────────────────────
+    const clockLabel = new Gtk.Label({
+        label: "...",
+        css_classes: ["app-grid-clock-time"],
+        halign: Gtk.Align.CENTER,
+        margin_bottom: 32, // space between clock and search bar
+    })
+
+    const updateClock = () => {
+        const d = new Date()
+        const h = d.getHours().toString().padStart(2, "0")
+        const m = d.getMinutes().toString().padStart(2, "0")
+        clockLabel.label = `${h}:${m}`
+    }
+    
+    // Timer updates every 1s
+    const clockTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+        updateClock()
+        return GLib.SOURCE_CONTINUE
+    })
+    
+    // Clean up timer when window is destroyed
+    win.connect("unrealize", () => {
+        try { GLib.source_remove(clockTimer) } catch {}
+    })
+    
+    updateClock() // set initially
+
     // ── Main content column ────────────────────────────────────────────────
     const contentCol = new Gtk.Box({
         name: "app-grid-content",
@@ -123,6 +151,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         hexpand: true,
         vexpand: true,
     })
+    contentCol.append(clockLabel)
     contentCol.append(searchEntry)
     contentCol.append(gridArea)
 

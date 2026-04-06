@@ -20,7 +20,18 @@ window#crystal-app-launcher,
 /* ── Main content column ── */
 .app-grid-content {
     background: transparent;
-    padding: 56px 100px 48px;
+    padding: 30px 100px 48px; /* Reduced top padding to accommodate the massive clock */
+}
+
+/* ── Cinematic Clock ── */
+.app-grid-clock-time {
+    font-family: 'Inter Variable', sans-serif;
+    font-size: 156px;
+    font-weight: 200;
+    letter-spacing: -6px;
+    color: rgba(255, 255, 255, 0.85);
+    text-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+    transition: all 400ms cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 /* ── Search bar ── */
