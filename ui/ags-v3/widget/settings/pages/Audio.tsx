@@ -116,13 +116,19 @@ export default function AudioPage() {
         microphones.forEach((ep: any) => micGroup.listBox.append(createDeviceRow(ep, true)))
     }
 
-    audio.connect("speaker-added", refreshDevices)
-    audio.connect("speaker-removed", refreshDevices)
-    audio.connect("microphone-added", refreshDevices)
-    audio.connect("microphone-removed", refreshDevices)
-    audio.connect("notify::default-speaker", refreshDevices)
-    audio.connect("notify::default-microphone", refreshDevices)
+    const audioSignals = [
+        audio.connect("speaker-added", refreshDevices),
+        audio.connect("speaker-removed", refreshDevices),
+        audio.connect("microphone-added", refreshDevices),
+        audio.connect("microphone-removed", refreshDevices),
+        audio.connect("notify::default-speaker", refreshDevices),
+        audio.connect("notify::default-microphone", refreshDevices),
+    ]
     refreshDevices()
+
+    page.connect("unrealize", () => {
+        audioSignals.forEach(id => { try { audio.disconnect(id) } catch {} })
+    })
 
     page.append(speakerGroup.box)
     page.append(micGroup.box)

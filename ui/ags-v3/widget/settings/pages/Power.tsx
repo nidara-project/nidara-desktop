@@ -63,7 +63,7 @@ export default function PowerPage() {
 
     page.append(profileGroup.box)
 
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
         execAsync(["powerprofilesctl", "get"]).then((current: string) => {
             const clean = current.trim()
             profiles.forEach((p, idx) => {

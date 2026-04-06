@@ -114,6 +114,10 @@ export default function ControlCenterPage(): Gtk.Widget {
 
     rebuild()
 
+    // Refresh when layout changes from outside (e.g. Widgets page toggling CC placement)
+    const layoutSigId = ccLayout.connect("changed", rebuild)
+    page.connect("unrealize", () => { try { ccLayout.disconnect(layoutSigId) } catch {} })
+
     page.append(activeGroup.box)
     page.append(inactiveGroup.box)
     return page

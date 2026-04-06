@@ -4,23 +4,24 @@ import app from "ags/gtk4/app"
 import Adw from "gi://Adw?version=1"
 
 // Page Imports
-import NetworkPage from "./pages/Network"
-import AudioPage from "./pages/Audio"
-import DockPage from "./pages/Dock"
-import PowerPage from "./pages/Power"
 import AppearancePage from "./pages/Appearance"
-import ControlCenterPage from "./pages/ControlCenter"
+import DisplayPage from "./pages/Display"
+import AudioPage from "./pages/Audio"
+import NetworkPage from "./pages/Network"
+import PowerPage from "./pages/Power"
+import DockPage from "./pages/Dock"
+import RegionPage from "./pages/Region"
+import WidgetsPage from "./pages/Widgets"
+import AboutPage from "./pages/About"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex } from "./SettingsHelpers"
 
 /**
  * Settings - System Configuration Panel
- * macOS Tahoe Inspired Design
  */
 export default function Settings(monitor: Gdk.Monitor) {
-    console.log("[Settings] Initializing window components...");
     clearSearchIndex()
 
-    // --- Navigation Controls (Tahoe Style) --- 🧭
+    // Navigation Controls
     // NOTE: Adw.HeaderBar allocates its full height (44px) to packed children unless
     // the button itself declares valign:CENTER. Use child Gtk.Image with explicit pixel_size
     // to control content size independently of GTK's default icon sizing.
@@ -41,7 +42,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         halign: Gtk.Align.CENTER,
     })
 
-    // Navigation Capsule 💊 (True Pill Shape via CSS)
+    // Navigation Capsule (pill shape via CSS)
     const navCapsule = new Gtk.Box({ 
         css_classes: ["navigation-capsule"],
         valign: Gtk.Align.CENTER,
@@ -71,13 +72,16 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
 
     const categories = [
-        { id: "appearance", label: "Apariencia", icon: "preferences-desktop-theme-symbolic", component: AppearancePage },
-        { id: "network", label: "Red", icon: "network-workgroup-symbolic", component: NetworkPage },
-        { id: "audio", label: "Sonido", icon: "audio-speakers-symbolic", component: AudioPage },
-        { id: "dock", label: "Dock / Panel", icon: "dock-bottom-symbolic", component: DockPage },
-        { id: "controlcenter", label: "Centro de Control", icon: "view-grid-symbolic", component: ControlCenterPage },
-        { id: "power", label: "Energía", icon: "power-profile-balanced-symbolic", component: PowerPage },
-        { id: "input", label: "Dispositivos", icon: "input-mouse-symbolic", component: null },
+        { id: "appearance", label: "Apariencia",      icon: "preferences-desktop-theme-symbolic",  component: AppearancePage },
+        { id: "display",    label: "Pantalla",         icon: "video-display-symbolic",              component: DisplayPage     },
+        { id: "audio",      label: "Sonido",           icon: "audio-speakers-symbolic",             component: AudioPage       },
+        { id: "network",    label: "Red",              icon: "network-workgroup-symbolic",           component: NetworkPage     },
+        { id: "input",      label: "Dispositivos",     icon: "input-keyboard-symbolic",             component: null            },
+        { id: "region",     label: "Idioma y Región",  icon: "preferences-system-time-symbolic",    component: RegionPage      },
+        { id: "dock",       label: "Dock / Panel",     icon: "dock-bottom-symbolic",                component: DockPage        },
+        { id: "widgets",    label: "Widgets",          icon: "puzzle-piece-symbolic",               component: WidgetsPage     },
+        { id: "power",      label: "Energía",          icon: "power-profile-balanced-symbolic",     component: PowerPage       },
+        { id: "about",      label: "Acerca de",        icon: "help-about-symbolic",                 component: AboutPage       },
     ]
 
     const stack = new Adw.ViewStack({
@@ -306,8 +310,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         if (historyIdx < history.length - 1) navigateTo(history[++historyIdx], false)
     })
 
-    // --- Responsive Floating Architecture --- 🏔️
-    // Sidebar: Floating Pill (Directly in SplitView)
+    // Sidebar scroll container
     const sidebarScroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
@@ -318,7 +321,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     sidebarScroll.set_name("crystal-settings-sidebar-scroll")
 
 
-    // Search Component 🔍
+    // Search
     const searchEntry = new Gtk.SearchEntry({
         placeholder_text: "Buscar ajustes...",
         css_classes: ["settings-search", "pill"],
@@ -352,7 +355,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         searchEntry.text = ""
     })
 
-    // Sidebar Toggle Button 📲
+    // Sidebar toggle button
     const sidebarToggle = new Gtk.Button({
         child: new Gtk.Image({ icon_name: "view-sidebar-symbolic", pixel_size: 16 }),
         css_classes: ["crystal-icon-btn", "sidebar-toggle"],
@@ -398,7 +401,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     contentColumn.append(contentHeader)
     contentColumn.append(stack)
 
-    // Main Responsive Overlay Split View 🏔️
+    // Overlay split view — sidebar + content
     const splitView = new Adw.OverlaySplitView({
         name: "settings-splitview",
         sidebar: sidebarScroll,
@@ -414,13 +417,13 @@ export default function Settings(monitor: Gdk.Monitor) {
         splitView.set_show_sidebar(!splitView.show_sidebar)
     })
 
-    // DESACTIVAR SEPARADOR VERTICAL (Tahoe Clean Look)
+    // Hide sidebar separator for a clean look
     try {
         // @ts-ignore
         if (splitView.set_show_sidebar_separator) splitView.set_show_sidebar_separator(false)
     } catch (e) {}
 
-    // 💎 NATIVE RESPONSIVE BREAKPOINT 💎
+    // Responsive breakpoint — collapse sidebar below 1100px
     const breakpoint = new Adw.Breakpoint({
         condition: Adw.BreakpointCondition.parse("max-width: 1100px")
     })
@@ -432,7 +435,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     mainContainer.append(splitView)
     win.set_content(mainContainer)
 
-    // Restaura la selección tras colapso/expansión del SplitView
+    // Restore sidebar selection after collapse/expand
     splitView.connect("notify::collapsed", () => {
         if (!sidebar.get_selected_row() && stack.visible_child_name)
             syncSidebarSelection(stack.visible_child_name)
@@ -452,6 +455,5 @@ export default function Settings(monitor: Gdk.Monitor) {
     // Default selection — navigate to first page, seeding history
     if (categories.length > 0) navigateTo(categories[0].id)
 
-    console.log("[Settings] window ready to return.");
     return win
 }
