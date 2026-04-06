@@ -19,12 +19,6 @@ export default function DockPage() {
         (v) => updateDockSettings({ screenGap: v }),
         { unit: "px" },
     ))
-    geoGroup.listBox.append(sliderRow(
-        "Escala de iconos", "Ajuste fino del renderizado",
-        dockSettings.iconThemeScale, 0, 20,
-        (v) => updateDockSettings({ iconThemeScale: v }),
-        { unit: "%" },
-    ))
     page.append(geoGroup.box)
 
     // 2. Effects
