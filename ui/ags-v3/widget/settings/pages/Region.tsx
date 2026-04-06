@@ -215,33 +215,102 @@ export default function RegionPage() {
     tzBox.append(tzList)
     page.append(tzBox)
 
-    // ── Idioma del sistema ────────────────────────────────────────────────────
+    // ── Idioma del sistema y Teclado ──────────────────────────────────────────
     const { box: localeBox, listBox: localeList } = listGroup("Idioma del sistema")
 
-    const langLabel = staticLabel("…")
-    localeList.append(createRow("Locale activo", "Variable LANG del sistema", langLabel))
+    // --- 1. Locale (LANG) ---
+    const langEntry = new Gtk.Entry({ placeholder_text: "Ej: es_ES.UTF-8", width_chars: 20, valign: Gtk.Align.CENTER })
+    const langCompletion = new Gtk.EntryCompletion()
+    const langModel = new Gtk.ListStore()
+    // @ts-ignore
+    langModel.set_column_types([GObject.TYPE_STRING])
+    langCompletion.set_model(langModel)
+    langCompletion.set_text_column(0)
+    langCompletion.set_inline_completion(true)
+    langCompletion.set_minimum_key_length(1)
+    langEntry.set_completion(langCompletion)
 
-    const kbLabel = staticLabel("…")
-    localeList.append(createRow("Distribución de teclado", "Layout X11 activo", kbLabel))
+    const applyLangBtn = new Gtk.Button({ label: "Aplicar", css_classes: ["suggested-action"], valign: Gtk.Align.CENTER })
+    const langEntryRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+    langEntryRow.append(langEntry)
+    langEntryRow.append(applyLangBtn)
+    
+    localeList.append(createRow("Idioma (Locale)", "El cambio requiere reiniciar sesión", langEntryRow))
 
-    // Single localectl call — parse both fields from same output
-    execAsync(["localectl", "status"])
-        .then(out => {
-            const langMatch = out.match(/System Locale:\s*LANG=(\S+)/)
-            langLabel.label = langMatch ? langMatch[1] : (GLib.getenv("LANG") || "Desconocido")
-            const kbMatch = out.match(/X11 Layout:\s*(\S+)/)
-            kbLabel.label = kbMatch ? kbMatch[1] : "—"
-        })
-        .catch(() => {
-            langLabel.label = GLib.getenv("LANG") || "Desconocido"
-            kbLabel.label = "—"
-        })
+    // --- 2. Keyboard Layout ---
+    const kbEntry = new Gtk.Entry({ placeholder_text: "Ej: es", width_chars: 20, valign: Gtk.Align.CENTER })
+    const kbCompletion = new Gtk.EntryCompletion()
+    const kbModel = new Gtk.ListStore()
+    // @ts-ignore
+    kbModel.set_column_types([GObject.TYPE_STRING])
+    kbCompletion.set_model(kbModel)
+    kbCompletion.set_text_column(0)
+    kbCompletion.set_inline_completion(true)
+    kbCompletion.set_minimum_key_length(1)
+    kbEntry.set_completion(kbCompletion)
 
-    localeList.append(createRow(
-        "Nota",
-        "Cambiar el idioma requiere reiniciar la sesión y configurar el locale con localectl.",
-        new Gtk.Image({ icon_name: "dialog-information-symbolic", pixel_size: 18, opacity: 0.6, valign: Gtk.Align.CENTER })
-    ))
+    const applyKbBtn = new Gtk.Button({ label: "Aplicar", css_classes: ["suggested-action"], valign: Gtk.Align.CENTER })
+    const kbEntryRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+    kbEntryRow.append(kbEntry)
+    kbEntryRow.append(applyKbBtn)
+    
+    localeList.append(createRow("Distribución de Teclado", "Se aplica instantáneamente", kbEntryRow))
+
+    // Initialization: parse current values and populate lists
+    execAsync(["localectl", "status"]).then(out => {
+        const langMatch = out.match(/System Locale:\s*LANG=(\S+)/)
+        if (langMatch) langEntry.text = langMatch[1]
+        
+        // Populate locales list
+        execAsync(["localectl", "list-locales"]).then(list => {
+            list.trim().split("\n").forEach(l => {
+                if (!l) return
+                const iter = langModel.append()
+                // @ts-ignore
+                langModel.set(iter, [0], [l])
+            })
+        }).catch(console.error)
+
+        // Read Hyprland config specifically for current KB (more reliable than localectl for Wayland)
+        execAsync(["bash", "-c", "grep 'kb_layout' ~/.config/hypr/hyprland-user.conf | awk '{print $3}' || echo ''"]).then(kb => {
+            kbEntry.text = kb.trim() || out.match(/X11 Layout:\s*(\S+)/)?.[1] || "us"
+        }).catch(err => console.error("Error reading hypr kb_layout:", err))
+
+        // Populate kb layouts list
+        execAsync(["localectl", "list-x11-keymap-layouts"]).then(list => {
+            list.trim().split("\n").forEach(k => {
+                if (!k) return
+                const iter = kbModel.append()
+                // @ts-ignore
+                kbModel.set(iter, [0], [k])
+            })
+        }).catch(console.error)
+    }).catch(console.error)
+
+    // Actions
+    const applyLang = () => {
+        const lang = langEntry.text.trim()
+        if (!lang) return
+        applyLangBtn.sensitive = false
+        execAsync(["pkexec", "localectl", "set-locale", `LANG=${lang}`])
+            .finally(() => applyLangBtn.sensitive = true)
+    }
+
+    const applyKb = () => {
+        const kb = kbEntry.text.trim()
+        if (!kb) return
+        applyKbBtn.sensitive = false
+        // Update both the active Hyprland session and the user's persistent config file
+        const cmd = `sed -i "s/\\(kb_layout\\s*=\\s*\\).*/\\1${kb}/" ~/.config/hypr/hyprland-user.conf && hyprctl keyword input:kb_layout ${kb}`
+        execAsync(["bash", "-c", cmd])
+            .finally(() => applyKbBtn.sensitive = true)
+    }
+
+    applyLangBtn.connect("clicked", applyLang)
+    langEntry.connect("activate", applyLang)
+    
+    applyKbBtn.connect("clicked", applyKb)
+    kbEntry.connect("activate", applyKb)
 
     localeBox.append(localeList)
     page.append(localeBox)
