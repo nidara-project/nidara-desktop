@@ -37,7 +37,8 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
         Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true)
-        // exclusive_zone = 0 → respeta los zones de barra y dock (no los cubre)
+        // Ignorar las zonas reservadas para cubrir el 100% de la pantalla (tapar dock y barra)
+        Gtk4LayerShell.set_exclusive_zone(win, -1)
         Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
     }
 
