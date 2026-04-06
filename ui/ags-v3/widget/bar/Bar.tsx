@@ -1,7 +1,6 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
 import Pango from "gi://Pango"
 import { execAsync } from "ags/process"
-import { createPoll } from "ags/time"
 import app from "ags/gtk4/app"
 import AstalHyprland from "gi://AstalHyprland"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
@@ -10,13 +9,15 @@ import Cairo from "gi://cairo"
 
 // Astal Service Libraries
 import { getWordmark, getServiceSafe } from "../../utils"
-import SquircleContainer from "../common/SquircleContainer" 
+import SquircleContainer from "../common/SquircleContainer"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
+import widgetConfig from "../../core/WidgetConfig"
+import regionConfig from "../../core/RegionConfig"
+import registry from "../widgets/index"
 import Tray from "./Tray"
-import SystemResources from "./Resources"
 
-// 🛰️ Zenith Native Overlays (One-file Simplicity)
+// Overlay panels mounted on the bar window (avoids separate layer-shell surfaces)
 import { ControlCenterWidget } from "../control-center/ControlCenter"
 import NotificationCenter from "../control-center/NotificationCenter"
 import Prism from "../prism/Prism"
@@ -154,7 +155,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const overview = WorkspaceOverview(gdkmonitor)
   const powerMenu = PowerMenu()
 
-  // 💎 THE CATCHER: Invisible button to close overlays
+  // Invisible full-screen button — dismisses any open overlay on outside click
   const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
   catcher.connect("clicked", () => {
     if (status.cc_edit_mode) return   // don't close CC while in edit mode
@@ -163,7 +164,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   })
 
   masterOverlay.set_child(barBox)
-  masterOverlay.add_overlay(catcher) // 💎 Behind panels, above BarBox base child
+  masterOverlay.add_overlay(catcher) // behind panels, above bar base
   masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu); masterOverlay.add_overlay(overview); masterOverlay.add_overlay(powerMenu)
 
   cc.valign = Gtk.Align.START; cc.halign = Gtk.Align.END
@@ -189,7 +190,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   prism.margin_top = 0
   popups.margin_top = 54; popups.margin_end = 12
 
-  // 💎 TAHOE GEOMETRY: NC must end just before the dock
+  // NC height: leave room for bar (40px) + dock (92px) + safety margin
   const maxH = monGeo.height - 160 // 40 (Bar) + 92 (Dock) + 28 (Safety)
   cc.height_request = 800; nc.height_request = maxH; prism.height_request = 500
 
@@ -204,7 +205,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
       const isAnyOpen = status.isAnyOverlayOpen
       if (isAnyOpen && !status.cc_edit_mode) {
-          // 🛰️ SURGICAL: Catcher region (Everything below Bar to catch outside clicks)
+          // Catcher region — covers everything below bar to intercept outside-click dismissal
           // In edit mode we skip this so other windows remain interactive
           // @ts-ignore
           region.unionRectangle({ x: 0, y: 40, width: Math.round(monGeo.width), height: Math.round(monGeo.height - 40) })
@@ -219,7 +220,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       }
       addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism); addWidgetToRegion(systemMenu); addWidgetToRegion(overview); addWidgetToRegion(powerMenu)
       
-      // 🛰️ ATOMIC: Add every individual popup to the region
+      // Add each popup individually to the input region
       let child = popups.get_first_child()
       while (child) {
           addWidgetToRegion(child)
@@ -269,14 +270,36 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   const timeContent = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16 })
   const timeLabel = new Gtk.Label({ label: "..." })
-  const timeAccessor = createPoll("...", 1000, "date +'%a %b %d  %H:%M'", (out) => out.trim())
-  timeAccessor.subscribe(() => { timeLabel.label = timeAccessor.get() })
-  timeContent.append(new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 14 })); timeContent.append(timeLabel)
+  const updateClock = () => {
+    execAsync(["bash", "-c", `date +'${regionConfig.getClockFormat()}'`])
+      .then(out => { timeLabel.label = out.trim() })
+      .catch(() => {})
+  }
+  const clockTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => { updateClock(); return GLib.SOURCE_CONTINUE })
+  timeLabel.connect("unrealize", () => { try { GLib.source_remove(clockTimer) } catch {} })
+  regionConfig.connect("changed", updateClock)
+  updateClock()
+  timeContent.append(new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 16 })); timeContent.append(timeLabel)
 
-  right.append(SquircleContainer({ child: SystemResources(), gloss: true, alpha: 0.15, perfect: true }))
+  // Optional bar widgets (before Tray, reactive to config changes)
+  const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: 10 })
+  const rebuildBarWidgets = () => {
+    let child = optWidgets.get_first_child()
+    while (child) { const n = child.get_next_sibling(); optWidgets.remove(child); child = n }
+    for (const id of widgetConfig.barWidgetIds()) {
+      const w = registry.get(id)
+      if (w?.buildBarContent) {
+        optWidgets.append(SquircleContainer({ child: w.buildBarContent(), gloss: true, alpha: 0.15, perfect: true }))
+      }
+    }
+  }
+  widgetConfig.connect("changed", rebuildBarWidgets)
+  rebuildBarWidgets()
+
+  right.append(optWidgets)
   right.append(SquircleContainer({ child: Tray(), gloss: true, alpha: 0.15, perfect: true }))
-  right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: "edit-find-symbolic", pixel_size: 14, margin_start: 16, margin_end: 16 }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, perfect: true }))
-  const ccBtn = SquircleContainer({ child: new Gtk.Image({ icon_name: "open-menu-symbolic", pixel_size: 14, margin_start: 16, margin_end: 16 }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, perfect: true })
+  right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: "edit-find-symbolic", pixel_size: 16, margin_start: 16, margin_end: 16 }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, perfect: true }))
+  const ccBtn = SquircleContainer({ child: new Gtk.Image({ icon_name: "open-menu-symbolic", pixel_size: 16, margin_start: 16, margin_end: 16 }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, perfect: true })
   right.append(ccBtn)
   right.append(SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, alpha: 0.15, perfect: true }))
 
@@ -291,9 +314,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-    // 🏗️ SURGICAL: No bottom anchor = proper exclusive zone for the top strip
+    // No bottom anchor — required for the exclusive zone to reserve only the top strip
     Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
-    Gtk4LayerShell.set_exclusive_zone(win, 40) // 💎 TRUE 40px RESERVE
+    Gtk4LayerShell.set_exclusive_zone(win, 40) // reserve 40px at top
     Gtk4LayerShell.set_monitor(win, gdkmonitor)
     
     // Guard against missing set_size in some Gjs binding versions

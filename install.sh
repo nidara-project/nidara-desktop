@@ -1,44 +1,43 @@
 #!/bin/bash
-# Crystal Shell - ISO Provisioning Script 💎
-# Designed for EndeavourOS / Arch Linux 🚀
+# Crystal Shell - Provisioning Script
+# Designed for EndeavourOS / Arch Linux
 
 set -e
 
-echo "🚀 Starting Crystal Shell Provisioning (Arch Linux Mode)..."
+echo "Starting Crystal Shell installation (Arch Linux)..."
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
 INSTALL_DIR="$HOME/.config/crystal-shell"
 
 if [ "$REPO_DIR" != "$INSTALL_DIR" ]; then
     echo "=========================================="
-    echo "💎 Crystal Shell Installation Mode"
+    echo "Crystal Shell Installation"
     echo "=========================================="
-    echo "Elige el modo de instalación para $INSTALL_DIR:"
-    echo "1) Instalación Normal (Copia de archivos - Recomendado para usuarios)"
-    echo "2) Instalación de Desarrollo (Symlink - Recomendado para programar)"
-    
-    # V124: Robust Read with timeout & forced default
+    echo "Choose installation mode for $INSTALL_DIR:"
+    echo "1) Normal install  (file copy  - recommended for users)"
+    echo "2) Developer install (symlink  - recommended for contributors)"
+
     INSTALL_MODE="1"
-    read -p ">> Selecciona [1/2] (por defecto 1): " -t 30 USER_INPUT
+    read -p ">> Select [1/2] (default: 1): " -t 30 USER_INPUT
     INSTALL_MODE=${USER_INPUT:-1}
 
     if [ "$INSTALL_MODE" = "2" ]; then
-        echo "🔗 Creando enlace simbólico de desarrollo..."
-        # Surgical swap: ensures no directory residues
+        echo "Creating development symlink..."
+        # Replace any existing directory with a symlink
         if [ -d "$INSTALL_DIR" ] && [ ! -L "$INSTALL_DIR" ]; then
-            echo "⚠️  Detectada carpeta física instalada. Reemplazando por Symlink..."
+            echo "[WARN] Existing directory found at $INSTALL_DIR. Replacing with symlink..."
             rm -rf "$INSTALL_DIR"
         fi
         ln -sfn "$REPO_DIR" "$INSTALL_DIR"
     else
-        echo "📂 Copiando los archivos base..."
+        echo "Copying files..."
         mkdir -p "$INSTALL_DIR"
         cp -rT "$REPO_DIR" "$INSTALL_DIR"
     fi
 fi
 
 # 1. System Dependencies
-echo "📦 Installing system dependencies via pacman..."
+echo "Installing system dependencies via pacman..."
 sudo pacman -Sy --needed --noconfirm \
     base-devel \
     glib2-devel \
@@ -99,24 +98,21 @@ sudo pacman -Sy --needed --noconfirm \
     awww \
     lz4
 
-
-
 # 2. Build & Install Dependencies (Vala Panel Appmenu)
 # Required for AstalTray
-echo "🛠️ Compiling appmenu-glib-translator..."
+echo "Building appmenu-glib-translator..."
 mkdir -p /tmp/astal-deps
 cd /tmp/astal-deps
 if [ ! -d "vala-panel-appmenu" ]; then
     git clone https://gitlab.com/vala-panel-project/vala-panel-appmenu.git
 fi
 cd vala-panel-appmenu/subprojects/appmenu-glib-translator
-# Clean old build dir if it exists
 rm -rf build
 meson setup build --prefix=/usr
 sudo meson install -C build
 
-# 3. Build & Install Astal Libraries (The "Secret Sauce")
-echo "🛠️ Compiling Astal Service Libraries..."
+# 3. Build & Install Astal Libraries
+echo "Building Astal service libraries..."
 mkdir -p /tmp/astal-build
 cd /tmp/astal-build
 if [ ! -d "astal" ]; then
@@ -124,24 +120,23 @@ if [ ! -d "astal" ]; then
 fi
 cd astal
 
-# List of components to install in order
 COMPONENTS=(
-    "lib/astal/io" 
-    "lib/astal/gtk3" 
-    "lib/astal/gtk4" 
-    "lib/apps" 
-    "lib/hyprland" 
-    "lib/mpris" 
-    "lib/network" 
-    "lib/battery" 
-    "lib/notifd" 
-    "lib/bluetooth" 
+    "lib/astal/io"
+    "lib/astal/gtk3"
+    "lib/astal/gtk4"
+    "lib/apps"
+    "lib/hyprland"
+    "lib/mpris"
+    "lib/network"
+    "lib/battery"
+    "lib/notifd"
+    "lib/bluetooth"
     "lib/tray"
     "lang/gjs"
 )
 
 for comp in "${COMPONENTS[@]}"; do
-    echo "🔨 Building $comp..."
+    echo "Building $comp..."
     pushd "$comp"
     rm -rf build
     meson setup build --prefix=/usr
@@ -149,26 +144,21 @@ for comp in "${COMPONENTS[@]}"; do
     popd
 done
 
-# 4. Global Path Configuration & Linker Cache
-echo "⚙️ Configuring Global GI_TYPELIB_PATH & Library Cache..."
-# On Arch, typelibs are usually in /usr/lib/girepository-1.0
+# 4. Configure GObject Introspection paths and linker cache
+echo "Configuring GI_TYPELIB_PATH and library cache..."
 TYPELIB_PATH="/usr/lib/girepository-1.0"
-LIB_PATH="/usr/lib"
 
-# Refresh shared library cache
-echo "🔄 Refreshing system library cache (ldconfig)..."
+echo "Refreshing shared library cache..."
 sudo ldconfig
 
-# Add to /etc/environment for global access
 if ! grep -q "GI_TYPELIB_PATH" /etc/environment; then
     echo "GI_TYPELIB_PATH=\"$TYPELIB_PATH\"" | sudo tee -a /etc/environment
 else
-    # Update existing if needed
     sudo sed -i "s|GI_TYPELIB_PATH=.*|GI_TYPELIB_PATH=\"$TYPELIB_PATH\"|g" /etc/environment
 fi
 
-# 5. Build & Install AGS CLI (The Launcher)
-echo "🛠️ Compiling AGS v3 CLI (Launcher)..."
+# 5. Build & Install AGS CLI
+echo "Building AGS v3 CLI..."
 mkdir -p /tmp/ags-build
 cd /tmp/ags-build
 if [ ! -d "ags" ]; then
@@ -176,85 +166,74 @@ if [ ! -d "ags" ]; then
 fi
 cd ags
 rm -rf build
-# We need gnim for the build
 npm install
 meson setup build --prefix=/usr
 sudo meson install -C build
 
 # 6. UI Setup
-echo "🖥️ Setting up AGS UI..."
+echo "Setting up AGS UI..."
 if [ -d "$INSTALL_DIR/ui/ags-v3" ]; then
     cd "$INSTALL_DIR/ui/ags-v3"
 
     if [ "$INSTALL_MODE" = "2" ]; then
         # Dev mode: install npm deps for IDE support (TypeScript types, sass)
-        echo "📦 Installing npm dev dependencies (IDE support)..."
+        echo "Installing npm dev dependencies..."
         npm install
-        echo "🎨 Compiling SCSS..."
+        echo "Compiling SCSS..."
         npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
     else
-        # User mode: style.css comes pre-compiled in the repo
-        echo "ℹ️  Using pre-compiled style.css"
+        # User mode: style.css is pre-compiled in the repo
+        echo "[INFO] Using pre-compiled style.css"
     fi
 
-    # Bundle app into standalone binary (both modes)
-    echo "📦 Bundling Crystal Shell (ags bundle)..."
+    # Bundle into standalone binary
+    echo "Bundling Crystal Shell..."
     mkdir -p build
     ags bundle app.ts build/crystal-shell
-    echo "✅ Bundle created at $INSTALL_DIR/ui/ags-v3/build/crystal-shell"
+    echo "[OK] Bundle created at $INSTALL_DIR/ui/ags-v3/build/crystal-shell"
 else
-    echo "⚠️  UI directory not found at $INSTALL_DIR/ui/ags-v3, skipping."
+    echo "[WARN] UI directory not found at $INSTALL_DIR/ui/ags-v3, skipping."
 fi
 
 # 7. Enable Audio Services
-echo "🔊 Enabling Audio Services..."
+echo "Enabling audio services..."
 systemctl --user enable --now wireplumber pipewire pipewire-pulse
 
 # 8. Configure System Session (SDDM & Hyprland)
-echo "🎬 Configuring Session Start..."
+echo "Configuring session..."
 
-# Enable SDDM (Display Manager)
-echo "Login Manager (SDDM)..."
+echo "Enabling SDDM display manager..."
 sudo systemctl enable sddm
 
-# Link Hyprland Config
-echo "🔗 Linking Hyprland Configuration..."
+# Link Hyprland configs
+echo "Linking Hyprland configuration..."
 mkdir -p "$HOME/.config/hypr"
-# Backup existing config if it's not a symlink
-if [ -f "$HOME/.config/hypr/hyprland.conf" ] && [ ! -L "$HOME/.config/hypr/hyprland.conf" ]; then
-    mv "$HOME/.config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf.bak"
-fi
-ln -sf "$INSTALL_DIR/config/hypr/hyprland.conf" "$HOME/.config/hypr/hyprland.conf"
 
-# Hyprlock config
-if [ -f "$HOME/.config/hypr/hyprlock.conf" ] && [ ! -L "$HOME/.config/hypr/hyprlock.conf" ]; then
-    mv "$HOME/.config/hypr/hyprlock.conf" "$HOME/.config/hypr/hyprlock.conf.bak"
-fi
-ln -sf "$INSTALL_DIR/config/hypr/hyprlock.conf" "$HOME/.config/hypr/hyprlock.conf"
+for conf in hyprland.conf hyprlock.conf hypridle.conf; do
+    if [ -f "$HOME/.config/hypr/$conf" ] && [ ! -L "$HOME/.config/hypr/$conf" ]; then
+        mv "$HOME/.config/hypr/$conf" "$HOME/.config/hypr/$conf.bak"
+    fi
+    ln -sf "$INSTALL_DIR/config/hypr/$conf" "$HOME/.config/hypr/$conf"
+done
 
-# Hypridle config
-if [ -f "$HOME/.config/hypr/hypridle.conf" ] && [ ! -L "$HOME/.config/hypr/hypridle.conf" ]; then
-    mv "$HOME/.config/hypr/hypridle.conf" "$HOME/.config/hypr/hypridle.conf.bak"
-fi
-ln -sf "$INSTALL_DIR/config/hypr/hypridle.conf" "$HOME/.config/hypr/hypridle.conf"
-
-# User overrides file (never overwritten by updates)
+# User overrides file — never overwritten by updates
 USER_CONF="$HOME/.config/hypr/hyprland-user.conf"
 if [ ! -f "$USER_CONF" ]; then
     cat > "$USER_CONF" <<'EOF'
 # ── hyprland-user.conf ──────────────────────────────────────────────────────
-# Este archivo es TUYO. Las actualizaciones de Crystal Shell nunca lo tocarán.
-# Añade aquí tus personalizaciones: teclado, monitores, apps al inicio, etc.
+# This file is yours. Crystal Shell updates will never touch it.
+# Add your personal customizations here: keyboard layout, monitors, startup
+# apps, keybinds, etc.
 #
-# Ejemplos:
+# Examples:
 #   input {
-#       kb_layout = es  # Cambia 'es' por tu idioma (latam, us, uk...)
+#       kb_layout = es     # Change to your keyboard layout (us, uk, latam...)
 #   }
 #   monitor = HDMI-A-1, 1920x1080@60, 0x0, 1
-#   bind = SUPER, F1, exec, mi-aplicacion
-#   exec-once = mi-daemon-personalizado
+#   bind = SUPER, F1, exec, my-app
+#   exec-once = my-custom-daemon
 #
-# 🟢 OPTIMIZACIÓN NVIDIA (¡Descomenta esto si usas tarjeta NVIDIA!)
+# NVIDIA users — uncomment the block below if you have an NVIDIA GPU:
 #   env = LIBVA_DRIVER_NAME,nvidia
 #   env = XDG_SESSION_TYPE,wayland
 #   env = GBM_BACKEND,nvidia-drm
@@ -264,13 +243,13 @@ if [ ! -f "$USER_CONF" ]; then
 #   }
 # ─────────────────────────────────────────────────────────────────────────────
 EOF
-    echo "✅ Created user config: $USER_CONF"
+    echo "[OK] Created user config: $USER_CONF"
 else
-    echo "ℹ️  User config already exists, keeping it: $USER_CONF"
+    echo "[INFO] User config already exists, keeping: $USER_CONF"
 fi
 
-# 9. Configure XDG Portals (Modern Apps Theme Support)
-echo "🎨 Configuring XDG Desktop Portals..."
+# 9. Configure XDG Portals
+echo "Configuring XDG desktop portals..."
 mkdir -p "$HOME/.config/xdg-desktop-portal"
 cat > "$HOME/.config/xdg-desktop-portal/portals.conf" <<'EOF'
 [preferred]
@@ -280,7 +259,7 @@ org.freedesktop.impl.portal.Screenshot=hyprland
 EOF
 
 # 10. Desktop Session Entry
-echo "📝 Creating Crystal Shell Desktop Entry for Display Managers..."
+echo "Creating Crystal Shell desktop session entry..."
 sudo mkdir -p /usr/share/wayland-sessions
 cat <<'EOF' | sudo tee /usr/share/wayland-sessions/crystal-shell.desktop > /dev/null
 [Desktop Entry]
@@ -292,10 +271,9 @@ DesktopNames=Hyprland
 EOF
 
 # 11. Install Application Entries
-echo "📝 Installing application entries..."
+echo "Installing application entries..."
 mkdir -p "$HOME/.local/share/applications"
 if [ "$INSTALL_MODE" = "2" ]; then
-    # Dev mode: symlink so changes in repo are reflected immediately
     for f in "$INSTALL_DIR/config/applications/"*.desktop; do
         ln -sf "$f" "$HOME/.local/share/applications/$(basename "$f")"
     done
@@ -304,5 +282,6 @@ else
 fi
 update-desktop-database "$HOME/.local/share/applications/" 2>/dev/null || true
 
-echo "✅ Provisioning Complete!"
-echo "👉 Restart (or run 'sudo systemctl start sddm') and select 'Crystal Shell' from the login screen."
+echo ""
+echo "[OK] Installation complete."
+echo "Restart your session (or run 'sudo systemctl start sddm') and select 'Crystal Shell' from the login screen."

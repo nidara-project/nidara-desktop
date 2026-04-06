@@ -35,7 +35,7 @@ interface ThemeState {
 }
 
 /**
- * ThemeManager Service 🎨
+ * ThemeManager — GTK theme, dark mode, and Fluid Crystal token management
  * Orchestrates GTK theming, Fluid Crystal token engine, and GSettings.
  */
 class ThemeManager extends GObject.Object {
@@ -74,7 +74,7 @@ class ThemeManager extends GObject.Object {
         console.log("[ThemeManager] NEW instance created. ")
         this.loadSettings()
         
-        // V875: System Monitoring 📡
+        // Monitor system color scheme changes
         this.interfaceSettings.connect("changed::color-scheme", () => {
             const scheme = this.interfaceSettings.get_string("color-scheme")
             const isDark = scheme === "prefer-dark"
@@ -84,11 +84,11 @@ class ThemeManager extends GObject.Object {
             }
         })
 
-        // V127: Font Change Monitoring 🔠
+        // Monitor font preference changes
         this.interfaceSettings.connect("changed::font-name", () => this.syncFont())
         this.syncFont()
         
-        // V950: Hot Reload (CSS Monitoring) 📡
+        // Hot-reload CSS in dev mode
         this.setupStyleMonitor()
         
         this.applyAll()
@@ -335,7 +335,7 @@ class ThemeManager extends GObject.Object {
                 let configPaths: string[] = [];
 
                 if (isDevMode) {
-                    console.log("[ThemeManager] 🛠️ DEV MODE DETECTED: Forcing local style.css ONLY.");
+                    console.log("[ThemeManager] Dev mode: loading local style.css");
                     configPaths = [`${activeDir}/style.css`];
                 } else {
                     // Production behavior: crystal-shell config dir first, fallback to cwd

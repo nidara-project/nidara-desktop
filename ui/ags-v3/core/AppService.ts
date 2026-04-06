@@ -35,13 +35,13 @@ class AppService {
     private nameMap = new Map<string, string>()
     private wmMap = new Map<string, string>() // Map wmClass -> Desktop ID
     private listeners = new Set<() => void>()
-    private isReloading = false // V138: Lock to avoid concurrent reloads during boot 🛡️
+    private isReloading = false // Lock to avoid concurrent reloads during boot
 
     constructor() {
         // Global Theme Discovery
         const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
 
-        // V94.1: ENSURE SYSTEM ICONS WIN (FALLBACKS ONLY)
+        // Search paths ordered so system icons take priority over pixmaps
         const localIcons = GLib.get_home_dir() + "/.local/share/icons"
         const systemIcons = "/usr/share/icons"
         const localShareIcons = "/usr/local/share/icons" // V126: Support for locally installed app icons (e.g. Rofi)
@@ -68,7 +68,7 @@ class AppService {
         let lastTheme = theme.get_theme_name()
         theme.connect("changed", () => {
             const name = theme.get_theme_name()
-            if (name === lastTheme) return // V138: Skip if name hasn't changed to avoid redundant reloads
+            if (name === lastTheme) return // skip if name unchanged to avoid redundant reloads
             lastTheme = name
 
             // Debounce theme changes to prevent GListStore conflicts during start-up
@@ -95,7 +95,7 @@ class AppService {
 
         const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
 
-        // V150: CRYSTAL_SHELL OVERLAY PRIORITY 🛰️
+        // Crystal Shell icon overlay — checked before system theme
         const overlayBase = `${GLib.get_home_dir()}/.local/share/icons/crystal-shell`
         const extensions = [".svg", ".png", ""]
         for (const ext of extensions) {
@@ -106,19 +106,19 @@ class AppService {
             if (GLib.file_test(flat, GLib.FileTest.EXISTS)) return flat
         }
 
-        // V127: NATIVE GTK RESOLUTION 💎
+        // Native GTK theme resolution
         if (theme.has_icon(n)) {
             const paintable = theme.lookup_icon(n, null, 48, 1, Gtk.TextDirection.LTR, 0)
             const path = paintable?.get_file()?.get_path()
 
-            // Reject Pixmaps from native resolution to force themed search ☢️
+            // Skip pixmaps — prefer themed icons
             const isPixmap = path && path.includes("/usr/share/pixmaps")
             if (path && !isPixmap && !BAD_ICONS.some(bad => path.includes(bad))) {
                 return n
             }
         }
 
-        // V129: DEEP BRUTE FORCE FALLBACK (The "Nuclear Option") ☢️
+        // Deep filesystem fallback — searches icon theme directories directly
         let themeName = theme.get_theme_name()
         if (themeName === "Adwaita" || themeName === "hicolor") {
             try {
@@ -152,16 +152,16 @@ class AppService {
     }
 
     reload() {
-        if (this.isReloading) return // V138: Prevention of concurrent GListStore churn
+        if (this.isReloading) return // prevent concurrent reload
         this.isReloading = true
 
         console.log("[AppService] Synchronizing Registry...")
         const start = Date.now()
         this.cache.clear()
         this.nameMap.clear()
-        this.wmMap.clear() // V138: Ensure full wipe
+        this.wmMap.clear()
 
-        // V133: FLUSH GTK ICON CACHE
+        // Refresh GTK icon theme context
         // Force a fresh theme context lookup to ensure we aren't using stale paths
         const display = Gdk.Display.get_default()
         if (display) {
@@ -173,8 +173,7 @@ class AppService {
         const visitedIds = new Set<string>()
 
         apps.forEach(app => {
-            // V149.3: ROBUST ID CAPTURE (GIO) 💎
-            // Canonical source is get_id(), fallback to Desktop filename if available
+            // Canonical ID from GIO, fallback to desktop filename
             const rawId = app.get_id() || (app as any).get_filename?.()?.split("/").pop() || ""
             const id = rawId.replace(".desktop", "")
             if (!id || visitedIds.has(id.toLowerCase())) return
@@ -204,8 +203,7 @@ class AppService {
             const data: AppData = {
                 id: id, // V94.2: PRESERVE ORIGINAL CASE (Critical for gtk-launch)
                 name: app.get_name(),
-                // V147: ROBUST BINARY RESOLUTION 💎
-                // We take the FIRST part of the executable string (the binary), then the filename.
+                // Extract the binary name from the executable string
                 exec: app.get_executable()?.split(" ")[0].split("/").pop()?.replace(/["']/g, "").toLowerCase() || "",
                 icon: canonical,
                 wmClass: wmClass
@@ -231,13 +229,12 @@ class AppService {
     }
 
     private applyOverrides() {
-        // V74: Static overrides removed. Configuration should be done via .desktop files.
+        // Static overrides removed — configure via .desktop files instead
     }
 
     /**
-     * V160: HYPRLAND CLASS RESOLVER 💎
-     * Extract specific heuristics from components (like Dock) to Core.
-     * Returns the normalized identifier or null if it should be ignored.
+     * Normalizes a Hyprland window class to a desktop app ID.
+     * Returns null for windows that should be ignored (e.g. the shell itself).
      */
     resolveHyprlandClass(rawClass: string): string | null {
         if (!rawClass) return null
@@ -261,13 +258,12 @@ class AppService {
     }
 
     /**
-     * V127: UNIVERSAL RESOLVER    /**
-     * Resuelve un nombre de icono o GIcon a una ruta absoluta o nombre de tema válido.
+     * Resolves an icon name or GIcon to an absolute path or valid theme icon name.
      */
     getIconName(key: any): string | null {
         if (!key) return null
 
-        // V150: NATIVE GICON RESOLUTION 🛰️ (Safe handling for non-string inputs)
+        // Safe handling for non-string GIcon inputs
         if (typeof key !== "string" && !Array.isArray(key)) {
             try {
                 if (key instanceof Gio.ThemedIcon) {
@@ -296,7 +292,7 @@ class AppService {
         const k = key.toLowerCase().replace(".desktop", "")
         let hit = this.nameMap.get(k) || this.getCanonicalName(key)
 
-        // V150: PIXMAP DE-PRIORITIZATION ☢️
+        // Deprioritize pixmaps — prefer themed icons
         const isPixmap = hit && hit.includes("/usr/share/pixmaps")
         const isGeneric = hit && BAD_ICONS.some(f => hit!.includes(f))
 
@@ -307,9 +303,8 @@ class AppService {
             }
         }
 
-        // V150: LOGGING & CACHING 🛰️
         if (hit && hit.includes("crystal-shell")) {
-            console.log(`[AppService] Resolved '${key}' -> CRYSTAL_SHELL OVERLAY: ${hit}`)
+            console.log(`[AppService] Resolved '${key}' -> overlay icon: ${hit}`)
         }
 
         if (hit) this.nameMap.set(k, hit)
@@ -321,13 +316,12 @@ class AppService {
     }
 
     /**
-     * V94.10: UNIVERSAL RESOLVER 🚀
-     * Finds the real DesktopAppInfo using any identifier (ID, WM_CLASS, or Variant)
+     * Finds the DesktopAppInfo for any identifier: desktop ID, WM_CLASS, or variant.
      */
     getAppInfo(lid: string): any | null {
         if (!lid) return null
 
-        // V149: ROBUST BASENAME RESOLUTION 💎
+        // Normalize to basename without .desktop extension
         // We ensure that if we get a full path, we extract the ID (e.g. org.gnome.Nautilus)
         const q = lid.toLowerCase()
             .split("/").pop()! // Get filename
@@ -344,8 +338,7 @@ class AppService {
         // 3. Search for best match in cache
         let fallbackMatch = null
         for (const [id, data] of this.cache.entries()) {
-            // V149.2: STRICT FUZZY MATCHING 💎
-            // Handle cases like "org.telegram" -> "org.telegram.desktop"
+                // Handle prefixed IDs like "org.telegram" -> "org.telegram.desktop"
             const match = id === q || id.startsWith(q + ".") || id.startsWith(q + "-")
             if (match) return this.gAppCache.get(id) || null
 
@@ -364,8 +357,7 @@ class AppService {
     }
 
     /**
-     * V149: UNIVERSAL FILE MANAGER RESOLUTION 🛰️
-     * Returns the sanitized command for the system's default file manager.
+     * Returns the launch command for the system's default file manager.
      */
     getDefaultFileManagerCommand(): string {
         try {
@@ -381,8 +373,8 @@ class AppService {
     }
 
     /**
-     *  THE ABSOLUTE TRUTH: Combined App Resolution 🛰️
-     * Consolidates getAppInfo, getAppData, and specialized hacks (Chrome/YouTube).
+     * Resolves a full app record from any identifier.
+     * Combines getAppInfo, getAppData, and browser-specific ID normalization.
      */
     getResolvedApp(lid: string | null | undefined) {
         if (!lid) return null
@@ -420,7 +412,7 @@ class AppService {
     }
 
     /**
-     * V151: Search functionality for Prism 💎
+     * Searches apps by name or ID. Used by Prism (spotlight search).
      */
     search(query: string): AppData[] {
         if (!query) return []

@@ -1,7 +1,7 @@
 import GObject from "gi://GObject"
 
 /**
- * 🛰️ CRYSTAL_SHELL UI STATUS ENGINE
+ * Crystal Shell UI Status Engine
  * 
  * Centralized GObject-based state for overlays.
  * Allows reactive binding without App-level signal collision.

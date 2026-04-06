@@ -80,9 +80,12 @@ settings_addr.txt
 # Generated CSS (kept in repo as pre-compiled convenience for users)
 # ui/ags-v3/style.css  ← intentionally NOT ignored
 ui/ags-v3/style.css.map
-# User configs
+# User configs — generated at runtime, personal to each installation
 theme_settings.json
 fluid-crystal.json
+region.json
+cc_layout.json
+widgets.json
 
 # Agent Memory
 MEMORY.md

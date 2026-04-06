@@ -1,15 +1,11 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import GObject from "gi://GObject"
-import AstalBluetooth from "gi://AstalBluetooth"
-import { execAsync } from "ags/process"
 import BaseIsland from "./BaseIsland"
-import { WifiWidget, EthernetWidget, RoundToggle, FocusWidget } from "./Toggles"
-import { VolumeWidget } from "./Sliders"
-import { MediaIslandContent } from "./MediaIsland"
-import Theme from "../../core/ThemeManager"
 import ccLayout, { UNIT, GAP, GRID_COLS, GRID_WIDTH, GRID_HEIGHT, SIZE_MAP } from "./CCLayoutManager"
 import { AtomicWidget, WidgetSize } from "./Types"
 import status from "../../core/Status"
+import widgetConfig from "../../core/WidgetConfig"
+import registry from "../widgets/index"
 
 const pixelX = (gx: number) => gx * (UNIT + GAP)
 const pixelY = (gy: number) => gy * (UNIT + GAP)
@@ -37,29 +33,7 @@ let dragWidgetId = ""
 
 export function getWidgetById(id: string): AtomicWidget | null {
     try {
-        const btSvc = AstalBluetooth.get_default()
-        const registry: Record<string, () => AtomicWidget> = {
-            media:       () => MediaIslandContent(),
-            wifi:        () => WifiWidget(),
-            focus:       () => FocusWidget(),
-            ethernet:    () => EthernetWidget(),
-            bt:          () => RoundToggle("bt", "Bluetooth",
-                             "bluetooth-active-symbolic",
-                             () => btSvc?.is_powered || false,
-                             () => { if (btSvc) btSvc.is_powered = !btSvc.is_powered },
-                             () => btSvc?.is_powered ? "Activo" : "Inactivo"),
-            volume:      () => VolumeWidget(),
-            dark_mode:   () => RoundToggle("dark-mode", "Apariencia",
-                             () => Theme.isDark ? "weather-clear-night-symbolic" : "weather-clear-symbolic",
-                             () => Theme.isDark,
-                             () => Theme.setDarkMode(!Theme.isDark),
-                             () => Theme.isDark ? "Oscuro" : "Claro"),
-            calculator:  () => RoundToggle("calculator", "Calculadora",
-                             "accessories-calculator-symbolic", false,
-                             () => execAsync("gnome-calculator").catch(() => {})),
-        }
-        const factory = registry[id]
-        return factory ? factory() : null
+        return registry.get(id)
     } catch (e) {
         console.error(`[IslandGrid] Failed to resolve widget ${id}:`, e)
         return null
@@ -283,6 +257,16 @@ export default function IslandGrid() {
         rebuild()
     })
     ccLayout.connect("changed", () => rebuild())
+
+    // Sync CC layout when widget placement config changes
+    widgetConfig.connect("changed", () => {
+        const activeInCC = new Set(ccLayout.activeIds())
+        for (const w of registry.ccCapable()) {
+            const inCC = widgetConfig.get(w.id).cc
+            if (inCC && !activeInCC.has(w.id)) ccLayout.add(w.id)
+            else if (!inCC && activeInCC.has(w.id)) ccLayout.remove(w.id)
+        }
+    })
 
     // Reset edit mode when CC is closed
     status.connect("notify::cc-open", () => {

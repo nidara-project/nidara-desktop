@@ -1,0 +1,136 @@
+import { Gtk } from "ags/gtk4"
+import AstalHyprland from "gi://AstalHyprland"
+import { execAsync } from "ags/process"
+import { listGroup, createRow, pageHeader, pageBox, staticLabel } from "../SettingsHelpers"
+
+/**
+ * Parses a monitor name and returns a friendly label.
+ * e.g. "HDMI-A-1" → "HDMI-A-1", "eDP-1" → "eDP-1 (integrada)"
+ */
+function monitorLabel(name: string): string {
+    if (name.startsWith("eDP")) return `${name} (integrada)`
+    return name
+}
+
+/**
+ * Builds the resolution/refresh rate string for a monitor.
+ */
+function currentMode(mon: any): string {
+    const w = mon.width ?? 0
+    const h = mon.height ?? 0
+    const hz = Math.round(mon.refresh_rate ?? mon.refreshRate ?? 0)
+    if (!w || !h) return "Desconocida"
+    return `${w}×${h} @ ${hz}Hz`
+}
+
+/**
+ * Returns available scale options as strings.
+ * Hyprland supports arbitrary scale values; we offer common presets.
+ */
+const SCALE_PRESETS = ["1.0", "1.25", "1.5", "1.75", "2.0"]
+
+function buildMonitorSection(mon: any): Gtk.Widget {
+    const name: string   = mon.name ?? "Monitor"
+    const model: string  = mon.model ?? mon.description ?? ""
+    const make: string   = mon.make ?? ""
+    const description    = [make, model].filter(Boolean).join(" ") || name
+
+    const { box, listBox } = listGroup(monitorLabel(name))
+
+    // Current mode (static info)
+    listBox.append(createRow("Resolución activa", "Modo actual", staticLabel(currentMode(mon))))
+
+    // Scale
+    const currentScale = String(Math.round((mon.scale ?? 1.0) * 100) / 100)
+    const drp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
+    SCALE_PRESETS.forEach(s => drp.append_text(`${s}×`))
+    const initIdx = SCALE_PRESETS.findIndex(s => parseFloat(s) === parseFloat(currentScale))
+    drp.active = initIdx >= 0 ? initIdx : 0
+
+    drp.connect("changed", () => {
+        const val = drp.get_active_text()
+        if (!val) return
+        const scale = parseFloat(val.replace("×", ""))
+        execAsync([
+            "hyprctl", "keyword", "monitor",
+            `${name},preferred,auto,${scale}`
+        ]).catch(e => console.error("[Display] scale change failed:", e))
+    })
+
+    listBox.append(createRow("Escala", "Factor de escala de la pantalla", drp))
+
+    // Make/model info
+    if (description) {
+        listBox.append(createRow("Modelo", "Identificador del monitor", staticLabel(description)))
+    }
+
+    // Transform / rotation — common values
+    const ROTATIONS = ["Normal (0°)", "90°", "180°", "270°"]
+    const TRANSFORM_MAP: Record<string, number> = {
+        "Normal (0°)": 0, "90°": 1, "180°": 2, "270°": 3,
+    }
+    const currentTransform = mon.transform ?? 0
+    const rotationIdx = Math.max(0, currentTransform)
+
+    const rotDrp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
+    ROTATIONS.forEach(r => rotDrp.append_text(r))
+    rotDrp.active = rotationIdx < ROTATIONS.length ? rotationIdx : 0
+
+    rotDrp.connect("changed", () => {
+        const label = rotDrp.get_active_text()
+        if (!label) return
+        const t = TRANSFORM_MAP[label] ?? 0
+        execAsync([
+            "hyprctl", "keyword", "monitor",
+            `${name},preferred,auto,1,transform,${t}`
+        ]).catch(e => console.error("[Display] rotation change failed:", e))
+    })
+
+    listBox.append(createRow("Rotación", "Orientación de la pantalla", rotDrp))
+
+    box.append(listBox)
+    return box
+}
+
+export default function DisplayPage() {
+    const page = pageBox("display-page")
+    page.append(pageHeader("Pantalla", "Configura resolución, escala y orientación de tus monitores"))
+
+    const hypr = AstalHyprland.get_default()
+    if (!hypr) {
+        const err = new Gtk.Label({
+            label: "Servicio Hyprland no disponible",
+            css_classes: ["settings-placeholder"],
+            margin_top: 40,
+        })
+        page.append(err)
+        return page
+    }
+
+    const monitors: any[] = hypr.get_monitors() ?? []
+
+    if (monitors.length === 0) {
+        page.append(new Gtk.Label({
+            label: "No se detectaron monitores.",
+            css_classes: ["settings-placeholder"],
+            margin_top: 40,
+        }))
+        return page
+    }
+
+    monitors.forEach(mon => {
+        page.append(buildMonitorSection(mon))
+    })
+
+    // Note about persistence
+    const { box: noteBox, listBox: noteList } = listGroup("")
+    noteList.append(createRow(
+        "Cambios temporales",
+        "Los cambios se aplican en vivo pero no persisten. Añádelos a hyprland-user.conf para hacerlos permanentes.",
+        new Gtk.Image({ icon_name: "dialog-information-symbolic", pixel_size: 18, opacity: 0.6, valign: Gtk.Align.CENTER })
+    ))
+    noteBox.append(noteList)
+    page.append(noteBox)
+
+    return page
+}

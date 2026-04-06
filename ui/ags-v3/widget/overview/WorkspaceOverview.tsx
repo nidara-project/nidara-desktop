@@ -58,7 +58,7 @@ function SchematicMap(wsId: number, hyprland: any) {
 
         if (!hMonitor || !hMonitor.width) return
 
-        // V7.27: Geometric Unity 🛰️
+        // Scale preview to match monitor aspect ratio
         let physW = hMonitor.width
         let physH = hMonitor.height
 
@@ -248,7 +248,7 @@ export default function WorkspaceOverview(monitor: any) {
         vexpand: true
     })
     
-    // El SquircleContainer ahora envuelve TODO el overview, proveyendo un único fondo cristal unificado
+    // SquircleContainer wraps the entire overview, providing a unified glass background
     const overviewSquircle = SquircleContainer({
         child: overview,
         n: 3.2,

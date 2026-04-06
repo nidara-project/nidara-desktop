@@ -337,7 +337,7 @@ export function writeQtSettings(config: FluidCrystalConfig, iconTheme?: string):
       writeFile(kvConfigPath, kvContent)
     }
 
-    // 1b. Deep Transparency Sync (for themes with overrides like MacTahoeDark) 🌊
+    // Deep transparency sync (handles theme-level overrides)
     const activeConfigPath = findThemeConfig(target)
     if (activeConfigPath && activeConfigPath.includes(home)) {
         // Only update if it's a user theme (writable)
@@ -360,7 +360,7 @@ export function writeQtSettings(config: FluidCrystalConfig, iconTheme?: string):
         }
     }
 
-    // 2. Sync Icon Theme to qt6ct/qt5ct and kdeglobals 🖼️
+    // Sync icon theme to Qt (qt5ct/qt6ct) and kdeglobals
     if (iconTheme) {
       const ctConfigs = [`${home}/.config/qt6ct/qt6ct.conf`, `${home}/.config/qt5ct/qt5ct.conf`]
       for (const path of ctConfigs) {
