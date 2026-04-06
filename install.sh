@@ -88,6 +88,7 @@ sudo pacman -Sy --needed --noconfirm \
     xdg-desktop-portal-gtk \
     xdg-desktop-portal-hyprland \
     ttf-jetbrains-mono-nerd \
+    inter-font \
     noto-fonts-emoji \
     xfce4-settings \
     hyprlauncher \
