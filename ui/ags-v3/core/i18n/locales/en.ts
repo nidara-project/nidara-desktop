@@ -1,0 +1,63 @@
+export default {
+    "settings.input.title": "Devices",
+    "settings.input.subtitle": "Mouse, touchpad, and keyboard settings",
+    
+    "settings.input.mouse.group": "Mouse",
+    "settings.input.mouse.speed": "Pointer Speed",
+    "settings.input.mouse.speed.desc": "Adjust tracking sensitivity",
+    "settings.input.mouse.accel": "Acceleration Profile",
+    "settings.input.mouse.accel.desc": "Pointer acceleration behavior",
+    "settings.input.mouse.accel.adaptive": "Adaptive",
+    "settings.input.mouse.accel.flat": "Flat",
+
+    "settings.input.touchpad.group": "Touchpad",
+    "settings.input.touchpad.natural": "Natural Scrolling",
+    "settings.input.touchpad.natural.desc": "Move content with fingers",
+    "settings.input.touchpad.tap": "Tap to Click",
+    "settings.input.touchpad.tap.desc": "Tap touchpad to click",
+
+    "settings.input.keyboard.group": "Keyboard",
+    "settings.input.keyboard.numlock": "NumLock on Boot",
+    "settings.input.keyboard.numlock.desc": "Enable numeric keypad by default",
+
+    "settings.region.title": "Language & Region",
+    "settings.region.subtitle": "Time, date formats and system timezone",
+    "settings.region.preview": "Live preview",
+    
+    "settings.region.time.group": "Time",
+    "settings.region.time.format": "Time format",
+    "settings.region.time.format.desc": "How time is displayed in the bar",
+    "settings.region.time.24h": "24 hours",
+    "settings.region.time.12h": "12 hours (AM/PM)",
+    "settings.region.time.seconds": "Show seconds",
+    "settings.region.time.seconds.desc": "Include seconds in the bar clock",
+
+    "settings.region.date.group": "Date",
+    "settings.region.date.format": "Date format",
+    "settings.region.date.format.desc": "How date is displayed in the bar",
+    "settings.region.date.none": "Time only — no date",
+    "settings.region.date.short": "Short — Mon 06 Apr",
+    "settings.region.date.short-year": "Short with year — Mon 06 Apr 2026",
+    "settings.region.date.long": "Long — Monday, 06 Apr",
+    "settings.region.date.numeric": "Numeric — 04/06/2026",
+    "settings.region.date.iso": "ISO 8601 — 2026-04-06",
+
+    "settings.region.tz.group": "Timezone",
+    "settings.region.tz.active": "Active timezone",
+    "settings.region.tz.active.desc": "System timezone",
+    "settings.region.tz.change": "Change timezone",
+    "settings.region.tz.change.desc": "Type or select an IANA timezone",
+    "settings.region.tz.apply": "Apply",
+    "settings.region.tz.applying": "Applying...",
+    "settings.region.tz.ok": "✓ Applied",
+    "settings.region.tz.error": "✗ Error applying — verify the zone name",
+    "settings.region.tz.placeholder": "Ex: Europe/London",
+
+    "settings.region.locale.group": "System Language & Keyboard",
+    "settings.region.locale.lang": "Language (Locale)",
+    "settings.region.locale.lang.desc": "Requires a session restart",
+    "settings.region.locale.lang.placeholder": "Ex: en_US.UTF-8",
+    "settings.region.locale.kb": "Keyboard Layout",
+    "settings.region.locale.kb.desc": "Applies instantly",
+    "settings.region.locale.kb.placeholder": "Ex: us"
+}

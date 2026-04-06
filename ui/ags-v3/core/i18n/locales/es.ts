@@ -1,0 +1,63 @@
+export default {
+    "settings.input.title": "Dispositivos",
+    "settings.input.subtitle": "Ratón, panel táctil y teclado",
+    
+    "settings.input.mouse.group": "Ratón",
+    "settings.input.mouse.speed": "Velocidad del Puntero",
+    "settings.input.mouse.speed.desc": "Ajuste de sensibilidad",
+    "settings.input.mouse.accel": "Perfil de Aceleración",
+    "settings.input.mouse.accel.desc": "Comportamiento del puntero",
+    "settings.input.mouse.accel.adaptive": "Adaptativa",
+    "settings.input.mouse.accel.flat": "Plana",
+
+    "settings.input.touchpad.group": "Touchpad",
+    "settings.input.touchpad.natural": "Desplazamiento Natural",
+    "settings.input.touchpad.natural.desc": "Mover el contenido con los dedos",
+    "settings.input.touchpad.tap": "Tocar para hacer click",
+    "settings.input.touchpad.tap.desc": "Tocar panel para click",
+
+    "settings.input.keyboard.group": "Teclado",
+    "settings.input.keyboard.numlock": "Bloqueo Numérico al iniciar",
+    "settings.input.keyboard.numlock.desc": "Teclado numérico encendido por defecto",
+
+    "settings.region.title": "Idioma y Región",
+    "settings.region.subtitle": "Formato de hora, fecha y zona horaria del sistema",
+    "settings.region.preview": "Vista previa en vivo",
+    
+    "settings.region.time.group": "Hora",
+    "settings.region.time.format": "Formato de hora",
+    "settings.region.time.format.desc": "Cómo se muestra la hora en la barra",
+    "settings.region.time.24h": "24 horas",
+    "settings.region.time.12h": "12 horas (AM/PM)",
+    "settings.region.time.seconds": "Mostrar segundos",
+    "settings.region.time.seconds.desc": "Incluye los segundos en el reloj de la barra",
+
+    "settings.region.date.group": "Fecha",
+    "settings.region.date.format": "Formato de fecha",
+    "settings.region.date.format.desc": "Cómo se muestra la fecha en la barra",
+    "settings.region.date.none": "Solo hora — sin fecha",
+    "settings.region.date.short": "Corto — Lun 06 Abr",
+    "settings.region.date.short-year": "Corto con año — Lun 06 Abr 2026",
+    "settings.region.date.long": "Largo — Lunes, 06 Abr",
+    "settings.region.date.numeric": "Numérico — 06/04/2026",
+    "settings.region.date.iso": "ISO 8601 — 2026-04-06",
+
+    "settings.region.tz.group": "Zona Horaria",
+    "settings.region.tz.active": "Zona activa",
+    "settings.region.tz.active.desc": "Zona horaria del sistema",
+    "settings.region.tz.change": "Cambiar zona horaria",
+    "settings.region.tz.change.desc": "Escribe o selecciona una zona IANA",
+    "settings.region.tz.apply": "Aplicar",
+    "settings.region.tz.applying": "Aplicando…",
+    "settings.region.tz.ok": "✓ Aplicado",
+    "settings.region.tz.error": "✗ Error al aplicar — verifica el nombre de la zona",
+    "settings.region.tz.placeholder": "Ej: Europe/Madrid",
+
+    "settings.region.locale.group": "Idioma del sistema y Teclado",
+    "settings.region.locale.lang": "Idioma (Locale)",
+    "settings.region.locale.lang.desc": "El cambio requiere reiniciar sesión",
+    "settings.region.locale.lang.placeholder": "Ej: es_ES.UTF-8",
+    "settings.region.locale.kb": "Distribución de Teclado",
+    "settings.region.locale.kb.desc": "Se aplica instantáneamente",
+    "settings.region.locale.kb.placeholder": "Ej: es"
+}
