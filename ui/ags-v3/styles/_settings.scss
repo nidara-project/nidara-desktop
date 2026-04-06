@@ -419,3 +419,36 @@ window.crystal-settings-window {
     -gtk-icon-size: 18px;
 }
 
+// ── Region Page - Live Clock Preview ─────────────────────────────────────────
+
+.region-preview-box {
+    background: var(--crystal-surface-back);
+    border: 1px solid var(--crystal-border);
+    border-radius: $crystal-radius-md;
+    padding: 24px 32px 20px;
+    margin-bottom: 8px;
+}
+
+.region-clock-preview {
+    font-size: 2.4rem;
+    font-weight: 300;
+    color: var(--crystal-text);
+    letter-spacing: -0.5px;
+}
+
+// ── Region Page - Timezone Status ─────────────────────────────────────────────
+
+.tz-status {
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.tz-status-ok {
+    color: #30d158; // system green
+}
+
+.tz-status-err {
+    color: #ff453a; // system red
+}
+
