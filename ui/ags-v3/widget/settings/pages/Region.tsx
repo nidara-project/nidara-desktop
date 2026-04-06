@@ -11,9 +11,12 @@ const TIME_FORMAT_LABELS: Record<TimeFormat, string> = {
 }
 
 const DATE_FORMAT_LABELS: Record<DateFormat, string> = {
-    "short": "Corto — Lun 06 Abr",
-    "long":  "Largo — Lunes, 06 Abr",
-    "iso":   "ISO 8601 — 2026-04-06",
+    "none":       "Solo hora — sin fecha",
+    "short":      "Corto — Lun 06 Abr",
+    "short-year": "Corto con año — Lun 06 Abr 2026",
+    "long":       "Largo — Lunes, 06 Abr",
+    "numeric":    "Numérico — 06/04/2026",
+    "iso":        "ISO 8601 — 2026-04-06",
 }
 
 function clockPreview(): string {

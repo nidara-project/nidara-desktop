@@ -4,7 +4,7 @@ import { readFile, writeFile } from "ags/file"
 import { execAsync } from "ags/process"
 
 export type TimeFormat = "24h" | "12h"
-export type DateFormat = "short" | "long" | "iso"
+export type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
 
 export interface RegionSettings {
     timeFormat: TimeFormat
@@ -122,9 +122,12 @@ class RegionConfigManager extends GObject.Object {
         const sec = this._settings.showSeconds ? ":%S" : ""
         const timePart = this._settings.timeFormat === "12h" ? `%I:%M${sec} %p` : `%H:%M${sec}`
         switch (this._settings.dateFormat) {
-            case "iso":  return `%Y-%m-%d  ${timePart}`
-            case "long": return `%A, %d %b  ${timePart}`
-            default:     return `%a %d %b  ${timePart}` // short
+            case "none":       return timePart
+            case "short-year": return `%a %d %b %Y  ${timePart}`
+            case "long":       return `%A, %d %b  ${timePart}`
+            case "numeric":    return `%d/%m/%Y  ${timePart}`
+            case "iso":        return `%Y-%m-%d  ${timePart}`
+            default:           return `%a %d %b  ${timePart}` // short
         }
     }
 }
