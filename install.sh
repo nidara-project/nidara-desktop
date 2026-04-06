@@ -248,6 +248,13 @@ else
     echo "[INFO] User config already exists, keeping: $USER_CONF"
 fi
 
+# UI auto-generated settings file — initialized empty so Hyprland doesn't complain
+UI_CONF="$HOME/.config/hypr/crystal-settings.conf"
+if [ ! -f "$UI_CONF" ]; then
+    touch "$UI_CONF"
+    echo "[OK] Inicialized empty UI config: $UI_CONF"
+fi
+
 # 9. Configure XDG Portals
 echo "Configuring XDG desktop portals..."
 mkdir -p "$HOME/.config/xdg-desktop-portal"
