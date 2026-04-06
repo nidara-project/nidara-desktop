@@ -69,6 +69,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     const sidebar = new Gtk.ListBox({
         css_classes: ["settings-sidebar", "navigation-sidebar"],
         selection_mode: Gtk.SelectionMode.SINGLE,
+        activate_on_single_click: true,
         vexpand: true,
     })
 
@@ -298,9 +299,18 @@ export default function Settings(monitor: Gdk.Monitor) {
         updateNavButtons()
     }
 
-    sidebar.connect("row-selected", (_, row) => {
-        if (isProgrammaticNav || !row?.name) return
+    sidebar.connect("row-activated", (_, row) => {
+        if (!row?.name) return
         navigateTo(row.name)
+    })
+
+    // Revert any spurious selection change (focus, resize, keyboard navigation)
+    // that didn't originate from our own navigateTo/syncSidebarSelection calls.
+    sidebar.connect("row-selected", () => {
+        if (isProgrammaticNav) return
+        const currentPage = stack.visible_child_name
+        if (currentPage && currentPage !== "search-results")
+            syncSidebarSelection(currentPage)
     })
 
     backBtn.connect("clicked", () => {

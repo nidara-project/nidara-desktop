@@ -1,5 +1,9 @@
-import { Gtk } from "ags/gtk4"
+import { Gtk, Gdk } from "ags/gtk4"
+import Gio from "gi://Gio"
+import GLib from "gi://GLib"
+import GdkPixbuf from "gi://GdkPixbuf"
 import Theme from "../../../core/ThemeManager"
+import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
 import { ACCENT_PALETTE, type AccentKey } from "../../../core/FluidCrystal"
 // @ts-ignore
 import Adw from "gi://Adw?version=1"
@@ -56,7 +60,94 @@ export default function AppearancePage() {
     ))
     page.append(fcGroup.box)
 
-    // 3. System Assets
+    // 3. Wallpaper
+    const wallGroup = listGroup("Fondo de Pantalla")
+
+    // Preview
+    const preview = new Gtk.Picture({
+        width_request: 320,
+        height_request: 180,
+        content_fit: Gtk.ContentFit.COVER,
+        css_classes: ["wallpaper-preview"],
+        halign: Gtk.Align.CENTER,
+    })
+    const updatePreview = (path: string) => {
+        if (!path || !GLib.file_test(path, GLib.FileTest.EXISTS)) return
+        try {
+            // GdkPixbuf handles GIFs (first frame) and all common formats uniformly
+            const pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
+            if (pixbuf) preview.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
+        } catch (_) {
+            preview.set_filename(path) // fallback
+        }
+    }
+    updatePreview(Wallpaper.current)
+    Wallpaper.refreshFromDaemon()
+
+    const previewRow = new Gtk.ListBoxRow({ css_classes: ["settings-item-row", "wallpaper-preview-row"] })
+    previewRow.set_child(preview)
+    wallGroup.listBox.append(previewRow)
+
+    // Transition selector
+    const transitions = Object.keys(TRANSITION_LABELS) as TransitionType[]
+    const transLabels = transitions.map(k => TRANSITION_LABELS[k])
+    const transRow = dropdownRow(
+        "Transición",
+        "Efecto al cambiar el fondo de pantalla",
+        TRANSITION_LABELS[Wallpaper.transition],
+        transLabels,
+        (label) => {
+            const key = transitions.find(k => TRANSITION_LABELS[k] === label)
+            if (key) Wallpaper.previewTransition(key)
+        },
+    )
+    wallGroup.listBox.append(transRow)
+
+    // File picker row
+    const changeBtn = new Gtk.Button({
+        label: "Explorar...",
+        css_classes: ["pill"],
+        valign: Gtk.Align.CENTER,
+    })
+    changeBtn.connect("clicked", () => {
+        const dialog = new Gtk.FileDialog({
+            title: "Seleccionar fondo de pantalla",
+            modal: true,
+        })
+        const filter = new Gtk.FileFilter()
+        filter.add_mime_type("image/jpeg")
+        filter.add_mime_type("image/png")
+        filter.add_mime_type("image/gif")
+        filter.add_mime_type("image/webp")
+        filter.add_mime_type("image/avif")
+        filter.set_name("Imágenes")
+        const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
+        filters.append(filter)
+        dialog.set_filters(filters)
+
+        dialog.set_initial_folder(Gio.File.new_for_path(GLib.get_home_dir()))
+
+        dialog.open(null, null, (_: any, result: any) => {
+            try {
+                const file = dialog.open_finish(result)
+                const path = file?.get_path()
+                if (path) {
+                    Wallpaper.setWallpaper(path)
+                    updatePreview(path)
+                }
+            } catch (_) { /* user cancelled */ }
+        })
+    })
+    wallGroup.listBox.append(createRow(
+        "Imagen",
+        "Elige el fondo de pantalla desde tus archivos",
+        changeBtn,
+    ))
+
+    Wallpaper.connect("changed", () => updatePreview(Wallpaper.current))
+    page.append(wallGroup.box)
+
+    // 4. System Assets
     const assetsGroup = listGroup("Recursos del Sistema")
     assetsGroup.listBox.append(dropdownRow(
         "Tema GTK", "Estética estructural de aplicaciones",

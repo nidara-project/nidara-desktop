@@ -452,3 +452,16 @@ window.crystal-settings-window {
     color: #ff453a; // system red
 }
 
+
+// ── Wallpaper Preview ─────────────────────────────────────────────────────────
+row.wallpaper-preview-row {
+    padding: 12px;
+    &:hover { background-color: transparent; }
+
+    picture.wallpaper-preview {
+        border-radius: $crystal-radius-md;
+        border: 2px solid var(--crystal-border);
+        overflow: hidden;
+        background-color: var(--crystal-surface);
+    }
+}
