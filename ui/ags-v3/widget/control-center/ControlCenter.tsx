@@ -2,6 +2,7 @@ import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import status from "../../core/Status"
+import { dockSideState } from "../../widget/dock/state"
 import IslandGrid from "./IslandGrid"
 
 /**
@@ -17,15 +18,17 @@ export function ControlCenterWidget(monitor: Gdk.Monitor) {
         halign: Gtk.Align.END,
         valign: Gtk.Align.FILL,
         margin_top: 0, // Managed by Bar
-        margin_end: 0,
+        margin_end: dockSideState.position === 'right' ? dockSideState.width : 0,
     })
 
     layout.append(IslandGrid())
 
-    const sync = () => {
-        layout.set_visible(status.cc_open)
+    const syncVisibility = () => layout.set_visible(status.cc_open)
+    const syncDockOffset = () => {
+        layout.margin_end = dockSideState.position === 'right' ? dockSideState.width : 0
     }
-    status.connect("notify::cc-open", sync)
-    sync()
+    status.connect("notify::cc-open", syncVisibility)
+    dockSideState.subscribe(syncDockOffset)
+    syncVisibility()
     return layout
 }

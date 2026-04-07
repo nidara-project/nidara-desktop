@@ -463,6 +463,47 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
   -gtk-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
 }
 
+/* ── Vertical Dock ───────────────────────────────────────────────────────── */
+window#crystal-dock-vertical {
+  background: transparent;
+}
+
+.dock-v-pill {
+  background-color: var(--crystal-surface-back);
+  border: 1px solid var(--crystal-border);
+  border-radius: 24px;
+  padding: 8px 0;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25);
+  min-width: 0;
+}
+
+.dock-v-list {
+  padding: 4px 0;
+}
+
+button.dock-v-icon {
+  background: transparent;
+  border: none;
+  border-radius: 14px;
+  padding: 0;
+  transition: background 150ms ease;
+}
+button.dock-v-icon:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+button.dock-v-icon image {
+  -gtk-icon-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.dock-ctx-item {
+  border-radius: 8px;
+  padding: 6px 16px;
+  min-width: 160px;
+}
+.dock-ctx-item:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
 /* ==========================================================================
    CRYSTAL BAR - STITCH FIDELITY (Pills, Dots and Cairo Circles)
    ========================================================================== */

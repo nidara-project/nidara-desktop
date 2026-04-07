@@ -10,7 +10,7 @@ import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
 import { DockItem, Separator } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
-import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState, dockSettings, menuState } from "./state"
+import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState, dockSettings, menuState, dockSideState } from "./state"
 import status from "../../core/Status"
 import Theme from "core/ThemeManager"
 
@@ -24,6 +24,13 @@ import Theme from "core/ThemeManager"
 
 
 export default function Dock(gdkmonitor: any) {
+    const isVertical = dockSettings.position === 'left' || dockSettings.position === 'right'
+    const BAR_HEIGHT = 40  // matches bar's exclusive_zone
+
+    // Notify CC/NC/Popups of side dock width (or reset for bottom)
+    // Published after layer-shell setup when WIN_W is known
+    dockSideState.update(dockSettings.position, 0)  // reset first; updated after size known
+
     // V180: Sync initial width with pinned items to prevent "One-Time Jump" on startup
     const norm = (s: string) => (s || "").toLowerCase().replace(".desktop", "")
 
@@ -70,8 +77,9 @@ export default function Dock(gdkmonitor: any) {
     const layout = new Gtk.Overlay({
         name: "cd-layout",
         css_classes: ["cd-layout"],
-        halign: Gtk.Align.FILL, // V609: Allow manual centering
-        valign: Gtk.Align.END,
+        halign: Gtk.Align.FILL,
+        valign: isVertical ? Gtk.Align.FILL : Gtk.Align.END,
+        vexpand: isVertical,
     })
 
     let previewIdx = -1
@@ -159,6 +167,15 @@ export default function Dock(gdkmonitor: any) {
     }
 
 
+    const dockMonitorWidth = gdkmonitor.get_geometry().width
+    const dockMonitorHeight = gdkmonitor.get_geometry().height
+    // For vertical: window spans available height (excluding top bar)
+    const verticalUsableH = dockMonitorHeight - BAR_HEIGHT
+    // For vertical: window is pill-wide; for horizontal: full-screen-wide
+    const WIN_W = isVertical ? DOCK_CONSTANTS.EXCLUSIVE_ZONE : dockMonitorWidth
+    const WIN_H = isVertical ? verticalUsableH : DOCK_CONSTANTS.WINDOW_HEIGHT
+    const sideEdge = dockSettings.position === 'left' ? Gtk4LayerShell.Edge.LEFT : Gtk4LayerShell.Edge.RIGHT
+
     const win = new Gtk.Window({
         name: "crystal-dock",
         css_classes: ["crystal-dock-window", "fc-ignore"],
@@ -167,7 +184,7 @@ export default function Dock(gdkmonitor: any) {
         can_focus: false,
         can_target: true,
         resizable: false,
-        default_height: DOCK_CONSTANTS.WINDOW_HEIGHT,
+        default_height: WIN_H,
     })
     ;(win as any).gdkmonitor = gdkmonitor
     win.set_child(layout)
@@ -175,44 +192,59 @@ export default function Dock(gdkmonitor: any) {
         name: "cd-bar",
         css_classes: ["cd-bar"],
         spacing: 0,
-        halign: Gtk.Align.START,
-        valign: Gtk.Align.END,
+        orientation: isVertical ? Gtk.Orientation.VERTICAL : Gtk.Orientation.HORIZONTAL,
+        halign: isVertical ? Gtk.Align.CENTER : Gtk.Align.START,
+        valign: isVertical ? Gtk.Align.START  : Gtk.Align.END,
         hexpand: false,
+        vexpand: false,
     })
-
-    const dockMonitorWidth = gdkmonitor.get_geometry().width
 
     const da = new Gtk.DrawingArea({
         name: "dock-gloss-layer",
-        valign: Gtk.Align.END,
-        halign: Gtk.Align.START, // V615: Unified START anchor
+        valign: isVertical ? Gtk.Align.FILL : Gtk.Align.END,
+        halign: isVertical ? Gtk.Align.FILL : Gtk.Align.START,
         height_request: DOCK_CONSTANTS.PILL_HEIGHT,
-        margin_bottom: dockSettings.screenGap,
+        margin_bottom: isVertical ? 0 : dockSettings.screenGap,
         can_focus: false,
     })
 
     da.set_draw_func((_, cr, w, h) => {
-        // V430: Enable Gloss/Border effect for main dock
-        // Pass n=3.2 at the very end to separate the dock pill formula from the icon formula (4.0).
-        // V700: Surgical Inset applied (2.5) to avoid any edge bleeding.
-        drawSquircle(cr, w, h, undefined, 0.15, true, undefined, undefined, false, undefined, 3.2, 1.0, 0)
+        if (isVertical) {
+            // Draw pill at the correct side and centered vertically within the full window
+            const pw = DOCK_CONSTANTS.PILL_HEIGHT
+            const ph = smoothedBarWidth + DOCK_CONSTANTS.BASE_MARGIN * 2
+            const px = dockSettings.position === 'right' ? 0 : dockSettings.screenGap
+            const py = Math.max(0, Math.round((h - ph) / 2))
+            cr.translate(px, py)
+            drawSquircle(cr, pw, ph, undefined, 0.15, true, undefined, undefined, false, undefined, 3.2, 1.0, 0)
+        } else {
+            drawSquircle(cr, w, h, undefined, 0.15, true, undefined, undefined, false, undefined, 3.2, 1.0, 0)
+        }
     })
 
     const updateSize = () => {
         if (!bar || !win) return
-        bar.set_size_request(smoothedBarWidth, -1)
-        const targetW = smoothedBarWidth + (DOCK_CONSTANTS.BASE_MARGIN * 2)
-        if (da) {
-            da.set_size_request(targetW, DOCK_CONSTANTS.PILL_HEIGHT)
-            da.queue_draw()
+        if (isVertical) {
+            // smoothedBarWidth accumulates total HEIGHT in vertical mode
+            bar.set_size_request(DOCK_CONSTANTS.PILL_HEIGHT, smoothedBarWidth)
+            const targetH = smoothedBarWidth + (DOCK_CONSTANTS.BASE_MARGIN * 2)
+            if (da) { da.set_size_request(DOCK_CONSTANTS.PILL_HEIGHT, targetH); da.queue_draw() }
+        } else {
+            bar.set_size_request(smoothedBarWidth, -1)
+            const targetW = smoothedBarWidth + (DOCK_CONSTANTS.BASE_MARGIN * 2)
+            if (da) { da.set_size_request(targetW, DOCK_CONSTANTS.PILL_HEIGHT); da.queue_draw() }
         }
     }
 
-    // V615: PRE-EMPTIVE CENTERING
-    // Set the margin immediately so the very first frame is correct.
+    // Pre-emptive centering (horizontal) / top margin (vertical)
     const initialMargin = Math.round((dockMonitorWidth - totalStaticWidth) / 2)
-    bar.margin_start = Math.max(0, initialMargin)
-    if (da) da.margin_start = Math.max(0, initialMargin - DOCK_CONSTANTS.BASE_MARGIN) // V616: Center background pill
+    if (!isVertical) {
+        bar.margin_start = Math.max(0, initialMargin)
+        if (da) da.margin_start = Math.max(0, initialMargin - DOCK_CONSTANTS.BASE_MARGIN)
+    } else {
+        // Set initial vertical centering immediately so the first frame is correct
+        bar.margin_top = Math.max(0, Math.round((verticalUsableH - totalStaticWidth) / 2))
+    }
 
     // --- PHYSICS ENGINE ---
     const animRegistry = new Map<string, import("./state").AnimState>()
@@ -220,6 +252,27 @@ export default function Dock(gdkmonitor: any) {
     let lastFrameTime = 0
     let tickId: number | null = null
 
+    // ── Auto-hide slide state ─────────────────────────────────────────────────
+    // slideOffset: 0 = fully visible, PILL_HEIGHT+screenGap = fully hidden below screen
+    let slideTarget = 0
+    let slideCurrent = 0
+    let slideVelocity = 0
+    let isRevealed = true
+    const SLIDE_STIFFNESS = 500
+    const SLIDE_DAMPING = 52
+
+    const setRevealed = (reveal: boolean) => {
+        if (isRevealed === reveal) return
+        isRevealed = reveal
+        slideTarget = reveal ? 0 : (isVertical
+            ? DOCK_CONSTANTS.PILL_HEIGHT + dockSettings.screenGap + 4
+            : DOCK_CONSTANTS.PILL_HEIGHT + dockSettings.screenGap + 4)
+        if (layerShellReady) {
+            const zone = reveal ? (isVertical ? WIN_W : DOCK_CONSTANTS.EXCLUSIVE_ZONE) : 0
+            Gtk4LayerShell.set_exclusive_zone(win, zone)
+        }
+        runUnifiedTick()
+    }
 
     const runUnifiedTick = () => {
         if (tickId !== null) return
@@ -288,11 +341,19 @@ export default function Dock(gdkmonitor: any) {
                     const slotW = newRoundedX - lastRoundedX
                     lastRoundedX = newRoundedX
 
-                    if (revealer.width_request !== slotW) revealer.width_request = slotW
-
-                    const centerBox = itemBox as Gtk.CenterBox
-                    const line = centerBox?.get_center_widget() as Gtk.Box
-                    if (line) line.set_size_request(-1, Math.round(state.currentHeight))
+                    if (isVertical) {
+                        if (revealer.height_request !== slotW) revealer.height_request = slotW
+                        if (revealer.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) revealer.width_request = DOCK_CONSTANTS.PILL_HEIGHT
+                        // Horizontal separator line in vertical mode
+                        const centerBox = itemBox as Gtk.CenterBox
+                        const line = centerBox?.get_center_widget() as Gtk.Box
+                        if (line) line.set_size_request(Math.round(state.currentHeight * 0.7), DOCK_CONSTANTS.SEPARATOR_LINE)
+                    } else {
+                        if (revealer.width_request !== slotW) revealer.width_request = slotW
+                        const centerBox = itemBox as Gtk.CenterBox
+                        const line = centerBox?.get_center_widget() as Gtk.Box
+                        if (line) line.set_size_request(-1, Math.round(state.currentHeight))
+                    }
                 } else {
                     const exactMargin = state.currentMargin
                     const exactIconSize = DOCK_CONSTANTS.ICON_SIZE * state.currentScale
@@ -305,28 +366,52 @@ export default function Dock(gdkmonitor: any) {
                     const slotW = newRoundedX - lastRoundedX
                     lastRoundedX = newRoundedX
 
-                    // V610: The key integer — ALWAYS visually lock the icon to its strict integer scale 
-                    // This prevents unscaled, far-away icons from receiving 1px diffusion jitters
                     const tps = Math.round(exactIconSize)
                     const remaining = slotW - tps
                     const marginL = Math.floor(remaining / 2)
                     const marginR = Math.ceil(remaining / 2)
 
-                    // Sizing allocations
-                    if (revealer.width_request !== slotW) revealer.width_request = slotW
-                    if (itemBox) {
-                        if (itemBox.width_request !== tps) itemBox.width_request = tps
-                        if (itemBox.margin_start !== marginL) itemBox.margin_start = marginL
-                        if (itemBox.margin_end !== marginR) itemBox.margin_end = marginR
-                        itemBox.margin_bottom = Math.round(0 - (state.currentTranslateY || 0))
+                    if (isVertical) {
+                        // Vertical: slot height = slotW, full pill width
+                        if (revealer.height_request !== slotW) revealer.height_request = slotW
+                        if (revealer.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) revealer.width_request = DOCK_CONSTANTS.PILL_HEIGHT
+                        if (itemBox) {
+                            // Fill full pill width so indicator and icon position correctly
+                            itemBox.halign = Gtk.Align.FILL
+                            itemBox.valign = Gtk.Align.START
+                            if (itemBox.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) itemBox.width_request = DOCK_CONSTANTS.PILL_HEIGHT
+                            if (itemBox.height_request !== tps) itemBox.height_request = tps
+                            if (itemBox.margin_top !== marginL) itemBox.margin_top = marginL
+                            if (itemBox.margin_bottom !== marginR) itemBox.margin_bottom = marginR
+                            itemBox.margin_start = 0; itemBox.margin_end = 0
+                        }
+                    } else {
+                        if (revealer.width_request !== slotW) revealer.width_request = slotW
+                        if (itemBox) {
+                            if (itemBox.width_request !== tps) itemBox.width_request = tps
+                            if (itemBox.margin_start !== marginL) itemBox.margin_start = marginL
+                            if (itemBox.margin_end !== marginR) itemBox.margin_end = marginR
+                            itemBox.margin_bottom = Math.round(0 - (state.currentTranslateY || 0))
+                        }
                     }
 
                     // Visual nested sizing
                     const overlay = itemBox?.get_first_child() as Gtk.Overlay
                     if (overlay) {
+                        if (isVertical) {
+                            // Force overlay to fill the full pill width so icon+indicator position correctly
+                            overlay.set_size_request(DOCK_CONSTANTS.PILL_HEIGHT, tps)
+                            overlay.halign = Gtk.Align.FILL
+                        }
                         const iconBox = overlay.get_child() as Gtk.Box
                         if (iconBox) {
                             iconBox.set_size_request(tps, tps)
+                            if (isVertical) {
+                                // Icon centered within full pill width
+                                iconBox.halign = Gtk.Align.CENTER
+                                iconBox.valign = Gtk.Align.CENTER
+                                iconBox.margin_bottom = 0
+                            }
                             const plateOverlay = iconBox.get_first_child() as Gtk.Overlay
                             if (plateOverlay && plateOverlay.get_child) {
                                 const da = plateOverlay.get_child()
@@ -344,14 +429,19 @@ export default function Dock(gdkmonitor: any) {
                 }
             })
 
-            // Step 3: Bar width/position
-            // We only round the FINAL sum, completely eliminating the stepped jitter vibration
+            // Step 3: Bar position (horizontal: margin_start; vertical: margin_top)
             const roundedTotalWidth = Math.round(totalBarWidth)
-            const barM = Math.round((dockMonitorWidth - roundedTotalWidth) / 2)
 
-            if (bar.margin_start !== barM) {
-                bar.margin_start = barM
-                if (da) da.margin_start = barM - DOCK_CONSTANTS.BASE_MARGIN
+            if (isVertical) {
+                // totalBarWidth = total height of all icon slots
+                const barM = Math.round((verticalUsableH - roundedTotalWidth) / 2)
+                if (bar.margin_top !== barM) bar.margin_top = barM
+            } else {
+                const barM = Math.round((dockMonitorWidth - roundedTotalWidth) / 2)
+                if (bar.margin_start !== barM) {
+                    bar.margin_start = barM
+                    if (da) da.margin_start = barM - DOCK_CONSTANTS.BASE_MARGIN
+                }
             }
 
             if (active || smoothedBarWidth !== roundedTotalWidth) {
@@ -359,6 +449,35 @@ export default function Dock(gdkmonitor: any) {
                 updateSize()
                 updateInputRegion(smoothedBarWidth)
                 active = true
+            }
+
+            // Step 4: Slide spring (auto-hide)
+            const slideDelta = slideTarget - slideCurrent
+            const slideAbsDelta = Math.abs(slideDelta)
+            const slideAbsVel = Math.abs(slideVelocity)
+            if (slideAbsDelta > 0.2 || slideAbsVel > 0.2) {
+                const slideForce = SLIDE_STIFFNESS * slideDelta - SLIDE_DAMPING * slideVelocity
+                slideVelocity += slideForce * dt
+                slideCurrent += slideVelocity * dt
+                const offset = Math.round(slideCurrent)
+                if (isVertical) {
+                    if (layerShellReady) Gtk4LayerShell.set_margin(win, sideEdge, -offset)
+                } else {
+                    const mb = dockSettings.screenGap - offset
+                    if (shim.margin_bottom !== mb) shim.margin_bottom = mb
+                    if (da.margin_bottom !== mb) da.margin_bottom = mb
+                }
+                active = true
+            } else if (slideCurrent !== slideTarget) {
+                slideCurrent = slideTarget
+                slideVelocity = 0
+                if (isVertical) {
+                    if (layerShellReady) Gtk4LayerShell.set_margin(win, sideEdge, -Math.round(slideTarget))
+                } else {
+                    const mb = dockSettings.screenGap - Math.round(slideTarget)
+                    shim.margin_bottom = mb
+                    da.margin_bottom = mb
+                }
             }
 
             if (!active) {
@@ -454,25 +573,41 @@ export default function Dock(gdkmonitor: any) {
         const surface = win.get_native()?.get_surface()
         if (!surface) return
 
-        // dockMonitorWidth already declared at top
         const region = new Cairo.Region()
 
-        // V300: Surgical Input Region for 200px window.
-        // The window is 200px high to allow icon magnification, but we ONLY
-        // capture mouse events in the bottom 110px (Dock area).
-
-        // V421: SMART INPUT REGION
-        // If a menu is open, we MUST allow input on the full window (200px) so the menu can receive clicks.
-        // If no menu is open, we MUST clip to the bottom 110px so we don't block windows behind the dock.
-        if (menuState.openCount > 0) {
-            surface.set_input_region(null) // Full window input
+        // Vertical dock: restrict input to pill area, or thin edge when hidden
+        if (isVertical) {
+            if (dockSettings.autoHide && !isRevealed && slideTarget > 0) {
+                // Hidden: thin edge strip at screen edge for reveal trigger
+                const edgeX = dockSettings.position === 'right' ? WIN_W - 4 : 0
+                // @ts-ignore
+                region.unionRectangle({ x: edgeX, y: 0, width: 4, height: WIN_H })
+            } else {
+                // Visible: only the pill column (prevents transparent gaps from blocking clicks)
+                const pillX = dockSettings.position === 'left' ? dockSettings.screenGap : 0
+                // @ts-ignore
+                region.unionRectangle({ x: pillX, y: 0, width: DOCK_CONSTANTS.PILL_HEIGHT, height: WIN_H })
+            }
+            surface.set_input_region(region)
             return
         }
 
-        // V422: GENEROUS INPUT REGION
-        // We expand the interaction zone by 250px on each side to ensure
-        // the magnification starts growing SMOOTHLY before the mouse hits the icons.
-        // This eliminates the "jump" reported by the user.
+        // When auto-hide is on and dock is hidden, expose only a thin strip at
+        // the very bottom of the window (= screen edge) so the mouse can trigger reveal.
+        if (dockSettings.autoHide && !isRevealed && slideTarget > 0) {
+            // @ts-ignore
+            region.unionRectangle({ x: 0, y: DOCK_CONSTANTS.WINDOW_HEIGHT - 4, width: dockMonitorWidth, height: 4 })
+            surface.set_input_region(region)
+            return
+        }
+
+        // V421: SMART INPUT REGION — full window while menu is open
+        if (menuState.openCount > 0) {
+            surface.set_input_region(null)
+            return
+        }
+
+        // V422: GENEROUS INPUT REGION — expanded zone for smooth magnification onset
         const width = totalWidth + 500
         const x = (dockMonitorWidth - width) / 2
         const y = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT
@@ -492,18 +627,25 @@ export default function Dock(gdkmonitor: any) {
 
     win.add_controller(motion)
     motion.connect("motion", (controller, x, y) => {
-        clearLeaveTimeout() // V160: Cancel any pending leave reset
+        clearLeaveTimeout()
 
-        // V478: DRAG PERSISTENCE
-        // While dragging, we IGNORE the vertical limit. Reordering and magnification
-        // must stay active as long as the drag is alive.
+        // Auto-hide: reveal dock on any mouse entry
+        if (dockSettings.autoHide && !isRevealed) {
+            setRevealed(true)
+            updateInputRegion(smoothedBarWidth)
+        }
+
+        // Vertical dock: no magnification
+        if (isVertical) {
+            updateAllTargets(-1000)
+            return
+        }
+
         if (dragBus.draggingId) {
             updateAllTargets(x)
             return
         }
 
-        // V215: Normal operation (not dragging)
-        // We only magnify if the mouse is in the bottom 110px.
         const yLimit = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT
         if (y < yLimit) {
             updateAllTargets(-1000)
@@ -512,26 +654,35 @@ export default function Dock(gdkmonitor: any) {
         updateAllTargets(x)
     })
     motion.connect("leave", () => {
-        // V477: Do NOT reset during drag. This prevents magnification cut-outs
-        // if the user's hand wanders slightly while dragging.
         if (dragBus.draggingId) return
 
         clearLeaveTimeout()
-        leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+        const magnDelay = 50
+        const hideDelay = dockSettings.autoHide ? Math.max(magnDelay, dockSettings.hideDelay) : magnDelay
+        leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, hideDelay, () => {
             updateAllTargets(-1000)
+            if (dockSettings.autoHide) {
+                setRevealed(false)
+                updateInputRegion(smoothedBarWidth)
+            }
             leaveTimeout = null
             return GLib.SOURCE_REMOVE
         })
     })
 
     const shim = new Gtk.Box({
-        valign: Gtk.Align.END, halign: Gtk.Align.START, // V601: Logic Anchor
-        margin_bottom: dockSettings.screenGap,
-        height_request: DOCK_CONSTANTS.PILL_HEIGHT,
-        vexpand: true,
+        valign: isVertical ? Gtk.Align.START : Gtk.Align.END,
+        halign: isVertical
+            ? (dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END)
+            : Gtk.Align.START,
+        margin_bottom: isVertical ? 0 : dockSettings.screenGap,
+        margin_start: isVertical && dockSettings.position === 'left'  ? dockSettings.screenGap : 0,
+        margin_end:   isVertical && dockSettings.position === 'right' ? dockSettings.screenGap : 0,
+        height_request: isVertical ? -1 : DOCK_CONSTANTS.PILL_HEIGHT,
+        vexpand: isVertical,
         overflow: Gtk.Overflow.VISIBLE,
     })
-    bar.valign = Gtk.Align.END
+    if (!isVertical) bar.valign = Gtk.Align.END
     shim.append(bar)
 
     // V470: GLOBAL DROP TARGET
@@ -649,7 +800,7 @@ export default function Dock(gdkmonitor: any) {
                 const widget = factory()
                 const revealer = new (Gtk as any).Revealer({
                     css_classes: ["cd-revealer"],
-                    transition_type: Gtk.RevealerTransitionType.SLIDE_LEFT,
+                    transition_type: isVertical ? Gtk.RevealerTransitionType.SLIDE_DOWN : Gtk.RevealerTransitionType.SLIDE_LEFT,
                     transition_duration: 300,
                     child: widget,
                     reveal_child: firstRender
@@ -1014,9 +1165,13 @@ export default function Dock(gdkmonitor: any) {
             // Sync alignment to prevent "bad load" shift
             if (firstRender || !tickId) {
                 smoothedBarWidth = totalCurrentWidth
-                const manualMarginStart = Math.round((dockMonitorWidth - smoothedBarWidth) / 2)
-                bar.margin_start = manualMarginStart
-                if (da) da.margin_start = manualMarginStart - DOCK_CONSTANTS.BASE_MARGIN
+                if (isVertical) {
+                    bar.margin_top = Math.max(0, Math.round((verticalUsableH - smoothedBarWidth) / 2))
+                } else {
+                    const manualMarginStart = Math.round((dockMonitorWidth - smoothedBarWidth) / 2)
+                    bar.margin_start = manualMarginStart
+                    if (da) da.margin_start = manualMarginStart - DOCK_CONSTANTS.BASE_MARGIN
+                }
                 updateSize()
                 firstRender = false
             }
@@ -1038,15 +1193,16 @@ export default function Dock(gdkmonitor: any) {
     }
 
     // dockMonitorWidth already declared at line 221
-    win.set_default_size(dockMonitorWidth, DOCK_CONSTANTS.WINDOW_HEIGHT)
+    win.set_default_size(WIN_W, WIN_H)
     let layerInit = false
+    let layerShellReady = false
     try {
         Gtk4LayerShell.init_for_window(win)
         layerInit = true
     } catch (e) {
         console.warn("Gtk4LayerShell init failed (not on Wayland?): " + e)
     }
-    win.set_size_request(dockMonitorWidth, DOCK_CONSTANTS.WINDOW_HEIGHT)
+    win.set_size_request(WIN_W, WIN_H)
     win.set_decorated(false)
 
     try {
@@ -1061,10 +1217,18 @@ export default function Dock(gdkmonitor: any) {
         try {
             Gtk4LayerShell.set_namespace(win, "crystal-dock");
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP);
-            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true);
-            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true);
-            Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true);
-            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 0);
+
+            if (isVertical) {
+                Gtk4LayerShell.set_anchor(win, sideEdge, true);
+                Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true);
+                Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true);
+                Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, BAR_HEIGHT);
+            } else {
+                Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true);
+                Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true);
+                Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true);
+                Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, 0);
+            }
             if (orderedIds.length > 0) {
                 let total = 0
                 orderedIds.forEach(id => {
@@ -1074,7 +1238,15 @@ export default function Dock(gdkmonitor: any) {
                 updateInputRegion(total)
             }
 
-            Gtk4LayerShell.set_exclusive_zone(win, DOCK_CONSTANTS.EXCLUSIVE_ZONE);
+            layerShellReady = true
+            // Vertical dock: exclusive_zone = 0 so we don't shrink the bar or other
+            // layer-shell surfaces anchored to the same edge. The dock sits on TOP layer
+            // and is always visible above app windows regardless.
+            const exclusiveZone = (dockSettings.autoHide || isVertical) ? 0 : DOCK_CONSTANTS.EXCLUSIVE_ZONE
+            Gtk4LayerShell.set_exclusive_zone(win, exclusiveZone)
+
+            // Publish side width so CC/NC/Popups offset themselves
+            if (isVertical) dockSideState.update(dockSettings.position, WIN_W)
 
             win.connect("realize", () => {
                 // V300: Delegate to surgical updateInputRegion on realize

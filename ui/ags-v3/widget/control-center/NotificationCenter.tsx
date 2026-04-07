@@ -7,6 +7,7 @@ import SquircleContainer, { Shape } from "../common/SquircleContainer"
 import Gio from "gi://Gio"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
+import { dockSideState } from "../../widget/dock/state"
 
 export function createIconWidget(n: AstalNotifd.Notification, size: number) {
     const entry = n.desktop_entry || n.app_name || ""
@@ -109,7 +110,8 @@ export default function NotificationCenter() {
     const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string }>()
 
     const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vscrollbar_policy: Gtk.PolicyType.AUTOMATIC, vexpand: true, css_classes: ["nc-scroll", "nc-transparent-scroll"] })
-    const listContainer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["nc-content-box"], margin_top: 0, margin_bottom: 40, margin_end: 0, halign: Gtk.Align.END, width_request: 450 })
+    const listContainer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["nc-content-box"], margin_top: 0, margin_bottom: 40, margin_end: dockSideState.position === 'right' ? dockSideState.width : 0, halign: Gtk.Align.END, width_request: 450 })
+    dockSideState.subscribe(() => { listContainer.margin_end = dockSideState.position === 'right' ? dockSideState.width : 0 })
     scroll.set_child(listContainer)
 
     const calendar = SquircleContainer({ child: new Gtk.Calendar({ hexpand: true, css_classes: ["nc-calendar-widget"] }), radius: 32, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["cc-island", "nc-calendar-island"] })

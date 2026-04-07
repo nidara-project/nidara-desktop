@@ -1,10 +1,28 @@
 import { Gtk } from "ags/gtk4"
-import { dockSettings, updateDockSettings } from "../../dock/state"
-import { listGroup, toggleRow, sliderRow, presetRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { dockSettings, updateDockSettings, type DockPosition } from "../../dock/state"
+import { listGroup, toggleRow, sliderRow, presetRow, dropdownRow, pageHeader, pageBox } from "../SettingsHelpers"
 
 export default function DockPage() {
     const page = pageBox("dock-page")
     page.append(pageHeader("Dock", "Personaliza el tamaño, animación e indicadores del dock"))
+
+    // 0. Position
+    const posGroup = listGroup("Posición")
+    const posOptions: { label: string; value: DockPosition }[] = [
+        { label: "Inferior",  value: 'bottom' },
+        { label: "Izquierda", value: 'left'   },
+        { label: "Derecha",   value: 'right'  },
+    ]
+    posGroup.listBox.append(dropdownRow(
+        "Posición del dock", "Dónde aparece el dock en la pantalla",
+        posOptions.find(o => o.value === dockSettings.position)?.label ?? "Inferior",
+        posOptions.map(o => o.label),
+        (label) => {
+            const opt = posOptions.find(o => o.label === label)
+            if (opt) updateDockSettings({ position: opt.value })
+        },
+    ))
+    page.append(posGroup.box)
 
     // 1. Geometry
     const geoGroup = listGroup("Geometría")
@@ -43,6 +61,22 @@ export default function DockPage() {
         dockSettings.showIndicators,
         (v) => updateDockSettings({ showIndicators: v }),
     ))
+
+    const autoHideToggle = toggleRow(
+        "Ocultar automáticamente", "El dock se esconde al alejar el cursor",
+        dockSettings.autoHide,
+        (v) => updateDockSettings({ autoHide: v }),
+    )
+    behGroup.listBox.append(autoHideToggle)
+
+    const delaySlider = sliderRow(
+        "Retardo al ocultar", "Tiempo antes de que el dock se oculte",
+        dockSettings.hideDelay, 0, 2000,
+        (v) => updateDockSettings({ hideDelay: Math.round(v) }),
+        { unit: "ms" },
+    )
+    behGroup.listBox.append(delaySlider)
+
     page.append(behGroup.box)
 
     return page

@@ -36,12 +36,13 @@ export function Separator(id: string, updateDock: () => void, register: (id: str
     // Callbacks for drop logic
     onDrop: (sourceId: string) => void
 ) {
+    const isSepVertical = dockSettings.position === 'left' || dockSettings.position === 'right'
     const baseWidth = DOCK_CONSTANTS.SEPARATOR_SLOT
     const box = new Gtk.CenterBox({
         css_classes: ["cd-separator-container"],
-        valign: Gtk.Align.END, halign: Gtk.Align.CENTER,
-        width_request: baseWidth,
-        height_request: DOCK_CONSTANTS.PILL_HEIGHT,
+        valign: isSepVertical ? Gtk.Align.CENTER : Gtk.Align.END, halign: Gtk.Align.CENTER,
+        width_request: isSepVertical ? DOCK_CONSTANTS.PILL_HEIGHT : baseWidth,
+        height_request: isSepVertical ? baseWidth : DOCK_CONSTANTS.PILL_HEIGHT,
         hexpand: false,
         margin_bottom: 0,
     })
@@ -98,6 +99,7 @@ export function DockItem(
     referenceWidget?: Gtk.Widget
 ) {
     let { appId, appItem, updateDock, register, addresses = [], clientTitle, onPin, onUnpin, onReorder, isPinned, cleanId } = props
+    const isVertical = dockSettings.position === 'left' || dockSettings.position === 'right'
     let rawId = "void"
     if (appItem.get_id) {
         rawId = appItem.get_id() || "void"
@@ -111,11 +113,11 @@ export function DockItem(
     const itemBox = new Gtk.Box({
         name: "cd-item-" + appId,
         css_classes: ["cd-item"],
-        valign: Gtk.Align.END,
-        halign: Gtk.Align.START,
+        valign: isVertical ? Gtk.Align.START : Gtk.Align.END,
+        halign: isVertical ? Gtk.Align.FILL : Gtk.Align.START,
         hexpand: false,
-        width_request: DOCK_CONSTANTS.ICON_SIZE,
-        height_request: DOCK_CONSTANTS.PILL_HEIGHT,
+        width_request: isVertical ? DOCK_CONSTANTS.PILL_HEIGHT : DOCK_CONSTANTS.ICON_SIZE,
+        height_request: isVertical ? -1 : DOCK_CONSTANTS.PILL_HEIGHT,
         can_focus: false,
         focusable: false, // V405: Explicitly disable focus
         has_tooltip: false,
@@ -136,9 +138,9 @@ export function DockItem(
         name: "cd-icon-box-" + appId,
         css_classes: ["cd-icon-container"],
         halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.END,
+        valign: isVertical ? Gtk.Align.CENTER : Gtk.Align.END,
         hexpand: false,
-        margin_bottom: DOCK_CONSTANTS.PILL_PADDING,
+        margin_bottom: isVertical ? 0 : DOCK_CONSTANTS.PILL_PADDING,
         has_tooltip: false,
         can_focus: false, // V405: Explicitly disable focus
         focusable: false
@@ -366,9 +368,14 @@ export function DockItem(
     const indicator = new Gtk.Box({
         name: "cd-indicator-" + appId,
         css_classes: ["cd-indicator-container"],
-        halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.END,
-        margin_bottom: DOCK_CONSTANTS.INDICATOR_GAP,
+        // For vertical: indicator is on the screen-edge side (right for right dock, left for left dock)
+        halign: isVertical
+            ? (dockSettings.position === 'right' ? Gtk.Align.END : Gtk.Align.START)
+            : Gtk.Align.CENTER,
+        valign: isVertical ? Gtk.Align.CENTER : Gtk.Align.END,
+        margin_bottom: isVertical ? 0 : DOCK_CONSTANTS.INDICATOR_GAP,
+        margin_end:   isVertical && dockSettings.position === 'right' ? DOCK_CONSTANTS.INDICATOR_GAP : 0,
+        margin_start: isVertical && dockSettings.position === 'left'  ? DOCK_CONSTANTS.INDICATOR_GAP : 0,
         has_tooltip: false,
         width_request: DOT_SIZE, height_request: DOT_SIZE,
     })
@@ -378,9 +385,10 @@ export function DockItem(
         name: "cd-overlay-" + appId,
         css_classes: ["cd-overlay", "overlay"],
         overflow: Gtk.Overflow.VISIBLE,
-        valign: Gtk.Align.END,
-        vexpand: true,
-        height_request: DOCK_CONSTANTS.PILL_HEIGHT,
+        halign: isVertical ? Gtk.Align.FILL : Gtk.Align.START,
+        valign: isVertical ? Gtk.Align.CENTER : Gtk.Align.END,
+        vexpand: !isVertical,
+        height_request: isVertical ? DOCK_CONSTANTS.ICON_SIZE : DOCK_CONSTANTS.PILL_HEIGHT,
         has_tooltip: false,
     })
     overlay.set_child(iconBox)
@@ -389,7 +397,10 @@ export function DockItem(
 
     // TOOLTIP
     // Re-implemented Popover for anchored positioning with GTK theme styling
-    const tooltip = new Gtk.Popover({ position: Gtk.PositionType.TOP, autohide: false, has_arrow: true })
+    const tooltipPosition = isVertical
+        ? (dockSettings.position === 'right' ? Gtk.PositionType.LEFT : Gtk.PositionType.RIGHT)
+        : Gtk.PositionType.TOP
+    const tooltip = new Gtk.Popover({ position: tooltipPosition, autohide: false, has_arrow: true })
     const label = new Gtk.Label({ css_classes: ["label"] })
     const content = new Gtk.Box()
     content.append(label)

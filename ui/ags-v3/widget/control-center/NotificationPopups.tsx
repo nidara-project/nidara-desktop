@@ -3,7 +3,8 @@ import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import AstalNotifd from "gi://AstalNotifd"
 import GLib from "gi://GLib"
-import { NotificationCapsule } from "./NotificationCenter" 
+import { NotificationCapsule } from "./NotificationCenter"
+import { dockSideState } from "../../widget/dock/state"
 
 export function NotificationPopupsWidget() {
     const notifd = AstalNotifd.get_default()
@@ -14,7 +15,12 @@ export function NotificationPopupsWidget() {
         css_classes: ["notif-popup-container"],
         valign: Gtk.Align.START,
         halign: Gtk.Align.END,
-        width_request: 440
+        width_request: 440,
+        margin_end: dockSideState.position === 'right' ? dockSideState.width : 0,
+    })
+
+    dockSideState.subscribe(() => {
+        box.margin_end = dockSideState.position === 'right' ? dockSideState.width : 0
     })
 
     const notifMap = new Map<number, Gtk.Widget>()

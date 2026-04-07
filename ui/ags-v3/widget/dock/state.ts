@@ -28,6 +28,8 @@ export const DOCK_CONFIG = {
 // --- DOCK SETTINGS (Reactive, Persisted) ---
 const SETTINGS_FILE = GLib.get_home_dir() + "/.config/dock_settings.json"
 
+export type DockPosition = 'bottom' | 'left' | 'right'
+
 export interface DockSettings {
     iconSize: number        // 32–96, default 48
     magnification: boolean  // default true
@@ -35,6 +37,9 @@ export interface DockSettings {
     showIndicators: boolean // default true
     screenGap: number       // 4–16, default 8
     iconThemeScale: number  // 0.0 to 0.20, default 0.0
+    autoHide: boolean       // hide dock when mouse leaves, default false
+    hideDelay: number       // ms before hiding after mouse leaves, default 500
+    position: DockPosition  // dock anchor position, default 'bottom'
 }
 
 const DOCK_DEFAULTS: DockSettings = {
@@ -44,6 +49,9 @@ const DOCK_DEFAULTS: DockSettings = {
     showIndicators: true,
     screenGap: 8,
     iconThemeScale: 0.0,
+    autoHide: false,
+    hideDelay: 500,
+    position: 'bottom',
 }
 
 // Load persisted settings or use defaults
@@ -190,3 +198,20 @@ export function changeMenuCount(delta: number) {
     if (menuState.openCount < 0) menuState.openCount = 0
 }
 
+
+// --- DOCK SIDE STATE (reactive, consumed by CC/NC/NotifPopups) ---
+// Published by VerticalDock when position is left/right, reset to 0 for bottom.
+export const dockSideState = {
+    position: 'bottom' as DockPosition,
+    width: 0,  // exclusive zone width (px) when dock is left or right, else 0
+    _listeners: new Set<() => void>(),
+    update(position: DockPosition, width: number) {
+        this.position = position
+        this.width = width
+        this._listeners.forEach(fn => fn())
+    },
+    subscribe(fn: () => void) {
+        this._listeners.add(fn)
+        return () => this._listeners.delete(fn)
+    },
+}
