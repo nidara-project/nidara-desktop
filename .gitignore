@@ -87,6 +87,9 @@ region.json
 cc_layout.json
 widgets.json
 
+# Dev mode marker (written by install.sh --dev, personal to each machine)
+.dev
+
 # Agent Memory
 MEMORY.md
 memory/

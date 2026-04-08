@@ -1,0 +1,44 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# crystal-shell-ui — Crystal Shell UI launcher
+# Installed to /usr/bin/crystal-shell-ui
+# Called by Hyprland exec-once and by SUPER+SHIFT+R to restart the UI
+# ─────────────────────────────────────────────────────────────────────────────
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/crystal-shell"
+SYS_BUNDLE="/usr/share/crystal-shell/ui/ags-v3/build/crystal-shell"
+LOG="/tmp/crystal-shell-ui.log"
+
+# Kill any existing instance cleanly
+killall -9 gjs 2>/dev/null || true
+sleep 0.2
+
+export GDK_BACKEND=wayland
+export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# ── Dev mode ─────────────────────────────────────────────────────────────────
+# If ~/.config/crystal-shell/.dev exists and contains a source path, run from source.
+# This file is created by: install.sh --dev
+DEV_FILE="$CONFIG_DIR/.dev"
+if [ -f "$DEV_FILE" ]; then
+    SOURCE_DIR="$(cat "$DEV_FILE")"
+    APP_TS="$SOURCE_DIR/ui/ags-v3/app.ts"
+    if [ -f "$APP_TS" ]; then
+        echo "[$(date '+%H:%M:%S')] crystal-shell-ui: DEV mode — $SOURCE_DIR" | tee -a "$LOG"
+        cd "$SOURCE_DIR/ui/ags-v3"
+        exec ags run app.ts >> "$LOG" 2>&1
+    else
+        echo "[$(date '+%H:%M:%S')] crystal-shell-ui: WARNING — .dev points to '$SOURCE_DIR' but app.ts not found" | tee -a "$LOG"
+    fi
+fi
+
+# ── Production mode ───────────────────────────────────────────────────────────
+if [ -x "$SYS_BUNDLE" ]; then
+    echo "[$(date '+%H:%M:%S')] crystal-shell-ui: bundle $SYS_BUNDLE" >> "$LOG"
+    cd /usr/share/crystal-shell/ui/ags-v3
+    exec "$SYS_BUNDLE" >> "$LOG" 2>&1
+fi
+
+echo "[$(date '+%H:%M:%S')] crystal-shell-ui: ERROR — no bundle found at $SYS_BUNDLE" | tee -a "$LOG"
+exit 1
