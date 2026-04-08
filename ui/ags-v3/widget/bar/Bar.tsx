@@ -90,11 +90,11 @@ function SystemMenuOverlay() {
     return btn
   }
 
-  pBox.append(makeRow("dialog-information-symbolic", "Acerca de este equipo", () => execAsync(["bash", "-c", "missioncenter || gnome-system-monitor || hwinfo --gui || kitty --class float -e fastfetch"]).catch(console.error)))
+  pBox.append(makeRow("dialog-information-symbolic", "Acerca de este equipo", () => status.toggleAbout()))
   pBox.append(new Gtk.Separator({ css_classes: ["system-menu-sep"], margin_top: 4, margin_bottom: 4 }))
-  pBox.append(makeRow("preferences-system-symbolic", "Configuración del Sistema...", () => execAsync("ags request 'toggleSettings()'").catch(console.error)))
+  pBox.append(makeRow("preferences-system-symbolic", "Configuración del Sistema...", () => (globalThis as any).toggleSettings?.()))
   pBox.append(new Gtk.Separator({ css_classes: ["system-menu-sep"], margin_top: 4, margin_bottom: 4 }))
-  pBox.append(makeRow("system-log-out-symbolic", "Opciones de Energía...", () => execAsync("ags request 'togglePowerMenu()'").catch(console.error)))
+  pBox.append(makeRow("system-log-out-symbolic", "Opciones de Energía...", () => status.togglePowerMenu()))
 
   const squircleWrapper = SquircleContainer({ 
       child: pBox, 
@@ -129,7 +129,7 @@ function Workspaces() {
     hypr.connect("notify::focused-workspace", update); hypr.connect("workspace-added", update); hypr.connect("workspace-removed", update); update()
     box.append(dot)
   }
-  return SquircleContainer({ child: box, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => execAsync("ags request 'toggleOverview()'") })
+  return SquircleContainer({ child: box, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleOverview() })
 }
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {

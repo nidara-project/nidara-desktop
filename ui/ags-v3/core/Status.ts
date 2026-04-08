@@ -20,6 +20,7 @@ export class UIStatus extends GObject.Object {
                 "system-menu-open": GObject.ParamSpec.boolean("system-menu-open", "System Menu Open", "System Menu visibility", GObject.ParamFlags.READWRITE, false),
                 "overview-open": GObject.ParamSpec.boolean("overview-open", "Overview Open", "Overview visibility", GObject.ParamFlags.READWRITE, false),
                 "power-menu-open": GObject.ParamSpec.boolean("power-menu-open", "Power Menu Open", "Power Menu visibility", GObject.ParamFlags.READWRITE, false),
+                "about-open": GObject.ParamSpec.boolean("about-open", "About Open", "About window visibility", GObject.ParamFlags.READWRITE, false),
             },
             Signals: {
                 "toggle-cc": {},
@@ -41,6 +42,7 @@ export class UIStatus extends GObject.Object {
     private _system_menu_open = false
     private _overview_open = false
     private _power_menu_open = false
+    private _about_open = false
 
     public get notif_active() { return this._notif_active }
     public set notif_active(v: boolean) {
@@ -185,12 +187,22 @@ export class UIStatus extends GObject.Object {
         this.notify("power-menu-open")
     }
 
+    public get about_open() { return this._about_open }
+    public set about_open(v: boolean) {
+        if (this._about_open === v) return
+        this._about_open = v
+        if (v) this._system_menu_open = false
+        this.notify("about-open")
+        if (v) this.notify("system-menu-open")
+    }
+
     toggleCC() { this.cc_open = !this.cc_open }
     toggleNC() { this.nc_open = !this.nc_open }
     togglePrism() { this.prism_open = !this.prism_open }
     toggleSystemMenu() { this.system_menu_open = !this.system_menu_open }
     toggleOverview() { this.overview_open = !this.overview_open }
     togglePowerMenu() { this.power_menu_open = !this.power_menu_open }
+    toggleAbout() { this.about_open = !this.about_open }
 }
 
 export const status = new UIStatus()

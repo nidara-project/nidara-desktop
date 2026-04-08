@@ -669,13 +669,15 @@ export function DockItem(
                 if (appId === "special:home" || appId === "home-shortcut") {
                     const command = appService.getDefaultFileManagerCommand()
                     execAsync(["hyprctl", "dispatch", "exec", command]).catch(print)
+                } else if (appId === "crystal-shell-settings") {
+                    ;(globalThis as any).toggleSettings?.()
                 } else {
                     try {
                         // Igualar lógica robusta del AppGrid
                         const realInfo = appService.getAppInfo(appId || (appItem as any).executable)
                         const rawCommand = realInfo?.get_commandline() || (appItem as any).executable || ""
                         const command = rawCommand.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
-                        if (!command) { appItem.launch() } 
+                        if (!command) { appItem.launch() }
                         else { execAsync(["hyprctl", "dispatch", "exec", command]).catch(() => appItem.launch()) }
                     } catch (e) {
                         try { appItem.launch() } catch (e2) { execAsync(`gtk-launch ${appId}`).catch(print) }

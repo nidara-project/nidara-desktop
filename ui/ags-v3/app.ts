@@ -33,6 +33,7 @@ import AppGrid from "./widget/app-grid/AppGrid"
 import Bar from "./widget/bar/Bar"
 import Settings from "./widget/settings/Settings"
 import Theme from "./core/ThemeManager"
+import AboutWindow from "./widget/about/AboutWindow"
 
 console.log("[CRYSTAL_SHELL] Calling app.start()...");
 
@@ -118,9 +119,8 @@ app.start({
       status.togglePowerMenu()
     }
     const toggleSettings = () => {
-      // Lazy Init on first toggle
+      // Lazy init on first open
       if (settingsWindows.length === 0) {
-        console.log("[App] First-time Settings initialization...");
         const display = Gdk.Display.get_default()
         if (display) {
           const monitors: any = display.get_monitors()
@@ -129,15 +129,20 @@ app.start({
           }
         }
       }
+      // present() = show + focus, like a normal app window
       settingsWindows.forEach(s => {
-          try { s.toggle() } catch (e) { console.error(e) }
+          try { s.present() } catch (e) { console.error(e) }
       })
     }
     const toggleOverview = () => {
       status.toggleOverview()
     }
+    // About window — lazy, created only when first toggled, destroyed on close
+    status.connect("notify::about-open", () => {
+      if (status.about_open) try { AboutWindow() } catch (e) { console.error("[About] failed:", e) }
+    })
     // Expose Globals
-    (globalThis as any).toggleAppGrid = toggleAppGrid;
+    ;(globalThis as any).toggleAppGrid = toggleAppGrid;
     (globalThis as any).togglePowerMenu = togglePower;
     (globalThis as any).toggleSettings = toggleSettings;
     (globalThis as any).toggleOverview = toggleOverview;

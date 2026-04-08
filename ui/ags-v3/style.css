@@ -721,6 +721,47 @@ button.dock-v-icon image {
   min-height: 1px;
 }
 
+/* ── About Window ──────────────────────────────────────────────────────────── */
+.about-floating-window,
+.about-floating-window > * {
+  background: transparent;
+  background-color: transparent;
+}
+
+.about-logo {
+  margin-bottom: 8px;
+  -gtk-icon-filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.4));
+}
+
+.about-shell-name {
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.about-os-name {
+  font-size: 13px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.about-spec-key {
+  font-size: 12px;
+  font-weight: 500;
+  opacity: 0.55;
+  min-width: 80px;
+}
+
+.about-spec-val {
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.about-sep {
+  background: rgba(255, 255, 255, 0.1);
+  min-height: 1px;
+}
+
 /* ==========================================================================
    CONTROL CENTER - CLEAN GTK4 ARCHITECTURE
    ========================================================================== */
