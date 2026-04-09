@@ -37,7 +37,7 @@ export default function Prism() {
             let cmd = appInfo?.get_commandline() || data.exec
             if (cmd) {
                 cmd = cmd.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
-                execAsync(["hyprctl", "dispatch", "exec", cmd]).catch(console.error)
+                execAsync(["uwsm", "app", "--", "sh", "-c", cmd]).catch(console.error)
             }
         }
     }

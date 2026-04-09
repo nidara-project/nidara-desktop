@@ -422,7 +422,7 @@ class AppService {
                 let command = freshInfo?.get_commandline() || data?.exec || launchId
                 // Absolute Isolation Sanitization
                 command = command.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
-                GLib.spawn_command_line_async(`hyprctl dispatch exec ${command}`)
+                GLib.spawn_command_line_async(`uwsm app -- sh -c ${GLib.shell_quote(command)}`)
             }
         }
     }

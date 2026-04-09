@@ -91,9 +91,8 @@ export default function Dock(gdkmonitor: any) {
     const getLaunch = (lid: string) => {
         const app = appService.getAppData(lid)
         const desktopId = app?.id || lid
-        // Always use gtk-launch so the full user environment (PATH, etc.) is used.
-        // This is critical for apps like Crystal Shell Settings whose Exec uses `ags`.
-        return () => execAsync(["gtk-launch", desktopId]).catch(print)
+        // Use uwsm app -- gtk-launch so apps land in their own systemd scope.
+        return () => execAsync(["uwsm", "app", "--", "gtk-launch", desktopId]).catch(print)
     }
 
     const onPin = (sourceId: string) => {

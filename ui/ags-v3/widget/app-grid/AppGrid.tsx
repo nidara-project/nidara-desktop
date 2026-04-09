@@ -325,7 +325,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
                 const rawCommand = realInfo?.get_commandline() || app.executable || ""
                 const command = rawCommand.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
                 if (!command) { app.launch(); return }
-                execAsync(["hyprctl", "dispatch", "exec", command]).catch(() => app.launch())
+                execAsync(["uwsm", "app", "--", "sh", "-c", command]).catch(() => app.launch())
             } catch (e) {
                 app.launch()
             }

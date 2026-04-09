@@ -511,7 +511,7 @@ export function DockItem(
             // V149: UNIVERSAL HOME ISOLATION (Right Click) 🛰️
             mainSection.append("Abrir", addAction(() => {
                 const command = appService.getDefaultFileManagerCommand()
-                execAsync(["hyprctl", "dispatch", "exec", command]).catch(print)
+                execAsync(["uwsm", "app", "--", "sh", "-c", command]).catch(print)
             }))
         } else if (appId === "trash" || appId === "special:trash") {
             mainSection.append("Abrir", addAction(() => appItem.launch()))
@@ -683,7 +683,7 @@ export function DockItem(
                 // V149: UNIVERSAL HOME ISOLATION (Left Click) 🛰️
                 if (appId === "special:home" || appId === "home-shortcut") {
                     const command = appService.getDefaultFileManagerCommand()
-                    execAsync(["hyprctl", "dispatch", "exec", command]).catch(print)
+                    execAsync(["uwsm", "app", "--", "sh", "-c", command]).catch(print)
                 } else if (appId === "crystal-shell-settings") {
                     ;(globalThis as any).toggleSettings?.()
                 } else {
@@ -693,9 +693,9 @@ export function DockItem(
                         const rawCommand = realInfo?.get_commandline() || (appItem as any).executable || ""
                         const command = rawCommand.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
                         if (!command) { appItem.launch() }
-                        else { execAsync(["hyprctl", "dispatch", "exec", command]).catch(() => appItem.launch()) }
+                        else { execAsync(["uwsm", "app", "--", "sh", "-c", command]).catch(() => appItem.launch()) }
                     } catch (e) {
-                        try { appItem.launch() } catch (e2) { execAsync(`gtk-launch ${appId}`).catch(print) }
+                        try { appItem.launch() } catch (e2) { execAsync(["uwsm", "app", "--", "gtk-launch", appId]).catch(print) }
                     }
                 }
             } catch (fallbackError) {
