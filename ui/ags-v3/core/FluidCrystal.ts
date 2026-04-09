@@ -1,11 +1,7 @@
 /**
- * Fluid Crystal Token Engine
- * Single source of truth for all theme colors.
- * 
- * Architecture:
- *  - Dark/Light mode: Managed by Libadwaita via color-scheme (real-time)
- *  - Accent, transparency, tint: Managed by Fluid Crystal via @define-color (restart for external apps)
- *  - Surface colors (window_bg, view_bg, etc.): NOT overridden - Libadwaita handles them dynamically
+ * Crystal Token Engine
+ * Generates CSS custom properties and @define-color tokens for Crystal Shell's own UI.
+ * These tokens are scoped to the AGS/GJS process — external GTK apps are not affected.
  */
 
 import Gio from "gi://Gio"
@@ -38,9 +34,7 @@ export interface TintPanels {
 }
 
 export interface FluidCrystalConfig {
-  enabled: boolean
   accent: AccentKey
-  isDark: boolean
   transparency: number
   tintStrength: number
   tintPanels: TintPanels
@@ -48,9 +42,7 @@ export interface FluidCrystalConfig {
 }
 
 export const DEFAULT_CONFIG: FluidCrystalConfig = {
-  enabled: true,
   accent: "blue",
-  isDark: true,
   transparency: 0.75,
   tintStrength: 0.0,
   tintPanels: {
@@ -71,51 +63,29 @@ const PANEL_SELECTORS: Record<keyof TintPanels, string[]> = {
 
 // ── LOGIC ────────────────────────────────────────────────────────────
 
-function generateTokenHeader(config: FluidCrystalConfig): string {
+function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): string {
   const accent = ACCENT_PALETTE[config.accent].color
   const t = config.transparency
-  // Base window glass logic based on user transparency setting
   const baseAlpha = (1.0 - t).toFixed(2)
-  const backdropAlpha = baseAlpha
-  const popoverAlpha = baseAlpha // Match window transparency as requested
 
-  // Libadwaita Base Colors
-  const baseBg = config.isDark ? "#242424" : "#fafafa"
-  const viewBg = config.isDark ? "#1e1e1e" : "#ffffff"
-  const headerBg = config.isDark ? "#303030" : "#ebebeb"
-  const popoverBg = config.isDark ? "#303030" : "#ffffff"
-  const sidebarBg = config.isDark ? "#242424" : "#f6f5f4"
+  const baseBg = isDark ? "#242424" : "#fafafa"
+  const popoverBg = isDark ? "#303030" : "#ffffff"
 
   const lines = [
-    `/* Fluid Crystal Generated Tokens: Process-Local Isolation */`,
+    `/* Crystal Shell Token Engine */`,
     `@define-color accent_bg_color ${accent};`,
     `@define-color accent_fg_color #ffffff;`,
     `@define-color accent_color ${accent};`,
     `@define-color fc_window_bg alpha(${baseBg}, ${baseAlpha});`,
-    `@define-color fc_window_bg_backdrop alpha(${baseBg}, ${backdropAlpha});`,
-    `@define-color fc_popover_bg alpha(${popoverBg}, ${popoverAlpha});`,
-  ]
-
-  if (config.enabled) {
-    lines.push(
-      `/* ENGINE ACTIVE */`,
-      // NOTE: These @define-color tokens ONLY affect the AGS GJS process.
-      // GTK apps (Nautilus, terminal, etc.) run in their own process with
-      // their own CSS providers — they are NOT affected by these overrides.
-      `@define-color sidebar_bg_color transparent;`,
-      `@define-color sidebar_backdrop_color transparent;`
-    )
-  } else {
-    lines.push(
-      `/* ENGINE INACTIVE */`
-    )
-  }
-
-  lines.push(
+    `@define-color fc_window_bg_backdrop alpha(${baseBg}, ${baseAlpha});`,
+    `@define-color fc_popover_bg alpha(${popoverBg}, ${baseAlpha});`,
+    `@define-color sidebar_bg_color transparent;`,
+    `@define-color sidebar_backdrop_color transparent;`,
     `* {`,
     `  --fc-transparency: ${t.toFixed(2)};`,
     `  --fc-accent: ${accent};`,
-  )
+  ]
+
   for (const [key, { color }] of Object.entries(ACCENT_PALETTE)) {
     lines.push(`  --accent-${key}: ${color};`)
   }
@@ -123,12 +93,13 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
   lines.push(`  --accent-bg-color: ${accent};`)
   lines.push(`  --accent-fg-color: #ffffff;`)
 
-  // V3000: Crystal Design System Tokens
-  const whiteOrBlack = config.isDark ? "#ffffff" : "#000000"
+  const whiteOrBlack = isDark ? "#ffffff" : "#000000"
   const r = parseInt(accent.slice(1, 3), 16)
   const g = parseInt(accent.slice(3, 5), 16)
   const b = parseInt(accent.slice(5, 7), 16)
-  
+  const fg = isDark ? "255, 255, 255" : "0, 0, 0"
+  const bg = isDark ? "36, 36, 36" : "250, 250, 250"
+
   lines.push(
     `  --crystal-accent: ${accent};`,
     `  --crystal-accent-rgb: ${r}, ${g}, ${b};`,
@@ -137,23 +108,23 @@ function generateTokenHeader(config: FluidCrystalConfig): string {
     `  --crystal-accent-30: rgba(${r}, ${g}, ${b}, 0.3);`,
     `  --crystal-accent-10: rgba(${r}, ${g}, ${b}, 0.1);`,
     `  --crystal-accent-08: rgba(${r}, ${g}, ${b}, 0.08);`,
-    `  --crystal-bg: rgba(${config.isDark ? "36, 36, 36" : "250, 250, 250"}, ${baseAlpha});`,
-    `  --crystal-bg-backdrop: rgba(${config.isDark ? "36, 36, 36" : "250, 250, 250"}, ${backdropAlpha});`,
-    `  --crystal-surface-back: rgba(${config.isDark ? "255, 255, 255" : "0, 0, 0"}, 0.04);`,
-    `  --crystal-surface: rgba(${config.isDark ? "255, 255, 255" : "0, 0, 0"}, 0.08);`,
-    `  --crystal-surface-hover: rgba(${config.isDark ? "255, 255, 255" : "0, 0, 0"}, 0.12);`,
-    `  --crystal-surface-active: rgba(${config.isDark ? "255, 255, 255" : "0, 0, 0"}, 0.16);`,
-    `  --crystal-surface-raised: rgba(${config.isDark ? "255, 255, 255" : "0, 0, 0"}, 0.20);`,
+    `  --crystal-bg: rgba(${bg}, ${baseAlpha});`,
+    `  --crystal-bg-backdrop: rgba(${bg}, ${baseAlpha});`,
+    `  --crystal-surface-back: rgba(${fg}, 0.04);`,
+    `  --crystal-surface: rgba(${fg}, 0.08);`,
+    `  --crystal-surface-hover: rgba(${fg}, 0.12);`,
+    `  --crystal-surface-active: rgba(${fg}, 0.16);`,
+    `  --crystal-surface-raised: rgba(${fg}, 0.20);`,
     `  --crystal-text: ${whiteOrBlack};`,
-    `  --crystal-text-dim: rgba(${config.isDark ? "255, 255, 255" : "0, 0, 0"}, 0.6);`,
-    `  --crystal-text-disabled: rgba(${config.isDark ? "255, 255, 255" : "0, 0, 0"}, 0.3);`,
+    `  --crystal-text-dim: rgba(${fg}, 0.6);`,
+    `  --crystal-text-disabled: rgba(${fg}, 0.3);`,
     `}`
   )
   return lines.join("\n")
 }
 
-export function generateTokensCss(config: FluidCrystalConfig): string {
-  return generateTokenHeader(config)
+export function generateTokensCss(config: FluidCrystalConfig, isDark: boolean): string {
+  return generateTokenHeader(config, isDark)
 }
 
 
@@ -395,18 +366,3 @@ export function writeQtSettings(config: FluidCrystalConfig, iconTheme?: string):
   }
 }
 
-const CONFIG_PATH = `${GLib.get_home_dir()}/.config/crystal-shell/fluid-crystal.json`
-
-export function saveConfig(config: FluidCrystalConfig): void {
-  const dir = `${GLib.get_home_dir()}/.config/crystal-shell`
-  GLib.mkdir_with_parents(dir, 0o755)
-  writeFile(CONFIG_PATH, JSON.stringify(config, null, 2))
-}
-
-export function loadConfig(): FluidCrystalConfig {
-  try {
-    const data = readFile(CONFIG_PATH)
-    if (data) return { ...DEFAULT_CONFIG, ...JSON.parse(data) }
-  } catch (e) { }
-  return { ...DEFAULT_CONFIG }
-}

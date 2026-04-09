@@ -23,14 +23,8 @@ export default function AppearancePage() {
     ))
     page.append(styleGroup.box)
 
-    // 2. Fluid Crystal Engine
+    // 2. Crystal Shell visual tokens
     const fcGroup = listGroup("Crystal Shell")
-    fcGroup.listBox.append(toggleRow(
-        "Transparencia Crystal Shell",
-        "Aplica fondo translúcido a las ventanas del shell (bar, dock, paneles)",
-        Theme.isFluidCrystal,
-        (active) => Theme.setFluidCrystalEnabled(active),
-    ))
 
     // Accent Color Picker
     const accentPicker = new Gtk.Box({ spacing: 10, valign: Gtk.Align.CENTER })

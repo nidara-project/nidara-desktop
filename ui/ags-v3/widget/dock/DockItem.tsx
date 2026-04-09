@@ -187,7 +187,7 @@ export function DockItem(
             return { gicon: gicon }
         }
 
-        return { name: "image-missing" }
+        return { name: "application-x-executable" }
     }
 
     const res = getIcon()
@@ -223,6 +223,21 @@ export function DockItem(
             if (gicon.get_file && gicon.get_file()) {
                 resolvedPath = gicon.get_file()!.get_path() || ""
                 if (resolvedPath) pixbuf = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(resolvedPath, sourceSize, sourceSize, true)
+            }
+        }
+
+        // If still no pixbuf, load the generic fallback icon so the DrawingArea path is always used
+        if (!pixbuf) {
+            const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default()!)
+            for (const fallbackName of ["application-x-executable", "image-missing"]) {
+                if (!theme.has_icon(fallbackName)) continue
+                const info = theme.lookup_icon(fallbackName, [], sourceSize, 1, Gtk.TextDirection.NONE, Gtk.IconLookupFlags.FORCE_REGULAR)
+                const file = info?.get_file()
+                const path = file?.get_path()
+                if (path) {
+                    try { pixbuf = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(path, sourceSize, sourceSize, true) } catch (_) {}
+                    if (pixbuf) break
+                }
             }
         }
     } catch (e) {
@@ -288,8 +303,8 @@ export function DockItem(
     } else {
         // Fallback for system icons
         const iconProps: any = {
-            icon_name: res.name || "image-missing",
-            pixel_size: 128,
+            icon_name: res.name || "application-x-executable",
+            pixel_size: DOCK_CONSTANTS.ICON_SIZE,
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER
         }

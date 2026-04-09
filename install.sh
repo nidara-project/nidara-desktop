@@ -38,7 +38,7 @@ sudo pacman -Sy --needed --noconfirm \
     jq slurp grim wl-clipboard mesa pam \
     git nodejs npm gjs go \
     accountsservice sddm pavucontrol rust cargo \
-    hyprland hyprlock hypridle \
+    hyprland hyprlock hypridle uwsm \
     kitty nautilus dolphin thunar \
     polkit-gnome \
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland \
@@ -167,7 +167,7 @@ else
 fi
 
 # Default JSON configs (never overwrite user's existing files)
-for f in theme_settings.json widgets.json fluid-crystal.json cc_layout.json region.json; do
+for f in appearance.json widgets.json cc_layout.json region.json; do
     if [ -f "$REPO_DIR/$f" ] && [ ! -f "$CONFIG_DIR/$f" ]; then
         cp "$REPO_DIR/$f" "$CONFIG_DIR/$f"
         echo "  [Init] $CONFIG_DIR/$f"

@@ -15,8 +15,6 @@ import {
     ACCENT_PALETTE,
     generateTokensCss,
     generateTintCss,
-    loadConfig as loadFCConfig,
-    saveConfig as saveFCConfig,
     writeQtSettings,
     getSystemQtTheme,
 } from "./FluidCrystal"
@@ -57,7 +55,7 @@ class ThemeManager extends GObject.Object {
     }
 
     private fcConfig: FluidCrystalConfig = { ...DEFAULT_CONFIG }
-    private configPath = `${GLib.get_user_config_dir()}/crystal-shell/theme_settings.json`
+    private configPath = `${GLib.get_user_config_dir()}/crystal-shell/appearance.json`
     private _lastTokensCss: string = ""
     private _lastTintCss: string = ""
 
@@ -202,7 +200,6 @@ class ThemeManager extends GObject.Object {
     get iconTheme() { return this.state.iconTheme }
     get cursorTheme() { return this.state.cursorTheme }
     get isDark() { return this.state.isDark }
-    get isFluidCrystal() { return this.fcConfig.enabled }
     get accentColor(): AccentKey { return this.fcConfig.accent }
     get transparency() { return this.fcConfig.transparency }
     get tintStrength() { return this.fcConfig.tintStrength }
@@ -238,26 +235,17 @@ class ThemeManager extends GObject.Object {
 
     async setQtTheme(theme: string) {
         this.fcConfig.qtTheme = theme
-        saveFCConfig(this.fcConfig)
+        this.saveSettings()
         writeQtSettings(this.fcConfig, this.state.iconTheme)
         this.emit("changed")
     }
 
     async setDarkMode(dark: boolean) {
         this.state.isDark = dark
-        this.fcConfig.isDark = dark
         const scheme = dark ? "prefer-dark" : "prefer-light"
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", scheme])
-        saveFCConfig(this.fcConfig)
         this.saveSettings()
         await this.syncGtkTheme()
-    }
-
-    async setFluidCrystalEnabled(enabled: boolean) {
-        this.fcConfig.enabled = enabled
-        saveFCConfig(this.fcConfig)
-        await this.syncGtkTheme()
-        this.emit("changed")
     }
 
     private persistenceDebounceId = 0
@@ -265,7 +253,6 @@ class ThemeManager extends GObject.Object {
         if (this.persistenceDebounceId > 0) GLib.source_remove(this.persistenceDebounceId)
         this.persistenceDebounceId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
             console.log(`[ThemeManager] Token persistence triggered`)
-            saveFCConfig(this.fcConfig)
             this.saveSettings()
             this.persistenceDebounceId = 0
             return GLib.SOURCE_REMOVE
@@ -274,41 +261,33 @@ class ThemeManager extends GObject.Object {
 
     async setAccentColor(accent: AccentKey) {
         this.fcConfig.accent = accent
-        if (this.isFluidCrystal) {
-            this.ensureProvidersLinked()
-            this.themeProvider.load_from_string(generateTokensCss(this.fcConfig))
-            this.schedulePersistence()
-        } else {
-            saveFCConfig(this.fcConfig)
-        }
+        this.ensureProvidersLinked()
+        this.themeProvider.load_from_string(generateTokensCss(this.fcConfig, this.state.isDark))
+        this.schedulePersistence()
         this.emit("changed")
     }
 
     async setTransparency(value: number) {
         this.fcConfig.transparency = Math.max(0, Math.min(1, value))
         console.log(`[ThemeManager] Updating Transparency: ${this.fcConfig.transparency}`)
-        if (this.isFluidCrystal) {
-            this.ensureProvidersLinked()
-            const tokens = generateTokensCss(this.fcConfig)
-            this.themeProvider.load_from_data(tokens, tokens.length)
-            this.schedulePersistence()
-        } else {
-            saveFCConfig(this.fcConfig)
-        }
+        this.ensureProvidersLinked()
+        const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
+        this.themeProvider.load_from_data(tokens, tokens.length)
+        this.schedulePersistence()
         this.emit("changed")
     }
 
     async setTintStrength(value: number) {
         this.fcConfig.tintStrength = Math.max(0, Math.min(1, value))
-        if (this.isFluidCrystal) this.refreshTintCss()
-        saveFCConfig(this.fcConfig)
+        this.refreshTintCss()
+        this.saveSettings()
         this.emit("changed")
     }
 
     async setTintPanel(panel: keyof TintPanels, enabled: boolean) {
         this.fcConfig.tintPanels[panel] = enabled
-        if (this.isFluidCrystal) this.refreshTintCss()
-        saveFCConfig(this.fcConfig)
+        this.refreshTintCss()
+        this.saveSettings()
         this.emit("changed")
     }
 
@@ -366,37 +345,17 @@ class ThemeManager extends GObject.Object {
         }
     }
 
-    private async clearConfigSymlinks() {
-        const dirs = ["gtk-3.0", "gtk-4.0"]
-        const list = ["gtk.css", "gtk-dark.css", "_tokens.css", "assets", "windows-assets"]
-        for (const d of dirs) {
-            const configDir = `${GLib.get_user_config_dir()}/${d}`
-            for (const name of list) {
-                await execAsync(["rm", "-rf", `${configDir}/${name}`]).catch(() => { })
-            }
-        }
-    }
-
     private async syncGtkTheme() {
         const theme = this.state.themeFamily
 
-        if (this.isFluidCrystal) {
-            this.ensureProvidersLinked()
-
-            const tokensCss = generateTokensCss(this.fcConfig)
-            if (this._lastTokensCss !== tokensCss) {
-                this.themeProvider.load_from_string(tokensCss)
-                this._lastTokensCss = tokensCss
-            }
-
-            this.refreshTintCss()
-            GLib.unsetenv("GTK_THEME")
-        } else {
-            await this.clearConfigSymlinks()
-            this.themeProvider.load_from_string(generateTokensCss(this.fcConfig))
-            this.tintProvider.load_from_string("")
-            GLib.unsetenv("GTK_THEME")
+        this.ensureProvidersLinked()
+        const tokensCss = generateTokensCss(this.fcConfig, this.state.isDark)
+        if (this._lastTokensCss !== tokensCss) {
+            this.themeProvider.load_from_string(tokensCss)
+            this._lastTokensCss = tokensCss
         }
+        this.refreshTintCss()
+        GLib.unsetenv("GTK_THEME")
 
         try {
             if (theme) {
@@ -444,20 +403,53 @@ class ThemeManager extends GObject.Object {
     private saveSettings() {
         const dir = `${GLib.get_user_config_dir()}/crystal-shell`
         if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
-        writeFile(this.configPath, JSON.stringify(this.state, null, 2))
+        const merged = {
+            ...this.state,
+            accent: this.fcConfig.accent,
+            transparency: this.fcConfig.transparency,
+            tintStrength: this.fcConfig.tintStrength,
+            tintPanels: this.fcConfig.tintPanels,
+            qtTheme: this.fcConfig.qtTheme,
+        }
+        writeFile(this.configPath, JSON.stringify(merged, null, 2))
         writeQtSettings(this.fcConfig, this.state.iconTheme)
     }
 
     private loadSettings() {
-        this.fcConfig = loadFCConfig()
         const systemQt = getSystemQtTheme()
-        if (systemQt) this.fcConfig.qtTheme = systemQt
         try {
+            let data: Record<string, unknown> = {}
+
             if (GLib.file_test(this.configPath, GLib.FileTest.EXISTS)) {
-                this.state = { ...this.state, ...JSON.parse(readFile(this.configPath)) }
-                this.fcConfig.isDark = this.state.isDark
-            } else { this.syncFromSystem() }
-        } catch (e) { this.syncFromSystem() }
+                data = JSON.parse(readFile(this.configPath))
+            } else {
+                // Migrate from old split files if they exist
+                const oldFcPath = `${GLib.get_user_config_dir()}/crystal-shell/fluid-crystal.json`
+                const oldThemePath = `${GLib.get_user_config_dir()}/crystal-shell/theme_settings.json`
+                if (GLib.file_test(oldFcPath, GLib.FileTest.EXISTS))
+                    data = { ...data, ...JSON.parse(readFile(oldFcPath)) }
+                if (GLib.file_test(oldThemePath, GLib.FileTest.EXISTS))
+                    data = { ...data, ...JSON.parse(readFile(oldThemePath)) }
+                if (Object.keys(data).length === 0) this.syncFromSystem()
+            }
+
+            this.state = {
+                themeFamily: (data.themeFamily as string) ?? this.state.themeFamily,
+                iconTheme:   (data.iconTheme as string)   ?? this.state.iconTheme,
+                cursorTheme: (data.cursorTheme as string) ?? this.state.cursorTheme,
+                isDark:      (data.isDark as boolean)     ?? this.state.isDark,
+            }
+            this.fcConfig = {
+                accent:      (data.accent as AccentKey)                  ?? DEFAULT_CONFIG.accent,
+                transparency:(data.transparency as number)               ?? DEFAULT_CONFIG.transparency,
+                tintStrength:(data.tintStrength as number)               ?? DEFAULT_CONFIG.tintStrength,
+                tintPanels:  (data.tintPanels as typeof DEFAULT_CONFIG.tintPanels) ?? DEFAULT_CONFIG.tintPanels,
+                qtTheme:     systemQt || (data.qtTheme as string)        || DEFAULT_CONFIG.qtTheme,
+            }
+        } catch (e) {
+            this.syncFromSystem()
+            if (systemQt) this.fcConfig.qtTheme = systemQt
+        }
     }
 
     private syncFromSystem() {

@@ -12,7 +12,8 @@ export interface AppData {
     wmClass: string | null
 }
 
-// V136: GENERIC ICONS TO AVOID
+// Icons that are file-type placeholders or symbolic UI icons — not real app icons.
+// Avoid using these as app icons; try to find a better themed alternative first.
 const BAD_ICONS = [
     "image-missing",
     "text-x-generic",
@@ -21,9 +22,6 @@ const BAD_ICONS = [
     "application-x-executable",
     "preferences-system-details-symbolic",
     "preferences-system-symbolic",
-    "preferences-system", // V136: Generic system icon (often used as fallback for Kitty)
-    "system-help",
-    "utilities-terminal",
     "dialog-information-symbolic",
     "application-default-icon",
     "unknown"
@@ -110,12 +108,10 @@ class AppService {
         if (theme.has_icon(n)) {
             const paintable = theme.lookup_icon(n, null, 48, 1, Gtk.TextDirection.LTR, 0)
             const path = paintable?.get_file()?.get_path()
-
-            // Skip pixmaps — prefer themed icons
-            const isPixmap = path && path.includes("/usr/share/pixmaps")
-            if (path && !isPixmap && !BAD_ICONS.some(bad => path.includes(bad))) {
-                return n
-            }
+            // Pixmap icons: return the file path directly so callers can render them at any size
+            if (path?.includes("/usr/share/pixmaps")) return path
+            // Themed icon: return the name and let GTK resolve at whatever size is needed
+            return n
         }
 
         // Deep filesystem fallback — searches icon theme directories directly
@@ -129,23 +125,43 @@ class AppService {
         }
 
         const visited = new Set<string>()
-        const bases = [
+        const subdirs = ["scalable/apps", "apps", "48x48/apps", "32x32/apps", ""]
+
+        const searchBases = (bases: string[]) => {
+            for (const base of bases) {
+                for (const sub of subdirs) {
+                    for (const ext of extensions) {
+                        const path = `${base}/${sub}/${n}${ext}`.replace("//", "/")
+                        if (!visited.has(path) && GLib.file_test(path, GLib.FileTest.EXISTS)) return path
+                        visited.add(path)
+                    }
+                }
+            }
+            return null
+        }
+
+        // 1. Current theme + hicolor + pixmaps
+        const primary = searchBases([
             `${GLib.get_home_dir()}/.local/share/icons/${themeName}`,
             `/usr/share/icons/${themeName}`,
             `/usr/share/icons/hicolor`,
             `/usr/share/pixmaps`
-        ]
+        ])
+        if (primary) return primary
 
-        const subdirs = ["scalable/apps", "apps", "48x48/apps", "32x32/apps", ""]
-
-        for (const base of bases) {
-            for (const sub of subdirs) {
-                for (const ext of extensions) {
-                    const path = `${base}/${sub}/${n}${ext}`.replace("//", "/")
-                    if (!visited.has(path) && GLib.file_test(path, GLib.FileTest.EXISTS)) return path
-                    visited.add(path)
+        // 2. All other installed themes — last resort for icons not in the active theme
+        for (const iconsBase of [`${GLib.get_home_dir()}/.local/share/icons`, `/usr/share/icons`]) {
+            if (!GLib.file_test(iconsBase, GLib.FileTest.EXISTS)) continue
+            try {
+                const dir = Gio.File.new_for_path(iconsBase)
+                const enumerator = dir.enumerate_children("standard::name,standard::type", Gio.FileQueryInfoFlags.NONE, null)
+                let info
+                while ((info = enumerator.next_file(null))) {
+                    if (info.get_file_type() !== Gio.FileType.DIRECTORY) continue
+                    const result = searchBases([`${iconsBase}/${info.get_name()}`])
+                    if (result) return result
                 }
-            }
+            } catch (e) {}
         }
 
         return null
