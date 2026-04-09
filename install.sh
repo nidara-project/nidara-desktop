@@ -9,7 +9,10 @@
 set -e
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
-CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/crystal-shell"
+# When run via `sudo bash install.sh`, $HOME is /root. Use SUDO_USER's home instead.
+REAL_USER="${SUDO_USER:-$USER}"
+REAL_HOME="$(getent passwd "$REAL_USER" | cut -d: -f6)"
+CONFIG_DIR="${REAL_HOME}/.config/crystal-shell"
 
 # ── Mode selection ────────────────────────────────────────────────────────────
 MODE="system"
@@ -157,10 +160,12 @@ EOF
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[7/7] Initializing user configuration..."
 mkdir -p "$CONFIG_DIR"
+chown "$REAL_USER" "$CONFIG_DIR"
 
 # Dev mode marker
 if [ "$MODE" = "dev" ]; then
     echo "$REPO_DIR" > "$CONFIG_DIR/.dev"
+    chown "$REAL_USER" "$CONFIG_DIR/.dev"
     echo "  [Dev] crystal-shell-ui will run from: $REPO_DIR"
 else
     rm -f "$CONFIG_DIR/.dev"
