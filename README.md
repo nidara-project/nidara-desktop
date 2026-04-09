@@ -1,136 +1,144 @@
-# Crystal Shell - El futuro de mi escritorio 💎
+# Crystal Shell
 
-Crystal Shell es un entorno de escritorio (DE) personalizado basado en **Hyprland** y **AGS v3 (Aylur's Gtk Shell)**, diseñado para ser extremadamente rápido, visualmente premium y altamente optimizado sobre **Arch Linux**.
+Crystal Shell is a full **Wayland desktop environment** built on **Hyprland** and **AGS v3 (Aylur's GTK Shell)**, designed to be fast, visually premium, and tightly optimized for **Arch Linux**.
 
-## 🚀 Características Clave
-- **Compositor**: Hyprland (Wayland) para animaciones ultra-fluidas y tiling window management.
-- **Shell**: AGS v3 (TypeScript/TSX) para una interfaz reactiva y moderna (Barra, Dock, Control Center).
-- **Dock Premium**: Implementación nativa en AGS v3 con animaciones de magnificación.
-- **AppGrid Inteligente**: Búsqueda difusa instantánea.
-- **Control Center**: Gestión integrada de volumen (WirePlumber), brillo, red, batería y reproducción multimedia (MPRIS).
-- **Modularidad**: Arquitectura desacoplada en TypeScript.
-
-## 🛠️ Optimización y Rendimiento
-- **AppGrid Optimization**: Implementación de sistema de caché.
-- **Dock Physics**: Motor de magnificación centralizado.
-- **Atomic Loading**: Los componentes del Control Center se cargan de forma atómica.
-
-## 💿 Instalación (Usuarios)
-El proyecto incluye un script de aprovisionamiento robusto para **Arch Linux** que configura todo el sistema (SDDM, Hyprland, Audio, UI) automáticamente.
-
-1.  **Clonar el repositorio** en cualquier directorio temporal:
-    ```bash
-    git clone https://github.com/Fluid-Crystal/Crystal-Shell.git ~/crystal-shell-install
-    ```
-2.  **Ejecutar el instalador** y seleccionar modo **1 (Normal)**:
-    ```bash
-    cd ~/crystal-shell-install
-    ./install.sh
-    ```
-3.  El instalador copia todo a `~/.config/crystal-shell/`, enlaza las configuraciones en los directorios correctos del sistema y genera el binario de la app.
-4.  **Iniciar sesión**: Reinicia el equipo o ejecuta `sudo systemctl start sddm` y selecciona _Crystal Shell_ en la pantalla de login.
-5.  Una vez instalado, puedes eliminar la carpeta temporal: `rm -rf ~/crystal-shell-install`
+It is not a theme or a set of scripts — it registers as a proper Wayland session (like GNOME or KDE) and is launched by the display manager.
 
 ---
 
-## ⌨️ Atajos Clave (Hyprland)
-| Atajo | Acción |
-| :--- | :--- |
-| `Super + Q` | Cerrar ventana activa |
-| `Super + T` | Abrir Terminal (Kitty) |
-| `Super + E` | Abrir Archivos (Thunar) |
-| `Super + R` | Abrir Lanzador de aplicaciones |
-| `Super + Shift + C` | **Recargar UI Completa (AGS + Hyprland)** |
-| `Super + D` | Mostrar/Ocultar AppGrid |
+## Features
+
+- **Compositor**: Hyprland (Wayland) — smooth animations, tiling window management.
+- **Shell**: AGS v3 (TypeScript/TSX) — reactive, modular UI: Bar, Dock, Control Center, Notification Center.
+- **Dock**: macOS-style with spring magnification physics. Supports bottom, left, and right positions.
+- **AppGrid**: Full-screen launcher with instant fuzzy search.
+- **Control Center**: Volume (WirePlumber), brightness, Wi-Fi, Bluetooth, battery, MPRIS media.
+- **Settings**: Multi-page settings window — Theme, Fluid Crystal, Dock, Audio, Display, About.
+- **Fluid Crystal Design System**: Dynamic accent colors, glassmorphism tokens, dark/light mode.
+- **About**: "About This Mac"-style system info window.
+
 ---
 
-## 🎨 Personalización
+## Installation (Users)
 
-Crystal Shell gestiona sus configuraciones como symlinks en `~/.config/hypr/`. Para que tus cambios **sobrevivan a las actualizaciones**, edítalos en un único archivo seguro:
+Requires **Arch Linux**.
 
-**`~/.config/hypr/hyprland-user.conf`** — creado automáticamente por el instalador.
+```bash
+git clone https://github.com/Fluid-Crystal/Crystal-Shell.git ~/crystal-shell-install
+cd ~/crystal-shell-install
+./install.sh
+```
 
-Este archivo nunca se toca en las actualizaciones. Úsalo para sobreescribir configuraciones:
+The installer:
+1. Installs system dependencies (GTK4, Libadwaita, Hyprland, GJS, Astal libraries, AGS CLI).
+2. Builds the UI bundle (`ags bundle`).
+3. Installs system files:
+   - `/usr/bin/crystal-shell` — Wayland session entry point
+   - `/usr/bin/crystal-shell-ui` — UI launcher (auto-detects dev/prod mode)
+   - `/usr/share/crystal-shell/config/hypr/hyprland.conf` — system Hyprland config
+   - `/usr/share/wayland-sessions/crystal-shell.desktop` — session entry
+4. Creates `~/.config/crystal-shell/` for user config (never overwritten on updates).
+5. Enables system services: `pipewire`, `wireplumber`, `hypridle`.
+
+**To start:** reboot and select _Crystal Shell_ from the login screen.
+
+---
+
+## User Configuration
+
+User config lives in `~/.config/crystal-shell/` and is never overwritten by updates.
+
+To customize Hyprland, edit:
+
+**`~/.config/crystal-shell/hyprland-user.conf`**
 
 ```ini
-# Monitores
+# Monitors
 monitor = HDMI-A-1, 1920x1080@60, 0x0, 1
 
-# Atajos personalizados
+# Custom keybinds
 bind = SUPER, F1, exec, firefox
 
-# Apps al inicio
-exec-once = mi-app
+# Autostart
+exec-once = my-app
 
-# Sobreescribir cualquier ajuste de Crystal Shell
+# Override any Crystal Shell setting
 general {
     gaps_out = 16
 }
 ```
 
-> **Nota:** Los archivos `hyprland.conf`, `hyprlock.conf` e `hypridle.conf` en `~/.config/hypr/` son symlinks gestionados por Crystal Shell. Edítalos solo si sabes que se perderán en actualizaciones de la shell.
+The system Hyprland config at `/usr/share/crystal-shell/config/hypr/hyprland.conf` is managed by the installer. Your user file always takes precedence.
 
 ---
 
-## 🧑‍💻 Guía para Desarrolladores
+## Keybindings (Hyprland)
 
-### Setup inicial
+| Shortcut | Action |
+| :--- | :--- |
+| `Super + Q` | Close active window |
+| `Super + T` | Terminal (Kitty) |
+| `Super + E` | Files (Thunar) |
+| `Super + D` | Toggle AppGrid |
+| `Super + Shift + R` | **Reload Crystal Shell UI** |
 
-1. **Clona el repo** en tu directorio de trabajo:
-   ```bash
-   git clone https://github.com/Fluid-Crystal/Crystal-Shell.git ~/Dev/Crystal-Shell
-   cd ~/Dev/Crystal-Shell
-   ```
-2. **Ejecuta el instalador en modo Dev** (crea un symlink en lugar de copiar):
-   ```bash
-   ./install.sh  # → selecciona opción 2 (Desarrollo)
-   ```
-   Esto crea `~/.config/crystal-shell → ~/Dev/Crystal-Shell`. Cualquier cambio en tu repo se refleja inmediatamente en el entorno.
+---
 
-3. **Instala dependencias npm** para el soporte del IDE (autocompletado TypeScript):
-   ```bash
-   cd ui/ags-v3
-   npm install
-   ```
+## Developer Guide
 
-### Estructura del proyecto
+### Setup
+
+```bash
+git clone https://github.com/Fluid-Crystal/Crystal-Shell.git ~/Dev/Crystal-Shell
+cd ~/Dev/Crystal-Shell
+./install.sh --dev
+```
+
+`--dev` installs the system binaries normally but writes `~/.config/crystal-shell/.dev` pointing to your repo. The `crystal-shell-ui` launcher detects this file and runs `ags run app.ts` from source instead of the installed bundle — no symlinks, no full-repo copy.
+
+Install npm dependencies for IDE support (TypeScript autocomplete):
+
+```bash
+cd ui/ags-v3
+npm install
+```
+
+### Project Structure
 
 ```
 Crystal-Shell/
 ├── config/
-│   ├── hypr/             # Configs de Hyprland, Hyprlock, Hypridle
-│   └── applications/     # Entradas .desktop
+│   └── hypr/                  # System Hyprland config
 ├── scripts/
-│   ├── start_ui.sh       # Arranque (llamado por Hyprland exec-once)
-│   └── reload_ui.sh      # Recarga en caliente (dev)
-└── ui/ags-v3/            # Shell (TypeScript + AGS v3)
-    ├── app.ts            # Punto de entrada
-    ├── widget/           # Componentes UI (Bar, Dock, AppGrid, Settings...)
-    ├── styles/           # SCSS modular
-    ├── style.scss        # Entrada SCSS
-    ├── style.css         # CSS compilado (incluido en el repo)
+│   ├── crystal-shell          # Wayland session wrapper → /usr/bin/crystal-shell
+│   └── crystal-shell-ui       # UI launcher (dev/prod) → /usr/bin/crystal-shell-ui
+├── install.sh                 # Provisioning script
+└── ui/ags-v3/                 # Shell (TypeScript + AGS v3)
+    ├── app.ts                 # Entry point
+    ├── core/                  # State management, theme engine, services
+    ├── widget/                # UI components (Bar, Dock, AppGrid, Settings, About...)
+    ├── styles/                # Modular SCSS
+    ├── style.css              # Compiled CSS (committed)
     └── build/
-        └── crystal-shell # Bundle standalone (incluido en el repo)
+        └── crystal-shell      # Standalone bundle (committed)
 ```
 
-### Flujo de Trabajo y Contribuciones
+### Development Workflow
 
-Si quieres contribuir al proyecto (Pull Requests):
-1. Modifica **solo** los archivos fuente (`.ts`, `.tsx`, `.scss`).
-2. Para probar tus cambios en vivo: `Super + Shift + C` o `npx sass --no-charset style.scss style.css`.
-3. ⚠️ **IMPORTANTE:** No incluyas `style.css` ni el contenido de `build/` en tus Pull Requests. Los binarios y CSS pre-compilados los generamos los mantenedores cuando publicamos una versión oficial.
+- **Reload UI:** `Super + Shift + R` (calls `crystal-shell-ui`, which re-runs `ags run` from source).
+- **Logs:** `tail -f /tmp/crystal-shell-ui.log`
+- **Kill zombie GJS processes:** `killall gjs` (do this first when styles or UI look stuck).
 
-### Publicar un release (Solo Mantenedores)
+Contributing (Pull Requests):
+1. Modify only source files (`.ts`, `.tsx`, `.scss`).
+2. Do **not** include `style.css` or `build/crystal-shell` in PRs — compiled artifacts are generated by maintainers at release time.
 
-Cuando tengas lista una versión para usuarios:
+### Publishing a Release (Maintainers only)
 
 ```bash
 cd ui/ags-v3
+npm run build   # compiles SCSS + bundles app
 
-# 1. Compila CSS + genera el bundle standalone
-npm run build
-
-# 2. Commitea los artefactos compilados
 cd ../..
 git add ui/ags-v3/style.css ui/ags-v3/build/crystal-shell
 git commit -m "release: vX.Y.Z"
@@ -138,7 +146,6 @@ git tag vX.Y.Z
 git push && git push --tags
 ```
 
-Los usuarios que instalen desde este commit recibirán el bundle pre-generado. El instalador también lo regenera en su máquina durante la instalación por seguridad.
-
 ---
-💎 **Crystal Shell** - *Performance, Aesthetics, Intelligence.*
+
+**Crystal Shell** — *Performance, Aesthetics, Intelligence.*

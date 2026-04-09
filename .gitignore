@@ -77,6 +77,11 @@ debug_*.js
 *_json.txt
 settings_addr.txt
 
+# User config files — generated at runtime, may appear in repo root
+# if install.sh was previously run in legacy symlink dev mode
+crystal-settings.conf
+hyprland-user.conf
+
 # Generated CSS (kept in repo as pre-compiled convenience for users)
 # ui/ags-v3/style.css  ← intentionally NOT ignored
 ui/ags-v3/style.css.map
