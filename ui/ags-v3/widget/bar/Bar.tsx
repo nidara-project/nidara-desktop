@@ -1,6 +1,5 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
 import Pango from "gi://Pango"
-import { execAsync } from "ags/process"
 import app from "ags/gtk4/app"
 import AstalHyprland from "gi://AstalHyprland"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
@@ -271,9 +270,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const timeContent = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16 })
   const timeLabel = new Gtk.Label({ label: "..." })
   const updateClock = () => {
-    execAsync(["bash", "-c", `date +'${regionConfig.getClockFormat()}'`])
-      .then(out => { timeLabel.label = out.trim() })
-      .catch(() => {})
+    const fmt = regionConfig.getClockFormat()
+    timeLabel.label = GLib.DateTime.new_now_local().format(fmt) ?? ""
   }
   const clockTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => { updateClock(); return GLib.SOURCE_CONTINUE })
   timeLabel.connect("unrealize", () => { try { GLib.source_remove(clockTimer) } catch {} })

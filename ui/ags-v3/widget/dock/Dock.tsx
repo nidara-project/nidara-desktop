@@ -66,6 +66,7 @@ export default function Dock(gdkmonitor: any) {
     const initialPinned = [...pinnedState.list]
     let totalStaticWidth = calculateStableWidth(initialPinned)
     const widgetCache = new Map<string, Gtk.Widget>()
+    let lastIconTheme = Theme.iconTheme
     let firstRender = true
     // V608: Initial Population for stable startup
     let orderedIds: string[] = []
@@ -729,6 +730,12 @@ export default function Dock(gdkmonitor: any) {
         }
         updateLock = true
         try {
+            // If the icon theme changed, flush the cache so DockItems are recreated with fresh pixbufs
+            const currentIconTheme = Theme.iconTheme
+            if (currentIconTheme !== lastIconTheme) {
+                widgetCache.clear()
+                lastIconTheme = currentIconTheme
+            }
             // V310: PROTECTION. If a menu is open, skip reconciliation to prevent widget tree shifts (the "ghost menu" fix).
             // V170: Also skip rendering entirely if any fullscreen overlay is active consuming the screen.
             if (menuState.openCount > 0 || status.isAnyOverlayOpen) {

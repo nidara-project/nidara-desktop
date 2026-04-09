@@ -1,10 +1,48 @@
-import { Gtk, Gdk } from "ags/gtk4"
+import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
-import { execAsync } from "ags/process"
+import Gio from "gi://Gio"
 import Theme from "../../core/ThemeManager"
 
+function readFile(path: string): string {
+    try {
+        const [, contents] = Gio.File.new_for_path(path).load_contents(null)
+        return new TextDecoder().decode(contents)
+    } catch {
+        return ""
+    }
+}
+
+// CPU: differential measurement between two /proc/stat reads
+let prevIdle = 0
+let prevTotal = 0
+
+function readCpuPercent(): number {
+    const line = readFile("/proc/stat").split("\n")[0] // "cpu  u n s i ..."
+    const parts = line.trim().split(/\s+/).slice(1).map(Number)
+    const idle = parts[3] + (parts[4] ?? 0) // idle + iowait
+    const total = parts.reduce((a, b) => a + b, 0)
+    const diffIdle = idle - prevIdle
+    const diffTotal = total - prevTotal
+    prevIdle = idle
+    prevTotal = total
+    if (diffTotal === 0) return 0
+    return Math.round((1 - diffIdle / diffTotal) * 100)
+}
+
+function readRamPercent(): number {
+    const text = readFile("/proc/meminfo")
+    const get = (key: string) => {
+        const m = text.match(new RegExp(`^${key}:\\s+(\\d+)`, "m"))
+        return m ? parseInt(m[1]) : 0
+    }
+    const total = get("MemTotal")
+    const available = get("MemAvailable")
+    if (total === 0) return 0
+    return Math.round((1 - available / total) * 100)
+}
+
 /**
- * Resource Circle - High Fidelity Canvas Monitor 🍎
+ * Resource Circle - High Fidelity Canvas Monitor
  */
 function ResourceCircle(iconName: string, update: (cb: (val: number) => void) => void, interval = 2000) {
     const canvas = new Gtk.DrawingArea({
@@ -22,18 +60,16 @@ function ResourceCircle(iconName: string, update: (cb: (val: number) => void) =>
         const xc = width / 2
         const yc = height / 2
 
-        const c = Theme.isDark ? 1 : 0 // white in dark, black in light
-        // Background track
+        const c = Theme.isDark ? 1 : 0
         cr.setSourceRGBA(c, c, c, 0.1)
         cr.setLineWidth(2)
         cr.arc(xc, yc, radius, 0, 2 * Math.PI)
         cr.stroke()
 
-        // Progress arc
         if (percentage > 0) {
             cr.setSourceRGBA(c, c, c, 0.8)
             cr.setLineWidth(2)
-            cr.setLineCap(1) // Round caps
+            cr.setLineCap(1)
             const angle = (percentage / 100) * 2 * Math.PI
             cr.arc(xc, yc, radius, -Math.PI / 2, angle - Math.PI / 2)
             cr.stroke()
@@ -70,7 +106,7 @@ function ResourceCircle(iconName: string, update: (cb: (val: number) => void) =>
 }
 
 /**
- * CPU and RAM Monitor Module 📊
+ * CPU and RAM Monitor Module
  */
 export default function SystemResources() {
     const box = new Gtk.Box({
@@ -78,25 +114,17 @@ export default function SystemResources() {
         css_classes: ["bar-resources"],
         spacing: 12,
         valign: Gtk.Align.CENTER,
-        margin_start: 16, // Unified 16px 📐
+        margin_start: 16,
         margin_end: 16,
         margin_top: 4,
         margin_bottom: 4
     })
 
-    const cpu = ResourceCircle("C", (cb) => {
-        execAsync(["bash", "-c", "LC_ALL=C top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'"]).then(out => {
-            const val = parseFloat(out.trim().replace(",", "."))
-            cb(isNaN(val) ? 0 : Math.floor(val))
-        }).catch(() => cb(0))
-    }, 2000)
+    // Prime the CPU differential so first reading isn't 100%
+    readCpuPercent()
 
-    const ram = ResourceCircle("M", (cb) => {
-        execAsync(["bash", "-c", "LC_ALL=C free -m | grep Mem | awk '{print $3/$2 * 100}'"]).then(out => {
-            const val = parseFloat(out.trim().replace(",", "."))
-            cb(isNaN(val) ? 0 : Math.floor(val))
-        }).catch(() => cb(0))
-    }, 5000)
+    const cpu = ResourceCircle("C", (cb) => cb(readCpuPercent()), 2000)
+    const ram = ResourceCircle("M", (cb) => cb(readRamPercent()), 5000)
 
     box.append(cpu)
     box.append(ram)
