@@ -1929,6 +1929,15 @@ window.crystal-settings-window list.settings-list-box row:only-child {
   color: var(--crystal-text-dim);
 }
 
+.app-override-badge {
+  font-size: 0.7rem;
+  color: var(--crystal-accent);
+  background-color: alpha(var(--crystal-accent), 0.15);
+  border-radius: 4px;
+  padding: 2px 6px;
+  margin-right: 4px;
+}
+
 window.crystal-settings-window #settings-splitview, window.crystal-settings-window .crystal-split-view {
   background-color: transparent;
 }

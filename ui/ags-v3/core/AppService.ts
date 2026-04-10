@@ -87,6 +87,9 @@ class AppService {
         this.listeners.forEach(cb => cb())
     }
 
+    /** Resolves an icon name or path to what should be passed to Gtk.Image. Public for Settings UI. */
+    getCanonicalIconName(n: string): string | null { return this.getCanonicalName(n) }
+
     private getCanonicalName(n: string): string | null {
         if (!n || n === "void") return null
         if (n.startsWith("/") || n.startsWith("file://")) return n
@@ -425,6 +428,79 @@ class AppService {
                 GLib.spawn_command_line_async(`uwsm app -- sh -c ${GLib.shell_quote(command)}`)
             }
         }
+    }
+
+    getAllApps(): AppData[] {
+        return Array.from(this.cache.values()).sort((a, b) => a.name.localeCompare(b.name))
+    }
+
+    // ── Icon Overlay (per-app overrides) ──────────────────────────────────────
+
+    private get overlayAppsDir(): string {
+        return `${GLib.get_home_dir()}/.local/share/icons/crystal-shell/scalable/apps`
+    }
+
+    /** Returns the current override file path for the given icon name, or null if none. */
+    getIconOverridePath(iconName: string): string | null {
+        for (const ext of [".svg", ".png"]) {
+            const p = `${this.overlayAppsDir}/${iconName}${ext}`
+            if (GLib.file_test(p, GLib.FileTest.EXISTS)) return p
+        }
+        return null
+    }
+
+    /**
+     * Sets a per-app icon override.
+     * @param originalIconName  The icon name from the app's .desktop file (e.g. "firefox")
+     * @param sourceIconOrPath  Either a themed icon name (e.g. "web-browser") or an absolute file path
+     * @returns true on success
+     */
+    setIconOverride(originalIconName: string, sourceIconOrPath: string): boolean {
+        GLib.mkdir_with_parents(this.overlayAppsDir, 0o755)
+
+        let sourcePath = sourceIconOrPath
+        if (!sourceIconOrPath.startsWith("/")) {
+            // Resolve themed icon name to file path
+            const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+            const paintable = theme.lookup_icon(sourceIconOrPath, null, 64, 1, Gtk.TextDirection.LTR, 0)
+            sourcePath = paintable?.get_file()?.get_path() ?? ""
+            if (!sourcePath) return false
+        }
+
+        const ext = sourcePath.toLowerCase().endsWith(".svg") ? ".svg" : ".png"
+        const destPath = `${this.overlayAppsDir}/${originalIconName}${ext}`
+
+        // Remove any existing override first
+        this.removeIconOverride(originalIconName)
+
+        try {
+            Gio.File.new_for_path(sourcePath).copy(
+                Gio.File.new_for_path(destPath),
+                Gio.FileCopyFlags.OVERWRITE, null, null
+            )
+            Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).invalidate_caches()
+            this.reload()
+            return true
+        } catch (e) {
+            console.error("[AppService] setIconOverride failed:", e)
+            return false
+        }
+    }
+
+    /** Removes the per-app icon override for the given icon name. */
+    removeIconOverride(iconName: string): boolean {
+        let removed = false
+        for (const ext of [".svg", ".png"]) {
+            const p = `${this.overlayAppsDir}/${iconName}${ext}`
+            if (GLib.file_test(p, GLib.FileTest.EXISTS)) {
+                try { Gio.File.new_for_path(p).delete(null); removed = true } catch {}
+            }
+        }
+        if (removed) {
+            Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).invalidate_caches()
+            this.reload()
+        }
+        return removed
     }
 
     /**

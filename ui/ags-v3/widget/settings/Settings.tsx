@@ -14,6 +14,7 @@ import RegionPage from "./pages/Region"
 import WidgetsPage from "./pages/Widgets"
 import AboutPage from "./pages/About"
 import InputPage from "./pages/Input"
+import AppsPage from "./pages/Apps"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex } from "./SettingsHelpers"
 
 /**
@@ -80,6 +81,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "network",    label: "Red",              icon: "network-workgroup-symbolic",           component: NetworkPage     },
         { id: "input",      label: "Dispositivos",     icon: "input-keyboard-symbolic",             component: InputPage       },
         { id: "region",     label: "Idioma y Región",  icon: "preferences-system-time-symbolic",    component: RegionPage      },
+        { id: "apps",       label: "Aplicaciones",     icon: "application-x-executable-symbolic",   component: AppsPage        },
         { id: "dock",       label: "Dock / Panel",     icon: "dock-bottom-symbolic",                component: DockPage        },
         { id: "widgets",    label: "Widgets",          icon: "puzzle-piece-symbolic",               component: WidgetsPage     },
         { id: "power",      label: "Energía",          icon: "power-profile-balanced-symbolic",     component: PowerPage       },
