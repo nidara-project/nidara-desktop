@@ -90,9 +90,22 @@ class AppService {
     /** Resolves an icon name or path to what should be passed to Gtk.Image. Public for Settings UI. */
     getCanonicalIconName(n: string): string | null { return this.getCanonicalName(n) }
 
+    /** Extracts the overlay key from an icon name or absolute path. E.g. "/usr/share/pixmaps/foo.png" → "foo" */
+    private iconOverlayKey(n: string): string {
+        if (!n.startsWith("/")) return n
+        return n.split("/").pop()!.replace(/\.(svg|png|xpm|jpg)$/i, "")
+    }
+
     private getCanonicalName(n: string): string | null {
         if (!n || n === "void") return null
-        if (n.startsWith("/") || n.startsWith("file://")) return n
+
+        // For absolute paths, check overlay using basename before returning the path directly
+        if (n.startsWith("/") || n.startsWith("file://")) {
+            const key = this.iconOverlayKey(n)
+            const overlayHit = this.getIconOverridePath(key)
+            if (overlayHit) return overlayHit
+            return n
+        }
 
         const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
 
@@ -458,6 +471,9 @@ class AppService {
     setIconOverride(originalIconName: string, sourceIconOrPath: string): boolean {
         GLib.mkdir_with_parents(this.overlayAppsDir, 0o755)
 
+        // Normalize: if originalIconName is an absolute path (FileIcon app), use the basename
+        const overlayKey = this.iconOverlayKey(originalIconName)
+
         let sourcePath = sourceIconOrPath
         if (!sourceIconOrPath.startsWith("/")) {
             // Resolve themed icon name to file path
@@ -468,17 +484,17 @@ class AppService {
         }
 
         const ext = sourcePath.toLowerCase().endsWith(".svg") ? ".svg" : ".png"
-        const destPath = `${this.overlayAppsDir}/${originalIconName}${ext}`
+        const destPath = `${this.overlayAppsDir}/${overlayKey}${ext}`
 
         // Remove any existing override first
-        this.removeIconOverride(originalIconName)
+        this.removeIconOverride(overlayKey)
 
         try {
             Gio.File.new_for_path(sourcePath).copy(
                 Gio.File.new_for_path(destPath),
                 Gio.FileCopyFlags.OVERWRITE, null, null
             )
-            Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).invalidate_caches()
+            // GTK4 invalidates icon theme cache automatically
             this.reload()
             return true
         } catch (e) {
@@ -497,7 +513,7 @@ class AppService {
             }
         }
         if (removed) {
-            Gtk.IconTheme.get_for_display(Gdk.Display.get_default()).invalidate_caches()
+            // GTK4 invalidates icon theme cache automatically
             this.reload()
         }
         return removed

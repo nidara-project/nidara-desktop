@@ -23,12 +23,11 @@ function loadPixbuf(iconName: string | null, size: number): GdkPixbuf.Pixbuf | n
 }
 
 function makeIconImage(iconName: string | null, size: number): Gtk.Image {
+    const img = new Gtk.Image({ pixel_size: size })
     const pb = loadPixbuf(iconName, size)
-    if (pb) {
-        const tex = Gdk.Texture.new_for_pixbuf(pb)
-        return new Gtk.Image({ paintable: tex, pixel_size: size })
-    }
-    return new Gtk.Image({ icon_name: iconName ?? "application-x-executable", pixel_size: size })
+    if (pb) img.set_from_pixbuf(pb)
+    else img.icon_name = iconName ?? "application-x-executable"
+    return img
 }
 
 // ── Icon picker dialog ────────────────────────────────────────────────────────
@@ -101,7 +100,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
             const isThemed = theme.has_icon(iconInput)
             if (isFile || isThemed) {
                 const pb = loadPixbuf(iconInput.startsWith("/") ? iconInput : iconInput, 72)
-                if (pb) previewImg.set_paintable(Gdk.Texture.new_for_pixbuf(pb))
+                if (pb) previewImg.set_from_pixbuf(pb)
                 previewStatus.label = isFile ? "Archivo personalizado" : `Encontrado en tema`
                 entry.remove_css_class("error")
             } else {
@@ -157,7 +156,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
         // Refresh row
         const canonical = appService.getCanonicalIconName(originalIcon)
         const pb = loadPixbuf(canonical, 32)
-        if (pb) rowIcon.set_paintable(Gdk.Texture.new_for_pixbuf(pb))
+        if (pb) rowIcon.set_from_pixbuf(pb)
         else rowIcon.icon_name = canonical ?? "application-x-executable"
         rowIconLabel.label = canonical ?? originalIcon
         dialog.close()
@@ -174,7 +173,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
         if (ok) {
             const canonical = appService.getCanonicalIconName(originalIcon)
             const pb = loadPixbuf(canonical, 32)
-            if (pb) rowIcon.set_paintable(Gdk.Texture.new_for_pixbuf(pb))
+            if (pb) rowIcon.set_from_pixbuf(pb)
             else rowIcon.icon_name = canonical ?? "application-x-executable"
             rowIconLabel.label = canonical ?? originalIcon
             dialog.close()
