@@ -335,6 +335,16 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     }
 
     // ── Cache init ─────────────────────────────────────────────────────────
+    const resetCache = () => {
+        widgetCache.clear()
+        cacheInitialized = false
+        let child = flowbox.get_first_child()
+        while (child) { const next = child.get_next_sibling(); flowbox.remove(child); child = next }
+    }
+
+    // Rebuild icons when AppService reloads (e.g. after an icon override is saved)
+    appService.connect(() => { resetCache(); initCache() })
+
     const initCache = () => {
         if (cacheInitialized) return
         const apps = appsService.get_list().sort((a, b) =>
