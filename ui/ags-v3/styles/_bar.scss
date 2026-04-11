@@ -217,6 +217,39 @@
     min-height: 1px;
 }
 
+// ── Inline confirmation view ──────────────────────────────────────────────────
+.system-confirm-secondary {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 12px;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.13);
+        color: rgba(255, 255, 255, 0.9);
+    }
+}
+
+.system-confirm-primary {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 12px;
+    font-weight: 600;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.18);
+    }
+
+    &.danger-action {
+        background: rgba(220, 50, 40, 0.75);
+        color: rgba(255, 255, 255, 0.95);
+
+        &:hover {
+            background: rgba(220, 50, 40, 0.92);
+            color: white;
+        }
+    }
+}
+
 /* ── About Window ──────────────────────────────────────────────────────────── */
 
 .about-floating-window,
