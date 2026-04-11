@@ -741,11 +741,12 @@ button.dock-v-icon image {
   background: rgba(255, 255, 255, 0.18);
 }
 .system-confirm-primary.danger-action {
-  background: rgba(255, 59, 48, 0.2);
-  color: #ff5555;
+  background: rgba(220, 50, 40, 0.75);
+  color: rgba(255, 255, 255, 0.95);
 }
 .system-confirm-primary.danger-action:hover {
-  background: rgba(255, 59, 48, 0.35);
+  background: rgba(220, 50, 40, 0.92);
+  color: white;
 }
 
 /* ── About Window ──────────────────────────────────────────────────────────── */
