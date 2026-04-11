@@ -224,6 +224,19 @@ if [ ! -e "$HYPRIDLE_LINK" ]; then
     echo "  [Symlink] $HYPRIDLE_LINK -> $CONFIG_DIR/hypridle.conf"
 fi
 
+# Hyprlock config (created once, never overwritten — edit to customize lock screen)
+# Symlinked from ~/.config/hypr/hyprlock.conf so hyprlock finds it in its default search path.
+if [ ! -f "$CONFIG_DIR/hyprlock.conf" ]; then
+    cp "$REPO_DIR/config/hypr/hyprlock.conf" "$CONFIG_DIR/hyprlock.conf"
+    chown "$REAL_USER" "$CONFIG_DIR/hyprlock.conf"
+    echo "  [Init] $CONFIG_DIR/hyprlock.conf"
+fi
+HYPRLOCK_LINK="${REAL_HOME}/.config/hypr/hyprlock.conf"
+if [ ! -e "$HYPRLOCK_LINK" ]; then
+    ln -s "$CONFIG_DIR/hyprlock.conf" "$HYPRLOCK_LINK"
+    echo "  [Symlink] $HYPRLOCK_LINK -> $CONFIG_DIR/hyprlock.conf"
+fi
+
 # ── SDDM ──────────────────────────────────────────────────────────────────────
 echo "  Enabling SDDM..."
 sudo systemctl enable sddm 2>/dev/null || true
