@@ -115,9 +115,6 @@ app.start({
     const toggleAppGrid = () => {
       appLauncherWindows.forEach(g => { try { g.toggle() } catch (e) { console.error(e) } })
     }
-    const togglePower = () => {
-      status.togglePowerMenu()
-    }
     const toggleSettings = () => {
       // Lazy init on first open
       if (settingsWindows.length === 0) {
@@ -143,7 +140,6 @@ app.start({
     })
     // Expose Globals
     ;(globalThis as any).toggleAppGrid = toggleAppGrid;
-    (globalThis as any).togglePowerMenu = togglePower;
     (globalThis as any).toggleSettings = toggleSettings;
     (globalThis as any).toggleOverview = toggleOverview;
 
@@ -164,8 +160,6 @@ app.start({
         status.togglePrism(); break;
       case "toggleAppGrid":
         (globalThis as any).toggleAppGrid?.(); break;
-      case "togglePowerMenu":
-        (globalThis as any).togglePowerMenu?.(); break;
       case "toggleSettings":
         (globalThis as any).toggleSettings?.(); break;
       case "toggleOverview":

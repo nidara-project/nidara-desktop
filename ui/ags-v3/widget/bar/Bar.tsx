@@ -22,7 +22,7 @@ import NotificationCenter from "../control-center/NotificationCenter"
 import Prism from "../prism/Prism"
 import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
 import WorkspaceOverview from "../overview/WorkspaceOverview"
-import PowerMenu from "../power-menu/PowerMenu"
+import { execAsync } from "ags/process"
 
 function AppMenu(monitorWidth: number): { widget: Gtk.Widget; appName: Gtk.Label } {
   const box = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, margin_start: 16, margin_end: 16 })
@@ -77,41 +77,146 @@ function AppMenu(monitorWidth: number): { widget: Gtk.Widget; appName: Gtk.Label
 }
 
 function SystemMenuOverlay() {
-  const pBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, margin_top: 6, margin_bottom: 6, margin_start: 6, margin_end: 6 })
+  // ── Shared confirm state ───────────────────────────────────────────────
+  let pendingCmd: (() => void) | null = null
 
-  const makeRow = (ico: string, txt: string, cmd: () => void) => {
-    const lbl = new Gtk.Label({ label: txt, halign: Gtk.Align.START, css_classes: ["system-menu-label"] })
-    const img = new Gtk.Image({ icon_name: ico, pixel_size: 16 })
+  const stack = new Gtk.Stack({
+    transition_type: Gtk.StackTransitionType.CROSSFADE,
+    transition_duration: 130,
+  })
+
+  // ── Normal menu page ───────────────────────────────────────────────────
+  const menuBox = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    spacing: 2,
+    margin_top: 6, margin_bottom: 6, margin_start: 6, margin_end: 6,
+  })
+
+  const makeRow = (ico: string, txt: string, danger: boolean, cmd: () => void) => {
+    const lbl = new Gtk.Label({ label: txt, halign: Gtk.Align.START, hexpand: true,
+      css_classes: danger ? ["system-menu-label", "danger"] : ["system-menu-label"] })
+    const img = new Gtk.Image({ icon_name: ico, pixel_size: 16,
+      css_classes: danger ? ["danger-icon"] : [] })
     const b = new Gtk.Box({ spacing: 12, margin_top: 2, margin_bottom: 2, margin_start: 4, margin_end: 16 })
     b.append(img); b.append(lbl)
     const btn = new Gtk.Button({ child: b, css_classes: ["system-menu-row"], hexpand: true })
-    btn.connect("clicked", () => { status.system_menu_open = false; cmd() })
+    btn.connect("clicked", cmd)
     return btn
   }
 
-  pBox.append(makeRow("dialog-information-symbolic", "Acerca de este equipo", () => status.toggleAbout()))
-  pBox.append(new Gtk.Separator({ css_classes: ["system-menu-sep"], margin_top: 4, margin_bottom: 4 }))
-  pBox.append(makeRow("preferences-system-symbolic", "Configuración del Sistema...", () => (globalThis as any).toggleSettings?.()))
-  pBox.append(new Gtk.Separator({ css_classes: ["system-menu-sep"], margin_top: 4, margin_bottom: 4 }))
-  pBox.append(makeRow("system-log-out-symbolic", "Opciones de Energía...", () => status.togglePowerMenu()))
+  const sep = () => new Gtk.Separator({ css_classes: ["system-menu-sep"], margin_top: 4, margin_bottom: 4 })
 
-  const squircleWrapper = SquircleContainer({ 
-      child: pBox, 
-      radius: 16, 
-      gloss: true, 
-      alpha: 0.15, 
-      borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, 
-      css_classes: ["system-menu-dropdown"] 
+  const showConfirm = (ico: string, question: string, actionLabel: string, danger: boolean, cmd: () => void) => {
+    pendingCmd = cmd
+    confirmIcon.icon_name = ico
+    confirmQuestion.label = question
+    confirmActionBtn.label = actionLabel
+    if (danger) confirmActionBtn.add_css_class("danger-action")
+    else confirmActionBtn.remove_css_class("danger-action")
+    stack.set_visible_child_name("confirm")
+  }
+
+  const closeAndRun = (cmd: string[]) => {
+    status.system_menu_open = false
+    execAsync(cmd).catch(console.error)
+  }
+
+  menuBox.append(makeRow("dialog-information-symbolic", "Acerca de este equipo", false, () => {
+    status.system_menu_open = false; status.toggleAbout()
+  }))
+  menuBox.append(sep())
+  menuBox.append(makeRow("preferences-system-symbolic", "Configuración del Sistema...", false, () => {
+    status.system_menu_open = false; ;(globalThis as any).toggleSettings?.()
+  }))
+  menuBox.append(sep())
+  menuBox.append(makeRow("changes-prevent-symbolic", "Bloquear Pantalla", false, () =>
+    closeAndRun(["loginctl", "lock-session"])
+  ))
+  menuBox.append(makeRow("system-suspend-symbolic", "Suspender", false, () =>
+    closeAndRun(["systemctl", "suspend"])
+  ))
+  menuBox.append(sep())
+  menuBox.append(makeRow("system-log-out-symbolic", "Cerrar Sesión...", true, () =>
+    showConfirm("system-log-out-symbolic", "¿Cerrar la sesión?", "Cerrar Sesión", true,
+      () => closeAndRun(["hyprctl", "dispatch", "exit"]))
+  ))
+  menuBox.append(makeRow("system-reboot-symbolic", "Reiniciar...", false, () =>
+    showConfirm("system-reboot-symbolic", "¿Reiniciar el equipo?", "Reiniciar", false,
+      () => closeAndRun(["reboot"]))
+  ))
+  menuBox.append(makeRow("system-shutdown-symbolic", "Apagar...", true, () =>
+    showConfirm("system-shutdown-symbolic", "¿Apagar el equipo?", "Apagar", true,
+      () => closeAndRun(["shutdown", "now"]))
+  ))
+
+  // ── Confirmation page ──────────────────────────────────────────────────
+  const confirmIcon = new Gtk.Image({ pixel_size: 28, halign: Gtk.Align.CENTER })
+  const confirmQuestion = new Gtk.Label({
+    halign: Gtk.Align.CENTER,
+    justify: Gtk.Justification.CENTER,
+    css_classes: ["system-menu-label"],
+    wrap: true,
+    max_width_chars: 20,
+  })
+
+  const confirmCancelBtn = new Gtk.Button({ label: "Cancelar", css_classes: ["system-menu-row", "system-confirm-secondary"], hexpand: true })
+  confirmCancelBtn.connect("clicked", () => {
+    pendingCmd = null
+    stack.set_visible_child_name("menu")
+  })
+
+  const confirmActionBtn = new Gtk.Button({ label: "", css_classes: ["system-menu-row", "system-confirm-primary"], hexpand: true })
+  confirmActionBtn.connect("clicked", () => {
+    pendingCmd?.()
+    pendingCmd = null
+    stack.set_visible_child_name("menu")
+  })
+
+  const confirmBtnRow = new Gtk.Box({ spacing: 6, homogeneous: true, margin_top: 4 })
+  confirmBtnRow.append(confirmCancelBtn)
+  confirmBtnRow.append(confirmActionBtn)
+
+  const confirmBox = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    spacing: 10,
+    margin_top: 16, margin_bottom: 14, margin_start: 10, margin_end: 10,
+    width_request: 210,
+  })
+  confirmBox.append(confirmIcon)
+  confirmBox.append(confirmQuestion)
+  confirmBox.append(confirmBtnRow)
+
+  // Reset to menu page when closed
+  status.connect("notify::system-menu-open", () => {
+    if (!status.system_menu_open) {
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
+        stack.set_visible_child_name("menu")
+        pendingCmd = null
+        return GLib.SOURCE_REMOVE
+      })
+    }
+  })
+
+  stack.add_named(menuBox, "menu")
+  stack.add_named(confirmBox, "confirm")
+  stack.set_visible_child_name("menu")
+
+  const squircleWrapper = SquircleContainer({
+    child: stack,
+    radius: 16,
+    gloss: true,
+    alpha: 0.15,
+    borderColor: { r: 1, g: 1, b: 1, a: 0.05 },
+    css_classes: ["system-menu-dropdown"],
   })
 
   const outerBox = new Gtk.Box({
-      valign: Gtk.Align.START,
-      halign: Gtk.Align.START,
-      margin_top: 48,
-      margin_start: 8,
-      visible: false
+    valign: Gtk.Align.START,
+    halign: Gtk.Align.START,
+    margin_top: 48,
+    margin_start: 8,
+    visible: false,
   })
-  
   outerBox.append(squircleWrapper)
   return outerBox
 }
@@ -152,26 +257,23 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const popups = NotificationPopupsWidget()
   const systemMenu = SystemMenuOverlay()
   const overview = WorkspaceOverview(gdkmonitor)
-  const powerMenu = PowerMenu()
-
   // Invisible full-screen button — dismisses any open overlay on outside click
   const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
   catcher.connect("clicked", () => {
     if (status.cc_edit_mode) return   // don't close CC while in edit mode
     status.cc_open = false; status.nc_open = false; status.prism_open = false; status.system_menu_open = false
-    status.overview_open = false; status.power_menu_open = false
+    status.overview_open = false
   })
 
   masterOverlay.set_child(barBox)
   masterOverlay.add_overlay(catcher) // behind panels, above bar base
-  masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu); masterOverlay.add_overlay(overview); masterOverlay.add_overlay(powerMenu)
+  masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu); masterOverlay.add_overlay(overview)
 
   cc.valign = Gtk.Align.START; cc.halign = Gtk.Align.END
   nc.valign = Gtk.Align.START; nc.halign = Gtk.Align.END
   prism.valign = Gtk.Align.CENTER; prism.halign = Gtk.Align.CENTER
   popups.valign = Gtk.Align.START; popups.halign = Gtk.Align.END
   overview.valign = Gtk.Align.CENTER; overview.halign = Gtk.Align.CENTER
-  powerMenu.valign = Gtk.Align.CENTER; powerMenu.halign = Gtk.Align.CENTER
 
   cc.margin_top = 48; cc.margin_end = 8
 
@@ -217,7 +319,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           // @ts-ignore
           region.unionRectangle({ x: Math.round(alloc.x), y: Math.round(alloc.y), width: Math.round(alloc.width), height: Math.round(alloc.height) })
       }
-      addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism); addWidgetToRegion(systemMenu); addWidgetToRegion(overview); addWidgetToRegion(powerMenu)
+      addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism); addWidgetToRegion(systemMenu); addWidgetToRegion(overview)
       
       // Add each popup individually to the input region
       let child = popups.get_first_child()
@@ -252,7 +354,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     catcher.set_visible(status.isAnyOverlayOpen && !status.cc_edit_mode)
     if (status.cc_open) centerCCUnderIcon()
     cc.set_visible(status.cc_open); nc.set_visible(status.nc_open); prism.set_visible(status.prism_open); systemMenu.set_visible(status.system_menu_open)
-    setOverviewVisible(status.overview_open); powerMenu.set_visible(status.power_menu_open)
+    setOverviewVisible(status.overview_open)
     // Update immediately — get_visible() is already correct after set_visible() above,
     // so the region calculation is accurate without waiting for a layout pass.
     // The overview is the exception: its input region is refreshed inside
@@ -260,7 +362,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     updateInputRegion()
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
-  status.connect("notify::overview-open", syncOverlays); status.connect("notify::power-menu-open", syncOverlays)
+  status.connect("notify::overview-open", syncOverlays)
   status.connect("notify::cc-edit-mode", syncOverlays)
   status.connect("notify::prism-open", () => { 
     syncOverlays() // Call syncOverlays to update visibility and input region

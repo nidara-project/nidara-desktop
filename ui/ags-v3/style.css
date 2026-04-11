@@ -721,6 +721,33 @@ button.dock-v-icon image {
   min-height: 1px;
 }
 
+.system-confirm-secondary {
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+}
+.system-confirm-secondary:hover {
+  background: rgba(255, 255, 255, 0.13);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.system-confirm-primary {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+}
+.system-confirm-primary:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+.system-confirm-primary.danger-action {
+  background: rgba(255, 59, 48, 0.2);
+  color: #ff5555;
+}
+.system-confirm-primary.danger-action:hover {
+  background: rgba(255, 59, 48, 0.35);
+}
+
 /* ── About Window ──────────────────────────────────────────────────────────── */
 .about-floating-window,
 .about-floating-window > * {
