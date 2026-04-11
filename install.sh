@@ -210,6 +210,20 @@ if [ ! -f "$CONFIG_DIR/crystal-settings.conf" ]; then
     echo "  [Init] $CONFIG_DIR/crystal-settings.conf"
 fi
 
+# Hypridle config (created once, never overwritten — edit to customize idle/lock behaviour)
+# Symlinked from ~/.config/hypr/hypridle.conf so hypridle finds it in its default search path.
+if [ ! -f "$CONFIG_DIR/hypridle.conf" ]; then
+    cp "$REPO_DIR/config/hypr/hypridle.conf" "$CONFIG_DIR/hypridle.conf"
+    chown "$REAL_USER" "$CONFIG_DIR/hypridle.conf"
+    echo "  [Init] $CONFIG_DIR/hypridle.conf"
+fi
+mkdir -p "${REAL_HOME}/.config/hypr"
+HYPRIDLE_LINK="${REAL_HOME}/.config/hypr/hypridle.conf"
+if [ ! -e "$HYPRIDLE_LINK" ]; then
+    ln -s "$CONFIG_DIR/hypridle.conf" "$HYPRIDLE_LINK"
+    echo "  [Symlink] $HYPRIDLE_LINK -> $CONFIG_DIR/hypridle.conf"
+fi
+
 # ── SDDM ──────────────────────────────────────────────────────────────────────
 echo "  Enabling SDDM..."
 sudo systemctl enable sddm 2>/dev/null || true
