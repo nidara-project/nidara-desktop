@@ -276,14 +276,15 @@ export default function Dock(gdkmonitor: any) {
             const zone = reveal ? (isVertical ? WIN_W : DOCK_CONSTANTS.EXCLUSIVE_ZONE) : 0
             Gtk4LayerShell.set_exclusive_zone(win, zone)
         }
-        // Seed frame for slide animation — this is a user-driven path (auto-hide reveal/hide)
-        if (da) da.queue_draw()
-        runUnifiedTick()
+        runUnifiedTick(true)
     }
 
-    const runUnifiedTick = () => {
+    // seedFrame: only seed when newly registering from a user-driven path.
+    // System event paths (notify::focused-client → update) pass false so they
+    // never cause surface damage. Also, if the tick is already running the
+    // seedFrame parameter is irrelevant — the guard returns early before it fires.
+    const runUnifiedTick = (seedFrame = false) => {
         if (tickId !== null) return
-
         tickId = bar.add_tick_callback((_, clock) => {
             if (menuState.openCount > 0) return true
 
@@ -493,6 +494,7 @@ export default function Dock(gdkmonitor: any) {
             }
             return true
         })
+        if (seedFrame && da) da.queue_draw()
     }
 
     let lastMouseX = -1000
@@ -571,11 +573,7 @@ export default function Dock(gdkmonitor: any) {
                 state.targetTranslateY = metrics.translateY
             }
         })
-        runUnifiedTick()
-        // Seed the first frame only from user-driven paths (motion, leave, drag).
-        // System event paths (notify::focused-client → update) pass seedFrame=false
-        // to avoid surface damage and GPU blur recomputation on every focus change.
-        if (seedFrame && da) da.queue_draw()
+        runUnifiedTick(seedFrame)
     }
 
     const motion = new Gtk.EventControllerMotion()
