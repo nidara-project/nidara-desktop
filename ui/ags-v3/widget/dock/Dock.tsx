@@ -276,16 +276,13 @@ export default function Dock(gdkmonitor: any) {
             const zone = reveal ? (isVertical ? WIN_W : DOCK_CONSTANTS.EXCLUSIVE_ZONE) : 0
             Gtk4LayerShell.set_exclusive_zone(win, zone)
         }
+        // Seed frame for slide animation — this is a user-driven path (auto-hide reveal/hide)
+        if (da) da.queue_draw()
         runUnifiedTick()
     }
 
     const runUnifiedTick = () => {
         if (tickId !== null) return
-
-        // Seed the first frame so the tick callback actually executes.
-        // Without this, add_tick_callback is registered but GTK never renders
-        // a frame (nothing called queue_draw), so the callback silently never fires.
-        if (da) da.queue_draw()
 
         tickId = bar.add_tick_callback((_, clock) => {
             if (menuState.openCount > 0) return true
@@ -499,7 +496,7 @@ export default function Dock(gdkmonitor: any) {
     }
 
     let lastMouseX = -1000
-    const updateAllTargets = (mouseX: number) => {
+    const updateAllTargets = (mouseX: number, seedFrame = true) => {
         // V320: Freeze magnification shifts while a menu is open to prevent "ghost menu" flickering
         if (menuState.openCount > 0) return
 
@@ -575,6 +572,10 @@ export default function Dock(gdkmonitor: any) {
             }
         })
         runUnifiedTick()
+        // Seed the first frame only from user-driven paths (motion, leave, drag).
+        // System event paths (notify::focused-client → update) pass seedFrame=false
+        // to avoid surface damage and GPU blur recomputation on every focus change.
+        if (seedFrame && da) da.queue_draw()
     }
 
     const motion = new Gtk.EventControllerMotion()
@@ -1199,7 +1200,7 @@ export default function Dock(gdkmonitor: any) {
             }
 
             if (!tickId) runUnifiedTick()
-            if (!skipTargets) updateAllTargets(lastMouseX)
+            if (!skipTargets) updateAllTargets(lastMouseX, false)
             updateSize()
             return bar
         } catch (e) {
