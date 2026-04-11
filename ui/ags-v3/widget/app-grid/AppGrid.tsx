@@ -125,7 +125,8 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         const d = new Date()
         const h = d.getHours().toString().padStart(2, "0")
         const m = d.getMinutes().toString().padStart(2, "0")
-        clockLabel.label = `${h}:${m}`
+        const next = `${h}:${m}`
+        if (clockLabel.label !== next) clockLabel.label = next
     }
     
     // Timer updates every 1s

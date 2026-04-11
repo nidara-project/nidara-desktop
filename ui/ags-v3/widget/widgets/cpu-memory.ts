@@ -1,8 +1,34 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
-import { execAsync } from "ags/process"
+import Gio from "gi://Gio"
 import Theme from "../../core/ThemeManager"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+
+function readFile(path: string): string {
+    try {
+        const [, contents] = Gio.File.new_for_path(path).load_contents(null)
+        return new TextDecoder().decode(contents)
+    } catch { return "" }
+}
+
+function makeCpuReader() {
+    let prevIdle = 0, prevTotal = 0
+    return (): number => {
+        const parts = readFile("/proc/stat").split("\n")[0].trim().split(/\s+/).slice(1).map(Number)
+        const idle = parts[3] + (parts[4] ?? 0)
+        const total = parts.reduce((a, b) => a + b, 0)
+        const dIdle = idle - prevIdle, dTotal = total - prevTotal
+        prevIdle = idle; prevTotal = total
+        return dTotal <= 0 ? 0 : Math.max(0, Math.min(100, Math.round((1 - dIdle / dTotal) * 100)))
+    }
+}
+
+function readRamPercent(): number {
+    const text = readFile("/proc/meminfo")
+    const get = (k: string) => { const m = text.match(new RegExp(`^${k}:\\s+(\\d+)`, "m")); return m ? parseInt(m[1]) : 0 }
+    const total = get("MemTotal"), available = get("MemAvailable")
+    return total === 0 ? 0 : Math.round((1 - available / total) * 100)
+}
 
 function makeArc(
     label: string,
@@ -47,7 +73,7 @@ function makeArc(
     overlay.set_child(canvas)
     overlay.add_overlay(icon)
 
-    const sync = () => { poll(v => { pct = v; canvas.queue_draw() }); return true }
+    const sync = () => { poll(v => { if (v !== pct) { pct = v; canvas.queue_draw() } }); return true }
     sync()
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, sync)
 
@@ -55,21 +81,13 @@ function makeArc(
 }
 
 function cpuArc(size: number) {
-    return makeArc("C", size, size - 8, cb =>
-        execAsync(["bash", "-c", "LC_ALL=C top -bn1 | grep 'Cpu(s)' | awk '{print $2+$4}'"])
-            .then(o => { const v = parseFloat(o.trim().replace(",", ".")); cb(isNaN(v) ? 0 : Math.floor(v)) })
-            .catch(() => cb(0)),
-        2000,
-    )
+    const read = makeCpuReader()
+    read() // prime so first timer reading is a real differential
+    return makeArc("C", size, size - 8, cb => cb(read()), 2000)
 }
 
 function ramArc(size: number) {
-    return makeArc("M", size, size - 8, cb =>
-        execAsync(["bash", "-c", "LC_ALL=C free -m | grep Mem | awk '{print $3/$2 * 100}'"])
-            .then(o => { const v = parseFloat(o.trim().replace(",", ".")); cb(isNaN(v) ? 0 : Math.floor(v)) })
-            .catch(() => cb(0)),
-        5000,
-    )
+    return makeArc("M", size, size - 8, cb => cb(readRamPercent()), 5000)
 }
 
 // Bar variant: two small 24px arcs (matches original Resources.tsx dimensions)

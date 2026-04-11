@@ -222,8 +222,13 @@ export default function Dock(gdkmonitor: any) {
         }
     })
 
+    let lastRenderedWidth = -1
     const updateSize = () => {
         if (!bar || !win) return
+        // Skip all layout + repaint when dimensions haven't changed — prevents
+        // needless Wayland surface damage and GPU blur recomputation at idle.
+        if (smoothedBarWidth === lastRenderedWidth) return
+        lastRenderedWidth = smoothedBarWidth
         if (isVertical) {
             // smoothedBarWidth accumulates total HEIGHT in vertical mode
             bar.set_size_request(DOCK_CONSTANTS.PILL_HEIGHT, smoothedBarWidth)
@@ -276,6 +281,11 @@ export default function Dock(gdkmonitor: any) {
 
     const runUnifiedTick = () => {
         if (tickId !== null) return
+
+        // Seed the first frame so the tick callback actually executes.
+        // Without this, add_tick_callback is registered but GTK never renders
+        // a frame (nothing called queue_draw), so the callback silently never fires.
+        if (da) da.queue_draw()
 
         tickId = bar.add_tick_callback((_, clock) => {
             if (menuState.openCount > 0) return true
@@ -735,10 +745,16 @@ export default function Dock(gdkmonitor: any) {
                 widgetCache.clear()
                 lastIconTheme = currentIconTheme
             }
-            // V310: PROTECTION. If a menu is open, skip reconciliation to prevent widget tree shifts (the "ghost menu" fix).
-            // V170: Also skip rendering entirely if any fullscreen overlay is active consuming the screen.
+            // Run the animation tick regardless of overlay state — it only moves existing
+            // widgets and is safe to run at any time. Skip only when a context menu is open
+            // (menuState.openCount > 0) because then we want to freeze the dock pill to
+            // prevent it from shrinking and visually clipping the visible menu.
+            if (!tickId && menuState.openCount === 0) runUnifiedTick()
+
+            // V310: PROTECTION. Skip widget-tree reconciliation while a context menu or
+            // fullscreen overlay is active to prevent layout shifts ("ghost menu" fix).
             if (menuState.openCount > 0 || status.isAnyOverlayOpen) {
-                needsUpdate = true // Try again later
+                needsUpdate = true // Try again after overlay closes
                 return bar
             }
 
@@ -1281,6 +1297,16 @@ export default function Dock(gdkmonitor: any) {
     const cConn = hypr.connect("notify::clients", throttledUpdate)
     const fConn = hypr.connect("notify::focused-client", throttledUpdate)
     const aConn = appService.connect(throttledUpdate)
+
+    // Recover immediately when any overlay closes — don't rely on the 100ms poll.
+    const overlayRecovery = () => { if (!status.isAnyOverlayOpen && needsUpdate) throttledUpdate() }
+    status.connect("notify::cc-open", overlayRecovery)
+    status.connect("notify::nc-open", overlayRecovery)
+    status.connect("notify::prism-open", overlayRecovery)
+    status.connect("notify::system-menu-open", overlayRecovery)
+    status.connect("notify::overview-open", overlayRecovery)
+    status.connect("notify::power-menu-open", overlayRecovery)
+
     const dConn = dragBus.subscribe((draggingId) => {
         // V461: Reset reordering state when a drag starts/ends
         if (draggingId) {

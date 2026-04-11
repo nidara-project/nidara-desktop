@@ -239,7 +239,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       } else {
           overview.remove_css_class("overview-open")
           overviewHideTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 260, () => {
-              if (!status.overview_open) overview.set_visible(false)
+              if (!status.overview_open) {
+                  overview.set_visible(false)
+                  updateInputRegion() // re-evaluate now that overview is actually gone
+              }
               overviewHideTimer = null; return GLib.SOURCE_REMOVE
           })
       }
@@ -250,7 +253,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     if (status.cc_open) centerCCUnderIcon()
     cc.set_visible(status.cc_open); nc.set_visible(status.nc_open); prism.set_visible(status.prism_open); systemMenu.set_visible(status.system_menu_open)
     setOverviewVisible(status.overview_open); powerMenu.set_visible(status.power_menu_open)
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })
+    // Update immediately — get_visible() is already correct after set_visible() above,
+    // so the region calculation is accurate without waiting for a layout pass.
+    // The overview is the exception: its input region is refreshed inside
+    // setOverviewVisible() after the fade-out animation completes (260ms).
+    updateInputRegion()
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
   status.connect("notify::overview-open", syncOverlays); status.connect("notify::power-menu-open", syncOverlays)
@@ -271,7 +278,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const timeLabel = new Gtk.Label({ label: "..." })
   const updateClock = () => {
     const fmt = regionConfig.getClockFormat()
-    timeLabel.label = GLib.DateTime.new_now_local().format(fmt) ?? ""
+    const next = GLib.DateTime.new_now_local().format(fmt) ?? ""
+    if (timeLabel.label !== next) timeLabel.label = next
   }
   const clockTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => { updateClock(); return GLib.SOURCE_CONTINUE })
   timeLabel.connect("unrealize", () => { try { GLib.source_remove(clockTimer) } catch {} })
@@ -327,6 +335,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   win.set_child(masterOverlay)
   win.connect("realize", () => updateInputRegion())
+
+  // Safety net: refresh input region on workspace switch so any stale allocation
+  // left by a closing overlay (e.g. overview animation) is cleared immediately.
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
+      const hyprland = AstalHyprland.get_default()
+      if (hyprland) hyprland.connect("notify::focused-workspace", () => updateInputRegion())
+      return GLib.SOURCE_REMOVE
+  })
   
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
       win.present()
