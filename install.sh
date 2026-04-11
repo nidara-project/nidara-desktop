@@ -210,32 +210,27 @@ if [ ! -f "$CONFIG_DIR/crystal-settings.conf" ]; then
     echo "  [Init] $CONFIG_DIR/crystal-settings.conf"
 fi
 
-# Hypridle config (created once, never overwritten — edit to customize idle/lock behaviour)
-# Symlinked from ~/.config/hypr/hypridle.conf so hypridle finds it in its default search path.
-if [ ! -f "$CONFIG_DIR/hypridle.conf" ]; then
-    cp "$REPO_DIR/config/hypr/hypridle.conf" "$CONFIG_DIR/hypridle.conf"
-    chown "$REAL_USER" "$CONFIG_DIR/hypridle.conf"
-    echo "  [Init] $CONFIG_DIR/hypridle.conf"
-fi
+# Hypridle + Hyprlock configs
+# Dev mode:    symlink directly to repo so edits take effect immediately
+# System mode: copy to $CONFIG_DIR once (never overwritten), symlink from there
 mkdir -p "${REAL_HOME}/.config/hypr"
-HYPRIDLE_LINK="${REAL_HOME}/.config/hypr/hypridle.conf"
-if [ ! -e "$HYPRIDLE_LINK" ]; then
-    ln -s "$CONFIG_DIR/hypridle.conf" "$HYPRIDLE_LINK"
-    echo "  [Symlink] $HYPRIDLE_LINK -> $CONFIG_DIR/hypridle.conf"
-fi
 
-# Hyprlock config (created once, never overwritten — edit to customize lock screen)
-# Symlinked from ~/.config/hypr/hyprlock.conf so hyprlock finds it in its default search path.
-if [ ! -f "$CONFIG_DIR/hyprlock.conf" ]; then
-    cp "$REPO_DIR/config/hypr/hyprlock.conf" "$CONFIG_DIR/hyprlock.conf"
-    chown "$REAL_USER" "$CONFIG_DIR/hyprlock.conf"
-    echo "  [Init] $CONFIG_DIR/hyprlock.conf"
-fi
-HYPRLOCK_LINK="${REAL_HOME}/.config/hypr/hyprlock.conf"
-if [ ! -e "$HYPRLOCK_LINK" ]; then
-    ln -s "$CONFIG_DIR/hyprlock.conf" "$HYPRLOCK_LINK"
-    echo "  [Symlink] $HYPRLOCK_LINK -> $CONFIG_DIR/hyprlock.conf"
-fi
+for daemon in hypridle hyprlock; do
+    LINK="${REAL_HOME}/.config/hypr/${daemon}.conf"
+    if [ "$MODE" = "dev" ]; then
+        TARGET="$REPO_DIR/config/hypr/${daemon}.conf"
+    else
+        TARGET="$CONFIG_DIR/${daemon}.conf"
+        if [ ! -f "$TARGET" ]; then
+            cp "$REPO_DIR/config/hypr/${daemon}.conf" "$TARGET"
+            chown "$REAL_USER" "$TARGET"
+            echo "  [Init] $TARGET"
+        fi
+    fi
+    # Always (re)create the symlink so it points to the right target for the current mode
+    ln -sf "$TARGET" "$LINK"
+    echo "  [Symlink] $LINK -> $TARGET"
+done
 
 # ── SDDM ──────────────────────────────────────────────────────────────────────
 echo "  Enabling SDDM..."
