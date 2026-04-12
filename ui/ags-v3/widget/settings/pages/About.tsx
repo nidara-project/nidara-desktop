@@ -3,6 +3,29 @@ import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { listGroup, createRow, pageHeader, pageBox, staticLabel } from "../SettingsHelpers"
 
+function readVersion(): string {
+    // System install path
+    const systemPath = "/usr/share/crystal-shell/VERSION"
+    // Dev mode: walk up from this file's bundle location to find the repo VERSION
+    const devPath = `${GLib.get_home_dir()}/.config/crystal-shell/.dev`
+
+    try {
+        const [devOk, devBytes] = GLib.file_get_contents(devPath)
+        if (devOk) {
+            const repoDir = new TextDecoder().decode(devBytes).trim()
+            const [ok, bytes] = GLib.file_get_contents(`${repoDir}/VERSION`)
+            if (ok) return new TextDecoder().decode(bytes).trim()
+        }
+    } catch {}
+
+    try {
+        const [ok, bytes] = GLib.file_get_contents(systemPath)
+        if (ok) return new TextDecoder().decode(bytes).trim()
+    } catch {}
+
+    return "0.1.0"
+}
+
 /**
  * Reads a field from /etc/os-release synchronously.
  */
@@ -58,7 +81,7 @@ export default function AboutPage() {
     // ── Crystal Shell ──────────────────────────────────────────────────────────
     const { box: shellBox, listBox: shellList } = listGroup("Crystal Shell")
 
-    shellList.append(createRow("Versión", "Crystal Shell", staticLabel("0.1.0")))
+    shellList.append(createRow("Versión", "Crystal Shell", staticLabel(readVersion())))
     shellList.append(createRow("Shell", "AGS v3 / GJS + GTK4", staticLabel("Hyprland WM")))
 
     shellBox.append(shellList)

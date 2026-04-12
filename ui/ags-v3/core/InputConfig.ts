@@ -17,6 +17,8 @@ class InputConfig extends GObject.Object {
     private _touchpadNaturalScroll = false
     private _touchpadTap = true
     private _numlockOnBoot = false
+    private _kbLayout = "us"
+    private _kbVariant = ""
 
     private initialized = false
 
@@ -30,6 +32,8 @@ class InputConfig extends GObject.Object {
     get touchpadNaturalScroll() { return this._touchpadNaturalScroll }
     get touchpadTap() { return this._touchpadTap }
     get numlockOnBoot() { return this._numlockOnBoot }
+    get kbLayout() { return this._kbLayout }
+    get kbVariant() { return this._kbVariant }
 
     // Parse options directly from Hyprland live state
     private async syncFromHyprland() {
@@ -58,6 +62,16 @@ class InputConfig extends GObject.Object {
             this._numlockOnBoot = JSON.parse(out).int === 1
         } catch {}
 
+        try {
+            const out = await execAsync(["hyprctl", "getoption", "-j", "input:kb_layout"])
+            this._kbLayout = JSON.parse(out).str || "us"
+        } catch {}
+
+        try {
+            const out = await execAsync(["hyprctl", "getoption", "-j", "input:kb_variant"])
+            this._kbVariant = JSON.parse(out).str || ""
+        } catch {}
+
         this.initialized = true
         this.emit("changed")
     }
@@ -80,7 +94,9 @@ input {
     sensitivity = ${this._pointerSpeed.toFixed(2)}
     accel_profile = ${this._accelProfile}
     numlock_by_default = ${this._numlockOnBoot}
-    
+    kb_layout = ${this._kbLayout}
+    kb_variant = ${this._kbVariant}
+
     touchpad {
         natural_scroll = ${this._touchpadNaturalScroll}
         tap-to-click = ${this._touchpadTap}
@@ -124,6 +140,14 @@ input {
     setNumlockOnBoot(val: boolean) {
         this._numlockOnBoot = val
         this.applyAndSave("input:numlock_by_default", val ? 1 : 0)
+    }
+
+    setKbLayout(layout: string, variant = "") {
+        this._kbLayout = layout
+        this._kbVariant = variant
+        execAsync(["hyprctl", "keyword", "input:kb_layout", layout]).catch(console.error)
+        execAsync(["hyprctl", "keyword", "input:kb_variant", variant]).catch(console.error)
+        this.applyAndSave("input:kb_layout", layout)
     }
 }
 

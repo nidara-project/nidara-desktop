@@ -88,6 +88,22 @@ function buildMonitorSection(mon: any): Gtk.Widget {
 
     listBox.append(createRow("Rotación", "Orientación de la pantalla", rotDrp))
 
+    // VRR (Variable Refresh Rate) — per monitor
+    // vrr values: 0=off, 1=on (fullscreen), 2=fullscreen+window
+    const VRR_OPTS = ["Desactivado", "Solo pantalla completa", "Siempre"]
+    const currentVrr = mon.vrr ?? 0
+    const vrrDrp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
+    VRR_OPTS.forEach(o => vrrDrp.append_text(o))
+    vrrDrp.active = currentVrr < VRR_OPTS.length ? currentVrr : 0
+
+    vrrDrp.connect("changed", () => {
+        const idx = vrrDrp.active
+        execAsync(["hyprctl", "keyword", "misc:vrr", String(idx)])
+            .catch(e => console.error("[Display] vrr change failed:", e))
+    })
+
+    listBox.append(createRow("VRR / FreeSync", "Tasa de refresco variable (requiere pantalla compatible)", vrrDrp))
+
     box.append(listBox)
     return box
 }

@@ -55,6 +55,55 @@ export default function InputPage() {
     // ── Keyboard ──────────────────────────────────────────────────────────────
     const { box: kbBox, listBox: kbList } = listGroup(t("settings.input.keyboard.group"))
 
+    // Layout entries: [display label, hyprland layout code, variant]
+    const layouts: [string, string, string][] = [
+        ["English (US)",              "us",  ""],
+        ["English (UK)",              "gb",  ""],
+        ["Español (ES)",              "es",  ""],
+        ["Español (Latinoamérica)",   "latam", ""],
+        ["Français",                  "fr",  ""],
+        ["Deutsch",                   "de",  ""],
+        ["Italiano",                  "it",  ""],
+        ["Português (Brasil)",        "br",  ""],
+        ["Português (Portugal)",      "pt",  ""],
+        ["Nederlands",                "nl",  ""],
+        ["Polski",                    "pl",  ""],
+        ["Русский",                   "ru",  ""],
+        ["Українська",                "ua",  ""],
+        ["日本語 (Romaji)",            "jp",  ""],
+        ["中文 (Pinyin)",              "cn",  ""],
+        ["한국어",                     "kr",  ""],
+        ["العربية",                    "ara", ""],
+        ["Svenska",                   "se",  ""],
+        ["Norsk",                     "no",  ""],
+        ["Dansk",                     "dk",  ""],
+        ["Suomi",                     "fi",  ""],
+        ["Čeština",                   "cz",  ""],
+        ["Slovenčina",                "sk",  ""],
+        ["Magyar",                    "hu",  ""],
+        ["Română",                    "ro",  ""],
+        ["Türkçe",                    "tr",  ""],
+        ["English (Dvorak)",          "us",  "dvorak"],
+        ["English (Colemak)",         "us",  "colemak"],
+    ]
+    const layoutLabels = layouts.map(([label]) => label)
+
+    const currentLayoutLabel = (): string => {
+        const cur = layouts.find(([, l, v]) => l === inputConfig.kbLayout && v === inputConfig.kbVariant)
+        return cur?.[0] ?? inputConfig.kbLayout
+    }
+
+    kbList.append(dropdownRow(
+        "Distribución del teclado",
+        "Layout de teclado activo en Hyprland",
+        currentLayoutLabel(),
+        layoutLabels,
+        (label) => {
+            const entry = layouts.find(([l]) => l === label)
+            if (entry) inputConfig.setKbLayout(entry[1], entry[2])
+        }
+    ))
+
     kbList.append(toggleRow(
         t("settings.input.keyboard.numlock"),
         t("settings.input.keyboard.numlock.desc"),

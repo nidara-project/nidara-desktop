@@ -88,6 +88,7 @@ ui/ags-v3/style.css.map
 # User configs — generated at runtime, personal to each installation
 theme_settings.json
 fluid-crystal.json
+appearance.json
 region.json
 cc_layout.json
 widgets.json

@@ -114,6 +114,10 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[6/7] Installing system files..."
 
+# Version file
+sudo mkdir -p /usr/share/crystal-shell
+sudo cp "$REPO_DIR/VERSION" /usr/share/crystal-shell/VERSION
+
 # Hyprland config
 sudo mkdir -p /usr/share/crystal-shell/config/hypr
 sudo cp -r "$REPO_DIR/config/hypr/." /usr/share/crystal-shell/config/hypr/

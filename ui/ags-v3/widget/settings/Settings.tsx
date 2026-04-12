@@ -15,6 +15,8 @@ import WidgetsPage from "./pages/Widgets"
 import AboutPage from "./pages/About"
 import InputPage from "./pages/Input"
 import AppsPage from "./pages/Apps"
+import BluetoothPage from "./pages/Bluetooth"
+import AutostartPage from "./pages/Autostart"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex } from "./SettingsHelpers"
 
 /**
@@ -80,10 +82,12 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "audio",      label: "Sonido",           icon: "audio-speakers-symbolic",             component: AudioPage       },
         { id: "network",    label: "Red",              icon: "network-workgroup-symbolic",           component: NetworkPage     },
         { id: "input",      label: "Dispositivos",     icon: "input-keyboard-symbolic",             component: InputPage       },
+        { id: "bluetooth",  label: "Bluetooth",        icon: "bluetooth-symbolic",                  component: BluetoothPage   },
         { id: "region",     label: "Idioma y Región",  icon: "preferences-system-time-symbolic",    component: RegionPage      },
         { id: "apps",       label: "Aplicaciones",     icon: "application-x-executable-symbolic",   component: AppsPage        },
         { id: "dock",       label: "Dock / Panel",     icon: "dock-bottom-symbolic",                component: DockPage        },
         { id: "widgets",    label: "Widgets",          icon: "puzzle-piece-symbolic",               component: WidgetsPage     },
+        { id: "autostart",  label: "Inicio automático", icon: "system-run-symbolic",                component: AutostartPage   },
         { id: "power",      label: "Energía",          icon: "power-profile-balanced-symbolic",     component: PowerPage       },
         { id: "about",      label: "Acerca de",        icon: "help-about-symbolic",                 component: AboutPage       },
     ]
