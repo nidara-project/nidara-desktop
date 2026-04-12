@@ -86,12 +86,13 @@ hyprland-user.conf
 # ui/ags-v3/style.css  ← intentionally NOT ignored
 ui/ags-v3/style.css.map
 # User configs — generated at runtime, personal to each installation
+# (root-level only; defaults/ folder is intentionally tracked)
 theme_settings.json
 fluid-crystal.json
-appearance.json
-region.json
-cc_layout.json
-widgets.json
+/appearance.json
+/region.json
+/cc_layout.json
+/widgets.json
 
 # Dev mode marker (written by install.sh --dev, personal to each machine)
 .dev

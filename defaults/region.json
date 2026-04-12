@@ -1,0 +1,6 @@
+{
+  "timeFormat": "24h",
+  "dateFormat": "long",
+  "timezone": "Europe/Madrid",
+  "showSeconds": false
+}

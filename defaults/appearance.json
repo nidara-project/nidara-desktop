@@ -1,0 +1,14 @@
+{
+  "themeFamily": "Adwaita",
+  "iconTheme": "Colloid",
+  "cursorTheme": "Adwaita",
+  "isDark": true,
+  "accent": "green",
+  "transparency": 0.49230769230769234,
+  "tintStrength": 0,
+  "tintPanels": {
+    "controlCenter": false,
+    "appGrid": false
+  },
+  "qtTheme": "Default"
+}

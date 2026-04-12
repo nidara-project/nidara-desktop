@@ -1,0 +1,38 @@
+{
+  "cpu_memory": {
+    "bar": false,
+    "cc": true
+  },
+  "volume": {
+    "bar": true,
+    "cc": true
+  },
+  "wifi": {
+    "bar": false,
+    "cc": true
+  },
+  "ethernet": {
+    "bar": false,
+    "cc": true
+  },
+  "bt": {
+    "bar": false,
+    "cc": true
+  },
+  "media": {
+    "bar": false,
+    "cc": true
+  },
+  "dark_mode": {
+    "bar": false,
+    "cc": true
+  },
+  "focus": {
+    "bar": false,
+    "cc": true
+  },
+  "calculator": {
+    "bar": false,
+    "cc": true
+  }
+}

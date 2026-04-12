@@ -177,8 +177,9 @@ fi
 
 # Default JSON configs (never overwrite user's existing files)
 for f in appearance.json widgets.json cc_layout.json region.json; do
-    if [ -f "$REPO_DIR/$f" ] && [ ! -f "$CONFIG_DIR/$f" ]; then
-        cp "$REPO_DIR/$f" "$CONFIG_DIR/$f"
+    if [ -f "$REPO_DIR/defaults/$f" ] && [ ! -f "$CONFIG_DIR/$f" ]; then
+        cp "$REPO_DIR/defaults/$f" "$CONFIG_DIR/$f"
+        chown "$REAL_USER" "$CONFIG_DIR/$f"
         echo "  [Init] $CONFIG_DIR/$f"
     fi
 done
