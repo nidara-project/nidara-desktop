@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
-import { dockSettings, updateDockSettings, type DockPosition } from "../../dock/state"
-import { listGroup, toggleRow, sliderRow, presetRow, dropdownRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { dockSettings, updateDockSettings, onDockSettingsChanged, type DockPosition } from "../../dock/state"
+import { listGroup, createRow, toggleRow, sliderRow, presetRow, dropdownRow, pageHeader, pageBox } from "../SettingsHelpers"
 
 export default function DockPage() {
     const page = pageBox("dock-page")
@@ -81,17 +81,31 @@ export default function DockPage() {
         (v) => updateDockSettings({ showIndicators: v }),
     ))
 
-    const isCurrentlyVertical = dockSettings.position === 'left' || dockSettings.position === 'right'
-    const autoHideToggle = toggleRow(
-        "Ocultar automáticamente",
-        isCurrentlyVertical
-            ? "Obligatorio en posición lateral"
-            : "El dock se esconde al alejar el cursor",
-        isCurrentlyVertical ? true : dockSettings.autoHide,
-        (v) => { if (!isCurrentlyVertical) updateDockSettings({ autoHide: v }) },
-    )
-    if (isCurrentlyVertical) autoHideToggle.sensitive = false
-    behGroup.listBox.append(autoHideToggle)
+    // Auto-hide — built manually so we can update it reactively when position changes
+    const autoHideSwitch = new Gtk.Switch({ active: dockSettings.autoHide, valign: Gtk.Align.CENTER })
+    const autoHideSubtitle = new Gtk.Label({
+        label: "El dock se esconde al alejar el cursor",
+        css_classes: ["settings-row-subtitle"],
+        halign: Gtk.Align.START,
+        ellipsize: 3,
+    })
+    autoHideSwitch.connect("state-set", (_: any, state: boolean) => {
+        if (dockSettings.position !== 'left' && dockSettings.position !== 'right')
+            updateDockSettings({ autoHide: state })
+        return false
+    })
+    const autoHideRow = createRow("Ocultar automáticamente", "El dock se esconde al alejar el cursor", autoHideSwitch)
+    behGroup.listBox.append(autoHideRow)
+
+    const syncAutoHide = () => {
+        const vertical = dockSettings.position === 'left' || dockSettings.position === 'right'
+        autoHideRow.sensitive = !vertical
+        autoHideSwitch.active = vertical ? true : dockSettings.autoHide
+        verticalNote.visible = vertical
+    }
+    syncAutoHide()
+    const unsub = onDockSettingsChanged(syncAutoHide)
+    page.connect("unrealize", () => { try { unsub?.() } catch {} })
 
     const delaySlider = sliderRow(
         "Retardo al ocultar", "Tiempo antes de que el dock se oculte",
