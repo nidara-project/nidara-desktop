@@ -119,7 +119,6 @@ general {
 
 | Shortcut | Action |
 | :--- | :--- |
-| `Super + D` | Toggle App Launcher |
 | `Super + S` | Open Settings |
 | `Super + T` | Terminal (Kitty) |
 | `Super + E` | Files (Nautilus) |
