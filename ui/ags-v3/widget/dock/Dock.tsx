@@ -270,7 +270,7 @@ export default function Dock(gdkmonitor: any) {
         if (isRevealed === reveal) return
         isRevealed = reveal
         slideTarget = reveal ? 0 : (isVertical
-            ? DOCK_CONSTANTS.PILL_HEIGHT + dockSettings.screenGap + 4
+            ? WIN_W - 4   // leave 4px on-screen as the hover trigger strip
             : DOCK_CONSTANTS.PILL_HEIGHT + dockSettings.screenGap + 4)
         if (layerShellReady) {
             const zone = reveal ? (isVertical ? WIN_W : DOCK_CONSTANTS.EXCLUSIVE_ZONE) : 0
@@ -587,8 +587,11 @@ export default function Dock(gdkmonitor: any) {
         // Vertical dock: restrict input to pill area, or thin edge when hidden
         if (isVertical) {
             if (dockSettings.autoHide && !isRevealed && slideTarget > 0) {
-                // Hidden: thin edge strip at screen edge for reveal trigger
-                const edgeX = dockSettings.position === 'right' ? WIN_W - 4 : 0
+                // Hidden: the window is slid (WIN_W - 4)px off-screen, leaving the last
+                // 4px on screen as a hover trigger. In window coords:
+                //   left dock:  rightmost 4px = x = WIN_W - 4
+                //   right dock: leftmost 4px  = x = 0
+                const edgeX = dockSettings.position === 'left' ? WIN_W - 4 : 0
                 // @ts-ignore
                 region.unionRectangle({ x: edgeX, y: 0, width: 4, height: WIN_H })
             } else {
