@@ -1260,21 +1260,12 @@ export default function Dock(gdkmonitor: any) {
             }
 
             layerShellReady = true
-            // Bottom dock: use layer-shell exclusive_zone to push windows up.
-            // Vertical dock: exclusive_zone stays 0 (would push the bar inward since
-            // both share LEFT/RIGHT anchors). Instead we use hyprctl monitor addreserved
-            // which only affects xdg-toplevel placement, not other layer-shell surfaces.
+            // Vertical dock: exclusive_zone = 0. Layer-shell exclusive zones on LEFT/RIGHT
+            // also push other surfaces anchored to those edges (including the bar).
+            // No clean protocol-level solution exists for reserving side space without
+            // affecting the bar. Auto-hide is the recommended mode for vertical positions.
             const exclusiveZone = (dockSettings.autoHide || isVertical) ? 0 : DOCK_CONSTANTS.EXCLUSIVE_ZONE
             Gtk4LayerShell.set_exclusive_zone(win, exclusiveZone)
-
-            if (isVertical && !dockSettings.autoHide) {
-                const monitorName = gdkmonitor.get_connector?.() ?? ""
-                const left  = dockSettings.position === 'left'  ? WIN_W : 0
-                const right = dockSettings.position === 'right' ? WIN_W : 0
-                execAsync(["hyprctl", "keyword", "monitor",
-                    `${monitorName},addreserved,0,0,${left},${right}`
-                ]).catch(console.error)
-            }
 
             // Publish side width so CC/NC/Popups offset themselves
             if (isVertical) dockSideState.update(dockSettings.position, WIN_W)
@@ -1364,13 +1355,6 @@ export default function Dock(gdkmonitor: any) {
         try { if (aConn) aConn() } catch (e) { }
         try { if (dConn) dConn() } catch (e) { }
         try { if (mSub) mSub() } catch (e) { }
-        // Reset addreserved when dock is destroyed (position change or session end)
-        if (isVertical && !dockSettings.autoHide) {
-            const monitorName = gdkmonitor.get_connector?.() ?? ""
-            execAsync(["hyprctl", "keyword", "monitor",
-                `${monitorName},addreserved,0,0,0,0`
-            ]).catch(() => {})
-        }
     })
 
     update()

@@ -19,9 +19,28 @@ export default function DockPage() {
         posOptions.map(o => o.label),
         (label) => {
             const opt = posOptions.find(o => o.label === label)
-            if (opt) updateDockSettings({ position: opt.value })
+            if (!opt) return
+            const isVertical = opt.value === 'left' || opt.value === 'right'
+            updateDockSettings({
+                position: opt.value,
+                // Auto-hide is required for vertical positions — the layer-shell protocol
+                // has no way to reserve side space without also pushing the bar inward.
+                ...(isVertical ? { autoHide: true } : {}),
+            })
         },
     ))
+
+    const verticalNote = new Gtk.Label({
+        label: "En posición lateral, ocultación automática se activa siempre.",
+        css_classes: ["settings-row-subtitle"],
+        halign: Gtk.Align.START,
+        margin_start: 10,
+        margin_top: 2,
+        margin_bottom: 6,
+        wrap: true,
+        visible: dockSettings.position === 'left' || dockSettings.position === 'right',
+    })
+    posGroup.box.append(verticalNote)
     page.append(posGroup.box)
 
     // 1. Geometry
@@ -62,11 +81,16 @@ export default function DockPage() {
         (v) => updateDockSettings({ showIndicators: v }),
     ))
 
+    const isCurrentlyVertical = dockSettings.position === 'left' || dockSettings.position === 'right'
     const autoHideToggle = toggleRow(
-        "Ocultar automáticamente", "El dock se esconde al alejar el cursor",
-        dockSettings.autoHide,
-        (v) => updateDockSettings({ autoHide: v }),
+        "Ocultar automáticamente",
+        isCurrentlyVertical
+            ? "Obligatorio en posición lateral"
+            : "El dock se esconde al alejar el cursor",
+        isCurrentlyVertical ? true : dockSettings.autoHide,
+        (v) => { if (!isCurrentlyVertical) updateDockSettings({ autoHide: v }) },
     )
+    if (isCurrentlyVertical) autoHideToggle.sensitive = false
     behGroup.listBox.append(autoHideToggle)
 
     const delaySlider = sliderRow(
