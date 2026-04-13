@@ -275,9 +275,10 @@ export default function Dock(gdkmonitor: any) {
         slideTarget = reveal ? 0 : (isVertical
             ? WIN_W - 4   // leave 4px on-screen as the hover trigger strip
             : DOCK_CONSTANTS.PILL_HEIGHT + dockSettings.screenGap + 4)
-        if (layerShellReady) {
-            const zone = reveal ? (isVertical ? WIN_W : DOCK_CONSTANTS.EXCLUSIVE_ZONE) : 0
-            Gtk4LayerShell.set_exclusive_zone(win, zone)
+        // Vertical dock: never change exclusive_zone (stays 0) — it would push the bar.
+        // Only horizontal dock toggles exclusive_zone on reveal/hide.
+        if (layerShellReady && !isVertical) {
+            Gtk4LayerShell.set_exclusive_zone(win, reveal ? DOCK_CONSTANTS.EXCLUSIVE_ZONE : 0)
         }
         runUnifiedTick(true)
     }
