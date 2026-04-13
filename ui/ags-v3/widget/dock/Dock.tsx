@@ -1304,7 +1304,7 @@ export default function Dock(gdkmonitor: any) {
     status.connect("notify::prism-open", overlayRecovery)
     status.connect("notify::system-menu-open", overlayRecovery)
     status.connect("notify::overview-open", overlayRecovery)
-    status.connect("notify::power-menu-open", overlayRecovery)
+
 
     const dConn = dragBus.subscribe((draggingId) => {
         // V461: Reset reordering state when a drag starts/ends
