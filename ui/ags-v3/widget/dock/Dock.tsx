@@ -258,11 +258,14 @@ export default function Dock(gdkmonitor: any) {
     let tickId: number | null = null
 
     // ── Auto-hide slide state ─────────────────────────────────────────────────
-    // slideOffset: 0 = fully visible, PILL_HEIGHT+screenGap = fully hidden below screen
-    let slideTarget = 0
-    let slideCurrent = 0
+    // slideOffset: 0 = fully visible, >0 = hidden (off-screen by that many px)
+    const initialHideTarget = isVertical
+        ? WIN_W - 4
+        : DOCK_CONSTANTS.PILL_HEIGHT + dockSettings.screenGap + 4
+    let isRevealed    = !dockSettings.autoHide
+    let slideTarget   = dockSettings.autoHide ? initialHideTarget : 0
+    let slideCurrent  = slideTarget   // start at final position — no intro animation
     let slideVelocity = 0
-    let isRevealed = true
     const SLIDE_STIFFNESS = 500
     const SLIDE_DAMPING = 52
 
@@ -824,7 +827,7 @@ export default function Dock(gdkmonitor: any) {
                 const widget = factory()
                 const revealer = new (Gtk as any).Revealer({
                     css_classes: ["cd-revealer"],
-                    transition_type: isVertical ? Gtk.RevealerTransitionType.SLIDE_DOWN : Gtk.RevealerTransitionType.SLIDE_LEFT,
+                    transition_type: isVertical ? Gtk.RevealerTransitionType.NONE : Gtk.RevealerTransitionType.SLIDE_LEFT,
                     transition_duration: 300,
                     child: widget,
                     reveal_child: firstRender
@@ -1263,12 +1266,16 @@ export default function Dock(gdkmonitor: any) {
             }
 
             layerShellReady = true
-            // Vertical dock: exclusive_zone = 0. Layer-shell exclusive zones on LEFT/RIGHT
-            // also push other surfaces anchored to those edges (including the bar).
-            // No clean protocol-level solution exists for reserving side space without
-            // affecting the bar. Auto-hide is the recommended mode for vertical positions.
             const exclusiveZone = (dockSettings.autoHide || isVertical) ? 0 : DOCK_CONSTANTS.EXCLUSIVE_ZONE
             Gtk4LayerShell.set_exclusive_zone(win, exclusiveZone)
+
+            // Apply initial hidden position immediately so the dock doesn't flash visible
+            if (dockSettings.autoHide) {
+                if (isVertical) {
+                    Gtk4LayerShell.set_margin(win, sideEdge, -(WIN_W - 4))
+                }
+                // Horizontal initial hide is handled via margin_bottom in the tick
+            }
 
             // Publish side width so CC/NC/Popups offset themselves
             if (isVertical) dockSideState.update(dockSettings.position, WIN_W)
