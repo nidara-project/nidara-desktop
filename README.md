@@ -8,18 +8,34 @@ It is not a theme or a set of scripts — it registers as a proper Wayland sessi
 
 ## Features
 
-- **Compositor**: Hyprland (Wayland) — smooth animations, tiling window management.
-- **Shell**: AGS v3 (TypeScript/TSX) — reactive, modular UI: Bar, Dock, Control Center, Notification Center.
+- **Compositor**: Hyprland (Wayland) — smooth animations, tiling + floating window management.
+- **Shell**: AGS v3 (TypeScript/TSX) — reactive, modular UI.
+- **Bar**: Live clock, workspaces, system tray, resource indicators, system menu with inline power actions.
 - **Dock**: macOS-style with spring magnification physics. Supports bottom, left, and right positions.
-- **AppGrid**: Full-screen launcher with instant fuzzy search.
+- **App Launcher**: Full-screen grid with instant fuzzy search.
 - **Control Center**: Volume (WirePlumber), brightness, Wi-Fi, Bluetooth, battery, MPRIS media.
-- **Settings**: Multi-page settings window — Theme, Fluid Crystal, Dock, Audio, Display, About.
+- **Notification Center**: Grouped notifications with inline actions.
+- **Settings**: Multi-page settings panel:
+  - Appearance — theme, accent color, glassmorphism, dark/light mode
+  - Display — per-monitor scale, rotation, VRR/FreeSync
+  - Audio — output/input device selection, volumes
+  - Network — Wi-Fi and wired connections
+  - Input — pointer speed, acceleration, touchpad, keyboard layout
+  - Bluetooth — paired devices, scan, pair/connect/forget
+  - Language & Region — time format, timezone
+  - Applications — per-app icon overrides
+  - Dock & Panel — position, size, behavior
+  - Widgets — Control Center layout
+  - Autostart — manage `exec-once` entries
+  - Power — performance profile, screen-off, lock, suspend timers (hypridle)
+  - About — system info, Crystal Shell version
 - **Fluid Crystal Design System**: Dynamic accent colors, glassmorphism tokens, dark/light mode.
-- **About**: "About This Mac"-style system info window.
+- **Lock screen**: hyprlock with frosted-glass blur.
+- **Idle management**: hypridle — configurable screen-off, lock, and suspend timers.
 
 ---
 
-## Installation (Users)
+## Installation
 
 Requires **Arch Linux**.
 
@@ -34,11 +50,11 @@ The installer:
 2. Builds the UI bundle (`ags bundle`).
 3. Installs system files:
    - `/usr/bin/crystal-shell` — Wayland session entry point
-   - `/usr/bin/crystal-shell-ui` — UI launcher (auto-detects dev/prod mode)
-   - `/usr/share/crystal-shell/config/hypr/hyprland.conf` — system Hyprland config
+   - `/usr/bin/crystal-shell-ui` — UI launcher (auto-detects dev/system mode)
+   - `/usr/share/crystal-shell/` — configs, bundle, version file
    - `/usr/share/wayland-sessions/crystal-shell.desktop` — session entry
-4. Creates `~/.config/crystal-shell/` for user config (never overwritten on updates).
-5. Enables system services: `pipewire`, `wireplumber`, `hypridle`.
+4. Creates `~/.config/crystal-shell/` with default configs (never overwritten on updates).
+5. Enables system services: `pipewire`, `wireplumber`, `sddm`.
 
 **To start:** reboot and select _Crystal Shell_ from the login screen.
 
@@ -46,13 +62,18 @@ The installer:
 
 ## User Configuration
 
-User config lives in `~/.config/crystal-shell/` and is never overwritten by updates.
+User config lives in `~/.config/crystal-shell/` and is **never overwritten** by updates.
 
-To customize Hyprland, edit:
+To customize Hyprland (monitors, keyboard layout, startup apps, extra keybinds), edit:
 
 **`~/.config/crystal-shell/hyprland-user.conf`**
 
 ```ini
+# Keyboard layout
+input {
+    kb_layout = es
+}
+
 # Monitors
 monitor = HDMI-A-1, 1920x1080@60, 0x0, 1
 
@@ -62,25 +83,55 @@ bind = SUPER, F1, exec, firefox
 # Autostart
 exec-once = my-app
 
-# Override any Crystal Shell setting
+# Override any Hyprland setting
 general {
     gaps_out = 16
 }
 ```
 
-The system Hyprland config at `/usr/share/crystal-shell/config/hypr/hyprland.conf` is managed by the installer. Your user file always takes precedence.
+> **NVIDIA users** — uncomment the NVIDIA block in `hyprland-user.conf` after installation.
 
 ---
 
-## Keybindings (Hyprland)
+## Keybindings
+
+### Window Management
 
 | Shortcut | Action |
 | :--- | :--- |
 | `Super + Q` | Close active window |
+| `Super + F` | Toggle floating |
+| `Super + P` | Toggle pseudo-tiling (dwindle) |
+| `Super + Left / Right / Up / Down` | Move focus |
+| `Super + Shift + Arrow` | Resize active window |
+| `Super + Mouse drag (left button)` | Move window |
+| `Super + Mouse drag (right button)` | Resize window |
+
+### Workspaces
+
+| Shortcut | Action |
+| :--- | :--- |
+| `Super + 1–5` | Switch to workspace |
+| `Super + Shift + 1–5` | Move window to workspace |
+| `Super + Scroll` | Cycle workspaces |
+
+### Apps & Shell
+
+| Shortcut | Action |
+| :--- | :--- |
+| `Super + D` | Toggle App Launcher |
+| `Super + S` | Open Settings |
 | `Super + T` | Terminal (Kitty) |
-| `Super + E` | Files (Thunar) |
-| `Super + D` | Toggle AppGrid |
-| `Super + Shift + R` | **Reload Crystal Shell UI** |
+| `Super + E` | Files (Nautilus) |
+| `Super + Shift + R` | Reload Crystal Shell UI |
+| `Super` (tap) | Toggle App Launcher |
+
+### Screenshots
+
+| Shortcut | Action |
+| :--- | :--- |
+| `Print` | Region screenshot → clipboard |
+| `Shift + Print` | Region screenshot → `~/Pictures/` |
 
 ---
 
@@ -94,13 +145,11 @@ cd ~/Dev/Crystal-Shell
 ./install.sh --dev
 ```
 
-`--dev` installs the system binaries normally but writes `~/.config/crystal-shell/.dev` pointing to your repo. The `crystal-shell-ui` launcher detects this file and runs `ags run app.ts` from source instead of the installed bundle — no symlinks, no full-repo copy.
-
-Install npm dependencies for IDE support (TypeScript autocomplete):
+`--dev` installs system binaries normally but writes `~/.config/crystal-shell/.dev` pointing to your repo. The `crystal-shell-ui` launcher detects this file and runs `ags run app.ts` from source — no full rebuild needed to see changes.
 
 ```bash
 cd ui/ags-v3
-npm install
+npm install   # IDE support (TypeScript autocomplete)
 ```
 
 ### Project Structure
@@ -108,36 +157,36 @@ npm install
 ```
 Crystal-Shell/
 ├── config/
-│   └── hypr/                  # System Hyprland config
+│   └── hypr/                  # Hyprland config (installed to /usr/share/crystal-shell/)
+├── defaults/                  # Default user configs (copied once on first install)
 ├── scripts/
-│   ├── crystal-shell          # Wayland session wrapper → /usr/bin/crystal-shell
-│   └── crystal-shell-ui       # UI launcher (dev/prod) → /usr/bin/crystal-shell-ui
+│   ├── crystal-shell          # Wayland session entry → /usr/bin/crystal-shell
+│   └── crystal-shell-ui       # UI launcher (dev/system) → /usr/bin/crystal-shell-ui
+├── VERSION                    # Current version (semver)
 ├── install.sh                 # Provisioning script
 └── ui/ags-v3/                 # Shell (TypeScript + AGS v3)
-    ├── app.ts                 # Entry point
-    ├── core/                  # State management, theme engine, services
-    ├── widget/                # UI components (Bar, Dock, AppGrid, Settings, About...)
+    ├── app.ts                 # Entry point + IPC request handler
+    ├── core/                  # State, theme engine, services
+    ├── widget/                # UI components (Bar, Dock, AppGrid, Settings…)
     ├── styles/                # Modular SCSS
-    ├── style.css              # Compiled CSS (committed)
+    ├── style.css              # Compiled CSS (committed for convenience)
     └── build/
-        └── crystal-shell      # Standalone bundle (committed)
+        └── crystal-shell      # Standalone bundle (committed for releases)
 ```
 
 ### Development Workflow
 
-- **Reload UI:** `Super + Shift + R` (calls `crystal-shell-ui`, which re-runs `ags run` from source).
+- **Reload UI:** `Super + Shift + R`
 - **Logs:** `tail -f /tmp/crystal-shell-ui.log`
-- **Kill zombie GJS processes:** `killall gjs` (do this first when styles or UI look stuck).
+- **Kill stale GJS process:** `killall gjs`
+- **Compile SCSS:** `cd ui/ags-v3 && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css`
+- **Send IPC command:** `ags request toggleAppGrid`
 
-Contributing (Pull Requests):
-1. Modify only source files (`.ts`, `.tsx`, `.scss`).
-2. Do **not** include `style.css` or `build/crystal-shell` in PRs — compiled artifacts are generated by maintainers at release time.
-
-### Publishing a Release (Maintainers only)
+### Publishing a Release
 
 ```bash
 cd ui/ags-v3
-npm run build   # compiles SCSS + bundles app
+npm run build          # compiles SCSS + bundles app
 
 cd ../..
 git add ui/ags-v3/style.css ui/ags-v3/build/crystal-shell
