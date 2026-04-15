@@ -107,6 +107,7 @@ for comp in \
     "lib/astal/io" "lib/astal/gtk3" "lib/astal/gtk4" \
     "lib/apps" "lib/hyprland" "lib/mpris" "lib/network" \
     "lib/battery" "lib/notifd" "lib/bluetooth" "lib/tray" \
+    "lib/greet" \
     "lang/gjs"
 do
     echo "  Building $comp..."
@@ -142,10 +143,21 @@ npm install
 npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
 
 if [ "$MODE" = "system" ]; then
-    echo "  Bundling..."
+    echo "  Bundling shell UI..."
     mkdir -p build
     ags bundle app.ts build/crystal-shell
     echo "  [OK] Bundle: $REPO_DIR/ui/ags-v3/build/crystal-shell"
+fi
+
+echo "  Building greeter..."
+# Use ags-v3's sass installation for SCSS compilation
+cd "$REPO_DIR/ui/ags-v3"
+npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css
+cd "$REPO_DIR/ui/greeter"
+if [ "$MODE" = "system" ]; then
+    mkdir -p build
+    ags bundle app.ts build/crystal-greeter
+    echo "  [OK] Greeter bundle: $REPO_DIR/ui/greeter/build/crystal-greeter"
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -166,17 +178,25 @@ if [ -f "$REPO_DIR/defaults/wallpaper/wallpaper.png" ]; then
     sudo cp "$REPO_DIR/defaults/wallpaper/wallpaper.png" /usr/share/crystal-shell/wallpaper.png
 fi
 
-# UI bundle + style
+# Shell UI bundle + style
 sudo mkdir -p /usr/share/crystal-shell/ui/ags-v3/build
 if [ "$MODE" = "system" ]; then
     sudo cp "$REPO_DIR/ui/ags-v3/build/crystal-shell" /usr/share/crystal-shell/ui/ags-v3/build/
 fi
 sudo cp "$REPO_DIR/ui/ags-v3/style.css" /usr/share/crystal-shell/ui/ags-v3/
 
+# Greeter bundle + style
+sudo mkdir -p /usr/share/crystal-shell/ui/greeter/build
+if [ "$MODE" = "system" ]; then
+    sudo cp "$REPO_DIR/ui/greeter/build/crystal-greeter" /usr/share/crystal-shell/ui/greeter/build/
+fi
+sudo cp "$REPO_DIR/ui/greeter/style.css" /usr/share/crystal-shell/ui/greeter/
+
 # Session wrapper scripts
 sudo cp "$REPO_DIR/scripts/crystal-shell"    /usr/bin/crystal-shell
 sudo cp "$REPO_DIR/scripts/crystal-shell-ui" /usr/bin/crystal-shell-ui
-sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui
+sudo cp "$REPO_DIR/scripts/crystal-greeter"  /usr/bin/crystal-greeter
+sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter
 
 # Wayland session entry
 sudo mkdir -p /usr/share/wayland-sessions

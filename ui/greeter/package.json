@@ -1,0 +1,10 @@
+{
+  "scripts": {
+    "dev": "cd ../ags-v3 && npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css && cd ../greeter && ags run app.ts",
+    "build": "mkdir -p build && cd ../ags-v3 && npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css && cd ../greeter && ags bundle app.ts build/crystal-greeter"
+  },
+  "prettier": {
+    "semi": false,
+    "tabWidth": 2
+  }
+}

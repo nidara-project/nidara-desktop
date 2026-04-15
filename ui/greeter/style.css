@@ -1,0 +1,198 @@
+/* Crystal Shell — Greeter stylesheet
+   Matches the shell's glassmorphism design system. */
+* {
+  font-family: "Inter", sans-serif;
+  color: rgba(255, 255, 255, 0.92);
+  --crystal-accent: #0088FF;
+  --crystal-accent-rgb: 0, 136, 255;
+  --crystal-border: rgba(255, 255, 255, 0.12);
+  --crystal-surface: rgba(255, 255, 255, 0.08);
+  --crystal-radius-lg: 24px;
+  --crystal-radius-md: 16px;
+  --crystal-radius-sm: 10px;
+  --crystal-radius-pill: 9999px;
+}
+
+.greeter-window {
+  background: transparent;
+}
+
+window,
+window > .background,
+window > decoration,
+window > contents {
+  background: transparent;
+  box-shadow: none;
+}
+
+.greeter-clock {
+  font-size: 96px;
+  font-weight: 200;
+  letter-spacing: -4px;
+  color: rgba(255, 255, 255, 0.93);
+}
+
+.greeter-date {
+  font-size: 15px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.3px;
+  margin-top: 2px;
+}
+
+.greeter-card {
+  background: rgba(14, 14, 22, 0.6);
+  border: 1px solid var(--crystal-border);
+  border-radius: var(--crystal-radius-lg);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  padding: 32px 28px 24px;
+  min-width: 340px;
+}
+
+.greeter-avatar {
+  border-radius: 9999px;
+  background: var(--crystal-surface);
+  border: 2px solid var(--crystal-border);
+  padding: 2px;
+}
+
+.greeter-username {
+  font-size: 15px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.75);
+  margin-top: 2px;
+}
+
+.greeter-password,
+passwordentry.greeter-password {
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--crystal-radius-sm);
+  color: rgba(255, 255, 255, 0.92);
+  caret-color: rgba(255, 255, 255, 0.92);
+  padding: 10px 12px;
+  box-shadow: none;
+  min-height: 0;
+  margin-top: 8px;
+}
+
+.greeter-password:focus,
+passwordentry.greeter-password:focus {
+  border-color: rgba(var(--crystal-accent-rgb, 0, 136, 255), 0.5);
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 0 0 3px rgba(0, 136, 255, 0.12);
+}
+
+.greeter-password > text,
+passwordentry.greeter-password > text {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.greeter-password > button,
+passwordentry.greeter-password > button {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.4);
+  min-height: 0;
+  min-width: 0;
+  padding: 4px;
+}
+.greeter-password > button:hover,
+passwordentry.greeter-password > button:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.greeter-login-btn {
+  background: var(--crystal-accent);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--crystal-radius-pill);
+  padding: 10px 24px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  box-shadow: 0 4px 14px rgba(0, 136, 255, 0.3);
+  min-height: 0;
+  margin-top: 4px;
+}
+.greeter-login-btn:hover {
+  background: #1a96ff;
+  box-shadow: 0 4px 18px rgba(0, 136, 255, 0.45);
+}
+.greeter-login-btn:active {
+  background: #006ecc;
+  box-shadow: none;
+}
+.greeter-login-btn:disabled {
+  background: rgba(0, 136, 255, 0.25);
+  color: rgba(255, 255, 255, 0.4);
+  box-shadow: none;
+}
+
+.greeter-session-label {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.45);
+  min-width: 48px;
+}
+
+.greeter-session-drop,
+.greeter-session-drop > button {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--crystal-radius-sm);
+  color: rgba(255, 255, 255, 0.7);
+  padding: 6px 10px;
+  box-shadow: none;
+  font-size: 0.82rem;
+  min-height: 0;
+}
+.greeter-session-drop:hover,
+.greeter-session-drop > button:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.greeter-error {
+  color: #ff6b6b;
+  font-size: 0.82rem;
+  margin-top: 4px;
+}
+
+@keyframes greeter-shake {
+  0%, 100% {
+    margin-left: 0;
+  }
+  20% {
+    margin-left: -8px;
+  }
+  40% {
+    margin-left: 8px;
+  }
+  60% {
+    margin-left: -6px;
+  }
+  80% {
+    margin-left: 6px;
+  }
+}
+.greeter-shake {
+  animation: greeter-shake 0.4s ease;
+}
+
+.greeter-power-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--crystal-radius-pill);
+  color: rgba(255, 255, 255, 0.5);
+  padding: 7px 18px;
+  font-size: 0.82rem;
+  box-shadow: none;
+  min-height: 0;
+}
+.greeter-power-btn:hover {
+  background: rgba(255, 255, 255, 0.11);
+  color: rgba(255, 255, 255, 0.88);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/*# sourceMappingURL=style.css.map */
