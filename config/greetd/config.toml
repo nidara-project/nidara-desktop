@@ -5,5 +5,5 @@
 vt = 1
 
 [default_session]
-command = "Hyprland --config /etc/greetd/hyprland-greeter.conf"
+command = "env HYPRLAND_CMD=start-hyprland Hyprland --config /etc/greetd/hyprland-greeter.conf"
 user = "greeter"
