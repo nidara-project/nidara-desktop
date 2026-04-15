@@ -332,33 +332,17 @@ _detect_dm() {
     echo "none"
 }
 
-_install_regreet() {
-    sudo pacman -S --needed --noconfirm greetd-regreet
-}
-
 ACTIVE_DM=$(_detect_dm)
 if [ "$ACTIVE_DM" = "none" ]; then
     echo "  No display manager detected — installing greetd..."
 
-    _install_regreet
-
     # Install greetd config files (inject detected keyboard layout)
     sudo mkdir -p /etc/greetd
     sudo cp "$REPO_DIR/config/greetd/config.toml" /etc/greetd/config.toml
-    sudo cp "$REPO_DIR/config/greetd/regreet.toml" /etc/greetd/regreet.toml
     sudo sed "s/kb_layout = us/kb_layout = $SYS_KB_LAYOUT/" \
         "$REPO_DIR/config/greetd/hyprland-greeter.conf" \
         | sudo tee /etc/greetd/hyprland-greeter.conf > /dev/null
-    sudo chmod 644 /etc/greetd/config.toml /etc/greetd/regreet.toml /etc/greetd/hyprland-greeter.conf
-
-    # regreet CSS — install to greeter user's GTK4 config dir (gtk.css is loaded automatically)
-    GREETER_HOME=$(getent passwd greeter | cut -d: -f6)
-    if [ -n "$GREETER_HOME" ]; then
-        sudo mkdir -p "$GREETER_HOME/.config/gtk-4.0"
-        sudo cp "$REPO_DIR/defaults/regreet/style.css" "$GREETER_HOME/.config/gtk-4.0/gtk.css"
-        sudo chown -R greeter:greeter "$GREETER_HOME/.config"
-        echo "  [OK] regreet CSS installed to $GREETER_HOME/.config/gtk-4.0/gtk.css"
-    fi
+    sudo chmod 644 /etc/greetd/config.toml /etc/greetd/hyprland-greeter.conf
 
     sudo systemctl enable greetd
     echo "  [OK] greetd enabled."
