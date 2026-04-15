@@ -114,4 +114,6 @@ astal-local/
 restore_history.sh
 CRYSTAL_SHELL_ARCHITECTURE.md
 
-wallpaper
+# wallpaper directory is tracked (default asset shipped with the project)
+!defaults/wallpaper/
+!defaults/wallpaper/*.png
