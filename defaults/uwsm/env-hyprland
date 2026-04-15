@@ -1,0 +1,10 @@
+# Crystal Shell — uwsm environment variables (Hyprland-specific)
+# Only loaded when the Hyprland session starts.
+# Use this for HYPR* and AQ_* variables.
+# Reference: https://wiki.hyprland.org/Configuring/Environment-variables/
+
+# ── GPU selection (uncomment if needed) ───────────────────────────────────────
+# export AQ_DRM_DEVICES=/dev/dri/card1
+
+# ── NVIDIA cursor fix (uncomment if needed) ───────────────────────────────────
+# export HYPR_NO_HARDWARE_CURSORS=1

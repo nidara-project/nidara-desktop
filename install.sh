@@ -30,6 +30,45 @@ echo "  Repo: $REPO_DIR"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
+# System environment detection
+# Reads values the user already set during Arch installation — never asks.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Keyboard layout ─────────────────────────────────────────────────────────────
+# vconsole keymaps mostly match X11/Wayland names, but a few differ.
+_vconsole_to_xkb() {
+    case "$1" in
+        uk)          echo "gb"    ;;  # British: vconsole=uk, XKB=gb
+        us-acentos)  echo "us"    ;;  # Latin US variant → plain us
+        br-abnt2)    echo "br"    ;;
+        *)           echo "$1"    ;;  # All others match directly
+    esac
+}
+
+SYS_KB_LAYOUT="us"
+if [ -f /etc/vconsole.conf ]; then
+    _keymap=$(grep -E "^KEYMAP=" /etc/vconsole.conf | head -1 | cut -d= -f2 | tr -d '"' | tr -d "'")
+    [ -n "$_keymap" ] && SYS_KB_LAYOUT=$(_vconsole_to_xkb "$_keymap")
+fi
+
+# Timezone ────────────────────────────────────────────────────────────────────
+SYS_TIMEZONE="UTC"
+if [ -L /etc/localtime ]; then
+    _tz=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
+    [ -n "$_tz" ] && SYS_TIMEZONE="$_tz"
+fi
+
+# Locale ──────────────────────────────────────────────────────────────────────
+SYS_LOCALE="en_US"
+if [ -f /etc/locale.conf ]; then
+    _lang=$(grep -E "^LANG=" /etc/locale.conf | head -1 | cut -d= -f2 | cut -d. -f1 | tr -d '"' | tr -d "'")
+    [ -n "$_lang" ] && SYS_LOCALE="$_lang"
+fi
+
+echo "  Detected: layout=$SYS_KB_LAYOUT  timezone=$SYS_TIMEZONE  locale=$SYS_LOCALE"
+echo ""
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 1. System dependencies
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[1/7] Installing system dependencies..."
@@ -40,7 +79,7 @@ sudo pacman -Sy --needed --noconfirm \
     intltool scdoc brightnessctl pamixer hyprpicker \
     jq slurp grim wl-clipboard mesa pam \
     git nodejs npm gjs go \
-    accountsservice sddm pavucontrol rust cargo \
+    accountsservice greetd pavucontrol rust cargo \
     hyprland hyprlock hypridle uwsm \
     kitty nautilus dolphin thunar \
     polkit-gnome \
@@ -122,6 +161,11 @@ sudo cp "$REPO_DIR/VERSION" /usr/share/crystal-shell/VERSION
 sudo mkdir -p /usr/share/crystal-shell/config/hypr
 sudo cp -r "$REPO_DIR/config/hypr/." /usr/share/crystal-shell/config/hypr/
 
+# Default wallpaper
+if [ -f "$REPO_DIR/defaults/wallpaper/wallpaper.png" ]; then
+    sudo cp "$REPO_DIR/defaults/wallpaper/wallpaper.png" /usr/share/crystal-shell/wallpaper.png
+fi
+
 # UI bundle + style
 sudo mkdir -p /usr/share/crystal-shell/ui/ags-v3/build
 if [ "$MODE" = "system" ]; then
@@ -176,7 +220,7 @@ else
 fi
 
 # Default JSON configs (never overwrite user's existing files)
-for f in appearance.json widgets.json cc_layout.json region.json; do
+for f in appearance.json widgets.json cc_layout.json; do
     if [ -f "$REPO_DIR/defaults/$f" ] && [ ! -f "$CONFIG_DIR/$f" ]; then
         cp "$REPO_DIR/defaults/$f" "$CONFIG_DIR/$f"
         chown "$REAL_USER" "$CONFIG_DIR/$f"
@@ -184,27 +228,34 @@ for f in appearance.json widgets.json cc_layout.json region.json; do
     fi
 done
 
+# region.json — generated with detected timezone (not copied from defaults)
+if [ ! -f "$CONFIG_DIR/region.json" ]; then
+    cat > "$CONFIG_DIR/region.json" <<JSON
+{
+  "timeFormat": "24h",
+  "dateFormat": "long",
+  "timezone": "$SYS_TIMEZONE",
+  "showSeconds": false
+}
+JSON
+    chown "$REAL_USER" "$CONFIG_DIR/region.json"
+    echo "  [Init] $CONFIG_DIR/region.json (timezone=$SYS_TIMEZONE)"
+fi
+
 # Hyprland user overrides (created once, never overwritten)
 if [ ! -f "$CONFIG_DIR/hyprland-user.conf" ]; then
-    cat > "$CONFIG_DIR/hyprland-user.conf" <<'HYPR'
+    cat > "$CONFIG_DIR/hyprland-user.conf" <<HYPR
 # ── hyprland-user.conf ──────────────────────────────────────────────────────
 # Your personal Hyprland overrides. Crystal Shell updates will never touch this.
-# Add keyboard layout, monitor setup, startup apps, custom keybinds, etc.
+# Add monitor setup, startup apps, custom keybinds, etc.
 #
-# Examples:
-#   input {
-#       kb_layout = es    # Change to your layout (us, uk, es, latam...)
-#   }
-#   monitor = HDMI-A-1, 1920x1080@60, 0x0, 1
-#   bind = SUPER, F1, exec, my-app
-#   exec-once = my-custom-daemon
-#
-# NVIDIA users — uncomment if needed:
-#   env = LIBVA_DRIVER_NAME,nvidia
-#   env = GBM_BACKEND,nvidia-drm
-#   env = __GLX_VENDOR_LIBRARY_NAME,nvidia
-#   cursor { no_hardware_cursors = true }
+# Note: environment variables go in ~/.config/uwsm/env (toolkit/NVIDIA)
+# or ~/.config/uwsm/env-hyprland (HYPR* / AQ_* variables) — not here.
 # ─────────────────────────────────────────────────────────────────────────────
+
+input {
+    kb_layout = $SYS_KB_LAYOUT
+}
 HYPR
     echo "  [Init] $CONFIG_DIR/hyprland-user.conf"
 fi
@@ -237,9 +288,63 @@ for daemon in hypridle hyprlock; do
     echo "  [Symlink] $LINK -> $TARGET"
 done
 
-# ── SDDM ──────────────────────────────────────────────────────────────────────
-echo "  Enabling SDDM..."
-sudo systemctl enable sddm 2>/dev/null || true
+# uwsm environment files (created once, never overwritten)
+UWSM_DIR="${REAL_HOME}/.config/uwsm"
+mkdir -p "$UWSM_DIR"
+chown "$REAL_USER" "$UWSM_DIR"
+for f in env env-hyprland; do
+    if [ ! -f "$UWSM_DIR/$f" ]; then
+        cp "$REPO_DIR/defaults/uwsm/$f" "$UWSM_DIR/$f"
+        chown "$REAL_USER" "$UWSM_DIR/$f"
+        echo "  [Init] $UWSM_DIR/$f"
+    fi
+done
+
+# ── Display manager ───────────────────────────────────────────────────────────
+# Only install and enable greetd if no other display manager is already active.
+# If the user already has sddm/gdm/lightdm/etc. enabled we leave it untouched.
+_detect_dm() {
+    for dm in sddm gdm lightdm lxdm xdm slim ly greetd; do
+        if systemctl is-enabled "$dm" 2>/dev/null | grep -qE "^enabled"; then
+            echo "$dm"; return 0
+        fi
+    done
+    echo "none"
+}
+
+_install_regreet() {
+    sudo pacman -S --needed --noconfirm greetd-regreet
+}
+
+ACTIVE_DM=$(_detect_dm)
+if [ "$ACTIVE_DM" = "none" ]; then
+    echo "  No display manager detected — installing greetd..."
+
+    _install_regreet
+
+    # Install greetd config files (inject detected keyboard layout)
+    sudo mkdir -p /etc/greetd
+    sudo cp "$REPO_DIR/config/greetd/config.toml" /etc/greetd/config.toml
+    sudo cp "$REPO_DIR/config/greetd/regreet.toml" /etc/greetd/regreet.toml
+    sudo sed "s/kb_layout = us/kb_layout = $SYS_KB_LAYOUT/" \
+        "$REPO_DIR/config/greetd/hyprland-greeter.conf" \
+        | sudo tee /etc/greetd/hyprland-greeter.conf > /dev/null
+    sudo chmod 644 /etc/greetd/config.toml /etc/greetd/regreet.toml /etc/greetd/hyprland-greeter.conf
+
+    # regreet CSS — install to greeter user's GTK4 config dir (gtk.css is loaded automatically)
+    GREETER_HOME=$(getent passwd greeter | cut -d: -f6)
+    if [ -n "$GREETER_HOME" ]; then
+        sudo mkdir -p "$GREETER_HOME/.config/gtk-4.0"
+        sudo cp "$REPO_DIR/defaults/regreet/style.css" "$GREETER_HOME/.config/gtk-4.0/gtk.css"
+        sudo chown -R greeter:greeter "$GREETER_HOME/.config"
+        echo "  [OK] regreet CSS installed to $GREETER_HOME/.config/gtk-4.0/gtk.css"
+    fi
+
+    sudo systemctl enable greetd
+    echo "  [OK] greetd enabled."
+else
+    echo "  Display manager '$ACTIVE_DM' already enabled — skipping greetd setup."
+fi
 
 # ── Audio services ────────────────────────────────────────────────────────────
 echo "  Enabling audio services..."

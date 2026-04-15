@@ -1,0 +1,13 @@
+# regreet configuration for Crystal Shell
+# Installed to /etc/greetd/regreet.toml
+
+[background]
+path = ""
+fit = "Cover"
+
+[GTK]
+application_prefer_dark_theme = true
+
+[commands]
+reboot = [ "systemctl", "reboot" ]
+poweroff = [ "systemctl", "poweroff" ]

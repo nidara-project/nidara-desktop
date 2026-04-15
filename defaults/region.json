@@ -1,6 +1,6 @@
 {
   "timeFormat": "24h",
   "dateFormat": "long",
-  "timezone": "Europe/Madrid",
+  "timezone": "UTC",
   "showSeconds": false
 }

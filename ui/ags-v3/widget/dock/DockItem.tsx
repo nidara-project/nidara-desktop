@@ -444,7 +444,7 @@ export function DockItem(
     motion.connect("enter", () => {
         if (tooltipTimeout) GLib.source_remove(tooltipTimeout)
     })
-    motion.connect("motion", (controller, x, y) => {
+    motion.connect("motion", (_controller, _x, _y) => {
         if (popover && popover.visible) return // Don't show tooltip if menu is open
 
         if (!tooltip.visible && !tooltipTimeout) {
@@ -586,6 +586,7 @@ export function DockItem(
         iconBox.insert_action_group("dock", actionGroup)
         popover = Gtk.PopoverMenu.new_from_model(menuModel) as unknown as Gtk.Popover
         popover.set_has_tooltip(false)
+        ;(popover as any).position = tooltipPosition
         popover.set_parent(iconBox)
 
         popover.connect("notify::visible", () => {

@@ -1,0 +1,197 @@
+/* Crystal Shell — regreet greeter stylesheet
+   Selectors verified via GTK Inspector.
+   Applied via ~/.config/gtk-4.0/gtk.css on the greeter user. */
+
+/* ── Global ─────────────────────────────────────────────────────────────────── */
+* {
+    font-family: "Inter", sans-serif;
+    color: rgba(255, 255, 255, 0.88);
+}
+
+/* ── Window + overlay: fully transparent ────────────────────────────────────── */
+window,
+window > .background,
+window > decoration,
+window > contents,
+overlay {
+    background: transparent;
+    box-shadow: none;
+    border: none;
+}
+
+/* ── Login card (GtkFrame > GtkGrid) ─────────────────────────────────────────── */
+overlay > frame {
+    background: rgba(14, 14, 22, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 20px;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    padding: 8px;
+}
+
+/* Remove GtkFrame's own border line */
+overlay > frame > border {
+    border: none;
+}
+
+/* ── Clock frame: no background ──────────────────────────────────────────────── */
+overlay > frame:last-of-type {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    margin-top: 48px;
+}
+
+/* ── Clock label ─────────────────────────────────────────────────────────────── */
+overlay > frame:last-of-type label {
+    font-size: 5rem;
+    font-weight: 200;
+    color: rgba(255, 255, 255, 0.92);
+    letter-spacing: -3px;
+}
+
+/* ── Grid inside login card ──────────────────────────────────────────────────── */
+frame > grid {
+    padding: 28px 32px;
+    row-spacing: 10px;
+    column-spacing: 8px;
+}
+
+/* ── Labels inside card ──────────────────────────────────────────────────────── */
+frame > grid > label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.55);
+}
+
+/* ── User / session ComboBox ─────────────────────────────────────────────────── */
+comboboxtext > button,
+combobox > button {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.88);
+    padding: 8px 12px;
+    box-shadow: none;
+    min-height: 0;
+}
+
+comboboxtext > button:hover,
+combobox > button:hover {
+    background: rgba(255, 255, 255, 0.11);
+}
+
+/* ── Password entry ──────────────────────────────────────────────────────────── */
+passwordentry,
+entry {
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.92);
+    caret-color: rgba(255, 255, 255, 0.92);
+    padding: 9px 12px;
+    box-shadow: none;
+    outline: none;
+    min-height: 0;
+}
+
+passwordentry:focus,
+entry:focus {
+    border-color: rgba(0, 136, 255, 0.55);
+    background: rgba(255, 255, 255, 0.09);
+    box-shadow: 0 0 0 3px rgba(0, 136, 255, 0.12);
+    outline: none;
+}
+
+passwordentry > text,
+entry > text {
+    color: rgba(255, 255, 255, 0.92);
+}
+
+/* ── Show/hide password toggle ───────────────────────────────────────────────── */
+passwordentry > button,
+entry > button {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    color: rgba(255, 255, 255, 0.4);
+    padding: 4px;
+    min-height: 0;
+    min-width: 0;
+}
+
+passwordentry > button:hover,
+entry > button:hover {
+    color: rgba(255, 255, 255, 0.7);
+    background: transparent;
+}
+
+/* ── Login button ────────────────────────────────────────────────────────────── */
+button.suggested-action {
+    background: #0088FF;
+    color: #ffffff;
+    border: none;
+    border-radius: 9999px;
+    padding: 9px 24px;
+    font-weight: 600;
+    font-size: 0.88rem;
+    box-shadow: 0 4px 14px rgba(0, 136, 255, 0.3);
+    min-height: 0;
+}
+
+button.suggested-action:hover {
+    background: #1a96ff;
+    box-shadow: 0 4px 18px rgba(0, 136, 255, 0.45);
+}
+
+button.suggested-action:active {
+    background: #006ecc;
+    box-shadow: none;
+}
+
+button.suggested-action:disabled {
+    background: rgba(0, 136, 255, 0.25);
+    color: rgba(255, 255, 255, 0.4);
+    box-shadow: none;
+}
+
+/* ── InfoBar (error messages) ────────────────────────────────────────────────── */
+/* Hidden by default — only visible when revealer expands */
+infobar {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    min-height: 0;
+}
+
+revealer > box infobar {
+    background: rgba(255, 69, 58, 0.1);
+    border: 1px solid rgba(255, 69, 58, 0.2);
+    border-radius: 10px;
+    padding: 6px 12px;
+}
+
+revealer > box infobar label {
+    color: #ff6b6b;
+    font-size: 0.8rem;
+}
+
+/* ── Power buttons (bottom bar) ──────────────────────────────────────────────── */
+overlay > box button {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 9999px;
+    color: rgba(255, 255, 255, 0.55);
+    padding: 7px 18px;
+    font-size: 0.82rem;
+    box-shadow: none;
+    transition: all 0.15s ease;
+    min-height: 0;
+}
+
+overlay > box button:hover {
+    background: rgba(255, 255, 255, 0.11);
+    color: rgba(255, 255, 255, 0.88);
+    border-color: rgba(255, 255, 255, 0.18);
+}
