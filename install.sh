@@ -80,7 +80,7 @@ sudo pacman -Sy --needed --noconfirm \
     jq slurp grim wl-clipboard mesa pam \
     git nodejs npm gjs go \
     accountsservice greetd pavucontrol rust cargo \
-    hyprland hyprlock hypridle uwsm \
+    hyprland hypridle uwsm \
     kitty nautilus dolphin thunar \
     polkit-gnome \
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland \
@@ -108,6 +108,7 @@ for comp in \
     "lib/apps" "lib/hyprland" "lib/mpris" "lib/network" \
     "lib/battery" "lib/notifd" "lib/bluetooth" "lib/tray" \
     "lib/greet" \
+    "lib/auth" \
     "lang/gjs"
 do
     echo "  Building $comp..."
@@ -160,6 +161,14 @@ if [ "$MODE" = "system" ]; then
     echo "  [OK] Greeter bundle: $REPO_DIR/ui/greeter/build/crystal-greeter"
 fi
 
+echo "  Building lockscreen..."
+cd "$REPO_DIR/ui/lockscreen"
+if [ "$MODE" = "system" ]; then
+    mkdir -p build
+    ags bundle app.ts build/crystal-lock
+    echo "  [OK] Lockscreen bundle: $REPO_DIR/ui/lockscreen/build/crystal-lock"
+fi
+
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Install system files
 # ─────────────────────────────────────────────────────────────────────────────
@@ -192,11 +201,18 @@ if [ "$MODE" = "system" ]; then
 fi
 sudo cp "$REPO_DIR/ui/greeter/style.css" /usr/share/crystal-shell/ui/greeter/
 
+# Lockscreen bundle (shares greeter's style.css)
+sudo mkdir -p /usr/share/crystal-shell/ui/lockscreen/build
+if [ "$MODE" = "system" ]; then
+    sudo cp "$REPO_DIR/ui/lockscreen/build/crystal-lock" /usr/share/crystal-shell/ui/lockscreen/build/
+fi
+
 # Session wrapper scripts
 sudo cp "$REPO_DIR/scripts/crystal-shell"    /usr/bin/crystal-shell
 sudo cp "$REPO_DIR/scripts/crystal-shell-ui" /usr/bin/crystal-shell-ui
 sudo cp "$REPO_DIR/scripts/crystal-greeter"  /usr/bin/crystal-greeter
-sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter
+sudo cp "$REPO_DIR/scripts/crystal-lock"     /usr/bin/crystal-lock
+sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock
 
 # Wayland session entry
 sudo mkdir -p /usr/share/wayland-sessions
@@ -291,7 +307,7 @@ fi
 # System mode: copy to $CONFIG_DIR once (never overwritten), symlink from there
 mkdir -p "${REAL_HOME}/.config/hypr"
 
-for daemon in hypridle hyprlock; do
+for daemon in hypridle; do
     LINK="${REAL_HOME}/.config/hypr/${daemon}.conf"
     if [ "$MODE" = "dev" ]; then
         TARGET="$REPO_DIR/config/hypr/${daemon}.conf"

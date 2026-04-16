@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "baseUrl": ".",
+    "checkJs": false,
+    "jsx": "react",
+    "jsxFactory": "astal.jsx",
+    "jsxFragmentFactory": "astal.Fragment",
+    "module": "ES2022",
+    "moduleResolution": "node",
+    "noEmit": true,
+    "paths": {
+      "ags": ["/usr/local/share/ags/js"],
+      "ags/*": ["/usr/local/share/ags/js/*"],
+      "ags/gtk4": ["/usr/local/share/ags/js/lib/gtk4"],
+      "ags/gtk4/app": ["/usr/local/share/ags/js/lib/gtk4/app.ts"],
+      "ags/time": ["/usr/local/share/ags/js/lib/time.ts"],
+      "ags/process": ["/usr/local/share/ags/js/lib/process.ts"],
+      "ags/file": ["/usr/local/share/ags/js/lib/file.ts"]
+    },
+    "skipLibCheck": true,
+    "strict": false,
+    "target": "ES2020"
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.d.ts",
+    "gi.d.ts"
+  ]
+}

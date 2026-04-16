@@ -1,0 +1,26 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# crystal-lock — Crystal Shell lock screen launcher
+# Installed to /usr/bin/crystal-lock
+# Called by hypridle, loginctl lock-session, and Hyprland keybinds
+# ─────────────────────────────────────────────────────────────────────────────
+
+BUNDLE="/usr/share/crystal-shell/ui/lockscreen/build/crystal-lock"
+LOG="/tmp/crystal-lock.log"
+
+export GDK_BACKEND=wayland
+export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+
+# Prevent multiple instances
+if pgrep -x crystal-lock > /dev/null 2>&1; then
+    exit 0
+fi
+
+if [ -x "$BUNDLE" ]; then
+    cd /usr/share/crystal-shell/ui/lockscreen
+    exec "$BUNDLE" >> "$LOG" 2>&1
+fi
+
+echo "[$(date '+%H:%M:%S')] crystal-lock: ERROR — bundle not found at $BUNDLE" | tee -a "$LOG"
+exit 1
