@@ -13,8 +13,9 @@ export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.
 export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export LD_PRELOAD="/usr/lib/libgtk4-layer-shell.so${LD_PRELOAD:+:$LD_PRELOAD}"
 
-# Prevent multiple instances
-if pgrep -x crystal-lock > /dev/null 2>&1; then
+# Prevent multiple instances (exclude own PID — bash names itself after the script)
+SELF=$$
+if pgrep -x crystal-lock | grep -qv "^${SELF}$"; then
     exit 0
 fi
 
