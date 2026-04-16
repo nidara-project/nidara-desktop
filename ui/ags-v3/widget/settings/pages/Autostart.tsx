@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { t } from "../../../core/i18n"
 
 // ── Config path ───────────────────────────────────────────────────────────────
 const USER_CONF = `${GLib.get_home_dir()}/.config/hypr/hyprland-user.conf`
@@ -65,9 +66,9 @@ const writeEntries = (newEntries: AutostartEntry[]) => {
 
 export default function AutostartPage() {
     const page = pageBox("autostart-page")
-    page.append(pageHeader("Inicio automático", "Programas que se inician con Hyprland"))
+    page.append(pageHeader(t("settings.autostart.page.title.inicio-automatico"), t("settings.autostart.page.subtitle.programas-que-se-inician-con-hyprland")))
 
-    const { box, listBox } = listGroup("Entradas exec-once en hyprland-user.conf")
+    const { box, listBox } = listGroup(t("settings.autostart.group.entradas-exec-once-en-hyprland-user-conf"))
     page.append(box)
 
     let entries: AutostartEntry[] = parseEntries(readConf())
@@ -79,7 +80,7 @@ export default function AutostartPage() {
         if (entries.length === 0) {
             const emptyRow = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
             emptyRow.set_child(new Gtk.Label({
-                label: "Sin entradas exec-once en hyprland-user.conf",
+                label: t("settings.autostart.label.sin-entradas-exec-once-en-hyprland-user-"),
                 css_classes: ["settings-placeholder"],
                 margin_top: 14,
                 margin_bottom: 14,
@@ -107,7 +108,7 @@ export default function AutostartPage() {
                     child: new Gtk.Image({ icon_name: "edit-delete-symbolic", pixel_size: 16 }),
                     css_classes: ["destructive-action", "settings-row-action"],
                     valign: Gtk.Align.CENTER,
-                    tooltip_text: "Eliminar",
+                    tooltip_text: t("settings.autostart.tooltip.eliminar"),
                 })
                 deleteBtn.connect("clicked", () => {
                     entries.splice(idx, 1)
@@ -152,7 +153,7 @@ export default function AutostartPage() {
         })
 
         const addBtn = new Gtk.Button({
-            label: "Añadir",
+            label: t("settings.autostart.label.anadir"),
             css_classes: ["suggested-action"],
             valign: Gtk.Align.CENTER,
             sensitive: false,
@@ -193,7 +194,7 @@ export default function AutostartPage() {
 
     // Info note
     const note = new Gtk.Label({
-        label: "Los cambios se aplican la próxima vez que Hyprland se inicia.",
+        label: t("settings.autostart.label.los-cambios-se-aplican-la-proxima-vez-qu"),
         css_classes: ["settings-row-subtitle"],
         halign: Gtk.Align.START,
         margin_start: 10,

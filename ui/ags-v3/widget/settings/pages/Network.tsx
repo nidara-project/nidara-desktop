@@ -1,13 +1,14 @@
 import { Gtk } from "ags/gtk4"
 import AstalNetwork from "gi://AstalNetwork"
 import { listGroup, createRow, staticLabel, pageHeader, pageBox } from "../SettingsHelpers"
+import { t } from "../../../core/i18n"
 
 export default function NetworkPage() {
     const network = AstalNetwork.get_default()
-    if (!network) return new Gtk.Label({ label: "Servicio de Red no disponible" })
+    if (!network) return new Gtk.Label({ label: t("settings.network.label.servicio-de-red-no-disponible") })
 
     const page = pageBox("network-page")
-    page.append(pageHeader("Red", "Administra las conexiones de red y parámetros técnicos"))
+    page.append(pageHeader(t("settings.network.page.title.red"), t("settings.network.page.subtitle.administra-las-conexiones-de-red-y-param")))
 
     const getIp = (service: any) => {
         if (!service) return "None"
@@ -23,7 +24,7 @@ export default function NetworkPage() {
 
     // ── Ethernet ──
     if (network.wired) {
-        const wiredGroup = listGroup("Cableada (Ethernet)")
+        const wiredGroup = listGroup(t("settings.network.group.cableada-ethernet"))
 
         const wiredStatus = staticLabel(
             network.wired.internet === AstalNetwork.Internet.CONNECTED ? "Conectada" : "Desconectada"
@@ -40,19 +41,19 @@ export default function NetworkPage() {
         network.wired.connect("notify::internet", updateWired)
         network.wired.connect("notify::ip4-address", updateWired)
 
-        wiredGroup.listBox.append(createRow("Conexión Ethernet", "Estado actual de la interfaz física", wiredStatus))
-        wiredGroup.listBox.append(createRow("Interfaz", "Nombre del dispositivo en el núcleo", interfaceLabel))
-        wiredGroup.listBox.append(createRow("Dirección IPv4", "Identificador único en la red local", ipLabel))
+        wiredGroup.listBox.append(createRow(t("settings.network.row.label.conexion-ethernet"), t("settings.network.row.desc.estado-actual-de-la-interfaz-fisica"), wiredStatus))
+        wiredGroup.listBox.append(createRow(t("settings.network.row.label.interfaz"), t("settings.network.row.desc.nombre-del-dispositivo-en-el-nucleo"), interfaceLabel))
+        wiredGroup.listBox.append(createRow(t("settings.network.row.label.direccion-ipv4"), t("settings.network.row.desc.identificador-unico-en-la-red-local"), ipLabel))
         page.append(wiredGroup.box)
     }
 
     // ── Wi-Fi ──
     if (network.wifi && network.wifi.get_devices().length > 0) {
-        const wifiGroup = listGroup("Wi-Fi")
+        const wifiGroup = listGroup(t("settings.network.group.wi-fi"))
 
         const wifiSwitch = new Gtk.Switch({ active: network.wifi.enabled, valign: Gtk.Align.CENTER })
         wifiSwitch.connect("notify::active", () => { network.wifi.enabled = wifiSwitch.active })
-        wifiGroup.listBox.append(createRow("Activar Wi-Fi", "Habilita la sincronización del espectro inalámbrico", wifiSwitch))
+        wifiGroup.listBox.append(createRow(t("settings.network.row.label.activar-wi-fi"), t("settings.network.row.desc.habilita-la-sincronizacion-del-espectro-"), wifiSwitch))
 
         const wifiSsidLabel = staticLabel("---")
         const wifiIpLabel = staticLabel("---")
@@ -71,14 +72,14 @@ export default function NetworkPage() {
         network.wifi.connect("notify::ip4-address", updateWifi)
         updateWifi()
 
-        wifiGroup.listBox.append(createRow("Interfaz", "Nombre del adaptador inalámbrico", wifiInterface))
-        wifiGroup.listBox.append(createRow("Punto de Acceso", "Red conectada actualmente", wifiSsidLabel))
-        wifiGroup.listBox.append(createRow("Dirección IP", "Asignación actual de la red inalámbrica", wifiIpLabel))
-        wifiGroup.listBox.append(createRow("Velocidad", "Rendimiento máximo teórico", wifiSpeedLabel))
+        wifiGroup.listBox.append(createRow(t("settings.network.row.label.interfaz"), t("settings.network.row.desc.nombre-del-adaptador-inalambrico"), wifiInterface))
+        wifiGroup.listBox.append(createRow(t("settings.network.row.label.punto-de-acceso"), t("settings.network.row.desc.red-conectada-actualmente"), wifiSsidLabel))
+        wifiGroup.listBox.append(createRow(t("settings.network.row.label.direccion-ip"), t("settings.network.row.desc.asignacion-actual-de-la-red-inalambrica"), wifiIpLabel))
+        wifiGroup.listBox.append(createRow(t("settings.network.row.label.velocidad"), t("settings.network.row.desc.rendimiento-maximo-teorico"), wifiSpeedLabel))
         page.append(wifiGroup.box)
 
         // AP List
-        const apListGroup = listGroup("Puntos de Acceso Cercanos")
+        const apListGroup = listGroup(t("settings.network.group.puntos-de-acceso-cercanos"))
         const refreshAps = () => {
             if (!network.wifi) return
             let child = apListGroup.listBox.get_first_child()
@@ -103,9 +104,9 @@ export default function NetworkPage() {
         page.append(apListGroup.box)
 
     } else {
-        const noWifiGroup = listGroup("Inalámbrica")
+        const noWifiGroup = listGroup(t("settings.network.group.inalambrica"))
         noWifiGroup.listBox.append(
-            createRow("Estado del Hardware", "No se encontró ningún adaptador compatible",
+            createRow(t("settings.network.row.label.estado-del-hardware"), t("settings.network.row.desc.no-se-encontro-ningun-adaptador-compatib"),
                 staticLabel("Hardware Wi-Fi no detectado"))
         )
         page.append(noWifiGroup.box)

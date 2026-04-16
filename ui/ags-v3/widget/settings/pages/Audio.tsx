@@ -1,16 +1,17 @@
 import { Gtk } from "ags/gtk4"
 import AstalWp from "gi://AstalWp"
 import { listGroup, pageHeader, pageBox } from "../SettingsHelpers"
+import { t } from "../../../core/i18n"
 
 export default function AudioPage() {
     const audio = AstalWp.get_default()?.audio
-    if (!audio) return new Gtk.Label({ label: "Servicio de Audio no disponible" })
+    if (!audio) return new Gtk.Label({ label: t("settings.audio.label.servicio-de-audio-no-disponible") })
 
     const page = pageBox("audio-page")
-    page.append(pageHeader("Sonido", "Administra tus dispositivos de entrada y salida"))
+    page.append(pageHeader(t("settings.audio.page.title.sonido"), t("settings.audio.page.subtitle.administra-tus-dispositivos-de-entrada-y")))
 
-    const speakerGroup = listGroup("Dispositivos de Salida")
-    const micGroup = listGroup("Entrada (Micrófonos)")
+    const speakerGroup = listGroup(t("settings.audio.group.dispositivos-de-salida"))
+    const micGroup = listGroup(t("settings.audio.group.entrada-microfonos"))
 
     const createDeviceRow = (endpoint: any, isMic: boolean) => {
         const box = new Gtk.Box({

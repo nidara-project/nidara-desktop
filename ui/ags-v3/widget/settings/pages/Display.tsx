@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import AstalHyprland from "gi://AstalHyprland"
 import { execAsync } from "ags/process"
 import { listGroup, createRow, pageHeader, pageBox, staticLabel } from "../SettingsHelpers"
+import { t } from "../../../core/i18n"
 
 /**
  * Parses a monitor name and returns a friendly label.
@@ -38,7 +39,7 @@ function buildMonitorSection(mon: any): Gtk.Widget {
     const { box, listBox } = listGroup(monitorLabel(name))
 
     // Current mode (static info)
-    listBox.append(createRow("Resolución activa", "Modo actual", staticLabel(currentMode(mon))))
+    listBox.append(createRow(t("settings.display.row.label.resolucion-activa"), t("settings.display.row.desc.modo-actual"), staticLabel(currentMode(mon))))
 
     // Scale
     const currentScale = String(Math.round((mon.scale ?? 1.0) * 100) / 100)
@@ -57,11 +58,11 @@ function buildMonitorSection(mon: any): Gtk.Widget {
         ]).catch(e => console.error("[Display] scale change failed:", e))
     })
 
-    listBox.append(createRow("Escala", "Factor de escala de la pantalla", drp))
+    listBox.append(createRow(t("settings.display.row.label.escala"), t("settings.display.row.desc.factor-de-escala-de-la-pantalla"), drp))
 
     // Make/model info
     if (description) {
-        listBox.append(createRow("Modelo", "Identificador del monitor", staticLabel(description)))
+        listBox.append(createRow(t("settings.display.row.label.modelo"), t("settings.display.row.desc.identificador-del-monitor"), staticLabel(description)))
     }
 
     // Transform / rotation — common values
@@ -86,7 +87,7 @@ function buildMonitorSection(mon: any): Gtk.Widget {
         ]).catch(e => console.error("[Display] rotation change failed:", e))
     })
 
-    listBox.append(createRow("Rotación", "Orientación de la pantalla", rotDrp))
+    listBox.append(createRow(t("settings.display.row.label.rotacion"), t("settings.display.row.desc.orientacion-de-la-pantalla"), rotDrp))
 
     // VRR (Variable Refresh Rate) — per monitor
     // vrr values: 0=off, 1=on (fullscreen), 2=fullscreen+window
@@ -102,7 +103,7 @@ function buildMonitorSection(mon: any): Gtk.Widget {
             .catch(e => console.error("[Display] vrr change failed:", e))
     })
 
-    listBox.append(createRow("VRR / FreeSync", "Tasa de refresco variable (requiere pantalla compatible)", vrrDrp))
+    listBox.append(createRow(t("settings.display.row.label.vrr-freesync"), t("settings.display.row.desc.tasa-de-refresco-variable-requiere-panta"), vrrDrp))
 
     box.append(listBox)
     return box
@@ -110,12 +111,12 @@ function buildMonitorSection(mon: any): Gtk.Widget {
 
 export default function DisplayPage() {
     const page = pageBox("display-page")
-    page.append(pageHeader("Pantalla", "Configura resolución, escala y orientación de tus monitores"))
+    page.append(pageHeader(t("settings.display.page.title.pantalla"), t("settings.display.page.subtitle.configura-resolucion-escala-y-orientacio")))
 
     const hypr = AstalHyprland.get_default()
     if (!hypr) {
         const err = new Gtk.Label({
-            label: "Servicio Hyprland no disponible",
+            label: t("settings.display.label.servicio-hyprland-no-disponible"),
             css_classes: ["settings-placeholder"],
             margin_top: 40,
         })
@@ -127,7 +128,7 @@ export default function DisplayPage() {
 
     if (monitors.length === 0) {
         page.append(new Gtk.Label({
-            label: "No se detectaron monitores.",
+            label: t("settings.display.label.no-se-detectaron-monitores"),
             css_classes: ["settings-placeholder"],
             margin_top: 40,
         }))
@@ -141,8 +142,8 @@ export default function DisplayPage() {
     // Note about persistence
     const { box: noteBox, listBox: noteList } = listGroup("")
     noteList.append(createRow(
-        "Cambios temporales",
-        "Los cambios se aplican en vivo pero no persisten. Añádelos a hyprland-user.conf para hacerlos permanentes.",
+        t("settings.display.row.label.cambios-temporales"),
+        t("settings.display.row.desc.los-cambios-se-aplican-en-vivo-pero-no-p"),
         new Gtk.Image({ icon_name: "dialog-information-symbolic", pixel_size: 18, opacity: 0.6, valign: Gtk.Align.CENTER })
     ))
     noteBox.append(noteList)

@@ -1,0 +1,882 @@
+{
+  "settings.about.group.crystal-shell": {
+    "value": "Crystal Shell",
+    "file": "about",
+    "ctx": "group"
+  },
+  "settings.about.group.entorno": {
+    "value": "Entorno",
+    "file": "about",
+    "ctx": "group"
+  },
+  "settings.about.group.sistema": {
+    "value": "Sistema",
+    "file": "about",
+    "ctx": "group"
+  },
+  "settings.about.page.subtitle.informacion-del-sistema-y-version-de-cry": {
+    "value": "Información del sistema y versión de Crystal Shell",
+    "file": "about",
+    "ctx": "page.subtitle"
+  },
+  "settings.about.page.title.acerca-de": {
+    "value": "Acerca de",
+    "file": "about",
+    "ctx": "page.title"
+  },
+  "settings.about.row.desc.ags-v3-gjs-gtk4": {
+    "value": "AGS v3 / GJS + GTK4",
+    "file": "about",
+    "ctx": "row.desc"
+  },
+  "settings.about.row.desc.desde-el-ultimo-arranque": {
+    "value": "Desde el último arranque",
+    "file": "about",
+    "ctx": "row.desc"
+  },
+  "settings.about.row.desc.gestor-de-ventanas": {
+    "value": "Gestor de ventanas",
+    "file": "about",
+    "ctx": "row.desc"
+  },
+  "settings.about.row.desc.procesador": {
+    "value": "Procesador",
+    "file": "about",
+    "ctx": "row.desc"
+  },
+  "settings.about.row.desc.tipo-de-sesion": {
+    "value": "Tipo de sesión",
+    "file": "about",
+    "ctx": "row.desc"
+  },
+  "settings.about.row.desc.total-instalada": {
+    "value": "Total instalada",
+    "file": "about",
+    "ctx": "row.desc"
+  },
+  "settings.about.row.desc.version-del-compositor": {
+    "value": "Versión del compositor",
+    "file": "about",
+    "ctx": "row.desc"
+  },
+  "settings.about.row.desc.version-del-kernel-de-linux": {
+    "value": "Versión del kernel de Linux",
+    "file": "about",
+    "ctx": "row.desc"
+  },
+  "settings.about.row.label.cpu": {
+    "value": "CPU",
+    "file": "about",
+    "ctx": "row.label"
+  },
+  "settings.about.row.label.escritorio": {
+    "value": "Escritorio",
+    "file": "about",
+    "ctx": "row.label"
+  },
+  "settings.about.row.label.hyprland": {
+    "value": "Hyprland",
+    "file": "about",
+    "ctx": "row.label"
+  },
+  "settings.about.row.label.kernel": {
+    "value": "Kernel",
+    "file": "about",
+    "ctx": "row.label"
+  },
+  "settings.about.row.label.memoria-ram": {
+    "value": "Memoria RAM",
+    "file": "about",
+    "ctx": "row.label"
+  },
+  "settings.about.row.label.protocolo-grafico": {
+    "value": "Protocolo gráfico",
+    "file": "about",
+    "ctx": "row.label"
+  },
+  "settings.about.row.label.shell": {
+    "value": "Shell",
+    "file": "about",
+    "ctx": "row.label"
+  },
+  "settings.about.row.label.sistema-operativo": {
+    "value": "Sistema Operativo",
+    "file": "about",
+    "ctx": "row.label"
+  },
+  "settings.about.row.label.tiempo-activo": {
+    "value": "Tiempo activo",
+    "file": "about",
+    "ctx": "row.label"
+  },
+  "settings.about.row.label.version": {
+    "value": "Versión",
+    "file": "about",
+    "ctx": "row.label"
+  },
+  "settings.appearance.group.diseno-base": {
+    "value": "Diseño Base",
+    "file": "appearance",
+    "ctx": "group"
+  },
+  "settings.appearance.group.fondo-de-pantalla": {
+    "value": "Fondo de Pantalla",
+    "file": "appearance",
+    "ctx": "group"
+  },
+  "settings.appearance.group.recursos-del-sistema": {
+    "value": "Recursos del Sistema",
+    "file": "appearance",
+    "ctx": "group"
+  },
+  "settings.appearance.label.explorar": {
+    "value": "Explorar...",
+    "file": "appearance",
+    "ctx": "label"
+  },
+  "settings.appearance.page.subtitle.personaliza-el-alma-visual-de-tu-sistema": {
+    "value": "Personaliza el alma visual de tu sistema Crystal Shell",
+    "file": "appearance",
+    "ctx": "page.subtitle"
+  },
+  "settings.appearance.page.title.apariencia": {
+    "value": "Apariencia",
+    "file": "appearance",
+    "ctx": "page.title"
+  },
+  "settings.appearance.row.desc.controla-la-permeabilidad-de-la-luz-en-l": {
+    "value": "Controla la permeabilidad de la luz en las ventanas",
+    "file": "appearance",
+    "ctx": "row.desc"
+  },
+  "settings.appearance.row.desc.define-el-tono-vibrante-de-la-interfaz": {
+    "value": "Define el tono vibrante de la interfaz",
+    "file": "appearance",
+    "ctx": "row.desc"
+  },
+  "settings.appearance.row.desc.efecto-al-cambiar-el-fondo-de-pantalla": {
+    "value": "Efecto al cambiar el fondo de pantalla",
+    "file": "appearance",
+    "ctx": "row.desc"
+  },
+  "settings.appearance.row.desc.elige-el-fondo-de-pantalla-desde-tus-arc": {
+    "value": "Elige el fondo de pantalla desde tus archivos",
+    "file": "appearance",
+    "ctx": "row.desc"
+  },
+  "settings.appearance.row.desc.estetica-estructural-de-aplicaciones": {
+    "value": "Estética estructural de aplicaciones",
+    "file": "appearance",
+    "ctx": "row.desc"
+  },
+  "settings.appearance.row.desc.estilo-del-puntero-de-precision": {
+    "value": "Estilo del puntero de precisión",
+    "file": "appearance",
+    "ctx": "row.desc"
+  },
+  "settings.appearance.row.desc.paquete-de-glifos-del-sistema": {
+    "value": "Paquete de glifos del sistema",
+    "file": "appearance",
+    "ctx": "row.desc"
+  },
+  "settings.appearance.row.desc.sincroniza-el-estilo-con-apps-qt-kde": {
+    "value": "Sincroniza el estilo con apps Qt/KDE",
+    "file": "appearance",
+    "ctx": "row.desc"
+  },
+  "settings.appearance.row.desc.sincroniza-el-nucleo-visual-con-la-noche": {
+    "value": "Sincroniza el núcleo visual con la noche",
+    "file": "appearance",
+    "ctx": "row.desc"
+  },
+  "settings.appearance.row.label.color-de-acento": {
+    "value": "Color de Acento",
+    "file": "appearance",
+    "ctx": "row.label"
+  },
+  "settings.appearance.row.label.cursor": {
+    "value": "Cursor",
+    "file": "appearance",
+    "ctx": "row.label"
+  },
+  "settings.appearance.row.label.iconos": {
+    "value": "Iconos",
+    "file": "appearance",
+    "ctx": "row.label"
+  },
+  "settings.appearance.row.label.imagen": {
+    "value": "Imagen",
+    "file": "appearance",
+    "ctx": "row.label"
+  },
+  "settings.appearance.row.label.modo-oscuro": {
+    "value": "Modo Oscuro",
+    "file": "appearance",
+    "ctx": "row.label"
+  },
+  "settings.appearance.row.label.tema-gtk": {
+    "value": "Tema GTK",
+    "file": "appearance",
+    "ctx": "row.label"
+  },
+  "settings.appearance.row.label.tema-qt-kvantum": {
+    "value": "Tema Qt (Kvantum)",
+    "file": "appearance",
+    "ctx": "row.label"
+  },
+  "settings.appearance.row.label.transicion": {
+    "value": "Transición",
+    "file": "appearance",
+    "ctx": "row.label"
+  },
+  "settings.appearance.row.label.transparencia-profunda": {
+    "value": "Transparencia Profunda",
+    "file": "appearance",
+    "ctx": "row.label"
+  },
+  "settings.apps.label.aplicaciones-instaladas": {
+    "value": "APLICACIONES INSTALADAS",
+    "file": "apps",
+    "ctx": "label"
+  },
+  "settings.apps.label.aplicar": {
+    "value": "Aplicar",
+    "file": "apps",
+    "ctx": "label"
+  },
+  "settings.apps.label.cancelar": {
+    "value": "Cancelar",
+    "file": "apps",
+    "ctx": "label"
+  },
+  "settings.apps.label.desde-archivo": {
+    "value": "Desde archivo...",
+    "file": "apps",
+    "ctx": "label"
+  },
+  "settings.apps.label.nombre-de-icono-del-tema": {
+    "value": "Nombre de icono del tema",
+    "file": "apps",
+    "ctx": "label"
+  },
+  "settings.apps.label.restaurar": {
+    "value": "Restaurar",
+    "file": "apps",
+    "ctx": "label"
+  },
+  "settings.apps.page.subtitle.personaliza-los-iconos-de-las-aplicacion": {
+    "value": "Personaliza los iconos de las aplicaciones instaladas",
+    "file": "apps",
+    "ctx": "page.subtitle"
+  },
+  "settings.apps.page.title.aplicaciones": {
+    "value": "Aplicaciones",
+    "file": "apps",
+    "ctx": "page.title"
+  },
+  "settings.apps.tooltip.cambiar-icono": {
+    "value": "Cambiar icono",
+    "file": "apps",
+    "ctx": "tooltip"
+  },
+  "settings.apps.tooltip.eliminar-el-override-y-volver-al-icono-d": {
+    "value": "Eliminar el override y volver al icono del tema",
+    "file": "apps",
+    "ctx": "tooltip"
+  },
+  "settings.audio.group.dispositivos-de-salida": {
+    "value": "Dispositivos de Salida",
+    "file": "audio",
+    "ctx": "group"
+  },
+  "settings.audio.group.entrada-microfonos": {
+    "value": "Entrada (Micrófonos)",
+    "file": "audio",
+    "ctx": "group"
+  },
+  "settings.audio.label.servicio-de-audio-no-disponible": {
+    "value": "Servicio de Audio no disponible",
+    "file": "audio",
+    "ctx": "label"
+  },
+  "settings.audio.page.subtitle.administra-tus-dispositivos-de-entrada-y": {
+    "value": "Administra tus dispositivos de entrada y salida",
+    "file": "audio",
+    "ctx": "page.subtitle"
+  },
+  "settings.audio.page.title.sonido": {
+    "value": "Sonido",
+    "file": "audio",
+    "ctx": "page.title"
+  },
+  "settings.autostart.group.entradas-exec-once-en-hyprland-user-conf": {
+    "value": "Entradas exec-once en hyprland-user.conf",
+    "file": "autostart",
+    "ctx": "group"
+  },
+  "settings.autostart.label.anadir": {
+    "value": "Añadir",
+    "file": "autostart",
+    "ctx": "label"
+  },
+  "settings.autostart.label.los-cambios-se-aplican-la-proxima-vez-qu": {
+    "value": "Los cambios se aplican la próxima vez que Hyprland se inicia.",
+    "file": "autostart",
+    "ctx": "label"
+  },
+  "settings.autostart.label.sin-entradas-exec-once-en-hyprland-user-": {
+    "value": "Sin entradas exec-once en hyprland-user.conf",
+    "file": "autostart",
+    "ctx": "label"
+  },
+  "settings.autostart.page.subtitle.programas-que-se-inician-con-hyprland": {
+    "value": "Programas que se inician con Hyprland",
+    "file": "autostart",
+    "ctx": "page.subtitle"
+  },
+  "settings.autostart.page.title.inicio-automatico": {
+    "value": "Inicio automático",
+    "file": "autostart",
+    "ctx": "page.title"
+  },
+  "settings.autostart.tooltip.eliminar": {
+    "value": "Eliminar",
+    "file": "autostart",
+    "ctx": "tooltip"
+  },
+  "settings.bluetooth.group.buscar-dispositivos": {
+    "value": "Buscar dispositivos",
+    "file": "bluetooth",
+    "ctx": "group"
+  },
+  "settings.bluetooth.group.dispositivos-detectados": {
+    "value": "Dispositivos detectados",
+    "file": "bluetooth",
+    "ctx": "group"
+  },
+  "settings.bluetooth.group.dispositivos-emparejados": {
+    "value": "Dispositivos emparejados",
+    "file": "bluetooth",
+    "ctx": "group"
+  },
+  "settings.bluetooth.label.buscar-ahora": {
+    "value": "Buscar ahora",
+    "file": "bluetooth",
+    "ctx": "label"
+  },
+  "settings.bluetooth.label.conectar": {
+    "value": "Conectar",
+    "file": "bluetooth",
+    "ctx": "label"
+  },
+  "settings.bluetooth.label.desconectar": {
+    "value": "Desconectar",
+    "file": "bluetooth",
+    "ctx": "label"
+  },
+  "settings.bluetooth.label.emparejar": {
+    "value": "Emparejar",
+    "file": "bluetooth",
+    "ctx": "label"
+  },
+  "settings.bluetooth.label.sin-dispositivos": {
+    "value": "Sin dispositivos",
+    "file": "bluetooth",
+    "ctx": "label"
+  },
+  "settings.bluetooth.page.subtitle.gestiona-dispositivos-bluetooth-empareja": {
+    "value": "Gestiona dispositivos Bluetooth emparejados y cercanos",
+    "file": "bluetooth",
+    "ctx": "page.subtitle"
+  },
+  "settings.bluetooth.page.title.bluetooth": {
+    "value": "Bluetooth",
+    "file": "bluetooth",
+    "ctx": "page.title"
+  },
+  "settings.bluetooth.row.desc.busca-dispositivos-bluetooth-cercanos-du": {
+    "value": "Busca dispositivos Bluetooth cercanos durante 8 segundos",
+    "file": "bluetooth",
+    "ctx": "row.desc"
+  },
+  "settings.bluetooth.row.desc.encender-o-apagar-el-adaptador-bluetooth": {
+    "value": "Encender o apagar el adaptador Bluetooth",
+    "file": "bluetooth",
+    "ctx": "row.desc"
+  },
+  "settings.bluetooth.row.label.activar-bluetooth": {
+    "value": "Activar Bluetooth",
+    "file": "bluetooth",
+    "ctx": "row.label"
+  },
+  "settings.bluetooth.row.label.escanear": {
+    "value": "Escanear",
+    "file": "bluetooth",
+    "ctx": "row.label"
+  },
+  "settings.bluetooth.tooltip.olvidar-dispositivo": {
+    "value": "Olvidar dispositivo",
+    "file": "bluetooth",
+    "ctx": "tooltip"
+  },
+  "settings.controlcenter.group.widgets-activos": {
+    "value": "Widgets activos",
+    "file": "controlcenter",
+    "ctx": "group"
+  },
+  "settings.controlcenter.group.widgets-disponibles": {
+    "value": "Widgets disponibles",
+    "file": "controlcenter",
+    "ctx": "group"
+  },
+  "settings.controlcenter.label.no-hay-widgets-activos": {
+    "value": "No hay widgets activos",
+    "file": "controlcenter",
+    "ctx": "label"
+  },
+  "settings.controlcenter.label.todos-los-widgets-estan-activos": {
+    "value": "Todos los widgets están activos",
+    "file": "controlcenter",
+    "ctx": "label"
+  },
+  "settings.controlcenter.page.subtitle.gestiona-los-widgets-del-panel-de-contro": {
+    "value": "Gestiona los widgets del panel de control rápido",
+    "file": "controlcenter",
+    "ctx": "page.subtitle"
+  },
+  "settings.controlcenter.page.title.centro-de-control": {
+    "value": "Centro de Control",
+    "file": "controlcenter",
+    "ctx": "page.title"
+  },
+  "settings.controlcenter.tooltip.anadir-al-cc": {
+    "value": "Añadir al CC",
+    "file": "controlcenter",
+    "ctx": "tooltip"
+  },
+  "settings.controlcenter.tooltip.quitar-del-cc": {
+    "value": "Quitar del CC",
+    "file": "controlcenter",
+    "ctx": "tooltip"
+  },
+  "settings.display.label.no-se-detectaron-monitores": {
+    "value": "No se detectaron monitores.",
+    "file": "display",
+    "ctx": "label"
+  },
+  "settings.display.label.servicio-hyprland-no-disponible": {
+    "value": "Servicio Hyprland no disponible",
+    "file": "display",
+    "ctx": "label"
+  },
+  "settings.display.page.subtitle.configura-resolucion-escala-y-orientacio": {
+    "value": "Configura resolución, escala y orientación de tus monitores",
+    "file": "display",
+    "ctx": "page.subtitle"
+  },
+  "settings.display.page.title.pantalla": {
+    "value": "Pantalla",
+    "file": "display",
+    "ctx": "page.title"
+  },
+  "settings.display.row.desc.factor-de-escala-de-la-pantalla": {
+    "value": "Factor de escala de la pantalla",
+    "file": "display",
+    "ctx": "row.desc"
+  },
+  "settings.display.row.desc.identificador-del-monitor": {
+    "value": "Identificador del monitor",
+    "file": "display",
+    "ctx": "row.desc"
+  },
+  "settings.display.row.desc.los-cambios-se-aplican-en-vivo-pero-no-p": {
+    "value": "Los cambios se aplican en vivo pero no persisten. Añádelos a hyprland-user.conf para hacerlos permanentes.",
+    "file": "display",
+    "ctx": "row.desc"
+  },
+  "settings.display.row.desc.modo-actual": {
+    "value": "Modo actual",
+    "file": "display",
+    "ctx": "row.desc"
+  },
+  "settings.display.row.desc.orientacion-de-la-pantalla": {
+    "value": "Orientación de la pantalla",
+    "file": "display",
+    "ctx": "row.desc"
+  },
+  "settings.display.row.desc.tasa-de-refresco-variable-requiere-panta": {
+    "value": "Tasa de refresco variable (requiere pantalla compatible)",
+    "file": "display",
+    "ctx": "row.desc"
+  },
+  "settings.display.row.label.cambios-temporales": {
+    "value": "Cambios temporales",
+    "file": "display",
+    "ctx": "row.label"
+  },
+  "settings.display.row.label.escala": {
+    "value": "Escala",
+    "file": "display",
+    "ctx": "row.label"
+  },
+  "settings.display.row.label.modelo": {
+    "value": "Modelo",
+    "file": "display",
+    "ctx": "row.label"
+  },
+  "settings.display.row.label.resolucion-activa": {
+    "value": "Resolución activa",
+    "file": "display",
+    "ctx": "row.label"
+  },
+  "settings.display.row.label.rotacion": {
+    "value": "Rotación",
+    "file": "display",
+    "ctx": "row.label"
+  },
+  "settings.display.row.label.vrr-freesync": {
+    "value": "VRR / FreeSync",
+    "file": "display",
+    "ctx": "row.label"
+  },
+  "settings.dock.group.comportamiento": {
+    "value": "Comportamiento",
+    "file": "dock",
+    "ctx": "group"
+  },
+  "settings.dock.group.efectos": {
+    "value": "Efectos",
+    "file": "dock",
+    "ctx": "group"
+  },
+  "settings.dock.group.geometria": {
+    "value": "Geometría",
+    "file": "dock",
+    "ctx": "group"
+  },
+  "settings.dock.group.posicion": {
+    "value": "Posición",
+    "file": "dock",
+    "ctx": "group"
+  },
+  "settings.dock.label.derecha": {
+    "value": "Derecha",
+    "file": "dock",
+    "ctx": "label"
+  },
+  "settings.dock.label.en-posicion-lateral-ocultacion-automatic": {
+    "value": "En posición lateral, ocultación automática se activa siempre.",
+    "file": "dock",
+    "ctx": "label"
+  },
+  "settings.dock.label.inferior": {
+    "value": "Inferior",
+    "file": "dock",
+    "ctx": "label"
+  },
+  "settings.dock.label.izquierda": {
+    "value": "Izquierda",
+    "file": "dock",
+    "ctx": "label"
+  },
+  "settings.dock.page.subtitle.personaliza-el-tamano-animacion-e-indica": {
+    "value": "Personaliza el tamaño, animación e indicadores del dock",
+    "file": "dock",
+    "ctx": "page.subtitle"
+  },
+  "settings.dock.page.title.dock": {
+    "value": "Dock",
+    "file": "dock",
+    "ctx": "page.title"
+  },
+  "settings.dock.row.desc.distancia-al-borde-de-la-pantalla": {
+    "value": "Distancia al borde de la pantalla",
+    "file": "dock",
+    "ctx": "row.desc"
+  },
+  "settings.dock.row.desc.donde-aparece-el-dock-en-la-pantalla": {
+    "value": "Dónde aparece el dock en la pantalla",
+    "file": "dock",
+    "ctx": "row.desc"
+  },
+  "settings.dock.row.desc.efecto-de-zoom-al-pasar-el-cursor": {
+    "value": "Efecto de zoom al pasar el cursor",
+    "file": "dock",
+    "ctx": "row.desc"
+  },
+  "settings.dock.row.desc.el-dock-se-esconde-al-alejar-el-cursor": {
+    "value": "El dock se esconde al alejar el cursor",
+    "file": "dock",
+    "ctx": "row.desc"
+  },
+  "settings.dock.row.desc.limite-de-expansion-al-magnificar": {
+    "value": "Límite de expansión al magnificar",
+    "file": "dock",
+    "ctx": "row.desc"
+  },
+  "settings.dock.row.desc.punto-bajo-los-iconos-de-apps-abiertas": {
+    "value": "Punto bajo los iconos de apps abiertas",
+    "file": "dock",
+    "ctx": "row.desc"
+  },
+  "settings.dock.row.desc.tiempo-antes-de-que-el-dock-se-oculte": {
+    "value": "Tiempo antes de que el dock se oculte",
+    "file": "dock",
+    "ctx": "row.desc"
+  },
+  "settings.dock.row.label.magnificacion-activa": {
+    "value": "Magnificación activa",
+    "file": "dock",
+    "ctx": "row.label"
+  },
+  "settings.dock.row.label.margen-inferior": {
+    "value": "Margen inferior",
+    "file": "dock",
+    "ctx": "row.label"
+  },
+  "settings.dock.row.label.mostrar-indicadores": {
+    "value": "Mostrar indicadores",
+    "file": "dock",
+    "ctx": "row.label"
+  },
+  "settings.dock.row.label.ocultar-automaticamente": {
+    "value": "Ocultar automáticamente",
+    "file": "dock",
+    "ctx": "row.label"
+  },
+  "settings.dock.row.label.posicion-del-dock": {
+    "value": "Posición del dock",
+    "file": "dock",
+    "ctx": "row.label"
+  },
+  "settings.dock.row.label.retardo-al-ocultar": {
+    "value": "Retardo al ocultar",
+    "file": "dock",
+    "ctx": "row.label"
+  },
+  "settings.dock.row.label.tamano-maximo": {
+    "value": "Tamaño máximo",
+    "file": "dock",
+    "ctx": "row.label"
+  },
+  "settings.network.group.cableada-ethernet": {
+    "value": "Cableada (Ethernet)",
+    "file": "network",
+    "ctx": "group"
+  },
+  "settings.network.group.inalambrica": {
+    "value": "Inalámbrica",
+    "file": "network",
+    "ctx": "group"
+  },
+  "settings.network.group.puntos-de-acceso-cercanos": {
+    "value": "Puntos de Acceso Cercanos",
+    "file": "network",
+    "ctx": "group"
+  },
+  "settings.network.group.wi-fi": {
+    "value": "Wi-Fi",
+    "file": "network",
+    "ctx": "group"
+  },
+  "settings.network.label.servicio-de-red-no-disponible": {
+    "value": "Servicio de Red no disponible",
+    "file": "network",
+    "ctx": "label"
+  },
+  "settings.network.page.subtitle.administra-las-conexiones-de-red-y-param": {
+    "value": "Administra las conexiones de red y parámetros técnicos",
+    "file": "network",
+    "ctx": "page.subtitle"
+  },
+  "settings.network.page.title.red": {
+    "value": "Red",
+    "file": "network",
+    "ctx": "page.title"
+  },
+  "settings.network.row.desc.asignacion-actual-de-la-red-inalambrica": {
+    "value": "Asignación actual de la red inalámbrica",
+    "file": "network",
+    "ctx": "row.desc"
+  },
+  "settings.network.row.desc.estado-actual-de-la-interfaz-fisica": {
+    "value": "Estado actual de la interfaz física",
+    "file": "network",
+    "ctx": "row.desc"
+  },
+  "settings.network.row.desc.habilita-la-sincronizacion-del-espectro-": {
+    "value": "Habilita la sincronización del espectro inalámbrico",
+    "file": "network",
+    "ctx": "row.desc"
+  },
+  "settings.network.row.desc.identificador-unico-en-la-red-local": {
+    "value": "Identificador único en la red local",
+    "file": "network",
+    "ctx": "row.desc"
+  },
+  "settings.network.row.desc.no-se-encontro-ningun-adaptador-compatib": {
+    "value": "No se encontró ningún adaptador compatible",
+    "file": "network",
+    "ctx": "row.desc"
+  },
+  "settings.network.row.desc.nombre-del-adaptador-inalambrico": {
+    "value": "Nombre del adaptador inalámbrico",
+    "file": "network",
+    "ctx": "row.desc"
+  },
+  "settings.network.row.desc.nombre-del-dispositivo-en-el-nucleo": {
+    "value": "Nombre del dispositivo en el núcleo",
+    "file": "network",
+    "ctx": "row.desc"
+  },
+  "settings.network.row.desc.red-conectada-actualmente": {
+    "value": "Red conectada actualmente",
+    "file": "network",
+    "ctx": "row.desc"
+  },
+  "settings.network.row.desc.rendimiento-maximo-teorico": {
+    "value": "Rendimiento máximo teórico",
+    "file": "network",
+    "ctx": "row.desc"
+  },
+  "settings.network.row.label.activar-wi-fi": {
+    "value": "Activar Wi-Fi",
+    "file": "network",
+    "ctx": "row.label"
+  },
+  "settings.network.row.label.conexion-ethernet": {
+    "value": "Conexión Ethernet",
+    "file": "network",
+    "ctx": "row.label"
+  },
+  "settings.network.row.label.direccion-ip": {
+    "value": "Dirección IP",
+    "file": "network",
+    "ctx": "row.label"
+  },
+  "settings.network.row.label.direccion-ipv4": {
+    "value": "Dirección IPv4",
+    "file": "network",
+    "ctx": "row.label"
+  },
+  "settings.network.row.label.estado-del-hardware": {
+    "value": "Estado del Hardware",
+    "file": "network",
+    "ctx": "row.label"
+  },
+  "settings.network.row.label.interfaz": {
+    "value": "Interfaz",
+    "file": "network",
+    "ctx": "row.label"
+  },
+  "settings.network.row.label.punto-de-acceso": {
+    "value": "Punto de Acceso",
+    "file": "network",
+    "ctx": "row.label"
+  },
+  "settings.network.row.label.velocidad": {
+    "value": "Velocidad",
+    "file": "network",
+    "ctx": "row.label"
+  },
+  "settings.power.group.inactividad-y-bloqueo": {
+    "value": "Inactividad y Bloqueo",
+    "file": "power",
+    "ctx": "group"
+  },
+  "settings.power.group.perfil-de-rendimiento": {
+    "value": "Perfil de Rendimiento",
+    "file": "power",
+    "ctx": "group"
+  },
+  "settings.power.label.ahorro-de-energia": {
+    "value": "Ahorro de Energía",
+    "file": "power",
+    "ctx": "label"
+  },
+  "settings.power.label.alto-rendimiento": {
+    "value": "Alto Rendimiento",
+    "file": "power",
+    "ctx": "label"
+  },
+  "settings.power.label.el-bloqueo-debe-ocurrir-antes-que-la-sus": {
+    "value": "El bloqueo debe ocurrir antes que la suspensión para garantizar seguridad.",
+    "file": "power",
+    "ctx": "label"
+  },
+  "settings.power.label.equilibrado": {
+    "value": "Equilibrado",
+    "file": "power",
+    "ctx": "label"
+  },
+  "settings.power.label.nunca": {
+    "value": "Nunca",
+    "file": "power",
+    "ctx": "label"
+  },
+  "settings.power.page.subtitle.gestion-de-energia-inactividad-y-bloqueo": {
+    "value": "Gestión de energía, inactividad y bloqueo",
+    "file": "power",
+    "ctx": "page.subtitle"
+  },
+  "settings.power.page.title.energia": {
+    "value": "Energía",
+    "file": "power",
+    "ctx": "page.title"
+  },
+  "settings.power.row.desc.tiempo-sin-actividad-antes-de-apagar-la-": {
+    "value": "Tiempo sin actividad antes de apagar la pantalla",
+    "file": "power",
+    "ctx": "row.desc"
+  },
+  "settings.power.row.desc.tiempo-sin-actividad-antes-de-bloquear-l": {
+    "value": "Tiempo sin actividad antes de bloquear la sesión",
+    "file": "power",
+    "ctx": "row.desc"
+  },
+  "settings.power.row.desc.tiempo-sin-actividad-antes-de-suspender-": {
+    "value": "Tiempo sin actividad antes de suspender el equipo",
+    "file": "power",
+    "ctx": "row.desc"
+  },
+  "settings.power.row.label.apagar-pantalla": {
+    "value": "Apagar pantalla",
+    "file": "power",
+    "ctx": "row.label"
+  },
+  "settings.power.row.label.bloquear-sesion": {
+    "value": "Bloquear sesión",
+    "file": "power",
+    "ctx": "row.label"
+  },
+  "settings.power.row.label.suspender": {
+    "value": "Suspender",
+    "file": "power",
+    "ctx": "row.label"
+  },
+  "settings.widgets.label.barra": {
+    "value": "Barra",
+    "file": "widgets",
+    "ctx": "label"
+  },
+  "settings.widgets.label.centro": {
+    "value": "Centro",
+    "file": "widgets",
+    "ctx": "label"
+  },
+  "settings.widgets.label.para-reordenar-los-widgets-en-el-centro-": {
+    "value": "Para reordenar los widgets en el Centro de Control usa el modo Editar del panel.",
+    "file": "widgets",
+    "ctx": "label"
+  },
+  "settings.widgets.page.subtitle.elige-donde-aparece-cada-widget-en-la-ba": {
+    "value": "Elige dónde aparece cada widget: en la Barra, en el Centro de Control, o en ambos",
+    "file": "widgets",
+    "ctx": "page.subtitle"
+  },
+  "settings.widgets.page.title.widgets": {
+    "value": "Widgets",
+    "file": "widgets",
+    "ctx": "page.title"
+  }
+}

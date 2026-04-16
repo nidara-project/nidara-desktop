@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { listGroup, createRow, pageHeader, pageBox, staticLabel } from "../SettingsHelpers"
+import { t } from "../../../core/i18n"
 
 function readVersion(): string {
     // System install path
@@ -76,52 +77,52 @@ function readTotalRam(): string {
 
 export default function AboutPage() {
     const page = pageBox("about-page")
-    page.append(pageHeader("Acerca de", "Información del sistema y versión de Crystal Shell"))
+    page.append(pageHeader(t("settings.about.page.title.acerca-de"), t("settings.about.page.subtitle.informacion-del-sistema-y-version-de-cry")))
 
     // ── Crystal Shell ──────────────────────────────────────────────────────────
-    const { box: shellBox, listBox: shellList } = listGroup("Crystal Shell")
+    const { box: shellBox, listBox: shellList } = listGroup(t("settings.about.group.crystal-shell"))
 
-    shellList.append(createRow("Versión", "Crystal Shell", staticLabel(readVersion())))
-    shellList.append(createRow("Shell", "AGS v3 / GJS + GTK4", staticLabel("Hyprland WM")))
+    shellList.append(createRow(t("settings.about.row.label.version"), "Crystal Shell", staticLabel(readVersion())))
+    shellList.append(createRow(t("settings.about.row.label.shell"), t("settings.about.row.desc.ags-v3-gjs-gtk4"), staticLabel("Hyprland WM")))
 
     shellBox.append(shellList)
     page.append(shellBox)
 
     // ── Sistema ────────────────────────────────────────────────────────────────
-    const { box: sysBox, listBox: sysList } = listGroup("Sistema")
+    const { box: sysBox, listBox: sysList } = listGroup(t("settings.about.group.sistema"))
 
     const osName = readOsRelease("PRETTY_NAME")
     const osId   = readOsRelease("ID")
 
-    sysList.append(createRow("Sistema Operativo", osId, staticLabel(osName)))
-    sysList.append(createRow("CPU", "Procesador", staticLabel(readCpuInfo())))
-    sysList.append(createRow("Memoria RAM", "Total instalada", staticLabel(readTotalRam())))
+    sysList.append(createRow(t("settings.about.row.label.sistema-operativo"), osId, staticLabel(osName)))
+    sysList.append(createRow(t("settings.about.row.label.cpu"), t("settings.about.row.desc.procesador"), staticLabel(readCpuInfo())))
+    sysList.append(createRow(t("settings.about.row.label.memoria-ram"), t("settings.about.row.desc.total-instalada"), staticLabel(readTotalRam())))
 
     // Kernel — async
     const kernelLabel = staticLabel("…")
-    sysList.append(createRow("Kernel", "Versión del kernel de Linux", kernelLabel))
+    sysList.append(createRow(t("settings.about.row.label.kernel"), t("settings.about.row.desc.version-del-kernel-de-linux"), kernelLabel))
     execAsync(["uname", "-r"]).then(v => { kernelLabel.label = v.trim() }).catch(() => {})
 
     // Uptime — async
     const uptimeLabel = staticLabel("…")
-    sysList.append(createRow("Tiempo activo", "Desde el último arranque", uptimeLabel))
+    sysList.append(createRow(t("settings.about.row.label.tiempo-activo"), t("settings.about.row.desc.desde-el-ultimo-arranque"), uptimeLabel))
     execAsync(["uptime", "-p"]).then(v => { uptimeLabel.label = v.trim().replace(/^up /, "") }).catch(() => {})
 
     sysBox.append(sysList)
     page.append(sysBox)
 
     // ── Entorno ────────────────────────────────────────────────────────────────
-    const { box: envBox, listBox: envList } = listGroup("Entorno")
+    const { box: envBox, listBox: envList } = listGroup(t("settings.about.group.entorno"))
 
     const sessionType = GLib.getenv("XDG_SESSION_TYPE") || "wayland"
     const desktopEnv = GLib.getenv("XDG_CURRENT_DESKTOP") || "Hyprland"
 
-    envList.append(createRow("Protocolo gráfico", "Tipo de sesión", staticLabel(sessionType)))
-    envList.append(createRow("Escritorio", "Gestor de ventanas", staticLabel(desktopEnv)))
+    envList.append(createRow(t("settings.about.row.label.protocolo-grafico"), t("settings.about.row.desc.tipo-de-sesion"), staticLabel(sessionType)))
+    envList.append(createRow(t("settings.about.row.label.escritorio"), t("settings.about.row.desc.gestor-de-ventanas"), staticLabel(desktopEnv)))
 
     // Hyprland version — async
     const hyprLabel = staticLabel("…")
-    envList.append(createRow("Hyprland", "Versión del compositor", hyprLabel))
+    envList.append(createRow(t("settings.about.row.label.hyprland"), t("settings.about.row.desc.version-del-compositor"), hyprLabel))
     execAsync(["hyprctl", "version"]).then(v => {
         const match = v.match(/Hyprland\s+([\w.-]+)/)
         hyprLabel.label = match ? match[1] : v.split("\n")[0].trim()

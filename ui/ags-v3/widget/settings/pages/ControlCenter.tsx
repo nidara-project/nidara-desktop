@@ -1,6 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import ccLayout, { WIDGET_META, SIZE_MAP } from "../../control-center/CCLayoutManager"
 import { pageBox, pageHeader, listGroup } from "../SettingsHelpers"
+import { t } from "../../../core/i18n"
 
 function sizeLabel(id: string): string {
     const size = ccLayout.effectiveSize(id)
@@ -10,10 +11,10 @@ function sizeLabel(id: string): string {
 
 export default function ControlCenterPage(): Gtk.Widget {
     const page = pageBox("cc-settings-page")
-    page.append(pageHeader("Centro de Control", "Gestiona los widgets del panel de control rápido"))
+    page.append(pageHeader(t("settings.controlcenter.page.title.centro-de-control"), t("settings.controlcenter.page.subtitle.gestiona-los-widgets-del-panel-de-contro")))
 
-    const activeGroup   = listGroup("Widgets activos")
-    const inactiveGroup = listGroup("Widgets disponibles")
+    const activeGroup   = listGroup(t("settings.controlcenter.group.widgets-activos"))
+    const inactiveGroup = listGroup(t("settings.controlcenter.group.widgets-disponibles"))
 
     const rebuild = () => {
         // Clear both list boxes
@@ -27,7 +28,7 @@ export default function ControlCenterPage(): Gtk.Widget {
         if (activeIds.length === 0) {
             const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
             row.set_child(new Gtk.Label({
-                label: "No hay widgets activos",
+                label: t("settings.controlcenter.label.no-hay-widgets-activos"),
                 css_classes: ["settings-row-subtitle"],
                 margin_top: 12, margin_bottom: 12, margin_start: 16,
                 halign: Gtk.Align.START,
@@ -56,7 +57,7 @@ export default function ControlCenterPage(): Gtk.Widget {
                 icon_name: "list-remove-symbolic",
                 css_classes: ["settings-icon-btn", "destructive-action-subtle"],
                 valign: Gtk.Align.CENTER,
-                tooltip_text: "Quitar del CC",
+                tooltip_text: t("settings.controlcenter.tooltip.quitar-del-cc"),
             })
             removeBtn.connect("clicked", () => { ccLayout.remove(id); rebuild() })
             box.append(removeBtn)
@@ -71,7 +72,7 @@ export default function ControlCenterPage(): Gtk.Widget {
         if (inactiveIds.length === 0) {
             const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
             row.set_child(new Gtk.Label({
-                label: "Todos los widgets están activos",
+                label: t("settings.controlcenter.label.todos-los-widgets-estan-activos"),
                 css_classes: ["settings-row-subtitle"],
                 margin_top: 12, margin_bottom: 12, margin_start: 16,
                 halign: Gtk.Align.START,
@@ -101,7 +102,7 @@ export default function ControlCenterPage(): Gtk.Widget {
                 icon_name: "list-add-symbolic",
                 css_classes: ["settings-icon-btn"],
                 valign: Gtk.Align.CENTER,
-                tooltip_text: "Añadir al CC",
+                tooltip_text: t("settings.controlcenter.tooltip.anadir-al-cc"),
             })
             addBtn.connect("clicked", () => { ccLayout.add(id); rebuild() })
             box.append(addBtn)

@@ -4,6 +4,7 @@ import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
 import appService, { type AppData } from "../../../core/AppService"
 import { pageBox, pageHeader } from "../SettingsHelpers"
+import { t } from "../../../core/i18n"
 
 // ── Icon preview helpers ──────────────────────────────────────────────────────
 
@@ -74,7 +75,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
 
     // Current icon name hint
     box.append(new Gtk.Label({
-        label: "Nombre de icono del tema",
+        label: t("settings.apps.label.nombre-de-icono-del-tema"),
         css_classes: ["settings-group-title"],
         halign: Gtk.Align.START,
         margin_bottom: 6,
@@ -114,7 +115,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
 
     // File picker button
     const fileBtn = new Gtk.Button({
-        label: "Desde archivo...",
+        label: t("settings.apps.label.desde-archivo"),
         css_classes: ["pill"],
         halign: Gtk.Align.START,
         margin_top: 10,
@@ -146,10 +147,10 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
 
     const hasOverride = !!appService.getIconOverridePath(originalIcon)
     const resetBtn = new Gtk.Button({
-        label: "Restaurar",
+        label: t("settings.apps.label.restaurar"),
         css_classes: ["pill"],
         sensitive: hasOverride,
-        tooltip_text: "Eliminar el override y volver al icono del tema",
+        tooltip_text: t("settings.apps.tooltip.eliminar-el-override-y-volver-al-icono-d"),
     })
     resetBtn.connect("clicked", () => {
         appService.removeIconOverride(originalIcon)
@@ -162,10 +163,10 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
         dialog.close()
     })
 
-    const cancelBtn = new Gtk.Button({ label: "Cancelar", css_classes: ["pill"] })
+    const cancelBtn = new Gtk.Button({ label: t("settings.apps.label.cancelar"), css_classes: ["pill"] })
     cancelBtn.connect("clicked", () => dialog.close())
 
-    const applyBtn = new Gtk.Button({ label: "Aplicar", css_classes: ["pill", "suggested-action"] })
+    const applyBtn = new Gtk.Button({ label: t("settings.apps.label.aplicar"), css_classes: ["pill", "suggested-action"] })
     applyBtn.connect("clicked", () => {
         const val = entry.text.trim()
         if (!val) { dialog.close(); return }
@@ -230,7 +231,7 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
         child: new Gtk.Image({ icon_name: "document-edit-symbolic", pixel_size: 14 }),
         css_classes: ["crystal-icon-btn"],
         valign: Gtk.Align.CENTER,
-        tooltip_text: "Cambiar icono",
+        tooltip_text: t("settings.apps.tooltip.cambiar-icono"),
     })
     editBtn.connect("clicked", () => {
         const win = row.get_root() as Gtk.Window | null
@@ -254,7 +255,7 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
 
 export default function AppsPage() {
     const page = pageBox("apps-page")
-    page.append(pageHeader("Aplicaciones", "Personaliza los iconos de las aplicaciones instaladas"))
+    page.append(pageHeader(t("settings.apps.page.title.aplicaciones"), t("settings.apps.page.subtitle.personaliza-los-iconos-de-las-aplicacion")))
 
     // Search
     const searchEntry = new Gtk.SearchEntry({
@@ -268,7 +269,7 @@ export default function AppsPage() {
     // App list — build the group manually so we can wrap the ListBox in a ScrolledWindow
     const groupBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["settings-group"] })
     groupBox.append(new Gtk.Label({
-        label: "APLICACIONES INSTALADAS",
+        label: t("settings.apps.label.aplicaciones-instaladas"),
         css_classes: ["settings-group-title"],
         halign: Gtk.Align.START,
         margin_start: 10,

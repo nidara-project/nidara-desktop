@@ -5,19 +5,20 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import Theme from "../../../core/ThemeManager"
 import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
 import { ACCENT_PALETTE, type AccentKey } from "../../../core/FluidCrystal"
+import { t } from "../../../core/i18n"
 // @ts-ignore
 import Adw from "gi://Adw?version=1"
 import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageHeader, pageBox } from "../SettingsHelpers"
 
 export default function AppearancePage() {
     const page = pageBox("appearance-page")
-    page.append(pageHeader("Apariencia", "Personaliza el alma visual de tu sistema Crystal Shell"))
+    page.append(pageHeader(t("settings.appearance.page.title.apariencia"), t("settings.appearance.page.subtitle.personaliza-el-alma-visual-de-tu-sistema")))
 
     // 1. General style
-    const styleGroup = listGroup("Diseño Base")
+    const styleGroup = listGroup(t("settings.appearance.group.diseno-base"))
     styleGroup.listBox.append(toggleRow(
-        "Modo Oscuro",
-        "Sincroniza el núcleo visual con la noche",
+        t("settings.appearance.row.label.modo-oscuro"),
+        t("settings.appearance.row.desc.sincroniza-el-nucleo-visual-con-la-noche"),
         Theme.isDark,
         (active) => Theme.setDarkMode(active),
     ))
@@ -44,10 +45,10 @@ export default function AppearancePage() {
         accentButtons[key] = btn
     })
 
-    fcGroup.listBox.append(createRow("Color de Acento", "Define el tono vibrante de la interfaz", accentPicker))
+    fcGroup.listBox.append(createRow(t("settings.appearance.row.label.color-de-acento"), t("settings.appearance.row.desc.define-el-tono-vibrante-de-la-interfaz"), accentPicker))
     fcGroup.listBox.append(sliderRow(
-        "Transparencia Profunda",
-        "Controla la permeabilidad de la luz en las ventanas",
+        t("settings.appearance.row.label.transparencia-profunda"),
+        t("settings.appearance.row.desc.controla-la-permeabilidad-de-la-luz-en-l"),
         Theme.transparency, 0, 1,
         (v) => Theme.setTransparency(v),
         { pct: true, icons: ["display-brightness-symbolic", "display-brightness-high-symbolic"] },
@@ -55,7 +56,7 @@ export default function AppearancePage() {
     page.append(fcGroup.box)
 
     // 3. Wallpaper
-    const wallGroup = listGroup("Fondo de Pantalla")
+    const wallGroup = listGroup(t("settings.appearance.group.fondo-de-pantalla"))
 
     // Preview
     const preview = new Gtk.Picture({
@@ -86,8 +87,8 @@ export default function AppearancePage() {
     const transitions = Object.keys(TRANSITION_LABELS) as TransitionType[]
     const transLabels = transitions.map(k => TRANSITION_LABELS[k])
     const transRow = dropdownRow(
-        "Transición",
-        "Efecto al cambiar el fondo de pantalla",
+        t("settings.appearance.row.label.transicion"),
+        t("settings.appearance.row.desc.efecto-al-cambiar-el-fondo-de-pantalla"),
         TRANSITION_LABELS[Wallpaper.transition],
         transLabels,
         (label) => {
@@ -99,7 +100,7 @@ export default function AppearancePage() {
 
     // File picker row
     const changeBtn = new Gtk.Button({
-        label: "Explorar...",
+        label: t("settings.appearance.label.explorar"),
         css_classes: ["pill"],
         valign: Gtk.Align.CENTER,
     })
@@ -133,8 +134,8 @@ export default function AppearancePage() {
         })
     })
     wallGroup.listBox.append(createRow(
-        "Imagen",
-        "Elige el fondo de pantalla desde tus archivos",
+        t("settings.appearance.row.label.imagen"),
+        t("settings.appearance.row.desc.elige-el-fondo-de-pantalla-desde-tus-arc"),
         changeBtn,
     ))
 
@@ -142,21 +143,21 @@ export default function AppearancePage() {
     page.append(wallGroup.box)
 
     // 4. System Assets
-    const assetsGroup = listGroup("Recursos del Sistema")
+    const assetsGroup = listGroup(t("settings.appearance.group.recursos-del-sistema"))
     assetsGroup.listBox.append(dropdownRow(
-        "Tema GTK", "Estética estructural de aplicaciones",
+        t("settings.appearance.row.label.tema-gtk"), t("settings.appearance.row.desc.estetica-estructural-de-aplicaciones"),
         Theme.themeFamily, Theme.getAvailableGtkThemes(), (v) => Theme.setGtkTheme(v),
     ))
     assetsGroup.listBox.append(dropdownRow(
-        "Tema Qt (Kvantum)", "Sincroniza el estilo con apps Qt/KDE",
+        t("settings.appearance.row.label.tema-qt-kvantum"), t("settings.appearance.row.desc.sincroniza-el-estilo-con-apps-qt-kde"),
         Theme.qtTheme, Theme.getAvailableQtThemes(), (v) => Theme.setQtTheme(v),
     ))
     assetsGroup.listBox.append(dropdownRow(
-        "Iconos", "Paquete de glifos del sistema",
+        t("settings.appearance.row.label.iconos"), t("settings.appearance.row.desc.paquete-de-glifos-del-sistema"),
         Theme.iconTheme, Theme.getAvailableIconThemes(), (v) => Theme.setIconTheme(v),
     ))
     assetsGroup.listBox.append(dropdownRow(
-        "Cursor", "Estilo del puntero de precisión",
+        t("settings.appearance.row.label.cursor"), t("settings.appearance.row.desc.estilo-del-puntero-de-precision"),
         Theme.cursorTheme, Theme.getAvailableCursorThemes(), (v) => Theme.setCursorTheme(v),
     ))
     page.append(assetsGroup.box)

@@ -10,7 +10,7 @@ const locales: Record<string, TranslationMap> = {
     es
 }
 
-let activeLocale = "es"
+let activeLocale = "en"
 
 export function detectLanguage() {
     const langEnv = GLib.getenv("LANG") || ""
