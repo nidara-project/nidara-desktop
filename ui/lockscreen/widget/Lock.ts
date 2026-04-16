@@ -47,7 +47,7 @@ export default function Lock(monitor: Gdk.Monitor) {
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
     Gtk4LayerShell.set_exclusive_zone(win, -1)
-    Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+    Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
   } catch (e) {
     console.error("[Lock] LayerShell failed — falling back to fullscreen:", e)
     win.fullscreen()
