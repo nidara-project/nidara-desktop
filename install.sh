@@ -344,6 +344,16 @@ if [ "$ACTIVE_DM" = "none" ]; then
         | sudo tee /etc/greetd/hyprland-greeter.conf > /dev/null
     sudo chmod 644 /etc/greetd/config.toml /etc/greetd/hyprland-greeter.conf
 
+    # Symlink greeter Hyprland config to the greeter user's default location
+    # so start-hyprland finds it without needing a -c flag
+    GREETER_HOME=$(getent passwd greeter | cut -d: -f6)
+    if [ -n "$GREETER_HOME" ]; then
+        sudo mkdir -p "$GREETER_HOME/.config/hypr"
+        sudo ln -sf /etc/greetd/hyprland-greeter.conf "$GREETER_HOME/.config/hypr/hyprland.conf"
+        sudo chown -R greeter:greeter "$GREETER_HOME/.config"
+        echo "  [OK] Greeter Hyprland config symlinked to $GREETER_HOME/.config/hypr/hyprland.conf"
+    fi
+
     sudo systemctl enable greetd
     echo "  [OK] greetd enabled."
 else
