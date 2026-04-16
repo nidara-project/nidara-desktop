@@ -138,10 +138,27 @@ app.start({
     status.connect("notify::about-open", () => {
       if (status.about_open) try { AboutWindow() } catch (e) { console.error("[About] failed:", e) }
     })
+    const lockScreen = () => {
+      windows.forEach(w => {
+        if (w.name === "crystal-bar" || w.name === "crystal-dock") {
+          try { w.hide() } catch (e) {}
+        }
+      })
+    }
+    const unlockScreen = () => {
+      windows.forEach(w => {
+        if (w.name === "crystal-bar" || w.name === "crystal-dock") {
+          try { w.present() } catch (e) {}
+        }
+      })
+    }
+
     // Expose Globals
     ;(globalThis as any).toggleAppGrid = toggleAppGrid;
     (globalThis as any).toggleSettings = toggleSettings;
     (globalThis as any).toggleOverview = toggleOverview;
+    (globalThis as any).lockScreen = lockScreen;
+    (globalThis as any).unlockScreen = unlockScreen;
 
   },
   requestHandler(argv, res) {
@@ -164,6 +181,10 @@ app.start({
         (globalThis as any).toggleSettings?.(); break;
       case "toggleOverview":
         (globalThis as any).toggleOverview?.(); break;
+      case "hideForLock":
+        (globalThis as any).lockScreen?.(); break;
+      case "showAfterLock":
+        (globalThis as any).unlockScreen?.(); break;
       default:
         console.warn(`[Handler] Unknown command: ${cmd}`)
         return res("unknown command")

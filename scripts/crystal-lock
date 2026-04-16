@@ -24,16 +24,20 @@ if [ ! -x "$BUNDLE" ]; then
     exit 1
 fi
 
-# Switch to an empty regular workspace (99) so only the wallpaper is visible.
-# special: workspaces are overlays and don't hide the current workspace.
+# Save current workspace
 PREV_WS=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id // empty')
+
+# Hide bar and dock, disable all keybinds, switch to empty workspace
+ags request hideForLock >> "$LOG" 2>&1 || true
+hyprctl dispatch submap lock >> "$LOG" 2>&1 || true
 hyprctl dispatch workspace 99 >> "$LOG" 2>&1 || true
 
+# Run lockscreen — blocks until app.quit() on successful auth
 cd /usr/share/crystal-shell/ui/lockscreen
 "$BUNDLE" >> "$LOG" 2>&1
 
-# Restore workspace and keyboard focus after unlock
-if [ -n "$PREV_WS" ]; then
-    hyprctl dispatch workspace "$PREV_WS" >> "$LOG" 2>&1 || true
-fi
+# Restore everything after unlock
+hyprctl dispatch submap reset >> "$LOG" 2>&1 || true
+[ -n "$PREV_WS" ] && hyprctl dispatch workspace "$PREV_WS" >> "$LOG" 2>&1 || true
 hyprctl dispatch focuscurrentorlast >> "$LOG" 2>&1 || true
+ags request showAfterLock >> "$LOG" 2>&1 || true
