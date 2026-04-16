@@ -302,7 +302,7 @@ if [ ! -f "$CONFIG_DIR/crystal-settings.conf" ]; then
     echo "  [Init] $CONFIG_DIR/crystal-settings.conf"
 fi
 
-# Hypridle + Hyprlock configs
+# Hypridle config
 # Dev mode:    symlink directly to repo so edits take effect immediately
 # System mode: copy to $CONFIG_DIR once (never overwritten), symlink from there
 mkdir -p "${REAL_HOME}/.config/hypr"
