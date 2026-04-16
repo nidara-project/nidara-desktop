@@ -11,6 +11,7 @@ LOG="/tmp/crystal-lock.log"
 export GDK_BACKEND=wayland
 export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export LD_PRELOAD="/usr/lib/libgtk4-layer-shell.so${LD_PRELOAD:+:$LD_PRELOAD}"
 
 # Prevent multiple instances
 if pgrep -x crystal-lock > /dev/null 2>&1; then
