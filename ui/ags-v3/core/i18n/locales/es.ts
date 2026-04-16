@@ -59,7 +59,7 @@ export default {
     "settings.region.locale.lang.placeholder": "Ej: es_ES.UTF-8",
     "settings.region.locale.kb": "Distribución de Teclado",
     "settings.region.locale.kb.desc": "Se aplica instantáneamente",
-    "settings.region.locale.kb.placeholder": "Ej: es"
+    "settings.region.locale.kb.placeholder": "Ej: es",
 
     // --- extracted by extract-i18n.mjs ---
     "settings.about.group.crystal-shell": "Crystal Shell",

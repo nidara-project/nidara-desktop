@@ -12,7 +12,7 @@ import { DockItem, Separator } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
 import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState, dockSettings, menuState, dockSideState } from "./state"
 import status from "../../core/Status"
-import Theme from "core/ThemeManager"
+import Theme from "../../core/ThemeManager"
 
 // V127: Native Gtk Resolution
 
@@ -510,17 +510,16 @@ export default function Dock(gdkmonitor: any) {
         if (seedFrame && da) da.queue_draw()
     }
 
-    let lastMouseX = -1000
-    const updateAllTargets = (mouseX: number, seedFrame = true) => {
+    let lastMousePos = -1000
+    const updateAllTargets = (mousePos: number, seedFrame = true) => {
         // V320: Freeze magnification shifts while a menu is open to prevent "ghost menu" flickering
         if (menuState.openCount > 0) return
 
         const screenWidth = gdkmonitor.get_geometry().width
-        lastMouseX = mouseX
+        lastMousePos = mousePos
 
-        // Static centers are in screen coordinates, so pass mouseX directly.
-        // NO projection feedback loop — eliminates the vibration bug.
-        const pX = lastMouseX
+        // Static centers are in dock-axis coordinates (X for horizontal, Y for vertical).
+        const pX = lastMousePos
 
         const draggingId = dragBus.draggingId
         if (draggingId) {
@@ -1261,7 +1260,7 @@ export default function Dock(gdkmonitor: any) {
             }
 
             if (!tickId) runUnifiedTick()
-            if (!skipTargets) updateAllTargets(lastMouseX, false)
+            if (!skipTargets) updateAllTargets(lastMousePos, false)
             updateSize()
             return bar
         } catch (e) {
