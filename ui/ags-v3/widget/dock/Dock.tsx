@@ -58,9 +58,10 @@ export default function Dock(gdkmonitor: any) {
             !effectivePinned.some(p => norm(p) === c)
         ).length
 
-        // Total = Launcher(1) + Home(1) + Pinned + Running + Trash(1) + Separators(2)
+        // Total = Launcher(1) + Home(1) + Pinned + Running + Trash(1) + sep-trash(1) + sep-running(0 or 1)
         const apps = 3 + effectivePinned.length + runningUnpinnedCount
-        return (apps * DOCK_CONSTANTS.APP_SLOT) + (2 * DOCK_CONSTANTS.SEPARATOR_SLOT)
+        const separators = 1 + (runningUnpinnedCount > 0 ? 1 : 0)
+        return (apps * DOCK_CONSTANTS.APP_SLOT) + (separators * DOCK_CONSTANTS.SEPARATOR_SLOT)
     }
 
     const initialPinned = [...pinnedState.list]
@@ -1023,18 +1024,20 @@ export default function Dock(gdkmonitor: any) {
                 }
             })
 
-            const separatorId = "sep-running"
-            configs.push({
-                id: separatorId, width: DOCK_CONSTANTS.SEPARATOR_SLOT,
-                syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
-                isPinned: true,
-                isSeparator: true,
-                factory: (vc) => {
-                    const w = Separator(separatorId, update, (id, s) => animRegistry.set(id, s), onReorder)
-                    if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
-                    return w
-                }
-            })
+            if (runningUnpinnedKeys.length > 0) {
+                const separatorId = "sep-running"
+                configs.push({
+                    id: separatorId, width: DOCK_CONSTANTS.SEPARATOR_SLOT,
+                    syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
+                    isPinned: true,
+                    isSeparator: true,
+                    factory: (vc) => {
+                        const w = Separator(separatorId, update, (id, s) => animRegistry.set(id, s), onReorder)
+                        if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
+                        return w
+                    }
+                })
+            }
 
             runningUnpinnedKeys.forEach(k => {
                 const group = groupedClients[k]
