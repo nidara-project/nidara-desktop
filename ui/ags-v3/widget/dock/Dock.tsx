@@ -172,8 +172,9 @@ export default function Dock(gdkmonitor: any) {
     const dockMonitorHeight = gdkmonitor.get_geometry().height
     // For vertical: window spans available height (excluding top bar)
     const verticalUsableH = dockMonitorHeight - BAR_HEIGHT
-    // For vertical: window is pill-wide; for horizontal: full-screen-wide
-    const WIN_W = isVertical ? DOCK_CONSTANTS.EXCLUSIVE_ZONE : dockMonitorWidth
+    // For vertical: window is WINDOW_HEIGHT wide (matches horizontal window height)
+    // giving icons room to grow toward the screen center, same logic as horizontal upward growth.
+    const WIN_W = isVertical ? DOCK_CONSTANTS.WINDOW_HEIGHT : dockMonitorWidth
     const WIN_H = isVertical ? verticalUsableH : DOCK_CONSTANTS.WINDOW_HEIGHT
     const sideEdge = dockSettings.position === 'left' ? Gtk4LayerShell.Edge.LEFT : Gtk4LayerShell.Edge.RIGHT
 
@@ -194,8 +195,11 @@ export default function Dock(gdkmonitor: any) {
         css_classes: ["cd-bar"],
         spacing: 0,
         orientation: isVertical ? Gtk.Orientation.VERTICAL : Gtk.Orientation.HORIZONTAL,
-        halign: isVertical ? Gtk.Align.CENTER : Gtk.Align.START,
+        halign: isVertical
+            ? (dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END)
+            : Gtk.Align.START,
         valign: isVertical ? Gtk.Align.START : Gtk.Align.END,
+        overflow: isVertical ? Gtk.Overflow.VISIBLE : Gtk.Overflow.HIDDEN,
         hexpand: false,
         vexpand: false,
     })
@@ -213,7 +217,10 @@ export default function Dock(gdkmonitor: any) {
         if (isVertical) {
             const pw = DOCK_CONSTANTS.PILL_HEIGHT
             const ph = smoothedBarWidth + DOCK_CONSTANTS.BASE_MARGIN * 2
-            const px = dockSettings.position === 'right' ? 0 : dockSettings.screenGap
+            // Pill sits at the screen edge: right dock → rightmost, left dock → leftmost + gap
+            const px = dockSettings.position === 'right'
+                ? WIN_W - DOCK_CONSTANTS.EXCLUSIVE_ZONE
+                : dockSettings.screenGap
             const py = Math.max(0, Math.round((verticalUsableH - ph) / 2))
             cr.translate(px, py)
             drawSquircle(cr, pw, ph, undefined, 0.15, true, undefined, undefined, false, undefined, 3.2, 1.0, 0)
@@ -354,8 +361,10 @@ export default function Dock(gdkmonitor: any) {
                     lastRoundedX = newRoundedX
 
                     if (isVertical) {
+                        const edgeAlign = dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END
                         if (revealer.height_request !== slotW) revealer.height_request = slotW
                         if (revealer.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) revealer.width_request = DOCK_CONSTANTS.PILL_HEIGHT
+                        revealer.halign = edgeAlign
                         // Horizontal separator line in vertical mode
                         const centerBox = itemBox as Gtk.CenterBox
                         const line = centerBox?.get_center_widget() as Gtk.Box
@@ -384,22 +393,25 @@ export default function Dock(gdkmonitor: any) {
                     const marginR = Math.ceil(remaining / 2)
 
                     if (isVertical) {
-                        // Vertical: slot height = slotW, full pill width
+                        // Vertical: slot height grows with magnification, width = tps so icon
+                        // overflows toward screen center (same as horizontal icons growing upward).
+                        const edgeAlign = dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END
                         if (revealer.height_request !== slotW) revealer.height_request = slotW
-                        if (revealer.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) revealer.width_request = DOCK_CONSTANTS.PILL_HEIGHT
-                        // Keep the actual GTK Revealer wrapper (widgetCache entry) in sync.
-                        // The tick's `revealer` variable is actually state.widget (itemBox), not
-                        // the GTK Revealer, so we sync the Revealer separately every frame.
+                        if (revealer.width_request !== tps) revealer.width_request = tps
+                        revealer.overflow = Gtk.Overflow.VISIBLE
+                        revealer.halign = edgeAlign
+                        // Sync the actual GTK Revealer wrapper too
                         const gtkRev = widgetCache.get(id) as any
                         if (gtkRev && gtkRev !== (revealer as any)) {
                             if (gtkRev.height_request !== slotW) gtkRev.height_request = slotW
-                            if (gtkRev.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) gtkRev.width_request = DOCK_CONSTANTS.PILL_HEIGHT
+                            if (gtkRev.width_request !== tps) gtkRev.width_request = tps
+                            gtkRev.overflow = Gtk.Overflow.VISIBLE
+                            gtkRev.halign = edgeAlign
                         }
                         if (itemBox) {
-                            // Fill full pill width so indicator and icon position correctly
-                            itemBox.halign = Gtk.Align.FILL
+                            itemBox.halign = edgeAlign  // anchor to screen edge, grow toward center
                             itemBox.valign = Gtk.Align.START
-                            if (itemBox.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) itemBox.width_request = DOCK_CONSTANTS.PILL_HEIGHT
+                            if (itemBox.width_request !== tps) itemBox.width_request = tps
                             if (itemBox.height_request !== tps) itemBox.height_request = tps
                             if (itemBox.margin_top !== marginL) itemBox.margin_top = marginL
                             if (itemBox.margin_bottom !== marginR) itemBox.margin_bottom = marginR
@@ -419,16 +431,17 @@ export default function Dock(gdkmonitor: any) {
                     const overlay = itemBox?.get_first_child() as Gtk.Overlay
                     if (overlay) {
                         if (isVertical) {
-                            // Force overlay to fill the full pill width so icon+indicator position correctly
-                            overlay.set_size_request(DOCK_CONSTANTS.PILL_HEIGHT, tps)
-                            overlay.halign = Gtk.Align.FILL
+                            // Square overlay — icon grows in both axes, anchored to screen edge
+                            const edgeAlign = dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END
+                            overlay.set_size_request(tps, tps)
+                            overlay.halign = edgeAlign
                         }
                         const iconBox = overlay.get_child() as Gtk.Box
                         if (iconBox) {
                             iconBox.set_size_request(tps, tps)
                             if (isVertical) {
-                                // Icon centered within full pill width
-                                iconBox.halign = Gtk.Align.CENTER
+                                const edgeAlign = dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END
+                                iconBox.halign = edgeAlign
                                 iconBox.valign = Gtk.Align.CENTER
                                 iconBox.margin_bottom = 0
                             }
@@ -607,14 +620,13 @@ export default function Dock(gdkmonitor: any) {
                 // @ts-ignore
                 region.unionRectangle({ x: edgeX, y: 0, width: 4, height: WIN_H })
             } else {
-                // Visible: pill column extended to the wall so cursor moving toward the screen
-                // edge doesn't fire a leave event. Restrict Y to pill area so transparent
-                // space above/below passes clicks through to underlying windows.
-                const pillX = dockSettings.position === 'left' ? dockSettings.screenGap : 0
+                // Visible: include the full overflow zone (icons grow toward screen center)
+                // plus the pill area. Restrict Y to pill area so transparent space above/below
+                // passes clicks through to underlying windows.
                 const ph = smoothedBarWidth + DOCK_CONSTANTS.BASE_MARGIN * 2
                 const py = Math.max(0, Math.round((verticalUsableH - ph) / 2))
                 // @ts-ignore
-                region.unionRectangle({ x: pillX, y: py, width: WIN_W - pillX, height: ph })
+                region.unionRectangle({ x: 0, y: py, width: WIN_W, height: ph })
             }
             surface.set_input_region(region)
             return
