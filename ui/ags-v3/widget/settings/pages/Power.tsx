@@ -26,7 +26,7 @@ const parseHypridle = (): IdleConfig => {
         }
         return {
             screenOff: blocks.find(b => b.onTimeout.includes("dpms off"))?.timeout ?? 0,
-            lock:      blocks.find(b => b.onTimeout.includes("lock-session") || b.onTimeout.includes("hyprlock"))?.timeout ?? 0,
+            lock:      blocks.find(b => b.onTimeout.includes("crystal-lock") || b.onTimeout.includes("lock-session") || b.onTimeout.includes("hyprlock"))?.timeout ?? 0,
             suspend:   blocks.find(b => b.onTimeout.includes("suspend"))?.timeout ?? 0,
         }
     } catch {
@@ -40,8 +40,8 @@ const writeHypridle = ({ screenOff, lock, suspend }: IdleConfig) => {
         "# Edited via Settings → Energía → Inactividad",
         "",
         "general {",
-        "    lock_cmd = pidof hyprlock || hyprlock",
-        "    before_sleep_cmd = loginctl lock-session",
+        "    lock_cmd = crystal-lock",
+        "    before_sleep_cmd = crystal-lock",
         "    after_sleep_cmd = hyprctl dispatch dpms on",
         "    ignore_dbus_inhibit = false",
         "}",
@@ -57,7 +57,7 @@ const writeHypridle = ({ screenOff, lock, suspend }: IdleConfig) => {
     if (lock > 0) lines.push(
         "listener {",
         `    timeout = ${lock}`,
-        "    on-timeout = loginctl lock-session",
+        "    on-timeout = crystal-lock",
         "}", ""
     )
     if (suspend > 0) lines.push(
@@ -184,7 +184,7 @@ export default function PowerPage() {
 
     idleGroup.listBox.append(dropdownRow(
         "Bloquear sesión",
-        "Tiempo sin actividad antes de bloquear con hyprlock",
+        "Tiempo sin actividad antes de bloquear la sesión",
         closestLabel(lockOpts, cfg.lock),
         lockOpts.map(o => o.label),
         (label) => {
