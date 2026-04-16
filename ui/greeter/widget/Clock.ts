@@ -36,6 +36,7 @@ export default function Clock(): Gtk.Widget {
     orientation: Gtk.Orientation.VERTICAL,
     halign: Gtk.Align.CENTER,
     spacing: 4,
+    css_classes: ["greeter-clock-container"],
   })
   box.append(timeLabel)
   box.append(dateLabel)

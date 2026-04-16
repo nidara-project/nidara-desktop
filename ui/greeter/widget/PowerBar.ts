@@ -12,7 +12,7 @@ function PowerButton(icon: string, label: string, action: () => void): Gtk.Butto
 }
 
 export default function PowerBar(): Gtk.Widget {
-  const bar = new Gtk.Box({ spacing: 8, halign: Gtk.Align.CENTER })
+  const bar = new Gtk.Box({ spacing: 4, halign: Gtk.Align.CENTER, css_classes: ["greeter-power-bar"] })
 
   bar.append(PowerButton("media-playback-pause-symbolic", "Suspender",
     () => execAsync("systemctl suspend").catch(console.error)))

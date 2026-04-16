@@ -49,7 +49,7 @@ export default function Greeter(monitor: Gdk.Monitor) {
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
     Gtk4LayerShell.set_exclusive_zone(win, -1)
-    Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+    Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
   } catch (e) {
     console.error("[Greeter] LayerShell failed — falling back to fullscreen:", e)
     win.fullscreen()
@@ -57,28 +57,5 @@ export default function Greeter(monitor: Gdk.Monitor) {
 
   win.present()
 
-  // Focus password field after layout settles
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-    const card = loginCard as any
-    // Walk to find GtkPasswordEntry and focus it
-    const findAndFocusPassword = (widget: Gtk.Widget): boolean => {
-      if (widget instanceof Gtk.PasswordEntry) {
-        widget.grab_focus()
-        return true
-      }
-      let child = widget.get_first_child()
-      while (child) {
-        if (findAndFocusPassword(child)) return true
-        child = child.get_next_sibling()
-      }
-      return false
-    }
-    findAndFocusPassword(loginCard)
-    return GLib.SOURCE_REMOVE
-  })
-
   return win
 }
-
-// GLib needs to be imported for the timeout
-import GLib from "gi://GLib"

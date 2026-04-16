@@ -20,7 +20,7 @@ const cssPath = GLib.file_test("./style.css", GLib.FileTest.EXISTS)
   : "/usr/share/crystal-shell/ui/greeter/style.css"
 
 app.start({
-  applicationId: "com.crystalshell.greeter",
+  instanceName: "crystal-greeter",
   css: cssPath,
 
   main() {

@@ -31,6 +31,16 @@ window > contents {
 }
 
 // ── Clock ──────────────────────────────────────────────────────────────────
+// Must have alpha > 0.3 (ignore_alpha threshold) so blur is consistent
+// across the entire container. No text-shadow — would fade to 0 and create
+// a visible blur cutoff ring around the text.
+.greeter-clock-container {
+  background: rgba(14, 14, 22, 0.50);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 24px;
+  padding: 16px 40px 12px;
+}
+
 .greeter-clock {
   font-size: 96px;
   font-weight: 200;
@@ -41,18 +51,19 @@ window > contents {
 .greeter-date {
   font-size: 15px;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.55);
   letter-spacing: 0.3px;
   margin-top: 2px;
 }
 
 // ── Card ───────────────────────────────────────────────────────────────────
+// No external box-shadow — it would extend into the transparent layer area
+// and get blurred by Hyprland. Depth comes from border + inner highlight.
 .greeter-card {
-  background: rgba(14, 14, 22, 0.60);
-  border: 1px solid var(--crystal-border);
+  background: rgba(14, 14, 22, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--crystal-radius-lg);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45),
-              inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
   padding: 32px 28px 24px;
   min-width: 340px;
 }
@@ -121,16 +132,16 @@ passwordentry.greeter-password > button {
   padding: 10px 24px;
   font-weight: 600;
   font-size: 0.9rem;
-  box-shadow: 0 4px 14px rgba(0, 136, 255, 0.3);
+  box-shadow: none;
   min-height: 0;
   margin-top: 4px;
 
   &:hover {
     background: #1a96ff;
-    box-shadow: 0 4px 18px rgba(0, 136, 255, 0.45);
+    box-shadow: none;
   }
 
-  &:active { background: #006ecc; box-shadow: none; }
+  &:active { background: #006ecc; }
 
   &:disabled {
     background: rgba(0, 136, 255, 0.25);
@@ -140,26 +151,82 @@ passwordentry.greeter-password > button {
 }
 
 // ── Session picker ─────────────────────────────────────────────────────────
-.greeter-session-label {
-  font-size: 0.8rem;
-  color: rgba(255, 255, 255, 0.45);
-  min-width: 48px;
-}
-
-.greeter-session-drop,
-.greeter-session-drop > button {
+.greeter-session-dropdown {
+  // Strip the default "combo" frame/entry look
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: var(--crystal-radius-sm);
   color: rgba(255, 255, 255, 0.7);
-  padding: 6px 10px;
   box-shadow: none;
   font-size: 0.82rem;
   min-height: 0;
+  padding: 0;
+
+  // The inner toggle button
+  > button {
+    background: transparent;
+    border: none;
+    border-radius: var(--crystal-radius-sm);
+    box-shadow: none;
+    padding: 7px 12px;
+    color: inherit;
+    min-height: 0;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+  }
 
   &:hover {
-    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.22);
     color: rgba(255, 255, 255, 0.9);
+  }
+
+}
+
+// DropDown popup — GTK4 DropDown uses a GtkListView inside a popover
+popover.background {
+  background: rgba(14, 14, 22, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--crystal-radius-sm);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  padding: 4px;
+
+  > contents {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  // The scrolled window wrapper adds margin — strip it
+  scrolledwindow,
+  scrolledwindow > viewport,
+  scrolledwindow > undershoot,
+  scrolledwindow > overshoot {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    min-height: 0;
+  }
+
+  // GtkListView inside the dropdown
+  listview {
+    background: transparent;
+    padding: 0;
+    margin: 0;
+    border: none;
+
+    > row {
+      padding: 6px 10px;
+      border-radius: 6px;
+      color: rgba(255, 255, 255, 0.75);
+      min-height: 0;
+
+      &:hover    { background: rgba(255, 255, 255, 0.08); color: #fff; }
+      &:selected { background: rgba(99, 179, 237, 0.18);   color: #fff; }
+    }
   }
 }
 
@@ -184,19 +251,25 @@ passwordentry.greeter-password > button {
 }
 
 // ── Power bar ──────────────────────────────────────────────────────────────
+.greeter-power-bar {
+  background: rgba(10, 10, 18, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--crystal-radius-pill);
+  padding: 4px 6px;
+}
+
 .greeter-power-btn {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: transparent;
+  border: none;
   border-radius: var(--crystal-radius-pill);
   color: rgba(255, 255, 255, 0.5);
-  padding: 7px 18px;
+  padding: 6px 16px;
   font-size: 0.82rem;
   box-shadow: none;
   min-height: 0;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.11);
+    background: rgba(255, 255, 255, 0.09);
     color: rgba(255, 255, 255, 0.88);
-    border-color: rgba(255, 255, 255, 0.18);
   }
 }
