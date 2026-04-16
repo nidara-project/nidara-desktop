@@ -19,10 +19,19 @@ if pgrep -x crystal-lock | grep -qv "^${SELF}$"; then
     exit 0
 fi
 
-if [ -x "$BUNDLE" ]; then
-    cd /usr/share/crystal-shell/ui/lockscreen
-    exec "$BUNDLE" >> "$LOG" 2>&1
+if [ ! -x "$BUNDLE" ]; then
+    echo "[$(date '+%H:%M:%S')] crystal-lock: ERROR — bundle not found at $BUNDLE" | tee -a "$LOG"
+    exit 1
 fi
 
-echo "[$(date '+%H:%M:%S')] crystal-lock: ERROR — bundle not found at $BUNDLE" | tee -a "$LOG"
-exit 1
+# Switch to empty special workspace so no windows are visible behind the lockscreen
+PREV_WS=$(hyprctl activeworkspace -j 2>/dev/null | jq -r '.id // empty')
+hyprctl dispatch workspace special:lock >> "$LOG" 2>&1 || true
+
+cd /usr/share/crystal-shell/ui/lockscreen
+"$BUNDLE" >> "$LOG" 2>&1
+
+# Restore previous workspace after unlock
+if [ -n "$PREV_WS" ]; then
+    hyprctl dispatch workspace "$PREV_WS" >> "$LOG" 2>&1 || true
+fi
