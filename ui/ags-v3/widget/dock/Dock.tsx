@@ -116,7 +116,7 @@ export default function Dock(gdkmonitor: any) {
         let finalIdx = previewIdx
         if (finalIdx === -1) {
             console.warn(`[Dock] onReorder: previewIdx was -1 for ${nsid}. Re-calculating...`)
-            const relX = lastMouseX - lockedStartX
+            const relX = lastMousePos - lockedStartX
             finalIdx = Math.floor(relX / DOCK_CONSTANTS.APP_SLOT)
         }
 
@@ -526,7 +526,7 @@ export default function Dock(gdkmonitor: any) {
             // V480: STATIC LOGIC ANCHOR
             // We use the startX captured when the drag began for the GRID.
             // This makes slot calculation absolute and immune to visual shifts.
-            const relX = lastMouseX - lockedStartX
+            const relX = lastMousePos - lockedStartX
 
             // V482: 50% STICKY SLOT HYSTERESIS
             const slotSize = DOCK_CONSTANTS.APP_SLOT
@@ -663,8 +663,10 @@ export default function Dock(gdkmonitor: any) {
             updateInputRegion(smoothedBarWidth)
         }
 
-        // Vertical dock: no magnification — tick runs only when needed (reveal/hide/update)
-        if (isVertical) return
+        if (isVertical) {
+            if (!dragBus.draggingId) updateAllTargets(y)
+            return
+        }
 
         if (dragBus.draggingId) {
             updateAllTargets(x)
@@ -723,7 +725,7 @@ export default function Dock(gdkmonitor: any) {
     barDropTarget.connect("motion", (t, x, y) => {
         // V478: Signal Tunneling
         // Connect motion to mouseBus to drive animations during drag
-        mouseBus.emit(x) // Since DropTarget is on layout, x is already window-relative
+        mouseBus.emit(isVertical ? y : x)
         return Gdk.DragAction.MOVE
     })
 
@@ -837,7 +839,9 @@ export default function Dock(gdkmonitor: any) {
                 const widget = factory()
                 const revealer = new (Gtk as any).Revealer({
                     css_classes: ["cd-revealer"],
-                    transition_type: isVertical ? Gtk.RevealerTransitionType.NONE : Gtk.RevealerTransitionType.SLIDE_LEFT,
+                    transition_type: isVertical
+                        ? (dockSettings.position === 'left' ? Gtk.RevealerTransitionType.SLIDE_RIGHT : Gtk.RevealerTransitionType.SLIDE_LEFT)
+                        : Gtk.RevealerTransitionType.SLIDE_UP,
                     transition_duration: 300,
                     child: widget,
                     reveal_child: firstRender
@@ -1127,14 +1131,15 @@ export default function Dock(gdkmonitor: any) {
 
             totalStaticWidth = validConfigs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
 
-            const screenWidth = gdkmonitor.get_geometry().width
-            const startX = (screenWidth - totalStaticWidth) / 2
-            let runningX = startX
+            // staticCenter is in dock-axis coords: X for bottom dock, Y for side docks
+            const axisSize = isVertical ? verticalUsableH : gdkmonitor.get_geometry().width
+            const axisStart = Math.max(0, (axisSize - totalStaticWidth) / 2)
+            let runningAxis = axisStart
 
             const finalItems = validConfigs.map((c) => {
                 const slotWidth = c.width || DOCK_CONSTANTS.APP_SLOT
-                const myCenter = runningX + (slotWidth / 2)
-                runningX += slotWidth
+                const myCenter = runningAxis + (slotWidth / 2)
+                runningAxis += slotWidth
 
                 const widget = getOrCreateItem(c.id, () => c.factory(myCenter))
                 const state = animRegistry.get(c.id)
@@ -1179,7 +1184,7 @@ export default function Dock(gdkmonitor: any) {
             }
 
             let totalCurrentWidth = 0
-            const pX_sync = lastMouseX
+            const pX_sync = lastMousePos
 
             orderedIds.forEach((id) => {
                 const state = animRegistry.get(id)
