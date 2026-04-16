@@ -130,7 +130,7 @@ function SystemMenuOverlay() {
   }))
   menuBox.append(sep())
   menuBox.append(makeRow("changes-prevent-symbolic", "Bloquear Pantalla", false, () =>
-    closeAndRun(["loginctl", "lock-session"])
+    closeAndRun(["crystal-lock"])
   ))
   menuBox.append(makeRow("system-suspend-symbolic", "Suspender", false, () =>
     closeAndRun(["systemctl", "suspend"])
