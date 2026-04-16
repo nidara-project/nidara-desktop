@@ -676,7 +676,20 @@ export default function Dock(gdkmonitor: any) {
         }
 
         if (isVertical) {
-            if (!dragBus.draggingId) updateAllTargets(y)
+            if (!dragBus.draggingId) {
+                // xLimit is the pill's screen-edge boundary in window coords.
+                // Equivalent to yLimit in horizontal: cursor beyond the normal pill area
+                // (in the overflow zone only) resets magnification.
+                const xLimit = dockSettings.position === 'right'
+                    ? WIN_W - DOCK_CONSTANTS.EXCLUSIVE_ZONE
+                    : DOCK_CONSTANTS.EXCLUSIVE_ZONE
+                const beyondPill = dockSettings.position === 'right' ? x < xLimit : x > xLimit
+                if (beyondPill) {
+                    updateAllTargets(-1000)
+                } else {
+                    updateAllTargets(y)
+                }
+            }
             return
         }
 
