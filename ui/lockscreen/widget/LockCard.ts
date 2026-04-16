@@ -9,9 +9,6 @@ export default function LockCard(): Gtk.Widget {
   const user = getDefaultUser()
   let isAuthenticating = false
 
-  // ── PAM instance ──────────────────────────────────────────────────────────
-  const pam = new AstalAuth.Pam()
-
   // ── Avatar ────────────────────────────────────────────────────────────────
   const avatar = user.avatarPath
     ? new Gtk.Image({ file: user.avatarPath, pixel_size: 56, css_classes: ["greeter-avatar"] })
@@ -72,28 +69,6 @@ export default function LockCard(): Gtk.Widget {
     })
   }
 
-  // PAM signals
-  pam.connect("success", () => {
-    app.quit()
-  })
-
-  pam.connect("fail", (_: any, msg: string) => {
-    console.error("[Lock] auth fail:", msg)
-    showError("Contraseña incorrecta")
-    passwordEntry.set_text("")
-    passwordEntry.grab_focus()
-    setLoading(false)
-  })
-
-  // Some PAM modules send info/error messages during auth
-  pam.connect("error-msg", (_: any, msg: string) => {
-    console.warn("[Lock] PAM error-msg:", msg)
-  })
-
-  pam.connect("info-msg", (_: any, msg: string) => {
-    console.log("[Lock] PAM info-msg:", msg)
-  })
-
   const doUnlock = () => {
     if (isAuthenticating) return
     const password = passwordEntry.get_text()
@@ -102,14 +77,44 @@ export default function LockCard(): Gtk.Widget {
     setLoading(true)
     errorLabel.visible = false
 
-    try {
-      pam.start_authenticate(user.username)
-      pam.supply_secret(password)
-    } catch (e: any) {
-      console.error("[Lock] PAM start error:", e)
-      showError("Error de autenticación")
+    // Create a fresh Pam instance for each authentication attempt
+    const pam = new AstalAuth.Pam()
+    pam.username = user.username
+
+    pam.connect("success", () => {
+      app.quit()
+    })
+
+    pam.connect("fail", (_: any, msg: string) => {
+      console.error("[Lock] auth fail:", msg)
+      showError("Contraseña incorrecta")
+      passwordEntry.set_text("")
+      passwordEntry.grab_focus()
       setLoading(false)
-    }
+    })
+
+    // PAM asks for password via this signal
+    pam.connect("auth-prompt-hidden", () => {
+      pam.supply_secret(password)
+    })
+
+    // For visible prompts (unusual for password auth, but handle gracefully)
+    pam.connect("auth-prompt-visible", () => {
+      pam.supply_secret("")
+    })
+
+    // Info/error messages from PAM modules — just log them
+    pam.connect("auth-info", (_: any, msg: string) => {
+      console.log("[Lock] PAM info:", msg)
+      pam.supply_secret(null)
+    })
+
+    pam.connect("auth-error", (_: any, msg: string) => {
+      console.warn("[Lock] PAM error:", msg)
+      pam.supply_secret(null)
+    })
+
+    pam.start_authenticate()
   }
 
   passwordEntry.connect("activate", doUnlock)
