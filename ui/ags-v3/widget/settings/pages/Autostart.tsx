@@ -146,7 +146,7 @@ export default function AutostartPage() {
 
     const buildAddRow = (): Gtk.ListBoxRow => {
         const entry = new Gtk.Entry({
-            placeholder_text: "Comando (ej: nm-applet)",
+            placeholder_text: t("settings.autostart.entry.placeholder"),
             hexpand: true,
             valign: Gtk.Align.CENTER,
             css_classes: ["settings-entry"],

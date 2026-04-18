@@ -170,6 +170,7 @@ export default {
     "settings.autostart.page.subtitle.programas-que-se-inician-con-hyprland": "Programs that start with Hyprland",
     "settings.autostart.page.title.inicio-automatico": "Autostart",
     "settings.autostart.tooltip.eliminar": "Remove",
+    "settings.autostart.entry.placeholder": "Command (e.g. nm-applet)",
 
     // Bluetooth
     "settings.bluetooth.group.buscar-dispositivos": "Search Devices",
