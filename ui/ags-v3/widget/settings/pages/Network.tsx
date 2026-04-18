@@ -11,7 +11,7 @@ export default function NetworkPage() {
     page.append(pageHeader(t("settings.network.page.title.red"), t("settings.network.page.subtitle.administra-las-conexiones-de-red-y-param")))
 
     const getIp = (service: any) => {
-        if (!service) return "None"
+        if (!service) return t("settings.network.label.none")
         if (service.ip4_address && service.ip4_address !== "None") return String(service.ip4_address)
         try {
             const addrs = service.device?.get_ip4_config()?.get_addresses()
@@ -19,7 +19,7 @@ export default function NetworkPage() {
         } catch (e) {
             console.warn("[NetworkSettings] Failed to resolve IP:", e)
         }
-        return "None"
+        return t("settings.network.label.none")
     }
 
     // ── Ethernet ──
@@ -27,14 +27,15 @@ export default function NetworkPage() {
         const wiredGroup = listGroup(t("settings.network.group.cableada-ethernet"))
 
         const wiredStatus = staticLabel(
-            network.wired.internet === AstalNetwork.Internet.CONNECTED ? "Conectada" : "Desconectada"
+            network.wired.internet === AstalNetwork.Internet.CONNECTED
+                ? t("settings.network.label.conectada") : t("settings.network.label.desconectada")
         )
         const interfaceLabel = staticLabel(network.wired.device?.interface || "---")
         const ipLabel = staticLabel(getIp(network.wired))
 
         const updateWired = () => {
             wiredStatus.label = network.wired.internet === AstalNetwork.Internet.CONNECTED
-                ? "Conectada" : "Desconectada"
+                ? t("settings.network.label.conectada") : t("settings.network.label.desconectada")
             interfaceLabel.label = String(network.wired.device?.interface || "---")
             ipLabel.label = getIp(network.wired)
         }
@@ -62,7 +63,7 @@ export default function NetworkPage() {
 
         const updateWifi = () => {
             if (!network.wifi) return
-            wifiSsidLabel.label = String(network.wifi.ssid || "Desconectado")
+            wifiSsidLabel.label = String(network.wifi.ssid || t("settings.network.label.desconectado"))
             wifiIpLabel.label = getIp(network.wifi)
             const speed = network.wifi.active_access_point?.speed || 0
             wifiSpeedLabel.label = speed > 0 ? `${speed} Mbps` : "---"
@@ -89,12 +90,12 @@ export default function NetworkPage() {
             aps.slice(0, 10).forEach((ap: any) => {
                 if (!ap.ssid) return
                 const btn = new Gtk.Button({
-                    label: ap.active ? "Conectado" : "Conectar",
+                    label: ap.active ? t("settings.network.ap.label.conectado") : t("settings.network.ap.label.conectar"),
                     css_classes: [ap.active ? "accent-pill" : "flat-pill"],
                     valign: Gtk.Align.CENTER,
                 })
                 apListGroup.listBox.append(
-                    createRow(ap.ssid, `Intensidad: ${ap.strength}% | ${ap.frequency}MHz`, btn)
+                    createRow(ap.ssid, `${t("settings.network.ap.desc.intensidad")} ${ap.strength}% | ${ap.frequency}MHz`, btn)
                 )
             })
             apListGroup.box.visible = aps.length > 0 && network.wifi.enabled
@@ -107,7 +108,7 @@ export default function NetworkPage() {
         const noWifiGroup = listGroup(t("settings.network.group.inalambrica"))
         noWifiGroup.listBox.append(
             createRow(t("settings.network.row.label.estado-del-hardware"), t("settings.network.row.desc.no-se-encontro-ningun-adaptador-compatib"),
-                staticLabel("Hardware Wi-Fi no detectado"))
+                staticLabel(t("settings.network.label.hw-wifi-no-detectado")))
         )
         page.append(noWifiGroup.box)
     }

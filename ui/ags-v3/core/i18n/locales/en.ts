@@ -273,6 +273,14 @@ export default {
     "settings.network.row.label.interfaz": "Interface",
     "settings.network.row.label.punto-de-acceso": "Access Point",
     "settings.network.row.label.velocidad": "Speed",
+    "settings.network.label.conectada": "Connected",
+    "settings.network.label.desconectada": "Disconnected",
+    "settings.network.label.desconectado": "Disconnected",
+    "settings.network.label.hw-wifi-no-detectado": "Wi-Fi hardware not detected",
+    "settings.network.label.none": "None",
+    "settings.network.ap.label.conectado": "Connected",
+    "settings.network.ap.label.conectar": "Connect",
+    "settings.network.ap.desc.intensidad": "Strength:",
 
     // Power
     "settings.power.group.inactividad-y-bloqueo": "Idle & Lock",
