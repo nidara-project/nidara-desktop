@@ -154,8 +154,8 @@ window.nc-window-2 {
 }
 
 .cc-slot-placeholder {
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(var(--crystal-accent-rgb), 0.08);
+    border: 1.5px dashed rgba(var(--crystal-accent-rgb), 0.4);
     border-radius: 9999px;
 }
 
