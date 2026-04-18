@@ -80,32 +80,32 @@ const writeHypridle = ({ screenOff, lock, suspend }: IdleConfig) => {
 
 // ── Option tables ─────────────────────────────────────────────────────────────
 const screenOpts = [
-    { label: t("settings.power.label.nunca"),   s: 0    },
-    { label: "2 min",   s: 120  },
-    { label: "5 min",   s: 300  },
-    { label: "10 min",  s: 600  },
-    { label: "20 min",  s: 1200 },
-    { label: "30 min",  s: 1800 },
+    { label: t("settings.power.label.nunca"),                              s: 0    },
+    { label: `2 ${t("settings.power.time.min")}`,                         s: 120  },
+    { label: `5 ${t("settings.power.time.min")}`,                         s: 300  },
+    { label: `10 ${t("settings.power.time.min")}`,                        s: 600  },
+    { label: `20 ${t("settings.power.time.min")}`,                        s: 1200 },
+    { label: `30 ${t("settings.power.time.min")}`,                        s: 1800 },
 ]
 const lockOpts = [
-    { label: t("settings.power.label.nunca"),   s: 0    },
-    { label: "5 min",   s: 300  },
-    { label: "10 min",  s: 600  },
-    { label: "30 min",  s: 1800 },
-    { label: "1 hora",  s: 3600 },
-    { label: "2 horas", s: 7200 },
+    { label: t("settings.power.label.nunca"),                              s: 0    },
+    { label: `5 ${t("settings.power.time.min")}`,                         s: 300  },
+    { label: `10 ${t("settings.power.time.min")}`,                        s: 600  },
+    { label: `30 ${t("settings.power.time.min")}`,                        s: 1800 },
+    { label: `1 ${t("settings.power.time.hora")}`,                        s: 3600 },
+    { label: `2 ${t("settings.power.time.horas")}`,                       s: 7200 },
 ]
 const suspendOpts = [
-    { label: t("settings.power.label.nunca"),   s: 0     },
-    { label: "15 min",  s: 900   },
-    { label: "30 min",  s: 1800  },
-    { label: "1 hora",  s: 3600  },
-    { label: "2 horas", s: 7200  },
-    { label: "3 horas", s: 10800 },
+    { label: t("settings.power.label.nunca"),                              s: 0     },
+    { label: `15 ${t("settings.power.time.min")}`,                        s: 900   },
+    { label: `30 ${t("settings.power.time.min")}`,                        s: 1800  },
+    { label: `1 ${t("settings.power.time.hora")}`,                        s: 3600  },
+    { label: `2 ${t("settings.power.time.horas")}`,                       s: 7200  },
+    { label: `3 ${t("settings.power.time.horas")}`,                       s: 10800 },
 ]
 
 const closestLabel = (opts: { label: string; s: number }[], seconds: number) => {
-    if (seconds === 0) return "Nunca"
+    if (seconds === 0) return t("settings.power.label.nunca")
     let best = opts[0]
     for (const o of opts) if (Math.abs(o.s - seconds) < Math.abs(best.s - seconds)) best = o
     return best.label
