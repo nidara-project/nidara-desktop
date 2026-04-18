@@ -24,23 +24,17 @@ window.prism-window {
 }
 
 .prism-search-box {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: var(--crystal-surface-raised);
     border-radius: 12px;
     padding: 8px 16px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--crystal-border);
 }
 
-.prism-search-entry,
-.prism-search-entry:focus {
+.prism-search-entry {
     background: none;
-    border: none;
-    color: white;
+    color: var(--crystal-text);
     font-size: 1.4rem;
-    caret-color: white;
-    box-shadow: none;
-    outline: none;
-    outline-width: 0;
-    outline-color: transparent;
+    caret-color: var(--crystal-text);
 }
 
 .prism-results-list {
@@ -57,7 +51,7 @@ window.prism-window {
 
 .prism-result-row:hover,
 .prism-result-row:selected {
-    background-color: rgba(255, 255, 255, 0.1);
+    background-color: var(--crystal-surface-hover);
 }
 
 .prism-result-content {
@@ -68,13 +62,13 @@ window.prism-window {
 }
 
 .prism-result-title {
-    color: white;
+    color: var(--crystal-text);
     font-weight: 500;
     font-size: 1.1rem;
 }
 
 .prism-result-description {
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--crystal-text-disabled);
     font-size: 0.9rem;
 }
 

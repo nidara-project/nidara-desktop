@@ -59,7 +59,7 @@ function SeparatorRow(label: string): Gtk.ListBoxRow {
 }
 
 export default function Prism() {
-    const entry = new Gtk.Entry({
+    const entry = new Gtk.Text({
         placeholder_text: t("prism.placeholder"),
         css_classes: ["prism-search-entry"],
         hexpand: true,
