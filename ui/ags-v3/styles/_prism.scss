@@ -73,3 +73,16 @@ window.prism-window {
     color: rgba(255, 255, 255, 0.5);
     font-size: 0.9rem;
 }
+
+.prism-section-row {
+    background: transparent;
+    padding: 0;
+}
+
+.prism-section-label {
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}

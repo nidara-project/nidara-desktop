@@ -247,6 +247,11 @@ export default {
     "settings.dock.dockitem.label.desanclar-del-dock": "Desanclar del dock",
     "settings.dock.dockitem.label.mantener-en-el-dock": "Mantener en el dock",
 
+    // Prism (búsqueda)
+    "prism.placeholder": "Buscar apps y archivos recientes...",
+    "prism.section.apps": "Aplicaciones",
+    "prism.section.files": "Archivos Recientes",
+
     // Workspace Overview
     "overview.workspace": "Escritorio",
     "overview.empty": "Vacío",

@@ -324,6 +324,11 @@ export default {
     "settings.dock.dockitem.label.desanclar-del-dock": "Unpin from dock",
     "settings.dock.dockitem.label.mantener-en-el-dock": "Keep in dock",
 
+    // Prism (search)
+    "prism.placeholder": "Search apps and recent files...",
+    "prism.section.apps": "Applications",
+    "prism.section.files": "Recent Files",
+
     // Workspace Overview
     "overview.workspace": "Workspace",
     "overview.empty": "Empty",
