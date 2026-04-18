@@ -19,6 +19,8 @@ export default {
     "settings.input.keyboard.group": "Teclado",
     "settings.input.keyboard.numlock": "Bloqueo Numérico al iniciar",
     "settings.input.keyboard.numlock.desc": "Teclado numérico encendido por defecto",
+    "settings.input.keyboard.layout": "Distribución del teclado",
+    "settings.input.keyboard.layout.desc": "Layout de teclado activo en Hyprland",
 
     "settings.region.title": "Idioma y Región",
     "settings.region.subtitle": "Formato de hora, fecha y zona horaria del sistema",

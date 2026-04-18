@@ -94,8 +94,8 @@ export default function InputPage() {
     }
 
     kbList.append(dropdownRow(
-        "Distribución del teclado",
-        "Layout de teclado activo en Hyprland",
+        t("settings.input.keyboard.layout"),
+        t("settings.input.keyboard.layout.desc"),
         currentLayoutLabel(),
         layoutLabels,
         (label) => {

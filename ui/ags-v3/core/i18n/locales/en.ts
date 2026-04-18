@@ -19,6 +19,8 @@ export default {
     "settings.input.keyboard.group": "Keyboard",
     "settings.input.keyboard.numlock": "NumLock on Boot",
     "settings.input.keyboard.numlock.desc": "Enable numeric keypad by default",
+    "settings.input.keyboard.layout": "Keyboard Layout",
+    "settings.input.keyboard.layout.desc": "Active keyboard layout in Hyprland",
 
     "settings.region.title": "Language & Region",
     "settings.region.subtitle": "Time, date formats and system timezone",
