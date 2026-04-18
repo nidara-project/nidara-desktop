@@ -369,7 +369,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   
   syncOverlays()
 
-  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 10 })
+  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 8 })
   left.append(SystemMenuIcon())
   left.append(AppTitle(monGeo.width))
   const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER }); center.append(Workspaces())
