@@ -203,14 +203,6 @@
     font-weight: 500;
 }
 
-.system-menu-label.danger, .system-menu-row:hover .danger {
-    color: #ff5555;
-}
-
-.danger-icon {
-    color: #ff5555;
-    -gtk-icon-palette: success white, warning white, error #ff5555;
-}
 
 .system-menu-sep {
     background: rgba(255, 255, 255, 0.1);
@@ -239,15 +231,6 @@
         background: rgba(255, 255, 255, 0.18);
     }
 
-    &.danger-action {
-        background: rgba(220, 50, 40, 0.75);
-        color: rgba(255, 255, 255, 0.95);
-
-        &:hover {
-            background: rgba(220, 50, 40, 0.92);
-            color: white;
-        }
-    }
 }
 
 /* ── About Window ──────────────────────────────────────────────────────────── */
