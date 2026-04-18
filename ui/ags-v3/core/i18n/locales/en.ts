@@ -352,6 +352,26 @@ export default {
     "bar.system-menu.confirm.action.restart": "Restart",
     "bar.system-menu.confirm.action.shutdown": "Shut Down",
 
+    // Widget names (bar + settings panel)
+    "widget.bluetooth.name": "Bluetooth",
+    "widget.bluetooth.sub.active": "Active",
+    "widget.bluetooth.sub.inactive": "Inactive",
+    "widget.dark-mode.name": "Appearance",
+    "widget.dark-mode.sub.dark": "Dark",
+    "widget.dark-mode.sub.light": "Light",
+    "widget.focus.name": "Do Not Disturb",
+    "widget.calculator.name": "Calculator",
+
+    // Ethernet bar popover rows
+    "widget.ethernet.row.interface": "Interface",
+    "widget.ethernet.row.status": "Status",
+    "widget.ethernet.row.speed": "Speed",
+
+    // Wi-Fi bar popover rows
+    "widget.wifi.row.network": "Network",
+    "widget.wifi.row.status": "Status",
+    "widget.wifi.row.disabled": "Disabled",
+
     // Battery widget
     "widget.battery.label.bateria-no-disponible": "Battery not available",
     "widget.battery.name": "Battery",

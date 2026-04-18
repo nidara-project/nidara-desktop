@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import AstalNetwork from "gi://AstalNetwork"
 import { EthernetWidget } from "../control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { t } from "../../core/i18n"
 
 function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; update: () => void } {
     const key = new Gtk.Label({ label, css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
@@ -30,10 +31,10 @@ function buildBarContent(): Gtk.Widget {
     }
 
     // ── Popover content ──────────────────────────────────────────
-    const iface   = infoRow("Interfaz", () => (wired as any)?.device?.interface || "—")
-    const state   = infoRow("Estado",   () => isConnected() ? "Conectada" : "Desconectada")
-    const ip      = infoRow("IP",       () => (wired as any)?.ip4_address || (wired as any)?.ip4Address || "—")
-    const speed   = infoRow("Velocidad",() => {
+    const iface   = infoRow(t("widget.ethernet.row.interface"), () => (wired as any)?.device?.interface || "—")
+    const state   = infoRow(t("widget.ethernet.row.status"),    () => isConnected() ? t("cc.ethernet.sub.connected") : t("cc.ethernet.sub.disconnected"))
+    const ip      = infoRow("IP",                               () => (wired as any)?.ip4_address || (wired as any)?.ip4Address || "—")
+    const speed   = infoRow(t("widget.ethernet.row.speed"),     () => {
         const s = (wired as any)?.device?.speed
         return s ? `${s} Mb/s` : "—"
     })
@@ -49,7 +50,7 @@ function buildBarContent(): Gtk.Widget {
         margin_end: 14,
         width_request: 220,
     })
-    popBox.append(new Gtk.Label({ label: "Ethernet", css_classes: ["bar-popover-title"], halign: Gtk.Align.START }))
+    popBox.append(new Gtk.Label({ label: t("cc.ethernet.name"), css_classes: ["bar-popover-title"], halign: Gtk.Align.START }))
     popBox.append(new Gtk.Separator({ css_classes: ["bar-popover-sep"], margin_top: 2, margin_bottom: 2 }))
     popBox.append(iface.row)
     popBox.append(state.row)
@@ -71,7 +72,7 @@ function buildBarContent(): Gtk.Widget {
 
 const ethernetWidget: AtomicWidget = {
     id: "ethernet",
-    name: "Ethernet",
+    name: t("cc.ethernet.name"),
     icon: "network-wired-symbolic",
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,

@@ -2,6 +2,7 @@ import Theme from "../../core/ThemeManager"
 import { RoundToggle } from "../control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { makeIconAction } from "./bar-helpers"
+import { t } from "../../core/i18n"
 
 function buildBarContent() {
     return makeIconAction({
@@ -12,17 +13,17 @@ function buildBarContent() {
 
 const darkModeWidget: AtomicWidget = {
     id: "dark_mode",
-    name: "Apariencia",
+    name: t("widget.dark-mode.name"),
     icon: "weather-clear-night-symbolic",
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
     buildContent: (size) => RoundToggle(
-        "dark-mode", "Apariencia",
+        "dark-mode", t("widget.dark-mode.name"),
         () => Theme.isDark ? "weather-clear-night-symbolic" : "weather-clear-symbolic",
         () => Theme.isDark,
         () => Theme.setDarkMode(!Theme.isDark),
-        () => Theme.isDark ? "Oscuro" : "Claro",
+        () => Theme.isDark ? t("widget.dark-mode.sub.dark") : t("widget.dark-mode.sub.light"),
     ).buildContent(size),
     buildBarContent,
 }

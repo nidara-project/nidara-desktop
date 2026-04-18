@@ -2,6 +2,7 @@ import AstalNotifd from "gi://AstalNotifd"
 import { FocusWidget } from "../control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { makeIconAction } from "./bar-helpers"
+import { t } from "../../core/i18n"
 
 function buildBarContent() {
     const notifd = AstalNotifd.get_default()
@@ -15,7 +16,7 @@ function buildBarContent() {
 
 const focusWidget: AtomicWidget = {
     id: "focus",
-    name: "No Molestar",
+    name: t("widget.focus.name"),
     icon: "notifications-disabled-symbolic",
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,

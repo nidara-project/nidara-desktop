@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import AstalNetwork from "gi://AstalNetwork"
 import { WifiWidget } from "../control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { t } from "../../core/i18n"
 
 function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; update: () => void } {
     const key = new Gtk.Label({ label, css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
@@ -25,8 +26,8 @@ function buildBarContent(): Gtk.Widget {
     }
 
     // ── Popover content ──────────────────────────────────────────
-    const ssid    = infoRow("Red",    () => (wifi as any)?.ssid        || "—")
-    const state   = infoRow("Estado", () => (wifi as any)?.enabled === false ? "Desactivado" : "Conectado")
+    const ssid    = infoRow(t("widget.wifi.row.network"), () => (wifi as any)?.ssid        || "—")
+    const state   = infoRow(t("widget.wifi.row.status"),  () => (wifi as any)?.enabled === false ? t("widget.wifi.row.disabled") : t("cc.wifi.sub.connected"))
     const ip      = infoRow("IP",     () => (wifi as any)?.ip4_address || (wifi as any)?.ip4Address || "—")
 
     const updates = [ssid.update, state.update, ip.update]
@@ -40,7 +41,7 @@ function buildBarContent(): Gtk.Widget {
         margin_end: 14,
         width_request: 220,
     })
-    popBox.append(new Gtk.Label({ label: "Wi-Fi", css_classes: ["bar-popover-title"], halign: Gtk.Align.START }))
+    popBox.append(new Gtk.Label({ label: t("cc.wifi.name"), css_classes: ["bar-popover-title"], halign: Gtk.Align.START }))
     popBox.append(new Gtk.Separator({ css_classes: ["bar-popover-sep"], margin_top: 2, margin_bottom: 2 }))
     popBox.append(ssid.row)
     popBox.append(state.row)
@@ -61,7 +62,7 @@ function buildBarContent(): Gtk.Widget {
 
 const wifiWidget: AtomicWidget = {
     id: "wifi",
-    name: "Wi-Fi",
+    name: t("cc.wifi.name"),
     icon: "network-wireless-symbolic",
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,

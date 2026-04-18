@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import AstalWp from "gi://AstalWp"
 import { VolumeWidget } from "../control-center/Sliders"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { t } from "../../core/i18n"
 
 function buildBarContent(): Gtk.Widget {
     const speaker = AstalWp.get_default()?.audio?.default_speaker
@@ -89,7 +90,7 @@ function buildBarContent(): Gtk.Widget {
         margin_start: 14,
         margin_end: 14,
     })
-    popBox.append(new Gtk.Label({ label: "Volumen", css_classes: ["bar-popover-title"], halign: Gtk.Align.START }))
+    popBox.append(new Gtk.Label({ label: t("cc.volume.name"), css_classes: ["bar-popover-title"], halign: Gtk.Align.START }))
     popBox.append(row)
 
     const popover = new Gtk.Popover({ autohide: true, position: Gtk.PositionType.BOTTOM })
@@ -106,7 +107,7 @@ function buildBarContent(): Gtk.Widget {
 
 const volumeWidget: AtomicWidget = {
     id: "volume",
-    name: "Volumen",
+    name: t("cc.volume.name"),
     icon: "audio-volume-high-symbolic",
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.FULL_WIDTH,

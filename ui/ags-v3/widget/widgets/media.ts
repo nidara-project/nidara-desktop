@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import AstalMpris from "gi://AstalMpris"
 import { MediaIslandContent } from "../control-center/MediaIsland"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { t } from "../../core/i18n"
 
 function buildBarContent(): Gtk.Widget {
     const mpris = AstalMpris.get_default()
@@ -71,7 +72,7 @@ function buildBarContent(): Gtk.Widget {
 
 const mediaWidget: AtomicWidget = {
     id: "media",
-    name: "Media",
+    name: t("cc.media.name"),
     icon: "media-playback-start-symbolic",
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SQUARE,
