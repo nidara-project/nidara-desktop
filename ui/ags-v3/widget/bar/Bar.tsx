@@ -369,7 +369,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   
   syncOverlays()
 
-  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 16 })
+  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 10 })
   left.append(SystemMenuIcon())
   left.append(AppTitle(monGeo.width))
   const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER }); center.append(Workspaces())
@@ -404,7 +404,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   rebuildBarWidgets()
 
   right.append(optWidgets)
-  right.append(SquircleContainer({ child: Tray(), gloss: true, alpha: 0.15, perfect: true }))
+  const trayInner = Tray()
+  const trayCapsule = SquircleContainer({ child: trayInner, gloss: true, alpha: 0.15, perfect: true })
+  trayInner.connect("notify::visible", () => trayCapsule.set_visible(trayInner.get_visible()))
+  trayCapsule.set_visible(trayInner.get_visible())
+  right.append(trayCapsule)
   right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: "edit-find-symbolic", pixel_size: 16, margin_start: 16, margin_end: 16 }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, perfect: true }))
   const ccBtn = SquircleContainer({ child: new Gtk.Image({ icon_name: "open-menu-symbolic", pixel_size: 16, margin_start: 16, margin_end: 16 }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, perfect: true })
   right.append(ccBtn)
