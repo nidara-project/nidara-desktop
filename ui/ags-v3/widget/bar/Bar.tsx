@@ -90,11 +90,10 @@ function SystemMenuOverlay() {
     margin_top: 6, margin_bottom: 6, margin_start: 6, margin_end: 6,
   })
 
-  const makeRow = (ico: string, txt: string, danger: boolean, cmd: () => void) => {
+  const makeRow = (ico: string, txt: string, _danger: boolean, cmd: () => void) => {
     const lbl = new Gtk.Label({ label: txt, halign: Gtk.Align.START, hexpand: true,
-      css_classes: danger ? ["system-menu-label", "danger"] : ["system-menu-label"] })
-    const img = new Gtk.Image({ icon_name: ico, pixel_size: 16,
-      css_classes: danger ? ["danger-icon"] : [] })
+      css_classes: ["system-menu-label"] })
+    const img = new Gtk.Image({ icon_name: ico, pixel_size: 16 })
     const b = new Gtk.Box({ spacing: 12, margin_top: 2, margin_bottom: 2, margin_start: 4, margin_end: 16 })
     b.append(img); b.append(lbl)
     const btn = new Gtk.Button({ child: b, css_classes: ["system-menu-row"], hexpand: true })
