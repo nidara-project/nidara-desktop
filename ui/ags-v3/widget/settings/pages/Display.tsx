@@ -9,7 +9,7 @@ import { t } from "../../../core/i18n"
  * e.g. "HDMI-A-1" → "HDMI-A-1", "eDP-1" → "eDP-1 (integrada)"
  */
 function monitorLabel(name: string): string {
-    if (name.startsWith("eDP")) return `${name} (integrada)`
+    if (name.startsWith("eDP")) return `${name} (${t("settings.display.label.integrada")})`
     return name
 }
 
@@ -20,7 +20,7 @@ function currentMode(mon: any): string {
     const w = mon.width ?? 0
     const h = mon.height ?? 0
     const hz = Math.round(mon.refresh_rate ?? mon.refreshRate ?? 0)
-    if (!w || !h) return "Desconocida"
+    if (!w || !h) return t("settings.display.label.desconocida")
     return `${w}×${h} @ ${hz}Hz`
 }
 
@@ -31,7 +31,7 @@ function currentMode(mon: any): string {
 const SCALE_PRESETS = ["1.0", "1.25", "1.5", "1.75", "2.0"]
 
 function buildMonitorSection(mon: any): Gtk.Widget {
-    const name: string   = mon.name ?? "Monitor"
+    const name: string   = mon.name ?? t("settings.display.label.monitor")
     const model: string  = mon.model ?? mon.description ?? ""
     const make: string   = mon.make ?? ""
     const description    = [make, model].filter(Boolean).join(" ") || name
@@ -66,9 +66,10 @@ function buildMonitorSection(mon: any): Gtk.Widget {
     }
 
     // Transform / rotation — common values
-    const ROTATIONS = ["Normal (0°)", "90°", "180°", "270°"]
+    const ROT_NORMAL = t("settings.display.rotation.normal")
+    const ROTATIONS = [ROT_NORMAL, "90°", "180°", "270°"]
     const TRANSFORM_MAP: Record<string, number> = {
-        "Normal (0°)": 0, "90°": 1, "180°": 2, "270°": 3,
+        [ROT_NORMAL]: 0, "90°": 1, "180°": 2, "270°": 3,
     }
     const currentTransform = mon.transform ?? 0
     const rotationIdx = Math.max(0, currentTransform)
@@ -91,7 +92,11 @@ function buildMonitorSection(mon: any): Gtk.Widget {
 
     // VRR (Variable Refresh Rate) — per monitor
     // vrr values: 0=off, 1=on (fullscreen), 2=fullscreen+window
-    const VRR_OPTS = ["Desactivado", "Solo pantalla completa", "Siempre"]
+    const VRR_OPTS = [
+        t("settings.display.vrr.desactivado"),
+        t("settings.display.vrr.solo-pantalla-completa"),
+        t("settings.display.vrr.siempre"),
+    ]
     const currentVrr = mon.vrr ?? 0
     const vrrDrp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
     VRR_OPTS.forEach(o => vrrDrp.append_text(o))

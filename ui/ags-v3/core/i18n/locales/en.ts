@@ -85,6 +85,7 @@ export default {
     "settings.about.row.label.sistema-operativo": "Operating System",
     "settings.about.row.label.tiempo-activo": "Uptime",
     "settings.about.row.label.version": "Version",
+    "settings.about.label.no-disponible": "Not available",
 
     // Appearance
     "settings.appearance.group.diseno-base": "Base Style",
@@ -111,6 +112,8 @@ export default {
     "settings.appearance.row.label.tema-qt-kvantum": "Qt Theme (Kvantum)",
     "settings.appearance.row.label.transicion": "Transition",
     "settings.appearance.row.label.transparencia-profunda": "Deep Transparency",
+    "settings.appearance.dialog.title.seleccionar-fondo-de-pantalla": "Select wallpaper",
+    "settings.appearance.filter.imagenes": "Images",
 
     // Apps
     "settings.apps.label.aplicaciones-instaladas": "INSTALLED APPS",
@@ -123,6 +126,17 @@ export default {
     "settings.apps.page.title.aplicaciones": "Apps",
     "settings.apps.tooltip.cambiar-icono": "Change icon",
     "settings.apps.tooltip.eliminar-el-override-y-volver-al-icono-d": "Remove override and restore theme icon",
+    "settings.apps.badge.override": "override",
+    "settings.apps.dialog.title.icono": "Icon",
+    "settings.apps.dialog.title.seleccionar-icono": "Select icon",
+    "settings.apps.entry.placeholder.buscar-aplicacion": "Search app...",
+    "settings.apps.entry.placeholder.ej-firefox-web-browser": "e.g. firefox, web-browser",
+    "settings.apps.filter.imagenes-svg-png": "SVG / PNG images",
+    "settings.apps.label.sin-icono": "no icon",
+    "settings.apps.status.archivo-personalizado": "Custom file",
+    "settings.apps.status.encontrado-en-tema": "Found in theme",
+    "settings.apps.status.no-encontrado-en-el-tema-actual": "Not found in current theme",
+    "settings.apps.status.no-se-pudo-aplicar-el-override": "Could not apply override",
 
     // Audio
     "settings.audio.group.dispositivos-de-salida": "Output Devices",
@@ -130,6 +144,7 @@ export default {
     "settings.audio.label.servicio-de-audio-no-disponible": "Audio service not available",
     "settings.audio.page.subtitle.administra-tus-dispositivos-de-entrada-y": "Manage your input and output devices",
     "settings.audio.page.title.sonido": "Sound",
+    "settings.audio.label.dispositivo": "Device",
 
     // Autostart
     "settings.autostart.group.entradas-exec-once-en-hyprland-user-conf": "exec-once entries in hyprland-user.conf",
@@ -185,6 +200,13 @@ export default {
     "settings.display.row.label.resolucion-activa": "Active resolution",
     "settings.display.row.label.rotacion": "Rotation",
     "settings.display.row.label.vrr-freesync": "VRR / FreeSync",
+    "settings.display.label.desconocida": "Unknown",
+    "settings.display.label.integrada": "integrated",
+    "settings.display.label.monitor": "Monitor",
+    "settings.display.rotation.normal": "Normal (0°)",
+    "settings.display.vrr.desactivado": "Disabled",
+    "settings.display.vrr.siempre": "Always",
+    "settings.display.vrr.solo-pantalla-completa": "Fullscreen only",
 
     // Dock
     "settings.dock.group.comportamiento": "Behavior",
@@ -269,4 +291,11 @@ export default {
     "settings.dock.dockitem.label.salir": "Quit",
     "settings.dock.dockitem.label.desanclar-del-dock": "Unpin from dock",
     "settings.dock.dockitem.label.mantener-en-el-dock": "Keep in dock",
+
+    // Battery widget
+    "widget.battery.label.bateria-no-disponible": "Battery not available",
+    "widget.battery.name": "Battery",
+    "widget.battery.state.cargado": "Charged",
+    "widget.battery.state.cargando": "Charging",
+    "widget.battery.state.descargando": "Discharging",
 }

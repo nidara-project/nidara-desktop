@@ -126,7 +126,7 @@ export default function AboutPage() {
     execAsync(["hyprctl", "version"]).then(v => {
         const match = v.match(/Hyprland\s+([\w.-]+)/)
         hyprLabel.label = match ? match[1] : v.split("\n")[0].trim()
-    }).catch(() => { hyprLabel.label = "No disponible" })
+    }).catch(() => { hyprLabel.label = t("settings.about.label.no-disponible") })
 
     envBox.append(envList)
     page.append(envBox)

@@ -106,7 +106,7 @@ export default function AppearancePage() {
     })
     changeBtn.connect("clicked", () => {
         const dialog = new Gtk.FileDialog({
-            title: "Seleccionar fondo de pantalla",
+            title: t("settings.appearance.dialog.title.seleccionar-fondo-de-pantalla"),
             modal: true,
         })
         const filter = new Gtk.FileFilter()
@@ -115,7 +115,7 @@ export default function AppearancePage() {
         filter.add_mime_type("image/gif")
         filter.add_mime_type("image/webp")
         filter.add_mime_type("image/avif")
-        filter.set_name("Imágenes")
+        filter.set_name(t("settings.appearance.filter.imagenes"))
         const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
         filters.append(filter)
         dialog.set_filters(filters)

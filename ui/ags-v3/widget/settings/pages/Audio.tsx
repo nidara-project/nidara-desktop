@@ -30,7 +30,7 @@ export default function AudioPage() {
             pixel_size: 18,
         }))
         header.append(new Gtk.Label({
-            label: endpoint.description || endpoint.name || "Dispositivo",
+            label: endpoint.description || endpoint.name || t("settings.audio.label.dispositivo"),
             halign: Gtk.Align.START,
             css_classes: ["settings-row-label"],
             hexpand: true,

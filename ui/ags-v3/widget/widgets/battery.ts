@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import AstalBattery from "gi://AstalBattery"
 import { makeExpandable } from "./bar-helpers"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { t } from "../../core/i18n"
 
 const bat = AstalBattery.get_default()
 
@@ -24,7 +25,7 @@ function getSummary(): string {
     const pct = Math.round(bat.percentage)
     if (bat.charging || bat.charged) {
         const timeStr = formatTime(bat.time_to_full)
-        return timeStr ? `${pct}% · ${timeStr}` : `${pct}% · Cargando`
+        return timeStr ? `${pct}% · ${timeStr}` : `${pct}% · ${t("widget.battery.state.cargando")}`
     }
     const timeStr = formatTime(bat.time_to_empty)
     return timeStr ? `${pct}% · ${timeStr}` : `${pct}%`
@@ -50,7 +51,7 @@ function buildBarContent(): Gtk.Widget {
 function buildContent(_size: WidgetSize): Gtk.Widget {
     if (!bat) {
         const label = new Gtk.Label({
-            label: "Batería no disponible",
+            label: t("widget.battery.label.bateria-no-disponible"),
             css_classes: ["settings-placeholder"],
             halign: Gtk.Align.CENTER,
             valign: Gtk.Align.CENTER,
@@ -79,13 +80,13 @@ function buildContent(_size: WidgetSize): Gtk.Widget {
         icon.icon_name = getIcon()
         pctLabel.label = `${pct}%`
         if (bat.charged) {
-            stateLabel.label = "Cargado"
+            stateLabel.label = t("widget.battery.state.cargado")
         } else if (bat.charging) {
-            const t = formatTime(bat.time_to_full)
-            stateLabel.label = t ? `Cargando · ${t}` : "Cargando"
+            const timeStr = formatTime(bat.time_to_full)
+            stateLabel.label = timeStr ? `${t("widget.battery.state.cargando")} · ${timeStr}` : t("widget.battery.state.cargando")
         } else {
-            const t = formatTime(bat.time_to_empty)
-            stateLabel.label = t ? `${t} restantes` : "Descargando"
+            const timeStr = formatTime(bat.time_to_empty)
+            stateLabel.label = timeStr ? `${timeStr} · ${t("widget.battery.state.descargando")}` : t("widget.battery.state.descargando")
         }
     }
 
@@ -111,7 +112,7 @@ function buildContent(_size: WidgetSize): Gtk.Widget {
 
 const batteryWidget: AtomicWidget = {
     id: "battery",
-    name: "Batería",
+    name: t("widget.battery.name"),
     icon: "battery-symbolic",
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,

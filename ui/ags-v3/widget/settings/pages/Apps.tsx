@@ -37,7 +37,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
     const originalIcon = app.icon ?? ""
 
     const dialog = new Gtk.Window({
-        title: `Icono — ${app.name}`,
+        title: `${t("settings.apps.dialog.title.icono")} — ${app.name}`,
         default_width: 420,
         modal: true,
         resizable: false,
@@ -83,7 +83,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
 
     // Icon name entry
     const entry = new Gtk.Entry({
-        placeholder_text: originalIcon || "ej. firefox, web-browser",
+        placeholder_text: originalIcon || t("settings.apps.entry.placeholder.ej-firefox-web-browser"),
         hexpand: true,
     })
     if (originalIcon) entry.text = originalIcon
@@ -102,10 +102,10 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
             if (isFile || isThemed) {
                 const pb = loadPixbuf(iconInput.startsWith("/") ? iconInput : iconInput, 72)
                 if (pb) previewImg.set_from_pixbuf(pb)
-                previewStatus.label = isFile ? "Archivo personalizado" : `Encontrado en tema`
+                previewStatus.label = isFile ? t("settings.apps.status.archivo-personalizado") : t("settings.apps.status.encontrado-en-tema")
                 entry.remove_css_class("error")
             } else {
-                previewStatus.label = "No encontrado en el tema actual"
+                previewStatus.label = t("settings.apps.status.no-encontrado-en-el-tema-actual")
                 entry.add_css_class("error")
             }
             return GLib.SOURCE_REMOVE
@@ -122,11 +122,11 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
         margin_bottom: 4,
     })
     fileBtn.connect("clicked", () => {
-        const fd = new Gtk.FileDialog({ title: "Seleccionar icono", modal: true })
+        const fd = new Gtk.FileDialog({ title: t("settings.apps.dialog.title.seleccionar-icono"), modal: true })
         const filter = new Gtk.FileFilter()
         filter.add_mime_type("image/svg+xml")
         filter.add_mime_type("image/png")
-        filter.set_name("Imágenes SVG / PNG")
+        filter.set_name(t("settings.apps.filter.imagenes-svg-png"))
         const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
         filters.append(filter)
         fd.set_filters(filters)
@@ -179,7 +179,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
             rowIconLabel.label = canonical ?? originalIcon
             dialog.close()
         } else {
-            previewStatus.label = "No se pudo aplicar el override"
+            previewStatus.label = t("settings.apps.status.no-se-pudo-aplicar-el-override")
         }
     })
 
@@ -211,7 +211,7 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
     textBox.append(new Gtk.Label({ label: app.name, halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
 
     const iconLabel = new Gtk.Label({
-        label: canonical ?? (app.icon ?? "sin icono"),
+        label: canonical ?? (app.icon ?? t("settings.apps.label.sin-icono")),
         halign: Gtk.Align.START,
         css_classes: ["settings-row-subtitle"],
         ellipsize: 3, // PANGO_ELLIPSIZE_END
@@ -221,7 +221,7 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
     // Override badge
     const hasOverride = !!appService.getIconOverridePath(app.icon ?? "")
     const badge = new Gtk.Label({
-        label: "override",
+        label: t("settings.apps.badge.override"),
         css_classes: ["settings-row-subtitle", "app-override-badge"],
         visible: hasOverride,
         valign: Gtk.Align.CENTER,
@@ -259,7 +259,7 @@ export default function AppsPage() {
 
     // Search
     const searchEntry = new Gtk.SearchEntry({
-        placeholder_text: "Buscar aplicación...",
+        placeholder_text: t("settings.apps.entry.placeholder.buscar-aplicacion"),
         hexpand: true,
         margin_bottom: 4,
     })
