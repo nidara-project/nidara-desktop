@@ -2,6 +2,7 @@ import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { readFile, writeFile } from "ags/file"
+import { t } from "./i18n"
 
 const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/wallpaper`
 
@@ -10,18 +11,18 @@ export type TransitionType =
     | "outer" | "wipe" | "wave" | "left" | "right" | "top" | "bottom"
 
 export const TRANSITION_LABELS: Record<TransitionType, string> = {
-    random: "Aleatoria",
-    simple: "Fundido suave",
-    fade: "Fundido con curva",
-    center: "Círculo central",
-    grow: "Expansión",
-    outer: "Contracción",
-    wipe: "Barrido diagonal",
-    wave: "Ola",
-    left: "Desde la izquierda",
-    right: "Desde la derecha",
-    top: "Desde arriba",
-    bottom: "Desde abajo",
+    random: t("wallpaper.transition.random"),
+    simple: t("wallpaper.transition.simple"),
+    fade:   t("wallpaper.transition.fade"),
+    center: t("wallpaper.transition.center"),
+    grow:   t("wallpaper.transition.grow"),
+    outer:  t("wallpaper.transition.outer"),
+    wipe:   t("wallpaper.transition.wipe"),
+    wave:   t("wallpaper.transition.wave"),
+    left:   t("wallpaper.transition.left"),
+    right:  t("wallpaper.transition.right"),
+    top:    t("wallpaper.transition.top"),
+    bottom: t("wallpaper.transition.bottom"),
 }
 
 class WallpaperManager extends GObject.Object {

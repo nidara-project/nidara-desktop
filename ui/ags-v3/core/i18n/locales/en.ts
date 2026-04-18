@@ -115,6 +115,20 @@ export default {
     "settings.appearance.dialog.title.seleccionar-fondo-de-pantalla": "Select wallpaper",
     "settings.appearance.filter.imagenes": "Images",
 
+    // Wallpaper transitions
+    "wallpaper.transition.random": "Random",
+    "wallpaper.transition.simple": "Soft fade",
+    "wallpaper.transition.fade": "Fade with curve",
+    "wallpaper.transition.center": "Center circle",
+    "wallpaper.transition.grow": "Expand",
+    "wallpaper.transition.outer": "Contract",
+    "wallpaper.transition.wipe": "Diagonal wipe",
+    "wallpaper.transition.wave": "Wave",
+    "wallpaper.transition.left": "From left",
+    "wallpaper.transition.right": "From right",
+    "wallpaper.transition.top": "From top",
+    "wallpaper.transition.bottom": "From bottom",
+
     // Apps
     "settings.apps.label.aplicaciones-instaladas": "INSTALLED APPS",
     "settings.apps.label.aplicar": "Apply",
