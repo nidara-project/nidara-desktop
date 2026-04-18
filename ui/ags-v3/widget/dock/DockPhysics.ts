@@ -117,16 +117,20 @@ export function calculateDockItemMetrics(
     const intensity = Math.exp(-0.5 * Math.pow(distance / sigma, 2));
 
     if (isSeparator) {
-        // V610: Dynamic Separators (macOS Tahoe)
-        // Separators expand slightly when neighbors magnify to provide breathing room
-        const targetScale = 1.0 + (intensity * 0.4); // Max 40% expansion when fully focused
-        return {
-            scale: targetScale,
-            width: DOCK_CONSTANTS.SEPARATOR_SLOT * targetScale,
-            height: 48,
-            translateY: 0,
-            margin: 0,
-        };
+        // Separators only expand when magnification is active — they must respect the same flag
+        // as regular icons. If maxSize === minSize the user disabled magnification, and the
+        // separator expanding would still push the icons after it (trash/right-edge items).
+        if (DOCK_CONSTANTS.maxSize > DOCK_CONSTANTS.minSize) {
+            const targetScale = 1.0 + (intensity * 0.4);
+            return {
+                scale: targetScale,
+                width: DOCK_CONSTANTS.SEPARATOR_SLOT * targetScale,
+                height: 48,
+                translateY: 0,
+                margin: 0,
+            };
+        }
+        return { scale: 1.0, width: DOCK_CONSTANTS.SEPARATOR_SLOT, height: 48, translateY: 0, margin: 0 };
     }
 
     const targetScale = 1 + (intensity * ((DOCK_CONSTANTS.maxSize / DOCK_CONSTANTS.minSize) - 1));

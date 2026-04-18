@@ -110,16 +110,28 @@ export function DockItem(
     }
     rawId = rawId.replace(".desktop", "")
 
+    const edgeAlign = isVertical
+        ? (dockSettings.position === 'right' ? Gtk.Align.END : Gtk.Align.START)
+        : Gtk.Align.START
+
     const itemBox = new Gtk.Box({
         name: "cd-item-" + appId,
         css_classes: ["cd-item"],
         valign: isVertical ? Gtk.Align.START : Gtk.Align.END,
         halign: isVertical ? Gtk.Align.FILL : Gtk.Align.START,
         hexpand: false,
-        width_request: isVertical ? DOCK_CONSTANTS.PILL_HEIGHT : DOCK_CONSTANTS.ICON_SIZE,
-        height_request: isVertical ? -1 : DOCK_CONSTANTS.PILL_HEIGHT,
+        // Vertical mirrors horizontal: slot axis = height (tick changes it), overflow axis = width (fixed).
+        // Horizontal: width = tps (changes), height = PILL_HEIGHT (fixed).
+        // Vertical:   height = tps (changes), width = PILL_HEIGHT (fixed).
+        width_request:  isVertical ? DOCK_CONSTANTS.PILL_HEIGHT : DOCK_CONSTANTS.ICON_SIZE,
+        height_request: isVertical ? DOCK_CONSTANTS.ICON_SIZE   : DOCK_CONSTANTS.PILL_HEIGHT,
+        // top/bottom margins pre-set to ICON_MARGIN so Revealer natural height = ICON_SIZE + 2*ICON_MARGIN
+        // = APP_SLOT from the start — prevents the layout jump when first tick applies the same values.
+        margin_top:    isVertical ? DOCK_CONSTANTS.ICON_MARGIN : 0,
+        margin_bottom: isVertical ? DOCK_CONSTANTS.ICON_MARGIN : 0,
+        overflow: isVertical ? Gtk.Overflow.VISIBLE : Gtk.Overflow.HIDDEN,
         can_focus: false,
-        focusable: false, // V405: Explicitly disable focus
+        focusable: false,
         has_tooltip: false,
     })
 
@@ -137,12 +149,14 @@ export function DockItem(
     const iconBox = new Gtk.Box({
         name: "cd-icon-box-" + appId,
         css_classes: ["cd-icon-container"],
-        halign: Gtk.Align.CENTER,
+        halign: isVertical ? edgeAlign : Gtk.Align.CENTER,
         valign: isVertical ? Gtk.Align.CENTER : Gtk.Align.END,
         hexpand: false,
+        width_request:  isVertical ? DOCK_CONSTANTS.ICON_SIZE : -1,
+        height_request: isVertical ? DOCK_CONSTANTS.ICON_SIZE : -1,
         margin_bottom: isVertical ? 0 : DOCK_CONSTANTS.PILL_PADDING,
         has_tooltip: false,
-        can_focus: false, // V405: Explicitly disable focus
+        can_focus: false,
         focusable: false
     })
 
@@ -316,7 +330,7 @@ export function DockItem(
     child.set_halign(Gtk.Align.CENTER)
     child.set_valign(Gtk.Align.CENTER)
     child.set_has_tooltip(false)
-    // Removed override: child.set_size_request(..., ...) - Size is handled by DrawingArea setup or Plate logic
+    child.set_size_request(DOCK_CONSTANTS.ICON_SIZE, DOCK_CONSTANTS.ICON_SIZE)
 
     const state = {
         targetScale: 1.0, currentScale: 1.0, velocityScale: 0,
@@ -400,9 +414,14 @@ export function DockItem(
         name: "cd-overlay-" + appId,
         css_classes: ["cd-overlay", "overlay"],
         overflow: Gtk.Overflow.VISIBLE,
-        halign: isVertical ? Gtk.Align.FILL : Gtk.Align.START,
+        halign: isVertical ? edgeAlign : Gtk.Align.START,
         valign: isVertical ? Gtk.Align.CENTER : Gtk.Align.END,
         vexpand: !isVertical,
+        // Vertical: PILL_PADDING margin keeps icon centered in pill (mirrors horizontal iconBox.margin_bottom).
+        // Overflow goes toward screen center as icon magnifies (halign = edgeAlign, margin is fixed).
+        margin_end:   isVertical && dockSettings.position === 'right' ? DOCK_CONSTANTS.PILL_PADDING : 0,
+        margin_start: isVertical && dockSettings.position === 'left'  ? DOCK_CONSTANTS.PILL_PADDING : 0,
+        width_request:  isVertical ? DOCK_CONSTANTS.ICON_SIZE : -1,
         height_request: isVertical ? DOCK_CONSTANTS.ICON_SIZE : DOCK_CONSTANTS.PILL_HEIGHT,
         has_tooltip: false,
     })

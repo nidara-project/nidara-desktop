@@ -1,57 +1,56 @@
 import { Gtk } from "ags/gtk4"
-import { execAsync } from "ags/process"
+import AstalBluetooth from "gi://AstalBluetooth"
 import GLib from "gi://GLib"
-import { listGroup, createRow, pageHeader, pageBox, toggleRow } from "../SettingsHelpers"
+import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
-
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-const rfkillEnabled = (): Promise<boolean> =>
-    execAsync(["bash", "-c", "rfkill list bluetooth | grep -q 'Soft blocked: yes' && echo 1 || echo 0"])
-        .then(out => out.trim() === "1")
-        .catch(() => false)
-
-const bluetoothctlCmd = (args: string[]): Promise<string> =>
-    execAsync(["bluetoothctl", ...args]).catch(e => { console.error("[BT]", e); return "" })
-
-interface BTDevice {
-    address: string
-    name: string
-    connected: boolean
-    paired: boolean
-    trusted: boolean
-    icon: string
-}
-
-const parseDevices = (out: string): BTDevice[] => {
-    const lines = out.split("\n").filter(l => l.startsWith("Device "))
-    return lines.map(line => {
-        const parts = line.split(" ")
-        const address = parts[1] ?? ""
-        const name = parts.slice(2).join(" ")
-        return { address, name, connected: false, paired: true, trusted: false, icon: "bluetooth-symbolic" }
-    })
-}
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function BluetoothPage() {
     const page = pageBox("bluetooth-page")
-    page.append(pageHeader(t("settings.bluetooth.page.title.bluetooth"), t("settings.bluetooth.page.subtitle.gestiona-dispositivos-bluetooth-empareja")))
+    page.append(pageHeader(
+        t("settings.bluetooth.page.title.bluetooth"),
+        t("settings.bluetooth.page.subtitle.gestiona-dispositivos-bluetooth-empareja"),
+    ))
+
+    const bt = AstalBluetooth.get_default()
+
+    if (!bt || !bt.adapter) {
+        const banner = new Gtk.Label({
+            label: t("settings.bluetooth.label.bluetooth-no-disponible"),
+            css_classes: ["settings-placeholder"],
+            margin_top: 24,
+            halign: Gtk.Align.CENTER,
+        })
+        page.append(banner)
+        return page
+    }
 
     // ── Power toggle ─────────────────────────────────────────────────────────
     const powerGroup = listGroup(t("settings.bluetooth.page.title.bluetooth"))
+    const powerSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER, active: bt.is_powered })
 
-    const powerSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER, active: false })
-    let powerChanging = false
-
+    let ignoreStateSet = false
     powerSwitch.connect("state-set", (_: any, state: boolean) => {
-        if (powerChanging) return false
-        bluetoothctlCmd(["power", state ? "on" : "off"]).then(() => refreshDevices())
+        if (ignoreStateSet) return false
+        bt.is_powered = state
         return false
     })
 
-    powerGroup.listBox.append(createRow(t("settings.bluetooth.row.label.activar-bluetooth"), t("settings.bluetooth.row.desc.encender-o-apagar-el-adaptador-bluetooth"), powerSwitch))
+    const syncPower = () => {
+        ignoreStateSet = true
+        powerSwitch.active = bt.is_powered
+        ignoreStateSet = false
+    }
+
+    const powerId = bt.connect("notify::is-powered", syncPower)
+    powerSwitch.connect("unrealize", () => { try { bt.disconnect(powerId) } catch {} })
+
+    powerGroup.listBox.append(createRow(
+        t("settings.bluetooth.row.label.activar-bluetooth"),
+        t("settings.bluetooth.row.desc.encender-o-apagar-el-adaptador-bluetooth"),
+        powerSwitch,
+    ))
     page.append(powerGroup.box)
 
     // ── Paired devices ────────────────────────────────────────────────────────
@@ -64,36 +63,39 @@ export default function BluetoothPage() {
         label: t("settings.bluetooth.label.buscar-ahora"),
         css_classes: ["suggested-action"],
         valign: Gtk.Align.CENTER,
-        hexpand: false,
     })
     const scanSpinner = new Gtk.Spinner({ valign: Gtk.Align.CENTER, visible: false })
     const scanBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
     scanBox.append(scanSpinner)
     scanBox.append(scanBtn)
 
-    let scanTimeoutId: number | null = null
+    let scanTimerId: number | null = null
+
+    const stopScan = () => {
+        if (scanTimerId !== null) { GLib.source_remove(scanTimerId); scanTimerId = null }
+        try { bt.adapter.stop_discovery() } catch {}
+        scanBtn.sensitive = true
+        scanSpinner.stop()
+        scanSpinner.visible = false
+    }
 
     scanBtn.connect("clicked", () => {
         scanBtn.sensitive = false
         scanSpinner.visible = true
         scanSpinner.start()
-        bluetoothctlCmd(["--timeout", "8", "scan", "on"]).then(() => {
-            if (scanTimeoutId !== null) GLib.source_remove(scanTimeoutId)
-            scanTimeoutId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 8500, () => {
-                scanTimeoutId = null
-                scanBtn.sensitive = true
-                scanSpinner.stop()
-                scanSpinner.visible = false
-                refreshDevices()
-                return GLib.SOURCE_REMOVE
-            })
+        try { bt.adapter.start_discovery() } catch {}
+        if (scanTimerId !== null) GLib.source_remove(scanTimerId)
+        scanTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 8000, () => {
+            stopScan()
+            return GLib.SOURCE_REMOVE
         })
     })
+    scanBtn.connect("unrealize", () => stopScan())
 
     scanGroup.listBox.append(createRow(
         t("settings.bluetooth.row.label.escanear"),
         t("settings.bluetooth.row.desc.busca-dispositivos-bluetooth-cercanos-du"),
-        scanBox
+        scanBox,
     ))
     page.append(scanGroup.box)
 
@@ -101,11 +103,11 @@ export default function BluetoothPage() {
     const nearbyGroup = listGroup(t("settings.bluetooth.group.dispositivos-detectados"))
     page.append(nearbyGroup.box)
 
-    // ── Refresh logic ─────────────────────────────────────────────────────────
-    const rebuildDeviceList = (
+    // ── Device list builder ───────────────────────────────────────────────────
+    const rebuildList = (
         listBox: Gtk.ListBox,
-        devices: BTDevice[],
-        allowActions: boolean
+        devices: AstalBluetooth.Device[],
+        allowActions: boolean,
     ) => {
         let child = listBox.get_first_child()
         while (child) { listBox.remove(child); child = listBox.get_first_child() }
@@ -148,7 +150,7 @@ export default function BluetoothPage() {
                 margin_bottom: 12,
             })
             rowBox.append(new Gtk.Image({
-                icon_name: "bluetooth-symbolic",
+                icon_name: dev.icon || "bluetooth-symbolic",
                 pixel_size: 20,
                 valign: Gtk.Align.CENTER,
             }))
@@ -162,7 +164,7 @@ export default function BluetoothPage() {
                         valign: Gtk.Align.CENTER,
                     })
                     disconnectBtn.connect("clicked", () => {
-                        bluetoothctlCmd(["disconnect", dev.address]).then(() => refreshDevices())
+                        dev.disconnect_device(null)
                     })
                     rowBox.append(disconnectBtn)
                 } else {
@@ -172,7 +174,7 @@ export default function BluetoothPage() {
                         valign: Gtk.Align.CENTER,
                     })
                     connectBtn.connect("clicked", () => {
-                        bluetoothctlCmd(["connect", dev.address]).then(() => refreshDevices())
+                        dev.connect_device(null)
                     })
                     rowBox.append(connectBtn)
                 }
@@ -184,7 +186,7 @@ export default function BluetoothPage() {
                     tooltip_text: t("settings.bluetooth.tooltip.olvidar-dispositivo"),
                 })
                 removeBtn.connect("clicked", () => {
-                    bluetoothctlCmd(["remove", dev.address]).then(() => refreshDevices())
+                    try { bt.adapter.remove_device(dev) } catch {}
                 })
                 rowBox.append(removeBtn)
             } else {
@@ -194,9 +196,7 @@ export default function BluetoothPage() {
                     valign: Gtk.Align.CENTER,
                 })
                 pairBtn.connect("clicked", () => {
-                    bluetoothctlCmd(["pair", dev.address]).then(() => {
-                        bluetoothctlCmd(["trust", dev.address]).then(() => refreshDevices())
-                    })
+                    try { dev.pair() } catch (e) { console.error("[BT] pair:", e) }
                 })
                 rowBox.append(pairBtn)
             }
@@ -207,40 +207,19 @@ export default function BluetoothPage() {
         })
     }
 
-    const refreshDevices = () => {
-        // Power state
-        bluetoothctlCmd(["show"]).then(info => {
-            powerChanging = true
-            powerSwitch.active = info.includes("Powered: yes")
-            powerChanging = false
-        })
-
-        // Paired devices with connection status
-        bluetoothctlCmd(["devices", "Paired"]).then(pairedOut => {
-            const paired = parseDevices(pairedOut)
-            bluetoothctlCmd(["devices", "Connected"]).then(connOut => {
-                const connected = new Set(parseDevices(connOut).map(d => d.address))
-                const withState = paired.map(d => ({ ...d, connected: connected.has(d.address) }))
-                rebuildDeviceList(devicesGroup.listBox, withState, true)
-            })
-        })
-
-        // Nearby (not yet paired)
-        bluetoothctlCmd(["devices"]).then(allOut => {
-            bluetoothctlCmd(["devices", "Paired"]).then(pairedOut => {
-                const allDevices = parseDevices(allOut)
-                const pairedAddrs = new Set(parseDevices(pairedOut).map(d => d.address))
-                const nearby = allDevices.filter(d => !pairedAddrs.has(d.address))
-                rebuildDeviceList(nearbyGroup.listBox, nearby, false)
-            })
-        })
+    // ── Live device updates ───────────────────────────────────────────────────
+    const refreshLists = () => {
+        const all: AstalBluetooth.Device[] = bt.devices ?? []
+        const paired = all.filter(d => d.paired)
+        const unpaired = all.filter(d => !d.paired)
+        rebuildList(devicesGroup.listBox, paired, true)
+        rebuildList(nearbyGroup.listBox, unpaired, false)
     }
 
-    // Initial load
-    GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-        refreshDevices()
-        return GLib.SOURCE_REMOVE
-    })
+    const devicesId = bt.connect("notify::devices", refreshLists)
+    page.connect("unrealize", () => { try { bt.disconnect(devicesId) } catch {} })
+
+    refreshLists()
 
     return page
 }

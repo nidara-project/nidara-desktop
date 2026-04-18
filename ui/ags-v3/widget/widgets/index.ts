@@ -8,6 +8,7 @@ import darkMode  from "./dark-mode"
 import focus     from "./focus"
 import calculator from "./calculator"
 import media     from "./media"
+import battery   from "./battery"
 
 const ALL_WIDGETS: AtomicWidget[] = [
     cpuMemory,
@@ -19,6 +20,7 @@ const ALL_WIDGETS: AtomicWidget[] = [
     focus,
     calculator,
     media,
+    battery,
 ]
 
 const _map = new Map<string, AtomicWidget>(ALL_WIDGETS.map(w => [w.id, w]))

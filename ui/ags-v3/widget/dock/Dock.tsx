@@ -393,29 +393,23 @@ export default function Dock(gdkmonitor: any) {
                     const marginR = Math.ceil(remaining / 2)
 
                     if (isVertical) {
-                        // Vertical: slot height grows with magnification, width = tps so icon
-                        // overflows toward screen center (same as horizontal icons growing upward).
-                        const edgeAlign = dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END
+                        // Mirror of horizontal: slot axis = height, overflow axis = width.
+                        // Revealer height = slotW (grows), width = PILL_HEIGHT (fixed like horizontal height).
+                        // itemBox height = tps (grows), width = PILL_HEIGHT (fixed like horizontal height).
+                        // Icon overflows outward (toward screen center) via overflow=VISIBLE.
                         if (revealer.height_request !== slotW) revealer.height_request = slotW
-                        if (revealer.width_request !== tps) revealer.width_request = tps
-                        revealer.overflow = Gtk.Overflow.VISIBLE
-                        revealer.halign = edgeAlign
+                        if (revealer.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) revealer.width_request = DOCK_CONSTANTS.PILL_HEIGHT
                         // Sync the actual GTK Revealer wrapper too
                         const gtkRev = widgetCache.get(id) as any
                         if (gtkRev && gtkRev !== (revealer as any)) {
                             if (gtkRev.height_request !== slotW) gtkRev.height_request = slotW
-                            if (gtkRev.width_request !== tps) gtkRev.width_request = tps
-                            gtkRev.overflow = Gtk.Overflow.VISIBLE
-                            gtkRev.halign = edgeAlign
+                            if (gtkRev.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) gtkRev.width_request = DOCK_CONSTANTS.PILL_HEIGHT
                         }
                         if (itemBox) {
-                            itemBox.halign = edgeAlign  // anchor to screen edge, grow toward center
-                            itemBox.valign = Gtk.Align.START
-                            if (itemBox.width_request !== tps) itemBox.width_request = tps
+                            // Only height changes (slot axis); width stays PILL_HEIGHT from constructor.
                             if (itemBox.height_request !== tps) itemBox.height_request = tps
                             if (itemBox.margin_top !== marginL) itemBox.margin_top = marginL
                             if (itemBox.margin_bottom !== marginR) itemBox.margin_bottom = marginR
-                            itemBox.margin_start = 0; itemBox.margin_end = 0
                         }
                     } else {
                         if (revealer.width_request !== slotW) revealer.width_request = slotW
@@ -466,8 +460,6 @@ export default function Dock(gdkmonitor: any) {
             const roundedTotalWidth = Math.round(totalBarWidth)
 
             if (isVertical) {
-                // Explicit margin_top mirrors the horizontal margin_start approach: our code
-                // owns the position, GTK layout changes (popovers etc.) cannot shift the bar.
                 const barM = Math.max(0, Math.round((verticalUsableH - roundedTotalWidth) / 2))
                 if (bar.margin_top !== barM) bar.margin_top = barM
             } else {
@@ -667,8 +659,6 @@ export default function Dock(gdkmonitor: any) {
 
     win.add_controller(motion)
     motion.connect("motion", (controller, x, y) => {
-        clearLeaveTimeout()
-
         // Auto-hide: reveal dock on any mouse entry
         if (dockSettings.autoHide && !isRevealed) {
             setRevealed(true)
@@ -687,11 +677,14 @@ export default function Dock(gdkmonitor: any) {
                 if (beyondPill) {
                     updateAllTargets(-1000)
                 } else {
+                    clearLeaveTimeout()  // only cancel leave timer when cursor is inside the pill
                     updateAllTargets(y)
                 }
             }
             return
         }
+
+        clearLeaveTimeout()
 
         if (dragBus.draggingId) {
             updateAllTargets(x)
@@ -871,6 +864,15 @@ export default function Dock(gdkmonitor: any) {
                     child: widget,
                     reveal_child: firstRender
                 })
+                // Pre-size vertical revealers to rest state so no layout jump on first tick.
+                // Separators use SEPARATOR_SLOT; regular items use APP_SLOT.
+                if (isVertical) {
+                    const isSep = id.startsWith("sep-")
+                    revealer.height_request = isSep ? DOCK_CONSTANTS.SEPARATOR_SLOT : DOCK_CONSTANTS.APP_SLOT
+                    revealer.width_request  = DOCK_CONSTANTS.PILL_HEIGHT
+                    revealer.overflow = Gtk.Overflow.VISIBLE
+                    revealer.halign = Gtk.Align.FILL
+                }
                 if (!firstRender) GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { revealer.reveal_child = true; return GLib.SOURCE_REMOVE })
                 widgetCache.set(id, revealer)
                 return revealer
@@ -1232,6 +1234,7 @@ export default function Dock(gdkmonitor: any) {
                     // first tick frame finds every height/margin already correct
                     // and triggers no GTK layout reflow (prevents stretch-on-hover).
                     if (isVertical && !state.isSeparator) {
+                        const edgeAlign = dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END
                         const widget = widgetCache.get(id)
                         if (widget) {
                             const slotH = Math.round(state.currentWidth + 2 * state.currentMargin)
@@ -1244,23 +1247,18 @@ export default function Dock(gdkmonitor: any) {
                                 (widget as any).width_request = DOCK_CONSTANTS.PILL_HEIGHT
                             const itemBox = (widget as any).get_child ? (widget as any).get_child() : null
                             if (itemBox) {
-                                if (itemBox.width_request !== DOCK_CONSTANTS.PILL_HEIGHT)
-                                    itemBox.width_request = DOCK_CONSTANTS.PILL_HEIGHT
                                 if (itemBox.height_request !== tps)
                                     itemBox.height_request = tps
                                 if (itemBox.margin_top !== marginL) itemBox.margin_top = marginL
                                 if (itemBox.margin_bottom !== marginR) itemBox.margin_bottom = marginR
-                                itemBox.margin_start = 0; itemBox.margin_end = 0
-                                itemBox.halign = Gtk.Align.FILL
-                                itemBox.valign = Gtk.Align.START
                                 const overlay = itemBox.get_first_child ? itemBox.get_first_child() : null
                                 if (overlay) {
-                                    overlay.set_size_request(DOCK_CONSTANTS.PILL_HEIGHT, tps)
-                                    overlay.halign = Gtk.Align.FILL
+                                    overlay.set_size_request(tps, tps)
+                                    overlay.halign = edgeAlign
                                     const iconBox = overlay.get_child ? overlay.get_child() : null
                                     if (iconBox) {
                                         iconBox.set_size_request(tps, tps)
-                                        iconBox.halign = Gtk.Align.CENTER
+                                        iconBox.halign = edgeAlign
                                         iconBox.valign = Gtk.Align.CENTER
                                         ;(iconBox as any).margin_bottom = 0
                                     }
@@ -1273,9 +1271,9 @@ export default function Dock(gdkmonitor: any) {
             })
 
             // Sync alignment to prevent "bad load" shift.
-            // For vertical dock, there is never magnification (motion handler exits early),
-            // so it is always safe to snap smoothedBarWidth to the actual item total.
-            // This prevents the tick from doing an async jump when items change.
+            // Always snap for vertical to avoid one-frame lag where the pill is drawn too small
+            // (icons appear squished). The snap uses currentWidth spring values, so it's correct
+            // even during magnification animation.
             if (firstRender || !tickId || isVertical) {
                 smoothedBarWidth = totalCurrentWidth
                 if (isVertical) {

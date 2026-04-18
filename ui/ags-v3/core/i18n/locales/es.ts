@@ -139,6 +139,7 @@ export default {
     "settings.bluetooth.label.desconectar": "Desconectar",
     "settings.bluetooth.label.emparejar": "Emparejar",
     "settings.bluetooth.label.sin-dispositivos": "Sin dispositivos",
+    "settings.bluetooth.label.bluetooth-no-disponible": "Adaptador Bluetooth no disponible",
     "settings.bluetooth.page.subtitle.gestiona-dispositivos-bluetooth-empareja": "Gestiona dispositivos Bluetooth emparejados y cercanos",
     "settings.bluetooth.page.title.bluetooth": "Bluetooth",
     "settings.bluetooth.row.desc.busca-dispositivos-bluetooth-cercanos-du": "Busca dispositivos Bluetooth cercanos durante 8 segundos",
