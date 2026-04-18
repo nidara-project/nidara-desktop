@@ -65,13 +65,19 @@ export default function Prism() {
         hexpand: true,
         valign: Gtk.Align.CENTER,
     })
-    const resultsList = new Gtk.ListBox({ css_classes: ["prism-results-list"], selection_mode: Gtk.SelectionMode.SINGLE, activate_on_single_click: true, margin_top: 0 })
+    const resultsList = new Gtk.ListBox({ css_classes: ["prism-results-list"], selection_mode: Gtk.SelectionMode.SINGLE, activate_on_single_click: true })
+    const revealer = new (Gtk as any).Revealer({
+        transition_type: (Gtk as any).RevealerTransitionType.SLIDE_DOWN,
+        transition_duration: 180,
+        reveal_child: false,
+        child: resultsList,
+    })
     const contentBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, css_classes: ["prism-box"], width_request: 650, halign: Gtk.Align.CENTER })
     const searchContainer = new Gtk.Box({ css_classes: ["prism-search-box"], spacing: 12 })
     searchContainer.append(new Gtk.Image({ icon_name: "system-search-symbolic", pixel_size: 20 }))
     searchContainer.append(entry)
     contentBox.append(searchContainer)
-    contentBox.append(resultsList)
+    contentBox.append(revealer)
 
     const prismWrapper = SquircleContainer({ child: contentBox, radius: 32, n: 4.5, css_classes: ["prism-wrapper"], alpha: 0.15, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 } })
 
@@ -107,10 +113,9 @@ export default function Prism() {
         const query = entry.text.trim()
         clearList()
 
-        if (query.length === 0) { resultsList.visible = false; resultsList.margin_top = 0; return }
+        if (query.length === 0) { revealer.reveal_child = false; return }
 
-        resultsList.visible = true
-        resultsList.margin_top = 12
+        revealer.reveal_child = true
 
         // ── Apps ─────────────────────────────────────────────────────────────
         const appResults = appService.search(query)
@@ -141,7 +146,7 @@ export default function Prism() {
 
         // Select first selectable row
         let first = resultsList.get_first_child()
-        while (first && !(first as any).selectable) first = (first as any).get_next_sibling?.()
+        while (first && (first as Gtk.ListBoxRow).selectable === false) first = (first as any).get_next_sibling?.()
         if (first) resultsList.select_row(first as Gtk.ListBoxRow)
     })
 
@@ -170,8 +175,7 @@ export default function Prism() {
         if (status.prism_open) {
             entry.text = ""
             clearList()
-            resultsList.visible = false
-            resultsList.margin_top = 0
+            revealer.reveal_child = false
             entry.grab_focus()
         }
     }
