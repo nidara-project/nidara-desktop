@@ -373,7 +373,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   left.append(SystemMenuIcon())
   left.append(AppTitle(monGeo.width))
   const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER }); center.append(Workspaces())
-  const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 10 })
+  const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 8 })
 
   const timeContent = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16 })
   const timeLabel = new Gtk.Label({ label: "..." })
@@ -389,7 +389,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeContent.append(new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 16 })); timeContent.append(timeLabel)
 
   // Optional bar widgets (before Tray, reactive to config changes)
-  const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: 10 })
+  const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: 8 })
   const rebuildBarWidgets = () => {
     let child = optWidgets.get_first_child()
     while (child) { const n = child.get_next_sibling(); optWidgets.remove(child); child = n }
