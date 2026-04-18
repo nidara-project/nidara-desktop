@@ -292,6 +292,22 @@ export default {
     "settings.widgets.page.subtitle.elige-donde-aparece-cada-widget-en-la-ba": "Elige dónde aparece cada widget: en la Barra, en el Centro de Control, o en ambos",
     "settings.widgets.page.title.widgets": "Widgets",
 
+    // System menu
+    "bar.system-menu.about": "Acerca de este equipo",
+    "bar.system-menu.settings": "Configuración del Sistema...",
+    "bar.system-menu.lock": "Bloquear Pantalla",
+    "bar.system-menu.suspend": "Suspender",
+    "bar.system-menu.logout": "Cerrar Sesión...",
+    "bar.system-menu.restart": "Reiniciar...",
+    "bar.system-menu.shutdown": "Apagar...",
+    "bar.system-menu.confirm.logout": "¿Cerrar la sesión?",
+    "bar.system-menu.confirm.restart": "¿Reiniciar el equipo?",
+    "bar.system-menu.confirm.shutdown": "¿Apagar el equipo?",
+    "bar.system-menu.confirm.cancel": "Cancelar",
+    "bar.system-menu.confirm.action.logout": "Cerrar Sesión",
+    "bar.system-menu.confirm.action.restart": "Reiniciar",
+    "bar.system-menu.confirm.action.shutdown": "Apagar",
+
     // Battery widget
     "widget.battery.label.bateria-no-disponible": "Batería no disponible",
     "widget.battery.name": "Batería",

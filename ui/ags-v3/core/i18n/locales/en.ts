@@ -322,6 +322,22 @@ export default {
     "settings.dock.dockitem.label.desanclar-del-dock": "Unpin from dock",
     "settings.dock.dockitem.label.mantener-en-el-dock": "Keep in dock",
 
+    // System menu
+    "bar.system-menu.about": "About This Computer",
+    "bar.system-menu.settings": "System Settings...",
+    "bar.system-menu.lock": "Lock Screen",
+    "bar.system-menu.suspend": "Sleep",
+    "bar.system-menu.logout": "Log Out...",
+    "bar.system-menu.restart": "Restart...",
+    "bar.system-menu.shutdown": "Shut Down...",
+    "bar.system-menu.confirm.logout": "Log out?",
+    "bar.system-menu.confirm.restart": "Restart this computer?",
+    "bar.system-menu.confirm.shutdown": "Shut down this computer?",
+    "bar.system-menu.confirm.cancel": "Cancel",
+    "bar.system-menu.confirm.action.logout": "Log Out",
+    "bar.system-menu.confirm.action.restart": "Restart",
+    "bar.system-menu.confirm.action.shutdown": "Shut Down",
+
     // Battery widget
     "widget.battery.label.bateria-no-disponible": "Battery not available",
     "widget.battery.name": "Battery",

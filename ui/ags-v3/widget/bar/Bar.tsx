@@ -23,17 +23,23 @@ import Prism from "../prism/Prism"
 import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
 import WorkspaceOverview from "../overview/WorkspaceOverview"
 import { execAsync } from "ags/process"
+import { t } from "../../core/i18n"
 
-function AppMenu(monitorWidth: number): { widget: Gtk.Widget; appName: Gtk.Label } {
-  const box = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, margin_start: 16, margin_end: 16 })
-  const distroIcon = new Gtk.Image({ icon_name: "start-here-symbolic", pixel_size: 16, css_classes: ["bar-distro-icon"] })
-  // Max label width = half monitor - center capsule est. (100px) - icon/padding overhead (80px)
-  const labelMaxChars = Math.max(15, Math.floor((monitorWidth / 2 - 180) / 8))
+function SystemMenuIcon(): Gtk.Widget {
+  const icon = new Gtk.Image({ icon_name: "start-here-symbolic", pixel_size: 16, css_classes: ["bar-distro-icon"], margin_start: 14, margin_end: 14 })
+  return SquircleContainer({ child: icon, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleSystemMenu() })
+}
+
+function AppTitle(monitorWidth: number): Gtk.Widget {
+  // Max label width = half monitor - center capsule est. (100px) - icon capsule + gap overhead (~100px)
+  const labelMaxChars = Math.max(15, Math.floor((monitorWidth / 2 - 200) / 8))
   const appName = new Gtk.Label({
-    label: "Finder",
+    label: "—",
     css_classes: ["bar-app-name"],
     ellipsize: Pango.EllipsizeMode.END,
     max_width_chars: labelMaxChars,
+    margin_start: 16,
+    margin_end: 16,
   })
 
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
@@ -46,10 +52,8 @@ function AppMenu(monitorWidth: number): { widget: Gtk.Widget; appName: Gtk.Label
       const sync = () => {
         const client = hyprland.focused_client
         const label = getWordmark(client, hyprland)
-        // Only update when we have a real value — avoids momentary "App" on window init
         if (label) appName.label = label
 
-        // Re-subscribe to title changes on the newly focused client
         if (trackedClient && titleHandlerId) {
           trackedClient.disconnect(titleHandlerId)
           titleHandlerId = 0
@@ -67,13 +71,7 @@ function AppMenu(monitorWidth: number): { widget: Gtk.Widget; appName: Gtk.Label
     return GLib.SOURCE_REMOVE
   })
 
-  box.append(distroIcon); box.append(appName)
-  
-  const widget = SquircleContainer({ child: box, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => {
-    status.toggleSystemMenu()
-  }})
-
-  return { widget, appName }
+  return SquircleContainer({ child: appName, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
 }
 
 function SystemMenuOverlay() {
@@ -121,31 +119,31 @@ function SystemMenuOverlay() {
     execAsync(cmd).catch(console.error)
   }
 
-  menuBox.append(makeRow("dialog-information-symbolic", "Acerca de este equipo", false, () => {
+  menuBox.append(makeRow("dialog-information-symbolic", t("bar.system-menu.about"), false, () => {
     status.system_menu_open = false; status.toggleAbout()
   }))
   menuBox.append(sep())
-  menuBox.append(makeRow("preferences-system-symbolic", "Configuración del Sistema...", false, () => {
+  menuBox.append(makeRow("preferences-system-symbolic", t("bar.system-menu.settings"), false, () => {
     status.system_menu_open = false; ;(globalThis as any).toggleSettings?.()
   }))
   menuBox.append(sep())
-  menuBox.append(makeRow("changes-prevent-symbolic", "Bloquear Pantalla", false, () =>
+  menuBox.append(makeRow("changes-prevent-symbolic", t("bar.system-menu.lock"), false, () =>
     closeAndRun(["crystal-lock"])
   ))
-  menuBox.append(makeRow("system-suspend-symbolic", "Suspender", false, () =>
+  menuBox.append(makeRow("system-suspend-symbolic", t("bar.system-menu.suspend"), false, () =>
     closeAndRun(["systemctl", "suspend"])
   ))
   menuBox.append(sep())
-  menuBox.append(makeRow("system-log-out-symbolic", "Cerrar Sesión...", true, () =>
-    showConfirm("system-log-out-symbolic", "¿Cerrar la sesión?", "Cerrar Sesión", true,
+  menuBox.append(makeRow("system-log-out-symbolic", t("bar.system-menu.logout"), true, () =>
+    showConfirm("system-log-out-symbolic", t("bar.system-menu.confirm.logout"), t("bar.system-menu.confirm.action.logout"), true,
       () => closeAndRun(["hyprctl", "dispatch", "exit"]))
   ))
-  menuBox.append(makeRow("system-reboot-symbolic", "Reiniciar...", false, () =>
-    showConfirm("system-reboot-symbolic", "¿Reiniciar el equipo?", "Reiniciar", false,
+  menuBox.append(makeRow("system-reboot-symbolic", t("bar.system-menu.restart"), false, () =>
+    showConfirm("system-reboot-symbolic", t("bar.system-menu.confirm.restart"), t("bar.system-menu.confirm.action.restart"), false,
       () => closeAndRun(["reboot"]))
   ))
-  menuBox.append(makeRow("system-shutdown-symbolic", "Apagar...", true, () =>
-    showConfirm("system-shutdown-symbolic", "¿Apagar el equipo?", "Apagar", true,
+  menuBox.append(makeRow("system-shutdown-symbolic", t("bar.system-menu.shutdown"), true, () =>
+    showConfirm("system-shutdown-symbolic", t("bar.system-menu.confirm.shutdown"), t("bar.system-menu.confirm.action.shutdown"), true,
       () => closeAndRun(["shutdown", "now"]))
   ))
 
@@ -159,7 +157,7 @@ function SystemMenuOverlay() {
     max_width_chars: 20,
   })
 
-  const confirmCancelBtn = new Gtk.Button({ label: "Cancelar", css_classes: ["system-menu-row", "system-confirm-secondary"], hexpand: true })
+  const confirmCancelBtn = new Gtk.Button({ label: t("bar.system-menu.confirm.cancel"), css_classes: ["system-menu-row", "system-confirm-secondary"], hexpand: true })
   confirmCancelBtn.connect("clicked", () => {
     pendingCmd = null
     stack.set_visible_child_name("menu")
@@ -371,8 +369,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   
   syncOverlays()
 
-  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 8 })
-  left.append(AppMenu(monGeo.width).widget)
+  const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 16 })
+  left.append(SystemMenuIcon())
+  left.append(AppTitle(monGeo.width))
   const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER }); center.append(Workspaces())
   const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 10 })
 
