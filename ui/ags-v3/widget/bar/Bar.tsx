@@ -290,7 +290,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   // NC height: leave room for bar (40px) + dock (92px) + safety margin
   const maxH = monGeo.height - 160 // 40 (Bar) + 92 (Dock) + 28 (Safety)
-  cc.height_request = 800; nc.height_request = maxH; prism.height_request = 500
+  cc.height_request = 800; nc.height_request = maxH
 
   const updateInputRegion = () => {
       const surface = win.get_native()?.get_surface()
