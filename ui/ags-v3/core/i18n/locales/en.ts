@@ -324,6 +324,11 @@ export default {
     "settings.dock.dockitem.label.desanclar-del-dock": "Unpin from dock",
     "settings.dock.dockitem.label.mantener-en-el-dock": "Keep in dock",
 
+    // App Grid
+    "app-grid.search.placeholder": "Search apps...",
+    "app-grid.no-results": "No results",
+    "app-grid.menu.pin": "Pin to Dock",
+
     // Dock special item names and menu
     "dock.special.launcher.name": "Launcher",
     "dock.special.trash.name": "Trash",

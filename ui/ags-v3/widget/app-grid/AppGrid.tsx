@@ -8,6 +8,7 @@ import Gio from "gi://Gio"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import appService from "../../core/AppService"
 import { pinnedState, savePinned } from "../dock/state"
+import { t } from "../../core/i18n"
 
 // Extract just the desktop basename, stripping path and .desktop extension
 const normId = (s: string) => {
@@ -49,7 +50,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     // ── Search bar ─────────────────────────────────────────────────────────
     const searchEntry = new Gtk.Entry({
         name: "app-grid-search-entry",
-        placeholder_text: "Buscar aplicaciones...",
+        placeholder_text: t("app-grid.search.placeholder"),
         halign: Gtk.Align.CENTER,
         css_classes: ["app-grid-search"],
         width_request: 500,
@@ -89,7 +90,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         css_classes: ["app-grid-no-results-icon"],
     })
     const noResultsLabel = new Gtk.Label({
-        label: "Sin resultados",
+        label: t("app-grid.no-results"),
         css_classes: ["app-grid-no-results-label"],
     })
     noResults.append(noResultsIcon)
@@ -291,7 +292,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
             })
             actionGroup.add_action(pinAction)
             menuModel.append(
-                isPinned ? "Desanclar del Dock" : "Anclar en Dock",
+                isPinned ? t("settings.dock.dockitem.label.desanclar-del-dock") : t("app-grid.menu.pin"),
                 "context.pin"
             )
 

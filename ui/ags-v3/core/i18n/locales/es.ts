@@ -247,6 +247,11 @@ export default {
     "settings.dock.dockitem.label.desanclar-del-dock": "Desanclar del dock",
     "settings.dock.dockitem.label.mantener-en-el-dock": "Mantener en el dock",
 
+    // App Grid
+    "app-grid.search.placeholder": "Buscar aplicaciones...",
+    "app-grid.no-results": "Sin resultados",
+    "app-grid.menu.pin": "Anclar en Dock",
+
     // Dock special item names and menu
     "dock.special.launcher.name": "Lanzador",
     "dock.special.trash.name": "Papelera",
