@@ -30,13 +30,17 @@ window.prism-window {
     border: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.prism-search-entry {
+.prism-search-entry,
+.prism-search-entry:focus {
     background: none;
     border: none;
     color: white;
     font-size: 1.4rem;
     caret-color: white;
     box-shadow: none;
+    outline: none;
+    outline-width: 0;
+    outline-color: transparent;
 }
 
 .prism-results-list {
