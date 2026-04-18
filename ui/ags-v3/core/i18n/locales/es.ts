@@ -247,6 +247,12 @@ export default {
     "settings.dock.dockitem.label.desanclar-del-dock": "Desanclar del dock",
     "settings.dock.dockitem.label.mantener-en-el-dock": "Mantener en el dock",
 
+    // Workspace Overview
+    "overview.workspace": "Escritorio",
+    "overview.empty": "Vacío",
+    "overview.window": "ventana",
+    "overview.windows": "ventanas",
+
     // App Grid
     "app-grid.search.placeholder": "Buscar aplicaciones...",
     "app-grid.no-results": "Sin resultados",

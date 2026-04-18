@@ -9,6 +9,7 @@ import appService from "../../core/AppService"
 import Gio from "gi://Gio"
 import status from "../../core/Status"
 import SquircleContainer, { Shape } from "../common/SquircleContainer"
+import { t } from "../../core/i18n"
 
 const BASE_WIDTH = 300
 const BASE_HEIGHT = 170
@@ -271,7 +272,7 @@ export default function WorkspaceOverview(monitor: any) {
 
     for (let i = 1; i <= 5; i++) {
         const schematic = SchematicMap(i, hyprland)
-        const label = new Gtk.Label({ label: `Workspace ${i}`, css_classes: ["wo-label"] })
+        const label = new Gtk.Label({ label: `${t("overview.workspace")} ${i}`, css_classes: ["wo-label"] })
         const count = new Gtk.Label({ css_classes: ["wo-count"] })
         const header = new Gtk.Box({ 
             orientation: Gtk.Orientation.VERTICAL,
@@ -326,7 +327,7 @@ export default function WorkspaceOverview(monitor: any) {
                 label.set_css_classes(["wo-label", isActive ? "active" : ""])
 
                 const wsClients = clients.filter(c => c.workspace.id === i)
-                count.label = wsClients.length === 0 ? "Vacío" : (wsClients.length === 1 ? "1 ventana" : `${wsClients.length} ventanas`)
+                count.label = wsClients.length === 0 ? t("overview.empty") : (wsClients.length === 1 ? `1 ${t("overview.window")}` : `${wsClients.length} ${t("overview.windows")}`)
 
                 if (ctx.schematic && ctx.schematic.sync) {
                     ctx.schematic.sync(workspaces, monitors, clients)

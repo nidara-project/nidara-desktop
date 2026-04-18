@@ -324,6 +324,12 @@ export default {
     "settings.dock.dockitem.label.desanclar-del-dock": "Unpin from dock",
     "settings.dock.dockitem.label.mantener-en-el-dock": "Keep in dock",
 
+    // Workspace Overview
+    "overview.workspace": "Workspace",
+    "overview.empty": "Empty",
+    "overview.window": "window",
+    "overview.windows": "windows",
+
     // App Grid
     "app-grid.search.placeholder": "Search apps...",
     "app-grid.no-results": "No results",
