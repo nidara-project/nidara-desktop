@@ -88,6 +88,8 @@ export default {
     "settings.about.row.label.tiempo-activo": "Tiempo activo",
     "settings.about.row.label.version": "Versión",
     "settings.about.label.no-disponible": "No disponible",
+    "settings.about.row.label.graficos": "Gráficos",
+    "settings.about.label.cerrar": "Cerrar",
     "settings.appearance.group.diseno-base": "Diseño Base",
     "settings.appearance.group.fondo-de-pantalla": "Fondo de Pantalla",
     "settings.appearance.group.recursos-del-sistema": "Recursos del Sistema",

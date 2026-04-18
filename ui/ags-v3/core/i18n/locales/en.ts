@@ -88,6 +88,8 @@ export default {
     "settings.about.row.label.tiempo-activo": "Uptime",
     "settings.about.row.label.version": "Version",
     "settings.about.label.no-disponible": "Not available",
+    "settings.about.row.label.graficos": "Graphics",
+    "settings.about.label.cerrar": "Close",
 
     // Appearance
     "settings.appearance.group.diseno-base": "Base Style",

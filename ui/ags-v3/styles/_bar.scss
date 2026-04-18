@@ -274,3 +274,16 @@
     background: rgba(255, 255, 255, 0.1);
     min-height: 1px;
 }
+
+.about-close-btn {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: 6px;
+    padding: 4px;
+    opacity: 0.5;
+    transition: opacity 0.15s ease;
+
+    &:hover { opacity: 1; background: rgba(255, 255, 255, 0.1); }
+    &:active { background: rgba(255, 255, 255, 0.05); }
+}

@@ -4,6 +4,7 @@ import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import SquircleContainer from "../common/SquircleContainer"
 import status from "../../core/Status"
+import { t } from "../../core/i18n"
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -92,23 +93,33 @@ export default function AboutWindow(): Gtk.Window | null {
 
     // ── Specs ─────────────────────────────────────────────────────────────────
     const specsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8, margin_start: 16, margin_end: 16 })
-    specsBox.append(specRow("Procesador", cpu))
-    specsBox.append(specRow("Memoria", ram))
-    specsBox.append(asyncSpecRow("Gráficos", ["bash", "-c",
+    specsBox.append(specRow(t("settings.about.row.label.cpu"), cpu))
+    specsBox.append(specRow(t("settings.about.row.label.memoria-ram"), ram))
+    specsBox.append(asyncSpecRow(t("settings.about.row.label.graficos"), ["bash", "-c",
         "lspci 2>/dev/null | grep -i 'vga\\|3d\\|display' | head -1 | sed 's/.*: //' | sed 's/(.*)//' | xargs || echo '—'"
     ]))
-    specsBox.append(asyncSpecRow("Kernel", ["uname", "-r"]))
-    specsBox.append(asyncSpecRow("Uptime", ["bash", "-c", "uptime -p | sed 's/^up //'"] ))
+    specsBox.append(asyncSpecRow(t("settings.about.row.label.kernel"), ["uname", "-r"]))
+    specsBox.append(asyncSpecRow(t("settings.about.row.label.tiempo-activo"), ["bash", "-c", "uptime -p | sed 's/^up //'"] ))
 
     // ── Versions ──────────────────────────────────────────────────────────────
     const verBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8, margin_start: 16, margin_end: 16 })
-    verBox.append(asyncSpecRow("Hyprland", ["bash", "-c",
+    verBox.append(asyncSpecRow(t("settings.about.row.label.hyprland"), ["bash", "-c",
         "hyprctl version 2>/dev/null | grep -oP 'v?[\\d]+\\.[\\d]+\\.[\\d]+' | head -1 || echo '—'"
     ]))
     verBox.append(specRow("AGS", "v3 (GJS + GTK4)"))
 
+    // ── Close button ──────────────────────────────────────────────────────────
+    const closeBtn = new Gtk.Button({
+        child: new Gtk.Image({ icon_name: "window-close-symbolic", pixel_size: 14 }),
+        css_classes: ["about-close-btn"],
+        halign: Gtk.Align.END,
+        tooltip_text: t("settings.about.label.cerrar"),
+    })
+    closeBtn.connect("clicked", () => { status.about_open = false })
+
     // ── Card ──────────────────────────────────────────────────────────────────
-    const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_top: 24, margin_bottom: 24, margin_start: 24, margin_end: 24, width_request: 380 })
+    const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_top: 12, margin_bottom: 24, margin_start: 24, margin_end: 24, width_request: 380 })
+    card.append(closeBtn)
     card.append(headerBox)
     card.append(specsBox)
     card.append(new Gtk.Separator({ css_classes: ["about-sep"], margin_top: 8, margin_bottom: 8 }))
