@@ -13,6 +13,7 @@ import { drawSquircle } from "../common/DrawingUtils"
 import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState, dockSettings, menuState, dockSideState } from "./state"
 import status from "../../core/Status"
 import Theme from "../../core/ThemeManager"
+import { t } from "../../core/i18n"
 
 // V127: Native Gtk Resolution
 
@@ -932,7 +933,7 @@ export default function Dock(gdkmonitor: any) {
             delete groupedClients["home-shortcut"]
 
             const launcherItem = {
-                name: "Lanzador",
+                name: t("dock.special.launcher.name"),
                 icon_name: ["view-app-grid-symbolic", "view-app-grid", "org.gnome.Shell.Apps-symbolic", "pan-start-symbolic"],
                 launch: () => { if ((globalThis as any).toggleAppGrid) (globalThis as any).toggleAppGrid() }
             }
@@ -1122,7 +1123,7 @@ export default function Dock(gdkmonitor: any) {
             })
 
             const trash = {
-                name: "Papelera",
+                name: t("dock.special.trash.name"),
                 icon_name: ["user-trash", "trashcan-empty", "trash"],
                 launch: () => execAsync("nautilus trash:///").catch(print)
             }

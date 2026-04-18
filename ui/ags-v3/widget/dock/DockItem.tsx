@@ -14,6 +14,7 @@ import { DOCK_CONSTANTS } from "./DockPhysics"
 
 import { dragBus, mouseBus, dockSettings, changeMenuCount, menuState } from "./state"
 import Theme from "../../core/ThemeManager"
+import { t } from "../../core/i18n"
 
 const hypr = AstalHyprland.get_default()
 
@@ -513,9 +514,9 @@ export function DockItem(
 
         // Section 1: Main App (Standardize special names)
         let mainTitle = appItem.name || "App"
-        if (appId === "launcher" || appId === "special:launcher") mainTitle = "Aplicaciones"
-        if (appId === "home-shortcut" || appId === "special:home") mainTitle = "Archivos"
-        if (appId === "trash" || appId === "special:trash") mainTitle = "Papelera"
+        if (appId === "launcher" || appId === "special:launcher") mainTitle = t("settings.dock.dockitem.label.aplicaciones")
+        if (appId === "home-shortcut" || appId === "special:home") mainTitle = t("dock.special.home.label")
+        if (appId === "trash" || appId === "special:trash") mainTitle = t("dock.special.trash.name")
         const mainSection = addSection(mainTitle)
 
         let desktopActions: string[] = []
@@ -525,16 +526,16 @@ export function DockItem(
         }
 
         if (appId === "launcher" || appId === "special:launcher") {
-            mainSection.append("Abrir", addAction(() => appItem.launch()))
+            mainSection.append(t("dock.menu.open"), addAction(() => appItem.launch()))
         } else if (appId === "home-shortcut" || appId === "special:home") {
             // V149: UNIVERSAL HOME ISOLATION (Right Click) 🛰️
-            mainSection.append("Abrir", addAction(() => {
+            mainSection.append(t("dock.menu.open"), addAction(() => {
                 const command = appService.getDefaultFileManagerCommand()
                 execAsync(["uwsm", "app", "--", "sh", "-c", command]).catch(print)
             }))
         } else if (appId === "trash" || appId === "special:trash") {
-            mainSection.append("Abrir", addAction(() => appItem.launch()))
-            mainSection.append("Vaciar Papelera", addAction(() => execAsync("gio trash --empty").catch(print)))
+            mainSection.append(t("dock.menu.open"), addAction(() => appItem.launch()))
+            mainSection.append(t("settings.dock.dockitem.label.vaciar-papelera"), addAction(() => execAsync("gio trash --empty").catch(print)))
         }
 
         if (desktopActions.length > 0) {
@@ -554,7 +555,7 @@ export function DockItem(
         if (!isSpecialItem) {
             const pinSection = addSection(null)
             pinSection.append(
-                isPinned ? "Desanclar del dock" : "Mantener en el dock",
+                isPinned ? t("settings.dock.dockitem.label.desanclar-del-dock") : t("settings.dock.dockitem.label.mantener-en-el-dock"),
                 addAction(() => {
                     const cid = cleanId || appId
                     if (isPinned) onUnpin(cid)
@@ -576,7 +577,7 @@ export function DockItem(
                     const hyprClient = hypr.clients.find(c => c.address === cleanAddr || c.address === rawAddr)
 
                     // Use a substring to prevent gigantic unreadable menus
-                    let winTitle = hyprClient?.title || `Ventana de ${appItem.name || "App"}`
+                    let winTitle = hyprClient?.title || `${t("dock.menu.window-of")} ${appItem.name || "App"}`
                     if (winTitle.length > 35) winTitle = winTitle.substring(0, 32) + "..."
 
                     // Add the window to the menu. Clicking it focuses the window.
@@ -592,7 +593,7 @@ export function DockItem(
             // 2. Add the destructive "Close All" action at the very bottom
             const closeSection = addSection(null)
             closeSection.append(
-                winCount > 1 ? `Cerrar todas (${winCount})` : "Salir",
+                winCount > 1 ? `${t("settings.dock.dockitem.label.cerrar-todas")} (${winCount})` : t("settings.dock.dockitem.label.salir"),
                 addAction(() => {
                     state.addresses.forEach(addr => {
                         const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
@@ -745,9 +746,9 @@ export function DockItem(
             dot.remove_css_class("focused")
         }
         let targetTitle = appItem.name || "App"
-        if (appId === "launcher" || appId === "special:launcher") targetTitle = "Aplicaciones"
-        if (appId === "home-shortcut" || appId === "special:home") targetTitle = "Archivos"
-        if (appId === "trash" || appId === "special:trash") targetTitle = "Papelera"
+        if (appId === "launcher" || appId === "special:launcher") targetTitle = t("settings.dock.dockitem.label.aplicaciones")
+        if (appId === "home-shortcut" || appId === "special:home") targetTitle = t("dock.special.home.label")
+        if (appId === "trash" || appId === "special:trash") targetTitle = t("dock.special.trash.name")
         if (focused && addresses.includes(focused.address)) {
             targetTitle = focused.title
         } else if (addresses.length > 0) {

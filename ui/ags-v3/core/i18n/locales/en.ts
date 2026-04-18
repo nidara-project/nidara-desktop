@@ -324,6 +324,13 @@ export default {
     "settings.dock.dockitem.label.desanclar-del-dock": "Unpin from dock",
     "settings.dock.dockitem.label.mantener-en-el-dock": "Keep in dock",
 
+    // Dock special item names and menu
+    "dock.special.launcher.name": "Launcher",
+    "dock.special.trash.name": "Trash",
+    "dock.special.home.label": "Files",
+    "dock.menu.open": "Open",
+    "dock.menu.window-of": "Window of",
+
     // System menu
     "bar.system-menu.about": "About This Computer",
     "bar.system-menu.settings": "System Settings...",

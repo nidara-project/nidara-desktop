@@ -238,6 +238,22 @@ export default {
     "settings.dock.row.label.tamano-maximo": "Tamaño máximo",
     "settings.dock.row.label.tamano-de-icono": "Tamaño de icono",
     "settings.dock.row.desc.tamano-base-en-reposo": "Tamaño base en reposo",
+
+    // Dock item menu labels
+    "settings.dock.dockitem.label.aplicaciones": "Aplicaciones",
+    "settings.dock.dockitem.label.vaciar-papelera": "Vaciar Papelera",
+    "settings.dock.dockitem.label.cerrar-todas": "Cerrar todas",
+    "settings.dock.dockitem.label.salir": "Salir",
+    "settings.dock.dockitem.label.desanclar-del-dock": "Desanclar del dock",
+    "settings.dock.dockitem.label.mantener-en-el-dock": "Mantener en el dock",
+
+    // Dock special item names and menu
+    "dock.special.launcher.name": "Lanzador",
+    "dock.special.trash.name": "Papelera",
+    "dock.special.home.label": "Archivos",
+    "dock.menu.open": "Abrir",
+    "dock.menu.window-of": "Ventana de",
+
     "settings.network.group.cableada-ethernet": "Cableada (Ethernet)",
     "settings.network.group.inalambrica": "Inalámbrica",
     "settings.network.group.puntos-de-acceso-cercanos": "Puntos de Acceso Cercanos",
