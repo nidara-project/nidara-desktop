@@ -7,6 +7,7 @@ import status from "../../core/Status"
 import widgetConfig from "../../core/WidgetConfig"
 import registry from "../widgets/index"
 import { t } from "../../core/i18n"
+import SquircleContainer, { Shape } from "../common/SquircleContainer"
 
 const pixelX = (gx: number) => gx * (UNIT + GAP)
 const pixelY = (gy: number) => gy * (UNIT + GAP)
@@ -199,15 +200,13 @@ export default function IslandGrid() {
 
     fixed.add_controller(dropTarget)
 
-    const editBtn = new Gtk.Button({
-        label: t("cc.grid.edit"),
-        css_classes: ["cc-edit-btn"],
-        halign: Gtk.Align.END,
-        margin_top: 8, margin_end: 4, margin_bottom: 4,
-    })
+    const editLabel = new Gtk.Label({ label: t("cc.grid.edit"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 })
+    const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, alpha: 0.2, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"] })
+    const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 20, margin_bottom: 8 })
+    editBtnWrapper.append(editBtn)
 
     outer.append(fixed)
-    outer.append(editBtn)
+    outer.append(editBtnWrapper)
 
     const rebuild = () => {
         removeGhost()
@@ -249,14 +248,16 @@ export default function IslandGrid() {
             if (widget) fixed.put(widget, pixelX(entry.x), pixelY(entry.y))
         }
 
-        editBtn.label = editMode ? t("cc.grid.done") : t("cc.grid.edit")
+        editLabel.label = editMode ? t("cc.grid.done") : t("cc.grid.edit")
     }
 
-    editBtn.connect("clicked", () => {
+    const gestureClick = new Gtk.GestureClick()
+    gestureClick.connect("released", () => {
         editMode = !editMode
         status.cc_edit_mode = editMode
         rebuild()
     })
+    editBtn.add_controller(gestureClick)
     ccLayout.connect("changed", () => rebuild())
 
     // Sync CC layout when widget placement config changes

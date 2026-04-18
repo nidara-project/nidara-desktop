@@ -127,16 +127,14 @@ window.nc-window-2 {
 }
 
 /* --- Edit Mode Controls --- */
-.cc-edit-btn {
-    background: transparent;
-    border: 1px solid var(--crystal-border);
-    border-radius: var(--crystal-radius-pill);
-    color: var(--crystal-text-dim);
-    padding: 3px 12px;
-    font-size: 0.8em;
+.cc-edit-pill {
+    label {
+        font-size: 0.85em;
+        font-weight: 700;
+        color: var(--crystal-text-dim);
+    }
 
-    &:hover {
-        background: var(--crystal-surface);
+    &:hover label {
         color: var(--crystal-text);
     }
 }
@@ -156,7 +154,8 @@ window.nc-window-2 {
 }
 
 .cc-slot-placeholder {
-    background: rgba(255, 255, 255, 0.04);
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.18);
     border-radius: 9999px;
 }
 
