@@ -1,6 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import AstalWp from "gi://AstalWp"
 import { AtomicWidget, WidgetSize } from "./Types"
+import { t } from "../../core/i18n"
 
 function buildHorizontalSlider(
     iconNameLow: string,
@@ -154,7 +155,7 @@ export function VolumeWidget(): AtomicWidget {
 
     return {
         id: "volume",
-        name: "Volumen",
+        name: t("cc.volume.name"),
         defaultSize: WidgetSize.FULL_WIDTH,
         supportedSizes: [WidgetSize.FULL_WIDTH, WidgetSize.TALL],
         buildContent,

@@ -4,6 +4,7 @@ import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { createSquirclePath } from "../common/DrawingUtils"
 import { AtomicWidget, WidgetSize } from "./Types"
+import { t } from "../../core/i18n"
 
 interface MediaState {
     artPixbuf: any
@@ -69,7 +70,7 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
     })
 
     const title = new Gtk.Label({
-        label: "No media", css_classes: ["cc-media-title-atomic"],
+        label: t("cc.media.no-media"), css_classes: ["cc-media-title-atomic"],
         halign: Gtk.Align.CENTER, ellipsize: 3, max_width_chars: 18,
     })
     const artist = new Gtk.Label({
@@ -100,7 +101,7 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
 
     const update = () => {
         const p = state.currentPlayer
-        title.label  = p?.title || "No media"
+        title.label  = p?.title || t("cc.media.no-media")
         artist.label = p?.artist || ""
         play.icon_name = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING
             ? "media-playback-pause-symbolic" : "media-playback-start-symbolic"
@@ -157,7 +158,7 @@ function buildWideContent(state: MediaState): Gtk.Widget {
 
     const update = () => {
         const p = state.currentPlayer
-        title.label  = p?.title || "No media"
+        title.label  = p?.title || t("cc.media.no-media")
         artist.label = p?.artist || ""
         play.icon_name = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING
             ? "media-playback-pause-symbolic" : "media-playback-start-symbolic"
@@ -180,7 +181,7 @@ export function MediaIslandContent(): AtomicWidget {
 
     return {
         id: "media",
-        name: "Media",
+        name: t("cc.media.name"),
         defaultSize: WidgetSize.SQUARE,
         supportedSizes: [WidgetSize.SQUARE, WidgetSize.WIDE],
         buildContent: (size) => size === WidgetSize.WIDE

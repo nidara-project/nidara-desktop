@@ -3,6 +3,7 @@ import { execAsync } from "ags/process"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalNotifd from "gi://AstalNotifd"
 import { AtomicWidget, WidgetSize } from "./Types"
+import { t } from "../../core/i18n"
 
 // Shared capsule layout: icon circle + title/subtitle text stack
 function buildCapsuleContent(
@@ -95,16 +96,16 @@ export function EthernetWidget(): AtomicWidget {
         )
     }
     const getSub = () => {
-        if (!wired) return "Sin cable"
+        if (!wired) return t("cc.ethernet.sub.no-cable")
         const connected = (wired as any).internet === (AstalNetwork as any).Internet?.CONNECTED
-        if (!connected) return "Desconectada"
-        return (wired as any).device?.interface || "Conectada"
+        if (!connected) return t("cc.ethernet.sub.disconnected")
+        return (wired as any).device?.interface || t("cc.ethernet.sub.connected")
     }
 
     const buildContent = (_size: WidgetSize): Gtk.Widget => {
         const content = buildCapsuleContent(
             getIcon,
-            () => "Ethernet",
+            () => t("cc.ethernet.name"),
             getSub,
             () => {},  // no toggle — solo indicador
         )
@@ -118,7 +119,7 @@ export function EthernetWidget(): AtomicWidget {
         return content
     }
 
-    return { id: "ethernet", name: "Ethernet", defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.WIDE], buildContent }
+    return { id: "ethernet", name: t("cc.ethernet.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.WIDE], buildContent }
 }
 
 export function WifiWidget(): AtomicWidget {
@@ -127,10 +128,10 @@ export function WifiWidget(): AtomicWidget {
     const buildContent = (_size: WidgetSize) => {
         const content = buildCapsuleContent(
             () => wifi?.icon_name || "network-wireless-offline-symbolic",
-            () => "Wi-Fi",
+            () => t("cc.wifi.name"),
             () => {
-                if (!wifi) return "Off"
-                return (wifi as any).ssid || ((wifi as any).enabled === false ? "Off" : "Connected")
+                if (!wifi) return t("cc.wifi.sub.off")
+                return (wifi as any).ssid || ((wifi as any).enabled === false ? t("cc.wifi.sub.off") : t("cc.wifi.sub.connected"))
             },
             () => execAsync(["bash", "-c",
                 "nmcli radio wifi | grep -q enabled && nmcli radio wifi off || nmcli radio wifi on"
@@ -146,7 +147,7 @@ export function WifiWidget(): AtomicWidget {
         return content
     }
 
-    return { id: "wifi", name: "Wi-Fi", defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.WIDE], buildContent }
+    return { id: "wifi", name: t("cc.wifi.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.WIDE], buildContent }
 }
 
 export function FocusWidget(): AtomicWidget {
@@ -155,8 +156,8 @@ export function FocusWidget(): AtomicWidget {
     const buildContent = (_size: WidgetSize) => {
         const content = buildCapsuleContent(
             () => notifd?.dont_disturb ? "notifications-disabled-symbolic" : "notifications-symbolic",
-            () => notifd?.dont_disturb ? "DnD On" : "DnD",
-            () => notifd?.dont_disturb ? "Modo silencio" : "",
+            () => notifd?.dont_disturb ? t("cc.focus.title.on") : t("cc.focus.title.off"),
+            () => notifd?.dont_disturb ? t("cc.focus.sub.on") : "",
             () => { if (notifd) notifd.dont_disturb = !notifd.dont_disturb },
         )
         if (notifd) {
@@ -166,7 +167,7 @@ export function FocusWidget(): AtomicWidget {
         return content
     }
 
-    return { id: "focus", name: "Focus", defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.WIDE], buildContent }
+    return { id: "focus", name: t("cc.focus.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.WIDE], buildContent }
 }
 
 export function RoundToggle(

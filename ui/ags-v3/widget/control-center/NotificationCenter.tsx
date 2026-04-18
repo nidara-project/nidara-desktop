@@ -8,6 +8,7 @@ import Gio from "gi://Gio"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
 import { dockSideState } from "../../widget/dock/state"
+import { t } from "../../core/i18n"
 
 export function createIconWidget(n: AstalNotifd.Notification, size: number) {
     const entry = n.desktop_entry || n.app_name || ""
@@ -56,7 +57,7 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     
     if (!isPopup) {
         const now = Math.floor(Date.now()/1000); const d = now - n.time
-        const timeStr = d < 60 ? "ahora" : (d < 3600 ? `${Math.floor(d/60)}m` : `${Math.floor(d/3600)}h`)
+        const timeStr = d < 60 ? t("nc.time.now") : (d < 3600 ? `${Math.floor(d/60)}m` : `${Math.floor(d/3600)}h`)
         header.append(new Gtk.Label({ label: timeStr, css_classes: ["nc-item-time"], halign: Gtk.Align.END }))
         if (groupCount > 1 && !isExpanded) header.append(new Gtk.Label({ label: `${groupCount}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
     }
@@ -116,9 +117,9 @@ export default function NotificationCenter() {
 
     const calendar = SquircleContainer({ child: new Gtk.Calendar({ hexpand: true, css_classes: ["nc-calendar-widget"] }), radius: 32, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["cc-island", "nc-calendar-island"] })
     const spacer = new Gtk.Box({ height_request: 24 })
-    const emptyLabel = new Gtk.Label({ label: "No hay notificaciones", css_classes: ["nc-empty"], margin_top: 64, halign: Gtk.Align.CENTER, visible: false })
+    const emptyLabel = new Gtk.Label({ label: t("nc.empty"), css_classes: ["nc-empty"], margin_top: 64, halign: Gtk.Align.CENTER, visible: false })
     const pillBox = new Gtk.Box({ halign: Gtk.Align.CENTER, height_request: 40, margin_top: 32, margin_bottom: 40, visible: false })
-    const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: "Borrar notificaciones", margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, alpha: 0.2, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => notifd.notifications.forEach(n => n.dismiss()), css_classes: ["nc-clear-all-pill"] })
+    const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: t("nc.clear-all"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, alpha: 0.2, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => notifd.notifications.forEach(n => n.dismiss()), css_classes: ["nc-clear-all-pill"] })
     pillBox.append(clearAllBtn)
 
     listContainer.append(calendar); listContainer.append(spacer); listContainer.append(emptyLabel)

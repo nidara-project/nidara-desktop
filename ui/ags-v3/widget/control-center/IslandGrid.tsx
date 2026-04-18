@@ -6,6 +6,7 @@ import { AtomicWidget, WidgetSize } from "./Types"
 import status from "../../core/Status"
 import widgetConfig from "../../core/WidgetConfig"
 import registry from "../widgets/index"
+import { t } from "../../core/i18n"
 
 const pixelX = (gx: number) => gx * (UNIT + GAP)
 const pixelY = (gy: number) => gy * (UNIT + GAP)
@@ -199,7 +200,7 @@ export default function IslandGrid() {
     fixed.add_controller(dropTarget)
 
     const editBtn = new Gtk.Button({
-        label: "Editar",
+        label: t("cc.grid.edit"),
         css_classes: ["cc-edit-btn"],
         halign: Gtk.Align.END,
         margin_top: 8, margin_end: 4, margin_bottom: 4,
@@ -248,7 +249,7 @@ export default function IslandGrid() {
             if (widget) fixed.put(widget, pixelX(entry.x), pixelY(entry.y))
         }
 
-        editBtn.label = editMode ? "Listo" : "Editar"
+        editBtn.label = editMode ? t("cc.grid.done") : t("cc.grid.edit")
     }
 
     editBtn.connect("clicked", () => {

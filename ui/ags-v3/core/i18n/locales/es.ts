@@ -316,4 +316,37 @@ export default {
     "widget.battery.state.cargado": "Cargado",
     "widget.battery.state.cargando": "Cargando",
     "widget.battery.state.descargando": "Descargando",
+
+    // Control Center — Ethernet toggle
+    "cc.ethernet.name": "Ethernet",
+    "cc.ethernet.sub.no-cable": "Sin cable",
+    "cc.ethernet.sub.disconnected": "Desconectada",
+    "cc.ethernet.sub.connected": "Conectada",
+
+    // Control Center — Wi-Fi toggle
+    "cc.wifi.name": "Wi-Fi",
+    "cc.wifi.sub.off": "Off",
+    "cc.wifi.sub.connected": "Conectado",
+
+    // Control Center — Focus/DnD toggle
+    "cc.focus.name": "Silencio",
+    "cc.focus.title.on": "Activo",
+    "cc.focus.title.off": "No molestar",
+    "cc.focus.sub.on": "Modo silencio",
+
+    // Control Center — Island grid
+    "cc.grid.edit": "Editar",
+    "cc.grid.done": "Listo",
+
+    // Control Center — Volume widget
+    "cc.volume.name": "Volumen",
+
+    // Control Center — Media widget
+    "cc.media.name": "Multimedia",
+    "cc.media.no-media": "Sin reproducción",
+
+    // Notification Center
+    "nc.time.now": "ahora",
+    "nc.empty": "No hay notificaciones",
+    "nc.clear-all": "Borrar notificaciones",
 }
