@@ -249,6 +249,8 @@ export default {
     "settings.dock.row.label.posicion-del-dock": "Dock position",
     "settings.dock.row.label.retardo-al-ocultar": "Hide delay",
     "settings.dock.row.label.tamano-maximo": "Max size",
+    "settings.dock.row.label.tamano-de-icono": "Icon Size",
+    "settings.dock.row.desc.tamano-base-en-reposo": "Base size at rest",
 
     // Network
     "settings.network.group.cableada-ethernet": "Wired (Ethernet)",

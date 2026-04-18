@@ -233,6 +233,8 @@ export default {
     "settings.dock.row.label.posicion-del-dock": "Posición del dock",
     "settings.dock.row.label.retardo-al-ocultar": "Retardo al ocultar",
     "settings.dock.row.label.tamano-maximo": "Tamaño máximo",
+    "settings.dock.row.label.tamano-de-icono": "Tamaño de icono",
+    "settings.dock.row.desc.tamano-base-en-reposo": "Tamaño base en reposo",
     "settings.network.group.cableada-ethernet": "Cableada (Ethernet)",
     "settings.network.group.inalambrica": "Inalámbrica",
     "settings.network.group.puntos-de-acceso-cercanos": "Puntos de Acceso Cercanos",

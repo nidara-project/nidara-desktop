@@ -16,7 +16,7 @@ export default function DockPage() {
     ]
     posGroup.listBox.append(dropdownRow(
         t("settings.dock.row.label.posicion-del-dock"), t("settings.dock.row.desc.donde-aparece-el-dock-en-la-pantalla"),
-        posOptions.find(o => o.value === dockSettings.position)?.label ?? "Inferior",
+        posOptions.find(o => o.value === dockSettings.position)?.label ?? t("settings.dock.label.inferior"),
         posOptions.map(o => o.label),
         (label) => {
             const opt = posOptions.find(o => o.label === label)
@@ -47,7 +47,7 @@ export default function DockPage() {
     // 1. Geometry
     const geoGroup = listGroup(t("settings.dock.group.geometria"))
     geoGroup.listBox.append(presetRow(
-        "Tamaño de icono", "Tamaño base en reposo",
+        t("settings.dock.row.label.tamano-de-icono"), t("settings.dock.row.desc.tamano-base-en-reposo"),
         [32, 48, 64, 80, 96], dockSettings.iconSize, "px",
         (v) => updateDockSettings({ iconSize: v }),
     ))
@@ -95,7 +95,7 @@ export default function DockPage() {
             updateDockSettings({ autoHide: state })
         return false
     })
-    const autoHideRow = createRow(t("settings.dock.row.label.ocultar-automaticamente"), "El dock se esconde al alejar el cursor", autoHideSwitch)
+    const autoHideRow = createRow(t("settings.dock.row.label.ocultar-automaticamente"), t("settings.dock.row.desc.el-dock-se-esconde-al-alejar-el-cursor"), autoHideSwitch)
     behGroup.listBox.append(autoHideRow)
 
     const syncAutoHide = () => {

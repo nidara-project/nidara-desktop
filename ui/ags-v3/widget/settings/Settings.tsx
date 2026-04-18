@@ -18,6 +18,7 @@ import AppsPage from "./pages/Apps"
 import BluetoothPage from "./pages/Bluetooth"
 import AutostartPage from "./pages/Autostart"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex } from "./SettingsHelpers"
+import { t } from "../../core/i18n"
 
 /**
  * Settings - System Configuration Panel
@@ -77,19 +78,19 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
 
     const categories = [
-        { id: "appearance", label: "Apariencia",      icon: "preferences-desktop-theme-symbolic",  component: AppearancePage },
-        { id: "display",    label: "Pantalla",         icon: "video-display-symbolic",              component: DisplayPage     },
-        { id: "audio",      label: "Sonido",           icon: "audio-speakers-symbolic",             component: AudioPage       },
-        { id: "network",    label: "Red",              icon: "network-workgroup-symbolic",           component: NetworkPage     },
-        { id: "input",      label: "Dispositivos",     icon: "input-keyboard-symbolic",             component: InputPage       },
-        { id: "bluetooth",  label: "Bluetooth",        icon: "bluetooth-symbolic",                  component: BluetoothPage   },
-        { id: "region",     label: "Idioma y Región",  icon: "preferences-system-time-symbolic",    component: RegionPage      },
-        { id: "apps",       label: "Aplicaciones",     icon: "application-x-executable-symbolic",   component: AppsPage        },
-        { id: "dock",       label: "Dock / Panel",     icon: "dock-bottom-symbolic",                component: DockPage        },
-        { id: "widgets",    label: "Widgets",          icon: "puzzle-piece-symbolic",               component: WidgetsPage     },
-        { id: "autostart",  label: "Inicio automático", icon: "system-run-symbolic",                component: AutostartPage   },
-        { id: "power",      label: "Energía",          icon: "power-profile-balanced-symbolic",     component: PowerPage       },
-        { id: "about",      label: "Acerca de",        icon: "help-about-symbolic",                 component: AboutPage       },
+        { id: "appearance", label: t("settings.appearance.page.title.apariencia"),      icon: "preferences-desktop-theme-symbolic",  component: AppearancePage },
+        { id: "display",    label: t("settings.display.page.title.pantalla"),           icon: "video-display-symbolic",              component: DisplayPage     },
+        { id: "audio",      label: t("settings.audio.page.title.sonido"),               icon: "audio-speakers-symbolic",             component: AudioPage       },
+        { id: "network",    label: t("settings.network.page.title.red"),                icon: "network-workgroup-symbolic",           component: NetworkPage     },
+        { id: "input",      label: t("settings.input.title"),                           icon: "input-keyboard-symbolic",             component: InputPage       },
+        { id: "bluetooth",  label: t("settings.bluetooth.page.title.bluetooth"),        icon: "bluetooth-symbolic",                  component: BluetoothPage   },
+        { id: "region",     label: t("settings.region.title"),                          icon: "preferences-system-time-symbolic",    component: RegionPage      },
+        { id: "apps",       label: t("settings.apps.page.title.aplicaciones"),          icon: "application-x-executable-symbolic",   component: AppsPage        },
+        { id: "dock",       label: t("settings.dock.page.title.dock"),                  icon: "dock-bottom-symbolic",                component: DockPage        },
+        { id: "widgets",    label: t("settings.widgets.page.title.widgets"),            icon: "puzzle-piece-symbolic",               component: WidgetsPage     },
+        { id: "autostart",  label: t("settings.autostart.page.title.inicio-automatico"), icon: "system-run-symbolic",               component: AutostartPage   },
+        { id: "power",      label: t("settings.power.page.title.energia"),              icon: "power-profile-balanced-symbolic",     component: PowerPage       },
+        { id: "about",      label: t("settings.about.page.title.acerca-de"),            icon: "help-about-symbolic",                 component: AboutPage       },
     ]
 
     const stack = new Adw.ViewStack({
