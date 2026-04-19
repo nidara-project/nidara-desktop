@@ -28,7 +28,7 @@ function buildHorizontalSlider(
     })
     scale.set_range(0, 100)
     scale.set_value(getValue())
-    scale.set_increments(2, 10)
+    scale.set_increments(1, 5)
 
     const valueLabel = new Gtk.Label({
         label: `${Math.round(getValue())}%`,
@@ -88,7 +88,7 @@ function buildVerticalSlider(
     })
     scale.set_range(0, 100)
     scale.set_value(getValue())
-    scale.set_increments(2, 10)
+    scale.set_increments(1, 5)
 
     const valueLabel = new Gtk.Label({
         label: `${Math.round(getValue())}%`,
