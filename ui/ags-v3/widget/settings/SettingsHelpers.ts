@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import GLib from "gi://GLib"
 
 /**
  * Shared UI helpers for Settings pages.
@@ -177,7 +178,8 @@ export const sliderRow = (
     click.connect("released", () => { isDragging = false })
     motion.connect("motion", (_g: Gtk.EventControllerMotion, x: number) => {
         if (!isDragging) return
-        scale.set_value(Math.max(min, Math.min(max, dragStart + ((x - startX) / trackW) * (max - min))))
+        const newVal = Math.max(min, Math.min(max, dragStart + ((x - startX) / trackW) * (max - min)))
+        if (Math.abs(newVal - scale.get_value()) >= (max - min) * 0.005) scale.set_value(newVal)
     })
 
     if (icons) {
@@ -194,10 +196,17 @@ export const sliderRow = (
         xalign: 1.0,
     })
 
+    let pendingCb = false
     scale.connect("value-changed", () => {
-        const v = scale.get_value()
-        valueLabel.label = formatVal(v)
-        cb(v)
+        valueLabel.label = formatVal(scale.get_value())
+        if (!pendingCb) {
+            pendingCb = true
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                cb(scale.get_value())
+                pendingCb = false
+                return GLib.SOURCE_REMOVE
+            })
+        }
     })
 
     container.append(valueLabel)

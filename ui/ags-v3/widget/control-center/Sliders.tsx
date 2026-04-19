@@ -51,7 +51,8 @@ function buildHorizontalSlider(
     click.connect("released", () => { isDragging = false })
     motion.connect("motion", (_g: Gtk.EventControllerMotion, x: number) => {
         if (!isDragging) return
-        scale.set_value(Math.max(0, Math.min(100, dragStart + ((x - startX) / trackW) * 100)))
+        const newVal = Math.max(0, Math.min(100, dragStart + ((x - startX) / trackW) * 100))
+        if (Math.abs(newVal - scale.get_value()) >= 0.5) scale.set_value(newVal)
     })
 
     const valueLabel = new Gtk.Label({
@@ -66,11 +67,19 @@ function buildHorizontalSlider(
     box.append(valueLabel)
 
     let ignoreUntil = 0
+    let pendingOnChange = false
     scale.connect("value-changed", () => {
         const v = scale.get_value()
         valueLabel.label = `${Math.round(v)}%`
-        ignoreUntil = GLib.get_monotonic_time() + 300_000 // 300ms in µs
-        onChange(v / 100)
+        ignoreUntil = GLib.get_monotonic_time() + 300_000
+        if (!pendingOnChange) {
+            pendingOnChange = true
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                onChange(scale.get_value() / 100)
+                pendingOnChange = false
+                return GLib.SOURCE_REMOVE
+            })
+        }
     })
 
     const cleanup = onExternalChange((v) => {
@@ -132,7 +141,8 @@ function buildVerticalSlider(
     click.connect("released", () => { isDragging = false })
     motion.connect("motion", (_g: Gtk.EventControllerMotion, _x: number, y: number) => {
         if (!isDragging) return
-        scale.set_value(Math.max(0, Math.min(100, dragStart + ((startY - y) / trackH) * 100)))
+        const newVal = Math.max(0, Math.min(100, dragStart + ((startY - y) / trackH) * 100))
+        if (Math.abs(newVal - scale.get_value()) >= 0.5) scale.set_value(newVal)
     })
 
     const valueLabel = new Gtk.Label({
@@ -147,11 +157,19 @@ function buildVerticalSlider(
     box.append(valueLabel)
 
     let ignoreUntil = 0
+    let pendingOnChange = false
     scale.connect("value-changed", () => {
         const v = scale.get_value()
         valueLabel.label = `${Math.round(v)}%`
         ignoreUntil = GLib.get_monotonic_time() + 300_000
-        onChange(v / 100)
+        if (!pendingOnChange) {
+            pendingOnChange = true
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                onChange(scale.get_value() / 100)
+                pendingOnChange = false
+                return GLib.SOURCE_REMOVE
+            })
+        }
     })
 
     const cleanup = onExternalChange((v) => {
