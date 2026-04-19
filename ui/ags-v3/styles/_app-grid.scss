@@ -35,44 +35,25 @@ window#crystal-app-launcher,
 }
 
 /* ── Search bar ── */
-// GTK4 Entry: style the outer box AND the inner text node
-entry.app-grid-search,
-#app-grid-search-entry {
-    background: rgba(255, 255, 255, 0.13);
-    border: 1px solid rgba(255, 255, 255, 0.22);
-    border-radius: 100px; // Full pill
-    color: rgba(255, 255, 255, 0.95);
+.app-grid-search-box {
+    background: var(--crystal-surface-raised);
+    border: 1px solid var(--crystal-border);
+    border-radius: var(--crystal-radius-pill);
     padding: 10px 20px;
-    font-size: 1.05em;
-    font-weight: 400;
-    caret-color: white;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
     margin-bottom: 40px;
-    transition: background 0.15s ease, border-color 0.15s ease;
-    outline: none;
     min-height: 44px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
 
-    > text {
-        background: transparent;
-        color: rgba(255, 255, 255, 0.95);
-        padding: 0;
-    }
+.app-grid-search-icon {
+    color: var(--crystal-text-dim);
+}
 
-    > image {
-        color: rgba(255, 255, 255, 0.5);
-        -gtk-icon-size: 18px;
-        margin-right: 6px;
-    }
-
-    &:focus {
-        background: rgba(255, 255, 255, 0.18);
-        border-color: rgba(255, 255, 255, 0.45);
-        box-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
-    }
-
-    > placeholder {
-        color: rgba(255, 255, 255, 0.38);
-    }
+.app-grid-search-entry {
+    background: none;
+    color: var(--crystal-text);
+    font-size: 1.05em;
+    caret-color: var(--crystal-text);
 }
 
 /* ── Scroll + FlowBox ── */

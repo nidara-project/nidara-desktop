@@ -48,16 +48,20 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     win.visible = false
 
     // ── Search bar ─────────────────────────────────────────────────────────
-    const searchEntry = new Gtk.Entry({
-        name: "app-grid-search-entry",
+    const searchEntry = new Gtk.Text({
         placeholder_text: t("app-grid.search.placeholder"),
-        halign: Gtk.Align.CENTER,
-        css_classes: ["app-grid-search"],
-        width_request: 500,
-        primary_icon_name: "system-search-symbolic",
-        primary_icon_activatable: false,
-        primary_icon_sensitive: false,
+        css_classes: ["app-grid-search-entry"],
+        hexpand: true,
+        valign: Gtk.Align.CENTER,
     })
+    const searchBox = new Gtk.Box({
+        css_classes: ["app-grid-search-box"],
+        spacing: 10,
+        halign: Gtk.Align.CENTER,
+        width_request: 500,
+    })
+    searchBox.append(new Gtk.Image({ icon_name: "system-search-symbolic", pixel_size: 18, css_classes: ["app-grid-search-icon"] }))
+    searchBox.append(searchEntry)
 
     // ── FlowBox ────────────────────────────────────────────────────────────
     const flowbox = new Gtk.FlowBox({
@@ -154,7 +158,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         vexpand: true,
     })
     contentCol.append(clockLabel)
-    contentCol.append(searchEntry)
+    contentCol.append(searchBox)
     contentCol.append(gridArea)
 
     // ── Root container (background + click-to-close) ───────────────────────
