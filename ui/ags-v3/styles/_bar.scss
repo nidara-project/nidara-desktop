@@ -270,7 +270,7 @@
 }
 
 .about-sep {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--crystal-surface);
     min-height: 1px;
 }
 
@@ -283,6 +283,6 @@
     opacity: 0.5;
     transition: opacity 0.15s ease;
 
-    &:hover { opacity: 1; background: rgba(255, 255, 255, 0.1); }
-    &:active { background: rgba(255, 255, 255, 0.05); }
+    &:hover { opacity: 1; background: var(--crystal-surface); }
+    &:active { background: var(--crystal-surface-back); }
 }
