@@ -179,12 +179,10 @@ button.crystal-btn,
     &:hover {
         background: var(--crystal-surface-hover);
         border-color: var(--crystal-border);
-        transform: translateY(-1px);
     }
 
     &:active {
         background: var(--crystal-surface-active);
-        transform: scale(0.96);
     }
 
     &.accent {

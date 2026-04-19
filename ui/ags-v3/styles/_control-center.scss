@@ -285,11 +285,10 @@ window.nc-window-2 {
         background: var(--crystal-surface-hover);
         border-color: var(--crystal-border);
         color: var(--crystal-text);
-        transform: scale(1.05) translateY(-1px);
     }
-    
+
     &:active {
-        transform: scale(0.92);
+        background: var(--crystal-surface-active);
     }
 }
 
