@@ -158,6 +158,8 @@ export const sliderRow = (
     scale.set_range(min, max)
     scale.set_value(init)
     scale.set_draw_value(false)
+    scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
+        t === Gtk.ScrollType.PAGE_FORWARD || t === Gtk.ScrollType.PAGE_BACKWARD)
 
     if (icons) {
         container.append(scale)

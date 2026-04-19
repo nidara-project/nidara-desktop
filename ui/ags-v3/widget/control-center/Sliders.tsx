@@ -29,6 +29,8 @@ function buildHorizontalSlider(
     scale.set_range(0, 100)
     scale.set_value(getValue())
     scale.set_increments(1, 5)
+    scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
+        t === Gtk.ScrollType.PAGE_FORWARD || t === Gtk.ScrollType.PAGE_BACKWARD)
 
     const valueLabel = new Gtk.Label({
         label: `${Math.round(getValue())}%`,
@@ -89,6 +91,8 @@ function buildVerticalSlider(
     scale.set_range(0, 100)
     scale.set_value(getValue())
     scale.set_increments(1, 5)
+    scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
+        t === Gtk.ScrollType.PAGE_FORWARD || t === Gtk.ScrollType.PAGE_BACKWARD)
 
     const valueLabel = new Gtk.Label({
         label: `${Math.round(getValue())}%`,
