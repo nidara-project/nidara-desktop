@@ -114,7 +114,7 @@ window#crystal-dock box.cd-squircle-plate drawingarea {
 }
 
 window#crystal-dock box.cd-squircle-plate.show-bg {
-    background-color: #ffffff;
+    background-color: var(--crystal-surface-raised);
     /* Explicit hover state */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     /* Optional: add explicit shadow on hover */
@@ -191,7 +191,7 @@ button.dock-v-icon {
     transition: background 150ms ease;
 
     &:hover {
-        background-color: rgba(255,255,255,0.1);
+        background-color: var(--crystal-surface);
     }
 
     image {
@@ -204,5 +204,5 @@ button.dock-v-icon {
     padding: 6px 16px;
     min-width: 160px;
 
-    &:hover { background-color: rgba(255,255,255,0.1); }
+    &:hover { background-color: var(--crystal-surface); }
 }

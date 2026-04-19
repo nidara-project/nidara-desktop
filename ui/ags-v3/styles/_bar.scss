@@ -191,11 +191,11 @@
 }
 
 .system-menu-row:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--crystal-surface);
 }
 
 .system-menu-row:active {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--crystal-surface-back);
 }
 
 .system-menu-label {
@@ -205,32 +205,31 @@
 
 
 .system-menu-sep {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--crystal-surface);
     min-height: 1px;
 }
 
 // ── Inline confirmation view ──────────────────────────────────────────────────
 .system-confirm-secondary {
-    background: rgba(255, 255, 255, 0.07);
-    color: rgba(255, 255, 255, 0.7);
+    background: var(--crystal-surface-back);
+    color: var(--crystal-text-dim);
     font-size: 12px;
 
     &:hover {
-        background: rgba(255, 255, 255, 0.13);
-        color: rgba(255, 255, 255, 0.9);
+        background: var(--crystal-surface-hover);
+        color: var(--crystal-text);
     }
 }
 
 .system-confirm-primary {
-    background: rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.9);
+    background: var(--crystal-surface);
+    color: var(--crystal-text);
     font-size: 12px;
     font-weight: 600;
 
     &:hover {
-        background: rgba(255, 255, 255, 0.18);
+        background: var(--crystal-surface-active);
     }
-
 }
 
 /* ── About Window ──────────────────────────────────────────────────────────── */

@@ -140,7 +140,7 @@ window.nc-window-2 {
 }
 
 .cc-remove-btn {
-    background: rgba(255, 59, 48, 0.85);
+    background: rgba(var(--crystal-danger-rgb), 0.85);
     border: none;
     border-radius: 9999px;
     color: white;
@@ -150,7 +150,7 @@ window.nc-window-2 {
 
     image { margin: 0; -gtk-icon-size: 12px; }
 
-    &:hover { background: rgba(255, 59, 48, 1.0); }
+    &:hover { background: var(--crystal-danger); }
 }
 
 .cc-slot-placeholder {
@@ -242,8 +242,8 @@ window.nc-window-2 {
 
 .nc-item-clear-btn-compact {
     color: var(--crystal-text-dim);
-    &:hover { 
-        background: #ff3b30; 
+    &:hover {
+        background: var(--crystal-danger);
         color: white;
     }
 }
@@ -324,7 +324,7 @@ window.nc-window-2 {
 }
 
 .nc-item-clear-btn:hover {
-    color: #ff3b30;
+    color: var(--crystal-danger);
 }
 
 .nc-item-time {
