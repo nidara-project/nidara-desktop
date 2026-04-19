@@ -124,6 +124,20 @@ highlight {
     background-image: none;
 }
 
+/* Force slider margin to 0 across all crystal contexts.
+   Adwaita sets "scale slider { margin: -7px }" which shifts GTK's internal
+   hit-test position relative to the visual thumb, causing the thumb to jump
+   on click. Using ID+class specificity (1,1,1) beats Adwaita's (0,0,2). */
+#crystal-bar scale slider,
+#crystal-bar .crystal-scale slider,
+.crystal-control-center scale slider,
+.crystal-control-center .crystal-scale slider,
+window.crystal-settings-window scale slider,
+window.crystal-settings-window .crystal-scale slider {
+    margin: 0;
+    padding: 0;
+}
+
 /* --- Global Sidebar System (Tahoe Island) --- */
 .crystal-sidebar-island {
     background: var(--crystal-surface-back);
