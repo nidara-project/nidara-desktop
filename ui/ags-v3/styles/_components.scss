@@ -47,21 +47,32 @@ scale,
     min-height: 28px;
     margin: 4px 0;
     padding: 0;
+    outline: none;
+    box-shadow: none;
 
     trough {
         min-height: 6px;
+        min-width: 6px;
         background-color: var(--crystal-surface);
         border-radius: 99px;
-        margin: 0;
+        border: none;
+        outline: none;
+        box-shadow: none;
         padding: 0;
+        margin: 0;
     }
 
     highlight {
         min-height: 6px;
+        min-width: 0;
         background-color: $crystal-accent;
+        background-image: none;
         border-radius: 99px;
-        margin: 0;
+        border: none;
+        outline: none;
+        box-shadow: none;
         padding: 0;
+        margin: 0;
     }
 
     slider {
@@ -69,10 +80,12 @@ scale,
         background-image: none;
         border-radius: 99px;
         border: none;
+        outline: none;
         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
         min-width: 20px;
         min-height: 20px;
         margin: 0;
+        padding: 0;
         /* Only animate visual properties — never position, to avoid drag lag */
         transition: background-color 0.15s ease, box-shadow 0.15s ease;
     }
@@ -84,6 +97,15 @@ scale,
 
     &:hover slider {
         box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+    }
+
+    /* Nuke every Adwaita focus decoration on scale internals */
+    trough:focus, trough:focus-within,
+    highlight:focus,
+    slider:focus {
+        outline: none;
+        box-shadow: none;
+        border: none;
     }
 }
 
