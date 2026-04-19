@@ -30,6 +30,14 @@
         box-shadow: none;
         border: none;
     }
+
+    /* Suppress GTK4 drop-target highlight border */
+    &:drop(active),
+    *:drop(active) {
+        box-shadow: none;
+        border-color: transparent;
+        outline: none;
+    }
 }
 
 /* Specific resets for AdwWindow in Crystal Shell */
