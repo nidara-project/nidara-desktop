@@ -29,18 +29,17 @@ function buildHorizontalSlider(
     scale.set_range(0, 100)
     scale.set_value(getValue())
     scale.set_increments(1, 5)
-    // Block GTK Range's absolute-position drag; keep scroll-wheel steps.
+    // Only block JUMP (absolute pointer snap) and PAGE (trough click).
+    // Scroll-wheel (STEP_UP/DOWN) and keyboard (STEP_FORWARD/BACKWARD) pass through.
     scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
-        t !== Gtk.ScrollType.STEP_UP && t !== Gtk.ScrollType.STEP_DOWN &&
-        t !== Gtk.ScrollType.STEP_FORWARD && t !== Gtk.ScrollType.STEP_BACKWARD)
+        t === Gtk.ScrollType.JUMP || t === Gtk.ScrollType.PAGE_FORWARD || t === Gtk.ScrollType.PAGE_BACKWARD)
 
-    // GestureClick (CAPTURE) claims the pointer sequence before GTK Range can,
-    // denying its internal gesture. EventControllerMotion then tracks the delta.
     const click = new Gtk.GestureClick({ propagation_phase: Gtk.PropagationPhase.CAPTURE, button: 1 })
     const motion = new Gtk.EventControllerMotion({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
     scale.add_controller(click)
     scale.add_controller(motion)
     let isDragging = false, dragStart = 0, startX = 0, trackW = 1
+    let pendingMotion = false, lastMotionX = 0
     click.connect("pressed", (_g: Gtk.GestureClick, _n: number, x: number) => {
         _g.set_state(Gtk.EventSequenceState.CLAIMED)
         isDragging = true
@@ -51,8 +50,15 @@ function buildHorizontalSlider(
     click.connect("released", () => { isDragging = false })
     motion.connect("motion", (_g: Gtk.EventControllerMotion, x: number) => {
         if (!isDragging) return
-        const newVal = Math.max(0, Math.min(100, dragStart + ((x - startX) / trackW) * 100))
-        if (Math.abs(newVal - scale.get_value()) >= 0.5) scale.set_value(newVal)
+        lastMotionX = x
+        if (!pendingMotion) {
+            pendingMotion = true
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                if (isDragging) scale.set_value(Math.max(0, Math.min(100, dragStart + ((lastMotionX - startX) / trackW) * 100)))
+                pendingMotion = false
+                return GLib.SOURCE_REMOVE
+            })
+        }
     })
 
     const valueLabel = new Gtk.Label({
@@ -123,14 +129,14 @@ function buildVerticalSlider(
     scale.set_value(getValue())
     scale.set_increments(1, 5)
     scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
-        t !== Gtk.ScrollType.STEP_UP && t !== Gtk.ScrollType.STEP_DOWN &&
-        t !== Gtk.ScrollType.STEP_FORWARD && t !== Gtk.ScrollType.STEP_BACKWARD)
+        t === Gtk.ScrollType.JUMP || t === Gtk.ScrollType.PAGE_FORWARD || t === Gtk.ScrollType.PAGE_BACKWARD)
 
     const click = new Gtk.GestureClick({ propagation_phase: Gtk.PropagationPhase.CAPTURE, button: 1 })
     const motion = new Gtk.EventControllerMotion({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
     scale.add_controller(click)
     scale.add_controller(motion)
     let isDragging = false, dragStart = 0, startY = 0, trackH = 1
+    let pendingMotion = false, lastMotionY = 0
     click.connect("pressed", (_g: Gtk.GestureClick, _n: number, _x: number, y: number) => {
         _g.set_state(Gtk.EventSequenceState.CLAIMED)
         isDragging = true
@@ -141,8 +147,15 @@ function buildVerticalSlider(
     click.connect("released", () => { isDragging = false })
     motion.connect("motion", (_g: Gtk.EventControllerMotion, _x: number, y: number) => {
         if (!isDragging) return
-        const newVal = Math.max(0, Math.min(100, dragStart + ((startY - y) / trackH) * 100))
-        if (Math.abs(newVal - scale.get_value()) >= 0.5) scale.set_value(newVal)
+        lastMotionY = y
+        if (!pendingMotion) {
+            pendingMotion = true
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                if (isDragging) scale.set_value(Math.max(0, Math.min(100, dragStart + ((startY - lastMotionY) / trackH) * 100)))
+                pendingMotion = false
+                return GLib.SOURCE_REMOVE
+            })
+        }
     })
 
     const valueLabel = new Gtk.Label({

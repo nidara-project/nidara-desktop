@@ -160,14 +160,14 @@ export const sliderRow = (
     scale.set_value(init)
     scale.set_draw_value(false)
     scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
-        t !== Gtk.ScrollType.STEP_UP && t !== Gtk.ScrollType.STEP_DOWN &&
-        t !== Gtk.ScrollType.STEP_FORWARD && t !== Gtk.ScrollType.STEP_BACKWARD)
+        t === Gtk.ScrollType.JUMP || t === Gtk.ScrollType.PAGE_FORWARD || t === Gtk.ScrollType.PAGE_BACKWARD)
 
     const click = new Gtk.GestureClick({ propagation_phase: Gtk.PropagationPhase.CAPTURE, button: 1 })
     const motion = new Gtk.EventControllerMotion({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
     scale.add_controller(click)
     scale.add_controller(motion)
     let isDragging = false, dragStart = 0, startX = 0, trackW = 1
+    let pendingMotion = false, lastMotionX = 0
     click.connect("pressed", (_g: Gtk.GestureClick, _n: number, x: number) => {
         _g.set_state(Gtk.EventSequenceState.CLAIMED)
         isDragging = true
@@ -178,8 +178,15 @@ export const sliderRow = (
     click.connect("released", () => { isDragging = false })
     motion.connect("motion", (_g: Gtk.EventControllerMotion, x: number) => {
         if (!isDragging) return
-        const newVal = Math.max(min, Math.min(max, dragStart + ((x - startX) / trackW) * (max - min)))
-        if (Math.abs(newVal - scale.get_value()) >= (max - min) * 0.005) scale.set_value(newVal)
+        lastMotionX = x
+        if (!pendingMotion) {
+            pendingMotion = true
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                if (isDragging) scale.set_value(Math.max(min, Math.min(max, dragStart + ((lastMotionX - startX) / trackW) * (max - min))))
+                pendingMotion = false
+                return GLib.SOURCE_REMOVE
+            })
+        }
     })
 
     if (icons) {

@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import GLib from "gi://GLib"
 import AstalWp from "gi://AstalWp"
 import { VolumeWidget } from "../control-center/Sliders"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
@@ -33,6 +34,7 @@ function buildBarContent(): Gtk.Widget {
         label: speaker ? `${Math.round(speaker.volume * 100)}%` : "–",
         css_classes: ["bar-popover-value"],
         halign: Gtk.Align.CENTER,
+        width_chars: 5, xalign: 1.0,
     })
 
     const scale = new Gtk.Scale({
@@ -44,20 +46,56 @@ function buildBarContent(): Gtk.Widget {
     })
     scale.set_range(0, 100)
     scale.set_value(speaker ? Math.round(speaker.volume * 100) : 50)
-    scale.set_increments(2, 10)
+    scale.set_increments(1, 5)
+    scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
+        t === Gtk.ScrollType.JUMP || t === Gtk.ScrollType.PAGE_FORWARD || t === Gtk.ScrollType.PAGE_BACKWARD)
 
-    let ignoreExternal = false
+    const click = new Gtk.GestureClick({ propagation_phase: Gtk.PropagationPhase.CAPTURE, button: 1 })
+    const motion = new Gtk.EventControllerMotion({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
+    scale.add_controller(click)
+    scale.add_controller(motion)
+    let isDragging = false, dragStart = 0, startX = 0, trackW = 1
+    let pendingMotion = false, lastMotionX = 0
+    click.connect("pressed", (_g: Gtk.GestureClick, _n: number, x: number) => {
+        _g.set_state(Gtk.EventSequenceState.CLAIMED)
+        isDragging = true
+        dragStart = scale.get_value()
+        startX = x
+        trackW = Math.max(20, scale.get_width() - 20)
+    })
+    click.connect("released", () => { isDragging = false })
+    motion.connect("motion", (_g: Gtk.EventControllerMotion, x: number) => {
+        if (!isDragging) return
+        lastMotionX = x
+        if (!pendingMotion) {
+            pendingMotion = true
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                if (isDragging) scale.set_value(Math.max(0, Math.min(100, dragStart + ((lastMotionX - startX) / trackW) * 100)))
+                pendingMotion = false
+                return GLib.SOURCE_REMOVE
+            })
+        }
+    })
+
+    let ignoreUntil = 0
+    let pendingOnChange = false
     scale.connect("value-changed", () => {
         const v = scale.get_value()
         volLabel.label = `${Math.round(v)}%`
-        ignoreExternal = true
-        if (speaker) speaker.volume = v / 100
-        ignoreExternal = false
+        ignoreUntil = GLib.get_monotonic_time() + 300_000
+        if (!pendingOnChange) {
+            pendingOnChange = true
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                if (speaker) speaker.volume = scale.get_value() / 100
+                pendingOnChange = false
+                return GLib.SOURCE_REMOVE
+            })
+        }
     })
 
     if (speaker) {
         const id = speaker.connect("notify::volume", () => {
-            if (ignoreExternal) return
+            if (GLib.get_monotonic_time() < ignoreUntil) return
             const v = Math.round(speaker.volume * 100)
             if (Math.abs(scale.get_value() - v) > 1) {
                 scale.set_value(v)
