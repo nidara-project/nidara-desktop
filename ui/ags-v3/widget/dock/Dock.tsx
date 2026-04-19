@@ -827,7 +827,7 @@ export default function Dock(gdkmonitor: any) {
                 }
 
                 effectivePinnedList = effectivePinnedList.filter(p => norm(p) !== nsid)
-                runningUnpinnedKeys = groupedKeys.filter(k => k !== nsid && k !== "home-shortcut" && !pinnedState.list.some(p => norm(p) === k))
+                runningUnpinnedKeys = groupedKeys.filter(k => k !== nsid && k !== "home-shortcut" && !pinnedState.list.some(p => { const lid = norm(p); return k === lid || k.includes(lid) || lid.includes(k) }))
 
                 const pinnedBoundary = 2 + effectivePinnedList.length
 
@@ -845,7 +845,7 @@ export default function Dock(gdkmonitor: any) {
                 }
             } else {
                 lastDraggingId = ""
-                runningUnpinnedKeys = groupedKeys.filter(k => k !== "home-shortcut" && !pinnedState.list.some(p => norm(p) === k))
+                runningUnpinnedKeys = groupedKeys.filter(k => k !== "home-shortcut" && !pinnedState.list.some(p => { const lid = norm(p); return k === lid || k.includes(lid) || lid.includes(k) }))
             }
 
             type ItemConfig = { id: string, width: number, syncData?: any, isPinned: boolean, factory: (vc: number) => Gtk.Widget, isSeparator?: boolean }
