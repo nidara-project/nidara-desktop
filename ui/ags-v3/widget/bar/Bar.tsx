@@ -2,6 +2,7 @@ import { Astal, Gtk, Gdk } from "ags/gtk4"
 import Pango from "gi://Pango"
 import app from "ags/gtk4/app"
 import AstalHyprland from "gi://AstalHyprland"
+import AstalNotifd from "gi://AstalNotifd"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import Cairo from "gi://cairo"
@@ -385,7 +386,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeLabel.connect("unrealize", () => { try { GLib.source_remove(clockTimer) } catch {} })
   regionConfig.connect("changed", updateClock)
   updateClock()
-  timeContent.append(new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 16 })); timeContent.append(timeLabel)
+  const bellIcon = new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 16, visible: false })
+  try {
+    const notifd = AstalNotifd.get_default()
+    const syncBell = () => { bellIcon.set_visible(notifd.notifications.length > 0) }
+    notifd.connect("notified", syncBell)
+    notifd.connect("resolved", syncBell)
+    syncBell()
+  } catch {}
+  timeContent.append(bellIcon); timeContent.append(timeLabel)
 
   // Optional bar widgets (before Tray, reactive to config changes)
   const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: 8 })
