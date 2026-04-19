@@ -29,8 +29,23 @@ function buildHorizontalSlider(
     scale.set_range(0, 100)
     scale.set_value(getValue())
     scale.set_increments(1, 5)
+    // Block all pointer-driven value changes from GTK's built-in absolute positioning.
+    // Our GestureDrag below replaces it with relative (delta) drag.
     scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
-        t === Gtk.ScrollType.PAGE_FORWARD || t === Gtk.ScrollType.PAGE_BACKWARD)
+        t !== Gtk.ScrollType.STEP_UP && t !== Gtk.ScrollType.STEP_DOWN &&
+        t !== Gtk.ScrollType.STEP_FORWARD && t !== Gtk.ScrollType.STEP_BACKWARD)
+
+    // Relative drag: track delta from click point, not absolute pointer position
+    const drag = new Gtk.GestureDrag({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
+    scale.add_controller(drag)
+    let dragStart = 0, trackW = 1
+    drag.connect("drag-begin", () => {
+        dragStart = scale.get_value()
+        trackW = Math.max(20, scale.get_width() - 20)
+    })
+    drag.connect("drag-update", (_g: Gtk.GestureDrag, dx: number) => {
+        scale.set_value(Math.max(0, Math.min(100, dragStart + (dx / trackW) * 100)))
+    })
 
     const valueLabel = new Gtk.Label({
         label: `${Math.round(getValue())}%`,
@@ -92,7 +107,19 @@ function buildVerticalSlider(
     scale.set_value(getValue())
     scale.set_increments(1, 5)
     scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
-        t === Gtk.ScrollType.PAGE_FORWARD || t === Gtk.ScrollType.PAGE_BACKWARD)
+        t !== Gtk.ScrollType.STEP_UP && t !== Gtk.ScrollType.STEP_DOWN &&
+        t !== Gtk.ScrollType.STEP_FORWARD && t !== Gtk.ScrollType.STEP_BACKWARD)
+
+    const drag = new Gtk.GestureDrag({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
+    scale.add_controller(drag)
+    let dragStart = 0, trackH = 1
+    drag.connect("drag-begin", () => {
+        dragStart = scale.get_value()
+        trackH = Math.max(20, scale.get_height() - 20)
+    })
+    drag.connect("drag-update", (_g: Gtk.GestureDrag, _dx: number, dy: number) => {
+        scale.set_value(Math.max(0, Math.min(100, dragStart + (-dy / trackH) * 100)))
+    })
 
     const valueLabel = new Gtk.Label({
         label: `${Math.round(getValue())}%`,

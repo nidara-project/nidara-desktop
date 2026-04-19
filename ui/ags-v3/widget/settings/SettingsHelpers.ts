@@ -159,7 +159,19 @@ export const sliderRow = (
     scale.set_value(init)
     scale.set_draw_value(false)
     scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
-        t === Gtk.ScrollType.PAGE_FORWARD || t === Gtk.ScrollType.PAGE_BACKWARD)
+        t !== Gtk.ScrollType.STEP_UP && t !== Gtk.ScrollType.STEP_DOWN &&
+        t !== Gtk.ScrollType.STEP_FORWARD && t !== Gtk.ScrollType.STEP_BACKWARD)
+
+    const drag = new Gtk.GestureDrag({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
+    scale.add_controller(drag)
+    let dragStart = 0, trackW = 1
+    drag.connect("drag-begin", () => {
+        dragStart = scale.get_value()
+        trackW = Math.max(20, scale.get_width() - 20)
+    })
+    drag.connect("drag-update", (_g: Gtk.GestureDrag, dx: number) => {
+        scale.set_value(Math.max(min, Math.min(max, dragStart + (dx / trackW) * (max - min))))
+    })
 
     if (icons) {
         container.append(scale)
