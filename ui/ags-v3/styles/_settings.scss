@@ -445,11 +445,11 @@ window.crystal-settings-window {
 }
 
 .tz-status-ok {
-    color: #30d158; // system green
+    color: var(--crystal-success);
 }
 
 .tz-status-err {
-    color: #ff453a; // system red
+    color: var(--crystal-danger);
 }
 
 

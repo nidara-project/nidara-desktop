@@ -27,18 +27,17 @@ window.workspace-cockpit {
 }
 
 .cockpit-search {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--crystal-surface-back);
+    border: 1px solid var(--crystal-border);
     border-radius: 14px;
     padding: 10px 20px;
-    color: white;
+    color: var(--crystal-text);
     font-size: 16px;
     transition: all 0.2s ease;
 
     &:focus {
-        background: rgba(255, 255, 255, 0.08);
-        border-color: rgba(255, 255, 255, 0.3);
-        box-shadow: 0 0 20px rgba(255, 255, 255, 0.05);
+        background: var(--crystal-surface);
+        border-color: var(--crystal-surface-raised);
     }
 }
 
@@ -54,23 +53,23 @@ window.workspace-cockpit {
 .wo-item {
     padding: 16px;
     border-radius: 24px;
-    background-color: rgba(255, 255, 255, 0.02);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    background-color: var(--crystal-surface-back);
+    border: 1px solid var(--crystal-border);
     transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .wo-schematic-container {
     border-radius: 12px;
     background-color: rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--crystal-border);
 }
 
 .wo-label {
     font-size: 1.1em;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--crystal-text);
     transition: all 0.2s;
-    
+
     &.active {
         color: #{"@accent_bg_color"};
     }
@@ -79,13 +78,13 @@ window.workspace-cockpit {
 .wo-count {
     font-size: 0.8em;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--crystal-text-dim);
     margin-bottom: 8px;
 }
 
 .wo-schematic-win {
-    background-color: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background-color: var(--crystal-surface);
+    border: 1px solid var(--crystal-border);
     border-radius: 8px;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     transition: all 0.2s ease;
@@ -97,7 +96,7 @@ window.workspace-cockpit {
 }
 
 .bar-ws-dot {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: var(--crystal-surface-raised);
     border-radius: 999px;
     transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -107,7 +106,7 @@ window.workspace-cockpit {
     }
 
     &.occupied {
-        background-color: rgba(255, 255, 255, 0.5);
+        background-color: var(--crystal-text-dim);
     }
 }
 
@@ -128,9 +127,8 @@ window.workspace-cockpit {
     }
 
     &:hover .wo-item {
-        background-color: rgba(255, 255, 255, 0.05);
-        border-color: rgba(255, 255, 255, 0.12);
-        transform: translateY(-6px);
+        background-color: var(--crystal-surface-back);
+        border-color: var(--crystal-surface-hover);
 
         &.active {
             background-color: #{"alpha(@accent_bg_color, 0.08)"};
