@@ -41,64 +41,49 @@ switch,
     }
 }
 
-/* --- Sliders (Scales) - macOS Tahoe Edition --- */
-/* 
-   TRICK: We use border-as-padding to make the trough APPEAR thin (8px) 
-   while physically being 14px, allowing the slider (14px) to fit without 
-   negative margins that cause GtkGizmo warnings.
-*/
+/* --- Sliders (Scales) --- */
 scale,
 .crystal-scale {
-    min-height: 24px;
+    min-height: 28px;
     margin: 4px 0;
     padding: 0;
-    
+
     trough {
-        min-height: 14px; // Match slider height
-        background-clip: padding-box; // Key for the trick
+        min-height: 6px;
         background-color: var(--crystal-surface);
-        border: 3px solid transparent; // 14 - 3 - 3 = 8px visible area
         border-radius: 99px;
         margin: 0;
         padding: 0;
-        transition: all 0.3s ease;
     }
-    
+
     highlight {
-        min-height: 14px;
-        background-clip: padding-box;
+        min-height: 6px;
         background-color: $crystal-accent;
-        border: 3px solid transparent; // Match trough "slim" look
         border-radius: 99px;
         margin: 0;
         padding: 0;
     }
-    
+
     slider {
-        /* Horizontal capsule shape */
         background-color: #ffffff;
         background-image: none;
         border-radius: 99px;
-        border: 1px solid rgba(255, 255, 255, 0.3);
-        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
-        
-        min-width: 24px;   // Horizontal width
-        min-height: 14px;  // Fits perfectly in the 14px trough
-        margin: 0;         // ZERO margin = No GtkGizmo complaints
-        
-        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        border: none;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+        min-width: 20px;
+        min-height: 20px;
+        margin: 0;
+        /* Only animate visual properties — never position, to avoid drag lag */
+        transition: background-color 0.15s ease, box-shadow 0.15s ease;
     }
 
-    /* GLASSY DYNAMIC: Translucent when clicked/grabbed */
     &:active slider {
-        background-color: rgba(255, 255, 255, 0.45);
-        border-color: rgba(255, 255, 255, 0.6);
+        background-color: rgba(255, 255, 255, 0.55);
         box-shadow: none;
     }
 
     &:hover slider {
-        transform: scale(1.05);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
     }
 }
 
