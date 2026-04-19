@@ -41,7 +41,12 @@ switch,
     }
 }
 
-/* --- Sliders (Scales) --- */
+/* --- Sliders (Scales) ---
+   trough and slider share the same physical height (20px) so GTK's
+   hit-testing covers the full thumb area. Top/bottom borders only
+   (no horizontal border) make the track visually thin without
+   offsetting the horizontal alignment — fixes low-value separation.
+*/
 scale,
 .crystal-scale {
     min-height: 28px;
@@ -51,11 +56,14 @@ scale,
     box-shadow: none;
 
     trough {
-        min-height: 6px;
-        min-width: 6px;
+        min-height: 20px;
+        border-top: 7px solid transparent;
+        border-bottom: 7px solid transparent;
+        background-clip: padding-box;
         background-color: var(--crystal-surface);
         border-radius: 99px;
-        border: none;
+        border-left: none;
+        border-right: none;
         outline: none;
         box-shadow: none;
         padding: 0;
@@ -63,12 +71,15 @@ scale,
     }
 
     highlight {
-        min-height: 6px;
-        min-width: 0;
+        min-height: 20px;
+        border-top: 7px solid transparent;
+        border-bottom: 7px solid transparent;
+        background-clip: padding-box;
         background-color: $crystal-accent;
         background-image: none;
         border-radius: 99px;
-        border: none;
+        border-left: none;
+        border-right: none;
         outline: none;
         box-shadow: none;
         padding: 0;
@@ -86,7 +97,6 @@ scale,
         min-height: 20px;
         margin: 0;
         padding: 0;
-        /* Only animate visual properties — never position, to avoid drag lag */
         transition: background-color 0.15s ease, box-shadow 0.15s ease;
     }
 
@@ -99,7 +109,6 @@ scale,
         box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
     }
 
-    /* Nuke every Adwaita focus decoration on scale internals */
     trough:focus, trough:focus-within,
     highlight:focus,
     slider:focus {
