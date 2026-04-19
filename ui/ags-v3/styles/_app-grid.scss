@@ -94,15 +94,14 @@ window#crystal-app-launcher,
     box-shadow: none;
     border-radius: 18px;
     padding: 12px 16px;
-    transition: background 0.15s ease, transform 0.12s ease;
+    transition: background 0.15s ease;
 
     &:hover {
-        background: rgba(255, 255, 255, 0.1);
-        transform: scale(1.04);
+        background: var(--crystal-surface);
     }
 
     &:active {
-        transform: scale(0.97);
+        background: var(--crystal-surface-hover);
     }
 }
 

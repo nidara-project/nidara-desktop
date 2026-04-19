@@ -240,8 +240,8 @@ button.accent-circle-btn {
     margin: 0;
     transition: all 0.2s ease;
 
-    &.selected { border-color: var(--crystal-text); transform: scale(1.1); }
-    &:hover:not(.selected) { transform: scale(1.05); }
+    &.selected { border-color: var(--crystal-text); box-shadow: 0 0 0 2px var(--crystal-text); }
+    &:hover:not(.selected) { border-color: var(--crystal-text-dim); }
 
     &.accent-blue   { background-color: #0088FF; }
     &.accent-teal   { background-color: #2190a4; }
