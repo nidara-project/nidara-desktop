@@ -82,7 +82,8 @@ export default function AudioPage() {
         const valueLabel = new Gtk.Label({
             label: `${Math.round(endpoint.volume * 100)}%`,
             css_classes: ["slider-value-label"],
-            width_chars: 4,
+            width_chars: 5,
+            xalign: 1.0,
         })
 
         scale.connect("value-changed", () => {
