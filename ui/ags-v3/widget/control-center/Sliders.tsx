@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import GLib from "gi://GLib"
 import AstalWp from "gi://AstalWp"
 import { AtomicWidget, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
@@ -32,7 +33,7 @@ function buildHorizontalSlider(
     const valueLabel = new Gtk.Label({
         label: `${Math.round(getValue())}%`,
         css_classes: ["slider-value-label"],
-        width_chars: 4, valign: Gtk.Align.CENTER,
+        width_chars: 5, xalign: 1.0, valign: Gtk.Align.CENTER,
     })
 
     box.append(new Gtk.Image({ icon_name: iconNameLow,  pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER }))
@@ -40,17 +41,16 @@ function buildHorizontalSlider(
     box.append(new Gtk.Image({ icon_name: iconNameHigh, pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER }))
     box.append(valueLabel)
 
-    let ignoreExternal = false
+    let ignoreUntil = 0
     scale.connect("value-changed", () => {
         const v = scale.get_value()
         valueLabel.label = `${Math.round(v)}%`
-        ignoreExternal = true
+        ignoreUntil = GLib.get_monotonic_time() + 300_000 // 300ms in µs
         onChange(v / 100)
-        ignoreExternal = false
     })
 
     const cleanup = onExternalChange((v) => {
-        if (ignoreExternal) return
+        if (GLib.get_monotonic_time() < ignoreUntil) return
         const val = Math.round(v * 100)
         if (Math.abs(scale.get_value() - val) > 1) {
             scale.set_value(val)
@@ -94,23 +94,23 @@ function buildVerticalSlider(
         label: `${Math.round(getValue())}%`,
         css_classes: ["slider-value-label"],
         halign: Gtk.Align.CENTER,
+        width_chars: 5,
     })
 
     box.append(icon)
     box.append(scale)
     box.append(valueLabel)
 
-    let ignoreExternal = false
+    let ignoreUntil = 0
     scale.connect("value-changed", () => {
         const v = scale.get_value()
         valueLabel.label = `${Math.round(v)}%`
-        ignoreExternal = true
+        ignoreUntil = GLib.get_monotonic_time() + 300_000
         onChange(v / 100)
-        ignoreExternal = false
     })
 
     const cleanup = onExternalChange((v) => {
-        if (ignoreExternal) return
+        if (GLib.get_monotonic_time() < ignoreUntil) return
         const val = Math.round(v * 100)
         if (Math.abs(scale.get_value() - val) > 1) {
             scale.set_value(val)
