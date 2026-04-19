@@ -56,14 +56,10 @@ scale,
     box-shadow: none;
 
     trough {
-        min-height: 20px;
-        border-top: 7px solid transparent;
-        border-bottom: 7px solid transparent;
-        background-clip: padding-box;
+        min-height: 6px;
         background-color: var(--crystal-surface);
         border-radius: 99px;
-        border-left: none;
-        border-right: none;
+        border: none;
         outline: none;
         box-shadow: none;
         padding: 0;
@@ -71,15 +67,11 @@ scale,
     }
 
     highlight {
-        min-height: 20px;
-        border-top: 7px solid transparent;
-        border-bottom: 7px solid transparent;
-        background-clip: padding-box;
+        min-height: 6px;
         background-color: $crystal-accent;
         background-image: none;
         border-radius: 99px;
-        border-left: none;
-        border-right: none;
+        border: none;
         outline: none;
         box-shadow: none;
         padding: 0;

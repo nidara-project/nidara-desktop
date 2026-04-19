@@ -47,22 +47,14 @@ window.nc-window-2 {
 
 .cc-scale-vertical {
     trough {
-        min-width: 20px;
+        min-width: 6px;
         min-height: unset;
-        border-top: none;
-        border-bottom: none;
-        border-left: 7px solid transparent;
-        border-right: 7px solid transparent;
-        background-clip: padding-box;
+        border: none;
     }
     highlight {
-        min-width: 20px;
+        min-width: 6px;
         min-height: unset;
-        border-top: none;
-        border-bottom: none;
-        border-left: 7px solid transparent;
-        border-right: 7px solid transparent;
-        background-clip: padding-box;
+        border: none;
     }
     slider {
         min-width: 20px;
