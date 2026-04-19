@@ -29,22 +29,29 @@ function buildHorizontalSlider(
     scale.set_range(0, 100)
     scale.set_value(getValue())
     scale.set_increments(1, 5)
-    // Block all pointer-driven value changes from GTK's built-in absolute positioning.
-    // Our GestureDrag below replaces it with relative (delta) drag.
+    // Block GTK Range's absolute-position drag; keep scroll-wheel steps.
     scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
         t !== Gtk.ScrollType.STEP_UP && t !== Gtk.ScrollType.STEP_DOWN &&
         t !== Gtk.ScrollType.STEP_FORWARD && t !== Gtk.ScrollType.STEP_BACKWARD)
 
-    // Relative drag: track delta from click point, not absolute pointer position
-    const drag = new Gtk.GestureDrag({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
-    scale.add_controller(drag)
-    let dragStart = 0, trackW = 1
-    drag.connect("drag-begin", () => {
+    // GestureClick (CAPTURE) claims the pointer sequence before GTK Range can,
+    // denying its internal gesture. EventControllerMotion then tracks the delta.
+    const click = new Gtk.GestureClick({ propagation_phase: Gtk.PropagationPhase.CAPTURE, button: 1 })
+    const motion = new Gtk.EventControllerMotion({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
+    scale.add_controller(click)
+    scale.add_controller(motion)
+    let isDragging = false, dragStart = 0, startX = 0, trackW = 1
+    click.connect("pressed", (_g: Gtk.GestureClick, _n: number, x: number) => {
+        _g.set_state(Gtk.EventSequenceState.CLAIMED)
+        isDragging = true
         dragStart = scale.get_value()
+        startX = x
         trackW = Math.max(20, scale.get_width() - 20)
     })
-    drag.connect("drag-update", (_g: Gtk.GestureDrag, dx: number) => {
-        scale.set_value(Math.max(0, Math.min(100, dragStart + (dx / trackW) * 100)))
+    click.connect("released", () => { isDragging = false })
+    motion.connect("motion", (_g: Gtk.EventControllerMotion, x: number) => {
+        if (!isDragging) return
+        scale.set_value(Math.max(0, Math.min(100, dragStart + ((x - startX) / trackW) * 100)))
     })
 
     const valueLabel = new Gtk.Label({
@@ -110,15 +117,22 @@ function buildVerticalSlider(
         t !== Gtk.ScrollType.STEP_UP && t !== Gtk.ScrollType.STEP_DOWN &&
         t !== Gtk.ScrollType.STEP_FORWARD && t !== Gtk.ScrollType.STEP_BACKWARD)
 
-    const drag = new Gtk.GestureDrag({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
-    scale.add_controller(drag)
-    let dragStart = 0, trackH = 1
-    drag.connect("drag-begin", () => {
+    const click = new Gtk.GestureClick({ propagation_phase: Gtk.PropagationPhase.CAPTURE, button: 1 })
+    const motion = new Gtk.EventControllerMotion({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
+    scale.add_controller(click)
+    scale.add_controller(motion)
+    let isDragging = false, dragStart = 0, startY = 0, trackH = 1
+    click.connect("pressed", (_g: Gtk.GestureClick, _n: number, _x: number, y: number) => {
+        _g.set_state(Gtk.EventSequenceState.CLAIMED)
+        isDragging = true
         dragStart = scale.get_value()
+        startY = y
         trackH = Math.max(20, scale.get_height() - 20)
     })
-    drag.connect("drag-update", (_g: Gtk.GestureDrag, _dx: number, dy: number) => {
-        scale.set_value(Math.max(0, Math.min(100, dragStart + (-dy / trackH) * 100)))
+    click.connect("released", () => { isDragging = false })
+    motion.connect("motion", (_g: Gtk.EventControllerMotion, _x: number, y: number) => {
+        if (!isDragging) return
+        scale.set_value(Math.max(0, Math.min(100, dragStart + ((startY - y) / trackH) * 100)))
     })
 
     const valueLabel = new Gtk.Label({

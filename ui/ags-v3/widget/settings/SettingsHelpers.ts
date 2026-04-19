@@ -162,15 +162,22 @@ export const sliderRow = (
         t !== Gtk.ScrollType.STEP_UP && t !== Gtk.ScrollType.STEP_DOWN &&
         t !== Gtk.ScrollType.STEP_FORWARD && t !== Gtk.ScrollType.STEP_BACKWARD)
 
-    const drag = new Gtk.GestureDrag({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
-    scale.add_controller(drag)
-    let dragStart = 0, trackW = 1
-    drag.connect("drag-begin", () => {
+    const click = new Gtk.GestureClick({ propagation_phase: Gtk.PropagationPhase.CAPTURE, button: 1 })
+    const motion = new Gtk.EventControllerMotion({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
+    scale.add_controller(click)
+    scale.add_controller(motion)
+    let isDragging = false, dragStart = 0, startX = 0, trackW = 1
+    click.connect("pressed", (_g: Gtk.GestureClick, _n: number, x: number) => {
+        _g.set_state(Gtk.EventSequenceState.CLAIMED)
+        isDragging = true
         dragStart = scale.get_value()
+        startX = x
         trackW = Math.max(20, scale.get_width() - 20)
     })
-    drag.connect("drag-update", (_g: Gtk.GestureDrag, dx: number) => {
-        scale.set_value(Math.max(min, Math.min(max, dragStart + (dx / trackW) * (max - min))))
+    click.connect("released", () => { isDragging = false })
+    motion.connect("motion", (_g: Gtk.EventControllerMotion, x: number) => {
+        if (!isDragging) return
+        scale.set_value(Math.max(min, Math.min(max, dragStart + ((x - startX) / trackW) * (max - min))))
     })
 
     if (icons) {
