@@ -41,12 +41,7 @@ switch,
     }
 }
 
-/* --- Sliders (Scales) ---
-   trough and slider share the same physical height (20px) so GTK's
-   hit-testing covers the full thumb area. Top/bottom borders only
-   (no horizontal border) make the track visually thin without
-   offsetting the horizontal alignment — fixes low-value separation.
-*/
+/* --- Sliders (Scales) --- */
 scale,
 .crystal-scale {
     min-height: 28px;
@@ -56,7 +51,7 @@ scale,
     box-shadow: none;
 
     trough {
-        min-height: 6px;
+        min-height: 8px;
         background-color: var(--crystal-surface);
         border-radius: 99px;
         border: none;
@@ -67,7 +62,7 @@ scale,
     }
 
     highlight {
-        min-height: 6px;
+        min-height: 8px;
         background-color: $crystal-accent;
         background-image: none;
         border-radius: 99px;
@@ -124,16 +119,9 @@ highlight {
     background-image: none;
 }
 
-/* Force slider margin to 0 across all crystal contexts.
-   Adwaita sets "scale slider { margin: -7px }" which shifts GTK's internal
-   hit-test position relative to the visual thumb, causing the thumb to jump
-   on click. Using ID+class specificity (1,1,1) beats Adwaita's (0,0,2). */
-#crystal-bar scale slider,
-#crystal-bar .crystal-scale slider,
-.crystal-control-center scale slider,
-.crystal-control-center .crystal-scale slider,
-window.crystal-settings-window scale slider,
-window.crystal-settings-window .crystal-scale slider {
+/* Adwaita: "scale.horizontal slider { margin: -7px }" → specificity 0,1,1.
+   "scale.crystal-scale slider" = 0,1,2 → wins without !important. */
+scale.crystal-scale slider {
     margin: 0;
     padding: 0;
 }
@@ -171,10 +159,13 @@ window.crystal-settings-window .crystal-scale slider {
 }
 
 /* --- PillSlider Specific Reset --- */
+/* This class is applied to the invisible input-only Gtk.Scale underneath the Cairo visual layer.
+   opacity:0 hides it completely; pointer events still work because GTK ignores opacity for hit-testing. */
 .cc-slider-scale-input {
     min-height: 0;
     margin: 0;
-    
+    opacity: 0;
+
     trough, highlight, slider {
         background: none;
         background-image: none;

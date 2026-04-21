@@ -221,7 +221,7 @@ class ThemeManager extends GObject.Object {
         this.state.iconTheme = icons
         try {
             await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", icons])
-            this.saveSettings()
+            this.saveSettings(true)
             this.emit("changed")
         } catch (e) { console.error(e) }
     }
@@ -235,8 +235,7 @@ class ThemeManager extends GObject.Object {
 
     async setQtTheme(theme: string) {
         this.fcConfig.qtTheme = theme
-        this.saveSettings()
-        writeQtSettings(this.fcConfig, this.state.iconTheme)
+        this.saveSettings(true)
         this.emit("changed")
     }
 
@@ -400,7 +399,7 @@ class ThemeManager extends GObject.Object {
         console.log("[ThemeManager] Global Styles READY! ")
     }
 
-    private saveSettings() {
+    private saveSettings(syncQt = false) {
         const dir = `${GLib.get_user_config_dir()}/crystal-shell`
         if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
         const merged = {
@@ -412,7 +411,7 @@ class ThemeManager extends GObject.Object {
             qtTheme: this.fcConfig.qtTheme,
         }
         writeFile(this.configPath, JSON.stringify(merged, null, 2))
-        writeQtSettings(this.fcConfig, this.state.iconTheme)
+        if (syncQt) writeQtSettings(this.fcConfig, this.state.iconTheme)
     }
 
     private loadSettings() {

@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
-import GLib from "gi://GLib"
 import AstalWp from "gi://AstalWp"
+import { makeHSlider } from "../common/Slider"
 import { VolumeWidget } from "../control-center/Sliders"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { t } from "../../core/i18n"
@@ -37,73 +37,17 @@ function buildBarContent(): Gtk.Widget {
         width_chars: 5, xalign: 1.0,
     })
 
-    const scale = new Gtk.Scale({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        draw_value: false,
-        hexpand: true,
+    const sliderWidget = makeHSlider({
+        value: speaker ? Math.round(speaker.volume * 100) : 50,
+        onChange: (v) => { if (speaker) speaker.volume = v / 100 },
+        onValueChanged: (v) => { volLabel.label = `${Math.round(v)}%` },
+        onExtChange: (cb) => {
+            if (!speaker) return () => {}
+            const id = speaker.connect("notify::volume", () => cb(Math.round(speaker.volume * 100)))
+            return () => { try { speaker.disconnect(id) } catch {} }
+        },
         width_request: 200,
-        css_classes: ["crystal-scale"],
     })
-    scale.set_range(0, 100)
-    scale.set_value(speaker ? Math.round(speaker.volume * 100) : 50)
-    scale.set_increments(1, 5)
-    scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
-        t === Gtk.ScrollType.JUMP || t === Gtk.ScrollType.PAGE_FORWARD || t === Gtk.ScrollType.PAGE_BACKWARD)
-
-    const click = new Gtk.GestureClick({ propagation_phase: Gtk.PropagationPhase.CAPTURE, button: 1 })
-    const motion = new Gtk.EventControllerMotion({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
-    scale.add_controller(click)
-    scale.add_controller(motion)
-    let isDragging = false, dragStart = 0, startX = 0, trackW = 1
-    let pendingMotion = false, lastMotionX = 0
-    click.connect("pressed", (_g: Gtk.GestureClick, _n: number, x: number) => {
-        _g.set_state(Gtk.EventSequenceState.CLAIMED)
-        isDragging = true
-        dragStart = scale.get_value()
-        startX = x
-        trackW = Math.max(20, scale.get_width() - 20)
-    })
-    click.connect("released", () => { isDragging = false })
-    motion.connect("motion", (_g: Gtk.EventControllerMotion, x: number) => {
-        if (!isDragging) return
-        lastMotionX = x
-        if (!pendingMotion) {
-            pendingMotion = true
-            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                if (isDragging) scale.set_value(Math.max(0, Math.min(100, dragStart + ((lastMotionX - startX) / trackW) * 100)))
-                pendingMotion = false
-                return GLib.SOURCE_REMOVE
-            })
-        }
-    })
-
-    let ignoreUntil = 0
-    let pendingOnChange = false
-    scale.connect("value-changed", () => {
-        const v = scale.get_value()
-        volLabel.label = `${Math.round(v)}%`
-        ignoreUntil = GLib.get_monotonic_time() + 300_000
-        if (!pendingOnChange) {
-            pendingOnChange = true
-            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                if (speaker) speaker.volume = scale.get_value() / 100
-                pendingOnChange = false
-                return GLib.SOURCE_REMOVE
-            })
-        }
-    })
-
-    if (speaker) {
-        const id = speaker.connect("notify::volume", () => {
-            if (GLib.get_monotonic_time() < ignoreUntil) return
-            const v = Math.round(speaker.volume * 100)
-            if (Math.abs(scale.get_value() - v) > 1) {
-                scale.set_value(v)
-                volLabel.label = `${v}%`
-            }
-        })
-        scale.connect("unrealize", () => { try { speaker.disconnect(id) } catch {} })
-    }
 
     const muteBtn = new Gtk.Button({
         icon_name: (speaker as any)?.mute ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic",
@@ -117,7 +61,7 @@ function buildBarContent(): Gtk.Widget {
 
     const row = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
     row.append(muteBtn)
-    row.append(scale)
+    row.append(sliderWidget)
     row.append(volLabel)
 
     const popBox = new Gtk.Box({

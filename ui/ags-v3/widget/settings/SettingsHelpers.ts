@@ -1,5 +1,5 @@
 import { Gtk } from "ags/gtk4"
-import GLib from "gi://GLib"
+import { makeHSlider } from "../common/Slider"
 
 /**
  * Shared UI helpers for Settings pages.
@@ -149,53 +149,6 @@ export const sliderRow = (
         container.append(new Gtk.Image({ icon_name: icons[0], pixel_size: 16, opacity: 0.5 }))
     }
 
-    const scale = new Gtk.Scale({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        hexpand: true,
-        valign: Gtk.Align.CENTER,
-        width_request: 140,
-        css_classes: ["crystal-scale", "cc-atomic-scale-native"],
-    })
-    scale.set_range(min, max)
-    scale.set_value(init)
-    scale.set_draw_value(false)
-    scale.connect("change-value", (_s: Gtk.Scale, t: Gtk.ScrollType) =>
-        t === Gtk.ScrollType.JUMP || t === Gtk.ScrollType.PAGE_FORWARD || t === Gtk.ScrollType.PAGE_BACKWARD)
-
-    const click = new Gtk.GestureClick({ propagation_phase: Gtk.PropagationPhase.CAPTURE, button: 1 })
-    const motion = new Gtk.EventControllerMotion({ propagation_phase: Gtk.PropagationPhase.CAPTURE })
-    scale.add_controller(click)
-    scale.add_controller(motion)
-    let isDragging = false, dragStart = 0, startX = 0, trackW = 1
-    let pendingMotion = false, lastMotionX = 0
-    click.connect("pressed", (_g: Gtk.GestureClick, _n: number, x: number) => {
-        _g.set_state(Gtk.EventSequenceState.CLAIMED)
-        isDragging = true
-        dragStart = scale.get_value()
-        startX = x
-        trackW = Math.max(20, scale.get_width() - 20)
-    })
-    click.connect("released", () => { isDragging = false })
-    motion.connect("motion", (_g: Gtk.EventControllerMotion, x: number) => {
-        if (!isDragging) return
-        lastMotionX = x
-        if (!pendingMotion) {
-            pendingMotion = true
-            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                if (isDragging) scale.set_value(Math.max(min, Math.min(max, dragStart + ((lastMotionX - startX) / trackW) * (max - min))))
-                pendingMotion = false
-                return GLib.SOURCE_REMOVE
-            })
-        }
-    })
-
-    if (icons) {
-        container.append(scale)
-        container.append(new Gtk.Image({ icon_name: icons[1], pixel_size: 16, opacity: 0.5 }))
-    } else {
-        container.append(scale)
-    }
-
     const valueLabel = new Gtk.Label({
         label: formatVal(init),
         css_classes: ["slider-value-label"],
@@ -203,18 +156,21 @@ export const sliderRow = (
         xalign: 1.0,
     })
 
-    let pendingCb = false
-    scale.connect("value-changed", () => {
-        valueLabel.label = formatVal(scale.get_value())
-        if (!pendingCb) {
-            pendingCb = true
-            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                cb(scale.get_value())
-                pendingCb = false
-                return GLib.SOURCE_REMOVE
-            })
-        }
+    const sliderWidget = makeHSlider({
+        min, max, value: init,
+        onChange: cb,
+        onValueChanged: (v) => { valueLabel.label = formatVal(v) },
+        debounce: 32,
+        cssClasses: ["cc-atomic-scale-native"],
+        width_request: 140,
     })
+
+    if (icons) {
+        container.append(sliderWidget)
+        container.append(new Gtk.Image({ icon_name: icons[1], pixel_size: 16, opacity: 0.5 }))
+    } else {
+        container.append(sliderWidget)
+    }
 
     container.append(valueLabel)
     return createRow(label, subtitle, container)
