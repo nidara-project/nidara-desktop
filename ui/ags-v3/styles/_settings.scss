@@ -33,7 +33,7 @@ window.crystal-settings-window {
         background-color: transparent;
 
         stack, bin, viewport, navigationview,
-        box:not(.navigation-capsule):not(.header-start-box) {
+        box:not(.navigation-capsule):not(.header-start-box):not(.crystal-sidebar-capsule) {
             background-color: transparent;
             border: none;
             box-shadow: none;
