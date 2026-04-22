@@ -423,10 +423,14 @@ export default function Settings(monitor: Gdk.Monitor) {
     contentHeader.append(closeBtn)
 
     // Content column: header on top, stack below
+    // margin matches sidebar capsule (8px top/right/bottom, 0 left — sidebar provides left spacing)
     const contentColumn = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         hexpand: true,
         vexpand: true,
+        margin_top: 8,
+        margin_end: 8,
+        margin_bottom: 8,
     })
     contentColumn.append(contentHeader)
     contentColumn.append(stack)
