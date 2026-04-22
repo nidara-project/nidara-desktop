@@ -223,9 +223,8 @@ export const staticLabel = (text: any) => new Gtk.Label({
 export const pageHeader = (title: string, subtitle: string) => {
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 8,
-        margin_bottom: 24,
-        margin_start: 6,
+        spacing: 4,
+        margin_bottom: 16,
     })
     box.append(new Gtk.Label({
         label: title,
@@ -244,10 +243,6 @@ export const pageHeader = (title: string, subtitle: string) => {
 export const pageBox = (...extraClasses: string[]) =>
     new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 32,
+        spacing: 24,
         css_classes: ["settings-page", ...extraClasses],
-        margin_start: 12,
-        margin_end: 12,
-        margin_top: 40,
-        margin_bottom: 40,
     })

@@ -73,6 +73,12 @@ window.crystal-settings-window {
     }
 }
 
+// ── Sidebar header spacer — mirrors content header height ─────────────────────
+.settings-sidebar-header {
+    min-height: 44px;
+    border-bottom: 1px solid var(--crystal-border);
+}
+
 // ── Sidebar list rows ─────────────────────────────────────────────────────────
 // Override Adwaita's navigation-sidebar defaults with consistent spacing
 // and a rounded-rect (not pill) row shape.
@@ -239,7 +245,7 @@ stack.settings-stack {
 // ── Page typography ───────────────────────────────────────────────────────────
 .settings-page {
     background: transparent;
-    padding: 24px 40px 40px;
+    padding: 32px 40px 40px;
 }
 
 .settings-page-title {
