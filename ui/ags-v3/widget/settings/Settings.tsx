@@ -330,29 +330,25 @@ export default function Settings(monitor: Gdk.Monitor) {
         if (historyIdx < history.length - 1) navigateTo(history[++historyIdx], false)
     })
 
+    // Header spacer row — non-interactive, 44px tall, mirrors content header
+    const spacerRow = new Gtk.ListBoxRow({
+        css_classes: ["sidebar-header-spacer-row"],
+        selectable: false,
+        activatable: false,
+        focusable: false,
+    })
+    spacerRow.set_child(new Gtk.Box({}))
+    sidebar.prepend(spacerRow)
+
     // Sidebar scroll container
     const sidebarScroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        css_classes: ["settings-sidebar-scroll"],
+        css_classes: ["settings-sidebar-scroll", "crystal-sidebar-capsule"],
         vexpand: true,
     })
     sidebarScroll.set_child(sidebar)
     sidebarScroll.set_name("crystal-settings-sidebar-scroll")
-
-    // Sidebar header spacer — matches content header height (44px) so list rows align
-    const sidebarHeaderSpacer = new Gtk.Box({
-        css_classes: ["settings-sidebar-header"],
-    })
-
-    // Sidebar panel — the visual card (rounded rect) containing spacer + scroll
-    const sidebarPanel = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        vexpand: true,
-    })
-    sidebarPanel.set_name("settings-sidebar-panel")
-    sidebarPanel.append(sidebarHeaderSpacer)
-    sidebarPanel.append(sidebarScroll)
 
 
     // Search
@@ -438,7 +434,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     // Overlay split view — sidebar + content
     const splitView = new Adw.OverlaySplitView({
         name: "settings-splitview",
-        sidebar: sidebarPanel,
+        sidebar: sidebarScroll,
         content: contentColumn,
         hexpand: true,
         vexpand: true,

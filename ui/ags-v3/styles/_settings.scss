@@ -56,9 +56,9 @@ window.crystal-settings-window {
 }
 
 // ── Sidebar panel ─────────────────────────────────────────────────────────────
-// Two-ID selector: (2,1,1) beats the box reset at (1,3,2).
+// Rounded rectangle card floating in the left column — NOT a pill.
 // margin: top right bottom left — 8px all except right (content starts there).
-window.crystal-settings-window #settings-sidebar-panel {
+.crystal-sidebar-capsule {
     background: var(--crystal-surface-back);
     border: 1px solid var(--crystal-border);
     border-radius: $crystal-radius-md;
@@ -73,10 +73,13 @@ window.crystal-settings-window #settings-sidebar-panel {
     }
 }
 
-// ── Sidebar header spacer — mirrors content header height ─────────────────────
-.settings-sidebar-header {
+// ── Sidebar header spacer row — non-interactive, mirrors content header height ─
+row.sidebar-header-spacer-row {
     min-height: 44px;
     border-bottom: 1px solid var(--crystal-border);
+    background: transparent;
+    padding: 0;
+    &:hover { background: transparent; }
 }
 
 // ── Sidebar list rows ─────────────────────────────────────────────────────────

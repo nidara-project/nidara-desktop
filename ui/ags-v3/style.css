@@ -1570,23 +1570,28 @@ window.crystal-settings-window #settings-splitview > *, window.crystal-settings-
   outline: none;
 }
 
-window.crystal-settings-window #settings-sidebar-panel {
+.crystal-sidebar-capsule {
   background: var(--crystal-surface-back);
   border: 1px solid var(--crystal-border);
   border-radius: var(--crystal-radius-md);
   margin: 8px 0 8px 8px;
   min-width: 210px;
 }
-window.crystal-settings-window #settings-sidebar-panel viewport, window.crystal-settings-window #settings-sidebar-panel list {
+.crystal-sidebar-capsule viewport, .crystal-sidebar-capsule list {
   background: transparent;
   border: none;
   box-shadow: none;
   outline: none;
 }
 
-.settings-sidebar-header {
+row.sidebar-header-spacer-row {
   min-height: 44px;
   border-bottom: 1px solid var(--crystal-border);
+  background: transparent;
+  padding: 0;
+}
+row.sidebar-header-spacer-row:hover {
+  background: transparent;
 }
 
 window.crystal-settings-window list.settings-sidebar.navigation-sidebar {
