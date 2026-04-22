@@ -348,9 +348,9 @@ export default function Settings(monitor: Gdk.Monitor) {
     // Sidebar panel — the visual card (rounded rect) containing spacer + scroll
     const sidebarPanel = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        css_classes: ["crystal-sidebar-capsule"],
         vexpand: true,
     })
+    sidebarPanel.set_name("settings-sidebar-panel")
     sidebarPanel.append(sidebarHeaderSpacer)
     sidebarPanel.append(sidebarScroll)
 

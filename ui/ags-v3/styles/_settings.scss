@@ -33,7 +33,7 @@ window.crystal-settings-window {
         background-color: transparent;
 
         stack, bin, viewport, navigationview,
-        box:not(.navigation-capsule):not(.header-start-box):not(.crystal-sidebar-capsule) {
+        box:not(.navigation-capsule):not(.header-start-box) {
             background-color: transparent;
             border: none;
             box-shadow: none;
@@ -56,9 +56,9 @@ window.crystal-settings-window {
 }
 
 // ── Sidebar panel ─────────────────────────────────────────────────────────────
-// Rounded rectangle card floating in the left column — NOT a pill.
+// ID selector wins over all Adwaita/splitview reset rules.
 // margin: top right bottom left — 8px all except right (content starts there).
-.crystal-sidebar-capsule {
+#settings-sidebar-panel {
     background: var(--crystal-surface-back);
     border: 1px solid var(--crystal-border);
     border-radius: $crystal-radius-md;
