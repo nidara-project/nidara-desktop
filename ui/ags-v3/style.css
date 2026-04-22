@@ -1570,14 +1570,14 @@ window.crystal-settings-window #settings-splitview > *, window.crystal-settings-
   outline: none;
 }
 
-#settings-sidebar-panel {
+window.crystal-settings-window #settings-sidebar-panel {
   background: var(--crystal-surface-back);
   border: 1px solid var(--crystal-border);
   border-radius: var(--crystal-radius-md);
   margin: 8px 0 8px 8px;
   min-width: 210px;
 }
-#settings-sidebar-panel viewport, #settings-sidebar-panel list {
+window.crystal-settings-window #settings-sidebar-panel viewport, window.crystal-settings-window #settings-sidebar-panel list {
   background: transparent;
   border: none;
   box-shadow: none;

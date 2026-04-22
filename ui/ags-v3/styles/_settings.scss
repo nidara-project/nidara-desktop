@@ -56,9 +56,9 @@ window.crystal-settings-window {
 }
 
 // ── Sidebar panel ─────────────────────────────────────────────────────────────
-// ID selector wins over all Adwaita/splitview reset rules.
+// Two-ID selector: (2,1,1) beats the box reset at (1,3,2).
 // margin: top right bottom left — 8px all except right (content starts there).
-#settings-sidebar-panel {
+window.crystal-settings-window #settings-sidebar-panel {
     background: var(--crystal-surface-back);
     border: 1px solid var(--crystal-border);
     border-radius: $crystal-radius-md;
