@@ -100,28 +100,30 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     categories.forEach(cat => {
         const rowContent = new Gtk.Box({
-            spacing: 16,
+            spacing: 12,
             css_classes: ["settings-sidebar-row"],
-            margin_start: 12,
-            margin_end: 12,
-            margin_top: 8,
-            margin_bottom: 8
+            margin_start: 14,
+            margin_end: 14,
+            margin_top: 0,
+            margin_bottom: 0,
+            valign: Gtk.Align.CENTER,
         })
-        
-        const icon = new Gtk.Image({ 
-            icon_name: cat.icon, 
-            pixel_size: 20,
-            css_classes: ["sidebar-icon"] 
+
+        const icon = new Gtk.Image({
+            icon_name: cat.icon,
+            pixel_size: 18,
+            css_classes: ["sidebar-icon"],
+            opacity: 0.8,
         })
-        
+
         rowContent.append(icon)
-        rowContent.append(new Gtk.Label({ 
+        rowContent.append(new Gtk.Label({
             label: cat.label,
-            css_classes: ["sidebar-label"] 
+            css_classes: ["sidebar-label"],
         }))
 
-        const listRow = new Gtk.ListBoxRow({ 
-            css_classes: ["settings-row-container", "crystal-sidebar-row"],
+        const listRow = new Gtk.ListBoxRow({
+            css_classes: ["settings-row-container"],
         })
         listRow.set_child(rowContent)
         listRow.set_name(cat.id)

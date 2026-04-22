@@ -1,12 +1,10 @@
 @use 'base' as *;
 
 /* ==========================================================================
-   CRYSTAL SETTINGS - Tahoe Medical-Grade Interface
+   CRYSTAL SETTINGS WINDOW
    ========================================================================== */
 
-// 1. Root Purge
-// NOTA: NO usar "> .background" — ese selector pilla tooltip.background y borra su fondo.
-// Adw.Window tiene nodos: decoration, contents. Esos son los que hay que resetear.
+// ── Window root reset ─────────────────────────────────────────────────────────
 window#crystal-settings-window {
     background: none;
     background-color: transparent;
@@ -21,7 +19,7 @@ window#crystal-settings-window {
     }
 }
 
-// 2. Master Surface (the main glass panel)
+// ── Main glass surface ────────────────────────────────────────────────────────
 #settings-main-glass {
     background: var(--crystal-bg);
     border: 1px solid var(--crystal-border);
@@ -29,16 +27,45 @@ window#crystal-settings-window {
     box-shadow: var(--crystal-shadow-lg);
 }
 
-// 3. THE SIDEBAR (full-height capsule, macOS style)
-.crystal-sidebar-capsule {
-    background: rgba(0, 0, 0, 0.25);
-    border-radius: $crystal-radius-lg;
-    border-right: none;
-    margin: 5px 0 10px 10px; // top:5px → borde superior del panel alineado con borde superior de los botones cabecera
-    min-width: 250px;
+// ── Adw.OverlaySplitView internal cleanup ─────────────────────────────────────
+window.crystal-settings-window {
+    #settings-splitview, .crystal-split-view {
+        background-color: transparent;
 
-    // Nuke all Adwaita internal chrome
-    & viewport, & list {
+        stack, bin, viewport, navigationview,
+        box:not(.navigation-capsule):not(.header-start-box) {
+            background-color: transparent;
+            border: none;
+            box-shadow: none;
+            outline: none;
+        }
+
+        // Hide Adwaita's built-in sidebar separator
+        separator, .sidebar-separator, > separator, > border {
+            background: transparent;
+            min-width: 0;
+            min-height: 0;
+            opacity: 0;
+            margin: 0;
+            padding: 0;
+            border: none;
+        }
+
+        > * { border: none; box-shadow: none; outline: none; }
+    }
+}
+
+// ── Sidebar panel ─────────────────────────────────────────────────────────────
+// Rounded rectangle card floating in the left column — NOT a pill.
+// margin: top right bottom left — 8px all except right (content starts there).
+.crystal-sidebar-capsule {
+    background: var(--crystal-surface-back);
+    border: 1px solid var(--crystal-border);
+    border-radius: $crystal-radius-md;
+    margin: 8px 0 8px 8px;
+    min-width: 210px;
+
+    viewport, list {
         background: transparent;
         border: none;
         box-shadow: none;
@@ -46,107 +73,71 @@ window#crystal-settings-window {
     }
 }
 
-// Sidebar item rows
-.crystal-sidebar-row {
-    padding: 8px 14px;
-    border-radius: $crystal-radius-sm;
-    transition: background 0.18s ease, color 0.18s ease;
-    margin: 3px 8px;
-    color: var(--crystal-text-dim);
-
-    label {
-        font-weight: 500;
-        font-size: 0.9rem;
-        color: inherit;
-    }
-    image {
-        color: inherit;
-    }
-
-    &:hover {
-        background: var(--crystal-surface-back);
-        color: var(--crystal-text);
-    }
-}
-
-// 4. OVERRIDE LIBADWAITA'S NAVIGATION SIDEBAR
+// ── Sidebar list rows ─────────────────────────────────────────────────────────
+// Override Adwaita's navigation-sidebar defaults with consistent spacing
+// and a rounded-rect (not pill) row shape.
 window.crystal-settings-window list.settings-sidebar.navigation-sidebar {
     background: transparent;
-    padding: 10px 8px 8px 8px;
-    
-    & > row {
+    padding: 6px;
+
+    > row {
         background: transparent;
-        padding: 4px 8px;
-        margin-bottom: 4px;
-        border-radius: 99px; // Píldora macOS total
-        min-height: 38px;
-        transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        padding: 0;
+        margin: 1px 0;
+        border-radius: $crystal-radius-sm;
+        min-height: 36px;
+        transition: background 0.15s ease;
         border: none;
         box-shadow: none;
-        
+
         &:hover {
-            background-color: var(--crystal-surface-back);
+            background-color: var(--crystal-surface-hover);
         }
-        
-        // Selected state - Accent colored pill overriding Libadwaita legally
+
         &:selected, &:active {
-            background-color: var(--crystal-accent);
-            color: var(--crystal-accent-fg);
-            
-            label, image, .sidebar-icon, .sidebar-label {
-                color: var(--crystal-accent-fg);
+            background-color: var(--crystal-accent-10);
+
+            label, image, .sidebar-label {
+                color: var(--crystal-accent);
                 opacity: 1;
             }
         }
     }
 }
 
-list row:selected .crystal-sidebar-row {
-    background: var(--crystal-accent-30);
-    color: var(--crystal-accent);
-    label { font-weight: 600; color: inherit; }
-    image { color: inherit; opacity: 1; }
+// Row inner content: default dimmed, hover brighter, selected accent
+.settings-sidebar-row {
+    color: var(--crystal-text-dim);
 }
 
-// 4. CONTENT AREA (right column: header + stack)
-.settings-content-pillar {
-    background: transparent;
-    border: none;
-
-    &, & box, & scrolledwindow, & viewport {
-        box-shadow: none;
-        border: none;
-        background: transparent;
+window.crystal-settings-window list.settings-sidebar.navigation-sidebar {
+    > row:hover .settings-sidebar-row {
+        color: var(--crystal-text);
+    }
+    > row:selected .settings-sidebar-row,
+    > row:active  .settings-sidebar-row {
+        color: var(--crystal-accent);
     }
 }
 
-// 5. HEADER — plain Gtk.Box, we control it completely
+// ── Header ────────────────────────────────────────────────────────────────────
 .settings-header {
     background: transparent;
     border-bottom: 1px solid var(--crystal-border);
-    padding: 0 10px;
+    padding: 0 12px;
     min-height: 44px;
 }
 
-// Sidebar header spacer — same height as header, with matching border-bottom
-// This makes the divider line appear continuous across sidebar + content
-.sidebar-header-spacer {
-    min-height: 44px;
-    border-bottom: 1px solid var(--crystal-border);
-}
-
-// Crystal icon button — our own circular button, bypasses Adwaita entirely.
-// Equal padding on all sides = button is always square = true circle with border-radius.
+// ── Icon buttons ──────────────────────────────────────────────────────────────
 button.crystal-icon-btn {
     padding: 7px;
     min-width: 0;
     min-height: 0;
-    border-radius: 9999px;
+    border-radius: $crystal-radius-pill;
     border: none;
     box-shadow: none;
     background: transparent;
     background-image: none;
-    // Use color (not opacity) so states don't multiply — opacity would compound with color alpha
     color: var(--crystal-text-dim);
     outline: none;
 
@@ -161,12 +152,10 @@ button.crystal-icon-btn {
         background-image: none;
         box-shadow: none;
     }
-    // Disabled: clearly inactive but still readable — no opacity multiplication
-    &:disabled { color: var(--crystal-text-disabled); }
+    &:disabled    { color: var(--crystal-text-disabled); }
     &:focus-visible { outline: 1px solid var(--crystal-text-disabled); outline-offset: 1px; }
 }
 
-// Sidebar toggle — matches nav capsule height (icon 16px + padding 8px*2 + border 1px*2 = 34px)
 button.crystal-icon-btn.sidebar-toggle {
     padding: 8px;
     background: var(--crystal-surface);
@@ -174,15 +163,13 @@ button.crystal-icon-btn.sidebar-toggle {
     &:hover { background: var(--crystal-surface-hover); }
 }
 
-// Navigation capsule — pill, visually same height as sidebar toggle
+// ── Navigation capsule (back / forward) ───────────────────────────────────────
 .navigation-capsule {
     background: var(--crystal-surface);
     border: 1px solid var(--crystal-border);
-    border-radius: 999px;
+    border-radius: $crystal-radius-pill;
     padding: 2px;
     min-height: 28px;
-
-    // nav-btn inherits all styling from .crystal-icon-btn
 
     > separator.nav-separator {
         background-color: var(--crystal-border);
@@ -192,7 +179,32 @@ button.crystal-icon-btn.sidebar-toggle {
     }
 }
 
-// 6. THE STACK + SCROLL (full-width, content limited by per-page Adw.Clamp)
+// ── Search entry ──────────────────────────────────────────────────────────────
+.settings-search {
+    background: var(--crystal-surface-back);
+    border: 1px solid var(--crystal-border);
+    border-radius: $crystal-radius-pill;
+    padding: 0 12px;
+    min-height: 32px;
+    outline: none;
+    box-shadow: none;
+
+    &:focus, &:focus-within {
+        border-color: var(--crystal-surface-raised);
+        box-shadow: none;
+        outline: none;
+    }
+
+    focus-ring { box-shadow: none; }
+
+    > text {
+        background: transparent;
+        color: var(--crystal-text);
+        caret-color: var(--crystal-text);
+    }
+}
+
+// ── Stack + scroll ────────────────────────────────────────────────────────────
 stack.settings-stack {
     background: transparent;
     border: none;
@@ -204,99 +216,37 @@ stack.settings-stack {
     border: none;
     box-shadow: none;
 
-    & > viewport {
-        background: transparent;
-        border: none;
-    }
+    > viewport { background: transparent; border: none; }
 
-    // Scrollbar on the right — visible, subtle
-    & > scrollbar.vertical {
+    > scrollbar.vertical {
         background: transparent;
         border: none;
         padding: 4px 2px;
 
         > trough {
             background: transparent;
-            border-radius: 999px;
+            border-radius: $crystal-radius-pill;
         }
         > trough > slider {
             background: var(--crystal-surface-active);
-            border-radius: 999px;
+            border-radius: $crystal-radius-pill;
             min-width: 5px;
             &:hover { background: var(--crystal-surface-raised); }
         }
     }
 }
 
-// 7. ACCENT PICKERS
-button.accent-circle-btn {
-    background-image: none;
-    background-color: transparent;
-    border: 3px solid transparent;
-    border-radius: 999px;
-    min-width: 32px;
-    min-height: 32px;
-    padding: 0;
-    margin: 0;
-    transition: all 0.2s ease;
-
-    &.selected { border-color: var(--crystal-text); box-shadow: 0 0 0 2px var(--crystal-text); }
-    &:hover:not(.selected) { border-color: var(--crystal-text-dim); }
-
-    &.accent-blue   { background-color: #0088FF; }
-    &.accent-teal   { background-color: #2190a4; }
-    &.accent-green  { background-color: #79B757; }
-    &.accent-yellow { background-color: #F3BA4B; }
-    &.accent-orange { background-color: #E9873A; }
-    &.accent-red    { background-color: #ED5F5D; }
-    &.accent-pink   { background-color: #E55E9C; }
-    &.accent-purple { background-color: #9A57A3; }
-    &.accent-slate  { background-color: #6f8396; }
-}
-
-// 8. Search entry
-.settings-search {
-    background: var(--crystal-surface-back);
-    border: 1px solid var(--crystal-border);
-    border-radius: 999px;
-    padding: 0 12px;
-    min-height: 30px;
-    outline: none;
-    box-shadow: none;
-
-    &:focus, &:focus-within {
-        border-color: var(--crystal-surface-raised);
-        box-shadow: none;
-        outline: none;
-    }
-
-    // Kill Adwaita blue focus ring
-    focus-ring { box-shadow: none; }
-
-    > text {
-        background: transparent;
-        color: var(--crystal-text);
-        caret-color: var(--crystal-text);
-    }
-}
-
-
-// 9. Nav buttons — styled via .navigation-capsule and .sidebar-toggle above
-
-// ═══════════════════════════════════════════════════════════════════════
-// 10. PAGE CONTENT - Typography
-// ═══════════════════════════════════════════════════════════════════════
-
+// ── Page typography ───────────────────────────────────────────────────────────
 .settings-page {
     background: transparent;
-    padding: 24px 40px 40px 40px;
+    padding: 24px 40px 40px;
 }
 
 .settings-page-title {
-    font-size: 1.4rem;
+    font-size: 1.35rem;
     font-weight: 700;
     color: var(--crystal-text);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
 }
 
 .settings-page-subtitle {
@@ -309,26 +259,22 @@ button.accent-circle-btn {
     font-weight: 700;
     color: var(--crystal-text-dim);
     letter-spacing: 0.08em;
-    margin-left: 4px;
-    margin-bottom: 4px;
+    margin-start: 4px;
+    margin-bottom: 6px;
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// 11. BOXED LISTS
-// ═══════════════════════════════════════════════════════════════════════
-
-window.crystal-settings-window preferencespage preferencesgroup list.boxed-list,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box,
+// ── Settings list cards ───────────────────────────────────────────────────────
 window.crystal-settings-window list.boxed-list,
 window.crystal-settings-window list.settings-list-box {
     background-color: var(--crystal-surface-back);
     border: 1px solid var(--crystal-border);
     border-radius: $crystal-radius-md;
     padding: 2px;
-    box-shadow: none; 
+    box-shadow: none;
     margin-bottom: 24px;
 
-    label.settings-row-label { color: var(--crystal-text); } 
+    label.settings-row-label { color: var(--crystal-text); }
+
     row.settings-item-row, row {
         background-color: transparent;
         padding: 2px 0;
@@ -337,17 +283,15 @@ window.crystal-settings-window list.settings-list-box {
         transition: background 0.15s ease;
         box-shadow: none;
 
-        &:hover {
-            background-color: var(--crystal-surface-back);
-        }
+        &:hover { background-color: var(--crystal-surface); }
 
-        & + row {
-            box-shadow: inset 0 1px 0 var(--crystal-border);
-        }
+        // Inset divider between consecutive rows
+        & + row { box-shadow: inset 0 1px 0 var(--crystal-border); }
 
+        // Round only the outer corners to match the card radius
         &:first-child { border-radius: $crystal-radius-md $crystal-radius-md 0 0; }
-        &:last-child { border-radius: 0 0 $crystal-radius-md $crystal-radius-md; }
-        &:only-child { border-radius: $crystal-radius-md; }
+        &:last-child  { border-radius: 0 0 $crystal-radius-md $crystal-radius-md; }
+        &:only-child  { border-radius: $crystal-radius-md; }
     }
 }
 
@@ -362,65 +306,44 @@ window.crystal-settings-window list.settings-list-box {
     color: var(--crystal-text-dim);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// 12. SPLIT VIEW & OVERLAY CLEANER - CRYSTAL SPECIFIC
-// ═══════════════════════════════════════════════════════════════════════
+// ── Accent color pickers ──────────────────────────────────────────────────────
+button.accent-circle-btn {
+    background-image: none;
+    background-color: transparent;
+    border: 3px solid transparent;
+    border-radius: $crystal-radius-pill;
+    min-width: 32px;
+    min-height: 32px;
+    padding: 0;
+    margin: 0;
+    transition: all 0.2s ease;
 
-window.crystal-settings-window {
-    #settings-splitview, .crystal-split-view {
-        background-color: transparent;
+    &.selected       { border-color: var(--crystal-text); box-shadow: 0 0 0 2px var(--crystal-text); }
+    &:hover:not(.selected) { border-color: var(--crystal-text-dim); }
 
-        & stack, & bin, & viewport, & navigationview,
-        & box:not(.navigation-capsule):not(.header-start-box) {
-            background-color: transparent;
-            border: none;
-            box-shadow: none;
-            outline: none;
-        }
-
-        // Ocultar separador
-        & separator, & .sidebar-separator, & > separator, & > border {
-            background: transparent;
-            min-width: 0;
-            min-height: 0;
-            opacity: 0;
-            margin: 0;
-            padding: 0;
-            border: none;
-        }
-        
-        // Atacamos a los hijos directos para quitar sus bordes nativos
-        & > * {
-            border: none;
-            box-shadow: none;
-            outline: none;
-        }
-    }
+    &.accent-blue   { background-color: #0088FF; }
+    &.accent-teal   { background-color: #2190a4; }
+    &.accent-green  { background-color: #79B757; }
+    &.accent-yellow { background-color: #F3BA4B; }
+    &.accent-orange { background-color: #E9873A; }
+    &.accent-red    { background-color: #ED5F5D; }
+    &.accent-pink   { background-color: #E55E9C; }
+    &.accent-purple { background-color: #9A57A3; }
+    &.accent-slate  { background-color: #6f8396; }
 }
 
-// ── Search Results ────────────────────────────────────────────────────────────
-.search-results-list {
-    .search-result-row {
-        &:hover { background: var(--crystal-surface-back); }
-    }
-}
-
+// ── Search results ────────────────────────────────────────────────────────────
 .search-result-chip {
     font-size: 0.75em;
     font-weight: 500;
-    color: var(--crystal-accent, rgba(255,255,255,0.5));
-    background: var(--crystal-surface-back);
-    border-radius: 100px;
+    color: var(--crystal-accent);
+    background: var(--crystal-accent-10);
+    border-radius: $crystal-radius-pill;
     padding: 2px 10px;
-    margin-left: 4px;
+    margin-start: 4px;
 }
 
-.search-result-page-icon {
-    -gtk-icon-size: 18px;
-}
-
-// ── Region Page - Live Clock Preview ─────────────────────────────────────────
-
+// ── Region page ───────────────────────────────────────────────────────────────
 .region-preview-box {
     background: var(--crystal-surface-back);
     border: 1px solid var(--crystal-border);
@@ -436,24 +359,11 @@ window.crystal-settings-window {
     letter-spacing: -0.5px;
 }
 
-// ── Region Page - Timezone Status ─────────────────────────────────────────────
+.tz-status     { font-size: 0.8rem; font-weight: 500; transition: all 0.2s ease; }
+.tz-status-ok  { color: var(--crystal-success); }
+.tz-status-err { color: var(--crystal-danger); }
 
-.tz-status {
-    font-size: 0.8rem;
-    font-weight: 500;
-    transition: all 0.2s ease;
-}
-
-.tz-status-ok {
-    color: var(--crystal-success);
-}
-
-.tz-status-err {
-    color: var(--crystal-danger);
-}
-
-
-// ── Wallpaper Preview ─────────────────────────────────────────────────────────
+// ── Wallpaper preview ─────────────────────────────────────────────────────────
 row.wallpaper-preview-row {
     padding: 12px;
     &:hover { background-color: transparent; }

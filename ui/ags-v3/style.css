@@ -1522,7 +1522,7 @@ window.workspace-cockpit {
 }
 
 /* ==========================================================================
-   CRYSTAL SETTINGS - Tahoe Medical-Grade Interface
+   CRYSTAL SETTINGS WINDOW
    ========================================================================== */
 window#crystal-settings-window {
   background: none;
@@ -1544,12 +1544,38 @@ window#crystal-settings-window > decoration, window#crystal-settings-window > co
   box-shadow: var(--crystal-shadow-lg);
 }
 
+window.crystal-settings-window #settings-splitview, window.crystal-settings-window .crystal-split-view {
+  background-color: transparent;
+}
+window.crystal-settings-window #settings-splitview stack, window.crystal-settings-window #settings-splitview bin, window.crystal-settings-window #settings-splitview viewport, window.crystal-settings-window #settings-splitview navigationview,
+window.crystal-settings-window #settings-splitview box:not(.navigation-capsule):not(.header-start-box), window.crystal-settings-window .crystal-split-view stack, window.crystal-settings-window .crystal-split-view bin, window.crystal-settings-window .crystal-split-view viewport, window.crystal-settings-window .crystal-split-view navigationview,
+window.crystal-settings-window .crystal-split-view box:not(.navigation-capsule):not(.header-start-box) {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+window.crystal-settings-window #settings-splitview separator, window.crystal-settings-window #settings-splitview .sidebar-separator, window.crystal-settings-window #settings-splitview > separator, window.crystal-settings-window #settings-splitview > border, window.crystal-settings-window .crystal-split-view separator, window.crystal-settings-window .crystal-split-view .sidebar-separator, window.crystal-settings-window .crystal-split-view > separator, window.crystal-settings-window .crystal-split-view > border {
+  background: transparent;
+  min-width: 0;
+  min-height: 0;
+  opacity: 0;
+  margin: 0;
+  padding: 0;
+  border: none;
+}
+window.crystal-settings-window #settings-splitview > *, window.crystal-settings-window .crystal-split-view > * {
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
 .crystal-sidebar-capsule {
-  background: rgba(0, 0, 0, 0.25);
-  border-radius: var(--crystal-radius-lg);
-  border-right: none;
-  margin: 5px 0 10px 10px;
-  min-width: 250px;
+  background: var(--crystal-surface-back);
+  border: 1px solid var(--crystal-border);
+  border-radius: var(--crystal-radius-md);
+  margin: 8px 0 8px 8px;
+  min-width: 210px;
 }
 .crystal-sidebar-capsule viewport, .crystal-sidebar-capsule list {
   background: transparent;
@@ -1558,92 +1584,55 @@ window#crystal-settings-window > decoration, window#crystal-settings-window > co
   outline: none;
 }
 
-.crystal-sidebar-row {
-  padding: 8px 14px;
-  border-radius: var(--crystal-radius-sm);
-  transition: background 0.18s ease, color 0.18s ease;
-  margin: 3px 8px;
-  color: var(--crystal-text-dim);
-}
-.crystal-sidebar-row label {
-  font-weight: 500;
-  font-size: 0.9rem;
-  color: inherit;
-}
-.crystal-sidebar-row image {
-  color: inherit;
-}
-.crystal-sidebar-row:hover {
-  background: var(--crystal-surface-back);
-  color: var(--crystal-text);
-}
-
 window.crystal-settings-window list.settings-sidebar.navigation-sidebar {
   background: transparent;
-  padding: 10px 8px 8px 8px;
+  padding: 6px;
 }
 window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row {
   background: transparent;
-  padding: 4px 8px;
-  margin-bottom: 4px;
-  border-radius: 99px;
-  min-height: 38px;
-  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  padding: 0;
+  margin: 1px 0;
+  border-radius: var(--crystal-radius-sm);
+  min-height: 36px;
+  transition: background 0.15s ease;
   border: none;
   box-shadow: none;
 }
 window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:hover {
-  background-color: var(--crystal-surface-back);
+  background-color: var(--crystal-surface-hover);
 }
 window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:selected, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:active {
-  background-color: var(--crystal-accent);
-  color: var(--crystal-accent-fg);
+  background-color: var(--crystal-accent-10);
 }
-window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:selected label, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:selected image, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:selected .sidebar-icon, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:selected .sidebar-label, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:active label, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:active image, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:active .sidebar-icon, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:active .sidebar-label {
-  color: var(--crystal-accent-fg);
-  opacity: 1;
-}
-
-list row:selected .crystal-sidebar-row {
-  background: var(--crystal-accent-30);
+window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:selected label, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:selected image, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:selected .sidebar-label, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:active label, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:active image, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:active .sidebar-label {
   color: var(--crystal-accent);
-}
-list row:selected .crystal-sidebar-row label {
-  font-weight: 600;
-  color: inherit;
-}
-list row:selected .crystal-sidebar-row image {
-  color: inherit;
   opacity: 1;
 }
 
-.settings-content-pillar {
-  background: transparent;
-  border: none;
+.settings-sidebar-row {
+  color: var(--crystal-text-dim);
 }
-.settings-content-pillar, .settings-content-pillar box, .settings-content-pillar scrolledwindow, .settings-content-pillar viewport {
-  box-shadow: none;
-  border: none;
-  background: transparent;
+
+window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:hover .settings-sidebar-row {
+  color: var(--crystal-text);
+}
+window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:selected .settings-sidebar-row,
+window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:active .settings-sidebar-row {
+  color: var(--crystal-accent);
 }
 
 .settings-header {
   background: transparent;
   border-bottom: 1px solid var(--crystal-border);
-  padding: 0 10px;
+  padding: 0 12px;
   min-height: 44px;
-}
-
-.sidebar-header-spacer {
-  min-height: 44px;
-  border-bottom: 1px solid var(--crystal-border);
 }
 
 button.crystal-icon-btn {
   padding: 7px;
   min-width: 0;
   min-height: 0;
-  border-radius: 9999px;
+  border-radius: var(--crystal-radius-pill);
   border: none;
   box-shadow: none;
   background: transparent;
@@ -1682,7 +1671,7 @@ button.crystal-icon-btn.sidebar-toggle:hover {
 .navigation-capsule {
   background: var(--crystal-surface);
   border: 1px solid var(--crystal-border);
-  border-radius: 999px;
+  border-radius: var(--crystal-radius-pill);
   padding: 2px;
   min-height: 28px;
 }
@@ -1691,6 +1680,29 @@ button.crystal-icon-btn.sidebar-toggle:hover {
   min-width: 1px;
   min-height: 1px;
   margin: 5px 1px;
+}
+
+.settings-search {
+  background: var(--crystal-surface-back);
+  border: 1px solid var(--crystal-border);
+  border-radius: var(--crystal-radius-pill);
+  padding: 0 12px;
+  min-height: 32px;
+  outline: none;
+  box-shadow: none;
+}
+.settings-search:focus, .settings-search:focus-within {
+  border-color: var(--crystal-surface-raised);
+  box-shadow: none;
+  outline: none;
+}
+.settings-search focus-ring {
+  box-shadow: none;
+}
+.settings-search > text {
+  background: transparent;
+  color: var(--crystal-text);
+  caret-color: var(--crystal-text);
 }
 
 stack.settings-stack {
@@ -1715,22 +1727,108 @@ stack.settings-stack {
 }
 .settings-page-scroll > scrollbar.vertical > trough {
   background: transparent;
-  border-radius: 999px;
+  border-radius: var(--crystal-radius-pill);
 }
 .settings-page-scroll > scrollbar.vertical > trough > slider {
   background: var(--crystal-surface-active);
-  border-radius: 999px;
+  border-radius: var(--crystal-radius-pill);
   min-width: 5px;
 }
 .settings-page-scroll > scrollbar.vertical > trough > slider:hover {
   background: var(--crystal-surface-raised);
 }
 
+.settings-page {
+  background: transparent;
+  padding: 24px 40px 40px;
+}
+
+.settings-page-title {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--crystal-text);
+  margin-bottom: 6px;
+}
+
+.settings-page-subtitle {
+  font-size: 0.85rem;
+  color: var(--crystal-text-dim);
+}
+
+.settings-group-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--crystal-text-dim);
+  letter-spacing: 0.08em;
+  margin-start: 4px;
+  margin-bottom: 6px;
+}
+
+window.crystal-settings-window list.boxed-list,
+window.crystal-settings-window list.settings-list-box {
+  background-color: var(--crystal-surface-back);
+  border: 1px solid var(--crystal-border);
+  border-radius: var(--crystal-radius-md);
+  padding: 2px;
+  box-shadow: none;
+  margin-bottom: 24px;
+}
+window.crystal-settings-window list.boxed-list label.settings-row-label,
+window.crystal-settings-window list.settings-list-box label.settings-row-label {
+  color: var(--crystal-text);
+}
+window.crystal-settings-window list.boxed-list row.settings-item-row, window.crystal-settings-window list.boxed-list row,
+window.crystal-settings-window list.settings-list-box row.settings-item-row,
+window.crystal-settings-window list.settings-list-box row {
+  background-color: transparent;
+  padding: 2px 0;
+  border: none;
+  border-radius: 0;
+  transition: background 0.15s ease;
+  box-shadow: none;
+}
+window.crystal-settings-window list.boxed-list row.settings-item-row:hover, window.crystal-settings-window list.boxed-list row:hover,
+window.crystal-settings-window list.settings-list-box row.settings-item-row:hover,
+window.crystal-settings-window list.settings-list-box row:hover {
+  background-color: var(--crystal-surface);
+}
+window.crystal-settings-window list.boxed-list row.settings-item-row + row, window.crystal-settings-window list.boxed-list row + row,
+window.crystal-settings-window list.settings-list-box row.settings-item-row + row,
+window.crystal-settings-window list.settings-list-box row + row {
+  box-shadow: inset 0 1px 0 var(--crystal-border);
+}
+window.crystal-settings-window list.boxed-list row.settings-item-row:first-child, window.crystal-settings-window list.boxed-list row:first-child,
+window.crystal-settings-window list.settings-list-box row.settings-item-row:first-child,
+window.crystal-settings-window list.settings-list-box row:first-child {
+  border-radius: var(--crystal-radius-md) var(--crystal-radius-md) 0 0;
+}
+window.crystal-settings-window list.boxed-list row.settings-item-row:last-child, window.crystal-settings-window list.boxed-list row:last-child,
+window.crystal-settings-window list.settings-list-box row.settings-item-row:last-child,
+window.crystal-settings-window list.settings-list-box row:last-child {
+  border-radius: 0 0 var(--crystal-radius-md) var(--crystal-radius-md);
+}
+window.crystal-settings-window list.boxed-list row.settings-item-row:only-child, window.crystal-settings-window list.boxed-list row:only-child,
+window.crystal-settings-window list.settings-list-box row.settings-item-row:only-child,
+window.crystal-settings-window list.settings-list-box row:only-child {
+  border-radius: var(--crystal-radius-md);
+}
+
+.settings-row-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--crystal-text);
+}
+
+.settings-row-subtitle {
+  font-size: 0.8rem;
+  color: var(--crystal-text-dim);
+}
+
 button.accent-circle-btn {
   background-image: none;
   background-color: transparent;
   border: 3px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--crystal-radius-pill);
   min-width: 32px;
   min-height: 32px;
   padding: 0;
@@ -1772,183 +1870,14 @@ button.accent-circle-btn.accent-slate {
   background-color: #6f8396;
 }
 
-.settings-search {
-  background: var(--crystal-surface-back);
-  border: 1px solid var(--crystal-border);
-  border-radius: 999px;
-  padding: 0 12px;
-  min-height: 30px;
-  outline: none;
-  box-shadow: none;
-}
-.settings-search:focus, .settings-search:focus-within {
-  border-color: var(--crystal-surface-raised);
-  box-shadow: none;
-  outline: none;
-}
-.settings-search focus-ring {
-  box-shadow: none;
-}
-.settings-search > text {
-  background: transparent;
-  color: var(--crystal-text);
-  caret-color: var(--crystal-text);
-}
-
-.settings-page {
-  background: transparent;
-  padding: 24px 40px 40px 40px;
-}
-
-.settings-page-title {
-  font-size: 1.4rem;
-  font-weight: 700;
-  color: var(--crystal-text);
-  margin-bottom: 4px;
-}
-
-.settings-page-subtitle {
-  font-size: 0.85rem;
-  color: var(--crystal-text-dim);
-}
-
-.settings-group-title {
-  font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--crystal-text-dim);
-  letter-spacing: 0.08em;
-  margin-left: 4px;
-  margin-bottom: 4px;
-}
-
-window.crystal-settings-window preferencespage preferencesgroup list.boxed-list,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box,
-window.crystal-settings-window list.boxed-list,
-window.crystal-settings-window list.settings-list-box {
-  background-color: var(--crystal-surface-back);
-  border: 1px solid var(--crystal-border);
-  border-radius: var(--crystal-radius-md);
-  padding: 2px;
-  box-shadow: none;
-  margin-bottom: 24px;
-}
-window.crystal-settings-window preferencespage preferencesgroup list.boxed-list label.settings-row-label,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box label.settings-row-label,
-window.crystal-settings-window list.boxed-list label.settings-row-label,
-window.crystal-settings-window list.settings-list-box label.settings-row-label {
-  color: var(--crystal-text);
-}
-window.crystal-settings-window preferencespage preferencesgroup list.boxed-list row.settings-item-row, window.crystal-settings-window preferencespage preferencesgroup list.boxed-list row,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box row.settings-item-row,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box row,
-window.crystal-settings-window list.boxed-list row.settings-item-row,
-window.crystal-settings-window list.boxed-list row,
-window.crystal-settings-window list.settings-list-box row.settings-item-row,
-window.crystal-settings-window list.settings-list-box row {
-  background-color: transparent;
-  padding: 2px 0;
-  border: none;
-  border-radius: 0;
-  transition: background 0.15s ease;
-  box-shadow: none;
-}
-window.crystal-settings-window preferencespage preferencesgroup list.boxed-list row.settings-item-row:hover, window.crystal-settings-window preferencespage preferencesgroup list.boxed-list row:hover,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box row.settings-item-row:hover,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box row:hover,
-window.crystal-settings-window list.boxed-list row.settings-item-row:hover,
-window.crystal-settings-window list.boxed-list row:hover,
-window.crystal-settings-window list.settings-list-box row.settings-item-row:hover,
-window.crystal-settings-window list.settings-list-box row:hover {
-  background-color: var(--crystal-surface-back);
-}
-window.crystal-settings-window preferencespage preferencesgroup list.boxed-list row.settings-item-row + row, window.crystal-settings-window preferencespage preferencesgroup list.boxed-list row + row,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box row.settings-item-row + row,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box row + row,
-window.crystal-settings-window list.boxed-list row.settings-item-row + row,
-window.crystal-settings-window list.boxed-list row + row,
-window.crystal-settings-window list.settings-list-box row.settings-item-row + row,
-window.crystal-settings-window list.settings-list-box row + row {
-  box-shadow: inset 0 1px 0 var(--crystal-border);
-}
-window.crystal-settings-window preferencespage preferencesgroup list.boxed-list row.settings-item-row:first-child, window.crystal-settings-window preferencespage preferencesgroup list.boxed-list row:first-child,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box row.settings-item-row:first-child,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box row:first-child,
-window.crystal-settings-window list.boxed-list row.settings-item-row:first-child,
-window.crystal-settings-window list.boxed-list row:first-child,
-window.crystal-settings-window list.settings-list-box row.settings-item-row:first-child,
-window.crystal-settings-window list.settings-list-box row:first-child {
-  border-radius: var(--crystal-radius-md) var(--crystal-radius-md) 0 0;
-}
-window.crystal-settings-window preferencespage preferencesgroup list.boxed-list row.settings-item-row:last-child, window.crystal-settings-window preferencespage preferencesgroup list.boxed-list row:last-child,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box row.settings-item-row:last-child,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box row:last-child,
-window.crystal-settings-window list.boxed-list row.settings-item-row:last-child,
-window.crystal-settings-window list.boxed-list row:last-child,
-window.crystal-settings-window list.settings-list-box row.settings-item-row:last-child,
-window.crystal-settings-window list.settings-list-box row:last-child {
-  border-radius: 0 0 var(--crystal-radius-md) var(--crystal-radius-md);
-}
-window.crystal-settings-window preferencespage preferencesgroup list.boxed-list row.settings-item-row:only-child, window.crystal-settings-window preferencespage preferencesgroup list.boxed-list row:only-child,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box row.settings-item-row:only-child,
-window.crystal-settings-window preferencespage preferencesgroup list.settings-list-box row:only-child,
-window.crystal-settings-window list.boxed-list row.settings-item-row:only-child,
-window.crystal-settings-window list.boxed-list row:only-child,
-window.crystal-settings-window list.settings-list-box row.settings-item-row:only-child,
-window.crystal-settings-window list.settings-list-box row:only-child {
-  border-radius: var(--crystal-radius-md);
-}
-
-.settings-row-label {
-  font-size: 0.9rem;
-  font-weight: 500;
-  color: var(--crystal-text);
-}
-
-.settings-row-subtitle {
-  font-size: 0.8rem;
-  color: var(--crystal-text-dim);
-}
-
-window.crystal-settings-window #settings-splitview, window.crystal-settings-window .crystal-split-view {
-  background-color: transparent;
-}
-window.crystal-settings-window #settings-splitview stack, window.crystal-settings-window #settings-splitview bin, window.crystal-settings-window #settings-splitview viewport, window.crystal-settings-window #settings-splitview navigationview, window.crystal-settings-window #settings-splitview box:not(.navigation-capsule):not(.header-start-box), window.crystal-settings-window .crystal-split-view stack, window.crystal-settings-window .crystal-split-view bin, window.crystal-settings-window .crystal-split-view viewport, window.crystal-settings-window .crystal-split-view navigationview, window.crystal-settings-window .crystal-split-view box:not(.navigation-capsule):not(.header-start-box) {
-  background-color: transparent;
-  border: none;
-  box-shadow: none;
-  outline: none;
-}
-window.crystal-settings-window #settings-splitview separator, window.crystal-settings-window #settings-splitview .sidebar-separator, window.crystal-settings-window #settings-splitview > separator, window.crystal-settings-window #settings-splitview > border, window.crystal-settings-window .crystal-split-view separator, window.crystal-settings-window .crystal-split-view .sidebar-separator, window.crystal-settings-window .crystal-split-view > separator, window.crystal-settings-window .crystal-split-view > border {
-  background: transparent;
-  min-width: 0;
-  min-height: 0;
-  opacity: 0;
-  margin: 0;
-  padding: 0;
-  border: none;
-}
-window.crystal-settings-window #settings-splitview > *, window.crystal-settings-window .crystal-split-view > * {
-  border: none;
-  box-shadow: none;
-  outline: none;
-}
-
-.search-results-list .search-result-row:hover {
-  background: var(--crystal-surface-back);
-}
-
 .search-result-chip {
   font-size: 0.75em;
   font-weight: 500;
-  color: var(--crystal-accent, rgba(255, 255, 255, 0.5));
-  background: var(--crystal-surface-back);
-  border-radius: 100px;
+  color: var(--crystal-accent);
+  background: var(--crystal-accent-10);
+  border-radius: var(--crystal-radius-pill);
   padding: 2px 10px;
-  margin-left: 4px;
-}
-
-.search-result-page-icon {
-  -gtk-icon-size: 18px;
+  margin-start: 4px;
 }
 
 .region-preview-box {
