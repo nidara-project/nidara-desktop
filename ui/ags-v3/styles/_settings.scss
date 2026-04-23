@@ -99,7 +99,7 @@ window.crystal-settings-window list.settings-sidebar.navigation-sidebar {
         border: none;
         box-shadow: none;
 
-        &:hover {
+        &:hover:not(.sidebar-header-spacer-row) {
             background-color: var(--crystal-surface-hover);
         }
 

@@ -131,38 +131,37 @@ export const drawSquircle = (
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, strokeOffset)
     cr.setLineWidth(borderWidth)
 
-    if (borderColor) {
-        cr.setSourceRGBA(borderColor.r, borderColor.g, borderColor.b, borderColor.a)
-    } else {
-        const intensity = borderWidth > 1.0 ? 0.25 : 0.20
-        const lg = new Cairo.LinearGradient(x, y, x + drawW, y + drawH)
-        lg.addColorStopRGBA(0.0, 1, 1, 1, intensity)
-        lg.addColorStopRGBA(0.4, 1, 1, 1, 0.05)
-        lg.addColorStopRGBA(0.6, 1, 1, 1, 0.05)
-        lg.addColorStopRGBA(1.0, 1, 1, 1, intensity)
-        cr.setSource(lg)
+    const baseAlpha = borderColor ? borderColor.a : (borderWidth > 1.0 ? 0.12 : 0.10)
+    const baseR = borderColor ? borderColor.r : 1
+    const baseG = borderColor ? borderColor.g : 1
+    const baseB = borderColor ? borderColor.b : 1
+    cr.setSourceRGBA(baseR, baseG, baseB, baseAlpha)
+    cr.stroke()
+    cr.restore()
+
+    // 3. SPECULAR RIMS — vertical (lit from above), only when gloss is enabled
+    if (enableGloss) {
+        cr.save()
+        createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, -0.5)
+        cr.setLineWidth(1.0)
+
+        const rimIntensity = borderWidth > 1.0 ? 0.4 : 0.3
+        const cx = x + drawW * 0.5
+
+        // Top rim: top edge → center, bright highlight
+        const rimTop = new Cairo.LinearGradient(cx, y, cx, y + drawH * 0.5)
+        rimTop.addColorStopRGBA(0.0, 1, 1, 1, rimIntensity)
+        rimTop.addColorStopRGBA(1.0, 1, 1, 1, 0.0)
+        cr.setSource(rimTop)
+        cr.strokePreserve()
+
+        // Bottom rim: subtle reflected light
+        const rimBot = new Cairo.LinearGradient(cx, y + drawH, cx, y + drawH * 0.5)
+        rimBot.addColorStopRGBA(0.0, 1, 1, 1, rimIntensity * 0.35)
+        rimBot.addColorStopRGBA(1.0, 1, 1, 1, 0.0)
+        cr.setSource(rimBot)
+        cr.stroke()
+
+        cr.restore()
     }
-    cr.stroke()
-    cr.restore()
-
-    // 3. SPECULAR RIMS (Symmetric Tahoe Edges 💎)
-    cr.save()
-    const rimOffset = -0.5
-    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, rimOffset)
-    cr.setLineWidth(1.0)
-
-    const rimIntensity = borderWidth > 1.0 ? 0.4 : 0.3
-    const rimGradTL = new Cairo.LinearGradient(x, y, x + (drawW * 0.5), y + (drawH * 0.5))
-    rimGradTL.addColorStopRGBA(0.0, 1, 1, 1, rimIntensity)
-    rimGradTL.addColorStopRGBA(0.4, 1, 1, 1, 0.0)
-    cr.setSource(rimGradTL)
-    cr.strokePreserve()
-
-    const rimGradBR = new Cairo.LinearGradient(x + drawW, y + drawH, x + (drawW * 0.5), y + (drawH * 0.5))
-    rimGradBR.addColorStopRGBA(0.0, 1, 1, 1, rimIntensity)
-    rimGradBR.addColorStopRGBA(0.4, 1, 1, 1, 0.0)
-    cr.setSource(rimGradBR)
-    cr.stroke()
-
-    cr.restore()
 }

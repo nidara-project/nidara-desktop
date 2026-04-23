@@ -355,7 +355,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     const searchEntry = new Gtk.SearchEntry({
         placeholder_text: "Buscar ajustes...",
         css_classes: ["settings-search", "pill"],
-        hexpand: true,
+        width_request: 280,
         max_width_chars: 30,
         valign: Gtk.Align.CENTER,
     })
@@ -412,15 +412,13 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
     closeBtn.connect("clicked", () => win.set_visible(false))
 
-    // Pure Gtk.Box header — no Adw.HeaderBar, no automatic height allocation to children
-    const contentHeader = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 8,
+    // CenterBox header — start/center/end slots give true centering without spacers
+    const contentHeader = new Gtk.CenterBox({
         css_classes: ["settings-header"],
     })
-    contentHeader.append(headerStart)
-    contentHeader.append(searchEntry)   // hexpand:true → takes remaining space
-    contentHeader.append(closeBtn)
+    contentHeader.set_start_widget(headerStart)
+    contentHeader.set_center_widget(searchEntry)
+    contentHeader.set_end_widget(closeBtn)
 
     // Content column: header on top, stack below
     // margin matches sidebar capsule (8px top/right/bottom, 0 left — sidebar provides left spacing)

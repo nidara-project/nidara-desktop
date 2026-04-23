@@ -1,3 +1,4 @@
+@charset "UTF-8";
 /* ==========================================================================
    CRYSTAL DESIGN SYSTEM - BASE TOKENS (V3000)
    ========================================================================== */
@@ -1608,7 +1609,7 @@ window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row {
   border: none;
   box-shadow: none;
 }
-window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:hover {
+window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:hover:not(.sidebar-header-spacer-row) {
   background-color: var(--crystal-surface-hover);
 }
 window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:selected, window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:active {

@@ -224,9 +224,9 @@ export default function Dock(gdkmonitor: any) {
                 : dockSettings.screenGap
             const py = Math.max(0, Math.round((verticalUsableH - ph) / 2))
             cr.translate(px, py)
-            drawSquircle(cr, pw, ph, undefined, 0.15, true, undefined, undefined, false, undefined, 3.2, 1.0, 0)
+            drawSquircle(cr, pw, ph, undefined, 0.15, true, undefined, undefined, false, { r: 1, g: 1, b: 1, a: 0.12 }, 3.2, 1.0, 0)
         } else {
-            drawSquircle(cr, w, _h, undefined, 0.15, true, undefined, undefined, false, undefined, 3.2, 1.0, 0)
+            drawSquircle(cr, w, _h, undefined, 0.15, true, undefined, undefined, false, { r: 1, g: 1, b: 1, a: 0.12 }, 3.2, 1.0, 0)
         }
     })
 
