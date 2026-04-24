@@ -61,11 +61,6 @@ export default {
     "settings.region.tz.error": "✗ Error applying — verify the zone name",
     "settings.region.tz.placeholder": "Ex: Europe/London",
 
-    "settings.region.calendar.group": "Calendar",
-    "settings.region.calendar.monday-first": "Week Starts on Monday",
-    "settings.region.calendar.monday-first.desc": "Applies to the notification center calendar",
-    "settings.region.calendar.external-note": "For other apps (e.g. GNOME Calendar), a re-login is required.",
-
     "settings.region.locale.group": "System Language & Keyboard",
     "settings.region.locale.lang": "Language (Locale)",
     "settings.region.locale.lang.desc": "Requires a session restart",

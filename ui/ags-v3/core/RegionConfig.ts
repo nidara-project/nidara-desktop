@@ -11,7 +11,6 @@ export interface RegionSettings {
     dateFormat: DateFormat
     timezone: string
     showSeconds: boolean
-    weekStartsMonday: boolean
 }
 
 const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/region.json`
@@ -21,26 +20,6 @@ const DEFAULTS: RegionSettings = {
     dateFormat: "short",
     timezone: "",
     showSeconds: false,
-    weekStartsMonday: false,
-}
-
-// Write LC_TIME to the systemd user environment so external apps pick it up
-// after re-login. Does NOT affect the running process (glibc locale is frozen).
-function persistWeekLocale(monday: boolean) {
-    const dir = `${GLib.get_home_dir()}/.config/environment.d`
-    const file = `${dir}/crystal-locale.conf`
-    try {
-        if (monday) {
-            if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
-                GLib.mkdir_with_parents(dir, 0o755)
-            writeFile(file, "LC_TIME=en_GB.UTF-8\n")
-        } else {
-            if (GLib.file_test(file, GLib.FileTest.EXISTS))
-                GLib.unlink(file)
-        }
-    } catch (e) {
-        console.error("[RegionConfig] persistWeekLocale failed:", e)
-    }
 }
 
 class RegionConfigManager extends GObject.Object {
@@ -60,9 +39,6 @@ class RegionConfigManager extends GObject.Object {
         if (!this._settings.timezone) {
             this._settings.timezone = this.detectTimezone()
         }
-
-        // Ensure the environment.d file matches the saved preference at startup
-        persistWeekLocale(this._settings.weekStartsMonday ?? false)
     }
 
     private load(): RegionSettings {
@@ -99,11 +75,10 @@ class RegionConfigManager extends GObject.Object {
         return ""
     }
 
-    get timeFormat(): TimeFormat      { return this._settings.timeFormat }
-    get dateFormat(): DateFormat      { return this._settings.dateFormat }
-    get timezone(): string            { return this._settings.timezone }
-    get showSeconds(): boolean        { return this._settings.showSeconds ?? false }
-    get weekStartsMonday(): boolean   { return this._settings.weekStartsMonday ?? false }
+    get timeFormat(): TimeFormat  { return this._settings.timeFormat }
+    get dateFormat(): DateFormat  { return this._settings.dateFormat }
+    get timezone(): string        { return this._settings.timezone }
+    get showSeconds(): boolean    { return this._settings.showSeconds ?? false }
 
     setTimeFormat(v: TimeFormat) {
         if (this._settings.timeFormat === v) return
@@ -122,14 +97,6 @@ class RegionConfigManager extends GObject.Object {
     setShowSeconds(v: boolean) {
         if ((this._settings.showSeconds ?? false) === v) return
         this._settings.showSeconds = v
-        this.save()
-        this.emit("changed")
-    }
-
-    setWeekStartsMonday(v: boolean) {
-        if ((this._settings.weekStartsMonday ?? false) === v) return
-        this._settings.weekStartsMonday = v
-        persistWeekLocale(v)
         this.save()
         this.emit("changed")
     }

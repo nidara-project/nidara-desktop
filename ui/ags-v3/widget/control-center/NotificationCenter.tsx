@@ -9,8 +9,6 @@ import appService from "../../core/AppService"
 import status from "../../core/Status"
 import { dockSideState } from "../../widget/dock/state"
 import { t } from "../../core/i18n"
-import regionConfig from "../../core/RegionConfig"
-import { MiniCalendar } from "../common/MiniCalendar"
 
 export function createIconWidget(n: AstalNotifd.Notification, size: number) {
     const entry = n.desktop_entry || n.app_name || ""
@@ -118,7 +116,7 @@ export default function NotificationCenter() {
     scroll.set_child(listContainer)
 
     const calendarIsland = SquircleContainer({
-        child: MiniCalendar(),
+        child: new Gtk.Calendar({ hexpand: true, css_classes: ["nc-calendar-widget"] }),
         radius: 32, gloss: true, alpha: 0.15,
         borderColor: { r: 1, g: 1, b: 1, a: 0.05 },
         css_classes: ["cc-island", "nc-calendar-island"],

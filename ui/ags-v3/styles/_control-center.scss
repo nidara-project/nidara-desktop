@@ -294,57 +294,19 @@ window.nc-window-2 {
     }
 }
 
-/* Mini Calendar */
-.nc-mini-cal {
-    padding: 12px 10px 8px;
-}
+/* Calendar Cleanup */
+.nc-calendar-island {
+    calendar {
+        background: none;
+        background-color: transparent;
+        border: none;
+        box-shadow: none;
 
-.nc-mini-cal-header {
-    margin-bottom: 8px;
-}
-
-.nc-mini-cal-month {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--crystal-text);
-}
-
-button.nc-mini-cal-nav {
-    background: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    padding: 4px;
-    min-width: 28px;
-    min-height: 28px;
-    border-radius: $crystal-radius-pill;
-    color: var(--crystal-text-dim);
-
-    &:hover  { background: var(--crystal-surface); color: var(--crystal-text); }
-    &:active { background: var(--crystal-surface-active); }
-}
-
-.nc-mini-cal-grid { column-spacing: 0; row-spacing: 2px; }
-
-.nc-mini-cal-day-name {
-    font-size: 0.7rem;
-    font-weight: 600;
-    color: var(--crystal-text-dim);
-    min-width: 30px;
-    margin-bottom: 2px;
-}
-
-.nc-mini-cal-day {
-    font-size: 0.8rem;
-    color: var(--crystal-text);
-    min-width: 30px;
-    min-height: 26px;
-    border-radius: $crystal-radius-pill;
-
-    &.today {
-        background: var(--crystal-accent-10);
-        color: var(--crystal-accent);
-        font-weight: 700;
+        &.view, & header, & button {
+            background: none;
+            background-color: transparent;
+            border: none;
+        }
     }
 }
 

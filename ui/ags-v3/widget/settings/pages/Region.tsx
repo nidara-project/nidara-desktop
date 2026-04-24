@@ -209,27 +209,6 @@ export default function RegionPage() {
     tzBox.append(tzList)
     page.append(tzBox)
 
-    // ── Calendario ────────────────────────────────────────────────────────────
-    const { box: calBox, listBox: calList } = listGroup(t("settings.region.calendar.group"))
-    calList.append(toggleRow(
-        t("settings.region.calendar.monday-first"),
-        t("settings.region.calendar.monday-first.desc"),
-        regionConfig.weekStartsMonday,
-        (v) => regionConfig.setWeekStartsMonday(v),
-    ))
-    calBox.append(calList)
-
-    const calInfoLabel = new Gtk.Label({
-        label: t("settings.region.calendar.external-note"),
-        css_classes: ["settings-row-subtitle"],
-        halign: Gtk.Align.START,
-        margin_start: 4,
-        margin_top: 4,
-        wrap: true,
-    })
-    calBox.append(calInfoLabel)
-    page.append(calBox)
-
     // ── Idioma del sistema y Teclado ──────────────────────────────────────────
     const { box: localeBox, listBox: localeList } = listGroup(t("settings.region.locale.group"))
 
