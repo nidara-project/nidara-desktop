@@ -61,6 +61,10 @@ export default {
     "settings.region.tz.error": "✗ Error al aplicar — verifica el nombre de la zona",
     "settings.region.tz.placeholder": "Ej: Europe/Madrid",
 
+    "settings.region.calendar.group": "Calendario",
+    "settings.region.calendar.monday-first": "La semana empieza el lunes",
+    "settings.region.calendar.monday-first.desc": "Se aplica al calendario del centro de notificaciones",
+
     "settings.region.locale.group": "Idioma del sistema y Teclado",
     "settings.region.locale.lang": "Idioma (Locale)",
     "settings.region.locale.lang.desc": "El cambio requiere reiniciar sesión",

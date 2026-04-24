@@ -11,6 +11,7 @@ export interface RegionSettings {
     dateFormat: DateFormat
     timezone: string
     showSeconds: boolean
+    weekStartsMonday: boolean
 }
 
 const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/region.json`
@@ -20,6 +21,12 @@ const DEFAULTS: RegionSettings = {
     dateFormat: "short",
     timezone: "",
     showSeconds: false,
+    weekStartsMonday: false,
+}
+
+// Apply LC_TIME so Gtk.Calendar picks up the right first-day-of-week
+function applyWeekLocale(monday: boolean) {
+    GLib.setenv("LC_TIME", monday ? "en_GB.UTF-8" : "en_US.UTF-8", true)
 }
 
 class RegionConfigManager extends GObject.Object {
@@ -36,9 +43,13 @@ class RegionConfigManager extends GObject.Object {
         super()
         this._settings = this.load()
 
-        // Detect current system timezone if not saved yet
         if (!this._settings.timezone) {
             this._settings.timezone = this.detectTimezone()
+        }
+
+        // Apply saved locale preference before any GTK widgets are created
+        if (this._settings.weekStartsMonday) {
+            applyWeekLocale(true)
         }
     }
 
@@ -76,10 +87,11 @@ class RegionConfigManager extends GObject.Object {
         return ""
     }
 
-    get timeFormat(): TimeFormat  { return this._settings.timeFormat }
-    get dateFormat(): DateFormat   { return this._settings.dateFormat }
-    get timezone(): string         { return this._settings.timezone }
-    get showSeconds(): boolean     { return this._settings.showSeconds ?? false }
+    get timeFormat(): TimeFormat      { return this._settings.timeFormat }
+    get dateFormat(): DateFormat      { return this._settings.dateFormat }
+    get timezone(): string            { return this._settings.timezone }
+    get showSeconds(): boolean        { return this._settings.showSeconds ?? false }
+    get weekStartsMonday(): boolean   { return this._settings.weekStartsMonday ?? false }
 
     setTimeFormat(v: TimeFormat) {
         if (this._settings.timeFormat === v) return
@@ -98,6 +110,14 @@ class RegionConfigManager extends GObject.Object {
     setShowSeconds(v: boolean) {
         if ((this._settings.showSeconds ?? false) === v) return
         this._settings.showSeconds = v
+        this.save()
+        this.emit("changed")
+    }
+
+    setWeekStartsMonday(v: boolean) {
+        if ((this._settings.weekStartsMonday ?? false) === v) return
+        this._settings.weekStartsMonday = v
+        applyWeekLocale(v)
         this.save()
         this.emit("changed")
     }
