@@ -10,6 +10,7 @@ import AudioPage from "./pages/Audio"
 import NetworkPage from "./pages/Network"
 import PowerPage from "./pages/Power"
 import DockPage from "./pages/Dock"
+import BarPage from "./pages/Bar"
 import RegionPage from "./pages/Region"
 import WidgetsPage from "./pages/Widgets"
 import AboutPage from "./pages/About"
@@ -86,6 +87,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "bluetooth",  label: t("settings.bluetooth.page.title.bluetooth"),        icon: "bluetooth-symbolic",                  component: BluetoothPage   },
         { id: "region",     label: t("settings.region.title"),                          icon: "preferences-system-time-symbolic",    component: RegionPage      },
         { id: "apps",       label: t("settings.apps.page.title.aplicaciones"),          icon: "application-x-executable-symbolic",   component: AppsPage        },
+        { id: "bar",        label: t("settings.bar.title"),                              icon: "panel-top-symbolic",                  component: BarPage         },
         { id: "dock",       label: t("settings.dock.page.title.dock"),                  icon: "dock-bottom-symbolic",                component: DockPage        },
         { id: "widgets",    label: t("settings.widgets.page.title.widgets"),            icon: "puzzle-piece-symbolic",               component: WidgetsPage     },
         { id: "autostart",  label: t("settings.autostart.page.title.inicio-automatico"), icon: "system-run-symbolic",               component: AutostartPage   },

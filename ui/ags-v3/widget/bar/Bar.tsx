@@ -25,6 +25,7 @@ import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
 import WorkspaceOverview from "../overview/WorkspaceOverview"
 import { execAsync } from "ags/process"
 import { t } from "../../core/i18n"
+import { barSettings, onBarSettingsChanged } from "./barState"
 
 function SystemMenuIcon(): Gtk.Widget {
   const icon = new Gtk.Image({ icon_name: "start-here-symbolic", pixel_size: 16, css_classes: ["bar-distro-icon"], margin_start: 14, margin_end: 14 })
@@ -370,9 +371,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   syncOverlays()
 
   const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 8 })
-  left.append(SystemMenuIcon())
-  left.append(AppTitle(monGeo.width))
+  const sysMenuWidget = SystemMenuIcon()
+  const appTitleWidget = AppTitle(monGeo.width)
+  sysMenuWidget.set_visible(barSettings.showSystemMenu)
+  appTitleWidget.set_visible(barSettings.showAppTitle)
+  left.append(sysMenuWidget)
+  left.append(appTitleWidget)
   const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER }); center.append(Workspaces())
+  center.set_visible(barSettings.showWorkspaces)
   const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 8 })
 
   const timeContent = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16 })
@@ -423,6 +429,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   right.append(SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
 
   barBox.set_start_widget(left); barBox.set_center_widget(center); barBox.set_end_widget(right)
+
+  onBarSettingsChanged((s) => {
+    sysMenuWidget.set_visible(s.showSystemMenu)
+    appTitleWidget.set_visible(s.showAppTitle)
+    center.set_visible(s.showWorkspaces)
+  })
 
   const monitorHeight = gdkmonitor.get_geometry().height
 
