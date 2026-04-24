@@ -11,6 +11,7 @@ import NetworkPage from "./pages/Network"
 import PowerPage from "./pages/Power"
 import DockPage from "./pages/Dock"
 import BarPage from "./pages/Bar"
+import NotificationsPage from "./pages/Notifications"
 import RegionPage from "./pages/Region"
 import WidgetsPage from "./pages/Widgets"
 import AboutPage from "./pages/About"
@@ -87,6 +88,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "bluetooth",  label: t("settings.bluetooth.page.title.bluetooth"),        icon: "bluetooth-symbolic",                  component: BluetoothPage   },
         { id: "region",     label: t("settings.region.title"),                          icon: "preferences-system-time-symbolic",    component: RegionPage      },
         { id: "apps",       label: t("settings.apps.page.title.aplicaciones"),          icon: "application-x-executable-symbolic",   component: AppsPage        },
+        { id: "notifications", label: t("settings.notif.title"),                        icon: "notifications-symbolic",              component: NotificationsPage },
         { id: "bar",        label: t("settings.bar.title"),                              icon: "panel-top-symbolic",                  component: BarPage         },
         { id: "dock",       label: t("settings.dock.page.title.dock"),                  icon: "dock-bottom-symbolic",                component: DockPage        },
         { id: "widgets",    label: t("settings.widgets.page.title.widgets"),            icon: "puzzle-piece-symbolic",               component: WidgetsPage     },

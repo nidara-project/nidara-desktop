@@ -34,6 +34,7 @@ import Bar from "./widget/bar/Bar"
 import Settings from "./widget/settings/Settings"
 import Theme from "./core/ThemeManager"
 import AboutWindow from "./widget/about/AboutWindow"
+import notifConfig from "./core/NotifConfig"
 
 console.log("[CRYSTAL_SHELL] Calling app.start()...");
 
@@ -42,6 +43,14 @@ app.start({
     main() {
     const randomId = Math.floor(Math.random() * 10000);
     console.log(`[CRYSTAL_SHELL] main() started! (ID: ${randomId})`);
+
+    // Apply notification DND default
+    if (notifConfig.dndDefault) {
+        import("gi://AstalNotifd").then(({ default: AstalNotifd }) => {
+            const notifd = AstalNotifd.get_default()
+            if (notifd) notifd.dont_disturb = true
+        }).catch(() => {})
+    }
 
     //  STABILIZATION: Set Hyprland rules
     import("ags/process").then(({ execAsync }) => {

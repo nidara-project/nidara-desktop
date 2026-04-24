@@ -5,6 +5,7 @@ import AstalNotifd from "gi://AstalNotifd"
 import GLib from "gi://GLib"
 import { NotificationCapsule } from "./NotificationCenter"
 import { dockSideState } from "../../widget/dock/state"
+import notifConfig from "../../core/NotifConfig"
 
 export function NotificationPopupsWidget() {
     const notifd = AstalNotifd.get_default()
@@ -40,7 +41,7 @@ export function NotificationPopupsWidget() {
         box.append(widget)
         notifMap.set(id, widget)
 
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 6000, () => {
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, notifConfig.popupTimeoutMs, () => {
             const w = notifMap.get(id)
             if (w && w.get_parent() === box) {
                 box.remove(w)
