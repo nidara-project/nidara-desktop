@@ -9,6 +9,8 @@ export default {
     "settings.input.mouse.accel.desc": "Comportamiento del puntero",
     "settings.input.mouse.accel.adaptive": "Adaptativa",
     "settings.input.mouse.accel.flat": "Plana",
+    "settings.input.mouse.natural": "Desplazamiento Natural",
+    "settings.input.mouse.natural.desc": "Desplazar en la dirección del movimiento del contenido",
 
     "settings.input.touchpad.group": "Touchpad",
     "settings.input.touchpad.natural": "Desplazamiento Natural",
@@ -21,6 +23,10 @@ export default {
     "settings.input.keyboard.numlock.desc": "Teclado numérico encendido por defecto",
     "settings.input.keyboard.layout": "Distribución del teclado",
     "settings.input.keyboard.layout.desc": "Layout de teclado activo en Hyprland",
+    "settings.input.keyboard.repeat-delay": "Retardo de Repetición",
+    "settings.input.keyboard.repeat-delay.desc": "Tiempo antes de que una tecla pulsada empiece a repetirse",
+    "settings.input.keyboard.repeat-rate": "Velocidad de Repetición",
+    "settings.input.keyboard.repeat-rate.desc": "Rapidez con la que se repite una tecla pulsada",
 
     "settings.region.title": "Idioma y Región",
     "settings.region.subtitle": "Formato de hora, fecha y zona horaria del sistema",

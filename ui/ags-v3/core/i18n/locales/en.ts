@@ -9,6 +9,8 @@ export default {
     "settings.input.mouse.accel.desc": "Pointer acceleration behavior",
     "settings.input.mouse.accel.adaptive": "Adaptive",
     "settings.input.mouse.accel.flat": "Flat",
+    "settings.input.mouse.natural": "Natural Scrolling",
+    "settings.input.mouse.natural.desc": "Scroll in the direction of content movement",
 
     "settings.input.touchpad.group": "Touchpad",
     "settings.input.touchpad.natural": "Natural Scrolling",
@@ -21,6 +23,10 @@ export default {
     "settings.input.keyboard.numlock.desc": "Enable numeric keypad by default",
     "settings.input.keyboard.layout": "Keyboard Layout",
     "settings.input.keyboard.layout.desc": "Active keyboard layout in Hyprland",
+    "settings.input.keyboard.repeat-delay": "Repeat Delay",
+    "settings.input.keyboard.repeat-delay.desc": "Time before a held key starts repeating",
+    "settings.input.keyboard.repeat-rate": "Repeat Rate",
+    "settings.input.keyboard.repeat-rate.desc": "How fast a held key repeats",
 
     "settings.region.title": "Language & Region",
     "settings.region.subtitle": "Time, date formats and system timezone",

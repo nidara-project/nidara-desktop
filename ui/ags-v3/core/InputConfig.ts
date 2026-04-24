@@ -14,11 +14,14 @@ class InputConfig extends GObject.Object {
 
     private _pointerSpeed = 0.0
     private _accelProfile = "adaptive"
+    private _mouseNaturalScroll = false
     private _touchpadNaturalScroll = false
     private _touchpadTap = true
     private _numlockOnBoot = false
     private _kbLayout = "us"
     private _kbVariant = ""
+    private _kbRepeatDelay = 600
+    private _kbRepeatRate = 25
 
     private initialized = false
 
@@ -29,11 +32,14 @@ class InputConfig extends GObject.Object {
 
     get pointerSpeed() { return this._pointerSpeed }
     get accelProfile() { return this._accelProfile }
+    get mouseNaturalScroll() { return this._mouseNaturalScroll }
     get touchpadNaturalScroll() { return this._touchpadNaturalScroll }
     get touchpadTap() { return this._touchpadTap }
     get numlockOnBoot() { return this._numlockOnBoot }
     get kbLayout() { return this._kbLayout }
     get kbVariant() { return this._kbVariant }
+    get kbRepeatDelay() { return this._kbRepeatDelay }
+    get kbRepeatRate() { return this._kbRepeatRate }
 
     // Parse options directly from Hyprland live state
     private async syncFromHyprland() {
@@ -45,6 +51,11 @@ class InputConfig extends GObject.Object {
         try {
             const out = await execAsync(["hyprctl", "getoption", "-j", "input:accel_profile"])
             this._accelProfile = JSON.parse(out).str || "adaptive"
+        } catch {}
+
+        try {
+            const out = await execAsync(["hyprctl", "getoption", "-j", "input:natural_scroll"])
+            this._mouseNaturalScroll = JSON.parse(out).int === 1
         } catch {}
 
         try {
@@ -72,6 +83,16 @@ class InputConfig extends GObject.Object {
             this._kbVariant = JSON.parse(out).str || ""
         } catch {}
 
+        try {
+            const out = await execAsync(["hyprctl", "getoption", "-j", "input:repeat_delay"])
+            this._kbRepeatDelay = JSON.parse(out).int || 600
+        } catch {}
+
+        try {
+            const out = await execAsync(["hyprctl", "getoption", "-j", "input:repeat_rate"])
+            this._kbRepeatRate = JSON.parse(out).int || 25
+        } catch {}
+
         this.initialized = true
         this.emit("changed")
     }
@@ -93,9 +114,12 @@ class InputConfig extends GObject.Object {
 input {
     sensitivity = ${this._pointerSpeed.toFixed(2)}
     accel_profile = ${this._accelProfile}
+    natural_scroll = ${this._mouseNaturalScroll}
     numlock_by_default = ${this._numlockOnBoot}
     kb_layout = ${this._kbLayout}
     kb_variant = ${this._kbVariant}
+    repeat_delay = ${this._kbRepeatDelay}
+    repeat_rate = ${this._kbRepeatRate}
 
     touchpad {
         natural_scroll = ${this._touchpadNaturalScroll}
@@ -127,6 +151,11 @@ input {
         this.applyAndSave("input:accel_profile", val)
     }
 
+    setMouseNaturalScroll(val: boolean) {
+        this._mouseNaturalScroll = val
+        this.applyAndSave("input:natural_scroll", val ? 1 : 0)
+    }
+
     setTouchpadNaturalScroll(val: boolean) {
         this._touchpadNaturalScroll = val
         this.applyAndSave("input:touchpad:natural_scroll", val ? 1 : 0)
@@ -140,6 +169,16 @@ input {
     setNumlockOnBoot(val: boolean) {
         this._numlockOnBoot = val
         this.applyAndSave("input:numlock_by_default", val ? 1 : 0)
+    }
+
+    setKbRepeatDelay(val: number) {
+        this._kbRepeatDelay = Math.round(val)
+        this.applyAndSave("input:repeat_delay", this._kbRepeatDelay)
+    }
+
+    setKbRepeatRate(val: number) {
+        this._kbRepeatRate = Math.round(val)
+        this.applyAndSave("input:repeat_rate", this._kbRepeatRate)
     }
 
     setKbLayout(layout: string, variant = "") {

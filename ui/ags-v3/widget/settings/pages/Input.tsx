@@ -29,6 +29,13 @@ export default function InputPage() {
         (v) => inputConfig.setAccelProfile(v)
     ))
 
+    mouseList.append(toggleRow(
+        t("settings.input.mouse.natural"),
+        t("settings.input.mouse.natural.desc"),
+        inputConfig.mouseNaturalScroll,
+        (v) => inputConfig.setMouseNaturalScroll(v)
+    ))
+
     mouseBox.append(mouseList)
     page.append(mouseBox)
 
@@ -109,6 +116,22 @@ export default function InputPage() {
         t("settings.input.keyboard.numlock.desc"),
         inputConfig.numlockOnBoot,
         (v) => inputConfig.setNumlockOnBoot(v)
+    ))
+
+    kbList.append(sliderRow(
+        t("settings.input.keyboard.repeat-delay"),
+        t("settings.input.keyboard.repeat-delay.desc"),
+        inputConfig.kbRepeatDelay, 100, 2000,
+        (v) => inputConfig.setKbRepeatDelay(v),
+        { unit: "ms" }
+    ))
+
+    kbList.append(sliderRow(
+        t("settings.input.keyboard.repeat-rate"),
+        t("settings.input.keyboard.repeat-rate.desc"),
+        inputConfig.kbRepeatRate, 1, 100,
+        (v) => inputConfig.setKbRepeatRate(v),
+        { unit: "/s" }
     ))
 
     kbBox.append(kbList)
