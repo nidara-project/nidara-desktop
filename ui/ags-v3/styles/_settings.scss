@@ -162,7 +162,7 @@ button.crystal-icon-btn {
         box-shadow: none;
     }
     &:disabled    { color: var(--crystal-text-disabled); }
-    &:focus-visible { outline: 1px solid var(--crystal-text-disabled); outline-offset: 1px; }
+    &:focus-visible { outline: 1px solid var(--crystal-accent); outline-offset: 1px; }
 }
 
 button.crystal-icon-btn.sidebar-toggle {
@@ -371,6 +371,32 @@ button.accent-circle-btn {
 .tz-status     { font-size: 0.8rem; font-weight: 500; transition: all 0.2s ease; }
 .tz-status-ok  { color: var(--crystal-success); }
 .tz-status-err { color: var(--crystal-danger); }
+
+// ── Button accent overrides ───────────────────────────────────────────────────
+// Adwaita's @accent_bg_color lives in its own CSS provider and isn't affected
+// by our @define-color overrides. Explicit rules here win via specificity.
+window.crystal-settings-window {
+    button.suggested-action,
+    button.suggested-action.pill {
+        background-color: var(--crystal-accent);
+        background-image: none;
+        color: var(--crystal-accent-fg);
+        box-shadow: none;
+
+        &:hover  { background-color: color-mix(in srgb, var(--crystal-accent) 85%, white 15%); }
+        &:active { background-color: color-mix(in srgb, var(--crystal-accent) 70%, black 30%); }
+    }
+
+    button:focus-visible {
+        outline-color: var(--crystal-accent);
+    }
+
+    // Dropdown selected highlight
+    popover > contents list row:selected {
+        background-color: var(--crystal-accent-10);
+        color: var(--crystal-accent);
+    }
+}
 
 // ── Wallpaper preview ─────────────────────────────────────────────────────────
 row.wallpaper-preview-row {

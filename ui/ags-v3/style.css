@@ -1666,7 +1666,7 @@ button.crystal-icon-btn:disabled {
   color: var(--crystal-text-disabled);
 }
 button.crystal-icon-btn:focus-visible {
-  outline: 1px solid var(--crystal-text-disabled);
+  outline: 1px solid var(--crystal-accent);
   outline-offset: 1px;
 }
 
@@ -1918,6 +1918,29 @@ button.accent-circle-btn.accent-slate {
 
 .tz-status-err {
   color: var(--crystal-danger);
+}
+
+window.crystal-settings-window button.suggested-action,
+window.crystal-settings-window button.suggested-action.pill {
+  background-color: var(--crystal-accent);
+  background-image: none;
+  color: var(--crystal-accent-fg);
+  box-shadow: none;
+}
+window.crystal-settings-window button.suggested-action:hover,
+window.crystal-settings-window button.suggested-action.pill:hover {
+  background-color: color-mix(in srgb, var(--crystal-accent) 85%, white 15%);
+}
+window.crystal-settings-window button.suggested-action:active,
+window.crystal-settings-window button.suggested-action.pill:active {
+  background-color: color-mix(in srgb, var(--crystal-accent) 70%, black 30%);
+}
+window.crystal-settings-window button:focus-visible {
+  outline-color: var(--crystal-accent);
+}
+window.crystal-settings-window popover > contents list row:selected {
+  background-color: var(--crystal-accent-10);
+  color: var(--crystal-accent);
 }
 
 row.wallpaper-preview-row {
