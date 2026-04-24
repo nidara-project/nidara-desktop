@@ -3,6 +3,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Theme from "../../../core/ThemeManager"
+import NightLight from "../../../core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
 import { ACCENT_PALETTE, type AccentKey } from "../../../core/FluidCrystal"
 import { t } from "../../../core/i18n"
@@ -55,7 +56,24 @@ export default function AppearancePage() {
     ))
     page.append(fcGroup.box)
 
-    // 3. Wallpaper
+    // 3. Night Light
+    const nlGroup = listGroup(t("settings.appearance.group.night-light"))
+    nlGroup.listBox.append(toggleRow(
+        t("settings.appearance.row.label.night-light"),
+        t("settings.appearance.row.desc.night-light"),
+        NightLight.enabled,
+        (v) => NightLight.setEnabled(v),
+    ))
+    nlGroup.listBox.append(sliderRow(
+        t("settings.appearance.row.label.night-light-temp"),
+        t("settings.appearance.row.desc.night-light-temp"),
+        NightLight.temperature, 2700, 6500,
+        (v) => NightLight.setTemperature(v),
+        { unit: "K", icons: ["weather-clear-night-symbolic", "weather-clear-symbolic"] },
+    ))
+    page.append(nlGroup.box)
+
+    // 4. Wallpaper
     const wallGroup = listGroup(t("settings.appearance.group.fondo-de-pantalla"))
 
     // Preview
@@ -142,7 +160,7 @@ export default function AppearancePage() {
     Wallpaper.connect("changed", () => updatePreview(Wallpaper.current))
     page.append(wallGroup.box)
 
-    // 4. System Assets
+    // 5. System Assets
     const assetsGroup = listGroup(t("settings.appearance.group.recursos-del-sistema"))
     assetsGroup.listBox.append(dropdownRow(
         t("settings.appearance.row.label.tema-gtk"), t("settings.appearance.row.desc.estetica-estructural-de-aplicaciones"),
@@ -161,6 +179,41 @@ export default function AppearancePage() {
         Theme.cursorTheme, Theme.getAvailableCursorThemes(), (v) => Theme.setCursorTheme(v),
     ))
     page.append(assetsGroup.box)
+
+    // 6. Fonts
+    const fontsGroup = listGroup(t("settings.appearance.group.fonts"))
+
+    const interfaceFontBtn = new Gtk.FontButton({
+        font: Theme.interfaceFont,
+        use_font: true,
+        valign: Gtk.Align.CENTER,
+    })
+    interfaceFontBtn.connect("font-set", () => {
+        const f = (interfaceFontBtn as any).get_font?.()
+        if (f) Theme.setFont(f)
+    })
+    fontsGroup.listBox.append(createRow(
+        t("settings.appearance.row.label.interface-font"),
+        t("settings.appearance.row.desc.interface-font"),
+        interfaceFontBtn,
+    ))
+
+    const monoFontBtn = new Gtk.FontButton({
+        font: Theme.monoFont,
+        use_font: true,
+        valign: Gtk.Align.CENTER,
+    })
+    monoFontBtn.connect("font-set", () => {
+        const f = (monoFontBtn as any).get_font?.()
+        if (f) Theme.setMonoFont(f)
+    })
+    fontsGroup.listBox.append(createRow(
+        t("settings.appearance.row.label.mono-font"),
+        t("settings.appearance.row.desc.mono-font"),
+        monoFontBtn,
+    ))
+
+    page.append(fontsGroup.box)
 
     // State sync
     const updateThemeState = () => {

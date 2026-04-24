@@ -94,6 +94,12 @@ export default {
     // Appearance
     "settings.appearance.group.diseno-base": "Base Style",
     "settings.appearance.group.fondo-de-pantalla": "Wallpaper",
+    "settings.appearance.group.fonts": "Fonts",
+    "settings.appearance.group.night-light": "Night Light",
+    "settings.appearance.row.label.night-light": "Night Light",
+    "settings.appearance.row.desc.night-light": "Reduce blue light in the evening",
+    "settings.appearance.row.label.night-light-temp": "Color Temperature",
+    "settings.appearance.row.desc.night-light-temp": "Lower values are warmer and easier on the eyes",
     "settings.appearance.group.recursos-del-sistema": "System Resources",
     "settings.appearance.label.explorar": "Browse...",
     "settings.appearance.page.subtitle.personaliza-el-alma-visual-de-tu-sistema": "Customize the visual style of your Crystal Shell",
@@ -118,6 +124,10 @@ export default {
     "settings.appearance.row.label.transparencia-profunda": "Deep Transparency",
     "settings.appearance.dialog.title.seleccionar-fondo-de-pantalla": "Select wallpaper",
     "settings.appearance.filter.imagenes": "Images",
+    "settings.appearance.row.label.interface-font": "Interface Font",
+    "settings.appearance.row.desc.interface-font": "Font used in the shell and GTK apps",
+    "settings.appearance.row.label.mono-font": "Monospace Font",
+    "settings.appearance.row.desc.mono-font": "Font for terminals and code editors",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Random",

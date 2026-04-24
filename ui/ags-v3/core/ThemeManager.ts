@@ -206,6 +206,12 @@ class ThemeManager extends GObject.Object {
     get tintPanels() { return this.fcConfig.tintPanels }
     get qtTheme() { return this.fcConfig.qtTheme }
     get accentPalette() { return ACCENT_PALETTE }
+    get interfaceFont(): string {
+        try { return this.interfaceSettings.get_string("font-name") } catch (_) { return "Sans 11" }
+    }
+    get monoFont(): string {
+        try { return this.interfaceSettings.get_string("monospace-font-name") } catch (_) { return "Monospace 11" }
+    }
 
     // ── Actions ──────────────────────────────────────────────────────
 
@@ -236,6 +242,17 @@ class ThemeManager extends GObject.Object {
     async setQtTheme(theme: string) {
         this.fcConfig.qtTheme = theme
         this.saveSettings(true)
+        this.emit("changed")
+    }
+
+    async setFont(fontName: string) {
+        await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "font-name", fontName])
+        if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
+        this.emit("changed")
+    }
+
+    async setMonoFont(fontName: string) {
+        await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "monospace-font-name", fontName])
         this.emit("changed")
     }
 
@@ -376,8 +393,7 @@ class ThemeManager extends GObject.Object {
     }
 
     private updateSettingsIni(theme: string) {
-        // Only write standard properties; legacy dark-mode toggle is handled by Adw/GSettings
-        const ini = `[Settings]\ngtk-theme-name=${theme}\ngtk-icon-theme-name=${this.state.iconTheme}\ngtk-font-name=Inter 11\n`
+        const ini = `[Settings]\ngtk-theme-name=${theme}\ngtk-icon-theme-name=${this.state.iconTheme}\ngtk-font-name=${this.interfaceFont}\n`
         for (const d of ["gtk-3.0", "gtk-4.0"]) {
             writeFile(`${GLib.get_user_config_dir()}/${d}/settings.ini`, ini)
         }

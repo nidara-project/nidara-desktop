@@ -92,6 +92,12 @@ export default {
     "settings.about.label.cerrar": "Cerrar",
     "settings.appearance.group.diseno-base": "Diseño Base",
     "settings.appearance.group.fondo-de-pantalla": "Fondo de Pantalla",
+    "settings.appearance.group.fonts": "Fuentes",
+    "settings.appearance.group.night-light": "Luz Nocturna",
+    "settings.appearance.row.label.night-light": "Luz Nocturna",
+    "settings.appearance.row.desc.night-light": "Reduce la luz azul al anochecer",
+    "settings.appearance.row.label.night-light-temp": "Temperatura de Color",
+    "settings.appearance.row.desc.night-light-temp": "Valores más bajos son más cálidos y descansan la vista",
     "settings.appearance.group.recursos-del-sistema": "Recursos del Sistema",
     "settings.appearance.label.explorar": "Explorar...",
     "settings.appearance.page.subtitle.personaliza-el-alma-visual-de-tu-sistema": "Personaliza el alma visual de tu sistema Crystal Shell",
@@ -116,6 +122,10 @@ export default {
     "settings.appearance.row.label.transparencia-profunda": "Transparencia Profunda",
     "settings.appearance.dialog.title.seleccionar-fondo-de-pantalla": "Seleccionar fondo de pantalla",
     "settings.appearance.filter.imagenes": "Imágenes",
+    "settings.appearance.row.label.interface-font": "Fuente de Interfaz",
+    "settings.appearance.row.desc.interface-font": "Fuente usada en el shell y apps GTK",
+    "settings.appearance.row.label.mono-font": "Fuente Monoespaciada",
+    "settings.appearance.row.desc.mono-font": "Fuente para terminales y editores de código",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Aleatoria",

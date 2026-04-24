@@ -80,7 +80,7 @@ sudo pacman -Sy --needed --noconfirm \
     jq slurp grim wl-clipboard mesa pam \
     git nodejs npm gjs go \
     accountsservice greetd pavucontrol rust cargo \
-    hyprland hypridle uwsm \
+    hyprland hypridle hyprsunset uwsm \
     kitty nautilus dolphin thunar \
     polkit-gnome \
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland \
