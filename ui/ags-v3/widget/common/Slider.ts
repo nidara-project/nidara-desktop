@@ -163,6 +163,9 @@ export function makeHSlider(opts: {
         triggerChange()
     })
 
+    const themeSignalId = Theme.connect("changed", () => da.queue_draw())
+    overlay.connect("unrealize", () => { try { Theme.disconnect(themeSignalId) } catch {} })
+
     if (onExtChange) {
         const cleanup = onExtChange((v) => {
             if (GLib.get_monotonic_time() < ignoreUntil) return
