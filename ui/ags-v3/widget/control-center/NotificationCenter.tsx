@@ -10,6 +10,7 @@ import status from "../../core/Status"
 import { dockSideState } from "../../widget/dock/state"
 import { t } from "../../core/i18n"
 import regionConfig from "../../core/RegionConfig"
+import { MiniCalendar } from "../common/MiniCalendar"
 
 export function createIconWidget(n: AstalNotifd.Notification, size: number) {
     const entry = n.desktop_entry || n.app_name || ""
@@ -116,25 +117,19 @@ export default function NotificationCenter() {
     dockSideState.subscribe(() => { listContainer.margin_end = dockSideState.position === 'right' ? dockSideState.width : 0 })
     scroll.set_child(listContainer)
 
-    const calendarSlot = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
-    const buildCalendar = () => {
-        while (calendarSlot.get_first_child()) calendarSlot.get_first_child()!.unparent()
-        calendarSlot.append(SquircleContainer({
-            child: new Gtk.Calendar({ hexpand: true, css_classes: ["nc-calendar-widget"] }),
-            radius: 32, gloss: true, alpha: 0.15,
-            borderColor: { r: 1, g: 1, b: 1, a: 0.05 },
-            css_classes: ["cc-island", "nc-calendar-island"],
-        }))
-    }
-    buildCalendar()
-    const regionSigId = regionConfig.connect("changed", buildCalendar)
+    const calendarIsland = SquircleContainer({
+        child: MiniCalendar(),
+        radius: 32, gloss: true, alpha: 0.15,
+        borderColor: { r: 1, g: 1, b: 1, a: 0.05 },
+        css_classes: ["cc-island", "nc-calendar-island"],
+    })
     const spacer = new Gtk.Box({ height_request: 24 })
     const emptyLabel = new Gtk.Label({ label: t("nc.empty"), css_classes: ["nc-empty"], margin_top: 64, halign: Gtk.Align.CENTER, visible: false })
     const pillBox = new Gtk.Box({ halign: Gtk.Align.CENTER, height_request: 40, margin_top: 32, margin_bottom: 40, visible: false })
     const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: t("nc.clear-all"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, alpha: 0.2, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => notifd.notifications.forEach(n => n.dismiss()), css_classes: ["nc-clear-all-pill"] })
     pillBox.append(clearAllBtn)
 
-    listContainer.append(calendarSlot); listContainer.append(spacer); listContainer.append(emptyLabel)
+    listContainer.append(calendarIsland); listContainer.append(spacer); listContainer.append(emptyLabel)
     const notificationItemsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
     listContainer.append(notificationItemsBox); listContainer.append(pillBox)
 
@@ -192,7 +187,6 @@ export default function NotificationCenter() {
     status.connect("notify::nc-open", () => { if (!status.nc_open) { expandedGroups.clear(); updateNotifs() } else { updateNotifs() } })
     notifd.connect("notified", () => updateNotifs())
     notifd.connect("resolved", () => updateNotifs())
-    scroll.connect("unrealize", () => { try { regionConfig.disconnect(regionSigId) } catch {} })
     updateNotifs()
     return scroll
 }

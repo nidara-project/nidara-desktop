@@ -218,6 +218,16 @@ export default function RegionPage() {
         (v) => regionConfig.setWeekStartsMonday(v),
     ))
     calBox.append(calList)
+
+    const calInfoLabel = new Gtk.Label({
+        label: t("settings.region.calendar.external-note"),
+        css_classes: ["settings-row-subtitle"],
+        halign: Gtk.Align.START,
+        margin_start: 4,
+        margin_top: 4,
+        wrap: true,
+    })
+    calBox.append(calInfoLabel)
     page.append(calBox)
 
     // ── Idioma del sistema y Teclado ──────────────────────────────────────────

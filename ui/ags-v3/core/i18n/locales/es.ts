@@ -64,6 +64,7 @@ export default {
     "settings.region.calendar.group": "Calendario",
     "settings.region.calendar.monday-first": "La semana empieza el lunes",
     "settings.region.calendar.monday-first.desc": "Se aplica al calendario del centro de notificaciones",
+    "settings.region.calendar.external-note": "En otras apps (ej. GNOME Calendar), el cambio requiere reiniciar sesión.",
 
     "settings.region.locale.group": "Idioma del sistema y Teclado",
     "settings.region.locale.lang": "Idioma (Locale)",

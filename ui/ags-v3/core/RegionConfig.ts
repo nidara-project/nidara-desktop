@@ -24,9 +24,23 @@ const DEFAULTS: RegionSettings = {
     weekStartsMonday: false,
 }
 
-// Apply LC_TIME so Gtk.Calendar picks up the right first-day-of-week
-function applyWeekLocale(monday: boolean) {
-    GLib.setenv("LC_TIME", monday ? "en_GB.UTF-8" : "en_US.UTF-8", true)
+// Write LC_TIME to the systemd user environment so external apps pick it up
+// after re-login. Does NOT affect the running process (glibc locale is frozen).
+function persistWeekLocale(monday: boolean) {
+    const dir = `${GLib.get_home_dir()}/.config/environment.d`
+    const file = `${dir}/crystal-locale.conf`
+    try {
+        if (monday) {
+            if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
+                GLib.mkdir_with_parents(dir, 0o755)
+            writeFile(file, "LC_TIME=en_GB.UTF-8\n")
+        } else {
+            if (GLib.file_test(file, GLib.FileTest.EXISTS))
+                GLib.unlink(file)
+        }
+    } catch (e) {
+        console.error("[RegionConfig] persistWeekLocale failed:", e)
+    }
 }
 
 class RegionConfigManager extends GObject.Object {
@@ -47,10 +61,8 @@ class RegionConfigManager extends GObject.Object {
             this._settings.timezone = this.detectTimezone()
         }
 
-        // Apply saved locale preference before any GTK widgets are created
-        if (this._settings.weekStartsMonday) {
-            applyWeekLocale(true)
-        }
+        // Ensure the environment.d file matches the saved preference at startup
+        persistWeekLocale(this._settings.weekStartsMonday ?? false)
     }
 
     private load(): RegionSettings {
@@ -117,7 +129,7 @@ class RegionConfigManager extends GObject.Object {
     setWeekStartsMonday(v: boolean) {
         if ((this._settings.weekStartsMonday ?? false) === v) return
         this._settings.weekStartsMonday = v
-        applyWeekLocale(v)
+        persistWeekLocale(v)
         this.save()
         this.emit("changed")
     }
