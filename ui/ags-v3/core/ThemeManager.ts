@@ -256,6 +256,16 @@ class ThemeManager extends GObject.Object {
         this.emit("changed")
     }
 
+    get textScaling(): number {
+        try { return this.interfaceSettings.get_double("text-scaling-factor") } catch (_) { return 1.0 }
+    }
+
+    async setTextScaling(factor: number) {
+        const rounded = Math.round(factor * 100) / 100
+        await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "text-scaling-factor", String(rounded)])
+        this.emit("changed")
+    }
+
     async setDarkMode(dark: boolean) {
         this.state.isDark = dark
         const scheme = dark ? "prefer-dark" : "prefer-light"

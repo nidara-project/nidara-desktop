@@ -136,12 +136,15 @@ export const sliderRow = (
     min: number,
     max: number,
     cb: (v: number) => void,
-    opts: { unit?: string; icons?: [string, string]; pct?: boolean } = {},
+    opts: { unit?: string; icons?: [string, string]; pct?: boolean; decimals?: number } = {},
 ) => {
-    const { unit = "", icons, pct = false } = opts
+    const { unit = "", icons, pct = false, decimals } = opts
 
-    const formatVal = (v: number) =>
-        pct ? `${Math.round(v * 100)}%` : `${Math.round(v)}${unit}`
+    const formatVal = (v: number) => {
+        if (pct) return `${Math.round(v * 100)}%`
+        if (decimals !== undefined) return `${v.toFixed(decimals)}${unit}`
+        return `${Math.round(v)}${unit}`
+    }
 
     const container = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
 

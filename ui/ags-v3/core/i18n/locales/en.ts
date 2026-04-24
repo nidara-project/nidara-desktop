@@ -134,6 +134,8 @@ export default {
     "settings.appearance.row.desc.interface-font": "Font used in the shell and GTK apps",
     "settings.appearance.row.label.mono-font": "Monospace Font",
     "settings.appearance.row.desc.mono-font": "Font for terminals and code editors",
+    "settings.appearance.row.label.text-scaling": "Text Scaling",
+    "settings.appearance.row.desc.text-scaling": "Scale factor applied to all text system-wide",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Random",

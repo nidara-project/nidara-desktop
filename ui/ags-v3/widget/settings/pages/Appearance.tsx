@@ -213,6 +213,14 @@ export default function AppearancePage() {
         monoFontBtn,
     ))
 
+    fontsGroup.listBox.append(sliderRow(
+        t("settings.appearance.row.label.text-scaling"),
+        t("settings.appearance.row.desc.text-scaling"),
+        Theme.textScaling, 0.75, 2.0,
+        (v) => Theme.setTextScaling(v),
+        { decimals: 2, icons: ["font-x-generic-symbolic", "font-x-generic-symbolic"] },
+    ))
+
     page.append(fontsGroup.box)
 
     // State sync
