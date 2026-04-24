@@ -279,6 +279,7 @@ class ThemeManager extends GObject.Object {
         this.fcConfig.accent = accent
         this.ensureProvidersLinked()
         this.themeProvider.load_from_string(generateTokensCss(this.fcConfig, this.state.isDark))
+        execAsync(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", accent]).catch(() => {})
         this.schedulePersistence()
         this.emit("changed")
     }
@@ -409,7 +410,8 @@ class ThemeManager extends GObject.Object {
         if (settings.get_string("cursor-theme") !== this.state.cursorTheme) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", this.state.cursorTheme])
         const target = this.state.isDark ? "prefer-dark" : "prefer-light"
         if (settings.get_string("color-scheme") !== target) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", target])
-        
+        if (settings.get_string("accent-color") !== this.fcConfig.accent) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", this.fcConfig.accent]).catch(() => {})
+
         this._isReady = true
         this.emit("ready")
         console.log("[ThemeManager] Global Styles READY! ")
@@ -475,6 +477,8 @@ class ThemeManager extends GObject.Object {
             this.state.isDark = s.get_string("color-scheme") === "prefer-dark"
             const gtk = s.get_string("gtk-theme")
             if (gtk) this.state.themeFamily = gtk
+            const sysAccent = s.get_string("accent-color") as AccentKey
+            if (sysAccent && sysAccent in ACCENT_PALETTE) this.fcConfig.accent = sysAccent
         } catch (e) { }
     }
 }
