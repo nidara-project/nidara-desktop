@@ -147,6 +147,9 @@ export default {
     "settings.users.other.pw2":           "Confirm Password",
     "settings.users.other.pw2.placeholder": "Repeat password",
     "settings.users.other.err.pwmatch":   "Passwords do not match",
+    "settings.users.other.err.pw":        "Failed to change password.",
+    "settings.users.other.pw.change":     "Change Password",
+    "settings.users.other.pw.apply":      "Apply",
 
     // About
     "settings.about.group.crystal-shell": "Crystal Shell",

@@ -143,7 +143,7 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
 
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
     const cancelBtn = new Gtk.Button({ label: t("settings.users.other.cancel") })
-    const createBtn = new Gtk.Button({ label: t("settings.users.other.create"), css_classes: ["suggested-action"] })
+    const createBtn = new Gtk.Button({ label: t("settings.users.other.create"), css_classes: ["suggested-action"], sensitive: false })
     btnRow.append(cancelBtn)
     btnRow.append(createBtn)
 
@@ -156,22 +156,25 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
     box.append(btnRow)
     dialog.set_child(box)
 
+    const validateCreate = () => {
+        const uname = unameEntry.text.trim()
+        const pw  = pwEntry.text
+        const pw2 = pw2Entry.text
+        createBtn.sensitive = uname.length > 0 && pw.length > 0 && pw === pw2
+        if (pw2.length > 0 && pw !== pw2) {
+            statusLabel.label = t("settings.users.other.err.pwmatch"); statusLabel.visible = true
+        } else { statusLabel.visible = false }
+    }
+    unameEntry.connect("notify::text", validateCreate)
+    pwEntry.connect("notify::text",    validateCreate)
+    pw2Entry.connect("notify::text",   validateCreate)
+
     cancelBtn.connect("clicked", () => dialog.close())
 
     createBtn.connect("clicked", () => {
         const uname = unameEntry.text.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "")
         const fname = nameEntry.text.trim()
         const pw    = pwEntry.text
-        const pw2   = pw2Entry.text
-
-        if (!uname) {
-            statusLabel.label = t("settings.users.other.err.username")
-            statusLabel.visible = true; return
-        }
-        if (pw !== pw2) {
-            statusLabel.label = t("settings.users.other.err.pwmatch")
-            statusLabel.visible = true; return
-        }
 
         createBtn.sensitive = false
         statusLabel.visible = false
@@ -181,17 +184,7 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
             : ["pkexec", "useradd", "-m", "-c", fname, uname]
 
         execAsync(addCmd).then(() => {
-            if (!pw) {
-                // No password — account is locked until admin sets one
-                dialog.close()
-                onCreated()
-                return
-            }
-            // Set password via chpasswd over stdin (avoids password in args/ps)
-            const proc = Gio.Subprocess.new(
-                ["pkexec", "chpasswd"],
-                Gio.SubprocessFlags.STDIN_PIPE,
-            )
+            const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
             proc.communicate_utf8_async(`${uname}:${pw}\n`, null, (_: any, res: any) => {
                 try { proc.communicate_utf8_finish(res) } catch (e) {
                     console.error("[Users] chpasswd:", e)
@@ -204,6 +197,79 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
             statusLabel.label = t("settings.users.other.err.create")
             statusLabel.visible = true
             createBtn.sensitive = true
+        })
+    })
+
+    dialog.present()
+}
+
+// ── "Change password" dialog ──────────────────────────────────────────────────
+
+function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null) {
+    const dialog = new Gtk.Window({
+        title: `${t("settings.users.other.pw.change")} — ${user.displayName}`,
+        modal: true,
+        transient_for: parentWin ?? undefined,
+        resizable: false,
+        default_width: 360,
+    })
+
+    const box = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 12,
+        margin_start: 24, margin_end: 24,
+        margin_top: 24, margin_bottom: 24,
+    })
+
+    const field = (label: string, widget: Gtk.Widget) => {
+        const vbox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+        vbox.append(new Gtk.Label({ label, halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
+        vbox.append(widget)
+        return vbox
+    }
+
+    const pwEntry  = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true })
+    const pw2Entry = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true })
+
+    const statusLabel = new Gtk.Label({ label: "", css_classes: ["settings-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
+
+    const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
+    const cancelBtn = new Gtk.Button({ label: t("settings.users.other.cancel") })
+    const applyBtn  = new Gtk.Button({ label: t("settings.users.other.pw.apply"), css_classes: ["suggested-action"], sensitive: false })
+    btnRow.append(cancelBtn)
+    btnRow.append(applyBtn)
+
+    const validate = () => {
+        const pw = pwEntry.text; const pw2 = pw2Entry.text
+        applyBtn.sensitive = pw.length > 0 && pw === pw2
+        if (pw2.length > 0 && pw !== pw2) {
+            statusLabel.label = t("settings.users.other.err.pwmatch"); statusLabel.visible = true
+        } else { statusLabel.visible = false }
+    }
+    pwEntry.connect("notify::text",  validate)
+    pw2Entry.connect("notify::text", validate)
+
+    box.append(field(t("settings.users.other.pw"),  pwEntry))
+    box.append(field(t("settings.users.other.pw2"), pw2Entry))
+    box.append(statusLabel)
+    box.append(btnRow)
+    dialog.set_child(box)
+
+    cancelBtn.connect("clicked", () => dialog.close())
+
+    applyBtn.connect("clicked", () => {
+        const pw = pwEntry.text
+        applyBtn.sensitive = false
+        statusLabel.visible = false
+
+        const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
+        proc.communicate_utf8_async(`${user.username}:${pw}\n`, null, (_: any, res: any) => {
+            try { proc.communicate_utf8_finish(res); dialog.close() } catch (e) {
+                console.error("[Users] chpasswd:", e)
+                statusLabel.label = t("settings.users.other.err.pw")
+                statusLabel.visible = true
+                applyBtn.sensitive = true
+            }
         })
     })
 
@@ -245,6 +311,14 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
         return false
     })
 
+    const pwBtn = new Gtk.Button({
+        child: new Gtk.Image({ icon_name: "dialog-password-symbolic", pixel_size: 14 }),
+        css_classes: ["crystal-icon-btn"],
+        valign: Gtk.Align.CENTER,
+        tooltip_text: t("settings.users.other.pw.change"),
+    })
+    pwBtn.connect("clicked", () => showChangePasswordDialog(user, parentWin))
+
     const deleteBtn = new Gtk.Button({
         child: new Gtk.Image({ icon_name: "user-trash-symbolic", pixel_size: 14 }),
         css_classes: ["crystal-icon-btn"],
@@ -274,6 +348,7 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
     inner.append(nameBox)
     inner.append(adminBadge)
     inner.append(adminToggle)
+    inner.append(pwBtn)
     inner.append(deleteBtn)
 
     const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
