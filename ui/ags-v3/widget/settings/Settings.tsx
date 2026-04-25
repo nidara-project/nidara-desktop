@@ -19,6 +19,9 @@ import InputPage from "./pages/Input"
 import AppsPage from "./pages/Apps"
 import BluetoothPage from "./pages/Bluetooth"
 import AutostartPage from "./pages/Autostart"
+import DefaultAppsPage from "./pages/DefaultApps"
+import AccessibilityPage from "./pages/Accessibility"
+import UsersPage from "./pages/Users"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
 
@@ -80,6 +83,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
 
     const categories = [
+        { id: "users",       label: t("settings.users.title"),                           icon: "system-users-symbolic",               component: UsersPage       },
         { id: "appearance", label: t("settings.appearance.page.title.apariencia"),      icon: "preferences-desktop-theme-symbolic",  component: AppearancePage },
         { id: "display",    label: t("settings.display.page.title.pantalla"),           icon: "video-display-symbolic",              component: DisplayPage     },
         { id: "audio",      label: t("settings.audio.page.title.sonido"),               icon: "audio-speakers-symbolic",             component: AudioPage       },
@@ -88,6 +92,8 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "bluetooth",  label: t("settings.bluetooth.page.title.bluetooth"),        icon: "bluetooth-symbolic",                  component: BluetoothPage   },
         { id: "region",     label: t("settings.region.title"),                          icon: "preferences-system-time-symbolic",    component: RegionPage      },
         { id: "apps",       label: t("settings.apps.page.title.aplicaciones"),          icon: "application-x-executable-symbolic",   component: AppsPage        },
+        { id: "defaultapps", label: t("settings.defaultapps.title"),                   icon: "preferences-desktop-default-applications-symbolic", component: DefaultAppsPage },
+        { id: "accessibility", label: t("settings.accessibility.title"),               icon: "preferences-desktop-accessibility-symbolic", component: AccessibilityPage },
         { id: "notifications", label: t("settings.notif.title"),                        icon: "notifications-symbolic",              component: NotificationsPage },
         { id: "bar",        label: t("settings.bar.title"),                              icon: "panel-top-symbolic",                  component: BarPage         },
         { id: "dock",       label: t("settings.dock.page.title.dock"),                  icon: "dock-bottom-symbolic",                component: DockPage        },

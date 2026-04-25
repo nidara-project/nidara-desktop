@@ -398,6 +398,13 @@ window.crystal-settings-window {
     }
 }
 
+// ── User avatar ───────────────────────────────────────────────────────────────
+image.users-avatar {
+    border-radius: $crystal-radius-pill;
+    border: 2px solid var(--crystal-border);
+    background: var(--crystal-surface);
+}
+
 // ── Wallpaper preview ─────────────────────────────────────────────────────────
 row.wallpaper-preview-row {
     padding: 12px;

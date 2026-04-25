@@ -1943,6 +1943,12 @@ window.crystal-settings-window popover > contents list row:selected {
   color: var(--crystal-accent);
 }
 
+image.users-avatar {
+  border-radius: var(--crystal-radius-pill);
+  border: 2px solid var(--crystal-border);
+  background: var(--crystal-surface);
+}
+
 row.wallpaper-preview-row {
   padding: 12px;
 }
