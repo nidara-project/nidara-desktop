@@ -110,9 +110,9 @@ export default function NotificationCenter() {
     const expandedGroups = new Set<string>()
     const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string }>()
 
-    const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vscrollbar_policy: Gtk.PolicyType.AUTOMATIC, vexpand: true, css_classes: ["nc-scroll", "nc-transparent-scroll"] })
-    const listContainer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["nc-content-box"], margin_top: 0, margin_bottom: 40, margin_end: dockSideState.position === 'right' ? dockSideState.width : 0, halign: Gtk.Align.END, width_request: 450 })
-    dockSideState.subscribe(() => { listContainer.margin_end = dockSideState.position === 'right' ? dockSideState.width : 0 })
+    const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vscrollbar_policy: Gtk.PolicyType.AUTOMATIC, vexpand: true, width_request: 450, css_classes: ["nc-scroll", "nc-transparent-scroll"] })
+    const listContainer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["nc-content-box"], margin_top: 0, margin_bottom: 40 })
+    // Dock-on-right: push NC away from dock by increasing outer margin (handled in Bar.tsx via dockSideState)
     scroll.set_child(listContainer)
 
     const calendarIsland = SquircleContainer({

@@ -26,6 +26,7 @@ import WorkspaceOverview from "../overview/WorkspaceOverview"
 import { execAsync } from "ags/process"
 import { t } from "../../core/i18n"
 import { barSettings, onBarSettingsChanged } from "./barState"
+import { dockSideState } from "../dock/state"
 
 function SystemMenuIcon(): Gtk.Widget {
   const icon = new Gtk.Image({ icon_name: "start-here-symbolic", pixel_size: 16, css_classes: ["bar-distro-icon"], margin_start: 14, margin_end: 14 })
@@ -286,7 +287,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     const margin = Math.round(monGeo.width - iconCenter - CC_WIDTH / 2)
     cc.margin_end = Math.max(16, margin)
   }
-  nc.margin_top = 56; nc.margin_end = 16
+  nc.margin_top = 56
+  const syncNcMargin = () => { nc.margin_end = 16 + (dockSideState.position === 'right' ? dockSideState.width : 0) }
+  syncNcMargin()
+  dockSideState.subscribe(syncNcMargin)
   prism.margin_top = 0
   popups.margin_top = 56; popups.margin_end = 16
 
