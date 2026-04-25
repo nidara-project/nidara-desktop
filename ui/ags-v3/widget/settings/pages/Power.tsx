@@ -27,7 +27,7 @@ const parseHypridle = (): IdleConfig => {
         }
         return {
             screenOff: blocks.find(b => b.onTimeout.includes("dpms off"))?.timeout ?? 0,
-            lock:      blocks.find(b => b.onTimeout.includes("crystal-lock") || b.onTimeout.includes("lock-session") || b.onTimeout.includes("hyprlock"))?.timeout ?? 0,
+            lock:      blocks.find(b => b.onTimeout.includes("crystal-lock") || b.onTimeout.includes("lock-session"))?.timeout ?? 0,
             suspend:   blocks.find(b => b.onTimeout.includes("suspend"))?.timeout ?? 0,
         }
     } catch {
