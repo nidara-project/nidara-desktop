@@ -213,7 +213,7 @@ function SystemMenuOverlay() {
     valign: Gtk.Align.START,
     halign: Gtk.Align.START,
     margin_top: 56,
-    margin_start: 8,
+    margin_start: 16,
     visible: false,
   })
   outerBox.append(squircleWrapper)
@@ -274,7 +274,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   popups.valign = Gtk.Align.START; popups.halign = Gtk.Align.END
   overview.valign = Gtk.Align.CENTER; overview.halign = Gtk.Align.CENTER
 
-  cc.margin_top = 56; cc.margin_end = 8
+  cc.margin_top = 56; cc.margin_end = 16
 
   const CC_WIDTH = 356
   const centerCCUnderIcon = () => {
@@ -284,11 +284,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     if (!ok) return
     const iconCenter = tx + alloc.width / 2
     const margin = Math.round(monGeo.width - iconCenter - CC_WIDTH / 2)
-    cc.margin_end = Math.max(8, margin)
+    cc.margin_end = Math.max(16, margin)
   }
-  nc.margin_top = 56; nc.margin_end = 8
+  nc.margin_top = 56; nc.margin_end = 16
   prism.margin_top = 0
-  popups.margin_top = 56; popups.margin_end = 12
+  popups.margin_top = 56; popups.margin_end = 16
 
   // NC height: leave room for bar (40px) + dock (92px) + safety margin
   const maxH = monGeo.height - 160 // 40 (Bar) + 92 (Dock) + 28 (Safety)
