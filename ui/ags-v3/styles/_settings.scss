@@ -405,6 +405,22 @@ image.users-avatar {
     background: var(--crystal-surface);
 }
 
+image.users-avatar-sm {
+    border-radius: $crystal-radius-pill;
+    border: 1px solid var(--crystal-border);
+    background: var(--crystal-surface);
+}
+
+.users-admin-badge {
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--crystal-accent);
+    background: var(--crystal-accent-10);
+    border-radius: $crystal-radius-pill;
+    padding: 2px 8px;
+    margin-end: 4px;
+}
+
 // ── Wallpaper preview ─────────────────────────────────────────────────────────
 row.wallpaper-preview-row {
     padding: 12px;
