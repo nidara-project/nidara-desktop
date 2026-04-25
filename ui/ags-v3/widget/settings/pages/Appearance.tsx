@@ -101,11 +101,6 @@ export default function AppearancePage() {
             adjustment: new Gtk.Adjustment({ lower: 0, upper: 59, step_increment: 1, value: im }),
             width_chars: 2, wrap: true, numeric: true, digits: 0,
         })
-        // Leading-zero display
-        const fmt = (spin: Gtk.SpinButton) => {
-            spin.connect("output", () => { spin.text = String(spin.value_as_int).padStart(2, "0"); return true })
-        }
-        fmt(hSpin); fmt(mSpin)
         const emit = () => {
             const h = String(hSpin.value_as_int).padStart(2, "0")
             const m = String(mSpin.value_as_int).padStart(2, "0")
