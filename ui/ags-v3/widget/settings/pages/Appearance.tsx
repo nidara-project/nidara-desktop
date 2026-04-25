@@ -58,12 +58,16 @@ export default function AppearancePage() {
 
     // 3. Night Light
     const nlGroup = listGroup(t("settings.appearance.group.night-light"))
-    nlGroup.listBox.append(toggleRow(
+
+    // Manual toggle — insensitive when schedule controls it
+    const nlSwitch = new Gtk.Switch({ active: NightLight.enabled, valign: Gtk.Align.CENTER, sensitive: !NightLight.scheduleEnabled })
+    nlSwitch.connect("state-set", (_: any, v: boolean) => { NightLight.setEnabled(v); return false })
+    nlGroup.listBox.append(createRow(
         t("settings.appearance.row.label.night-light"),
         t("settings.appearance.row.desc.night-light"),
-        NightLight.enabled,
-        (v) => NightLight.setEnabled(v),
+        nlSwitch,
     ))
+
     nlGroup.listBox.append(sliderRow(
         t("settings.appearance.row.label.night-light-temp"),
         t("settings.appearance.row.desc.night-light-temp"),
@@ -71,6 +75,77 @@ export default function AppearancePage() {
         (v) => NightLight.setTemperature(v),
         { unit: "K", icons: ["weather-clear-night-symbolic", "weather-clear-symbolic"] },
     ))
+
+    // Schedule toggle
+    const schedSwitch = new Gtk.Switch({ active: NightLight.scheduleEnabled, valign: Gtk.Align.CENTER })
+    schedSwitch.connect("state-set", (_: any, v: boolean) => {
+        NightLight.setScheduleEnabled(v)
+        nlSwitch.sensitive = !v
+        schedTimeRow.visible = v
+        return false
+    })
+    nlGroup.listBox.append(createRow(
+        t("settings.appearance.row.label.night-light-schedule"),
+        t("settings.appearance.row.desc.night-light-schedule"),
+        schedSwitch,
+    ))
+
+    // Time pickers helper
+    const timePicker = (initial: string, onChange: (t: string) => void) => {
+        const [ih, im] = initial.split(":").map(Number)
+        const hSpin = new Gtk.SpinButton({
+            adjustment: new Gtk.Adjustment({ lower: 0, upper: 23, step_increment: 1, value: ih }),
+            width_chars: 2, wrap: true, numeric: true, digits: 0,
+        })
+        const mSpin = new Gtk.SpinButton({
+            adjustment: new Gtk.Adjustment({ lower: 0, upper: 59, step_increment: 1, value: im }),
+            width_chars: 2, wrap: true, numeric: true, digits: 0,
+        })
+        // Leading-zero display
+        const fmt = (spin: Gtk.SpinButton) => {
+            spin.connect("output", () => { spin.text = String(spin.value_as_int).padStart(2, "0"); return true })
+        }
+        fmt(hSpin); fmt(mSpin)
+        const emit = () => {
+            const h = String(hSpin.value_as_int).padStart(2, "0")
+            const m = String(mSpin.value_as_int).padStart(2, "0")
+            onChange(`${h}:${m}`)
+        }
+        hSpin.connect("value-changed", emit)
+        mSpin.connect("value-changed", emit)
+        const box = new Gtk.Box({ spacing: 2, valign: Gtk.Align.CENTER })
+        box.append(hSpin)
+        box.append(new Gtk.Label({ label: ":", css_classes: ["settings-row-label"] }))
+        box.append(mSpin)
+        return box
+    }
+
+    const schedTimeBox = new Gtk.Box({ spacing: 24, valign: Gtk.Align.CENTER })
+
+    const fromBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+    fromBox.append(new Gtk.Label({ label: t("settings.appearance.row.label.night-light-from"), halign: Gtk.Align.START, css_classes: ["settings-row-subtitle"] }))
+    fromBox.append(timePicker(NightLight.scheduleFrom, (v) => NightLight.setScheduleFrom(v)))
+
+    const toBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+    toBox.append(new Gtk.Label({ label: t("settings.appearance.row.label.night-light-to"), halign: Gtk.Align.START, css_classes: ["settings-row-subtitle"] }))
+    toBox.append(timePicker(NightLight.scheduleTo, (v) => NightLight.setScheduleTo(v)))
+
+    schedTimeBox.append(fromBox)
+    schedTimeBox.append(toBox)
+
+    const schedTimeRow = createRow("", "", schedTimeBox)
+    schedTimeRow.visible = NightLight.scheduleEnabled
+    nlGroup.listBox.append(schedTimeRow)
+
+    // Keep manual toggle in sync when schedule fires
+    const nlChangedId = NightLight.connect("changed", () => {
+        nlSwitch.active    = NightLight.enabled
+        nlSwitch.sensitive = !NightLight.scheduleEnabled
+        schedSwitch.active = NightLight.scheduleEnabled
+        schedTimeRow.visible = NightLight.scheduleEnabled
+    })
+    page.connect("unrealize", () => { try { NightLight.disconnect(nlChangedId) } catch {} })
+
     page.append(nlGroup.box)
 
     // 4. Wallpaper
