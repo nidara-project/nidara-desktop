@@ -1955,6 +1955,21 @@ image.users-avatar-sm {
   background: var(--crystal-surface);
 }
 
+button.settings-action-row {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+}
+button.settings-action-row:hover {
+  background: var(--crystal-surface);
+}
+button.settings-action-row:active {
+  background: var(--crystal-surface-active);
+}
+
 .users-admin-badge {
   font-size: 0.7rem;
   font-weight: 600;

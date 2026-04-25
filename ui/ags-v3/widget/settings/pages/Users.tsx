@@ -340,13 +340,18 @@ export default function UsersPage() {
             others.forEach(u => otherList.append(buildUserRow(u, parentWin, rebuildOtherUsers)))
         }
 
-        // Add User row
-        const addRow = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+        // Add User row — uses a flat Button so click always works regardless of SelectionMode
+        const addBtn = new Gtk.Button({
+            css_classes: ["settings-action-row"],
+            hexpand: true,
+        })
         const addInner = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
         addInner.append(new Gtk.Image({ icon_name: "list-add-symbolic", pixel_size: 16, opacity: 0.7 }))
         addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["settings-row-label"], halign: Gtk.Align.START }))
-        addRow.set_child(addInner)
-        addRow.connect("activate", () => showAddUserDialog(parentWin, rebuildOtherUsers))
+        addBtn.set_child(addInner)
+        addBtn.connect("clicked", () => showAddUserDialog(parentWin, rebuildOtherUsers))
+        const addRow = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+        addRow.set_child(addBtn)
         otherList.append(addRow)
     }
     rebuildOtherUsers()
