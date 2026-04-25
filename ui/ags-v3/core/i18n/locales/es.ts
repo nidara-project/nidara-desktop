@@ -212,7 +212,7 @@ export default {
     "settings.apps.label.nombre-de-icono-del-tema": "Nombre de icono del tema",
     "settings.apps.label.restaurar": "Restaurar",
     "settings.apps.page.subtitle.personaliza-los-iconos-de-las-aplicacion": "Personaliza los iconos de las aplicaciones instaladas",
-    "settings.apps.page.title.aplicaciones": "Aplicaciones",
+    "settings.apps.page.title.aplicaciones": "Iconos de Apps",
     "settings.apps.tooltip.cambiar-icono": "Cambiar icono",
     "settings.apps.tooltip.eliminar-el-override-y-volver-al-icono-d": "Eliminar el override y volver al icono del tema",
     "settings.apps.badge.override": "override",

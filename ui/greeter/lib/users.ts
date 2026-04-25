@@ -24,10 +24,14 @@ export function getUsers(): User[] {
       const gecos = parts[4] ?? ""
       const displayName = gecos.split(",")[0] || username
 
-      const avatarPath = `/var/lib/AccountsService/icons/${username}`
-      const hasAvatar = GLib.file_test(avatarPath, GLib.FileTest.EXISTS)
+      const homeDir = parts[5] ?? ""
+      const accountsAvatar = `/var/lib/AccountsService/icons/${username}`
+      const faceAvatar     = `${homeDir}/.face`
+      const avatarPath = GLib.file_test(accountsAvatar, GLib.FileTest.EXISTS) ? accountsAvatar
+                       : GLib.file_test(faceAvatar,     GLib.FileTest.EXISTS) ? faceAvatar
+                       : null
 
-      users.push({ username, displayName, avatarPath: hasAvatar ? avatarPath : null })
+      users.push({ username, displayName, avatarPath })
     }
 
     return users

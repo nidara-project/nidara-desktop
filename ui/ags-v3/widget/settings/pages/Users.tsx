@@ -1,4 +1,4 @@
-import { Gtk, Gdk } from "ags/gtk4"
+import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import { execAsync } from "ags/process"
@@ -14,8 +14,37 @@ function getDisplayName(): string {
 }
 
 function getAvatarPath(): string | null {
+    const accounts = `/var/lib/AccountsService/icons/${GLib.get_user_name()}`
+    const face     = `${GLib.get_home_dir()}/.face`
+    if (GLib.file_test(accounts, GLib.FileTest.EXISTS)) return accounts
+    if (GLib.file_test(face,     GLib.FileTest.EXISTS)) return face
+    return null
+}
+
+// Write avatar to ~/.face and try to register it in AccountsService via D-Bus.
+// AccountsService handles the polkit prompt itself.
+function saveAvatar(srcPath: string): Promise<void> {
     const face = `${GLib.get_home_dir()}/.face`
-    return GLib.file_test(face, GLib.FileTest.EXISTS) ? face : null
+    return execAsync(["cp", srcPath, face]).then(() => {
+        try {
+            const bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, null)
+            const accountsResult = bus.call_sync(
+                "org.freedesktop.Accounts", "/org/freedesktop/Accounts",
+                "org.freedesktop.Accounts", "FindUserByName",
+                new GLib.Variant("(s)", [GLib.get_user_name()]),
+                new GLib.VariantType("(o)"), Gio.DBusCallFlags.NONE, 2000, null,
+            )
+            const userPath = accountsResult.get_child_value(0).get_string()[0]
+            bus.call_sync(
+                "org.freedesktop.Accounts", userPath,
+                "org.freedesktop.Accounts.User", "SetIconFile",
+                new GLib.Variant("(s)", [face]),
+                null, Gio.DBusCallFlags.NONE, 5000, null,
+            )
+        } catch {
+            // AccountsService not available — ~/.face fallback is enough
+        }
+    })
 }
 
 function spawnTerminalWithCommand(cmd: string) {
@@ -85,12 +114,12 @@ export default function UsersPage() {
                 const file = dialog.open_finish(result)
                 const src  = file?.get_path()
                 if (!src) return
-                const dest = `${GLib.get_home_dir()}/.face`
-                execAsync(["cp", src, dest]).then(() => {
+                saveAvatar(src).then(() => {
+                    const dest = `${GLib.get_home_dir()}/.face`
                     try { avatarImg.set_from_file(dest) } catch {
                         avatarImg.icon_name = "avatar-default-symbolic"
                     }
-                }).catch(e => console.error("[Users] copy avatar:", e))
+                }).catch(e => console.error("[Users] save avatar:", e))
             } catch { /* cancelled */ }
         })
     })
