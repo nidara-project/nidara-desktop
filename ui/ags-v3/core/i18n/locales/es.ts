@@ -142,6 +142,11 @@ export default {
     "settings.users.other.delete.confirm.body":  "¿Eliminar permanentemente la cuenta y carpeta personal de",
     "settings.users.other.err.username":  "Introduce un nombre de usuario válido",
     "settings.users.other.err.create":    "No se pudo crear el usuario. Comprueba los permisos.",
+    "settings.users.other.pw":            "Contraseña",
+    "settings.users.other.pw.placeholder": "Dejar en blanco para cuenta bloqueada",
+    "settings.users.other.pw2":           "Confirmar contraseña",
+    "settings.users.other.pw2.placeholder": "Repite la contraseña",
+    "settings.users.other.err.pwmatch":   "Las contraseñas no coinciden",
 
     // --- extracted by extract-i18n.mjs ---
     "settings.about.group.crystal-shell": "Crystal Shell",

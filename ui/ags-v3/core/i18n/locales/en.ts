@@ -142,6 +142,11 @@ export default {
     "settings.users.other.delete.confirm.body":  "Permanently delete the account and home folder for",
     "settings.users.other.err.username":  "Please enter a valid username",
     "settings.users.other.err.create":    "Failed to create user. Check permissions.",
+    "settings.users.other.pw":            "Password",
+    "settings.users.other.pw.placeholder": "Leave blank for locked account",
+    "settings.users.other.pw2":           "Confirm Password",
+    "settings.users.other.pw2.placeholder": "Repeat password",
+    "settings.users.other.err.pwmatch":   "Passwords do not match",
 
     // About
     "settings.about.group.crystal-shell": "Crystal Shell",

@@ -110,36 +110,47 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
         modal: true,
         transient_for: parentWin ?? undefined,
         resizable: false,
-        default_width: 360,
+        default_width: 380,
     })
 
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
-        spacing: 16,
+        spacing: 12,
         margin_start: 24, margin_end: 24,
         margin_top: 24, margin_bottom: 24,
     })
 
-    const nameEntry = new Gtk.Entry({ placeholder_text: t("settings.users.other.fullname.placeholder"), hexpand: true })
-    const unameEntry = new Gtk.Entry({ placeholder_text: t("settings.users.other.username.placeholder"), hexpand: true })
+    const field = (label: string, widget: Gtk.Widget) => {
+        const vbox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+        vbox.append(new Gtk.Label({ label, halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
+        vbox.append(widget)
+        return vbox
+    }
 
-    const adminRow = new Gtk.Box({ spacing: 12 })
+    const nameEntry  = new Gtk.Entry({ placeholder_text: t("settings.users.other.fullname.placeholder"), hexpand: true })
+    const unameEntry = new Gtk.Entry({ placeholder_text: t("settings.users.other.username.placeholder"), hexpand: true })
+    const pwEntry    = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true,
+        placeholder_text: t("settings.users.other.pw.placeholder") })
+    const pw2Entry   = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true,
+        placeholder_text: t("settings.users.other.pw2.placeholder") })
+
+    const adminRow = new Gtk.Box({ spacing: 12, margin_top: 4 })
     adminRow.append(new Gtk.Label({ label: t("settings.users.other.admin"), hexpand: true, halign: Gtk.Align.START }))
     const adminSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER })
     adminRow.append(adminSwitch)
 
-    const statusLabel = new Gtk.Label({ label: "", css_classes: ["settings-row-subtitle"], halign: Gtk.Align.START, visible: false })
+    const statusLabel = new Gtk.Label({ label: "", css_classes: ["settings-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
 
-    const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END })
+    const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
     const cancelBtn = new Gtk.Button({ label: t("settings.users.other.cancel") })
     const createBtn = new Gtk.Button({ label: t("settings.users.other.create"), css_classes: ["suggested-action"] })
     btnRow.append(cancelBtn)
     btnRow.append(createBtn)
 
-    box.append(new Gtk.Label({ label: t("settings.users.other.fullname"), halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
-    box.append(nameEntry)
-    box.append(new Gtk.Label({ label: t("settings.users.other.username"), halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
-    box.append(unameEntry)
+    box.append(field(t("settings.users.other.fullname"), nameEntry))
+    box.append(field(t("settings.users.other.username"), unameEntry))
+    box.append(field(t("settings.users.other.pw"),  pwEntry))
+    box.append(field(t("settings.users.other.pw2"), pw2Entry))
     box.append(adminRow)
     box.append(statusLabel)
     box.append(btnRow)
@@ -150,19 +161,44 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
     createBtn.connect("clicked", () => {
         const uname = unameEntry.text.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "")
         const fname = nameEntry.text.trim()
-        if (!uname) { statusLabel.label = t("settings.users.other.err.username"); statusLabel.visible = true; return }
+        const pw    = pwEntry.text
+        const pw2   = pw2Entry.text
+
+        if (!uname) {
+            statusLabel.label = t("settings.users.other.err.username")
+            statusLabel.visible = true; return
+        }
+        if (pw !== pw2) {
+            statusLabel.label = t("settings.users.other.err.pwmatch")
+            statusLabel.visible = true; return
+        }
 
         createBtn.sensitive = false
         statusLabel.visible = false
 
-        const cmd = adminSwitch.active
+        const addCmd = adminSwitch.active
             ? ["pkexec", "useradd", "-m", "-G", "wheel", "-c", fname, uname]
             : ["pkexec", "useradd", "-m", "-c", fname, uname]
 
-        execAsync(cmd).then(() => {
-            dialog.close()
-            onCreated()
-            spawnTerminalWithCommand(`pkexec passwd ${uname}; echo; read -p "${t("settings.users.password.done")}"`)
+        execAsync(addCmd).then(() => {
+            if (!pw) {
+                // No password — account is locked until admin sets one
+                dialog.close()
+                onCreated()
+                return
+            }
+            // Set password via chpasswd over stdin (avoids password in args/ps)
+            const proc = Gio.Subprocess.new(
+                ["pkexec", "chpasswd"],
+                Gio.SubprocessFlags.STDIN_PIPE,
+            )
+            proc.communicate_utf8_async(`${uname}:${pw}\n`, null, (_: any, res: any) => {
+                try { proc.communicate_utf8_finish(res) } catch (e) {
+                    console.error("[Users] chpasswd:", e)
+                }
+                dialog.close()
+                onCreated()
+            })
         }).catch(e => {
             console.error("[Users] useradd:", e)
             statusLabel.label = t("settings.users.other.err.create")
