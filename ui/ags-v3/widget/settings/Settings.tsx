@@ -296,7 +296,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     const syncSidebarSelection = (pageId: string) => {
         isProgrammaticNav = true
         for (let i = 0; i < categories.length; i++) {
-            const row = sidebar.get_row_at_index(i)
+            const row = sidebar.get_row_at_index(i + 1) // +1: spacer row is prepended at index 0
             if (row?.get_name() === pageId) { sidebar.select_row(row); break }
         }
         isProgrammaticNav = false
