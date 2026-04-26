@@ -27,32 +27,11 @@ window#crystal-settings-window {
     box-shadow: var(--crystal-shadow-lg);
 }
 
-// ── Adw.OverlaySplitView internal cleanup ─────────────────────────────────────
-window.crystal-settings-window {
-    #settings-splitview, .crystal-split-view {
-        background-color: transparent;
-
-        stack, bin, viewport, navigationview,
-        box:not(.navigation-capsule):not(.header-start-box) {
-            background-color: transparent;
-            border: none;
-            box-shadow: none;
-            outline: none;
-        }
-
-        // Hide Adwaita's built-in sidebar separator
-        separator, .sidebar-separator, > separator, > border {
-            background: transparent;
-            min-width: 0;
-            min-height: 0;
-            opacity: 0;
-            margin: 0;
-            padding: 0;
-            border: none;
-        }
-
-        > * { border: none; box-shadow: none; outline: none; }
-    }
+// ── Adw.OverlaySplitView cleanup ──────────────────────────────────────────────
+#settings-splitview {
+    background: transparent;
+    border: none;
+    box-shadow: none;
 }
 
 // ── Sidebar panel ─────────────────────────────────────────────────────────────
@@ -204,8 +183,6 @@ button.crystal-icon-btn.sidebar-toggle {
         outline: none;
     }
 
-    focus-ring { box-shadow: none; }
-
     > text {
         background: transparent;
         color: var(--crystal-text);
@@ -226,24 +203,8 @@ stack.settings-stack {
     box-shadow: none;
 
     > viewport { background: transparent; border: none; }
-
-    > scrollbar.vertical {
-        background: transparent;
-        border: none;
-        padding: 4px 2px;
-
-        > trough {
-            background: transparent;
-            border-radius: $crystal-radius-pill;
-        }
-        > trough > slider {
-            background: var(--crystal-surface-active);
-            border-radius: $crystal-radius-pill;
-            min-width: 5px;
-            &:hover { background: var(--crystal-surface-raised); }
-        }
-    }
 }
+
 
 // ── Page typography ───────────────────────────────────────────────────────────
 .settings-page {
@@ -273,34 +234,25 @@ stack.settings-stack {
 }
 
 // ── Settings list cards ───────────────────────────────────────────────────────
-window.crystal-settings-window list.boxed-list,
-window.crystal-settings-window list.settings-list-box {
-    background-color: var(--crystal-surface-back);
+list.settings-list-box {
+    background: var(--crystal-surface-back);
     border: 1px solid var(--crystal-border);
     border-radius: $crystal-radius-md;
-    padding: 2px;
+    padding: 3px;
     box-shadow: none;
     margin-bottom: 24px;
 
-    label.settings-row-label { color: var(--crystal-text); }
-
-    row.settings-item-row, row {
-        background-color: transparent;
-        padding: 2px 0;
+    row.settings-item-row {
+        background: transparent;
         border: none;
-        border-radius: 0;
-        transition: background 0.15s ease;
         box-shadow: none;
+        border-radius: $crystal-radius-sm;
+        margin: 1px 0;
+        transition: background 0.15s ease;
 
-        &:hover { background-color: var(--crystal-surface); }
-
-        // Inset divider between consecutive rows
-        & + row { box-shadow: inset 0 1px 0 var(--crystal-border); }
-
-        // Round only the outer corners to match the card radius
-        &:first-child { border-radius: $crystal-radius-md $crystal-radius-md 0 0; }
-        &:last-child  { border-radius: 0 0 $crystal-radius-md $crystal-radius-md; }
-        &:only-child  { border-radius: $crystal-radius-md; }
+        &:hover  { background: var(--crystal-surface-hover); }
+        &:active { background: var(--crystal-surface-active); }
+        &:selected { background: transparent; }
     }
 }
 
@@ -313,6 +265,28 @@ window.crystal-settings-window list.settings-list-box {
 .settings-row-subtitle {
     font-size: 0.8rem;
     color: var(--crystal-text-dim);
+}
+
+// ── Time spin buttons ─────────────────────────────────────────────────────────
+spinbutton.time-spin {
+    background: var(--crystal-surface);
+    border: 1px solid var(--crystal-border);
+    border-radius: var(--crystal-radius-sm);
+    box-shadow: none;
+    min-height: 32px;
+
+    text { min-width: 28px; }
+
+    button {
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        min-width: 18px;
+        padding: 0;
+        color: var(--crystal-text-dim);
+
+        &:hover { color: var(--crystal-text); background: var(--crystal-surface-hover); }
+    }
 }
 
 // ── Accent color pickers ──────────────────────────────────────────────────────
@@ -389,12 +363,6 @@ window.crystal-settings-window {
 
     button:focus-visible {
         outline-color: var(--crystal-accent);
-    }
-
-    // Dropdown selected highlight
-    popover > contents list row:selected {
-        background-color: var(--crystal-accent-10);
-        color: var(--crystal-accent);
     }
 }
 

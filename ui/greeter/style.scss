@@ -6,14 +6,15 @@
   font-family: "Inter", sans-serif;
   color: rgba(255, 255, 255, 0.92);
 
-  // Design tokens (same as shell)
-  --crystal-accent:     #0088FF;
-  --crystal-accent-rgb: 0, 136, 255;
-  --crystal-border:     rgba(255, 255, 255, 0.12);
-  --crystal-surface:    rgba(255, 255, 255, 0.08);
-  --crystal-radius-lg:  24px;
-  --crystal-radius-md:  16px;
-  --crystal-radius-sm:  10px;
+  // Design tokens (same as shell; accent overridden at runtime in lock screen)
+  --crystal-accent:      #0088FF;
+  --crystal-accent-rgb:  0, 136, 255;
+  --crystal-border:      rgba(255, 255, 255, 0.12);
+  --crystal-surface:     rgba(255, 255, 255, 0.08);
+  --crystal-danger:      #ff6b6b;
+  --crystal-radius-lg:   24px;
+  --crystal-radius-md:   16px;
+  --crystal-radius-sm:   10px;
   --crystal-radius-pill: 9999px;
 }
 
@@ -100,9 +101,9 @@ passwordentry.greeter-password {
 
 .greeter-password:focus,
 passwordentry.greeter-password:focus {
-  border-color: rgba(var(--crystal-accent-rgb, 0, 136, 255), 0.5);
+  border-color: rgba(var(--crystal-accent-rgb), 0.5);
   background: rgba(255, 255, 255, 0.09);
-  box-shadow: 0 0 0 3px rgba(0, 136, 255, 0.12);
+  box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.12);
 }
 
 .greeter-password > text,
@@ -137,14 +138,16 @@ passwordentry.greeter-password > button {
   margin-top: 4px;
 
   &:hover {
-    background: #1a96ff;
+    background: color-mix(in srgb, var(--crystal-accent) 85%, white 15%);
     box-shadow: none;
   }
 
-  &:active { background: #006ecc; }
+  &:active {
+    background: color-mix(in srgb, var(--crystal-accent) 70%, black 30%);
+  }
 
   &:disabled {
-    background: rgba(0, 136, 255, 0.25);
+    background: rgba(var(--crystal-accent-rgb), 0.25);
     color: rgba(255, 255, 255, 0.4);
     box-shadow: none;
   }
@@ -225,14 +228,14 @@ popover.background {
       min-height: 0;
 
       &:hover    { background: rgba(255, 255, 255, 0.08); color: #fff; }
-      &:selected { background: rgba(99, 179, 237, 0.18);   color: #fff; }
+      &:selected { background: rgba(var(--crystal-accent-rgb), 0.18); color: #fff; }
     }
   }
 }
 
 // ── Error message ──────────────────────────────────────────────────────────
 .greeter-error {
-  color: #ff6b6b;
+  color: var(--crystal-danger);
   font-size: 0.82rem;
   margin-top: 4px;
 }

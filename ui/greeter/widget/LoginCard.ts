@@ -5,6 +5,7 @@ import GLib from "gi://GLib"
 import AstalGreet from "gi://AstalGreet"
 import { getSessions } from "../lib/sessions"
 import { getDefaultUser } from "../lib/users"
+import { t } from "../lib/i18n"
 
 // Wrap GIO-style async AstalGreet.login as a Promise
 function greetLogin(username: string, password: string, cmd: string): Promise<void> {
@@ -60,7 +61,7 @@ export default function LoginCard(): Gtk.Widget {
 
   // ── Password entry ────────────────────────────────────────────────────────────
   const passwordEntry = new Gtk.PasswordEntry({
-    placeholder_text: "Contraseña",
+    placeholder_text: t("password"),
     show_peek_icon: true,
     css_classes: ["greeter-password"],
     hexpand: true,
@@ -68,7 +69,7 @@ export default function LoginCard(): Gtk.Widget {
 
   // ── Login button ──────────────────────────────────────────────────────────────
   const loginBtn = new Gtk.Button({
-    label: "Iniciar sesión",
+    label: t("login"),
     css_classes: ["greeter-login-btn"],
     hexpand: true,
   })
@@ -94,7 +95,7 @@ export default function LoginCard(): Gtk.Widget {
     loginBtn.sensitive = !loading
     passwordEntry.sensitive = !loading
     sessionDropdown.sensitive = !loading
-    loginBtn.label = loading ? "Autenticando…" : "Iniciar sesión"
+    loginBtn.label = loading ? t("authenticating") : t("login")
   }
 
   const showError = (msg: string) => {
@@ -113,7 +114,7 @@ export default function LoginCard(): Gtk.Widget {
     if (!password) { passwordEntry.grab_focus(); return }
 
     const session = sessions[sessionIdx]
-    if (!session) { showError("No hay sesión disponible"); return }
+    if (!session) { showError(t("noSession")); return }
 
     setLoading(true)
     errorLabel.visible = false
@@ -124,7 +125,7 @@ export default function LoginCard(): Gtk.Widget {
     } catch (e: any) {
       const msg = String(e?.message ?? e)
       console.error("[Greeter] login error:", msg)
-      showError(msg.toLowerCase().includes("auth") ? "Contraseña incorrecta" : "Error al iniciar sesión")
+      showError(msg.toLowerCase().includes("auth") ? t("wrongPassword") : t("loginError"))
       passwordEntry.set_text("")
       passwordEntry.grab_focus()
       setLoading(false)

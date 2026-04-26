@@ -7,6 +7,7 @@
   --crystal-accent-rgb: 0, 136, 255;
   --crystal-border: rgba(255, 255, 255, 0.12);
   --crystal-surface: rgba(255, 255, 255, 0.08);
+  --crystal-danger: #ff6b6b;
   --crystal-radius-lg: 24px;
   --crystal-radius-md: 16px;
   --crystal-radius-sm: 10px;
@@ -85,9 +86,9 @@ passwordentry.greeter-password {
 
 .greeter-password:focus,
 passwordentry.greeter-password:focus {
-  border-color: rgba(var(--crystal-accent-rgb, 0, 136, 255), 0.5);
+  border-color: rgba(var(--crystal-accent-rgb), 0.5);
   background: rgba(255, 255, 255, 0.09);
-  box-shadow: 0 0 0 3px rgba(0, 136, 255, 0.12);
+  box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.12);
 }
 
 .greeter-password > text,
@@ -123,14 +124,14 @@ passwordentry.greeter-password > button:hover {
   margin-top: 4px;
 }
 .greeter-login-btn:hover {
-  background: #1a96ff;
+  background: color-mix(in srgb, var(--crystal-accent) 85%, white 15%);
   box-shadow: none;
 }
 .greeter-login-btn:active {
-  background: #006ecc;
+  background: color-mix(in srgb, var(--crystal-accent) 70%, black 30%);
 }
 .greeter-login-btn:disabled {
-  background: rgba(0, 136, 255, 0.25);
+  background: rgba(var(--crystal-accent-rgb), 0.25);
   color: rgba(255, 255, 255, 0.4);
   box-shadow: none;
 }
@@ -202,12 +203,12 @@ popover.background listview > row:hover {
   color: #fff;
 }
 popover.background listview > row:selected {
-  background: rgba(99, 179, 237, 0.18);
+  background: rgba(var(--crystal-accent-rgb), 0.18);
   color: #fff;
 }
 
 .greeter-error {
-  color: #ff6b6b;
+  color: var(--crystal-danger);
   font-size: 0.82rem;
   margin-top: 4px;
 }

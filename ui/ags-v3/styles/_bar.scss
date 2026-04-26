@@ -26,7 +26,6 @@
     background-color: transparent;
     border: none;
     margin-top: 8px;
-    /* INTERNAL TOP MARGIN */
 }
 
 /* --- Left/Center/Right capsules --- */
@@ -176,7 +175,6 @@
     background: transparent;
     border: none;
     box-shadow: none;
-    padding: 6px;
     color: var(--crystal-text);
     -gtk-icon-palette: success white, warning white, error white;
 }

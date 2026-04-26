@@ -366,38 +366,3 @@ window.nc-window-2 {
     }
 }
 
-/* --- Crystal Scrollbar --- */
-scrollbar.nc-transparent-scroll {
-    background: transparent;
-    border: none;
-    
-    & contents, & trough {
-        background: transparent;
-        border: none;
-    }
-    
-    & slider {
-        min-width: 3px;
-        min-height: 20px;
-        background: var(--crystal-surface);
-        border-radius: 20px;
-        margin-right: 2px;
-        transition: all 0.3s ease;
-
-        &:hover {
-            background: var(--crystal-surface-raised);
-            min-width: 6px;
-        }
-    }
-    
-    &.vertical slider {
-        margin-left: 10px;
-    }
-}
-
-/* Remove default scrollbar buttons */
-scrollbar button {
-    opacity: 0;
-    min-width: 0;
-    min-height: 0;
-}

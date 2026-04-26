@@ -4,6 +4,7 @@ import GLib from "gi://GLib"
 // @ts-ignore
 import AstalAuth from "gi://AstalAuth"
 import { getDefaultUser } from "../lib/users"
+import { t } from "../lib/i18n"
 
 export default function LockCard(): Gtk.Widget {
   const user = getDefaultUser()
@@ -38,7 +39,7 @@ export default function LockCard(): Gtk.Widget {
 
   // ── Password entry ────────────────────────────────────────────────────────
   const passwordEntry = new Gtk.PasswordEntry({
-    placeholder_text: "Contraseña",
+    placeholder_text: t("password"),
     show_peek_icon: true,
     css_classes: ["greeter-password"],
     hexpand: true,
@@ -46,7 +47,7 @@ export default function LockCard(): Gtk.Widget {
 
   // ── Unlock button ─────────────────────────────────────────────────────────
   const unlockBtn = new Gtk.Button({
-    label: "Desbloquear",
+    label: t("unlock"),
     css_classes: ["greeter-login-btn"],
     hexpand: true,
   })
@@ -56,7 +57,7 @@ export default function LockCard(): Gtk.Widget {
     isAuthenticating = loading
     unlockBtn.sensitive = !loading
     passwordEntry.sensitive = !loading
-    unlockBtn.label = loading ? "Verificando…" : "Desbloquear"
+    unlockBtn.label = loading ? t("unlocking") : t("unlock")
   }
 
   const showError = (msg: string) => {
@@ -87,7 +88,7 @@ export default function LockCard(): Gtk.Widget {
 
     pam.connect("fail", (_: any, msg: string) => {
       console.error("[Lock] auth fail:", msg)
-      showError("Contraseña incorrecta")
+      showError(t("wrongPassword"))
       passwordEntry.set_text("")
       passwordEntry.grab_focus()
       setLoading(false)

@@ -40,7 +40,7 @@ export const listGroup = (title: string) => {
     }
 
     const listBox = new Gtk.ListBox({
-        css_classes: ["settings-list-box", "boxed-list"],
+        css_classes: ["settings-list-box"],
         selection_mode: Gtk.SelectionMode.NONE,
     })
 

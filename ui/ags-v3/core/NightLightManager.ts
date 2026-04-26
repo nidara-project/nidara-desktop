@@ -27,11 +27,11 @@ class NightLightManager extends GObject.Object {
         super()
         this._load()
         if (this._scheduleEnabled) {
-            this._checkSchedule()
+            // Always recompute from current time — don't trust the saved _enabled value
+            this._enabled = this._isInSchedule()
             this._startScheduleTimer()
-        } else if (this._enabled) {
-            this._spawn()
         }
+        if (this._enabled) this._spawn()
     }
 
     get enabled()         { return this._enabled }
@@ -160,11 +160,12 @@ class NightLightManager extends GObject.Object {
         try {
             if (GLib.file_test(CONFIG_PATH, GLib.FileTest.EXISTS)) {
                 const d = JSON.parse(readFile(CONFIG_PATH))
+                const validTime = (t: unknown) => typeof t === "string" && /^\d{2}:\d{2}$/.test(t)
                 this._enabled         = d.enabled         ?? false
                 this._temperature     = d.temperature     ?? DEFAULT_TEMP
                 this._scheduleEnabled = d.scheduleEnabled ?? false
-                this._scheduleFrom    = d.scheduleFrom    ?? "20:00"
-                this._scheduleTo      = d.scheduleTo      ?? "07:00"
+                this._scheduleFrom    = validTime(d.scheduleFrom) ? d.scheduleFrom : "20:00"
+                this._scheduleTo      = validTime(d.scheduleTo)   ? d.scheduleTo   : "07:00"
             }
         } catch (_) {}
     }

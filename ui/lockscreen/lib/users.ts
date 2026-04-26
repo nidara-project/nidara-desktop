@@ -4,6 +4,7 @@ export interface User {
   username: string
   displayName: string
   avatarPath: string | null
+  homeDir: string
 }
 
 export function getUsers(): User[] {
@@ -31,7 +32,7 @@ export function getUsers(): User[] {
                        : GLib.file_test(faceAvatar,     GLib.FileTest.EXISTS) ? faceAvatar
                        : null
 
-      users.push({ username, displayName, avatarPath })
+      users.push({ username, displayName, avatarPath, homeDir })
     }
 
     return users

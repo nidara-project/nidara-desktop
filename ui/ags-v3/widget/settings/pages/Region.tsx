@@ -139,43 +139,32 @@ export default function RegionPage() {
         })
     }).catch(() => {})
 
-    const tzStatus = new Gtk.Label({
-        label: "",
-        css_classes: ["settings-row-subtitle", "tz-status"],
-        halign: Gtk.Align.END,
-        valign: Gtk.Align.CENTER,
-        visible: false,
-    })
-
     let tzStatusTimerId = 0
+
+    const tzApplyBtn = new Gtk.Button({
+        label: t("settings.region.tz.apply"),
+        css_classes: ["suggested-action"],
+        valign: Gtk.Align.CENTER,
+    })
 
     const applyTimezone = () => {
         const tz = tzEntry.text.trim()
         if (!tz) return
 
         tzApplyBtn.sensitive = false
-        tzStatus.label = t("settings.region.tz.applying")
-        tzStatus.remove_css_class("tz-status-ok")
-        tzStatus.remove_css_class("tz-status-err")
-        tzStatus.visible = true
+        tzApplyBtn.label = "…"
 
         regionConfig.setTimezone(tz)
 
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
             const success = regionConfig.timezone === tz
-            if (success) {
-                tzStatus.label = t("settings.region.tz.ok")
-                tzStatus.add_css_class("tz-status-ok")
-                tzCurrentLabel.label = tz
-            } else {
-                tzStatus.label = t("settings.region.tz.error")
-                tzStatus.add_css_class("tz-status-err")
-            }
-            tzApplyBtn.sensitive = true
+            tzApplyBtn.label = success ? "✓" : "✗"
+            if (success) tzCurrentLabel.label = tz
 
             if (tzStatusTimerId) GLib.source_remove(tzStatusTimerId)
-            tzStatusTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 5000, () => {
-                tzStatus.visible = false
+            tzStatusTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 2000, () => {
+                tzApplyBtn.label = t("settings.region.tz.apply")
+                tzApplyBtn.sensitive = true
                 tzStatusTimerId = 0
                 return GLib.SOURCE_REMOVE
             })
@@ -183,11 +172,6 @@ export default function RegionPage() {
         })
     }
 
-    const tzApplyBtn = new Gtk.Button({
-        label: t("settings.region.tz.apply"),
-        css_classes: ["suggested-action"],
-        valign: Gtk.Align.CENTER,
-    })
     tzApplyBtn.connect("clicked", applyTimezone)
     tzEntry.connect("activate", applyTimezone)
 
@@ -199,12 +183,6 @@ export default function RegionPage() {
         t("settings.region.tz.change.desc"),
         tzEntryRow,
     ))
-
-    const tzStatusRow = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
-    const tzStatusPad = new Gtk.Box({ margin_start: 16, margin_end: 16, margin_bottom: 8 })
-    tzStatusPad.append(tzStatus)
-    tzStatusRow.set_child(tzStatusPad)
-    tzList.append(tzStatusRow)
 
     tzBox.append(tzList)
     page.append(tzBox)

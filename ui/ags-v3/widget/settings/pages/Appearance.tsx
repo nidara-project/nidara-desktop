@@ -93,24 +93,37 @@ export default function AppearancePage() {
     // Time pickers helper
     const timePicker = (initial: string, onChange: (t: string) => void) => {
         const [ih, im] = initial.split(":").map(Number)
-        const hSpin = new Gtk.SpinButton({
-            adjustment: new Gtk.Adjustment({ lower: 0, upper: 23, step_increment: 1, value: ih }),
-            width_chars: 2, wrap: true, numeric: true, digits: 0,
-        })
-        const mSpin = new Gtk.SpinButton({
-            adjustment: new Gtk.Adjustment({ lower: 0, upper: 59, step_increment: 1, value: im }),
-            width_chars: 2, wrap: true, numeric: true, digits: 0,
-        })
+        const safeH = isNaN(ih) ? 20 : Math.max(0, Math.min(23, ih))
+        const safeM = isNaN(im) ? 0  : Math.max(0, Math.min(59, im))
+
+        const makeSpin = (lo: number, hi: number, val: number) => {
+            const spin = new Gtk.SpinButton({
+                adjustment: new Gtk.Adjustment({ lower: lo, upper: hi, step_increment: 1, value: val }),
+                width_chars: 2, wrap: true, numeric: true, digits: 0,
+                valign: Gtk.Align.CENTER,
+                css_classes: ["time-spin"],
+            })
+            spin.connect("output", () => {
+                spin.set_text(String(Math.round(spin.value)).padStart(2, "0"))
+                return true
+            })
+            return spin
+        }
+
+        const hSpin = makeSpin(0, 23, safeH)
+        const mSpin = makeSpin(0, 59, safeM)
+
         const emit = () => {
-            const h = String(hSpin.value_as_int).padStart(2, "0")
-            const m = String(mSpin.value_as_int).padStart(2, "0")
+            const h = String(Math.round(hSpin.value)).padStart(2, "0")
+            const m = String(Math.round(mSpin.value)).padStart(2, "0")
             onChange(`${h}:${m}`)
         }
         hSpin.connect("value-changed", emit)
         mSpin.connect("value-changed", emit)
-        const box = new Gtk.Box({ spacing: 2, valign: Gtk.Align.CENTER })
+
+        const box = new Gtk.Box({ spacing: 4, valign: Gtk.Align.CENTER })
         box.append(hSpin)
-        box.append(new Gtk.Label({ label: ":", css_classes: ["settings-row-label"] }))
+        box.append(new Gtk.Label({ label: ":", css_classes: ["settings-row-subtitle"] }))
         box.append(mSpin)
         return box
     }
