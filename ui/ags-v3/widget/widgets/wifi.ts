@@ -3,6 +3,7 @@ import AstalNetwork from "gi://AstalNetwork"
 import { WifiWidget } from "../control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; update: () => void } {
     const key = new Gtk.Label({ label, css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
@@ -16,7 +17,7 @@ function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; upda
 function buildBarContent(): Gtk.Widget {
     const wifi = AstalNetwork.get_default()?.wifi
 
-    const getIcon = () => wifi?.icon_name || "network-wireless-offline-symbolic"
+    const getIcon = () => wifi?.icon_name || Icons.wifiOff
 
     const image = new Gtk.Image({ icon_name: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16 })
 

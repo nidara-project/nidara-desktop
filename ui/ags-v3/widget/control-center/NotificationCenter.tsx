@@ -9,6 +9,7 @@ import appService from "../../core/AppService"
 import status from "../../core/Status"
 import { dockSideState } from "../../widget/dock/state"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 export function createIconWidget(n: AstalNotifd.Notification, size: number) {
     const entry = n.desktop_entry || n.app_name || ""
@@ -23,7 +24,7 @@ export function createIconWidget(n: AstalNotifd.Notification, size: number) {
     } else {
         const fallback = appService.getIconName(n.app_icon || n.app_name)
         if (fallback?.startsWith("/") || fallback?.startsWith("file://")) img.gicon = Gio.FileIcon.new(Gio.File.new_for_path(fallback.replace("file://", "")))
-        else img.icon_name = fallback || "dialog-information-symbolic"
+        else img.icon_name = fallback || Icons.info
     }
     return img
 }
@@ -35,7 +36,7 @@ export function GroupControlHeader(props: { name: string, count: number, onToggl
     labelBox.append(new Gtk.Label({ label: name, css_classes: ["nc-group-header-name"], halign: Gtk.Align.START }))
     labelBox.append(new Gtk.Label({ label: `${count}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
     const collapseBtn = new Gtk.Button({ 
-        child: new Gtk.Image({ icon_name: "pan-up-symbolic", pixel_size: 14 }),
+        child: new Gtk.Image({ icon_name: Icons.chevronUp, pixel_size: 14 }),
         css_classes: ["nc-group-collapse-btn"],
         valign: Gtk.Align.CENTER
     }); collapseBtn.connect("clicked", () => onToggle())
@@ -62,7 +63,7 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
         if (groupCount > 1 && !isExpanded) header.append(new Gtk.Label({ label: `${groupCount}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
     }
 
-    const clearBtn = new Gtk.Button({ child: new Gtk.Image({ icon_name: "window-close-symbolic", pixel_size: 11 }), css_classes: ["nc-item-clear-btn-compact"] })
+    const clearBtn = new Gtk.Button({ child: new Gtk.Image({ icon_name: Icons.close, pixel_size: 11 }), css_classes: ["nc-item-clear-btn-compact"] })
     const stopProp = new Gtk.GestureClick(); stopProp.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
     stopProp.connect("pressed", (gesture) => { gesture.set_state(Gtk.EventSequenceState.CLAIMED); if (groupCount > 1 && !isExpanded && onClearGroup) onClearGroup(); else n.dismiss() })
     clearBtn.add_controller(stopProp)

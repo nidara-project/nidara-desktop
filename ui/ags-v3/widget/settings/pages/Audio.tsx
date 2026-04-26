@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import AstalWp from "gi://AstalWp"
 import { listGroup, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
+import Icons from "../../../core/Icons"
 
 export default function AudioPage() {
     const audio = AstalWp.get_default()?.audio
@@ -26,7 +27,7 @@ export default function AudioPage() {
         // Header: Icon + Name + Mute
         const header = new Gtk.Box({ spacing: 12 })
         header.append(new Gtk.Image({
-            icon_name: isMic ? "audio-input-microphone-symbolic" : "audio-speakers-symbolic",
+            icon_name: isMic ? Icons.mic : Icons.speaker,
             pixel_size: 18,
         }))
         header.append(new Gtk.Label({
@@ -39,13 +40,13 @@ export default function AudioPage() {
         }))
 
         const muteBtn = new Gtk.Button({
-            icon_name: endpoint.mute ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic",
+            icon_name: endpoint.mute ? Icons.volumeMuted : Icons.volumeHigh,
             css_classes: ["settings-icon-btn", ...(endpoint.mute ? ["muted"] : [])],
             valign: Gtk.Align.CENTER,
         })
         muteBtn.connect("clicked", () => { endpoint.mute = !endpoint.mute })
         endpoint.connect("notify::mute", () => {
-            muteBtn.icon_name = endpoint.mute ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic"
+            muteBtn.icon_name = endpoint.mute ? Icons.volumeMuted : Icons.volumeHigh
             if (endpoint.mute) muteBtn.add_css_class("muted")
             else muteBtn.remove_css_class("muted")
         })
@@ -55,7 +56,7 @@ export default function AudioPage() {
         // Slider
         const sliderBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
         sliderBox.append(new Gtk.Image({
-            icon_name: isMic ? "audio-input-microphone-symbolic" : "audio-volume-low-symbolic",
+            icon_name: isMic ? Icons.mic : Icons.volumeLow,
             pixel_size: 16,
             opacity: 0.5,
         }))
@@ -74,7 +75,7 @@ export default function AudioPage() {
 
         sliderBox.append(scale)
         sliderBox.append(new Gtk.Image({
-            icon_name: isMic ? "audio-input-microphone-symbolic" : "audio-volume-high-symbolic",
+            icon_name: isMic ? Icons.mic : Icons.volumeHigh,
             pixel_size: 16,
             opacity: 0.5,
         }))

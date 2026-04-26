@@ -6,6 +6,7 @@ import { AtomicWidget, WidgetSize } from "./Types"
 import status from "../../core/Status"
 import widgetConfig from "../../core/WidgetConfig"
 import registry from "../widgets/index"
+import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
 import SquircleContainer, { Shape } from "../common/SquircleContainer"
 
@@ -83,7 +84,7 @@ function makeIslandWidget(
 
     // × remove
     const removeBtn = new Gtk.Button({
-        icon_name: "window-close-symbolic",
+        icon_name: Icons.close,
         css_classes: ["cc-remove-btn"],
         halign: Gtk.Align.END, valign: Gtk.Align.START,
         margin_top: 4, margin_end: 4,

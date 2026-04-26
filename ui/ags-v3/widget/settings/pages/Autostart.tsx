@@ -3,6 +3,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
+import Icons from "../../../core/Icons"
 
 // ── Config path ───────────────────────────────────────────────────────────────
 const USER_CONF = `${GLib.get_home_dir()}/.config/hypr/hyprland-user.conf`
@@ -105,7 +106,7 @@ export default function AutostartPage() {
                 })
 
                 const deleteBtn = new Gtk.Button({
-                    child: new Gtk.Image({ icon_name: "edit-delete-symbolic", pixel_size: 16 }),
+                    child: new Gtk.Image({ icon_name: Icons.trash, pixel_size: 16 }),
                     css_classes: ["destructive-action", "settings-row-action"],
                     valign: Gtk.Align.CENTER,
                     tooltip_text: t("settings.autostart.tooltip.eliminar"),
@@ -124,7 +125,7 @@ export default function AutostartPage() {
                     margin_bottom: 12,
                 })
                 rowBox.append(new Gtk.Image({
-                    icon_name: entry.enabled ? "media-playback-start-symbolic" : "media-playback-pause-symbolic",
+                    icon_name: entry.enabled ? Icons.play : Icons.pause,
                     pixel_size: 18,
                     valign: Gtk.Align.CENTER,
                     opacity: entry.enabled ? 1.0 : 0.5,
@@ -181,7 +182,7 @@ export default function AutostartPage() {
             margin_top: 12,
             margin_bottom: 12,
         })
-        rowBox.append(new Gtk.Image({ icon_name: "list-add-symbolic", pixel_size: 18, valign: Gtk.Align.CENTER, opacity: 0.6 }))
+        rowBox.append(new Gtk.Image({ icon_name: Icons.plus, pixel_size: 18, valign: Gtk.Align.CENTER, opacity: 0.6 }))
         rowBox.append(entry)
         rowBox.append(addBtn)
 

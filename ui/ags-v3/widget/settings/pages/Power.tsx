@@ -4,6 +4,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import { listGroup, pageHeader, pageBox, dropdownRow, createRow } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
+import Icons from "../../../core/Icons"
 
 // ── hypridle config ───────────────────────────────────────────────────────────
 // The symlink at ~/.config/hypr/hypridle.conf resolves to the correct writable
@@ -131,7 +132,7 @@ export default function PowerPage() {
         const rowContent = new Gtk.Box({ spacing: 16, margin_start: 16, margin_end: 16, margin_top: 14, margin_bottom: 14 })
         rowContent.append(new Gtk.Image({ icon_name: p.icon, pixel_size: 20, css_classes: ["sidebar-icon"] }))
         rowContent.append(new Gtk.Label({ label: p.label, hexpand: true, halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
-        const checkIcon = new Gtk.Image({ icon_name: "object-select-symbolic", css_classes: ["profile-check", "suggested-action"], pixel_size: 16, visible: false })
+        const checkIcon = new Gtk.Image({ icon_name: Icons.check, css_classes: ["profile-check", "suggested-action"], pixel_size: 16, visible: false })
         rowContent.append(checkIcon)
         checkIcons.set(p.id, checkIcon)
         const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })

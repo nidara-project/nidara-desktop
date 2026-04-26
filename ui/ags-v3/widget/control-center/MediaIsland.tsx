@@ -5,6 +5,7 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import { createSquirclePath } from "../common/DrawingUtils"
 import { AtomicWidget, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 interface MediaState {
     artPixbuf: any
@@ -82,9 +83,9 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
     header.append(artDa); header.append(title); header.append(artist)
 
     const controls = new Gtk.Box({ halign: Gtk.Align.CENTER })
-    const prev = new Gtk.Button({ icon_name: "media-skip-backward-symbolic", css_classes: ["cc-media-btn-atomic"] })
-    const play = new Gtk.Button({ icon_name: "media-playback-start-symbolic", css_classes: ["cc-media-btn-atomic"] })
-    const next = new Gtk.Button({ icon_name: "media-skip-forward-symbolic",  css_classes: ["cc-media-btn-atomic"] })
+    const prev = new Gtk.Button({ icon_name: Icons.skipBack, css_classes: ["cc-media-btn-atomic"] })
+    const play = new Gtk.Button({ icon_name: Icons.play,     css_classes: ["cc-media-btn-atomic"] })
+    const next = new Gtk.Button({ icon_name: Icons.skipForward, css_classes: ["cc-media-btn-atomic"] })
     prev.set_size_request(32, 32); play.set_size_request(32, 32); next.set_size_request(32, 32)
     controls.append(prev); controls.append(play); controls.append(next)
 
@@ -104,7 +105,7 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
         title.label  = p?.title || t("cc.media.no-media")
         artist.label = p?.artist || ""
         play.icon_name = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING
-            ? "media-playback-pause-symbolic" : "media-playback-start-symbolic"
+            ? Icons.pause : Icons.play
         prev.sensitive = p?.can_go_previous !== false
         next.sensitive = p?.can_go_next !== false
         artDa.queue_draw()
@@ -145,7 +146,7 @@ function buildWideContent(state: MediaState): Gtk.Widget {
     const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
     textBox.append(title); textBox.append(artist)
 
-    const play = new Gtk.Button({ icon_name: "media-playback-start-symbolic", css_classes: ["cc-media-btn-atomic"], valign: Gtk.Align.CENTER })
+    const play = new Gtk.Button({ icon_name: Icons.play, css_classes: ["cc-media-btn-atomic"], valign: Gtk.Align.CENTER })
     play.set_size_request(32, 32)
 
     const row = new Gtk.Box({
@@ -161,7 +162,7 @@ function buildWideContent(state: MediaState): Gtk.Widget {
         title.label  = p?.title || t("cc.media.no-media")
         artist.label = p?.artist || ""
         play.icon_name = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING
-            ? "media-playback-pause-symbolic" : "media-playback-start-symbolic"
+            ? Icons.pause : Icons.play
         artDa.queue_draw()
     }
 

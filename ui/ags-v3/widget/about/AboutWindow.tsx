@@ -5,6 +5,7 @@ import { execAsync } from "ags/process"
 import SquircleContainer from "../common/SquircleContainer"
 import status from "../../core/Status"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -110,7 +111,7 @@ export default function AboutWindow(): Gtk.Window | null {
 
     // ── Close button ──────────────────────────────────────────────────────────
     const closeBtn = new Gtk.Button({
-        child: new Gtk.Image({ icon_name: "window-close-symbolic", pixel_size: 14 }),
+        child: new Gtk.Image({ icon_name: Icons.close, pixel_size: 14 }),
         css_classes: ["about-close-btn"],
         halign: Gtk.Align.END,
         tooltip_text: t("settings.about.label.cerrar"),

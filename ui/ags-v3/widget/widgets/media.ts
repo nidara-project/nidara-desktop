@@ -3,13 +3,14 @@ import AstalMpris from "gi://AstalMpris"
 import { MediaIslandContent } from "../control-center/MediaIsland"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 function buildBarContent(): Gtk.Widget {
     const mpris = AstalMpris.get_default()
 
-    const prev = new Gtk.Button({ icon_name: "media-skip-backward-symbolic",  css_classes: ["bar-media-btn"] })
-    const play = new Gtk.Button({ icon_name: "media-playback-start-symbolic", css_classes: ["bar-media-btn"] })
-    const next = new Gtk.Button({ icon_name: "media-skip-forward-symbolic",   css_classes: ["bar-media-btn"] })
+    const prev = new Gtk.Button({ icon_name: Icons.skipBack,    css_classes: ["bar-media-btn"] })
+    const play = new Gtk.Button({ icon_name: Icons.play,        css_classes: ["bar-media-btn"] })
+    const next = new Gtk.Button({ icon_name: Icons.skipForward, css_classes: ["bar-media-btn"] })
 
     const title = new Gtk.Label({
         label: "",
@@ -36,7 +37,7 @@ function buildBarContent(): Gtk.Widget {
     const update = () => {
         const p = player
         const playing = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING
-        play.icon_name = playing ? "media-playback-pause-symbolic" : "media-playback-start-symbolic"
+        play.icon_name = playing ? Icons.pause : Icons.play
         prev.sensitive = p?.can_go_previous !== false
         next.sensitive = p?.can_go_next !== false
         const t = p?.title || ""
@@ -73,7 +74,7 @@ function buildBarContent(): Gtk.Widget {
 const mediaWidget: AtomicWidget = {
     id: "media",
     name: t("cc.media.name"),
-    icon: "media-playback-start-symbolic",
+    icon: Icons.play,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SQUARE,
     supportedSizes: [WidgetSize.SQUARE, WidgetSize.WIDE],

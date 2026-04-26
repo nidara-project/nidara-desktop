@@ -4,6 +4,7 @@ import ccLayout from "../../control-center/CCLayoutManager"
 import registry from "../../widgets/index"
 import { pageBox, pageHeader, listGroup } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
+import Icons from "../../../core/Icons"
 
 export default function WidgetsPage(): Gtk.Widget {
     const page = pageBox("widgets-page")
@@ -24,7 +25,7 @@ export default function WidgetsPage(): Gtk.Widget {
 
         // Icon + name
         box.append(new Gtk.Image({
-            icon_name: w.icon ?? "application-x-executable-symbolic",
+            icon_name: w.icon ?? Icons.app,
             pixel_size: 20,
             css_classes: ["sidebar-icon"],
         }))

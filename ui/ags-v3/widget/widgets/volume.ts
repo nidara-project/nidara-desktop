@@ -4,18 +4,19 @@ import { makeHSlider } from "../common/Slider"
 import { VolumeWidget } from "../control-center/Sliders"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 function buildBarContent(): Gtk.Widget {
     const speaker = AstalWp.get_default()?.audio?.default_speaker
 
     const getIcon = () => {
-        if (!speaker) return "audio-volume-muted-symbolic"
+        if (!speaker) return Icons.volumeMuted
         const muted = (speaker as any).mute ?? false
         const vol = speaker.volume
-        if (muted || vol === 0) return "audio-volume-muted-symbolic"
-        if (vol < 0.34)         return "audio-volume-low-symbolic"
-        if (vol < 0.67)         return "audio-volume-medium-symbolic"
-        return "audio-volume-high-symbolic"
+        if (muted || vol === 0) return Icons.volumeMuted
+        if (vol < 0.34)         return Icons.volumeLow
+        if (vol < 0.67)         return Icons.volumeMedium
+        return Icons.volumeHigh
     }
 
     const image = new Gtk.Image({ icon_name: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16 })
@@ -50,13 +51,13 @@ function buildBarContent(): Gtk.Widget {
     })
 
     const muteBtn = new Gtk.Button({
-        icon_name: (speaker as any)?.mute ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic",
+        icon_name: (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh,
         css_classes: ["bar-popover-icon-btn"],
         valign: Gtk.Align.CENTER,
     })
     muteBtn.connect("clicked", () => {
         if (speaker) (speaker as any).mute = !((speaker as any).mute ?? false)
-        muteBtn.icon_name = (speaker as any)?.mute ? "audio-volume-muted-symbolic" : "audio-volume-high-symbolic"
+        muteBtn.icon_name = (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh
     })
 
     const row = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
@@ -90,7 +91,7 @@ function buildBarContent(): Gtk.Widget {
 const volumeWidget: AtomicWidget = {
     id: "volume",
     name: t("cc.volume.name"),
-    icon: "audio-volume-high-symbolic",
+    icon: Icons.volumeHigh,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.FULL_WIDTH,
     supportedSizes: [WidgetSize.FULL_WIDTH, WidgetSize.TALL],

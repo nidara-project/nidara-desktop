@@ -9,6 +9,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import appService from "../../core/AppService"
 import { pinnedState, savePinned } from "../dock/state"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 // Extract just the desktop basename, stripping path and .desktop extension
 const normId = (s: string) => {
@@ -60,7 +61,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         halign: Gtk.Align.CENTER,
         width_request: 500,
     })
-    searchBox.append(new Gtk.Image({ icon_name: "system-search-symbolic", pixel_size: 18, css_classes: ["app-grid-search-icon"] }))
+    searchBox.append(new Gtk.Image({ icon_name: Icons.search, pixel_size: 18, css_classes: ["app-grid-search-icon"] }))
     searchBox.append(searchEntry)
 
     // ── FlowBox ────────────────────────────────────────────────────────────
@@ -89,7 +90,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         visible: false,
     })
     const noResultsIcon = new Gtk.Image({
-        icon_name: "system-search-symbolic",
+        icon_name: Icons.search,
         pixel_size: 48,
         css_classes: ["app-grid-no-results-icon"],
     })

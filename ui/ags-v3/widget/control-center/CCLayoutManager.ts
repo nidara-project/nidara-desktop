@@ -1,4 +1,5 @@
 import GLib from "gi://GLib"
+import Icons from "../../core/Icons"
 import GObject from "gi://GObject"
 import { readFile, writeFile } from "ags/file"
 import { WidgetSize } from "./Types"
@@ -27,14 +28,14 @@ export interface WidgetMeta {
 
 export const WIDGET_META: Record<string, WidgetMeta> = {
     cpu_memory:  { name: "CPU & Memoria", defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: "computer-symbolic" },
-    media:       { name: "Media",         defaultSize: WidgetSize.SQUARE,     sizes: [WidgetSize.SQUARE, WidgetSize.WIDE],           icon: "media-playback-start-symbolic" },
+    media:       { name: "Media",         defaultSize: WidgetSize.SQUARE,     sizes: [WidgetSize.SQUARE, WidgetSize.WIDE],           icon: Icons.play },
     wifi:        { name: "Wi-Fi",         defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: "network-wireless-symbolic" },
-    focus:       { name: "No Molestar",   defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: "notifications-disabled-symbolic" },
+    focus:       { name: "No Molestar",   defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.bellOff },
     ethernet:    { name: "Ethernet",      defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: "network-wired-symbolic" },
     bt:          { name: "Bluetooth",     defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],           icon: "bluetooth-active-symbolic" },
     dark_mode:   { name: "Apariencia",    defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],           icon: "weather-clear-night-symbolic" },
     calculator:  { name: "Calculadora",   defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE],                            icon: "accessories-calculator-symbolic" },
-    volume:      { name: "Volumen",       defaultSize: WidgetSize.FULL_WIDTH, sizes: [WidgetSize.FULL_WIDTH, WidgetSize.TALL],        icon: "audio-volume-high-symbolic" },
+    volume:      { name: "Volumen",       defaultSize: WidgetSize.FULL_WIDTH, sizes: [WidgetSize.FULL_WIDTH, WidgetSize.TALL],        icon: Icons.volumeHigh },
 }
 
 export interface LayoutEntry {

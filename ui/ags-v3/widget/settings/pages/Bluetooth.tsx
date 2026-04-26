@@ -3,6 +3,7 @@ import AstalBluetooth from "gi://AstalBluetooth"
 import GLib from "gi://GLib"
 import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
+import Icons from "../../../core/Icons"
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -150,7 +151,7 @@ export default function BluetoothPage() {
                 margin_bottom: 12,
             })
             rowBox.append(new Gtk.Image({
-                icon_name: dev.icon || "bluetooth-symbolic",
+                icon_name: dev.icon || Icons.bluetooth,
                 pixel_size: 20,
                 valign: Gtk.Align.CENTER,
             }))
@@ -180,7 +181,7 @@ export default function BluetoothPage() {
                 }
 
                 const removeBtn = new Gtk.Button({
-                    child: new Gtk.Image({ icon_name: "edit-delete-symbolic", pixel_size: 16 }),
+                    child: new Gtk.Image({ icon_name: Icons.trash, pixel_size: 16 }),
                     css_classes: ["settings-row-action", "destructive-action"],
                     valign: Gtk.Align.CENTER,
                     tooltip_text: t("settings.bluetooth.tooltip.olvidar-dispositivo"),

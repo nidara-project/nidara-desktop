@@ -14,8 +14,8 @@ import type { Monitor } from "gi://Gdk?version=4.0"
 import type { Window } from "gi://Gtk?version=4.0"
 
 /**
- *  THEME STRATEGY: 
- * We use Libadwaita exclusively for modern theme management. 
+ *  THEME STRATEGY:
+ * We use Libadwaita exclusively for modern theme management.
  */
 try {
   GLib.unsetenv("GTK_THEME")
@@ -23,6 +23,17 @@ try {
   Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
 } catch (e) {
   console.warn("[App] Initialization failed:", e)
+}
+
+// Register custom crystal-shell icon theme (cs-xxx-symbolic icons)
+try {
+  const display = Gdk.Display.get_default()
+  if (display) {
+    const iconsPath = `${GLib.get_current_dir()}/assets/icons`
+    Gtk.IconTheme.get_for_display(display).add_search_path(iconsPath)
+  }
+} catch (e) {
+  console.warn("[Icons] Failed to register icon search path:", e)
 }
 
 // Widget Imports

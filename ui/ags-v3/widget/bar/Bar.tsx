@@ -6,6 +6,7 @@ import AstalNotifd from "gi://AstalNotifd"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import Cairo from "gi://cairo"
+import Gio from "gi://Gio"
 
 // Astal Service Libraries
 import { getWordmark, getServiceSafe } from "../../utils"
@@ -27,10 +28,37 @@ import { execAsync } from "ags/process"
 import { t } from "../../core/i18n"
 import { barSettings, onBarSettingsChanged } from "./barState"
 import { dockSideState } from "../dock/state"
+import Icons from "../../core/Icons"
+
+const ASSETS_DIR = GLib.get_current_dir()
+
+export const LAUNCHER_ICON_PRESETS: Record<string, string> = {
+  "arch": `${ASSETS_DIR}/assets/logos/arch-symbolic.svg`,
+}
+
+function resolveIconPath(key: string): string | null {
+  if (LAUNCHER_ICON_PRESETS[key]) return LAUNCHER_ICON_PRESETS[key]
+  if (key.startsWith("/") && GLib.file_test(key, GLib.FileTest.EXISTS)) return key
+  return null
+}
 
 function SystemMenuIcon(): Gtk.Widget {
-  const icon = new Gtk.Image({ icon_name: "start-here-symbolic", pixel_size: 16, css_classes: ["bar-distro-icon"], margin_start: 14, margin_end: 14 })
-  return SquircleContainer({ child: icon, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleSystemMenu() })
+  const img = new Gtk.Image({ pixel_size: 18, css_classes: ["bar-distro-icon"], margin_start: 14, margin_end: 14 })
+
+  const applyIcon = () => {
+    const path = resolveIconPath(barSettings.launcherIcon || "arch")
+    if (path) {
+      img.gicon = Gio.FileIcon.new(Gio.File.new_for_path(path))
+    } else {
+      img.gicon = null
+      img.icon_name = "start-here-symbolic"
+    }
+  }
+
+  applyIcon()
+  onBarSettingsChanged(applyIcon)
+
+  return SquircleContainer({ child: img, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleSystemMenu() })
 }
 
 function AppTitle(monitorWidth: number): Gtk.Widget {
@@ -121,7 +149,7 @@ function SystemMenuOverlay() {
     execAsync(cmd).catch(console.error)
   }
 
-  menuBox.append(makeRow("dialog-information-symbolic", t("bar.system-menu.about"), false, () => {
+  menuBox.append(makeRow(Icons.info, t("bar.system-menu.about"), false, () => {
     status.system_menu_open = false; status.toggleAbout()
   }))
   menuBox.append(sep())
@@ -396,7 +424,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeLabel.connect("unrealize", () => { try { GLib.source_remove(clockTimer) } catch {} })
   regionConfig.connect("changed", updateClock)
   updateClock()
-  const bellIcon = new Gtk.Image({ icon_name: "notifications-symbolic", pixel_size: 16, visible: false })
+  const bellIcon = new Gtk.Image({ icon_name: Icons.bell, pixel_size: 16, visible: false })
   try {
     const notifd = AstalNotifd.get_default()
     const syncBell = () => { bellIcon.set_visible(notifd.notifications.length > 0) }
@@ -427,8 +455,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   trayInner.connect("notify::visible", () => trayCapsule.set_visible(trayInner.get_visible()))
   trayCapsule.set_visible(trayInner.get_visible())
   right.append(trayCapsule)
-  right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: "edit-find-symbolic", pixel_size: 16, margin_start: 16, margin_end: 16 }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
-  const ccBtn = SquircleContainer({ child: new Gtk.Image({ icon_name: "open-menu-symbolic", pixel_size: 16, margin_start: 16, margin_end: 16 }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
+  const ccBtn = SquircleContainer({ child: new Gtk.Image({ icon_name: Icons.menu, pixel_size: 16, margin_start: 16, margin_end: 16 }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
   right.append(ccBtn)
   right.append(SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
 

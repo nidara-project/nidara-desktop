@@ -7,12 +7,14 @@ export interface BarSettings {
     showAppTitle: boolean
     showWorkspaces: boolean
     showSystemMenu: boolean
+    launcherIcon: string
 }
 
 const DEFAULTS: BarSettings = {
     showAppTitle: true,
     showWorkspaces: true,
     showSystemMenu: true,
+    launcherIcon: "arch",
 }
 
 let _settings: BarSettings = { ...DEFAULTS }

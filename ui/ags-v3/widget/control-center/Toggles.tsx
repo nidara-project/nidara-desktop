@@ -4,6 +4,7 @@ import AstalNetwork from "gi://AstalNetwork"
 import AstalNotifd from "gi://AstalNotifd"
 import { AtomicWidget, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 // Shared capsule layout: icon circle + title/subtitle text stack
 function buildCapsuleContent(
@@ -127,7 +128,7 @@ export function WifiWidget(): AtomicWidget {
 
     const buildContent = (_size: WidgetSize) => {
         const content = buildCapsuleContent(
-            () => wifi?.icon_name || "network-wireless-offline-symbolic",
+            () => wifi?.icon_name || Icons.wifiOff,
             () => t("cc.wifi.name"),
             () => {
                 if (!wifi) return t("cc.wifi.sub.off")
@@ -155,7 +156,7 @@ export function FocusWidget(): AtomicWidget {
 
     const buildContent = (_size: WidgetSize) => {
         const content = buildCapsuleContent(
-            () => notifd?.dont_disturb ? "notifications-disabled-symbolic" : "notifications-symbolic",
+            () => notifd?.dont_disturb ? Icons.bellOff : Icons.bell,
             () => notifd?.dont_disturb ? t("cc.focus.title.on") : t("cc.focus.title.off"),
             () => notifd?.dont_disturb ? t("cc.focus.sub.on") : "",
             () => { if (notifd) notifd.dont_disturb = !notifd.dont_disturb },

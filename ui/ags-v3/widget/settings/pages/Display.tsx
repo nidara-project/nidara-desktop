@@ -3,6 +3,7 @@ import AstalHyprland from "gi://AstalHyprland"
 import { execAsync } from "ags/process"
 import { listGroup, createRow, pageHeader, pageBox, staticLabel } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
+import Icons from "../../../core/Icons"
 
 /**
  * Parses a monitor name and returns a friendly label.
@@ -149,7 +150,7 @@ export default function DisplayPage() {
     noteList.append(createRow(
         t("settings.display.row.label.cambios-temporales"),
         t("settings.display.row.desc.los-cambios-se-aplican-en-vivo-pero-no-p"),
-        new Gtk.Image({ icon_name: "dialog-information-symbolic", pixel_size: 18, opacity: 0.6, valign: Gtk.Align.CENTER })
+        new Gtk.Image({ icon_name: Icons.info, pixel_size: 18, opacity: 0.6, valign: Gtk.Align.CENTER })
     ))
     noteBox.append(noteList)
     page.append(noteBox)

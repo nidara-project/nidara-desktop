@@ -1,5 +1,6 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import appService from "../../core/AppService"
+import Icons from "../../core/Icons"
 
 const BASE_WIDTH = 300
 const BASE_HEIGHT = 170
@@ -149,7 +150,7 @@ export function Schematic(wsId: number, hyprland: any, width = BASE_WIDTH) {
             let widget = this.winWidgets.get(c.address)
             if (!widget) {
                 const img = new Gtk.Image({
-                    icon_name: appService.getIconName(c.class) || "system-run-symbolic",
+                    icon_name: appService.getIconName(c.class) || Icons.terminal,
                     pixel_size: iconSize,
                     halign: Gtk.Align.CENTER,
                     valign: Gtk.Align.CENTER,

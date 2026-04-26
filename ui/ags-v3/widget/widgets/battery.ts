@@ -3,6 +3,7 @@ import AstalBattery from "gi://AstalBattery"
 import { makeExpandable } from "./bar-helpers"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 const bat = AstalBattery.get_default()
 
@@ -16,8 +17,8 @@ function formatTime(seconds: number): string {
 }
 
 function getIcon(): string {
-    if (!bat) return "battery-missing-symbolic"
-    return bat.icon_name || "battery-missing-symbolic"
+    if (!bat) return Icons.battery
+    return bat.icon_name || Icons.battery
 }
 
 function getSummary(): string {

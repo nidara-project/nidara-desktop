@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import ccLayout, { WIDGET_META, SIZE_MAP } from "../../control-center/CCLayoutManager"
 import { pageBox, pageHeader, listGroup } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
+import Icons from "../../../core/Icons"
 
 function sizeLabel(id: string): string {
     const size = ccLayout.effectiveSize(id)
@@ -54,7 +55,7 @@ export default function ControlCenterPage(): Gtk.Widget {
             box.append(text)
 
             const removeBtn = new Gtk.Button({
-                icon_name: "list-remove-symbolic",
+                icon_name: Icons.minus,
                 css_classes: ["settings-icon-btn", "destructive-action-subtle"],
                 valign: Gtk.Align.CENTER,
                 tooltip_text: t("settings.controlcenter.tooltip.quitar-del-cc"),
@@ -99,7 +100,7 @@ export default function ControlCenterPage(): Gtk.Widget {
             box.append(text)
 
             const addBtn = new Gtk.Button({
-                icon_name: "list-add-symbolic",
+                icon_name: Icons.plus,
                 css_classes: ["settings-icon-btn"],
                 valign: Gtk.Align.CENTER,
                 tooltip_text: t("settings.controlcenter.tooltip.anadir-al-cc"),

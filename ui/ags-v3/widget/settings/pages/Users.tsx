@@ -6,6 +6,7 @@ import Adw from "gi://Adw?version=1"
 import { execAsync } from "ags/process"
 import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
+import Icons from "../../../core/Icons"
 
 // ── Data helpers ──────────────────────────────────────────────────────────────
 
@@ -283,8 +284,8 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
     const avatar = avatarFor(user.username, user.homeDir)
 
     const avatarImg = new Gtk.Image({ pixel_size: 36, css_classes: ["users-avatar-sm"], valign: Gtk.Align.CENTER })
-    if (avatar) { try { avatarImg.set_from_file(avatar) } catch { avatarImg.icon_name = "avatar-default-symbolic" } }
-    else avatarImg.icon_name = "avatar-default-symbolic"
+    if (avatar) { try { avatarImg.set_from_file(avatar) } catch { avatarImg.icon_name = Icons.user } }
+    else avatarImg.icon_name = Icons.user
 
     const nameBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
     nameBox.append(new Gtk.Label({ label: user.displayName, css_classes: ["settings-row-label"], halign: Gtk.Align.START }))
@@ -312,7 +313,7 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
     })
 
     const pwBtn = new Gtk.Button({
-        child: new Gtk.Image({ icon_name: "dialog-password-symbolic", pixel_size: 14 }),
+        child: new Gtk.Image({ icon_name: Icons.key, pixel_size: 14 }),
         css_classes: ["crystal-icon-btn"],
         valign: Gtk.Align.CENTER,
         tooltip_text: t("settings.users.other.pw.change"),
@@ -320,7 +321,7 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
     pwBtn.connect("clicked", () => showChangePasswordDialog(user, parentWin))
 
     const deleteBtn = new Gtk.Button({
-        child: new Gtk.Image({ icon_name: "user-trash-symbolic", pixel_size: 14 }),
+        child: new Gtk.Image({ icon_name: Icons.trash, pixel_size: 14 }),
         css_classes: ["crystal-icon-btn"],
         valign: Gtk.Align.CENTER,
         tooltip_text: t("settings.users.other.delete"),
@@ -370,8 +371,8 @@ export default function UsersPage() {
     const profileGroup = listGroup(t("settings.users.group.profile"))
 
     const avatarImg = new Gtk.Image({ pixel_size: 56, css_classes: ["users-avatar"], valign: Gtk.Align.CENTER })
-    if (avatarPath) { try { avatarImg.set_from_file(avatarPath) } catch { avatarImg.icon_name = "avatar-default-symbolic" } }
-    else avatarImg.icon_name = "avatar-default-symbolic"
+    if (avatarPath) { try { avatarImg.set_from_file(avatarPath) } catch { avatarImg.icon_name = Icons.user } }
+    else avatarImg.icon_name = Icons.user
 
     const changeAvatarBtn = new Gtk.Button({ label: t("settings.users.avatar.change"), css_classes: ["pill"], valign: Gtk.Align.CENTER })
     changeAvatarBtn.connect("clicked", () => {
@@ -389,7 +390,7 @@ export default function UsersPage() {
                 if (!src) return
                 saveAvatar(src).then(() => {
                     try { avatarImg.set_from_file(`${GLib.get_home_dir()}/.face`) }
-                    catch { avatarImg.icon_name = "avatar-default-symbolic" }
+                    catch { avatarImg.icon_name = Icons.user }
                 }).catch(e => console.error("[Users]", e))
             } catch { /* cancelled */ }
         })
@@ -457,7 +458,7 @@ export default function UsersPage() {
             hexpand: true,
         })
         const addInner = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
-        addInner.append(new Gtk.Image({ icon_name: "list-add-symbolic", pixel_size: 16, opacity: 0.7 }))
+        addInner.append(new Gtk.Image({ icon_name: Icons.plus, pixel_size: 16, opacity: 0.7 }))
         addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["settings-row-label"], halign: Gtk.Align.START }))
         addBtn.set_child(addInner)
         addBtn.connect("clicked", () => showAddUserDialog(parentWin, rebuildOtherUsers))

@@ -14,6 +14,7 @@ import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState, 
 import status from "../../core/Status"
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 // V127: Native Gtk Resolution
 
@@ -934,7 +935,7 @@ export default function Dock(gdkmonitor: any) {
 
             const launcherItem = {
                 name: t("dock.special.launcher.name"),
-                icon_name: ["view-app-grid-symbolic", "view-app-grid", "org.gnome.Shell.Apps-symbolic", "pan-start-symbolic"],
+                icon_name: [Icons.grid, "view-app-grid-symbolic", "view-app-grid", "org.gnome.Shell.Apps-symbolic"],
                 launch: () => { if ((globalThis as any).toggleAppGrid) (globalThis as any).toggleAppGrid() }
             }
             configs.push({

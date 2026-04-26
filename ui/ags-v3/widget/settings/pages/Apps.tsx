@@ -5,6 +5,7 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import appService, { type AppData } from "../../../core/AppService"
 import { pageBox, pageHeader } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
+import Icons from "../../../core/Icons"
 
 // ── Icon preview helpers ──────────────────────────────────────────────────────
 
@@ -228,7 +229,7 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
     })
 
     const editBtn = new Gtk.Button({
-        child: new Gtk.Image({ icon_name: "document-edit-symbolic", pixel_size: 14 }),
+        child: new Gtk.Image({ icon_name: Icons.filePen, pixel_size: 14 }),
         css_classes: ["crystal-icon-btn"],
         valign: Gtk.Align.CENTER,
         tooltip_text: t("settings.apps.tooltip.cambiar-icono"),

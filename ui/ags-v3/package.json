@@ -12,5 +12,8 @@
   "prettier": {
     "semi": false,
     "tabWidth": 2
+  },
+  "devDependencies": {
+    "lucide-static": "^1.11.0"
   }
 }

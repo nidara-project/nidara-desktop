@@ -6,6 +6,7 @@ import appService, { AppData } from "../../core/AppService"
 import status from "../../core/Status"
 import SquircleContainer from "../common/SquircleContainer"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 const MAX_FILE_RESULTS = 6
 
@@ -74,7 +75,7 @@ export default function Prism() {
     })
     const contentBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, css_classes: ["prism-box"], width_request: 650, halign: Gtk.Align.CENTER })
     const searchContainer = new Gtk.Box({ css_classes: ["prism-search-box"], spacing: 12 })
-    searchContainer.append(new Gtk.Image({ icon_name: "system-search-symbolic", pixel_size: 20 }))
+    searchContainer.append(new Gtk.Image({ icon_name: Icons.search, pixel_size: 20 }))
     searchContainer.append(entry)
     contentBox.append(searchContainer)
     contentBox.append(revealer)

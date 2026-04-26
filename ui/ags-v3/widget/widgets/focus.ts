@@ -3,11 +3,12 @@ import { FocusWidget } from "../control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 function buildBarContent() {
     const notifd = AstalNotifd.get_default()
     return makeIconAction({
-        getIcon: () => notifd?.dont_disturb ? "notifications-disabled-symbolic" : "notifications-symbolic",
+        getIcon: () => notifd?.dont_disturb ? Icons.bellOff : Icons.bell,
         onAction: () => { if (notifd) notifd.dont_disturb = !notifd.dont_disturb },
         activeClass: "bar-widget-active",
         getActive: () => notifd?.dont_disturb ?? false,
@@ -17,7 +18,7 @@ function buildBarContent() {
 const focusWidget: AtomicWidget = {
     id: "focus",
     name: t("widget.focus.name"),
-    icon: "notifications-disabled-symbolic",
+    icon: Icons.bellOff,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.WIDE],

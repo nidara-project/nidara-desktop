@@ -10,6 +10,7 @@ import Gio from "gi://Gio"
 import status from "../../core/Status"
 import SquircleContainer, { Shape } from "../common/SquircleContainer"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 const BASE_WIDTH = 300
 const BASE_HEIGHT = 170
@@ -165,7 +166,7 @@ function SchematicMap(wsId: number, hyprland: any) {
             let widget = this.winWidgets.get(c.address)
             if (!widget) {
                 const img = new Gtk.Image({
-                    icon_name: appService.getIconName(c.class) || "system-run-symbolic",
+                    icon_name: appService.getIconName(c.class) || Icons.terminal,
                     pixel_size: iconSize,
                     halign: Gtk.Align.CENTER,
                     valign: Gtk.Align.CENTER,

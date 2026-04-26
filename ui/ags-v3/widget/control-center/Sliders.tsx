@@ -4,6 +4,7 @@ import AstalWp from "gi://AstalWp"
 import { makeHSlider } from "../common/Slider"
 import { AtomicWidget, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 function buildHorizontalSlider(
     iconNameLow: string,
@@ -120,9 +121,9 @@ export function VolumeWidget(): AtomicWidget {
     const buildContent = (size: WidgetSize): Gtk.Widget => {
         const current = getValue()
         if (size === WidgetSize.TALL) {
-            return buildVerticalSlider("audio-volume-high-symbolic", () => current * 100, onChange, onExtChange)
+            return buildVerticalSlider(Icons.volumeHigh, () => current * 100, onChange, onExtChange)
         }
-        return buildHorizontalSlider("audio-volume-low-symbolic", "audio-volume-high-symbolic", () => current * 100, onChange, onExtChange)
+        return buildHorizontalSlider(Icons.volumeLow, Icons.volumeHigh, () => current * 100, onChange, onExtChange)
     }
 
     return {

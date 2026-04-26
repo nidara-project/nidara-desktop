@@ -619,6 +619,11 @@ button.dock-v-icon image {
   box-shadow: none;
 }
 
+/* --- Distro icon: color follows theme via currentColor in the SVG --- */
+.bar-distro-icon {
+  color: var(--crystal-text);
+}
+
 #crystal-bar,
 .crystal-bar-window {
   background: transparent;
@@ -1825,6 +1830,24 @@ button.accent-circle-btn.accent-purple {
 }
 button.accent-circle-btn.accent-slate {
   background-color: #6f8396;
+}
+
+button.launcher-icon-btn {
+  background: var(--crystal-surface-back);
+  background-image: none;
+  border: 2px solid transparent;
+  border-radius: var(--crystal-radius-sm);
+  padding: 8px 10px;
+  min-width: 52px;
+  transition: all 0.15s ease;
+}
+button.launcher-icon-btn.selected {
+  border-color: var(--crystal-accent);
+  background: var(--crystal-accent-10);
+}
+button.launcher-icon-btn:hover:not(.selected) {
+  background: var(--crystal-surface-hover);
+  border-color: var(--crystal-border);
 }
 
 .search-result-chip {
