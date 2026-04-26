@@ -343,6 +343,11 @@ export default {
     "settings.bar.row.desc.app-title": "Mostrar el nombre de la ventana enfocada en la barra",
     "settings.bar.row.label.workspaces": "Escritorios",
     "settings.bar.row.desc.workspaces": "Mostrar el selector de escritorios en el centro",
+    "settings.bar.group.icon": "Icono del Botón del Menú",
+    "settings.bar.row.label.icon-preset": "Por defecto",
+    "settings.bar.row.desc.icon-preset": "Restaurar el logo de Arch Linux integrado",
+    "settings.bar.row.label.icon-custom": "Icono personalizado",
+    "settings.bar.row.desc.icon-custom": "Ruta absoluta a un archivo SVG o PNG",
 
     "settings.dock.page.title.dock": "Dock",
     "settings.dock.row.desc.distancia-al-borde-de-la-pantalla": "Distancia al borde de la pantalla",

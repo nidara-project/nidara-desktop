@@ -315,6 +315,26 @@ button.accent-circle-btn {
     &.accent-slate  { background-color: #6f8396; }
 }
 
+// ── Launcher icon preset buttons ──────────────────────────────────────────────
+button.launcher-icon-btn {
+    background: var(--crystal-surface-back);
+    background-image: none;
+    border: 2px solid transparent;
+    border-radius: $crystal-radius-sm;
+    padding: 8px 10px;
+    min-width: 52px;
+    transition: all 0.15s ease;
+
+    &.selected {
+        border-color: var(--crystal-accent);
+        background: var(--crystal-accent-10);
+    }
+    &:hover:not(.selected) {
+        background: var(--crystal-surface-hover);
+        border-color: var(--crystal-border);
+    }
+}
+
 // ── Search results ────────────────────────────────────────────────────────────
 .search-result-chip {
     font-size: 0.75em;

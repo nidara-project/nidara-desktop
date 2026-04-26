@@ -14,6 +14,11 @@
     box-shadow: none;
 }
 
+/* --- Distro icon: color follows theme via currentColor in the SVG --- */
+.bar-distro-icon {
+    color: var(--crystal-text);
+}
+
 #crystal-bar,
 .crystal-bar-window {
     background: transparent;

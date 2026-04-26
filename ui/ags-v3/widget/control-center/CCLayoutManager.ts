@@ -27,14 +27,14 @@ export interface WidgetMeta {
 }
 
 export const WIDGET_META: Record<string, WidgetMeta> = {
-    cpu_memory:  { name: "CPU & Memoria", defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: "computer-symbolic" },
+    cpu_memory:  { name: "CPU & Memoria", defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.cpu },
     media:       { name: "Media",         defaultSize: WidgetSize.SQUARE,     sizes: [WidgetSize.SQUARE, WidgetSize.WIDE],           icon: Icons.play },
-    wifi:        { name: "Wi-Fi",         defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: "network-wireless-symbolic" },
+    wifi:        { name: "Wi-Fi",         defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.wifi },
     focus:       { name: "No Molestar",   defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.bellOff },
-    ethernet:    { name: "Ethernet",      defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: "network-wired-symbolic" },
-    bt:          { name: "Bluetooth",     defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],           icon: "bluetooth-active-symbolic" },
-    dark_mode:   { name: "Apariencia",    defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],           icon: "weather-clear-night-symbolic" },
-    calculator:  { name: "Calculadora",   defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE],                            icon: "accessories-calculator-symbolic" },
+    ethernet:    { name: "Ethernet",      defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.ethernet },
+    bt:          { name: "Bluetooth",     defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],           icon: Icons.bluetooth },
+    dark_mode:   { name: "Apariencia",    defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],           icon: Icons.moon },
+    calculator:  { name: "Calculadora",   defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE],                            icon: Icons.calculator },
     volume:      { name: "Volumen",       defaultSize: WidgetSize.FULL_WIDTH, sizes: [WidgetSize.FULL_WIDTH, WidgetSize.TALL],        icon: Icons.volumeHigh },
 }
 

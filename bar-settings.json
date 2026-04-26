@@ -1,5 +1,6 @@
 {
   "showAppTitle": true,
   "showWorkspaces": true,
-  "showSystemMenu": true
+  "showSystemMenu": true,
+  "launcherIcon": "arch"
 }

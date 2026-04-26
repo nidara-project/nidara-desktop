@@ -359,6 +359,11 @@ export default {
     "settings.bar.row.desc.app-title": "Show the focused window name in the bar",
     "settings.bar.row.label.workspaces": "Workspaces",
     "settings.bar.row.desc.workspaces": "Show the workspace switcher in the center",
+    "settings.bar.group.icon": "Menu Button Icon",
+    "settings.bar.row.label.icon-preset": "Default",
+    "settings.bar.row.desc.icon-preset": "Reset to the built-in Arch Linux logo",
+    "settings.bar.row.label.icon-custom": "Custom Icon",
+    "settings.bar.row.desc.icon-custom": "Absolute path to an SVG or PNG file",
 
     "settings.dock.page.title.dock": "Dock",
     "settings.dock.row.desc.distancia-al-borde-de-la-pantalla": "Distance to screen edge",
