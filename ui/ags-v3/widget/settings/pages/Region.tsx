@@ -228,11 +228,49 @@ export default function RegionPage() {
     
     localeList.append(createRow(t("settings.region.locale.kb"), t("settings.region.locale.kb.desc"), kbEntryRow))
 
+    // --- 2. Regional Format (LC_TIME, LC_NUMERIC, etc.) ---
+    // A single locale choice that sets all "format" LC_* variables at once.
+    // Populated from `locale -a`; "" means "same as LANG".
+    const regionalValues: string[] = [""]
+    const regionalDrp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
+    regionalDrp.append_text(t("settings.region.locale.regional.same"))
+
+    execAsync(["locale", "-a"]).then(output => {
+        const locales = output.trim().split("\n")
+            .map(l => l.trim())
+            .filter(l => l.includes(".") && l !== "C.utf8" && l !== "POSIX")
+            .map(l => l.replace(/\.utf8$/i, ".UTF-8"))
+            .sort()
+        locales.forEach(l => {
+            regionalValues.push(l)
+            regionalDrp.append_text(l)
+        })
+        const current = regionConfig.regionalLocale
+        const idx = current ? regionalValues.indexOf(current) : 0
+        // Block signal while setting initial value
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            regionalDrp.active = idx >= 0 ? idx : 0
+            return GLib.SOURCE_REMOVE
+        })
+    }).catch(console.error)
+
+    regionalDrp.connect("changed", () => {
+        const idx = regionalDrp.active
+        if (idx >= 0 && idx < regionalValues.length)
+            regionConfig.setRegionalLocale(regionalValues[idx])
+    })
+
+    localeList.append(createRow(
+        t("settings.region.locale.regional"),
+        t("settings.region.locale.regional.desc"),
+        regionalDrp,
+    ))
+
     // Initialization: parse current values and populate lists
     execAsync(["localectl", "status"]).then(out => {
         const langMatch = out.match(/System Locale:\s*LANG=(\S+)/)
         if (langMatch) langEntry.text = langMatch[1]
-        
+
         execAsync(["localectl", "list-locales"]).then(list => {
             list.trim().split("\n").forEach(l => {
                 if (!l) return

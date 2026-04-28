@@ -65,6 +65,10 @@ export default {
     "settings.region.locale.lang": "Language (Locale)",
     "settings.region.locale.lang.desc": "Requires a session restart",
     "settings.region.locale.lang.placeholder": "Ex: en_US.UTF-8",
+    "settings.region.locale.regional": "Regional Format",
+    "settings.region.locale.regional.desc": "Locale used for dates, numbers, currency and units. Takes effect on next login.",
+    "settings.region.locale.regional.same": "Same as language",
+
     "settings.region.locale.kb": "Keyboard Layout",
     "settings.region.locale.kb.desc": "Applies instantly",
     "settings.region.locale.kb.placeholder": "Ex: us",

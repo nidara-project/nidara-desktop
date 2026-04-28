@@ -11,15 +11,26 @@ export interface RegionSettings {
     dateFormat: DateFormat
     timezone: string
     showSeconds: boolean
+    regionalLocale: string  // e.g. "es_ES.UTF-8"; "" = same as LANG
 }
 
 const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/region.json`
+
+// Path where Crystal Shell writes user-level LC_* overrides, picked up by systemd/PAM on login
+const LOCALE_ENV_PATH = `${GLib.get_user_config_dir()}/environment.d/crystal-locale.conf`
+
+// Variables that represent "regional format" (not UI language)
+const REGIONAL_LC_VARS = [
+    "LC_TIME", "LC_NUMERIC", "LC_MONETARY",
+    "LC_PAPER", "LC_ADDRESS", "LC_TELEPHONE", "LC_MEASUREMENT",
+]
 
 const DEFAULTS: RegionSettings = {
     timeFormat: "24h",
     dateFormat: "short",
     timezone: "",
     showSeconds: false,
+    regionalLocale: "",
 }
 
 class RegionConfigManager extends GObject.Object {
@@ -38,6 +49,10 @@ class RegionConfigManager extends GObject.Object {
 
         if (!this._settings.timezone) {
             this._settings.timezone = this.detectTimezone()
+        }
+        // Detect regional locale from the environment.d file if not saved yet
+        if (!this._settings.regionalLocale) {
+            this._settings.regionalLocale = this._readRegionalLocaleFromFile()
         }
     }
 
@@ -62,6 +77,19 @@ class RegionConfigManager extends GObject.Object {
         }
     }
 
+    /** Reads LC_TIME from the environment.d file to detect the saved regional locale. */
+    private _readRegionalLocaleFromFile(): string {
+        try {
+            if (!GLib.file_test(LOCALE_ENV_PATH, GLib.FileTest.EXISTS)) return ""
+            const content = readFile(LOCALE_ENV_PATH)
+            for (const line of content.split("\n")) {
+                const m = line.match(/^LC_TIME=(.+)$/)
+                if (m) return m[1].trim()
+            }
+        } catch {}
+        return ""
+    }
+
     /**
      * Reads the active timezone from /etc/localtime symlink.
      * Returns empty string if undetectable.
@@ -75,10 +103,36 @@ class RegionConfigManager extends GObject.Object {
         return ""
     }
 
-    get timeFormat(): TimeFormat  { return this._settings.timeFormat }
-    get dateFormat(): DateFormat  { return this._settings.dateFormat }
-    get timezone(): string        { return this._settings.timezone }
-    get showSeconds(): boolean    { return this._settings.showSeconds ?? false }
+    get timeFormat(): TimeFormat      { return this._settings.timeFormat }
+    get dateFormat(): DateFormat      { return this._settings.dateFormat }
+    get timezone(): string            { return this._settings.timezone }
+    get showSeconds(): boolean        { return this._settings.showSeconds ?? false }
+    get regionalLocale(): string      { return this._settings.regionalLocale ?? "" }
+
+    /**
+     * Writes all REGIONAL_LC_VARS to ~/.config/environment.d/crystal-locale.conf.
+     * Pass "" to remove the file (LC_* fall back to LANG).
+     * Takes effect on next login (systemd/PAM reads environment.d).
+     */
+    setRegionalLocale(locale: string) {
+        this._settings.regionalLocale = locale
+        this.save()
+        try {
+            const dir = `${GLib.get_user_config_dir()}/environment.d`
+            if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
+                GLib.mkdir_with_parents(dir, 0o755)
+            if (!locale) {
+                if (GLib.file_test(LOCALE_ENV_PATH, GLib.FileTest.EXISTS))
+                    GLib.unlink(LOCALE_ENV_PATH)
+            } else {
+                const content = REGIONAL_LC_VARS.map(v => `${v}=${locale}`).join("\n") + "\n"
+                writeFile(LOCALE_ENV_PATH, content)
+            }
+        } catch (e) {
+            console.error("[RegionConfig] Failed to write locale env:", e)
+        }
+        this.emit("changed")
+    }
 
     setTimeFormat(v: TimeFormat) {
         if (this._settings.timeFormat === v) return

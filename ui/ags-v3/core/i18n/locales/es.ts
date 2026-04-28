@@ -65,6 +65,10 @@ export default {
     "settings.region.locale.lang": "Idioma (Locale)",
     "settings.region.locale.lang.desc": "El cambio requiere reiniciar sesión",
     "settings.region.locale.lang.placeholder": "Ej: es_ES.UTF-8",
+    "settings.region.locale.regional": "Formato regional",
+    "settings.region.locale.regional.desc": "Locale para fechas, números, moneda y unidades. Se aplica al iniciar sesión.",
+    "settings.region.locale.regional.same": "Igual que el idioma",
+
     "settings.region.locale.kb": "Distribución de Teclado",
     "settings.region.locale.kb.desc": "Se aplica instantáneamente",
     "settings.region.locale.kb.placeholder": "Ej: es",
