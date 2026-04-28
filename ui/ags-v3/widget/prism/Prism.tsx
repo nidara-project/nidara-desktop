@@ -75,7 +75,7 @@ export default function Prism() {
     })
     const contentBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, css_classes: ["prism-box"], width_request: 650, halign: Gtk.Align.CENTER })
     const searchContainer = new Gtk.Box({ css_classes: ["prism-search-box"], spacing: 12 })
-    searchContainer.append(new Gtk.Image({ icon_name: Icons.search, pixel_size: 20 }))
+    searchContainer.append(new Gtk.Image({ gicon: Icons.search, pixel_size: 20 , css_classes: ["cs-icon"] }))
     searchContainer.append(entry)
     contentBox.append(searchContainer)
     contentBox.append(revealer)

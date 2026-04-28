@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import Theme from "../../../core/ThemeManager"
 import { listGroup, createRow, toggleRow, sliderRow, pageHeader, pageBox } from "../SettingsHelpers"
+import Icons from "../../../core/Icons"
 import { t } from "../../../core/i18n"
 
 const iface = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
@@ -35,7 +36,7 @@ export default function AccessibilityPage() {
         t("settings.accessibility.text-scale.desc"),
         Theme.textScaling, 0.75, 2.0,
         (v) => Theme.setTextScaling(v),
-        { decimals: 2, icons: ["font-x-generic-symbolic", "font-x-generic-symbolic"] },
+        { decimals: 2, icons: [Icons.type, Icons.type] as [string, string] },
     ))
 
     visionGroup.listBox.append(sliderRow(
@@ -43,7 +44,7 @@ export default function AccessibilityPage() {
         t("settings.accessibility.cursor-size.desc"),
         getCursorSize(), 16, 96,
         (v) => setCursorSize(v),
-        { unit: "px", icons: ["input-mouse-symbolic", "input-mouse-symbolic"] },
+        { unit: "px", icons: [Icons.mousePointer, Icons.mousePointer] as [string, string] },
     ))
 
     page.append(visionGroup.box)

@@ -8,7 +8,7 @@ import Cairo from "gi://cairo"
 import { calculateDockItemMetrics, DOCK_CONSTANTS, springStep } from "./DockPhysics"
 import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
-import { DockItem, Separator } from "./DockItem"
+import { DockItem, Separator, dismissActiveDockMenu } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
 import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState, dockSettings, menuState, dockSideState } from "./state"
 import status from "../../core/Status"
@@ -205,6 +205,13 @@ export default function Dock(gdkmonitor: any) {
         hexpand: false,
         vexpand: false,
     })
+
+    // Dismiss any open context menu when the user clicks anywhere on the dock bar.
+    // Wayland doesn't send popup_done when clicking within the same layer surface,
+    // so this is the manual fallback for that case.
+    const barDismissClick = new Gtk.GestureClick({ button: 0 })
+    barDismissClick.connect("pressed", () => { dismissActiveDockMenu() })
+    bar.add_controller(barDismissClick)
 
     const da = new Gtk.DrawingArea({
         name: "dock-gloss-layer",
@@ -935,7 +942,7 @@ export default function Dock(gdkmonitor: any) {
 
             const launcherItem = {
                 name: t("dock.special.launcher.name"),
-                icon_name: [Icons.grid, "view-app-grid-symbolic", "view-app-grid", "org.gnome.Shell.Apps-symbolic"],
+                icon_name: ["crys-grid", "view-app-grid-symbolic", "view-app-grid", "org.gnome.Shell.Apps-symbolic"],
                 launch: () => { if ((globalThis as any).toggleAppGrid) (globalThis as any).toggleAppGrid() }
             }
             configs.push({
@@ -1330,6 +1337,7 @@ export default function Dock(gdkmonitor: any) {
         try {
             Gtk4LayerShell.set_namespace(win, "crystal-dock");
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP);
+            Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND);
 
             if (isVertical) {
                 Gtk4LayerShell.set_anchor(win, sideEdge, true);

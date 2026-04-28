@@ -121,7 +121,8 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
     `  --crystal-danger: #ff3b30;`,
     `  --crystal-danger-rgb: 255, 59, 48;`,
     `  --crystal-success: #30d158;`,
-    `}`
+    `}`,
+    isDark ? `` : `.cs-icon { -gtk-icon-filter: none; }`,
   )
   return lines.join("\n")
 }

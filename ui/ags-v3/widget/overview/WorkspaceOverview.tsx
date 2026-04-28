@@ -166,12 +166,12 @@ function SchematicMap(wsId: number, hyprland: any) {
             let widget = this.winWidgets.get(c.address)
             if (!widget) {
                 const img = new Gtk.Image({
-                    icon_name: appService.getIconName(c.class) || Icons.terminal,
+                    icon_name: appService.getIconName(c.class) || "application-x-executable",
                     pixel_size: iconSize,
                     halign: Gtk.Align.CENTER,
                     valign: Gtk.Align.CENTER,
                     hexpand: true,
-                    vexpand: true
+                    vexpand: true,
                 })
                 const box = new Gtk.Box({
                     css_classes: ["wo-schematic-win"],

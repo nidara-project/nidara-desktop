@@ -18,6 +18,12 @@ import { t } from "../../core/i18n"
 
 const hypr = AstalHyprland.get_default()
 
+// Module-level tracker so Dock.tsx can dismiss the active popover when clicking dock background
+let _activeDockMenu: Gtk.PopoverMenu | null = null
+export function dismissActiveDockMenu() {
+    if (_activeDockMenu?.visible) _activeDockMenu.popdown()
+}
+
 // --- PERSISTENCE (Moved to share state if needed, but for now referencing global or passing as props?)
 // Ideally DockItem shouldn't manage global pinned state directly, but for now we follow existing pattern.
 // To avoid circular dependency or complex state management refactor, we will export the list management 
@@ -435,8 +441,8 @@ export function DockItem(
     const tooltipPosition = isVertical
         ? (dockSettings.position === 'right' ? Gtk.PositionType.LEFT : Gtk.PositionType.RIGHT)
         : Gtk.PositionType.TOP
-    const tooltip = new Gtk.Popover({ position: tooltipPosition, autohide: false, has_arrow: true })
-    const label = new Gtk.Label({ css_classes: ["label"] })
+    const tooltip = new Gtk.Popover({ position: tooltipPosition, autohide: false, has_arrow: true, css_classes: ["dock-tooltip"] })
+    const label = new Gtk.Label({ css_classes: ["dock-tooltip-label"] })
     const content = new Gtk.Box()
     content.append(label)
     tooltip.set_child(content)
@@ -480,20 +486,34 @@ export function DockItem(
     iconBox.add_controller(motion)
 
     // MENU
-    // V700: Fully Native GTK4 PopoverMenu
-    let popover: Gtk.Popover | null = null
+    // Dock context menu — created once, model updated before each show
+    let popover: Gtk.PopoverMenu | null = null
+    let popupIdleId: number | null = null
 
     const toSentenceCase = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : ""
 
-    const rebuildMenu = () => {
-        if (popover) {
-            if (popover.visible) return
-            popover.unparent()
-            popover = null
-        }
+    const ensurePopover = () => {
+        if (popover) return
+        popover = Gtk.PopoverMenu.new_from_model(new Gio.Menu()) as unknown as Gtk.PopoverMenu
+        popover.add_css_class("dock-menu")
+        popover.set_has_tooltip(false)
+        ;(popover as any).position = tooltipPosition
+        popover.set_parent(iconBox)
+        popover.connect("notify::visible", () => {
+            if (popover?.visible) {
+                _activeDockMenu = popover
+                changeMenuCount(1)
+            } else {
+                _activeDockMenu = null
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+                    changeMenuCount(-1)
+                    return GLib.SOURCE_REMOVE
+                })
+            }
+        })
+    }
 
-        console.error(`[DockMenu] Rebuilding native menu for: ${appId}`)
-
+    const updateMenuModel = () => {
         const menuModel = new Gio.Menu()
         const actionGroup = new Gio.SimpleActionGroup()
         let actionIdx = 0
@@ -512,7 +532,6 @@ export function DockItem(
             return section
         }
 
-        // Section 1: Main App (Standardize special names)
         let mainTitle = appItem.name || "App"
         if (appId === "launcher" || appId === "special:launcher") mainTitle = t("settings.dock.dockitem.label.aplicaciones")
         if (appId === "home-shortcut" || appId === "special:home") mainTitle = t("dock.special.home.label")
@@ -521,17 +540,13 @@ export function DockItem(
 
         let desktopActions: string[] = []
         const gAppInfo = appService.getAppInfo(appId)
-        if (gAppInfo && gAppInfo.list_actions) {
-            desktopActions = gAppInfo.list_actions()
-        }
+        if (gAppInfo && gAppInfo.list_actions) desktopActions = gAppInfo.list_actions()
 
         if (appId === "launcher" || appId === "special:launcher") {
             mainSection.append(t("dock.menu.open"), addAction(() => appItem.launch()))
         } else if (appId === "home-shortcut" || appId === "special:home") {
-            // V149: UNIVERSAL HOME ISOLATION (Right Click) 🛰️
             mainSection.append(t("dock.menu.open"), addAction(() => {
-                const command = appService.getDefaultFileManagerCommand()
-                execAsync(["uwsm", "app", "--", "sh", "-c", command]).catch(print)
+                execAsync(["uwsm", "app", "--", "sh", "-c", appService.getDefaultFileManagerCommand()]).catch(print)
             }))
         } else if (appId === "trash" || appId === "special:trash") {
             mainSection.append(t("dock.menu.open"), addAction(() => appItem.launch()))
@@ -541,12 +556,10 @@ export function DockItem(
         if (desktopActions.length > 0) {
             const desktopSection = addSection(null)
             desktopActions.forEach((actionName: string) => {
-                const rawLabel = actionName
-                const label = gAppInfo ? gAppInfo.get_action_name(actionName) : toSentenceCase(rawLabel.replace(/[-_]/g, " "))
+                const label = gAppInfo ? gAppInfo.get_action_name(actionName) : toSentenceCase(actionName.replace(/[-_]/g, " "))
                 desktopSection.append(label, addAction(() => {
-                    try {
-                        if (gAppInfo && gAppInfo.launch_action) gAppInfo.launch_action(actionName, null)
-                    } catch (e) { console.error(e) }
+                    try { if (gAppInfo && gAppInfo.launch_action) gAppInfo.launch_action(actionName, null) }
+                    catch (e) { console.error(e) }
                 }))
             })
         }
@@ -556,41 +569,25 @@ export function DockItem(
             const pinSection = addSection(null)
             pinSection.append(
                 isPinned ? t("settings.dock.dockitem.label.desanclar-del-dock") : t("settings.dock.dockitem.label.mantener-en-el-dock"),
-                addAction(() => {
-                    const cid = cleanId || appId
-                    if (isPinned) onUnpin(cid)
-                    else onPin(cid)
-                })
+                addAction(() => { const cid = cleanId || appId; if (isPinned) onUnpin(cid); else onPin(cid) })
             )
         }
 
         if (state.addresses && state.addresses.length > 0) {
             const winCount = state.addresses.length
-
-            // 1. List all open windows natively (Only if there's more than 1)
             if (winCount > 1) {
                 const windowsSection = addSection(null)
                 state.addresses.forEach((addr) => {
                     const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
-                    // Try to find the title from hypr.clients (Astal might omit the 0x in its internally mapped address)
                     const rawAddr = addr.replace(/^0x/, '')
                     const hyprClient = hypr.clients.find(c => c.address === cleanAddr || c.address === rawAddr)
-
-                    // Use a substring to prevent gigantic unreadable menus
                     let winTitle = hyprClient?.title || `${t("dock.menu.window-of")} ${appItem.name || "App"}`
                     if (winTitle.length > 35) winTitle = winTitle.substring(0, 32) + "..."
-
-                    // Add the window to the menu. Clicking it focuses the window.
-                    windowsSection.append(
-                        winTitle,
-                        addAction(() => {
-                            execAsync(`hyprctl dispatch focuswindow address:${cleanAddr}`).catch(print)
-                        })
-                    )
+                    windowsSection.append(winTitle, addAction(() => {
+                        execAsync(`hyprctl dispatch focuswindow address:${cleanAddr}`).catch(print)
+                    }))
                 })
             }
-
-            // 2. Add the destructive "Close All" action at the very bottom
             const closeSection = addSection(null)
             closeSection.append(
                 winCount > 1 ? `${t("settings.dock.dockitem.label.cerrar-todas")} (${winCount})` : t("settings.dock.dockitem.label.salir"),
@@ -604,31 +601,17 @@ export function DockItem(
         }
 
         iconBox.insert_action_group("dock", actionGroup)
-        popover = Gtk.PopoverMenu.new_from_model(menuModel) as unknown as Gtk.Popover
-        popover.set_has_tooltip(false)
-        ;(popover as any).position = tooltipPosition
-        popover.set_parent(iconBox)
-
-        popover.connect("notify::visible", () => {
-            if (popover?.visible) {
-                changeMenuCount(1)
-            } else {
-                // V700: Keep dock frozen for 250ms while the GTK menu plays its fade-out animation.
-                // If we unfreeze instantly, the dock shrinks and visually clips the fading menu.
-                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
-                    changeMenuCount(-1)
-                    return GLib.SOURCE_REMOVE
-                })
-            }
-        })
+        ;(popover as any).set_menu_model(menuModel)
     }
 
     const rightClick = new Gtk.GestureClick({ button: 3 })
     rightClick.connect("released", () => {
-        console.error(`[DockMenu] Right-click released for: ${appId}`)
-        rebuildMenu()
-        // V320: Delay popup by 1 frame to ensure GTK has processed the new child/layout
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+        if (popupIdleId !== null) { GLib.source_remove(popupIdleId); popupIdleId = null }
+        if (popover && popover.visible) { popover.popdown(); return }
+        ensurePopover()
+        updateMenuModel()
+        popupIdleId = GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            popupIdleId = null
             if (popover) popover.popup()
             return GLib.SOURCE_REMOVE
         })

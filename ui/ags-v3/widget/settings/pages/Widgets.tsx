@@ -24,11 +24,8 @@ export default function WidgetsPage(): Gtk.Widget {
         })
 
         // Icon + name
-        box.append(new Gtk.Image({
-            icon_name: w.icon ?? Icons.app,
-            pixel_size: 20,
-            css_classes: ["sidebar-icon"],
-        }))
+        const wImg = new Gtk.Image({ gicon: w.icon ?? Icons.app, pixel_size: 20, css_classes: ["sidebar-icon", "cs-icon"] })
+        box.append(wImg)
         const label = new Gtk.Label({
             label: w.name,
             css_classes: ["settings-row-label"],

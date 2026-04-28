@@ -150,13 +150,13 @@ export function Schematic(wsId: number, hyprland: any, width = BASE_WIDTH) {
             let widget = this.winWidgets.get(c.address)
             if (!widget) {
                 const img = new Gtk.Image({
-                    icon_name: appService.getIconName(c.class) || Icons.terminal,
+                    icon_name: appService.getIconName(c.class) || "application-x-executable",
                     pixel_size: iconSize,
                     halign: Gtk.Align.CENTER,
                     valign: Gtk.Align.CENTER,
                     hexpand: true,
                     vexpand: true
-                })
+                , css_classes: ["cs-icon"] })
                 const box = new Gtk.Box({
                     css_classes: ["wo-schematic-win"],
                     halign: Gtk.Align.FILL,

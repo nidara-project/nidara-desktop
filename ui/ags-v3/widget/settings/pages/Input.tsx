@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import { listGroup, pageHeader, pageBox, toggleRow, sliderRow, dropdownRow } from "../SettingsHelpers"
+import Icons from "../../../core/Icons"
 import inputConfig from "../../../core/InputConfig"
 import { t } from "../../../core/i18n"
 
@@ -17,7 +18,7 @@ export default function InputPage() {
         -1.0,
         1.0,
         (v) => inputConfig.setPointerSpeed(v),
-        { icons: ["input-mouse-symbolic", "input-mouse-symbolic"], pct: true }
+        { icons: [Icons.mousePointer, Icons.mousePointer] as [string, string], pct: true }
     ))
 
     const accelProfiles = ["adaptive", "flat"]

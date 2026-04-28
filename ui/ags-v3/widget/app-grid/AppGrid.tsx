@@ -61,7 +61,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         halign: Gtk.Align.CENTER,
         width_request: 500,
     })
-    searchBox.append(new Gtk.Image({ icon_name: Icons.search, pixel_size: 18, css_classes: ["app-grid-search-icon"] }))
+    searchBox.append(new Gtk.Image({ gicon: Icons.search, pixel_size: 18, css_classes: ["app-grid-search-icon", "cs-icon"] }))
     searchBox.append(searchEntry)
 
     // ── FlowBox ────────────────────────────────────────────────────────────
@@ -90,9 +90,9 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         visible: false,
     })
     const noResultsIcon = new Gtk.Image({
-        icon_name: Icons.search,
+        gicon: Icons.search,
         pixel_size: 48,
-        css_classes: ["app-grid-no-results-icon"],
+        css_classes: ["app-grid-no-results-icon", "cs-icon"],
     })
     const noResultsLabel = new Gtk.Label({
         label: t("app-grid.no-results"),

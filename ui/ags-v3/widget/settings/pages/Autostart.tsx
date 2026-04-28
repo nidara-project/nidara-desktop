@@ -106,7 +106,7 @@ export default function AutostartPage() {
                 })
 
                 const deleteBtn = new Gtk.Button({
-                    child: new Gtk.Image({ icon_name: Icons.trash, pixel_size: 16 }),
+                    child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 16 , css_classes: ["cs-icon"] }),
                     css_classes: ["destructive-action", "settings-row-action"],
                     valign: Gtk.Align.CENTER,
                     tooltip_text: t("settings.autostart.tooltip.eliminar"),
@@ -125,10 +125,11 @@ export default function AutostartPage() {
                     margin_bottom: 12,
                 })
                 rowBox.append(new Gtk.Image({
-                    icon_name: entry.enabled ? Icons.play : Icons.pause,
+                    gicon: entry.enabled ? Icons.play : Icons.pause,
                     pixel_size: 18,
                     valign: Gtk.Align.CENTER,
                     opacity: entry.enabled ? 1.0 : 0.5,
+                    css_classes: ["cs-icon"],
                 }))
                 rowBox.append(cmdLabel)
                 rowBox.append(toggle)
@@ -182,7 +183,7 @@ export default function AutostartPage() {
             margin_top: 12,
             margin_bottom: 12,
         })
-        rowBox.append(new Gtk.Image({ icon_name: Icons.plus, pixel_size: 18, valign: Gtk.Align.CENTER, opacity: 0.6 }))
+        rowBox.append(new Gtk.Image({ gicon: Icons.plus, pixel_size: 18, valign: Gtk.Align.CENTER, opacity: 0.6 , css_classes: ["cs-icon"] }))
         rowBox.append(entry)
         rowBox.append(addBtn)
 

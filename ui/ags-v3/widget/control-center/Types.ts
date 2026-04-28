@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import Gio from "gi://Gio"
 
 export type WidgetLocation = "bar" | "cc"
 
@@ -13,7 +14,7 @@ export enum WidgetSize {
 export interface AtomicWidget {
     id: string
     name: string
-    icon?: string                       // icon name for Settings UI
+    icon?: Gio.FileIcon                 // icon for Settings UI
     locations?: WidgetLocation[]        // where this widget can appear
     defaultSize: WidgetSize
     supportedSizes: WidgetSize[]

@@ -49,7 +49,7 @@ export default function BarPage() {
     const refreshPreview = () => {
         const path = resolveCurrentPath(barSettings.launcherIcon)
         if (path) preview.gicon = Gio.FileIcon.new(Gio.File.new_for_path(path))
-        else { preview.gicon = null; preview.icon_name = "start-here-symbolic" }
+        else { preview.gicon = null; preview.gicon = Icons.grid }
     }
     refreshPreview()
 

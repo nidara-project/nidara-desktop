@@ -84,7 +84,7 @@ function makeIslandWidget(
 
     // × remove
     const removeBtn = new Gtk.Button({
-        icon_name: Icons.close,
+        child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14 , css_classes: ["cs-icon"] }),
         css_classes: ["cc-remove-btn"],
         halign: Gtk.Align.END, valign: Gtk.Align.START,
         margin_top: 4, margin_end: 4,

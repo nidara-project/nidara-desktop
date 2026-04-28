@@ -8,9 +8,12 @@ import Icons from "../../core/Icons"
 function buildBarContent(): Gtk.Widget {
     const mpris = AstalMpris.get_default()
 
-    const prev = new Gtk.Button({ icon_name: Icons.skipBack,    css_classes: ["bar-media-btn"] })
-    const play = new Gtk.Button({ icon_name: Icons.play,        css_classes: ["bar-media-btn"] })
-    const next = new Gtk.Button({ icon_name: Icons.skipForward, css_classes: ["bar-media-btn"] })
+    const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 16 , css_classes: ["cs-icon"] })
+    const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 16 , css_classes: ["cs-icon"] })
+    const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 16 , css_classes: ["cs-icon"] })
+    const prev = new Gtk.Button({ child: prevImg, css_classes: ["bar-media-btn"] })
+    const play = new Gtk.Button({ child: playImg, css_classes: ["bar-media-btn"] })
+    const next = new Gtk.Button({ child: nextImg, css_classes: ["bar-media-btn"] })
 
     const title = new Gtk.Label({
         label: "",
@@ -37,7 +40,7 @@ function buildBarContent(): Gtk.Widget {
     const update = () => {
         const p = player
         const playing = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING
-        play.icon_name = playing ? Icons.pause : Icons.play
+        playImg.gicon = playing ? Icons.pause : Icons.play
         prev.sensitive = p?.can_go_previous !== false
         next.sensitive = p?.can_go_next !== false
         const t = p?.title || ""

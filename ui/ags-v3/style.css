@@ -46,6 +46,12 @@
 /* ==========================================================================
    CRYSTAL DESIGN SYSTEM - NEUTRALIZATION LAYER
    ========================================================================== */
+/* Lucide SVGs: black stroke, inverted to white in dark mode via filter.
+   Light mode disables the filter (injected by FluidCrystal.ts). */
+.cs-icon {
+  -gtk-icon-filter: invert(1);
+}
+
 /*
    Targets explicit namespaced crystal components to ensure a clean slate
    without breaking global GTK apps.
@@ -61,6 +67,24 @@
   box-shadow: none;
   border: none;
   outline: none;
+  /* Ensure symbolic icons inherit the correct foreground color */
+}
+#crystal-dock image,
+#crystal-bar image,
+#crystal-app-launcher image,
+.crystal-control-center image,
+.crystal-notification-center image,
+.crystal-dock-window image,
+.crystal-bar-window image {
+  color: var(--crystal-text);
+}
+#crystal-dock,
+#crystal-bar,
+#crystal-app-launcher,
+.crystal-control-center,
+.crystal-notification-center,
+.crystal-dock-window,
+.crystal-bar-window {
   /* Neutralize intrusive GTK internal nodes */
 }
 #crystal-dock ripple, #crystal-dock highlight, #crystal-dock outline, #crystal-dock focus-ring,
@@ -604,6 +628,27 @@ button.dock-v-icon image {
 }
 .dock-ctx-item:hover {
   background-color: var(--crystal-surface);
+}
+
+.dock-menu {
+  transition: none;
+}
+.dock-menu modelbutton {
+  color: var(--crystal-text);
+}
+
+.dock-tooltip {
+  box-shadow: none;
+}
+.dock-tooltip > contents {
+  box-shadow: none;
+  padding: 4px 10px;
+}
+.dock-tooltip > arrow {
+  box-shadow: none;
+}
+.dock-tooltip .dock-tooltip-label {
+  color: var(--crystal-text);
 }
 
 /* ==========================================================================
@@ -1722,7 +1767,7 @@ stack.settings-stack {
   font-weight: 700;
   color: var(--crystal-text-dim);
   letter-spacing: 0.08em;
-  margin-start: 4px;
+  margin-left: 4px;
   margin-bottom: 6px;
 }
 
@@ -1857,7 +1902,7 @@ button.launcher-icon-btn:hover:not(.selected) {
   background: var(--crystal-accent-10);
   border-radius: var(--crystal-radius-pill);
   padding: 2px 10px;
-  margin-start: 4px;
+  margin-left: 4px;
 }
 
 .region-preview-box {
@@ -1942,7 +1987,7 @@ button.settings-action-row:active {
   background: var(--crystal-accent-10);
   border-radius: var(--crystal-radius-pill);
   padding: 2px 8px;
-  margin-end: 4px;
+  margin-right: 4px;
 }
 
 row.wallpaper-preview-row {

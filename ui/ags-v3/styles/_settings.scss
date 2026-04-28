@@ -229,7 +229,7 @@ stack.settings-stack {
     font-weight: 700;
     color: var(--crystal-text-dim);
     letter-spacing: 0.08em;
-    margin-start: 4px;
+    margin-left: 4px;
     margin-bottom: 6px;
 }
 
@@ -343,7 +343,7 @@ button.launcher-icon-btn {
     background: var(--crystal-accent-10);
     border-radius: $crystal-radius-pill;
     padding: 2px 10px;
-    margin-start: 4px;
+    margin-left: 4px;
 }
 
 // ── Region page ───────────────────────────────────────────────────────────────
@@ -419,7 +419,7 @@ button.settings-action-row {
     background: var(--crystal-accent-10);
     border-radius: $crystal-radius-pill;
     padding: 2px 8px;
-    margin-end: 4px;
+    margin-right: 4px;
 }
 
 // ── Wallpaper preview ─────────────────────────────────────────────────────────

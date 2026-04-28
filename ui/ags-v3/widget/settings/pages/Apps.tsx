@@ -229,7 +229,7 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
     })
 
     const editBtn = new Gtk.Button({
-        child: new Gtk.Image({ icon_name: Icons.filePen, pixel_size: 14 }),
+        child: new Gtk.Image({ gicon: Icons.filePen, pixel_size: 14 , css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn"],
         valign: Gtk.Align.CENTER,
         tooltip_text: t("settings.apps.tooltip.cambiar-icono"),

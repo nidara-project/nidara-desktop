@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
+import Gio from "gi://Gio"
 import AstalWp from "gi://AstalWp"
 import { makeHSlider } from "../common/Slider"
 import { AtomicWidget, WidgetSize } from "./Types"
@@ -7,8 +8,8 @@ import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
 function buildHorizontalSlider(
-    iconNameLow: string,
-    iconNameHigh: string,
+    iconNameLow: Gio.FileIcon,
+    iconNameHigh: Gio.FileIcon,
     getValue: () => number,
     onChange: (v: number) => void,
     onExtChange: (cb: (v: number) => void) => (() => void),
@@ -35,16 +36,16 @@ function buildHorizontalSlider(
         onExtChange: (cb) => onExtChange((v) => cb(Math.round(v * 100))),
     })
 
-    box.append(new Gtk.Image({ icon_name: iconNameLow,  pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER }))
+    box.append(new Gtk.Image({ gicon: iconNameLow,  pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"] }))
     box.append(sliderWidget)
-    box.append(new Gtk.Image({ icon_name: iconNameHigh, pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER }))
+    box.append(new Gtk.Image({ gicon: iconNameHigh, pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"] }))
     box.append(valueLabel)
 
     return box
 }
 
 function buildVerticalSlider(
-    iconName: string,
+    iconName: Gio.FileIcon,
     getValue: () => number,
     onChange: (v: number) => void,
     onExtChange: (cb: (v: number) => void) => (() => void),
@@ -57,7 +58,7 @@ function buildVerticalSlider(
         margin_top: 10, margin_bottom: 10,
     })
 
-    const icon = new Gtk.Image({ icon_name: iconName, pixel_size: 18, halign: Gtk.Align.CENTER })
+    const icon = new Gtk.Image({ gicon: iconName, pixel_size: 18, halign: Gtk.Align.CENTER, css_classes: ["cs-icon"] })
 
     const scale = new Gtk.Scale({
         orientation: Gtk.Orientation.VERTICAL,

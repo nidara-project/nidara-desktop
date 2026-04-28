@@ -43,7 +43,7 @@ export default function ControlCenterPage(): Gtk.Widget {
 
             const box = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 12, margin_top: 10, margin_bottom: 10 })
 
-            box.append(new Gtk.Image({ icon_name: meta.icon, pixel_size: 20, css_classes: ["sidebar-icon"] }))
+            box.append(new Gtk.Image({ gicon: meta.icon, pixel_size: 20, css_classes: ["sidebar-icon", "cs-icon"] }))
 
             const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
             text.append(new Gtk.Label({ label: meta.name, css_classes: ["settings-row-label"], halign: Gtk.Align.START }))
@@ -55,7 +55,7 @@ export default function ControlCenterPage(): Gtk.Widget {
             box.append(text)
 
             const removeBtn = new Gtk.Button({
-                icon_name: Icons.minus,
+                child: new Gtk.Image({ gicon: Icons.minus, pixel_size: 16 , css_classes: ["cs-icon"] }),
                 css_classes: ["settings-icon-btn", "destructive-action-subtle"],
                 valign: Gtk.Align.CENTER,
                 tooltip_text: t("settings.controlcenter.tooltip.quitar-del-cc"),
@@ -88,7 +88,7 @@ export default function ControlCenterPage(): Gtk.Widget {
 
             const box = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 12, margin_top: 10, margin_bottom: 10 })
 
-            box.append(new Gtk.Image({ icon_name: meta.icon, pixel_size: 20, css_classes: ["sidebar-icon"] }))
+            box.append(new Gtk.Image({ gicon: meta.icon, pixel_size: 20, css_classes: ["sidebar-icon", "cs-icon"] }))
 
             const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
             text.append(new Gtk.Label({ label: meta.name, css_classes: ["settings-row-label"], halign: Gtk.Align.START }))
@@ -100,7 +100,7 @@ export default function ControlCenterPage(): Gtk.Widget {
             box.append(text)
 
             const addBtn = new Gtk.Button({
-                icon_name: Icons.plus,
+                child: new Gtk.Image({ gicon: Icons.plus, pixel_size: 16 , css_classes: ["cs-icon"] }),
                 css_classes: ["settings-icon-btn"],
                 valign: Gtk.Align.CENTER,
                 tooltip_text: t("settings.controlcenter.tooltip.anadir-al-cc"),

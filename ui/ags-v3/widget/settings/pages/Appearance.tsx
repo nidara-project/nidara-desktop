@@ -7,6 +7,7 @@ import NightLight from "../../../core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
 import { ACCENT_PALETTE, type AccentKey } from "../../../core/FluidCrystal"
 import { t } from "../../../core/i18n"
+import Icons from "../../../core/Icons"
 // @ts-ignore
 import Adw from "gi://Adw?version=1"
 import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageHeader, pageBox } from "../SettingsHelpers"
@@ -52,7 +53,7 @@ export default function AppearancePage() {
         t("settings.appearance.row.desc.controla-la-permeabilidad-de-la-luz-en-l"),
         Theme.transparency, 0, 1,
         (v) => Theme.setTransparency(v),
-        { pct: true, icons: ["display-brightness-symbolic", "display-brightness-high-symbolic"] },
+        { pct: true, icons: [Icons.sun, Icons.sun] },
     ))
     page.append(fcGroup.box)
 
@@ -73,7 +74,7 @@ export default function AppearancePage() {
         t("settings.appearance.row.desc.night-light-temp"),
         NightLight.temperature, 2700, 6500,
         (v) => NightLight.setTemperature(v),
-        { unit: "K", icons: ["weather-clear-night-symbolic", "weather-clear-symbolic"] },
+        { unit: "K", icons: [Icons.moon, Icons.sun] },
     ))
 
     // Schedule toggle
@@ -301,7 +302,7 @@ export default function AppearancePage() {
         t("settings.appearance.row.desc.text-scaling"),
         Theme.textScaling, 0.75, 2.0,
         (v) => Theme.setTextScaling(v),
-        { decimals: 2, icons: ["font-x-generic-symbolic", "font-x-generic-symbolic"] },
+        { decimals: 2, icons: [Icons.type, Icons.type] },
     ))
 
     page.append(fontsGroup.box)

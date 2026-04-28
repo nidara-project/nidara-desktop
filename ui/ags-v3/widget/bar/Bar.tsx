@@ -51,7 +51,7 @@ function SystemMenuIcon(): Gtk.Widget {
       img.gicon = Gio.FileIcon.new(Gio.File.new_for_path(path))
     } else {
       img.gicon = null
-      img.icon_name = "start-here-symbolic"
+      img.gicon = Icons.grid
     }
   }
 
@@ -121,10 +121,10 @@ function SystemMenuOverlay() {
     margin_top: 6, margin_bottom: 6, margin_start: 6, margin_end: 6,
   })
 
-  const makeRow = (ico: string, txt: string, _danger: boolean, cmd: () => void) => {
+  const makeRow = (ico: Gio.FileIcon, txt: string, _danger: boolean, cmd: () => void) => {
     const lbl = new Gtk.Label({ label: txt, halign: Gtk.Align.START, hexpand: true,
       css_classes: ["system-menu-label"] })
-    const img = new Gtk.Image({ icon_name: ico, pixel_size: 16 })
+    const img = new Gtk.Image({ gicon: ico, pixel_size: 16, css_classes: ["cs-icon"] })
     const b = new Gtk.Box({ spacing: 12, margin_top: 2, margin_bottom: 2, margin_start: 4, margin_end: 16 })
     b.append(img); b.append(lbl)
     const btn = new Gtk.Button({ child: b, css_classes: ["system-menu-row"], hexpand: true })
@@ -134,9 +134,9 @@ function SystemMenuOverlay() {
 
   const sep = () => new Gtk.Separator({ css_classes: ["system-menu-sep"], margin_top: 4, margin_bottom: 4 })
 
-  const showConfirm = (ico: string, question: string, actionLabel: string, danger: boolean, cmd: () => void) => {
+  const showConfirm = (ico: Gio.FileIcon, question: string, actionLabel: string, danger: boolean, cmd: () => void) => {
     pendingCmd = cmd
-    confirmIcon.icon_name = ico
+    confirmIcon.gicon = ico
     confirmQuestion.label = question
     confirmActionBtn.label = actionLabel
     if (danger) confirmActionBtn.add_css_class("danger-action")
@@ -153,32 +153,32 @@ function SystemMenuOverlay() {
     status.system_menu_open = false; status.toggleAbout()
   }))
   menuBox.append(sep())
-  menuBox.append(makeRow("preferences-system-symbolic", t("bar.system-menu.settings"), false, () => {
+  menuBox.append(makeRow(Icons.settings, t("bar.system-menu.settings"), false, () => {
     status.system_menu_open = false; ;(globalThis as any).toggleSettings?.()
   }))
   menuBox.append(sep())
-  menuBox.append(makeRow("changes-prevent-symbolic", t("bar.system-menu.lock"), false, () =>
+  menuBox.append(makeRow(Icons.lock, t("bar.system-menu.lock"), false, () =>
     closeAndRun(["crystal-lock"])
   ))
-  menuBox.append(makeRow("system-suspend-symbolic", t("bar.system-menu.suspend"), false, () =>
+  menuBox.append(makeRow(Icons.moon, t("bar.system-menu.suspend"), false, () =>
     closeAndRun(["systemctl", "suspend"])
   ))
   menuBox.append(sep())
-  menuBox.append(makeRow("system-log-out-symbolic", t("bar.system-menu.logout"), true, () =>
-    showConfirm("system-log-out-symbolic", t("bar.system-menu.confirm.logout"), t("bar.system-menu.confirm.action.logout"), true,
+  menuBox.append(makeRow(Icons.logOut, t("bar.system-menu.logout"), true, () =>
+    showConfirm(Icons.logOut, t("bar.system-menu.confirm.logout"), t("bar.system-menu.confirm.action.logout"), true,
       () => closeAndRun(["hyprctl", "dispatch", "exit"]))
   ))
-  menuBox.append(makeRow("system-reboot-symbolic", t("bar.system-menu.restart"), false, () =>
-    showConfirm("system-reboot-symbolic", t("bar.system-menu.confirm.restart"), t("bar.system-menu.confirm.action.restart"), false,
+  menuBox.append(makeRow(Icons.rotateCcw, t("bar.system-menu.restart"), false, () =>
+    showConfirm(Icons.rotateCcw, t("bar.system-menu.confirm.restart"), t("bar.system-menu.confirm.action.restart"), false,
       () => closeAndRun(["reboot"]))
   ))
-  menuBox.append(makeRow("system-shutdown-symbolic", t("bar.system-menu.shutdown"), true, () =>
-    showConfirm("system-shutdown-symbolic", t("bar.system-menu.confirm.shutdown"), t("bar.system-menu.confirm.action.shutdown"), true,
+  menuBox.append(makeRow(Icons.power, t("bar.system-menu.shutdown"), true, () =>
+    showConfirm(Icons.power, t("bar.system-menu.confirm.shutdown"), t("bar.system-menu.confirm.action.shutdown"), true,
       () => closeAndRun(["shutdown", "now"]))
   ))
 
   // ── Confirmation page ──────────────────────────────────────────────────
-  const confirmIcon = new Gtk.Image({ pixel_size: 28, halign: Gtk.Align.CENTER })
+  const confirmIcon = new Gtk.Image({ pixel_size: 28, halign: Gtk.Align.CENTER, css_classes: ["cs-icon"] })
   const confirmQuestion = new Gtk.Label({
     halign: Gtk.Align.CENTER,
     justify: Gtk.Justification.CENTER,
@@ -424,7 +424,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeLabel.connect("unrealize", () => { try { GLib.source_remove(clockTimer) } catch {} })
   regionConfig.connect("changed", updateClock)
   updateClock()
-  const bellIcon = new Gtk.Image({ icon_name: Icons.bell, pixel_size: 16, visible: false })
+  const bellIcon = new Gtk.Image({ gicon: Icons.bell, pixel_size: 16, visible: false , css_classes: ["cs-icon"] })
   try {
     const notifd = AstalNotifd.get_default()
     const syncBell = () => { bellIcon.set_visible(notifd.notifications.length > 0) }
@@ -455,8 +455,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   trayInner.connect("notify::visible", () => trayCapsule.set_visible(trayInner.get_visible()))
   trayCapsule.set_visible(trayInner.get_visible())
   right.append(trayCapsule)
-  right.append(SquircleContainer({ child: new Gtk.Image({ icon_name: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
-  const ccBtn = SquircleContainer({ child: new Gtk.Image({ icon_name: Icons.menu, pixel_size: 16, margin_start: 16, margin_end: 16 }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  right.append(SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
+  const ccBtn = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.menu, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
   right.append(ccBtn)
   right.append(SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
 

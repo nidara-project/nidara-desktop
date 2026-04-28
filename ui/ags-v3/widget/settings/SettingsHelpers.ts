@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import Gio from "gi://Gio"
 import { makeHSlider } from "../common/Slider"
 
 /**
@@ -136,7 +137,7 @@ export const sliderRow = (
     min: number,
     max: number,
     cb: (v: number) => void,
-    opts: { unit?: string; icons?: [string, string]; pct?: boolean; decimals?: number } = {},
+    opts: { unit?: string; icons?: [Gio.FileIcon, Gio.FileIcon]; pct?: boolean; decimals?: number } = {},
 ) => {
     const { unit = "", icons, pct = false, decimals } = opts
 
@@ -149,7 +150,7 @@ export const sliderRow = (
     const container = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
 
     if (icons) {
-        container.append(new Gtk.Image({ icon_name: icons[0], pixel_size: 16, opacity: 0.5 }))
+        container.append(new Gtk.Image({ gicon: icons[0], pixel_size: 16, opacity: 0.5, css_classes: ["cs-icon"] }))
     }
 
     const valueLabel = new Gtk.Label({
@@ -170,7 +171,7 @@ export const sliderRow = (
 
     if (icons) {
         container.append(sliderWidget)
-        container.append(new Gtk.Image({ icon_name: icons[1], pixel_size: 16, opacity: 0.5 }))
+        container.append(new Gtk.Image({ gicon: icons[1], pixel_size: 16, opacity: 0.5, css_classes: ["cs-icon"] }))
     } else {
         container.append(sliderWidget)
     }

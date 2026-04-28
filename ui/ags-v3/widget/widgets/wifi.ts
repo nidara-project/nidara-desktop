@@ -17,12 +17,12 @@ function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; upda
 function buildBarContent(): Gtk.Widget {
     const wifi = AstalNetwork.get_default()?.wifi
 
-    const getIcon = () => wifi?.icon_name || Icons.wifiOff
+    const getIcon = () => (wifi as any)?.enabled === false ? Icons.wifiOff : Icons.wifi
 
-    const image = new Gtk.Image({ icon_name: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16 })
+    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
 
     if (wifi) {
-        const sigId = (wifi as any).connect("notify", () => { image.icon_name = getIcon() })
+        const sigId = (wifi as any).connect("notify", () => { image.gicon = getIcon() })
         image.connect("unrealize", () => { try { (wifi as any).disconnect(sigId) } catch {} })
     }
 
@@ -64,7 +64,7 @@ function buildBarContent(): Gtk.Widget {
 const wifiWidget: AtomicWidget = {
     id: "wifi",
     name: t("cc.wifi.name"),
-    icon: "network-wireless-symbolic",
+    icon: Icons.wifi,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.WIDE],

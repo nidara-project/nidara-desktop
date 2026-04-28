@@ -2,6 +2,10 @@
    CRYSTAL DESIGN SYSTEM - NEUTRALIZATION LAYER
    ========================================================================== */
 
+/* Lucide SVGs: black stroke, inverted to white in dark mode via filter.
+   Light mode disables the filter (injected by FluidCrystal.ts). */
+.cs-icon { -gtk-icon-filter: invert(1); }
+
 /*
    Targets explicit namespaced crystal components to ensure a clean slate
    without breaking global GTK apps.
@@ -18,6 +22,9 @@
     box-shadow: none;
     border: none;
     outline: none;
+
+    /* Ensure symbolic icons inherit the correct foreground color */
+    image { color: var(--crystal-text); }
 
     /* Neutralize intrusive GTK internal nodes */
     & ripple,

@@ -206,3 +206,22 @@ button.dock-v-icon {
 
     &:hover { background-color: var(--crystal-surface); }
 }
+
+.dock-menu {
+    transition: none;
+    modelbutton { color: var(--crystal-text); }
+}
+
+.dock-tooltip {
+    box-shadow: none;
+
+    > contents {
+        box-shadow: none;
+        padding: 4px 10px;
+    }
+
+    > arrow { box-shadow: none; }
+
+    .dock-tooltip-label { color: var(--crystal-text); }
+}
+

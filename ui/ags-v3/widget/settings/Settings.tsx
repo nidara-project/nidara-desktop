@@ -37,7 +37,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     // the button itself declares valign:CENTER. Use child Gtk.Image with explicit pixel_size
     // to control content size independently of GTK's default icon sizing.
     const backBtn = new Gtk.Button({
-        child: new Gtk.Image({ icon_name: Icons.chevronLeft, pixel_size: 14 }),
+        child: new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn", "nav-btn"],
         tooltip_text: "Atrás",
         sensitive: false,
@@ -45,7 +45,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         halign: Gtk.Align.CENTER,
     })
     const forwardBtn = new Gtk.Button({
-        child: new Gtk.Image({ icon_name: Icons.chevronRight, pixel_size: 14 }),
+        child: new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn", "nav-btn"],
         tooltip_text: "Adelante",
         sensitive: false,
@@ -84,24 +84,24 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
 
     const categories = [
-        { id: "users",       label: t("settings.users.title"),                           icon: "system-users-symbolic",               component: UsersPage       },
-        { id: "appearance", label: t("settings.appearance.page.title.apariencia"),      icon: "preferences-desktop-theme-symbolic",  component: AppearancePage },
-        { id: "display",    label: t("settings.display.page.title.pantalla"),           icon: "video-display-symbolic",              component: DisplayPage     },
-        { id: "audio",      label: t("settings.audio.page.title.sonido"),               icon: Icons.speaker,                         component: AudioPage       },
-        { id: "network",    label: t("settings.network.page.title.red"),                icon: "network-workgroup-symbolic",           component: NetworkPage     },
-        { id: "input",      label: t("settings.input.title"),                           icon: "input-keyboard-symbolic",             component: InputPage       },
-        { id: "bluetooth",  label: t("settings.bluetooth.page.title.bluetooth"),        icon: Icons.bluetooth,                       component: BluetoothPage   },
-        { id: "region",     label: t("settings.region.title"),                          icon: "preferences-system-time-symbolic",    component: RegionPage      },
-        { id: "defaultapps", label: t("settings.defaultapps.title"),                   icon: "preferences-desktop-default-applications-symbolic", component: DefaultAppsPage },
-        { id: "apps",       label: t("settings.apps.page.title.aplicaciones"),          icon: Icons.app,                             component: AppsPage        },
-        { id: "accessibility", label: t("settings.accessibility.title"),               icon: "preferences-desktop-accessibility-symbolic", component: AccessibilityPage },
-        { id: "notifications", label: t("settings.notif.title"),                        icon: Icons.bell,                            component: NotificationsPage },
-        { id: "bar",        label: t("settings.bar.title"),                              icon: "panel-top-symbolic",                  component: BarPage         },
-        { id: "dock",       label: t("settings.dock.page.title.dock"),                  icon: "dock-bottom-symbolic",                component: DockPage        },
-        { id: "widgets",    label: t("settings.widgets.page.title.widgets"),            icon: "puzzle-piece-symbolic",               component: WidgetsPage     },
-        { id: "autostart",  label: t("settings.autostart.page.title.inicio-automatico"), icon: Icons.terminal,                      component: AutostartPage   },
-        { id: "power",      label: t("settings.power.page.title.energia"),              icon: "power-profile-balanced-symbolic",     component: PowerPage       },
-        { id: "about",      label: t("settings.about.page.title.acerca-de"),            icon: "help-about-symbolic",                 component: AboutPage       },
+        { id: "users",       label: t("settings.users.title"),                           icon: Icons.user,         component: UsersPage       },
+        { id: "appearance", label: t("settings.appearance.page.title.apariencia"),      icon: Icons.palette,      component: AppearancePage },
+        { id: "display",    label: t("settings.display.page.title.pantalla"),           icon: Icons.monitor,      component: DisplayPage     },
+        { id: "audio",      label: t("settings.audio.page.title.sonido"),               icon: Icons.speaker,      component: AudioPage       },
+        { id: "network",    label: t("settings.network.page.title.red"),                icon: Icons.globe,        component: NetworkPage     },
+        { id: "input",      label: t("settings.input.title"),                           icon: Icons.keyboard,     component: InputPage       },
+        { id: "bluetooth",  label: t("settings.bluetooth.page.title.bluetooth"),        icon: Icons.bluetooth,    component: BluetoothPage   },
+        { id: "region",     label: t("settings.region.title"),                          icon: Icons.clock,        component: RegionPage      },
+        { id: "defaultapps", label: t("settings.defaultapps.title"),                   icon: Icons.app,          component: DefaultAppsPage },
+        { id: "apps",       label: t("settings.apps.page.title.aplicaciones"),          icon: Icons.grid,         component: AppsPage        },
+        { id: "accessibility", label: t("settings.accessibility.title"),               icon: Icons.accessibility, component: AccessibilityPage },
+        { id: "notifications", label: t("settings.notif.title"),                        icon: Icons.bell,          component: NotificationsPage },
+        { id: "bar",        label: t("settings.bar.title"),                              icon: Icons.panelTop,      component: BarPage         },
+        { id: "dock",       label: t("settings.dock.page.title.dock"),                  icon: Icons.dock,          component: DockPage        },
+        { id: "widgets",    label: t("settings.widgets.page.title.widgets"),            icon: Icons.puzzle,        component: WidgetsPage     },
+        { id: "autostart",  label: t("settings.autostart.page.title.inicio-automatico"), icon: Icons.rocket,      component: AutostartPage   },
+        { id: "power",      label: t("settings.power.page.title.energia"),              icon: Icons.battery,      component: PowerPage       },
+        { id: "about",      label: t("settings.about.page.title.acerca-de"),            icon: Icons.info,         component: AboutPage       },
     ]
 
     const stack = new Adw.ViewStack({
@@ -120,12 +120,8 @@ export default function Settings(monitor: Gdk.Monitor) {
             valign: Gtk.Align.CENTER,
         })
 
-        const icon = new Gtk.Image({
-            icon_name: cat.icon,
-            pixel_size: 18,
-            css_classes: ["sidebar-icon"],
-            opacity: 0.8,
-        })
+        const icon = new Gtk.Image({ pixel_size: 18, css_classes: ["sidebar-icon", "cs-icon"], opacity: 0.8 })
+        icon.gicon = cat.icon
 
         rowContent.append(icon)
         rowContent.append(new Gtk.Label({
@@ -187,7 +183,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         })
         scroll.set_child(clamp)
 
-        stack.add_titled_with_icon(scroll, cat.id, cat.label, cat.icon)
+        stack.add_titled(scroll, cat.id, cat.label)
     })
 
     sidebar.set_name("crystal-settings-sidebar-list")
@@ -251,9 +247,9 @@ export default function Settings(monitor: Gdk.Monitor) {
             })
 
             row.append(new Gtk.Image({
-                icon_name: cat?.icon || Icons.settings,
+                gicon: cat?.icon ?? Icons.settings,
                 pixel_size: 18,
-                css_classes: ["search-result-page-icon"],
+                css_classes: ["search-result-page-icon", "cs-icon"],
                 opacity: 0.6,
             }))
 
@@ -268,7 +264,7 @@ export default function Settings(monitor: Gdk.Monitor) {
             row.append(text)
 
             row.append(new Gtk.Label({ label: item.pageLabel, css_classes: ["search-result-chip"] }))
-            row.append(new Gtk.Image({ icon_name: Icons.chevronRight, pixel_size: 14, opacity: 0.4 }))
+            row.append(new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, opacity: 0.4, css_classes: ["cs-icon"] }))
 
             const lbr = new Gtk.ListBoxRow({ css_classes: ["settings-item-row", "search-result-row"] })
             lbr.set_child(row)
@@ -398,7 +394,7 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     // Sidebar toggle button
     const sidebarToggle = new Gtk.Button({
-        child: new Gtk.Image({ icon_name: Icons.sidebar, pixel_size: 16 }),
+        child: new Gtk.Image({ gicon: Icons.sidebar, pixel_size: 16, css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn", "sidebar-toggle"],
         tooltip_text: "Menú",
         valign: Gtk.Align.CENTER,
@@ -415,7 +411,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     headerStart.append(navCapsule)
 
     const closeBtn = new Gtk.Button({
-        child: new Gtk.Image({ icon_name: Icons.close, pixel_size: 14 }),
+        child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14, css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn"],
         tooltip_text: "Cerrar",
         valign: Gtk.Align.CENTER,

@@ -19,13 +19,13 @@ function buildBarContent(): Gtk.Widget {
         return Icons.volumeHigh
     }
 
-    const image = new Gtk.Image({ icon_name: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16 })
+    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
 
     // Keep icon in sync
     if (speaker) {
         const ids = [
-            speaker.connect("notify::volume", () => { image.icon_name = getIcon() }),
-            (speaker as any).connect?.("notify::mute", () => { image.icon_name = getIcon() }) ?? 0,
+            speaker.connect("notify::volume", () => { image.gicon = getIcon() }),
+            (speaker as any).connect?.("notify::mute", () => { image.gicon = getIcon() }) ?? 0,
         ]
         image.connect("unrealize", () => ids.forEach(id => { if (id) try { speaker.disconnect(id) } catch {} }))
     }
@@ -50,14 +50,15 @@ function buildBarContent(): Gtk.Widget {
         width_request: 200,
     })
 
+    const muteImg = new Gtk.Image({ gicon: (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh, pixel_size: 16, css_classes: ["cs-icon"] })
     const muteBtn = new Gtk.Button({
-        icon_name: (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh,
+        child: muteImg,
         css_classes: ["bar-popover-icon-btn"],
         valign: Gtk.Align.CENTER,
     })
     muteBtn.connect("clicked", () => {
         if (speaker) (speaker as any).mute = !((speaker as any).mute ?? false)
-        muteBtn.icon_name = (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh
+        muteImg.gicon = (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh
     })
 
     const row = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })

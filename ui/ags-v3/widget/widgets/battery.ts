@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import AstalBattery from "gi://AstalBattery"
+import Gio from "gi://Gio"
 import { makeExpandable } from "./bar-helpers"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { t } from "../../core/i18n"
@@ -16,7 +17,7 @@ function formatTime(seconds: number): string {
     return `${m}m`
 }
 
-function getIcon(): string {
+function getIcon(): Gio.FileIcon | string {
     if (!bat) return Icons.battery
     return bat.icon_name || Icons.battery
 }
@@ -42,7 +43,10 @@ function buildBarContent(): Gtk.Widget {
 
     const sigId = bat.connect("notify", () => {
         const icon = (widget as any).get_first_child()
-        if (icon?.icon_name !== undefined) icon.icon_name = getIcon()
+        if (icon) {
+            const ic = getIcon()
+            if (typeof ic === "string") icon.icon_name = ic; else icon.gicon = ic
+        }
     })
     widget.connect("unrealize", () => { try { bat.disconnect(sigId) } catch {} })
 
@@ -78,7 +82,8 @@ function buildContent(_size: WidgetSize): Gtk.Widget {
 
     const sync = () => {
         const pct = Math.round(bat.percentage)
-        icon.icon_name = getIcon()
+        const ic = getIcon()
+        if (typeof ic === "string") icon.icon_name = ic; else icon.gicon = ic
         pctLabel.label = `${pct}%`
         if (bat.charged) {
             stateLabel.label = t("widget.battery.state.cargado")
@@ -114,7 +119,7 @@ function buildContent(_size: WidgetSize): Gtk.Widget {
 const batteryWidget: AtomicWidget = {
     id: "battery",
     name: t("widget.battery.name"),
-    icon: "battery-symbolic",
+    icon: Icons.battery,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE],

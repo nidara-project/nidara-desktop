@@ -4,11 +4,16 @@ import AstalNetwork from "gi://AstalNetwork"
 import AstalNotifd from "gi://AstalNotifd"
 import { AtomicWidget, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
+import Gio from "gi://Gio"
 import Icons from "../../core/Icons"
+
+function setIcon(img: Gtk.Image, icon: Gio.FileIcon) {
+    img.gicon = icon
+}
 
 // Shared capsule layout: icon circle + title/subtitle text stack
 function buildCapsuleContent(
-    getIcon: () => string,
+    getIcon: () => Gio.FileIcon,
     getTitle: () => string,
     getSubTitle: () => string,
     onClick: () => void,
@@ -32,7 +37,8 @@ function buildCapsuleContent(
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         width_request: 48, height_request: 48,
     })
-    const icon = new Gtk.Image({ icon_name: getIcon(), pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true })
+    const icon = new Gtk.Image({ pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] })
+    setIcon(icon, getIcon())
     iconBox.append(icon)
 
     const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
@@ -46,7 +52,7 @@ function buildCapsuleContent(
     btn.set_child(box)
 
     const update = () => {
-        icon.icon_name = getIcon()
+        setIcon(icon, getIcon())
         label.label = getTitle()
         const sub = getSubTitle()
         subLabel.label = sub
@@ -64,13 +70,13 @@ function buildCapsuleContent(
 
 // Single (1×1) round button
 function buildRoundContent(
-    getIcon: () => string,
+    getIcon: () => Gio.FileIcon,
     getActive: () => boolean,
     onClick: () => void,
 ): Gtk.Widget {
     const syncClasses = () => {
         btn.set_css_classes(getActive() ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"])
-        icon.icon_name = getIcon()
+        setIcon(icon, getIcon())
     }
     const btn = new Gtk.Button({
         css_classes: getActive() ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"],
@@ -78,7 +84,8 @@ function buildRoundContent(
         hexpand: true, vexpand: true,
         width_request: 48, height_request: 48,
     })
-    const icon = new Gtk.Image({ icon_name: getIcon(), pixel_size: 28 })
+    const icon = new Gtk.Image({ pixel_size: 28, css_classes: ["cs-icon"] })
+    setIcon(icon, getIcon())
     btn.set_child(icon)
     btn.connect("clicked", () => { onClick(); syncClasses() })
     return btn
@@ -88,14 +95,7 @@ export function EthernetWidget(): AtomicWidget {
     const network = AstalNetwork.get_default()
     const wired   = network?.wired
 
-    const getIcon = () => {
-        if (!wired) return "network-wired-disconnected-symbolic"
-        return wired.icon_name || (
-            (wired as any).internet === (AstalNetwork as any).Internet?.CONNECTED
-                ? "network-wired-symbolic"
-                : "network-wired-disconnected-symbolic"
-        )
-    }
+    const getIcon = () => Icons.ethernet
     const getSub = () => {
         if (!wired) return t("cc.ethernet.sub.no-cable")
         const connected = (wired as any).internet === (AstalNetwork as any).Internet?.CONNECTED
@@ -128,7 +128,7 @@ export function WifiWidget(): AtomicWidget {
 
     const buildContent = (_size: WidgetSize) => {
         const content = buildCapsuleContent(
-            () => wifi?.icon_name || Icons.wifiOff,
+            () => (wifi as any)?.enabled === false ? Icons.wifiOff : Icons.wifi,
             () => t("cc.wifi.name"),
             () => {
                 if (!wifi) return t("cc.wifi.sub.off")
@@ -174,7 +174,7 @@ export function FocusWidget(): AtomicWidget {
 export function RoundToggle(
     id: string,
     name: string,
-    iconName: string | (() => string),
+    iconName: Gio.FileIcon | (() => Gio.FileIcon),
     active: boolean | (() => boolean),
     onClick: () => void,
     wideSubtitle?: () => string,

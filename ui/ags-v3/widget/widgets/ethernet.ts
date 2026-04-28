@@ -3,6 +3,7 @@ import AstalNetwork from "gi://AstalNetwork"
 import { EthernetWidget } from "../control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { t } from "../../core/i18n"
+import Icons from "../../core/Icons"
 
 function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; update: () => void } {
     const key = new Gtk.Label({ label, css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
@@ -19,14 +20,12 @@ function buildBarContent(): Gtk.Widget {
     const isConnected = () =>
         (wired as any)?.internet === (AstalNetwork as any).Internet?.CONNECTED
 
-    const getIcon = () => isConnected()
-        ? "network-wired-symbolic"
-        : "network-wired-disconnected-symbolic"
+    const getIcon = () => Icons.ethernet
 
-    const image = new Gtk.Image({ icon_name: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16 })
+    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
 
     if (wired) {
-        const sigId = (wired as any).connect("notify::internet", () => { image.icon_name = getIcon() })
+        const sigId = (wired as any).connect("notify::internet", () => { image.gicon = getIcon() })
         image.connect("unrealize", () => { try { (wired as any).disconnect(sigId) } catch {} })
     }
 
@@ -73,7 +72,7 @@ function buildBarContent(): Gtk.Widget {
 const ethernetWidget: AtomicWidget = {
     id: "ethernet",
     name: t("cc.ethernet.name"),
-    icon: "network-wired-symbolic",
+    icon: Icons.ethernet,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.WIDE],

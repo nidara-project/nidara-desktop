@@ -29,8 +29,14 @@ try {
 try {
   const display = Gdk.Display.get_default()
   if (display) {
-    const iconsPath = `${GLib.get_current_dir()}/assets/icons`
-    Gtk.IconTheme.get_for_display(display).add_search_path(iconsPath)
+    const candidates = [
+      `${GLib.get_user_config_dir()}/crystal-shell/ui/ags-v3/assets/icons`,
+      `${GLib.get_current_dir()}/assets/icons`,
+    ]
+    const theme = Gtk.IconTheme.get_for_display(display)
+    for (const p of candidates) {
+      if (GLib.file_test(p, GLib.FileTest.IS_DIR)) { theme.add_search_path(p); break }
+    }
   }
 } catch (e) {
   console.warn("[Icons] Failed to register icon search path:", e)

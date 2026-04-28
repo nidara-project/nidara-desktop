@@ -1,5 +1,11 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
+import Gio from "gi://Gio"
+
+function setIcon(img: Gtk.Image, icon: Gio.FileIcon | string) {
+    if (typeof icon === "string") img.icon_name = icon
+    else img.gicon = icon
+}
 
 const AUTO_HIDE_MS = 3000
 
@@ -9,7 +15,7 @@ const AUTO_HIDE_MS = 3000
  * The Revealer slides in the label to the right of the icon.
  */
 export function makeExpandable(opts: {
-    getIcon: () => string
+    getIcon: () => Gio.FileIcon | string
     getText: () => string
     onAction?: () => void
     autoHideMs?: number
@@ -17,11 +23,8 @@ export function makeExpandable(opts: {
     const { getIcon, getText, onAction, autoHideMs = AUTO_HIDE_MS } = opts
 
     // Identical to fixed bar pill structure — Gtk.Image as anchor
-    const icon = new Gtk.Image({
-        icon_name: getIcon(),
-        pixel_size: 16,
-        margin_start: 16,
-    })
+    const icon = new Gtk.Image({ pixel_size: 16, margin_start: 16, css_classes: ["cs-icon"] })
+    setIcon(icon, getIcon())
 
     const label = new Gtk.Label({
         label: "",
@@ -60,7 +63,7 @@ export function makeExpandable(opts: {
             collapse()
         } else {
             label.label = getText()
-            icon.icon_name = getIcon()
+            setIcon(icon, getIcon())
             expanded = true
             revealer.reveal_child = true
             hideTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, autoHideMs, () => {
@@ -85,22 +88,18 @@ export function makeExpandable(opts: {
  * Returns a Gtk.Image with a GestureClick attached.
  */
 export function makeIconAction(opts: {
-    getIcon: () => string
+    getIcon: () => Gio.FileIcon | string
     onAction: () => void
     activeClass?: string
     getActive?: () => boolean
 }): Gtk.Widget {
     const { getIcon, onAction, activeClass, getActive } = opts
 
-    const image = new Gtk.Image({
-        icon_name: getIcon(),
-        pixel_size: 16,
-        margin_start: 16,
-        margin_end: 16,
-    })
+    const image = new Gtk.Image({ pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+    setIcon(image, getIcon())
 
     const syncState = () => {
-        image.icon_name = getIcon()
+        setIcon(image, getIcon())
         if (activeClass && getActive) {
             if (getActive()) image.add_css_class(activeClass)
             else image.remove_css_class(activeClass)

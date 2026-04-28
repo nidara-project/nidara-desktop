@@ -27,8 +27,9 @@ export default function AudioPage() {
         // Header: Icon + Name + Mute
         const header = new Gtk.Box({ spacing: 12 })
         header.append(new Gtk.Image({
-            icon_name: isMic ? Icons.mic : Icons.speaker,
+            gicon: isMic ? Icons.mic : Icons.speaker,
             pixel_size: 18,
+            css_classes: ["cs-icon"],
         }))
         header.append(new Gtk.Label({
             label: endpoint.description || endpoint.name || t("settings.audio.label.dispositivo"),
@@ -39,14 +40,15 @@ export default function AudioPage() {
             max_width_chars: 30,
         }))
 
+        const muteImg = new Gtk.Image({ gicon: endpoint.mute ? Icons.volumeMuted : Icons.volumeHigh, pixel_size: 18 , css_classes: ["cs-icon"] })
         const muteBtn = new Gtk.Button({
-            icon_name: endpoint.mute ? Icons.volumeMuted : Icons.volumeHigh,
+            child: muteImg,
             css_classes: ["settings-icon-btn", ...(endpoint.mute ? ["muted"] : [])],
             valign: Gtk.Align.CENTER,
         })
         muteBtn.connect("clicked", () => { endpoint.mute = !endpoint.mute })
         endpoint.connect("notify::mute", () => {
-            muteBtn.icon_name = endpoint.mute ? Icons.volumeMuted : Icons.volumeHigh
+            muteImg.gicon = endpoint.mute ? Icons.volumeMuted : Icons.volumeHigh
             if (endpoint.mute) muteBtn.add_css_class("muted")
             else muteBtn.remove_css_class("muted")
         })
@@ -56,9 +58,10 @@ export default function AudioPage() {
         // Slider
         const sliderBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
         sliderBox.append(new Gtk.Image({
-            icon_name: isMic ? Icons.mic : Icons.volumeLow,
+            gicon: isMic ? Icons.mic : Icons.volumeLow,
             pixel_size: 16,
             opacity: 0.5,
+            css_classes: ["cs-icon"],
         }))
 
         const scale = new Gtk.Scale({
@@ -75,9 +78,10 @@ export default function AudioPage() {
 
         sliderBox.append(scale)
         sliderBox.append(new Gtk.Image({
-            icon_name: isMic ? Icons.mic : Icons.volumeHigh,
+            gicon: isMic ? Icons.mic : Icons.volumeHigh,
             pixel_size: 16,
             opacity: 0.5,
+            css_classes: ["cs-icon"],
         }))
 
         const valueLabel = new Gtk.Label({

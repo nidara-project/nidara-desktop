@@ -150,7 +150,7 @@ export default function DisplayPage() {
     noteList.append(createRow(
         t("settings.display.row.label.cambios-temporales"),
         t("settings.display.row.desc.los-cambios-se-aplican-en-vivo-pero-no-p"),
-        new Gtk.Image({ icon_name: Icons.info, pixel_size: 18, opacity: 0.6, valign: Gtk.Align.CENTER })
+        new Gtk.Image({ gicon: Icons.info, pixel_size: 18, opacity: 0.6, valign: Gtk.Align.CENTER , css_classes: ["cs-icon"] })
     ))
     noteBox.append(noteList)
     page.append(noteBox)

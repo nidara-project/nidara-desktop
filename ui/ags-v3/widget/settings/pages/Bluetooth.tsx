@@ -150,11 +150,9 @@ export default function BluetoothPage() {
                 margin_top: 12,
                 margin_bottom: 12,
             })
-            rowBox.append(new Gtk.Image({
-                icon_name: dev.icon || Icons.bluetooth,
-                pixel_size: 20,
-                valign: Gtk.Align.CENTER,
-            }))
+            const devImg = new Gtk.Image({ pixel_size: 20, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"] })
+            if (dev.icon) devImg.icon_name = dev.icon; else devImg.gicon = Icons.bluetooth
+            rowBox.append(devImg)
             rowBox.append(textBox)
 
             if (allowActions) {
@@ -181,7 +179,7 @@ export default function BluetoothPage() {
                 }
 
                 const removeBtn = new Gtk.Button({
-                    child: new Gtk.Image({ icon_name: Icons.trash, pixel_size: 16 }),
+                    child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 16 , css_classes: ["cs-icon"] }),
                     css_classes: ["settings-row-action", "destructive-action"],
                     valign: Gtk.Align.CENTER,
                     tooltip_text: t("settings.bluetooth.tooltip.olvidar-dispositivo"),

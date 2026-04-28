@@ -111,7 +111,7 @@ export default function AboutWindow(): Gtk.Window | null {
 
     // ── Close button ──────────────────────────────────────────────────────────
     const closeBtn = new Gtk.Button({
-        child: new Gtk.Image({ icon_name: Icons.close, pixel_size: 14 }),
+        child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14 , css_classes: ["cs-icon"] }),
         css_classes: ["about-close-btn"],
         halign: Gtk.Align.END,
         tooltip_text: t("settings.about.label.cerrar"),
