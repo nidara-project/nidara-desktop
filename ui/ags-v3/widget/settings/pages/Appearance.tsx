@@ -18,11 +18,12 @@ export default function AppearancePage() {
 
     // 1. General style
     const styleGroup = listGroup(t("settings.appearance.group.diseno-base"))
-    styleGroup.listBox.append(toggleRow(
+    const darkSwitch = new Gtk.Switch({ active: Theme.isDark, valign: Gtk.Align.CENTER })
+    darkSwitch.connect("state-set", (_: any, state: boolean) => { Theme.setDarkMode(state); return false })
+    styleGroup.listBox.append(createRow(
         t("settings.appearance.row.label.modo-oscuro"),
         t("settings.appearance.row.desc.sincroniza-el-nucleo-visual-con-la-noche"),
-        Theme.isDark,
-        (active) => Theme.setDarkMode(active),
+        darkSwitch,
     ))
     page.append(styleGroup.box)
 
@@ -323,6 +324,7 @@ export default function AppearancePage() {
 
     // State sync
     const updateThemeState = () => {
+        darkSwitch.active = Theme.isDark
         const currentAccent = Theme.accentColor
         Object.keys(accentButtons).forEach(key => {
             accentButtons[key].remove_css_class("selected")

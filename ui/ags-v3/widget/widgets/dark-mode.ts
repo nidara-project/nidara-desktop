@@ -5,10 +5,16 @@ import { makeIconAction } from "./bar-helpers"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
+const themeSubscribe = (sync: () => void) => {
+    const id = Theme.connect("changed", sync)
+    return () => { try { Theme.disconnect(id) } catch {} }
+}
+
 function buildBarContent() {
     return makeIconAction({
         getIcon: () => Theme.isDark ? Icons.moon : Icons.sun,
         onAction: () => Theme.setDarkMode(!Theme.isDark),
+        subscribe: themeSubscribe,
     })
 }
 
@@ -25,6 +31,7 @@ const darkModeWidget: AtomicWidget = {
         () => Theme.isDark,
         () => Theme.setDarkMode(!Theme.isDark),
         () => Theme.isDark ? t("widget.dark-mode.sub.dark") : t("widget.dark-mode.sub.light"),
+        themeSubscribe,
     ).buildContent(size),
     buildBarContent,
 }

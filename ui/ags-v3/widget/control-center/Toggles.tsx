@@ -12,12 +12,15 @@ function setIcon(img: Gtk.Image, icon: Gio.FileIcon) {
 }
 
 // Shared capsule layout: icon circle + title/subtitle text stack
+type SubscribeFn = (sync: () => void) => () => void
+
 function buildCapsuleContent(
     getIcon: () => Gio.FileIcon,
     getTitle: () => string,
     getSubTitle: () => string,
     onClick: () => void,
     getActive?: () => boolean,
+    subscribe?: SubscribeFn,
 ): Gtk.Widget {
     const btn = new Gtk.Button({
         css_classes: ["cc-capsule-btn"],
@@ -64,6 +67,10 @@ function buildCapsuleContent(
     }
 
     btn.connect("clicked", () => { onClick(); update() })
+    if (subscribe) {
+        const cleanup = subscribe(update)
+        btn.connect("unrealize", cleanup)
+    }
     update()
     return btn
 }
@@ -73,6 +80,7 @@ function buildRoundContent(
     getIcon: () => Gio.FileIcon,
     getActive: () => boolean,
     onClick: () => void,
+    subscribe?: SubscribeFn,
 ): Gtk.Widget {
     const syncClasses = () => {
         btn.set_css_classes(getActive() ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"])
@@ -88,6 +96,10 @@ function buildRoundContent(
     setIcon(icon, getIcon())
     btn.set_child(icon)
     btn.connect("clicked", () => { onClick(); syncClasses() })
+    if (subscribe) {
+        const cleanup = subscribe(syncClasses)
+        btn.connect("unrealize", cleanup)
+    }
     return btn
 }
 
@@ -178,6 +190,7 @@ export function RoundToggle(
     active: boolean | (() => boolean),
     onClick: () => void,
     wideSubtitle?: () => string,
+    subscribe?: SubscribeFn,
 ): AtomicWidget {
     const getActive = typeof active === "function" ? active : () => active
     const getIcon   = typeof iconName === "function" ? iconName : () => iconName
@@ -185,9 +198,9 @@ export function RoundToggle(
 
     const buildContent = (size: WidgetSize): Gtk.Widget => {
         if (size === WidgetSize.WIDE) {
-            return buildCapsuleContent(getIcon, () => name, getSub, onClick, getActive)
+            return buildCapsuleContent(getIcon, () => name, getSub, onClick, getActive, subscribe)
         }
-        return buildRoundContent(getIcon, getActive, onClick)
+        return buildRoundContent(getIcon, getActive, onClick, subscribe)
     }
 
     return {

@@ -92,8 +92,9 @@ export function makeIconAction(opts: {
     onAction: () => void
     activeClass?: string
     getActive?: () => boolean
+    subscribe?: (sync: () => void) => () => void
 }): Gtk.Widget {
-    const { getIcon, onAction, activeClass, getActive } = opts
+    const { getIcon, onAction, activeClass, getActive, subscribe } = opts
 
     const image = new Gtk.Image({ pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
     setIcon(image, getIcon())
@@ -109,6 +110,11 @@ export function makeIconAction(opts: {
     const gesture = new Gtk.GestureClick()
     gesture.connect("pressed", () => { onAction(); syncState() })
     image.add_controller(gesture)
+
+    if (subscribe) {
+        const cleanup = subscribe(syncState)
+        image.connect("unrealize", cleanup)
+    }
 
     syncState()
     return image
