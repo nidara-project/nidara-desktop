@@ -222,19 +222,23 @@ export default function Dock(gdkmonitor: any) {
         can_focus: false,
     })
 
+    Theme.connect("changed", () => da.queue_draw())
+
     da.set_draw_func((_, cr, w, _h) => {
+        const dockAlpha = Theme.dockOpacity
+        const dockColor = Theme.isDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
+        const borderCol = Theme.isDark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
         if (isVertical) {
             const pw = DOCK_CONSTANTS.PILL_HEIGHT
             const ph = smoothedBarWidth + DOCK_CONSTANTS.BASE_MARGIN * 2
-            // Pill sits at the screen edge: right dock → rightmost, left dock → leftmost + gap
             const px = dockSettings.position === 'right'
                 ? WIN_W - DOCK_CONSTANTS.EXCLUSIVE_ZONE
                 : dockSettings.screenGap
             const py = Math.max(0, Math.round((verticalUsableH - ph) / 2))
             cr.translate(px, py)
-            drawSquircle(cr, pw, ph, undefined, 0.15, true, undefined, undefined, false, { r: 1, g: 1, b: 1, a: 0.12 }, 3.2, 1.0, 0)
+            drawSquircle(cr, pw, ph, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, 0)
         } else {
-            drawSquircle(cr, w, _h, undefined, 0.15, true, undefined, undefined, false, { r: 1, g: 1, b: 1, a: 0.12 }, 3.2, 1.0, 0)
+            drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, 0)
         }
     })
 

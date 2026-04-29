@@ -25,7 +25,7 @@ export default function BaseIsland({
     width,
     height,
     size,
-    alpha = 0.15,
+    alpha,
     gloss = true
 }: BaseIslandProps): Gtk.Widget {
 
@@ -61,6 +61,7 @@ export default function BaseIsland({
         borderWidth: 1.5,
         gloss,
         alpha,
+        useShellOpacity: alpha === undefined,
         shape,
         css_classes: ["cc-island", `cc-${name}-island`],
         inset: 2.0,

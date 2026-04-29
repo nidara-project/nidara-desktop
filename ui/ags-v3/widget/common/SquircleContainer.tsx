@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import { drawSquircle } from "./DrawingUtils"
+import Theme from "../../core/ThemeManager"
 
 export enum Shape {
     SQUIRCLE,
@@ -29,6 +30,7 @@ interface SquircleContainerProps {
     margin?: number
     inset?: number
     padding?: number
+    useShellOpacity?: boolean
 }
 
 export default function SquircleContainer({
@@ -50,7 +52,8 @@ export default function SquircleContainer({
     shape = Shape.SQUIRCLE,
     borderWidth = 1.0,
     inset,
-    padding
+    padding,
+    useShellOpacity = false,
 }: SquircleContainerProps) {
     const container = new Gtk.Grid({
         css_classes,
@@ -66,9 +69,14 @@ export default function SquircleContainer({
     let isHovered = false
     const techInset = inset !== undefined ? inset : 2.0
 
+    if (useShellOpacity) {
+        Theme.connect("changed", () => da.queue_draw())
+    }
+
     da.set_draw_func((_, cr, w, h) => {
-        const baseColor = color || { r: 1, g: 1, b: 1 }
-        const baseAlpha = alpha !== undefined ? alpha : 0.05
+        const themeColor = Theme.isDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
+        const baseColor = color || (useShellOpacity ? themeColor : { r: 1, g: 1, b: 1 })
+        const baseAlpha = useShellOpacity ? Theme.shellOpacity : (alpha !== undefined ? alpha : 0.05)
         let shareColor = baseColor
         let shareAlpha = baseAlpha
         let shareBorder = borderColor

@@ -255,7 +255,7 @@ export default function WorkspaceOverview(monitor: any) {
         child: overview,
         n: 3.2,
         radius: 36,
-        alpha: 0.15,
+        useShellOpacity: true,
         gloss: true,
         borderColor: { r: 1, g: 1, b: 1, a: 0.1 }
     })

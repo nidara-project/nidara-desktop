@@ -103,7 +103,7 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
         if (onClose) onClose()
     }
     
-    return SquircleContainer({ child: box, radius: 40, n: 3.2, alpha: 0.15, gloss: true, shape: Shape.CAPSULE, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction })
+    return SquircleContainer({ child: box, radius: 40, n: 3.2, useShellOpacity: true, gloss: true, shape: Shape.CAPSULE, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction })
 }
 
 export default function NotificationCenter() {
@@ -118,14 +118,14 @@ export default function NotificationCenter() {
 
     const calendarIsland = SquircleContainer({
         child: new Gtk.Calendar({ hexpand: true, css_classes: ["nc-calendar-widget"] }),
-        radius: 32, gloss: true, alpha: 0.15,
+        radius: 32, gloss: true, useShellOpacity: true,
         borderColor: { r: 1, g: 1, b: 1, a: 0.05 },
         css_classes: ["cc-island", "nc-calendar-island"],
     })
     const spacer = new Gtk.Box({ height_request: 24 })
     const emptyLabel = new Gtk.Label({ label: t("nc.empty"), css_classes: ["nc-empty"], margin_top: 64, halign: Gtk.Align.CENTER, visible: false })
     const pillBox = new Gtk.Box({ halign: Gtk.Align.CENTER, height_request: 40, margin_top: 32, margin_bottom: 40, visible: false })
-    const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: t("nc.clear-all"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, alpha: 0.2, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => notifd.notifications.forEach(n => n.dismiss()), css_classes: ["nc-clear-all-pill"] })
+    const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: t("nc.clear-all"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => notifd.notifications.forEach(n => n.dismiss()), css_classes: ["nc-clear-all-pill"] })
     pillBox.append(clearAllBtn)
 
     listContainer.append(calendarIsland); listContainer.append(spacer); listContainer.append(emptyLabel)

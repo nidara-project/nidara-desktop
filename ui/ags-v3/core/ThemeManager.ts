@@ -202,6 +202,8 @@ class ThemeManager extends GObject.Object {
     get isDark() { return this.state.isDark }
     get accentColor(): AccentKey { return this.fcConfig.accent }
     get transparency() { return this.fcConfig.transparency }
+    get shellOpacity() { return this.fcConfig.shellOpacity }
+    get dockOpacity()  { return this.fcConfig.dockOpacity }
     get tintStrength() { return this.fcConfig.tintStrength }
     get tintPanels() { return this.fcConfig.tintPanels }
     get qtTheme() { return this.fcConfig.qtTheme }
@@ -272,6 +274,7 @@ class ThemeManager extends GObject.Object {
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", scheme])
         this.saveSettings()
         await this.syncGtkTheme()
+        this.emit("changed")
     }
 
     private persistenceDebounceId = 0
@@ -295,8 +298,25 @@ class ThemeManager extends GObject.Object {
     }
 
     async setTransparency(value: number) {
-        this.fcConfig.transparency = Math.max(0, Math.min(1, value))
-        console.log(`[ThemeManager] Updating Transparency: ${this.fcConfig.transparency}`)
+        this.fcConfig.transparency = Math.max(0.10, Math.min(0.90, value))
+        this.ensureProvidersLinked()
+        const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
+        this.themeProvider.load_from_data(tokens, tokens.length)
+        this.schedulePersistence()
+        this.emit("changed")
+    }
+
+    async setShellOpacity(value: number) {
+        this.fcConfig.shellOpacity = Math.max(0.06, Math.min(0.75, value))
+        this.ensureProvidersLinked()
+        const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
+        this.themeProvider.load_from_data(tokens, tokens.length)
+        this.schedulePersistence()
+        this.emit("changed")
+    }
+
+    async setDockOpacity(value: number) {
+        this.fcConfig.dockOpacity = Math.max(0.05, Math.min(0.60, value))
         this.ensureProvidersLinked()
         const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
         this.themeProvider.load_from_data(tokens, tokens.length)
@@ -434,6 +454,8 @@ class ThemeManager extends GObject.Object {
             ...this.state,
             accent: this.fcConfig.accent,
             transparency: this.fcConfig.transparency,
+            shellOpacity: this.fcConfig.shellOpacity,
+            dockOpacity: this.fcConfig.dockOpacity,
             tintStrength: this.fcConfig.tintStrength,
             tintPanels: this.fcConfig.tintPanels,
             qtTheme: this.fcConfig.qtTheme,
@@ -467,11 +489,13 @@ class ThemeManager extends GObject.Object {
                 isDark:      (data.isDark as boolean)     ?? this.state.isDark,
             }
             this.fcConfig = {
-                accent:      (data.accent as AccentKey)                  ?? DEFAULT_CONFIG.accent,
-                transparency:(data.transparency as number)               ?? DEFAULT_CONFIG.transparency,
-                tintStrength:(data.tintStrength as number)               ?? DEFAULT_CONFIG.tintStrength,
-                tintPanels:  (data.tintPanels as typeof DEFAULT_CONFIG.tintPanels) ?? DEFAULT_CONFIG.tintPanels,
-                qtTheme:     systemQt || (data.qtTheme as string)        || DEFAULT_CONFIG.qtTheme,
+                accent:       (data.accent as AccentKey)                  ?? DEFAULT_CONFIG.accent,
+                transparency: (data.transparency as number)              ?? DEFAULT_CONFIG.transparency,
+                shellOpacity: (data.shellOpacity as number)              ?? DEFAULT_CONFIG.shellOpacity,
+                dockOpacity:  (data.dockOpacity as number)               ?? DEFAULT_CONFIG.dockOpacity,
+                tintStrength: (data.tintStrength as number)              ?? DEFAULT_CONFIG.tintStrength,
+                tintPanels:   (data.tintPanels as typeof DEFAULT_CONFIG.tintPanels) ?? DEFAULT_CONFIG.tintPanels,
+                qtTheme:      systemQt || (data.qtTheme as string)       || DEFAULT_CONFIG.qtTheme,
             }
         } catch (e) {
             this.syncFromSystem()

@@ -80,7 +80,7 @@ export default function Prism() {
     contentBox.append(searchContainer)
     contentBox.append(revealer)
 
-    const prismWrapper = SquircleContainer({ child: contentBox, radius: 32, n: 4.5, css_classes: ["prism-wrapper"], alpha: 0.15, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 } })
+    const prismWrapper = SquircleContainer({ child: contentBox, radius: 32, n: 4.5, css_classes: ["prism-wrapper"], useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 } })
 
     const clearList = () => {
         let child = resultsList.get_first_child()

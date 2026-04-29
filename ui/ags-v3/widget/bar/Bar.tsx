@@ -11,6 +11,7 @@ import Gio from "gi://Gio"
 // Astal Service Libraries
 import { getWordmark, getServiceSafe } from "../../utils"
 import SquircleContainer from "../common/SquircleContainer"
+import Theme from "../../core/ThemeManager"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
 import widgetConfig from "../../core/WidgetConfig"
@@ -58,7 +59,7 @@ function SystemMenuIcon(): Gtk.Widget {
   applyIcon()
   onBarSettingsChanged(applyIcon)
 
-  return SquircleContainer({ child: img, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleSystemMenu() })
+  return SquircleContainer({ child: img, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleSystemMenu() })
 }
 
 function AppTitle(monitorWidth: number): Gtk.Widget {
@@ -102,7 +103,7 @@ function AppTitle(monitorWidth: number): Gtk.Widget {
     return GLib.SOURCE_REMOVE
   })
 
-  return SquircleContainer({ child: appName, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  return SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
 }
 
 function SystemMenuOverlay() {
@@ -233,7 +234,7 @@ function SystemMenuOverlay() {
     child: stack,
     radius: 24,
     gloss: true,
-    alpha: 0.15,
+    useShellOpacity: true,
     borderColor: { r: 1, g: 1, b: 1, a: 0.05 },
     css_classes: ["system-menu-dropdown"],
   })
@@ -261,7 +262,7 @@ function Workspaces() {
     hypr.connect("notify::focused-workspace", update); hypr.connect("workspace-added", update); hypr.connect("workspace-removed", update); update()
     box.append(dot)
   }
-  return SquircleContainer({ child: box, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleOverview() })
+  return SquircleContainer({ child: box, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleOverview() })
 }
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
@@ -442,7 +443,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     for (const id of widgetConfig.barWidgetIds()) {
       const w = registry.get(id)
       if (w?.buildBarContent) {
-        optWidgets.append(SquircleContainer({ child: w.buildBarContent(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
+        optWidgets.append(SquircleContainer({ child: w.buildBarContent(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
       }
     }
   }
@@ -451,14 +452,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   right.append(optWidgets)
   const trayInner = Tray()
-  const trayCapsule = SquircleContainer({ child: trayInner, gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  const trayCapsule = SquircleContainer({ child: trayInner, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
   trayInner.connect("notify::visible", () => trayCapsule.set_visible(trayInner.get_visible()))
   trayCapsule.set_visible(trayInner.get_visible())
   right.append(trayCapsule)
-  right.append(SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.togglePrism(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
-  const ccBtn = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.menu, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.toggleCC(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  right.append(SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
+  const ccBtn = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.menu, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
   right.append(ccBtn)
-  right.append(SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, alpha: 0.15, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
+  right.append(SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
 
   barBox.set_start_widget(left); barBox.set_center_widget(center); barBox.set_end_widget(right)
 

@@ -35,7 +35,9 @@ export interface TintPanels {
 
 export interface FluidCrystalConfig {
   accent: AccentKey
-  transparency: number
+  transparency: number   // Settings window opacity — range [0.10, 0.90]
+  shellOpacity: number   // Bar + CC + NC opacity   — range [0.06, 0.75]
+  dockOpacity: number    // Dock opacity            — range [0.05, 0.60]
   tintStrength: number
   tintPanels: TintPanels
   qtTheme: string
@@ -44,6 +46,8 @@ export interface FluidCrystalConfig {
 export const DEFAULT_CONFIG: FluidCrystalConfig = {
   accent: "blue",
   transparency: 0.75,
+  shellOpacity: 0.20,
+  dockOpacity: 0.20,
   tintStrength: 0.0,
   tintPanels: {
     controlCenter: false,
@@ -67,6 +71,9 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
   const accent = ACCENT_PALETTE[config.accent].color
   const t = config.transparency
   const baseAlpha = (1.0 - t).toFixed(2)
+  // Light mode floor: dark text needs at least 0.40 white opacity to pass WCAG AAA
+  // even on a pure black wallpaper (worst case), including inner surface-raised overlays.
+  const bgAlpha = (!isDark && parseFloat(baseAlpha) < 0.40) ? "0.40" : baseAlpha
 
   const baseBg = isDark ? "#242424" : "#fafafa"
   const popoverBg = isDark ? "#303030" : "#ffffff"
@@ -76,9 +83,9 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
     `@define-color accent_bg_color ${accent};`,
     `@define-color accent_fg_color #ffffff;`,
     `@define-color accent_color ${accent};`,
-    `@define-color fc_window_bg alpha(${baseBg}, ${baseAlpha});`,
-    `@define-color fc_window_bg_backdrop alpha(${baseBg}, ${baseAlpha});`,
-    `@define-color fc_popover_bg alpha(${popoverBg}, ${baseAlpha});`,
+    `@define-color fc_window_bg alpha(${baseBg}, ${bgAlpha});`,
+    `@define-color fc_window_bg_backdrop alpha(${baseBg}, ${bgAlpha});`,
+    `@define-color fc_popover_bg alpha(${popoverBg}, ${bgAlpha});`,
     `@define-color sidebar_bg_color transparent;`,
     `@define-color sidebar_backdrop_color transparent;`,
     `* {`,
@@ -100,6 +107,11 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
   const fg = isDark ? "255, 255, 255" : "0, 0, 0"
   const bg = isDark ? "36, 36, 36" : "250, 250, 250"
 
+  // Dock item hover/plate tokens — scaled by dockOpacity
+  const d = config.dockOpacity
+  const dBase   = (d * 0.50).toFixed(3)
+  const dRaised = d.toFixed(3)
+
   lines.push(
     `  --crystal-accent: ${accent};`,
     `  --crystal-accent-rgb: ${r}, ${g}, ${b};`,
@@ -108,13 +120,15 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
     `  --crystal-accent-30: rgba(${r}, ${g}, ${b}, 0.3);`,
     `  --crystal-accent-10: rgba(${r}, ${g}, ${b}, 0.1);`,
     `  --crystal-accent-08: rgba(${r}, ${g}, ${b}, 0.08);`,
-    `  --crystal-bg: rgba(${bg}, ${baseAlpha});`,
-    `  --crystal-bg-backdrop: rgba(${bg}, ${baseAlpha});`,
+    `  --crystal-bg: rgba(${bg}, ${bgAlpha});`,
+    `  --crystal-bg-backdrop: rgba(${bg}, ${bgAlpha});`,
     `  --crystal-surface-back: rgba(${fg}, 0.04);`,
     `  --crystal-surface: rgba(${fg}, 0.08);`,
     `  --crystal-surface-hover: rgba(${fg}, 0.12);`,
     `  --crystal-surface-active: rgba(${fg}, 0.16);`,
     `  --crystal-surface-raised: rgba(${fg}, 0.20);`,
+    `  --crystal-dock-surface: rgba(${fg}, ${dBase});`,
+    `  --crystal-dock-surface-raised: rgba(${fg}, ${dRaised});`,
     `  --crystal-text: ${whiteOrBlack};`,
     `  --crystal-text-dim: rgba(${fg}, 0.6);`,
     `  --crystal-text-disabled: rgba(${fg}, 0.3);`,

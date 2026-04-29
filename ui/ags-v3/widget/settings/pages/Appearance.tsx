@@ -49,9 +49,23 @@ export default function AppearancePage() {
 
     fcGroup.listBox.append(createRow(t("settings.appearance.row.label.color-de-acento"), t("settings.appearance.row.desc.define-el-tono-vibrante-de-la-interfaz"), accentPicker))
     fcGroup.listBox.append(sliderRow(
+        t("settings.appearance.row.label.shell-opacity"),
+        t("settings.appearance.row.desc.shell-opacity"),
+        Theme.shellOpacity, 0.06, 0.75,
+        (v) => Theme.setShellOpacity(v),
+        { pct: true, icons: [Icons.sun, Icons.sun] },
+    ))
+    fcGroup.listBox.append(sliderRow(
+        t("settings.appearance.row.label.dock-opacity"),
+        t("settings.appearance.row.desc.dock-opacity"),
+        Theme.dockOpacity, 0.05, 0.60,
+        (v) => Theme.setDockOpacity(v),
+        { pct: true, icons: [Icons.sun, Icons.sun] },
+    ))
+    fcGroup.listBox.append(sliderRow(
         t("settings.appearance.row.label.transparencia-profunda"),
         t("settings.appearance.row.desc.controla-la-permeabilidad-de-la-luz-en-l"),
-        Theme.transparency, 0, 1,
+        Theme.transparency, 0.10, 0.90,
         (v) => Theme.setTransparency(v),
         { pct: true, icons: [Icons.sun, Icons.sun] },
     ))
