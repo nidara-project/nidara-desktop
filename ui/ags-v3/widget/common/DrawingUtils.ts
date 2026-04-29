@@ -116,21 +116,30 @@ export const drawSquircle = (
     let r = cornerRadius ?? (minDim * 0.5)
     if (r > minDim * 0.5) r = minDim * 0.5
 
-    cr.setAntialias(3)
+    // GRAY antialias: alpha-channel only, no per-channel (R/G/B) compensation.
+    // SUBPIXEL (the previous value) pre-compensates each channel separately based
+    // on assumed subpixel layout — correct for LCD text on opaque surfaces, wrong
+    // here: on a transparent layer with Hyprland blur, the per-channel fringe at
+    // curved path edges creates chromatic spots that the blur amplifies.
+    // GRAY produces uniform alpha coverage at all path angles → clean blur halo.
+    cr.setAntialias(2) // GRAY
+    // Soft clip at outer boundary prevents the border stroke's outer half from
+    // bleeding into the transparent 2px margin.
+    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
+    cr.clip()
 
-    // 1. MAIN GLASS BODY (Inner-aligned)
+    // 1. MAIN GLASS BODY
     cr.save()
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, -0.5)
     cr.setSourceRGBA(color.r, color.g, color.b, alpha)
     cr.fill()
     cr.restore()
 
-    // 2. BASE BORDER (INNER STROKE LOGIC)
+    // 2. BASE BORDER
     cr.save()
     const strokeOffset = -borderWidth / 2
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, strokeOffset)
     cr.setLineWidth(borderWidth)
-
     const baseAlpha = borderColor ? borderColor.a : (borderWidth > 1.0 ? 0.12 : 0.10)
     const baseR = borderColor ? borderColor.r : 1
     const baseG = borderColor ? borderColor.g : 1
