@@ -116,27 +116,28 @@ export const drawSquircle = (
     let r = cornerRadius ?? (minDim * 0.5)
     if (r > minDim * 0.5) r = minDim * 0.5
 
-    // GRAY antialias: alpha-channel only, no per-channel (R/G/B) compensation.
-    // SUBPIXEL (the previous value) pre-compensates each channel separately based
-    // on assumed subpixel layout — correct for LCD text on opaque surfaces, wrong
-    // here: on a transparent layer with Hyprland blur, the per-channel fringe at
-    // curved path edges creates chromatic spots that the blur amplifies.
-    // GRAY produces uniform alpha coverage at all path angles → clean blur halo.
-    cr.setAntialias(2) // GRAY
-    // Soft clip at outer boundary prevents the border stroke's outer half from
-    // bleeding into the transparent 2px margin.
-    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
-    cr.clip()
+    // Hyprland blurs any pixel with alpha > ~0.04. AA (GRAY/SUBPIXEL) produces edge
+    // pixels with alpha = glass_alpha × coverage (e.g. 0.05 at a 50%-covered pixel),
+    // which show proportionally MORE blurred background than the glass interior —
+    // visible as a blurry arc at the curved ends. NONE antialias eliminates this:
+    // each pixel is either full glass_alpha or 0, no in-between. The border and rim
+    // strokes are drawn inside per-section NONE clips so their own GRAY AA pixels
+    // cannot escape onto the transparent region outside the glass body.
 
-    // 1. MAIN GLASS BODY
+    // 1. MAIN GLASS BODY — NONE fill, hard boundary pixels
     cr.save()
-    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, -0.5)
+    cr.setAntialias(1) // NONE
+    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
     cr.setSourceRGBA(color.r, color.g, color.b, alpha)
     cr.fill()
     cr.restore()
 
-    // 2. BASE BORDER
+    // 2. BASE BORDER — GRAY stroke inside a NONE hard clip
     cr.save()
+    cr.setAntialias(1) // NONE for clip
+    createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
+    cr.clip()
+    cr.setAntialias(2) // GRAY for smooth stroke inside clip
     const strokeOffset = -borderWidth / 2
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, strokeOffset)
     cr.setLineWidth(borderWidth)
@@ -148,9 +149,13 @@ export const drawSquircle = (
     cr.stroke()
     cr.restore()
 
-    // 3. SPECULAR RIMS — vertical (lit from above), only when gloss is enabled
+    // 3. SPECULAR RIMS — GRAY strokes inside NONE clip, only when gloss is enabled
     if (enableGloss) {
         cr.save()
+        cr.setAntialias(1) // NONE for clip
+        createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
+        cr.clip()
+        cr.setAntialias(2) // GRAY for smooth rim strokes inside clip
         createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, -0.5)
         cr.setLineWidth(1.0)
 
