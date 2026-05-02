@@ -37,10 +37,7 @@
 .bar-left,
 .bar-center,
 .bar-right {
-    background: none;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
+    @include crystal-reset;
     padding: 0;
     margin: 0;
 
@@ -64,10 +61,7 @@
 .bar-right button,
 .bar-tray-btn,
 .bar-ws-btn {
-    background: none;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
+    @include crystal-reset;
     padding: 0;
     margin: 0;
     min-width: 0;
@@ -158,9 +152,7 @@
 
 /* --- Spotlight Pill Refinement --- */
 .spotlight-pill {
-    background: transparent;
-    border: none;
-    box-shadow: none;
+    @include crystal-reset;
 
     image {
         padding: 0;
@@ -169,17 +161,12 @@
 }
 
 .overlay-catcher {
-    background: transparent;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
+    @include crystal-reset;
 }
 
 /* --- System Menu Dropdown (Native Overlay) --- */
 .system-menu-dropdown {
-    background: transparent;
-    border: none;
-    box-shadow: none;
+    @include crystal-reset;
     color: var(--crystal-text);
     -gtk-icon-palette: success white, warning white, error white;
 }
@@ -278,9 +265,7 @@
 }
 
 .about-close-btn {
-    background: transparent;
-    border: none;
-    box-shadow: none;
+    @include crystal-reset;
     border-radius: 6px;
     padding: 4px;
     opacity: 0.5;

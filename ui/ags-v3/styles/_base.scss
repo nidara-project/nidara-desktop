@@ -12,6 +12,7 @@
     --crystal-accent-60: rgba(0, 136, 255, 0.6);
     --crystal-accent-30: rgba(0, 136, 255, 0.3);
     --crystal-accent-10: rgba(0, 136, 255, 0.1);
+    --crystal-accent-08: rgba(0, 136, 255, 0.08);
 
     /* --- Surface & Backgrounds --- */
     --crystal-bg: rgba(30, 30, 30, 0.5);
@@ -41,6 +42,8 @@
     --crystal-danger: #ff3b30;
     --crystal-danger-rgb: 255, 59, 48;
     --crystal-success: #30d158;
+    --crystal-warning: #f3ba4b;
+    --crystal-warning-rgb: 243, 186, 75;
 
     /* --- Borders & Shadows --- */
     --crystal-border: rgba(127, 127, 127, 0.15);
@@ -60,3 +63,38 @@ $crystal-radius-md: var(--crystal-radius-md);
 $crystal-radius-sm: var(--crystal-radius-sm);
 $crystal-radius-xs: var(--crystal-radius-xs);
 $crystal-radius-pill: var(--crystal-radius-pill);
+
+/* ==========================================================================
+   MIXINS
+   ========================================================================== */
+
+// Wipes the GTK/Adwaita defaults that we fight everywhere.
+// Use inside any scoped selector before declaring custom appearance.
+@mixin crystal-reset {
+    background: none;
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    outline: none;
+}
+
+// CSS-side glass appearance (blur is compositor-side via Hyprland layerrule).
+// $level: surface | raised | floating
+@mixin glass($level: surface) {
+    @if $level == surface {
+        background-color: var(--crystal-surface);
+        border: 1px solid var(--crystal-border);
+        border-radius: var(--crystal-radius-md);
+    } @else if $level == raised {
+        background-color: var(--crystal-surface-raised);
+        border: 1px solid var(--crystal-border);
+        border-radius: var(--crystal-radius-md);
+        box-shadow: var(--crystal-shadow-md);
+    } @else if $level == floating {
+        background-color: var(--crystal-bg);
+        border: 1px solid var(--crystal-border);
+        border-radius: var(--crystal-radius-lg);
+        box-shadow: var(--crystal-shadow-lg);
+    }
+}

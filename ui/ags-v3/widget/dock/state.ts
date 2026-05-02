@@ -10,7 +10,7 @@ import AstalHyprland from "gi://AstalHyprland"
 import AstalApps from "gi://AstalApps"
 
 // --- PERSISTENCE ---
-const PINNED_FILE = GLib.get_home_dir() + "/.config/dock_pinned.json"
+const PINNED_FILE = GLib.get_user_config_dir() + "/dock_pinned.json"
 
 // Shared Hyprland service
 export const hypr = AstalHyprland.get_default()
@@ -26,7 +26,7 @@ export const DOCK_CONFIG = {
 }
 
 // --- DOCK SETTINGS (Reactive, Persisted) ---
-const SETTINGS_FILE = GLib.get_home_dir() + "/.config/dock_settings.json"
+const SETTINGS_FILE = GLib.get_user_config_dir() + "/dock_settings.json"
 
 export type DockPosition = 'bottom' | 'left' | 'right'
 

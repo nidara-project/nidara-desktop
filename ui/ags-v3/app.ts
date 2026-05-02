@@ -53,14 +53,25 @@ import Theme from "./core/ThemeManager"
 import AboutWindow from "./widget/about/AboutWindow"
 import notifConfig from "./core/NotifConfig"
 
-console.log("[CRYSTAL_SHELL] Calling app.start()...");
+// Minimal interface for windows managed by the shell
+interface ShellWindow {
+  name: string
+  gdkmonitor?: Gdk.Monitor
+  close(): void
+  hide(): void
+  present(): void
+  toggle?(): void
+}
+
+// Module-level IPC registry — populated by main(), read by requestHandler.
+// requestHandler and main() share this object directly (no globalThis needed for IPC).
+// Widget code (Dock, Bar, AppGrid) still uses (globalThis as any).toggleXxx because
+// those modules are imported before main() runs and cannot import from app.ts directly.
+const ipc: Record<string, (() => void) | undefined> = {}
 
 app.start({
   applicationId: "com.crystalshell.fluid",
     main() {
-    const randomId = Math.floor(Math.random() * 10000);
-    console.log(`[CRYSTAL_SHELL] main() started! (ID: ${randomId})`);
-
     // Apply notification DND default
     if (notifConfig.dndDefault) {
         import("gi://AstalNotifd").then(({ default: AstalNotifd }) => {
@@ -77,9 +88,9 @@ app.start({
         execAsync("hyprctl keyword layerrule 'ignorealpha 0.3, crystal-launcher'").catch(() => {})
     }).catch(() => {})
 
-    const windows = new Set<any>()
-    const appLauncherWindows: any[] = []
-    const settingsWindows: any[] = []
+    const windows = new Set<ShellWindow>()
+    const appLauncherWindows: ShellWindow[] = []
+    const settingsWindows: ShellWindow[] = []
 
     const initWinGlobal = (ctor: any, mon: Gdk.Monitor, array: any[]) => {
       try {
@@ -106,9 +117,9 @@ app.start({
             try {
               syncConstants()
               windows.forEach(w => {
-                if (w.name === "crystal-dock" && (w as any).gdkmonitor === monitor) {
+                if (w.name === "crystal-dock" && w.gdkmonitor === monitor) {
                   windows.delete(w)
-                  ; (w as any).close()
+                  w.close()
                 }
               })
               const newDock = Dock(monitor)
@@ -179,12 +190,19 @@ app.start({
       })
     }
 
-    // Expose Globals
-    ;(globalThis as any).toggleAppGrid = toggleAppGrid;
-    (globalThis as any).toggleSettings = toggleSettings;
-    (globalThis as any).toggleOverview = toggleOverview;
-    (globalThis as any).lockScreen = lockScreen;
-    (globalThis as any).unlockScreen = unlockScreen;
+    // Register IPC handlers (used by requestHandler)
+    ipc.toggleAppGrid = toggleAppGrid
+    ipc.toggleSettings = toggleSettings
+    ipc.toggleOverview = toggleOverview
+    ipc.lockScreen = lockScreen
+    ipc.unlockScreen = unlockScreen
+
+    // Direct-call surface used by Dock, DockItem, Bar, AppGrid widgets
+    ;(globalThis as any).toggleAppGrid = toggleAppGrid
+    ;(globalThis as any).toggleSettings = toggleSettings
+    ;(globalThis as any).toggleOverview = toggleOverview
+    ;(globalThis as any).lockScreen = lockScreen
+    ;(globalThis as any).unlockScreen = unlockScreen
 
   },
   requestHandler(argv, res) {
@@ -202,15 +220,15 @@ app.start({
       case "toggleSpotlight":
         status.togglePrism(); break;
       case "toggleAppGrid":
-        (globalThis as any).toggleAppGrid?.(); break;
+        ipc.toggleAppGrid?.(); break;
       case "toggleSettings":
-        (globalThis as any).toggleSettings?.(); break;
+        ipc.toggleSettings?.(); break;
       case "toggleOverview":
-        (globalThis as any).toggleOverview?.(); break;
+        ipc.toggleOverview?.(); break;
       case "hideForLock":
-        (globalThis as any).lockScreen?.(); break;
+        ipc.lockScreen?.(); break;
       case "showAfterLock":
-        (globalThis as any).unlockScreen?.(); break;
+        ipc.unlockScreen?.(); break;
       default:
         console.warn(`[Handler] Unknown command: ${cmd}`)
         return res("unknown command")

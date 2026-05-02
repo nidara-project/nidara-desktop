@@ -21,13 +21,6 @@ export class UIStatus extends GObject.Object {
                 "overview-open": GObject.ParamSpec.boolean("overview-open", "Overview Open", "Overview visibility", GObject.ParamFlags.READWRITE, false),
                 "about-open": GObject.ParamSpec.boolean("about-open", "About Open", "About window visibility", GObject.ParamFlags.READWRITE, false),
             },
-            Signals: {
-                "toggle-cc": {},
-                "toggle-nc": {},
-                "toggle-prism": {},
-                "toggle-system-menu": {},
-                "toggle-overview": {},
-            }
         }, this)
     }
 

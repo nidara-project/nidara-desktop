@@ -54,7 +54,7 @@ window.crystal-dock-window,
     &>highlight,
     &>outline,
     &>focus-ring,
-    decoration {
+    &>decoration {
         background-image: none;
         background-color: transparent;
         box-shadow: none;

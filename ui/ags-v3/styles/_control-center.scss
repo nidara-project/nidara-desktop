@@ -12,15 +12,9 @@ window.control-center-win,
 window.nc-window-0,
 window.nc-window-1,
 window.nc-window-2 {
-    background: none;
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
+    @include crystal-reset;
 
-    & decoration, & contents {
-        background: none;
-        background-color: transparent;
-    }
+    & decoration, & contents { @include crystal-reset; }
 }
 
 /* --- Island Body --- */
@@ -28,13 +22,7 @@ window.nc-window-2 {
     background-color: transparent;
 
     // Reset Adwaita button defaults inside CC islands
-    button {
-        background: none;
-        background-color: transparent;
-        border: none;
-        box-shadow: none;
-        outline: none;
-    }
+    button { @include crystal-reset; }
 }
 
 .cc-atomic-slider-box-horizontal {

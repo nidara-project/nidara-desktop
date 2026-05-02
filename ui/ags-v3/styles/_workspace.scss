@@ -1,11 +1,12 @@
+@use 'base' as *;
+
 /* ==========================================================================
    WORKSPACE COCKPIT
    ========================================================================== */
 
 /* --- Window --- */
 window.workspace-cockpit {
-    background: transparent;
-    box-shadow: none;
+    @include crystal-reset;
 }
 
 .cockpit-window-content {
@@ -112,12 +113,9 @@ window.workspace-cockpit {
 
 /* --- Buttons --- */
 .wo-btn {
-    background: transparent;
-    border: none;
+    @include crystal-reset;
     padding: 0;
     border-radius: 24px;
-    outline: none;
-    box-shadow: none;
 
     &:focus,
     &:active {

@@ -138,7 +138,7 @@ export const drawSquircle = (
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
     cr.clip()
     cr.setAntialias(2) // GRAY for smooth stroke inside clip
-    const strokeOffset = -borderWidth / 2
+    const strokeOffset = -borderWidth // fully inset: outer edge at -borderWidth/2, AA can't reach glass boundary
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, strokeOffset)
     cr.setLineWidth(borderWidth)
     const baseAlpha = borderColor ? borderColor.a : (borderWidth > 1.0 ? 0.12 : 0.10)

@@ -31,7 +31,7 @@
     & highlight,
     & outline,
     & focus-ring,
-    decoration {
+    & decoration {
         background-color: transparent;
         background-image: none;
         box-shadow: none;
@@ -56,25 +56,33 @@
     }
 }
 
-/* ── Crystal scrollbar — applies to all shell scrollbars ────────────────────── */
-scrollbar {
-    background: transparent;
-    border: none;
+/* ── Crystal scrollbar — scoped to shell components only ────────────────────── */
+#crystal-dock,
+#crystal-bar,
+#crystal-app-launcher,
+.crystal-control-center,
+.crystal-notification-center,
+.crystal-dock-window,
+.crystal-bar-window {
+    & scrollbar {
+        background: transparent;
+        border: none;
 
-    trough { background: transparent; border: none; }
+        trough { background: transparent; border: none; }
 
-    slider {
-        background: var(--crystal-surface-raised);
-        border-radius: var(--crystal-radius-pill);
-        min-width: 4px;
-        min-height: 20px;
-        margin: 2px;
-        transition: background 0.2s ease;
+        slider {
+            background: var(--crystal-surface-raised);
+            border-radius: var(--crystal-radius-pill);
+            min-width: 4px;
+            min-height: 20px;
+            margin: 2px;
+            transition: background 0.2s ease;
 
-        &:hover { background: var(--crystal-text-dim); }
+            &:hover { background: var(--crystal-text-dim); }
+        }
+
+        button { opacity: 0; min-width: 0; min-height: 0; padding: 0; }
     }
-
-    button { opacity: 0; min-width: 0; min-height: 0; padding: 0; }
 }
 
 /* Specific resets for AdwWindow in Crystal Shell */

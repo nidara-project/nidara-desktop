@@ -6,32 +6,19 @@
 
 // ── Window root reset ─────────────────────────────────────────────────────────
 window#crystal-settings-window {
-    background: none;
-    background-color: transparent;
-    box-shadow: none;
-    border: none;
+    @include crystal-reset;
 
-    > decoration, > contents {
-        background: none;
-        background-color: transparent;
-        box-shadow: none;
-        border: none;
-    }
+    > decoration, > contents { @include crystal-reset; }
 }
 
 // ── Main glass surface ────────────────────────────────────────────────────────
 #settings-main-glass {
-    background: var(--crystal-bg);
-    border: 1px solid var(--crystal-border);
-    border-radius: $crystal-radius-lg;
-    box-shadow: var(--crystal-shadow-lg);
+    @include glass(floating);
 }
 
 // ── Adw.OverlaySplitView cleanup ──────────────────────────────────────────────
 #settings-splitview {
-    background: transparent;
-    border: none;
-    box-shadow: none;
+    @include crystal-reset;
 }
 
 // ── Sidebar panel ─────────────────────────────────────────────────────────────
@@ -44,12 +31,7 @@ window#crystal-settings-window {
     margin: 8px 0 8px 8px;
     min-width: 210px;
 
-    viewport, list {
-        background: transparent;
-        border: none;
-        box-shadow: none;
-        outline: none;
-    }
+    viewport, list { @include crystal-reset; }
 }
 
 // ── Sidebar header spacer row — non-interactive, mirrors content header height ─
@@ -118,16 +100,12 @@ window.crystal-settings-window list.settings-sidebar.navigation-sidebar {
 
 // ── Icon buttons ──────────────────────────────────────────────────────────────
 button.crystal-icon-btn {
+    @include crystal-reset;
     padding: 7px;
     min-width: 0;
     min-height: 0;
     border-radius: $crystal-radius-pill;
-    border: none;
-    box-shadow: none;
-    background: transparent;
-    background-image: none;
     color: var(--crystal-text-dim);
-    outline: none;
 
     &:hover {
         background: var(--crystal-surface);
@@ -192,17 +170,14 @@ button.crystal-icon-btn.sidebar-toggle {
 
 // ── Stack + scroll ────────────────────────────────────────────────────────────
 stack.settings-stack {
-    background: transparent;
-    border: none;
+    @include crystal-reset;
     padding: 0;
 }
 
 .settings-page-scroll {
-    background: transparent;
-    border: none;
-    box-shadow: none;
+    @include crystal-reset;
 
-    > viewport { background: transparent; border: none; }
+    > viewport { @include crystal-reset; }
 }
 
 
@@ -243,9 +218,7 @@ list.settings-list-box {
     margin-bottom: 24px;
 
     row.settings-item-row {
-        background: transparent;
-        border: none;
-        box-shadow: none;
+        @include crystal-reset;
         border-radius: $crystal-radius-sm;
         margin: 1px 0;
         transition: background 0.15s ease;
