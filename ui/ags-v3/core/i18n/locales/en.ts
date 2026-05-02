@@ -423,6 +423,13 @@ export default {
     "settings.network.label.none": "None",
     "settings.network.ap.label.conectado": "Connected",
     "settings.network.ap.label.conectar": "Connect",
+    "settings.network.ap.label.desconectar": "Disconnect",
+    "settings.network.ap.label.conectando": "Connecting…",
+    "settings.network.ap.label.error": "Error",
+    "settings.network.ap.label.cancelar": "Cancel",
+    "settings.network.ap.label.buscar-redes": "Scan",
+    "settings.network.ap.title.contrasena-para": "Password for",
+    "settings.network.ap.placeholder.contrasena": "Wi-Fi password",
     "settings.network.ap.desc.intensidad": "Strength:",
 
     // Power
