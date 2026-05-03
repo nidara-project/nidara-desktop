@@ -106,6 +106,15 @@ window.nc-window-2 {
     color: var(--crystal-text-dim);
 }
 
+// VPN widget active state
+.vpn-active-bg {
+    background-color: rgba(var(--crystal-accent-rgb), 0.25);
+}
+
+.vpn-btn-active {
+    background-color: rgba(var(--crystal-accent-rgb), 0.08);
+}
+
 // Recording widget states
 .rec-active-bg {
     background-color: rgba(220, 30, 30, 0.25);

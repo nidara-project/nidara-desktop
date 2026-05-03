@@ -435,6 +435,13 @@ export default {
     "settings.network.ap.title.contrasena-para": "Password for",
     "settings.network.ap.placeholder.contrasena": "Wi-Fi password",
     "settings.network.ap.desc.intensidad": "Strength:",
+    "settings.network.group.vpn": "VPN",
+    "settings.network.vpn.no-profiles": "No VPN profiles configured",
+    "settings.network.vpn.btn.conectar": "Connect",
+    "settings.network.vpn.btn.desconectar": "Disconnect",
+    "settings.network.vpn.btn.conectando": "Connecting…",
+    "widget.vpn.name": "VPN",
+    "widget.vpn.sub.disconnected": "Not connected",
 
     // Power
     "settings.power.group.inactividad-y-bloqueo": "Idle & Lock",

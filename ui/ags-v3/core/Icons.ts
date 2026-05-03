@@ -81,6 +81,8 @@ const Icons = {
     camera:            f("camera"),
     record:            f("record"),
     recordStop:        f("record-stop"),
+    shield:            f("shield"),
+    shieldOff:         f("shield-off"),
 } as const
 
 export type IconGIcon = Gio.FileIcon

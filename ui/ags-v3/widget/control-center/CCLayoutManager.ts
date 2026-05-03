@@ -39,6 +39,7 @@ export const WIDGET_META: Record<string, WidgetMeta> = {
     clipboard:    { name: "Portapapeles", defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.clipboard },
     screenshot:   { name: "Captura",      defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.camera },
     screenrecord: { name: "Grabación",    defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.record },
+    vpn:          { name: "VPN",          defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.shield },
 }
 
 export interface LayoutEntry {

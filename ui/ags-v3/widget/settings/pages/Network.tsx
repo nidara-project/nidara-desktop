@@ -38,6 +38,76 @@ function rescan(): Promise<string> {
     return execAsync(["nmcli", "device", "wifi", "rescan"]).catch(() => "")
 }
 
+// ── VPN helpers ───────────────────────────────────────────────────────────────
+
+interface VpnProfile { name: string; type: string; active: boolean }
+
+async function listVpnProfiles(): Promise<VpnProfile[]> {
+    try {
+        const out = await execAsync(["nmcli", "-t", "-f", "NAME,TYPE,ACTIVE", "connection", "show"])
+        return out.trim().split("\n")
+            .map(line => {
+                const parts = line.split(":")
+                return { name: parts[0] ?? "", type: parts[1] ?? "", active: parts[2] === "yes" }
+            })
+            .filter(p => p.type === "vpn" || p.type === "wireguard")
+    } catch {
+        return []
+    }
+}
+
+function vpnTypeName(type: string): string {
+    if (type === "wireguard") return "WireGuard"
+    return "VPN"
+}
+
+function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow {
+    let active = profile.active
+
+    const btn = new Gtk.Button({ valign: Gtk.Align.CENTER })
+
+    function setState(state: "connect" | "disconnect" | "loading" | "error") {
+        switch (state) {
+            case "connect":
+                btn.label = t("settings.network.vpn.btn.conectar")
+                btn.remove_css_class("destructive-action"); btn.add_css_class("suggested-action")
+                btn.sensitive = true; break
+            case "disconnect":
+                btn.label = t("settings.network.vpn.btn.desconectar")
+                btn.remove_css_class("suggested-action"); btn.add_css_class("destructive-action")
+                btn.sensitive = true; break
+            case "loading":
+                btn.label = t("settings.network.vpn.btn.conectando")
+                btn.sensitive = false; break
+            case "error":
+                btn.label = t("settings.network.ap.label.error")
+                btn.sensitive = false
+                setTimeout(() => setState(active ? "disconnect" : "connect"), 2000); break
+        }
+    }
+    setState(active ? "disconnect" : "connect")
+
+    btn.connect("clicked", async () => {
+        setState("loading")
+        try {
+            if (active) {
+                await execAsync(["nmcli", "connection", "down", profile.name])
+                active = false
+            } else {
+                await execAsync(["nmcli", "connection", "up", profile.name])
+                active = true
+            }
+            setState(active ? "disconnect" : "connect")
+            setTimeout(onRefresh, 1500)
+        } catch (e) {
+            console.error("[Network] VPN toggle failed:", e)
+            setState("error")
+        }
+    })
+
+    return createRow(profile.name, vpnTypeName(profile.type), btn)
+}
+
 function getIp(service: any): string {
     if (!service) return t("settings.network.label.none")
     if (service.ip4_address && service.ip4_address !== "None") return String(service.ip4_address)
@@ -334,6 +404,33 @@ export default function NetworkPage() {
         ))
         page.append(box)
     }
+
+    // ── VPN ───────────────────────────────────────────────────────────────────
+    const { box: vpnBox, listBox: vpnList } = listGroup(t("settings.network.group.vpn"))
+
+    const emptyVpn = new Gtk.Label({
+        label: t("settings.network.vpn.no-profiles"),
+        css_classes: ["settings-row-subtitle"],
+        margin_top: 12, margin_bottom: 12, margin_start: 16,
+        halign: Gtk.Align.START,
+    })
+
+    const refreshVpn = () => {
+        let child = vpnList.get_first_child()
+        while (child) { vpnList.remove(child); child = vpnList.get_first_child() }
+
+        listVpnProfiles().then(profiles => {
+            if (profiles.length === 0) {
+                const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+                row.set_child(emptyVpn)
+                vpnList.append(row)
+            } else {
+                profiles.forEach(p => vpnList.append(buildVpnRow(p, refreshVpn)))
+            }
+        })
+    }
+    refreshVpn()
+    page.append(vpnBox)
 
     return page
 }

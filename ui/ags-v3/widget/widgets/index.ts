@@ -12,6 +12,7 @@ import battery   from "./battery"
 import clipboard from "./clipboard"
 import screenshot from "./screenshot"
 import screenrecord from "./screenrecord"
+import vpn from "./vpn"
 
 const ALL_WIDGETS: AtomicWidget[] = [
     cpuMemory,
@@ -27,6 +28,7 @@ const ALL_WIDGETS: AtomicWidget[] = [
     clipboard,
     screenshot,
     screenrecord,
+    vpn,
 ]
 
 const _map = new Map<string, AtomicWidget>(ALL_WIDGETS.map(w => [w.id, w]))

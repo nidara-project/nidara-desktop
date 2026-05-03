@@ -20,6 +20,7 @@ const DEFAULTS: Record<string, WidgetPlacement> = {
     clipboard:    { bar: false, cc: true  },
     screenshot:   { bar: false, cc: true  },
     screenrecord: { bar: false, cc: true  },
+    vpn:          { bar: false, cc: true  },
 }
 
 class WidgetConfigManager extends GObject.Object {
