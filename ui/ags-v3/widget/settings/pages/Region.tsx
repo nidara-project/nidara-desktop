@@ -4,6 +4,7 @@ import GObject from "gi://GObject"
 import { execAsync } from "ags/process"
 import { listGroup, createRow, toggleRow, pageHeader, pageBox, staticLabel } from "../SettingsHelpers"
 import regionConfig, { TimeFormat, DateFormat } from "../../../core/RegionConfig"
+import inputConfig from "../../../core/InputConfig"
 import { t } from "../../../core/i18n"
 
 const TIME_FORMAT_LABELS = (): Record<TimeFormat, string> => ({
@@ -280,9 +281,7 @@ export default function RegionPage() {
             })
         }).catch(console.error)
 
-        execAsync(["bash", "-c", "grep 'kb_layout' ~/.config/hypr/hyprland-user.conf | awk '{print $3}' || echo ''"]).then(kb => {
-            kbEntry.text = kb.trim() || out.match(/X11 Layout:\s*(\S+)/)?.[1] || "us"
-        }).catch(err => console.error("Error reading hypr kb_layout:", err))
+        kbEntry.text = inputConfig.kbLayout || out.match(/X11 Layout:\s*(\S+)/)?.[1] || "us"
 
         execAsync(["localectl", "list-x11-keymap-layouts"]).then(list => {
             list.trim().split("\n").forEach(k => {
@@ -305,10 +304,7 @@ export default function RegionPage() {
     const applyKb = () => {
         const kb = kbEntry.text.trim()
         if (!kb) return
-        applyKbBtn.sensitive = false
-        const cmd = `sed -i "s/\\(kb_layout\\s*=\\s*\\).*/\\1${kb}/" ~/.config/hypr/hyprland-user.conf && hyprctl keyword input:kb_layout ${kb}`
-        execAsync(["bash", "-c", cmd])
-            .finally(() => applyKbBtn.sensitive = true)
+        inputConfig.setKbLayout(kb)
     }
 
     applyLangBtn.connect("clicked", applyLang)
