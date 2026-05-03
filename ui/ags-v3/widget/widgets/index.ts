@@ -11,6 +11,7 @@ import media     from "./media"
 import battery   from "./battery"
 import brightness from "./brightness"
 import clipboard from "./clipboard"
+import nightLight from "./night-light"
 import screenshot from "./screenshot"
 import screenrecord from "./screenrecord"
 import vpn from "./vpn"
@@ -28,6 +29,7 @@ const ALL_WIDGETS: AtomicWidget[] = [
     battery,
     brightness,
     clipboard,
+    nightLight,
     screenshot,
     screenrecord,
     vpn,

@@ -564,6 +564,8 @@ export default {
     "widget.screenrecord.recording": "Recording…",
     "widget.screenrecord.saved": "Recording saved",
     "widget.brightness.name": "Brightness",
+    "widget.night-light.name": "Night Light",
+    "widget.night-light.sub.off": "Off",
 
     // Control Center — Ethernet toggle
     "cc.ethernet.name": "Ethernet",

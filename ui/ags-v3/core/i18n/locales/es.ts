@@ -543,6 +543,8 @@ export default {
     "widget.screenrecord.recording": "Grabando…",
     "widget.screenrecord.saved": "Grabación guardada",
     "widget.brightness.name": "Brillo",
+    "widget.night-light.name": "Luz Nocturna",
+    "widget.night-light.sub.off": "Apagada",
 
     // Control Center — Ethernet toggle
     "cc.ethernet.name": "Ethernet",
