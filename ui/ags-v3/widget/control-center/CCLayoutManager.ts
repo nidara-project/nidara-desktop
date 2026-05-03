@@ -27,6 +27,7 @@ export interface WidgetMeta {
 }
 
 export const WIDGET_META: Record<string, WidgetMeta> = {
+    brightness:  { name: "Brillo",        defaultSize: WidgetSize.FULL_WIDTH, sizes: [WidgetSize.FULL_WIDTH],                        icon: Icons.sun },
     cpu_memory:  { name: "CPU & Memoria", defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.cpu },
     media:       { name: "Media",         defaultSize: WidgetSize.SQUARE,     sizes: [WidgetSize.SQUARE, WidgetSize.WIDE],           icon: Icons.play },
     wifi:        { name: "Wi-Fi",         defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.wifi },

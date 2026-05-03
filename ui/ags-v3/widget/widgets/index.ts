@@ -9,6 +9,7 @@ import focus     from "./focus"
 import calculator from "./calculator"
 import media     from "./media"
 import battery   from "./battery"
+import brightness from "./brightness"
 import clipboard from "./clipboard"
 import screenshot from "./screenshot"
 import screenrecord from "./screenrecord"
@@ -25,6 +26,7 @@ const ALL_WIDGETS: AtomicWidget[] = [
     calculator,
     media,
     battery,
+    brightness,
     clipboard,
     screenshot,
     screenrecord,

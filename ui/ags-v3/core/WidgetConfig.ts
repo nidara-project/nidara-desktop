@@ -17,6 +17,7 @@ const DEFAULTS: Record<string, WidgetPlacement> = {
     dark_mode:  { bar: false, cc: true  },
     focus:      { bar: false, cc: true  },
     calculator: { bar: false, cc: true  },
+    brightness:   { bar: false, cc: true  },
     clipboard:    { bar: false, cc: true  },
     screenshot:   { bar: false, cc: true  },
     screenrecord: { bar: false, cc: true  },
