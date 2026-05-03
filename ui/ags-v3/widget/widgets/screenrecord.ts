@@ -191,11 +191,11 @@ function buildContent(_size: WidgetSize): Gtk.Widget {
         css_classes: ["cs-icon"],
     }))
 
-    const idleText = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
-    idleText.append(new Gtk.Label({ label: t("widget.screenrecord.name"), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START }))
-    idleText.append(new Gtk.Label({ label: t("widget.screenrecord.sub"), css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START }))
+    const idleText = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
+    idleText.append(new Gtk.Label({ label: t("widget.screenrecord.name"), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 }))
+    idleText.append(new Gtk.Label({ label: t("widget.screenrecord.sub"), css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 }))
 
-    const idleInner = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, halign: Gtk.Align.START, valign: Gtk.Align.CENTER, margin_start: 4 })
+    const idleInner = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true })
     idleInner.append(iconBoxIdle)
     idleInner.append(idleText)
 
@@ -214,16 +214,16 @@ function buildContent(_size: WidgetSize): Gtk.Widget {
     }))
 
     const elapsed = makeElapsedLabel()
-    const recText = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
-    recText.append(new Gtk.Label({ label: t("widget.screenrecord.recording"), css_classes: ["cc-atomic-label-bold", "rec-label"], halign: Gtk.Align.START }))
+    const recText = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
+    recText.append(new Gtk.Label({ label: t("widget.screenrecord.recording"), css_classes: ["cc-atomic-label-bold", "rec-label"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 }))
     recText.append(elapsed)
 
-    const recInner = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, halign: Gtk.Align.START, valign: Gtk.Align.CENTER, margin_start: 4 })
+    const recInner = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true })
     recInner.append(iconBoxRec)
     recInner.append(recText)
 
     // ── Stack ──
-    const stack = new Gtk.Stack({ transition_type: Gtk.StackTransitionType.CROSSFADE, transition_duration: 150 })
+    const stack = new Gtk.Stack({ transition_type: Gtk.StackTransitionType.CROSSFADE, transition_duration: 150, hexpand: true, hhomogeneous: true })
     stack.add_named(idleInner, "idle")
     stack.add_named(recInner, "recording")
     btn.set_child(stack)
