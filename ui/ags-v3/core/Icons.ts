@@ -79,6 +79,8 @@ const Icons = {
     globe:             f("globe"),
     clipboard:         f("clipboard"),
     camera:            f("camera"),
+    record:            f("record"),
+    recordStop:        f("record-stop"),
 } as const
 
 export type IconGIcon = Gio.FileIcon

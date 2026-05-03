@@ -451,6 +451,27 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   rebuildBarWidgets()
 
   right.append(optWidgets)
+
+  // Recording indicator — always in DOM, visible only while recording
+  const recDot = new Gtk.Box({
+      css_classes: ["bar-rec-indicator"],
+      width_request: 8, height_request: 8,
+      valign: Gtk.Align.CENTER,
+      visible: false,
+  })
+  const recLabel = new Gtk.Label({ label: "REC", css_classes: ["bar-rec-label"] })
+  const recBox = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER, margin_start: 8, margin_end: 8 })
+  recBox.append(recDot)
+  recBox.append(recLabel)
+  const recCapsule = SquircleContainer({ child: recBox, gloss: false, useShellOpacity: true, borderColor: { r: 0.9, g: 0.1, b: 0.1, a: 0.4 }, perfect: true, css_classes: ["bar-rec-capsule"] })
+  recCapsule.set_visible(false)
+  const syncRecIndicator = () => {
+      recCapsule.set_visible(status.recording)
+      recDot.set_visible(status.recording)
+  }
+  status.connect("notify::recording", syncRecIndicator)
+  right.append(recCapsule)
+
   const trayInner = Tray()
   const trayCapsule = SquircleContainer({ child: trayInner, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
   trayInner.connect("notify::visible", () => trayCapsule.set_visible(trayInner.get_visible()))

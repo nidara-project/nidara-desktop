@@ -527,6 +527,14 @@ export default {
     "widget.screenshot.action.copy": "Copiar",
     "widget.screenshot.action.save": "Guardar",
     "widget.screenshot.saved": "Captura guardada",
+    "widget.screenrecord.name": "Grabación",
+    "widget.screenrecord.sub": "Graba la pantalla",
+    "widget.screenrecord.mode.screen": "Pantalla completa",
+    "widget.screenrecord.mode.region": "Región",
+    "widget.screenrecord.audio": "Incluir audio",
+    "widget.screenrecord.start": "Iniciar grabación",
+    "widget.screenrecord.recording": "Grabando…",
+    "widget.screenrecord.saved": "Grabación guardada",
 
     // Control Center — Ethernet toggle
     "cc.ethernet.name": "Ethernet",

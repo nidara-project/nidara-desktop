@@ -106,6 +106,31 @@ window.nc-window-2 {
     color: var(--crystal-text-dim);
 }
 
+// Recording widget states
+.rec-active-bg {
+    background-color: rgba(220, 30, 30, 0.25);
+    animation: rec-pulse-cc 1.4s ease-in-out infinite;
+}
+
+.rec-stop-icon { color: #e03030; }
+
+.rec-label { color: #e03030; }
+
+.rec-elapsed {
+    font-size: 0.8em;
+    color: var(--crystal-text-dim);
+    font-variant-numeric: tabular-nums;
+}
+
+.rec-btn-active {
+    background-color: rgba(220, 30, 30, 0.08);
+}
+
+@keyframes rec-pulse-cc {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.5; }
+}
+
 .cc-atomic-focus-btn {
     background-color: var(--crystal-surface);
     border-radius: 12px;

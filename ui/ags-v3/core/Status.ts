@@ -20,6 +20,7 @@ export class UIStatus extends GObject.Object {
                 "system-menu-open": GObject.ParamSpec.boolean("system-menu-open", "System Menu Open", "System Menu visibility", GObject.ParamFlags.READWRITE, false),
                 "overview-open": GObject.ParamSpec.boolean("overview-open", "Overview Open", "Overview visibility", GObject.ParamFlags.READWRITE, false),
                 "about-open": GObject.ParamSpec.boolean("about-open", "About Open", "About window visibility", GObject.ParamFlags.READWRITE, false),
+                "recording": GObject.ParamSpec.boolean("recording", "Recording", "Screen recording active", GObject.ParamFlags.READWRITE, false),
             },
         }, this)
     }
@@ -33,6 +34,7 @@ export class UIStatus extends GObject.Object {
     private _system_menu_open = false
     private _overview_open = false
     private _about_open = false
+    private _recording = false
 
     public get notif_active() { return this._notif_active }
     public set notif_active(v: boolean) {
@@ -155,6 +157,13 @@ export class UIStatus extends GObject.Object {
         if (v) this._system_menu_open = false
         this.notify("about-open")
         if (v) this.notify("system-menu-open")
+    }
+
+    public get recording() { return this._recording }
+    public set recording(v: boolean) {
+        if (this._recording === v) return
+        this._recording = v
+        this.notify("recording")
     }
 
     toggleCC() { this.cc_open = !this.cc_open }

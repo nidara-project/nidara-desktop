@@ -274,3 +274,27 @@
     &:hover { opacity: 1; background: var(--crystal-surface); }
     &:active { background: var(--crystal-surface-back); }
 }
+
+// ── Recording indicator ───────────────────────────────────────────────────────
+
+.bar-rec-capsule {
+    background: rgba(220, 30, 30, 0.18);
+}
+
+.bar-rec-indicator {
+    border-radius: 999px;
+    background: #e03030;
+    animation: rec-pulse 1.4s ease-in-out infinite;
+}
+
+.bar-rec-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #e03030;
+    letter-spacing: 0.05em;
+}
+
+@keyframes rec-pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+}
