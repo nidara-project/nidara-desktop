@@ -3,6 +3,7 @@ import AstalNetwork from "gi://AstalNetwork"
 import { execAsync } from "ags/process"
 import { listGroup, createRow, staticLabel, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
+import Icons from "../../../core/Icons"
 
 // ── nmcli helpers ─────────────────────────────────────────────────────────────
 
@@ -59,7 +60,7 @@ function buildApRow(ap: any, iface: string, onRefresh: () => void): Gtk.ListBoxR
 
     if (secured) {
         rightBox.append(new Gtk.Image({
-            icon_name: "network-wireless-encrypted-symbolic",
+            gicon: Icons.lock,
             pixel_size: 14,
             opacity: 0.5,
             valign: Gtk.Align.CENTER,
