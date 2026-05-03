@@ -261,15 +261,17 @@ export default function IslandGrid() {
     editBtn.add_controller(gestureClick)
     ccLayout.connect("changed", () => rebuild())
 
-    // Sync CC layout when widget placement config changes
-    widgetConfig.connect("changed", () => {
+    // Sync CC layout with widget placement config
+    const syncCCLayout = () => {
         const activeInCC = new Set(ccLayout.activeIds())
         for (const w of registry.ccCapable()) {
             const inCC = widgetConfig.get(w.id).cc
             if (inCC && !activeInCC.has(w.id)) ccLayout.add(w.id)
             else if (!inCC && activeInCC.has(w.id)) ccLayout.remove(w.id)
         }
-    })
+    }
+    syncCCLayout()  // initial pass — catches widgets enabled before WIDGET_META had their entry
+    widgetConfig.connect("changed", syncCCLayout)
 
     // Reset edit mode when CC is closed
     status.connect("notify::cc-open", () => {
