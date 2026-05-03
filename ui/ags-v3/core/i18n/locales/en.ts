@@ -275,6 +275,10 @@ export default {
     "settings.audio.page.subtitle.administra-tus-dispositivos-de-entrada-y": "Manage your input and output devices",
     "settings.audio.page.title.sonido": "Sound",
     "settings.audio.label.dispositivo": "Device",
+    "settings.audio.label.por-defecto": "Default",
+    "settings.audio.btn.set-default": "Set default",
+    "settings.audio.group.aplicaciones": "App Volume",
+    "settings.audio.label.sin-apps": "No apps playing audio",
 
     // Autostart
     "settings.autostart.group.entradas-exec-once-en-hyprland-user-conf": "exec-once entries in hyprland-user.conf",
