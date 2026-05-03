@@ -536,6 +536,14 @@ export default {
     "widget.clipboard.sub.history": "History",
     "widget.clipboard.empty": "No clipboard history",
     "widget.clipboard.image": "[image]",
+    "widget.screenshot.name": "Screenshot",
+    "widget.screenshot.sub": "Capture",
+    "widget.screenshot.mode.area": "Area",
+    "widget.screenshot.mode.screen": "Screen",
+    "widget.screenshot.mode.window": "Window",
+    "widget.screenshot.action.copy": "Copy",
+    "widget.screenshot.action.save": "Save",
+    "widget.screenshot.saved": "Screenshot saved",
 
     // Control Center — Ethernet toggle
     "cc.ethernet.name": "Ethernet",

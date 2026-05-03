@@ -10,6 +10,7 @@ import calculator from "./calculator"
 import media     from "./media"
 import battery   from "./battery"
 import clipboard from "./clipboard"
+import screenshot from "./screenshot"
 
 const ALL_WIDGETS: AtomicWidget[] = [
     cpuMemory,
@@ -23,6 +24,7 @@ const ALL_WIDGETS: AtomicWidget[] = [
     media,
     battery,
     clipboard,
+    screenshot,
 ]
 
 const _map = new Map<string, AtomicWidget>(ALL_WIDGETS.map(w => [w.id, w]))
