@@ -36,6 +36,8 @@ export const WIDGET_META: Record<string, WidgetMeta> = {
     dark_mode:   { name: "Apariencia",    defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],           icon: Icons.moon },
     calculator:  { name: "Calculadora",   defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE],                            icon: Icons.calculator },
     volume:      { name: "Volumen",       defaultSize: WidgetSize.FULL_WIDTH, sizes: [WidgetSize.FULL_WIDTH, WidgetSize.TALL],        icon: Icons.volumeHigh },
+    clipboard:   { name: "Portapapeles", defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.clipboard },
+    screenshot:  { name: "Captura",      defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.camera },
 }
 
 export interface LayoutEntry {
