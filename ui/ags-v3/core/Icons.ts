@@ -77,6 +77,7 @@ const Icons = {
     bluetoothOff:      f("bluetooth-off"),
     bluetoothSearching: f("bluetooth-searching"),
     globe:             f("globe"),
+    clipboard:         f("clipboard"),
 } as const
 
 export type IconGIcon = Gio.FileIcon

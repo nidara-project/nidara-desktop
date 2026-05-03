@@ -511,6 +511,10 @@ export default {
     "widget.battery.state.cargado": "Cargado",
     "widget.battery.state.cargando": "Cargando",
     "widget.battery.state.descargando": "Descargando",
+    "widget.clipboard.name": "Portapapeles",
+    "widget.clipboard.sub.history": "Historial",
+    "widget.clipboard.empty": "Sin historial",
+    "widget.clipboard.image": "[imagen]",
 
     // Control Center — Ethernet toggle
     "cc.ethernet.name": "Ethernet",

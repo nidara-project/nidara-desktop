@@ -532,6 +532,10 @@ export default {
     "widget.battery.state.cargado": "Charged",
     "widget.battery.state.cargando": "Charging",
     "widget.battery.state.descargando": "Discharging",
+    "widget.clipboard.name": "Clipboard",
+    "widget.clipboard.sub.history": "History",
+    "widget.clipboard.empty": "No clipboard history",
+    "widget.clipboard.image": "[image]",
 
     // Control Center — Ethernet toggle
     "cc.ethernet.name": "Ethernet",

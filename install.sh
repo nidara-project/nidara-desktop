@@ -77,7 +77,7 @@ sudo pacman -Sy --needed --noconfirm \
     gtk3 gtk4 gtk4-layer-shell libadwaita libpeas-2 \
     libpulse networkmanager bluez-libs upower libnotify \
     intltool scdoc brightnessctl pamixer hyprpicker \
-    jq slurp grim wl-clipboard mesa pam \
+    jq slurp grim wl-clipboard cliphist mesa pam \
     git nodejs npm gjs go \
     accountsservice greetd pavucontrol rust cargo \
     hyprland hypridle hyprsunset uwsm \
