@@ -80,6 +80,7 @@ settings_addr.txt
 # User config files — generated at runtime, may appear in repo root
 # if install.sh was previously run in legacy symlink dev mode
 crystal-settings.conf
+crystal-monitor.conf
 hyprland-user.conf
 
 # Generated CSS (kept in repo as pre-compiled convenience for users)
