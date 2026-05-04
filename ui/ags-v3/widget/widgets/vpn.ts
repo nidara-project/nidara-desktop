@@ -130,7 +130,30 @@ function buildVpnPopover(anchor: Gtk.Widget): Gtk.Popover {
 
 // ── CC content ────────────────────────────────────────────────────────────────
 
-function buildContent(_size: WidgetSize): Gtk.Widget {
+function buildContent(size: WidgetSize): Gtk.Widget {
+    if (size === WidgetSize.SINGLE) {
+        const btn = new Gtk.Button({
+            css_classes: ["cc-atomic-round-btn"],
+            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+            hexpand: true, vexpand: true,
+        })
+        const icon = new Gtk.Image({ gicon: Icons.shieldOff, pixel_size: 28, css_classes: ["cs-icon"] })
+        btn.set_child(icon)
+        const popover = buildVpnPopover(btn)
+        popover.connect("closed", () => {
+            activeVpnName().then(name => {
+                icon.gicon = name ? Icons.shield : Icons.shieldOff
+                btn.set_css_classes(name ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"])
+            })
+        })
+        btn.connect("clicked", () => popover.popup())
+        activeVpnName().then(name => {
+            icon.gicon = name ? Icons.shield : Icons.shieldOff
+            if (name) btn.add_css_class("active")
+        })
+        return btn
+    }
+
     const btn = new Gtk.Button({
         css_classes: ["cc-capsule-btn"],
         halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
@@ -233,7 +256,7 @@ const vpnWidget: AtomicWidget = {
     icon: Icons.shield,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
-    supportedSizes: [WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
     buildContent,
     buildBarContent,
 }

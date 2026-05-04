@@ -107,80 +107,82 @@ export function EthernetWidget(): AtomicWidget {
     const network = AstalNetwork.get_default()
     const wired   = network?.wired
 
-    const getIcon = () => Icons.ethernet
+    const getIcon   = () => Icons.ethernet
+    const getActive = () => !!(wired && (wired as any).internet === (AstalNetwork as any).Internet?.CONNECTED)
     const getSub = () => {
         if (!wired) return t("cc.ethernet.sub.no-cable")
         const connected = (wired as any).internet === (AstalNetwork as any).Internet?.CONNECTED
         if (!connected) return t("cc.ethernet.sub.disconnected")
         return (wired as any).device?.interface || t("cc.ethernet.sub.connected")
     }
-
-    const buildContent = (_size: WidgetSize): Gtk.Widget => {
-        const content = buildCapsuleContent(
-            getIcon,
-            () => t("cc.ethernet.name"),
-            getSub,
-            () => {},  // no toggle — solo indicador
-        )
-        if (wired) {
-            const ids = [
-                (wired as any).connect("notify::internet",    () => {}),
-                (wired as any).connect("notify::ip4-address", () => {}),
-            ]
-            content.connect("unrealize", () => ids.forEach(id => { try { (wired as any).disconnect(id) } catch {} }))
-        }
-        return content
+    const subscribe: SubscribeFn = (sync) => {
+        if (!wired) return () => {}
+        const ids = [
+            (wired as any).connect("notify::internet",    sync),
+            (wired as any).connect("notify::ip4-address", sync),
+        ]
+        return () => ids.forEach(id => { try { (wired as any).disconnect(id) } catch {} })
     }
 
-    return { id: "ethernet", name: t("cc.ethernet.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.WIDE], buildContent }
+    const buildContent = (size: WidgetSize): Gtk.Widget => {
+        if (size === WidgetSize.SINGLE)
+            return buildRoundContent(getIcon, getActive, () => {}, subscribe)
+        return buildCapsuleContent(getIcon, () => t("cc.ethernet.name"), getSub, () => {}, getActive, subscribe)
+    }
+
+    return { id: "ethernet", name: t("cc.ethernet.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE], buildContent }
 }
 
 export function WifiWidget(): AtomicWidget {
-    const wifi = AstalNetwork.get_default()?.wifi
+    const wifi   = AstalNetwork.get_default()?.wifi
+    const toggle = () => execAsync(["bash", "-c",
+        "nmcli radio wifi | grep -q enabled && nmcli radio wifi off || nmcli radio wifi on"
+    ]).catch(() => {})
 
-    const buildContent = (_size: WidgetSize) => {
-        const content = buildCapsuleContent(
-            () => (wifi as any)?.enabled === false ? Icons.wifiOff : Icons.wifi,
-            () => t("cc.wifi.name"),
-            () => {
-                if (!wifi) return t("cc.wifi.sub.off")
-                return (wifi as any).ssid || ((wifi as any).enabled === false ? t("cc.wifi.sub.off") : t("cc.wifi.sub.connected"))
-            },
-            () => execAsync(["bash", "-c",
-                "nmcli radio wifi | grep -q enabled && nmcli radio wifi off || nmcli radio wifi on"
-            ]).catch(() => {}),
-        )
-        if (wifi) {
-            const sigId = (wifi as any).connect("notify", () => {
-                // Trigger re-render via button label update — we rely on reactive state
-                // The button itself re-reads getters on each notify
-            })
-            content.connect("unrealize", () => { try { (wifi as any).disconnect(sigId) } catch {} })
-        }
-        return content
+    const getIcon   = () => (wifi as any)?.enabled === false ? Icons.wifiOff : Icons.wifi
+    const getActive = () => !!((wifi as any)?.enabled !== false && (wifi as any)?.ssid)
+    const getSub    = () => {
+        if (!wifi) return t("cc.wifi.sub.off")
+        return (wifi as any).ssid || ((wifi as any).enabled === false ? t("cc.wifi.sub.off") : t("cc.wifi.sub.connected"))
+    }
+    const subscribe: SubscribeFn = (sync) => {
+        if (!wifi) return () => {}
+        const id = (wifi as any).connect("notify", sync)
+        return () => { try { (wifi as any).disconnect(id) } catch {} }
     }
 
-    return { id: "wifi", name: t("cc.wifi.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.WIDE], buildContent }
+    const buildContent = (size: WidgetSize): Gtk.Widget => {
+        if (size === WidgetSize.SINGLE)
+            return buildRoundContent(getIcon, getActive, toggle, subscribe)
+        return buildCapsuleContent(getIcon, () => t("cc.wifi.name"), getSub, toggle, getActive, subscribe)
+    }
+
+    return { id: "wifi", name: t("cc.wifi.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE], buildContent }
 }
 
 export function FocusWidget(): AtomicWidget {
-    const notifd = AstalNotifd.get_default()
-
-    const buildContent = (_size: WidgetSize) => {
-        const content = buildCapsuleContent(
-            () => notifd?.dont_disturb ? Icons.bellOff : Icons.bell,
-            () => notifd?.dont_disturb ? t("cc.focus.title.on") : t("cc.focus.title.off"),
-            () => notifd?.dont_disturb ? t("cc.focus.sub.on") : "",
-            () => { if (notifd) notifd.dont_disturb = !notifd.dont_disturb },
-        )
-        if (notifd) {
-            const sigId = (notifd as any).connect("notify", () => {})
-            content.connect("unrealize", () => { try { (notifd as any).disconnect(sigId) } catch {} })
-        }
-        return content
+    const notifd  = AstalNotifd.get_default()
+    const toggle  = () => { if (notifd) notifd.dont_disturb = !notifd.dont_disturb }
+    const getIcon = () => notifd?.dont_disturb ? Icons.bellOff : Icons.bell
+    const getActive = () => !!notifd?.dont_disturb
+    const subscribe: SubscribeFn = (sync) => {
+        if (!notifd) return () => {}
+        const id = (notifd as any).connect("notify", sync)
+        return () => { try { (notifd as any).disconnect(id) } catch {} }
     }
 
-    return { id: "focus", name: t("cc.focus.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.WIDE], buildContent }
+    const buildContent = (size: WidgetSize): Gtk.Widget => {
+        if (size === WidgetSize.SINGLE)
+            return buildRoundContent(getIcon, getActive, toggle, subscribe)
+        return buildCapsuleContent(
+            getIcon,
+            () => notifd?.dont_disturb ? t("cc.focus.title.on") : t("cc.focus.title.off"),
+            () => notifd?.dont_disturb ? t("cc.focus.sub.on") : "",
+            toggle, getActive, subscribe,
+        )
+    }
+
+    return { id: "focus", name: t("cc.focus.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE], buildContent }
 }
 
 export function RoundToggle(

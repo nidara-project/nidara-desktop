@@ -169,7 +169,29 @@ function buildRecordPopover(anchor: Gtk.Widget): Gtk.Popover {
 
 // ── CC widget content ─────────────────────────────────────────────────────────
 
-function buildContent(_size: WidgetSize): Gtk.Widget {
+function buildContent(size: WidgetSize): Gtk.Widget {
+    if (size === WidgetSize.SINGLE) {
+        const btn = new Gtk.Button({
+            css_classes: status.recording ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"],
+            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+            hexpand: true, vexpand: true,
+        })
+        const icon = new Gtk.Image({ gicon: status.recording ? Icons.recordStop : Icons.record, pixel_size: 28, css_classes: ["cs-icon"] })
+        btn.set_child(icon)
+        const popover = buildRecordPopover(btn)
+        const syncSingle = () => {
+            icon.gicon = status.recording ? Icons.recordStop : Icons.record
+            btn.set_css_classes(status.recording ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"])
+        }
+        const sigId = status.connect("notify::recording", syncSingle)
+        btn.connect("unrealize", () => { try { status.disconnect(sigId) } catch {} })
+        btn.connect("clicked", () => {
+            if (status.recording) stopRecording()
+            else popover.popup()
+        })
+        return btn
+    }
+
     // Outer button — in idle state opens popover, in recording state stops
     const btn = new Gtk.Button({
         css_classes: ["cc-capsule-btn"],
@@ -293,7 +315,7 @@ const screenrecordWidget: AtomicWidget = {
     icon: Icons.record,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
-    supportedSizes: [WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
     buildContent,
     buildBarContent,
 }

@@ -145,6 +145,18 @@ function buildBarContent(): Gtk.Widget {
 // ── CC content ────────────────────────────────────────────────────────────────
 
 function buildContent(size: WidgetSize): Gtk.Widget {
+    if (size === WidgetSize.SINGLE) {
+        const btn = new Gtk.Button({
+            css_classes: ["cc-atomic-round-btn"],
+            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+            hexpand: true, vexpand: true,
+        })
+        btn.set_child(new Gtk.Image({ gicon: Icons.clipboard, pixel_size: 28, css_classes: ["cs-icon"] }))
+        const popover = buildClipboardPopover(btn)
+        btn.connect("clicked", () => popover.popup())
+        return btn
+    }
+
     const btn = new Gtk.Button({
         css_classes: ["cc-capsule-btn"],
         halign: Gtk.Align.FILL,
@@ -208,7 +220,7 @@ const clipboardWidget: AtomicWidget = {
     icon: Icons.clipboard,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
-    supportedSizes: [WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
     buildContent,
     buildBarContent,
 }
