@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { CrystalPopover } from "../common/CrystalPopover"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
@@ -30,8 +31,8 @@ async function activeVpnName(): Promise<string | null> {
 
 // ── Popover ───────────────────────────────────────────────────────────────────
 
-function buildVpnPopover(anchor: Gtk.Widget): Gtk.Popover {
-    const popover = new Gtk.Popover({ autohide: true })
+function buildVpnPopover(anchor: Gtk.Widget): CrystalPopover {
+    const popover = new CrystalPopover({ autohide: true })
 
     const listBox = new Gtk.ListBox({
         css_classes: ["boxed-list"],

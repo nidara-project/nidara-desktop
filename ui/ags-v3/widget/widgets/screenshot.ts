@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { CrystalPopover } from "../common/CrystalPopover"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
@@ -54,7 +55,7 @@ async function capture(mode: CaptureMode, action: CaptureAction, onClose: () => 
 
 // ── Popover UI ────────────────────────────────────────────────────────────────
 
-function buildScreenshotPopover(anchor: Gtk.Widget): Gtk.Popover {
+function buildScreenshotPopover(anchor: Gtk.Widget): CrystalPopover {
     let selectedMode: CaptureMode = "area"
 
     // Mode buttons row
@@ -88,7 +89,7 @@ function buildScreenshotPopover(anchor: Gtk.Widget): Gtk.Popover {
     modeBtns[0].add_css_class("suggested-action")
 
     // Action buttons row
-    const popover = new Gtk.Popover({ autohide: true })
+    const popover = new CrystalPopover({ autohide: true })
 
     const makeActionBtn = (action: CaptureAction, label: string, cssClass: string) => {
         const btn = new Gtk.Button({ label, css_classes: [cssClass], hexpand: true })

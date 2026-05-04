@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { CrystalPopover } from "../common/CrystalPopover"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import status from "../../core/Status"
@@ -97,11 +98,11 @@ function makeElapsedLabel(): Gtk.Label {
 
 // ── Popover UI (idle state) ───────────────────────────────────────────────────
 
-function buildRecordPopover(anchor: Gtk.Widget): Gtk.Popover {
+function buildRecordPopover(anchor: Gtk.Widget): CrystalPopover {
     let selectedMode: RecordMode = "screen"
     let withAudio = false
 
-    const popover = new Gtk.Popover({ autohide: true })
+    const popover = new CrystalPopover({ autohide: true })
 
     // Mode row
     const modeRow = new Gtk.Box({

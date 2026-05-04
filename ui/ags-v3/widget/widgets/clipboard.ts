@@ -3,6 +3,7 @@ import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { WideToggle } from "../control-center/Toggles"
 import { makeIconAction } from "./bar-helpers"
+import { CrystalPopover } from "../common/CrystalPopover"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
@@ -43,7 +44,7 @@ function copyEntry(entry: ClipEntry): Promise<string> {
 
 // ── Popover ───────────────────────────────────────────────────────────────────
 
-function buildClipboardPopover(anchor: Gtk.Widget): Gtk.Popover {
+function buildClipboardPopover(anchor: Gtk.Widget): CrystalPopover {
     const scroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
@@ -76,7 +77,7 @@ function buildClipboardPopover(anchor: Gtk.Widget): Gtk.Popover {
     stack.append(emptyLabel)
     stack.append(scroll)
 
-    const popover = new Gtk.Popover({ autohide: true })
+    const popover = new CrystalPopover({ autohide: true })
     popover.set_child(stack)
     popover.set_parent(anchor)
     anchor.connect("unrealize", () => { try { popover.unparent() } catch {} })
