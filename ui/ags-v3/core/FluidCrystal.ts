@@ -77,6 +77,9 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
 
   const baseBg = isDark ? "#242424" : "#fafafa"
   const popoverBg = isDark ? "#303030" : "#ffffff"
+  // Popovers need alpha ≥ 0.32 so Hyprland's popups_ignorealpha=0.30 applies blur.
+  const popoverAlpha = Math.max(parseFloat(bgAlpha), 0.38).toFixed(2)
+  const popoverBorder = isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.10)"
 
   const lines = [
     `/* Crystal Shell Token Engine */`,
@@ -85,7 +88,8 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
     `@define-color accent_color ${accent};`,
     `@define-color fc_window_bg alpha(${baseBg}, ${bgAlpha});`,
     `@define-color fc_window_bg_backdrop alpha(${baseBg}, ${bgAlpha});`,
-    `@define-color fc_popover_bg alpha(${popoverBg}, ${bgAlpha});`,
+    `@define-color fc_popover_bg alpha(${popoverBg}, ${popoverAlpha});`,
+    `@define-color fc_popover_border ${popoverBorder};`,
     `@define-color sidebar_bg_color transparent;`,
     `@define-color sidebar_backdrop_color transparent;`,
     `* {`,

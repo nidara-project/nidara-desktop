@@ -215,34 +215,24 @@ button.crystal-btn,
 }
 
 /* --- CrystalPopover --- */
-/* We draw the whole shape (bg + border + arrow) in Cairo via vfunc_snapshot.
-   Use `popover.crystal-popover` prefix to match libadwaita's specificity
-   (0,1,2) so our higher load priority wins without needing !important. */
+/* Specificity (0,1,2) matches libadwaita's popover.background > contents,
+   load priority 810 > ~600 ensures our rules win the cascade. */
 popover.crystal-popover {
     background-color: transparent;
-    background-image: none;
     border: none;
     box-shadow: none;
-    padding: 0;
-    outline: none;
-
-    > arrow {
-        /* Kept alive for GTK layout/space-allocation but fully invisible */
-        background-color: transparent;
-        background-image: none;
-        border: none;
-        box-shadow: none;
-        color: transparent;
-        -gtk-icon-palette: success transparent;
-    }
 
     > contents {
-        /* libadwaita uses popover.background > contents (0,1,2) — we match that */
-        background-color: transparent;
-        background-image: none;
-        border: none;
-        box-shadow: none;
-        border-radius: 0;
+        background-color: @fc_popover_bg;
+        border-radius: 14px;
+        border: 1px solid @fc_popover_border;
+        box-shadow: 0 6px 28px rgba(0, 0, 0, 0.32);
         padding: 0;
+    }
+
+    > arrow {
+        /* Recolour the native GTK arrow to match the contents box */
+        background-color: @fc_popover_bg;
+        border-color: @fc_popover_border;
     }
 }
