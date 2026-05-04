@@ -216,33 +216,33 @@ button.crystal-btn,
 
 /* --- CrystalPopover --- */
 /* We draw the whole shape (bg + border + arrow) in Cairo via vfunc_snapshot.
-   Every GTK-native visual must be suppressed. !important is justified here:
-   we're in a deliberate full-override of the popover's internal nodes. */
-.crystal-popover {
-    background-color: transparent !important;
-    background-image: none !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    outline: none !important;
+   Use `popover.crystal-popover` prefix to match libadwaita's specificity
+   (0,1,2) so our higher load priority wins without needing !important. */
+popover.crystal-popover {
+    background-color: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    outline: none;
 
     > arrow {
-        /* Native arrow kept alive for layout (space allocation) but invisible */
-        background-color: transparent !important;
-        background-image: none !important;
-        border: none !important;
-        box-shadow: none !important;
-        color: transparent !important;
-        -gtk-icon-palette: success transparent !important;
+        /* Kept alive for GTK layout/space-allocation but fully invisible */
+        background-color: transparent;
+        background-image: none;
+        border: none;
+        box-shadow: none;
+        color: transparent;
+        -gtk-icon-palette: success transparent;
     }
 
     > contents {
-        /* The main opaque layer we must kill — GTK theme always paints this */
-        background-color: transparent !important;
-        background-image: none !important;
-        border: none !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        padding: 0 !important;
+        /* libadwaita uses popover.background > contents (0,1,2) — we match that */
+        background-color: transparent;
+        background-image: none;
+        border: none;
+        box-shadow: none;
+        border-radius: 0;
+        padding: 0;
     }
 }

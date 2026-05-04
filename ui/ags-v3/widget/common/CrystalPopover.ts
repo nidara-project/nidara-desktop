@@ -27,7 +27,7 @@ export class CrystalPopover extends Gtk.Popover {
 
         // ── Detect EFFECTIVE position from the arrow widget's actual allocation ──
         // get_position() returns the preference; GTK may flip it. The arrow widget's
-        // allocation always reflects the final placement.
+        // allocation always reflects the actual placement after any screen-edge flip.
         const pos = this._effectivePosition(w, h)
 
         // ── Read glass color from FluidCrystal's named color ──────────────────
@@ -40,29 +40,16 @@ export class CrystalPopover extends Gtk.Popover {
         const isLight = (fr + fg + fb) / 3 > 0.5
         const [bR, bG, bB, bA] = isLight ? [0.0, 0.0, 0.0, 0.10] : [1.0, 1.0, 1.0, 0.14]
 
-        // ── Draw custom Cairo background ──────────────────────────────────────
+        // ── Draw custom Cairo background (z-index: bottom) ────────────────────
         const bounds = new Graphene.Rect()
         bounds.init(0, 0, w, h)
         const cr = snapshot.append_cairo(bounds)
         drawPopover(cr, w, h, pos, fr, fg, fb, fa, bR, bG, bB, bA)
 
-        // ── Snapshot children WITHOUT the GTK native backgrounds ─────────────
-        // We skip the internal 'arrow' child (we draw our own) and snapshot only
-        // the children inside the 'contents' wrapper, bypassing its opaque CSS bg.
-        let internalChild = this.get_first_child()
-        while (internalChild) {
-            if (internalChild.has_css_class("arrow")) {
-                // Intentionally skip — our Cairo arrow replaces the native one
-            } else {
-                // 'contents' wrapper: render what's inside it, not the wrapper itself
-                let userChild = internalChild.get_first_child()
-                while (userChild) {
-                    ;(this as any).snapshot_child(userChild, snapshot)
-                    userChild = userChild.get_next_sibling()
-                }
-            }
-            internalChild = internalChild.get_next_sibling()
-        }
+        // ── Render children on top ────────────────────────────────────────────
+        // popover.crystal-popover > contents { background: transparent } (0,1,2)
+        // beats libadwaita at lower load priority, so super draws only children.
+        super.vfunc_snapshot(snapshot)
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
