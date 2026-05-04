@@ -80,7 +80,7 @@ const mediaWidget: AtomicWidget = {
     icon: Icons.play,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SQUARE,
-    supportedSizes: [WidgetSize.SQUARE, WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SQUARE],
     buildContent: (size) => MediaIslandContent().buildContent(size),
     buildBarContent,
 }
