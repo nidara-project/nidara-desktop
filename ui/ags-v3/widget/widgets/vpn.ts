@@ -29,43 +29,26 @@ async function activeVpnName(): Promise<string | null> {
     return profiles.find(p => p.active)?.name ?? null
 }
 
-// ── Popover ───────────────────────────────────────────────────────────────────
+// ── VPN controls (shared by bar expansion + CC popover) ──────────────────────
 
-function buildVpnPopover(anchor: Gtk.Widget): CrystalPopover {
-    const popover = new CrystalPopover({ autohide: true })
-
-    const listBox = new Gtk.ListBox({
-        css_classes: ["boxed-list"],
-        selection_mode: Gtk.SelectionMode.NONE,
-    })
-
+function buildVpnContent(onClose: () => void): Gtk.Widget {
+    const listBox = new Gtk.ListBox({ css_classes: ["boxed-list"], selection_mode: Gtk.SelectionMode.NONE })
     const emptyLabel = new Gtk.Label({
         label: t("settings.network.vpn.no-profiles"),
         css_classes: ["settings-row-subtitle"],
-        margin_top: 10, margin_bottom: 10,
-        margin_start: 14, margin_end: 14,
+        margin_top: 10, margin_bottom: 10, margin_start: 14, margin_end: 14,
     })
-
     const spinner = new Gtk.Spinner({ spinning: true, margin_top: 10, margin_bottom: 10 })
-
     const stack = new Gtk.Stack()
     stack.add_named(spinner, "loading")
     stack.add_named(emptyLabel, "empty")
     stack.add_named(listBox, "list")
     stack.set_visible_child_name("loading")
 
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        width_request: 220,
-        margin_top: 8, margin_bottom: 8,
-    })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: 220, margin_top: 8, margin_bottom: 8 })
     box.append(stack)
 
-    popover.set_child(box)
-    popover.set_parent(anchor)
-    anchor.connect("unrealize", () => { try { popover.unparent() } catch {} })
-
-    const refresh = (onDone?: () => void) => {
+    const refresh = () => {
         stack.set_visible_child_name("loading")
         let child = listBox.get_first_child()
         while (child) { listBox.remove(child); child = listBox.get_first_child() }
@@ -87,45 +70,32 @@ function buildVpnPopover(anchor: Gtk.Widget): CrystalPopover {
                         try {
                             if (active) await execAsync(["nmcli", "connection", "down", p.name])
                             else        await execAsync(["nmcli", "connection", "up", p.name])
-                        } catch (e) {
-                            console.error("[VPN widget]", e)
-                        }
-                        popover.popdown()
-                        onDone?.()
+                        } catch (e) { console.error("[VPN widget]", e) }
+                        onClose()
                     })
-
-                    const typeTag = new Gtk.Label({
-                        label: p.type === "wireguard" ? "WireGuard" : "VPN",
-                        css_classes: ["settings-row-subtitle"],
-                        valign: Gtk.Align.CENTER,
-                    })
-
+                    const typeTag = new Gtk.Label({ label: p.type === "wireguard" ? "WireGuard" : "VPN", css_classes: ["settings-row-subtitle"], valign: Gtk.Align.CENTER })
                     const right = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
-                    right.append(typeTag)
-                    right.append(btn)
-
+                    right.append(typeTag); right.append(btn)
                     const inner = new Gtk.Box({ spacing: 8, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10 })
-                    const nameLabel = new Gtk.Label({
-                        label: p.name,
-                        hexpand: true, halign: Gtk.Align.START,
-                        ellipsize: 3, max_width_chars: 16,
-                        css_classes: ["settings-row-label"],
-                    })
-                    inner.append(nameLabel)
-                    inner.append(right)
-
+                    const nameLabel = new Gtk.Label({ label: p.name, hexpand: true, halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 16, css_classes: ["settings-row-label"] })
+                    inner.append(nameLabel); inner.append(right)
                     const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
-                    row.set_child(inner)
-                    listBox.append(row)
+                    row.set_child(inner); listBox.append(row)
                 })
                 stack.set_visible_child_name("list")
             }
-            onDone?.()
         })
     }
 
-    popover.connect("show", () => refresh())
+    refresh()
+    return box
+}
 
+function buildVpnPopover(anchor: Gtk.Widget): CrystalPopover {
+    const popover = new CrystalPopover({ autohide: true })
+    popover.set_child(buildVpnContent(() => popover.popdown()))
+    popover.set_parent(anchor)
+    anchor.connect("unrealize", () => { try { popover.unparent() } catch {} })
     return popover
 }
 
@@ -225,28 +195,18 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     return btn
 }
 
-// ── Bar content ───────────────────────────────────────────────────────────────
+// ── Bar icon ──────────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    const image = new Gtk.Image({
-        gicon: Icons.shieldOff,
-        pixel_size: 16,
-        margin_start: 16, margin_end: 16,
-        css_classes: ["cs-icon"],
-    })
-
-    const popover = buildVpnPopover(image)
-    popover.connect("closed", () => {
-        activeVpnName().then(name => {
-            image.gicon = name ? Icons.shield : Icons.shieldOff
-        })
-    })
-
-    const gesture = new Gtk.GestureClick()
-    gesture.connect("pressed", () => popover.popup())
-    image.add_controller(gesture)
-
+    const image = new Gtk.Image({ gicon: Icons.shieldOff, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+    activeVpnName().then(name => { image.gicon = name ? Icons.shield : Icons.shieldOff })
     return image
+}
+
+// ── Bar expansion panel content ───────────────────────────────────────────────
+
+function buildBarExpanded(onClose: () => void): Gtk.Widget {
+    return buildVpnContent(onClose)
 }
 
 // ── Widget registration ───────────────────────────────────────────────────────
@@ -260,6 +220,9 @@ const vpnWidget: AtomicWidget = {
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
     buildContent,
     buildBarContent,
+    buildBarExpanded,
+    buildCCDetail: buildBarExpanded,
+    ccDetailRows: 3,
 }
 
 export default vpnWidget

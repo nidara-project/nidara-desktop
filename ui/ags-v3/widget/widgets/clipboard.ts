@@ -42,9 +42,50 @@ function copyEntry(entry: ClipEntry): Promise<string> {
     return execAsync(["bash", "-c", `printf '%s' ${JSON.stringify(entry.line)} | cliphist decode | wl-copy`])
 }
 
-// ── Popover ───────────────────────────────────────────────────────────────────
+// ── Shared list builder ───────────────────────────────────────────────────────
+// Returns widget + refresh fn; caller decides whether to wrap in a scroll.
 
-function buildClipboardPopover(anchor: Gtk.Widget): CrystalPopover {
+function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh: () => void } {
+    const listBox = new Gtk.ListBox({ css_classes: ["settings-list-box"], selection_mode: Gtk.SelectionMode.NONE })
+    const emptyLabel = new Gtk.Label({
+        label: t("widget.clipboard.empty"),
+        css_classes: ["settings-row-subtitle"],
+        margin_top: 16, margin_bottom: 16, margin_start: 16, margin_end: 16,
+    })
+    const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8 })
+    container.append(emptyLabel)
+    container.append(listBox)
+
+    const refresh = () => {
+        let child = listBox.get_first_child()
+        while (child) { listBox.remove(child); child = listBox.get_first_child() }
+        listEntries().then(entries => {
+            emptyLabel.visible = entries.length === 0
+            for (const entry of entries) {
+                const btn = new Gtk.Button({ css_classes: ["settings-action-row"], hexpand: true, halign: Gtk.Align.FILL })
+                const lbl = new Gtk.Label({
+                    label: entry.preview, halign: Gtk.Align.START, ellipsize: 3,
+                    max_width_chars: 36, margin_top: 10, margin_bottom: 10,
+                    margin_start: 14, margin_end: 14, css_classes: ["settings-row-label"],
+                })
+                btn.set_child(lbl)
+                btn.connect("clicked", () => {
+                    onClose()
+                    copyEntry(entry).catch(e => console.error("[Clipboard] copy failed:", e))
+                })
+                const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+                row.set_child(btn); listBox.append(row)
+            }
+        })
+    }
+    refresh()
+    return { widget: container, refresh }
+}
+
+// ── Popover / bar expansion (with scroll wrapper) ─────────────────────────────
+
+function buildClipboardContent(onClose: () => void): { widget: Gtk.Widget; refresh: () => void } {
+    const { widget: list, refresh } = buildClipboardList(onClose)
     const scroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
@@ -52,95 +93,32 @@ function buildClipboardPopover(anchor: Gtk.Widget): CrystalPopover {
         max_content_height: 360,
         width_request: 300,
     })
+    scroll.set_child(list)
+    return { widget: scroll, refresh }
+}
 
-    const listBox = new Gtk.ListBox({
-        css_classes: ["settings-list-box"],
-        selection_mode: Gtk.SelectionMode.NONE,
-    })
-    scroll.set_child(listBox)
-
-    const emptyLabel = new Gtk.Label({
-        label: t("widget.clipboard.empty"),
-        css_classes: ["settings-row-subtitle"],
-        margin_top: 16,
-        margin_bottom: 16,
-        margin_start: 16,
-        margin_end: 16,
-    })
-
-    const stack = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 0,
-        margin_top: 8,
-        margin_bottom: 8,
-    })
-    stack.append(emptyLabel)
-    stack.append(scroll)
-
+function buildClipboardPopover(anchor: Gtk.Widget): CrystalPopover {
     const popover = new CrystalPopover({ autohide: true })
-    popover.set_child(stack)
+    const { widget, refresh } = buildClipboardContent(() => popover.popdown())
+    popover.set_child(widget)
     popover.set_parent(anchor)
     anchor.connect("unrealize", () => { try { popover.unparent() } catch {} })
-
-    const populate = async () => {
-        // Clear list
-        let child = listBox.get_first_child()
-        while (child) { listBox.remove(child); child = listBox.get_first_child() }
-
-        const entries = await listEntries()
-        emptyLabel.visible = entries.length === 0
-        scroll.visible = entries.length > 0
-
-        for (const entry of entries) {
-            const btn = new Gtk.Button({
-                css_classes: ["settings-action-row"],
-                hexpand: true,
-                halign: Gtk.Align.FILL,
-            })
-            const lbl = new Gtk.Label({
-                label: entry.preview,
-                halign: Gtk.Align.START,
-                ellipsize: 3,  // PANGO_ELLIPSIZE_END
-                max_width_chars: 36,
-                margin_top: 10,
-                margin_bottom: 10,
-                margin_start: 14,
-                margin_end: 14,
-                css_classes: ["settings-row-label"],
-            })
-            btn.set_child(lbl)
-            btn.connect("clicked", () => {
-                popover.popdown()
-                copyEntry(entry).catch(e => console.error("[Clipboard] copy failed:", e))
-            })
-            const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
-            row.set_child(btn)
-            listBox.append(row)
-        }
-    }
-
-    popover.connect("show", populate)
+    popover.connect("show", () => refresh())
     return popover
 }
 
 // ── Bar content ───────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    const image = new Gtk.Image({
-        gicon: Icons.clipboard,
-        pixel_size: 16,
-        margin_start: 16,
-        margin_end: 16,
-        css_classes: ["cs-icon"],
-    })
+    return new Gtk.Image({ gicon: Icons.clipboard, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+}
 
-    const popover = buildClipboardPopover(image)
+function buildBarExpanded(onClose: () => void): Gtk.Widget {
+    return buildClipboardContent(onClose).widget
+}
 
-    const gesture = new Gtk.GestureClick()
-    gesture.connect("pressed", () => popover.popup())
-    image.add_controller(gesture)
-
-    return image
+function buildCCDetail(onClose: () => void): Gtk.Widget {
+    return buildClipboardList(onClose).widget
 }
 
 // ── CC content ────────────────────────────────────────────────────────────────
@@ -224,6 +202,9 @@ const clipboardWidget: AtomicWidget = {
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
     buildContent,
     buildBarContent,
+    buildBarExpanded,
+    buildCCDetail,
+    ccDetailRows: 4,
 }
 
 export default clipboardWidget

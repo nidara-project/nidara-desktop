@@ -15,58 +15,27 @@ function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; upda
 }
 
 function buildBarContent(): Gtk.Widget {
+    return new Gtk.Image({ gicon: Icons.ethernet, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+}
+
+function buildBarExpanded(_onClose: () => void): Gtk.Widget {
     const wired = AstalNetwork.get_default()?.wired
+    const isConnected = () => (wired as any)?.internet === (AstalNetwork as any).Internet?.CONNECTED
 
-    const isConnected = () =>
-        (wired as any)?.internet === (AstalNetwork as any).Internet?.CONNECTED
+    const iface = infoRow(t("widget.ethernet.row.interface"), () => (wired as any)?.device?.interface || "—")
+    const state = infoRow(t("widget.ethernet.row.status"),    () => isConnected() ? t("cc.ethernet.sub.connected") : t("cc.ethernet.sub.disconnected"))
+    const ip    = infoRow("IP",                               () => (wired as any)?.ip4_address || (wired as any)?.ip4Address || "—")
+    const speed = infoRow(t("widget.ethernet.row.speed"),     () => { const s = (wired as any)?.device?.speed; return s ? `${s} Mb/s` : "—" })
 
-    const getIcon = () => Icons.ethernet
+    iface.update(); state.update(); ip.update(); speed.update()
 
-    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, width_request: 200 })
+    box.append(iface.row)
+    box.append(state.row)
+    box.append(ip.row)
+    box.append(speed.row)
 
-    if (wired) {
-        const sigId = (wired as any).connect("notify::internet", () => { image.gicon = getIcon() })
-        image.connect("unrealize", () => { try { (wired as any).disconnect(sigId) } catch {} })
-    }
-
-    // ── Popover content ──────────────────────────────────────────
-    const iface   = infoRow(t("widget.ethernet.row.interface"), () => (wired as any)?.device?.interface || "—")
-    const state   = infoRow(t("widget.ethernet.row.status"),    () => isConnected() ? t("cc.ethernet.sub.connected") : t("cc.ethernet.sub.disconnected"))
-    const ip      = infoRow("IP",                               () => (wired as any)?.ip4_address || (wired as any)?.ip4Address || "—")
-    const speed   = infoRow(t("widget.ethernet.row.speed"),     () => {
-        const s = (wired as any)?.device?.speed
-        return s ? `${s} Mb/s` : "—"
-    })
-
-    const updates = [iface.update, state.update, ip.update, speed.update]
-
-    const popBox = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 6,
-        margin_top: 10,
-        margin_bottom: 10,
-        margin_start: 14,
-        margin_end: 14,
-        width_request: 220,
-    })
-    popBox.append(new Gtk.Label({ label: t("cc.ethernet.name"), css_classes: ["bar-popover-title"], halign: Gtk.Align.START }))
-    popBox.append(new Gtk.Separator({ css_classes: ["bar-popover-sep"], margin_top: 2, margin_bottom: 2 }))
-    popBox.append(iface.row)
-    popBox.append(state.row)
-    popBox.append(ip.row)
-    popBox.append(speed.row)
-
-    const popover = new Gtk.Popover({ autohide: true, position: Gtk.PositionType.BOTTOM })
-    popover.set_child(popBox)
-    popover.set_parent(image)
-    popover.connect("show", () => updates.forEach(u => u()))
-    image.connect("unrealize", () => { try { popover.unparent() } catch {} })
-
-    const gesture = new Gtk.GestureClick()
-    gesture.connect("pressed", () => popover.popup())
-    image.add_controller(gesture)
-
-    return image
+    return box
 }
 
 const ethernetWidget: AtomicWidget = {
@@ -78,6 +47,7 @@ const ethernetWidget: AtomicWidget = {
     supportedSizes: [WidgetSize.WIDE],
     buildContent: (size) => EthernetWidget().buildContent(size),
     buildBarContent,
+    buildBarExpanded,
 }
 
 export default ethernetWidget

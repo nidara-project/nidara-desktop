@@ -298,3 +298,28 @@
     0%, 100% { opacity: 1; }
     50%       { opacity: 0.3; }
 }
+/* --- Bar inline expansion panel --- */
+.bar-expansion-panel {
+    margin-top: 44px;
+}
+
+.bar-popover-value {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--crystal-text);
+    min-width: 38px;
+    xalign: 1.0;
+}
+
+.bar-popover-icon-btn {
+    background: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    padding: 4px;
+    border-radius: $crystal-radius-xs;
+    transition: background 0.15s ease;
+
+    &:hover  { background: var(--crystal-surface-hover); }
+    &:active { background: var(--crystal-surface-active); }
+}

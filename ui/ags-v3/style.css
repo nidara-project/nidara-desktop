@@ -1,3 +1,4 @@
+@charset "UTF-8";
 /* ==========================================================================
    CRYSTAL DESIGN SYSTEM - BASE TOKENS (V3000)
    ========================================================================== */
@@ -11,6 +12,7 @@
   --crystal-accent-60: rgba(0, 136, 255, 0.6);
   --crystal-accent-30: rgba(0, 136, 255, 0.3);
   --crystal-accent-10: rgba(0, 136, 255, 0.1);
+  --crystal-accent-08: rgba(0, 136, 255, 0.08);
   /* --- Surface & Backgrounds --- */
   --crystal-bg: rgba(30, 30, 30, 0.5);
   --crystal-bg-backdrop: rgba(30, 30, 30, 0.4);
@@ -36,6 +38,8 @@
   --crystal-danger: #ff3b30;
   --crystal-danger-rgb: 255, 59, 48;
   --crystal-success: #30d158;
+  --crystal-warning: #f3ba4b;
+  --crystal-warning-rgb: 243, 186, 75;
   /* --- Borders & Shadows --- */
   --crystal-border: rgba(127, 127, 127, 0.15);
   --crystal-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
@@ -43,6 +47,9 @@
 }
 
 /* SCSS Variable Aliases for easier use in component files */
+/* ==========================================================================
+   MIXINS
+   ========================================================================== */
 /* ==========================================================================
    CRYSTAL DESIGN SYSTEM - NEUTRALIZATION LAYER
    ========================================================================== */
@@ -87,8 +94,7 @@
 .crystal-bar-window {
   /* Neutralize intrusive GTK internal nodes */
 }
-#crystal-dock ripple, #crystal-dock highlight, #crystal-dock outline, #crystal-dock focus-ring,
-#crystal-dock decoration,
+#crystal-dock ripple, #crystal-dock highlight, #crystal-dock outline, #crystal-dock focus-ring, #crystal-dock decoration,
 #crystal-bar ripple,
 #crystal-bar highlight,
 #crystal-bar outline,
@@ -184,16 +190,37 @@
   box-shadow: none;
 }
 
-/* ── Crystal scrollbar — applies to all shell scrollbars ────────────────────── */
-scrollbar {
+/* ── Crystal scrollbar — scoped to shell components only ────────────────────── */
+#crystal-dock scrollbar,
+#crystal-bar scrollbar,
+#crystal-app-launcher scrollbar,
+.crystal-control-center scrollbar,
+.crystal-notification-center scrollbar,
+.crystal-dock-window scrollbar,
+.crystal-bar-window scrollbar,
+.crystal-settings-window scrollbar {
   background: transparent;
   border: none;
 }
-scrollbar trough {
+#crystal-dock scrollbar trough,
+#crystal-bar scrollbar trough,
+#crystal-app-launcher scrollbar trough,
+.crystal-control-center scrollbar trough,
+.crystal-notification-center scrollbar trough,
+.crystal-dock-window scrollbar trough,
+.crystal-bar-window scrollbar trough,
+.crystal-settings-window scrollbar trough {
   background: transparent;
   border: none;
 }
-scrollbar slider {
+#crystal-dock scrollbar slider,
+#crystal-bar scrollbar slider,
+#crystal-app-launcher scrollbar slider,
+.crystal-control-center scrollbar slider,
+.crystal-notification-center scrollbar slider,
+.crystal-dock-window scrollbar slider,
+.crystal-bar-window scrollbar slider,
+.crystal-settings-window scrollbar slider {
   background: var(--crystal-surface-raised);
   border-radius: var(--crystal-radius-pill);
   min-width: 4px;
@@ -201,10 +228,24 @@ scrollbar slider {
   margin: 2px;
   transition: background 0.2s ease;
 }
-scrollbar slider:hover {
+#crystal-dock scrollbar slider:hover,
+#crystal-bar scrollbar slider:hover,
+#crystal-app-launcher scrollbar slider:hover,
+.crystal-control-center scrollbar slider:hover,
+.crystal-notification-center scrollbar slider:hover,
+.crystal-dock-window scrollbar slider:hover,
+.crystal-bar-window scrollbar slider:hover,
+.crystal-settings-window scrollbar slider:hover {
   background: var(--crystal-text-dim);
 }
-scrollbar button {
+#crystal-dock scrollbar button,
+#crystal-bar scrollbar button,
+#crystal-app-launcher scrollbar button,
+.crystal-control-center scrollbar button,
+.crystal-notification-center scrollbar button,
+.crystal-dock-window scrollbar button,
+.crystal-bar-window scrollbar button,
+.crystal-settings-window scrollbar button {
   opacity: 0;
   min-width: 0;
   min-height: 0;
@@ -436,6 +477,118 @@ button.crystal-btn.accent:hover,
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
+/* --- CrystalPopover --- */
+/* Specificity (0,1,2) matches libadwaita's popover.background > contents,
+   load priority 810 > ~600 ensures our rules win the cascade.
+   CSS vars (--crystal-popover-*) are used instead of @define-color to stay
+   SCSS-compilable — @name syntax in property values is not valid SCSS. */
+popover.crystal-popover {
+  background-color: transparent;
+  border: none;
+  box-shadow: none;
+}
+popover.crystal-popover > contents {
+  /* Fallback ensures visible background even before --crystal-popover-bg token is set */
+  background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.82));
+  border-radius: 14px;
+  border: 1px solid var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.32);
+  padding: 0;
+}
+popover.crystal-popover > arrow {
+  background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.82));
+  border-color: var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
+}
+
+/* --- Shared list-row styles (Clipboard/VPN popovers + Settings) --- */
+/* These classes are reused across contexts so hover/active must be global. */
+.settings-row-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--crystal-text);
+}
+
+.settings-row-subtitle {
+  font-size: 0.8rem;
+  color: var(--crystal-text-dim);
+}
+
+row.settings-item-row {
+  border-radius: var(--crystal-radius-sm);
+  transition: background 0.15s ease;
+}
+row.settings-item-row:hover {
+  background: var(--crystal-surface-hover);
+}
+row.settings-item-row:active {
+  background: var(--crystal-surface-active);
+}
+row.settings-item-row:selected {
+  background: transparent;
+}
+
+button.settings-action-row {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+  transition: background 0.15s ease;
+}
+button.settings-action-row:hover {
+  background: var(--crystal-surface-hover);
+}
+button.settings-action-row:active {
+  background: var(--crystal-surface-active);
+}
+
+/* Hover/active for non-accent buttons inside any crystal popover */
+popover.crystal-popover button:not(.suggested-action):not(.destructive-action):not(.settings-action-row):hover {
+  background: var(--crystal-surface-hover);
+  transition: background 0.15s ease;
+}
+popover.crystal-popover button:not(.suggested-action):not(.destructive-action):not(.settings-action-row):active {
+  background: var(--crystal-surface-active);
+  transition: background 0.05s ease;
+}
+
+/* Accent (selected/primary) buttons inside crystal popovers */
+popover.crystal-popover button.suggested-action {
+  background: var(--crystal-accent);
+  color: #ffffff;
+  border: none;
+  border-radius: var(--crystal-radius-xs);
+  transition: background 0.15s ease;
+}
+popover.crystal-popover button.suggested-action:hover {
+  background: rgba(var(--crystal-accent-rgb), 0.85);
+}
+popover.crystal-popover button.suggested-action:active {
+  background: rgba(var(--crystal-accent-rgb), 0.65);
+}
+
+/* --- Bar info-popover label typography --- */
+/* Used in wifi/ethernet info popovers (title + key/value pairs). */
+.bar-popover-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--crystal-text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.bar-popover-key {
+  font-size: 0.85rem;
+  color: var(--crystal-text-dim);
+}
+
+.bar-popover-val {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--crystal-text);
+}
+
 /* --- Window Transparency Logic --- */
 window.crystal-dock-window,
 #crystal-dock {
@@ -482,8 +635,7 @@ window.crystal-dock-window decoration, window.crystal-dock-window > box,
   outline: none;
   background-image: none;
 }
-.cd-item > ripple, .cd-item > highlight, .cd-item > outline, .cd-item > focus-ring,
-.cd-item decoration {
+.cd-item > ripple, .cd-item > highlight, .cd-item > outline, .cd-item > focus-ring, .cd-item > decoration {
   background-image: none;
   background-color: transparent;
   box-shadow: none;
@@ -542,7 +694,7 @@ window#crystal-dock box.cd-squircle-plate drawingarea {
 }
 
 window#crystal-dock box.cd-squircle-plate.show-bg {
-  background-color: var(--crystal-surface-raised);
+  background-color: var(--crystal-dock-surface-raised);
   /* Explicit hover state */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   /* Optional: add explicit shadow on hover */
@@ -689,8 +841,10 @@ button.dock-v-icon image {
 .bar-right {
   background: none;
   background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
   padding: 0;
   margin: 0;
 }
@@ -719,8 +873,10 @@ button.dock-v-icon image {
 .bar-ws-btn {
   background: none;
   background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
   padding: 0;
   margin: 0;
   min-width: 0;
@@ -810,9 +966,12 @@ button.dock-v-icon image {
 
 /* --- Spotlight Pill Refinement --- */
 .spotlight-pill {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
 }
 .spotlight-pill image {
   padding: 0;
@@ -820,17 +979,22 @@ button.dock-v-icon image {
 }
 
 .overlay-catcher {
-  background: transparent;
+  background: none;
   background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
 }
 
 /* --- System Menu Dropdown (Native Overlay) --- */
 .system-menu-dropdown {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
   color: var(--crystal-text);
   -gtk-icon-palette: success white, warning white, error white;
 }
@@ -924,9 +1088,12 @@ button.dock-v-icon image {
 }
 
 .about-close-btn {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
   border-radius: 6px;
   padding: 4px;
   opacity: 0.5;
@@ -938,6 +1105,60 @@ button.dock-v-icon image {
 }
 .about-close-btn:active {
   background: var(--crystal-surface-back);
+}
+
+.bar-rec-capsule {
+  background: rgba(220, 30, 30, 0.18);
+}
+
+.bar-rec-indicator {
+  border-radius: 999px;
+  background: #e03030;
+  animation: rec-pulse 1.4s ease-in-out infinite;
+}
+
+.bar-rec-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #e03030;
+  letter-spacing: 0.05em;
+}
+
+@keyframes rec-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+/* --- Bar inline expansion panel --- */
+.bar-expansion-panel {
+  margin-top: 44px;
+}
+
+.bar-popover-value {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--crystal-text);
+  min-width: 38px;
+  xalign: 1;
+}
+
+.bar-popover-icon-btn {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 4px;
+  border-radius: var(--crystal-radius-xs);
+  transition: background 0.15s ease;
+}
+.bar-popover-icon-btn:hover {
+  background: var(--crystal-surface-hover);
+}
+.bar-popover-icon-btn:active {
+  background: var(--crystal-surface-active);
 }
 
 /* ==========================================================================
@@ -953,8 +1174,10 @@ window.nc-window-1,
 window.nc-window-2 {
   background: none;
   background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
 }
 window.notification-center-win decoration, window.notification-center-win contents,
 window.notif-win decoration,
@@ -971,6 +1194,10 @@ window.nc-window-2 decoration,
 window.nc-window-2 contents {
   background: none;
   background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
 }
 
 /* --- Island Body --- */
@@ -980,6 +1207,7 @@ window.nc-window-2 contents {
 .cc-island button {
   background: none;
   background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
   outline: none;
@@ -1064,6 +1292,45 @@ window.nc-window-2 contents {
   color: var(--crystal-text-dim);
 }
 
+.vpn-active-bg {
+  background-color: rgba(var(--crystal-accent-rgb), 0.25);
+}
+
+.vpn-btn-active {
+  background-color: rgba(var(--crystal-accent-rgb), 0.08);
+}
+
+.rec-active-bg {
+  background-color: rgba(220, 30, 30, 0.25);
+  animation: rec-pulse-cc 1.4s ease-in-out infinite;
+}
+
+.rec-stop-icon {
+  color: #e03030;
+}
+
+.rec-label {
+  color: #e03030;
+}
+
+.rec-elapsed {
+  font-size: 0.8em;
+  color: var(--crystal-text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.rec-btn-active {
+  background-color: rgba(220, 30, 30, 0.08);
+}
+
+@keyframes rec-pulse-cc {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
 .cc-atomic-focus-btn {
   background-color: var(--crystal-surface);
   border-radius: 12px;
@@ -1304,15 +1571,276 @@ window.nc-window-2 contents {
   color: var(--crystal-text);
 }
 
+/* --- CC Detail Strip --- */
+.cc-detail-back-btn {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--crystal-radius-sm);
+  color: var(--crystal-text);
+  transition: background 0.15s ease;
+}
+.cc-detail-back-btn:hover {
+  background: var(--crystal-surface-hover);
+}
+.cc-detail-back-btn:active {
+  background: var(--crystal-surface-active);
+}
+
+.cc-detail-sep {
+  background: var(--crystal-border);
+  min-height: 1px;
+  margin-left: 12px;
+  margin-right: 12px;
+}
+
+.cc-detail-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--crystal-text);
+  letter-spacing: 0.04em;
+}
+
+.cc-detail-section-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--crystal-text-dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+/* --- CC Detail Panel — styles for content inside the squircle island --------- */
+.cc-detail-panel list.settings-list-box,
+.cc-detail-panel list.boxed-list {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  margin-bottom: 4px;
+  padding: 0;
+}
+.cc-detail-panel list.settings-list-box row,
+.cc-detail-panel list.boxed-list row {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  border-radius: var(--crystal-radius-sm);
+  margin: 1px 0;
+  transition: background 0.12s ease;
+}
+.cc-detail-panel list.settings-list-box row:hover,
+.cc-detail-panel list.boxed-list row:hover {
+  background: rgba(var(--crystal-accent-rgb), 0.08);
+}
+.cc-detail-panel list.settings-list-box row:active,
+.cc-detail-panel list.boxed-list row:active {
+  background: rgba(var(--crystal-accent-rgb), 0.15);
+}
+.cc-detail-panel list.settings-list-box row:selected,
+.cc-detail-panel list.boxed-list row:selected {
+  background: transparent;
+}
+.cc-detail-panel button.settings-action-row {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  border-radius: var(--crystal-radius-sm);
+}
+.cc-detail-panel button.settings-action-row:hover {
+  background: rgba(var(--crystal-accent-rgb), 0.08);
+}
+.cc-detail-panel button.settings-action-row:active {
+  background: rgba(var(--crystal-accent-rgb), 0.15);
+}
+.cc-detail-panel button.suggested-action {
+  background: var(--crystal-accent);
+  background-image: none;
+  color: #fff;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--crystal-radius-sm);
+  padding: 6px 14px;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.cc-detail-panel button.suggested-action:hover {
+  background: rgba(var(--crystal-accent-rgb), 0.82);
+}
+.cc-detail-panel button.suggested-action:active {
+  background: rgba(var(--crystal-accent-rgb), 0.65);
+}
+.cc-detail-panel button.destructive-action {
+  background: var(--crystal-danger);
+  background-image: none;
+  color: #fff;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--crystal-radius-sm);
+  padding: 6px 14px;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.cc-detail-panel button.destructive-action:hover {
+  background: rgba(var(--crystal-danger-rgb), 0.82);
+}
+.cc-detail-panel button.destructive-action:active {
+  background: rgba(var(--crystal-danger-rgb), 0.65);
+}
+.cc-detail-panel button.flat {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  color: var(--crystal-accent);
+  border-radius: var(--crystal-radius-sm);
+  padding: 4px 10px;
+  font-weight: 500;
+}
+.cc-detail-panel button.flat:hover {
+  background: rgba(var(--crystal-accent-rgb), 0.1);
+}
+.cc-detail-panel button.flat:active {
+  background: rgba(var(--crystal-accent-rgb), 0.18);
+}
+.cc-detail-panel button.compact-btn {
+  font-size: 0.78rem;
+  font-weight: 500;
+  min-height: 24px;
+  padding: 2px 8px;
+}
+.cc-detail-panel button.settings-icon-btn {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--crystal-radius-sm);
+  padding: 4px;
+  color: var(--crystal-text-dim);
+  min-width: 28px;
+  min-height: 28px;
+}
+.cc-detail-panel button.settings-icon-btn:hover {
+  background: rgba(var(--crystal-accent-rgb), 0.1);
+  color: var(--crystal-accent);
+}
+.cc-detail-panel button.settings-icon-btn:active {
+  background: rgba(var(--crystal-accent-rgb), 0.18);
+}
+.cc-detail-panel .linked > button {
+  background: rgba(255, 255, 255, 0.05);
+  background-image: none;
+  border: 1px solid var(--crystal-border);
+  border-radius: var(--crystal-radius-sm);
+  box-shadow: none;
+  color: var(--crystal-text-dim);
+  font-size: 0.84rem;
+  padding: 6px 0;
+}
+.cc-detail-panel .linked > button:hover {
+  background: rgba(var(--crystal-accent-rgb), 0.08);
+  color: var(--crystal-text);
+}
+.cc-detail-panel .linked > button.suggested-action {
+  background: rgba(var(--crystal-accent-rgb), 0.18);
+  background-image: none;
+  border-color: rgba(var(--crystal-accent-rgb), 0.45);
+  color: var(--crystal-accent);
+  font-weight: 700;
+}
+.cc-detail-panel .linked > button.suggested-action:hover {
+  background: rgba(var(--crystal-accent-rgb), 0.26);
+}
+.cc-detail-panel .linked > button.suggested-action:active {
+  background: rgba(var(--crystal-accent-rgb), 0.35);
+}
+.cc-detail-panel switch:checked slider {
+  background: #fff;
+}
+.cc-detail-panel switch:checked {
+  background: var(--crystal-accent);
+}
+.cc-detail-panel .accent-label {
+  color: var(--crystal-accent);
+  background: rgba(var(--crystal-accent-rgb), 0.14);
+  border-radius: var(--crystal-radius-pill);
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.cc-detail-panel .settings-row-label {
+  font-size: 0.86rem;
+  color: var(--crystal-text);
+}
+.cc-detail-panel .settings-row-subtitle {
+  font-size: 0.82rem;
+  color: var(--crystal-text-dim);
+}
+.cc-detail-panel .slider-value-label {
+  color: var(--crystal-text-dim);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.cc-detail-panel separator {
+  background: var(--crystal-border);
+  margin: 4px 0;
+  min-height: 1px;
+}
+
+.audio-device-row {
+  background: transparent;
+  border-radius: var(--crystal-radius-sm);
+}
+.audio-device-row:hover {
+  background: rgba(var(--crystal-accent-rgb), 0.06);
+}
+
+.cc-detail-close-btn {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  padding: 4px;
+  border-radius: var(--crystal-radius-pill);
+  min-width: 24px;
+  min-height: 24px;
+  transition: background 0.15s ease;
+}
+.cc-detail-close-btn:hover {
+  background: var(--crystal-surface-hover);
+}
+.cc-detail-close-btn:active {
+  background: var(--crystal-surface-active);
+}
+
+/* --- CC Tile Cover (invisible intercept for detail-strip tiles) --- */
+.cc-tile-cover {
+  opacity: 0;
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+}
+
 /* ==========================================================================
    APP GRID — Launchpad Style
    ========================================================================== */
 /* ── Window ── */
 window#crystal-app-launcher,
 .app-grid-window {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
 }
 
 /* ── Background overlay (click to close) ── */
@@ -1361,7 +1889,9 @@ window#crystal-app-launcher,
 .app-grid-scroll viewport,
 .app-grid-scroll undershoot,
 .app-grid-scroll overshoot {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
   outline: none;
@@ -1384,9 +1914,12 @@ window#crystal-app-launcher,
 
 /* ── App button ── */
 .app-grid-button {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
   border-radius: 18px;
   padding: 12px 16px;
   transition: background 0.15s ease;
@@ -1435,8 +1968,12 @@ window#crystal-app-launcher,
    ========================================================================== */
 /* --- Window --- */
 window.workspace-cockpit {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
   box-shadow: none;
+  outline: none;
 }
 
 .cockpit-window-content {
@@ -1537,12 +2074,14 @@ window.workspace-cockpit {
 
 /* --- Buttons --- */
 .wo-btn {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
+  box-shadow: none;
+  outline: none;
   padding: 0;
   border-radius: 24px;
-  outline: none;
-  box-shadow: none;
 }
 .wo-btn:focus, .wo-btn:active {
   outline: none;
@@ -1564,27 +2103,34 @@ window.workspace-cockpit {
 window#crystal-settings-window {
   background: none;
   background-color: transparent;
-  box-shadow: none;
+  background-image: none;
   border: none;
+  box-shadow: none;
+  outline: none;
 }
 window#crystal-settings-window > decoration, window#crystal-settings-window > contents {
   background: none;
   background-color: transparent;
-  box-shadow: none;
+  background-image: none;
   border: none;
+  box-shadow: none;
+  outline: none;
 }
 
 #settings-main-glass {
-  background: var(--crystal-bg);
+  background-color: var(--crystal-bg);
   border: 1px solid var(--crystal-border);
   border-radius: var(--crystal-radius-lg);
   box-shadow: var(--crystal-shadow-lg);
 }
 
 #settings-splitview {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
 }
 
 .crystal-sidebar-capsule {
@@ -1595,7 +2141,9 @@ window#crystal-settings-window > decoration, window#crystal-settings-window > co
   min-width: 210px;
 }
 .crystal-sidebar-capsule viewport, .crystal-sidebar-capsule list {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
   outline: none;
@@ -1656,16 +2204,17 @@ window.crystal-settings-window list.settings-sidebar.navigation-sidebar > row:ac
 }
 
 button.crystal-icon-btn {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
   padding: 7px;
   min-width: 0;
   min-height: 0;
   border-radius: var(--crystal-radius-pill);
-  border: none;
-  box-shadow: none;
-  background: transparent;
-  background-image: none;
   color: var(--crystal-text-dim);
-  outline: none;
 }
 button.crystal-icon-btn:hover {
   background: var(--crystal-surface);
@@ -1730,19 +2279,30 @@ button.crystal-icon-btn.sidebar-toggle:hover {
 }
 
 stack.settings-stack {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
+  box-shadow: none;
+  outline: none;
   padding: 0;
 }
 
 .settings-page-scroll {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
 }
 .settings-page-scroll > viewport {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
+  box-shadow: none;
+  outline: none;
 }
 
 .settings-page {
@@ -1780,9 +2340,12 @@ list.settings-list-box {
   margin-bottom: 24px;
 }
 list.settings-list-box row.settings-item-row {
-  background: transparent;
+  background: none;
+  background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
   border-radius: var(--crystal-radius-sm);
   margin: 1px 0;
   transition: background 0.15s ease;
@@ -2003,14 +2566,20 @@ row.wallpaper-preview-row picture.wallpaper-preview {
 }
 
 window.prism-window {
-  background: transparent;
+  background: none;
   background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
 }
 window.prism-window decoration, window.prism-window contents {
   background: none;
   background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
 }
 
 .prism-window-root {

@@ -388,3 +388,225 @@ window.nc-window-2 {
     }
 }
 
+
+/* --- CC Detail Strip --- */
+.cc-detail-back-btn {
+    background: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    border-radius: $crystal-radius-sm;
+    color: var(--crystal-text);
+    transition: background 0.15s ease;
+
+    &:hover  { background: var(--crystal-surface-hover); }
+    &:active { background: var(--crystal-surface-active); }
+}
+
+.cc-detail-sep {
+    background: var(--crystal-border);
+    min-height: 1px;
+    margin-left: 12px;
+    margin-right: 12px;
+}
+
+.cc-detail-title {
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: var(--crystal-text);
+    letter-spacing: 0.04em;
+}
+
+.cc-detail-section-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: var(--crystal-text-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    opacity: 0.7;
+}
+
+/* --- CC Detail Panel — styles for content inside the squircle island --------- */
+.cc-detail-panel {
+
+    // Strip the settings-page card look from list boxes
+    list.settings-list-box,
+    list.boxed-list {
+        background: transparent;
+        background-image: none;
+        border: none;
+        box-shadow: none;
+        margin-bottom: 4px;
+        padding: 0;
+
+        row {
+            @include crystal-reset;
+            border-radius: $crystal-radius-sm;
+            margin: 1px 0;
+            transition: background 0.12s ease;
+
+            &:hover   { background: rgba(var(--crystal-accent-rgb), 0.08); }
+            &:active  { background: rgba(var(--crystal-accent-rgb), 0.15); }
+            &:selected { background: transparent; }
+        }
+    }
+
+    // Full-row click buttons (clipboard items)
+    button.settings-action-row {
+        @include crystal-reset;
+        border-radius: $crystal-radius-sm;
+
+        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.08); }
+        &:active { background: rgba(var(--crystal-accent-rgb), 0.15); }
+    }
+
+    // Primary action (VPN connect, screenshot save, start recording)
+    button.suggested-action {
+        background: var(--crystal-accent);
+        background-image: none;
+        color: #fff;
+        border: none;
+        box-shadow: none;
+        border-radius: $crystal-radius-sm;
+        padding: 6px 14px;
+        font-size: 0.84rem;
+        font-weight: 600;
+
+        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.82); }
+        &:active { background: rgba(var(--crystal-accent-rgb), 0.65); }
+    }
+
+    // Destructive action (VPN disconnect, stop recording)
+    button.destructive-action {
+        background: var(--crystal-danger);
+        background-image: none;
+        color: #fff;
+        border: none;
+        box-shadow: none;
+        border-radius: $crystal-radius-sm;
+        padding: 6px 14px;
+        font-size: 0.84rem;
+        font-weight: 600;
+
+        &:hover  { background: rgba(var(--crystal-danger-rgb), 0.82); }
+        &:active { background: rgba(var(--crystal-danger-rgb), 0.65); }
+    }
+
+    // Flat button (screenshot copy, set-default text link)
+    button.flat {
+        background: transparent;
+        background-image: none;
+        border: none;
+        box-shadow: none;
+        color: var(--crystal-accent);
+        border-radius: $crystal-radius-sm;
+        padding: 4px 10px;
+        font-weight: 500;
+
+        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.10); }
+        &:active { background: rgba(var(--crystal-accent-rgb), 0.18); }
+    }
+
+    // Compact text button (set-default, inside audio device rows)
+    button.compact-btn {
+        font-size: 0.78rem;
+        font-weight: 500;
+        min-height: 24px;
+        padding: 2px 8px;
+    }
+
+    // Icon buttons (mute toggles)
+    button.settings-icon-btn {
+        background: transparent;
+        background-image: none;
+        border: none;
+        box-shadow: none;
+        border-radius: $crystal-radius-sm;
+        padding: 4px;
+        color: var(--crystal-text-dim);
+        min-width: 28px;
+        min-height: 28px;
+
+        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.10); color: var(--crystal-accent); }
+        &:active { background: rgba(var(--crystal-accent-rgb), 0.18); }
+    }
+
+    // Linked mode-selector button groups (screenshot / screenrecord)
+    .linked {
+        > button {
+            background: rgba(255, 255, 255, 0.05);
+            background-image: none;
+            border: 1px solid var(--crystal-border);
+            border-radius: $crystal-radius-sm;
+            box-shadow: none;
+            color: var(--crystal-text-dim);
+            font-size: 0.84rem;
+            padding: 6px 0;
+
+            &:hover { background: rgba(var(--crystal-accent-rgb), 0.08); color: var(--crystal-text); }
+
+            &.suggested-action {
+                background: rgba(var(--crystal-accent-rgb), 0.18);
+                background-image: none;
+                border-color: rgba(var(--crystal-accent-rgb), 0.45);
+                color: var(--crystal-accent);
+                font-weight: 700;
+
+                &:hover  { background: rgba(var(--crystal-accent-rgb), 0.26); }
+                &:active { background: rgba(var(--crystal-accent-rgb), 0.35); }
+            }
+        }
+    }
+
+    // Audio enable switch
+    switch {
+        &:checked slider { background: #fff; }
+        &:checked       { background: var(--crystal-accent); }
+    }
+
+    // Default speaker badge
+    .accent-label {
+        color: var(--crystal-accent);
+        background: rgba(var(--crystal-accent-rgb), 0.14);
+        border-radius: $crystal-radius-pill;
+        padding: 2px 8px;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+
+    .settings-row-label   { font-size: 0.86rem; color: var(--crystal-text); }
+    .settings-row-subtitle { font-size: 0.82rem; color: var(--crystal-text-dim); }
+    .slider-value-label   { color: var(--crystal-text-dim); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+
+    separator { background: var(--crystal-border); margin: 4px 0; min-height: 1px; }
+}
+
+.audio-device-row {
+    background: transparent;
+    border-radius: $crystal-radius-sm;
+    &:hover { background: rgba(var(--crystal-accent-rgb), 0.06); }
+}
+
+.cc-detail-close-btn {
+    background: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    padding: 4px;
+    border-radius: $crystal-radius-pill;
+    min-width: 24px;
+    min-height: 24px;
+    transition: background 0.15s ease;
+
+    &:hover  { background: var(--crystal-surface-hover); }
+    &:active { background: var(--crystal-surface-active); }
+}
+
+/* --- CC Tile Cover (invisible intercept for detail-strip tiles) --- */
+.cc-tile-cover {
+    opacity: 0;
+    background: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+}

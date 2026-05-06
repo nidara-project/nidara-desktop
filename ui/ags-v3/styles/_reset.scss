@@ -63,7 +63,8 @@
 .crystal-control-center,
 .crystal-notification-center,
 .crystal-dock-window,
-.crystal-bar-window {
+.crystal-bar-window,
+.crystal-settings-window {
     & scrollbar {
         background: transparent;
         border: none;

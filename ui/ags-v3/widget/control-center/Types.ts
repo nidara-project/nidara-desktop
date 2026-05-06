@@ -19,5 +19,8 @@ export interface AtomicWidget {
     defaultSize: WidgetSize
     supportedSizes: WidgetSize[]
     buildContent: (size: WidgetSize) => Gtk.Widget
-    buildBarContent?: () => Gtk.Widget  // compact bar variant
+    buildBarContent?: () => Gtk.Widget                      // compact bar variant (icon only)
+    buildBarExpanded?: (onClose: () => void) => Gtk.Widget  // bar inline expansion panel
+    buildCCDetail?: (onClose: () => void) => Gtk.Widget     // CC full-panel detail (no inner scroll)
+    ccDetailRows?: number                                   // squircle height in grid rows (default 2)
 }

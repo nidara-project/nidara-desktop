@@ -40,7 +40,6 @@ function buildCommand(mode: CaptureMode, action: CaptureAction): string {
 }
 
 async function capture(mode: CaptureMode, action: CaptureAction, onClose: () => void) {
-    // Close the overlay first, then wait for it to disappear before capturing
     onClose()
     await new Promise(resolve => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 600, () => {
         resolve(null)
@@ -53,25 +52,18 @@ async function capture(mode: CaptureMode, action: CaptureAction, onClose: () => 
     }
 }
 
-// ── Popover UI ────────────────────────────────────────────────────────────────
+// ── Shared control builder (used by bar expansion + CC popover) ───────────────
 
-function buildScreenshotPopover(anchor: Gtk.Widget): CrystalPopover {
+function buildControls(onClose: () => void): Gtk.Widget {
     let selectedMode: CaptureMode = "area"
 
-    // Mode buttons row
     const modes: { id: CaptureMode; label: string }[] = [
         { id: "area",   label: t("widget.screenshot.mode.area") },
         { id: "screen", label: t("widget.screenshot.mode.screen") },
         { id: "window", label: t("widget.screenshot.mode.window") },
     ]
 
-    const modeRow = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 6,
-        homogeneous: true,
-        css_classes: ["linked"],
-    })
-
+    const modeRow = new Gtk.Box({ spacing: 6, homogeneous: true, css_classes: ["linked"] })
     const modeBtns: Gtk.Button[] = []
     for (const mode of modes) {
         const btn = new Gtk.Button({ label: mode.label })
@@ -85,64 +77,33 @@ function buildScreenshotPopover(anchor: Gtk.Widget): CrystalPopover {
         modeRow.append(btn)
         modeBtns.push(btn)
     }
-    // Initial selection
     modeBtns[0].add_css_class("suggested-action")
-
-    // Action buttons row
-    const popover = new CrystalPopover({ autohide: true })
 
     const makeActionBtn = (action: CaptureAction, label: string, cssClass: string) => {
         const btn = new Gtk.Button({ label, css_classes: [cssClass], hexpand: true })
-        btn.connect("clicked", () => {
-            const mode = selectedMode
-            capture(mode, action, () => popover.popdown())
-        })
+        btn.connect("clicked", () => capture(selectedMode, action, onClose))
         return btn
     }
 
-    const actionRow = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 6,
-        homogeneous: true,
-    })
+    const actionRow = new Gtk.Box({ spacing: 6, homogeneous: true })
     actionRow.append(makeActionBtn("copy", t("widget.screenshot.action.copy"), "flat"))
     actionRow.append(makeActionBtn("save", t("widget.screenshot.action.save"), "suggested-action"))
 
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 10,
-        margin_top: 14, margin_bottom: 14,
-        margin_start: 14, margin_end: 14,
-        width_request: 260,
-    })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: 240 })
     box.append(modeRow)
     box.append(new Gtk.Separator())
     box.append(actionRow)
-
-    popover.set_child(box)
-    popover.set_parent(anchor)
-    anchor.connect("unrealize", () => { try { popover.unparent() } catch {} })
-
-    return popover
+    return box
 }
 
-// ── Bar content ───────────────────────────────────────────────────────────────
+// ── Bar icon ──────────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    const image = new Gtk.Image({
-        gicon: Icons.camera,
-        pixel_size: 16,
-        margin_start: 16,
-        margin_end: 16,
-        css_classes: ["cs-icon"],
-    })
+    return new Gtk.Image({ gicon: Icons.camera, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+}
 
-    const popover = buildScreenshotPopover(image)
-    const gesture = new Gtk.GestureClick()
-    gesture.connect("pressed", () => popover.popup())
-    image.add_controller(gesture)
-
-    return image
+function buildBarExpanded(onClose: () => void): Gtk.Widget {
+    return buildControls(onClose)
 }
 
 // ── CC content ────────────────────────────────────────────────────────────────
@@ -155,7 +116,10 @@ function buildContent(size: WidgetSize): Gtk.Widget {
             hexpand: true, vexpand: true,
         })
         btn.set_child(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, css_classes: ["cs-icon"] }))
-        const popover = buildScreenshotPopover(btn)
+        const popover = new CrystalPopover({ autohide: true })
+        popover.set_child(buildControls(() => popover.popdown()))
+        popover.set_parent(btn)
+        btn.connect("unrealize", () => { try { popover.unparent() } catch {} })
         btn.connect("clicked", () => popover.popup())
         return btn
     }
@@ -171,37 +135,21 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         width_request: 48, height_request: 48,
     })
-    iconBox.append(new Gtk.Image({
-        gicon: Icons.camera,
-        pixel_size: 28,
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        hexpand: true, vexpand: true,
-        css_classes: ["cs-icon"],
-    }))
+    iconBox.append(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] }))
 
     const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
-    textStack.append(new Gtk.Label({
-        label: t("widget.screenshot.name"),
-        css_classes: ["cc-atomic-label-bold"],
-        halign: Gtk.Align.START,
-    }))
-    textStack.append(new Gtk.Label({
-        label: t("widget.screenshot.sub"),
-        css_classes: ["cc-atomic-label-dim"],
-        halign: Gtk.Align.START,
-    }))
+    textStack.append(new Gtk.Label({ label: t("widget.screenshot.name"), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START }))
+    textStack.append(new Gtk.Label({ label: t("widget.screenshot.sub"),  css_classes: ["cc-atomic-label-dim"],  halign: Gtk.Align.START }))
 
-    const inner = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 12,
-        halign: Gtk.Align.START, valign: Gtk.Align.CENTER,
-        margin_start: 4,
-    })
+    const inner = new Gtk.Box({ spacing: 12, halign: Gtk.Align.START, valign: Gtk.Align.CENTER, margin_start: 4 })
     inner.append(iconBox)
     inner.append(textStack)
     btn.set_child(inner)
 
-    const popover = buildScreenshotPopover(btn)
+    const popover = new CrystalPopover({ autohide: true })
+    popover.set_child(buildControls(() => popover.popdown()))
+    popover.set_parent(btn)
+    btn.connect("unrealize", () => { try { popover.unparent() } catch {} })
     btn.connect("clicked", () => popover.popup())
 
     return btn
@@ -218,6 +166,9 @@ const screenshotWidget: AtomicWidget = {
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
     buildContent,
     buildBarContent,
+    buildBarExpanded,
+    buildCCDetail: buildBarExpanded,
+    ccDetailRows: 2,
 }
 
 export default screenshotWidget

@@ -110,6 +110,9 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
   const b = parseInt(accent.slice(5, 7), 16)
   const fg = isDark ? "255, 255, 255" : "0, 0, 0"
   const bg = isDark ? "36, 36, 36" : "250, 250, 250"
+  const pbR = parseInt(popoverBg.slice(1, 3), 16)
+  const pbG = parseInt(popoverBg.slice(3, 5), 16)
+  const pbB = parseInt(popoverBg.slice(5, 7), 16)
 
   // Dock item hover/plate tokens — scaled by dockOpacity
   const d = config.dockOpacity
@@ -141,6 +144,8 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
     `  --crystal-success: #30d158;`,
     `  --crystal-warning: #f3ba4b;`,
     `  --crystal-warning-rgb: 243, 186, 75;`,
+    `  --crystal-popover-bg: rgba(${pbR}, ${pbG}, ${pbB}, ${popoverAlpha});`,
+    `  --crystal-popover-border: ${popoverBorder};`,
     `}`,
     isDark ? `` : `.cs-icon { -gtk-icon-filter: none; }`,
   )

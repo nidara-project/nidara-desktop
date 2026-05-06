@@ -216,23 +216,99 @@ button.crystal-btn,
 
 /* --- CrystalPopover --- */
 /* Specificity (0,1,2) matches libadwaita's popover.background > contents,
-   load priority 810 > ~600 ensures our rules win the cascade. */
+   load priority 810 > ~600 ensures our rules win the cascade.
+   CSS vars (--crystal-popover-*) are used instead of @define-color to stay
+   SCSS-compilable — @name syntax in property values is not valid SCSS. */
 popover.crystal-popover {
     background-color: transparent;
     border: none;
     box-shadow: none;
 
     > contents {
-        background-color: @fc_popover_bg;
+        /* Fallback ensures visible background even before --crystal-popover-bg token is set */
+        background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.82));
         border-radius: 14px;
-        border: 1px solid @fc_popover_border;
+        border: 1px solid var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
         box-shadow: 0 6px 28px rgba(0, 0, 0, 0.32);
         padding: 0;
     }
 
     > arrow {
-        /* Recolour the native GTK arrow to match the contents box */
-        background-color: @fc_popover_bg;
-        border-color: @fc_popover_border;
+        background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.82));
+        border-color: var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
     }
+}
+
+/* --- Shared list-row styles (Clipboard/VPN popovers + Settings) --- */
+/* These classes are reused across contexts so hover/active must be global. */
+.settings-row-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--crystal-text);
+}
+
+.settings-row-subtitle {
+    font-size: 0.8rem;
+    color: var(--crystal-text-dim);
+}
+
+row.settings-item-row {
+    border-radius: $crystal-radius-sm;
+    transition: background 0.15s ease;
+
+    &:hover   { background: var(--crystal-surface-hover); }
+    &:active  { background: var(--crystal-surface-active); }
+    &:selected { background: transparent; }
+}
+
+button.settings-action-row {
+    background: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    border-radius: 0;
+    padding: 0;
+    transition: background 0.15s ease;
+
+    &:hover  { background: var(--crystal-surface-hover); }
+    &:active { background: var(--crystal-surface-active); }
+}
+
+/* Hover/active for non-accent buttons inside any crystal popover */
+popover.crystal-popover button:not(.suggested-action):not(.destructive-action):not(.settings-action-row) {
+    &:hover  { background: var(--crystal-surface-hover);  transition: background 0.15s ease; }
+    &:active { background: var(--crystal-surface-active); transition: background 0.05s ease; }
+}
+
+/* Accent (selected/primary) buttons inside crystal popovers */
+popover.crystal-popover button.suggested-action {
+    background: $crystal-accent;
+    color: #ffffff;
+    border: none;
+    border-radius: $crystal-radius-xs;
+    transition: background 0.15s ease;
+
+    &:hover  { background: rgba(var(--crystal-accent-rgb), 0.85); }
+    &:active { background: rgba(var(--crystal-accent-rgb), 0.65); }
+}
+
+/* --- Bar info-popover label typography --- */
+/* Used in wifi/ethernet info popovers (title + key/value pairs). */
+.bar-popover-title {
+    font-size: 0.75rem;
+    font-weight: 700;
+    color: var(--crystal-text-dim);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.bar-popover-key {
+    font-size: 0.85rem;
+    color: var(--crystal-text-dim);
+}
+
+.bar-popover-val {
+    font-size: 0.85rem;
+    font-weight: 500;
+    color: var(--crystal-text);
 }

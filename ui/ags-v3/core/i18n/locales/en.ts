@@ -562,6 +562,7 @@ export default {
     "widget.screenrecord.audio": "Include audio",
     "widget.screenrecord.start": "Start recording",
     "widget.screenrecord.recording": "Recording…",
+    "widget.screenrecord.stop": "Stop recording",
     "widget.screenrecord.saved": "Recording saved",
     "widget.brightness.name": "Brightness",
     "widget.night-light.name": "Night Light",

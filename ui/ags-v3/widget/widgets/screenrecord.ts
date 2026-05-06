@@ -96,24 +96,15 @@ function makeElapsedLabel(): Gtk.Label {
     return label
 }
 
-// ── Popover UI (idle state) ───────────────────────────────────────────────────
+// ── Record controls (shared by bar expansion + CC popover) ───────────────────
 
-function buildRecordPopover(anchor: Gtk.Widget): CrystalPopover {
+function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
     let selectedMode: RecordMode = "screen"
     let withAudio = false
 
-    const popover = new CrystalPopover({ autohide: true })
-
-    // Mode row
-    const modeRow = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 6, homogeneous: true,
-        css_classes: ["linked"],
-    })
-
+    const modeRow = new Gtk.Box({ spacing: 6, homogeneous: true, css_classes: ["linked"] })
     const screenBtn = new Gtk.Button({ label: t("widget.screenrecord.mode.screen"), css_classes: ["suggested-action"] })
     const regionBtn = new Gtk.Button({ label: t("widget.screenrecord.mode.region") })
-
     screenBtn.connect("clicked", () => {
         selectedMode = "screen"
         screenBtn.add_css_class("suggested-action"); regionBtn.remove_css_class("suggested-action")
@@ -125,46 +116,30 @@ function buildRecordPopover(anchor: Gtk.Widget): CrystalPopover {
     modeRow.append(screenBtn)
     modeRow.append(regionBtn)
 
-    // Audio toggle row
     const audioRow = new Gtk.Box({ spacing: 8 })
     const audioSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER })
     audioSwitch.connect("notify::active", () => { withAudio = audioSwitch.active })
-    const audioLabel = new Gtk.Label({
-        label: t("widget.screenrecord.audio"),
-        hexpand: true, halign: Gtk.Align.START,
-    })
+    const audioLabel = new Gtk.Label({ label: t("widget.screenrecord.audio"), hexpand: true, halign: Gtk.Align.START })
     audioRow.append(audioLabel)
     audioRow.append(audioSwitch)
 
-    // Start button
-    const startBtn = new Gtk.Button({
-        label: t("widget.screenrecord.start"),
-        css_classes: ["suggested-action"],
-        hexpand: true,
-    })
-    startBtn.connect("clicked", () => {
-        const mode = selectedMode
-        const audio = withAudio
-        startRecording(mode, audio, () => popover.popdown())
-    })
+    const startBtn = new Gtk.Button({ label: t("widget.screenrecord.start"), css_classes: ["suggested-action"], hexpand: true })
+    startBtn.connect("clicked", () => startRecording(selectedMode, withAudio, onClose))
 
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 10,
-        margin_top: 14, margin_bottom: 14,
-        margin_start: 14, margin_end: 14,
-        width_request: 220,
-    })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: 200 })
     box.append(modeRow)
     box.append(new Gtk.Separator())
     box.append(audioRow)
     box.append(new Gtk.Separator())
     box.append(startBtn)
+    return box
+}
 
-    popover.set_child(box)
+function buildRecordPopover(anchor: Gtk.Widget): CrystalPopover {
+    const popover = new CrystalPopover({ autohide: true })
+    popover.set_child(buildRecordPopoverContent(() => popover.popdown()))
     popover.set_parent(anchor)
     anchor.connect("unrealize", () => { try { popover.unparent() } catch {} })
-
     return popover
 }
 
@@ -274,38 +249,48 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     return btn
 }
 
-// ── Bar content ────────────────────────────────────────────────────────────────
+// ── Bar icon (dynamic recording state indicator) ──────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    const image = new Gtk.Image({
-        gicon: Icons.record,
-        pixel_size: 16,
-        margin_start: 16, margin_end: 16,
-        css_classes: ["cs-icon"],
-    })
-
-    const popover = buildRecordPopover(image)
-
+    const image = new Gtk.Image({ gicon: Icons.record, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
     const syncState = () => {
-        if (status.recording) {
-            image.gicon = Icons.recordStop
-            image.add_css_class("rec-bar-active")
-        } else {
-            image.gicon = Icons.record
-            image.remove_css_class("rec-bar-active")
-        }
+        image.gicon = status.recording ? Icons.recordStop : Icons.record
+        if (status.recording) image.add_css_class("rec-bar-active")
+        else image.remove_css_class("rec-bar-active")
     }
     const sigId = status.connect("notify::recording", syncState)
     image.connect("unrealize", () => { try { status.disconnect(sigId) } catch {} })
-
-    const gesture = new Gtk.GestureClick()
-    gesture.connect("pressed", () => {
-        if (status.recording) stopRecording()
-        else popover.popup()
-    })
-    image.add_controller(gesture)
-
+    syncState()
     return image
+}
+
+// ── Bar expansion panel content ───────────────────────────────────────────────
+
+function buildBarExpanded(onClose: () => void): Gtk.Widget {
+    // Stack switches between setup (idle) and active (recording) views
+    const stack = new Gtk.Stack({ transition_type: Gtk.StackTransitionType.CROSSFADE, transition_duration: 150 })
+
+    // ── Idle page ──────────────────────────────────────────────
+    const idlePage = buildRecordPopoverContent(onClose)
+    stack.add_named(idlePage, "idle")
+
+    // ── Recording page ─────────────────────────────────────────
+    const elapsed = makeElapsedLabel()
+    const stopBtn = new Gtk.Button({ label: t("widget.screenrecord.stop"), css_classes: ["destructive-action"], hexpand: true })
+    stopBtn.connect("clicked", () => stopRecording())
+    const recBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: 180 })
+    recBox.append(elapsed)
+    recBox.append(new Gtk.Separator())
+    recBox.append(stopBtn)
+    stack.add_named(recBox, "recording")
+
+    // Keep stack in sync with recording state
+    const syncStack = () => stack.set_visible_child_name(status.recording ? "recording" : "idle")
+    const sigId = status.connect("notify::recording", syncStack)
+    stack.connect("unrealize", () => { try { status.disconnect(sigId) } catch {} })
+    syncStack()
+
+    return stack
 }
 
 // ── Widget registration ───────────────────────────────────────────────────────
@@ -319,6 +304,9 @@ const screenrecordWidget: AtomicWidget = {
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
     buildContent,
     buildBarContent,
+    buildBarExpanded,
+    buildCCDetail: buildBarExpanded,
+    ccDetailRows: 2,
 }
 
 export default screenrecordWidget

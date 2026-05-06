@@ -1,5 +1,6 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import GObject from "gi://GObject"
+import GLib from "gi://GLib"
 import BaseIsland from "./BaseIsland"
 import ccLayout, { UNIT, GAP, GRID_COLS, GRID_WIDTH, GRID_HEIGHT, SIZE_MAP } from "./CCLayoutManager"
 import { AtomicWidget, WidgetSize } from "./Types"
@@ -61,6 +62,7 @@ function makeIslandWidget(
     onResize: () => void,
     fixed: Gtk.Fixed,
     removeGhost: () => void,
+    showDetail: ((id: string) => void) | null,
 ): Gtk.Widget | null {
     const entry = ccLayout.layout.find(e => e.id === id)
     if (!entry) return null
@@ -75,6 +77,17 @@ function makeIslandWidget(
 
     const content = def.buildContent(effectiveSize)
     const island  = BaseIsland({ name: def.id, child: content, width, height, size: effectiveSize })
+
+    // Tiles with CC detail: wrap in overlay with invisible click-intercept cover
+    if (!editMode && def.buildCCDetail && showDetail) {
+        const overlay = new Gtk.Overlay()
+        overlay.set_child(island)
+        overlay.set_size_request(width, height)
+        const cover = new Gtk.Button({ css_classes: ["cc-tile-cover"], hexpand: true, vexpand: true })
+        cover.connect("clicked", () => showDetail(id))
+        overlay.add_overlay(cover)
+        return overlay
+    }
 
     if (!editMode) return island
 
@@ -138,6 +151,7 @@ function makeIslandWidget(
 
 export default function IslandGrid() {
     let editMode = false
+    let activeDetailId = ""
 
     const outer = new Gtk.Box({
         name: "island-grid-root",
@@ -151,6 +165,92 @@ export default function IslandGrid() {
         height_request: GRID_HEIGHT,
         halign: Gtk.Align.END,
     })
+
+    // ── Detail page (full-panel, macOS Tahoe style) ───────────────────────────
+    const mainStack = new Gtk.Stack({
+        transition_type: Gtk.StackTransitionType.CROSSFADE,
+        transition_duration: 200,
+        hexpand: false,
+        halign: Gtk.Align.END,
+    })
+
+    // Overview page: grid + edit button live here
+    const overviewPage = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, halign: Gtk.Align.END })
+
+    // Detail page — single squircle containing header + content (built fresh per widget)
+    const detailPage = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        halign: Gtk.Align.END,
+        width_request: GRID_WIDTH,
+    })
+    // detailIsland is appended/removed dynamically
+
+    mainStack.add_named(overviewPage, "overview")
+    mainStack.add_named(detailPage, "detail")
+    mainStack.set_visible_child_name("overview")
+
+    let detailIsland: Gtk.Widget | null = null
+
+    const hideDetail = () => {
+        activeDetailId = ""
+        mainStack.set_visible_child_name("overview")
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, 220, () => {
+            if (detailIsland) { try { detailPage.remove(detailIsland) } catch {} ; detailIsland = null }
+            return GLib.SOURCE_REMOVE
+        })
+    }
+
+    const showDetail = (id: string) => {
+        if (editMode) return
+        const w = registry.get(id)
+        if (!w?.buildCCDetail) return
+        if (activeDetailId === id) { hideDetail(); return }
+
+        if (detailIsland) { try { detailPage.remove(detailIsland) } catch {} ; detailIsland = null }
+
+        activeDetailId = id
+
+        const rows = w.ccDetailRows ?? 2
+        const cellH = rows * (UNIT + GAP) - GAP
+
+        // Header: back button + title — lives inside the squircle for glass contrast
+        const backBtnChild = new Gtk.Box({ spacing: 6, margin_start: 8, margin_end: 8, margin_top: 12, margin_bottom: 12 })
+        backBtnChild.append(new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["cs-icon"] }))
+        backBtnChild.append(new Gtk.Label({ label: w.name, css_classes: ["cc-detail-title"], halign: Gtk.Align.START }))
+        const backBtn = new Gtk.Button({ child: backBtnChild, css_classes: ["cc-detail-back-btn"], halign: Gtk.Align.START, margin_start: 4, margin_top: 4 })
+        backBtn.connect("clicked", hideDetail)
+
+        // Content
+        const panel = new Gtk.Box({
+            orientation: Gtk.Orientation.VERTICAL,
+            css_classes: ["cc-detail-panel"],
+            hexpand: true,
+            margin_start: 8, margin_end: 8, margin_bottom: 10,
+        })
+        panel.append(w.buildCCDetail(hideDetail))
+
+        const scroll = new Gtk.ScrolledWindow({
+            hscrollbar_policy: Gtk.PolicyType.NEVER,
+            vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+            height_request: cellH,
+        })
+        scroll.set_child(panel)
+
+        const inner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: GRID_WIDTH })
+        inner.append(backBtn)
+        inner.append(new Gtk.Separator({ css_classes: ["cc-detail-sep"], margin_bottom: 4 }))
+        inner.append(scroll)
+
+        detailIsland = SquircleContainer({
+            child: inner,
+            gloss: true,
+            useShellOpacity: true,
+            borderColor: { r: 1, g: 1, b: 1, a: 0.12 },
+            radius: 24,
+        })
+        detailPage.append(detailIsland)
+        mainStack.set_visible_child_name("detail")
+    }
 
     // Active ghost widget — recreated on every motion event to guarantee correct size
     let ghost: Gtk.Box | null = null
@@ -206,8 +306,9 @@ export default function IslandGrid() {
     const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 20, margin_bottom: 8 })
     editBtnWrapper.append(editBtn)
 
-    outer.append(fixed)
-    outer.append(editBtnWrapper)
+    overviewPage.append(fixed)
+    overviewPage.append(editBtnWrapper)
+    outer.append(mainStack)
 
     const rebuild = () => {
         removeGhost()
@@ -245,6 +346,7 @@ export default function IslandGrid() {
                 },
                 fixed,
                 removeGhost,
+                editMode ? null : showDetail,
             )
             if (widget) fixed.put(widget, pixelX(entry.x), pixelY(entry.y))
         }
@@ -256,6 +358,7 @@ export default function IslandGrid() {
     gestureClick.connect("released", () => {
         editMode = !editMode
         status.cc_edit_mode = editMode
+        if (editMode) hideDetail()
         rebuild()
     })
     editBtn.add_controller(gestureClick)
@@ -273,12 +376,15 @@ export default function IslandGrid() {
     syncCCLayout()  // initial pass — catches widgets enabled before WIDGET_META had their entry
     widgetConfig.connect("changed", syncCCLayout)
 
-    // Reset edit mode when CC is closed
+    // Reset edit mode + detail strip when CC is closed
     status.connect("notify::cc-open", () => {
-        if (!status.cc_open && editMode) {
-            editMode = false
-            status.cc_edit_mode = false
-            rebuild()
+        if (!status.cc_open) {
+            hideDetail()
+            if (editMode) {
+                editMode = false
+                status.cc_edit_mode = false
+                rebuild()
+            }
         }
     })
 

@@ -21,6 +21,7 @@ export class UIStatus extends GObject.Object {
                 "overview-open": GObject.ParamSpec.boolean("overview-open", "Overview Open", "Overview visibility", GObject.ParamFlags.READWRITE, false),
                 "about-open": GObject.ParamSpec.boolean("about-open", "About Open", "About window visibility", GObject.ParamFlags.READWRITE, false),
                 "recording": GObject.ParamSpec.boolean("recording", "Recording", "Screen recording active", GObject.ParamFlags.READWRITE, false),
+                "bar-expanded-id": GObject.ParamSpec.string("bar-expanded-id", "Bar Expanded ID", "ID of the expanded bar widget, empty = none", GObject.ParamFlags.READWRITE, ""),
             },
         }, this)
     }
@@ -35,6 +36,7 @@ export class UIStatus extends GObject.Object {
     private _overview_open = false
     private _about_open = false
     private _recording = false
+    private _bar_expanded_id = ""
 
     public get notif_active() { return this._notif_active }
     public set notif_active(v: boolean) {
@@ -44,7 +46,7 @@ export class UIStatus extends GObject.Object {
     }
 
     public get cc_open() { return this._cc_open }
-    public set cc_open(v: boolean) { 
+    public set cc_open(v: boolean) {
         if (this._cc_open === v) return
         this._cc_open = v
         if (v) {
@@ -53,11 +55,13 @@ export class UIStatus extends GObject.Object {
             this._notif_active = false
             this._system_menu_open = false
             this._overview_open = false
+            this._bar_expanded_id = ""
             this.notify("nc-open")
             this.notify("prism-open")
             this.notify("notif-active")
             this.notify("system-menu-open")
             this.notify("overview-open")
+            this.notify("bar-expanded-id")
         }
         this.notify("cc-open")
     }
@@ -72,11 +76,13 @@ export class UIStatus extends GObject.Object {
             this._notif_active = false
             this._system_menu_open = false
             this._overview_open = false
+            this._bar_expanded_id = ""
             this.notify("cc-open")
             this.notify("prism-open")
             this.notify("notif-active")
             this.notify("system-menu-open")
             this.notify("overview-open")
+            this.notify("bar-expanded-id")
         }
         this.notify("nc-open")
     }
@@ -90,10 +96,12 @@ export class UIStatus extends GObject.Object {
             this._nc_open = false
             this._system_menu_open = false
             this._overview_open = false
+            this._bar_expanded_id = ""
             this.notify("cc-open")
             this.notify("nc-open")
             this.notify("system-menu-open")
             this.notify("overview-open")
+            this.notify("bar-expanded-id")
         }
         this.notify("prism-open")
     }
@@ -147,7 +155,7 @@ export class UIStatus extends GObject.Object {
     }
 
     public get isAnyOverlayOpen(): boolean {
-        return this._cc_open || this._nc_open || this._prism_open || this._system_menu_open || this._overview_open
+        return this._cc_open || this._nc_open || this._prism_open || this._system_menu_open || this._overview_open || this._bar_expanded_id !== ""
     }
 
     public get about_open() { return this._about_open }
@@ -164,6 +172,13 @@ export class UIStatus extends GObject.Object {
         if (this._recording === v) return
         this._recording = v
         this.notify("recording")
+    }
+
+    public get bar_expanded_id() { return this._bar_expanded_id }
+    public set bar_expanded_id(v: string) {
+        if (this._bar_expanded_id === v) return
+        this._bar_expanded_id = v
+        this.notify("bar-expanded-id")
     }
 
     toggleCC() { this.cc_open = !this.cc_open }

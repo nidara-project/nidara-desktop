@@ -280,6 +280,19 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const masterOverlay = new Gtk.Overlay({ valign: Gtk.Align.FILL, vexpand: true })
   const barBox = new Gtk.CenterBox({ css_classes: ["bar-centerbox"], height_request: 40, valign: Gtk.Align.START, margin_start: 8, margin_end: 8 })
 
+  // ── Inline expansion panel ─────────────────────────────────────────────────
+  const capsuleRefs = new Map<string, Gtk.Widget>()
+  const expansionInner = new Gtk.Box({ margin_top: 10, margin_bottom: 10, margin_start: 14, margin_end: 14 })
+  const expansionCapsule = SquircleContainer({
+      child: expansionInner, gloss: true, useShellOpacity: true,
+      borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, radius: 20,
+      css_classes: ["bar-expansion-panel"],
+  })
+  expansionCapsule.valign = Gtk.Align.START
+  expansionCapsule.halign = Gtk.Align.END
+  expansionCapsule.margin_top = 44
+  expansionCapsule.visible = false
+
   const cc = ControlCenterWidget(gdkmonitor)
   const nc = NotificationCenter()
   const prism = Prism()
@@ -291,11 +304,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   catcher.connect("clicked", () => {
     if (status.cc_edit_mode) return   // don't close CC while in edit mode
     status.cc_open = false; status.nc_open = false; status.prism_open = false; status.system_menu_open = false
-    status.overview_open = false
+    status.overview_open = false; status.bar_expanded_id = ""
   })
 
   masterOverlay.set_child(barBox)
-  masterOverlay.add_overlay(catcher) // behind panels, above bar base
+  masterOverlay.add_overlay(catcher)       // behind panels, above bar base
+  masterOverlay.add_overlay(expansionCapsule)  // above catcher, below major overlays
   masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu); masterOverlay.add_overlay(overview)
 
   cc.valign = Gtk.Align.START; cc.halign = Gtk.Align.END
@@ -352,6 +366,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           region.unionRectangle({ x: Math.round(alloc.x), y: Math.round(alloc.y), width: Math.round(alloc.width), height: Math.round(alloc.height) })
       }
       addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism); addWidgetToRegion(systemMenu); addWidgetToRegion(overview)
+      addWidgetToRegion(expansionCapsule)
       
       // Add each popup individually to the input region
       let child = popups.get_first_child()
@@ -396,6 +411,43 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
   status.connect("notify::overview-open", syncOverlays)
   status.connect("notify::cc-edit-mode", syncOverlays)
+
+  // ── Bar expansion show/hide ────────────────────────────────────────────────
+  const showExpansion = (id: string) => {
+      const w = registry.get(id)
+      if (!w?.buildBarExpanded) return
+      // Replace content
+      let c = expansionInner.get_first_child()
+      while (c) { const n = c.get_next_sibling(); expansionInner.remove(c); c = n }
+      expansionInner.append(w.buildBarExpanded(() => { status.bar_expanded_id = "" }))
+      expansionCapsule.visible = true
+      // Position centered under the capsule after one layout pass
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1, () => {
+          const capsule = capsuleRefs.get(id)
+          if (!capsule) return GLib.SOURCE_REMOVE
+          const iconAlloc = capsule.get_allocation()
+          if (iconAlloc.width <= 1) return GLib.SOURCE_REMOVE
+          const [ok, tx] = capsule.translate_coordinates(masterOverlay, 0, 0)
+          if (!ok) return GLib.SOURCE_REMOVE
+          const iconCenterX = tx + iconAlloc.width / 2
+          const panelAlloc = expansionCapsule.get_allocation()
+          const panelW = panelAlloc.width > 1 ? panelAlloc.width : 260
+          expansionCapsule.margin_end = Math.max(8, Math.round(monGeo.width - iconCenterX - panelW / 2))
+          updateInputRegion()
+          return GLib.SOURCE_REMOVE
+      })
+  }
+  const hideExpansion = () => {
+      expansionCapsule.visible = false
+      let c = expansionInner.get_first_child()
+      while (c) { const n = c.get_next_sibling(); expansionInner.remove(c); c = n }
+  }
+  status.connect("notify::bar-expanded-id", () => {
+      if (status.bar_expanded_id) showExpansion(status.bar_expanded_id)
+      else hideExpansion()
+      catcher.set_visible(status.isAnyOverlayOpen && !status.cc_edit_mode)
+      updateInputRegion()
+  })
   status.connect("notify::prism-open", () => { 
     syncOverlays() // Call syncOverlays to update visibility and input region
     Gtk4LayerShell.set_keyboard_mode(win, status.prism_open ? Gtk4LayerShell.KeyboardMode.ON_DEMAND : Gtk4LayerShell.KeyboardMode.NONE)
@@ -438,12 +490,21 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Optional bar widgets (before Tray, reactive to config changes)
   const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: 8 })
   const rebuildBarWidgets = () => {
+    if (status.bar_expanded_id) status.bar_expanded_id = ""
+    capsuleRefs.clear()
     let child = optWidgets.get_first_child()
     while (child) { const n = child.get_next_sibling(); optWidgets.remove(child); child = n }
     for (const id of widgetConfig.barWidgetIds()) {
       const w = registry.get(id)
       if (w?.buildBarContent) {
-        optWidgets.append(SquircleContainer({ child: w.buildBarContent(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
+        const hasExpand = !!w.buildBarExpanded
+        const capsule = SquircleContainer({
+            child: w.buildBarContent(), gloss: true, useShellOpacity: true,
+            borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true,
+            ...(hasExpand ? { onClick: () => { status.bar_expanded_id = status.bar_expanded_id === id ? "" : id } } : {}),
+        })
+        if (hasExpand) capsuleRefs.set(id, capsule)
+        optWidgets.append(capsule)
       }
     }
   }
