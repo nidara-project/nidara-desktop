@@ -2,7 +2,7 @@ import { Gtk, Gdk } from "ags/gtk4"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import BaseIsland from "./BaseIsland"
-import ccLayout, { UNIT, GAP, GRID_COLS, GRID_WIDTH, GRID_HEIGHT, SIZE_MAP } from "./CCLayoutManager"
+import ccLayout, { UNIT, GAP, GRID_COLS, GRID_ROWS, GRID_WIDTH, GRID_HEIGHT, SIZE_MAP } from "./CCLayoutManager"
 import { AtomicWidget, WidgetSize } from "./Types"
 import status from "../../core/Status"
 import widgetConfig from "../../core/WidgetConfig"
@@ -34,6 +34,8 @@ function computeContentHeight(): number {
 let dragOffsetX = 0
 let dragOffsetY = 0
 let dragWidgetId = ""
+let dragSourceWidget: Gtk.Widget | null = null
+const dragOrigSnapshot = new Map<string, { x: number; y: number }>()
 
 export function getWidgetById(id: string): AtomicWidget | null {
     try {
@@ -51,7 +53,7 @@ function snapToGrid(id: string, dropX: number, dropY: number): { gx: number; gy:
     let gx = Math.round((dropX - dragOffsetX) / (UNIT + GAP))
     let gy = Math.round((dropY - dragOffsetY) / (UNIT + GAP))
     gx = Math.max(0, Math.min(GRID_COLS - w, gx))
-    gy = Math.max(0, gy)
+    gy = Math.max(0, Math.min(GRID_ROWS - h, gy))
     return { gx, gy }
 }
 
@@ -61,7 +63,8 @@ function makeIslandWidget(
     onRemove: () => void,
     onResize: () => void,
     fixed: Gtk.Fixed,
-    removeGhost: () => void,
+    onDragBegin: (dragged: Gtk.Widget) => void,
+    onDragEnd: (dragged: Gtk.Widget, deleteData: boolean) => void,
     showDetail: ((id: string) => void) | null,
 ): Gtk.Widget | null {
     const entry = ccLayout.layout.find(e => e.id === id)
@@ -122,6 +125,11 @@ function makeIslandWidget(
     const dragSrc = new Gtk.DragSource({ actions: Gdk.DragAction.MOVE })
 
     dragSrc.connect("prepare", (_: any, x: number, y: number) => {
+        // Clean up any previous stuck drag source
+        if (dragSourceWidget && dragSourceWidget !== overlay) {
+            dragSourceWidget.remove_css_class("cc-drag-source")
+            dragSourceWidget = null
+        }
         dragOffsetX  = x
         dragOffsetY  = y
         dragWidgetId = id
@@ -132,17 +140,16 @@ function makeIslandWidget(
     })
 
     dragSrc.connect("drag-begin", (_: any, drag: any) => {
-        // Snapshot the island (without edit-mode decorations) as drag icon
         try {
             const paintable = new Gtk.WidgetPaintable({ widget: island })
             Gtk.DragIcon.set_from_paintable(drag, paintable,
                 Math.round(dragOffsetX), Math.round(dragOffsetY))
         } catch {}
-        removeGhost()
+        onDragBegin(overlay)
     })
 
-    dragSrc.connect("drag-end", () => {
-        removeGhost()
+    dragSrc.connect("drag-end", (_src: any, _drag: any, deleteData: boolean) => {
+        onDragEnd(overlay, deleteData)
     })
 
     overlay.add_controller(dragSrc)
@@ -252,11 +259,32 @@ export default function IslandGrid() {
         mainStack.set_visible_child_name("detail")
     }
 
-    // Active ghost widget — recreated on every motion event to guarantee correct size
-    let ghost: Gtk.Box | null = null
-    const removeGhost = () => {
-        if (ghost && ghost.get_parent() === fixed) fixed.remove(ghost)
-        ghost = null
+    // Per-instance reflow state
+    const widgetRefs = new Map<string, Gtk.Widget>()
+
+    const applySnapshotVisually = () => {
+        for (const [id, pos] of dragOrigSnapshot) {
+            const ref = widgetRefs.get(id)
+            if (ref) fixed.move(ref, pixelX(pos.x), pixelY(pos.y))
+        }
+    }
+
+    const handleDragBegin = (overlay: Gtk.Widget) => {
+        dragOrigSnapshot.clear()
+        for (const entry of ccLayout.layout)
+            dragOrigSnapshot.set(entry.id, { x: entry.x, y: entry.y })
+        dragSourceWidget = overlay
+        overlay.add_css_class("cc-drag-source")
+    }
+
+    const handleDragEnd = (overlay: Gtk.Widget, deleteData: boolean) => {
+        try { overlay.remove_css_class("cc-drag-source") } catch {}
+        dragSourceWidget = null
+        if (!deleteData) {
+            applySnapshotVisually()
+        }
+        dragOrigSnapshot.clear()
+        dragWidgetId = ""
     }
 
     // Drop target — always present, only activates when drag sources are added (edit mode)
@@ -267,36 +295,26 @@ export default function IslandGrid() {
         const snap = snapToGrid(dragWidgetId, x, y)
         if (!snap) return Gdk.DragAction.MOVE
 
-        const size = ccLayout.effectiveSize(dragWidgetId)
-        const { w, h } = SIZE_MAP[size]
-        const gw = w * UNIT + (w - 1) * GAP
-        const gh = h * UNIT + (h - 1) * GAP
-
-        // Recreate ghost each motion event — guarantees Gtk.Fixed measures it fresh
-        removeGhost()
-        ghost = new Gtk.Box({
-            css_classes: ["cc-drop-ghost"],
-            width_request: gw,
-            height_request: gh,
-        })
-        fixed.put(ghost, pixelX(snap.gx), pixelY(snap.gy))
+        const preview = ccLayout.previewLayout(dragWidgetId, snap.gx, snap.gy)
+        for (const [id, pos] of preview) {
+            const ref = widgetRefs.get(id)
+            if (ref) fixed.move(ref, pixelX(pos.x), pixelY(pos.y))
+        }
 
         return Gdk.DragAction.MOVE
     })
 
-    dropTarget.connect("drop", (_: any, value: any, x: number, y: number) => {
-        removeGhost()
-        const id = typeof value === "string" ? value : (value as any).get_string?.() ?? ""
+    dropTarget.connect("drop", (_: any, _value: any, x: number, y: number) => {
+        const id = dragWidgetId
         if (!id) return false
         const snap = snapToGrid(id, x, y)
         if (!snap) return false
-        ccLayout.move(id, snap.gx, snap.gy)
-        dragWidgetId = ""
+        ccLayout.commitPreview(id, snap.gx, snap.gy)
         return true
     })
 
     dropTarget.connect("leave", () => {
-        removeGhost()
+        if (dragOrigSnapshot.size > 0) applySnapshotVisually()
     })
 
     fixed.add_controller(dropTarget)
@@ -311,7 +329,10 @@ export default function IslandGrid() {
     outer.append(mainStack)
 
     const rebuild = () => {
-        removeGhost()
+        dragWidgetId = ""
+        dragOrigSnapshot.clear()
+        widgetRefs.clear()
+        dragSourceWidget = null
 
         let child = fixed.get_first_child()
         while (child) {
@@ -345,10 +366,14 @@ export default function IslandGrid() {
                     if (next !== null) ccLayout.resize(entry.id, next)
                 },
                 fixed,
-                removeGhost,
+                handleDragBegin,
+                handleDragEnd,
                 editMode ? null : showDetail,
             )
-            if (widget) fixed.put(widget, pixelX(entry.x), pixelY(entry.y))
+            if (widget) {
+                fixed.put(widget, pixelX(entry.x), pixelY(entry.y))
+                widgetRefs.set(entry.id, widget)
+            }
         }
 
         editLabel.label = editMode ? t("cc.grid.done") : t("cc.grid.edit")

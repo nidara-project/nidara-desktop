@@ -182,6 +182,11 @@ window.nc-window-2 {
     border-radius: 9999px;
 }
 
+.cc-drag-source {
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+
 .cc-drop-ghost {
     background: rgba(var(--crystal-accent-rgb), 0.12);
     border: 2px dashed rgba(var(--crystal-accent-rgb), 0.6);

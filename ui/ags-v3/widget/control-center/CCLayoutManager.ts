@@ -22,46 +22,53 @@ export const SIZE_MAP: Record<WidgetSize, { w: number; h: number }> = {
 export interface WidgetMeta {
     name: string
     defaultSize: WidgetSize
-    sizes: WidgetSize[]   // Available sizes to cycle through
+    sizes: WidgetSize[]
     icon: string
 }
 
 export const WIDGET_META: Record<string, WidgetMeta> = {
-    brightness:   { name: "Brillo",        defaultSize: WidgetSize.FULL_WIDTH, sizes: [WidgetSize.FULL_WIDTH],                        icon: Icons.sun },
-    night_light:  { name: "Luz Nocturna", defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],            icon: Icons.moon },
-    cpu_memory:  { name: "CPU & Memoria", defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                              icon: Icons.cpu },
-    media:       { name: "Media",         defaultSize: WidgetSize.SQUARE,     sizes: [WidgetSize.SQUARE],                           icon: Icons.play },
-    wifi:        { name: "Wi-Fi",         defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],           icon: Icons.wifi },
-    focus:       { name: "No Molestar",   defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],           icon: Icons.bellOff },
-    ethernet:    { name: "Ethernet",      defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],           icon: Icons.ethernet },
-    bt:          { name: "Bluetooth",     defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],           icon: Icons.bluetooth },
-    dark_mode:   { name: "Apariencia",    defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],           icon: Icons.moon },
-    calculator:  { name: "Calculadora",   defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE],                            icon: Icons.calculator },
-    volume:      { name: "Volumen",       defaultSize: WidgetSize.FULL_WIDTH, sizes: [WidgetSize.FULL_WIDTH, WidgetSize.TALL],        icon: Icons.volumeHigh },
-    clipboard:    { name: "Portapapeles", defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],           icon: Icons.clipboard },
-    screenshot:   { name: "Captura",      defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],           icon: Icons.camera },
-    screenrecord: { name: "Grabación",    defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],           icon: Icons.record },
-    vpn:          { name: "VPN",          defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],           icon: Icons.shield },
+    brightness:   { name: "Brillo",        defaultSize: WidgetSize.FULL_WIDTH, sizes: [WidgetSize.FULL_WIDTH],                       icon: Icons.sun },
+    night_light:  { name: "Luz Nocturna",  defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.moon },
+    cpu_memory:   { name: "CPU & Memoria", defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                             icon: Icons.cpu },
+    media:        { name: "Media",         defaultSize: WidgetSize.SQUARE,     sizes: [WidgetSize.SQUARE],                          icon: Icons.play },
+    wifi:         { name: "Wi-Fi",         defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.wifi },
+    focus:        { name: "No Molestar",   defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.bellOff },
+    ethernet:     { name: "Ethernet",      defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.ethernet },
+    bt:           { name: "Bluetooth",     defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],          icon: Icons.bluetooth },
+    dark_mode:    { name: "Apariencia",    defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],          icon: Icons.moon },
+    calculator:   { name: "Calculadora",   defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE],                           icon: Icons.calculator },
+    volume:       { name: "Volumen",       defaultSize: WidgetSize.FULL_WIDTH, sizes: [WidgetSize.FULL_WIDTH, WidgetSize.TALL],       icon: Icons.volumeHigh },
+    clipboard:    { name: "Portapapeles",  defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.clipboard },
+    screenshot:   { name: "Captura",       defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.camera },
+    screenrecord: { name: "Grabación",     defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.record },
+    vpn:          { name: "VPN",           defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.shield },
 }
 
+// LayoutEntry is still the consumer-facing format; positions are always computed.
 export interface LayoutEntry {
     id: string
     x: number
     y: number
-    size?: WidgetSize   // Overrides defaultSize when set
+    size?: WidgetSize
 }
 
-const DEFAULT_LAYOUT: LayoutEntry[] = [
-    { id: "cpu_memory",  x: 2, y: 3 },
-    { id: "media",       x: 0, y: 0 },
-    { id: "focus",       x: 0, y: 2 },
-    { id: "wifi",        x: 2, y: 0 },
-    { id: "ethernet",    x: 2, y: 1 },
-    { id: "bt",          x: 3, y: 1 },
-    { id: "dark_mode",   x: 2, y: 2 },
-    { id: "calculator",  x: 3, y: 2 },
-    { id: "volume",      x: 0, y: 3 },
+// Default widget display order — positions are derived by flowPack.
+const DEFAULT_ORDER: string[] = [
+    "media",
+    "wifi",
+    "ethernet",
+    "focus",
+    "dark_mode",
+    "bt",
+    "volume",
+    "cpu_memory",
+    "calculator",
 ]
+
+interface SaveData {
+    order: string[]
+    sizes: Record<string, WidgetSize>
+}
 
 class CCLayoutManager extends GObject.Object {
     static {
@@ -71,23 +78,44 @@ class CCLayoutManager extends GObject.Object {
         }, this)
     }
 
-    private _layout: LayoutEntry[] = []
+    private _order: string[] = []
+    private _sizes: Record<string, WidgetSize> = {}
     private configPath = `${GLib.get_user_config_dir()}/crystal-shell/cc_layout.json`
 
     constructor() {
         super()
-        this._layout = this.loadFromDisk()
+        this.loadFromDisk()
     }
 
-    private loadFromDisk(): LayoutEntry[] {
+    private loadFromDisk() {
         try {
             if (GLib.file_test(this.configPath, GLib.FileTest.EXISTS)) {
-                const data = JSON.parse(readFile(this.configPath)) as LayoutEntry[]
-                const valid = data.filter(e => WIDGET_META[e.id])
-                if (valid.length > 0) return valid
+                const raw = JSON.parse(readFile(this.configPath))
+
+                if (Array.isArray(raw)) {
+                    // Migrate from old position-based format
+                    const entries = (raw as Array<{ id: string; x: number; y: number; size?: WidgetSize }>)
+                        .filter(e => WIDGET_META[e.id])
+                        .sort((a, b) => a.y * (GRID_COLS + 1) + a.x - (b.y * (GRID_COLS + 1) + b.x))
+                    if (entries.length > 0) {
+                        this._order = entries.map(e => e.id)
+                        this._sizes = {}
+                        for (const e of entries) if (e.size) this._sizes[e.id] = e.size
+                        return
+                    }
+                } else {
+                    const data = raw as SaveData
+                    const order = (data.order ?? []).filter((id: string) => WIDGET_META[id])
+                    if (order.length > 0) {
+                        this._order = order
+                        this._sizes = data.sizes ?? {}
+                        return
+                    }
+                }
             }
         } catch {}
-        return [...DEFAULT_LAYOUT]
+        this._order = [...DEFAULT_ORDER]
+        this._sizes = {}
     }
 
     private save() {
@@ -95,134 +123,147 @@ class CCLayoutManager extends GObject.Object {
             const dir = `${GLib.get_user_config_dir()}/crystal-shell`
             if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
                 GLib.mkdir_with_parents(dir, 0o755)
-            writeFile(this.configPath, JSON.stringify(this._layout, null, 2))
+            writeFile(this.configPath, JSON.stringify({ order: this._order, sizes: this._sizes }, null, 2))
         } catch (e) {
             console.error("[CCLayout] Save failed:", e)
         }
     }
 
+    // Pack widgets left-to-right, top-to-bottom by their order.
+    // Each widget is placed at the first fitting cell scanning in reading order.
+    private flowPack(order: string[]): Map<string, { x: number; y: number }> {
+        const result = new Map<string, { x: number; y: number }>()
+        const occupied = new Set<string>()
+        for (const id of order) {
+            const { w, h } = SIZE_MAP[this.effectiveSize(id)]
+            outer: for (let row = 0; row < GRID_ROWS + 4; row++) {
+                for (let col = 0; col <= GRID_COLS - w; col++) {
+                    let fits = true
+                    check: for (let dy = 0; dy < h; dy++)
+                        for (let dx = 0; dx < w; dx++)
+                            if (occupied.has(`${col + dx},${row + dy}`)) { fits = false; break check }
+                    if (fits) {
+                        result.set(id, { x: col, y: row })
+                        for (let dy = 0; dy < h; dy++)
+                            for (let dx = 0; dx < w; dx++)
+                                occupied.add(`${col + dx},${row + dy}`)
+                        break outer
+                    }
+                }
+            }
+        }
+        return result
+    }
+
+    // Find the order-index at which inserting dragId puts it nearest to (snapX, snapY).
+    // Uses reading-order key (y * stride + x) to compare positions.
+    private insertIdx(dragId: string, snapX: number, snapY: number): number {
+        const base = this._order.filter(id => id !== dragId)
+        const pos  = this.flowPack(base)
+        const snapKey = snapY * (GRID_COLS + 1) + snapX
+        for (let i = 0; i < base.length; i++) {
+            const p = pos.get(base[i])
+            if (p && p.y * (GRID_COLS + 1) + p.x >= snapKey) return i
+        }
+        return base.length
+    }
+
+    // ── Public API (same surface as before) ─────────────────────────────────
+
     get layout(): LayoutEntry[] {
-        return [...this._layout]
+        const pos = this.flowPack(this._order)
+        return this._order.map(id => ({
+            id,
+            x: pos.get(id)?.x ?? 0,
+            y: pos.get(id)?.y ?? 0,
+            size: this._sizes[id],
+        }))
     }
 
     activeIds(): string[] {
-        return this._layout.map(e => e.id)
+        return [...this._order]
     }
 
     inactiveIds(): string[] {
-        const active = new Set(this.activeIds())
+        const active = new Set(this._order)
         return Object.keys(WIDGET_META).filter(id => !active.has(id))
     }
 
     effectiveSize(id: string): WidgetSize {
-        const entry = this._layout.find(e => e.id === id)
-        return entry?.size ?? WIDGET_META[id]?.defaultSize ?? WidgetSize.SINGLE
+        return this._sizes[id] ?? WIDGET_META[id]?.defaultSize ?? WidgetSize.SINGLE
     }
 
-    // Returns the next available size that fits at current position, or null
+    // Always returns the next size in the cycle — flow layout accommodates any size.
     nextResizeSize(id: string): WidgetSize | null {
         const meta = WIDGET_META[id]
         if (!meta || meta.sizes.length <= 1) return null
-        const current = this.effectiveSize(id)
-        const idx = meta.sizes.indexOf(current)
-        for (let i = 1; i < meta.sizes.length; i++) {
-            const candidate = meta.sizes[(idx + i) % meta.sizes.length]
-            if (this.canFit(id, candidate)) return candidate
-        }
-        return null
-    }
-
-    private canFit(id: string, size: WidgetSize): boolean {
-        const entry = this._layout.find(e => e.id === id)
-        if (!entry) return false
-        const { w, h } = SIZE_MAP[size]
-        if (entry.x + w > GRID_COLS) return false
-        const occ = this.buildOccupancyExcluding(id)
-        for (let dy = 0; dy < h; dy++)
-            for (let dx = 0; dx < w; dx++)
-                if (occ.has(`${entry.x + dx},${entry.y + dy}`)) return false
-        return true
+        const idx = meta.sizes.indexOf(this.effectiveSize(id))
+        return meta.sizes[(idx + 1) % meta.sizes.length]
     }
 
     resize(id: string, newSize: WidgetSize): boolean {
-        if (!this.canFit(id, newSize)) return false
-        const entry = this._layout.find(e => e.id === id)
-        if (!entry) return false
-        entry.size = newSize
+        this._sizes[id] = newSize
         this.save()
         this.emit("changed")
         return true
     }
 
-    move(id: string, newX: number, newY: number): boolean {
-        const entry = this._layout.find(e => e.id === id)
-        if (!entry) return false
-        const size = this.effectiveSize(id)
-        const { w, h } = SIZE_MAP[size]
-        if (newX < 0 || newY < 0 || newX + w > GRID_COLS) return false
-        const occ = this.buildOccupancyExcluding(id)
-        for (let dy = 0; dy < h; dy++)
-            for (let dx = 0; dx < w; dx++)
-                if (occ.has(`${newX + dx},${newY + dy}`)) return false
-        if (entry.x === newX && entry.y === newY) return true  // no-op
-        entry.x = newX
-        entry.y = newY
+    // Returns hypothetical positions for all widgets if dragId were inserted
+    // at the position in flow order that puts it nearest to (snapX, snapY).
+    // Widgets behind the insertion point shift down; those before shift up — no gaps.
+    previewLayout(dragId: string, snapX: number, snapY: number): Map<string, { x: number; y: number }> {
+        const base = this._order.filter(id => id !== dragId)
+        const basePos = this.flowPack(base)
+        const snapKey = snapY * (GRID_COLS + 1) + snapX
+        let idx = base.length
+        for (let i = 0; i < base.length; i++) {
+            const p = basePos.get(base[i])
+            if (p && p.y * (GRID_COLS + 1) + p.x >= snapKey) { idx = i; break }
+        }
+        base.splice(idx, 0, dragId)
+        return this.flowPack(base)
+    }
+
+    commitPreview(dragId: string, snapX: number, snapY: number) {
+        const idx = this.insertIdx(dragId, snapX, snapY)
+        this._order = this._order.filter(id => id !== dragId)
+        this._order.splice(idx, 0, dragId)
         this.save()
         this.emit("changed")
-        return true
     }
 
     remove(id: string) {
-        this._layout = this._layout.filter(e => e.id !== id)
+        this._order = this._order.filter(e => e !== id)
+        delete this._sizes[id]
         this.save()
         this.emit("changed")
     }
 
     add(id: string) {
-        if (this._layout.find(e => e.id === id)) return
-        const meta = WIDGET_META[id]
-        if (!meta) return
-        const { w, h } = SIZE_MAP[meta.defaultSize]
-        const pos = this.findFreeSlot(w, h)
-        if (!pos) return
-        this._layout.push({ id, x: pos.x, y: pos.y })
+        if (this._order.includes(id)) return
+        if (!WIDGET_META[id]) return
+        this._order.push(id)
         this.save()
         this.emit("changed")
     }
 
-    private buildOccupancyExcluding(excludeId?: string): Set<string> {
-        const occ = new Set<string>()
-        for (const entry of this._layout) {
-            if (entry.id === excludeId) continue
-            const size = this.effectiveSize(entry.id)
-            const { w, h } = SIZE_MAP[size]
+    getEmptyCells(): Array<{ x: number; y: number }> {
+        const pos = this.flowPack(this._order)
+        const occupied = new Set<string>()
+        let maxRow = 0
+        for (const id of this._order) {
+            const p = pos.get(id)
+            if (!p) continue
+            const { w, h } = SIZE_MAP[this.effectiveSize(id)]
+            maxRow = Math.max(maxRow, p.y + h)
             for (let dy = 0; dy < h; dy++)
                 for (let dx = 0; dx < w; dx++)
-                    occ.add(`${entry.x + dx},${entry.y + dy}`)
+                    occupied.add(`${p.x + dx},${p.y + dy}`)
         }
-        return occ
-    }
-
-    private findFreeSlot(w: number, h: number): { x: number; y: number } | null {
-        const occ = this.buildOccupancyExcluding()
-        for (let row = 0; row < 20; row++) {
-            for (let col = 0; col <= GRID_COLS - w; col++) {
-                let fits = true
-                search: for (let dy = 0; dy < h; dy++)
-                    for (let dx = 0; dx < w; dx++)
-                        if (occ.has(`${col + dx},${row + dy}`)) { fits = false; break search }
-                if (fits) return { x: col, y: row }
-            }
-        }
-        return null
-    }
-
-    getEmptyCells(): Array<{ x: number; y: number }> {
-        const occ = this.buildOccupancyExcluding()
         const empty: Array<{ x: number; y: number }> = []
-        for (let row = 0; row < GRID_ROWS; row++)
+        for (let row = 0; row < maxRow; row++)
             for (let col = 0; col < GRID_COLS; col++)
-                if (!occ.has(`${col},${row}`)) empty.push({ x: col, y: row })
+                if (!occupied.has(`${col},${row}`)) empty.push({ x: col, y: row })
         return empty
     }
 }
