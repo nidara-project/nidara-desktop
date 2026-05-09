@@ -81,14 +81,15 @@ function makeIslandWidget(
     const content = def.buildContent(effectiveSize)
     const island  = BaseIsland({ name: def.id, child: content, width, height, size: effectiveSize })
 
-    // Tiles with CC detail: bubble-phase gesture lets child sliders claim drag events.
-    // Taps on non-interactive areas propagate up and open the detail panel.
+    // Tiles with CC detail: CAPTURE-phase gesture intercepts taps before child
+    // buttons can claim them, while still allowing slider drags (GestureClick
+    // self-cancels on motion > threshold, leaving GestureDrag free to operate).
     if (!editMode && def.buildCCDetail && showDetail) {
         const overlay = new Gtk.Overlay()
         overlay.set_child(island)
         overlay.set_size_request(width, height)
         const click = new Gtk.GestureClick()
-        click.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)
+        click.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
         click.connect("released", () => showDetail(id))
         overlay.add_controller(click)
         return overlay
