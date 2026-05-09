@@ -37,9 +37,12 @@ async function listEntries(): Promise<ClipEntry[]> {
 }
 
 function copyEntry(entry: ClipEntry): Promise<string> {
-    // cliphist decode reads the full line from stdin, outputs raw bytes
-    // then pipe to wl-copy
-    return execAsync(["bash", "-c", `printf '%s' ${JSON.stringify(entry.line)} | cliphist decode | wl-copy`])
+    // Pass only the numeric ID — JSON.stringify would escape the real tab in entry.line
+    // to \t (literal), which bash double-quotes don't re-expand.
+    // printf format-string does expand \t, so we reconstruct id<TAB> safely.
+    const tab = entry.line.indexOf("\t")
+    const id = tab !== -1 ? entry.line.slice(0, tab) : entry.line
+    return execAsync(["bash", "-c", `printf '%s\t' ${JSON.stringify(id)} | cliphist decode | wl-copy`])
 }
 
 // ── Shared list builder ───────────────────────────────────────────────────────
