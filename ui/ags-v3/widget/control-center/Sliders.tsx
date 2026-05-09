@@ -101,7 +101,7 @@ function buildVerticalSlider(
     const cleanup = onExtChange((v) => {
         if (GLib.get_monotonic_time() < ignoreUntil) return
         const val = Math.round(v * 100)
-        if (Math.abs(scale.get_value() - val) > 1) scale.set_value(val)
+        if (Math.abs(scale.get_value() - val) >= 1) scale.set_value(val)
     })
     box.connect("unrealize", cleanup)
 

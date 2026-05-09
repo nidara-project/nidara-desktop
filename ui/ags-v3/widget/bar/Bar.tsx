@@ -158,9 +158,11 @@ function SystemMenuOverlay() {
     status.system_menu_open = false; ;(globalThis as any).toggleSettings?.()
   }))
   menuBox.append(sep())
-  menuBox.append(makeRow(Icons.lock, t("bar.system-menu.lock"), false, () =>
-    closeAndRun(["crystal-lock"])
-  ))
+  menuBox.append(makeRow(Icons.lock, t("bar.system-menu.lock"), false, () => {
+    status.system_menu_open = false
+    ;(globalThis as any).lockScreen?.()
+    execAsync(["crystal-lock"]).catch(console.error)
+  }))
   menuBox.append(makeRow(Icons.moon, t("bar.system-menu.suspend"), false, () =>
     closeAndRun(["systemctl", "suspend"])
   ))
@@ -318,22 +320,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   popups.valign = Gtk.Align.START; popups.halign = Gtk.Align.END
   overview.valign = Gtk.Align.CENTER; overview.halign = Gtk.Align.CENTER
 
-  cc.margin_top = 56; cc.margin_end = 16
-
-  const CC_WIDTH = 356
-  const centerCCUnderIcon = () => {
-    const alloc = ccBtn.get_allocation()
-    if (alloc.width <= 1) return // not yet laid out
-    const [ok, tx] = ccBtn.translate_coordinates(masterOverlay, 0, 0)
-    if (!ok) return
-    const iconCenter = tx + alloc.width / 2
-    const margin = Math.round(monGeo.width - iconCenter - CC_WIDTH / 2)
-    cc.margin_end = Math.max(16, margin)
-  }
+  cc.margin_top = 56
   nc.margin_top = 56
-  const syncNcMargin = () => { nc.margin_end = 16 + (dockSideState.position === 'right' ? dockSideState.width : 0) }
-  syncNcMargin()
-  dockSideState.subscribe(syncNcMargin)
+  const syncPanelMargins = () => {
+    const end = 16 + (dockSideState.position === 'right' ? dockSideState.width : 0)
+    cc.margin_end = end
+    nc.margin_end = end
+  }
+  syncPanelMargins()
+  dockSideState.subscribe(syncPanelMargins)
   prism.margin_top = 0
   popups.margin_top = 56; popups.margin_end = 16
 
@@ -399,7 +394,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   const syncOverlays = () => {
     catcher.set_visible(status.isAnyOverlayOpen && !status.cc_edit_mode)
-    if (status.cc_open) centerCCUnderIcon()
     cc.set_visible(status.cc_open); nc.set_visible(status.nc_open); prism.set_visible(status.prism_open); systemMenu.set_visible(status.system_menu_open)
     setOverviewVisible(status.overview_open)
     // Update immediately — get_visible() is already correct after set_visible() above,

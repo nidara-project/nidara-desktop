@@ -52,6 +52,7 @@ import Settings from "./widget/settings/Settings"
 import Theme from "./core/ThemeManager"
 import AboutWindow from "./widget/about/AboutWindow"
 import notifConfig from "./core/NotifConfig"
+import { installPowerHooks } from "./core/PowerManager"
 
 // Minimal interface for windows managed by the shell
 interface ShellWindow {
@@ -79,6 +80,8 @@ app.start({
             if (notifd) notifd.dont_disturb = true
         }).catch(() => {})
     }
+
+    installPowerHooks()
 
     //  STABILIZATION: Set Hyprland rules
     import("ags/process").then(({ execAsync }) => {

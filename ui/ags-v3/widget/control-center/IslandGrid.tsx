@@ -81,14 +81,16 @@ function makeIslandWidget(
     const content = def.buildContent(effectiveSize)
     const island  = BaseIsland({ name: def.id, child: content, width, height, size: effectiveSize })
 
-    // Tiles with CC detail: wrap in overlay with invisible click-intercept cover
+    // Tiles with CC detail: bubble-phase gesture lets child sliders claim drag events.
+    // Taps on non-interactive areas propagate up and open the detail panel.
     if (!editMode && def.buildCCDetail && showDetail) {
         const overlay = new Gtk.Overlay()
         overlay.set_child(island)
         overlay.set_size_request(width, height)
-        const cover = new Gtk.Button({ css_classes: ["cc-tile-cover"], hexpand: true, vexpand: true })
-        cover.connect("clicked", () => showDetail(id))
-        overlay.add_overlay(cover)
+        const click = new Gtk.GestureClick()
+        click.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)
+        click.connect("released", () => showDetail(id))
+        overlay.add_controller(click)
         return overlay
     }
 
@@ -320,8 +322,8 @@ export default function IslandGrid() {
     fixed.add_controller(dropTarget)
 
     const editLabel = new Gtk.Label({ label: t("cc.grid.edit"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 })
-    const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, alpha: 0.2, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"] })
-    const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 20, margin_bottom: 8 })
+    const editBtn = SquircleContainer({ child: editLabel, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, css_classes: ["cc-edit-pill"] })
+    const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 24, margin_bottom: 12 })
     editBtnWrapper.append(editBtn)
 
     overviewPage.append(fixed)

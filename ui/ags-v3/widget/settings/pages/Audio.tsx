@@ -107,7 +107,7 @@ function createDeviceRow(
     })
     endpoint.connect("notify::volume", () => {
         const v = Math.round(endpoint.volume * 100)
-        if (Math.abs(scale.get_value() - v) > 1) {
+        if (Math.abs(scale.get_value() - v) >= 1) {
             scale.set_value(v)
             valLabel.label = `${v}%`
         }
@@ -129,7 +129,11 @@ function createDeviceRow(
 // ── Stream row (per-app) ──────────────────────────────────────────────────────
 
 function createStreamRow(stream: any): Gtk.ListBoxRow {
-    const appName = stream.name || stream.description || "App"
+    const appName = stream.description || stream.name || "App"
+    const rawIcon: string = stream.icon ?? ""
+    const iconName = (rawIcon && rawIcon !== "audio-card-symbolic")
+        ? rawIcon
+        : (stream.name?.toLowerCase() ?? "audio-x-generic-symbolic")
 
     const box = new Gtk.Box({
         spacing: 12,
@@ -138,6 +142,7 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
         valign: Gtk.Align.CENTER,
     })
 
+    box.append(new Gtk.Image({ icon_name: iconName, pixel_size: 16, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER }))
     box.append(new Gtk.Label({
         label: appName,
         halign: Gtk.Align.START,
@@ -184,7 +189,7 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
     })
     stream.connect("notify::volume", () => {
         const v = Math.round(stream.volume * 100)
-        if (Math.abs(scale.get_value() - v) > 1) {
+        if (Math.abs(scale.get_value() - v) >= 1) {
             scale.set_value(v)
             valLabel.label = `${v}%`
         }

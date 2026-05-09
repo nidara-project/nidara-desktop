@@ -121,7 +121,7 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
     scale.connect("value-changed", () => { ep.volume = scale.get_value() / 100; valLabel.label = `${Math.round(scale.get_value())}%` })
     ep.connect("notify::volume", () => {
         const v = Math.round(ep.volume * 100)
-        if (Math.abs(scale.get_value() - v) > 1) { scale.set_value(v); valLabel.label = `${v}%` }
+        if (Math.abs(scale.get_value() - v) >= 1) { scale.set_value(v); valLabel.label = `${v}%` }
         muteImg.gicon = endpointVolumeIcon(ep.volume, ep.mute ?? false)
     })
     const sliderRow = new Gtk.Box({ spacing: 8 })
@@ -137,14 +137,21 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
 }
 
 function buildStreamRow(stream: any): Gtk.ListBoxRow {
+    const appName = stream.description || stream.name || "App"
+    const rawIcon: string = stream.icon ?? ""
+    const iconName = (rawIcon && rawIcon !== "audio-card-symbolic")
+        ? rawIcon
+        : (stream.name?.toLowerCase() ?? "audio-x-generic-symbolic")
+
     const box = new Gtk.Box({ spacing: 10, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10, valign: Gtk.Align.CENTER })
     const muteImg = new Gtk.Image({ gicon: endpointVolumeIcon(stream.volume, stream.mute ?? false), pixel_size: 16, css_classes: ["cs-icon"] })
     const muteBtn = new Gtk.Button({ child: muteImg, css_classes: ["settings-icon-btn", "flat"], valign: Gtk.Align.CENTER })
     muteBtn.connect("clicked", () => { stream.mute = !stream.mute })
     stream.connect("notify::mute", () => { muteImg.gicon = endpointVolumeIcon(stream.volume, stream.mute ?? false) })
+    box.append(new Gtk.Image({ icon_name: iconName, pixel_size: 16, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER }))
     box.append(muteBtn)
     box.append(new Gtk.Label({
-        label: stream.name || stream.description || "App",
+        label: appName,
         halign: Gtk.Align.START, hexpand: true,
         css_classes: ["settings-row-label"], ellipsize: 3, max_width_chars: 16,
     }))
@@ -154,7 +161,7 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
     scale.connect("value-changed", () => { stream.volume = scale.get_value() / 100; valLabel.label = `${Math.round(scale.get_value())}%` })
     stream.connect("notify::volume", () => {
         const v = Math.round(stream.volume * 100)
-        if (Math.abs(scale.get_value() - v) > 1) { scale.set_value(v); valLabel.label = `${v}%` }
+        if (Math.abs(scale.get_value() - v) >= 1) { scale.set_value(v); valLabel.label = `${v}%` }
         muteImg.gicon = endpointVolumeIcon(stream.volume, stream.mute ?? false)
     })
     box.append(scale)

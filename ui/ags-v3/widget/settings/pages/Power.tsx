@@ -43,8 +43,8 @@ const writeHypridle = ({ screenOff, lock, suspend }: IdleConfig) => {
         "",
         "general {",
         "    lock_cmd = crystal-lock",
-        "    before_sleep_cmd = crystal-lock",
-        "    after_sleep_cmd = hyprctl dispatch dpms on",
+        "    before_sleep_cmd = crystal-before-sleep",
+        "    after_sleep_cmd = crystal-after-sleep",
         "    ignore_dbus_inhibit = false",
         "}",
         "",
@@ -73,7 +73,9 @@ const writeHypridle = ({ screenOff, lock, suspend }: IdleConfig) => {
             new TextEncoder().encode(lines.join("\n")),
             null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null
         )
-        execAsync(["bash", "-c", "pkill hypridle; sleep 0.3; uwsm app -- hypridle"]).catch(() => {})
+        execAsync(["bash", "-c",
+            "systemctl --user restart hypridle 2>/dev/null || (pkill -TERM hypridle 2>/dev/null; sleep 0.8; uwsm app -- hypridle)"
+        ]).catch(() => {})
     } catch (e) {
         console.error("[PowerPage] Failed to write hypridle config:", e)
     }

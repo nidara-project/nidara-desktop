@@ -169,7 +169,7 @@ export function makeHSlider(opts: {
     if (onExtChange) {
         const cleanup = onExtChange((v) => {
             if (GLib.get_monotonic_time() < ignoreUntil) return
-            if (Math.abs(scale.get_value() - v) > 1) {
+            if (Math.abs(scale.get_value() - v) >= 1) {
                 scale.set_value(v)
                 da.queue_draw()
             }
