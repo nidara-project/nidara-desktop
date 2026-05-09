@@ -6,6 +6,7 @@ import GLib from "gi://GLib"
 import { NotificationCapsule } from "./NotificationCenter"
 import { dockSideState } from "../../widget/dock/state"
 import notifConfig from "../../core/NotifConfig"
+import status from "../../core/Status"
 
 export function NotificationPopupsWidget() {
     const notifd = AstalNotifd.get_default()
@@ -28,7 +29,7 @@ export function NotificationPopupsWidget() {
 
     const onNotified = (_: any, id: number) => {
         const n = notifd.get_notification(id)
-        if (!n || notifd.dont_disturb) return
+        if (!n || notifd.dont_disturb || status.cc_open || status.nc_open) return
 
         if (notifMap.has(id)) {
             box.remove(notifMap.get(id)!)

@@ -40,6 +40,7 @@ const Icons = {
     chevronRight: f("chevron-right"),
     chevronLeft:  f("chevron-left"),
     chevronUp:    f("chevron-up"),
+    chevronDown:  f("chevron-down"),
     plus:         f("plus"),
     minus:        f("minus"),
     pause:        f("pause"),

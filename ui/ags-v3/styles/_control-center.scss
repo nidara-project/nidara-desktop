@@ -231,8 +231,19 @@ window.nc-window-2 {
 
 /* --- Notifications: Steel Symmetry --- */
 .nc-capsule-item {
-    margin: 4px 0;
     min-height: 80px;
+}
+
+.nc-stack-card {
+    margin-bottom: 0;
+}
+
+.nc-ghost-strip-0 {
+    margin-top: -4px;
+}
+
+.nc-group-with-ghost {
+    margin-bottom: -8px;
 }
 
 .nc-capsule-glass {
@@ -379,18 +390,13 @@ window.nc-window-2 {
 }
 
 .nc-clear-all-pill {
-    margin-bottom: 20px;
-    transition: all 0.2s ease;
-
     label {
         font-size: 0.85em;
         font-weight: 700;
         color: var(--crystal-text-dim);
     }
 
-    &:hover {
-        label { color: var(--crystal-text); }
-    }
+    &:hover label { color: var(--crystal-text); }
 }
 
 
