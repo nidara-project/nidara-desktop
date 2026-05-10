@@ -95,8 +95,8 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
 
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
-        const box = new Gtk.Box({ halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true })
-        const icon = new Gtk.Image({ gicon: Icons.shieldOff, pixel_size: 28, css_classes: ["cs-icon"] })
+        const box = new Gtk.Box({ hexpand: true, vexpand: true })
+        const icon = new Gtk.Image({ gicon: Icons.shieldOff, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] })
         box.append(icon)
         activeVpnName().then(name => { icon.gicon = name ? Icons.shield : Icons.shieldOff })
         return box
@@ -106,6 +106,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         css_classes: ["cc-atomic-icon-circle-bg"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         width_request: 48, height_request: 48,
+        margin_start: 4,
     })
     const icon = new Gtk.Image({
         gicon: Icons.shieldOff,

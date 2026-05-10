@@ -139,8 +139,8 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
 
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
-        const box = new Gtk.Box({ halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true })
-        const icon = new Gtk.Image({ gicon: status.recording ? Icons.recordStop : Icons.record, pixel_size: 28, css_classes: ["cs-icon"] })
+        const box = new Gtk.Box({ hexpand: true, vexpand: true })
+        const icon = new Gtk.Image({ gicon: status.recording ? Icons.recordStop : Icons.record, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] })
         box.append(icon)
         const syncSingle = () => { icon.gicon = status.recording ? Icons.recordStop : Icons.record }
         const sigId = status.connect("notify::recording", syncSingle)

@@ -110,8 +110,8 @@ function buildBarExpanded(onClose: () => void): Gtk.Widget {
 
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
-        const box = new Gtk.Box({ halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true })
-        box.append(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, css_classes: ["cs-icon"] }))
+        const box = new Gtk.Box({ hexpand: true, vexpand: true })
+        box.append(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] }))
         return box
     }
 
@@ -119,6 +119,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         css_classes: ["cc-atomic-icon-circle-bg"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         width_request: 48, height_request: 48,
+        margin_start: 4,
     })
     iconBox.append(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] }))
 
@@ -126,7 +127,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     textBox.append(new Gtk.Label({ label: t("widget.screenshot.name"), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START }))
     textBox.append(new Gtk.Label({ label: t("widget.screenshot.sub"),  css_classes: ["cc-atomic-label-dim"],  halign: Gtk.Align.START }))
 
-    const inner = new Gtk.Box({ spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true, vexpand: true })
+    const inner = new Gtk.Box({ spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true })
     inner.append(iconBox)
     inner.append(textBox)
     return inner
