@@ -49,7 +49,7 @@ function copyEntry(entry: ClipEntry): Promise<string> {
 // Returns widget + refresh fn; caller decides whether to wrap in a scroll.
 
 function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh: () => void } {
-    const listBox = new Gtk.ListBox({ css_classes: ["settings-list-box"], selection_mode: Gtk.SelectionMode.NONE })
+    const listBox = new Gtk.ListBox({ css_classes: ["clip-list"], selection_mode: Gtk.SelectionMode.NONE })
     const emptyLabel = new Gtk.Label({
         label: t("widget.clipboard.empty"),
         css_classes: ["settings-row-subtitle"],
@@ -76,7 +76,7 @@ function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh:
                     onClose()
                     copyEntry(entry).catch(e => console.error("[Clipboard] copy failed:", e))
                 })
-                const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+                const row = new Gtk.ListBoxRow()
                 row.set_child(btn); listBox.append(row)
             }
         })

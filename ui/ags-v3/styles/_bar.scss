@@ -303,6 +303,22 @@
     margin-top: 44px;
 }
 
+list.clip-list {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+
+    row {
+        background: transparent;
+        border-radius: $crystal-radius-xs;
+        transition: background 0.15s ease;
+
+        &:hover   { background: var(--crystal-surface-hover); }
+        &:active  { background: var(--crystal-surface-active); }
+        &:selected { background: transparent; }
+    }
+}
+
 .bar-popover-value {
     font-size: 0.85rem;
     font-weight: 500;
