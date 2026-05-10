@@ -92,6 +92,7 @@ function buildClipboardContent(onClose: () => void): { widget: Gtk.Widget; refre
     const scroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+        propagate_natural_height: true,
         min_content_height: 60,
         max_content_height: 360,
         width_request: 300,
