@@ -52,6 +52,7 @@ function buildContent(_size: WidgetSize): Gtk.Widget {
     })
 
     let ignoreUntil = 0
+    let sliderSync: ((v: number) => void) | undefined
 
     const slider = makeHSlider({
         value: _cachedPct,
@@ -61,10 +62,12 @@ function buildContent(_size: WidgetSize): Gtk.Widget {
         },
         onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%` },
         onExtChange: (cb) => {
+            sliderSync = cb
             const id = GLib.timeout_add(GLib.PRIORITY_LOW, 2000, () => {
                 if (GLib.get_monotonic_time() < ignoreUntil) return GLib.SOURCE_CONTINUE
+                const prev = _cachedPct
                 fetchBrightness().then(v => {
-                    if (Math.abs(v - _cachedPct) > 1) cb(v)
+                    if (Math.abs(v - prev) > 1) cb(v)
                 })
                 return GLib.SOURCE_CONTINUE
             })
@@ -77,7 +80,7 @@ function buildContent(_size: WidgetSize): Gtk.Widget {
     box.append(new Gtk.Image({ gicon: Icons.sun,  pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"] }))
     box.append(valueLabel)
 
-    fetchBrightness().then(v => { valueLabel.label = `${v}%` })
+    fetchBrightness().then(v => { sliderSync?.(v) })
 
     return box
 }
@@ -98,6 +101,7 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
     })
 
     let ignoreUntil = 0
+    let sliderSync: ((v: number) => void) | undefined
 
     const slider = makeHSlider({
         value: _cachedPct,
@@ -107,9 +111,11 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
         },
         onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%` },
         onExtChange: (cb) => {
+            sliderSync = cb
             const id = GLib.timeout_add(GLib.PRIORITY_LOW, 2000, () => {
                 if (GLib.get_monotonic_time() < ignoreUntil) return GLib.SOURCE_CONTINUE
-                fetchBrightness().then(v => { if (Math.abs(v - _cachedPct) > 1) cb(v) })
+                const prev = _cachedPct
+                fetchBrightness().then(v => { if (Math.abs(v - prev) > 1) cb(v) })
                 return GLib.SOURCE_CONTINUE
             })
             return () => { try { GLib.source_remove(id) } catch {} }
@@ -122,7 +128,7 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
     row.append(slider)
     row.append(valueLabel)
 
-    fetchBrightness().then(v => { valueLabel.label = `${v}%` })
+    fetchBrightness().then(v => { sliderSync?.(v) })
 
     return row
 }
