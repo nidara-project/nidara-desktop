@@ -168,6 +168,9 @@ export function makeHSlider(opts: {
         triggerChange()
     })
 
+    // Sync label to initial value (set_value fires before the handler was connected)
+    opts.onValueChanged?.(scale.get_value())
+
     const themeSignalId = Theme.connect("changed", () => da.queue_draw())
     overlay.connect("unrealize", () => { try { Theme.disconnect(themeSignalId) } catch {} })
 
