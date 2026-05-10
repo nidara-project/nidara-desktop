@@ -133,6 +133,7 @@ export function makeHSlider(opts: {
 
     // ── onChange / debounce ──────────────────────────────────────────
     let ignoreUntil = 0
+    let isSyncing = false   // true while external callback is setting the value
     let triggerChange: () => void
 
     if (debounce > 0) {
@@ -160,8 +161,9 @@ export function makeHSlider(opts: {
     }
 
     scale.connect("value-changed", () => {
-        ignoreUntil = GLib.get_monotonic_time() + 300_000
         da.queue_draw()
+        if (isSyncing) return   // programmatic sync — don't seek or update labels
+        ignoreUntil = GLib.get_monotonic_time() + 300_000
         opts.onValueChanged?.(scale.get_value())
         triggerChange()
     })
@@ -173,7 +175,9 @@ export function makeHSlider(opts: {
         const cleanup = onExtChange((v) => {
             if (GLib.get_monotonic_time() < ignoreUntil) return
             if (Math.abs(scale.get_value() - v) >= 1) {
+                isSyncing = true
                 scale.set_value(v)
+                isSyncing = false
                 da.queue_draw()
             }
         })
