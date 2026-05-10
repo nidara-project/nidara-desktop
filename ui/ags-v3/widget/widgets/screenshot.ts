@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
-import { CrystalPopover } from "../common/CrystalPopover"
+
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
@@ -110,25 +110,10 @@ function buildBarExpanded(onClose: () => void): Gtk.Widget {
 
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
-        const btn = new Gtk.Button({
-            css_classes: ["cc-atomic-round-btn"],
-            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-            hexpand: true, vexpand: true,
-        })
-        btn.set_child(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, css_classes: ["cs-icon"] }))
-        const popover = new CrystalPopover({ autohide: true })
-        popover.set_child(buildControls(() => popover.popdown()))
-        popover.set_parent(btn)
-        btn.connect("unrealize", () => { try { popover.unparent() } catch {} })
-        btn.connect("clicked", () => popover.popup())
-        return btn
+        const box = new Gtk.Box({ halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true })
+        box.append(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, css_classes: ["cs-icon"] }))
+        return box
     }
-
-    const btn = new Gtk.Button({
-        css_classes: ["cc-capsule-btn"],
-        halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
-        hexpand: true, vexpand: true,
-    })
 
     const iconBox = new Gtk.Box({
         css_classes: ["cc-atomic-icon-circle-bg"],
@@ -137,22 +122,14 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     })
     iconBox.append(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] }))
 
-    const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
-    textStack.append(new Gtk.Label({ label: t("widget.screenshot.name"), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START }))
-    textStack.append(new Gtk.Label({ label: t("widget.screenshot.sub"),  css_classes: ["cc-atomic-label-dim"],  halign: Gtk.Align.START }))
+    const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
+    textBox.append(new Gtk.Label({ label: t("widget.screenshot.name"), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START }))
+    textBox.append(new Gtk.Label({ label: t("widget.screenshot.sub"),  css_classes: ["cc-atomic-label-dim"],  halign: Gtk.Align.START }))
 
-    const inner = new Gtk.Box({ spacing: 12, halign: Gtk.Align.START, valign: Gtk.Align.CENTER, margin_start: 4 })
+    const inner = new Gtk.Box({ spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true, vexpand: true })
     inner.append(iconBox)
-    inner.append(textStack)
-    btn.set_child(inner)
-
-    const popover = new CrystalPopover({ autohide: true })
-    popover.set_child(buildControls(() => popover.popdown()))
-    popover.set_parent(btn)
-    btn.connect("unrealize", () => { try { popover.unparent() } catch {} })
-    btn.connect("clicked", () => popover.popup())
-
-    return btn
+    inner.append(textBox)
+    return inner
 }
 
 // ── Widget registration ───────────────────────────────────────────────────────

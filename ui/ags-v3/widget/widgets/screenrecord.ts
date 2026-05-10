@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
-import { CrystalPopover } from "../common/CrystalPopover"
+
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import status from "../../core/Status"
@@ -135,118 +135,51 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
     return box
 }
 
-function buildRecordPopover(anchor: Gtk.Widget): CrystalPopover {
-    const popover = new CrystalPopover({ autohide: true })
-    popover.set_child(buildRecordPopoverContent(() => popover.popdown()))
-    popover.set_parent(anchor)
-    anchor.connect("unrealize", () => { try { popover.unparent() } catch {} })
-    return popover
-}
-
 // ── CC widget content ─────────────────────────────────────────────────────────
 
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
-        const btn = new Gtk.Button({
-            css_classes: status.recording ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"],
-            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-            hexpand: true, vexpand: true,
-        })
+        const box = new Gtk.Box({ halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true })
         const icon = new Gtk.Image({ gicon: status.recording ? Icons.recordStop : Icons.record, pixel_size: 28, css_classes: ["cs-icon"] })
-        btn.set_child(icon)
-        const popover = buildRecordPopover(btn)
-        const syncSingle = () => {
-            icon.gicon = status.recording ? Icons.recordStop : Icons.record
-            btn.set_css_classes(status.recording ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"])
-        }
+        box.append(icon)
+        const syncSingle = () => { icon.gicon = status.recording ? Icons.recordStop : Icons.record }
         const sigId = status.connect("notify::recording", syncSingle)
-        btn.connect("unrealize", () => { try { status.disconnect(sigId) } catch {} })
-        btn.connect("clicked", () => {
-            if (status.recording) stopRecording()
-            else popover.popup()
-        })
-        return btn
+        box.connect("unrealize", () => { try { status.disconnect(sigId) } catch {} })
+        return box
     }
 
-    // Outer button — in idle state opens popover, in recording state stops
-    const btn = new Gtk.Button({
-        css_classes: ["cc-capsule-btn"],
-        halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
-        hexpand: true, vexpand: true,
-    })
-
     // ── Idle stack child ──
-    const iconBoxIdle = new Gtk.Box({
-        css_classes: ["cc-atomic-icon-circle-bg"],
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        width_request: 48, height_request: 48,
-    })
-    iconBoxIdle.append(new Gtk.Image({
-        gicon: Icons.record,
-        pixel_size: 28,
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        hexpand: true, vexpand: true,
-        css_classes: ["cs-icon"],
-    }))
-
+    const iconBoxIdle = new Gtk.Box({ css_classes: ["cc-atomic-icon-circle-bg"], halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, width_request: 48, height_request: 48 })
+    iconBoxIdle.append(new Gtk.Image({ gicon: Icons.record, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] }))
     const idleText = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
     idleText.append(new Gtk.Label({ label: t("widget.screenrecord.name"), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 }))
     idleText.append(new Gtk.Label({ label: t("widget.screenrecord.sub"), css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 }))
-
-    const idleInner = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true })
-    idleInner.append(iconBoxIdle)
-    idleInner.append(idleText)
+    const idleInner = new Gtk.Box({ spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true })
+    idleInner.append(iconBoxIdle); idleInner.append(idleText)
 
     // ── Recording stack child ──
-    const iconBoxRec = new Gtk.Box({
-        css_classes: ["cc-atomic-icon-circle-bg", "rec-active-bg"],
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        width_request: 48, height_request: 48,
-    })
-    iconBoxRec.append(new Gtk.Image({
-        gicon: Icons.recordStop,
-        pixel_size: 22,
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        hexpand: true, vexpand: true,
-        css_classes: ["cs-icon", "rec-stop-icon"],
-    }))
-
+    const iconBoxRec = new Gtk.Box({ css_classes: ["cc-atomic-icon-circle-bg", "rec-active-bg"], halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, width_request: 48, height_request: 48 })
+    iconBoxRec.append(new Gtk.Image({ gicon: Icons.recordStop, pixel_size: 22, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon", "rec-stop-icon"] }))
     const elapsed = makeElapsedLabel()
     const recText = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
     recText.append(new Gtk.Label({ label: t("widget.screenrecord.recording"), css_classes: ["cc-atomic-label-bold", "rec-label"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 }))
     recText.append(elapsed)
+    const recInner = new Gtk.Box({ spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true })
+    recInner.append(iconBoxRec); recInner.append(recText)
 
-    const recInner = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true })
-    recInner.append(iconBoxRec)
-    recInner.append(recText)
-
-    // ── Stack ──
     const stack = new Gtk.Stack({ transition_type: Gtk.StackTransitionType.CROSSFADE, transition_duration: 150, hexpand: true, hhomogeneous: true })
     stack.add_named(idleInner, "idle")
     stack.add_named(recInner, "recording")
-    btn.set_child(stack)
 
-    const popover = buildRecordPopover(btn)
+    const outer = new Gtk.Box({ hexpand: true, vexpand: true, halign: Gtk.Align.FILL, valign: Gtk.Align.FILL })
+    outer.append(stack)
 
-    const syncState = () => {
-        if (status.recording) {
-            stack.set_visible_child_name("recording")
-            btn.add_css_class("rec-btn-active")
-        } else {
-            stack.set_visible_child_name("idle")
-            btn.remove_css_class("rec-btn-active")
-        }
-    }
+    const syncState = () => stack.set_visible_child_name(status.recording ? "recording" : "idle")
     const sigId = status.connect("notify::recording", syncState)
-    btn.connect("unrealize", () => { try { status.disconnect(sigId) } catch {} })
+    outer.connect("unrealize", () => { try { status.disconnect(sigId) } catch {} })
     syncState()
 
-    btn.connect("clicked", () => {
-        if (status.recording) stopRecording()
-        else popover.popup()
-    })
-
-    return btn
+    return outer
 }
 
 // ── Bar icon (dynamic recording state indicator) ──────────────────────────────

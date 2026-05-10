@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
-import { CrystalPopover } from "../common/CrystalPopover"
+
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
@@ -91,45 +91,16 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
     return box
 }
 
-function buildVpnPopover(anchor: Gtk.Widget): CrystalPopover {
-    const popover = new CrystalPopover({ autohide: true })
-    popover.set_child(buildVpnContent(() => popover.popdown()))
-    popover.set_parent(anchor)
-    anchor.connect("unrealize", () => { try { popover.unparent() } catch {} })
-    return popover
-}
-
 // ── CC content ────────────────────────────────────────────────────────────────
 
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
-        const btn = new Gtk.Button({
-            css_classes: ["cc-atomic-round-btn"],
-            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-            hexpand: true, vexpand: true,
-        })
+        const box = new Gtk.Box({ halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true })
         const icon = new Gtk.Image({ gicon: Icons.shieldOff, pixel_size: 28, css_classes: ["cs-icon"] })
-        btn.set_child(icon)
-        const popover = buildVpnPopover(btn)
-        popover.connect("closed", () => {
-            activeVpnName().then(name => {
-                icon.gicon = name ? Icons.shield : Icons.shieldOff
-                btn.set_css_classes(name ? ["cc-atomic-round-btn", "active"] : ["cc-atomic-round-btn"])
-            })
-        })
-        btn.connect("clicked", () => popover.popup())
-        activeVpnName().then(name => {
-            icon.gicon = name ? Icons.shield : Icons.shieldOff
-            if (name) btn.add_css_class("active")
-        })
-        return btn
+        box.append(icon)
+        activeVpnName().then(name => { icon.gicon = name ? Icons.shield : Icons.shieldOff })
+        return box
     }
-
-    const btn = new Gtk.Button({
-        css_classes: ["cc-capsule-btn"],
-        halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
-        hexpand: true, vexpand: true,
-    })
 
     const iconBox = new Gtk.Box({
         css_classes: ["cc-atomic-icon-circle-bg"],
@@ -160,39 +131,29 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     textBox.append(titleLabel)
     textBox.append(subLabel)
 
-    const inner = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true })
+    const inner = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true, vexpand: true })
     inner.append(iconBox)
     inner.append(textBox)
-    btn.set_child(inner)
 
     const syncState = (activeName: string | null) => {
         if (activeName) {
             icon.gicon = Icons.shield
             iconBox.add_css_class("vpn-active-bg")
             subLabel.label = activeName
-            btn.add_css_class("vpn-btn-active")
         } else {
             icon.gicon = Icons.shieldOff
             iconBox.remove_css_class("vpn-active-bg")
             subLabel.label = t("widget.vpn.sub.disconnected")
-            btn.remove_css_class("vpn-btn-active")
         }
     }
 
     const refresh = () => activeVpnName().then(syncState)
 
-    const popover = buildVpnPopover(btn)
-    // After popover closes, refresh state
-    popover.connect("closed", refresh)
-
-    btn.connect("clicked", () => popover.popup())
-
-    // Initial state + periodic refresh every 10s
     refresh()
     const timerId = GLib.timeout_add(GLib.PRIORITY_LOW, 10000, () => { refresh(); return GLib.SOURCE_CONTINUE })
-    btn.connect("unrealize", () => { try { GLib.source_remove(timerId) } catch {} })
+    inner.connect("unrealize", () => { try { GLib.source_remove(timerId) } catch {} })
 
-    return btn
+    return inner
 }
 
 // ── Bar icon ──────────────────────────────────────────────────────────────────

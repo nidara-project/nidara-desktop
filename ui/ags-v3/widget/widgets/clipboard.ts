@@ -3,7 +3,7 @@ import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { WideToggle } from "../control-center/Toggles"
 import { makeIconAction } from "./bar-helpers"
-import { CrystalPopover } from "../common/CrystalPopover"
+
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
@@ -100,16 +100,6 @@ function buildClipboardContent(onClose: () => void): { widget: Gtk.Widget; refre
     return { widget: scroll, refresh }
 }
 
-function buildClipboardPopover(anchor: Gtk.Widget): CrystalPopover {
-    const popover = new CrystalPopover({ autohide: true })
-    const { widget, refresh } = buildClipboardContent(() => popover.popdown())
-    popover.set_child(widget)
-    popover.set_parent(anchor)
-    anchor.connect("unrealize", () => { try { popover.unparent() } catch {} })
-    popover.connect("show", () => refresh())
-    return popover
-}
-
 // ── Bar content ───────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
@@ -128,70 +118,26 @@ function buildCCDetail(onClose: () => void): Gtk.Widget {
 
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
-        const btn = new Gtk.Button({
-            css_classes: ["cc-atomic-round-btn"],
-            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-            hexpand: true, vexpand: true,
-        })
-        btn.set_child(new Gtk.Image({ gicon: Icons.clipboard, pixel_size: 28, css_classes: ["cs-icon"] }))
-        const popover = buildClipboardPopover(btn)
-        btn.connect("clicked", () => popover.popup())
-        return btn
+        const box = new Gtk.Box({ halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true })
+        box.append(new Gtk.Image({ gicon: Icons.clipboard, pixel_size: 28, css_classes: ["cs-icon"] }))
+        return box
     }
-
-    const btn = new Gtk.Button({
-        css_classes: ["cc-capsule-btn"],
-        halign: Gtk.Align.FILL,
-        valign: Gtk.Align.FILL,
-        hexpand: true,
-        vexpand: true,
-    })
 
     const iconBox = new Gtk.Box({
         css_classes: ["cc-atomic-icon-circle-bg"],
-        halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.CENTER,
-        width_request: 48,
-        height_request: 48,
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+        width_request: 48, height_request: 48,
     })
-    const icon = new Gtk.Image({
-        gicon: Icons.clipboard,
-        pixel_size: 28,
-        halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.CENTER,
-        hexpand: true,
-        vexpand: true,
-        css_classes: ["cs-icon"],
-    })
-    iconBox.append(icon)
+    iconBox.append(new Gtk.Image({ gicon: Icons.clipboard, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] }))
 
-    const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
-    textStack.append(new Gtk.Label({
-        label: t("widget.clipboard.name"),
-        css_classes: ["cc-atomic-label-bold"],
-        halign: Gtk.Align.START,
-    }))
-    textStack.append(new Gtk.Label({
-        label: t("widget.clipboard.sub.history"),
-        css_classes: ["cc-atomic-label-dim"],
-        halign: Gtk.Align.START,
-    }))
+    const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
+    textBox.append(new Gtk.Label({ label: t("widget.clipboard.name"), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START }))
+    textBox.append(new Gtk.Label({ label: t("widget.clipboard.sub.history"), css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START }))
 
-    const inner = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 12,
-        halign: Gtk.Align.START,
-        valign: Gtk.Align.CENTER,
-        margin_start: 4,
-    })
+    const inner = new Gtk.Box({ spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true, vexpand: true })
     inner.append(iconBox)
-    inner.append(textStack)
-    btn.set_child(inner)
-
-    const popover = buildClipboardPopover(btn)
-    btn.connect("clicked", () => popover.popup())
-
-    return btn
+    inner.append(textBox)
+    return inner
 }
 
 // ── Widget registration ────────────────────────────────────────────────────────
