@@ -578,6 +578,7 @@ export default {
     "cc.wifi.name": "Wi-Fi",
     "cc.wifi.sub.off": "Off",
     "cc.wifi.sub.connected": "Connected",
+    "cc.wifi.sub.disconnected": "Not connected",
 
     // Control Center — Focus/DnD toggle
     "cc.focus.name": "Focus",
