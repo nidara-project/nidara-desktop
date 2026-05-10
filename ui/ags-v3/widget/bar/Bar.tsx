@@ -494,9 +494,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
         const hasExpand = !!w.buildBarExpanded
         const hasCCDetail = !!w.buildCCDetail
         const onRelease = hasExpand
-            ? () => { status.bar_expanded_id = status.bar_expanded_id === id ? "" : id }
+            ? () => { if (status.cc_open) return; status.bar_expanded_id = status.bar_expanded_id === id ? "" : id }
             : hasCCDetail
-                ? () => { status.cc_open = true; status.cc_detail_id = id }
+                ? () => { if (status.cc_open) return; status.cc_open = true; status.cc_detail_id = id }
                 : undefined
         const capsule = SquircleContainer({
             child: w.buildBarContent(), gloss: true, useShellOpacity: true,
