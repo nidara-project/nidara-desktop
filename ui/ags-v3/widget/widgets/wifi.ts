@@ -25,21 +25,31 @@ function buildBarContent(): Gtk.Widget {
     return image
 }
 
-function buildBarExpanded(_onClose: () => void): Gtk.Widget {
+function buildInfoPanel(): Gtk.Widget {
     const wifi = AstalNetwork.get_default()?.wifi
 
-    const ssid  = infoRow(t("widget.wifi.row.network"), () => (wifi as any)?.ssid        || "—")
+    const ssid  = infoRow(t("widget.wifi.row.network"), () => (wifi as any)?.ssid || "—")
     const state = infoRow(t("widget.wifi.row.status"),  () => (wifi as any)?.enabled === false ? t("widget.wifi.row.disabled") : t("cc.wifi.sub.connected"))
     const ip    = infoRow("IP",                         () => (wifi as any)?.ip4_address || (wifi as any)?.ip4Address || "—")
 
-    ssid.update(); state.update(); ip.update()
+    const updateAll = () => { ssid.update(); state.update(); ip.update() }
+    updateAll()
 
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, width_request: 200 })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, hexpand: true, margin_top: 4 })
     box.append(ssid.row)
     box.append(state.row)
     box.append(ip.row)
 
+    if (wifi) {
+        const sigId = (wifi as any).connect("notify", updateAll)
+        box.connect("unrealize", () => { try { (wifi as any).disconnect(sigId) } catch {} })
+    }
+
     return box
+}
+
+function buildBarExpanded(_onClose: () => void): Gtk.Widget {
+    return buildInfoPanel()
 }
 
 const wifiWidget: AtomicWidget = {
@@ -52,6 +62,8 @@ const wifiWidget: AtomicWidget = {
     buildContent: (size) => WifiWidget().buildContent(size),
     buildBarContent,
     buildBarExpanded,
+    buildCCDetail: buildBarExpanded,
+    ccDetailRows: 2,
 }
 
 export default wifiWidget

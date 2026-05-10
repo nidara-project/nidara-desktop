@@ -18,7 +18,7 @@ function buildBarContent(): Gtk.Widget {
     return new Gtk.Image({ gicon: Icons.ethernet, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
 }
 
-function buildBarExpanded(_onClose: () => void): Gtk.Widget {
+function buildInfoPanel(): Gtk.Widget {
     const wired = AstalNetwork.get_default()?.wired
     const isConnected = () => (wired as any)?.internet === (AstalNetwork as any).Internet?.CONNECTED
 
@@ -27,15 +27,30 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
     const ip    = infoRow("IP",                               () => (wired as any)?.ip4_address || (wired as any)?.ip4Address || "—")
     const speed = infoRow(t("widget.ethernet.row.speed"),     () => { const s = (wired as any)?.device?.speed; return s ? `${s} Mb/s` : "—" })
 
-    iface.update(); state.update(); ip.update(); speed.update()
+    const updateAll = () => { iface.update(); state.update(); ip.update(); speed.update() }
+    updateAll()
 
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, width_request: 200 })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, hexpand: true, margin_top: 4 })
     box.append(iface.row)
     box.append(state.row)
     box.append(ip.row)
     box.append(speed.row)
 
+    if (wired) {
+        const wiredId = (wired as any).connect("notify", updateAll)
+        const device  = (wired as any)?.device
+        const devId   = device ? device.connect("notify::speed", updateAll) : 0
+        box.connect("unrealize", () => {
+            try { (wired as any).disconnect(wiredId) } catch {}
+            if (devId) try { device.disconnect(devId) } catch {}
+        })
+    }
+
     return box
+}
+
+function buildBarExpanded(_onClose: () => void): Gtk.Widget {
+    return buildInfoPanel()
 }
 
 const ethernetWidget: AtomicWidget = {
@@ -48,6 +63,8 @@ const ethernetWidget: AtomicWidget = {
     buildContent: (size) => EthernetWidget().buildContent(size),
     buildBarContent,
     buildBarExpanded,
+    buildCCDetail: buildBarExpanded,
+    ccDetailRows: 2,
 }
 
 export default ethernetWidget
