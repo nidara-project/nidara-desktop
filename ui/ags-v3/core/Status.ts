@@ -22,6 +22,7 @@ export class UIStatus extends GObject.Object {
                 "about-open": GObject.ParamSpec.boolean("about-open", "About Open", "About window visibility", GObject.ParamFlags.READWRITE, false),
                 "recording": GObject.ParamSpec.boolean("recording", "Recording", "Screen recording active", GObject.ParamFlags.READWRITE, false),
                 "bar-expanded-id": GObject.ParamSpec.string("bar-expanded-id", "Bar Expanded ID", "ID of the expanded bar widget, empty = none", GObject.ParamFlags.READWRITE, ""),
+                "cc-detail-id": GObject.ParamSpec.string("cc-detail-id", "CC Detail ID", "Widget ID to open in CC detail view, empty = none", GObject.ParamFlags.READWRITE, ""),
             },
         }, this)
     }
@@ -37,6 +38,7 @@ export class UIStatus extends GObject.Object {
     private _about_open = false
     private _recording = false
     private _bar_expanded_id = ""
+    private _cc_detail_id = ""
 
     public get notif_active() { return this._notif_active }
     public set notif_active(v: boolean) {
@@ -179,6 +181,13 @@ export class UIStatus extends GObject.Object {
         if (this._bar_expanded_id === v) return
         this._bar_expanded_id = v
         this.notify("bar-expanded-id")
+    }
+
+    public get cc_detail_id() { return this._cc_detail_id }
+    public set cc_detail_id(v: string) {
+        if (this._cc_detail_id === v) return
+        this._cc_detail_id = v
+        this.notify("cc-detail-id")
     }
 
     toggleCC() { this.cc_open = !this.cc_open }

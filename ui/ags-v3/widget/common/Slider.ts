@@ -37,18 +37,18 @@ function pillPath(cr: any, leftX: number, rightX: number, cy: number, h: number)
     cr.closePath()
 }
 
-function drawSlider(cr: any, w: number, h: number, frac: number) {
+function drawSlider(cr: any, w: number, h: number, frac: number, trackH: number, thumbR: number) {
     const isDark = Theme.isDark
     const cy = h / 2
-    const tx = THUMB_R                   // track left edge
-    const tw = w - THUMB_R * 2          // track pixel width
+    const tx = thumbR                    // track left edge aligns with thumb center at min
+    const tw = w - thumbR * 2           // track pixel width
     const thumbX = tx + frac * tw       // thumb center
 
     // ── Track background ─────────────────────────────────────────────
     const baseC = isDark ? 1 : 0
     cr.setSourceRGBA(baseC, baseC, baseC, isDark ? 0.18 : 0.14)
     cr.newPath()
-    pillPath(cr, tx, tx + tw, cy, TRACK_H)
+    pillPath(cr, tx, tx + tw, cy, trackH)
     cr.fill()
 
     // ── Fill (accent) ─────────────────────────────────────────────────
@@ -56,20 +56,19 @@ function drawSlider(cr: any, w: number, h: number, frac: number) {
         const [ar, ag, ab] = PALETTE[Theme.accentColor] ?? PALETTE.blue
         cr.setSourceRGBA(ar, ag, ab, 0.9)
         cr.newPath()
-        pillPath(cr, tx, thumbX, cy, TRACK_H)
+        pillPath(cr, tx, thumbX, cy, trackH)
         cr.fill()
     }
 
     // ── Thumb ────────────────────────────────────────────────────────
-    // Drop shadow
+    const tr = thumbR - 1
     cr.setSourceRGBA(0, 0, 0, 0.25)
     cr.newPath()
-    cr.arc(thumbX, cy + 1, THUMB_R - 1, 0, 2 * Math.PI)
+    cr.arc(thumbX, cy + 1, tr, 0, 2 * Math.PI)
     cr.fill()
-    // White circle
     cr.setSourceRGBA(1, 1, 1, 0.95)
     cr.newPath()
-    cr.arc(thumbX, cy, THUMB_R - 1, 0, 2 * Math.PI)
+    cr.arc(thumbX, cy, tr, 0, 2 * Math.PI)
     cr.fill()
 }
 
@@ -84,8 +83,12 @@ export function makeHSlider(opts: {
     debounce?: number
     cssClasses?: string[]
     width_request?: number
+    trackH?: number   // track height in px (default 6)
+    thumbR?: number   // thumb radius in px (default 9)
 }): Gtk.Widget {
     const { min = 0, max = 100, value, onChange, onExtChange, debounce = 0 } = opts
+    const trackH = opts.trackH ?? TRACK_H
+    const thumbR = opts.thumbR ?? THUMB_R
     const step = opts.step ?? (max - min) / 20
 
     // ── Input layer: invisible Gtk.Scale with 0-px thumb ────────────
@@ -105,13 +108,13 @@ export function makeHSlider(opts: {
         hexpand: true,
         halign: Gtk.Align.FILL,
         valign: Gtk.Align.CENTER,
-        height_request: THUMB_R * 2,
+        height_request: thumbR * 2,
         can_target: false,
     })
     da.set_draw_func((_, cr, w, h) => {
         const v = scale.get_value()
         const frac = (max - min) <= 0 ? 0 : (v - min) / (max - min)
-        drawSlider(cr, w, h, frac)
+        drawSlider(cr, w, h, frac, trackH, thumbR)
     })
 
     // ── Overlay: DrawingArea as base, Scale on top (invisible, input-only) ──

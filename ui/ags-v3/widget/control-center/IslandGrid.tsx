@@ -416,6 +416,15 @@ export default function IslandGrid() {
         }
     })
 
+    // Open a specific detail view when requested from outside (e.g. bar widget tap)
+    status.connect("notify::cc-detail-id", () => {
+        const id = status.cc_detail_id
+        if (id) {
+            status.cc_detail_id = ""
+            showDetail(id)
+        }
+    })
+
     rebuild()
     return outer
 }

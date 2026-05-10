@@ -492,10 +492,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const w = registry.get(id)
       if (w?.buildBarContent) {
         const hasExpand = !!w.buildBarExpanded
+        const hasCCDetail = !!w.buildCCDetail
+        const onClick = hasExpand
+            ? () => { status.bar_expanded_id = status.bar_expanded_id === id ? "" : id }
+            : hasCCDetail
+                ? () => { status.cc_open = true; status.cc_detail_id = id }
+                : undefined
         const capsule = SquircleContainer({
             child: w.buildBarContent(), gloss: true, useShellOpacity: true,
             borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true,
-            ...(hasExpand ? { onClick: () => { status.bar_expanded_id = status.bar_expanded_id === id ? "" : id } } : {}),
+            ...(onClick ? { onClick } : {}),
         })
         if (hasExpand) capsuleRefs.set(id, capsule)
         optWidgets.append(capsule)
