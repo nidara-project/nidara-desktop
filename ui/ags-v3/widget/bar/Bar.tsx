@@ -493,7 +493,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (w?.buildBarContent) {
         const hasExpand = !!w.buildBarExpanded
         const hasCCDetail = !!w.buildCCDetail
-        const onClick = hasExpand
+        const onRelease = hasExpand
             ? () => { status.bar_expanded_id = status.bar_expanded_id === id ? "" : id }
             : hasCCDetail
                 ? () => { status.cc_open = true; status.cc_detail_id = id }
@@ -501,8 +501,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
         const capsule = SquircleContainer({
             child: w.buildBarContent(), gloss: true, useShellOpacity: true,
             borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true,
-            ...(onClick ? { onClick } : {}),
+            hoverAlpha: onRelease ? 0.06 : undefined,
         })
+        if (onRelease) {
+            // BUBBLE + released: child buttons claim on press → deny this gesture → released
+            // never fires when a button is clicked; fires only for neutral-area taps.
+            const g = new Gtk.GestureClick()
+            g.connect("released", onRelease)
+            capsule.add_controller(g)
+        }
         if (hasExpand) capsuleRefs.set(id, capsule)
         optWidgets.append(capsule)
       }
