@@ -7,6 +7,28 @@ export interface WidgetPlacement {
     cc: boolean
 }
 
+// Canonical left-to-right order for bar widgets.
+// System/connectivity widgets (wifi, volume) are rightmost, closest to the tray.
+// Optional/utility widgets sit in the middle. Unlisted widgets fall to the end.
+const BAR_ORDER = [
+    "media",
+    "cpu_memory",
+    "battery",
+    "brightness",
+    "dark_mode",
+    "focus",
+    "night_light",
+    "calculator",
+    "clipboard",
+    "screenshot",
+    "screenrecord",
+    "vpn",
+    "bt",
+    "ethernet",
+    "wifi",
+    "volume",
+]
+
 const DEFAULTS: Record<string, WidgetPlacement> = {
     cpu_memory: { bar: true,  cc: true  },
     volume:     { bar: false, cc: true  },
@@ -83,7 +105,10 @@ class WidgetConfigManager extends GObject.Object {
     }
 
     barWidgetIds(): string[] {
-        return Object.keys(DEFAULTS).filter(id => this._config[id]?.bar)
+        const active = new Set(Object.keys(DEFAULTS).filter(id => this._config[id]?.bar))
+        const ordered = BAR_ORDER.filter(id => active.has(id))
+        const rest = [...active].filter(id => !BAR_ORDER.includes(id))
+        return [...ordered, ...rest]
     }
 
     ccWidgetIds(): string[] {

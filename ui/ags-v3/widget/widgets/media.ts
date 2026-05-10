@@ -26,8 +26,8 @@ function buildBarContent(): Gtk.Widget {
     const box = new Gtk.Box({
         spacing: 4,
         valign: Gtk.Align.CENTER,
-        margin_start: 10,
-        margin_end: 10,
+        margin_start: 16,
+        margin_end: 16,
     })
     box.append(prev)
     box.append(play)

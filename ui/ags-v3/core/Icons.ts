@@ -52,6 +52,7 @@ const Icons = {
     bellOff:      f("bell-off"),
     check:        f("check"),
     menu:         f("menu"),
+    settings2:    f("settings-2"),
     settings:     f("settings"),
     terminal:     f("terminal"),
     grid:         f("grid"),
