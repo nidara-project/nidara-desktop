@@ -162,13 +162,13 @@ export function makeHSlider(opts: {
 
     scale.connect("value-changed", () => {
         da.queue_draw()
-        if (isSyncing) return   // programmatic sync — don't seek or update labels
+        opts.onValueChanged?.(scale.get_value())   // always sync label
+        if (isSyncing) return   // programmatic sync — don't seek
         ignoreUntil = GLib.get_monotonic_time() + 300_000
-        opts.onValueChanged?.(scale.get_value())
         triggerChange()
     })
 
-    // Sync label to initial value (set_value fires before the handler was connected)
+    // Handler wasn't connected when set_value(value) ran — prime the label now
     opts.onValueChanged?.(scale.get_value())
 
     const themeSignalId = Theme.connect("changed", () => da.queue_draw())
