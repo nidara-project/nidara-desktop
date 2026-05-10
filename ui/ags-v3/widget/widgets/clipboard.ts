@@ -1,8 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
-import { WideToggle } from "../control-center/Toggles"
-import { makeIconAction } from "./bar-helpers"
 
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -24,7 +22,6 @@ async function listEntries(): Promise<ClipEntry[]> {
             .map(line => {
                 const tab = line.indexOf("\t")
                 const preview = tab !== -1 ? line.slice(tab + 1) : line
-                // Binary/image entries come back as empty or non-printable content
                 const clean = preview.replace(/\s+/g, " ").trim()
                 return {
                     line,
@@ -37,68 +34,67 @@ async function listEntries(): Promise<ClipEntry[]> {
 }
 
 function copyEntry(entry: ClipEntry): Promise<string> {
-    // Pass only the numeric ID — JSON.stringify would escape the real tab in entry.line
-    // to \t (literal), which bash double-quotes don't re-expand.
-    // printf format-string does expand \t, so we reconstruct id<TAB> safely.
     const tab = entry.line.indexOf("\t")
     const id = tab !== -1 ? entry.line.slice(0, tab) : entry.line
     return execAsync(["bash", "-c", `printf '%s\t' ${JSON.stringify(id)} | cliphist decode | wl-copy`])
 }
 
 // ── Shared list builder ───────────────────────────────────────────────────────
-// Returns widget + refresh fn; caller decides whether to wrap in a scroll.
 
 function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh: () => void } {
-    const listBox = new Gtk.ListBox({ css_classes: ["clip-list"], selection_mode: Gtk.SelectionMode.NONE })
+    const entriesBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
     const emptyLabel = new Gtk.Label({
         label: t("widget.clipboard.empty"),
         css_classes: ["settings-row-subtitle"],
-        margin_top: 16, margin_bottom: 16, margin_start: 16, margin_end: 16,
+        margin_top: 16, margin_bottom: 16,
+        halign: Gtk.Align.CENTER,
     })
-    const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8 })
-    container.append(emptyLabel)
-    container.append(listBox)
 
     const refresh = () => {
-        let child = listBox.get_first_child()
-        while (child) { listBox.remove(child); child = listBox.get_first_child() }
+        let child = entriesBox.get_first_child()
+        while (child) { entriesBox.remove(child); child = entriesBox.get_first_child() }
+
         listEntries().then(entries => {
-            emptyLabel.visible = entries.length === 0
+            if (entries.length === 0) {
+                entriesBox.append(emptyLabel)
+                return
+            }
             for (const entry of entries) {
-                const btn = new Gtk.Button({ css_classes: ["settings-action-row"], hexpand: true, halign: Gtk.Align.FILL })
                 const lbl = new Gtk.Label({
                     label: entry.preview, halign: Gtk.Align.START, ellipsize: 3,
-                    max_width_chars: 36, margin_top: 10, margin_bottom: 10,
-                    margin_start: 14, margin_end: 14, css_classes: ["settings-row-label"],
+                    max_width_chars: 36, css_classes: ["settings-row-label"],
                 })
-                btn.set_child(lbl)
+                const btn = new Gtk.Button({
+                    css_classes: ["clip-entry-btn"],
+                    hexpand: true, halign: Gtk.Align.FILL,
+                    child: lbl,
+                })
                 btn.connect("clicked", () => {
                     onClose()
                     copyEntry(entry).catch(e => console.error("[Clipboard] copy failed:", e))
                 })
-                const row = new Gtk.ListBoxRow()
-                row.set_child(btn); listBox.append(row)
+                entriesBox.append(btn)
             }
         })
     }
     refresh()
-    return { widget: container, refresh }
+    return { widget: entriesBox, refresh }
 }
 
-// ── Popover / bar expansion (with scroll wrapper) ─────────────────────────────
+// ── Bar expansion (with scroll wrapper) ──────────────────────────────────────
 
-function buildClipboardContent(onClose: () => void): { widget: Gtk.Widget; refresh: () => void } {
-    const { widget: list, refresh } = buildClipboardList(onClose)
+function buildClipboardContent(onClose: () => void): Gtk.Widget {
+    const { widget: list } = buildClipboardList(onClose)
     const scroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
         propagate_natural_height: true,
         min_content_height: 60,
         max_content_height: 360,
-        width_request: 300,
+        width_request: 280,
     })
     scroll.set_child(list)
-    return { widget: scroll, refresh }
+    return scroll
 }
 
 // ── Bar content ───────────────────────────────────────────────────────────────
@@ -108,7 +104,7 @@ function buildBarContent(): Gtk.Widget {
 }
 
 function buildBarExpanded(onClose: () => void): Gtk.Widget {
-    return buildClipboardContent(onClose).widget
+    return buildClipboardContent(onClose)
 }
 
 function buildCCDetail(onClose: () => void): Gtk.Widget {

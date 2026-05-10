@@ -303,20 +303,17 @@
     margin-top: 44px;
 }
 
-list.clip-list {
+button.clip-entry-btn {
     background: transparent;
+    background-image: none;
     border: none;
     box-shadow: none;
+    border-radius: $crystal-radius-xs;
+    padding: 9px 12px;
+    transition: background 0.15s ease;
 
-    row {
-        background: transparent;
-        border-radius: $crystal-radius-xs;
-        transition: background 0.15s ease;
-
-        &:hover   { background: var(--crystal-surface-hover); }
-        &:active  { background: var(--crystal-surface-active); }
-        &:selected { background: transparent; }
-    }
+    &:hover  { background: var(--crystal-surface-hover); }
+    &:active { background: var(--crystal-surface-active); }
 }
 
 .bar-popover-value {
