@@ -63,10 +63,10 @@ function buildControls(onClose: () => void): Gtk.Widget {
         { id: "window", label: t("widget.screenshot.mode.window") },
     ]
 
-    const modeRow = new Gtk.Box({ spacing: 6, homogeneous: true, css_classes: ["linked"] })
+    const modeRow = new Gtk.Box({ spacing: 4, homogeneous: true })
     const modeBtns: Gtk.Button[] = []
     for (const mode of modes) {
-        const btn = new Gtk.Button({ label: mode.label })
+        const btn = new Gtk.Button({ label: mode.label, css_classes: ["crystal-seg-btn"] })
         btn.connect("clicked", () => {
             selectedMode = mode.id
             modeBtns.forEach((b, i) => {

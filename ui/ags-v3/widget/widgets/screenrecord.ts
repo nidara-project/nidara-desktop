@@ -102,16 +102,18 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
     let selectedMode: RecordMode = "screen"
     let withAudio = false
 
-    const modeRow = new Gtk.Box({ spacing: 6, homogeneous: true, css_classes: ["linked"] })
-    const screenBtn = new Gtk.Button({ label: t("widget.screenrecord.mode.screen"), css_classes: ["suggested-action"] })
-    const regionBtn = new Gtk.Button({ label: t("widget.screenrecord.mode.region") })
+    const modeRow = new Gtk.Box({ spacing: 4, homogeneous: true })
+    const screenBtn = new Gtk.Button({ label: t("widget.screenrecord.mode.screen"), css_classes: ["crystal-seg-btn", "suggested-action"] })
+    const regionBtn = new Gtk.Button({ label: t("widget.screenrecord.mode.region"), css_classes: ["crystal-seg-btn"] })
     screenBtn.connect("clicked", () => {
         selectedMode = "screen"
-        screenBtn.add_css_class("suggested-action"); regionBtn.remove_css_class("suggested-action")
+        screenBtn.add_css_class("suggested-action")
+        regionBtn.remove_css_class("suggested-action")
     })
     regionBtn.connect("clicked", () => {
         selectedMode = "region"
-        regionBtn.add_css_class("suggested-action"); screenBtn.remove_css_class("suggested-action")
+        regionBtn.add_css_class("suggested-action")
+        screenBtn.remove_css_class("suggested-action")
     })
     modeRow.append(screenBtn)
     modeRow.append(regionBtn)
