@@ -460,6 +460,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   center.set_visible(barSettings.showWorkspaces)
   const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 8 })
 
+  // Keep workspace capsule at the true monitor center regardless of how wide the
+  // right side grows.  SizeGroup makes both sides request max(left, right) width,
+  // so CenterBox always sees equal flanks and places center at exactly width/2.
+  const sideGroup = new Gtk.SizeGroup({ mode: Gtk.SizeGroupMode.HORIZONTAL })
+  sideGroup.add_widget(left)
+  sideGroup.add_widget(right)
+
   const timeContent = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16 })
   const timeLabel = new Gtk.Label({ label: "..." })
   const updateClock = () => {
