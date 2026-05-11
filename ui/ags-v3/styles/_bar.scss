@@ -301,6 +301,51 @@
 /* --- Bar inline expansion panel --- */
 .bar-expansion-panel {
     margin-top: 44px;
+
+    button.suggested-action {
+        background: var(--crystal-accent);
+        background-image: none;
+        color: #fff;
+        border: none;
+        box-shadow: none;
+        border-radius: $crystal-radius-sm;
+        padding: 6px 14px;
+        font-size: 0.84rem;
+        font-weight: 600;
+
+        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.82); }
+        &:active { background: rgba(var(--crystal-accent-rgb), 0.65); }
+    }
+
+    button.destructive-action {
+        background: var(--crystal-danger);
+        background-image: none;
+        color: #fff;
+        border: none;
+        box-shadow: none;
+        border-radius: $crystal-radius-sm;
+        padding: 6px 14px;
+        font-size: 0.84rem;
+        font-weight: 600;
+
+        &:hover  { background: rgba(var(--crystal-danger-rgb), 0.82); }
+        &:active { background: rgba(var(--crystal-danger-rgb), 0.65); }
+    }
+
+    button.flat {
+        background: transparent;
+        background-image: none;
+        border: none;
+        box-shadow: none;
+        color: var(--crystal-accent);
+        border-radius: $crystal-radius-sm;
+        padding: 6px 14px;
+        font-size: 0.84rem;
+        font-weight: 500;
+
+        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.10); }
+        &:active { background: rgba(var(--crystal-accent-rgb), 0.18); }
+    }
 }
 
 button.clip-entry-btn {
