@@ -1135,6 +1135,73 @@ button.dock-v-icon image {
 .bar-expansion-panel {
   margin-top: 44px;
 }
+.bar-expansion-panel button.suggested-action {
+  background: var(--crystal-accent);
+  background-image: none;
+  color: #fff;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--crystal-radius-sm);
+  padding: 6px 14px;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.bar-expansion-panel button.suggested-action:hover {
+  background: rgba(var(--crystal-accent-rgb), 0.82);
+}
+.bar-expansion-panel button.suggested-action:active {
+  background: rgba(var(--crystal-accent-rgb), 0.65);
+}
+.bar-expansion-panel button.destructive-action {
+  background: var(--crystal-danger);
+  background-image: none;
+  color: #fff;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--crystal-radius-sm);
+  padding: 6px 14px;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+.bar-expansion-panel button.destructive-action:hover {
+  background: rgba(var(--crystal-danger-rgb), 0.82);
+}
+.bar-expansion-panel button.destructive-action:active {
+  background: rgba(var(--crystal-danger-rgb), 0.65);
+}
+.bar-expansion-panel button.flat {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  color: var(--crystal-accent);
+  border-radius: var(--crystal-radius-sm);
+  padding: 6px 14px;
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+.bar-expansion-panel button.flat:hover {
+  background: rgba(var(--crystal-accent-rgb), 0.1);
+}
+.bar-expansion-panel button.flat:active {
+  background: rgba(var(--crystal-accent-rgb), 0.18);
+}
+
+button.clip-entry-btn {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--crystal-radius-xs);
+  padding: 9px 12px;
+  transition: background 0.15s ease;
+}
+button.clip-entry-btn:hover {
+  background: var(--crystal-surface-hover);
+}
+button.clip-entry-btn:active {
+  background: var(--crystal-surface-active);
+}
 
 .bar-popover-value {
   font-size: 0.85rem;
