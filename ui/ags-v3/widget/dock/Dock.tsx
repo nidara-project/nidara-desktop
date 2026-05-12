@@ -1,16 +1,16 @@
 import app from "ags/gtk4/app"
-import { Gtk, Gdk } from "ags/gtk4"
+import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
-import { calculateDockItemMetrics, DOCK_CONSTANTS, springStep } from "./DockPhysics"
+import { calculateDockItemMetrics, DOCK_CONSTANTS, springStep, slideSpringStep } from "./DockPhysics"
 import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
 import { DockItem, Separator, dismissActiveDockMenu } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
-import { hypr, appsService as apps, dragBus, mouseBus, savePinned, pinnedState, dockSettings, menuState, dockSideState } from "./state"
+import { hypr, appsService as apps, dragBus, mouseBus, pointerBus, savePinned, pinnedState, dockSettings, menuState, dockSideState } from "./state"
 import status from "../../core/Status"
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
@@ -90,6 +90,16 @@ export default function Dock(gdkmonitor: any) {
     let lastDraggingId = ""
     let lockedStaticWidth = 0
     let lockedStartX = 0
+    // Grace period after a drop: Wayland sends a spurious pointer_leave to the dock as
+    // part of DnD grab cleanup even though the cursor is still over the surface.
+    // This flag suppresses the leave handler until the protocol cleanup is done.
+    let isDndEnding = false
+
+    // Stable open-order tracking for unpinned apps.
+    // Keys are assigned a monotonically-increasing sequence number the first time
+    // they appear in groupedClients so unpinned icons stay in open order.
+    const unpinnedOpenOrder = new Map<string, number>()
+    let unpinnedSeq = 0
 
     const getLaunch = (lid: string) => {
         const app = appService.getAppData(lid)
@@ -159,14 +169,28 @@ export default function Dock(gdkmonitor: any) {
                 pinnedState.list = pinnedState.list.filter(p => norm(p) !== nsid)
                 savePinned()
             }
+            // Update open-order map to reflect the user's manual placement.
+            // Build sorted list without the dragged item, insert it at toIdx, then
+            // reassign sequence numbers so the sort in update() honours the new order.
+            const sortedUnpinned = [...unpinnedOpenOrder.entries()]
+                .sort((a, b) => a[1] - b[1])
+                .map(([k]) => k)
+                .filter(k => k !== nsid)
+            let toIdx = Math.max(0, Math.min(finalIdx - (pinnedBoundary + 1), sortedUnpinned.length))
+            sortedUnpinned.splice(toIdx, 0, nsid)
+            sortedUnpinned.forEach((k, i) => unpinnedOpenOrder.set(k, i))
+            unpinnedSeq = sortedUnpinned.length
         }
 
-        // V496: ATOMIC RESET. Force animation reset immediately.
+        // COMMIT: draggingId is already "" (GestureDrag.drag-end cleared it before dConn
+        // called onReorder). Calling dragBus.setDragging("") here again would re-fire dConn
+        // a second time → second update() → the visible dock rebuild. Just flip the sentinels
+        // and call update() once.
         previewIdx = -1
         lastDraggingId = ""
-        dragBus.setDragging("")
-        updateAllTargets(-1000)
+        isDndEnding = true    // Blocks the leave handler for 600ms
         update()
+        GLib.timeout_add(GLib.PRIORITY_HIGH, 600, () => { isDndEnding = false; return GLib.SOURCE_REMOVE })
     }
 
 
@@ -288,8 +312,14 @@ export default function Dock(gdkmonitor: any) {
     const SLIDE_STIFFNESS = 500
     const SLIDE_DAMPING = 52
 
+    // True while a DnD is in flight (from drag-start to 700ms after drag-end).
+    // Blocks setRevealed(false) so the dock can't slide away during DnD cleanup
+    // regardless of which leave handler path fires.
+    let dndActive = false
+
     const setRevealed = (reveal: boolean) => {
         if (isRevealed === reveal) return
+        if (!reveal && dndActive) return  // Never hide dock during DnD
         isRevealed = reveal
         slideTarget = reveal ? 0 : (isVertical
             ? WIN_W - 4   // leave 4px on-screen as the hover trigger strip
@@ -341,7 +371,14 @@ export default function Dock(gdkmonitor: any) {
                 state.currentWidth = widthChannel.current; state.velocityWidth = widthChannel.velocity
                 state.currentMargin = marginChannel.current; state.velocityMargin = marginChannel.velocity
 
-                if (a1 || a2 || a3) active = true
+                let a4 = false
+                if (state.currentSlideX !== 0 || state.targetSlideX !== 0) {
+                    const slideXCh: SpringChannel = { target: state.targetSlideX, current: state.currentSlideX, velocity: state.velocitySlideX }
+                    a4 = slideSpringStep(slideXCh, dt)
+                    state.currentSlideX = slideXCh.current; state.velocitySlideX = slideXCh.velocity
+                }
+
+                if (a1 || a2 || a3 || a4) active = true
             })
 
             // Step 2: Apply per-icon layout + accumulate bar width
@@ -421,15 +458,24 @@ export default function Dock(gdkmonitor: any) {
                         if (itemBox) {
                             // Only height changes (slot axis); width stays PILL_HEIGHT from constructor.
                             if (itemBox.height_request !== tps) itemBox.height_request = tps
-                            if (itemBox.margin_top !== marginL) itemBox.margin_top = marginL
-                            if (itemBox.margin_bottom !== marginR) itemBox.margin_bottom = marginR
+                            // Slide spring along vertical axis (currentSlideX reused as axis offset)
+                            const vSlide = Math.round(state.currentSlideX)
+                            const vtML = marginL + vSlide
+                            const vtMR = marginR - vSlide
+                            if (itemBox.margin_top !== vtML) itemBox.margin_top = vtML
+                            if (itemBox.margin_bottom !== vtMR) itemBox.margin_bottom = vtMR
                         }
                     } else {
                         if (revealer.width_request !== slotW) revealer.width_request = slotW
                         if (itemBox) {
                             if (itemBox.width_request !== tps) itemBox.width_request = tps
-                            if (itemBox.margin_start !== marginL) itemBox.margin_start = marginL
-                            if (itemBox.margin_end !== marginR) itemBox.margin_end = marginR
+                            // Slide spring: offset the icon within the slot so it appears to glide
+                            // from its old position to the new one after a DOM reorder.
+                            const hSlide = Math.round(state.currentSlideX)
+                            const htML = marginL + hSlide
+                            const htMR = marginR - hSlide
+                            if (itemBox.margin_start !== htML) itemBox.margin_start = htML
+                            if (itemBox.margin_end !== htMR) itemBox.margin_end = htMR
                             itemBox.margin_bottom = Math.round(0 - (state.currentTranslateY || 0))
                         }
                     }
@@ -540,7 +586,10 @@ export default function Dock(gdkmonitor: any) {
         const pX = lastMousePos
 
         const draggingId = dragBus.draggingId
-        if (draggingId) {
+        // Only enter drag-slot logic when actively previewing (previewIdx !== -1).
+        // When previewIdx === -1 the drop was committed but drag-end hasn't cleared
+        // draggingId yet — we treat it as the resting state so the leave guard holds.
+        if (draggingId && previewIdx !== -1) {
             // V480: STATIC LOGIC ANCHOR
             // We use the startX captured when the drag began for the GRID.
             // This makes slot calculation absolute and immune to visual shifts.
@@ -607,7 +656,17 @@ export default function Dock(gdkmonitor: any) {
     }
 
     const motion = new Gtk.EventControllerMotion()
-    motion.connect("enter", () => { })
+    motion.connect("enter", () => {
+        // Cancel any pending hide timeout immediately on re-enter.
+        // Hyprland sends a spurious wl_pointer.leave after a click/drag-release and then
+        // immediately a wl_pointer.enter (cursor never actually left). Without this, the
+        // leaveTimeout would fire 500ms later and slide the dock away.
+        clearLeaveTimeout()
+        if (dockSettings.autoHide && !isRevealed) {
+            setRevealed(true)
+            updateInputRegion(smoothedBarWidth)
+        }
+    })
     const updateInputRegion = (totalWidth: number) => {
         const surface = win.get_native()?.get_surface()
         if (!surface) return
@@ -712,18 +771,23 @@ export default function Dock(gdkmonitor: any) {
         updateAllTargets(x)
     })
     motion.connect("leave", () => {
-        if (dragBus.draggingId) return
+        if (dragBus.draggingId || isDndEnding) return
 
         clearLeaveTimeout()
         const magnDelay = 50
         const hideDelay = dockSettings.autoHide ? Math.max(magnDelay, dockSettings.hideDelay) : magnDelay
         leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, hideDelay, () => {
+            leaveTimeout = null
+            // Re-check: a drag-end or click may have set isDndEnding AFTER the leave event
+            // fired (Wayland can include wl_pointer.leave before wl_pointer.button.released
+            // in the same frame). If protection is active, abort the hide — a genuine leave
+            // will create a new timeout once the protection expires.
+            if (isDndEnding || dragBus.draggingId) return GLib.SOURCE_REMOVE
             updateAllTargets(-1000)
             if (dockSettings.autoHide) {
                 setRevealed(false)
                 updateInputRegion(smoothedBarWidth)
             }
-            leaveTimeout = null
             return GLib.SOURCE_REMOVE
         })
     })
@@ -743,33 +807,9 @@ export default function Dock(gdkmonitor: any) {
     if (!isVertical) bar.valign = Gtk.Align.END
     shim.append(bar)
 
-    // V470: GLOBAL DROP TARGET
-    // This catches drops even in the gaps between icons, using previewIdx    // V470: GLOBAL DROP TARGET
-    const barDropTarget = new Gtk.DropTarget({ actions: Gdk.DragAction.MOVE, formats: null })
-    barDropTarget.set_gtypes([GObject.TYPE_STRING])
-
-    // V530: SIGNAL TUNNELING ATTACHMENT
-    // We subscribe to mouseBus to ensure that motion signals from icons OR the background
-    // ALWAYS drive the magnification and reordering logic.
-    const mSub = mouseBus.subscribe((x) => updateAllTargets(x))
-
-    barDropTarget.connect("motion", (t, x, y) => {
-        // V478: Signal Tunneling
-        // Connect motion to mouseBus to drive animations during drag
-        mouseBus.emit(isVertical ? y : x)
-        return Gdk.DragAction.MOVE
-    })
-
-    barDropTarget.connect("drop", (t, val) => {
-        const draggingId = dragBus.draggingId || (val as string)
-        if (!draggingId) return false
-
-        console.log(`[Dock] Global Drop triggered for ${draggingId}`)
-        onReorder(draggingId)
-        return true
-    })
-    // V471: Move Global DropTarget to the layout overlay ONLY
-    layout.add_controller(barDropTarget)
+    // No drop target needed — drag is handled by GestureDrag in DockItem (not Wayland DnD).
+    // The dock's own motion.connect("motion") handler tracks cursor position during gesture drag
+    // because GestureDrag is a plain pointer gesture, not a wl_data_device grab.
 
     // V136: Architecture Simplification
     // The DrawingArea is now the primary child (Background), removing 'pillBg' to prevent double backgrounds.
@@ -821,6 +861,11 @@ export default function Dock(gdkmonitor: any) {
                 groupedClients[key].addresses.push(c.address)
             })
 
+            // Maintain stable open-order: evict closed apps, register new ones
+            const currentGroupKeys = new Set(Object.keys(groupedClients))
+            unpinnedOpenOrder.forEach((_, k) => { if (!currentGroupKeys.has(k)) unpinnedOpenOrder.delete(k) })
+            currentGroupKeys.forEach(k => { if (!unpinnedOpenOrder.has(k)) unpinnedOpenOrder.set(k, unpinnedSeq++) })
+
             const draggingId = dragBus.draggingId
             const hoverId = dragBus.hoverId
 
@@ -831,7 +876,10 @@ export default function Dock(gdkmonitor: any) {
             const groupedKeys = Object.keys(groupedClients)
             const nsid = draggingId ? norm(draggingId) : ""
 
-            if (draggingId) {
+            // Only enter drag-preview mode if actively dragging AND previewIdx is valid.
+            // After onReorder commits a drop it sets previewIdx=-1 but leaves draggingId
+            // set so the leave handler stays blocked until drag-end fires.
+            if (draggingId && previewIdx !== -1) {
                 if (draggingId !== lastDraggingId) {
                     lastDraggingId = draggingId
                     const currentPos = pinnedState.list.findIndex(p => norm(p) === nsid)
@@ -840,6 +888,7 @@ export default function Dock(gdkmonitor: any) {
 
                 effectivePinnedList = effectivePinnedList.filter(p => norm(p) !== nsid)
                 runningUnpinnedKeys = groupedKeys.filter(k => k !== nsid && k !== "home-shortcut" && !pinnedState.list.some(p => { const lid = norm(p); return k === lid || k.includes(lid) || lid.includes(k) }))
+                    .sort((a, b) => (unpinnedOpenOrder.get(a) ?? Infinity) - (unpinnedOpenOrder.get(b) ?? Infinity))
 
                 const pinnedBoundary = 2 + effectivePinnedList.length
 
@@ -858,6 +907,7 @@ export default function Dock(gdkmonitor: any) {
             } else {
                 lastDraggingId = ""
                 runningUnpinnedKeys = groupedKeys.filter(k => k !== "home-shortcut" && !pinnedState.list.some(p => { const lid = norm(p); return k === lid || k.includes(lid) || lid.includes(k) }))
+                    .sort((a, b) => (unpinnedOpenOrder.get(a) ?? Infinity) - (unpinnedOpenOrder.get(b) ?? Infinity))
             }
 
             type ItemConfig = { id: string, width: number, syncData?: any, isPinned: boolean, factory: (vc: number) => Gtk.Widget, isSeparator?: boolean }
@@ -877,6 +927,10 @@ export default function Dock(gdkmonitor: any) {
                     child: widget,
                     reveal_child: firstRender
                 })
+                // VISIBLE overflow lets the slide-spring animate icons past the slot boundary
+                // during reorder. The revealer still clips internally during its enter/exit
+                // transition, so the SLIDE_UP entrance animation is unaffected.
+                revealer.set_overflow(Gtk.Overflow.VISIBLE)
                 // Pre-size vertical revealers to rest state so no layout jump on first tick.
                 // Separators use SEPARATOR_SLOT; regular items use APP_SLOT.
                 if (isVertical) {
@@ -1166,6 +1220,17 @@ export default function Dock(gdkmonitor: any) {
                 processed.add(c.id); return true
             })
 
+            // Capture current pixel positions BEFORE reordering so the slide spring can
+            // animate each icon from its old visual position to the new one.
+            const _slideOldPos = new Map<string, number>()
+            const _slideOldSet = new Set(orderedIds)
+            let _slideAccOld = 0
+            orderedIds.forEach(id => {
+                _slideOldPos.set(id, _slideAccOld)
+                const s = animRegistry.get(id)
+                _slideAccOld += s ? (s.currentWidth + s.currentMargin * 2) : DOCK_CONSTANTS.APP_SLOT
+            })
+
             orderedIds = validConfigs.map(c => c.id)
             currentTotalItems = validConfigs.length
 
@@ -1202,13 +1267,42 @@ export default function Dock(gdkmonitor: any) {
                 }
             }
 
-            // Surgical Reordering without destruction
+            // Fire slide springs for items whose position changed in the new order.
+            // Each item's icon is pre-displaced to its old visual position and springs to 0.
+            let _slideAccNew = 0
+            orderedIds.forEach(id => {
+                const s = animRegistry.get(id)
+                const newX = _slideAccNew
+                _slideAccNew += s ? (s.currentWidth + s.currentMargin * 2) : DOCK_CONSTANTS.APP_SLOT
+                if (!s || !_slideOldSet.has(id)) return
+                const oldX = _slideOldPos.get(id)
+                if (oldX === undefined) return
+                const disp = oldX - newX
+                if (Math.abs(disp) > 1) {
+                    s.currentSlideX = (s.currentSlideX || 0) + disp
+                    s.velocitySlideX = 0
+                    s.targetSlideX = 0
+                    if (!tickId) runUnifiedTick()
+                }
+            })
+
+            // Surgical Reordering without destruction.
+            // For items already in this bar we use reorder_child_after() instead of
+            // unparent() + insert_child_after(). The unparent/reparent path temporarily
+            // unmaps the Revealer widget, which resets its visual state and causes the
+            // SLIDE_UP entrance animation to replay — producing the "dock rebuilds" flash
+            // visible on every drop. reorder_child_after() moves the child in-place while
+            // keeping it mapped, so no animation state is disturbed.
             let currentChild = bar.get_first_child()
             let prevSibling: Gtk.Widget | null = null
             finalItems.forEach(item => {
                 if (currentChild !== item) {
-                    if (item.get_parent()) item.unparent()
-                    bar.insert_child_after(item, prevSibling)
+                    if (item.get_parent() === bar) {
+                        (bar as any).reorder_child_after(item, prevSibling)
+                    } else {
+                        if (item.get_parent()) item.unparent()
+                        bar.insert_child_after(item, prevSibling)
+                    }
                 }
                 prevSibling = item
                 currentChild = item ? (item as any).get_next_sibling() : null
@@ -1415,11 +1509,20 @@ export default function Dock(gdkmonitor: any) {
     status.connect("notify::overview-open", overlayRecovery)
 
 
+    // Any button release on a dock icon (click, long-press, or drag-end) emits this.
+    // Set isDndEnding for 700ms so the leaveTimeout callback skips setRevealed(false)
+    // even if the wl_pointer.leave arrived before we set the flag (same Wayland frame).
+    const pConn = pointerBus.onButtonReleased(() => {
+        isDndEnding = true
+        GLib.timeout_add(GLib.PRIORITY_HIGH, 700, () => { isDndEnding = false; return GLib.SOURCE_REMOVE })
+    })
+
     const dConn = dragBus.subscribe((draggingId) => {
-        // V461: Reset reordering state when a drag starts/ends
         if (draggingId) {
+            // Drag START — lock the dock open for the entire drag.
+            dndActive = true
+
             // V481: ABSOLUTE GRID ANCHOR
-            // We calculate the width the dock WILL have once it grows for the dragging item.
             const nsid = norm(draggingId)
             let virtualPinned = [...pinnedState.list]
             if (!virtualPinned.some(p => norm(p) === nsid)) {
@@ -1427,32 +1530,47 @@ export default function Dock(gdkmonitor: any) {
             }
             lockedStaticWidth = calculateStableWidth(virtualPinned)
 
-            // The grid is centered on the monitor. 
-            // lockedStartX is the unmagnified start position of this centered grid.
             const screenWidth = gdkmonitor.get_geometry().width
             lockedStartX = (screenWidth - lockedStaticWidth) / 2
 
             const currentIdx = pinnedState.list.findIndex(p => norm(p) === nsid)
             if (currentIdx !== -1) {
-                // V520: Offset by 2 for Launcher and Home
                 previewIdx = currentIdx + 2
             } else {
-                // Start at the end of pinned list (Zone boundary)
                 previewIdx = 2 + pinnedState.list.length
             }
+            throttledUpdate()
         } else {
-            // V486: Clean reset after a short grace period
+            // Drag END (GestureDrag released).
+            // Commit the reorder if the cursor is still over the dock (previewIdx >= 0).
+            // If the gesture ended outside the dock, just restore the original order.
+            if (previewIdx >= 0 && lastDraggingId && lastMousePos >= 0) {
+                onReorder(lastDraggingId)
+            } else {
+                // Dropped outside dock — restore without committing.
+                previewIdx = -1
+                isDndEnding = true
+                update()
+                GLib.timeout_add(GLib.PRIORITY_HIGH, 400, () => { isDndEnding = false; return GLib.SOURCE_REMOVE })
+            }
+
+            // Release the auto-hide lock slightly after gesture end.
+            GLib.timeout_add(GLib.PRIORITY_HIGH, 200, () => {
+                dndActive = false
+                return GLib.SOURCE_REMOVE
+            })
+
+            // Safety cleanup after short delay.
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
                 if (!dragBus.draggingId) {
                     lastDraggingId = ""
                     previewIdx = -1
-                    // V497: Final safety reset to clear any stuck magnification
-                    updateAllTargets(-1000)
+                    if (lastMousePos < 0) updateAllTargets(-1000)
+                    update()
                 }
                 return GLib.SOURCE_REMOVE
             })
         }
-        throttledUpdate()
     })
 
     win.connect("destroy", () => {
@@ -1461,8 +1579,8 @@ export default function Dock(gdkmonitor: any) {
         try { if (cConn) GObject.signal_handler_disconnect(hypr, cConn) } catch (e) { }
         try { if (fConn) GObject.signal_handler_disconnect(hypr, fConn) } catch (e) { }
         try { if (aConn) aConn() } catch (e) { }
+        try { if (pConn) pConn() } catch (e) { }
         try { if (dConn) dConn() } catch (e) { }
-        try { if (mSub) mSub() } catch (e) { }
     })
 
     update()

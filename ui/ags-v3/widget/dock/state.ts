@@ -144,6 +144,11 @@ export interface AnimState {
     currentTranslateY: number
     velocityY: number          // V600: Spring Velocity
 
+    // Reorder slide spring: animates icon from old position to new position after DOM reorder
+    currentSlideX: number
+    targetSlideX: number
+    velocitySlideX: number
+
     virtualCenter: number
     staticCenter: number
     isSeparator: boolean
@@ -186,6 +191,18 @@ export const mouseBus = {
     listeners: new Set<(x: number) => void>(),
     emit(x: number) { this.listeners.forEach(l => l(x)) },
     subscribe(l: (x: number) => void) { this.listeners.add(l); return () => this.listeners.delete(l) }
+}
+
+// Signals any button release on a dock icon (click, long-press, drag end).
+// Dock.tsx subscribes to set isDndEnding=true, blocking the spurious
+// wl_pointer.leave that Hyprland sends immediately after button release.
+export const pointerBus = {
+    _listeners: new Set<() => void>(),
+    emitButtonReleased() { this._listeners.forEach(fn => fn()) },
+    onButtonReleased(fn: () => void) {
+        this._listeners.add(fn)
+        return () => this._listeners.delete(fn)
+    }
 }
 
 // --- SHARED UI STATE ---

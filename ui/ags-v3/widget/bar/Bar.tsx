@@ -169,7 +169,7 @@ function SystemMenuOverlay() {
   menuBox.append(sep())
   menuBox.append(makeRow(Icons.logOut, t("bar.system-menu.logout"), true, () =>
     showConfirm(Icons.logOut, t("bar.system-menu.confirm.logout"), t("bar.system-menu.confirm.action.logout"), true,
-      () => closeAndRun(["hyprctl", "dispatch", "exit"]))
+      () => closeAndRun(["uwsm", "stop"]))
   ))
   menuBox.append(makeRow(Icons.rotateCcw, t("bar.system-menu.restart"), false, () =>
     showConfirm(Icons.rotateCcw, t("bar.system-menu.confirm.restart"), t("bar.system-menu.confirm.action.restart"), false,

@@ -2,6 +2,7 @@ import GObject from "gi://GObject"
 import { Astal, Gtk, Gdk } from "ags/gtk4"
 import AstalHyprland from "gi://AstalHyprland"
 import GLib from "gi://GLib"
+import { execAsync } from "ags/process"
 // @ts-ignore
 import Pango from "gi://Pango"
 import app from "ags/gtk4/app"
@@ -295,7 +296,7 @@ export default function WorkspaceOverview(monitor: any) {
         const btn = new Gtk.Button({ child: itemBox, css_classes: ["wo-btn"] })
         btn.set_focus_on_click(false) 
         btn.connect("clicked", () => {
-            hyprland.dispatch("workspace", i.toString())
+            execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ workspace = ${i}})`]).catch(console.error)
             status.overview_open = false
         })
 

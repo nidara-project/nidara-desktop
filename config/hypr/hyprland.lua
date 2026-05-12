@@ -95,13 +95,17 @@ hl.config({
 
 
 -- ── Animations ────────────────────────────────────────────────────────────────
-hl.curve("myBezier", { type = "bezier", points = { {0.05, 0.9}, {0.1, 1.05} } })
+hl.curve("myBezier",  { type = "bezier", points = { {0.05, 0.9}, {0.1, 1.05} } })
+hl.curve("easeOut",   { type = "bezier", points = { {0.0,  0.0}, {0.2,  1.0} } })
 
 hl.animation({ leaf = "windows",    enabled = true,  speed = 7,  bezier = "myBezier" })
 hl.animation({ leaf = "windowsOut", enabled = true,  speed = 4,  bezier = "default", style = "popin 80%" })
 hl.animation({ leaf = "border",     enabled = true,  speed = 10, bezier = "default" })
-hl.animation({ leaf = "fade",       enabled = false, speed = 5,  bezier = "default" })
-hl.animation({ leaf = "workspaces", enabled = true,  speed = 6,  bezier = "default" })
+hl.animation({ leaf = "fade",          enabled = true, speed = 4,   bezier = "easeOut" })
+hl.animation({ leaf = "layers",        enabled = true, speed = 3,   bezier = "easeOut" })
+hl.animation({ leaf = "layersIn",      enabled = true, speed = 3,   bezier = "easeOut", style = "fade" })
+hl.animation({ leaf = "layersOut",     enabled = true, speed = 2,   bezier = "easeOut", style = "fade" })
+hl.animation({ leaf = "workspaces",    enabled = true, speed = 6,   bezier = "default" })
 
 
 -- ── Crystal Shell startup ─────────────────────────────────────────────────────
@@ -206,7 +210,7 @@ hl.window_rule({
 
 -- ── Layer rules ───────────────────────────────────────────────────────────────
 hl.layer_rule({ match = { namespace = "crystal-bar" },      blur = true, ignore_alpha = 0.05  })
-hl.layer_rule({ match = { namespace = "crystal-dock" },     blur = true, ignore_alpha = 0.04  })
+hl.layer_rule({ match = { namespace = "crystal-dock" },     blur = true, ignore_alpha = 0.04, no_anim = true })
 hl.layer_rule({ match = { namespace = "notif-win" },        blur = true, ignore_alpha = 0.001 })
 hl.layer_rule({ match = { namespace = "crystal-launcher" }, blur = true, ignore_alpha = 0.001 })
 hl.layer_rule({ match = { namespace = "crystal-lock" },     blur = true, ignore_alpha = 0.3   })

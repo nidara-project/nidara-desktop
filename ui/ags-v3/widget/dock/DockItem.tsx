@@ -12,7 +12,7 @@ import Cairo from "gi://cairo"
 import appService from "../../core/AppService" // Ensure import path is correct relative to this file
 import { DOCK_CONSTANTS } from "./DockPhysics"
 
-import { dragBus, mouseBus, dockSettings, changeMenuCount, menuState } from "./state"
+import { dragBus, mouseBus, pointerBus, dockSettings, changeMenuCount, menuState } from "./state"
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
 
@@ -69,6 +69,7 @@ export function Separator(id: string, updateDock: () => void, register: (id: str
         targetMargin: 0, currentMargin: 0, velocityMargin: 0,
         targetHeight: DOCK_CONSTANTS.SEPARATOR_HEIGHT, currentHeight: DOCK_CONSTANTS.SEPARATOR_HEIGHT, velocityHeight: 0,
         targetTranslateY: 0, currentTranslateY: 0, velocityY: 0,
+        currentSlideX: 0, targetSlideX: 0, velocitySlideX: 0,
         staticCenter: 0,
         virtualCenter: 0,
         isSeparator: true,
@@ -345,6 +346,7 @@ export function DockItem(
         targetMargin: DOCK_CONSTANTS.ICON_MARGIN, currentMargin: DOCK_CONSTANTS.ICON_MARGIN, velocityMargin: 0,
         targetHeight: DOCK_CONSTANTS.PILL_HEIGHT, currentHeight: DOCK_CONSTANTS.PILL_HEIGHT, velocityHeight: 0,
         targetTranslateY: 0, currentTranslateY: 0, velocityY: 0,
+        currentSlideX: 0, targetSlideX: 0, velocitySlideX: 0,
         staticCenter: 0,
         virtualCenter: 0,
         isSeparator: false,
@@ -584,7 +586,7 @@ export function DockItem(
                     let winTitle = hyprClient?.title || `${t("dock.menu.window-of")} ${appItem.name || "App"}`
                     if (winTitle.length > 35) winTitle = winTitle.substring(0, 32) + "..."
                     windowsSection.append(winTitle, addAction(() => {
-                        execAsync(`hyprctl dispatch focuswindow address:${cleanAddr}`).catch(print)
+                        execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ window = 'address:${cleanAddr}'})`]).catch(print)
                     }))
                 })
             }
@@ -594,7 +596,7 @@ export function DockItem(
                 addAction(() => {
                     state.addresses.forEach(addr => {
                         const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
-                        execAsync(`hyprctl dispatch closewindow address:${cleanAddr}`).catch(print)
+                        execAsync(["hyprctl", "dispatch", `hl.dsp.window.close({ window = 'address:${cleanAddr}'})`]).catch(print)
                     })
                 })
             )
@@ -618,22 +620,47 @@ export function DockItem(
     })
     iconBox.add_controller(rightClick)
 
-    // DRAG SOURCE
-    const source = new Gtk.DragSource({ actions: Gdk.DragAction.COPY | Gdk.DragAction.MOVE })
-    source.connect("prepare", (s, x, y) => {
-        s.set_icon(Gtk.WidgetPaintable.new(child), x, y)
-        dragBus.setDragging(cleanId || appId)
-        return (Gdk as any).ContentProvider.new_for_value(cleanId || rawId || appId)
+    // DRAG — long-press to enter drag mode, then move to reorder.
+    // Holding the icon for LONG_PRESS_MS ms makes it semi-transparent (drag ready);
+    // releasing before then is treated as a click. Pointer tracking for reorder
+    // preview is handled by Dock.tsx's window-level motion controller, not here.
+    let gestureIsDragging = false
+    let longPressTimer: number | null = null
+    const LONG_PRESS_MS = 400
+
+    const dragGesture = new Gtk.GestureDrag()
+    dragGesture.connect("drag-begin", () => {
+        if (longPressTimer !== null) { GLib.source_remove(longPressTimer); longPressTimer = null }
+        longPressTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, LONG_PRESS_MS, () => {
+            longPressTimer = null
+            if (dragBus.draggingId) return GLib.SOURCE_REMOVE  // another icon owns drag
+            gestureIsDragging = true
+            dragBus.setDragging(cleanId || appId)
+            return GLib.SOURCE_REMOVE
+        })
     })
-    source.connect("drag-end", () => {
-        dragBus.setDragging("")
-        dragBus.clearHover()
+    dragGesture.connect("drag-update", () => {
+        // No-op: reorder preview is driven by Dock.tsx motion events.
     })
-    itemBox.add_controller(source)
+    dragGesture.connect("drag-end", () => {
+        if (longPressTimer !== null) { GLib.source_remove(longPressTimer); longPressTimer = null }
+        // Always signal button-release so Dock.tsx sets isDndEnding and the spurious
+        // wl_pointer.leave that Hyprland emits after every click doesn't reset magnification.
+        pointerBus.emitButtonReleased()
+        if (gestureIsDragging) {
+            dragBus.setDragging("")
+            dragBus.clearHover()
+        }
+        // Defer flag reset so leftClick.released (fires in the same event batch) still
+        // sees gestureIsDragging = true and skips launching the app after a drag.
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { gestureIsDragging = false; return GLib.SOURCE_REMOVE })
+    })
+    iconBox.add_controller(dragGesture)
 
     // CLICK (Focus/Launch)
     const leftClick = new Gtk.GestureClick({ button: 1 })
     leftClick.connect("released", () => {
+        if (gestureIsDragging) return  // Button release after a drag — not a click
         if (addresses.length > 0) {
             const focusedAddr = hypr.focusedClient?.address
             const idx = addresses.indexOf(focusedAddr || "")
@@ -641,7 +668,7 @@ export function DockItem(
             let target = addresses[nextIdx]
             if (target) {
                 if (!target.startsWith("0x")) target = "0x" + target
-                execAsync(`hyprctl dispatch focuswindow address:${target}`).catch(print)
+                execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ window = 'address:${target}'})`]).catch(print)
             }
         } else {
             // Fallback or Launch

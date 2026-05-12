@@ -173,4 +173,24 @@ export function springStep(ch: SpringChannel, dt: number): boolean {
     return true;
 }
 
+/**
+ * Faster spring for reorder slide animation — critically damped so it settles
+ * quickly (~250 ms) without overshoot.
+ */
+export function slideSpringStep(ch: SpringChannel, dt: number): boolean {
+    const STIFFNESS = 700
+    const DAMPING   = 53   // ≈ 2√700 → critically damped
+
+    const delta  = ch.target - ch.current
+    if (Math.abs(delta) < 0.5 && Math.abs(ch.velocity) < 1.0) {
+        ch.current = ch.target
+        ch.velocity = 0
+        return false
+    }
+    const force = STIFFNESS * delta - DAMPING * ch.velocity
+    ch.velocity += force * dt
+    ch.current  += ch.velocity * dt
+    return true
+}
+
 
