@@ -82,6 +82,9 @@ settings_addr.txt
 crystal-settings.conf
 crystal-monitor.conf
 hyprland-user.conf
+crystal-settings.lua
+crystal-monitor.lua
+hyprland-user.lua
 
 # Generated CSS (kept in repo as pre-compiled convenience for users)
 # ui/ags-v3/style.css  ← intentionally NOT ignored

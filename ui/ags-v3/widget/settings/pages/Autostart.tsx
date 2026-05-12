@@ -6,7 +6,11 @@ import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 
 // ── Config path ───────────────────────────────────────────────────────────────
-const USER_CONF = `${GLib.get_home_dir()}/.config/hypr/hyprland-user.conf`
+const USER_CONF = `${GLib.get_home_dir()}/.config/hypr/hyprland-user.lua`
+
+// Markers that delimit the UI-managed autostart block inside hyprland-user.lua
+const AUTOSTART_BEGIN = "-- @autostart start"
+const AUTOSTART_END   = "-- @autostart end"
 
 // ── Parsing ───────────────────────────────────────────────────────────────────
 
@@ -22,13 +26,18 @@ const readConf = (): string => {
 }
 
 const parseEntries = (content: string): AutostartEntry[] => {
-    return content.split("\n")
+    const lines = content.split("\n")
+    const start = lines.findIndex(l => l.trim() === AUTOSTART_BEGIN)
+    const end   = lines.findIndex(l => l.trim() === AUTOSTART_END)
+    if (start === -1 || end === -1) return []
+
+    return lines.slice(start + 1, end)
         .map(line => {
             const stripped = line.trim()
-            const active = stripped.match(/^exec-once\s*=\s*(.+)/)
-            if (active) return { command: active[1].trim(), enabled: true }
-            const disabled = stripped.match(/^# ?exec-once\s*=\s*(.+)/)
-            if (disabled) return { command: disabled[1].trim(), enabled: false }
+            const active   = stripped.match(/^hl\.exec_cmd\(["'](.+)["']\)/)
+            if (active)   return { command: active[1],   enabled: true }
+            const disabled = stripped.match(/^--\s*hl\.exec_cmd\(["'](.+)["']\)/)
+            if (disabled) return { command: disabled[1], enabled: false }
             return null
         })
         .filter(Boolean) as AutostartEntry[]
@@ -38,24 +47,29 @@ const parseEntries = (content: string): AutostartEntry[] => {
 
 const writeEntries = (newEntries: AutostartEntry[]) => {
     const content = readConf()
-    const lines = content.split("\n")
+    const lines   = content.split("\n")
+    const start   = lines.findIndex(l => l.trim() === AUTOSTART_BEGIN)
+    const end     = lines.findIndex(l => l.trim() === AUTOSTART_END)
 
-    // Remove existing exec-once lines (enabled and disabled)
-    const filtered = lines.filter(line => {
-        const stripped = line.trim()
-        return !stripped.match(/^exec-once\s*=/) && !stripped.match(/^#\s*exec-once\s*=/)
-    })
+    const block = [
+        AUTOSTART_BEGIN,
+        'hl.on("hyprland.start", function()',
+        ...newEntries.map(e =>
+            e.enabled
+                ? `    hl.exec_cmd("${e.command}")`
+                : `    -- hl.exec_cmd("${e.command}")`
+        ),
+        "end)",
+        AUTOSTART_END,
+    ]
 
-    // Append the new entries
-    const entryLines = newEntries.map(e =>
-        e.enabled ? `exec-once = ${e.command}` : `# exec-once = ${e.command}`
-    )
-
-    const result = [...filtered, ...entryLines].join("\n")
+    const result = start !== -1 && end !== -1
+        ? [...lines.slice(0, start), ...block, ...lines.slice(end + 1)]
+        : [...lines, "", ...block]
 
     try {
         Gio.File.new_for_path(USER_CONF).replace_contents(
-            new TextEncoder().encode(result),
+            new TextEncoder().encode(result.join("\n")),
             null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null
         )
     } catch (e) {

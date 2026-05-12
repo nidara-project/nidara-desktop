@@ -281,10 +281,10 @@ export default {
     "settings.audio.label.sin-apps": "No apps playing audio",
 
     // Autostart
-    "settings.autostart.group.entradas-exec-once-en-hyprland-user-conf": "exec-once entries in hyprland-user.conf",
+    "settings.autostart.group.entradas-exec-once-en-hyprland-user-conf": "Startup entries in hyprland-user.lua",
     "settings.autostart.label.anadir": "Add",
     "settings.autostart.label.los-cambios-se-aplican-la-proxima-vez-qu": "Changes apply the next time Hyprland starts.",
-    "settings.autostart.label.sin-entradas-exec-once-en-hyprland-user-": "No exec-once entries in hyprland-user.conf",
+    "settings.autostart.label.sin-entradas-exec-once-en-hyprland-user-": "No startup entries in hyprland-user.lua",
     "settings.autostart.page.subtitle.programas-que-se-inician-con-hyprland": "Programs that start with Hyprland",
     "settings.autostart.page.title.inicio-automatico": "Autostart",
     "settings.autostart.tooltip.eliminar": "Remove",
@@ -325,7 +325,7 @@ export default {
     "settings.display.page.title.pantalla": "Display",
     "settings.display.row.desc.factor-de-escala-de-la-pantalla": "Display scale factor",
     "settings.display.row.desc.identificador-del-monitor": "Monitor identifier",
-    "settings.display.row.desc.los-cambios-se-aplican-en-vivo-pero-no-p": "Changes apply live but won't persist. Add them to hyprland-user.conf to make them permanent.",
+    "settings.display.row.desc.los-cambios-se-aplican-en-vivo-pero-no-p": "Changes apply live but won't persist. Add them to hyprland-user.lua to make them permanent.",
     "settings.display.row.desc.modo-actual": "Current mode",
     "settings.display.row.desc.orientacion-de-la-pantalla": "Screen orientation",
     "settings.display.row.desc.tasa-de-refresco-variable-requiere-panta": "Variable refresh rate (requires compatible display)",
