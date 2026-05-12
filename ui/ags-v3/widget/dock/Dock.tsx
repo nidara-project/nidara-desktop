@@ -1440,7 +1440,7 @@ export default function Dock(gdkmonitor: any) {
         try {
             Gtk4LayerShell.set_namespace(win, "crystal-dock");
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP);
-            Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND);
+            Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE);
 
             if (isVertical) {
                 Gtk4LayerShell.set_anchor(win, sideEdge, true);
