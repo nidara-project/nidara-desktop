@@ -758,7 +758,7 @@ export default function Dock(gdkmonitor: any) {
 
         clearLeaveTimeout()
 
-        if (dragBus.draggingId) {
+        if (dragBus.draggingId || isDndEnding) {
             updateAllTargets(x)
             return
         }
