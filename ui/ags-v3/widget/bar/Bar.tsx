@@ -283,6 +283,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const barBox = new Gtk.CenterBox({ css_classes: ["bar-centerbox"], height_request: 40, valign: Gtk.Align.START, margin_start: 8, margin_end: 8 })
 
   // ── Inline expansion panel ─────────────────────────────────────────────────
+  const OVERFLOW_ID = "__overflow"
+  let overflowContentBuilder: ((onClose: () => void) => Gtk.Widget) | null = null
+  // Measurement cache — populated after first layout; used to cap visible icons
+  let cachedMaxIcons: number | null = null
   const capsuleRefs = new Map<string, Gtk.Widget>()
   const expansionInner = new Gtk.Box({ margin_top: 10, margin_bottom: 10, margin_start: 14, margin_end: 14 })
   const expansionCapsule = SquircleContainer({
@@ -408,16 +412,23 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   // ── Bar expansion show/hide ────────────────────────────────────────────────
   const showExpansion = (id: string) => {
-      const w = registry.get(id)
-      if (!w?.buildBarExpanded) return
-      // Replace content
+      const onClose = () => { status.bar_expanded_id = "" }
+      let content: Gtk.Widget | undefined
+      if (id === OVERFLOW_ID) {
+          if (!overflowContentBuilder) return
+          content = overflowContentBuilder(onClose)
+      } else {
+          const w = registry.get(id)
+          if (!w?.buildBarExpanded) return
+          content = w.buildBarExpanded(onClose)
+      }
       let c = expansionInner.get_first_child()
       while (c) { const n = c.get_next_sibling(); expansionInner.remove(c); c = n }
-      expansionInner.append(w.buildBarExpanded(() => { status.bar_expanded_id = "" }))
+      expansionInner.append(content)
       expansionCapsule.visible = true
-      // Position centered under the capsule after one layout pass
+      // Position centered under the capsule (hidden widgets fall back to overflow capsule)
       GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1, () => {
-          const capsule = capsuleRefs.get(id)
+          const capsule = capsuleRefs.get(id) ?? capsuleRefs.get(OVERFLOW_ID)
           if (!capsule) return GLib.SOURCE_REMOVE
           const iconAlloc = capsule.get_allocation()
           if (iconAlloc.width <= 1) return GLib.SOURCE_REMOVE
@@ -490,39 +501,96 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   // Optional bar widgets (before Tray, reactive to config changes)
   const optWidgets = new Gtk.Box({ css_classes: ["bar-optional-widgets"], spacing: 8 })
+
+  const getMaxIcons = (): number => cachedMaxIcons ?? Infinity
+
+  const buildOverflowList = (hiddenIds: string[]): Gtk.Widget => {
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
+    for (const id of hiddenIds) {
+      const w = registry.get(id)
+      if (!w) continue
+      const hasExpand = !!w.buildBarExpanded
+      const hasCCDetail = !!w.buildCCDetail
+      const row = new Gtk.Box({ spacing: 10 })
+      row.append(new Gtk.Image({ gicon: w.icon, pixel_size: 16, css_classes: ["cs-icon"] }))
+      row.append(new Gtk.Label({ label: w.name, halign: Gtk.Align.START, hexpand: true }))
+      const btn = new Gtk.Button({ child: row, css_classes: ["clip-entry-btn"], hexpand: true })
+      btn.connect("clicked", () => {
+        if (hasExpand) {
+          status.bar_expanded_id = id
+        } else if (hasCCDetail) {
+          status.bar_expanded_id = ""
+          status.cc_open = true
+          status.cc_detail_id = id
+        }
+      })
+      box.append(btn)
+    }
+    return box
+  }
+
   const rebuildBarWidgets = () => {
     if (status.bar_expanded_id) status.bar_expanded_id = ""
     capsuleRefs.clear()
+    overflowContentBuilder = null
     let child = optWidgets.get_first_child()
     while (child) { const n = child.get_next_sibling(); optWidgets.remove(child); child = n }
-    for (const id of widgetConfig.barWidgetIds()) {
+
+    const allIds = widgetConfig.barWidgetIds()
+    const maxIcons = getMaxIcons()
+    const needsOverflow = allIds.length > maxIcons
+    // Reserve 1 slot for the overflow capsule itself when overflow is needed
+    const visibleCount = needsOverflow ? Math.max(0, maxIcons - 1) : allIds.length
+    const visibleIds = allIds.slice(0, visibleCount)
+    const hiddenIds = allIds.slice(visibleCount)
+
+    for (const id of visibleIds) {
       const w = registry.get(id)
-      if (w?.buildBarContent) {
-        const hasExpand = !!w.buildBarExpanded
-        const hasCCDetail = !!w.buildCCDetail
-        const onRelease = hasExpand
-            ? () => { if (status.cc_open) return; status.bar_expanded_id = status.bar_expanded_id === id ? "" : id }
-            : hasCCDetail
-                ? () => { if (status.cc_open) return; status.cc_open = true; status.cc_detail_id = id }
-                : undefined
-        const capsule = SquircleContainer({
-            child: w.buildBarContent(), gloss: true, useShellOpacity: true,
-            borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true,
-            hoverAlpha: onRelease ? 0.06 : undefined,
-        })
-        if (onRelease) {
-            // BUBBLE + released: child buttons claim on press → deny this gesture → released
-            // never fires when a button is clicked; fires only for neutral-area taps.
-            const g = new Gtk.GestureClick()
-            g.connect("released", onRelease)
-            capsule.add_controller(g)
-        }
-        if (hasExpand) capsuleRefs.set(id, capsule)
-        optWidgets.append(capsule)
+      if (!w?.buildBarContent) continue
+      const hasExpand = !!w.buildBarExpanded
+      const hasCCDetail = !!w.buildCCDetail
+      const onRelease = hasExpand
+          ? () => { if (status.cc_open) return; status.bar_expanded_id = status.bar_expanded_id === id ? "" : id }
+          : hasCCDetail
+              ? () => { if (status.cc_open) return; status.cc_open = true; status.cc_detail_id = id }
+              : undefined
+      const capsule = SquircleContainer({
+          child: w.buildBarContent(), gloss: true, useShellOpacity: true,
+          borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true,
+          hoverAlpha: onRelease ? 0.06 : undefined,
+      })
+      if (onRelease) {
+          // BUBBLE + released: child buttons claim on press → deny this gesture → released
+          // never fires when a button is clicked; fires only for neutral-area taps.
+          const g = new Gtk.GestureClick()
+          g.connect("released", onRelease)
+          capsule.add_controller(g)
       }
+      if (hasExpand) capsuleRefs.set(id, capsule)
+      optWidgets.append(capsule)
+    }
+
+    if (hiddenIds.length > 0) {
+      overflowContentBuilder = () => buildOverflowList(hiddenIds)
+      const overflowLabel = new Gtk.Label({ label: "···", css_classes: ["bar-overflow-label"], margin_start: 12, margin_end: 12 })
+      const overflowCapsule = SquircleContainer({
+          child: overflowLabel, gloss: true, useShellOpacity: true,
+          borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, hoverAlpha: 0.06,
+      })
+      const g = new Gtk.GestureClick()
+      g.connect("released", () => {
+          if (status.cc_open) return
+          status.bar_expanded_id = status.bar_expanded_id === OVERFLOW_ID ? "" : OVERFLOW_ID
+      })
+      overflowCapsule.add_controller(g)
+      capsuleRefs.set(OVERFLOW_ID, overflowCapsule)
+      optWidgets.append(overflowCapsule)
     }
   }
-  widgetConfig.connect("changed", rebuildBarWidgets)
+  widgetConfig.connect("changed", () => {
+      rebuildBarWidgets()  // rebuild with all icons first (cachedMaxIcons may be stale)
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { measureOverflow(); return GLib.SOURCE_REMOVE })
+  })
   rebuildBarWidgets()
 
   right.append(optWidgets)
@@ -552,10 +620,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   trayInner.connect("notify::visible", () => trayCapsule.set_visible(trayInner.get_visible()))
   trayCapsule.set_visible(trayInner.get_visible())
   right.append(trayCapsule)
-  right.append(SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
+  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  right.append(searchCapsule)
   const ccBtn = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.settings2, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
   right.append(ccBtn)
-  right.append(SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true }))
+  const timeCapsule = SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  right.append(timeCapsule)
 
   barBox.set_start_widget(left); barBox.set_center_widget(center); barBox.set_end_widget(right)
 
@@ -598,11 +668,48 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       return GLib.SOURCE_REMOVE
   })
   
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
-      win.present()
-      win.set_opacity(1)
-      return GLib.SOURCE_REMOVE
-  })
+  // Present invisible → measure → show, so the bar is never visible with a wrong layout.
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => { win.present(); return GLib.SOURCE_REMOVE })
+
+  // Measure actual available space and greedy-fill icons; rebuild if overflow needed.
+  // Uses measure() (natural/preferred width) instead of get_width() (allocated width)
+  // so that a squished/overflowed bar state doesn't fool the calculation.
+  const measureOverflow = () => {
+      const natW = (w: Gtk.Widget) => w.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+
+      const iconWidths: number[] = []
+      let c: Gtk.Widget | null = optWidgets.get_first_child()
+      while (c) { iconWidths.push(natW(c)); c = c.get_next_sibling() }
+      if (iconWidths.length === 0) return
+
+      const spacing = 8
+      const fixedCapsules: Gtk.Widget[] = [recCapsule, trayCapsule, searchCapsule, ccBtn, timeCapsule]
+      const fixedW = fixedCapsules.reduce((s, w) => s + (w.get_visible() ? natW(w) + spacing : 0), 0)
+      // Budget = space available to optWidgets before the right side would overlap the
+      // workspace capsule. The workspace is centered, so each side gets at most:
+      //   (monGeo.width - 16(bar margins) - workspace_nat) / 2
+      // minus fixedW, minus the barBox margin_end (8px).
+      const workspaceNat = natW(center)
+      const budget = (monGeo.width - 16 - workspaceNat) / 2 - fixedW
+
+      let total = 0
+      let fitsCount = 0
+      for (let i = 0; i < iconWidths.length; i++) {
+          const cost = i === 0 ? iconWidths[i] : iconWidths[i] + spacing
+          if (total + cost > budget) break
+          total += cost
+          fitsCount++
+      }
+
+      cachedMaxIcons = fitsCount
+      if (widgetConfig.barWidgetIds().length > fitsCount) {
+          rebuildBarWidgets()
+      }
+  }
+  // Measure after first layout pass (bar realized but still invisible)
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 220, () => { measureOverflow(); return GLib.SOURCE_REMOVE })
+  // Show only after measurement+rebuild have had time to take effect
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => { win.set_opacity(1); return GLib.SOURCE_REMOVE })
 
   return win
 }

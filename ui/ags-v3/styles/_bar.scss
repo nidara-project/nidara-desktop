@@ -294,6 +294,13 @@
     letter-spacing: 0.05em;
 }
 
+.bar-overflow-label {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--crystal-text);
+    letter-spacing: 0.04em;
+}
+
 @keyframes rec-pulse {
     0%, 100% { opacity: 1; }
     50%       { opacity: 0.3; }
