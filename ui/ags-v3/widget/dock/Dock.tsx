@@ -1397,6 +1397,11 @@ export default function Dock(gdkmonitor: any) {
             if (!tickId) runUnifiedTick()
             if (!skipTargets) updateAllTargets(lastMousePos, false)
             updateSize()
+            // Re-assert exclusive zone after every widget-tree reconciliation.
+            // Hyprland may briefly clear it when the layer surface commits a new buffer.
+            if (layerShellReady && !isVertical && !dockSettings.autoHide) {
+                Gtk4LayerShell.set_exclusive_zone(win, DOCK_CONSTANTS.EXCLUSIVE_ZONE)
+            }
             return bar
         } catch (e) {
             console.error("[Dock] Update error:", e)
