@@ -548,7 +548,7 @@ export function DockItem(
             mainSection.append(t("dock.menu.open"), addAction(() => appItem.launch()))
         } else if (appId === "home-shortcut" || appId === "special:home") {
             mainSection.append(t("dock.menu.open"), addAction(() => {
-                execAsync(["uwsm", "app", "--", "sh", "-c", appService.getDefaultFileManagerCommand()]).catch(print)
+                execAsync(["uwsm", "app", "--", "xdg-open", GLib.get_home_dir()]).catch(print)
             }))
         } else if (appId === "trash" || appId === "special:trash") {
             mainSection.append(t("dock.menu.open"), addAction(() => appItem.launch()))
@@ -715,21 +715,14 @@ export function DockItem(
 
                 // V149: UNIVERSAL HOME ISOLATION (Left Click) 🛰️
                 if (appId === "special:home" || appId === "home-shortcut") {
-                    const command = appService.getDefaultFileManagerCommand()
-                    execAsync(["uwsm", "app", "--", "sh", "-c", command]).catch(print)
+                    execAsync(["uwsm", "app", "--", "xdg-open", GLib.get_home_dir()]).catch(print)
                 } else if (appId === "crystal-shell-settings") {
                     ;(globalThis as any).toggleSettings?.()
                 } else {
-                    try {
-                        // Igualar lógica robusta del AppGrid
-                        const realInfo = appService.getAppInfo(appId || (appItem as any).executable)
-                        const rawCommand = realInfo?.get_commandline() || (appItem as any).executable || ""
-                        const command = rawCommand.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
-                        if (!command) { appItem.launch() }
-                        else { execAsync(["uwsm", "app", "--", "sh", "-c", command]).catch(() => appItem.launch()) }
-                    } catch (e) {
-                        try { appItem.launch() } catch (e2) { execAsync(["uwsm", "app", "--", "gtk-launch", appId]).catch(print) }
-                    }
+                    // gtk-launch reads the .desktop file directly — no CWD inheritance
+                    // from the AGS process (which runs from ui/ags-v3).
+                    execAsync(["uwsm", "app", "--", "gtk-launch", appId])
+                        .catch(() => { try { appItem.launch() } catch (_) {} })
                 }
             } catch (fallbackError) {
                 // If the entire block fails, don't crash the dock
