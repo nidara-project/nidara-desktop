@@ -644,10 +644,12 @@ export function DockItem(
     })
     dragGesture.connect("drag-end", () => {
         if (longPressTimer !== null) { GLib.source_remove(longPressTimer); longPressTimer = null }
-        // Always signal button-release so Dock.tsx sets isDndEnding and the spurious
-        // wl_pointer.leave that Hyprland emits after every click doesn't reset magnification.
-        pointerBus.emitButtonReleased()
         if (gestureIsDragging) {
+            // Signal Dock.tsx to set isDndEnding and suppress the Hyprland-emitted
+            // wl_pointer.leave that follows every drag-end. Regular clicks no longer
+            // need this: the two-stage leave timer (50ms de-magnify, then hideDelay hide)
+            // handles the leave→re-enter cycle correctly without blocking.
+            pointerBus.emitButtonReleased()
             dragBus.setDragging("")
             dragBus.clearHover()
         }

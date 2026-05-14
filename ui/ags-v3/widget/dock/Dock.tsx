@@ -1545,9 +1545,9 @@ export default function Dock(gdkmonitor: any) {
     status.connect("notify::overview-open", overlayRecovery)
 
 
-    // Any button release on a dock icon (click, long-press, or drag-end) emits this.
-    // Set isDndEnding for 700ms so the leaveTimeout callback skips setRevealed(false)
-    // even if the wl_pointer.leave arrived before we set the flag (same Wayland frame).
+    // Emitted only on real drag-end (not clicks). Set isDndEnding for 700ms so the
+    // leave handler and its callbacks skip setRevealed(false) while the drag cleanup
+    // is still in progress (wl_pointer.leave can arrive before drag-end in the same frame).
     const pConn = pointerBus.onButtonReleased(() => {
         isDndEnding = true
         GLib.timeout_add(GLib.PRIORITY_HIGH, 700, () => { isDndEnding = false; return GLib.SOURCE_REMOVE })
