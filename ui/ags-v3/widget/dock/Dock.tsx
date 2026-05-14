@@ -1558,16 +1558,23 @@ export default function Dock(gdkmonitor: any) {
         GLib.timeout_add(GLib.PRIORITY_HIGH, 700, () => { isDndEnding = false; return GLib.SOURCE_REMOVE })
     })
 
-    // When the context menu closes, de-magnify and restart the tick so icons spring
-    // back to rest. If cursor is no longer in the dock, also trigger hide.
+    // When the context menu closes, de-magnify and start a hide timer (same as a leave
+    // event). If the cursor is still inside the dock, the next motion/enter event cancels
+    // the timer via clearLeaveTimeout() — no special cursor-position check needed.
     const mConn = onMenuCountChanged((count) => {
         if (count !== 0) return
         updateAllTargets(-1000)
-        if (dockSettings.autoHide && !cursorInDock) {
-            setRevealed(false)
-            updateInputRegion(smoothedBarWidth)
-        }
         runUnifiedTick(true)
+        if (dockSettings.autoHide && isRevealed) {
+            clearLeaveTimeout()
+            leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, dockSettings.hideDelay, () => {
+                leaveTimeout = null
+                if (menuState.openCount > 0 || isDndEnding || dragBus.draggingId) return GLib.SOURCE_REMOVE
+                setRevealed(false)
+                updateInputRegion(smoothedBarWidth)
+                return GLib.SOURCE_REMOVE
+            })
+        }
     })
 
     const dConn = dragBus.subscribe((draggingId) => {
