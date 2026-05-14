@@ -210,9 +210,16 @@ export const menuState = {
     openCount: 0
 }
 
+const _menuCountListeners: Array<(count: number) => void> = []
+export function onMenuCountChanged(cb: (count: number) => void): () => void {
+    _menuCountListeners.push(cb)
+    return () => { const i = _menuCountListeners.indexOf(cb); if (i >= 0) _menuCountListeners.splice(i, 1) }
+}
+
 export function changeMenuCount(delta: number) {
     menuState.openCount += delta
     if (menuState.openCount < 0) menuState.openCount = 0
+    _menuCountListeners.forEach(cb => cb(menuState.openCount))
 }
 
 

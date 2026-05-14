@@ -10,7 +10,7 @@ import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
 import { DockItem, Separator, dismissActiveDockMenu } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
-import { hypr, appsService as apps, dragBus, mouseBus, pointerBus, savePinned, pinnedState, dockSettings, onDockSettingsChanged, menuState, dockSideState } from "./state"
+import { hypr, appsService as apps, dragBus, mouseBus, pointerBus, savePinned, pinnedState, dockSettings, onDockSettingsChanged, menuState, onMenuCountChanged, dockSideState } from "./state"
 import status from "../../core/Status"
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
@@ -800,14 +800,16 @@ export default function Dock(gdkmonitor: any) {
                 if (hideDelay > magnDelay) {
                     leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, hideDelay - magnDelay, () => {
                         leaveTimeout = null
-                        if (isDndEnding || dragBus.draggingId) return GLib.SOURCE_REMOVE
+                        if (isDndEnding || dragBus.draggingId || menuState.openCount > 0) return GLib.SOURCE_REMOVE
                         setRevealed(false)
                         updateInputRegion(smoothedBarWidth)
                         return GLib.SOURCE_REMOVE
                     })
                 } else {
-                    setRevealed(false)
-                    updateInputRegion(smoothedBarWidth)
+                    if (menuState.openCount === 0) {
+                        setRevealed(false)
+                        updateInputRegion(smoothedBarWidth)
+                    }
                 }
             }
             return GLib.SOURCE_REMOVE
@@ -1553,6 +1555,14 @@ export default function Dock(gdkmonitor: any) {
         GLib.timeout_add(GLib.PRIORITY_HIGH, 700, () => { isDndEnding = false; return GLib.SOURCE_REMOVE })
     })
 
+    // When the context menu closes, de-magnify and restart the tick so icons spring
+    // back to rest. The cursor is outside the dock at this point (user clicked away).
+    const mConn = onMenuCountChanged((count) => {
+        if (count !== 0) return
+        updateAllTargets(-1000)
+        runUnifiedTick(true)
+    })
+
     const dConn = dragBus.subscribe((draggingId) => {
         if (draggingId) {
             // Drag START — lock the dock open for the entire drag.
@@ -1638,6 +1648,7 @@ export default function Dock(gdkmonitor: any) {
         try { if (pConn) pConn() } catch (e) { }
         try { if (dConn) dConn() } catch (e) { }
         try { if (sConn) sConn() } catch (e) { }
+        try { if (mConn) mConn() } catch (e) { }
     })
 
     update()
