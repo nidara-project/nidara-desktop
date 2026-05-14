@@ -45,7 +45,7 @@ try {
 // Widget Imports
 import Dock from "./widget/dock/Dock"
 import { syncConstants } from "./widget/dock/DockPhysics"
-import { onDockSettingsChanged, onPinnedChanged } from "./widget/dock/state"
+import { onDockSettingsChanged, dockSettings } from "./widget/dock/state"
 import AppGrid from "./widget/app-grid/AppGrid"
 import Bar from "./widget/bar/Bar"
 import Settings from "./widget/settings/Settings"
@@ -119,20 +119,39 @@ app.start({
             rebuildTimer = null
             try {
               syncConstants()
+              // Collect old dock windows BEFORE creating the new one.
+              const oldDocks: any[] = []
               windows.forEach(w => {
-                if (w.name === "crystal-dock" && w.gdkmonitor === monitor) {
-                  windows.delete(w)
-                  w.close()
+                if (w.name === "crystal-dock" && (w as any).gdkmonitor === monitor) {
+                  oldDocks.push(w)
                 }
               })
+              // Create new dock first so its exclusive zone is established before
+              // the old window closes — prevents the gap where Hyprland briefly
+              // sees no exclusive zone and expands windows into the dock area.
               const newDock = Dock(monitor)
               windows.add(newDock)
+              // Now it is safe to close the old dock.
+              for (const w of oldDocks) {
+                windows.delete(w)
+                w.close()
+              }
             } catch (e) { console.error("[DockRebuild] Dock rebuild failed:", e) }
             return GLib.SOURCE_REMOVE
           })
         }
-        onDockSettingsChanged(scheduleDockRebuild)
-        onPinnedChanged(scheduleDockRebuild)
+        // Only rebuild when layer-shell anchors/mode actually change.
+        // All other settings (iconSize, screenGap, magnification, etc.) are applied
+        // in-place by Dock.tsx's internal onDockSettingsChanged listener.
+        let _prevPos = dockSettings.position
+        let _prevAutoHide = dockSettings.autoHide
+        onDockSettingsChanged((s) => {
+          if (s.position !== _prevPos || s.autoHide !== _prevAutoHide) {
+            _prevPos = s.position
+            _prevAutoHide = s.autoHide
+            scheduleDockRebuild()
+          }
+        })
 
         // Settings deferred to toggleSettings (Lazy)
         initWinGlobal(AppGrid, monitor, appLauncherWindows)

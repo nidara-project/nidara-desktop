@@ -5,12 +5,12 @@ import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
-import { calculateDockItemMetrics, DOCK_CONSTANTS, springStep, slideSpringStep } from "./DockPhysics"
+import { calculateDockItemMetrics, DOCK_CONSTANTS, syncConstants, springStep, slideSpringStep } from "./DockPhysics"
 import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
 import { DockItem, Separator, dismissActiveDockMenu } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
-import { hypr, appsService as apps, dragBus, mouseBus, pointerBus, savePinned, pinnedState, dockSettings, menuState, dockSideState } from "./state"
+import { hypr, appsService as apps, dragBus, mouseBus, pointerBus, savePinned, pinnedState, dockSettings, onDockSettingsChanged, menuState, dockSideState } from "./state"
 import status from "../../core/Status"
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
@@ -317,6 +317,11 @@ export default function Dock(gdkmonitor: any) {
     // regardless of which leave handler path fires.
     let dndActive = false
 
+    // Suppresses reveal from spurious pointer-enter events that Wayland fires when a
+    // new window appears under the cursor (before the input region is restricted to the
+    // 4px trigger strip). Cleared in the realize handler once the region is applied.
+    let isSettlingIn = dockSettings.autoHide
+
     const setRevealed = (reveal: boolean) => {
         if (isRevealed === reveal) return
         if (!reveal && dndActive) return  // Never hide dock during DnD
@@ -548,10 +553,10 @@ export default function Dock(gdkmonitor: any) {
                 if (isVertical) {
                     if (layerShellReady) Gtk4LayerShell.set_margin(win, sideEdge, -offset)
                 } else {
-                    const mb = dockSettings.screenGap - offset
-                    if (shim.margin_bottom !== mb) shim.margin_bottom = mb
-                    if (da.margin_bottom !== mb) da.margin_bottom = mb
+                    if (layerShellReady) Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, -offset)
                 }
+                // Update input region during slide so trigger strip activates once 80% hidden.
+                updateInputRegion(smoothedBarWidth)
                 active = true
             } else if (slideCurrent !== slideTarget) {
                 slideCurrent = slideTarget
@@ -559,10 +564,9 @@ export default function Dock(gdkmonitor: any) {
                 if (isVertical) {
                     if (layerShellReady) Gtk4LayerShell.set_margin(win, sideEdge, -Math.round(slideTarget))
                 } else {
-                    const mb = dockSettings.screenGap - Math.round(slideTarget)
-                    shim.margin_bottom = mb
-                    da.margin_bottom = mb
+                    if (layerShellReady) Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, -Math.round(slideTarget))
                 }
+                updateInputRegion(smoothedBarWidth)
             }
 
             if (!active) {
@@ -662,7 +666,7 @@ export default function Dock(gdkmonitor: any) {
         // immediately a wl_pointer.enter (cursor never actually left). Without this, the
         // leaveTimeout would fire 500ms later and slide the dock away.
         clearLeaveTimeout()
-        if (dockSettings.autoHide && !isRevealed) {
+        if (dockSettings.autoHide && !isRevealed && !isSettlingIn) {
             setRevealed(true)
             updateInputRegion(smoothedBarWidth)
         }
@@ -697,10 +701,18 @@ export default function Dock(gdkmonitor: any) {
         }
 
         // When auto-hide is on and dock is hidden, expose only a thin strip at
-        // the very bottom of the window (= screen edge) so the mouse can trigger reveal.
-        if (dockSettings.autoHide && !isRevealed && slideTarget > 0) {
+        // the screen edge. The window is pushed down by initialHideTarget px so the
+        // screen edge falls at y = WINDOW_HEIGHT - initialHideTarget in window coords.
+        //
+        // Only activate the trigger strip once the dock is ≥80% hidden. During the
+        // early part of the hide animation the strip sits in the overflow zone above the
+        // pill in screen-space, so a cursor moving upward would pass through it and
+        // immediately re-reveal the dock — cancelling the hide and keeping icons magnified.
+        if (dockSettings.autoHide && !isRevealed && slideTarget > 0
+                && slideCurrent >= initialHideTarget * 0.8) {
+            const triggerY = DOCK_CONSTANTS.WINDOW_HEIGHT - Math.round(initialHideTarget) - 4
             // @ts-ignore
-            region.unionRectangle({ x: 0, y: DOCK_CONSTANTS.WINDOW_HEIGHT - 4, width: dockMonitorWidth, height: 4 })
+            region.unionRectangle({ x: 0, y: triggerY, width: dockMonitorWidth, height: 4 })
             surface.set_input_region(region)
             return
         }
@@ -731,8 +743,8 @@ export default function Dock(gdkmonitor: any) {
 
     win.add_controller(motion)
     motion.connect("motion", (controller, x, y) => {
-        // Auto-hide: reveal dock on any mouse entry
-        if (dockSettings.autoHide && !isRevealed) {
+        // Auto-hide: reveal dock on any mouse entry (skip spurious events before realize)
+        if (dockSettings.autoHide && !isRevealed && !isSettlingIn) {
             setRevealed(true)
             updateInputRegion(smoothedBarWidth)
         }
@@ -776,7 +788,7 @@ export default function Dock(gdkmonitor: any) {
         clearLeaveTimeout()
         const magnDelay = 50
         const hideDelay = dockSettings.autoHide ? Math.max(magnDelay, dockSettings.hideDelay) : magnDelay
-        leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, hideDelay, () => {
+        leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, magnDelay, () => {
             leaveTimeout = null
             // Re-check: a drag-end or click may have set isDndEnding AFTER the leave event
             // fired (Wayland can include wl_pointer.leave before wl_pointer.button.released
@@ -785,8 +797,18 @@ export default function Dock(gdkmonitor: any) {
             if (isDndEnding || dragBus.draggingId) return GLib.SOURCE_REMOVE
             updateAllTargets(-1000)
             if (dockSettings.autoHide) {
-                setRevealed(false)
-                updateInputRegion(smoothedBarWidth)
+                if (hideDelay > magnDelay) {
+                    leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, hideDelay - magnDelay, () => {
+                        leaveTimeout = null
+                        if (isDndEnding || dragBus.draggingId) return GLib.SOURCE_REMOVE
+                        setRevealed(false)
+                        updateInputRegion(smoothedBarWidth)
+                        return GLib.SOURCE_REMOVE
+                    })
+                } else {
+                    setRevealed(false)
+                    updateInputRegion(smoothedBarWidth)
+                }
             }
             return GLib.SOURCE_REMOVE
         })
@@ -1466,19 +1488,20 @@ export default function Dock(gdkmonitor: any) {
             const exclusiveZone = (dockSettings.autoHide || isVertical) ? 0 : DOCK_CONSTANTS.EXCLUSIVE_ZONE
             Gtk4LayerShell.set_exclusive_zone(win, exclusiveZone)
 
-            // Apply initial hidden position immediately so the dock doesn't flash visible
+            // Slide window to hidden position before first paint. Using set_margin on the
+            // window avoids GTK widget negative-margin issues (same mechanism as vertical dock).
             if (dockSettings.autoHide) {
                 if (isVertical) {
                     Gtk4LayerShell.set_margin(win, sideEdge, -(WIN_W - 4))
+                } else {
+                    Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, -Math.round(initialHideTarget))
                 }
-                // Horizontal initial hide is handled via margin_bottom in the tick
             }
 
             // Publish side width so CC/NC/Popups offset themselves
             if (isVertical) dockSideState.update(dockSettings.position, WIN_W)
 
             win.connect("realize", () => {
-                // V300: Delegate to surgical updateInputRegion on realize
                 if (orderedIds.length > 0) {
                     let total = 0
                     orderedIds.forEach(id => {
@@ -1489,6 +1512,14 @@ export default function Dock(gdkmonitor: any) {
                 } else {
                     updateInputRegion(totalStaticWidth)
                 }
+                // Defer clearing isSettlingIn so spurious Wayland pointer-enter events
+                // (sent by the compositor when the new window appears under the cursor)
+                // are still suppressed. realize fires synchronously inside win.present(),
+                // before the compositor's events reach the GLib event loop.
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
+                    isSettlingIn = false
+                    return GLib.SOURCE_REMOVE
+                })
             })
         } catch (e) { console.error(e) }
     }
@@ -1578,6 +1609,26 @@ export default function Dock(gdkmonitor: any) {
         }
     })
 
+    // In-place settings update — no dock rebuild needed for most settings.
+    // position/autoHide require layer-shell reconfiguration and are handled by app.ts.
+    const sConn = onDockSettingsChanged(() => {
+        syncConstants()
+        win.set_size_request(WIN_W, DOCK_CONSTANTS.WINDOW_HEIGHT)
+        if (!isVertical) {
+            da.height_request = DOCK_CONSTANTS.PILL_HEIGHT
+            shim.height_request = DOCK_CONSTANTS.PILL_HEIGHT
+            // Re-sync window position so the dock stays at its correct hidden/visible
+            // position after settings change (layer margin, not widget margin).
+            if (layerShellReady) {
+                Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.BOTTOM, -Math.round(slideCurrent))
+            }
+        }
+        if (layerShellReady && !isVertical && !dockSettings.autoHide) {
+            Gtk4LayerShell.set_exclusive_zone(win, DOCK_CONSTANTS.EXCLUSIVE_ZONE)
+        }
+        update()
+    })
+
     win.connect("destroy", () => {
         if (tickId) { bar.remove_tick_callback(tickId); tickId = null }
         if (updateTimer) { GLib.source_remove(updateTimer); updateTimer = null }
@@ -1586,6 +1637,7 @@ export default function Dock(gdkmonitor: any) {
         try { if (aConn) aConn() } catch (e) { }
         try { if (pConn) pConn() } catch (e) { }
         try { if (dConn) dConn() } catch (e) { }
+        try { if (sConn) sConn() } catch (e) { }
     })
 
     update()
