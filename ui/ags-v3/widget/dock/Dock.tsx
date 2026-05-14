@@ -94,6 +94,7 @@ export default function Dock(gdkmonitor: any) {
     // part of DnD grab cleanup even though the cursor is still over the surface.
     // This flag suppresses the leave handler until the protocol cleanup is done.
     let isDndEnding = false
+    let cursorInDock = false
 
     // Stable open-order tracking for unpinned apps.
     // Keys are assigned a monotonically-increasing sequence number the first time
@@ -661,6 +662,7 @@ export default function Dock(gdkmonitor: any) {
 
     const motion = new Gtk.EventControllerMotion()
     motion.connect("enter", () => {
+        cursorInDock = true
         // Cancel any pending hide timeout immediately on re-enter.
         // Hyprland sends a spurious wl_pointer.leave after a click/drag-release and then
         // immediately a wl_pointer.enter (cursor never actually left). Without this, the
@@ -783,6 +785,7 @@ export default function Dock(gdkmonitor: any) {
         updateAllTargets(x)
     })
     motion.connect("leave", () => {
+        cursorInDock = false
         if (dragBus.draggingId || isDndEnding) return
 
         clearLeaveTimeout()
@@ -1556,10 +1559,14 @@ export default function Dock(gdkmonitor: any) {
     })
 
     // When the context menu closes, de-magnify and restart the tick so icons spring
-    // back to rest. The cursor is outside the dock at this point (user clicked away).
+    // back to rest. If cursor is no longer in the dock, also trigger hide.
     const mConn = onMenuCountChanged((count) => {
         if (count !== 0) return
         updateAllTargets(-1000)
+        if (dockSettings.autoHide && !cursorInDock) {
+            setRevealed(false)
+            updateInputRegion(smoothedBarWidth)
+        }
         runUnifiedTick(true)
     })
 
