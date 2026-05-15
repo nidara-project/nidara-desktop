@@ -12,13 +12,7 @@ window#crystal-app-launcher,
 
 /* ── Background overlay (click to close) ── */
 .app-grid-background {
-    background: rgba(0, 0, 0, 0.62);
-}
-
-/* ── Main content column ── */
-.app-grid-content {
     background: transparent;
-    padding: 72px 100px 48px;
 }
 
 /* ── Search bar ── */
@@ -26,10 +20,9 @@ window#crystal-app-launcher,
     background: var(--crystal-surface-raised);
     border: 1px solid var(--crystal-border);
     border-radius: var(--crystal-radius-pill);
-    padding: 12px 22px;
-    margin-bottom: 40px;
-    min-height: 52px;
-    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    padding: 10px 18px;
+    min-height: 44px;
+    transition: background 0.15s ease, border-color 0.15s ease;
 
     &:focus-within {
         border-color: rgba(var(--crystal-accent-rgb), 0.6);
@@ -48,7 +41,7 @@ window#crystal-app-launcher,
 .app-grid-search-entry {
     background: none;
     color: var(--crystal-text);
-    font-size: 1.1em;
+    font-size: 1.0em;
     caret-color: var(--crystal-accent);
 }
 
@@ -71,11 +64,27 @@ window#crystal-app-launcher,
     border-radius: 18px;
 
     &:selected,
-    &:focus,
     &:active {
         background: transparent;
         outline: none;
         box-shadow: none;
+    }
+
+    &:focus {
+        outline: none;
+        background: transparent;
+
+        .app-grid-button {
+            background: var(--crystal-surface);
+        }
+
+        .app-grid-plate {
+            box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.6);
+        }
+
+        .app-grid-label {
+            color: white;
+        }
     }
 }
 
@@ -95,9 +104,9 @@ window#crystal-app-launcher,
     }
 }
 
-/* ── Icon plate (squircle container) ── */
+/* ── Icon plate ── */
 .app-grid-plate {
-    border-radius: 22%;
+    border-radius: var(--crystal-radius-lg);
     background: transparent;
 }
 
@@ -108,7 +117,7 @@ window#crystal-app-launcher,
 
 /* ── Label ── */
 .app-grid-label {
-    color: rgba(255, 255, 255, 0.92);
+    color: var(--crystal-text);
     font-size: 0.82em;
     font-weight: 500;
     min-height: 2.5em; // Fixed height for 2 lines — keeps grid rows aligned
@@ -117,12 +126,12 @@ window#crystal-app-launcher,
 
 /* ── No results ── */
 .app-grid-no-results-icon {
-    color: rgba(255, 255, 255, 0.3);
+    color: var(--crystal-text-disabled);
     margin-bottom: 4px;
 }
 
 .app-grid-no-results-label {
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--crystal-text-dim);
     font-size: 1em;
     font-weight: 400;
 }
