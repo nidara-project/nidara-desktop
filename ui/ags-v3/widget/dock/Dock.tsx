@@ -203,7 +203,7 @@ export default function Dock(gdkmonitor: any) {
     // For vertical: window is WINDOW_HEIGHT wide (matches horizontal window height)
     // giving icons room to grow toward the screen center, same logic as horizontal upward growth.
     const WIN_W = isVertical ? DOCK_CONSTANTS.WINDOW_HEIGHT : dockMonitorWidth
-    const WIN_H = isVertical ? verticalUsableH : DOCK_CONSTANTS.WINDOW_HEIGHT
+    const WIN_H = isVertical ? verticalUsableH : dockMonitorHeight
     const sideEdge = dockSettings.position === 'left' ? Gtk4LayerShell.Edge.LEFT : Gtk4LayerShell.Edge.RIGHT
 
     const win = new Gtk.Window({
@@ -711,9 +711,15 @@ export default function Dock(gdkmonitor: any) {
         // early part of the hide animation the strip sits in the overflow zone above the
         // pill in screen-space, so a cursor moving upward would pass through it and
         // immediately re-reveal the dock — cancelling the hide and keeping icons magnified.
+        // In fullscreen mode (no appgrid open), expose no trigger — cursor cannot re-reveal
+        if (fullscreenMode && !appGridOpen && !isRevealed) {
+            surface.set_input_region(region) // empty region
+            return
+        }
+
         if (dockSettings.autoHide && !isRevealed && slideTarget > 0
                 && slideCurrent >= initialHideTarget * 0.8) {
-            const triggerY = DOCK_CONSTANTS.WINDOW_HEIGHT - Math.round(initialHideTarget) - 4
+            const triggerY = WIN_H - Math.round(initialHideTarget) - 4
             // @ts-ignore
             region.unionRectangle({ x: 0, y: triggerY, width: dockMonitorWidth, height: 4 })
             surface.set_input_region(region)
@@ -729,7 +735,7 @@ export default function Dock(gdkmonitor: any) {
         // V422: GENEROUS INPUT REGION — expanded zone for smooth magnification onset
         const width = totalWidth + 500
         const x = (dockMonitorWidth - width) / 2
-        const y = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT
+        const y = WIN_H - DOCK_CONSTANTS.PILL_HEIGHT
 
         // @ts-ignore
         region.unionRectangle({ x: Math.round(x), y: Math.round(y), width: Math.round(width), height: DOCK_CONSTANTS.PILL_HEIGHT })
@@ -746,6 +752,8 @@ export default function Dock(gdkmonitor: any) {
 
     win.add_controller(motion)
     motion.connect("motion", (controller, x, y) => {
+        // Fullscreen mode: cursor cannot interact with dock unless appgrid is open
+        if (fullscreenMode && !appGridOpen) return
         // Auto-hide: reveal dock on any mouse entry (skip spurious events before realize)
         if (dockSettings.autoHide && !isRevealed && !isSettlingIn) {
             setRevealed(true)
@@ -1638,7 +1646,7 @@ export default function Dock(gdkmonitor: any) {
     // position/autoHide require layer-shell reconfiguration and are handled by app.ts.
     const sConn = onDockSettingsChanged(() => {
         syncConstants()
-        win.set_size_request(WIN_W, DOCK_CONSTANTS.WINDOW_HEIGHT)
+        win.set_size_request(WIN_W, WIN_H)
         if (!isVertical) {
             da.height_request = DOCK_CONSTANTS.PILL_HEIGHT
             shim.height_request = DOCK_CONSTANTS.PILL_HEIGHT
@@ -1690,6 +1698,71 @@ export default function Dock(gdkmonitor: any) {
                     }
                     return GLib.SOURCE_REMOVE
                 })
+            }
+        }
+    }
+
+    // ── Fullscreen detection ──────────────────────────────────────────────────
+    // When a fullscreen window is focused, force-hide the dock and disable the
+    // cursor trigger strip. The dock re-appears only when:
+    //   a) the appgrid opens (Super key), or
+    //   b) the fullscreen window loses focus / exits fullscreen.
+    let fullscreenMode = false
+    let appGridOpen = false
+    let trackedClient: any = null
+    let trackedClientConn: number | null = null
+
+    const setFullscreenMode = (active: boolean) => {
+        if (fullscreenMode === active) return
+        fullscreenMode = active
+        if (active && !appGridOpen) {
+            // Force hide — slide out and clear input region so cursor can't re-trigger
+            if (isRevealed) setRevealed(false)
+            updateInputRegion(smoothedBarWidth)
+        } else if (!active) {
+            // Restore: re-show unless autohide is on and cursor is outside
+            if (!dockSettings.autoHide || cursorInDock) {
+                setRevealed(true)
+                runUnifiedTick(true)
+            }
+            updateInputRegion(smoothedBarWidth)
+        }
+    }
+
+    const checkFullscreen = () => {
+        const client = hypr.focused_client
+        // Re-track the focused client's fullscreen property
+        if (trackedClient && trackedClientConn !== null) {
+            try { trackedClient.disconnect(trackedClientConn) } catch (_) {}
+            trackedClientConn = null
+        }
+        trackedClient = client ?? null
+        if (client) {
+            trackedClientConn = client.connect("notify::fullscreen", () =>
+                setFullscreenMode(client.fullscreen ?? false))
+            setFullscreenMode(client.fullscreen ?? false)
+        } else {
+            setFullscreenMode(false)
+        }
+    }
+
+    hypr.connect("notify::focused-client", checkFullscreen)
+    checkFullscreen()
+
+    ;(win as any).setAppGridOpen = (open: boolean) => {
+        appGridOpen = open
+        if (open && fullscreenMode) {
+            // Appgrid opened while fullscreen — reveal dock
+            if (!isRevealed) {
+                setRevealed(true)
+                runUnifiedTick(true)
+            }
+            updateInputRegion(smoothedBarWidth)
+        } else if (!open && fullscreenMode) {
+            // Appgrid closed while still fullscreen — hide dock again
+            if (isRevealed && !cursorInDock) {
+                setRevealed(false)
+                updateInputRegion(smoothedBarWidth)
             }
         }
     }

@@ -171,6 +171,17 @@ app.start({
       }
     } catch (e) { console.error(`[UI] Error:`, e) }
 
+    // Notify docks when appgrid opens/closes so they can reveal/hide in fullscreen
+    const notifyDocksAppGrid = (open: boolean) => {
+      windows.forEach(w => {
+        if (w.name === "crystal-dock") (w as any).setAppGridOpen?.(open)
+      })
+    }
+    appLauncherWindows.forEach(launcherWin => {
+      ;(launcherWin as any).connect("show", () => notifyDocksAppGrid(true))
+      ;(launcherWin as any).connect("hide", () => notifyDocksAppGrid(false))
+    })
+
     //  Toggles Logic
     const toggleAppGrid = () => {
       appLauncherWindows.forEach(g => { try { g.toggle() } catch (e) { console.error(e) } })
