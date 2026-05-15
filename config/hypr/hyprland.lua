@@ -132,6 +132,7 @@ hl.bind(mainMod .. " + L",         hl.dsp.exec_cmd("crystal-lock"))
 -- ── Keybinds — App launchers ─────────────────────────────────────────────────
 hl.bind(mainMod .. " + S",   hl.dsp.exec_cmd("ags request toggleSettings"))
 hl.bind("SUPER + SUPER_L",   hl.dsp.exec_cmd("ags request toggleAppGrid"), { release = true })
+hl.bind(mainMod .. " + G",   hl.dsp.exec_cmd("ags request toggleGameOverlay"))
 hl.bind(mainMod .. " + E",   hl.dsp.exec_cmd("uwsm app -- " .. fileManager))
 hl.bind(mainMod .. " + T",   hl.dsp.exec_cmd("uwsm app -- " .. terminal))
 hl.bind(mainMod .. " + Q",   hl.dsp.window.close())
