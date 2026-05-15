@@ -171,20 +171,6 @@ app.start({
       }
     } catch (e) { console.error(`[UI] Error:`, e) }
 
-    // Gaming overlay mode: promote dock+bar to OVERLAY when launcher opens so they
-    // appear above fullscreen windows. The app grid restricts its own input region
-    // to the squircle bounds, so dock/bar pointer events fall through naturally.
-    const setShellOverlayMode = (active: boolean) => {
-      windows.forEach(w => {
-        if (w.name === "crystal-dock" || w.name === "crystal-bar")
-          (w as any).setLauncherMode?.(active)
-      })
-    }
-    appLauncherWindows.forEach(launcherWin => {
-      ;(launcherWin as any).connect("show", () => setShellOverlayMode(true))
-      ;(launcherWin as any).connect("hide", () => setShellOverlayMode(false))
-    })
-
     //  Toggles Logic
     const toggleAppGrid = () => {
       appLauncherWindows.forEach(g => { try { g.toggle() } catch (e) { console.error(e) } })

@@ -712,12 +712,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Show only after measurement+rebuild have had time to take effect
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => { win.set_opacity(1); return GLib.SOURCE_REMOVE })
 
-  ;(win as any).setLauncherMode = (active: boolean) => {
-    try {
-      Gtk4LayerShell.set_layer(win, active ? Gtk4LayerShell.Layer.OVERLAY : Gtk4LayerShell.Layer.TOP)
-    } catch (e) { console.error("[Bar] setLauncherMode failed:", e) }
-  }
-
   let gameOverlayActive = false
   ;(win as any).setGameOverlayMode = (active: boolean) => {
     try {
