@@ -16,6 +16,7 @@ import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
+import AppGridPanel from "../app-grid/AppGrid"
 
 // V127: Native Gtk Resolution
 
@@ -217,7 +218,11 @@ export default function Dock(gdkmonitor: any) {
         default_height: WIN_H,
     })
     ;(win as any).gdkmonitor = gdkmonitor
-    win.set_child(layout)
+
+    // Full-window overlay: dock strip (layout) as base child, appgrid panel as overlay
+    const windowOverlay = new Gtk.Overlay({ hexpand: true, vexpand: true })
+    windowOverlay.set_child(layout)
+    win.set_child(windowOverlay)
     const bar = new Gtk.Box({
         name: "cd-bar",
         css_classes: ["cd-bar"],
@@ -712,7 +717,7 @@ export default function Dock(gdkmonitor: any) {
         // pill in screen-space, so a cursor moving upward would pass through it and
         // immediately re-reveal the dock — cancelling the hide and keeping icons magnified.
         // In fullscreen mode (no appgrid open), expose no trigger — cursor cannot re-reveal
-        if (fullscreenMode && !appGridOpen && !isRevealed) {
+        if (fullscreenMode && !appGridPanelOpen && !isRevealed) {
             surface.set_input_region(region) // empty region
             return
         }
@@ -753,7 +758,7 @@ export default function Dock(gdkmonitor: any) {
     win.add_controller(motion)
     motion.connect("motion", (controller, x, y) => {
         // Fullscreen mode: cursor cannot interact with dock unless appgrid is open
-        if (fullscreenMode && !appGridOpen) return
+        if (fullscreenMode && !appGridPanelOpen) return
         // Auto-hide: reveal dock on any mouse entry (skip spurious events before realize)
         if (dockSettings.autoHide && !isRevealed && !isSettlingIn) {
             setRevealed(true)
@@ -1702,25 +1707,93 @@ export default function Dock(gdkmonitor: any) {
         }
     }
 
+    // ── Embedded AppGrid panel ────────────────────────────────────────────────
+    let appGridPanelOpen = false
+
+    const appGrid = AppGridPanel(gdkmonitor, () => closeAppGridPanel())
+
+    appGrid.setKeyboardModeCallback(
+        () => { if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE) },
+        () => { if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND) }
+    )
+
+    appGrid.widget.visible = false
+    appGrid.widget.halign  = Gtk.Align.CENTER
+    appGrid.widget.valign  = Gtk.Align.CENTER
+    windowOverlay.add_overlay(appGrid.widget)
+
+    const openAppGridPanel = () => {
+        if (appGridPanelOpen) return
+        appGridPanelOpen = true
+        appGrid.widget.visible = true
+        appGrid.onShow()
+        if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+        // Full window receives input when appgrid is open
+        const surface = win.get_native()?.get_surface()
+        if (surface) surface.set_input_region(null)
+        // Reveal dock if hidden (fullscreen mode or autohide)
+        if (!isRevealed) {
+            setRevealed(true)
+            runUnifiedTick(true)
+        }
+    }
+
+    const closeAppGridPanel = () => {
+        if (!appGridPanelOpen) return
+        appGridPanelOpen = false
+        appGrid.widget.visible = false
+        if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+        // Restore dock hide if in fullscreen or autohide with cursor outside
+        if (fullscreenMode && !cursorInDock) {
+            setRevealed(false)
+        } else if (dockSettings.autoHide && !cursorInDock) {
+            setRevealed(false)
+        }
+        updateInputRegion(smoothedBarWidth)
+    }
+
+    ;(win as any).toggleAppGridPanel = () => {
+        if (appGridPanelOpen) closeAppGridPanel()
+        else openAppGridPanel()
+    }
+
+    // BgClick: close appgrid when clicking outside squircle and outside dock strip
+    const bgClickGesture = new Gtk.GestureClick()
+    bgClickGesture.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)
+    bgClickGesture.connect("released", (_gesture: any, _n: number, x: number, y: number) => {
+        if (!appGridPanelOpen) return
+        const a = appGrid.widget.get_allocation()
+        const inSquircle  = x >= a.x && x <= a.x + a.width && y >= a.y && y <= a.y + a.height
+        const inDockStrip = y >= WIN_H - DOCK_CONSTANTS.PILL_HEIGHT * 1.5
+        if (!inSquircle && !inDockStrip) closeAppGridPanel()
+    })
+    windowOverlay.add_controller(bgClickGesture)
+
+    // Key handler: delegate to appgrid when open
+    const appGridKeyCtrl = new Gtk.EventControllerKey()
+    appGridKeyCtrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+    appGridKeyCtrl.connect("key-pressed", (_c: any, keyval: number) => {
+        if (!appGridPanelOpen) return false
+        return appGrid.handleKey(keyval)
+    })
+    win.add_controller(appGridKeyCtrl)
+
     // ── Fullscreen detection ──────────────────────────────────────────────────
     // When a fullscreen window is focused, force-hide the dock and disable the
     // cursor trigger strip. The dock re-appears only when:
     //   a) the appgrid opens (Super key), or
     //   b) the fullscreen window loses focus / exits fullscreen.
     let fullscreenMode = false
-    let appGridOpen = false
     let trackedClient: any = null
     let trackedClientConn: number | null = null
 
     const setFullscreenMode = (active: boolean) => {
         if (fullscreenMode === active) return
         fullscreenMode = active
-        if (active && !appGridOpen) {
-            // Force hide — slide out and clear input region so cursor can't re-trigger
+        if (active && !appGridPanelOpen) {
             if (isRevealed) setRevealed(false)
             updateInputRegion(smoothedBarWidth)
         } else if (!active) {
-            // Restore: re-show unless autohide is on and cursor is outside
             if (!dockSettings.autoHide || cursorInDock) {
                 setRevealed(true)
                 runUnifiedTick(true)
@@ -1731,7 +1804,6 @@ export default function Dock(gdkmonitor: any) {
 
     const checkFullscreen = () => {
         const client = hypr.focused_client
-        // Re-track the focused client's fullscreen property
         if (trackedClient && trackedClientConn !== null) {
             try { trackedClient.disconnect(trackedClientConn) } catch (_) {}
             trackedClientConn = null
@@ -1748,24 +1820,6 @@ export default function Dock(gdkmonitor: any) {
 
     hypr.connect("notify::focused-client", checkFullscreen)
     checkFullscreen()
-
-    ;(win as any).setAppGridOpen = (open: boolean) => {
-        appGridOpen = open
-        if (open && fullscreenMode) {
-            // Appgrid opened while fullscreen — reveal dock
-            if (!isRevealed) {
-                setRevealed(true)
-                runUnifiedTick(true)
-            }
-            updateInputRegion(smoothedBarWidth)
-        } else if (!open && fullscreenMode) {
-            // Appgrid closed while still fullscreen — hide dock again
-            if (isRevealed && !cursorInDock) {
-                setRevealed(false)
-                updateInputRegion(smoothedBarWidth)
-            }
-        }
-    }
 
     update()
     // V197: Redundant late-update timeouts removed. initialPinned logic handles it.

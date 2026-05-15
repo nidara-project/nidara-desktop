@@ -47,7 +47,6 @@ try {
 import Dock from "./widget/dock/Dock"
 import { syncConstants } from "./widget/dock/DockPhysics"
 import { onDockSettingsChanged, dockSettings } from "./widget/dock/state"
-import AppGrid from "./widget/app-grid/AppGrid"
 import Bar from "./widget/bar/Bar"
 import Settings from "./widget/settings/Settings"
 import Theme from "./core/ThemeManager"
@@ -88,12 +87,10 @@ app.start({
     import("ags/process").then(({ execAsync }) => {
         execAsync("hyprctl keyword layerrule 'blur, crystal-bar'").catch(() => {})
         execAsync("hyprctl keyword layerrule 'ignorealpha 0.5, crystal-bar'").catch(() => {})
-        execAsync("hyprctl keyword layerrule 'blur, crystal-launcher'").catch(() => {})
-        execAsync("hyprctl keyword layerrule 'ignorealpha 0.3, crystal-launcher'").catch(() => {})
+        // crystal-launcher is now embedded inside crystal-dock, no separate layerrule needed
     }).catch(() => {})
 
     const windows = new Set<ShellWindow>()
-    const appLauncherWindows: ShellWindow[] = []
     const settingsWindows: ShellWindow[] = []
 
     const initWinGlobal = (ctor: any, mon: Gdk.Monitor, array: any[]) => {
@@ -154,9 +151,6 @@ app.start({
           }
         })
 
-        // Settings deferred to toggleSettings (Lazy)
-        initWinGlobal(AppGrid, monitor, appLauncherWindows)
-
       } catch (e) { console.error(`[UI] Error:`, e) }
     }
 
@@ -171,20 +165,11 @@ app.start({
       }
     } catch (e) { console.error(`[UI] Error:`, e) }
 
-    // Notify docks when appgrid opens/closes so they can reveal/hide in fullscreen
-    const notifyDocksAppGrid = (open: boolean) => {
-      windows.forEach(w => {
-        if (w.name === "crystal-dock") (w as any).setAppGridOpen?.(open)
-      })
-    }
-    appLauncherWindows.forEach(launcherWin => {
-      ;(launcherWin as any).connect("show", () => notifyDocksAppGrid(true))
-      ;(launcherWin as any).connect("hide", () => notifyDocksAppGrid(false))
-    })
-
     //  Toggles Logic
     const toggleAppGrid = () => {
-      appLauncherWindows.forEach(g => { try { g.toggle() } catch (e) { console.error(e) } })
+      windows.forEach(w => {
+        if (w.name === "crystal-dock") try { (w as any).toggleAppGridPanel?.() } catch (e) { console.error(e) }
+      })
     }
     const toggleSettings = () => {
       // Lazy init on first open

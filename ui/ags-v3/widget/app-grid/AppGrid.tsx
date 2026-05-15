@@ -5,7 +5,6 @@ import GLib from "gi://GLib"
 import Pango from "gi://Pango"
 import AstalApps from "gi://AstalApps"
 import Gio from "gi://Gio"
-import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import appService from "../../core/AppService"
 import { pinnedState, savePinned } from "../dock/state"
 import { t } from "../../core/i18n"
@@ -23,35 +22,14 @@ const normId = (s: string) => {
 
 const appsService = new AstalApps.Apps()
 
-export default function AppGrid(monitor: Gdk.Monitor) {
-    const win = new Gtk.Window({
-        name: "crystal-app-launcher",
-        css_classes: ["app-grid-window"],
-    })
+export interface AppGridPanelHandle {
+    widget: Gtk.Widget
+    onShow: () => void
+    handleKey: (keyval: number) => boolean
+    setKeyboardModeCallback: (onExclusive: () => void, onDemand: () => void) => void
+}
 
-    let layerInit = false
-    try {
-        Gtk4LayerShell.init_for_window(win)
-        layerInit = true
-    } catch (e) { }
-
-    if (layerInit) {
-        Gtk4LayerShell.set_namespace(win, "crystal-launcher")
-        Gtk4LayerShell.set_monitor(win, monitor)
-        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true)
-        // Ignorar las zonas reservadas para cubrir el 100% de la pantalla (tapar dock y barra)
-        Gtk4LayerShell.set_exclusive_zone(win, -1)
-        Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
-    }
-
-    // @ts-ignore
-    win.app_paintable = true
-    win.visible = false
-
+export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void): AppGridPanelHandle {
     // ── Search bar ─────────────────────────────────────────────────────────
     const searchEntry = new Gtk.Text({
         placeholder_text: t("app-grid.search.placeholder"),
@@ -108,13 +86,10 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     noResults.append(noResultsLabel)
 
     const monitorGeo = monitor.get_geometry()
-    // innerWidth must accommodate 6 columns: 6×142px child + 5×8px gap = 892px minimum
     const innerWidth = Math.max(920, Math.min(Math.round(monitorGeo.width * 0.50), 950))
-    // Exact height for GRID_ROWS complete rows, derived from widget properties:
-    //   button padding (12+12) + plate height (96) + item spacing (10) + label min-height (~33px) = 163px/row
     const GRID_ROWS = 3
     const ROW_H    = 163
-    const scrollHeight = GRID_ROWS * ROW_H + (GRID_ROWS - 1) * 8 + 16  // rows + gaps + flowbox margins (8+8)
+    const scrollHeight = GRID_ROWS * ROW_H + (GRID_ROWS - 1) * 8 + 16
 
     const scroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
@@ -126,10 +101,9 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     })
     scroll.set_child(flowbox)
 
-    // ── Fade overlay — smooth top/bottom edges on scroll ──────────────────
+    // ── Fade overlay ───────────────────────────────────────────────────────
     const adj = scroll.get_vadjustment()
     const FADE = 32
-
     const fadeDA = new Gtk.DrawingArea({ hexpand: true, vexpand: true, can_target: false })
     fadeDA.set_draw_func((_da: any, cr: any, w: number, h: number) => {
         const val   = adj.get_value()
@@ -137,24 +111,18 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         const page  = adj.get_page_size()
         const [r, g, b] = Theme.isDark ? [0, 0, 0] : [1, 1, 1]
         const a = Theme.shellOpacity
-
-        cr.setOperator(2) // OVER
-
+        cr.setOperator(2)
         if (val > 0.5) {
             const g1 = new Cairo.LinearGradient(0, 0, 0, FADE)
             g1.addColorStopRGBA(0, r, g, b, a)
             g1.addColorStopRGBA(1, r, g, b, 0)
-            cr.setSource(g1)
-            cr.rectangle(0, 0, w, FADE)
-            cr.fill()
+            cr.setSource(g1); cr.rectangle(0, 0, w, FADE); cr.fill()
         }
         if (val < upper - page - 0.5) {
             const g2 = new Cairo.LinearGradient(0, h - FADE, 0, h)
             g2.addColorStopRGBA(0, r, g, b, 0)
             g2.addColorStopRGBA(1, r, g, b, a)
-            cr.setSource(g2)
-            cr.rectangle(0, h - FADE, w, FADE)
-            cr.fill()
+            cr.setSource(g2); cr.rectangle(0, h - FADE, w, FADE); cr.fill()
         }
     })
     adj.connect("value-changed", () => fadeDA.queue_draw())
@@ -165,7 +133,6 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     scrollOverlay.set_child(scroll)
     scrollOverlay.add_overlay(fadeDA)
 
-    // ── Grid area (scroll + no-results) ───────────────────────────────────
     const gridArea = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         vexpand: false,
@@ -174,7 +141,6 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     gridArea.append(scrollOverlay)
     gridArea.append(noResults)
 
-    // ── Content box (transparent — Cairo glass drawn by SquircleContainer) ──
     const contentBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         hexpand: false,
@@ -184,7 +150,6 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     contentBox.append(searchBox)
     contentBox.append(gridArea)
 
-    // ── Glass panel (Cairo squircle background, matching dock/CC aesthetic) ─
     const squirclePanel = SquircleContainer({
         child: contentBox,
         radius: 32,
@@ -194,39 +159,12 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         hexpand: false,
         vexpand: false,
     })
-    // Asymmetric margins: breathing room at top/sides for the search bar,
-    // tight at the bottom so the scroll grid clips at the squircle border.
     contentBox.margin_top    = 28
     contentBox.margin_start  = 32
     contentBox.margin_end    = 32
     contentBox.margin_bottom = 4
     squirclePanel.halign = Gtk.Align.CENTER
-
-    // ── Root container (transparent full-screen, click-to-close) ─────────
-    const spacerTop = new Gtk.Box({ vexpand: true })
-    const spacerBottom = new Gtk.Box({ vexpand: true })
-
-    const mainBox = new Gtk.Box({
-        name: "app-grid-main-overlay",
-        css_classes: ["app-grid-background"],
-        orientation: Gtk.Orientation.VERTICAL,
-        hexpand: true,
-        vexpand: true,
-    })
-    mainBox.append(spacerTop)
-    mainBox.append(squirclePanel)
-    mainBox.append(spacerBottom)
-
-    const bgClick = new Gtk.GestureClick()
-    bgClick.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)
-    bgClick.connect("released", (_gesture, _n, x, y) => {
-        const a = squirclePanel.get_allocation()
-        if (x >= a.x && x <= a.x + a.width && y >= a.y && y <= a.y + a.height) return
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { win.visible = false; return GLib.SOURCE_REMOVE })
-    })
-    mainBox.add_controller(bgClick)
-
-    win.set_child(mainBox)
+    squirclePanel.valign = Gtk.Align.CENTER
 
     // ── Widget state ───────────────────────────────────────────────────────
     const widgetCache = new Map<string, Gtk.Button>()
@@ -253,6 +191,10 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         const nameB: string = (childB.get_child() as any)?._appName || ""
         return nameA.localeCompare(nameB)
     })
+
+    // Keyboard mode callbacks — wired by dock after construction
+    let _cbExclusive: (() => void) | null = null
+    let _cbDemand:    (() => void) | null = null
 
     // ── App widget factory ─────────────────────────────────────────────────
     const createAppWidget = (app: any): Gtk.Button => {
@@ -315,7 +257,6 @@ export default function AppGrid(monitor: Gdk.Monitor) {
 
         // ── Context menu (pin/unpin) ───────────────────────────────────────
         let contextPopover: Gtk.Popover | null = null
-
         const buildContextMenu = () => {
             if (contextPopover?.visible) return
             contextPopover?.unparent()
@@ -349,12 +290,10 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         const rightClick = new Gtk.GestureClick({ button: 3 })
         rightClick.connect("released", () => {
             buildContextMenu()
-            if (layerInit) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+            _cbDemand?.()
             GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
                 contextPopover?.popup()
-                contextPopover?.connect("closed", () => {
-                    if (layerInit) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
-                })
+                contextPopover?.connect("closed", () => { _cbExclusive?.() })
                 return GLib.SOURCE_REMOVE
             })
         })
@@ -362,7 +301,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
 
         // ── Launch ─────────────────────────────────────────────────────────
         button.connect("clicked", () => {
-            win.visible = false
+            onClose()
             if (id === "crystal-shell-settings") {
                 shellActions.toggleSettings?.()
                 return
@@ -381,7 +320,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         return button
     }
 
-    // ── Cache init ─────────────────────────────────────────────────────────
+    // ── Cache ──────────────────────────────────────────────────────────────
     const resetCache = () => {
         widgetCache.clear()
         cacheInitialized = false
@@ -389,7 +328,6 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         while (child) { const next = child.get_next_sibling(); flowbox.remove(child); child = next }
     }
 
-    // Rebuild icons when AppService reloads (e.g. after an icon override is saved)
     appService.connect(() => { resetCache(); initCache() })
 
     const initCache = () => {
@@ -426,8 +364,6 @@ export default function AppGrid(monitor: Gdk.Monitor) {
             const matches = appsService.fuzzy_query(query)
             currentMatchIds = new Set<string>()
             sortOrder.clear()
-            // Re-rank: prefix match > word-start match > generic fuzzy.
-            // fuzzy_query alone doesn't prioritize prefix matches for short queries.
             const q = currentQuery
             const scored = (matches as any[]).map((a, fuzzyRank: number) => {
                 const name = (a.name || "").toLowerCase()
@@ -457,11 +393,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     searchEntry.connect("changed", () => filterApps(searchEntry.text))
 
     // ── Keyboard navigation ────────────────────────────────────────────────
-    // FlowBox's internal cursor (used for arrow-key nav) is a private field
-    // with no public reset API — it persists between opens regardless of
-    // unselect_all / select_child / grab_focus calls. We bypass it entirely
-    // by tracking our own navIdx and handling all four arrow keys in CAPTURE.
-    let navIdx = -1  // -1 = search has focus, ≥0 = index into visible children
+    let navIdx = -1
 
     const getVisibleChildren = (): Gtk.FlowBoxChild[] => {
         const result: Gtk.FlowBoxChild[] = []
@@ -478,11 +410,9 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         if (!children.length) return
         navIdx = Math.max(0, Math.min(idx, children.length - 1))
         children[navIdx].grab_focus()
-        // GTK auto-scroll puts the item flush against the edge. We override it
-        // by computing the target scroll position manually with breathing room.
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
             const row    = Math.floor(navIdx / GRID_COLS)
-            const rowTop = 8 + row * (ROW_H + 8)   // flowbox margin_top + row offset
+            const rowTop = 8 + row * (ROW_H + 8)
             const rowBot = rowTop + ROW_H
             const cur    = adj.get_value()
             const page   = adj.get_page_size()
@@ -497,57 +427,6 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         })
     }
 
-    const keyController = new Gtk.EventControllerKey()
-    keyController.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-    keyController.connect("key-pressed", (_c, keyval) => {
-        if (keyval === Gdk.KEY_Escape) {
-            win.visible = false
-            return true
-        }
-        if (keyval === Gdk.KEY_Tab) {
-            if (navIdx < 0) focusAt(0)
-            return true
-        }
-        if (keyval === Gdk.KEY_ISO_Left_Tab) {  // Shift+Tab
-            if (navIdx >= 0) { navIdx = -1; searchEntry.grab_focus() }
-            return true
-        }
-        if (keyval === Gdk.KEY_Down) {
-            focusAt(navIdx < 0 ? 0 : navIdx + GRID_COLS)
-            return true
-        }
-        if (keyval === Gdk.KEY_Up) {
-            if (navIdx < 0) return false
-            if (navIdx < GRID_COLS) { navIdx = -1; searchEntry.grab_focus() }
-            else { focusAt(navIdx - GRID_COLS) }
-            return true
-        }
-        if (keyval === Gdk.KEY_Right) {
-            if (navIdx < 0) return false
-            focusAt(navIdx + 1)
-            return true
-        }
-        if (keyval === Gdk.KEY_Left) {
-            if (navIdx < 0) return false
-            focusAt(navIdx - 1)
-            return true
-        }
-        if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
-            if (navIdx >= 0) {
-                const children = getVisibleChildren()
-                ;(children[navIdx]?.get_child() as Gtk.Button)?.emit("clicked")
-                return true
-            }
-        }
-        if (navIdx >= 0 && keyval >= 32 && keyval <= 126) {
-            navIdx = -1
-            searchEntry.grab_focus()
-            return false
-        }
-        return false
-    })
-    win.add_controller(keyController)
-
     flowbox.connect("child-activated", (_fb, child) => {
         const btn = child.get_child() as Gtk.Button
         btn?.emit("clicked")
@@ -555,24 +434,64 @@ export default function AppGrid(monitor: Gdk.Monitor) {
 
     filterApps()
 
-    win.connect("map", () => {
-        if (layerInit) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
-        navIdx = -1
-        searchEntry.grab_focus()
-    })
+    return {
+        widget: squirclePanel,
 
-    ;(win as any).toggle = () => {
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-            const isVis = win.get_visible()
-            if (!isVis) {
-                navIdx = -1
-                searchEntry.text = ""
-                filterApps()
+        onShow() {
+            navIdx = -1
+            searchEntry.text = ""
+            filterApps()
+            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+                searchEntry.grab_focus()
+                return GLib.SOURCE_REMOVE
+            })
+        },
+
+        handleKey(keyval: number): boolean {
+            if (keyval === Gdk.KEY_Escape) {
+                onClose(); return true
             }
-            win.set_visible(!isVis)
-            return GLib.SOURCE_REMOVE
-        })
-    }
+            if (keyval === Gdk.KEY_Tab) {
+                if (navIdx < 0) focusAt(0)
+                return true
+            }
+            if (keyval === Gdk.KEY_ISO_Left_Tab) {
+                if (navIdx >= 0) { navIdx = -1; searchEntry.grab_focus() }
+                return true
+            }
+            if (keyval === Gdk.KEY_Down) {
+                focusAt(navIdx < 0 ? 0 : navIdx + GRID_COLS); return true
+            }
+            if (keyval === Gdk.KEY_Up) {
+                if (navIdx < 0) return false
+                if (navIdx < GRID_COLS) { navIdx = -1; searchEntry.grab_focus() }
+                else { focusAt(navIdx - GRID_COLS) }
+                return true
+            }
+            if (keyval === Gdk.KEY_Right) {
+                if (navIdx < 0) return false
+                focusAt(navIdx + 1); return true
+            }
+            if (keyval === Gdk.KEY_Left) {
+                if (navIdx < 0) return false
+                focusAt(navIdx - 1); return true
+            }
+            if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
+                if (navIdx >= 0) {
+                    const children = getVisibleChildren()
+                    ;(children[navIdx]?.get_child() as Gtk.Button)?.emit("clicked")
+                    return true
+                }
+            }
+            if (navIdx >= 0 && keyval >= 32 && keyval <= 126) {
+                navIdx = -1; searchEntry.grab_focus(); return false
+            }
+            return false
+        },
 
-    return win
+        setKeyboardModeCallback(onExclusive: () => void, onDemand: () => void) {
+            _cbExclusive = onExclusive
+            _cbDemand    = onDemand
+        },
+    }
 }
