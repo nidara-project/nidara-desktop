@@ -247,7 +247,10 @@ class AppService {
             if (data.wmClass) {
                 this.nameMap.set(data.wmClass, canonical!)
                 this.wmMap.set(data.wmClass, id.toLowerCase())
-            } else if (data.exec) {
+            } else if (data.exec && !this.nameMap.has(data.exec)) {
+                // Don't overwrite: apps sharing the same executable (e.g. Steam game
+                // shortcuts all have exec="steam") would replace the real app's icon.
+                // wmClass entries (the branch above) always win and may overwrite later.
                 this.nameMap.set(data.exec, canonical!)
             }
 
@@ -368,15 +371,21 @@ class AppService {
         if (idFromWm) return this.gAppCache.get(idFromWm) || null
 
         // 3. Search for best match in cache
+        let execMatch = null   // exec/name match — lower priority than id/wmClass
         let fallbackMatch = null
         for (const [id, data] of this.cache.entries()) {
-                // Handle prefixed IDs like "org.telegram" -> "org.telegram.desktop"
+            // Handle prefixed IDs like "org.telegram" -> "org.telegram.desktop"
             const match = id === q || id.startsWith(q + ".") || id.startsWith(q + "-")
             if (match) return this.gAppCache.get(id) || null
 
-            // Metadata matches (WM_CLASS, etc.)
-            if (data.wmClass === q || data.exec === q || data.name.toLowerCase() === q) {
-                return this.gAppCache.get(id) || null
+            // WM_CLASS is authoritative
+            if (data.wmClass === q) return this.gAppCache.get(id) || null
+
+            // exec/name matches: collect the first hit but prefer an exact id match above.
+            // Multiple apps can share the same executable (e.g. every Steam game shortcut
+            // has exec="steam"), so we don't return immediately — keep looking for a better id match.
+            if (!execMatch && (data.exec === q || data.name.toLowerCase() === q)) {
+                execMatch = this.gAppCache.get(id) || null
             }
 
             // Substring fallback (only if nothing better found)
@@ -385,7 +394,7 @@ class AppService {
             }
         }
 
-        return fallbackMatch
+        return execMatch || fallbackMatch
     }
 
     /**
