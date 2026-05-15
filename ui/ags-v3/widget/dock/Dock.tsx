@@ -15,6 +15,7 @@ import status from "../../core/Status"
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
+import shellActions from "../../core/ShellActions"
 
 // V127: Native Gtk Resolution
 
@@ -1028,7 +1029,7 @@ export default function Dock(gdkmonitor: any) {
             const launcherItem = {
                 name: t("dock.special.launcher.name"),
                 icon_name: ["crys-grid", "view-app-grid-symbolic", "view-app-grid", "org.gnome.Shell.Apps-symbolic"],
-                launch: () => { if ((globalThis as any).toggleAppGrid) (globalThis as any).toggleAppGrid() }
+                launch: () => { shellActions.toggleAppGrid?.() }
             }
             configs.push({
                 id: "launcher", width: DOCK_CONSTANTS.APP_SLOT,
@@ -1089,7 +1090,7 @@ export default function Dock(gdkmonitor: any) {
                     }
                     // Crystal Shell internal windows use global toggles directly (no external process)
                     if (lid === "crystal-shell-settings") {
-                        appItem.launch = () => { (globalThis as any).toggleSettings?.() }
+                        appItem.launch = () => { shellActions.toggleSettings?.() }
                     } else {
                         // Always use gtk-launch so PATH is fully resolved (needed for flatpak, etc.)
                         appItem.launch = getLaunch(lid)
@@ -1122,7 +1123,7 @@ export default function Dock(gdkmonitor: any) {
                         icon = icon.replace(/-default$/i, "-Default")
                     }
                     const ghostLaunch = lid === "crystal-shell-settings"
-                        ? () => { (globalThis as any).toggleSettings?.() }
+                        ? () => { shellActions.toggleSettings?.() }
                         : getLaunch(lid)
                     const ghost = { name: displayName, icon_name: icon, launch: ghostLaunch } as any
                     configs.push({
@@ -1178,7 +1179,7 @@ export default function Dock(gdkmonitor: any) {
                     } as any
                 }
                 if (lid === "crystal-shell-settings") {
-                    appItem.launch = () => { (globalThis as any).toggleSettings?.() }
+                    appItem.launch = () => { shellActions.toggleSettings?.() }
                 }
 
                 configs.push({
@@ -1664,6 +1665,34 @@ export default function Dock(gdkmonitor: any) {
         try { if (sConn) sConn() } catch (e) { }
         try { if (mConn) mConn() } catch (e) { }
     })
+
+    // Exposed for app.ts: elevate dock above fullscreen windows while launcher is open.
+    // active=true  → OVERLAY layer + force reveal (autohide case)
+    // active=false → TOP layer + re-hide if autohide and cursor is outside
+    ;(win as any).setLauncherMode = (active: boolean) => {
+        if (!layerShellReady) return
+        if (active) {
+            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
+            // Force-reveal if autohide had it hidden
+            if (dockSettings.autoHide && !isRevealed) {
+                isRevealed = true
+                slideTarget = 0
+                runUnifiedTick(true)
+            }
+        } else {
+            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
+            updateInputRegion(smoothedBarWidth)
+            if (dockSettings.autoHide && !cursorInDock) {
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+                    if (!cursorInDock && menuState.openCount === 0) {
+                        setRevealed(false)
+                        updateInputRegion(smoothedBarWidth)
+                    }
+                    return GLib.SOURCE_REMOVE
+                })
+            }
+        }
+    }
 
     update()
     // V197: Redundant late-update timeouts removed. initialPinned logic handles it.

@@ -15,6 +15,7 @@ import { DOCK_CONSTANTS } from "./DockPhysics"
 import { dragBus, mouseBus, pointerBus, dockSettings, changeMenuCount, menuState } from "./state"
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
+import shellActions from "../../core/ShellActions"
 
 const hypr = AstalHyprland.get_default()
 
@@ -717,7 +718,7 @@ export function DockItem(
                 if (appId === "special:home" || appId === "home-shortcut") {
                     execAsync(["uwsm", "app", "--", "xdg-open", GLib.get_home_dir()]).catch(print)
                 } else if (appId === "crystal-shell-settings") {
-                    ;(globalThis as any).toggleSettings?.()
+                    shellActions.toggleSettings?.()
                 } else {
                     // gtk-launch reads the .desktop file directly — no CWD inheritance
                     // from the AGS process (which runs from ui/ags-v3).

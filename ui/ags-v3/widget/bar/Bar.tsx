@@ -30,6 +30,7 @@ import { t } from "../../core/i18n"
 import { barSettings, onBarSettingsChanged } from "./barState"
 import { dockSideState } from "../dock/state"
 import Icons from "../../core/Icons"
+import shellActions from "../../core/ShellActions"
 
 const ASSETS_DIR = GLib.get_current_dir()
 
@@ -155,12 +156,12 @@ function SystemMenuOverlay() {
   }))
   menuBox.append(sep())
   menuBox.append(makeRow(Icons.settings, t("bar.system-menu.settings"), false, () => {
-    status.system_menu_open = false; ;(globalThis as any).toggleSettings?.()
+    status.system_menu_open = false; shellActions.toggleSettings?.()
   }))
   menuBox.append(sep())
   menuBox.append(makeRow(Icons.lock, t("bar.system-menu.lock"), false, () => {
     status.system_menu_open = false
-    ;(globalThis as any).lockScreen?.()
+    shellActions.lockScreen?.()
     execAsync(["crystal-lock"]).catch(console.error)
   }))
   menuBox.append(makeRow(Icons.moon, t("bar.system-menu.suspend"), false, () =>
@@ -710,6 +711,22 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 220, () => { measureOverflow(); return GLib.SOURCE_REMOVE })
   // Show only after measurement+rebuild have had time to take effect
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => { win.set_opacity(1); return GLib.SOURCE_REMOVE })
+
+  ;(win as any).setLauncherMode = (active: boolean) => {
+    try {
+      Gtk4LayerShell.set_layer(win, active ? Gtk4LayerShell.Layer.OVERLAY : Gtk4LayerShell.Layer.TOP)
+    } catch (e) { console.error("[Bar] setLauncherMode failed:", e) }
+  }
+
+  let gameOverlayActive = false
+  ;(win as any).setGameOverlayMode = (active: boolean) => {
+    try {
+      gameOverlayActive = active
+      Gtk4LayerShell.set_layer(win, active ? Gtk4LayerShell.Layer.OVERLAY : Gtk4LayerShell.Layer.TOP)
+      if (active) win.present()
+    } catch (e) { console.error("[Bar] setGameOverlayMode failed:", e) }
+  }
+  ;(win as any).isGameOverlayActive = () => gameOverlayActive
 
   return win
 }

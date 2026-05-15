@@ -13,6 +13,7 @@ import Icons from "../../core/Icons"
 import SquircleContainer from "../common/SquircleContainer"
 import Theme from "../../core/ThemeManager"
 import Cairo from "gi://cairo"
+import shellActions from "../../core/ShellActions"
 
 // Extract just the desktop basename, stripping path and .desktop extension
 const normId = (s: string) => {
@@ -202,8 +203,6 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     squirclePanel.halign = Gtk.Align.CENTER
 
     // ── Root container (transparent full-screen, click-to-close) ─────────
-    // valign: CENTER on a child of a vertical Gtk.Box has no effect —
-    // vertical centering requires equal expandable spacers above and below.
     const spacerTop = new Gtk.Box({ vexpand: true })
     const spacerBottom = new Gtk.Box({ vexpand: true })
 
@@ -223,10 +222,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
     bgClick.connect("released", (_gesture, _n, x, y) => {
         const a = squirclePanel.get_allocation()
         if (x >= a.x && x <= a.x + a.width && y >= a.y && y <= a.y + a.height) return
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-            win.visible = false
-            return GLib.SOURCE_REMOVE
-        })
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { win.visible = false; return GLib.SOURCE_REMOVE })
     })
     mainBox.add_controller(bgClick)
 
@@ -368,7 +364,7 @@ export default function AppGrid(monitor: Gdk.Monitor) {
         button.connect("clicked", () => {
             win.visible = false
             if (id === "crystal-shell-settings") {
-                ;(globalThis as any).toggleSettings?.()
+                shellActions.toggleSettings?.()
                 return
             }
             try {

@@ -4,6 +4,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import status from "./core/Status"
+import shellActions from "./core/ShellActions"
 // @ts-ignore
 import Adw from "gi://Adw?version=1"
 import { readFile } from "ags/file"
@@ -66,8 +67,8 @@ interface ShellWindow {
 
 // Module-level IPC registry — populated by main(), read by requestHandler.
 // requestHandler and main() share this object directly (no globalThis needed for IPC).
-// Widget code (Dock, Bar, AppGrid) still uses (globalThis as any).toggleXxx because
-// those modules are imported before main() runs and cannot import from app.ts directly.
+// Widget code (Dock, Bar, AppGrid) uses core/ShellActions — a shared typed registry
+// populated here after main() runs, avoiding circular imports with app.ts.
 const ipc: Record<string, (() => void) | undefined> = {}
 
 app.start({
@@ -170,6 +171,20 @@ app.start({
       }
     } catch (e) { console.error(`[UI] Error:`, e) }
 
+    // Gaming overlay mode: promote dock+bar to OVERLAY when launcher opens so they
+    // appear above fullscreen windows. The app grid restricts its own input region
+    // to the squircle bounds, so dock/bar pointer events fall through naturally.
+    const setShellOverlayMode = (active: boolean) => {
+      windows.forEach(w => {
+        if (w.name === "crystal-dock" || w.name === "crystal-bar")
+          (w as any).setLauncherMode?.(active)
+      })
+    }
+    appLauncherWindows.forEach(launcherWin => {
+      ;(launcherWin as any).connect("show", () => setShellOverlayMode(true))
+      ;(launcherWin as any).connect("hide", () => setShellOverlayMode(false))
+    })
+
     //  Toggles Logic
     const toggleAppGrid = () => {
       appLauncherWindows.forEach(g => { try { g.toggle() } catch (e) { console.error(e) } })
@@ -192,6 +207,15 @@ app.start({
     }
     const toggleOverview = () => {
       status.toggleOverview()
+    }
+    const toggleGameOverlay = () => {
+      // Only promotes bar — dock and appgrid are unaffected
+      windows.forEach(w => {
+        if (w.name === "crystal-bar") {
+          const isActive = (w as any).isGameOverlayActive?.() ?? false
+          ;(w as any).setGameOverlayMode?.(!isActive)
+        }
+      })
     }
     // About window — lazy, created only when first toggled, destroyed on close
     status.connect("notify::about-open", () => {
@@ -216,15 +240,17 @@ app.start({
     ipc.toggleAppGrid = toggleAppGrid
     ipc.toggleSettings = toggleSettings
     ipc.toggleOverview = toggleOverview
+    ipc.toggleGameOverlay = toggleGameOverlay
     ipc.lockScreen = lockScreen
     ipc.unlockScreen = unlockScreen
 
-    // Direct-call surface used by Dock, DockItem, Bar, AppGrid widgets
-    ;(globalThis as any).toggleAppGrid = toggleAppGrid
-    ;(globalThis as any).toggleSettings = toggleSettings
-    ;(globalThis as any).toggleOverview = toggleOverview
-    ;(globalThis as any).lockScreen = lockScreen
-    ;(globalThis as any).unlockScreen = unlockScreen
+    // Typed shared registry used by Dock, DockItem, Bar, AppGrid widgets
+    shellActions.toggleAppGrid = toggleAppGrid
+    shellActions.toggleSettings = toggleSettings
+    shellActions.toggleOverview = toggleOverview
+    shellActions.toggleGameOverlay = toggleGameOverlay
+    shellActions.lockScreen = lockScreen
+    shellActions.unlockScreen = unlockScreen
 
   },
   requestHandler(argv, res) {
@@ -247,6 +273,8 @@ app.start({
         ipc.toggleSettings?.(); break;
       case "toggleOverview":
         ipc.toggleOverview?.(); break;
+      case "toggleGameOverlay":
+        ipc.toggleGameOverlay?.(); break;
       case "hideForLock":
         ipc.lockScreen?.(); break;
       case "showAfterLock":
