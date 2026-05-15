@@ -215,9 +215,14 @@ class AppService {
             let canonical: string | null = null
 
             if (icon instanceof Gio.ThemedIcon) {
-                // Return the first valid name in the theme
-                const names = icon.get_names()
-                canonical = this.getIconName(names)
+                // Bypass nameMap (mid-build during reload) — resolve directly from GTK theme.
+                // Using getIconName here would pick up contaminated nameMap entries from
+                // apps processed earlier in this loop (e.g. a Steam game shortcut setting
+                // nameMap["steam"] before steam.desktop is reached).
+                for (const n of icon.get_names()) {
+                    const resolved = this.getCanonicalName(n)
+                    if (resolved) { canonical = resolved; break }
+                }
             } else if (icon instanceof Gio.FileIcon) {
                 canonical = icon.get_file().get_path()
             }
