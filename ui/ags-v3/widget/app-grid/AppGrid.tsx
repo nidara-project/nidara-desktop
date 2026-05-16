@@ -137,10 +137,11 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         motion.connect("leave", () => itemBox.remove_css_class("hover"))
         itemBox.add_controller(motion)
 
-        // Click: switch workspace (GestureClick directly — no Button wrapper)
+        // Click: switch workspace and move keyboard focus here
         const click = new Gtk.GestureClick()
         click.connect("released", () => {
             execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ workspace = ${i}})`]).catch(console.error)
+            focusWsSlot(i)
         })
         itemBox.add_controller(click)
 
