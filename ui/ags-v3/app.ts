@@ -191,10 +191,13 @@ app.start({
       status.toggleOverview()
     }
     const toggleGameOverlay = () => {
-      // Only promotes bar — dock and appgrid are unaffected
+      // Only promotes bar — dock and appgrid are unaffected.
+      // Activation requires a fullscreen window; deactivation is always allowed.
       windows.forEach(w => {
         if (w.name === "crystal-bar") {
           const isActive = (w as any).isGameOverlayActive?.() ?? false
+          const isFullscreen = (w as any).isBarFullscreenMode?.() ?? false
+          if (!isActive && !isFullscreen) return
           ;(w as any).setGameOverlayMode?.(!isActive)
         }
       })

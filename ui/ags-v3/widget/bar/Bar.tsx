@@ -763,6 +763,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const barHypr = AstalHyprland.get_default()
   if (barHypr) {
       barHypr.connect("notify::focused-client", checkBarFullscreen)
+      // Workspace switches don't always update focused-client when the game stays
+      // running in the background, so also re-check on workspace change.
+      barHypr.connect("notify::focused-workspace", checkBarFullscreen)
       GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { checkBarFullscreen(); return GLib.SOURCE_REMOVE })
   }
 
@@ -786,6 +789,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       } catch (e) { console.error("[Bar] setGameOverlayMode failed:", e) }
   }
   ;(win as any).isGameOverlayActive = () => gameOverlayActive
+  ;(win as any).isBarFullscreenMode = () => barFullscreenMode
 
   return win
 }
