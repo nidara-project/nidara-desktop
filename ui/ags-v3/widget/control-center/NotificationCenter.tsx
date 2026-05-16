@@ -157,7 +157,8 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
         drawSquircle(cr, w, CARD_H, undefined, Theme.shellOpacity, false, color, 28, false, { r: 1, g: 1, b: 1, a: 0.07 })
         cr.restore()
     })
-    Theme.connect("changed", () => da.queue_draw())
+    const themeConn = Theme.connect("changed", () => da.queue_draw())
+    da.connect("destroy", () => Theme.disconnect(themeConn))
     wrapper.append(da)
 
     return wrapper
@@ -207,7 +208,8 @@ export default function NotificationCenter() {
         sortedIds.forEach((id, index) => {
             const gl = groups.get(id)!; const sortedGroup = gl.sort((a, b) => b.time - a.time || b.id - a.id)
             const isExpanded = expandedGroups.has(id)
-            const sig = `${gl.length}:${isExpanded}:${sortedGroup.map(n => n.id).join(",")}`
+            const timeBucket = Math.floor(Date.now() / 60_000)
+            const sig = `${gl.length}:${isExpanded}:${sortedGroup.map(n => n.id).join(",")}:${timeBucket}`
             let cache = groupCache.get(id)
             if (!cache) {
                 const subBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_top: 4 })
@@ -246,9 +248,26 @@ export default function NotificationCenter() {
         })
     }
 
-    status.connect("notify::nc-open", () => { if (!status.nc_open) { expandedGroups.clear(); updateNotifs() } else { updateNotifs() } })
-    notifd.connect("notified", () => updateNotifs())
-    notifd.connect("resolved", () => updateNotifs())
+    let timestampTimer: number | null = null
+
+    status.connect("notify::nc-open", () => {
+        if (status.nc_open) {
+            updateNotifs()
+            // Refresh relative timestamps ("2m", "1h") while NC is visible.
+            timestampTimer = GLib.timeout_add(GLib.PRIORITY_LOW, 60_000, () => {
+                if (!status.nc_open) { timestampTimer = null; return GLib.SOURCE_REMOVE }
+                updateNotifs()
+                return GLib.SOURCE_CONTINUE
+            })
+        } else {
+            if (timestampTimer !== null) { GLib.source_remove(timestampTimer); timestampTimer = null }
+            expandedGroups.clear()
+            updateNotifs()
+        }
+    })
+    // Only rebuild when NC is open — opening NC always calls updateNotifs() above.
+    notifd.connect("notified", () => { if (status.nc_open) updateNotifs() })
+    notifd.connect("resolved", () => { if (status.nc_open) updateNotifs() })
     updateNotifs()
     return scroll
 }
