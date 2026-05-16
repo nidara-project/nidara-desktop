@@ -9,15 +9,17 @@ import AstalApps from "gi://AstalApps"
 import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import Cairo from "gi://cairo"
-import appService from "../../core/AppService" // Ensure import path is correct relative to this file
+import appService from "../../core/AppService"
 import { DOCK_CONSTANTS } from "./DockPhysics"
+import hs from "../../core/HyprlandState"
 
 import { dragBus, mouseBus, pointerBus, dockSettings, changeMenuCount, menuState } from "./state"
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
 import shellActions from "../../core/ShellActions"
 
-const hypr = AstalHyprland.get_default()
+// hypr kept as alias for hs to minimise diff surface in this file
+const hypr = hs
 
 // Module-level tracker so Dock.tsx can dismiss the active popover when clicking dock background
 let _activeDockMenu: Gtk.PopoverMenu | null = null
@@ -764,13 +766,12 @@ export function DockItem(
         label.set_label(targetTitle || "")
     }
 
-    const c1 = hypr.connect("notify::clients", sync)
-    const c2 = hypr.connect("notify::focused-client", sync)
+    const hsChangedId = hs.connect("changed", sync)
 
-    // V106: PROPER SIGNAL MANAGEMENT
+    // Per-client title signal for real-time title updates without waiting for a full refresh
     const clientSignalIds: { client: any, signalId: number }[] = []
     addresses.forEach(addr => {
-        const c = hypr.clients.find(cl => cl.address === addr)
+        const c = hs.clients.find(cl => cl.address === addr)
         if (c) {
             const signalId = c.connect("notify::title", sync)
             clientSignalIds.push({ client: c, signalId })
@@ -778,8 +779,7 @@ export function DockItem(
     })
 
     itemBox.connect("destroy", () => {
-        try { hypr.disconnect(c1) } catch (e) { }
-        try { hypr.disconnect(c2) } catch (e) { }
+        try { hs.disconnect(hsChangedId) } catch (e) { }
         clientSignalIds.forEach(({ client, signalId }) => {
             try {
                 if (GObject.signal_handler_is_connected(client, signalId)) {

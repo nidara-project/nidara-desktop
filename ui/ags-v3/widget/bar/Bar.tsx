@@ -31,6 +31,7 @@ import { barSettings, onBarSettingsChanged } from "./barState"
 import { dockSideState } from "../dock/state"
 import Icons from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
+import hs from "../../core/HyprlandState"
 
 const ASSETS_DIR = GLib.get_current_dir()
 
@@ -75,32 +76,27 @@ function AppTitle(monitorWidth: number): Gtk.Widget {
     margin_end: 16,
   })
 
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-    getServiceSafe(() => AstalHyprland.get_default(), "Hyprland").then(hyprland => {
-      if (!hyprland) return
+  GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+    let trackedClient: AstalHyprland.Client | null = null
+    let titleHandlerId = 0
 
-      let trackedClient: AstalHyprland.Client | null = null
-      let titleHandlerId = 0
+    const sync = () => {
+      const client = hs.focusedClient
+      const label = getWordmark(client, AstalHyprland.get_default())
+      if (label) appName.label = label
 
-      const sync = () => {
-        const client = hyprland.focused_client
-        const label = getWordmark(client, hyprland)
-        if (label) appName.label = label
-
-        if (trackedClient && titleHandlerId) {
-          trackedClient.disconnect(titleHandlerId)
-          titleHandlerId = 0
-        }
-        trackedClient = client
-        if (client) {
-          titleHandlerId = client.connect("notify::title", sync)
-        }
+      if (trackedClient && titleHandlerId) {
+        trackedClient.disconnect(titleHandlerId)
+        titleHandlerId = 0
       }
+      trackedClient = client
+      if (client) {
+        titleHandlerId = client.connect("notify::title", sync)
+      }
+    }
 
-      hyprland.connect("notify::focused-client", sync)
-      hyprland.connect("notify::focused-workspace", sync)
-      sync()
-    })
+    hs.connect("changed", sync)
+    sync()
     return GLib.SOURCE_REMOVE
   })
 
@@ -254,15 +250,16 @@ function SystemMenuOverlay() {
 }
 
 function Workspaces() {
-  const hypr = AstalHyprland.get_default()
   const box = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16 })
   for (let i = 1; i <= 5; i++) {
     const dot = new Gtk.Box({ css_classes: ["workspace-dot"], valign: Gtk.Align.CENTER })
     const update = () => {
-      const active = hypr.focusedWorkspace.id === i; const occupied = hypr.get_workspace(i)?.clients.length > 0
+      const active   = hs.focusedWorkspace?.id === i
+      const occupied = hs.occupiedWorkspaces.has(i)
       dot.set_css_classes(["workspace-dot", active ? "active" : occupied ? "occupied" : "empty"])
     }
-    hypr.connect("notify::focused-workspace", update); hypr.connect("workspace-added", update); hypr.connect("workspace-removed", update); update()
+    hs.connect("changed", update)
+    update()
     box.append(dot)
   }
   return SquircleContainer({ child: box, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleOverview() })
@@ -661,13 +658,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   win.set_child(masterOverlay)
   win.connect("realize", () => updateInputRegion())
 
-  // Safety net: refresh input region on workspace switch so any stale allocation
-  // left by a closing overlay (e.g. overview animation) is cleared immediately.
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-      const hyprland = AstalHyprland.get_default()
-      if (hyprland) hyprland.connect("notify::focused-workspace", () => updateInputRegion())
-      return GLib.SOURCE_REMOVE
-  })
+  // Safety net: refresh input region on any Hyprland state change to clear
+  // stale allocations left by closing overlays (e.g. overview animation).
+  hs.connect("changed", updateInputRegion)
   
   // Present invisible → measure → show, so the bar is never visible with a wrong layout.
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => { win.present(); return GLib.SOURCE_REMOVE })
@@ -743,9 +736,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
 
   const checkBarFullscreen = () => {
-      const hypr = AstalHyprland.get_default()
-      if (!hypr) return
-      const client = hypr.focused_client
+      const client = hs.focusedClient
       if (trackedBarClient && trackedBarClientConn !== null) {
           try { trackedBarClient.disconnect(trackedBarClientConn) } catch (_) {}
           trackedBarClientConn = null
@@ -760,14 +751,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       }
   }
 
-  const barHypr = AstalHyprland.get_default()
-  if (barHypr) {
-      barHypr.connect("notify::focused-client", checkBarFullscreen)
-      // Workspace switches don't always update focused-client when the game stays
-      // running in the background, so also re-check on workspace change.
-      barHypr.connect("notify::focused-workspace", checkBarFullscreen)
-      GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { checkBarFullscreen(); return GLib.SOURCE_REMOVE })
-  }
+  hs.connect("changed", checkBarFullscreen)
+  GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { checkBarFullscreen(); return GLib.SOURCE_REMOVE })
 
   ;(win as any).setGameOverlayMode = (active: boolean) => {
       try {

@@ -1,16 +1,16 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
 import AstalHyprland from "gi://AstalHyprland"
 import GLib from "gi://GLib"
-import { execAsync } from "ags/process"
 import status from "../../core/Status"
 import SquircleContainer, { Shape } from "../common/SquircleContainer"
 import { t } from "../../core/i18n"
 import { createSchematicMap } from "../common/WorkspaceSchematic"
+import hs from "../../core/HyprlandState"
 
 const WO_PREVIEW_WIDTH = 300
 
 export default function WorkspaceOverview(monitor: any) {
-    const hyprland = AstalHyprland.get_default()
+    const hyprland = AstalHyprland.get_default() // kept for createSchematicMap
 
     const overview = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
@@ -73,7 +73,7 @@ export default function WorkspaceOverview(monitor: any) {
         const btn = new Gtk.Button({ child: itemBox, css_classes: ["wo-btn"] })
         btn.set_focus_on_click(false) 
         btn.connect("clicked", () => {
-            execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ workspace = ${i}})`]).catch(console.error)
+            hs.focusWorkspace(i)
             status.overview_open = false
         })
 
@@ -85,15 +85,14 @@ export default function WorkspaceOverview(monitor: any) {
 
     const syncAll = () => {
         try {
-            if (!hyprland) return
-            const monitors = hyprland.get_monitors() || []
-            const workspaces = hyprland.get_workspaces() || []
-            const clients = hyprland.get_clients() || []
-            const focusedId = hyprland.focused_workspace?.id || 1
-            const occupied = new Set(workspaces.filter(ws => ws != null).map(ws => ws.id))
+            const monitors   = hs.monitors
+            const workspaces = hs.workspaces
+            const clients    = hs.clients
+            const focusedId  = hs.focusedWorkspace?.id || 1
+            const occupied   = hs.occupiedWorkspaces
 
             slots.forEach((ctx, i) => {
-                const isActive = focusedId === i
+                const isActive   = focusedId === i
                 const isOccupied = occupied.has(i)
                 ctx.wrapperBtn.visible = true
 
@@ -118,43 +117,14 @@ export default function WorkspaceOverview(monitor: any) {
     }
 
 
-    const signals = [
-        hyprland.connect("notify::focused-workspace", () => {
-            syncAll()
-        }),
-        hyprland.connect("notify::clients", () => {
-            syncAll()
-        }),
-        hyprland.connect("monitor-added", () => syncAll()),
-        hyprland.connect("monitor-removed", () => syncAll()),
-        hyprland.connect("event", (h, name, data) => {
-            if (["workspace", "activewindow", "movewindow", "resizewindow", "openwindow", "closewindow", "fullscreen", "focusedmon"].includes(name)) {
-                syncAll()
-            }
-        })
-    ]
+    const changedId = hs.connect("changed", syncAll)
 
     status.connect("notify::overview-open", () => {
-        if (status.overview_open) {
-            syncAll()
-        }
-    })
-
-    // V8.0: On-demand heartbeat — only runs while overview is open, stops automatically when closed.
-    // Hyprland event signals handle real-time changes; this acts as a safety net for edge cases.
-    const scheduleHeartbeat = () => {
-        GLib.timeout_add(GLib.PRIORITY_LOW, 1000, () => {
-            if (!status.overview_open) return GLib.SOURCE_REMOVE
-            syncAll()
-            return GLib.SOURCE_CONTINUE
-        })
-    }
-    status.connect("notify::overview-open", () => {
-        if (status.overview_open) scheduleHeartbeat()
+        if (status.overview_open) syncAll()
     })
 
     windowContent.connect("unrealize", () => {
-        signals.forEach(id => hyprland.disconnect(id))
+        hs.disconnect(changedId)
     })
 
     overview.append(list)

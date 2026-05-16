@@ -6,6 +6,7 @@ import Pango from "gi://Pango"
 import AstalApps from "gi://AstalApps"
 import AstalHyprland from "gi://AstalHyprland"
 import Gio from "gi://Gio"
+import hs from "../../core/HyprlandState"
 import appService from "../../core/AppService"
 import { pinnedState, savePinned } from "../dock/state"
 import { t } from "../../core/i18n"
@@ -57,7 +58,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
 
     // ── Workspace strip ────────────────────────────────────────────────────
     const WS_STRIP_WIDTH = 150
-    const hyprland = AstalHyprland.get_default()
+    const hyprland = AstalHyprland.get_default() // kept for createSchematicMap
 
     const wsStrip = new Gtk.Box({
         css_classes: ["ws-strip"],
@@ -77,12 +78,11 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     let wsNav = 0
 
     const syncWsStrip = () => {
-        if (!hyprland) return
         try {
-            const workspaces = hyprland.get_workspaces() || []
-            const monitors = hyprland.get_monitors() || []
-            const clients = hyprland.get_clients() || []
-            const focusedId = hyprland.focused_workspace?.id || 1
+            const workspaces = hs.workspaces
+            const monitors   = hs.monitors
+            const clients    = hs.clients
+            const focusedId  = hs.focusedWorkspace?.id || 1
             wsSlots.forEach(({ itemBox, label, sync }, i) => {
                 const isActive = focusedId === i
                 const isNav    = wsNav === i
@@ -140,7 +140,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         // Click: switch workspace and move keyboard focus here
         const click = new Gtk.GestureClick()
         click.connect("released", () => {
-            execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ workspace = ${i}})`]).catch(console.error)
+            hs.focusWorkspace(i)
             focusWsSlot(i)
         })
         itemBox.add_controller(click)
@@ -149,23 +149,11 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         wsStrip.append(itemBox)
     }
 
-    const stripSignals: number[] = []
-    if (hyprland) {
-        stripSignals.push(hyprland.connect("notify::focused-workspace", () => {
-            // If keyboard focus is in the strip, follow the new active workspace
-            if (wsNav > 0) wsNav = hyprland.focused_workspace?.id || 1
-            syncWsStrip()
-        }))
-        stripSignals.push(hyprland.connect("notify::clients", syncWsStrip))
-        stripSignals.push(hyprland.connect("event", (_h: any, name: string) => {
-            if (["workspace", "activewindow", "movewindow", "openwindow", "closewindow", "focusedmon"].includes(name)) {
-                syncWsStrip()
-            }
-        }))
-    }
-    wsStrip.connect("unrealize", () => {
-        stripSignals.forEach(id => hyprland?.disconnect(id))
+    const stripChangedId = hs.connect("changed", () => {
+        if (wsNav > 0) wsNav = hs.focusedWorkspace?.id || 1
+        syncWsStrip()
     })
+    wsStrip.connect("unrealize", () => hs.disconnect(stripChangedId))
 
     // ── FlowBox ────────────────────────────────────────────────────────────
     const GRID_COLS = 6
@@ -574,7 +562,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             searchEntry.get_buffer().set_text("", -1)
             filterApps()
             searchBox.remove_css_class("search-active")
-            focusWsSlot(hyprland?.focused_workspace?.id || 1)
+            focusWsSlot(hs.focusedWorkspace?.id || 1)
         },
 
         handleKey(keyval: number): boolean {
@@ -602,7 +590,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
                     return true
                 }
                 if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
-                    execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ workspace = ${wsNav}})`]).catch(console.error)
+                    hs.focusWorkspace(wsNav)
                     return true
                 }
                 // Backspace / printable char → back to search
@@ -624,7 +612,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             }
             if (keyval === Gdk.KEY_Up) {
                 if (navIdx < 0) {
-                    focusWsSlot(hyprland?.focused_workspace?.id || 1)
+                    focusWsSlot(hs.focusedWorkspace?.id || 1)
                     return true
                 }
                 if (navIdx < GRID_COLS) { focusWsSlot(hyprland?.focused_workspace?.id || 1) }
