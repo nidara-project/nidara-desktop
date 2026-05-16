@@ -4,6 +4,7 @@ import GLib from "gi://GLib"
 // @ts-ignore
 import Pango from "gi://Pango"
 import AstalApps from "gi://AstalApps"
+import AstalHyprland from "gi://AstalHyprland"
 import Gio from "gi://Gio"
 import appService from "../../core/AppService"
 import { pinnedState, savePinned } from "../dock/state"
@@ -13,6 +14,7 @@ import SquircleContainer from "../common/SquircleContainer"
 import Theme from "../../core/ThemeManager"
 import Cairo from "gi://cairo"
 import shellActions from "../../core/ShellActions"
+import { createSchematicMap } from "../common/WorkspaceSchematic"
 
 // Extract just the desktop basename, stripping path and .desktop extension
 const normId = (s: string) => {
@@ -52,6 +54,83 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         searchEntry.grab_focus()
     })
     searchBox.add_controller(searchBoxClick)
+
+    // ── Workspace strip ────────────────────────────────────────────────────
+    const WS_STRIP_WIDTH = 110
+    const hyprland = AstalHyprland.get_default()
+
+    const wsStrip = new Gtk.Box({
+        css_classes: ["ws-strip"],
+        orientation: Gtk.Orientation.HORIZONTAL,
+        spacing: 8,
+        halign: Gtk.Align.CENTER,
+        margin_top: 12,
+        margin_bottom: 4,
+    })
+
+    interface WsSlot {
+        btn: Gtk.Button
+        itemBox: Gtk.Box
+        label: Gtk.Label
+        sync: (ws: any[], mon: any[], cl: any[]) => void
+    }
+    const wsSlots = new Map<number, WsSlot>()
+
+    for (let i = 1; i <= 5; i++) {
+        const { wrapper, sync } = createSchematicMap(i, WS_STRIP_WIDTH, hyprland)
+        const wsLabel = new Gtk.Label({
+            label: `${i}`,
+            css_classes: ["ws-strip-label"],
+            halign: Gtk.Align.CENTER,
+        })
+        const itemBox = new Gtk.Box({
+            css_classes: ["ws-strip-item"],
+            orientation: Gtk.Orientation.VERTICAL,
+            spacing: 4,
+            halign: Gtk.Align.CENTER,
+        })
+        itemBox.append(wrapper)
+        itemBox.append(wsLabel)
+        const btn = new Gtk.Button({ css_classes: ["ws-strip-btn"], child: itemBox })
+        btn.set_focus_on_click(false)
+        btn.connect("clicked", () => {
+            execAsync(["hyprctl", "dispatch", `workspace ${i}`]).catch(console.error)
+        })
+        wsSlots.set(i, { btn, itemBox, label: wsLabel, sync })
+        wsStrip.append(btn)
+    }
+
+    const syncWsStrip = () => {
+        if (!hyprland) return
+        try {
+            const workspaces = hyprland.get_workspaces() || []
+            const monitors = hyprland.get_monitors() || []
+            const clients = hyprland.get_clients() || []
+            const focusedId = hyprland.focused_workspace?.id || 1
+            wsSlots.forEach(({ itemBox, label, sync }, i) => {
+                const isActive = focusedId === i
+                itemBox.set_css_classes(["ws-strip-item", isActive ? "active" : ""])
+                label.set_css_classes(["ws-strip-label", isActive ? "active" : ""])
+                sync(workspaces, monitors, clients)
+            })
+        } catch (e) {
+            console.error(`[WsStrip] sync failed: ${e}`)
+        }
+    }
+
+    const stripSignals: number[] = []
+    if (hyprland) {
+        stripSignals.push(hyprland.connect("notify::focused-workspace", syncWsStrip))
+        stripSignals.push(hyprland.connect("notify::clients", syncWsStrip))
+        stripSignals.push(hyprland.connect("event", (_h: any, name: string) => {
+            if (["workspace", "activewindow", "movewindow", "openwindow", "closewindow", "focusedmon"].includes(name)) {
+                syncWsStrip()
+            }
+        }))
+    }
+    wsStrip.connect("unrealize", () => {
+        stripSignals.forEach(id => hyprland?.disconnect(id))
+    })
 
     // ── FlowBox ────────────────────────────────────────────────────────────
     const GRID_COLS = 6
@@ -156,6 +235,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         width_request: innerWidth,
     })
     contentBox.append(searchBox)
+    contentBox.append(wsStrip)
     contentBox.append(gridArea)
 
     const squirclePanel = SquircleContainer({
@@ -391,6 +471,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         flowbox.invalidate_filter()
         flowbox.invalidate_sort()
         updateNoResults()
+        wsStrip.visible = !currentQuery
     }
 
     searchEntry.connect("changed", () => filterApps(searchEntry.text))
@@ -454,6 +535,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             flowbox.unselect_all()
             searchEntry.get_buffer().set_text("", -1)
             filterApps()
+            syncWsStrip()
             searchBox.add_css_class("search-active")
             searchEntry.grab_focus()
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
