@@ -132,31 +132,26 @@ window#crystal-app-launcher,
     padding: 0 4px;
 }
 
-.ws-strip-btn {
-    @include crystal-reset;
-    border-radius: 14px;
-    padding: 0;
-
-    &:hover .ws-strip-item {
-        background: var(--crystal-surface-hover);
-        border-color: var(--crystal-surface-hover);
-    }
-
-    &:active .ws-strip-item {
-        background: var(--crystal-surface);
-    }
-}
-
 .ws-strip-item {
     padding: 6px;
     border-radius: 12px;
     background: var(--crystal-surface-back);
     border: 1px solid var(--crystal-border);
-    transition: background 0.15s ease, border-color 0.15s ease;
+    transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+
+    &.hover {
+        background: var(--crystal-surface-hover);
+        border-color: var(--crystal-surface-hover);
+    }
 
     &.active {
         background: #{"alpha(@accent_bg_color, 0.07)"};
         border-color: #{"alpha(@accent_bg_color, 0.55)"};
+    }
+
+    &.keyboard-focus {
+        border-color: #{"alpha(@accent_bg_color, 0.9)"};
+        box-shadow: 0 0 0 2px #{"alpha(@accent_bg_color, 0.35)"};
     }
 }
 

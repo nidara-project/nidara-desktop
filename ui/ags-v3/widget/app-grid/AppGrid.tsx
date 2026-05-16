@@ -68,12 +68,49 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     })
 
     interface WsSlot {
-        btn: Gtk.Button
         itemBox: Gtk.Box
         label: Gtk.Label
         sync: (ws: any[], mon: any[], cl: any[]) => void
     }
     const wsSlots = new Map<number, WsSlot>()
+    // 0 = not in strip; 1-5 = keyboard-focused slot
+    let wsNav = 0
+
+    const syncWsStrip = () => {
+        if (!hyprland) return
+        try {
+            const workspaces = hyprland.get_workspaces() || []
+            const monitors = hyprland.get_monitors() || []
+            const clients = hyprland.get_clients() || []
+            const focusedId = hyprland.focused_workspace?.id || 1
+            wsSlots.forEach(({ itemBox, label, sync }, i) => {
+                const isActive = focusedId === i
+                const isNav    = wsNav === i
+                itemBox.set_css_classes([
+                    "ws-strip-item",
+                    ...(isActive ? ["active"] : []),
+                    ...(isNav   ? ["keyboard-focus"] : []),
+                ])
+                label.set_css_classes(["ws-strip-label", ...(isActive ? ["active"] : [])])
+                sync(workspaces, monitors, clients)
+            })
+        } catch (e) {
+            console.error(`[WsStrip] sync failed: ${e}`)
+        }
+    }
+
+    // Keyboard-focus a specific slot (1-5); clears app-grid selection
+    const focusWsSlot = (wsId: number) => {
+        wsNav = Math.max(1, Math.min(wsId, 5))
+        syncWsStrip()
+        searchBox.remove_css_class("search-active")
+    }
+
+    const clearWsNav = () => {
+        if (wsNav === 0) return
+        wsNav = 0
+        syncWsStrip()
+    }
 
     for (let i = 1; i <= 5; i++) {
         const { wrapper, sync } = createSchematicMap(i, WS_STRIP_WIDTH, hyprland)
@@ -90,31 +127,22 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         })
         itemBox.append(wrapper)
         itemBox.append(wsLabel)
-        const btn = new Gtk.Button({ css_classes: ["ws-strip-btn"], child: itemBox })
-        btn.set_focus_on_click(false)
-        btn.connect("clicked", () => {
+
+        // Hover highlight
+        const motion = new Gtk.EventControllerMotion()
+        motion.connect("enter", () => itemBox.add_css_class("hover"))
+        motion.connect("leave", () => itemBox.remove_css_class("hover"))
+        itemBox.add_controller(motion)
+
+        // Click: switch workspace (GestureClick directly — no Button wrapper)
+        const click = new Gtk.GestureClick()
+        click.connect("released", () => {
             execAsync(["hyprctl", "dispatch", "workspace", `${i}`]).catch(console.error)
         })
-        wsSlots.set(i, { btn, itemBox, label: wsLabel, sync })
-        wsStrip.append(btn)
-    }
+        itemBox.add_controller(click)
 
-    const syncWsStrip = () => {
-        if (!hyprland) return
-        try {
-            const workspaces = hyprland.get_workspaces() || []
-            const monitors = hyprland.get_monitors() || []
-            const clients = hyprland.get_clients() || []
-            const focusedId = hyprland.focused_workspace?.id || 1
-            wsSlots.forEach(({ itemBox, label, sync }, i) => {
-                const isActive = focusedId === i
-                itemBox.set_css_classes(["ws-strip-item", isActive ? "active" : ""])
-                label.set_css_classes(["ws-strip-label", isActive ? "active" : ""])
-                sync(workspaces, monitors, clients)
-            })
-        } catch (e) {
-            console.error(`[WsStrip] sync failed: ${e}`)
-        }
+        wsSlots.set(i, { itemBox, label: wsLabel, sync })
+        wsStrip.append(itemBox)
     }
 
     const stripSignals: number[] = []
@@ -471,6 +499,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         flowbox.invalidate_sort()
         updateNoResults()
         wsStrip.visible = !currentQuery
+        if (currentQuery) clearWsNav()
     }
 
     searchEntry.connect("changed", () => filterApps(searchEntry.text))
@@ -490,12 +519,14 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
 
     const returnToSearch = () => {
         navIdx = -1
+        clearWsNav()
         flowbox.unselect_all()
         searchBox.add_css_class("search-active")
         searchEntry.grab_focus()
     }
 
     const focusAt = (idx: number) => {
+        clearWsNav()
         const children = getVisibleChildren()
         if (!children.length) return
         navIdx = Math.max(0, Math.min(idx, children.length - 1))
@@ -531,6 +562,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
 
         onShow() {
             navIdx = -1
+            wsNav = 0
             flowbox.unselect_all()
             searchEntry.get_buffer().set_text("", -1)
             filterApps()
@@ -548,11 +580,56 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             if (keyval === Gdk.KEY_Escape) {
                 onClose(); return true
             }
+
+            // ── Workspace strip navigation ──────────────────────────────
+            if (wsNav > 0) {
+                if (keyval === Gdk.KEY_Left) {
+                    if (wsNav > 1) focusWsSlot(wsNav - 1)
+                    return true
+                }
+                if (keyval === Gdk.KEY_Right) {
+                    if (wsNav < 5) focusWsSlot(wsNav + 1)
+                    return true
+                }
+                if (keyval === Gdk.KEY_Up) {
+                    // top of the UI, do nothing
+                    return true
+                }
+                if (keyval === Gdk.KEY_Down) {
+                    clearWsNav()
+                    focusAt(0)
+                    return true
+                }
+                if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
+                    execAsync(["hyprctl", "dispatch", "workspace", `${wsNav}`]).catch(console.error)
+                    return true
+                }
+                // Backspace / printable char → back to search
+                if (keyval === Gdk.KEY_BackSpace) {
+                    returnToSearch(); return true
+                }
+                if (keyval >= Gdk.KEY_space && keyval <= Gdk.KEY_asciitilde) {
+                    returnToSearch()
+                    const buf = searchEntry.get_buffer()
+                    buf.insert_text(buf.get_length(), String.fromCharCode(keyval), 1)
+                    return true
+                }
+                return false
+            }
+
+            // ── App grid / search navigation ────────────────────────────
             if (keyval === Gdk.KEY_Down) {
                 focusAt(navIdx < 0 ? 0 : navIdx + GRID_COLS); return true
             }
             if (keyval === Gdk.KEY_Up) {
-                if (navIdx < 0) return false
+                if (navIdx < 0) {
+                    // Search focused → enter workspace strip if visible
+                    if (wsStrip.visible) {
+                        focusWsSlot(hyprland?.focused_workspace?.id || 1)
+                        return true
+                    }
+                    return false
+                }
                 if (navIdx < GRID_COLS) { returnToSearch() }
                 else { focusAt(navIdx - GRID_COLS) }
                 return true
@@ -572,7 +649,6 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
                     return true
                 }
             }
-            // Backspace: delete last char from buffer directly — no GTK focus needed
             if (keyval === Gdk.KEY_BackSpace) {
                 if (navIdx >= 0) returnToSearch()
                 const buf = searchEntry.get_buffer()
@@ -580,7 +656,6 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
                 if (len > 0) buf.delete_text(len - 1, 1)
                 return true
             }
-            // Printable ASCII: insert into buffer directly — works without compositor focus
             if (keyval >= Gdk.KEY_space && keyval <= Gdk.KEY_asciitilde) {
                 if (navIdx >= 0) returnToSearch()
                 const buf = searchEntry.get_buffer()
