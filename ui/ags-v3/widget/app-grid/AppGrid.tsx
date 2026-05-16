@@ -86,12 +86,14 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             wsSlots.forEach(({ itemBox, label, sync }, i) => {
                 const isActive = focusedId === i
                 const isNav    = wsNav === i
-                itemBox.set_css_classes([
-                    "ws-strip-item",
-                    ...(isActive ? ["active"] : []),
-                    ...(isNav   ? ["keyboard-focus"] : []),
-                ])
-                label.set_css_classes(["ws-strip-label", ...(isActive ? ["active"] : [])])
+                // Toggle individual classes — set_css_classes would wipe the
+                // "hover" class that EventControllerMotion adds independently.
+                if (isActive) itemBox.add_css_class("active")
+                else          itemBox.remove_css_class("active")
+                if (isNav)    itemBox.add_css_class("keyboard-focus")
+                else          itemBox.remove_css_class("keyboard-focus")
+                if (isActive) label.add_css_class("active")
+                else          label.remove_css_class("active")
                 sync(workspaces, monitors, clients)
             })
         } catch (e) {

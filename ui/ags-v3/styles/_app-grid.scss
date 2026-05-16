@@ -150,9 +150,8 @@ window#crystal-app-launcher,
     }
 
     &.keyboard-focus {
-        background: #{"alpha(@accent_bg_color, 0.12)"};
-        border-color: #{"@accent_bg_color"};
-        box-shadow: 0 0 0 3px #{"alpha(@accent_bg_color, 0.4)"};
+        background: #{"alpha(@accent_bg_color, 0.15)"};
+        border: 2px solid #{"@accent_bg_color"};
     }
 }
 
