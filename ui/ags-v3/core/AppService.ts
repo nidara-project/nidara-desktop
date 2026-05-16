@@ -180,6 +180,46 @@ class AppService {
             } catch (e) {}
         }
 
+        // Steam fallback: handles steam_icon_APPID (from .desktop Icon= field) and
+        // steam_app_APPID (Hyprland window class when no .desktop file exists).
+        // Steam stores per-game icons as hash-named JPEGs in its own appcache — outside
+        // the XDG icon theme, so the GTK lookup above never finds them for most games.
+        const steamMatch = n.match(/^steam_(icon|app)_(\d+)$/i)
+        if (steamMatch) {
+            const appId = steamMatch[2]
+            if (steamMatch[1].toLowerCase() === "app") {
+                // Re-enter with the standard icon name so the full chain runs for it
+                return this.getCanonicalName(`steam_icon_${appId}`)
+            }
+            // steam_icon_APPID: find the hash-named icon file in Steam's librarycache.
+            // Each APPID dir contains a small (≤10 KB) 40-char hex-named .jpg that is the
+            // dock/taskbar icon, plus large artwork files with fixed names.
+            const cacheBases = [
+                `${GLib.get_home_dir()}/.local/share/Steam/appcache/librarycache`,
+                `${GLib.get_home_dir()}/.steam/steam/appcache/librarycache`,
+            ]
+            const knownArtwork = new Set(["header.jpg", "library_600x900.jpg", "library_hero.jpg", "library_hero_blur.jpg", "logo.png"])
+            for (const base of cacheBases) {
+                const cacheDir = `${base}/${appId}`
+                if (!GLib.file_test(cacheDir, GLib.FileTest.EXISTS)) continue
+                try {
+                    const gDir = Gio.File.new_for_path(cacheDir)
+                    const enumerator = gDir.enumerate_children("standard::name,standard::type,standard::size", Gio.FileQueryInfoFlags.NONE, null)
+                    let info
+                    let best: { path: string; size: number } | null = null
+                    while ((info = enumerator.next_file(null))) {
+                        const fname = info.get_name()
+                        if (info.get_file_type() !== Gio.FileType.REGULAR) continue
+                        if (knownArtwork.has(fname)) continue
+                        if (!/^[0-9a-f]{40}\.(jpg|png)$/i.test(fname)) continue
+                        const size = info.get_size()
+                        if (!best || size < best.size) best = { path: `${cacheDir}/${fname}`, size }
+                    }
+                    if (best) return best.path
+                } catch (e) { }
+            }
+        }
+
         return null
     }
 

@@ -119,7 +119,7 @@ function SchematicMap(wsId: number, hyprland: any) {
         this.dockArea.set_size_request(BASE_WIDTH, dH)
         this.move(this.dockArea, 0, this.cachedDrawHeight - dH)
 
-        const wsClients = clients.filter((c: any) => c.workspace.id === this.wsId)
+        const wsClients = clients.filter((c: any) => c?.workspace?.id === this.wsId)
             .sort((a: any, b: any) => (b.focus_history_id || 0) - (a.focus_history_id || 0))
 
         const rTop = (hMonitor as any).reserved_top || 0
@@ -313,7 +313,7 @@ export default function WorkspaceOverview(monitor: any) {
             const workspaces = hyprland.get_workspaces() || []
             const clients = hyprland.get_clients() || []
             const focusedId = hyprland.focused_workspace?.id || 1
-            const occupied = new Set(workspaces.map(ws => ws.id))
+            const occupied = new Set(workspaces.filter(ws => ws != null).map(ws => ws.id))
 
             slots.forEach((ctx, i) => {
                 const isActive = focusedId === i
@@ -328,7 +328,7 @@ export default function WorkspaceOverview(monitor: any) {
                 }
                 label.set_css_classes(["wo-label", isActive ? "active" : ""])
 
-                const wsClients = clients.filter(c => c.workspace.id === i)
+                const wsClients = clients.filter(c => c?.workspace?.id === i)
                 count.label = wsClients.length === 0 ? t("overview.empty") : (wsClients.length === 1 ? `1 ${t("overview.window")}` : `${wsClients.length} ${t("overview.windows")}`)
 
                 if (ctx.schematic && ctx.schematic.sync) {

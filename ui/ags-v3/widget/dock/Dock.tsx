@@ -38,13 +38,23 @@ export default function Dock(gdkmonitor: any) {
     // V180: Sync initial width with pinned items to prevent "One-Time Jump" on startup
     const norm = (s: string) => (s || "").toLowerCase().replace(".desktop", "")
 
+    // IDs with steam_app_ prefix are unique per-game and must never match "steam" (or any
+    // other shorter ID) via substring. Without this guard, "steam_app_1172470".includes("steam")
+    // would absorb all game windows under the pinned Steam client icon.
+    const appMatch = (k: string, lid: string) =>
+        k === lid || (
+            !k.startsWith("steam_app_") && !lid.startsWith("steam_app_") &&
+            (k.includes(lid) || lid.includes(k))
+        )
+
     // V475: Synchronous Width Helper
     // This allows updateAllTargets and update to always see the same base width
     // regardless of when they are called.
     const calculateStableWidth = (effectivePinned: string[]) => {
         const groupedClients: { [key: string]: any } = {}
         hypr.clients.forEach(c => {
-            if (c.class?.toLowerCase().includes("ags")) return
+            if (!c.class) return
+            if (c.class.toLowerCase().includes("ags")) return
             let key = c.class.toLowerCase()
 
             // V625: Mirror mapping logic from update()
@@ -937,7 +947,7 @@ export default function Dock(gdkmonitor: any) {
                 }
 
                 effectivePinnedList = effectivePinnedList.filter(p => norm(p) !== nsid)
-                runningUnpinnedKeys = groupedKeys.filter(k => k !== nsid && k !== "home-shortcut" && !pinnedState.list.some(p => { const lid = norm(p); return k === lid || k.includes(lid) || lid.includes(k) }))
+                runningUnpinnedKeys = groupedKeys.filter(k => k !== nsid && k !== "home-shortcut" && !pinnedState.list.some(p => { const lid = norm(p); return appMatch(k, lid) }))
                     .sort((a, b) => (unpinnedOpenOrder.get(a) ?? Infinity) - (unpinnedOpenOrder.get(b) ?? Infinity))
 
                 const pinnedBoundary = 2 + effectivePinnedList.length
@@ -956,7 +966,7 @@ export default function Dock(gdkmonitor: any) {
                 }
             } else {
                 lastDraggingId = ""
-                runningUnpinnedKeys = groupedKeys.filter(k => k !== "home-shortcut" && !pinnedState.list.some(p => { const lid = norm(p); return k === lid || k.includes(lid) || lid.includes(k) }))
+                runningUnpinnedKeys = groupedKeys.filter(k => k !== "home-shortcut" && !pinnedState.list.some(p => { const lid = norm(p); return appMatch(k, lid) }))
                     .sort((a, b) => (unpinnedOpenOrder.get(a) ?? Infinity) - (unpinnedOpenOrder.get(b) ?? Infinity))
             }
 
@@ -1080,9 +1090,7 @@ export default function Dock(gdkmonitor: any) {
                 const originalId = id.replace(".desktop", "")
                 let appItem = findApp(id)
                 const targetKey = lid
-                const groupKey = Object.keys(groupedClients).find(k =>
-                    k === targetKey || k.includes(targetKey) || targetKey.includes(k)
-                )
+                const groupKey = Object.keys(groupedClients).find(k => appMatch(k, targetKey))
                 let addrs: string[] = []
                 let clientTitle = undefined
 
