@@ -64,8 +64,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         orientation: Gtk.Orientation.HORIZONTAL,
         spacing: 8,
         halign: Gtk.Align.CENTER,
-        margin_top: 12,
-        margin_bottom: 4,
+        margin_bottom: 12,
     })
 
     interface WsSlot {
@@ -94,7 +93,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         const btn = new Gtk.Button({ css_classes: ["ws-strip-btn"], child: itemBox })
         btn.set_focus_on_click(false)
         btn.connect("clicked", () => {
-            execAsync(["hyprctl", "dispatch", `workspace ${i}`]).catch(console.error)
+            execAsync(["hyprctl", "dispatch", "workspace", `${i}`]).catch(console.error)
         })
         wsSlots.set(i, { btn, itemBox, label: wsLabel, sync })
         wsStrip.append(btn)
@@ -234,8 +233,8 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         vexpand: false,
         width_request: innerWidth,
     })
-    contentBox.append(searchBox)
     contentBox.append(wsStrip)
+    contentBox.append(searchBox)
     contentBox.append(gridArea)
 
     const squirclePanel = SquircleContainer({
