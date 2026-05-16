@@ -622,7 +622,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
                     focusWsSlot(hyprland?.focused_workspace?.id || 1)
                     return true
                 }
-                if (navIdx < GRID_COLS) { returnToSearch() }
+                if (navIdx < GRID_COLS) { focusWsSlot(hyprland?.focused_workspace?.id || 1) }
                 else { focusAt(navIdx - GRID_COLS) }
                 return true
             }
