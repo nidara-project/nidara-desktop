@@ -568,14 +568,8 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             flowbox.unselect_all()
             searchEntry.get_buffer().set_text("", -1)
             filterApps()
-            syncWsStrip()
-            searchBox.add_css_class("search-active")
-            searchEntry.grab_focus()
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-                searchEntry.grab_focus()
-                ;(searchEntry.get_root() as Gtk.Window)?.set_focus(searchEntry)
-                return GLib.SOURCE_REMOVE
-            })
+            searchBox.remove_css_class("search-active")
+            focusWsSlot(hyprland?.focused_workspace?.id || 1)
         },
 
         handleKey(keyval: number): boolean {
