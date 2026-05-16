@@ -151,7 +151,11 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
 
     const stripSignals: number[] = []
     if (hyprland) {
-        stripSignals.push(hyprland.connect("notify::focused-workspace", syncWsStrip))
+        stripSignals.push(hyprland.connect("notify::focused-workspace", () => {
+            // If keyboard focus is in the strip, follow the new active workspace
+            if (wsNav > 0) wsNav = hyprland.focused_workspace?.id || 1
+            syncWsStrip()
+        }))
         stripSignals.push(hyprland.connect("notify::clients", syncWsStrip))
         stripSignals.push(hyprland.connect("event", (_h: any, name: string) => {
             if (["workspace", "activewindow", "movewindow", "openwindow", "closewindow", "focusedmon"].includes(name)) {
