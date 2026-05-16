@@ -137,7 +137,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         // Click: switch workspace (GestureClick directly — no Button wrapper)
         const click = new Gtk.GestureClick()
         click.connect("released", () => {
-            execAsync(["hyprctl", "dispatch", "workspace", `${i}`]).catch(console.error)
+            execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ workspace = ${i}})`]).catch(console.error)
         })
         itemBox.add_controller(click)
 
@@ -601,7 +601,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
                     return true
                 }
                 if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
-                    execAsync(["hyprctl", "dispatch", "workspace", `${wsNav}`]).catch(console.error)
+                    execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ workspace = ${wsNav}})`]).catch(console.error)
                     return true
                 }
                 // Backspace / printable char → back to search
