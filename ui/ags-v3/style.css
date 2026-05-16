@@ -2147,8 +2147,8 @@ window#crystal-app-launcher,
   padding: 6px;
   border-radius: 12px;
   background: var(--crystal-surface-back);
-  border: 1px solid var(--crystal-border);
-  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+  border: 2px solid var(--crystal-border);
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 .ws-strip-item.hover {
   background: var(--crystal-surface-hover);
@@ -2160,7 +2160,7 @@ window#crystal-app-launcher,
 }
 .ws-strip-item.keyboard-focus {
   background: alpha(@accent_bg_color, 0.15);
-  border: 2px solid @accent_bg_color;
+  border-color: @accent_bg_color;
 }
 
 .ws-strip-label {

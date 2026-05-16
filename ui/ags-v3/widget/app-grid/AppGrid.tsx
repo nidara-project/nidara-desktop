@@ -56,14 +56,14 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     searchBox.add_controller(searchBoxClick)
 
     // ── Workspace strip ────────────────────────────────────────────────────
-    const WS_STRIP_WIDTH = 110
+    const WS_STRIP_WIDTH = 150
     const hyprland = AstalHyprland.get_default()
 
     const wsStrip = new Gtk.Box({
         css_classes: ["ws-strip"],
         orientation: Gtk.Orientation.HORIZONTAL,
         spacing: 8,
-        halign: Gtk.Align.CENTER,
+        hexpand: true,
         margin_bottom: 12,
     })
 
@@ -125,7 +125,8 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             css_classes: ["ws-strip-item"],
             orientation: Gtk.Orientation.VERTICAL,
             spacing: 4,
-            halign: Gtk.Align.CENTER,
+            hexpand: true,
+            halign: Gtk.Align.FILL,
         })
         itemBox.append(wrapper)
         itemBox.append(wsLabel)
@@ -500,7 +501,6 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         flowbox.invalidate_filter()
         flowbox.invalidate_sort()
         updateNoResults()
-        wsStrip.visible = !currentQuery
         if (currentQuery) clearWsNav()
     }
 
@@ -625,12 +625,8 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             }
             if (keyval === Gdk.KEY_Up) {
                 if (navIdx < 0) {
-                    // Search focused → enter workspace strip if visible
-                    if (wsStrip.visible) {
-                        focusWsSlot(hyprland?.focused_workspace?.id || 1)
-                        return true
-                    }
-                    return false
+                    focusWsSlot(hyprland?.focused_workspace?.id || 1)
+                    return true
                 }
                 if (navIdx < GRID_COLS) { returnToSearch() }
                 else { focusAt(navIdx - GRID_COLS) }
