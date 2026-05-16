@@ -26,39 +26,36 @@ export function NotificationPopupsWidget() {
     })
 
     const notifMap = new Map<number, Gtk.Widget>()
+    const timerMap = new Map<number, number>()
 
-    const onNotified = (_: any, id: number) => {
-        const n = notifd.get_notification(id)
-        if (!n || notifd.dont_disturb || status.cc_open || status.nc_open) return
-
-        if (notifMap.has(id)) {
-            box.remove(notifMap.get(id)!)
-        }
-
-        const widget = NotificationCapsule({ n, isPopup: true, onClose: () => {
-             if (widget.get_parent() === box) box.remove(widget)
-             notifMap.delete(id)
-        }})
-        box.append(widget)
-        notifMap.set(id, widget)
-
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, notifConfig.popupTimeoutMs, () => {
-            const w = notifMap.get(id)
-            if (w && w.get_parent() === box) {
-                box.remove(w)
-                notifMap.delete(id)
-            }
-            return GLib.SOURCE_REMOVE
-        })
-    }
-
-    const onResolved = (_: any, id: number) => {
+    const removeNotif = (id: number) => {
+        const timer = timerMap.get(id)
+        if (timer) { GLib.source_remove(timer); timerMap.delete(id) }
         const widget = notifMap.get(id)
         if (widget) {
             if (widget.get_parent() === box) box.remove(widget)
             notifMap.delete(id)
         }
     }
+
+    const onNotified = (_: any, id: number) => {
+        const n = notifd.get_notification(id)
+        if (!n || notifd.dont_disturb || status.cc_open || status.nc_open) return
+
+        removeNotif(id)
+
+        const widget = NotificationCapsule({ n, isPopup: true, onClose: () => removeNotif(id) })
+        box.append(widget)
+        notifMap.set(id, widget)
+
+        timerMap.set(id, GLib.timeout_add(GLib.PRIORITY_DEFAULT, notifConfig.popupTimeoutMs, () => {
+            timerMap.delete(id)
+            removeNotif(id)
+            return GLib.SOURCE_REMOVE
+        }))
+    }
+
+    const onResolved = (_: any, id: number) => removeNotif(id)
 
     notifd.connect("notified", (s, id) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { onNotified(s, id); return GLib.SOURCE_REMOVE }))
     notifd.connect("resolved", (s, id) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { onResolved(s, id); return GLib.SOURCE_REMOVE }))

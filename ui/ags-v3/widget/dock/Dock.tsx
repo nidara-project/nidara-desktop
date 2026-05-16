@@ -1835,22 +1835,22 @@ export default function Dock(gdkmonitor: any) {
     }
 
     const checkFullscreen = () => {
-        const client = hypr.focused_client
-        if (trackedClient && trackedClientConn !== null) {
-            try { trackedClient.disconnect(trackedClientConn) } catch (_) {}
-            trackedClientConn = null
+        const client = hs.focusedClient ?? null
+        if (client !== trackedClient) {
+            if (trackedClient && trackedClientConn !== null) {
+                try { trackedClient.disconnect(trackedClientConn) } catch (_) {}
+                trackedClientConn = null
+            }
+            trackedClient = client
+            if (client) {
+                trackedClientConn = client.connect("notify::fullscreen", () =>
+                    setFullscreenMode(client.fullscreen ?? false))
+            }
         }
-        trackedClient = client ?? null
-        if (client) {
-            trackedClientConn = client.connect("notify::fullscreen", () =>
-                setFullscreenMode(client.fullscreen ?? false))
-            setFullscreenMode(client.fullscreen ?? false)
-        } else {
-            setFullscreenMode(false)
-        }
+        setFullscreenMode(client ? (client.fullscreen ?? false) : false)
     }
 
-    hypr.connect("notify::focused-client", checkFullscreen)
+    hs.connect("changed", checkFullscreen)
     checkFullscreen()
 
     update()
