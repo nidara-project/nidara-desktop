@@ -683,6 +683,12 @@ export default function Dock(gdkmonitor: any) {
         const surface = win.get_native()?.get_surface()
         if (!surface) return
 
+        // AppGrid open: full window must receive input (panel + dock strip)
+        if (appGridPanelOpen) {
+            surface.set_input_region(null)
+            return
+        }
+
         const region = new Cairo.Region()
 
         // Vertical dock: restrict input to pill area, or thin edge when hidden
@@ -757,8 +763,10 @@ export default function Dock(gdkmonitor: any) {
 
     win.add_controller(motion)
     motion.connect("motion", (controller, x, y) => {
-        // Fullscreen mode: cursor cannot interact with dock unless appgrid is open
-        if (fullscreenMode && !appGridPanelOpen) return
+        // AppGrid open: dock doesn't respond to mouse (panel handles its own events)
+        if (appGridPanelOpen) return
+        // Fullscreen mode: cursor cannot interact with dock
+        if (fullscreenMode) return
         // Auto-hide: reveal dock on any mouse entry (skip spurious events before realize)
         if (dockSettings.autoHide && !isRevealed && !isSettlingIn) {
             setRevealed(true)
@@ -791,7 +799,7 @@ export default function Dock(gdkmonitor: any) {
             return
         }
 
-        const yLimit = DOCK_CONSTANTS.WINDOW_HEIGHT - DOCK_CONSTANTS.PILL_HEIGHT
+        const yLimit = WIN_H - DOCK_CONSTANTS.PILL_HEIGHT
         if (y < yLimit) {
             updateAllTargets(-1000)
             return
@@ -800,6 +808,7 @@ export default function Dock(gdkmonitor: any) {
     })
     motion.connect("leave", () => {
         cursorInDock = false
+        if (appGridPanelOpen) return  // keep dock revealed while panel is open
         if (dragBus.draggingId || isDndEnding) return
 
         clearLeaveTimeout()
@@ -811,19 +820,19 @@ export default function Dock(gdkmonitor: any) {
             // fired (Wayland can include wl_pointer.leave before wl_pointer.button.released
             // in the same frame). If protection is active, abort the hide — a genuine leave
             // will create a new timeout once the protection expires.
-            if (isDndEnding || dragBus.draggingId) return GLib.SOURCE_REMOVE
+            if (isDndEnding || dragBus.draggingId || appGridPanelOpen) return GLib.SOURCE_REMOVE
             updateAllTargets(-1000)
             if (dockSettings.autoHide) {
                 if (hideDelay > magnDelay) {
                     leaveTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, hideDelay - magnDelay, () => {
                         leaveTimeout = null
-                        if (isDndEnding || dragBus.draggingId || menuState.openCount > 0) return GLib.SOURCE_REMOVE
+                        if (isDndEnding || dragBus.draggingId || menuState.openCount > 0 || appGridPanelOpen) return GLib.SOURCE_REMOVE
                         setRevealed(false)
                         updateInputRegion(smoothedBarWidth)
                         return GLib.SOURCE_REMOVE
                     })
                 } else {
-                    if (menuState.openCount === 0) {
+                    if (menuState.openCount === 0 && !appGridPanelOpen) {
                         setRevealed(false)
                         updateInputRegion(smoothedBarWidth)
                     }
@@ -1724,10 +1733,17 @@ export default function Dock(gdkmonitor: any) {
 
     const openAppGridPanel = () => {
         if (appGridPanelOpen) return
+        clearLeaveTimeout()  // cancel any pending hide from a stale mouse-leave event
         appGridPanelOpen = true
+        win.set_focusable(true)
+        win.set_focus_visible(true)
+        if (layerShellReady) {
+            // OVERLAY ensures visibility above fullscreen windows; EXCLUSIVE routes all keys here
+            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
+            Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+        }
         appGrid.widget.visible = true
         appGrid.onShow()
-        if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
         // Full window receives input when appgrid is open
         const surface = win.get_native()?.get_surface()
         if (surface) surface.set_input_region(null)
@@ -1742,7 +1758,17 @@ export default function Dock(gdkmonitor: any) {
         if (!appGridPanelOpen) return
         appGridPanelOpen = false
         appGrid.widget.visible = false
-        if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+        appGrid.setActive(false)
+        win.set_focus(null)
+        win.set_focusable(false)
+        win.set_focus_visible(false)
+        if (layerShellReady) {
+            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
+            Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+            // Restore exclusive zone that was implicitly cleared while in OVERLAY
+            if (!isVertical)
+                Gtk4LayerShell.set_exclusive_zone(win, (isRevealed && !dockSettings.autoHide) ? DOCK_CONSTANTS.EXCLUSIVE_ZONE : 0)
+        }
         // Restore dock hide if in fullscreen or autohide with cursor outside
         if (fullscreenMode && !cursorInDock) {
             setRevealed(false)

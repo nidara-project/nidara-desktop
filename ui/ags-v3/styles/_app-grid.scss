@@ -24,8 +24,9 @@ window#crystal-app-launcher,
     min-height: 44px;
     transition: background 0.15s ease, border-color 0.15s ease;
 
-    &:focus-within {
-        border-color: rgba(var(--crystal-accent-rgb), 0.6);
+    &:focus-within,
+    &.search-active {
+        border-color: rgba(var(--crystal-accent-rgb), 0.7);
         background: var(--crystal-surface);
     }
 }
@@ -33,7 +34,8 @@ window#crystal-app-launcher,
 .app-grid-search-icon {
     color: var(--crystal-text-dim);
 
-    .app-grid-search-box:focus-within & {
+    .app-grid-search-box:focus-within &,
+    .app-grid-search-box.search-active & {
         color: var(--crystal-accent);
     }
 }
@@ -63,11 +65,20 @@ window#crystal-app-launcher,
     padding: 0;
     border-radius: 18px;
 
-    &:selected,
     &:active {
         background: transparent;
         outline: none;
         box-shadow: none;
+    }
+
+    &:selected {
+        background: transparent;
+        outline: none;
+        box-shadow: none;
+
+        .app-grid-plate {
+            box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.6);
+        }
     }
 
     &:focus {
@@ -76,14 +87,6 @@ window#crystal-app-launcher,
 
         .app-grid-button {
             background: var(--crystal-surface);
-        }
-
-        .app-grid-plate {
-            box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.6);
-        }
-
-        .app-grid-label {
-            color: white;
         }
     }
 }

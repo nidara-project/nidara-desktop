@@ -27,6 +27,7 @@ export interface AppGridPanelHandle {
     onShow: () => void
     handleKey: (keyval: number) => boolean
     setKeyboardModeCallback: (onExclusive: () => void, onDemand: () => void) => void
+    setActive: (active: boolean) => void
 }
 
 export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void): AppGridPanelHandle {
@@ -44,6 +45,13 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     })
     searchBox.append(new Gtk.Image({ gicon: Icons.search, pixel_size: 18, css_classes: ["app-grid-search-icon", "cs-icon"] }))
     searchBox.append(searchEntry)
+
+    const searchBoxClick = new Gtk.GestureClick()
+    searchBoxClick.connect("pressed", () => {
+        searchBox.add_css_class("search-active")
+        searchEntry.grab_focus()
+    })
+    searchBox.add_controller(searchBoxClick)
 
     // ── FlowBox ────────────────────────────────────────────────────────────
     const GRID_COLS = 6
@@ -383,11 +391,6 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         flowbox.invalidate_filter()
         flowbox.invalidate_sort()
         updateNoResults()
-
-        if (!noResults.visible) {
-            const first = flowbox.get_first_child()
-            if (first) flowbox.select_child(first as any)
-        }
     }
 
     searchEntry.connect("changed", () => filterApps(searchEntry.text))
@@ -405,10 +408,19 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         return result
     }
 
+    const returnToSearch = () => {
+        navIdx = -1
+        flowbox.unselect_all()
+        searchBox.add_css_class("search-active")
+        searchEntry.grab_focus()
+    }
+
     const focusAt = (idx: number) => {
         const children = getVisibleChildren()
         if (!children.length) return
         navIdx = Math.max(0, Math.min(idx, children.length - 1))
+        flowbox.select_child(children[navIdx])
+        searchBox.remove_css_class("search-active")
         children[navIdx].grab_focus()
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
             const row    = Math.floor(navIdx / GRID_COLS)
@@ -439,10 +451,14 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
 
         onShow() {
             navIdx = -1
-            searchEntry.text = ""
+            flowbox.unselect_all()
+            searchEntry.get_buffer().set_text("", -1)
             filterApps()
-            GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            searchBox.add_css_class("search-active")
+            searchEntry.grab_focus()
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
                 searchEntry.grab_focus()
+                ;(searchEntry.get_root() as Gtk.Window)?.set_focus(searchEntry)
                 return GLib.SOURCE_REMOVE
             })
         },
@@ -451,20 +467,12 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             if (keyval === Gdk.KEY_Escape) {
                 onClose(); return true
             }
-            if (keyval === Gdk.KEY_Tab) {
-                if (navIdx < 0) focusAt(0)
-                return true
-            }
-            if (keyval === Gdk.KEY_ISO_Left_Tab) {
-                if (navIdx >= 0) { navIdx = -1; searchEntry.grab_focus() }
-                return true
-            }
             if (keyval === Gdk.KEY_Down) {
                 focusAt(navIdx < 0 ? 0 : navIdx + GRID_COLS); return true
             }
             if (keyval === Gdk.KEY_Up) {
                 if (navIdx < 0) return false
-                if (navIdx < GRID_COLS) { navIdx = -1; searchEntry.grab_focus() }
+                if (navIdx < GRID_COLS) { returnToSearch() }
                 else { focusAt(navIdx - GRID_COLS) }
                 return true
             }
@@ -483,8 +491,20 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
                     return true
                 }
             }
-            if (navIdx >= 0 && keyval >= 32 && keyval <= 126) {
-                navIdx = -1; searchEntry.grab_focus(); return false
+            // Backspace: delete last char from buffer directly — no GTK focus needed
+            if (keyval === Gdk.KEY_BackSpace) {
+                if (navIdx >= 0) returnToSearch()
+                const buf = searchEntry.get_buffer()
+                const len = buf.get_length()
+                if (len > 0) buf.delete_text(len - 1, 1)
+                return true
+            }
+            // Printable ASCII: insert into buffer directly — works without compositor focus
+            if (keyval >= Gdk.KEY_space && keyval <= Gdk.KEY_asciitilde) {
+                if (navIdx >= 0) returnToSearch()
+                const buf = searchEntry.get_buffer()
+                buf.insert_text(buf.get_length(), String.fromCharCode(keyval), 1)
+                return true
             }
             return false
         },
@@ -492,6 +512,11 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         setKeyboardModeCallback(onExclusive: () => void, onDemand: () => void) {
             _cbExclusive = onExclusive
             _cbDemand    = onDemand
+        },
+
+        setActive(active: boolean) {
+            if (active) searchBox.add_css_class("search-active")
+            else searchBox.remove_css_class("search-active")
         },
     }
 }

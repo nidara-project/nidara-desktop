@@ -709,16 +709,81 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
   // Measure after first layout pass (bar realized but still invisible)
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 220, () => { measureOverflow(); return GLib.SOURCE_REMOVE })
-  // Show only after measurement+rebuild have had time to take effect
-  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => { win.set_opacity(1); return GLib.SOURCE_REMOVE })
-
+  let barFullscreenMode = false
   let gameOverlayActive = false
+
+  // Show only after measurement+rebuild have had time to take effect
+  // Skip if fullscreen is already detected by then (checkBarFullscreen runs in idle_add)
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+      if (!barFullscreenMode) win.set_opacity(1)
+      return GLib.SOURCE_REMOVE
+  })
+
+  // Fullscreen detection — hide bar automatically, restore when fullscreen exits
+  let trackedBarClient: any = null
+  let trackedBarClientConn: number | null = null
+
+  const setBarFullscreenMode = (active: boolean) => {
+      if (barFullscreenMode === active) return
+      barFullscreenMode = active
+      try {
+          if (active && !gameOverlayActive) {
+              Gtk4LayerShell.set_exclusive_zone(win, 0)
+              win.set_opacity(0)
+          } else if (!active) {
+              if (gameOverlayActive) {
+                  // Exit overlay mode when fullscreen ends
+                  gameOverlayActive = false
+                  Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
+              }
+              Gtk4LayerShell.set_exclusive_zone(win, 40)
+              win.set_opacity(1)
+          }
+      } catch (e) {}
+  }
+
+  const checkBarFullscreen = () => {
+      const hypr = AstalHyprland.get_default()
+      if (!hypr) return
+      const client = hypr.focused_client
+      if (trackedBarClient && trackedBarClientConn !== null) {
+          try { trackedBarClient.disconnect(trackedBarClientConn) } catch (_) {}
+          trackedBarClientConn = null
+      }
+      trackedBarClient = client ?? null
+      if (client) {
+          trackedBarClientConn = client.connect("notify::fullscreen", () =>
+              setBarFullscreenMode(client.fullscreen ?? false))
+          setBarFullscreenMode(client.fullscreen ?? false)
+      } else {
+          setBarFullscreenMode(false)
+      }
+  }
+
+  const barHypr = AstalHyprland.get_default()
+  if (barHypr) {
+      barHypr.connect("notify::focused-client", checkBarFullscreen)
+      GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { checkBarFullscreen(); return GLib.SOURCE_REMOVE })
+  }
+
   ;(win as any).setGameOverlayMode = (active: boolean) => {
-    try {
-      gameOverlayActive = active
-      Gtk4LayerShell.set_layer(win, active ? Gtk4LayerShell.Layer.OVERLAY : Gtk4LayerShell.Layer.TOP)
-      if (active) win.present()
-    } catch (e) { console.error("[Bar] setGameOverlayMode failed:", e) }
+      try {
+          gameOverlayActive = active
+          if (active) {
+              Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
+              Gtk4LayerShell.set_exclusive_zone(win, 0)
+              win.set_opacity(1)
+              win.present()
+          } else {
+              Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
+              if (barFullscreenMode) {
+                  Gtk4LayerShell.set_exclusive_zone(win, 0)
+                  win.set_opacity(0)
+              } else {
+                  Gtk4LayerShell.set_exclusive_zone(win, 40)
+              }
+          }
+      } catch (e) { console.error("[Bar] setGameOverlayMode failed:", e) }
   }
   ;(win as any).isGameOverlayActive = () => gameOverlayActive
 

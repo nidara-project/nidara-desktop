@@ -1251,7 +1251,6 @@ button.clip-entry-btn:active {
   font-weight: 500;
   color: var(--crystal-text);
   min-width: 38px;
-  xalign: 1;
 }
 
 .bar-popover-icon-btn {
@@ -2037,15 +2036,15 @@ window#crystal-app-launcher,
   min-height: 44px;
   transition: background 0.15s ease, border-color 0.15s ease;
 }
-.app-grid-search-box:focus-within {
-  border-color: rgba(var(--crystal-accent-rgb), 0.6);
+.app-grid-search-box:focus-within, .app-grid-search-box.search-active {
+  border-color: rgba(var(--crystal-accent-rgb), 0.7);
   background: var(--crystal-surface);
 }
 
 .app-grid-search-icon {
   color: var(--crystal-text-dim);
 }
-.app-grid-search-box:focus-within .app-grid-search-icon {
+.app-grid-search-box:focus-within .app-grid-search-icon, .app-grid-search-box.search-active .app-grid-search-icon {
   color: var(--crystal-accent);
 }
 
@@ -2079,10 +2078,18 @@ window#crystal-app-launcher,
   padding: 0;
   border-radius: 18px;
 }
-.app-grid-flow flowboxchild:selected, .app-grid-flow flowboxchild:active {
+.app-grid-flow flowboxchild:active {
   background: transparent;
   outline: none;
   box-shadow: none;
+}
+.app-grid-flow flowboxchild:selected {
+  background: transparent;
+  outline: none;
+  box-shadow: none;
+}
+.app-grid-flow flowboxchild:selected .app-grid-plate {
+  box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.6);
 }
 .app-grid-flow flowboxchild:focus {
   outline: none;
@@ -2090,12 +2097,6 @@ window#crystal-app-launcher,
 }
 .app-grid-flow flowboxchild:focus .app-grid-button {
   background: var(--crystal-surface);
-}
-.app-grid-flow flowboxchild:focus .app-grid-plate {
-  box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.6);
-}
-.app-grid-flow flowboxchild:focus .app-grid-label {
-  color: white;
 }
 
 /* ── App button ── */
