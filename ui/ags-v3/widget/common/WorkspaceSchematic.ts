@@ -24,6 +24,7 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
         css_classes: ["wo-schematic-preview"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER,
+        can_target: false,
     })
 
     const fixed = new Gtk.Fixed({
@@ -32,6 +33,7 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
         vexpand: false,
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER,
+        can_target: false,
     }) as any
 
     fixed.set_overflow(Gtk.Overflow.HIDDEN)

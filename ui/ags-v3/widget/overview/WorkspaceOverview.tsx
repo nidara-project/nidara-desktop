@@ -73,7 +73,7 @@ export default function WorkspaceOverview(monitor: any) {
         const btn = new Gtk.Button({ child: itemBox, css_classes: ["wo-btn"] })
         btn.set_focus_on_click(false) 
         btn.connect("clicked", () => {
-            execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ workspace = ${i}})`]).catch(console.error)
+            execAsync(["hyprctl", "dispatch", "workspace", `${i}`]).catch(console.error)
             status.overview_open = false
         })
 
