@@ -12,6 +12,7 @@ import { DockItem, Separator, dismissActiveDockMenu } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
 import { hypr, appsService as apps, dragBus, mouseBus, pointerBus, savePinned, pinnedState, dockSettings, onDockSettingsChanged, menuState, onMenuCountChanged, dockSideState } from "./state"
 import status from "../../core/Status"
+import hs from "../../core/HyprlandState"
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -314,7 +315,6 @@ export default function Dock(gdkmonitor: any) {
     // --- PHYSICS ENGINE ---
     const animRegistry = new Map<string, import("./state").AnimState>()
 
-    let lastFrameTime = 0
     let tickId: number | null = null
 
     // ── Auto-hide slide state ─────────────────────────────────────────────────
@@ -369,7 +369,7 @@ export default function Dock(gdkmonitor: any) {
                 return false
             }
 
-            const dt = 1 / 60 // Fixed time step for stability
+            const dt = 1 / 60
             let active = false
 
 
@@ -587,7 +587,7 @@ export default function Dock(gdkmonitor: any) {
             }
 
             if (!active) {
-                tickId = null; lastFrameTime = 0
+                tickId = null
                 return false
             }
             return true
@@ -1568,8 +1568,7 @@ export default function Dock(gdkmonitor: any) {
         })
     }
 
-    const cConn = hypr.connect("notify::clients", throttledUpdate)
-    const fConn = hypr.connect("notify::focused-client", throttledUpdate)
+    const cConn = hs.connect("changed", throttledUpdate)
     const aConn = appService.connect(throttledUpdate)
 
     // Recover immediately when any overlay closes — don't rely on the 100ms poll.
@@ -1687,8 +1686,7 @@ export default function Dock(gdkmonitor: any) {
     win.connect("destroy", () => {
         if (tickId) { bar.remove_tick_callback(tickId); tickId = null }
         if (updateTimer) { GLib.source_remove(updateTimer); updateTimer = null }
-        try { if (cConn) GObject.signal_handler_disconnect(hypr, cConn) } catch (e) { }
-        try { if (fConn) GObject.signal_handler_disconnect(hypr, fConn) } catch (e) { }
+        try { if (cConn) hs.disconnect(cConn) } catch (e) { }
         try { if (aConn) aConn() } catch (e) { }
         try { if (pConn) pConn() } catch (e) { }
         try { if (dConn) dConn() } catch (e) { }

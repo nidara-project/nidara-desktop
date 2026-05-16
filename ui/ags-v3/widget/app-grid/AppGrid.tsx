@@ -82,7 +82,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             const workspaces = hs.workspaces
             const monitors   = hs.monitors
             const clients    = hs.clients
-            const focusedId  = hs.focusedWorkspace?.id || 1
+            const focusedId  = hs.focusedWorkspaceId || 1
             wsSlots.forEach(({ itemBox, label, sync }, i) => {
                 const isActive = focusedId === i
                 const isNav    = wsNav === i
@@ -150,7 +150,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     }
 
     const stripChangedId = hs.connect("changed", () => {
-        if (wsNav > 0) wsNav = hs.focusedWorkspace?.id || 1
+        if (wsNav > 0) wsNav = hs.focusedWorkspaceId || 1
         syncWsStrip()
     })
     wsStrip.connect("unrealize", () => hs.disconnect(stripChangedId))
@@ -562,7 +562,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             searchEntry.get_buffer().set_text("", -1)
             filterApps()
             searchBox.remove_css_class("search-active")
-            focusWsSlot(hs.focusedWorkspace?.id || 1)
+            focusWsSlot(hs.focusedWorkspaceId || 1)
         },
 
         handleKey(keyval: number): boolean {
@@ -612,10 +612,10 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             }
             if (keyval === Gdk.KEY_Up) {
                 if (navIdx < 0) {
-                    focusWsSlot(hs.focusedWorkspace?.id || 1)
+                    focusWsSlot(hs.focusedWorkspaceId || 1)
                     return true
                 }
-                if (navIdx < GRID_COLS) { focusWsSlot(hyprland?.focused_workspace?.id || 1) }
+                if (navIdx < GRID_COLS) { focusWsSlot(hs.focusedWorkspaceId || 1) }
                 else { focusAt(navIdx - GRID_COLS) }
                 return true
             }

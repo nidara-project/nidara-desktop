@@ -763,31 +763,20 @@ export function DockItem(
             const c = hypr.clients.find(c => c.address === addresses[0])
             if (c) targetTitle = c.title
         }
-        label.set_label(targetTitle || "")
+        // Guard: avoid surface commit when title hasn't changed
+        const next = targetTitle || ""
+        if (label.label !== next) label.set_label(next)
     }
 
     const hsChangedId = hs.connect("changed", sync)
 
-    // Per-client title signal for real-time title updates without waiting for a full refresh
-    const clientSignalIds: { client: any, signalId: number }[] = []
-    addresses.forEach(addr => {
-        const c = hs.clients.find(cl => cl.address === addr)
-        if (c) {
-            const signalId = c.connect("notify::title", sync)
-            clientSignalIds.push({ client: c, signalId })
-        }
-    })
+    // Note: notify::title per-client connections removed — they caused a dock surface
+    // commit (and Hyprland blur pass) on every window title update from running apps
+    // (e.g. YouTube tab progress, Discord unread count). hs.changed fires on actual
+    // structural changes (focus, workspace, open/close) which is sufficient.
 
     itemBox.connect("destroy", () => {
         try { hs.disconnect(hsChangedId) } catch (e) { }
-        clientSignalIds.forEach(({ client, signalId }) => {
-            try {
-                if (GObject.signal_handler_is_connected(client, signalId)) {
-                    client.disconnect(signalId)
-                }
-            } catch (e) { }
-        })
-        clientSignalIds.length = 0
     })
     sync()
 

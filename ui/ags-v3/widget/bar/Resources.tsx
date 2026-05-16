@@ -92,15 +92,21 @@ function ResourceCircle(iconName: string, update: (cb: (val: number) => void) =>
     overlay.add_overlay(icon)
 
     const sync = () => {
+        // Skip entirely when the widget is not on screen — prevents surface commits
+        // to the bar layer (and thus Hyprland blur passes) while hidden.
+        if (!canvas.get_mapped()) return GLib.SOURCE_CONTINUE
         update((val) => {
+            // Hysteresis: at 24 px, a 5 pp swing is ~1 px of arc — skip smaller changes.
+            if (Math.abs(val - percentage) < 5) return
             percentage = val
             canvas.queue_draw()
         })
-        return true
+        return GLib.SOURCE_CONTINUE
     }
 
     sync()
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, sync)
+    const timerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, sync)
+    canvas.connect("destroy", () => GLib.source_remove(timerId))
 
     return overlay
 }

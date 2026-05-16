@@ -83,8 +83,10 @@ function AppTitle(monitorWidth: number): Gtk.Widget {
     const sync = () => {
       const client = hs.focusedClient
       const label = getWordmark(client, AstalHyprland.get_default())
-      if (label) appName.label = label
+      if (label && label !== appName.label) appName.label = label
 
+      // Only rewire notify::title when the focused client actually changed
+      if (client === trackedClient) return
       if (trackedClient && titleHandlerId) {
         trackedClient.disconnect(titleHandlerId)
         titleHandlerId = 0
@@ -254,7 +256,7 @@ function Workspaces() {
   for (let i = 1; i <= 5; i++) {
     const dot = new Gtk.Box({ css_classes: ["workspace-dot"], valign: Gtk.Align.CENTER })
     const update = () => {
-      const active   = hs.focusedWorkspace?.id === i
+      const active   = hs.focusedWorkspaceId === i
       const occupied = hs.occupiedWorkspaces.has(i)
       dot.set_css_classes(["workspace-dot", active ? "active" : occupied ? "occupied" : "empty"])
     }
@@ -657,10 +659,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   win.set_child(masterOverlay)
   win.connect("realize", () => updateInputRegion())
-
-  // Safety net: refresh input region on any Hyprland state change to clear
-  // stale allocations left by closing overlays (e.g. overview animation).
-  hs.connect("changed", updateInputRegion)
   
   // Present invisible → measure → show, so the bar is never visible with a wrong layout.
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => { win.present(); return GLib.SOURCE_REMOVE })
@@ -736,19 +734,20 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
 
   const checkBarFullscreen = () => {
-      const client = hs.focusedClient
-      if (trackedBarClient && trackedBarClientConn !== null) {
-          try { trackedBarClient.disconnect(trackedBarClientConn) } catch (_) {}
-          trackedBarClientConn = null
+      const client = hs.focusedClient ?? null
+      // Skip rewire if focused client object hasn't changed
+      if (client !== trackedBarClient) {
+          if (trackedBarClient && trackedBarClientConn !== null) {
+              try { trackedBarClient.disconnect(trackedBarClientConn) } catch (_) {}
+              trackedBarClientConn = null
+          }
+          trackedBarClient = client
+          if (client) {
+              trackedBarClientConn = client.connect("notify::fullscreen", () =>
+                  setBarFullscreenMode(client.fullscreen ?? false))
+          }
       }
-      trackedBarClient = client ?? null
-      if (client) {
-          trackedBarClientConn = client.connect("notify::fullscreen", () =>
-              setBarFullscreenMode(client.fullscreen ?? false))
-          setBarFullscreenMode(client.fullscreen ?? false)
-      } else {
-          setBarFullscreenMode(false)
-      }
+      setBarFullscreenMode(client ? (client.fullscreen ?? false) : false)
   }
 
   hs.connect("changed", checkBarFullscreen)
