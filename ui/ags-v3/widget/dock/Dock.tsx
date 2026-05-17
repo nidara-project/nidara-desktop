@@ -522,12 +522,20 @@ export default function Dock(gdkmonitor: any) {
                                 const da = plateOverlay.get_child()
                                 if (da) {
                                     da.set_size_request(tps, tps)
+                                    ;(da as any).set_content_width?.(tps)
+                                    ;(da as any).set_content_height?.(tps)
                                     const icon = (da as any).get_next_sibling()
                                     if (icon) icon.set_size_request(tps, tps)
                                 }
                             } else {
                                 const icon = iconBox.get_first_child()
-                                if (icon) icon.set_size_request(tps, tps)
+                                if (icon) {
+                                    icon.set_size_request(tps, tps)
+                                    // DrawingArea uses content_width/height for measure(), not size_request.
+                                    // Must update both to allow shrinking below the constructor's initial value.
+                                    ;(icon as any).set_content_width?.(tps)
+                                    ;(icon as any).set_content_height?.(tps)
+                                }
                             }
                         }
                     }
@@ -1666,6 +1674,10 @@ export default function Dock(gdkmonitor: any) {
         if (!isVertical) {
             da.height_request = DOCK_CONSTANTS.PILL_HEIGHT
             shim.height_request = DOCK_CONSTANTS.PILL_HEIGHT
+            // screenGap controls the visual gap between the pill and the screen edge.
+            // margin_bottom is set at construction so must be re-applied on every change.
+            da.margin_bottom = dockSettings.screenGap
+            shim.margin_bottom = dockSettings.screenGap
             // Re-sync window position so the dock stays at its correct hidden/visible
             // position after settings change (layer margin, not widget margin).
             if (layerShellReady) {
