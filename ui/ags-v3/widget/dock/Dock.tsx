@@ -789,11 +789,11 @@ export default function Dock(gdkmonitor: any) {
                 if (beyondPill) {
                     updateAllTargets(-1000)
                 } else {
-                    clearLeaveTimeout()  // only cancel leave timer when cursor is inside the pill
-                    // Convert window-absolute Y to bar-relative Y so staticCenter (bar-relative)
-                    // and cursor Y are in the same coordinate space.
-                    const barTop = Math.max(0, Math.round((verticalUsableH - smoothedBarWidth) / 2))
-                    updateAllTargets(y - barTop)
+                    clearLeaveTimeout()
+                    // Vertical dock has no magnification — macOS sidebar dock doesn't either.
+                    // Height changes during magnification shift the entire bar (centering effect),
+                    // making all icons jump. Tooltips are handled per-item by EventControllerMotion.
+                    // Intentionally do NOT call updateAllTargets here: icons stay at rest scale.
                 }
             }
             return
@@ -1291,11 +1291,9 @@ export default function Dock(gdkmonitor: any) {
 
             totalStaticWidth = validConfigs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
 
-            // staticCenter is in dock-axis coords: X for bottom dock, Y for side docks.
-            // Vertical: bar-relative (0 = bar top). valign=CENTER means the bar always centers
-            // itself and we don't need axisStart — the cursor is adjusted in the motion handler.
+            // staticCenter is in dock-axis coords: X for bottom dock, Y for side docks
             const axisSize = isVertical ? verticalUsableH : gdkmonitor.get_geometry().width
-            const axisStart = isVertical ? 0 : Math.max(0, (axisSize - totalStaticWidth) / 2)
+            const axisStart = Math.max(0, (axisSize - totalStaticWidth) / 2)
             let runningAxis = axisStart
 
             const finalItems = validConfigs.map((c) => {
