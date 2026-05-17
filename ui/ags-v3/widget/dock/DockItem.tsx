@@ -57,10 +57,17 @@ export function Separator(id: string, updateDock: () => void, register: (id: str
         margin_bottom: 0,
     })
 
+    // For vertical docks the separator is a horizontal hairline, not a vertical one.
+    // Initialize dimensions to match what the tick would set so no layout jump occurs.
     const line = new Gtk.Box({
         name: "cd-separator", css_classes: ["cd-separator"],
         valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
-        width_request: DOCK_CONSTANTS.SEPARATOR_LINE, height_request: DOCK_CONSTANTS.SEPARATOR_HEIGHT,
+        width_request: isSepVertical
+            ? Math.round(DOCK_CONSTANTS.SEPARATOR_HEIGHT * 0.7)
+            : DOCK_CONSTANTS.SEPARATOR_LINE,
+        height_request: isSepVertical
+            ? DOCK_CONSTANTS.SEPARATOR_LINE
+            : DOCK_CONSTANTS.SEPARATOR_HEIGHT,
         hexpand: false,
     })
 
