@@ -278,19 +278,19 @@
 // ── Recording indicator ───────────────────────────────────────────────────────
 
 .bar-rec-capsule {
-    background: rgba(220, 30, 30, 0.18);
+    background: rgba(var(--crystal-danger-rgb), 0.18);
 }
 
 .bar-rec-indicator {
     border-radius: 999px;
-    background: #e03030;
+    background: var(--crystal-danger);
     animation: rec-pulse 1.4s ease-in-out infinite;
 }
 
 .bar-rec-label {
     font-size: 0.7rem;
     font-weight: 700;
-    color: #e03030;
+    color: var(--crystal-danger);
     letter-spacing: 0.05em;
 }
 
@@ -310,11 +310,9 @@
     margin-top: 44px;
 
     button.suggested-action {
+        @include crystal-reset;
         background: var(--crystal-accent);
-        background-image: none;
-        color: #fff;
-        border: none;
-        box-shadow: none;
+        color: var(--crystal-accent-fg);
         border-radius: $crystal-radius-sm;
         padding: 6px 14px;
         font-size: 0.84rem;
@@ -325,9 +323,9 @@
     }
 
     button.destructive-action {
+        @include crystal-reset;
         background: var(--crystal-danger);
-        background-image: none;
-        color: #fff;
+        color: var(--crystal-accent-fg);
         border: none;
         box-shadow: none;
         border-radius: $crystal-radius-sm;

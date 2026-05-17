@@ -28,7 +28,7 @@ switch,
         margin: 3px;
         min-width: 18px;
         min-height: 18px;
-        background-color: #ffffff;
+        background-color: var(--crystal-thumb);
         background-image: none;
         border: none;
         border-radius: $crystal-radius-pill;
@@ -74,7 +74,7 @@ scale,
     }
 
     slider {
-        background-color: #ffffff;
+        background-color: var(--crystal-thumb);
         background-image: none;
         border-radius: 99px;
         border: none;
@@ -88,7 +88,7 @@ scale,
     }
 
     &:active slider {
-        background-color: rgba(255, 255, 255, 0.55);
+        background-color: rgba(255, 255, 255, 0.55); // pressed: slight translucency over --crystal-thumb
         box-shadow: none;
     }
 
@@ -167,14 +167,10 @@ scale.crystal-scale slider {
     opacity: 0;
 
     trough, highlight, slider {
-        background: none;
-        background-image: none;
-        border: none;
-        box-shadow: none;
+        @include crystal-reset;
         min-height: 0;
         min-width: 0;
         margin: 0;
-        outline: none;
     }
 }
 
@@ -199,7 +195,7 @@ button.crystal-btn,
 
     &.accent {
         background: $crystal-accent;
-        color: #ffffff;
+        color: var(--crystal-accent-fg);
         border: none;
         
         &:hover { background: rgba(var(--crystal-accent-rgb), 0.85); }
@@ -220,9 +216,7 @@ button.crystal-btn,
    CSS vars (--crystal-popover-*) are used instead of @define-color to stay
    SCSS-compilable — @name syntax in property values is not valid SCSS. */
 popover.crystal-popover {
-    background-color: transparent;
-    border: none;
-    box-shadow: none;
+    @include crystal-reset;
 
     > contents {
         /* Fallback ensures visible background even before --crystal-popover-bg token is set */
@@ -262,10 +256,7 @@ row.settings-item-row {
 }
 
 button.settings-action-row {
-    background: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
+    @include crystal-reset;
     border-radius: 0;
     padding: 0;
     transition: background 0.15s ease;
@@ -283,7 +274,7 @@ popover.crystal-popover button:not(.suggested-action):not(.destructive-action):n
 /* Accent (selected/primary) buttons inside crystal popovers */
 popover.crystal-popover button.suggested-action {
     background: $crystal-accent;
-    color: #ffffff;
+    color: var(--crystal-accent-fg);
     border: none;
     border-radius: $crystal-radius-xs;
     transition: background 0.15s ease;
@@ -310,13 +301,11 @@ button.crystal-seg-btn {
     &:active { background: var(--crystal-surface-active); }
 
     &.suggested-action {
+        @include crystal-reset;
         background: var(--crystal-accent);
-        background-image: none;
-        color: #fff;
-        border: none;
-        box-shadow: none;
+        color: var(--crystal-accent-fg);
 
-        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.82); color: #fff; }
+        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.82); color: var(--crystal-accent-fg); }
         &:active { background: rgba(var(--crystal-accent-rgb), 0.65); }
     }
 }

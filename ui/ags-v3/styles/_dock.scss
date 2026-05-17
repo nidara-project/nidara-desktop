@@ -3,20 +3,13 @@
 /* --- Window Transparency Logic --- */
 window.crystal-dock-window,
 #crystal-dock {
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    outline: none;
+    @include crystal-reset;
     margin: 0;
     padding: 0;
 
     decoration,
     &>box {
-        background-color: transparent;
-        background-image: none;
-        box-shadow: none;
-        border: none;
+        @include crystal-reset;
     }
 }
 
@@ -28,13 +21,10 @@ window.crystal-dock-window,
 }
 
 .cd-item {
+    @include crystal-reset;
     margin: 0;
     padding: 0;
-    background-color: transparent;
-    background-image: none;
     transform-origin: bottom;
-    border: none;
-    box-shadow: none;
     transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1);
     -gtk-icon-shadow: none;
 
@@ -43,10 +33,7 @@ window.crystal-dock-window,
     }
 
     &:hover {
-        background-color: transparent;
-        box-shadow: none;
-        outline: none;
-        background-image: none;
+        @include crystal-reset;
     }
 
     // Kill internal GTK nodes (ripples, highlights, etc.)
@@ -55,10 +42,7 @@ window.crystal-dock-window,
     &>outline,
     &>focus-ring,
     &>decoration {
-        background-image: none;
-        background-color: transparent;
-        box-shadow: none;
-        border: none;
+        @include crystal-reset;
         opacity: 0;
     }
 }
@@ -98,19 +82,15 @@ window#crystal-dock box.cd-squircle-plate>outline,
 window#crystal-dock box.cd-squircle-plate:focus>ripple,
 window#crystal-dock box.cd-squircle-plate:hover>ripple,
 window#crystal-dock box.cd-squircle-plate:active>ripple {
-    background-image: none;
-    background-color: transparent;
-    box-shadow: none;
+    @include crystal-reset;
     opacity: 0;
 }
 
 window#crystal-dock box.cd-squircle-plate image,
 window#crystal-dock box.cd-squircle-plate widget,
 window#crystal-dock box.cd-squircle-plate drawingarea {
-    box-shadow: none;
+    @include crystal-reset;
     -gtk-icon-shadow: none;
-    border: none;
-    background: none;
 }
 
 window#crystal-dock box.cd-squircle-plate.show-bg {
