@@ -242,7 +242,7 @@ export default function Dock(gdkmonitor: any) {
         halign: isVertical
             ? (dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END)
             : Gtk.Align.START,
-        valign: isVertical ? Gtk.Align.START : Gtk.Align.END,
+        valign: isVertical ? Gtk.Align.CENTER : Gtk.Align.END,
         overflow: isVertical ? Gtk.Overflow.VISIBLE : Gtk.Overflow.HIDDEN,
         hexpand: false,
         vexpand: false,
@@ -293,7 +293,6 @@ export default function Dock(gdkmonitor: any) {
         lastRenderedWidth = smoothedBarWidth
         if (isVertical) {
             bar.set_size_request(DOCK_CONSTANTS.PILL_HEIGHT, smoothedBarWidth)
-            bar.margin_top = Math.max(0, Math.round((verticalUsableH - smoothedBarWidth) / 2))
             if (da) da.queue_draw()
         } else {
             bar.set_size_request(smoothedBarWidth, -1)
@@ -302,14 +301,12 @@ export default function Dock(gdkmonitor: any) {
         }
     }
 
-    // Pre-emptive centering: horizontal via margin_start, vertical via margin_top.
-    // Both are set explicitly so GTK layout changes (e.g. popovers) cannot shift the bar.
+    // Pre-emptive centering: horizontal only (margin_start). Vertical uses valign=CENTER — GTK
+    // centers the bar automatically so we don't fight with layout on the first frame.
     const initialMargin = Math.round((dockMonitorWidth - totalStaticWidth) / 2)
     if (!isVertical) {
         bar.margin_start = Math.max(0, initialMargin)
         if (da) da.margin_start = Math.max(0, initialMargin - DOCK_CONSTANTS.BASE_MARGIN)
-    } else {
-        bar.margin_top = Math.max(0, Math.round((verticalUsableH - totalStaticWidth) / 2))
     }
 
     // --- PHYSICS ENGINE ---
@@ -537,13 +534,10 @@ export default function Dock(gdkmonitor: any) {
                 }
             })
 
-            // Step 3: Bar position (horizontal: margin_start; vertical: margin_top)
+            // Step 3: Bar position (horizontal: margin_start; vertical: handled by valign=CENTER)
             const roundedTotalWidth = Math.round(totalBarWidth)
 
-            if (isVertical) {
-                const barM = Math.max(0, Math.round((verticalUsableH - roundedTotalWidth) / 2))
-                if (bar.margin_top !== barM) bar.margin_top = barM
-            } else {
+            if (!isVertical) {
                 const barM = Math.round((dockMonitorWidth - roundedTotalWidth) / 2)
                 if (bar.margin_start !== barM) {
                     bar.margin_start = barM
@@ -796,7 +790,10 @@ export default function Dock(gdkmonitor: any) {
                     updateAllTargets(-1000)
                 } else {
                     clearLeaveTimeout()  // only cancel leave timer when cursor is inside the pill
-                    updateAllTargets(y)
+                    // Convert window-absolute Y to bar-relative Y so staticCenter (bar-relative)
+                    // and cursor Y are in the same coordinate space.
+                    const barTop = Math.max(0, Math.round((verticalUsableH - smoothedBarWidth) / 2))
+                    updateAllTargets(y - barTop)
                 }
             }
             return
@@ -1294,9 +1291,11 @@ export default function Dock(gdkmonitor: any) {
 
             totalStaticWidth = validConfigs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
 
-            // staticCenter is in dock-axis coords: X for bottom dock, Y for side docks
+            // staticCenter is in dock-axis coords: X for bottom dock, Y for side docks.
+            // Vertical: bar-relative (0 = bar top). valign=CENTER means the bar always centers
+            // itself and we don't need axisStart — the cursor is adjusted in the motion handler.
             const axisSize = isVertical ? verticalUsableH : gdkmonitor.get_geometry().width
-            const axisStart = Math.max(0, (axisSize - totalStaticWidth) / 2)
+            const axisStart = isVertical ? 0 : Math.max(0, (axisSize - totalStaticWidth) / 2)
             let runningAxis = axisStart
 
             const finalItems = validConfigs.map((c) => {
@@ -1441,9 +1440,7 @@ export default function Dock(gdkmonitor: any) {
             // even during magnification animation.
             if (firstRender || !tickId || isVertical) {
                 smoothedBarWidth = totalCurrentWidth
-                if (isVertical) {
-                    bar.margin_top = Math.max(0, Math.round((verticalUsableH - smoothedBarWidth) / 2))
-                } else {
+                if (!isVertical) {
                     const manualMarginStart = Math.round((dockMonitorWidth - smoothedBarWidth) / 2)
                     bar.margin_start = manualMarginStart
                     if (da) da.margin_start = manualMarginStart - DOCK_CONSTANTS.BASE_MARGIN
