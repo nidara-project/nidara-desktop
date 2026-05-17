@@ -65,6 +65,18 @@ window.workspace-cockpit {
     border: 1px solid var(--crystal-border);
 }
 
+.wo-reserved-area.bar {
+    background-color: rgba(0, 0, 0, 0.35);
+    border-bottom: 1px solid var(--crystal-border);
+    min-height: 3px;
+}
+
+.wo-reserved-area.dock {
+    background-color: rgba(0, 0, 0, 0.35);
+    border-top: 1px solid var(--crystal-border);
+    min-height: 3px;
+}
+
 .wo-label {
     font-size: 1.1em;
     font-weight: 600;
