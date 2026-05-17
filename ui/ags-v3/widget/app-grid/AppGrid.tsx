@@ -4,7 +4,6 @@ import GLib from "gi://GLib"
 // @ts-ignore
 import Pango from "gi://Pango"
 import AstalApps from "gi://AstalApps"
-import AstalHyprland from "gi://AstalHyprland"
 import Gio from "gi://Gio"
 import hs from "../../core/HyprlandState"
 import appService from "../../core/AppService"
@@ -58,7 +57,6 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
 
     // ── Workspace strip ────────────────────────────────────────────────────
     const WS_STRIP_WIDTH = 150
-    const hyprland = AstalHyprland.get_default() // kept for createSchematicMap
 
     const wsStrip = new Gtk.Box({
         css_classes: ["ws-strip"],
@@ -71,7 +69,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     interface WsSlot {
         itemBox: Gtk.Box
         label: Gtk.Label
-        sync: (ws: any[], mon: any[], cl: any[]) => void
+        sync: () => void
     }
     const wsSlots = new Map<number, WsSlot>()
     // 0 = not in strip; 1-5 = keyboard-focused slot
@@ -79,22 +77,17 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
 
     const syncWsStrip = () => {
         try {
-            const workspaces = hs.workspaces
-            const monitors   = hs.monitors
-            const clients    = hs.clients
-            const focusedId  = hs.focusedWorkspaceId || 1
+            const focusedId = hs.focusedWorkspaceId || 1
             wsSlots.forEach(({ itemBox, label, sync }, i) => {
                 const isActive = focusedId === i
                 const isNav    = wsNav === i
-                // Toggle individual classes — set_css_classes would wipe the
-                // "hover" class that EventControllerMotion adds independently.
                 if (isActive) itemBox.add_css_class("active")
                 else          itemBox.remove_css_class("active")
                 if (isNav)    itemBox.add_css_class("keyboard-focus")
                 else          itemBox.remove_css_class("keyboard-focus")
                 if (isActive) label.add_css_class("active")
                 else          label.remove_css_class("active")
-                sync(workspaces, monitors, clients)
+                sync()
             })
         } catch (e) {
             console.error(`[WsStrip] sync failed: ${e}`)
@@ -115,7 +108,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     }
 
     for (let i = 1; i <= 5; i++) {
-        const { wrapper, sync } = createSchematicMap(i, WS_STRIP_WIDTH, hyprland)
+        const { wrapper, sync } = createSchematicMap(i, WS_STRIP_WIDTH)
         const wsLabel = new Gtk.Label({
             label: `${i}`,
             css_classes: ["ws-strip-label"],
@@ -154,6 +147,9 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         syncWsStrip()
     })
     wsStrip.connect("unrealize", () => hs.disconnect(stripChangedId))
+    // hs emits "changed" in its constructor before AppGrid connects — do an
+    // initial sync on the next idle tick so schematics are populated immediately.
+    GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { syncWsStrip(); return GLib.SOURCE_REMOVE })
 
     // ── FlowBox ────────────────────────────────────────────────────────────
     const GRID_COLS = 6
