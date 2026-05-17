@@ -1,5 +1,4 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
-import AstalHyprland from "gi://AstalHyprland"
 import GLib from "gi://GLib"
 import status from "../../core/Status"
 import SquircleContainer, { Shape } from "../common/SquircleContainer"
@@ -10,8 +9,6 @@ import hs from "../../core/HyprlandState"
 const WO_PREVIEW_WIDTH = 300
 
 export default function WorkspaceOverview(monitor: any) {
-    const hyprland = AstalHyprland.get_default() // kept for createSchematicMap
-
     const overview = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 32,
@@ -47,10 +44,10 @@ export default function WorkspaceOverview(monitor: any) {
         valign: Gtk.Align.CENTER
     })
 
-    const slots = new Map<number, { wrapperBtn: Gtk.Button, itemBox: Gtk.Box, schematic: ((ws: any[], mon: any[], cl: any[]) => void) | null, headerBox: Gtk.Box }>()
+    const slots = new Map<number, { wrapperBtn: Gtk.Button, itemBox: Gtk.Box, schematic: (() => void) | null, headerBox: Gtk.Box }>()
 
     for (let i = 1; i <= 5; i++) {
-        const schematic = createSchematicMap(i, WO_PREVIEW_WIDTH, hyprland)
+        const schematic = createSchematicMap(i, WO_PREVIEW_WIDTH)
         const label = new Gtk.Label({ label: `${t("overview.workspace")} ${i}`, css_classes: ["wo-label"] })
         const count = new Gtk.Label({ css_classes: ["wo-count"] })
         const header = new Gtk.Box({
@@ -107,9 +104,7 @@ export default function WorkspaceOverview(monitor: any) {
                 const wsClients = clients.filter(c => c?.workspace?.id === i)
                 count.label = wsClients.length === 0 ? t("overview.empty") : (wsClients.length === 1 ? `1 ${t("overview.window")}` : `${wsClients.length} ${t("overview.windows")}`)
 
-                if (ctx.schematic) {
-                    ctx.schematic(workspaces, monitors, clients)
-                }
+                if (ctx.schematic) ctx.schematic()
             })
         } catch (e) {
             console.error(`[WO-Error] syncAll failed: ${e}`)

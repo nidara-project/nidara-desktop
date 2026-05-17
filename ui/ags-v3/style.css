@@ -2245,10 +2245,15 @@ window.workspace-cockpit {
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.wo-schematic-container {
-  border-radius: 12px;
-  background-color: rgba(0, 0, 0, 0.2);
-  border: 1px solid var(--crystal-border);
+/* Cairo canvas reads 'color' to get the tile fill color */
+.wo-schematic-canvas {
+  color: var(--crystal-surface);
+}
+
+/* Transparent overlay for icons only */
+.wo-schematic-icons,
+.wo-schematic-icon {
+  background: transparent;
 }
 
 .wo-label {
@@ -2270,10 +2275,6 @@ window.workspace-cockpit {
 
 .wo-schematic-win {
   background-color: var(--crystal-surface);
-  border: 1px solid var(--crystal-border);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  transition: all 0.2s ease;
 }
 
 .wo-item.active {

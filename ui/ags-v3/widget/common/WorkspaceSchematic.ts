@@ -4,36 +4,78 @@ import appService from "../../core/AppService"
 import hs from "../../core/HyprlandState"
 
 export interface SchematicHandle {
-    wrapper: Gtk.Box
+    wrapper: Gtk.Widget
     sync: () => void
+}
+
+interface Tile { x: number; y: number; w: number; h: number }
+
+function roundedRect(cr: any, x: number, y: number, w: number, h: number, r: number) {
+    const PI = Math.PI
+    cr.newPath()
+    cr.arc(x + r,     y + r,     r, PI,        3 * PI / 2)
+    cr.arc(x + w - r, y + r,     r, 3 * PI / 2, 2 * PI)
+    cr.arc(x + w - r, y + h - r, r, 0,          PI / 2)
+    cr.arc(x + r,     y + h - r, r, PI / 2,     PI)
+    cr.closePath()
 }
 
 export function createSchematicMap(wsId: number, width: number): SchematicHandle {
     const initialHeight = Math.round(width * (9 / 16))
 
-    const wrapper = new Gtk.Box({
+    // Cairo canvas draws background + tile rectangles at exact pixel coords.
+    // CSS color: var(--crystal-surface) on this widget is read via get_color()
+    // to get the actual surface color without hardcoding.
+    const canvas = new Gtk.DrawingArea({
+        css_classes: ["wo-schematic-canvas"],
+        can_target: false,
+        width_request: width,
+        height_request: initialHeight,
+    })
+
+    // Gtk.Fixed positions transparent icon widgets over each tile
+    const iconFixed = new Gtk.Fixed({
+        css_classes: ["wo-schematic-icons"],
+        can_target: false,
+        hexpand: true,
+        vexpand: true,
+    }) as any
+    iconFixed.set_overflow(Gtk.Overflow.HIDDEN)
+
+    // Overlay: canvas (base) + iconFixed (top layer)
+    const overlay = new Gtk.Overlay({
         css_classes: ["wo-schematic-preview"],
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER,
         can_target: false,
+        width_request: width,
+        height_request: initialHeight,
+    })
+    overlay.set_child(canvas)
+    overlay.add_overlay(iconFixed)
+
+    const HYPR_ROUNDING = 24
+
+    let currentTiles: Tile[] = []
+    let currentRadius   = 0
+
+    canvas.set_draw_func((da, cr, areaW, areaH) => {
+        // Dark background
+        cr.setSourceRGBA(0, 0, 0, 0.3)
+        cr.rectangle(0, 0, areaW, areaH)
+        cr.fill()
+
+        // Tile color: read from CSS 'color' property = var(--crystal-surface)
+        const col = da.get_style_context().get_color()
+        cr.setSourceRGBA(col.red, col.green, col.blue, col.alpha)
+        for (const t of currentTiles) {
+            const r = Math.min(currentRadius, t.w / 2, t.h / 2)
+            roundedRect(cr, t.x, t.y, t.w, t.h, r)
+            cr.fill()
+        }
     })
 
-    const fixed = new Gtk.Fixed({
-        css_classes: ["wo-schematic-container"],
-        hexpand: false,
-        vexpand: false,
-        halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.CENTER,
-        can_target: false,
-    }) as any
-
-    fixed.set_overflow(Gtk.Overflow.HIDDEN)
-    wrapper.append(fixed)
-
-    const winWidgets = new Map<string, { box: Gtk.Box, icon: Gtk.Image }>()
-
-    wrapper.set_size_request(width, initialHeight)
-    fixed.set_size_request(width, initialHeight)
+    const winWidgets = new Map<string, { box: Gtk.Box; icon: Gtk.Image }>()
 
     const sync = () => {
         const workspaces = hs.workspaces
@@ -48,16 +90,14 @@ export function createSchematicMap(wsId: number, width: number): SchematicHandle
         if (!hMonitor) hMonitor = monitors.find((m: any) => m.active_workspace?.id === wsId) ?? monitors[0]
         if (!hMonitor?.width) return
 
-        // hMonitor.width/height are physical pixels; divide by scale for logical coords.
-        // Window positions (c.x/y) already encode bar+dock+gaps — just scale directly.
         const scaleFactor = hMonitor.scale || 1
         const logicalW    = hMonitor.width  / scaleFactor
         const logicalH    = hMonitor.height / scaleFactor
         const scale       = width / logicalW
         const drawH       = Math.round(logicalH * scale)
 
-        wrapper.set_size_request(width, drawH)
-        fixed.set_size_request(width, drawH)
+        overlay.set_size_request(width, drawH)
+        canvas.set_size_request(width, drawH)
 
         const monX = hMonitor.x || 0
         const monY = hMonitor.y || 0
@@ -66,54 +106,57 @@ export function createSchematicMap(wsId: number, width: number): SchematicHandle
             .filter((c: any) => c?.workspace?.id === wsId)
             .sort((a: any, b: any) => (b.focus_history_id || 0) - (a.focus_history_id || 0))
 
+        // rounding_power=3.2 makes corners look more rounded than the raw radius implies;
+        // multiply by 4 to keep the schematic visually faithful at minimap scale
+        currentRadius = HYPR_ROUNDING * 4 * scale
+
+        // Cairo tiles — float coords so all inter-window gaps scale identically
+        currentTiles = wsClients.map((c: any) => ({
+            x: (c.x - monX) * scale,
+            y: (c.y - monY) * scale,
+            w: Math.max(1, c.width  * scale),
+            h: Math.max(1, c.height * scale),
+        }))
+        canvas.queue_draw()
+
+        // Icon widgets — transparent boxes with centered images
         const activeAddresses = new Set(wsClients.map((c: any) => c.address))
         winWidgets.forEach((_: any, addr: string) => {
             if (!activeAddresses.has(addr)) {
                 const w = winWidgets.get(addr)
-                if (w) fixed.remove(w.box)
+                if (w) iconFixed.remove(w.box)
                 winWidgets.delete(addr)
             }
         })
 
         wsClients.forEach((c: any) => {
-            // Compute left and right edges independently so rounding errors don't
-            // accumulate — otherwise x+w != round(right_edge) and the outer gaps
-            // become asymmetric (1px left, 0px right).
-            const x    = Math.round((c.x - monX) * scale)
-            const xEnd = Math.round((c.x - monX + c.width)  * scale)
-            const y    = Math.round((c.y - monY) * scale)
-            const yEnd = Math.round((c.y - monY + c.height) * scale)
-            const w    = Math.max(4, xEnd - x)
-            const h    = Math.max(4, yEnd - y)
+            const x = Math.round((c.x - monX) * scale)
+            const y = Math.round((c.y - monY) * scale)
+            const w = Math.max(2, Math.round(c.width  * scale))
+            const h = Math.max(2, Math.round(c.height * scale))
 
             let widget = winWidgets.get(c.address)
             if (!widget) {
                 const img = new Gtk.Image({
-                    pixel_size: Math.min(w * 0.7, h * 0.7, 28),
                     halign: Gtk.Align.CENTER,
                     valign: Gtk.Align.CENTER,
                     hexpand: true,
                     vexpand: true,
                 })
                 const box = new Gtk.Box({
-                    css_classes: ["wo-schematic-win"],
-                    halign: Gtk.Align.FILL,
-                    valign: Gtk.Align.FILL,
+                    css_classes: ["wo-schematic-icon"],
                     can_focus: false,
                     focusable: false,
-                    hexpand: true,
-                    vexpand: true,
                 })
                 box.append(img)
-                fixed.put(box, x, y)
+                iconFixed.put(box, x, y)
                 widget = { box, icon: img }
                 winWidgets.set(c.address, widget)
             } else {
-                fixed.move(widget.box, x, y)
+                iconFixed.move(widget.box, x, y)
             }
 
             widget.box.set_size_request(w, h)
-            widget.box.set_css_classes(["wo-schematic-win"])
 
             const iconId = c.class || "application-x-executable"
             const instance = (c as any).initialClass || (c as any).instance || ""
@@ -140,5 +183,5 @@ export function createSchematicMap(wsId: number, width: number): SchematicHandle
         })
     }
 
-    return { wrapper, sync }
+    return { wrapper: overlay, sync }
 }
