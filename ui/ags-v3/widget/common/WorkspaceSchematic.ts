@@ -29,11 +29,6 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
     fixed.set_overflow(Gtk.Overflow.HIDDEN)
     wrapper.append(fixed)
 
-    const barArea  = new Gtk.Box({ css_classes: ["wo-reserved-area", "bar"]  })
-    const dockArea = new Gtk.Box({ css_classes: ["wo-reserved-area", "dock"] })
-    fixed.put(barArea,  0, 0)
-    fixed.put(dockArea, 0, 0)
-
     const winWidgets = new Map<string, { box: Gtk.Box, icon: Gtk.Image }>()
 
     wrapper.set_size_request(width, initialHeight)
@@ -48,22 +43,16 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
         if (!hMonitor) hMonitor = monitors.find((m: any) => m.active_workspace?.id === wsId) || monitors[0]
         if (!hMonitor || !hMonitor.width) return
 
-        // hMonitor.width/height are physical pixels; divide by scale for logical coords
+        // hMonitor.width/height are physical pixels; divide by scale for logical coords.
+        // Window positions (c.x/y) already encode bar+dock+gaps — just scale directly.
         const scaleFactor = hMonitor.scale || 1
         const logicalW = hMonitor.width  / scaleFactor
         const logicalH = hMonitor.height / scaleFactor
-        const scale = width / logicalW
-        const drawH = Math.round(logicalH * scale)
+        const scale    = width / logicalW
+        const drawH    = Math.round(logicalH * scale)
 
         wrapper.set_size_request(width, drawH)
         fixed.set_size_request(width, drawH)
-
-        // reserved_top/bottom are in logical pixels (layer-shell exclusive zones)
-        const rTop    = Math.round(((hMonitor as any).reserved_top    || 0) * scale)
-        const rBottom = Math.round(((hMonitor as any).reserved_bottom || 0) * scale)
-
-        barArea.set_size_request(width, rTop)
-        dockArea.set_size_request(width, rBottom)
 
         const monX = hMonitor.x || 0
         const monY = hMonitor.y || 0
@@ -82,7 +71,6 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
         })
 
         wsClients.forEach((c: any) => {
-            // c.x/y are logical global coords; subtract monitor origin then scale to preview
             const x = Math.round((c.x - monX) * scale)
             const y = Math.round((c.y - monY) * scale)
             const w = Math.max(4, Math.round(c.width  * scale))
@@ -140,14 +128,6 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
             widget.icon.pixel_size = Math.min(w * 0.7, h * 0.7, 32)
             widget.icon.visible = w > 12 && h > 12
         })
-
-        // Keep chrome areas above window widgets
-        try {
-            fixed.remove(barArea)
-            fixed.put(barArea, 0, 0)
-            fixed.remove(dockArea)
-            fixed.put(dockArea, 0, drawH - rBottom)
-        } catch (e) { }
     }
 
     return { wrapper, sync }
