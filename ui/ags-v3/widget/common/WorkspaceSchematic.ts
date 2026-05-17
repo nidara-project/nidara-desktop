@@ -7,6 +7,10 @@ export interface SchematicHandle {
     sync: (workspaces: any[], monitors: any[], clients: any[]) => void
 }
 
+// Guaranteed minimum visual outer gap (px) on the left/right edges of the schematic.
+// At small preview scales, gaps_out (8 logical px) becomes sub-pixel; this keeps it visible.
+const OUTER_PAD = 4
+
 export function createSchematicMap(wsId: number, width: number, hyprland: any): SchematicHandle {
     const initialHeight = Math.round(width * (9 / 16))
 
@@ -52,8 +56,10 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
         const scaleFactor = hMonitor.scale || 1
         const logicalW = hMonitor.width  / scaleFactor
         const logicalH = hMonitor.height / scaleFactor
-        const scale    = width / logicalW
-        const drawH    = Math.round(logicalH * scale)
+        // OUTER_PAD is reserved on left+right; windows are shifted in by OUTER_PAD so the
+        // outer gaps_out area is always visible regardless of preview scale.
+        const scale = (width - 2 * OUTER_PAD) / logicalW
+        const drawH = Math.round(logicalH * scale)
 
         wrapper.set_size_request(width, drawH)
         fixed.set_size_request(width, drawH)
@@ -82,8 +88,9 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
         })
 
         wsClients.forEach((c: any) => {
-            // c.x/y are logical global coords; subtract monitor origin then scale to preview
-            const x = Math.round((c.x - monX) * scale)
+            // c.x/y are logical global coords; x gets OUTER_PAD added so the horizontal
+            // outer gap is always visible (vertical separation comes from bar/dock chrome).
+            const x = OUTER_PAD + Math.round((c.x - monX) * scale)
             const y = Math.round((c.y - monY) * scale)
             const w = Math.max(4, Math.round(c.width  * scale))
             const h = Math.max(4, Math.round(c.height * scale))
