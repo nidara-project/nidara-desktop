@@ -1,24 +1,14 @@
-import { Gtk, Gdk } from "ags/gtk4"
+import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import appService from "../../core/AppService"
-
-// Shared physical-monitor dimension cache — populated on first sync per monitor name.
-export const MonitorCache = new Map<string, { w: number, h: number }>()
 
 export interface SchematicHandle {
     wrapper: Gtk.Box
     sync: (workspaces: any[], monitors: any[], clients: any[]) => void
 }
 
-/**
- * Creates a scaled schematic preview of a single workspace.
- *
- * @param wsId     - Hyprland workspace ID (1-based)
- * @param width    - Desired pixel width of the preview (height is computed from aspect ratio)
- * @param hyprland - AstalHyprland singleton; used for focused_workspace / focused_monitor fallbacks
- */
 export function createSchematicMap(wsId: number, width: number, hyprland: any): SchematicHandle {
-    const initialHeight = Math.round(width * (170 / 300))
+    const initialHeight = Math.round(width * (9 / 16))
 
     const wrapper = new Gtk.Box({
         css_classes: ["wo-schematic-preview"],
@@ -44,7 +34,6 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
     fixed.put(barArea,  0, 0)
     fixed.put(dockArea, 0, 0)
 
-    let cachedDrawHeight = initialHeight
     const winWidgets = new Map<string, { box: Gtk.Box, icon: Gtk.Image }>()
 
     wrapper.set_size_request(width, initialHeight)
@@ -52,77 +41,36 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
 
     const sync = (workspaces: any[], monitors: any[], clients: any[]) => {
         const ws = workspaces.find((w: any) => w.id === wsId)
-        const focusedWs = hyprland.focused_workspace
 
         let hMonitor = monitors.find((m: any) => m.name === (ws?.monitor || ""))
         if (!hMonitor) hMonitor = monitors.find((m: any) => m.id === (ws?.monitor_id ?? -1))
-        if (!hMonitor && wsId === focusedWs?.id) hMonitor = hyprland.focused_monitor
+        if (!hMonitor && wsId === hyprland.focused_workspace?.id) hMonitor = hyprland.focused_monitor
         if (!hMonitor) hMonitor = monitors.find((m: any) => m.active_workspace?.id === wsId) || monitors[0]
         if (!hMonitor || !hMonitor.width) return
 
-        // Resolve physical dimensions (with GDK cross-check and snapping)
-        let physW = hMonitor.width
-        let physH = hMonitor.height
-
-        const cached = MonitorCache.get(hMonitor.name || "default")
-        if (cached) {
-            physW = cached.w
-            physH = cached.h
-        } else {
-            try {
-                const gdkMonitors = Gdk.Display.get_default()?.get_monitors()
-                let bestMatch = null
-                let minDist = Infinity
-                for (let i = 0; i < (gdkMonitors?.get_n_items() || 0); i++) {
-                    const gm = gdkMonitors?.get_item(i) as Gdk.Monitor
-                    const geom = gm.get_geometry()
-                    const dx = geom.x - (hMonitor.x || 0)
-                    const dy = geom.y - (hMonitor.y || 0)
-                    const dist = Math.sqrt(dx * dx + dy * dy)
-                    if (dist < minDist) { minDist = dist; bestMatch = geom }
-                }
-                if (bestMatch && minDist < 100) {
-                    physW = bestMatch.width
-                    physH = bestMatch.height
-                    MonitorCache.set(hMonitor.name || "default", { w: physW, h: physH })
-                }
-            } catch (e) { }
-        }
-
-        // Snap to known resolutions to avoid fractional-scaling artifacts
-        if (physH > 1000 && physH < 1500) physH = 1440
-        if (physH > 800  && physH <= 1000) physH = 1080
-        if (physW > 3000) physW = 3840
-        else if (physW > 2000) physW = 2560
-        else if (physW > 1800) physW = 1920
-
-        const ratio = physW / physH
-        if (ratio > 1.7 && ratio < 1.8) physH = (physW * 9)  / 16
-        else if (ratio > 1.5 && ratio < 1.7) physH = (physW * 10) / 16
-
-        const logicalW = Math.max(100, physW / (hMonitor.scale || 1))
-        const logicalH = Math.max(100, physH / (hMonitor.scale || 1))
+        // hMonitor.width/height are physical pixels; divide by scale for logical coords
+        const scaleFactor = hMonitor.scale || 1
+        const logicalW = hMonitor.width  / scaleFactor
+        const logicalH = hMonitor.height / scaleFactor
         const scale    = width / logicalW
-        cachedDrawHeight = Math.round(logicalH * scale)
+        const drawH    = Math.round(logicalH * scale)
 
-        wrapper.set_size_request(width, cachedDrawHeight)
-        fixed.set_size_request(width, cachedDrawHeight)
+        wrapper.set_size_request(width, drawH)
+        fixed.set_size_request(width, drawH)
 
-        const bH = Math.round(44  * scale)
-        const dH = Math.round(110 * scale)
-        barArea.set_size_request(width, bH)
-        dockArea.set_size_request(width, dH)
-        fixed.move(dockArea, 0, cachedDrawHeight - dH)
+        // reserved_top/bottom are in logical pixels (layer-shell exclusive zones)
+        const rTop    = Math.round(((hMonitor as any).reserved_top    || 0) * scale)
+        const rBottom = Math.round(((hMonitor as any).reserved_bottom || 0) * scale)
 
-        // Remove widgets for windows that are no longer on this workspace
+        barArea.set_size_request(width, rTop)
+        dockArea.set_size_request(width, rBottom)
+
+        const monX = hMonitor.x || 0
+        const monY = hMonitor.y || 0
+
         const wsClients = clients
             .filter((c: any) => c?.workspace?.id === wsId)
             .sort((a: any, b: any) => (b.focus_history_id || 0) - (a.focus_history_id || 0))
-
-        const rTop    = (hMonitor as any).reserved_top    || 0
-        const rBottom = (hMonitor as any).reserved_bottom || 0
-        const rLeft   = (hMonitor as any).reserved_left   || 0
-        const rRight  = (hMonitor as any).reserved_right  || 0
 
         const activeAddresses = new Set(wsClients.map((c: any) => c.address))
         winWidgets.forEach((_: any, addr: string) => {
@@ -133,31 +81,12 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
             }
         })
 
-        const isPrimary = (hMonitor.x || 0) === 0 && (hMonitor.y || 0) === 0
-        const barH = 44
-        const dockH = 110
-
         wsClients.forEach((c: any) => {
-            let rawX = c.x - (hMonitor.x || 0)
-            let rawY = c.y - (hMonitor.y || 0)
-            let rawW = c.width
-            let rawH = c.height
-
-            if (isPrimary && !c.floating) {
-                if (rawY < barH) {
-                    const diff = barH - rawY
-                    rawY = barH
-                    if (rawH > (logicalH - barH - dockH)) rawH -= (diff + 10)
-                }
-                if (rawY + rawH > (logicalH - dockH)) {
-                    rawH = Math.max(10, (logicalH - dockH) - rawY - 4)
-                }
-            }
-
-            const x = Math.round(rawX * scale)
-            const y = Math.round(rawY * scale)
-            const w = Math.round(rawW * scale)
-            const h = Math.round(rawH * scale)
+            // c.x/y are logical global coords; subtract monitor origin then scale to preview
+            const x = Math.round((c.x - monX) * scale)
+            const y = Math.round((c.y - monY) * scale)
+            const w = Math.max(4, Math.round(c.width  * scale))
+            const h = Math.max(4, Math.round(c.height * scale))
 
             let widget = winWidgets.get(c.address)
             if (!widget) {
@@ -185,10 +114,9 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
                 fixed.move(widget.box, x, y)
             }
 
-            widget.box.set_size_request(Math.max(1, w), Math.max(1, h))
+            widget.box.set_size_request(w, h)
             widget.box.set_css_classes(["wo-schematic-win"])
 
-            // Icon resolution — same logic as WO
             const iconId = c.class || "application-x-executable"
             const instance = (c as any).initialClass || (c as any).instance || ""
             let webAppIcon: string | null = null
@@ -213,12 +141,12 @@ export function createSchematicMap(wsId: number, width: number, hyprland: any): 
             widget.icon.visible = w > 12 && h > 12
         })
 
-        // Keep chrome areas on top
+        // Keep chrome areas above window widgets
         try {
             fixed.remove(barArea)
             fixed.put(barArea, 0, 0)
             fixed.remove(dockArea)
-            fixed.put(dockArea, 0, cachedDrawHeight - dH)
+            fixed.put(dockArea, 0, drawH - rBottom)
         } catch (e) { }
     }
 
