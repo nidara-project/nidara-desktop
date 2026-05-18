@@ -395,7 +395,8 @@ export function DockItem(
     ;(dot as any).set_draw_func((_area: any, cr: any, w: number, h: number) => {
         const r = Math.min(w, h) / 2
         cr.arc(w / 2, h / 2, r, 0, 2 * Math.PI)
-        cr.setSourceRGBA(1, 1, 1, 0.95)
+        const c = Theme.isDark ? 1 : 0
+        cr.setSourceRGBA(c, c, c, 0.9)
         cr.fill()
     })
 

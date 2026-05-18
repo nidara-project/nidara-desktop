@@ -1201,6 +1201,9 @@ export default function DockHorizontal(gdkmonitor: any) {
 
     const sConn = onDockSettingsChanged(() => {
         syncConstants()
+        // Force widget recreation so itemBox/dotZone get new PILL_HEIGHT/PILL_PADDING.
+        // The tick only updates width; height_request must come from the factory.
+        widgetCache.clear()
         win.set_size_request(WIN_W, WIN_H)
         da.height_request = DOCK_CONSTANTS.PILL_HEIGHT
         shim.height_request = DOCK_CONSTANTS.PILL_HEIGHT
