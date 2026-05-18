@@ -103,23 +103,16 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
 /* Removed ineffective specificity fixes */
 
 
-/* --- Indicators (Dots) - macOS Tahoe: small black circles --- */
+/* --- Indicators (Dots) --- */
 #crystal-dock .cd-dot {
-    min-height: 4px;
-    min-width: 4px;
-    border-radius: 2px;
-    margin-top: 4px;
-    background-color: transparent;
-    transition: all 0.2s ease;
-
-    &.open, &.focused {
-        background-color: var(--crystal-text);
-        box-shadow: none;
-        border: none;
-        opacity: 1;
-        min-height: 4px;
-        min-width: 4px;
-    }
+    min-width: 5px;
+    min-height: 5px;
+    border-radius: 9999px;
+    background-color: var(--crystal-text);
+    border: none;
+    box-shadow: none;
+    outline: none;
+    padding: 0;
 }
 
 /* --- Separator - macOS Tahoe: dark hairline --- */

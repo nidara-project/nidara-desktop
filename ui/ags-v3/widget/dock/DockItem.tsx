@@ -135,19 +135,17 @@ export function DockItem(
     const itemBox = new Gtk.Box({
         name: "cd-item-" + appId,
         css_classes: ["cd-item"],
+        // Horizontal: VERTICAL orientation stacks [icon zone, dot zone] top-to-bottom.
+        // Vertical:   HORIZONTAL orientation keeps the side-indicator pattern.
+        orientation: isVertical ? Gtk.Orientation.HORIZONTAL : Gtk.Orientation.VERTICAL,
         valign: isVertical ? Gtk.Align.START : Gtk.Align.END,
         halign: isVertical ? Gtk.Align.FILL : Gtk.Align.START,
         hexpand: false,
-        // Vertical mirrors horizontal: slot axis = height (tick changes it), overflow axis = width (fixed).
-        // Horizontal: width = tps (changes), height = PILL_HEIGHT (fixed).
-        // Vertical:   height = tps (changes), width = PILL_HEIGHT (fixed).
         width_request:  isVertical ? DOCK_CONSTANTS.PILL_HEIGHT : DOCK_CONSTANTS.ICON_SIZE,
         height_request: isVertical ? DOCK_CONSTANTS.ICON_SIZE   : DOCK_CONSTANTS.PILL_HEIGHT,
-        // top/bottom margins pre-set to ICON_MARGIN so Revealer natural height = ICON_SIZE + 2*ICON_MARGIN
-        // = APP_SLOT from the start — prevents the layout jump when first tick applies the same values.
         margin_top:    isVertical ? DOCK_CONSTANTS.ICON_MARGIN : 0,
         margin_bottom: isVertical ? DOCK_CONSTANTS.ICON_MARGIN : 0,
-        overflow: isVertical ? Gtk.Overflow.VISIBLE : Gtk.Overflow.HIDDEN,
+        overflow: Gtk.Overflow.VISIBLE,
         can_focus: false,
         focusable: false,
         has_tooltip: false,
@@ -170,9 +168,11 @@ export function DockItem(
         halign: isVertical ? edgeAlign : Gtk.Align.CENTER,
         valign: isVertical ? Gtk.Align.CENTER : Gtk.Align.END,
         hexpand: false,
+        // Horizontal: fills the icon zone (everything above the dot zone).
+        vexpand: !isVertical,
         width_request:  isVertical ? DOCK_CONSTANTS.ICON_SIZE : -1,
         height_request: isVertical ? DOCK_CONSTANTS.ICON_SIZE : -1,
-        margin_bottom: isVertical ? 0 : DOCK_CONSTANTS.PILL_PADDING,
+        margin_bottom: 0,
         has_tooltip: false,
         can_focus: false,
         focusable: false
@@ -382,71 +382,57 @@ export function DockItem(
     child.set_name("cd-icon-image-" + appId)
     iconBox.append(iconToDisplay)
 
-    // macOS Tahoe: 4px perfect black circle — Cairo-drawn for pixel-perfect rendering
-    const DOT_SIZE = 4
-    const dot = new Gtk.DrawingArea({
-        name: "cd-dot-" + appId,
-        css_classes: ["cd-dot"],
-        width_request: DOT_SIZE,
-        height_request: DOT_SIZE,
-        has_tooltip: false,
+    const DOT_SIZE = 5
+    const GAP = DOCK_CONSTANTS.INDICATOR_GAP
+
+    // DrawingArea + Cairo: always a perfect circle regardless of GTK allocation.
+    const dot = new Gtk.DrawingArea()
+    dot.set_halign(Gtk.Align.CENTER)
+    dot.set_valign(Gtk.Align.CENTER)
+    ;(dot as any).set_content_width(DOT_SIZE)
+    ;(dot as any).set_content_height(DOT_SIZE)
+    dot.set_visible(false)
+    ;(dot as any).set_draw_func((_area: any, cr: any, w: number, h: number) => {
+        const r = Math.min(w, h) / 2
+        cr.arc(w / 2, h / 2, r, 0, 2 * Math.PI)
+        cr.setSourceRGBA(1, 1, 1, 0.95)
+        cr.fill()
     })
-        ; (dot as any).set_content_width(DOT_SIZE)
-        ; (dot as any).set_content_height(DOT_SIZE)
-        ; (dot as any).set_draw_func((_a: any, cr: any, w: number, h: number) => {
-            // Best-quality anti-aliasing
-            cr.setAntialias(3) // CAIRO_ANTIALIAS_BEST
 
-            const cx = w / 2
-            const cy = h / 2
-            const r = DOT_SIZE / 2
-
-            const c = Theme.isDark ? 1 : 0 // white in dark mode, black in light mode
-
-            // 1. Subtle shadow halo (depth effect)
-            cr.arc(cx, cy + 0.5, r + 0.3, 0, Math.PI * 2)
-            cr.setSourceRGBA(c, c, c, 0.15)
-            cr.fill()
-
-            // 2. Crisp main dot
-            cr.arc(cx, cy, r, 0, Math.PI * 2)
-            cr.setSourceRGBA(c, c, c, 0.9)
-            cr.fill()
+    if (isVertical) {
+        if (dockSettings.position === 'right') {
+            dot.set_halign(Gtk.Align.START)
+            dot.set_margin_start(GAP)
+        } else {
+            dot.set_halign(Gtk.Align.END)
+            dot.set_margin_end(GAP)
+        }
+        const overlay = new Gtk.Overlay({
+            name: "cd-overlay-" + appId,
+            css_classes: ["cd-overlay", "overlay"],
+            overflow: Gtk.Overflow.VISIBLE,
+            halign: edgeAlign,
+            valign: Gtk.Align.CENTER,
+            margin_end:   dockSettings.position === 'right' ? DOCK_CONSTANTS.PILL_PADDING : 0,
+            margin_start: dockSettings.position === 'left'  ? DOCK_CONSTANTS.PILL_PADDING : 0,
+            width_request:  DOCK_CONSTANTS.ICON_SIZE,
+            height_request: DOCK_CONSTANTS.ICON_SIZE,
+            has_tooltip: false,
         })
-    const indicator = new Gtk.Box({
-        name: "cd-indicator-" + appId,
-        css_classes: ["cd-indicator-container"],
-        // For vertical: indicator is on the screen-edge side (right for right dock, left for left dock)
-        halign: isVertical
-            ? (dockSettings.position === 'right' ? Gtk.Align.END : Gtk.Align.START)
-            : Gtk.Align.CENTER,
-        valign: isVertical ? Gtk.Align.CENTER : Gtk.Align.END,
-        margin_bottom: isVertical ? 0 : DOCK_CONSTANTS.INDICATOR_GAP,
-        margin_end:   isVertical && dockSettings.position === 'right' ? DOCK_CONSTANTS.INDICATOR_GAP : 0,
-        margin_start: isVertical && dockSettings.position === 'left'  ? DOCK_CONSTANTS.INDICATOR_GAP : 0,
-        has_tooltip: false,
-        width_request: DOT_SIZE, height_request: DOT_SIZE,
-    })
-    indicator.append(dot)
-
-    const overlay = new Gtk.Overlay({
-        name: "cd-overlay-" + appId,
-        css_classes: ["cd-overlay", "overlay"],
-        overflow: Gtk.Overflow.VISIBLE,
-        halign: isVertical ? edgeAlign : Gtk.Align.START,
-        valign: isVertical ? Gtk.Align.CENTER : Gtk.Align.END,
-        vexpand: !isVertical,
-        // Vertical: PILL_PADDING margin keeps icon centered in pill (mirrors horizontal iconBox.margin_bottom).
-        // Overflow goes toward screen center as icon magnifies (halign = edgeAlign, margin is fixed).
-        margin_end:   isVertical && dockSettings.position === 'right' ? DOCK_CONSTANTS.PILL_PADDING : 0,
-        margin_start: isVertical && dockSettings.position === 'left'  ? DOCK_CONSTANTS.PILL_PADDING : 0,
-        width_request:  isVertical ? DOCK_CONSTANTS.ICON_SIZE : -1,
-        height_request: isVertical ? DOCK_CONSTANTS.ICON_SIZE : DOCK_CONSTANTS.PILL_HEIGHT,
-        has_tooltip: false,
-    })
-    overlay.set_child(iconBox)
-    overlay.add_overlay(indicator)
-    itemBox.append(overlay)
+        overlay.set_child(iconBox)
+        overlay.add_overlay(dot)
+        itemBox.append(overlay)
+    } else {
+        // CenterBox guarantees its center_widget gets exactly its natural size (6×6),
+        // rather than being stretched by a Gtk.Box parent layout pass.
+        const dotZone = new Gtk.CenterBox({
+            height_request: DOCK_CONSTANTS.PILL_PADDING,
+            halign: Gtk.Align.FILL,
+        })
+        dotZone.set_center_widget(dot)
+        itemBox.append(iconBox)
+        itemBox.append(dotZone)
+    }
 
     // TOOLTIP
     // Re-implemented Popover for anchored positioning with GTK theme styling
@@ -749,7 +735,6 @@ export function DockItem(
         const isOpen = addresses.length > 0
         const isFocused = focused && addresses.includes(focused.address)
 
-        // V610: Show indicator immediately if bouncing (launching) OR if explicitly open
         if ((isOpen || state.isBouncing) && dockSettings.showIndicators) {
             dot.set_visible(true)
             dot.add_css_class("open")

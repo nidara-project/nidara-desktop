@@ -43,6 +43,8 @@
   --crystal-border: rgba(127, 127, 127, 0.15);
   --crystal-shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.4);
   --crystal-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.2);
+  /* --- Component-specific --- */
+  --crystal-thumb: #ffffff;
 }
 
 /* SCSS Variable Aliases for easier use in component files */
@@ -290,7 +292,7 @@ switch slider,
   margin: 3px;
   min-width: 18px;
   min-height: 18px;
-  background-color: #ffffff;
+  background-color: var(--crystal-thumb);
   background-image: none;
   border: none;
   border-radius: var(--crystal-radius-pill);
@@ -336,7 +338,7 @@ scale highlight,
 }
 scale slider,
 .crystal-scale slider {
-  background-color: #ffffff;
+  background-color: var(--crystal-thumb);
   background-image: none;
   border-radius: 99px;
   border: none;
@@ -429,13 +431,14 @@ scale.crystal-scale slider {
 }
 .cc-slider-scale-input trough, .cc-slider-scale-input highlight, .cc-slider-scale-input slider {
   background: none;
+  background-color: transparent;
   background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
   min-height: 0;
   min-width: 0;
   margin: 0;
-  outline: none;
 }
 
 /* --- Buttons (Premium Crystal) --- */
@@ -460,7 +463,7 @@ button.crystal-btn:active,
 button.crystal-btn.accent,
 .crystal-button.accent {
   background: var(--crystal-accent);
-  color: #ffffff;
+  color: var(--crystal-accent-fg);
   border: none;
 }
 button.crystal-btn.accent:hover,
@@ -482,9 +485,12 @@ button.crystal-btn.accent:hover,
    CSS vars (--crystal-popover-*) are used instead of @define-color to stay
    SCSS-compilable — @name syntax in property values is not valid SCSS. */
 popover.crystal-popover {
+  background: none;
   background-color: transparent;
+  background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
 }
 popover.crystal-popover > contents {
   /* Fallback ensures visible background even before --crystal-popover-bg token is set */
@@ -527,10 +533,12 @@ row.settings-item-row:selected {
 }
 
 button.settings-action-row {
-  background: transparent;
+  background: none;
+  background-color: transparent;
   background-image: none;
   border: none;
   box-shadow: none;
+  outline: none;
   border-radius: 0;
   padding: 0;
   transition: background 0.15s ease;
@@ -555,7 +563,7 @@ popover.crystal-popover button:not(.suggested-action):not(.destructive-action):n
 /* Accent (selected/primary) buttons inside crystal popovers */
 popover.crystal-popover button.suggested-action {
   background: var(--crystal-accent);
-  color: #ffffff;
+  color: var(--crystal-accent-fg);
   border: none;
   border-radius: var(--crystal-radius-xs);
   transition: background 0.15s ease;
@@ -589,15 +597,18 @@ button.crystal-seg-btn:active {
   background: var(--crystal-surface-active);
 }
 button.crystal-seg-btn.suggested-action {
-  background: var(--crystal-accent);
+  background: none;
+  background-color: transparent;
   background-image: none;
-  color: #fff;
   border: none;
   box-shadow: none;
+  outline: none;
+  background: var(--crystal-accent);
+  color: var(--crystal-accent-fg);
 }
 button.crystal-seg-btn.suggested-action:hover {
   background: rgba(var(--crystal-accent-rgb), 0.82);
-  color: #fff;
+  color: var(--crystal-accent-fg);
 }
 button.crystal-seg-btn.suggested-action:active {
   background: rgba(var(--crystal-accent-rgb), 0.65);
@@ -627,6 +638,7 @@ button.crystal-seg-btn.suggested-action:active {
 /* --- Window Transparency Logic --- */
 window.crystal-dock-window,
 #crystal-dock {
+  background: none;
   background-color: transparent;
   background-image: none;
   border: none;
@@ -638,10 +650,12 @@ window.crystal-dock-window,
 window.crystal-dock-window decoration, window.crystal-dock-window > box,
 #crystal-dock decoration,
 #crystal-dock > box {
+  background: none;
   background-color: transparent;
   background-image: none;
-  box-shadow: none;
   border: none;
+  box-shadow: none;
+  outline: none;
 }
 
 /* --- Islands Layout --- */
@@ -651,13 +665,15 @@ window.crystal-dock-window decoration, window.crystal-dock-window > box,
 }
 
 .cd-item {
-  margin: 0;
-  padding: 0;
+  background: none;
   background-color: transparent;
   background-image: none;
-  transform-origin: bottom;
   border: none;
   box-shadow: none;
+  outline: none;
+  margin: 0;
+  padding: 0;
+  transform-origin: bottom;
   transition: background-color 0.2s cubic-bezier(0.2, 0, 0, 1);
   -gtk-icon-shadow: none;
 }
@@ -665,16 +681,20 @@ window.crystal-dock-window decoration, window.crystal-dock-window > box,
   opacity: 0.3;
 }
 .cd-item:hover {
+  background: none;
   background-color: transparent;
+  background-image: none;
+  border: none;
   box-shadow: none;
   outline: none;
-  background-image: none;
 }
 .cd-item > ripple, .cd-item > highlight, .cd-item > outline, .cd-item > focus-ring, .cd-item > decoration {
-  background-image: none;
+  background: none;
   background-color: transparent;
-  box-shadow: none;
+  background-image: none;
   border: none;
+  box-shadow: none;
+  outline: none;
   opacity: 0;
 }
 
@@ -713,19 +733,25 @@ window#crystal-dock box.cd-squircle-plate > outline,
 window#crystal-dock box.cd-squircle-plate:focus > ripple,
 window#crystal-dock box.cd-squircle-plate:hover > ripple,
 window#crystal-dock box.cd-squircle-plate:active > ripple {
-  background-image: none;
+  background: none;
   background-color: transparent;
+  background-image: none;
+  border: none;
   box-shadow: none;
+  outline: none;
   opacity: 0;
 }
 
 window#crystal-dock box.cd-squircle-plate image,
 window#crystal-dock box.cd-squircle-plate widget,
 window#crystal-dock box.cd-squircle-plate drawingarea {
-  box-shadow: none;
-  -gtk-icon-shadow: none;
-  border: none;
   background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  -gtk-icon-shadow: none;
 }
 
 window#crystal-dock box.cd-squircle-plate.show-bg {
@@ -736,22 +762,16 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
 }
 
 /* Removed ineffective specificity fixes */
-/* --- Indicators (Dots) - macOS Tahoe: small black circles --- */
+/* --- Indicators (Dots) --- */
 #crystal-dock .cd-dot {
-  min-height: 4px;
-  min-width: 4px;
-  border-radius: 2px;
-  margin-top: 4px;
-  background-color: transparent;
-  transition: all 0.2s ease;
-}
-#crystal-dock .cd-dot.open, #crystal-dock .cd-dot.focused {
+  min-width: 5px;
+  min-height: 5px;
+  border-radius: 9999px;
   background-color: var(--crystal-text);
-  box-shadow: none;
   border: none;
-  opacity: 1;
-  min-height: 4px;
-  min-width: 4px;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
 }
 
 /* --- Separator - macOS Tahoe: dark hairline --- */
@@ -1143,19 +1163,19 @@ button.dock-v-icon image {
 }
 
 .bar-rec-capsule {
-  background: rgba(220, 30, 30, 0.18);
+  background: rgba(var(--crystal-danger-rgb), 0.18);
 }
 
 .bar-rec-indicator {
   border-radius: 999px;
-  background: #e03030;
+  background: var(--crystal-danger);
   animation: rec-pulse 1.4s ease-in-out infinite;
 }
 
 .bar-rec-label {
   font-size: 0.7rem;
   font-weight: 700;
-  color: #e03030;
+  color: var(--crystal-danger);
   letter-spacing: 0.05em;
 }
 
@@ -1179,11 +1199,14 @@ button.dock-v-icon image {
   margin-top: 44px;
 }
 .bar-expansion-panel button.suggested-action {
-  background: var(--crystal-accent);
+  background: none;
+  background-color: transparent;
   background-image: none;
-  color: #fff;
   border: none;
   box-shadow: none;
+  outline: none;
+  background: var(--crystal-accent);
+  color: var(--crystal-accent-fg);
   border-radius: var(--crystal-radius-sm);
   padding: 6px 14px;
   font-size: 0.84rem;
@@ -1196,9 +1219,14 @@ button.dock-v-icon image {
   background: rgba(var(--crystal-accent-rgb), 0.65);
 }
 .bar-expansion-panel button.destructive-action {
-  background: var(--crystal-danger);
+  background: none;
+  background-color: transparent;
   background-image: none;
-  color: #fff;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  background: var(--crystal-danger);
+  color: var(--crystal-accent-fg);
   border: none;
   box-shadow: none;
   border-radius: var(--crystal-radius-sm);

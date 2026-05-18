@@ -319,6 +319,7 @@ export default function DockHorizontal(gdkmonitor: any) {
                     lastRoundedX = newRoundedX
 
                     if (revealer.width_request !== slotW) revealer.width_request = slotW
+                    if ((revealer as any).height_request !== DOCK_CONSTANTS.PILL_HEIGHT) (revealer as any).height_request = DOCK_CONSTANTS.PILL_HEIGHT
                     const gtkRevSep = widgetCache.get(id) as any
                     if (gtkRevSep && gtkRevSep !== (revealer as any)) {
                         if (gtkRevSep.width_request !== slotW) gtkRevSep.width_request = slotW
@@ -326,7 +327,7 @@ export default function DockHorizontal(gdkmonitor: any) {
                     }
                     const centerBox = itemBox as Gtk.CenterBox
                     const line = centerBox?.get_center_widget() as Gtk.Box
-                    if (line) line.set_size_request(-1, Math.round(state.currentHeight))
+                    if (line) line.set_size_request(-1, DOCK_CONSTANTS.SEPARATOR_HEIGHT)
                 } else {
                     const exactMargin = state.currentMargin
                     const exactIconSize = DOCK_CONSTANTS.ICON_SIZE * state.currentScale
@@ -360,31 +361,26 @@ export default function DockHorizontal(gdkmonitor: any) {
                         itemBox.margin_bottom = Math.round(0 - (state.currentTranslateY || 0))
                     }
 
-                    // Visual nested sizing
-                    const overlay = itemBox?.get_first_child() as Gtk.Overlay
-                    if (overlay) {
-                        const iconBox = overlay.get_child() as Gtk.Box
-                        if (iconBox) {
-                            iconBox.set_size_request(tps, tps)
-                            const pp = DOCK_CONSTANTS.PILL_PADDING
-                            if (iconBox.margin_bottom !== pp) iconBox.margin_bottom = pp
-                            const plateOverlay = iconBox.get_first_child() as Gtk.Overlay
-                            if (plateOverlay && plateOverlay.get_child) {
-                                const daIcon = plateOverlay.get_child()
-                                if (daIcon) {
-                                    daIcon.set_size_request(tps, tps)
-                                    ;(daIcon as any).set_content_width?.(tps)
-                                    ;(daIcon as any).set_content_height?.(tps)
-                                    const icon = (daIcon as any).get_next_sibling()
-                                    if (icon) icon.set_size_request(tps, tps)
-                                }
-                            } else {
-                                const icon = iconBox.get_first_child()
-                                if (icon) {
-                                    icon.set_size_request(tps, tps)
-                                    ;(icon as any).set_content_width?.(tps)
-                                    ;(icon as any).set_content_height?.(tps)
-                                }
+                    // Visual nested sizing (itemBox is now a vertical Box; iconBox is its first child)
+                    const iconBox = itemBox?.get_first_child() as Gtk.Box
+                    if (iconBox) {
+                        iconBox.set_size_request(tps, -1)
+                        const plateOverlay = iconBox.get_first_child() as Gtk.Overlay
+                        if (plateOverlay && plateOverlay.get_child) {
+                            const daIcon = plateOverlay.get_child()
+                            if (daIcon) {
+                                daIcon.set_size_request(tps, tps)
+                                ;(daIcon as any).set_content_width?.(tps)
+                                ;(daIcon as any).set_content_height?.(tps)
+                                const icon = (daIcon as any).get_next_sibling()
+                                if (icon) icon.set_size_request(tps, tps)
+                            }
+                        } else {
+                            const icon = iconBox.get_first_child()
+                            if (icon) {
+                                icon.set_size_request(tps, tps)
+                                ;(icon as any).set_content_width?.(tps)
+                                ;(icon as any).set_content_height?.(tps)
                             }
                         }
                     }
