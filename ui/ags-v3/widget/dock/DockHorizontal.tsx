@@ -353,6 +353,7 @@ export default function DockHorizontal(gdkmonitor: any) {
                     }
                     if (itemBox) {
                         if (itemBox.width_request !== tps) itemBox.width_request = tps
+                        if (itemBox.height_request !== DOCK_CONSTANTS.PILL_HEIGHT) itemBox.height_request = DOCK_CONSTANTS.PILL_HEIGHT
                         const hSlide = Math.round(state.currentSlideX)
                         const htML = marginL + hSlide
                         const htMR = marginR - hSlide
@@ -365,6 +366,11 @@ export default function DockHorizontal(gdkmonitor: any) {
                     const iconBox = itemBox?.get_first_child() as Gtk.Box
                     if (iconBox) {
                         iconBox.set_size_request(tps, -1)
+                        // Keep dotZone (CenterBox, second child) in sync with current PILL_PADDING
+                        const dotZone = iconBox.get_next_sibling() as any
+                        if (dotZone && dotZone.height_request !== DOCK_CONSTANTS.PILL_PADDING) {
+                            dotZone.height_request = DOCK_CONSTANTS.PILL_PADDING
+                        }
                         const plateOverlay = iconBox.get_first_child() as Gtk.Overlay
                         if (plateOverlay && plateOverlay.get_child) {
                             const daIcon = plateOverlay.get_child()
@@ -1201,9 +1207,20 @@ export default function DockHorizontal(gdkmonitor: any) {
 
     const sConn = onDockSettingsChanged(() => {
         syncConstants()
-        // Force widget recreation so itemBox/dotZone get new PILL_HEIGHT/PILL_PADDING.
-        // The tick only updates width; height_request must come from the factory.
-        widgetCache.clear()
+        // Snap all spring states to the new DOCK_CONSTANTS immediately — no
+        // widget destruction, no flash. The tick applies the new dimensions on
+        // the next frame via the itemBox / dotZone height_request guards above.
+        animRegistry.forEach((state) => {
+            if (state.isSeparator) {
+                state.targetWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.currentWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.velocityWidth = 0
+                state.targetHeight = DOCK_CONSTANTS.SEPARATOR_HEIGHT; state.currentHeight = DOCK_CONSTANTS.SEPARATOR_HEIGHT; state.velocityHeight = 0
+            } else {
+                state.targetScale = 1.0; state.currentScale = 1.0; state.velocityScale = 0
+                state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.currentWidth = DOCK_CONSTANTS.ICON_SIZE; state.velocityWidth = 0
+                state.targetMargin = DOCK_CONSTANTS.ICON_MARGIN; state.currentMargin = DOCK_CONSTANTS.ICON_MARGIN; state.velocityMargin = 0
+                state.targetHeight = DOCK_CONSTANTS.PILL_HEIGHT; state.currentHeight = DOCK_CONSTANTS.PILL_HEIGHT; state.velocityHeight = 0
+            }
+        })
         win.set_size_request(WIN_W, WIN_H)
         da.height_request = DOCK_CONSTANTS.PILL_HEIGHT
         shim.height_request = DOCK_CONSTANTS.PILL_HEIGHT

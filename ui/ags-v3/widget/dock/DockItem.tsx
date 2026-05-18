@@ -762,6 +762,7 @@ export function DockItem(
     }
 
     const hsChangedId = hs.connect("changed", sync)
+    const themeChangedId = Theme.connect("changed", () => dot.queue_draw())
 
     // Note: notify::title per-client connections removed — they caused a dock surface
     // commit (and Hyprland blur pass) on every window title update from running apps
@@ -770,6 +771,7 @@ export function DockItem(
 
     itemBox.connect("destroy", () => {
         try { hs.disconnect(hsChangedId) } catch (e) { }
+        try { Theme.disconnect(themeChangedId) } catch (e) { }
     })
     sync()
 
