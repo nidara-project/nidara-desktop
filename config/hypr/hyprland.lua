@@ -38,6 +38,7 @@ hl.config({
         },
         layout           = "dwindle",
         resize_on_border = true,
+        allow_tearing    = true,
     },
 
     decoration = {
@@ -132,7 +133,8 @@ hl.bind(mainMod .. " + L",         hl.dsp.exec_cmd("crystal-lock"))
 -- ── Keybinds — App launchers ─────────────────────────────────────────────────
 hl.bind(mainMod .. " + S",   hl.dsp.exec_cmd("ags request toggleSettings"))
 hl.bind("SUPER + SUPER_L",   hl.dsp.exec_cmd("ags request toggleAppGrid"), { release = true })
-hl.bind(mainMod .. " + G",   hl.dsp.exec_cmd("ags request toggleGameOverlay"))
+hl.bind(mainMod .. " + G",          hl.dsp.exec_cmd("ags request toggleGameOverlay"))
+hl.bind(mainMod .. " + SHIFT + G", hl.dsp.exec_cmd("crystal-game-mode toggle"))
 hl.bind(mainMod .. " + E",   hl.dsp.exec_cmd("uwsm app -- " .. fileManager))
 hl.bind(mainMod .. " + T",   hl.dsp.exec_cmd("uwsm app -- " .. terminal))
 hl.bind(mainMod .. " + Q",   hl.dsp.window.close())
@@ -206,6 +208,153 @@ hl.window_rule({
     match = { class = "^$" },
     no_anim  = true,
     rounding = 0,
+})
+
+
+-- ── Game mode — workspace, window rules & auto-return ────────────────────────
+local lastNonGameWs    = nil
+local prevWallpaper    = nil
+local prevTransition   = "fade"
+local gameMonitor      = ""
+local activeGames      = {}   -- address → appid; tracks all Steam-launched game windows
+
+local function getSteamAppId(pid)
+    local p = tonumber(pid)
+    for _ = 1, 8 do
+        if not p or p <= 1 then break end
+        local ef = io.open("/proc/" .. p .. "/environ", "rb")
+        if ef then
+            local env = ef:read("*a"); ef:close()
+            local appid = env:match("SteamAppId=(%d+)")
+                       or env:match("SteamGameId=(%d+)")
+                       or env:match("STEAM_APP_ID=(%d+)")
+            if appid and appid ~= "0" then return appid end
+        end
+        local sf = io.open("/proc/" .. p .. "/stat", "r")
+        if not sf then break end
+        local stat = sf:read("*l"); sf:close()
+        p = tonumber(stat:match("%)%s+%S+%s+(%d+)"))
+    end
+    return nil
+end
+
+local function readGamingCfg()
+    local f = io.open(os.getenv("HOME") .. "/.config/crystal-shell/gaming.json", "r")
+    if not f then return nil, nil, "grow", false end
+    local raw = f:read("*a"); f:close()
+    local mode       = raw:match('"wallpaperMode"%s*:%s*"([^"]+)"')
+    local custom     = raw:match('"customWallpaper"%s*:%s*"([^"]+)"')
+    local transition = raw:match('"transition"%s*:%s*"([^"]+)"') or "grow"
+    local perfOn     = raw:match('"performanceProfile"%s*:%s*(true)') ~= nil
+    return mode, custom, transition, perfOn
+end
+
+local function readWallpaperCfg()
+    local f = io.open(os.getenv("HOME") .. "/.config/crystal-shell/wallpaper", "r")
+    if not f then return nil, "fade" end
+    local raw = f:read("*a"); f:close()
+    return raw:match('"path"%s*:%s*"([^"]+)"'),
+           raw:match('"transition"%s*:%s*"([^"]+)"') or "fade"
+end
+
+local function findSteamHero(appid)
+    local base = os.getenv("HOME") .. "/.steam/steam/appcache/librarycache/" .. appid
+    local flat = base .. "/library_hero.jpg"
+    local f = io.open(flat, "r")
+    if f then f:close(); return flat end
+    local iter = io.popen('find "' .. base .. '" -maxdepth 2 -name "library_hero.jpg" 2>/dev/null | grep -v blur | head -1')
+    if iter then
+        local path = iter:read("*l"); iter:close()
+        if path then path = path:match("^%s*(.-)%s*$") end
+        if path and path ~= "" then return path end
+    end
+    return nil
+end
+
+hl.on("workspace.active", function(ws)
+    if ws.name ~= "gamespace" then
+        lastNonGameWs = ws.id
+    end
+end)
+
+hl.on("window.open", function(w)
+    local cls = w.class or ""
+    local pid = w.pid or 0
+    local appid = cls:match("^steam_app_(%d+)$") or getSteamAppId(pid)
+    if not appid then return end
+
+    activeGames[w.address] = appid
+    hl.dispatch(hl.dsp.window.move({ workspace = "name:gamespace" }))
+    hl.dispatch(hl.dsp.focus({ workspace = "name:gamespace" }))
+    hl.exec_cmd("hyprctl setprop address:" .. w.address .. " immediate 1 lock:0")
+
+    if prevWallpaper then return end
+
+    local ws = hl.get_active_workspace()
+    local mon = ws and ws.monitor
+    gameMonitor = (type(mon) == "string" and mon ~= "") and mon or ""
+
+    local mode, custom, transition, perfOn = readGamingCfg()
+    if perfOn then hl.exec_cmd("powerprofilesctl set performance") end
+
+    local wallpaperPath = nil
+    if mode == "artwork" then
+        wallpaperPath = findSteamHero(appid)
+    elseif mode == "custom" and custom and custom ~= "" then
+        wallpaperPath = custom
+    end
+
+    if wallpaperPath then
+        prevWallpaper, prevTransition = readWallpaperCfg()
+        local outputFlag = (gameMonitor ~= "") and (" --outputs " .. gameMonitor) or ""
+        os.execute("awww img " .. wallpaperPath .. " --transition-type " .. transition .. outputFlag)
+    end
+end)
+
+hl.on("window.destroy", function(w)
+    if not activeGames[w.address] then return end
+    activeGames[w.address] = nil
+
+    hl.timer(function()
+        local hasMore = false
+        for _ in pairs(activeGames) do hasMore = true; break end
+
+        local activeWs = hl.get_active_workspace()
+        if not hasMore and lastNonGameWs ~= nil and activeWs and activeWs.name == "gamespace" then
+            hl.dispatch(hl.dsp.focus({ workspace = lastNonGameWs }))
+            local _, _, _, perfOn = readGamingCfg()
+            if perfOn then hl.exec_cmd("powerprofilesctl set balanced") end
+            if prevWallpaper then
+                local outputFlag = (gameMonitor ~= "") and (" --outputs " .. gameMonitor) or ""
+                os.execute("awww img " .. prevWallpaper .. " --transition-type " .. prevTransition .. outputFlag)
+                prevWallpaper = nil
+            end
+        end
+    end, { timeout = 3000, type = "oneshot" })
+end)
+
+
+hl.workspace_rule({
+    workspace   = "name:gamespace",
+    gaps_in     = 0,
+    gaps_out    = 0,
+    no_border   = true,
+    no_rounding = true,
+    no_shadow   = true,
+    decorate    = false,
+    persistent  = false,
+})
+
+hl.window_rule({
+    name      = "steam-games-to-gamespace",
+    match     = { class = "^steam_app_" },
+    workspace = "name:gamespace",
+})
+
+hl.window_rule({
+    name      = "steam-games-tearing",
+    match     = { class = "^steam_app_" },
+    immediate = true,
 })
 
 

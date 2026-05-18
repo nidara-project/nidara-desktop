@@ -601,4 +601,21 @@ export default {
     "nc.time.now": "now",
     "nc.empty": "No notifications",
     "nc.clear-all": "Clear notifications",
+
+    // Gaming
+    "settings.gaming.page.title.gaming":                     "Gaming",
+    "settings.gaming.page.subtitle.configura-el-modo-juego": "Game mode, wallpaper and performance",
+    "settings.gaming.group.wallpaper":                       "Wallpaper",
+    "settings.gaming.group.rendimiento":                     "Performance",
+    "settings.gaming.mode.artwork":                          "Game art",
+    "settings.gaming.mode.custom":                           "Custom",
+    "settings.gaming.mode.none":                             "None",
+    "settings.gaming.row.label.wallpaper-mode":              "Wallpaper",
+    "settings.gaming.row.desc.wallpaper-mode":               "What to display when a game launches",
+    "settings.gaming.row.label.custom-wallpaper":            "Image",
+    "settings.gaming.row.desc.custom-wallpaper":             "Wallpaper shown for all games",
+    "settings.gaming.row.desc.transicion":                   "Transition when switching to game wallpaper",
+    "settings.gaming.row.label.performance-profile":         "High-performance profile",
+    "settings.gaming.row.desc.performance-profile":          "Activate performance power profile automatically when a game launches",
+    "settings.gaming.dialog.title.seleccionar-wallpaper":    "Select wallpaper",
 }

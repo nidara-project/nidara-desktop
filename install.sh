@@ -180,7 +180,12 @@ sudo cp "$REPO_DIR/VERSION" /usr/share/crystal-shell/VERSION
 
 # Hyprland config
 sudo mkdir -p /usr/share/crystal-shell/config/hypr
-sudo cp -r "$REPO_DIR/config/hypr/." /usr/share/crystal-shell/config/hypr/
+if [ "$MODE" = "dev" ]; then
+    sudo ln -sf "$REPO_DIR/config/hypr/hyprland.lua" /usr/share/crystal-shell/config/hypr/hyprland.lua
+    sudo cp "$REPO_DIR/config/hypr/hypridle.conf" /usr/share/crystal-shell/config/hypr/hypridle.conf
+else
+    sudo cp -r "$REPO_DIR/config/hypr/." /usr/share/crystal-shell/config/hypr/
+fi
 
 # Default wallpaper
 if [ -f "$REPO_DIR/defaults/wallpaper/wallpaper.png" ]; then
@@ -208,11 +213,12 @@ if [ "$MODE" = "system" ]; then
 fi
 
 # Session wrapper scripts
-sudo cp "$REPO_DIR/scripts/crystal-shell"    /usr/bin/crystal-shell
-sudo cp "$REPO_DIR/scripts/crystal-shell-ui" /usr/bin/crystal-shell-ui
-sudo cp "$REPO_DIR/scripts/crystal-greeter"  /usr/bin/crystal-greeter
-sudo cp "$REPO_DIR/scripts/crystal-lock"     /usr/bin/crystal-lock
-sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock
+sudo cp "$REPO_DIR/scripts/crystal-shell"     /usr/bin/crystal-shell
+sudo cp "$REPO_DIR/scripts/crystal-shell-ui"  /usr/bin/crystal-shell-ui
+sudo cp "$REPO_DIR/scripts/crystal-greeter"   /usr/bin/crystal-greeter
+sudo cp "$REPO_DIR/scripts/crystal-lock"      /usr/bin/crystal-lock
+sudo cp "$REPO_DIR/scripts/crystal-game-mode" /usr/bin/crystal-game-mode
+sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-game-mode
 
 # Wayland session entry
 sudo mkdir -p /usr/share/wayland-sessions

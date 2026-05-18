@@ -579,4 +579,21 @@ export default {
     "nc.time.now": "ahora",
     "nc.empty": "No hay notificaciones",
     "nc.clear-all": "Borrar notificaciones",
+
+    // Gaming
+    "settings.gaming.page.title.gaming":                     "Gaming",
+    "settings.gaming.page.subtitle.configura-el-modo-juego": "Modo juego, fondo de pantalla y rendimiento",
+    "settings.gaming.group.wallpaper":                       "Fondo de pantalla",
+    "settings.gaming.group.rendimiento":                     "Rendimiento",
+    "settings.gaming.mode.artwork":                          "Arte del juego",
+    "settings.gaming.mode.custom":                           "Personalizado",
+    "settings.gaming.mode.none":                             "Sin cambio",
+    "settings.gaming.row.label.wallpaper-mode":              "Fondo de pantalla",
+    "settings.gaming.row.desc.wallpaper-mode":               "Qué mostrar al lanzar un juego",
+    "settings.gaming.row.label.custom-wallpaper":            "Imagen",
+    "settings.gaming.row.desc.custom-wallpaper":             "Fondo de pantalla para todos los juegos",
+    "settings.gaming.row.desc.transicion":                   "Efecto de transición al cambiar al fondo de juego",
+    "settings.gaming.row.label.performance-profile":         "Perfil de alto rendimiento",
+    "settings.gaming.row.desc.performance-profile":          "Activa automáticamente el perfil de rendimiento al lanzar un juego",
+    "settings.gaming.dialog.title.seleccionar-wallpaper":    "Seleccionar fondo de pantalla",
 }

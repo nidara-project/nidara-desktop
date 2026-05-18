@@ -85,6 +85,7 @@ const Icons = {
     recordStop:        f("record-stop"),
     shield:            f("shield"),
     shieldOff:         f("shield-off"),
+    gamepad:           f("gamepad-2"),
 } as const
 
 export type IconGIcon = Gio.FileIcon

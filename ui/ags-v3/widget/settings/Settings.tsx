@@ -22,6 +22,7 @@ import AutostartPage from "./pages/Autostart"
 import DefaultAppsPage from "./pages/DefaultApps"
 import AccessibilityPage from "./pages/Accessibility"
 import UsersPage from "./pages/Users"
+import GamingPage from "./pages/Gaming"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -99,6 +100,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "bar",        label: t("settings.bar.title"),                              icon: Icons.panelTop,      component: BarPage         },
         { id: "dock",       label: t("settings.dock.page.title.dock"),                  icon: Icons.dock,          component: DockPage        },
         { id: "widgets",    label: t("settings.widgets.page.title.widgets"),            icon: Icons.puzzle,        component: WidgetsPage     },
+        { id: "gaming",     label: t("settings.gaming.page.title.gaming"),              icon: Icons.gamepad,      component: GamingPage      },
         { id: "autostart",  label: t("settings.autostart.page.title.inicio-automatico"), icon: Icons.rocket,      component: AutostartPage   },
         { id: "power",      label: t("settings.power.page.title.energia"),              icon: Icons.battery,      component: PowerPage       },
         { id: "about",      label: t("settings.about.page.title.acerca-de"),            icon: Icons.info,         component: AboutPage       },
