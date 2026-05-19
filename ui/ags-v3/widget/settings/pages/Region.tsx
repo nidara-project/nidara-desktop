@@ -23,9 +23,7 @@ const DATE_FORMAT_LABELS = (): Record<DateFormat, string> => ({
 
 function clockPreview(): string {
     try {
-        const fmt = regionConfig.getClockFormat()
-        const [, bytes] = GLib.spawn_command_line_sync(`date +"${fmt}"`)
-        return new TextDecoder().decode(bytes ?? new Uint8Array()).trim()
+        return regionConfig.formatClock()
     } catch {
         return "—"
     }

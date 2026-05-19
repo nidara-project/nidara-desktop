@@ -398,6 +398,13 @@ export default {
     "overview.window": "ventana",
     "overview.windows": "ventanas",
 
+    // Settings window chrome
+    "settings.search.placeholder": "Buscar ajustes...",
+    "settings.nav.back":           "Atrás",
+    "settings.nav.forward":        "Adelante",
+    "settings.nav.menu":           "Menú",
+    "settings.window.close":       "Cerrar",
+
     // App Grid
     "app-grid.search.placeholder": "Buscar aplicaciones...",
     "app-grid.no-results": "Sin resultados",

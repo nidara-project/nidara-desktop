@@ -40,7 +40,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     const backBtn = new Gtk.Button({
         child: new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn", "nav-btn"],
-        tooltip_text: "Atrás",
+        tooltip_text: t("settings.nav.back"),
         sensitive: false,
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
@@ -48,7 +48,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     const forwardBtn = new Gtk.Button({
         child: new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn", "nav-btn"],
-        tooltip_text: "Adelante",
+        tooltip_text: t("settings.nav.forward"),
         sensitive: false,
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
@@ -362,7 +362,7 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     // Search
     const searchEntry = new Gtk.SearchEntry({
-        placeholder_text: "Buscar ajustes...",
+        placeholder_text: t("settings.search.placeholder"),
         css_classes: ["settings-search", "pill"],
         width_request: 280,
         max_width_chars: 30,
@@ -398,7 +398,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     const sidebarToggle = new Gtk.Button({
         child: new Gtk.Image({ gicon: Icons.sidebar, pixel_size: 16, css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn", "sidebar-toggle"],
-        tooltip_text: "Menú",
+        tooltip_text: t("settings.nav.menu"),
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
     })
@@ -415,7 +415,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     const closeBtn = new Gtk.Button({
         child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14, css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn"],
-        tooltip_text: "Cerrar",
+        tooltip_text: t("settings.window.close"),
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
     })

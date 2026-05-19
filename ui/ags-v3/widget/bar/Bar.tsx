@@ -481,8 +481,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const timeContent = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16 })
   const timeLabel = new Gtk.Label({ label: "..." })
   const updateClock = () => {
-    const fmt = regionConfig.getClockFormat()
-    const next = GLib.DateTime.new_now_local().format(fmt) ?? ""
+    const next = regionConfig.formatClock()
     if (timeLabel.label !== next) timeLabel.label = next
   }
   const clockTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => { updateClock(); return GLib.SOURCE_CONTINUE })

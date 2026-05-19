@@ -1,6 +1,8 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
-import { t } from "../lib/i18n"
+
+const DAYS_LONG    = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const MONTHS_LONG  = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 function readRegionConfig(): { timeFormat: "24h" | "12h"; showSeconds: boolean } {
   try {
@@ -21,14 +23,17 @@ const region = readRegionConfig()
 const timeFmt = region.timeFormat === "12h"
   ? (region.showSeconds ? "%I:%M:%S %p" : "%I:%M %p")
   : (region.showSeconds ? "%H:%M:%S" : "%H:%M")
-const dateFmt = t("dateFormat")
 
 function formatTime(): string {
   return GLib.DateTime.new_now_local().format(timeFmt) ?? ""
 }
 
 function formatDate(): string {
-  return GLib.DateTime.new_now_local().format(dateFmt) ?? ""
+  const now = GLib.DateTime.new_now_local()
+  const day  = DAYS_LONG[now.get_day_of_week()]
+  const d    = now.get_day_of_month()
+  const mon  = MONTHS_LONG[now.get_month()]
+  return `${day}, ${mon} ${d}`  // Monday, May 19
 }
 
 export default function Clock(): Gtk.Widget {

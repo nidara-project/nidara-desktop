@@ -167,10 +167,39 @@ class RegionConfigManager extends GObject.Object {
             .catch(e => console.error("[RegionConfig] Failed to set timezone:", e))
     }
 
+    private static readonly DAYS_SHORT  = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+    private static readonly DAYS_LONG   = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+    private static readonly MONTHS_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
     /**
-     * Returns the `date` format string for use in the bar clock.
-     * e.g.  "%a %d %b  %H:%M"
+     * Returns a fully formatted clock string using locale-independent English
+     * day/month names. Avoids %a/%b/%A/%B which follow LC_TIME, not UI language.
      */
+    formatClock(dt?: GLib.DateTime): string {
+        const now = dt ?? GLib.DateTime.new_now_local()
+        const sec = this._settings.showSeconds ? ":%S" : ""
+        const timeFmt = this._settings.timeFormat === "12h" ? `%I:%M${sec} %p` : `%H:%M${sec}`
+        const time  = now.format(timeFmt) ?? ""
+        const dow   = now.get_day_of_week()    // 1=Mon … 7=Sun
+        const d     = now.get_day_of_month()
+        const m     = now.get_month()          // 1-12
+        const y     = now.get_year()
+        const dd    = String(d).padStart(2, "0")
+        const mm    = String(m).padStart(2, "0")
+        const dShort  = RegionConfigManager.DAYS_SHORT[dow]
+        const dLong   = RegionConfigManager.DAYS_LONG[dow]
+        const mShort  = RegionConfigManager.MONTHS_SHORT[m]
+        switch (this._settings.dateFormat) {
+            case "none":       return time
+            case "short-year": return `${dShort} ${mShort} ${d} ${y}  ${time}`
+            case "long":       return `${dLong}, ${mShort} ${d}  ${time}`
+            case "numeric":    return `${mm}/${dd}/${y}  ${time}`
+            case "iso":        return `${y}-${mm}-${dd}  ${time}`
+            default:           return `${dShort} ${mShort} ${d}  ${time}` // short
+        }
+    }
+
+    /** @deprecated Use formatClock() — returns locale-independent output */
     getClockFormat(): string {
         const sec = this._settings.showSeconds ? ":%S" : ""
         const timePart = this._settings.timeFormat === "12h" ? `%I:%M${sec} %p` : `%H:%M${sec}`
@@ -180,7 +209,7 @@ class RegionConfigManager extends GObject.Object {
             case "long":       return `%A, %d %b  ${timePart}`
             case "numeric":    return `%d/%m/%Y  ${timePart}`
             case "iso":        return `%Y-%m-%d  ${timePart}`
-            default:           return `%a %d %b  ${timePart}` // short
+            default:           return `%a %d %b  ${timePart}`
         }
     }
 }

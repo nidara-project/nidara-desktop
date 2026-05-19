@@ -489,6 +489,13 @@ export default {
     "overview.window": "window",
     "overview.windows": "windows",
 
+    // Settings window chrome
+    "settings.search.placeholder": "Search settings...",
+    "settings.nav.back":           "Back",
+    "settings.nav.forward":        "Forward",
+    "settings.nav.menu":           "Menu",
+    "settings.window.close":       "Close",
+
     // App Grid
     "app-grid.search.placeholder": "Search apps...",
     "app-grid.no-results": "No results",
