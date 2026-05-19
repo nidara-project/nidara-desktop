@@ -3,6 +3,7 @@ import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Clock from "./Clock"
 import LoginCard from "./LoginCard"
+import LocaleBar from "./LocaleBar"
 import PowerBar from "./PowerBar"
 
 export default function Greeter(monitor: Gdk.Monitor) {
@@ -22,8 +23,19 @@ export default function Greeter(monitor: Gdk.Monitor) {
 
   const loginCard = LoginCard()
   loginCard.halign = Gtk.Align.CENTER
-  loginCard.valign = Gtk.Align.CENTER
-  loginCard.margin_bottom = 40  // slightly above center
+
+  const localeBar = LocaleBar()
+  localeBar.halign = Gtk.Align.CENTER
+
+  const centerStack = new Gtk.Box({
+    orientation: Gtk.Orientation.VERTICAL,
+    halign: Gtk.Align.CENTER,
+    valign: Gtk.Align.CENTER,
+    spacing: 12,
+    margin_bottom: 40,
+  })
+  centerStack.append(loginCard)
+  centerStack.append(localeBar)
 
   const powerBar = PowerBar()
   powerBar.halign = Gtk.Align.CENTER
@@ -33,7 +45,7 @@ export default function Greeter(monitor: Gdk.Monitor) {
   const overlay = new Gtk.Overlay()
   overlay.set_child(fill)
   overlay.add_overlay(clockWidget)
-  overlay.add_overlay(loginCard)
+  overlay.add_overlay(centerStack)
   overlay.add_overlay(powerBar)
 
   win.set_child(overlay)

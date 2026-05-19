@@ -17,7 +17,6 @@ const strings = {
     suspend:       "Sleep",
     restart:       "Restart",
     shutdown:      "Shut Down",
-    dateFormat:    "%A, %B %-d",
   },
   es: {
     password:      "Contraseña",
@@ -27,7 +26,6 @@ const strings = {
     suspend:       "Suspender",
     restart:       "Reiniciar",
     shutdown:      "Apagar",
-    dateFormat:    "%A, %-d de %B",
   },
 } as const
 

@@ -253,6 +253,81 @@ popover.background {
   animation: greeter-shake 0.4s ease;
 }
 
+// ── Locale bar ─────────────────────────────────────────────────────────────
+.locale-bar {
+  background: rgba(10, 10, 18, 0.50);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: var(--crystal-radius-pill);
+  padding: 4px 10px;
+  min-height: 0;
+}
+
+.locale-bar-icon {
+  color: rgba(255, 255, 255, 0.35);
+  margin-right: 2px;
+}
+
+.locale-bar-sep {
+  background: rgba(255, 255, 255, 0.10);
+  min-width: 1px;
+  min-height: 14px;
+  margin: 4px 2px;
+}
+
+.locale-bar-dropdown {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.78rem;
+  min-height: 0;
+  padding: 0;
+
+  > button {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    padding: 3px 6px;
+    color: inherit;
+    min-height: 0;
+    font-size: inherit;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.07);
+      color: rgba(255, 255, 255, 0.85);
+      border-radius: var(--crystal-radius-pill);
+    }
+  }
+
+  &:hover { color: rgba(255, 255, 255, 0.85); }
+}
+
+.locale-bar-lang-group {
+  background: transparent;
+}
+
+.locale-bar-lang-btn {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--crystal-radius-pill);
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 3px 8px;
+  min-height: 0;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: rgba(255, 255, 255, 0.80);
+  }
+
+  &:checked {
+    background: rgba(var(--crystal-accent-rgb), 0.18);
+    color: var(--crystal-accent);
+  }
+}
+
 // ── Power bar ──────────────────────────────────────────────────────────────
 .greeter-power-bar {
   background: rgba(10, 10, 18, 0.55);

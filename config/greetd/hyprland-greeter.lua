@@ -17,10 +17,20 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("crystal-greeter; hyprctl dispatch exit")
 end)
 
+-- ── Keyboard layout: read saved greeter pref, fall back to "us" ──────────────
+local function readKbLayout()
+    local f = io.open("/var/lib/greeter/.config/crystal-shell/greeter-prefs.json", "r")
+    if not f then return "us" end
+    local content = f:read("*a")
+    f:close()
+    local layout = content:match('"kbLayout"%s*:%s*"([^"]+)"')
+    return layout and #layout > 0 and layout or "us"
+end
+
 -- ── Look & feel ───────────────────────────────────────────────────────────────
 hl.config({
     input = {
-        kb_layout    = "us",
+        kb_layout    = readKbLayout(),
         follow_mouse = 1,
     },
 

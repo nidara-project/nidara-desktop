@@ -5,7 +5,7 @@ import GLib from "gi://GLib"
 import AstalGreet from "gi://AstalGreet"
 import { getSessions } from "../lib/sessions"
 import { getDefaultUser } from "../lib/users"
-import { t } from "../lib/i18n"
+import { t, onLocaleChange } from "../lib/i18n"
 
 // Wrap GIO-style async AstalGreet.login as a Promise
 function greetLogin(username: string, password: string, cmd: string): Promise<void> {
@@ -155,6 +155,12 @@ export default function LoginCard(): Gtk.Widget {
       passwordEntry.grab_focus()
       return GLib.SOURCE_REMOVE
     })
+  })
+
+  // Update translatable strings when locale changes at runtime
+  onLocaleChange(() => {
+    passwordEntry.placeholder_text = t("password")
+    if (!isAuthenticating) loginBtn.label = t("login")
   })
 
   return card
