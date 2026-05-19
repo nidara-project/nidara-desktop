@@ -16,11 +16,11 @@ export default function PowerBar(): Gtk.Widget {
   const bar = new Gtk.Box({ spacing: 4, halign: Gtk.Align.CENTER, css_classes: ["greeter-power-bar"] })
 
   bar.append(PowerButton("media-playback-pause-symbolic", t("suspend"),
-    () => execAsync("systemctl suspend").catch(console.error)))
+    () => execAsync(["systemctl", "suspend"]).catch(console.error)))
   bar.append(PowerButton("system-reboot-symbolic", t("restart"),
-    () => execAsync("systemctl reboot").catch(console.error)))
+    () => execAsync(["reboot"]).catch(console.error)))
   bar.append(PowerButton("system-shutdown-symbolic", t("shutdown"),
-    () => execAsync("systemctl poweroff").catch(console.error)))
+    () => execAsync(["shutdown", "now"]).catch(console.error)))
 
   return bar
 }
