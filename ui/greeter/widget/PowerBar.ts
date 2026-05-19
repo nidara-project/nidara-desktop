@@ -18,9 +18,9 @@ export default function PowerBar(): Gtk.Widget {
   bar.append(PowerButton("media-playback-pause-symbolic", t("suspend"),
     () => execAsync(["systemctl", "suspend"]).catch(console.error)))
   bar.append(PowerButton("system-reboot-symbolic", t("restart"),
-    () => execAsync(["reboot"]).catch(console.error)))
+    () => execAsync(["systemctl", "reboot"]).catch(console.error)))
   bar.append(PowerButton("system-shutdown-symbolic", t("shutdown"),
-    () => execAsync(["shutdown", "now"]).catch(console.error)))
+    () => execAsync(["systemctl", "poweroff"]).catch(console.error)))
 
   return bar
 }

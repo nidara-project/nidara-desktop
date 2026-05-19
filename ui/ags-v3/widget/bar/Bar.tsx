@@ -172,11 +172,11 @@ function SystemMenuOverlay() {
   ))
   menuBox.append(makeRow(Icons.rotateCcw, t("bar.system-menu.restart"), false, () =>
     showConfirm(Icons.rotateCcw, t("bar.system-menu.confirm.restart"), t("bar.system-menu.confirm.action.restart"), false,
-      () => closeAndRun(["reboot"]))
+      () => closeAndRun(["systemctl", "reboot"]))
   ))
   menuBox.append(makeRow(Icons.power, t("bar.system-menu.shutdown"), true, () =>
     showConfirm(Icons.power, t("bar.system-menu.confirm.shutdown"), t("bar.system-menu.confirm.action.shutdown"), true,
-      () => closeAndRun(["shutdown", "now"]))
+      () => closeAndRun(["systemctl", "poweroff"]))
   ))
 
   // ── Confirmation page ──────────────────────────────────────────────────
