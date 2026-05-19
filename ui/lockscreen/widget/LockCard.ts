@@ -18,7 +18,7 @@ export default function LockCard(): Gtk.Widget {
     ? new Gtk.Image({ file: user.avatarPath, pixel_size: 80, css_classes: ["greeter-avatar"] })
     : new Gtk.Image({ icon_name: "avatar-default-symbolic", pixel_size: 80, css_classes: ["greeter-avatar"] })
   avatar.halign = Gtk.Align.CENTER
-  avatar.margin_top = 32
+  avatar.margin_top = 72
 
   const usernameLabel = new Gtk.Label({
     label: user.displayName,
@@ -107,6 +107,7 @@ export default function LockCard(): Gtk.Widget {
     orientation: Gtk.Orientation.VERTICAL,
     halign: Gtk.Align.CENTER,
     valign: Gtk.Align.CENTER,
+    margin_bottom: 160,  // shift above center
   })
 
   col.append(clockWidget)

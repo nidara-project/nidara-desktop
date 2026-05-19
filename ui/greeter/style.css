@@ -32,11 +32,11 @@ window > contents {
 }
 
 .greeter-date {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 500;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: var(--crystal-text-muted);
+  color: var(--crystal-text);
 }
 
 .greeter-clock {
@@ -97,9 +97,9 @@ passwordentry.greeter-password > button:hover {
 }
 
 .greeter-login-btn {
-  background: var(--crystal-glass-light);
+  background: rgba(0, 0, 0, 0.6);
   color: var(--crystal-text);
-  border: 1px solid var(--crystal-glass-border);
+  border: 1px solid var(--crystal-glass-border-sm);
   border-radius: var(--crystal-radius-pill);
   padding: 10px 24px;
   font-weight: 600;
@@ -108,16 +108,15 @@ passwordentry.greeter-password > button:hover {
   min-height: 0;
 }
 .greeter-login-btn:hover {
-  background: rgba(255, 255, 255, 0.46);
+  background: rgba(0, 0, 0, 0.72);
   box-shadow: none;
 }
 .greeter-login-btn:active {
-  background: rgba(255, 255, 255, 0.28);
+  background: rgba(0, 0, 0, 0.5);
 }
 .greeter-login-btn:disabled {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.35);
   color: var(--crystal-text-muted);
-  border-color: var(--crystal-glass-border-sm);
   box-shadow: none;
 }
 

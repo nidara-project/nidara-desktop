@@ -59,15 +59,15 @@ export default function Clock(): Gtk.Widget {
   const dateLabel = new Gtk.Label({
     label: formatDate(),
     css_classes: ["greeter-date"],
-    halign: Gtk.Align.START,
-    xalign: 0,
+    halign: Gtk.Align.CENTER,
+    xalign: 0.5,
   })
 
   const timeLabel = new Gtk.Label({
     label: formatTime(),
     css_classes: ["greeter-clock"],
-    halign: Gtk.Align.START,
-    xalign: 0,
+    halign: Gtk.Align.CENTER,
+    xalign: 0.5,
   })
 
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
