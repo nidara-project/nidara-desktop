@@ -61,7 +61,9 @@ export function getIconSize(x: number, mouseRelX: number, baseSize: number, maxS
 export function getWordmark(client: AstalHyprland.Client | null, hyprland: AstalHyprland.Hyprland): string {
     if (!client) {
         const ws = hyprland.focused_workspace
-        return ws ? `Workspace ${ws.id}` : "Workspace"
+        if (!ws) return "Workspace"
+        const wsName: Record<string, string> = { gamespace: "Gaming", lockspace: "Bloqueado" }
+        return wsName[ws.name] ?? `Workspace ${ws.id}`
     }
 
     const classMap: Record<string, string> = {
