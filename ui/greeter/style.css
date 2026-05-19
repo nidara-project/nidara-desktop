@@ -97,9 +97,9 @@ passwordentry.greeter-password > button:hover {
 }
 
 .greeter-login-btn {
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.06);
   color: var(--crystal-text);
-  border: 1px solid var(--crystal-glass-border-sm);
+  border: 1px solid var(--crystal-glass-border);
   border-radius: var(--crystal-radius-pill);
   padding: 10px 24px;
   font-weight: 600;
@@ -108,15 +108,16 @@ passwordentry.greeter-password > button:hover {
   min-height: 0;
 }
 .greeter-login-btn:hover {
-  background: rgba(0, 0, 0, 0.72);
+  background: rgba(0, 0, 0, 0.18);
   box-shadow: none;
 }
 .greeter-login-btn:active {
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.3);
 }
 .greeter-login-btn:disabled {
-  background: rgba(0, 0, 0, 0.35);
+  background: transparent;
   color: var(--crystal-text-muted);
+  border-color: var(--crystal-glass-border-sm);
   box-shadow: none;
 }
 
