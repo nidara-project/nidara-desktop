@@ -1,7 +1,6 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
-import Clock from "./Clock"
 import LockCard from "./LockCard"
 import PowerBar from "./PowerBar"
 
@@ -14,15 +13,9 @@ export default function Lock(monitor: Gdk.Monitor) {
 
   const fill = new Gtk.Box({ hexpand: true, vexpand: true })
 
-  const clockWidget = Clock()
-  clockWidget.halign = Gtk.Align.CENTER
-  clockWidget.valign = Gtk.Align.START
-  clockWidget.margin_top = 120
-
   const lockCard = LockCard()
   lockCard.halign = Gtk.Align.CENTER
   lockCard.valign = Gtk.Align.CENTER
-  lockCard.margin_bottom = 40
 
   const powerBar = PowerBar()
   powerBar.halign = Gtk.Align.CENTER
@@ -31,7 +24,6 @@ export default function Lock(monitor: Gdk.Monitor) {
 
   const overlay = new Gtk.Overlay()
   overlay.set_child(fill)
-  overlay.add_overlay(clockWidget)
   overlay.add_overlay(lockCard)
   overlay.add_overlay(powerBar)
 

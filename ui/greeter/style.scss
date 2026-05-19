@@ -1,4 +1,4 @@
-/* Crystal Shell — Greeter stylesheet
+/* Crystal Shell — Greeter / Lock stylesheet
    Matches the shell's glassmorphism design system. */
 
 // ── Tokens ─────────────────────────────────────────────────────────────────
@@ -6,7 +6,6 @@
   font-family: "Inter", sans-serif;
   color: rgba(255, 255, 255, 0.92);
 
-  // Design tokens (same as shell; accent overridden at runtime in lock screen)
   --crystal-accent:      #0088FF;
   --crystal-accent-rgb:  0, 136, 255;
   --crystal-border:      rgba(255, 255, 255, 0.12);
@@ -31,79 +30,77 @@ window > contents {
   box-shadow: none;
 }
 
-// ── Clock ──────────────────────────────────────────────────────────────────
-// Must have alpha > 0.3 (ignore_alpha threshold) so blur is consistent
-// across the entire container. No text-shadow — would fade to 0 and create
-// a visible blur cutoff ring around the text.
-.greeter-clock-container {
-  background: rgba(14, 14, 22, 0.50);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 24px;
-  padding: 16px 40px 12px;
-}
-
-.greeter-clock {
-  font-size: 96px;
-  font-weight: 200;
-  letter-spacing: -4px;
-  color: rgba(255, 255, 255, 0.93);
-}
-
-.greeter-date {
-  font-size: 15px;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.55);
-  letter-spacing: 0.3px;
-  margin-top: 2px;
-}
-
-// ── Card ───────────────────────────────────────────────────────────────────
-// No external box-shadow — it would extend into the transparent layer area
-// and get blurred by Hyprland. Depth comes from border + inner highlight.
+// ── Unified card ───────────────────────────────────────────────────────────
+// Single glass container: date → time → divider → avatar/user → auth fields
+// Alpha > 0.3 so Hyprland's ignorealpha blur applies consistently.
 .greeter-card {
   background: rgba(14, 14, 22, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: var(--crystal-radius-lg);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  padding: 32px 28px 24px;
-  min-width: 340px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
+  padding: 28px 28px 24px;
+  min-width: 360px;
+}
+
+// ── Date label (top of card) ───────────────────────────────────────────────
+.greeter-date {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.40);
+  margin-bottom: 2px;
+}
+
+// ── Time label ─────────────────────────────────────────────────────────────
+.greeter-clock {
+  font-size: 72px;
+  font-weight: 200;
+  letter-spacing: -3px;
+  color: rgba(255, 255, 255, 0.95);
+  margin-bottom: 4px;
+}
+
+// ── Divider between clock section and auth section ─────────────────────────
+.greeter-divider {
+  background: rgba(255, 255, 255, 0.08);
+  min-height: 1px;
+  margin-top: 4px;
+  margin-bottom: 8px;
 }
 
 // ── Avatar ─────────────────────────────────────────────────────────────────
 .greeter-avatar {
   border-radius: 9999px;
   background: var(--crystal-surface);
-  border: 2px solid var(--crystal-border);
-  padding: 2px;
+  border: 1px solid var(--crystal-border);
 }
 
 // ── Username ───────────────────────────────────────────────────────────────
 .greeter-username {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.75);
-  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.70);
 }
 
 // ── Password entry ─────────────────────────────────────────────────────────
 .greeter-password,
 passwordentry.greeter-password {
   background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.11);
   border-radius: var(--crystal-radius-sm);
   color: rgba(255, 255, 255, 0.92);
   caret-color: rgba(255, 255, 255, 0.92);
   padding: 10px 12px;
   box-shadow: none;
   min-height: 0;
-  margin-top: 8px;
 }
 
 .greeter-password:focus,
 passwordentry.greeter-password:focus {
-  border-color: rgba(var(--crystal-accent-rgb), 0.5);
+  border-color: rgba(var(--crystal-accent-rgb), 0.45);
   background: rgba(255, 255, 255, 0.09);
-  box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.12);
+  box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.10);
 }
 
 .greeter-password > text,
@@ -116,15 +113,15 @@ passwordentry.greeter-password > button {
   background: transparent;
   border: none;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.35);
   min-height: 0;
   min-width: 0;
   padding: 4px;
 
-  &:hover { color: rgba(255, 255, 255, 0.7); }
+  &:hover { color: rgba(255, 255, 255, 0.65); }
 }
 
-// ── Login button ───────────────────────────────────────────────────────────
+// ── Login / Unlock button ──────────────────────────────────────────────────
 .greeter-login-btn {
   background: var(--crystal-accent);
   color: #ffffff;
@@ -132,10 +129,9 @@ passwordentry.greeter-password > button {
   border-radius: var(--crystal-radius-pill);
   padding: 10px 24px;
   font-weight: 600;
-  font-size: 0.9rem;
+  font-size: 0.875rem;
   box-shadow: none;
   min-height: 0;
-  margin-top: 4px;
 
   &:hover {
     background: color-mix(in srgb, var(--crystal-accent) 85%, white 15%);
@@ -147,47 +143,42 @@ passwordentry.greeter-password > button {
   }
 
   &:disabled {
-    background: rgba(var(--crystal-accent-rgb), 0.25);
-    color: rgba(255, 255, 255, 0.4);
+    background: rgba(var(--crystal-accent-rgb), 0.22);
+    color: rgba(255, 255, 255, 0.35);
     box-shadow: none;
   }
 }
 
 // ── Session picker ─────────────────────────────────────────────────────────
 .greeter-session-dropdown {
-  // Strip the default "combo" frame/entry look
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: var(--crystal-radius-sm);
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.55);
   box-shadow: none;
-  font-size: 0.82rem;
+  font-size: 0.80rem;
   min-height: 0;
   padding: 0;
 
-  // The inner toggle button
   > button {
     background: transparent;
     border: none;
     border-radius: var(--crystal-radius-sm);
     box-shadow: none;
-    padding: 7px 12px;
+    padding: 6px 12px;
     color: inherit;
     min-height: 0;
 
-    &:hover {
-      background: rgba(255, 255, 255, 0.06);
-    }
+    &:hover { background: rgba(255, 255, 255, 0.05); }
   }
 
   &:hover {
-    border-color: rgba(255, 255, 255, 0.22);
-    color: rgba(255, 255, 255, 0.9);
+    border-color: rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.80);
   }
-
 }
 
-// DropDown popup — GTK4 DropDown uses a GtkListView inside a popover
+// DropDown popup
 popover.background {
   background: rgba(14, 14, 22, 0.97);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -202,7 +193,6 @@ popover.background {
     margin: 0;
   }
 
-  // The scrolled window wrapper adds margin — strip it
   scrolledwindow,
   scrolledwindow > viewport,
   scrolledwindow > undershoot,
@@ -214,7 +204,6 @@ popover.background {
     min-height: 0;
   }
 
-  // GtkListView inside the dropdown
   listview {
     background: transparent;
     padding: 0;
@@ -236,8 +225,7 @@ popover.background {
 // ── Error message ──────────────────────────────────────────────────────────
 .greeter-error {
   color: var(--crystal-danger);
-  font-size: 0.82rem;
-  margin-top: 4px;
+  font-size: 0.80rem;
 }
 
 // ── Shake animation (wrong password) ──────────────────────────────────────
@@ -253,22 +241,22 @@ popover.background {
   animation: greeter-shake 0.4s ease;
 }
 
-// ── Locale bar ─────────────────────────────────────────────────────────────
+// ── Locale bar (greeter only) ──────────────────────────────────────────────
 .locale-bar {
-  background: rgba(10, 10, 18, 0.50);
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(10, 10, 18, 0.48);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--crystal-radius-pill);
   padding: 4px 10px;
   min-height: 0;
 }
 
 .locale-bar-icon {
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(255, 255, 255, 0.30);
   margin-right: 2px;
 }
 
 .locale-bar-sep {
-  background: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.09);
   min-width: 1px;
   min-height: 14px;
   margin: 4px 2px;
@@ -278,7 +266,7 @@ popover.background {
   background: transparent;
   border: none;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.55);
+  color: rgba(255, 255, 255, 0.50);
   font-size: 0.78rem;
   min-height: 0;
   padding: 0;
@@ -299,7 +287,7 @@ popover.background {
     }
   }
 
-  &:hover { color: rgba(255, 255, 255, 0.85); }
+  &:hover { color: rgba(255, 255, 255, 0.80); }
 }
 
 .locale-bar-lang-group {
@@ -311,7 +299,7 @@ popover.background {
   border: none;
   box-shadow: none;
   border-radius: var(--crystal-radius-pill);
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.40);
   font-size: 0.75rem;
   font-weight: 500;
   padding: 3px 8px;
@@ -319,18 +307,18 @@ popover.background {
 
   &:hover {
     background: rgba(255, 255, 255, 0.07);
-    color: rgba(255, 255, 255, 0.80);
+    color: rgba(255, 255, 255, 0.75);
   }
 
   &:checked {
-    background: rgba(var(--crystal-accent-rgb), 0.18);
+    background: rgba(var(--crystal-accent-rgb), 0.16);
     color: var(--crystal-accent);
   }
 }
 
 // ── Power bar ──────────────────────────────────────────────────────────────
 .greeter-power-bar {
-  background: rgba(10, 10, 18, 0.55);
+  background: rgba(10, 10, 18, 0.50);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: var(--crystal-radius-pill);
   padding: 4px 6px;
@@ -340,14 +328,14 @@ popover.background {
   background: transparent;
   border: none;
   border-radius: var(--crystal-radius-pill);
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.45);
   padding: 6px 16px;
   font-size: 0.82rem;
   box-shadow: none;
   min-height: 0;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.09);
-    color: rgba(255, 255, 255, 0.88);
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.85);
   }
 }

@@ -1,21 +1,26 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 
+const DAYS_SHORT   = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 const DAYS_LONG    = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const MONTHS_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 const MONTHS_LONG  = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
-function readRegionConfig(): { timeFormat: "24h" | "12h"; showSeconds: boolean } {
+type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
+
+function readRegionConfig(): { timeFormat: "24h" | "12h"; showSeconds: boolean; dateFormat: DateFormat } {
   try {
     const path = `${GLib.get_user_config_dir()}/crystal-shell/region.json`
     const [ok, data] = GLib.file_get_contents(path)
-    if (!ok) return { timeFormat: "24h", showSeconds: false }
+    if (!ok) return { timeFormat: "24h", showSeconds: false, dateFormat: "long" }
     const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
     return {
       timeFormat: cfg.timeFormat === "12h" ? "12h" : "24h",
       showSeconds: cfg.showSeconds === true,
+      dateFormat: (cfg.dateFormat as DateFormat) ?? "long",
     }
   } catch {
-    return { timeFormat: "24h", showSeconds: false }
+    return { timeFormat: "24h", showSeconds: false, dateFormat: "long" }
   }
 }
 
@@ -30,21 +35,37 @@ function formatTime(): string {
 
 function formatDate(): string {
   const now = GLib.DateTime.new_now_local()
-  const day  = DAYS_LONG[now.get_day_of_week()]
+  const dow  = now.get_day_of_week()
   const d    = now.get_day_of_month()
-  const mon  = MONTHS_LONG[now.get_month()]
-  return `${day}, ${mon} ${d}`  // Monday, May 19
+  const m    = now.get_month()
+  const y    = now.get_year()
+  const dd   = String(d).padStart(2, "0")
+  const mm   = String(m).padStart(2, "0")
+  switch (region.dateFormat) {
+    case "none":       return ""
+    case "short":      return `${DAYS_SHORT[dow]}, ${MONTHS_SHORT[m]} ${d}`
+    case "short-year": return `${DAYS_SHORT[dow]}, ${MONTHS_SHORT[m]} ${d} ${y}`
+    case "long":       return `${DAYS_LONG[dow]}, ${MONTHS_LONG[m]} ${d}`
+    case "numeric":    return `${mm}/${dd}/${y}`
+    case "iso":        return `${y}-${mm}-${dd}`
+    default:           return `${DAYS_LONG[dow]}, ${MONTHS_LONG[m]} ${d}`
+  }
 }
 
+// Returns date + time labels for embedding inside a card (no container box)
 export default function Clock(): Gtk.Widget {
-  const timeLabel = new Gtk.Label({
-    label: formatTime(),
-    css_classes: ["greeter-clock"],
-  })
-
   const dateLabel = new Gtk.Label({
     label: formatDate(),
     css_classes: ["greeter-date"],
+    halign: Gtk.Align.START,
+    xalign: 0,
+  })
+
+  const timeLabel = new Gtk.Label({
+    label: formatTime(),
+    css_classes: ["greeter-clock"],
+    halign: Gtk.Align.START,
+    xalign: 0,
   })
 
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
@@ -59,11 +80,9 @@ export default function Clock(): Gtk.Widget {
 
   const box = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
-    halign: Gtk.Align.CENTER,
-    spacing: 4,
-    css_classes: ["greeter-clock-container"],
+    spacing: 0,
   })
-  box.append(timeLabel)
   box.append(dateLabel)
+  box.append(timeLabel)
   return box
 }

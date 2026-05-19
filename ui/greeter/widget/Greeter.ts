@@ -1,7 +1,6 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
-import Clock from "./Clock"
 import LoginCard from "./LoginCard"
 import LocaleBar from "./LocaleBar"
 import PowerBar from "./PowerBar"
@@ -13,13 +12,7 @@ export default function Greeter(monitor: Gdk.Monitor) {
     css_classes: ["greeter-window"],
   })
 
-  // ── Layout: Overlay with clock top, card center, power bottom ──────────────
   const fill = new Gtk.Box({ hexpand: true, vexpand: true })
-
-  const clockWidget = Clock()
-  clockWidget.halign = Gtk.Align.CENTER
-  clockWidget.valign = Gtk.Align.START
-  clockWidget.margin_top = 120
 
   const loginCard = LoginCard()
   loginCard.halign = Gtk.Align.CENTER
@@ -31,8 +24,7 @@ export default function Greeter(monitor: Gdk.Monitor) {
     orientation: Gtk.Orientation.VERTICAL,
     halign: Gtk.Align.CENTER,
     valign: Gtk.Align.CENTER,
-    spacing: 12,
-    margin_bottom: 40,
+    spacing: 10,
   })
   centerStack.append(loginCard)
   centerStack.append(localeBar)
@@ -44,13 +36,11 @@ export default function Greeter(monitor: Gdk.Monitor) {
 
   const overlay = new Gtk.Overlay()
   overlay.set_child(fill)
-  overlay.add_overlay(clockWidget)
   overlay.add_overlay(centerStack)
   overlay.add_overlay(powerBar)
 
   win.set_child(overlay)
 
-  // ── LayerShell: fullscreen overlay, exclusive keyboard ─────────────────────
   try {
     Gtk4LayerShell.init_for_window(win)
     Gtk4LayerShell.set_namespace(win, "crystal-greeter")
@@ -68,6 +58,5 @@ export default function Greeter(monitor: Gdk.Monitor) {
   }
 
   win.present()
-
   return win
 }
