@@ -7,6 +7,7 @@ import { getSessions } from "../lib/sessions"
 import { getDefaultUser } from "../lib/users"
 import { t, onLocaleChange } from "../lib/i18n"
 import Clock from "./Clock"
+import LocaleBar from "./LocaleBar"
 
 function greetLogin(username: string, password: string, cmd: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -26,29 +27,21 @@ export default function LoginCard(): Gtk.Widget {
   let sessionIdx = Math.max(0, sessions.findIndex(s => s.id === "crystal-shell"))
   let isAuthenticating = false
 
-  // ── Clock (date above, time below) ────────────────────────────────────────
+  // ── Clock: date above, time below ─────────────────────────────────────────
   const clockWidget = Clock()
-
-  // ── Divider ───────────────────────────────────────────────────────────────
-  const divider = new Gtk.Box({ css_classes: ["greeter-divider"] })
+  clockWidget.halign = Gtk.Align.CENTER
 
   // ── Avatar ────────────────────────────────────────────────────────────────
   const avatar = user.avatarPath
-    ? new Gtk.Image({ file: user.avatarPath, pixel_size: 36, css_classes: ["greeter-avatar"] })
-    : new Gtk.Image({ icon_name: "avatar-default-symbolic", pixel_size: 36, css_classes: ["greeter-avatar"] })
+    ? new Gtk.Image({ file: user.avatarPath, pixel_size: 80, css_classes: ["greeter-avatar"] })
+    : new Gtk.Image({ icon_name: "avatar-default-symbolic", pixel_size: 80, css_classes: ["greeter-avatar"] })
+  avatar.halign = Gtk.Align.CENTER
 
   const usernameLabel = new Gtk.Label({
     label: user.displayName,
     css_classes: ["greeter-username"],
+    halign: Gtk.Align.CENTER,
   })
-
-  const avatarRow = new Gtk.Box({
-    orientation: Gtk.Orientation.HORIZONTAL,
-    halign: Gtk.Align.START,
-    spacing: 10,
-  })
-  avatarRow.append(avatar)
-  avatarRow.append(usernameLabel)
 
   // ── Error label ───────────────────────────────────────────────────────────
   const errorLabel = new Gtk.Label({
@@ -56,7 +49,7 @@ export default function LoginCard(): Gtk.Widget {
     css_classes: ["greeter-error"],
     visible: false,
     wrap: true,
-    halign: Gtk.Align.START,
+    halign: Gtk.Align.CENTER,
   })
 
   // ── Password entry ────────────────────────────────────────────────────────
@@ -64,29 +57,29 @@ export default function LoginCard(): Gtk.Widget {
     placeholder_text: t("password"),
     show_peek_icon: true,
     css_classes: ["greeter-password"],
-    hexpand: true,
+    halign: Gtk.Align.CENTER,
+    width_request: 280,
   })
 
   // ── Login button ──────────────────────────────────────────────────────────
   const loginBtn = new Gtk.Button({
     label: t("login"),
     css_classes: ["greeter-login-btn"],
-    hexpand: true,
+    halign: Gtk.Align.CENTER,
+    width_request: 280,
   })
 
   // ── Session picker ────────────────────────────────────────────────────────
   const sessionModel = Gtk.StringList.new(sessions.map(s => s.name))
-
   const sessionDropdown = new Gtk.DropDown({
     model: sessionModel,
     selected: sessionIdx,
     css_classes: ["greeter-session-dropdown"],
+    halign: Gtk.Align.CENTER,
+    width_request: 280,
     show_arrow: true,
   })
-
-  sessionDropdown.connect("notify::selected", () => {
-    sessionIdx = sessionDropdown.selected
-  })
+  sessionDropdown.connect("notify::selected", () => { sessionIdx = sessionDropdown.selected })
 
   // ── Auth logic ────────────────────────────────────────────────────────────
   const setLoading = (loading: boolean) => {
@@ -134,23 +127,41 @@ export default function LoginCard(): Gtk.Widget {
   passwordEntry.connect("activate", doLogin)
   loginBtn.connect("clicked", doLogin)
 
-  // ── Card layout ───────────────────────────────────────────────────────────
-  const card = new Gtk.Box({
+  // ── Full centered column: clock → avatar → auth → locale ──────────────────
+  const col = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
-    css_classes: ["greeter-card"],
-    spacing: 10,
-    width_request: 360,
+    halign: Gtk.Align.CENTER,
+    valign: Gtk.Align.CENTER,
+    spacing: 0,
   })
 
-  card.append(clockWidget)
-  card.append(divider)
-  card.append(avatarRow)
-  card.append(passwordEntry)
-  card.append(loginBtn)
-  card.append(sessionDropdown)
-  card.append(errorLabel)
+  col.append(clockWidget)
 
-  card.connect("map", () => {
+  const spacer = new Gtk.Box()
+  spacer.height_request = 32
+  col.append(spacer)
+
+  col.append(avatar)
+  col.append(usernameLabel)
+
+  const spacer2 = new Gtk.Box()
+  spacer2.height_request = 16
+  col.append(spacer2)
+
+  col.append(passwordEntry)
+  col.append(loginBtn)
+  col.append(sessionDropdown)
+  col.append(errorLabel)
+
+  const spacer3 = new Gtk.Box()
+  spacer3.height_request = 12
+  col.append(spacer3)
+
+  const localeBar = LocaleBar()
+  localeBar.halign = Gtk.Align.CENTER
+  col.append(localeBar)
+
+  col.connect("map", () => {
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
       passwordEntry.grab_focus()
       return GLib.SOURCE_REMOVE
@@ -162,5 +173,5 @@ export default function LoginCard(): Gtk.Widget {
     if (!isAuthenticating) loginBtn.label = t("login")
   })
 
-  return card
+  return col
 }

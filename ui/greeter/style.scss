@@ -1,5 +1,4 @@
-/* Crystal Shell — Greeter / Lock stylesheet
-   Matches the shell's glassmorphism design system. */
+/* Crystal Shell — Greeter / Lock stylesheet */
 
 // ── Tokens ─────────────────────────────────────────────────────────────────
 * {
@@ -30,77 +29,59 @@ window > contents {
   box-shadow: none;
 }
 
-// ── Unified card ───────────────────────────────────────────────────────────
-// Single glass container: date → time → divider → avatar/user → auth fields
-// Alpha > 0.3 so Hyprland's ignorealpha blur applies consistently.
-.greeter-card {
-  background: rgba(14, 14, 22, 0.65);
-  border: 1px solid rgba(255, 255, 255, 0.13);
-  border-radius: var(--crystal-radius-lg);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  padding: 28px 28px 24px;
-  min-width: 360px;
-}
-
-// ── Date label (top of card) ───────────────────────────────────────────────
+// ── Date label ─────────────────────────────────────────────────────────────
 .greeter-date {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  letter-spacing: 1.5px;
+  letter-spacing: 2px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.40);
+  color: rgba(255, 255, 255, 0.50);
   margin-bottom: 2px;
 }
 
 // ── Time label ─────────────────────────────────────────────────────────────
 .greeter-clock {
-  font-size: 72px;
+  font-size: 88px;
   font-weight: 200;
-  letter-spacing: -3px;
-  color: rgba(255, 255, 255, 0.95);
-  margin-bottom: 4px;
-}
-
-// ── Divider between clock section and auth section ─────────────────────────
-.greeter-divider {
-  background: rgba(255, 255, 255, 0.08);
-  min-height: 1px;
-  margin-top: 4px;
-  margin-bottom: 8px;
+  letter-spacing: -4px;
+  color: rgba(255, 255, 255, 0.96);
 }
 
 // ── Avatar ─────────────────────────────────────────────────────────────────
 .greeter-avatar {
   border-radius: 9999px;
-  background: var(--crystal-surface);
-  border: 1px solid var(--crystal-border);
+  background: rgba(255, 255, 255, 0.06);
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  margin-bottom: 8px;
 }
 
 // ── Username ───────────────────────────────────────────────────────────────
 .greeter-username {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.70);
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 0.2px;
 }
 
 // ── Password entry ─────────────────────────────────────────────────────────
 .greeter-password,
 passwordentry.greeter-password {
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  border-radius: var(--crystal-radius-sm);
+  background: rgba(0, 0, 0, 0.30);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--crystal-radius-pill);
   color: rgba(255, 255, 255, 0.92);
   caret-color: rgba(255, 255, 255, 0.92);
-  padding: 10px 12px;
+  padding: 10px 16px;
   box-shadow: none;
   min-height: 0;
+  margin-bottom: 8px;
 }
 
 .greeter-password:focus,
 passwordentry.greeter-password:focus {
-  border-color: rgba(var(--crystal-accent-rgb), 0.45);
-  background: rgba(255, 255, 255, 0.09);
-  box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.10);
+  border-color: rgba(var(--crystal-accent-rgb), 0.55);
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.12);
 }
 
 .greeter-password > text,
@@ -116,16 +97,16 @@ passwordentry.greeter-password > button {
   color: rgba(255, 255, 255, 0.35);
   min-height: 0;
   min-width: 0;
-  padding: 4px;
+  padding: 4px 8px;
 
   &:hover { color: rgba(255, 255, 255, 0.65); }
 }
 
 // ── Login / Unlock button ──────────────────────────────────────────────────
 .greeter-login-btn {
-  background: var(--crystal-accent);
-  color: #ffffff;
-  border: none;
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.90);
+  border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: var(--crystal-radius-pill);
   padding: 10px 24px;
   font-weight: 600;
@@ -134,48 +115,51 @@ passwordentry.greeter-password > button {
   min-height: 0;
 
   &:hover {
-    background: color-mix(in srgb, var(--crystal-accent) 85%, white 15%);
+    background: rgba(255, 255, 255, 0.20);
+    border-color: rgba(255, 255, 255, 0.30);
     box-shadow: none;
   }
 
   &:active {
-    background: color-mix(in srgb, var(--crystal-accent) 70%, black 30%);
+    background: rgba(255, 255, 255, 0.10);
   }
 
   &:disabled {
-    background: rgba(var(--crystal-accent-rgb), 0.22);
-    color: rgba(255, 255, 255, 0.35);
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.30);
+    border-color: rgba(255, 255, 255, 0.10);
     box-shadow: none;
   }
 }
 
 // ── Session picker ─────────────────────────────────────────────────────────
 .greeter-session-dropdown {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  border-radius: var(--crystal-radius-sm);
-  color: rgba(255, 255, 255, 0.55);
+  background: transparent;
+  border: none;
   box-shadow: none;
-  font-size: 0.80rem;
+  color: rgba(255, 255, 255, 0.40);
+  font-size: 0.78rem;
   min-height: 0;
   padding: 0;
+  margin-top: 4px;
 
   > button {
     background: transparent;
     border: none;
-    border-radius: var(--crystal-radius-sm);
     box-shadow: none;
-    padding: 6px 12px;
+    padding: 4px 8px;
     color: inherit;
     min-height: 0;
+    font-size: inherit;
+    border-radius: var(--crystal-radius-pill);
 
-    &:hover { background: rgba(255, 255, 255, 0.05); }
+    &:hover {
+      background: rgba(255, 255, 255, 0.07);
+      color: rgba(255, 255, 255, 0.70);
+    }
   }
 
-  &:hover {
-    border-color: rgba(255, 255, 255, 0.18);
-    color: rgba(255, 255, 255, 0.80);
-  }
+  &:hover { color: rgba(255, 255, 255, 0.65); }
 }
 
 // DropDown popup
@@ -226,6 +210,7 @@ popover.background {
 .greeter-error {
   color: var(--crystal-danger);
   font-size: 0.80rem;
+  margin-top: 4px;
 }
 
 // ── Shake animation (wrong password) ──────────────────────────────────────
@@ -243,8 +228,8 @@ popover.background {
 
 // ── Locale bar (greeter only) ──────────────────────────────────────────────
 .locale-bar {
-  background: rgba(10, 10, 18, 0.48);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: var(--crystal-radius-pill);
   padding: 4px 10px;
   min-height: 0;
@@ -256,7 +241,7 @@ popover.background {
 }
 
 .locale-bar-sep {
-  background: rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.10);
   min-width: 1px;
   min-height: 14px;
   margin: 4px 2px;
@@ -266,7 +251,7 @@ popover.background {
   background: transparent;
   border: none;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.50);
+  color: rgba(255, 255, 255, 0.45);
   font-size: 0.78rem;
   min-height: 0;
   padding: 0;
@@ -318,8 +303,8 @@ popover.background {
 
 // ── Power bar ──────────────────────────────────────────────────────────────
 .greeter-power-bar {
-  background: rgba(10, 10, 18, 0.50);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.30);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   border-radius: var(--crystal-radius-pill);
   padding: 4px 6px;
 }
@@ -328,7 +313,7 @@ popover.background {
   background: transparent;
   border: none;
   border-radius: var(--crystal-radius-pill);
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.50);
   padding: 6px 16px;
   font-size: 0.82rem;
   box-shadow: none;
@@ -336,6 +321,6 @@ popover.background {
 
   &:hover {
     background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.85);
+    color: rgba(255, 255, 255, 0.88);
   }
 }
