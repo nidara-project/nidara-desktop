@@ -11,9 +11,16 @@ export default function Greeter(monitor: Gdk.Monitor) {
     css_classes: ["greeter-window"],
   })
 
-  const fill = new Gtk.Box({ hexpand: true, vexpand: true })
+  // Full-screen backdrop — alpha > 0.3 so Hyprland's blur applies everywhere
+  const fill = new Gtk.Box({
+    hexpand: true,
+    vexpand: true,
+    css_classes: ["greeter-backdrop"],
+  })
 
   const loginCard = LoginCard()
+  loginCard.halign = Gtk.Align.CENTER
+  loginCard.valign = Gtk.Align.CENTER
 
   const powerBar = PowerBar()
   powerBar.halign = Gtk.Align.CENTER

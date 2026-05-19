@@ -1,11 +1,17 @@
-/* Crystal Shell — Greeter / Lock stylesheet */
+/* Crystal Shell — Greeter / Lock stylesheet
+   GTK4 CSS subset only — no color-mix(), no rgba(var(), n), no filter.
+   All tokens pre-computed as full color values. */
 * {
   font-family: "Inter", sans-serif;
-  color: rgba(255, 255, 255, 0.92);
   --crystal-accent: #0088FF;
-  --crystal-accent-rgb: 0, 136, 255;
-  --crystal-border: rgba(255, 255, 255, 0.12);
-  --crystal-surface: rgba(255, 255, 255, 0.08);
+  --crystal-text: rgba(255, 255, 255, 0.95);
+  --crystal-text-secondary: rgba(255, 255, 255, 0.70);
+  --crystal-text-muted: rgba(255, 255, 255, 0.45);
+  --crystal-glass: rgba(18, 18, 28, 0.55);
+  --crystal-glass-light: rgba(255, 255, 255, 0.38);
+  --crystal-glass-border: rgba(255, 255, 255, 0.22);
+  --crystal-glass-border-sm:rgba(255, 255, 255, 0.14);
+  --crystal-focus-ring: rgba(0, 136, 255, 0.35);
   --crystal-danger: #ff6b6b;
   --crystal-radius-lg: 24px;
   --crystal-radius-md: 16px;
@@ -30,54 +36,49 @@ window > contents {
   font-weight: 600;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
-  margin-bottom: 2px;
+  color: var(--crystal-text-muted);
 }
 
 .greeter-clock {
   font-size: 88px;
   font-weight: 200;
   letter-spacing: -4px;
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--crystal-text);
 }
 
 .greeter-avatar {
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  margin-bottom: 8px;
+  border-radius: var(--crystal-radius-pill);
+  border: 2px solid var(--crystal-glass-border);
 }
 
 .greeter-username {
   font-size: 16px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--crystal-text-secondary);
   letter-spacing: 0.2px;
 }
 
 .greeter-password,
 passwordentry.greeter-password {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--crystal-glass);
+  border: 1px solid var(--crystal-glass-border-sm);
   border-radius: var(--crystal-radius-pill);
-  color: rgba(255, 255, 255, 0.92);
-  caret-color: rgba(255, 255, 255, 0.92);
+  color: var(--crystal-text);
+  caret-color: var(--crystal-text);
   padding: 10px 16px;
   box-shadow: none;
   min-height: 0;
-  margin-bottom: 8px;
 }
 
 .greeter-password:focus,
 passwordentry.greeter-password:focus {
-  border-color: rgba(var(--crystal-accent-rgb), 0.55);
-  background: rgba(0, 0, 0, 0.35);
-  box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.12);
+  border-color: var(--crystal-accent);
+  box-shadow: 0 0 0 2px var(--crystal-focus-ring);
 }
 
 .greeter-password > text,
 passwordentry.greeter-password > text {
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--crystal-text);
 }
 
 .greeter-password > button,
@@ -85,39 +86,38 @@ passwordentry.greeter-password > button {
   background: transparent;
   border: none;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--crystal-text-muted);
   min-height: 0;
   min-width: 0;
   padding: 4px 8px;
 }
 .greeter-password > button:hover,
 passwordentry.greeter-password > button:hover {
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--crystal-text-secondary);
 }
 
 .greeter-login-btn {
-  background: rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: var(--crystal-glass-light);
+  color: var(--crystal-text);
+  border: 1px solid var(--crystal-glass-border);
   border-radius: var(--crystal-radius-pill);
   padding: 10px 24px;
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: 14px;
   box-shadow: none;
   min-height: 0;
 }
 .greeter-login-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.46);
   box-shadow: none;
 }
 .greeter-login-btn:active {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.28);
 }
 .greeter-login-btn:disabled {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--crystal-text-muted);
+  border-color: var(--crystal-glass-border-sm);
   box-shadow: none;
 }
 
@@ -125,11 +125,10 @@ passwordentry.greeter-password > button:hover {
   background: transparent;
   border: none;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 0.78rem;
+  color: var(--crystal-text-muted);
+  font-size: 12px;
   min-height: 0;
   padding: 0;
-  margin-top: 4px;
 }
 .greeter-session-dropdown > button {
   background: transparent;
@@ -142,16 +141,16 @@ passwordentry.greeter-password > button:hover {
   border-radius: var(--crystal-radius-pill);
 }
 .greeter-session-dropdown > button:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--crystal-text-secondary);
 }
 .greeter-session-dropdown:hover {
-  color: rgba(255, 255, 255, 0.65);
+  color: var(--crystal-text-secondary);
 }
 
 popover.background {
   background: rgba(14, 14, 22, 0.97);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--crystal-glass-border-sm);
   border-radius: var(--crystal-radius-sm);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   padding: 4px;
@@ -181,22 +180,21 @@ popover.background listview {
 popover.background listview > row {
   padding: 6px 10px;
   border-radius: 6px;
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--crystal-text-secondary);
   min-height: 0;
 }
 popover.background listview > row:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  color: var(--crystal-text);
 }
 popover.background listview > row:selected {
-  background: rgba(var(--crystal-accent-rgb), 0.18);
-  color: #fff;
+  background: rgba(0, 136, 255, 0.2);
+  color: var(--crystal-text);
 }
 
 .greeter-error {
   color: var(--crystal-danger);
-  font-size: 0.8rem;
-  margin-top: 4px;
+  font-size: 12px;
 }
 
 @keyframes greeter-shake {
@@ -221,20 +219,20 @@ popover.background listview > row:selected {
 }
 
 .locale-bar {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--crystal-glass);
+  border: 1px solid var(--crystal-glass-border-sm);
   border-radius: var(--crystal-radius-pill);
   padding: 4px 10px;
   min-height: 0;
 }
 
 .locale-bar-icon {
-  color: rgba(255, 255, 255, 0.3);
+  color: var(--crystal-text-muted);
   margin-right: 2px;
 }
 
 .locale-bar-sep {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--crystal-glass-border-sm);
   min-width: 1px;
   min-height: 14px;
   margin: 4px 2px;
@@ -244,8 +242,8 @@ popover.background listview > row:selected {
   background: transparent;
   border: none;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 0.78rem;
+  color: var(--crystal-text-muted);
+  font-size: 12px;
   min-height: 0;
   padding: 0;
 }
@@ -260,11 +258,11 @@ popover.background listview > row:selected {
 }
 .locale-bar-dropdown > button:hover {
   background: rgba(255, 255, 255, 0.07);
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--crystal-text);
   border-radius: var(--crystal-radius-pill);
 }
 .locale-bar-dropdown:hover {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--crystal-text-secondary);
 }
 
 .locale-bar-lang-group {
@@ -276,24 +274,24 @@ popover.background listview > row:selected {
   border: none;
   box-shadow: none;
   border-radius: var(--crystal-radius-pill);
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 0.75rem;
+  color: var(--crystal-text-muted);
+  font-size: 12px;
   font-weight: 500;
   padding: 3px 8px;
   min-height: 0;
 }
 .locale-bar-lang-btn:hover {
   background: rgba(255, 255, 255, 0.07);
-  color: rgba(255, 255, 255, 0.75);
+  color: var(--crystal-text-secondary);
 }
 .locale-bar-lang-btn:checked {
-  background: rgba(var(--crystal-accent-rgb), 0.16);
+  background: rgba(0, 136, 255, 0.2);
   color: var(--crystal-accent);
 }
 
 .greeter-power-bar {
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--crystal-glass);
+  border: 1px solid var(--crystal-glass-border-sm);
   border-radius: var(--crystal-radius-pill);
   padding: 4px 6px;
 }
@@ -302,15 +300,15 @@ popover.background listview > row:selected {
   background: transparent;
   border: none;
   border-radius: var(--crystal-radius-pill);
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--crystal-text-muted);
   padding: 6px 16px;
-  font-size: 0.82rem;
+  font-size: 13px;
   box-shadow: none;
   min-height: 0;
 }
 .greeter-power-btn:hover {
   background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.88);
+  color: var(--crystal-text);
 }
 
 /*# sourceMappingURL=style.css.map */

@@ -1,19 +1,36 @@
-/* Crystal Shell — Greeter / Lock stylesheet */
+/* Crystal Shell — Greeter / Lock stylesheet
+   GTK4 CSS subset only — no color-mix(), no rgba(var(), n), no filter.
+   All tokens pre-computed as full color values. */
 
-// ── Tokens ─────────────────────────────────────────────────────────────────
+// ── Design tokens ───────────────────────────────────────────────────────────
 * {
   font-family: "Inter", sans-serif;
-  color: rgba(255, 255, 255, 0.92);
 
-  --crystal-accent:      #0088FF;
-  --crystal-accent-rgb:  0, 136, 255;
-  --crystal-border:      rgba(255, 255, 255, 0.12);
-  --crystal-surface:     rgba(255, 255, 255, 0.08);
-  --crystal-danger:      #ff6b6b;
-  --crystal-radius-lg:   24px;
-  --crystal-radius-md:   16px;
-  --crystal-radius-sm:   10px;
-  --crystal-radius-pill: 9999px;
+  // Accent (overridden at runtime by app.ts for lock, FluidCrystal for shell)
+  --crystal-accent:         #0088FF;
+
+  // Text
+  --crystal-text:           rgba(255, 255, 255, 0.95);
+  --crystal-text-secondary: rgba(255, 255, 255, 0.70);
+  --crystal-text-muted:     rgba(255, 255, 255, 0.45);
+
+  // Glass surfaces — alpha MUST be > 0.3 for Hyprland blur to apply
+  --crystal-glass:          rgba(18, 18, 28, 0.55);
+  --crystal-glass-light:    rgba(255, 255, 255, 0.38);
+  --crystal-glass-border:   rgba(255, 255, 255, 0.22);
+  --crystal-glass-border-sm:rgba(255, 255, 255, 0.14);
+
+  // Focus ring (accent at 12% — below blur threshold, layered over glass)
+  --crystal-focus-ring:     rgba(0, 136, 255, 0.35);
+
+  // Danger
+  --crystal-danger:         #ff6b6b;
+
+  // Radii
+  --crystal-radius-lg:      24px;
+  --crystal-radius-md:      16px;
+  --crystal-radius-sm:      10px;
+  --crystal-radius-pill:    9999px;
 }
 
 // ── Window ─────────────────────────────────────────────────────────────────
@@ -35,8 +52,7 @@ window > contents {
   font-weight: 600;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.50);
-  margin-bottom: 2px;
+  color: var(--crystal-text-muted);
 }
 
 // ── Time label ─────────────────────────────────────────────────────────────
@@ -44,49 +60,45 @@ window > contents {
   font-size: 88px;
   font-weight: 200;
   letter-spacing: -4px;
-  color: rgba(255, 255, 255, 0.96);
+  color: var(--crystal-text);
 }
 
 // ── Avatar ─────────────────────────────────────────────────────────────────
 .greeter-avatar {
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 2px solid rgba(255, 255, 255, 0.18);
-  margin-bottom: 8px;
+  border-radius: var(--crystal-radius-pill);
+  border: 2px solid var(--crystal-glass-border);
 }
 
 // ── Username ───────────────────────────────────────────────────────────────
 .greeter-username {
   font-size: 16px;
   font-weight: 500;
-  color: rgba(255, 255, 255, 0.85);
+  color: var(--crystal-text-secondary);
   letter-spacing: 0.2px;
 }
 
-// ── Password entry ─────────────────────────────────────────────────────────
+// ── Password entry — glass (alpha > 0.3 → Hyprland blurs behind it) ────────
 .greeter-password,
 passwordentry.greeter-password {
-  background: rgba(0, 0, 0, 0.30);
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: var(--crystal-glass);
+  border: 1px solid var(--crystal-glass-border-sm);
   border-radius: var(--crystal-radius-pill);
-  color: rgba(255, 255, 255, 0.92);
-  caret-color: rgba(255, 255, 255, 0.92);
+  color: var(--crystal-text);
+  caret-color: var(--crystal-text);
   padding: 10px 16px;
   box-shadow: none;
   min-height: 0;
-  margin-bottom: 8px;
 }
 
 .greeter-password:focus,
 passwordentry.greeter-password:focus {
-  border-color: rgba(var(--crystal-accent-rgb), 0.55);
-  background: rgba(0, 0, 0, 0.35);
-  box-shadow: 0 0 0 3px rgba(var(--crystal-accent-rgb), 0.12);
+  border-color: var(--crystal-accent);
+  box-shadow: 0 0 0 2px var(--crystal-focus-ring);
 }
 
 .greeter-password > text,
 passwordentry.greeter-password > text {
-  color: rgba(255, 255, 255, 0.92);
+  color: var(--crystal-text);
 }
 
 .greeter-password > button,
@@ -94,40 +106,39 @@ passwordentry.greeter-password > button {
   background: transparent;
   border: none;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--crystal-text-muted);
   min-height: 0;
   min-width: 0;
   padding: 4px 8px;
 
-  &:hover { color: rgba(255, 255, 255, 0.65); }
+  &:hover { color: var(--crystal-text-secondary); }
 }
 
-// ── Login / Unlock button ──────────────────────────────────────────────────
+// ── Login / Unlock button — frosted glass (alpha > 0.3 → blur applies) ─────
 .greeter-login-btn {
-  background: rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.90);
-  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: var(--crystal-glass-light);
+  color: var(--crystal-text);
+  border: 1px solid var(--crystal-glass-border);
   border-radius: var(--crystal-radius-pill);
   padding: 10px 24px;
   font-weight: 600;
-  font-size: 0.875rem;
+  font-size: 14px;
   box-shadow: none;
   min-height: 0;
 
   &:hover {
-    background: rgba(255, 255, 255, 0.20);
-    border-color: rgba(255, 255, 255, 0.30);
+    background: rgba(255, 255, 255, 0.46);
     box-shadow: none;
   }
 
   &:active {
-    background: rgba(255, 255, 255, 0.10);
+    background: rgba(255, 255, 255, 0.28);
   }
 
   &:disabled {
-    background: rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.30);
-    border-color: rgba(255, 255, 255, 0.10);
+    background: rgba(255, 255, 255, 0.12);
+    color: var(--crystal-text-muted);
+    border-color: var(--crystal-glass-border-sm);
     box-shadow: none;
   }
 }
@@ -137,11 +148,10 @@ passwordentry.greeter-password > button {
   background: transparent;
   border: none;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.40);
-  font-size: 0.78rem;
+  color: var(--crystal-text-muted);
+  font-size: 12px;
   min-height: 0;
   padding: 0;
-  margin-top: 4px;
 
   > button {
     background: transparent;
@@ -154,20 +164,20 @@ passwordentry.greeter-password > button {
     border-radius: var(--crystal-radius-pill);
 
     &:hover {
-      background: rgba(255, 255, 255, 0.07);
-      color: rgba(255, 255, 255, 0.70);
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--crystal-text-secondary);
     }
   }
 
-  &:hover { color: rgba(255, 255, 255, 0.65); }
+  &:hover { color: var(--crystal-text-secondary); }
 }
 
 // DropDown popup
 popover.background {
   background: rgba(14, 14, 22, 0.97);
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--crystal-glass-border-sm);
   border-radius: var(--crystal-radius-sm);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.60);
   padding: 4px;
 
   > contents {
@@ -197,11 +207,11 @@ popover.background {
     > row {
       padding: 6px 10px;
       border-radius: 6px;
-      color: rgba(255, 255, 255, 0.75);
+      color: var(--crystal-text-secondary);
       min-height: 0;
 
-      &:hover    { background: rgba(255, 255, 255, 0.08); color: #fff; }
-      &:selected { background: rgba(var(--crystal-accent-rgb), 0.18); color: #fff; }
+      &:hover    { background: rgba(255, 255, 255, 0.08); color: var(--crystal-text); }
+      &:selected { background: rgba(0, 136, 255, 0.20);   color: var(--crystal-text); }
     }
   }
 }
@@ -209,11 +219,10 @@ popover.background {
 // ── Error message ──────────────────────────────────────────────────────────
 .greeter-error {
   color: var(--crystal-danger);
-  font-size: 0.80rem;
-  margin-top: 4px;
+  font-size: 12px;
 }
 
-// ── Shake animation (wrong password) ──────────────────────────────────────
+// ── Shake animation ────────────────────────────────────────────────────────
 @keyframes greeter-shake {
   0%, 100% { margin-left: 0; }
   20%       { margin-left: -8px; }
@@ -226,22 +235,22 @@ popover.background {
   animation: greeter-shake 0.4s ease;
 }
 
-// ── Locale bar (greeter only) ──────────────────────────────────────────────
+// ── Locale bar — glass (alpha > 0.3 → blur applies) ───────────────────────
 .locale-bar {
-  background: rgba(0, 0, 0, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: var(--crystal-glass);
+  border: 1px solid var(--crystal-glass-border-sm);
   border-radius: var(--crystal-radius-pill);
   padding: 4px 10px;
   min-height: 0;
 }
 
 .locale-bar-icon {
-  color: rgba(255, 255, 255, 0.30);
+  color: var(--crystal-text-muted);
   margin-right: 2px;
 }
 
 .locale-bar-sep {
-  background: rgba(255, 255, 255, 0.10);
+  background: var(--crystal-glass-border-sm);
   min-width: 1px;
   min-height: 14px;
   margin: 4px 2px;
@@ -251,8 +260,8 @@ popover.background {
   background: transparent;
   border: none;
   box-shadow: none;
-  color: rgba(255, 255, 255, 0.45);
-  font-size: 0.78rem;
+  color: var(--crystal-text-muted);
+  font-size: 12px;
   min-height: 0;
   padding: 0;
 
@@ -267,12 +276,12 @@ popover.background {
 
     &:hover {
       background: rgba(255, 255, 255, 0.07);
-      color: rgba(255, 255, 255, 0.85);
+      color: var(--crystal-text);
       border-radius: var(--crystal-radius-pill);
     }
   }
 
-  &:hover { color: rgba(255, 255, 255, 0.80); }
+  &:hover { color: var(--crystal-text-secondary); }
 }
 
 .locale-bar-lang-group {
@@ -284,27 +293,27 @@ popover.background {
   border: none;
   box-shadow: none;
   border-radius: var(--crystal-radius-pill);
-  color: rgba(255, 255, 255, 0.40);
-  font-size: 0.75rem;
+  color: var(--crystal-text-muted);
+  font-size: 12px;
   font-weight: 500;
   padding: 3px 8px;
   min-height: 0;
 
   &:hover {
     background: rgba(255, 255, 255, 0.07);
-    color: rgba(255, 255, 255, 0.75);
+    color: var(--crystal-text-secondary);
   }
 
   &:checked {
-    background: rgba(var(--crystal-accent-rgb), 0.16);
+    background: rgba(0, 136, 255, 0.20);
     color: var(--crystal-accent);
   }
 }
 
-// ── Power bar ──────────────────────────────────────────────────────────────
+// ── Power bar — glass (alpha > 0.3 → blur applies) ────────────────────────
 .greeter-power-bar {
-  background: rgba(0, 0, 0, 0.30);
-  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: var(--crystal-glass);
+  border: 1px solid var(--crystal-glass-border-sm);
   border-radius: var(--crystal-radius-pill);
   padding: 4px 6px;
 }
@@ -313,14 +322,14 @@ popover.background {
   background: transparent;
   border: none;
   border-radius: var(--crystal-radius-pill);
-  color: rgba(255, 255, 255, 0.50);
+  color: var(--crystal-text-muted);
   padding: 6px 16px;
-  font-size: 0.82rem;
+  font-size: 13px;
   box-shadow: none;
   min-height: 0;
 
   &:hover {
     background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.88);
+    color: var(--crystal-text);
   }
 }

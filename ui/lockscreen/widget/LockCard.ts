@@ -11,46 +11,46 @@ export default function LockCard(): Gtk.Widget {
   const user = getDefaultUser()
   let isAuthenticating = false
 
-  // ── Clock: date above, time below ─────────────────────────────────────────
   const clockWidget = Clock()
   clockWidget.halign = Gtk.Align.CENTER
 
-  // ── Avatar ────────────────────────────────────────────────────────────────
   const avatar = user.avatarPath
     ? new Gtk.Image({ file: user.avatarPath, pixel_size: 80, css_classes: ["greeter-avatar"] })
     : new Gtk.Image({ icon_name: "avatar-default-symbolic", pixel_size: 80, css_classes: ["greeter-avatar"] })
   avatar.halign = Gtk.Align.CENTER
+  avatar.margin_top = 32
 
   const usernameLabel = new Gtk.Label({
     label: user.displayName,
     css_classes: ["greeter-username"],
     halign: Gtk.Align.CENTER,
+    margin_top: 10,
   })
 
-  // ── Error label ───────────────────────────────────────────────────────────
-  const errorLabel = new Gtk.Label({
-    label: "",
-    css_classes: ["greeter-error"],
-    visible: false,
-    wrap: true,
-    halign: Gtk.Align.CENTER,
-  })
-
-  // ── Password entry ────────────────────────────────────────────────────────
   const passwordEntry = new Gtk.PasswordEntry({
     placeholder_text: t("password"),
     show_peek_icon: true,
     css_classes: ["greeter-password"],
     halign: Gtk.Align.CENTER,
     width_request: 280,
+    margin_top: 20,
   })
 
-  // ── Unlock button ─────────────────────────────────────────────────────────
   const unlockBtn = new Gtk.Button({
     label: t("unlock"),
     css_classes: ["greeter-login-btn"],
     halign: Gtk.Align.CENTER,
     width_request: 280,
+    margin_top: 8,
+  })
+
+  const errorLabel = new Gtk.Label({
+    label: "",
+    css_classes: ["greeter-error"],
+    visible: false,
+    wrap: true,
+    halign: Gtk.Align.CENTER,
+    margin_top: 6,
   })
 
   // ── Auth logic ────────────────────────────────────────────────────────────
@@ -103,29 +103,15 @@ export default function LockCard(): Gtk.Widget {
   passwordEntry.connect("activate", doUnlock)
   unlockBtn.connect("clicked", doUnlock)
 
-  // ── Full centered column: clock → avatar → auth ───────────────────────────
   const col = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
     halign: Gtk.Align.CENTER,
     valign: Gtk.Align.CENTER,
-    spacing: 0,
   })
 
   col.append(clockWidget)
-
-  // Spacer between clock and avatar
-  const spacer = new Gtk.Box()
-  spacer.height_request = 32
-  col.append(spacer)
-
   col.append(avatar)
   col.append(usernameLabel)
-
-  // Spacer between username and password
-  const spacer2 = new Gtk.Box()
-  spacer2.height_request = 16
-  col.append(spacer2)
-
   col.append(passwordEntry)
   col.append(unlockBtn)
   col.append(errorLabel)
