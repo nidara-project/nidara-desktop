@@ -307,7 +307,9 @@ hl.on("window.open", function(w)
     if wallpaperPath then
         prevWallpaper, prevTransition = readWallpaperCfg()
         local outputFlag = (gameMonitor ~= "") and (" --outputs " .. gameMonitor) or ""
-        os.execute("awww img " .. wallpaperPath .. " --transition-type " .. transition .. outputFlag)
+        -- No transition on entry: game covers the wallpaper immediately anyway,
+        -- animating it causes awww to freeze mid-transition until the game closes.
+        os.execute("awww img " .. wallpaperPath .. " --transition-type none" .. outputFlag)
     end
 end)
 
@@ -335,26 +337,47 @@ end)
 
 
 hl.workspace_rule({
-    workspace   = "name:gamespace",
-    gaps_in     = 0,
-    gaps_out    = 0,
-    no_border   = true,
-    no_rounding = true,
-    no_shadow   = true,
-    decorate    = false,
-    persistent  = false,
+    workspace    = "name:gamespace",
+    gaps_in      = 0,
+    gaps_out     = 0,
+    no_border    = true,
+    border_size  = 0,
+    no_rounding  = true,
+    no_shadow    = true,
+    decorate     = false,
+    persistent   = false,
+    animation    = "fade",
 })
 
+-- All windows on gamespace get full performance treatment regardless of class
+hl.window_rule({
+    name         = "gamespace-perf",
+    match        = { workspace = "name:gamespace" },
+    no_blur      = true,
+    no_anim      = true,
+    no_dim       = true,
+    no_shadow    = true,
+    rounding     = 0,
+    border_size  = 0,
+    opaque       = true,
+    force_rgbx   = true,
+    immediate    = true,
+    idle_inhibit = "focus",
+    decorate     = false,
+})
+
+-- Fallback workspace assignment for steam_app_* (belt+suspenders with the Lua handler)
 hl.window_rule({
     name      = "steam-games-to-gamespace",
     match     = { class = "^steam_app_" },
     workspace = "name:gamespace",
 })
 
+-- Also catch games that self-report content type (XDG game = 3)
 hl.window_rule({
-    name      = "steam-games-tearing",
-    match     = { class = "^steam_app_" },
-    immediate = true,
+    name      = "content-game-to-gamespace",
+    match     = { content = 3 },
+    workspace = "name:gamespace",
 })
 
 
