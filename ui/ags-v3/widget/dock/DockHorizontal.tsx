@@ -10,7 +10,7 @@ import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
 import { DockItem, Separator, dismissActiveDockMenu } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
-import { hypr, appsService as apps, dragBus, mouseBus, pointerBus, savePinned, pinnedState, dockSettings, onDockSettingsChanged, menuState, onMenuCountChanged, dockSideState } from "./state"
+import { hypr, appsService as apps, dragBus, mouseBus, pointerBus, savePinned, pinnedState, dockSettings, onDockSettingsChanged, menuState, onMenuCountChanged, dockSideState, onPinnedChanged } from "./state"
 import status from "../../core/Status"
 import hs from "../../core/HyprlandState"
 import Theme from "../../core/ThemeManager"
@@ -84,9 +84,18 @@ export default function DockHorizontal(gdkmonitor: any) {
     let unpinnedSeq = 0
 
     const getLaunch = (lid: string) => {
-        const app = appService.getAppData(lid)
-        const desktopId = app?.id || lid
-        return () => execAsync(["uwsm", "app", "--", "gtk-launch", desktopId]).catch(print)
+        return () => {
+            const info = appService.getAppInfo(lid)
+            let command: string
+            if (info) {
+                // Use commandline directly: avoids DBusActivatable failures (e.g. Telegram)
+                command = (info.get_commandline() || lid).replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
+            } else {
+                command = `gtk-launch ${GLib.shell_quote(lid)}`
+            }
+            // cd $HOME so terminals (e.g. Kitty) don't inherit the AGS working directory
+            execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && ${command}`]).catch(print)
+        }
     }
 
     const onPin = (sourceId: string) => {
@@ -1142,16 +1151,19 @@ export default function DockHorizontal(gdkmonitor: any) {
         pinnedState.list = pinnedState.list.filter(id => {
             if (!id || id.startsWith("special:")) return true
             if (DOCK_PERMANENT_IDS.has(id.toLowerCase())) return true
-            return appService.hasApp(id)
+            const found = !!appService.getAppInfo(id)
+            if (!found) console.log(`[Dock] Pruning orphaned pin: "${id}" (not found in AppService)`)
+            return found
         })
-        if (pinnedState.list.length < before) {
-            console.log(`[Dock] Removed ${before - pinnedState.list.length} uninstalled pinned app(s)`)
-            savePinned()
-        }
+        if (pinnedState.list.length < before) savePinned()
     }
 
     const cConn = hs.connect("changed", throttledUpdate)
-    const aConn = appService.connect(() => { pruneOrphanedPins(); throttledUpdate() })
+    const aConn = appService.connect(throttledUpdate)
+    // Only prune on structural app changes (install/uninstall), not on boot scans or theme changes
+    const appStructConn = appService.connectStructural(pruneOrphanedPins)
+    // React to pins added externally (e.g. from AppGrid context menu)
+    const pinnedConn = onPinnedChanged(throttledUpdate)
 
     const overlayRecovery = () => { if (!status.isAnyOverlayOpen && needsUpdate) throttledUpdate() }
     status.connect("notify::cc-open", overlayRecovery)
@@ -1260,6 +1272,8 @@ export default function DockHorizontal(gdkmonitor: any) {
         try { if (dConn) dConn() } catch (e) {}
         try { if (sConn) sConn() } catch (e) {}
         try { if (mConn) mConn() } catch (e) {}
+        try { appStructConn() } catch (e) {}
+        try { pinnedConn() } catch (e) {}
     })
 
     ;(win as any).setLauncherMode = (active: boolean) => {

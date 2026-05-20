@@ -435,7 +435,8 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         while (child) { const next = child.get_next_sibling(); flowbox.remove(child); child = next }
     }
 
-    appService.connect(() => { appsService.reload(); resetCache(); initCache() })
+    appService.connect(() => { resetCache(); initCache() })
+    appService.connectStructural(() => { appsService.reload(); resetCache(); initCache() })
 
     const initCache = () => {
         if (cacheInitialized) return

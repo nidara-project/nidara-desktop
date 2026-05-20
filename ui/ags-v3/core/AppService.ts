@@ -36,6 +36,7 @@ class AppService {
     private isReloading = false // Lock to avoid concurrent reloads during boot
     private monitors: Gio.FileMonitor[] = []
     private reloadTimer: number | null = null
+    private structuralListeners = new Set<() => void>()
 
     constructor() {
         // Patch XDG_DATA_DIRS before any Gio.AppInfo call so Flatpak/Snap apps are
@@ -125,6 +126,7 @@ class AppService {
             this.reloadTimer = GLib.timeout_add(GLib.PRIORITY_LOW, 1500, () => {
                 this.reloadTimer = null
                 this.reload()
+                this.emitStructural()
                 return GLib.SOURCE_REMOVE
             })
         }
@@ -156,8 +158,18 @@ class AppService {
         return () => this.listeners.delete(callback)
     }
 
+    /** Fires only on structural changes (app install/uninstall via file watcher), not on boot scans or theme changes. */
+    connectStructural(callback: () => void) {
+        this.structuralListeners.add(callback)
+        return () => this.structuralListeners.delete(callback)
+    }
+
     private emit() {
         this.listeners.forEach(cb => cb())
+    }
+
+    private emitStructural() {
+        this.structuralListeners.forEach(cb => cb())
     }
 
     /** Returns true if the app ID is currently installed and tracked in the registry. */
