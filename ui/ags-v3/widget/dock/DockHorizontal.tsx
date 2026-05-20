@@ -1134,8 +1134,24 @@ export default function DockHorizontal(gdkmonitor: any) {
         })
     }
 
+    // IDs that should always stay pinned regardless of AppService state
+    const DOCK_PERMANENT_IDS = new Set(["home-shortcut", "launcher", "trash", "crystal-shell-settings"])
+
+    const pruneOrphanedPins = () => {
+        const before = pinnedState.list.length
+        pinnedState.list = pinnedState.list.filter(id => {
+            if (!id || id.startsWith("special:")) return true
+            if (DOCK_PERMANENT_IDS.has(id.toLowerCase())) return true
+            return appService.hasApp(id)
+        })
+        if (pinnedState.list.length < before) {
+            console.log(`[Dock] Removed ${before - pinnedState.list.length} uninstalled pinned app(s)`)
+            savePinned()
+        }
+    }
+
     const cConn = hs.connect("changed", throttledUpdate)
-    const aConn = appService.connect(throttledUpdate)
+    const aConn = appService.connect(() => { pruneOrphanedPins(); throttledUpdate() })
 
     const overlayRecovery = () => { if (!status.isAnyOverlayOpen && needsUpdate) throttledUpdate() }
     status.connect("notify::cc-open", overlayRecovery)

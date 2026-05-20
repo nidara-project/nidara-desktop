@@ -34,8 +34,15 @@ class AppService {
     private wmMap = new Map<string, string>() // Map wmClass -> Desktop ID
     private listeners = new Set<() => void>()
     private isReloading = false // Lock to avoid concurrent reloads during boot
+    private monitors: Gio.FileMonitor[] = []
+    private reloadTimer: number | null = null
 
     constructor() {
+        // Patch XDG_DATA_DIRS before any Gio.AppInfo call so Flatpak/Snap apps are
+        // visible even when the compositor starts without sourcing /etc/profile.d/.
+        // This also benefits AstalApps instances created later in state.ts / AppGrid.
+        this.patchXdgDataDirs()
+
         // Global Theme Discovery
         const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
 
@@ -56,6 +63,7 @@ class AppService {
         theme.add_search_path(snapIcons)
 
         this.reload()
+        this.watchAppDirs()
 
         // Deep Sync: Secondary scan for boot resilience
         GLib.timeout_add(GLib.PRIORITY_LOW, 5000, () => {
@@ -78,6 +86,71 @@ class AppService {
         })
     }
 
+    private patchXdgDataDirs() {
+        const home = GLib.get_home_dir()
+        // The "share" roots whose applications/ and icons/ subdirs Flatpak/Snap export to
+        const extraShares = [
+            "/var/lib/flatpak/exports/share",
+            `${home}/.local/share/flatpak/exports/share`,
+            "/var/lib/snapd/desktop",
+        ]
+        const current = GLib.getenv("XDG_DATA_DIRS") ?? "/usr/local/share:/usr/share"
+        const parts = current.split(":").filter(Boolean)
+        const added: string[] = []
+        for (const share of extraShares) {
+            if (GLib.file_test(share, GLib.FileTest.IS_DIR) && !parts.includes(share)) {
+                parts.push(share)
+                added.push(share)
+            }
+        }
+        if (added.length > 0) {
+            GLib.setenv("XDG_DATA_DIRS", parts.join(":"), true)
+            console.log(`[AppService] Patched XDG_DATA_DIRS with: ${added.join(", ")}`)
+        }
+    }
+
+    private watchAppDirs() {
+        const home = GLib.get_home_dir()
+        const dirs = [
+            "/usr/share/applications",
+            "/usr/local/share/applications",
+            `${home}/.local/share/applications`,
+            "/var/lib/flatpak/exports/share/applications",
+            `${home}/.local/share/flatpak/exports/share/applications`,
+            "/var/lib/snapd/desktop/applications",
+        ]
+
+        const debouncedReload = () => {
+            if (this.reloadTimer !== null) GLib.source_remove(this.reloadTimer)
+            this.reloadTimer = GLib.timeout_add(GLib.PRIORITY_LOW, 1500, () => {
+                this.reloadTimer = null
+                this.reload()
+                return GLib.SOURCE_REMOVE
+            })
+        }
+
+        for (const path of dirs) {
+            if (!GLib.file_test(path, GLib.FileTest.IS_DIR)) continue
+            try {
+                const dir = Gio.File.new_for_path(path)
+                const monitor = dir.monitor_directory(Gio.FileMonitorFlags.NONE, null)
+                monitor.connect("changed", (_m: any, _file: any, _other: any, eventType: number) => {
+                    // Only react to structural changes (files appearing or disappearing)
+                    const ev = Gio.FileMonitorEvent
+                    if (eventType === ev.CREATED || eventType === ev.DELETED ||
+                        eventType === ev.RENAMED || eventType === ev.MOVED_IN ||
+                        eventType === ev.MOVED_OUT) {
+                        console.log(`[AppService] Desktop dir changed (${path}), reloading in 1.5s...`)
+                        debouncedReload()
+                    }
+                })
+                this.monitors.push(monitor) // hold reference to prevent GC
+            } catch (e) {
+                // dir exists but isn't monitorable (permissions, etc.) — skip silently
+            }
+        }
+    }
+
     connect(callback: () => void) {
         this.listeners.add(callback)
         return () => this.listeners.delete(callback)
@@ -85,6 +158,13 @@ class AppService {
 
     private emit() {
         this.listeners.forEach(cb => cb())
+    }
+
+    /** Returns true if the app ID is currently installed and tracked in the registry. */
+    hasApp(id: string): boolean {
+        if (!id) return false
+        const k = id.toLowerCase().replace(/\.desktop$/, "").split("/").pop()!
+        return this.cache.has(k)
     }
 
     /** Resolves an icon name or path to what should be passed to Gtk.Image. Public for Settings UI. */
@@ -232,14 +312,6 @@ class AppService {
         this.cache.clear()
         this.nameMap.clear()
         this.wmMap.clear()
-
-        // Refresh GTK icon theme context
-        // Force a fresh theme context lookup to ensure we aren't using stale paths
-        const display = Gdk.Display.get_default()
-        if (display) {
-            const theme = Gtk.IconTheme.get_for_display(display)
-            // No direct clear_cache(), but re-fetching might help internal ref counting
-        }
 
         const apps = Gio.AppInfo.get_all()
         const visitedIds = new Set<string>()
