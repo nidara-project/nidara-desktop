@@ -7,14 +7,11 @@ import { Gtk, Gdk } from "ags/gtk4"
 import { writeFile, readFile } from "ags/file"
 import GLib from "gi://GLib"
 import AstalHyprland from "gi://AstalHyprland"
-import AstalApps from "gi://AstalApps"
-
 // --- PERSISTENCE ---
 const PINNED_FILE = GLib.get_user_config_dir() + "/dock_pinned.json"
 
 // Shared Hyprland service
 export const hypr = AstalHyprland.get_default()
-export const appsService = new AstalApps.Apps()
 
 // --- DOCK CONFIGURATION ---
 export const DOCK_CONFIG = {

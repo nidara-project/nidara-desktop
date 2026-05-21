@@ -275,6 +275,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
 
     // ── Widget state ───────────────────────────────────────────────────────
     const widgetCache = new Map<string, Gtk.Button>()
+    const iconRefMap = new Map<string, { image: Gtk.Image, originalIconName: string }>()
     let cacheInitialized = false
     let currentQuery = ""
     let currentMatchIds: Set<string> | null = null
@@ -322,6 +323,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         } else {
             icon.icon_name = resolved || iconName
         }
+        iconRefMap.set(id, { image: icon, originalIconName: iconName })
 
         const plate = new Gtk.Box({
             css_classes: ["app-grid-plate"],
@@ -430,12 +432,25 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     // ── Cache ──────────────────────────────────────────────────────────────
     const resetCache = () => {
         widgetCache.clear()
+        iconRefMap.clear()
         cacheInitialized = false
         let child = flowbox.get_first_child()
         while (child) { const next = child.get_next_sibling(); flowbox.remove(child); child = next }
     }
 
-    appService.connect(() => { resetCache(); initCache() })
+    // Theme/icon changes: refresh icon images in-place, no widget recreation
+    const refreshIcons = () => {
+        for (const [, { image, originalIconName }] of iconRefMap) {
+            const resolved = appService.getIconName(originalIconName)
+            if (resolved && resolved.startsWith("/")) {
+                image.gicon = Gio.FileIcon.new(Gio.File.new_for_path(resolved))
+            } else {
+                image.icon_name = resolved || originalIconName
+            }
+        }
+    }
+
+    appService.connect(refreshIcons)
     appService.connectStructural(() => { appsService.reload(); resetCache(); initCache() })
 
     const initCache = () => {

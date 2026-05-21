@@ -2,20 +2,21 @@ import app from "ags/gtk4/app"
 import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
-import GObject from "gi://GObject"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
-import { calculateDockItemMetrics, DOCK_CONSTANTS, syncConstants, springStep, slideSpringStep } from "./DockPhysics"
+import { DOCK_CONSTANTS, syncConstants, springStep, slideSpringStep } from "./DockPhysics"
 import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
 import { DockItem, Separator, dismissActiveDockMenu } from "./DockItem"
 import { drawSquircle } from "../common/DrawingUtils"
-import { hypr, appsService as apps, dragBus, mouseBus, pointerBus, savePinned, pinnedState, dockSettings, onDockSettingsChanged, menuState, onMenuCountChanged, dockSideState } from "./state"
+import {
+    hypr, dragBus, pointerBus, savePinned, pinnedState, dockSettings, onDockSettingsChanged,
+    menuState, onMenuCountChanged, dockSideState, onPinnedChanged
+} from "./state"
 import status from "../../core/Status"
 import hs from "../../core/HyprlandState"
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
-import Icons from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import AppGridPanel from "../app-grid/AppGrid"
 
@@ -33,46 +34,50 @@ export default function DockVertical(gdkmonitor: any) {
             (k.includes(lid) || lid.includes(k))
         )
 
-    const calculateStableWidth = (effectivePinned: string[]) => {
+    const calculateStableHeight = (effectivePinned: string[]) => {
         const groupedClients: { [key: string]: any } = {}
         hypr.clients.forEach(c => {
             if (!c.class) return
             if (c.class.toLowerCase().includes("ags")) return
             let key = c.class.toLowerCase()
-            if (["org.gnome.nautilus", "nautilus", "thunar", "dolphin", "pcmanfm", "nemo", "nemo-desktop"].includes(key)) {
+            if (["org.gnome.nautilus", "nautilus", "thunar", "dolphin", "pcmanfm", "nemo", "nemo-desktop"].includes(key))
                 key = "home-shortcut"
-            }
             groupedClients[key] = true
         })
-
         const runningUnpinnedCount = Object.keys(groupedClients).filter(c =>
-            c !== "home-shortcut" &&
-            c !== "launcher" &&
-            c !== "trash" &&
-            c !== "special:trash" &&
+            c !== "home-shortcut" && c !== "launcher" && c !== "trash" && c !== "special:trash" &&
             !effectivePinned.some(p => norm(p) === c)
         ).length
-
-        const appCount = 3 + effectivePinned.length + runningUnpinnedCount
+        const apps = 3 + effectivePinned.length + runningUnpinnedCount
         const separators = 1 + (runningUnpinnedCount > 0 ? 1 : 0)
-        return (appCount * DOCK_CONSTANTS.APP_SLOT) + (separators * DOCK_CONSTANTS.SEPARATOR_SLOT)
+        return (apps * DOCK_CONSTANTS.APP_SLOT) + (separators * DOCK_CONSTANTS.SEPARATOR_SLOT)
     }
 
     const initialPinned = [...pinnedState.list]
-    let totalStaticWidth = calculateStableWidth(initialPinned)
+    let totalStaticHeight = calculateStableHeight(initialPinned)
     const widgetCache = new Map<string, Gtk.Widget>()
     let lastIconTheme = Theme.iconTheme
     let firstRender = true
     let orderedIds: string[] = []
-    let smoothedBarWidth = totalStaticWidth
-    let velocityBarWidth = 0
+    let smoothedBarHeight = totalStaticHeight
     let currentTotalItems = 0
 
     const dockMonitorWidth = gdkmonitor.get_geometry().width
     const dockMonitorHeight = gdkmonitor.get_geometry().height
-    const verticalUsableH = dockMonitorHeight - BAR_HEIGHT
-    const WIN_W = DOCK_CONSTANTS.WINDOW_HEIGHT
-    const WIN_H = verticalUsableH
+    const WIN_W = dockMonitorWidth
+    const WIN_H = dockMonitorHeight
+
+    // Pill slide for auto-hide — slides the shim and DA drawing, NOT the window
+    const PILL_SLIDE_DIST = DOCK_CONSTANTS.EXCLUSIVE_ZONE + dockSettings.screenGap
+    let isRevealed    = !dockSettings.autoHide
+    let slideTarget   = dockSettings.autoHide ? PILL_SLIDE_DIST : 0
+    let slideCurrent  = slideTarget
+    let slideVelocity = 0
+    const SLIDE_STIFFNESS = 500
+    const SLIDE_DAMPING   = 52
+
+    let dndActive    = false
+    let isSettlingIn = dockSettings.autoHide
 
     const layout = new Gtk.Overlay({
         name: "cd-layout",
@@ -84,18 +89,26 @@ export default function DockVertical(gdkmonitor: any) {
 
     let previewIdx = -1
     let lastDraggingId = ""
-    let lockedStaticWidth = 0
-    let lockedStartX = 0
+    let lockedAxisStart = 0   // Y-start of draggable region (for reorder)
+    let lockedStaticHeight = 0
     let isDndEnding = false
     let cursorInDock = false
 
     const unpinnedOpenOrder = new Map<string, number>()
     let unpinnedSeq = 0
 
+    // Same getLaunch fix as DockHorizontal
     const getLaunch = (lid: string) => {
-        const appData = appService.getAppData(lid)
-        const desktopId = appData?.id || lid
-        return () => execAsync(["uwsm", "app", "--", "gtk-launch", desktopId]).catch(print)
+        return () => {
+            const info = appService.getAppInfo(lid)
+            let command: string
+            if (info) {
+                command = (info.get_commandline() || lid).replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
+            } else {
+                command = `gtk-launch ${GLib.shell_quote(lid)}`
+            }
+            execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && ${command}`]).catch(print)
+        }
     }
 
     const onPin = (sourceId: string) => {
@@ -116,9 +129,8 @@ export default function DockVertical(gdkmonitor: any) {
 
         let finalIdx = previewIdx
         if (finalIdx === -1) {
-            console.warn(`[DockV] onReorder: previewIdx was -1 for ${nsid}. Re-calculating...`)
-            const relX = lastMousePos - lockedStartX
-            finalIdx = Math.floor(relX / DOCK_CONSTANTS.APP_SLOT)
+            const relY = lastMouseY - lockedAxisStart
+            finalIdx = Math.floor(relY / DOCK_CONSTANTS.APP_SLOT)
         }
 
         const wasPinned = pinnedState.list.some(p => norm(p) === nsid)
@@ -141,9 +153,7 @@ export default function DockVertical(gdkmonitor: any) {
                 savePinned()
             }
             const sortedUnpinned = [...unpinnedOpenOrder.entries()]
-                .sort((a, b) => a[1] - b[1])
-                .map(([k]) => k)
-                .filter(k => k !== nsid)
+                .sort((a, b) => a[1] - b[1]).map(([k]) => k).filter(k => k !== nsid)
             let toIdx = Math.max(0, Math.min(finalIdx - (pinnedBoundary + 1), sortedUnpinned.length))
             sortedUnpinned.splice(toIdx, 0, nsid)
             sortedUnpinned.forEach((k, i) => unpinnedOpenOrder.set(k, i))
@@ -173,12 +183,14 @@ export default function DockVertical(gdkmonitor: any) {
     windowOverlay.set_child(layout)
     win.set_child(windowOverlay)
 
+    const edgeAlign = dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END
+
     const bar = new Gtk.Box({
         name: "cd-bar",
         css_classes: ["cd-bar"],
         spacing: 0,
         orientation: Gtk.Orientation.VERTICAL,
-        halign: dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END,
+        halign: edgeAlign,
         valign: Gtk.Align.CENTER,
         overflow: Gtk.Overflow.VISIBLE,
         hexpand: false,
@@ -189,76 +201,83 @@ export default function DockVertical(gdkmonitor: any) {
     barDismissClick.connect("pressed", () => { dismissActiveDockMenu() })
     bar.add_controller(barDismissClick)
 
+    // Full-window drawing area — pill drawn at computed position with slide offset
     const da = new Gtk.DrawingArea({
         name: "dock-gloss-layer",
         valign: Gtk.Align.FILL,
         halign: Gtk.Align.FILL,
-        height_request: DOCK_CONSTANTS.PILL_HEIGHT,
         can_focus: false,
     })
-
     Theme.connect("changed", () => da.queue_draw())
 
-    da.set_draw_func((_, cr, w, _h) => {
+    da.set_draw_func((_, cr, _w, _h) => {
         const dockAlpha = Theme.dockOpacity
         const dockColor = Theme.isDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
         const borderCol = Theme.isDark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
         const pw = DOCK_CONSTANTS.PILL_HEIGHT
-        const ph = smoothedBarWidth + DOCK_CONSTANTS.BASE_MARGIN * 2
+        const ph = smoothedBarHeight + DOCK_CONSTANTS.BASE_MARGIN * 2
+
+        // Center pill in [BAR_HEIGHT, WIN_H]
+        const availH = WIN_H - BAR_HEIGHT
+        const py = BAR_HEIGHT + Math.max(0, Math.round((availH - ph) / 2))
+
+        // Horizontal position with auto-hide slide
+        const slideOff = Math.round(slideCurrent)
         const px = dockSettings.position === 'right'
-            ? WIN_W - DOCK_CONSTANTS.EXCLUSIVE_ZONE
-            : dockSettings.screenGap
-        const py = Math.max(0, Math.round((verticalUsableH - ph) / 2))
+            ? WIN_W - DOCK_CONSTANTS.EXCLUSIVE_ZONE + slideOff
+            : dockSettings.screenGap - slideOff
+
         cr.translate(px, py)
         drawSquircle(cr, pw, ph, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, 0)
     })
 
-    let lastRenderedWidth = -1
+    let lastRenderedHeight = -1
     const updateSize = () => {
         if (!bar || !win) return
-        if (smoothedBarWidth === lastRenderedWidth) return
-        lastRenderedWidth = smoothedBarWidth
-        bar.set_size_request(DOCK_CONSTANTS.PILL_HEIGHT, smoothedBarWidth)
+        if (smoothedBarHeight === lastRenderedHeight) return
+        lastRenderedHeight = smoothedBarHeight
+        bar.set_size_request(DOCK_CONSTANTS.PILL_HEIGHT, smoothedBarHeight)
         if (da) da.queue_draw()
     }
 
+    // Shim: margin_top = BAR_HEIGHT excludes the bar zone; margin_start/end animated for auto-hide
+    const shimMarginStart = dockSettings.position === 'left'  ? dockSettings.screenGap : 0
+    const shimMarginEnd   = dockSettings.position === 'right' ? dockSettings.screenGap : 0
+    const shim = new Gtk.Box({
+        valign: Gtk.Align.FILL,
+        halign: edgeAlign,
+        margin_top:   BAR_HEIGHT,
+        margin_start: shimMarginStart,
+        margin_end:   shimMarginEnd,
+        vexpand: true,
+        overflow: Gtk.Overflow.VISIBLE,
+    })
+    shim.append(bar)
+
+    layout.set_child(da)
+    layout.add_overlay(shim)
+
     const animRegistry = new Map<string, import("./state").AnimState>()
     let tickId: number | null = null
-
-    const initialHideTarget = WIN_W - 4
-    let isRevealed    = !dockSettings.autoHide
-    let slideTarget   = dockSettings.autoHide ? initialHideTarget : 0
-    let slideCurrent  = slideTarget
-    let slideVelocity = 0
-    const SLIDE_STIFFNESS = 500
-    const SLIDE_DAMPING = 52
-
-    let dndActive = false
-    let isSettlingIn = dockSettings.autoHide
 
     const setRevealed = (reveal: boolean) => {
         if (isRevealed === reveal) return
         if (!reveal && dndActive) return
         isRevealed = reveal
-        slideTarget = reveal ? 0 : (WIN_W - 4)
-        // Vertical dock: never change exclusive_zone — it would push the bar.
+        slideTarget = reveal ? 0 : PILL_SLIDE_DIST
         runUnifiedTick(true)
     }
 
     const runUnifiedTick = (seedFrame = false) => {
         if (tickId !== null) return
-        tickId = bar.add_tick_callback((_, clock) => {
+        tickId = bar.add_tick_callback((_, _clock) => {
             if (menuState.openCount > 0) return true
-
-            if (orderedIds.length === 0) {
-                tickId = null
-                return false
-            }
+            if (orderedIds.length === 0) { tickId = null; return false }
 
             const dt = 1 / 60
             let active = false
 
-            // Step 1: Advance ALL icon springs
+            // Step 1: Advance per-icon springs
             orderedIds.forEach((id) => {
                 const state = animRegistry.get(id)
                 if (!state) return
@@ -292,170 +311,203 @@ export default function DockVertical(gdkmonitor: any) {
                 if (a1 || a2 || a3 || a4 || a5) active = true
             })
 
-            // Step 2: Apply per-icon layout (vertical only)
-            let totalBarWidth = 0
-            let currentFloatX = 0
-            let lastRoundedX = 0
+            // Step 2: Apply per-icon layout (vertical)
+            let totalBarHeight = 0
+            let currentFloatY = 0
+            let lastRoundedY = 0
 
             orderedIds.forEach((id) => {
                 const state = animRegistry.get(id)
                 if (!state) return
 
-                const widget = state.widget || widgetCache.get(id)
-                if (!widget) return
-
-                const revealer = widget as any
-                const itemBox = revealer.get_child ? (revealer.get_child() as Gtk.Box) : revealer
+                // KEY FIX: always use widgetCache (revealer), never state.widget
+                const gtkRev = widgetCache.get(id) as any
+                if (!gtkRev) return
+                const itemBox = (gtkRev.get_child ? gtkRev.get_child() : gtkRev) as any
 
                 if (state.isSeparator) {
-                    totalBarWidth += state.currentWidth
-                    currentFloatX += state.currentWidth
+                    totalBarHeight += state.currentWidth
+                    currentFloatY += state.currentWidth
+                    const newRoundedY = Math.round(currentFloatY)
+                    const slotH = newRoundedY - lastRoundedY
+                    lastRoundedY = newRoundedY
 
-                    const newRoundedX = Math.round(currentFloatX)
-                    const slotW = newRoundedX - lastRoundedX
-                    lastRoundedX = newRoundedX
+                    if (gtkRev.height_request !== slotH) gtkRev.height_request = slotH
+                    if (gtkRev.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) gtkRev.width_request = DOCK_CONSTANTS.PILL_HEIGHT
+                    gtkRev.halign = edgeAlign
 
-                    const edgeAlign = dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END
-                    if (revealer.height_request !== slotW) revealer.height_request = slotW
-                    if (revealer.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) revealer.width_request = DOCK_CONSTANTS.PILL_HEIGHT
-                    revealer.halign = edgeAlign
-                    const centerBox = itemBox as Gtk.CenterBox
-                    const line = centerBox?.get_center_widget() as Gtk.Box
+                    const line = (itemBox as Gtk.CenterBox)?.get_center_widget() as Gtk.Box
                     if (line) line.set_size_request(Math.round(state.currentHeight * 0.7), DOCK_CONSTANTS.SEPARATOR_LINE)
                 } else {
                     const exactMargin = state.currentMargin
                     const exactIconSize = DOCK_CONSTANTS.ICON_SIZE * state.currentScale
+                    const exactSlotH = exactIconSize + (exactMargin * 2)
+                    totalBarHeight += exactSlotH
 
-                    const exactSlotW = exactIconSize + (exactMargin * 2)
-                    totalBarWidth += exactSlotW
-
-                    currentFloatX += exactSlotW
-                    const newRoundedX = Math.round(currentFloatX)
-                    const slotW = newRoundedX - lastRoundedX
-                    lastRoundedX = newRoundedX
+                    currentFloatY += exactSlotH
+                    const newRoundedY = Math.round(currentFloatY)
+                    const slotH = newRoundedY - lastRoundedY
+                    lastRoundedY = newRoundedY
 
                     const tps = Math.round(exactIconSize)
-                    const remaining = slotW - tps
-                    const marginL = Math.floor(remaining / 2)
-                    const marginR = Math.ceil(remaining / 2)
+                    const remaining = slotH - tps
+                    const marginT = Math.floor(remaining / 2)
+                    const marginB = Math.ceil(remaining / 2)
 
-                    // Vertical: slot axis = height, overflow axis = width.
-                    if (revealer.height_request !== slotW) revealer.height_request = slotW
-                    if (revealer.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) revealer.width_request = DOCK_CONSTANTS.PILL_HEIGHT
-                    const gtkRev = widgetCache.get(id) as any
-                    if (gtkRev && gtkRev !== (revealer as any)) {
-                        if (gtkRev.height_request !== slotW) gtkRev.height_request = slotW
-                        if (gtkRev.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) gtkRev.width_request = DOCK_CONSTANTS.PILL_HEIGHT
-                    }
+                    // Revealer: height = slot, width = pill
+                    if (gtkRev.height_request !== slotH) gtkRev.height_request = slotH
+                    if (gtkRev.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) gtkRev.width_request = DOCK_CONSTANTS.PILL_HEIGHT
+
+                    // itemBox: icon size + margins for centering within slot
                     if (itemBox) {
                         if (itemBox.height_request !== tps) itemBox.height_request = tps
                         const vSlide = Math.round(state.currentSlideX)
-                        const vtML = marginL + vSlide
-                        const vtMR = marginR - vSlide
-                        if (itemBox.margin_top !== vtML) itemBox.margin_top = vtML
-                        if (itemBox.margin_bottom !== vtMR) itemBox.margin_bottom = vtMR
+                        if (itemBox.margin_top    !== marginT + vSlide) itemBox.margin_top    = marginT + vSlide
+                        if (itemBox.margin_bottom !== marginB - vSlide) itemBox.margin_bottom = marginB - vSlide
                     }
 
-                    // Visual nested sizing
+                    // Nested icon sizing
                     const overlay = itemBox?.get_first_child() as Gtk.Overlay
                     if (overlay) {
-                        const edgeAlign = dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END
                         overlay.set_size_request(tps, tps)
                         overlay.halign = edgeAlign
-                        const iconBox = overlay.get_child() as Gtk.Box
+                        const iconBox = overlay.get_child ? overlay.get_child() as Gtk.Box : null
                         if (iconBox) {
                             iconBox.set_size_request(tps, tps)
                             iconBox.halign = edgeAlign
                             iconBox.valign = Gtk.Align.CENTER
-                            iconBox.margin_bottom = 0
-                            const plateOverlay = iconBox.get_first_child() as Gtk.Overlay
-                            if (plateOverlay && plateOverlay.get_child) {
-                                const daIcon = plateOverlay.get_child()
-                                if (daIcon) {
-                                    daIcon.set_size_request(tps, tps)
-                                    ;(daIcon as any).set_content_width?.(tps)
-                                    ;(daIcon as any).set_content_height?.(tps)
-                                    const icon = (daIcon as any).get_next_sibling()
-                                    if (icon) icon.set_size_request(tps, tps)
-                                }
-                            } else {
-                                const icon = iconBox.get_first_child()
-                                if (icon) {
-                                    icon.set_size_request(tps, tps)
-                                    ;(icon as any).set_content_width?.(tps)
-                                    ;(icon as any).set_content_height?.(tps)
-                                }
+                            ;(iconBox as any).margin_bottom = 0
+                            const icon = (iconBox as any).get_first_child()
+                            if (icon) {
+                                icon.set_size_request(tps, tps)
+                                ;(icon as any).set_content_width?.(tps)
+                                ;(icon as any).set_content_height?.(tps)
                             }
                         }
                     }
                 }
             })
 
-            // Step 3: Vertical — valign=CENTER handles positioning; no margin_start needed.
-            const roundedTotalWidth = Math.round(totalBarWidth)
-
-            if (active || smoothedBarWidth !== roundedTotalWidth) {
-                smoothedBarWidth = roundedTotalWidth
+            // Step 3: Update bar height + input region
+            const roundedTotalHeight = Math.round(totalBarHeight)
+            if (active || smoothedBarHeight !== roundedTotalHeight) {
+                smoothedBarHeight = roundedTotalHeight
+                totalStaticHeight = roundedTotalHeight
                 updateSize()
-                updateInputRegion(smoothedBarWidth)
+                updateInputRegion(smoothedBarHeight)
                 active = true
             }
 
-            // Step 4: Slide spring (auto-hide)
+            // Step 4: Auto-hide slide — animate shim margin and DA drawing
             const slideDelta = slideTarget - slideCurrent
             const slideAbsDelta = Math.abs(slideDelta)
-            const slideAbsVel = Math.abs(slideVelocity)
+            const slideAbsVel   = Math.abs(slideVelocity)
             if (slideAbsDelta > 0.2 || slideAbsVel > 0.2) {
                 const slideForce = SLIDE_STIFFNESS * slideDelta - SLIDE_DAMPING * slideVelocity
                 slideVelocity += slideForce * dt
-                slideCurrent += slideVelocity * dt
-                const offset = Math.round(slideCurrent)
-                if (layerShellReady) Gtk4LayerShell.set_margin(win, sideEdge, -offset)
-                updateInputRegion(smoothedBarWidth)
+                slideCurrent  += slideVelocity * dt
+                applyShimSlide()
+                da.queue_draw()
+                updateInputRegion(smoothedBarHeight)
                 active = true
             } else if (slideCurrent !== slideTarget) {
-                slideCurrent = slideTarget
+                slideCurrent  = slideTarget
                 slideVelocity = 0
-                if (layerShellReady) Gtk4LayerShell.set_margin(win, sideEdge, -Math.round(slideTarget))
-                updateInputRegion(smoothedBarWidth)
+                applyShimSlide()
+                da.queue_draw()
+                updateInputRegion(smoothedBarHeight)
             }
 
-            if (!active) {
-                tickId = null
-                return false
-            }
+            if (!active) { tickId = null; return false }
             return true
         })
         if (seedFrame && da) da.queue_draw()
     }
 
-    let lastMousePos = -1000
-    const updateAllTargets = (mousePos: number, seedFrame = true) => {
+    const applyShimSlide = () => {
+        const slideOff = Math.round(slideCurrent)
+        if (dockSettings.position === 'left') {
+            const m = Math.max(-WIN_W, dockSettings.screenGap - slideOff)
+            if (shim.margin_start !== m) shim.margin_start = m
+        } else {
+            const m = Math.max(-WIN_W, dockSettings.screenGap - slideOff)
+            if (shim.margin_end !== m) shim.margin_end = m
+        }
+    }
+
+    let lastMouseY = -1000
+    const updateAllTargets = (mouseY: number, seedFrame = true) => {
         if (menuState.openCount > 0) return
 
-        lastMousePos = mousePos
-        const pX = lastMousePos
+        lastMouseY = mouseY
+        const draggingId = dragBus.draggingId
 
-        animRegistry.forEach((state, id) => {
-            if (pX === -1000) {
-                state.targetScale = 1.0
-                if (state.isSeparator) {
-                    state.targetWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.targetMargin = 0
-                    state.targetHeight = DOCK_CONSTANTS.SEPARATOR_HEIGHT
-                } else {
-                    state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.targetMargin = DOCK_CONSTANTS.ICON_MARGIN
-                    state.targetHeight = DOCK_CONSTANTS.PILL_HEIGHT
-                }
+        if (draggingId && previewIdx !== -1) {
+            const relY = lastMouseY - lockedAxisStart
+            const slotSize = DOCK_CONSTANTS.APP_SLOT
+            let targetIdx = Math.floor(relY / slotSize)
+
+            if (previewIdx !== -1) {
+                const currentSlotCenterY = previewIdx * slotSize + slotSize / 2
+                const distToCenter = relY - currentSlotCenterY
+                if (Math.abs(distToCenter) < slotSize * 0.50) targetIdx = previewIdx
+            }
+
+            if (targetIdx < 0) targetIdx = 0
+            if (targetIdx > currentTotalItems) targetIdx = currentTotalItems
+
+            if (targetIdx !== previewIdx) {
+                previewIdx = targetIdx
+                update(true)
+            }
+        }
+
+        // Vertical dock: no magnification — always rest state
+        animRegistry.forEach((state) => {
+            state.targetScale = 1.0
+            if (state.isSeparator) {
+                state.targetWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.targetMargin = 0
+                state.targetHeight = DOCK_CONSTANTS.SEPARATOR_HEIGHT
             } else {
-                const metrics = calculateDockItemMetrics(pX, state.staticCenter, state.isSeparator)
-                state.targetScale = metrics.scale
-                state.targetWidth = metrics.width
-                state.targetHeight = metrics.height || DOCK_CONSTANTS.PILL_HEIGHT
-                state.targetMargin = metrics.margin
-                state.targetTranslateY = metrics.translateY
+                state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.targetMargin = DOCK_CONSTANTS.ICON_MARGIN
+                state.targetHeight = DOCK_CONSTANTS.PILL_HEIGHT
             }
         })
         runUnifiedTick(seedFrame)
+    }
+
+    const updateInputRegion = (totalHeight: number) => {
+        const surface = win.get_native()?.get_surface()
+        if (!surface) return
+
+        if (appGridPanelOpen) { surface.set_input_region(null); return }
+
+        const region = new Cairo.Region()
+
+        if (fullscreenMode && !appGridPanelOpen && !isRevealed) {
+            surface.set_input_region(region); return
+        }
+
+        const slideOff = Math.round(slideCurrent)
+
+        if (dockSettings.autoHide && !isRevealed && slideOff >= PILL_SLIDE_DIST * 0.8) {
+            const TRIGGER_W = 4
+            const edgeX = dockSettings.position === 'left' ? 0 : WIN_W - TRIGGER_W
+            // @ts-ignore
+            region.unionRectangle({ x: edgeX, y: BAR_HEIGHT, width: TRIGGER_W, height: WIN_H - BAR_HEIGHT })
+            surface.set_input_region(region); return
+        }
+
+        if (menuState.openCount > 0) { surface.set_input_region(null); return }
+
+        const ph = totalHeight + DOCK_CONSTANTS.BASE_MARGIN * 2
+        const availH = WIN_H - BAR_HEIGHT
+        const py = BAR_HEIGHT + Math.max(0, Math.round((availH - ph) / 2))
+        const pillW = DOCK_CONSTANTS.PILL_HEIGHT + dockSettings.screenGap + 50 // buffer for tooltips
+        const edgeX = dockSettings.position === 'left' ? 0 : WIN_W - pillW
+        // @ts-ignore
+        region.unionRectangle({ x: edgeX, y: Math.max(0, py - 50), width: pillW, height: ph + 100 })
+        surface.set_input_region(region)
     }
 
     const motion = new Gtk.EventControllerMotion()
@@ -464,63 +516,41 @@ export default function DockVertical(gdkmonitor: any) {
         clearLeaveTimeout()
         if (dockSettings.autoHide && !isRevealed && !isSettlingIn) {
             setRevealed(true)
-            updateInputRegion(smoothedBarWidth)
+            updateInputRegion(smoothedBarHeight)
         }
     })
 
-    const updateInputRegion = (totalWidth: number) => {
-        const surface = win.get_native()?.get_surface()
-        if (!surface) return
-
-        if (appGridPanelOpen) {
-            surface.set_input_region(null)
-            return
-        }
-
-        const region = new Cairo.Region()
-
-        if (dockSettings.autoHide && !isRevealed && slideTarget > 0) {
-            const edgeX = dockSettings.position === 'left' ? WIN_W - 4 : 0
-            // @ts-ignore
-            region.unionRectangle({ x: edgeX, y: 0, width: 4, height: WIN_H })
-        } else {
-            const ph = smoothedBarWidth + DOCK_CONSTANTS.BASE_MARGIN * 2
-            const py = Math.max(0, Math.round((verticalUsableH - ph) / 2))
-            // @ts-ignore
-            region.unionRectangle({ x: 0, y: py, width: WIN_W, height: ph })
-        }
-        surface.set_input_region(region)
-    }
-
     let leaveTimeout: number | null = null
     const clearLeaveTimeout = () => {
-        if (leaveTimeout) {
-            GLib.source_remove(leaveTimeout)
-            leaveTimeout = null
-        }
+        if (leaveTimeout) { GLib.source_remove(leaveTimeout); leaveTimeout = null }
     }
 
     win.add_controller(motion)
-    motion.connect("motion", (controller, x, y) => {
+    motion.connect("motion", (_controller, x, y) => {
         if (appGridPanelOpen) return
         if (fullscreenMode) return
         if (dockSettings.autoHide && !isRevealed && !isSettlingIn) {
             setRevealed(true)
-            updateInputRegion(smoothedBarWidth)
+            updateInputRegion(smoothedBarHeight)
         }
 
-        if (!dragBus.draggingId) {
-            const xLimit = dockSettings.position === 'right'
-                ? WIN_W - DOCK_CONSTANTS.EXCLUSIVE_ZONE
-                : DOCK_CONSTANTS.EXCLUSIVE_ZONE
-            const beyondPill = dockSettings.position === 'right' ? x < xLimit : x > xLimit
-            if (beyondPill) {
-                updateAllTargets(-1000)
-            } else {
-                clearLeaveTimeout()
-                // Vertical dock has no magnification — tooltips handled per-item.
-            }
+        clearLeaveTimeout()
+
+        if (dragBus.draggingId || isDndEnding) {
+            updateAllTargets(y)
+            return
         }
+
+        // For vertical: x determines if cursor is on the pill side
+        const xLimit = dockSettings.position === 'right'
+            ? WIN_W - DOCK_CONSTANTS.EXCLUSIVE_ZONE
+            : DOCK_CONSTANTS.EXCLUSIVE_ZONE
+        const beyondPill = dockSettings.position === 'right' ? x < xLimit : x > xLimit
+        if (beyondPill) {
+            updateAllTargets(-1000)
+        }
+        // No magnification for vertical — just track Y for drag reorder
+        lastMouseY = y
     })
     motion.connect("leave", () => {
         cursorInDock = false
@@ -540,13 +570,13 @@ export default function DockVertical(gdkmonitor: any) {
                         leaveTimeout = null
                         if (isDndEnding || dragBus.draggingId || menuState.openCount > 0 || appGridPanelOpen) return GLib.SOURCE_REMOVE
                         setRevealed(false)
-                        updateInputRegion(smoothedBarWidth)
+                        updateInputRegion(smoothedBarHeight)
                         return GLib.SOURCE_REMOVE
                     })
                 } else {
                     if (menuState.openCount === 0 && !appGridPanelOpen) {
                         setRevealed(false)
-                        updateInputRegion(smoothedBarWidth)
+                        updateInputRegion(smoothedBarHeight)
                     }
                 }
             }
@@ -554,28 +584,11 @@ export default function DockVertical(gdkmonitor: any) {
         })
     })
 
-    const shim = new Gtk.Box({
-        valign: Gtk.Align.FILL,
-        halign: dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END,
-        margin_start: dockSettings.position === 'left'  ? dockSettings.screenGap : 0,
-        margin_end:   dockSettings.position === 'right' ? dockSettings.screenGap : 0,
-        height_request: -1,
-        vexpand: true,
-        overflow: Gtk.Overflow.VISIBLE,
-    })
-    shim.append(bar)
-
-    layout.set_child(da)
-    layout.add_overlay(shim)
-
     let updateLock = false
     let needsUpdate = false
 
     const update = (skipTargets = false) => {
-        if (updateLock) {
-            needsUpdate = true
-            return bar
-        }
+        if (updateLock) { needsUpdate = true; return bar }
         updateLock = true
         try {
             const currentIconTheme = Theme.iconTheme
@@ -586,8 +599,7 @@ export default function DockVertical(gdkmonitor: any) {
             if (!tickId && menuState.openCount === 0) runUnifiedTick()
 
             if (menuState.openCount > 0 || status.isAnyOverlayOpen) {
-                needsUpdate = true
-                return bar
+                needsUpdate = true; return bar
             }
 
             needsUpdate = false
@@ -597,9 +609,7 @@ export default function DockVertical(gdkmonitor: any) {
                 const rawClass = c.class || ""
                 const key = appService.resolveHyprlandClass(rawClass)
                 if (!key) return
-                if (!groupedClients[key]) {
-                    groupedClients[key] = { addresses: [], displayClass: rawClass, title: c.title }
-                }
+                if (!groupedClients[key]) groupedClients[key] = { addresses: [], displayClass: rawClass, title: c.title }
                 groupedClients[key].addresses.push(c.address)
             })
 
@@ -608,11 +618,8 @@ export default function DockVertical(gdkmonitor: any) {
             currentGroupKeys.forEach(k => { if (!unpinnedOpenOrder.has(k)) unpinnedOpenOrder.set(k, unpinnedSeq++) })
 
             const draggingId = dragBus.draggingId
-            const hoverId = dragBus.hoverId
-
             let effectivePinnedList = [...pinnedState.list]
             let runningUnpinnedKeys: string[] = []
-
             const groupedKeys = Object.keys(groupedClients)
             const nsid = draggingId ? norm(draggingId) : ""
 
@@ -624,11 +631,11 @@ export default function DockVertical(gdkmonitor: any) {
                 }
 
                 effectivePinnedList = effectivePinnedList.filter(p => norm(p) !== nsid)
-                runningUnpinnedKeys = groupedKeys.filter(k => k !== nsid && k !== "home-shortcut" && !pinnedState.list.some(p => { const lid = norm(p); return appMatch(k, lid) }))
+                runningUnpinnedKeys = groupedKeys.filter(k => k !== nsid && k !== "home-shortcut" &&
+                    !pinnedState.list.some(p => appMatch(k, norm(p))))
                     .sort((a, b) => (unpinnedOpenOrder.get(a) ?? Infinity) - (unpinnedOpenOrder.get(b) ?? Infinity))
 
                 const pinnedBoundary = 2 + effectivePinnedList.length
-
                 if (previewIdx !== -1) {
                     if (previewIdx <= pinnedBoundary) {
                         let insertPos = previewIdx - 2
@@ -644,7 +651,8 @@ export default function DockVertical(gdkmonitor: any) {
                 }
             } else {
                 lastDraggingId = ""
-                runningUnpinnedKeys = groupedKeys.filter(k => k !== "home-shortcut" && !pinnedState.list.some(p => { const lid = norm(p); return appMatch(k, lid) }))
+                runningUnpinnedKeys = groupedKeys.filter(k => k !== "home-shortcut" &&
+                    !pinnedState.list.some(p => appMatch(k, norm(p))))
                     .sort((a, b) => (unpinnedOpenOrder.get(a) ?? Infinity) - (unpinnedOpenOrder.get(b) ?? Infinity))
             }
 
@@ -656,6 +664,7 @@ export default function DockVertical(gdkmonitor: any) {
                 currentIds.add(id)
                 if (widgetCache.has(id)) return widgetCache.get(id)!
                 const widget = factory()
+                const isSep = id.startsWith("sep-")
                 const revealer = new (Gtk as any).Revealer({
                     css_classes: ["cd-revealer"],
                     transition_type: dockSettings.position === 'left'
@@ -663,15 +672,12 @@ export default function DockVertical(gdkmonitor: any) {
                         : Gtk.RevealerTransitionType.SLIDE_LEFT,
                     transition_duration: 300,
                     child: widget,
-                    reveal_child: firstRender
+                    reveal_child: firstRender,
                 })
                 revealer.set_overflow(Gtk.Overflow.VISIBLE)
-                // Pre-size vertical revealers to rest state
-                const isSep = id.startsWith("sep-")
                 revealer.height_request = isSep ? DOCK_CONSTANTS.SEPARATOR_SLOT : DOCK_CONSTANTS.APP_SLOT
                 revealer.width_request  = DOCK_CONSTANTS.PILL_HEIGHT
-                revealer.overflow = Gtk.Overflow.VISIBLE
-                revealer.halign = Gtk.Align.FILL
+                revealer.halign = edgeAlign
                 if (!firstRender) GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { revealer.reveal_child = true; return GLib.SOURCE_REMOVE })
                 widgetCache.set(id, revealer)
                 return revealer
@@ -682,19 +688,18 @@ export default function DockVertical(gdkmonitor: any) {
             }
 
             widgetCache.forEach(w => {
-                const inner = (w as any).get_child()
+                const inner = (w as any).get_child?.()
                 if (inner && (inner as any).popdown) (inner as any).popdown()
             })
 
             const findApp = (searchId: string) => appService.getResolvedApp(searchId)
-
             const userName = GLib.get_user_name()
             const prettyName = userName.charAt(0).toUpperCase() + userName.slice(1)
 
             const homeItem = {
                 name: prettyName,
                 icon_name: ["finder", "system-file-manager", "user-home", "folder-home", "folder"],
-                launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(e => { print(e) })
+                launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(print)
             }
             const homeAddrs = groupedClients["home-shortcut"]?.addresses || []
             configs.push({
@@ -702,11 +707,9 @@ export default function DockVertical(gdkmonitor: any) {
                 syncData: { addrs: homeAddrs, clientTitle: undefined, appItem: homeItem as any },
                 isPinned: true,
                 factory: (vc) => {
-                    const w = DockItem({
-                        appId: "home-shortcut", appItem: homeItem as any, updateDock: update,
+                    const w = DockItem({ appId: "home-shortcut", appItem: homeItem as any, updateDock: update,
                         register: (id, s) => animRegistry.set(id, s), addresses: homeAddrs,
-                        clientTitle: undefined, onPin, onUnpin, onReorder, isPinned: true, cleanId: "home-shortcut"
-                    }, bar)
+                        clientTitle: undefined, onPin, onUnpin, onReorder, isPinned: true, cleanId: "home-shortcut" }, bar)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
                 }
@@ -723,11 +726,9 @@ export default function DockVertical(gdkmonitor: any) {
                 syncData: { addrs: [], clientTitle: undefined, appItem: launcherItem as any },
                 isPinned: true,
                 factory: (vc) => {
-                    const w = DockItem({
-                        appId: "launcher", appItem: launcherItem as any, updateDock: update,
+                    const w = DockItem({ appId: "launcher", appItem: launcherItem as any, updateDock: update,
                         register: (id, s) => animRegistry.set(id, s), addresses: [],
-                        clientTitle: undefined, onPin, onUnpin, onReorder, isPinned: true, cleanId: "launcher"
-                    }, bar)
+                        clientTitle: undefined, onPin, onUnpin, onReorder, isPinned: true, cleanId: "launcher" }, bar)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
                 }
@@ -744,22 +745,16 @@ export default function DockVertical(gdkmonitor: any) {
 
                 if (groupKey && groupedClients[groupKey]) {
                     const group = groupedClients[groupKey]
-                    addrs = group.addresses
-                    clientTitle = group.title
+                    addrs = group.addresses; clientTitle = group.title
                     delete groupedClients[groupKey]
-                    if (!appItem) {
-                        appItem = { name: clientTitle || group.displayClass, icon_name: originalId || group.displayClass || lid, launch: getLaunch(lid) } as any
-                    }
-                    if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
-                        if (typeof appItem.icon_name === "string") appItem.icon_name = appItem.icon_name.replace(/-default$/i, "-Default")
-                    }
+                    if (!appItem) appItem = { name: clientTitle || group.displayClass, icon_name: originalId || lid, launch: getLaunch(lid) } as any
+                    if (lid.startsWith("chrome-") && lid.endsWith("-default") && typeof (appItem as any).icon_name === "string")
+                        (appItem as any).icon_name = (appItem as any).icon_name.replace(/-default$/i, "-Default")
                 }
 
                 if (appItem) {
-                    if (lid.startsWith("chrome-") && lid.endsWith("-default")) {
-                        // @ts-ignore
-                        appItem.icon_name = originalId.replace(/-default$/i, "-Default")
-                    }
+                    if (lid.startsWith("chrome-") && lid.endsWith("-default"))
+                        (appItem as any).icon_name = originalId.replace(/-default$/i, "-Default")
                     if (lid === "crystal-shell-settings") {
                         appItem.launch = () => { shellActions.toggleSettings?.() }
                     } else {
@@ -767,14 +762,11 @@ export default function DockVertical(gdkmonitor: any) {
                     }
                     configs.push({
                         id: lid, width: DOCK_CONSTANTS.APP_SLOT,
-                        syncData: { addrs, clientTitle, appItem: appItem! },
-                        isPinned: true,
+                        syncData: { addrs, clientTitle, appItem: appItem! }, isPinned: true,
                         factory: (vc) => {
-                            const w = DockItem({
-                                appId: lid, appItem: appItem!, updateDock: update,
+                            const w = DockItem({ appId: lid, appItem: appItem!, updateDock: update,
                                 register: (id, s) => animRegistry.set(id, s), addresses: addrs,
-                                clientTitle, onPin, onUnpin, onReorder, isPinned: true, cleanId: lid
-                            }, bar)
+                                clientTitle, onPin, onUnpin, onReorder, isPinned: true, cleanId: lid }, bar)
                             if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                             return w
                         }
@@ -783,23 +775,18 @@ export default function DockVertical(gdkmonitor: any) {
                     const info = appService.getAppInfo(lid)
                     const displayName = info?.get_name() || lid
                     let icon = info?.get_id() || originalId
-                    if (lid.startsWith("chrome-") && lid.endsWith("-default") && typeof icon === "string") {
+                    if (lid.startsWith("chrome-") && lid.endsWith("-default") && typeof icon === "string")
                         icon = icon.replace(/-default$/i, "-Default")
-                    }
                     const ghostLaunch = lid === "crystal-shell-settings"
-                        ? () => { shellActions.toggleSettings?.() }
-                        : getLaunch(lid)
+                        ? () => { shellActions.toggleSettings?.() } : getLaunch(lid)
                     const ghost = { name: displayName, icon_name: icon, launch: ghostLaunch } as any
                     configs.push({
                         id: lid, width: DOCK_CONSTANTS.APP_SLOT,
-                        syncData: { addrs: [], clientTitle: undefined, appItem: ghost },
-                        isPinned: true,
+                        syncData: { addrs: [], clientTitle: undefined, appItem: ghost }, isPinned: true,
                         factory: (vc) => {
-                            const w = DockItem({
-                                appId: lid, appItem: ghost, updateDock: update,
+                            const w = DockItem({ appId: lid, appItem: ghost, updateDock: update,
                                 register: (id, s) => animRegistry.set(id, s), addresses: [],
-                                clientTitle: undefined, onPin, onUnpin, onReorder, isPinned: true, cleanId: lid
-                            }, bar)
+                                clientTitle: undefined, onPin, onUnpin, onReorder, isPinned: true, cleanId: lid }, bar)
                             if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                             return w
                         }
@@ -808,13 +795,13 @@ export default function DockVertical(gdkmonitor: any) {
             })
 
             if (runningUnpinnedKeys.length > 0) {
-                const separatorId = "sep-running"
+                const sepId = "sep-running"
                 configs.push({
-                    id: separatorId, width: DOCK_CONSTANTS.SEPARATOR_SLOT,
+                    id: sepId, width: DOCK_CONSTANTS.SEPARATOR_SLOT,
                     syncData: { addrs: [], clientTitle: undefined, appItem: undefined },
                     isPinned: true, isSeparator: true,
                     factory: (vc) => {
-                        const w = Separator(separatorId, update, (id, s) => animRegistry.set(id, s), onReorder)
+                        const w = Separator(sepId, update, (id, s) => animRegistry.set(id, s), onReorder)
                         if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                         return w
                     }
@@ -825,21 +812,16 @@ export default function DockVertical(gdkmonitor: any) {
                 const group = groupedClients[k]
                 const lid = k.toLowerCase().replace(".desktop", "")
                 let appItem = findApp(lid) || findApp(group?.displayClass || "")
-                if (!appItem) {
-                    appItem = { name: group?.title || group?.displayClass || k, icon_name: lid, launch: getLaunch(lid) } as any
-                }
-                if (lid === "crystal-shell-settings") appItem.launch = () => { shellActions.toggleSettings?.() }
-
+                if (!appItem) appItem = { name: group?.title || group?.displayClass || k, icon_name: lid, launch: getLaunch(lid) } as any
+                if (lid === "crystal-shell-settings") appItem!.launch = () => { shellActions.toggleSettings?.() }
                 configs.push({
                     id: lid, width: DOCK_CONSTANTS.APP_SLOT,
                     syncData: { addrs: group?.addresses || [], clientTitle: group?.title, appItem: appItem! },
                     isPinned: false,
                     factory: (vc) => {
-                        const w = DockItem({
-                            appId: lid, appItem: appItem!, updateDock: update,
+                        const w = DockItem({ appId: lid, appItem: appItem!, updateDock: update,
                             register: (id, s) => animRegistry.set(id, s), addresses: group?.addresses || [],
-                            clientTitle: group?.title, onPin, onUnpin, onReorder, isPinned: false, cleanId: lid
-                        }, bar)
+                            clientTitle: group?.title, onPin, onUnpin, onReorder, isPinned: false, cleanId: lid }, bar)
                         if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                         return w
                     }
@@ -864,15 +846,12 @@ export default function DockVertical(gdkmonitor: any) {
             }
             configs.push({
                 id: "special:trash", width: DOCK_CONSTANTS.APP_SLOT,
-                syncData: { addrs: [], clientTitle: undefined, appItem: trash as any },
-                isPinned: true,
+                syncData: { addrs: [], clientTitle: undefined, appItem: trash as any }, isPinned: true,
                 factory: (vc) => {
-                    const w = DockItem({
-                        appId: "special:trash", appItem: trash as any, updateDock: update,
+                    const w = DockItem({ appId: "special:trash", appItem: trash as any, updateDock: update,
                         register: (id, s) => animRegistry.set(id, s), addresses: [],
                         clientTitle: undefined, onPin: () => {}, onUnpin: () => {}, onReorder: () => {},
-                        isPinned: true, cleanId: "special:trash"
-                    }, bar)
+                        isPinned: true, cleanId: "special:trash" }, bar)
                     if ((w as any).setVirtualCenter) (w as any).setVirtualCenter(vc)
                     return w
                 }
@@ -884,6 +863,7 @@ export default function DockVertical(gdkmonitor: any) {
                 processed.add(c.id); return true
             })
 
+            // Slide-spring bookkeeping (reorder animation)
             const _slideOldPos = new Map<string, number>()
             const _slideOldSet = new Set(orderedIds)
             let _slideAccOld = 0
@@ -895,23 +875,23 @@ export default function DockVertical(gdkmonitor: any) {
 
             orderedIds = validConfigs.map(c => c.id)
             currentTotalItems = validConfigs.length
+            totalStaticHeight = validConfigs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
 
-            totalStaticWidth = validConfigs.reduce((sum, c) => sum + (c.width || DOCK_CONSTANTS.APP_SLOT), 0)
-
-            const axisSize = verticalUsableH
-            const axisStart = Math.max(0, (axisSize - totalStaticWidth) / 2)
+            // staticCenter = Y coordinate within window space
+            const axisAvail = WIN_H - BAR_HEIGHT
+            const axisStart = BAR_HEIGHT + Math.max(0, (axisAvail - totalStaticHeight) / 2)
             let runningAxis = axisStart
 
             const finalItems = validConfigs.map((c) => {
-                const slotWidth = c.width || DOCK_CONSTANTS.APP_SLOT
-                const myCenter = runningAxis + (slotWidth / 2)
-                runningAxis += slotWidth
+                const slotH = c.width || DOCK_CONSTANTS.APP_SLOT
+                const myCenter = runningAxis + (slotH / 2)
+                runningAxis += slotH
 
                 const widget = getOrCreateItem(c.id, () => c.factory(myCenter))
                 const state = animRegistry.get(c.id)
                 if (state) state.staticCenter = myCenter
 
-                const inner = (widget as any).get_child ? (widget as any).get_child() : widget
+                const inner = (widget as any).get_child?.() ?? widget
                 if (inner && (inner as any).setVirtualCenter) (inner as any).setVirtualCenter(myCenter)
                 if (inner && (inner as any).syncState && (c as any).syncData) {
                     const d = (c as any).syncData
@@ -920,30 +900,28 @@ export default function DockVertical(gdkmonitor: any) {
                 return widget
             })
 
-            for (const [id, w] of widgetCache) {
-                if (!currentIds.has(id)) {
-                    widgetCache.delete(id)
-                    animRegistry.delete(id)
-                }
+            for (const [id] of widgetCache) {
+                if (!currentIds.has(id)) { widgetCache.delete(id); animRegistry.delete(id) }
             }
 
+            // Reorder slide spring: detect position changes
             let _slideAccNew = 0
             orderedIds.forEach(id => {
                 const s = animRegistry.get(id)
-                const newX = _slideAccNew
+                const newY = _slideAccNew
                 _slideAccNew += s ? (s.currentWidth + s.currentMargin * 2) : DOCK_CONSTANTS.APP_SLOT
                 if (!s || !_slideOldSet.has(id)) return
-                const oldX = _slideOldPos.get(id)
-                if (oldX === undefined) return
-                const disp = oldX - newX
+                const oldY = _slideOldPos.get(id)
+                if (oldY === undefined) return
+                const disp = oldY - newY
                 if (Math.abs(disp) > 1) {
                     s.currentSlideX = (s.currentSlideX || 0) + disp
-                    s.velocitySlideX = 0
-                    s.targetSlideX = 0
+                    s.velocitySlideX = 0; s.targetSlideX = 0
                     if (!tickId) runUnifiedTick()
                 }
             })
 
+            // Reconcile bar children
             let currentChild = bar.get_first_child()
             let prevSibling: Gtk.Widget | null = null
             finalItems.forEach(item => {
@@ -958,7 +936,6 @@ export default function DockVertical(gdkmonitor: any) {
                 prevSibling = item
                 currentChild = item ? (item as any).get_next_sibling() : null
             })
-
             const finalSet = new Set(finalItems)
             let c = bar.get_first_child()
             while (c) {
@@ -967,46 +944,45 @@ export default function DockVertical(gdkmonitor: any) {
                 c = next
             }
 
-            let totalCurrentWidth = 0
-            const pX_sync = lastMousePos
-
+            // Pre-apply rest-state layout so first tick has correct starting values
+            let totalCurrentHeight = 0
             orderedIds.forEach((id) => {
                 const state = animRegistry.get(id)
                 if (!state) return
-                const metrics = calculateDockItemMetrics(pX_sync, state.staticCenter, state.isSeparator)
-                state.targetScale = metrics.scale
-                state.targetWidth = metrics.width
-                state.targetHeight = metrics.height || DOCK_CONSTANTS.PILL_HEIGHT
-                state.targetMargin = metrics.margin
-                state.targetTranslateY = metrics.translateY
+
+                state.targetScale = 1.0
+                if (state.isSeparator) {
+                    state.targetWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.targetMargin = 0
+                    state.targetHeight = DOCK_CONSTANTS.SEPARATOR_HEIGHT
+                } else {
+                    state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.targetMargin = DOCK_CONSTANTS.ICON_MARGIN
+                    state.targetHeight = DOCK_CONSTANTS.PILL_HEIGHT
+                }
 
                 if (firstRender || !tickId) {
-                    state.currentScale = metrics.scale
-                    state.currentWidth = metrics.width
-                    state.currentMargin = metrics.margin
+                    state.currentScale = state.targetScale
+                    state.currentWidth = state.targetWidth
+                    state.currentMargin = state.targetMargin
 
-                    // Vertical: pre-apply full at-rest slot layout so the first tick finds
-                    // every height/margin already correct (prevents stretch-on-hover).
                     if (!state.isSeparator) {
-                        const edgeAlign = dockSettings.position === 'left' ? Gtk.Align.START : Gtk.Align.END
-                        const widget = widgetCache.get(id)
-                        if (widget) {
+                        const gtkRev = widgetCache.get(id) as any
+                        if (gtkRev) {
                             const slotH = Math.round(state.currentWidth + 2 * state.currentMargin)
                             const tps   = Math.round(DOCK_CONSTANTS.ICON_SIZE * state.currentScale)
-                            const marginL = Math.floor((slotH - tps) / 2)
-                            const marginR = Math.ceil((slotH - tps) / 2)
-                            if ((widget as any).height_request !== slotH) (widget as any).height_request = slotH
-                            if ((widget as any).width_request !== DOCK_CONSTANTS.PILL_HEIGHT) (widget as any).width_request = DOCK_CONSTANTS.PILL_HEIGHT
-                            const itemBoxV = (widget as any).get_child ? (widget as any).get_child() : null
+                            const mT = Math.floor((slotH - tps) / 2)
+                            const mB = Math.ceil ((slotH - tps) / 2)
+                            if (gtkRev.height_request !== slotH) gtkRev.height_request = slotH
+                            if (gtkRev.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) gtkRev.width_request = DOCK_CONSTANTS.PILL_HEIGHT
+                            const itemBoxV = gtkRev.get_child?.()
                             if (itemBoxV) {
                                 if (itemBoxV.height_request !== tps) itemBoxV.height_request = tps
-                                if (itemBoxV.margin_top !== marginL) itemBoxV.margin_top = marginL
-                                if (itemBoxV.margin_bottom !== marginR) itemBoxV.margin_bottom = marginR
-                                const overlayV = itemBoxV.get_first_child ? itemBoxV.get_first_child() : null
+                                if (itemBoxV.margin_top    !== mT)   itemBoxV.margin_top    = mT
+                                if (itemBoxV.margin_bottom !== mB)   itemBoxV.margin_bottom = mB
+                                const overlayV = itemBoxV.get_first_child?.()
                                 if (overlayV) {
                                     overlayV.set_size_request(tps, tps)
                                     overlayV.halign = edgeAlign
-                                    const iconBoxV = overlayV.get_child ? overlayV.get_child() : null
+                                    const iconBoxV = overlayV.get_child?.()
                                     if (iconBoxV) {
                                         iconBoxV.set_size_request(tps, tps)
                                         iconBoxV.halign = edgeAlign
@@ -1018,16 +994,17 @@ export default function DockVertical(gdkmonitor: any) {
                         }
                     }
                 }
-                totalCurrentWidth += state.currentWidth + (state.currentMargin * 2)
+                totalCurrentHeight += state.currentWidth + (state.currentMargin * 2)
             })
 
-            // Always snap for vertical to avoid one-frame lag
-            smoothedBarWidth = totalCurrentWidth
-            updateSize()
-            firstRender = false
+            if (firstRender || !tickId) {
+                smoothedBarHeight = totalCurrentHeight
+                updateSize()
+                firstRender = false
+            }
 
             if (!tickId) runUnifiedTick()
-            if (!skipTargets) updateAllTargets(lastMousePos, false)
+            if (!skipTargets) updateAllTargets(lastMouseY, false)
             updateSize()
             return bar
         } catch (e) {
@@ -1049,17 +1026,12 @@ export default function DockVertical(gdkmonitor: any) {
         Gtk4LayerShell.init_for_window(win)
         layerInit = true
     } catch (e) {
-        console.warn("Gtk4LayerShell init failed (not on Wayland?): " + e)
+        console.warn("Gtk4LayerShell init failed: " + e)
     }
     win.set_size_request(WIN_W, WIN_H)
     win.set_decorated(false)
 
-    try {
-        // @ts-ignore
-        win.app_paintable = true
-        // @ts-ignore
-        win.input_shape_combine_region(null)
-    } catch (e) {}
+    try { (win as any).app_paintable = true } catch (e) {}
 
     if (layerInit) {
         try {
@@ -1067,45 +1039,27 @@ export default function DockVertical(gdkmonitor: any) {
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
             Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
 
+            // Full-screen: anchor side + TOP + BOTTOM, no margin_top
             Gtk4LayerShell.set_anchor(win, sideEdge, true)
             Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
             Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.BOTTOM, true)
-            Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, BAR_HEIGHT)
 
-            if (orderedIds.length > 0) {
-                let total = 0
-                orderedIds.forEach(id => {
-                    const s = animRegistry.get(id)
-                    if (s) total += s.currentWidth + (s.currentMargin * 2)
-                })
-                updateInputRegion(total)
-            }
-
-            layerShellReady = true
-            // Vertical dock never sets exclusive zone (would push bar)
+            // Vertical dock: no exclusive zone (would push the bar)
             Gtk4LayerShell.set_exclusive_zone(win, 0)
 
+            layerShellReady = true
+
+            // Publish actual pill width so CC/NC/NotifPopups can offset correctly
+            dockSideState.update(dockSettings.position, DOCK_CONSTANTS.EXCLUSIVE_ZONE)
+
             if (dockSettings.autoHide) {
-                Gtk4LayerShell.set_margin(win, sideEdge, -(WIN_W - 4))
+                applyShimSlide()  // initial hidden position
             }
 
-            // Publish side width so CC/NC/Popups offset themselves
-            dockSideState.update(dockSettings.position, WIN_W)
-
             win.connect("realize", () => {
-                if (orderedIds.length > 0) {
-                    let total = 0
-                    orderedIds.forEach(id => {
-                        const s = animRegistry.get(id)
-                        if (s) total += s.currentWidth + (s.currentMargin * 2)
-                    })
-                    updateInputRegion(total)
-                } else {
-                    updateInputRegion(totalStaticWidth)
-                }
+                updateInputRegion(totalStaticHeight)
                 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
-                    isSettlingIn = false
-                    return GLib.SOURCE_REMOVE
+                    isSettlingIn = false; return GLib.SOURCE_REMOVE
                 })
             })
         } catch (e) { console.error(e) }
@@ -1119,8 +1073,23 @@ export default function DockVertical(gdkmonitor: any) {
         })
     }
 
+    const DOCK_PERMANENT_IDS = new Set(["home-shortcut", "launcher", "trash", "crystal-shell-settings"])
+    const pruneOrphanedPins = () => {
+        const before = pinnedState.list.length
+        pinnedState.list = pinnedState.list.filter(id => {
+            if (!id || id.startsWith("special:")) return true
+            if (DOCK_PERMANENT_IDS.has(id.toLowerCase())) return true
+            const found = !!appService.getAppInfo(id)
+            if (!found) console.log(`[DockV] Pruning orphaned pin: "${id}"`)
+            return found
+        })
+        if (pinnedState.list.length < before) savePinned()
+    }
+
     const cConn = hs.connect("changed", throttledUpdate)
     const aConn = appService.connect(throttledUpdate)
+    const appStructConn = appService.connectStructural(pruneOrphanedPins)
+    const pinnedConn = onPinnedChanged(throttledUpdate)
 
     const overlayRecovery = () => { if (!status.isAnyOverlayOpen && needsUpdate) throttledUpdate() }
     status.connect("notify::cc-open", overlayRecovery)
@@ -1144,7 +1113,7 @@ export default function DockVertical(gdkmonitor: any) {
                 leaveTimeout = null
                 if (menuState.openCount > 0 || isDndEnding || dragBus.draggingId) return GLib.SOURCE_REMOVE
                 setRevealed(false)
-                updateInputRegion(smoothedBarWidth)
+                updateInputRegion(smoothedBarHeight)
                 return GLib.SOURCE_REMOVE
             })
         }
@@ -1156,15 +1125,14 @@ export default function DockVertical(gdkmonitor: any) {
             const nsid = norm(draggingId)
             let virtualPinned = [...pinnedState.list]
             if (!virtualPinned.some(p => norm(p) === nsid)) virtualPinned.push(draggingId)
-            lockedStaticWidth = calculateStableWidth(virtualPinned)
-            const screenWidth = gdkmonitor.get_geometry().width
-            lockedStartX = (screenWidth - lockedStaticWidth) / 2
+            lockedStaticHeight = calculateStableHeight(virtualPinned)
+            lockedAxisStart = BAR_HEIGHT + Math.max(0, (WIN_H - BAR_HEIGHT - lockedStaticHeight) / 2)
             const currentIdx = pinnedState.list.findIndex(p => norm(p) === nsid)
             if (currentIdx !== -1) previewIdx = currentIdx + 2
             else previewIdx = 2 + pinnedState.list.length
             throttledUpdate()
         } else {
-            if (previewIdx >= 0 && lastDraggingId && lastMousePos >= 0) {
+            if (previewIdx >= 0 && lastDraggingId && lastMouseY >= 0) {
                 onReorder(lastDraggingId)
             } else {
                 previewIdx = -1
@@ -1175,9 +1143,8 @@ export default function DockVertical(gdkmonitor: any) {
             GLib.timeout_add(GLib.PRIORITY_HIGH, 200, () => { dndActive = false; return GLib.SOURCE_REMOVE })
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
                 if (!dragBus.draggingId) {
-                    lastDraggingId = ""
-                    previewIdx = -1
-                    if (lastMousePos < 0) updateAllTargets(-1000)
+                    lastDraggingId = ""; previewIdx = -1
+                    if (lastMouseY < 0) updateAllTargets(-1000)
                     update()
                 }
                 return GLib.SOURCE_REMOVE
@@ -1187,20 +1154,39 @@ export default function DockVertical(gdkmonitor: any) {
 
     const sConn = onDockSettingsChanged(() => {
         syncConstants()
-        win.set_size_request(WIN_W, WIN_H)
-        // Vertical dock: no exclusive zone changes, no margin_bottom updates
+        animRegistry.forEach((state) => {
+            if (state.isSeparator) {
+                state.targetWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.currentWidth = DOCK_CONSTANTS.SEPARATOR_SLOT; state.velocityWidth = 0
+                state.targetHeight = DOCK_CONSTANTS.SEPARATOR_HEIGHT; state.currentHeight = DOCK_CONSTANTS.SEPARATOR_HEIGHT; state.velocityHeight = 0
+            } else {
+                state.targetScale = 1.0; state.currentScale = 1.0; state.velocityScale = 0
+                state.targetWidth = DOCK_CONSTANTS.ICON_SIZE; state.currentWidth = DOCK_CONSTANTS.ICON_SIZE; state.velocityWidth = 0
+                state.targetMargin = DOCK_CONSTANTS.ICON_MARGIN; state.currentMargin = DOCK_CONSTANTS.ICON_MARGIN; state.velocityMargin = 0
+                state.targetHeight = DOCK_CONSTANTS.PILL_HEIGHT; state.currentHeight = DOCK_CONSTANTS.PILL_HEIGHT; state.velocityHeight = 0
+            }
+        })
+        // Update shim margins for new screenGap
+        if (dockSettings.position === 'left') {
+            shim.margin_start = dockSettings.screenGap - Math.round(slideCurrent)
+        } else {
+            shim.margin_end = dockSettings.screenGap - Math.round(slideCurrent)
+        }
+        dockSideState.update(dockSettings.position, DOCK_CONSTANTS.EXCLUSIVE_ZONE)
         update()
     })
 
     win.connect("destroy", () => {
         if (tickId) { bar.remove_tick_callback(tickId); tickId = null }
         if (updateTimer) { GLib.source_remove(updateTimer); updateTimer = null }
+        if (leaveTimeout) { GLib.source_remove(leaveTimeout); leaveTimeout = null }
         try { if (cConn) hs.disconnect(cConn) } catch (e) {}
         try { if (aConn) aConn() } catch (e) {}
         try { if (pConn) pConn() } catch (e) {}
         try { if (dConn) dConn() } catch (e) {}
         try { if (sConn) sConn() } catch (e) {}
         try { if (mConn) mConn() } catch (e) {}
+        try { appStructConn() } catch (e) {}
+        try { pinnedConn() } catch (e) {}
     })
 
     ;(win as any).setLauncherMode = (active: boolean) => {
@@ -1208,18 +1194,15 @@ export default function DockVertical(gdkmonitor: any) {
         if (active) {
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
             if (dockSettings.autoHide && !isRevealed) {
-                isRevealed = true
-                slideTarget = 0
-                runUnifiedTick(true)
+                isRevealed = true; slideTarget = 0; runUnifiedTick(true)
             }
         } else {
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
-            updateInputRegion(smoothedBarWidth)
+            updateInputRegion(smoothedBarHeight)
             if (dockSettings.autoHide && !cursorInDock) {
                 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
                     if (!cursorInDock && menuState.openCount === 0) {
-                        setRevealed(false)
-                        updateInputRegion(smoothedBarWidth)
+                        setRevealed(false); updateInputRegion(smoothedBarHeight)
                     }
                     return GLib.SOURCE_REMOVE
                 })
@@ -1231,7 +1214,6 @@ export default function DockVertical(gdkmonitor: any) {
     let appGridPanelOpen = false
 
     const appGrid = AppGridPanel(gdkmonitor, () => closeAppGridPanel())
-
     appGrid.setKeyboardModeCallback(
         () => { if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE) },
         () => { if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND) }
@@ -1256,10 +1238,7 @@ export default function DockVertical(gdkmonitor: any) {
         appGrid.onShow()
         const surface = win.get_native()?.get_surface()
         if (surface) surface.set_input_region(null)
-        if (!isRevealed) {
-            setRevealed(true)
-            runUnifiedTick(true)
-        }
+        if (!isRevealed) { setRevealed(true); runUnifiedTick(true) }
     }
 
     const closeAppGridPanel = () => {
@@ -1273,11 +1252,10 @@ export default function DockVertical(gdkmonitor: any) {
         if (layerShellReady) {
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
             Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
-            // Vertical: no exclusive zone to restore
         }
         if (fullscreenMode && !cursorInDock) setRevealed(false)
         else if (dockSettings.autoHide && !cursorInDock) setRevealed(false)
-        updateInputRegion(smoothedBarWidth)
+        updateInputRegion(smoothedBarHeight)
     }
 
     ;(win as any).toggleAppGridPanel = () => {
@@ -1290,8 +1268,9 @@ export default function DockVertical(gdkmonitor: any) {
     bgClickGesture.connect("released", (_gesture: any, _n: number, x: number, y: number) => {
         if (!appGridPanelOpen) return
         const a = appGrid.widget.get_allocation()
-        const inSquircle  = x >= a.x && x <= a.x + a.width && y >= a.y && y <= a.y + a.height
-        const inDockStrip = y >= WIN_H - DOCK_CONSTANTS.PILL_HEIGHT * 1.5
+        const inSquircle = x >= a.x && x <= a.x + a.width && y >= a.y && y <= a.y + a.height
+        const pillW = DOCK_CONSTANTS.PILL_HEIGHT + dockSettings.screenGap + 20
+        const inDockStrip = dockSettings.position === 'left' ? x < pillW : x > WIN_W - pillW
         if (!inSquircle && !inDockStrip) closeAppGridPanel()
     })
     windowOverlay.add_controller(bgClickGesture)
@@ -1314,13 +1293,10 @@ export default function DockVertical(gdkmonitor: any) {
         fullscreenMode = active
         if (active && !appGridPanelOpen) {
             if (isRevealed) setRevealed(false)
-            updateInputRegion(smoothedBarWidth)
+            updateInputRegion(smoothedBarHeight)
         } else if (!active) {
-            if (!dockSettings.autoHide || cursorInDock) {
-                setRevealed(true)
-                runUnifiedTick(true)
-            }
-            updateInputRegion(smoothedBarWidth)
+            if (!dockSettings.autoHide || cursorInDock) { setRevealed(true); runUnifiedTick(true) }
+            updateInputRegion(smoothedBarHeight)
         }
     }
 
@@ -1344,12 +1320,10 @@ export default function DockVertical(gdkmonitor: any) {
     checkFullscreen()
 
     update()
-
     win.present()
 
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
-        win.set_focus_visible(false)
-        win.set_focus(null)
+        win.set_focus_visible(false); win.set_focus(null)
         return GLib.SOURCE_REMOVE
     })
 
