@@ -21,13 +21,7 @@ export default function DockPage() {
         (label) => {
             const opt = posOptions.find(o => o.label === label)
             if (!opt) return
-            const isVertical = opt.value === 'left' || opt.value === 'right'
-            updateDockSettings({
-                position: opt.value,
-                // Auto-hide is required for vertical positions — the layer-shell protocol
-                // has no way to reserve side space without also pushing the bar inward.
-                ...(isVertical ? { autoHide: true } : {}),
-            })
+            updateDockSettings({ position: opt.value })
         },
     ))
 
@@ -91,8 +85,7 @@ export default function DockPage() {
         ellipsize: 3,
     })
     autoHideSwitch.connect("state-set", (_: any, state: boolean) => {
-        if (dockSettings.position !== 'left' && dockSettings.position !== 'right')
-            updateDockSettings({ autoHide: state })
+        updateDockSettings({ autoHide: state })
         return false
     })
     const autoHideRow = createRow(t("settings.dock.row.label.ocultar-automaticamente"), t("settings.dock.row.desc.el-dock-se-esconde-al-alejar-el-cursor"), autoHideSwitch)
@@ -100,8 +93,7 @@ export default function DockPage() {
 
     const syncAutoHide = () => {
         const vertical = dockSettings.position === 'left' || dockSettings.position === 'right'
-        autoHideRow.sensitive = !vertical
-        autoHideSwitch.active = vertical ? true : dockSettings.autoHide
+        autoHideSwitch.active = dockSettings.autoHide
         verticalNote.visible = vertical
     }
     syncAutoHide()

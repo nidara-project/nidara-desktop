@@ -165,7 +165,7 @@ export function DockItem(
     const iconBox = new Gtk.Box({
         name: "cd-icon-box-" + appId,
         css_classes: ["cd-icon-container"],
-        halign: isVertical ? edgeAlign : Gtk.Align.CENTER,
+        halign: Gtk.Align.CENTER,
         valign: isVertical ? Gtk.Align.CENTER : Gtk.Align.END,
         hexpand: false,
         // Horizontal: fills the icon zone (everything above the dot zone).
@@ -401,22 +401,22 @@ export function DockItem(
     })
 
     if (isVertical) {
+        // Dot on the screen-edge side of the pill
         if (dockSettings.position === 'right') {
-            dot.set_halign(Gtk.Align.START)
-            dot.set_margin_start(GAP)
-        } else {
             dot.set_halign(Gtk.Align.END)
             dot.set_margin_end(GAP)
+        } else {
+            dot.set_halign(Gtk.Align.START)
+            dot.set_margin_start(GAP)
         }
+        // Overlay spans the full pill width; icon is centered inside it
         const overlay = new Gtk.Overlay({
             name: "cd-overlay-" + appId,
             css_classes: ["cd-overlay", "overlay"],
             overflow: Gtk.Overflow.VISIBLE,
-            halign: edgeAlign,
+            halign: Gtk.Align.FILL,
             valign: Gtk.Align.CENTER,
-            margin_end:   dockSettings.position === 'right' ? DOCK_CONSTANTS.PILL_PADDING : 0,
-            margin_start: dockSettings.position === 'left'  ? DOCK_CONSTANTS.PILL_PADDING : 0,
-            width_request:  DOCK_CONSTANTS.ICON_SIZE,
+            width_request:  DOCK_CONSTANTS.PILL_HEIGHT,
             height_request: DOCK_CONSTANTS.ICON_SIZE,
             has_tooltip: false,
         })

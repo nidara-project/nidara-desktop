@@ -333,6 +333,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
   syncPanelMargins()
   dockSideState.subscribe(syncPanelMargins)
+
   prism.margin_top = 0
   popups.margin_top = 56; popups.margin_end = 16
 
@@ -636,6 +637,40 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   const monitorHeight = gdkmonitor.get_geometry().height
 
+  // ── Zone reservor ─────────────────────────────────────────────────────────
+  // Wayland layer-shell: a surface with LEFT+RIGHT anchors gets width = workarea
+  // width, which shrinks when the dock has a side exclusive zone. There is no
+  // protocol mechanism to make a single surface both span the full output AND
+  // ignore other surfaces' exclusive zones.
+  //
+  // Solution: two surfaces.
+  //   crystal-bar-zone  invisible, TOP+LEFT+RIGHT, exclusive_zone=40
+  //     → reserves 40 px at the top for tiled windows. Gets squished by the
+  //       dock's zone but is invisible so it doesn't matter.
+  //   crystal-bar  exclusive_zone=-1
+  //     → protocol: compositor MUST NOT adjust position/size based on other
+  //       surfaces' exclusive zones. Bar stays monGeo.width always.
+  const zoneWin = new Gtk.Window({ name: "crystal-bar-zone", application: app, visible: false })
+  zoneWin.set_child(new Gtk.Box()) // GTK requires a child to present
+  zoneWin.set_opacity(0)
+  zoneWin.connect("realize", () => {
+    // Empty input region — this window must never intercept pointer events
+    const surf = zoneWin.get_native()?.get_surface()
+    // @ts-ignore
+    if (surf?.set_input_region) surf.set_input_region(new Cairo.Region())
+  })
+  try {
+    Gtk4LayerShell.init_for_window(zoneWin)
+    Gtk4LayerShell.set_namespace(zoneWin, "crystal-bar-zone")
+    Gtk4LayerShell.set_layer(zoneWin, Gtk4LayerShell.Layer.TOP)
+    Gtk4LayerShell.set_anchor(zoneWin, Gtk4LayerShell.Edge.TOP, true)
+    Gtk4LayerShell.set_anchor(zoneWin, Gtk4LayerShell.Edge.LEFT, true)
+    Gtk4LayerShell.set_anchor(zoneWin, Gtk4LayerShell.Edge.RIGHT, true)
+    Gtk4LayerShell.set_exclusive_zone(zoneWin, 40)
+    Gtk4LayerShell.set_monitor(zoneWin, gdkmonitor)
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => { zoneWin.present(); return GLib.SOURCE_REMOVE })
+  } catch (e) { console.error("[Bar] Zone reservor init failed:", e) }
+
   try {
     Gtk4LayerShell.init_for_window(win)
     Gtk4LayerShell.set_namespace(win, "crystal-bar")
@@ -643,17 +678,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-    // No bottom anchor — required for the exclusive zone to reserve only the top strip
+    // No bottom anchor — required for the exclusive zone to reserve only the top strip.
     Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
-    Gtk4LayerShell.set_exclusive_zone(win, 40) // reserve 40px at top
+    // -1: compositor must not adjust this surface based on other surfaces' exclusive zones.
+    // The dock's side zone cannot squish the bar. TOP reservation is handled by zoneWin.
+    Gtk4LayerShell.set_exclusive_zone(win, -1)
     Gtk4LayerShell.set_monitor(win, gdkmonitor)
-    
-    // Guard against missing set_size in some Gjs binding versions
-    if ((Gtk4LayerShell as any).set_size) {
-        (Gtk4LayerShell as any).set_size(win, 0, monitorHeight)
-    }
-  } catch (e) { 
-    console.error("[Bar] LayerShell failed:", e) 
+  } catch (e) {
+    console.error("[Bar] LayerShell failed:", e)
   }
 
   win.set_child(masterOverlay)
@@ -718,7 +750,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       barFullscreenMode = active
       try {
           if (active && !gameOverlayActive) {
-              Gtk4LayerShell.set_exclusive_zone(win, 0)
+              Gtk4LayerShell.set_exclusive_zone(zoneWin, 0) // release top reservation
               win.set_opacity(0)
           } else if (!active) {
               if (gameOverlayActive) {
@@ -726,7 +758,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
                   gameOverlayActive = false
                   Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
               }
-              Gtk4LayerShell.set_exclusive_zone(win, 40)
+              Gtk4LayerShell.set_exclusive_zone(zoneWin, 40) // restore top reservation
               win.set_opacity(1)
           }
       } catch (e) {}
@@ -757,16 +789,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           gameOverlayActive = active
           if (active) {
               Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
-              Gtk4LayerShell.set_exclusive_zone(win, 0)
+              Gtk4LayerShell.set_exclusive_zone(zoneWin, 0) // release top reservation
               win.set_opacity(1)
               win.present()
           } else {
               Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
               if (barFullscreenMode) {
-                  Gtk4LayerShell.set_exclusive_zone(win, 0)
+                  Gtk4LayerShell.set_exclusive_zone(zoneWin, 0)
                   win.set_opacity(0)
               } else {
-                  Gtk4LayerShell.set_exclusive_zone(win, 40)
+                  Gtk4LayerShell.set_exclusive_zone(zoneWin, 40) // restore top reservation
               }
           }
       } catch (e) { console.error("[Bar] setGameOverlayMode failed:", e) }
