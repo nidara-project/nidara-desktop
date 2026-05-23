@@ -3,7 +3,9 @@ import { Gdk, Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 // @ts-ignore
 import Adw from "gi://Adw?version=1"
-import { LockOverlay } from "./widget/Lock"
+// @ts-ignore
+import Gtk4SessionLock from "gi://Gtk4SessionLock"
+import { Lock, LockOverlay } from "./widget/Lock"
 
 try {
   Adw.init()
@@ -42,6 +44,19 @@ function loadAccentCss(): string {
   }
 }
 
+function startFallback(display: Gdk.Display) {
+  console.log("[Lock] Starting OVERLAY layer fallback")
+  const monitors: any = display.get_monitors()
+  const n = monitors.get_n_items()
+  for (let i = 0; i < n; i++) {
+    try {
+      LockOverlay(monitors.get_item(i) as Gdk.Monitor)
+    } catch (e) {
+      console.error(`[Lock] Overlay fallback failed on monitor ${i}:`, e)
+    }
+  }
+}
+
 app.start({
   instanceName: "crystal-lock",
   css: cssPath,
@@ -61,14 +76,52 @@ app.start({
       )
     }
 
-    const monitors: any = display.get_monitors()
-    const n = monitors.get_n_items()
-    for (let i = 0; i < n; i++) {
-      try {
-        LockOverlay(monitors.get_item(i) as Gdk.Monitor)
-      } catch (e) {
-        console.error(`[Lock] Failed on monitor ${i}:`, e)
+    try {
+      const supported = Gtk4SessionLock.is_supported()
+      console.log(`[Lock] ext-session-lock-v1 supported: ${supported}`)
+
+      if (!supported) {
+        startFallback(display)
+        return
       }
+
+      const lockInst = new Gtk4SessionLock.Instance()
+      console.log("[Lock] Instance created, calling lock()")
+
+      lockInst.connect("locked", () => {
+        console.log("[Lock] Session locked successfully")
+      })
+
+      lockInst.connect("monitor", (_: any, monitor: Gdk.Monitor) => {
+        console.log("[Lock] monitor signal — assigning window")
+        try {
+          Lock(lockInst, monitor)
+          console.log("[Lock] Window assigned to monitor")
+        } catch (e) {
+          console.error("[Lock] assign_window_to_monitor failed:", e)
+        }
+      })
+
+      lockInst.connect("unlocked", () => {
+        console.log("[Lock] Session unlocked — scheduling quit")
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+          console.log("[Lock] Quitting")
+          app.quit()
+          return GLib.SOURCE_REMOVE
+        })
+      })
+
+      lockInst.connect("failed", () => {
+        console.error("[Lock] Session lock failed — falling back to overlay")
+        startFallback(display)
+      })
+
+      lockInst.lock()
+      console.log("[Lock] lock() called")
+
+    } catch (e) {
+      console.error("[Lock] Session lock init error:", e)
+      startFallback(display)
     }
   },
 })

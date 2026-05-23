@@ -6,7 +6,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 BUNDLE="/usr/share/crystal-shell/ui/lockscreen/build/crystal-lock"
-LOG="/tmp/crystal-lock.log"
+LOG="/var/log/crystal-lock.log"
 
 export GDK_BACKEND=wayland
 export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"

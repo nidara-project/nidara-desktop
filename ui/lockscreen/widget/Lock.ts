@@ -5,7 +5,7 @@ import LockCard from "./LockCard"
 import PowerBar from "./PowerBar"
 import Clock from "./Clock"
 
-export function LockOverlay(monitor: Gdk.Monitor) {
+function buildWindow(onUnlock: () => void): Gtk.ApplicationWindow {
   const win = new Gtk.ApplicationWindow({
     application: app,
     css_classes: ["greeter-window"],
@@ -22,7 +22,7 @@ export function LockOverlay(monitor: Gdk.Monitor) {
   clockWidget.valign = Gtk.Align.START
   clockWidget.margin_top = 72
 
-  const lockCard = LockCard(() => app.quit())
+  const lockCard = LockCard(onUnlock)
   lockCard.halign = Gtk.Align.CENTER
   lockCard.valign = Gtk.Align.CENTER
 
@@ -38,6 +38,19 @@ export function LockOverlay(monitor: Gdk.Monitor) {
   overlay.add_overlay(powerBar)
 
   win.set_child(overlay)
+  return win
+}
+
+// Session-lock protocol variant — assign_window_to_monitor() calls present() internally
+export function Lock(lockInstance: any, monitor: Gdk.Monitor) {
+  const win = buildWindow(() => lockInstance.unlock())
+  lockInstance.assign_window_to_monitor(win, monitor)
+  return win
+}
+
+// OVERLAY layer fallback
+export function LockOverlay(monitor: Gdk.Monitor) {
+  const win = buildWindow(() => app.quit())
 
   try {
     Gtk4LayerShell.init_for_window(win)

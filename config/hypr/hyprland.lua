@@ -85,8 +85,9 @@ hl.config({
     },
 
     misc = {
-        disable_hyprland_logo   = true,
-        force_default_wallpaper = 0,
+        disable_hyprland_logo        = true,
+        force_default_wallpaper      = 0,
+        allow_session_lock_restore   = true,
     },
 
     ecosystem = {
