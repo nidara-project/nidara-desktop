@@ -86,6 +86,7 @@ app.start({
       }
 
       const lockInst = new Gtk4SessionLock.Instance()
+      const lockWindows: any[] = []
       console.log("[Lock] Instance created, calling lock()")
 
       lockInst.connect("locked", () => {
@@ -95,7 +96,8 @@ app.start({
       lockInst.connect("monitor", (_: any, monitor: Gdk.Monitor) => {
         console.log("[Lock] monitor signal — assigning window")
         try {
-          Lock(lockInst, monitor)
+          const win = Lock(lockInst, monitor)
+          lockWindows.push(win)
           console.log("[Lock] Window assigned to monitor")
         } catch (e) {
           console.error("[Lock] assign_window_to_monitor failed:", e)
@@ -103,7 +105,11 @@ app.start({
       })
 
       lockInst.connect("unlocked", () => {
-        console.log("[Lock] Session unlocked — scheduling quit")
+        console.log("[Lock] Session unlocked — destroying windows")
+        for (const w of lockWindows) {
+          try { w.destroy() } catch (e) { console.warn("[Lock] destroy:", e) }
+        }
+        lockWindows.length = 0
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
           console.log("[Lock] Quitting")
           app.quit()

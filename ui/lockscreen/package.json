@@ -1,0 +1,9 @@
+{
+  "scripts": {
+    "build": "mkdir -p build && cd ../ags-v3 && npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css && cd ../lockscreen && ags bundle app.ts build/crystal-lock"
+  },
+  "prettier": {
+    "semi": false,
+    "tabWidth": 2
+  }
+}

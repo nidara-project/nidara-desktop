@@ -32,7 +32,7 @@ window > contents {
 }
 
 .greeter-backdrop {
-  background: rgba(10, 10, 18, 0.9);
+  background: transparent;
 }
 
 .greeter-date {
@@ -101,9 +101,9 @@ passwordentry.greeter-password > button:hover {
 }
 
 .greeter-login-btn {
-  background: var(--crystal-glass);
-  color: var(--crystal-text);
-  border: 1px solid var(--crystal-glass-border-sm);
+  background: var(--crystal-accent);
+  color: #fff;
+  border: none;
   border-radius: var(--crystal-radius-pill);
   padding: 10px 24px;
   font-weight: 600;
@@ -112,15 +112,16 @@ passwordentry.greeter-password > button:hover {
   min-height: 0;
 }
 .greeter-login-btn:hover {
-  background: rgba(30, 30, 46, 0.68);
+  background: var(--crystal-accent);
   box-shadow: none;
 }
 .greeter-login-btn:active {
-  background: rgba(10, 10, 20, 0.72);
+  background: var(--crystal-accent);
+  box-shadow: none;
 }
 .greeter-login-btn:disabled {
-  background: rgba(18, 18, 28, 0.3);
-  color: var(--crystal-text-muted);
+  background: rgba(var(--crystal-accent-rgb), 0.3);
+  color: rgba(255, 255, 255, 0.5);
   box-shadow: none;
 }
 
@@ -300,18 +301,22 @@ popover.background listview > row:selected {
 }
 
 .greeter-power-btn {
-  background: transparent;
+  background: var(--crystal-accent);
   border: none;
   border-radius: var(--crystal-radius-pill);
-  color: var(--crystal-text-muted);
+  color: #fff;
   padding: 6px 16px;
   font-size: 13px;
   box-shadow: none;
   min-height: 0;
 }
 .greeter-power-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--crystal-text);
+  background: var(--crystal-accent);
+  box-shadow: none;
+}
+.greeter-power-btn:active {
+  background: var(--crystal-accent);
+  box-shadow: none;
 }
 
 /*# sourceMappingURL=style.css.map */
