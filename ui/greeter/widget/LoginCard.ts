@@ -7,6 +7,7 @@ import { getSessions } from "../lib/sessions"
 import { getDefaultUser } from "../lib/users"
 import { t, onLocaleChange } from "../lib/i18n"
 import LocaleBar from "./LocaleBar"
+import { CrystalSelect } from "../../lib/crystal-ui"
 
 function greetLogin(username: string, password: string, cmd: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -56,17 +57,18 @@ export default function LoginCard(): Gtk.Widget {
     margin_top: 8,
   })
 
-  const sessionModel = Gtk.StringList.new(sessions.map(s => s.name))
-  const sessionDropdown = new Gtk.DropDown({
-    model: sessionModel,
-    selected: sessionIdx,
-    css_classes: ["greeter-session-dropdown"],
-    halign: Gtk.Align.CENTER,
-    width_request: 280,
-    show_arrow: true,
-    margin_top: 6,
+  const sessionSelect = CrystalSelect(
+    sessions.map(s => ({ label: s.name, value: s.id })),
+    sessions[sessionIdx]?.id ?? "",
+    "greeter-session-dropdown",
+  )
+  sessionSelect.widget.halign = Gtk.Align.CENTER
+  sessionSelect.widget.width_request = 280
+  sessionSelect.widget.margin_top = 6
+  sessionSelect.onChanged(value => {
+    sessionIdx = sessions.findIndex(s => s.id === value)
   })
-  sessionDropdown.connect("notify::selected", () => { sessionIdx = sessionDropdown.selected })
+  const sessionDropdown = sessionSelect.widget
 
   const errorLabel = new Gtk.Label({
     label: "",
@@ -86,7 +88,7 @@ export default function LoginCard(): Gtk.Widget {
     isAuthenticating = loading
     loginBtn.sensitive = !loading
     passwordEntry.sensitive = !loading
-    sessionDropdown.sensitive = !loading
+    sessionSelect.setSensitive(!loading)
     loginBtn.label = loading ? t("authenticating") : t("login")
   }
 

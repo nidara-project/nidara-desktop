@@ -2,17 +2,11 @@ import app from "ags/gtk4/app"
 import { Gdk, Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 // @ts-ignore
-import Adw from "gi://Adw?version=1"
-// @ts-ignore
 import Gtk4SessionLock from "gi://Gtk4SessionLock"
 import { Lock, LockOverlay } from "./widget/Lock"
 
-try {
-  Adw.init()
-  Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
-} catch (e) {
-  console.warn("[Lock] Adw init:", e)
-}
+// No Adwaita — plain GTK4 only
+GLib.setenv("GTK_THEME", "Default", true)
 
 const cssPath = GLib.file_test("/usr/share/crystal-shell/ui/greeter/style.css", GLib.FileTest.EXISTS)
   ? "/usr/share/crystal-shell/ui/greeter/style.css"

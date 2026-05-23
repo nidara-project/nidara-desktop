@@ -132,67 +132,61 @@ passwordentry.greeter-password > button:hover {
   color: var(--crystal-text-muted);
   font-size: 12px;
   min-height: 0;
-  padding: 0;
-}
-.greeter-session-dropdown > button {
-  background: transparent;
-  border: none;
-  box-shadow: none;
-  padding: 4px 8px;
-  color: inherit;
-  min-height: 0;
-  font-size: inherit;
+  padding: 4px 10px;
   border-radius: var(--crystal-radius-pill);
 }
-.greeter-session-dropdown > button:hover {
+.greeter-session-dropdown:hover {
   background: rgba(255, 255, 255, 0.08);
   color: var(--crystal-text-secondary);
 }
-.greeter-session-dropdown:hover {
-  color: var(--crystal-text-secondary);
+.greeter-session-dropdown:active {
+  background: rgba(255, 255, 255, 0.06);
 }
 
-popover.background {
+.crystal-select-arrow {
+  font-size: 10px;
+  color: inherit;
+}
+
+.crystal-popup {
   background: rgba(14, 14, 22, 0.97);
   border: 1px solid var(--crystal-glass-border-sm);
   border-radius: var(--crystal-radius-sm);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   padding: 4px;
 }
-popover.background > contents {
-  background: transparent;
-  border: none;
+.crystal-popup > contents {
   padding: 0;
   margin: 0;
-}
-popover.background scrolledwindow,
-popover.background scrolledwindow > viewport,
-popover.background scrolledwindow > undershoot,
-popover.background scrolledwindow > overshoot {
   background: transparent;
-  border: none;
-  padding: 0;
-  margin: 0;
-  min-height: 0;
 }
-popover.background listview {
+
+.crystal-popup-list {
   background: transparent;
   padding: 0;
   margin: 0;
   border: none;
 }
-popover.background listview > row {
-  padding: 6px 10px;
+
+.crystal-popup-item {
+  background: transparent;
+  border: none;
+  box-shadow: none;
   border-radius: 6px;
-  color: var(--crystal-text-secondary);
+  padding: 6px 12px;
   min-height: 0;
+  color: var(--crystal-text-secondary);
+  font-size: 13px;
 }
-popover.background listview > row:hover {
+.crystal-popup-item:hover {
   background: rgba(255, 255, 255, 0.08);
   color: var(--crystal-text);
 }
-popover.background listview > row:selected {
-  background: rgba(0, 136, 255, 0.2);
+.crystal-popup-item:active {
+  background: rgba(255, 255, 255, 0.05);
+}
+.crystal-popup-item--selected {
+  background: rgba(0, 136, 255, 0.15);
   color: var(--crystal-text);
 }
 

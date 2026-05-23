@@ -148,6 +148,13 @@ passwordentry.greeter-password > button {
 }
 
 // ── Session picker ─────────────────────────────────────────────────────────
+// ── crystal-ui: CrystalSelect ─────────────────────────────────────────────
+// Nodes: button.greeter-session-dropdown  (trigger)
+//        label.crystal-select-arrow       (▾ inside trigger)
+//        popover.crystal-popup            (popup shell)
+//        box.crystal-popup-list           (items container)
+//        button.crystal-popup-item        (each option)
+
 .greeter-session-dropdown {
   background: transparent;
   border: none;
@@ -155,68 +162,51 @@ passwordentry.greeter-password > button {
   color: var(--crystal-text-muted);
   font-size: 12px;
   min-height: 0;
-  padding: 0;
+  padding: 4px 10px;
+  border-radius: var(--crystal-radius-pill);
 
-  > button {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    padding: 4px 8px;
-    color: inherit;
-    min-height: 0;
-    font-size: inherit;
-    border-radius: var(--crystal-radius-pill);
-
-    &:hover {
-      background: rgba(255, 255, 255, 0.08);
-      color: var(--crystal-text-secondary);
-    }
-  }
-
-  &:hover { color: var(--crystal-text-secondary); }
+  &:hover  { background: rgba(255, 255, 255, 0.08); color: var(--crystal-text-secondary); }
+  &:active { background: rgba(255, 255, 255, 0.06); }
 }
 
-// DropDown popup
-popover.background {
+.crystal-select-arrow {
+  font-size: 10px;
+  color: inherit;
+}
+
+.crystal-popup {
   background: rgba(14, 14, 22, 0.97);
   border: 1px solid var(--crystal-glass-border-sm);
   border-radius: var(--crystal-radius-sm);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.60);
   padding: 4px;
 
-  > contents {
-    background: transparent;
-    border: none;
-    padding: 0;
-    margin: 0;
-  }
+  > contents { padding: 0; margin: 0; background: transparent; }
+}
 
-  scrolledwindow,
-  scrolledwindow > viewport,
-  scrolledwindow > undershoot,
-  scrolledwindow > overshoot {
-    background: transparent;
-    border: none;
-    padding: 0;
-    margin: 0;
-    min-height: 0;
-  }
+.crystal-popup-list {
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  border: none;
+}
 
-  listview {
-    background: transparent;
-    padding: 0;
-    margin: 0;
-    border: none;
+.crystal-popup-item {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 6px;
+  padding: 6px 12px;
+  min-height: 0;
+  color: var(--crystal-text-secondary);
+  font-size: 13px;
 
-    > row {
-      padding: 6px 10px;
-      border-radius: 6px;
-      color: var(--crystal-text-secondary);
-      min-height: 0;
+  &:hover  { background: rgba(255, 255, 255, 0.08); color: var(--crystal-text); }
+  &:active { background: rgba(255, 255, 255, 0.05); }
 
-      &:hover    { background: rgba(255, 255, 255, 0.08); color: var(--crystal-text); }
-      &:selected { background: rgba(0, 136, 255, 0.20);   color: var(--crystal-text); }
-    }
+  &--selected {
+    background: rgba(0, 136, 255, 0.15);
+    color: var(--crystal-text);
   }
 }
 

@@ -1,18 +1,10 @@
 import app from "ags/gtk4/app"
 import { Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
-// @ts-ignore
-import Adw from "gi://Adw?version=1"
 import Greeter from "./widget/Greeter"
 
-// Force dark mode
-try {
-  GLib.unsetenv("GTK_THEME")
-  Adw.init()
-  Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
-} catch (e) {
-  console.warn("[Greeter] Adw init:", e)
-}
+// No Adwaita — plain GTK4 only
+GLib.setenv("GTK_THEME", "Default", true)
 
 // CSS: try relative path (dev / prod after cd), then absolute installed path
 const cssPath = GLib.file_test("./style.css", GLib.FileTest.EXISTS)
