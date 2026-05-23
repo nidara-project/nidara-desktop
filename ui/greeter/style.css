@@ -31,6 +31,10 @@ window > contents {
   box-shadow: none;
 }
 
+.greeter-backdrop {
+  background: rgba(10, 10, 18, 0.9);
+}
+
 .greeter-date {
   font-size: 13px;
   font-weight: 500;

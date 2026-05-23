@@ -16,10 +16,11 @@ function readRegionConfig(): { timeFormat: "24h" | "12h"; showSeconds: boolean; 
     const [ok, data] = GLib.file_get_contents(path)
     if (!ok) return { timeFormat: "24h", showSeconds: false, dateFormat: "long" }
     const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
+    const fmt = (cfg.dateFormat as DateFormat) ?? "long"
     return {
       timeFormat: cfg.timeFormat === "12h" ? "12h" : "24h",
       showSeconds: cfg.showSeconds === true,
-      dateFormat: (cfg.dateFormat as DateFormat) ?? "long",
+      dateFormat: fmt === "none" ? "long" : fmt,
     }
   } catch {
     return { timeFormat: "24h", showSeconds: false, dateFormat: "long" }

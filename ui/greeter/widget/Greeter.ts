@@ -3,6 +3,7 @@ import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import LoginCard from "./LoginCard"
 import PowerBar from "./PowerBar"
+import Clock from "./Clock"
 
 export default function Greeter(monitor: Gdk.Monitor) {
   const win = new Gtk.ApplicationWindow({
@@ -11,12 +12,16 @@ export default function Greeter(monitor: Gdk.Monitor) {
     css_classes: ["greeter-window"],
   })
 
-  // Full-screen backdrop — alpha > 0.3 so Hyprland's blur applies everywhere
   const fill = new Gtk.Box({
     hexpand: true,
     vexpand: true,
     css_classes: ["greeter-backdrop"],
   })
+
+  const clockWidget = Clock()
+  clockWidget.halign = Gtk.Align.CENTER
+  clockWidget.valign = Gtk.Align.START
+  clockWidget.margin_top = 72
 
   const loginCard = LoginCard()
   loginCard.halign = Gtk.Align.CENTER
@@ -29,6 +34,7 @@ export default function Greeter(monitor: Gdk.Monitor) {
 
   const overlay = new Gtk.Overlay()
   overlay.set_child(fill)
+  overlay.add_overlay(clockWidget)
   overlay.add_overlay(loginCard)
   overlay.add_overlay(powerBar)
 

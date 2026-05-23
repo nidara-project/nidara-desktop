@@ -6,13 +6,12 @@ import AstalGreet from "gi://AstalGreet"
 import { getSessions } from "../lib/sessions"
 import { getDefaultUser } from "../lib/users"
 import { t, onLocaleChange } from "../lib/i18n"
-import Clock from "./Clock"
 import LocaleBar from "./LocaleBar"
 
 function greetLogin(username: string, password: string, cmd: string): Promise<void> {
   return new Promise((resolve, reject) => {
     try {
-      AstalGreet.login(username, password, cmd, null, (_: any, result: any) => {
+      AstalGreet.login(username, password, cmd, (_: any, result: any) => {
         try { AstalGreet.login_finish(result); resolve() }
         catch (e) { reject(e) }
       })
@@ -26,9 +25,6 @@ export default function LoginCard(): Gtk.Widget {
 
   let sessionIdx = Math.max(0, sessions.findIndex(s => s.id === "crystal-shell"))
   let isAuthenticating = false
-
-  const clockWidget = Clock()
-  clockWidget.halign = Gtk.Align.CENTER
 
   const avatar = user.avatarPath
     ? new Gtk.Image({ file: user.avatarPath, pixel_size: 80, css_classes: ["greeter-avatar"] })
@@ -135,10 +131,8 @@ export default function LoginCard(): Gtk.Widget {
     orientation: Gtk.Orientation.VERTICAL,
     halign: Gtk.Align.CENTER,
     valign: Gtk.Align.CENTER,
-    margin_bottom: 160,  // shift above center
   })
 
-  col.append(clockWidget)
   col.append(avatar)
   col.append(usernameLabel)
   col.append(passwordEntry)

@@ -3,17 +3,26 @@ import app from "ags/gtk4/app"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import LockCard from "./LockCard"
 import PowerBar from "./PowerBar"
+import Clock from "./Clock"
 
-export default function Lock(monitor: Gdk.Monitor) {
+export function LockOverlay(monitor: Gdk.Monitor) {
   const win = new Gtk.ApplicationWindow({
     application: app,
-    name: "crystal-lock",
     css_classes: ["greeter-window"],
   })
 
-  const fill = new Gtk.Box({ hexpand: true, vexpand: true })
+  const fill = new Gtk.Box({
+    hexpand: true,
+    vexpand: true,
+    css_classes: ["greeter-backdrop"],
+  })
 
-  const lockCard = LockCard()
+  const clockWidget = Clock()
+  clockWidget.halign = Gtk.Align.CENTER
+  clockWidget.valign = Gtk.Align.START
+  clockWidget.margin_top = 72
+
+  const lockCard = LockCard(() => app.quit())
   lockCard.halign = Gtk.Align.CENTER
   lockCard.valign = Gtk.Align.CENTER
 
@@ -24,6 +33,7 @@ export default function Lock(monitor: Gdk.Monitor) {
 
   const overlay = new Gtk.Overlay()
   overlay.set_child(fill)
+  overlay.add_overlay(clockWidget)
   overlay.add_overlay(lockCard)
   overlay.add_overlay(powerBar)
 
@@ -39,9 +49,9 @@ export default function Lock(monitor: Gdk.Monitor) {
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
     Gtk4LayerShell.set_exclusive_zone(win, -1)
-    Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+    Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
   } catch (e) {
-    console.error("[Lock] LayerShell failed — falling back to fullscreen:", e)
+    console.error("[Lock] LayerShell failed:", e)
     win.fullscreen()
   }
 

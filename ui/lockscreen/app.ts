@@ -3,7 +3,7 @@ import { Gdk, Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 // @ts-ignore
 import Adw from "gi://Adw?version=1"
-import Lock from "./widget/Lock"
+import { LockOverlay } from "./widget/Lock"
 
 try {
   Adw.init()
@@ -12,7 +12,6 @@ try {
   console.warn("[Lock] Adw init:", e)
 }
 
-// Share the greeter's compiled CSS
 const cssPath = GLib.file_test("/usr/share/crystal-shell/ui/greeter/style.css", GLib.FileTest.EXISTS)
   ? "/usr/share/crystal-shell/ui/greeter/style.css"
   : "../greeter/style.css"
@@ -51,7 +50,6 @@ app.start({
     const display = Gdk.Display.get_default()
     if (!display) { console.error("[Lock] No display"); return }
 
-    // Override accent color from user's shell config
     const accentCss = loadAccentCss()
     if (accentCss) {
       const provider = new Gtk.CssProvider()
@@ -67,7 +65,7 @@ app.start({
     const n = monitors.get_n_items()
     for (let i = 0; i < n; i++) {
       try {
-        Lock(monitors.get_item(i) as Gdk.Monitor)
+        LockOverlay(monitors.get_item(i) as Gdk.Monitor)
       } catch (e) {
         console.error(`[Lock] Failed on monitor ${i}:`, e)
       }

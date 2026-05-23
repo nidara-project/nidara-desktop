@@ -1,24 +1,18 @@
 import { Gtk } from "ags/gtk4"
-import app from "ags/gtk4/app"
 import GLib from "gi://GLib"
 // @ts-ignore
 import AstalAuth from "gi://AstalAuth"
 import { getDefaultUser } from "../lib/users"
 import { t } from "../lib/i18n"
-import Clock from "./Clock"
 
-export default function LockCard(): Gtk.Widget {
+export default function LockCard(onUnlock: () => void): Gtk.Widget {
   const user = getDefaultUser()
   let isAuthenticating = false
-
-  const clockWidget = Clock()
-  clockWidget.halign = Gtk.Align.CENTER
 
   const avatar = user.avatarPath
     ? new Gtk.Image({ file: user.avatarPath, pixel_size: 80, css_classes: ["greeter-avatar"] })
     : new Gtk.Image({ icon_name: "avatar-default-symbolic", pixel_size: 80, css_classes: ["greeter-avatar"] })
   avatar.halign = Gtk.Align.CENTER
-  avatar.margin_top = 72
 
   const usernameLabel = new Gtk.Label({
     label: user.displayName,
@@ -82,7 +76,7 @@ export default function LockCard(): Gtk.Widget {
     const pam = new AstalAuth.Pam()
     pam.username = user.username
 
-    pam.connect("success", () => { app.quit() })
+    pam.connect("success", () => { onUnlock() })
 
     pam.connect("fail", (_: any, msg: string) => {
       console.error("[Lock] auth fail:", msg)
@@ -107,10 +101,8 @@ export default function LockCard(): Gtk.Widget {
     orientation: Gtk.Orientation.VERTICAL,
     halign: Gtk.Align.CENTER,
     valign: Gtk.Align.CENTER,
-    margin_bottom: 160,  // shift above center
   })
 
-  col.append(clockWidget)
   col.append(avatar)
   col.append(usernameLabel)
   col.append(passwordEntry)

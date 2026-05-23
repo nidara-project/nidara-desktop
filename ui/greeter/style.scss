@@ -46,6 +46,11 @@ window > contents {
   box-shadow: none;
 }
 
+// ── Full-screen backdrop — solid dark, no blur intent ─────────────────────
+.greeter-backdrop {
+  background: rgba(10, 10, 18, 0.90);
+}
+
 // ── Date label ─────────────────────────────────────────────────────────────
 .greeter-date {
   font-size: 13px;
