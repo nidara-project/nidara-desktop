@@ -19,6 +19,11 @@
     color: var(--crystal-text);
 }
 
+/* --- Tray icons: symbolic names used explicitly in code; color applies for recoloring --- */
+.bar-tray-icon {
+    color: var(--crystal-text);
+}
+
 #crystal-bar,
 .crystal-bar-window {
     background: transparent;

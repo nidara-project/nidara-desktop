@@ -471,6 +471,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER }); center.append(Workspaces())
   center.set_visible(barSettings.showWorkspaces)
   const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 8 })
+  // Absorbs SizeGroup slack so actual capsules stay pinned to the right edge.
+  // When left > right (long window title), SizeGroup widens the right allocation;
+  // without this spacer, children would pack from the left of that wider slot.
+  const rightSpacer = new Gtk.Box({ hexpand: true })
+  right.append(rightSpacer)
 
   // Keep workspace capsule at the true monitor center regardless of how wide the
   // right side grows.  SizeGroup makes both sides request max(left, right) width,
