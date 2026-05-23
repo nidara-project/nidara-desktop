@@ -46,9 +46,8 @@ window > contents {
   box-shadow: none;
 }
 
-// ── Full-screen backdrop — solid dark, no blur intent ─────────────────────
 .greeter-backdrop {
-  background: rgba(10, 10, 18, 0.90);
+  background: transparent;
 }
 
 // ── Date label ─────────────────────────────────────────────────────────────

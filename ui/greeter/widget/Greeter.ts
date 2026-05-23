@@ -1,9 +1,24 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
+import GLib from "gi://GLib"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import LoginCard from "./LoginCard"
 import PowerBar from "./PowerBar"
 import Clock from "./Clock"
+import { getDefaultUser } from "../lib/users"
+
+function readWallpaperPath(): string | null {
+  try {
+    const user = getDefaultUser()
+    const path = `${user.homeDir}/.config/crystal-shell/wallpaper`
+    const [ok, data] = GLib.file_get_contents(path)
+    if (!ok) return null
+    const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
+    return (cfg.path as string) || null
+  } catch {
+    return null
+  }
+}
 
 export default function Greeter(monitor: Gdk.Monitor) {
   const win = new Gtk.ApplicationWindow({
@@ -12,11 +27,14 @@ export default function Greeter(monitor: Gdk.Monitor) {
     css_classes: ["greeter-window"],
   })
 
-  const fill = new Gtk.Box({
-    hexpand: true,
-    vexpand: true,
-    css_classes: ["greeter-backdrop"],
-  })
+  const wallpaperPath = readWallpaperPath()
+  const fill: Gtk.Widget = (wallpaperPath && GLib.file_test(wallpaperPath, GLib.FileTest.EXISTS))
+    ? (() => {
+        const pic = new Gtk.Picture({ hexpand: true, vexpand: true, content_fit: Gtk.ContentFit.COVER })
+        pic.set_filename(wallpaperPath)
+        return pic
+      })()
+    : new Gtk.Box({ hexpand: true, vexpand: true, css_classes: ["greeter-backdrop"] })
 
   const clockWidget = Clock()
   clockWidget.halign = Gtk.Align.CENTER
