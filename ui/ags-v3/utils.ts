@@ -62,7 +62,7 @@ export function getWordmark(client: AstalHyprland.Client | null, hyprland: Astal
     if (!client) {
         const ws = hyprland.focused_workspace
         if (!ws) return "Workspace"
-        const wsName: Record<string, string> = { gamespace: "Gaming", lockspace: "Bloqueado" }
+        const wsName: Record<string, string> = { gamespace: "Gaming" }
         return wsName[ws.name] ?? `Workspace ${ws.id}`
     }
 

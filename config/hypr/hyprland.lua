@@ -338,19 +338,6 @@ end)
 
 
 hl.workspace_rule({
-    workspace    = "name:lockspace",
-    gaps_in      = 0,
-    gaps_out     = 0,
-    no_border    = true,
-    border_size  = 0,
-    no_rounding  = true,
-    no_shadow    = true,
-    decorate     = false,
-    persistent   = false,
-    animation    = "fade",
-})
-
-hl.workspace_rule({
     workspace    = "name:gamespace",
     gaps_in      = 0,
     gaps_out     = 0,

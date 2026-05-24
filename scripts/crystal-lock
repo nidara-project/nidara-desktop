@@ -24,13 +24,10 @@ if [ ! -x "$BUNDLE" ]; then
     exit 1
 fi
 
-# Save current workspace (prefer name for named workspaces, fallback to id)
-PREV_WS=$(hyprctl activeworkspace -j 2>/dev/null | jq -r 'if .name and (.name | test("^[0-9]+$") | not) then "name:" + .name else (.id | tostring) end // empty')
-
-# Hide bar and dock, disable all keybinds, switch to dedicated lock workspace
+# Hide bar and dock, disable all keybinds
+# (workspace switch not needed — ext-session-lock-v1 covers all monitors at compositor level)
 ags request hideForLock >> "$LOG" 2>&1 || true
 hyprctl dispatch 'hl.dsp.submap("lock")' >> "$LOG" 2>&1 || true
-hyprctl dispatch "hl.dsp.focus({workspace='name:lockspace'})" >> "$LOG" 2>&1 || true
 
 # Run lockscreen — blocks until app.quit() on successful auth
 cd /usr/share/crystal-shell/ui/lockscreen
@@ -38,5 +35,4 @@ cd /usr/share/crystal-shell/ui/lockscreen
 
 # Restore everything after unlock
 hyprctl dispatch 'hl.dsp.submap("reset")' >> "$LOG" 2>&1 || true
-[ -n "$PREV_WS" ] && hyprctl dispatch "hl.dsp.focus({workspace='$PREV_WS'})" >> "$LOG" 2>&1 || true
 ags request showAfterLock >> "$LOG" 2>&1 || true

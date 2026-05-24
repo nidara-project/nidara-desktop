@@ -159,7 +159,6 @@ function SystemMenuOverlay() {
   menuBox.append(sep())
   menuBox.append(makeRow(Icons.lock, t("bar.system-menu.lock"), false, () => {
     status.system_menu_open = false
-    shellActions.lockScreen?.()
     execAsync(["crystal-lock"]).catch(console.error)
   }))
   menuBox.append(makeRow(Icons.moon, t("bar.system-menu.suspend"), false, () =>
