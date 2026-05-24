@@ -1,31 +1,35 @@
 import { Gtk } from "ags/gtk4"
+import Adw from "gi://Adw"
 
 /**
- * CrystalClamp — centering content container
+ * CrystalClamp — max-width content container with centering
  *
- * Centers the child in the available width. Unlike Adw.Clamp, this does NOT
- * enforce a maximum width (GTK4 has no CSS max-width; proper clamping needs
- * a GObject subclass). Content fills the available width naturally.
+ * Wraps the child in an Adw.Clamp, which is a pure layout widget (no visual
+ * styling of its own). It clamps the child to `maxWidth` pixels and centers
+ * it when the available space is larger. Below `maxWidth` the child fills the
+ * full available width normally.
  *
- * The `maxWidth` parameter is kept for API compatibility but is currently
- * unused — true max-width clamping will be revisited when a pure GTK4
- * approach is available.
+ * We use Adw.Clamp here because GTK4's CSS has no max-width property and a
+ * correct clamp implementation requires a custom layout manager. Adw.Clamp is
+ * a lightweight layout-only widget — it adds no backgrounds, borders or
+ * Adwaita-specific chrome.
  *
- * Key property: does NOT set width_request, so it never imposes a minimum
- * window width on its ancestors.
+ * Note: the ancestor CrystalSplitView uses a ZeroMinOverlay to break the
+ * minimum-width chain, so the Clamp's content minimum does NOT propagate to
+ * the window and does NOT prevent resize/tiling.
  */
 export function CrystalClamp(
     child: Gtk.Widget,
-    maxWidth = 800,   // reserved for future use
+    maxWidth = 800,
     vexpand  = true,
-): Gtk.Box {
-    const box = new Gtk.Box({
+): Gtk.Widget {
+    const clamp = new Adw.Clamp({
+        maximum_size: maxWidth,
+        tightening_threshold: maxWidth - 100,
         hexpand: true,
         vexpand,
-        css_classes: ["crystal-clamp"],
     })
-    box.append(child)
-    child.hexpand = true
+    clamp.set_child(child)
     if (vexpand) child.vexpand = true
-    return box
+    return clamp
 }

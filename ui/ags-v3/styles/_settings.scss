@@ -338,24 +338,90 @@ button.launcher-icon-btn {
 .tz-status-ok  { color: var(--crystal-success); }
 .tz-status-err { color: var(--crystal-danger); }
 
-// ── Button accent overrides ───────────────────────────────────────────────────
-// Adwaita's @accent_bg_color lives in its own CSS provider and isn't affected
-// by our @define-color overrides. Explicit rules here win via specificity.
+// ── Crystal button system ─────────────────────────────────────────────────────
+// All button variants used in settings pages, scoped to the window so we win
+// over Adwaita's CSS provider without needing !important.
+//
+// Hierarchy:
+//   suggested-action  → primary/confirm  → solid accent fill
+//   destructive-action → delete/danger   → danger tint + danger text
+//   pill (alone)       → secondary       → surface + border + pill shape
+//   flat               → icon-adjacent   → transparent, dim text
+//   (no class)         → plain           → surface + border (reset Adwaita raised)
+//
+// Shape modifiers (.pill) stack with action type via combined selectors.
+
 window.crystal-settings-window {
-    button.suggested-action,
-    button.suggested-action.pill {
+
+    // ── Primary action ────────────────────────────────────────────────────────
+    button.suggested-action {
         background-color: var(--crystal-accent);
         background-image: none;
         color: var(--crystal-accent-fg);
         box-shadow: none;
+        border: none;
+        border-radius: $crystal-radius-sm;
+        padding: 8px 16px;
+        font-weight: 500;
+        min-height: 32px;
 
-        &:hover  { background-color: color-mix(in srgb, var(--crystal-accent) 85%, white 15%); }
-        &:active { background-color: color-mix(in srgb, var(--crystal-accent) 70%, black 30%); }
+        &:hover   { background-color: color-mix(in srgb, var(--crystal-accent) 85%, white 15%); background-image: none; }
+        &:active  { background-color: color-mix(in srgb, var(--crystal-accent) 70%, black 30%); background-image: none; }
+        &:disabled { opacity: 0.5; }
+        &.pill     { border-radius: $crystal-radius-pill; padding: 8px 20px; }
     }
 
-    button:focus-visible {
-        outline-color: var(--crystal-accent);
+    // ── Danger / destructive action ───────────────────────────────────────────
+    button.destructive-action {
+        background-color: rgba(var(--crystal-danger-rgb), 0.12);
+        background-image: none;
+        box-shadow: none;
+        color: var(--crystal-danger);
+        border: 1px solid rgba(var(--crystal-danger-rgb), 0.25);
+        border-radius: $crystal-radius-sm;
+        padding: 8px 16px;
+        font-weight: 500;
+        min-height: 32px;
+
+        &:hover   { background-color: rgba(var(--crystal-danger-rgb), 0.22); background-image: none; box-shadow: none; }
+        &:active  { background-color: rgba(var(--crystal-danger-rgb), 0.32); background-image: none; }
+        &:disabled { opacity: 0.5; }
+        &:focus-visible { outline-color: var(--crystal-danger); }
+        &.pill     { border-radius: $crystal-radius-pill; padding: 8px 20px; }
     }
+
+    // ── Secondary / pill-only ─────────────────────────────────────────────────
+    // Buttons with only .pill (no action class) are secondary — outlined surface.
+    button.pill:not(.suggested-action):not(.destructive-action) {
+        background: var(--crystal-surface);
+        background-image: none;
+        box-shadow: none;
+        border: 1px solid var(--crystal-border);
+        border-radius: $crystal-radius-pill;
+        padding: 8px 18px;
+        color: var(--crystal-text);
+        font-weight: 500;
+        min-height: 32px;
+
+        &:hover   { background: var(--crystal-surface-hover); background-image: none; box-shadow: none; }
+        &:active  { background: var(--crystal-surface-active); background-image: none; }
+        &:disabled { opacity: 0.5; color: var(--crystal-text-disabled); }
+    }
+
+    // ── Flat (icon-adjacent, Audio page toggles, etc.) ────────────────────────
+    button.flat {
+        background: transparent;
+        background-image: none;
+        box-shadow: none;
+        border: none;
+        color: var(--crystal-text-dim);
+
+        &:hover  { background: var(--crystal-surface-hover); background-image: none; color: var(--crystal-text); }
+        &:active { background: var(--crystal-surface-active); background-image: none; }
+    }
+
+    // ── Focus ring (all buttons) ──────────────────────────────────────────────
+    button:focus-visible { outline-color: var(--crystal-accent); }
 }
 
 // ── User avatar ───────────────────────────────────────────────────────────────

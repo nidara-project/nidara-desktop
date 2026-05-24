@@ -2737,20 +2737,101 @@ button.launcher-icon-btn:hover:not(.selected) {
   color: var(--crystal-danger);
 }
 
-window.crystal-settings-window button.suggested-action,
-window.crystal-settings-window button.suggested-action.pill {
+window.crystal-settings-window button.suggested-action {
   background-color: var(--crystal-accent);
   background-image: none;
   color: var(--crystal-accent-fg);
   box-shadow: none;
+  border: none;
+  border-radius: var(--crystal-radius-sm);
+  padding: 8px 16px;
+  font-weight: 500;
+  min-height: 32px;
 }
-window.crystal-settings-window button.suggested-action:hover,
-window.crystal-settings-window button.suggested-action.pill:hover {
+window.crystal-settings-window button.suggested-action:hover {
   background-color: color-mix(in srgb, var(--crystal-accent) 85%, white 15%);
+  background-image: none;
 }
-window.crystal-settings-window button.suggested-action:active,
-window.crystal-settings-window button.suggested-action.pill:active {
+window.crystal-settings-window button.suggested-action:active {
   background-color: color-mix(in srgb, var(--crystal-accent) 70%, black 30%);
+  background-image: none;
+}
+window.crystal-settings-window button.suggested-action:disabled {
+  opacity: 0.5;
+}
+window.crystal-settings-window button.suggested-action.pill {
+  border-radius: var(--crystal-radius-pill);
+  padding: 8px 20px;
+}
+window.crystal-settings-window button.destructive-action {
+  background-color: rgba(var(--crystal-danger-rgb), 0.12);
+  background-image: none;
+  box-shadow: none;
+  color: var(--crystal-danger);
+  border: 1px solid rgba(var(--crystal-danger-rgb), 0.25);
+  border-radius: var(--crystal-radius-sm);
+  padding: 8px 16px;
+  font-weight: 500;
+  min-height: 32px;
+}
+window.crystal-settings-window button.destructive-action:hover {
+  background-color: rgba(var(--crystal-danger-rgb), 0.22);
+  background-image: none;
+  box-shadow: none;
+}
+window.crystal-settings-window button.destructive-action:active {
+  background-color: rgba(var(--crystal-danger-rgb), 0.32);
+  background-image: none;
+}
+window.crystal-settings-window button.destructive-action:disabled {
+  opacity: 0.5;
+}
+window.crystal-settings-window button.destructive-action:focus-visible {
+  outline-color: var(--crystal-danger);
+}
+window.crystal-settings-window button.destructive-action.pill {
+  border-radius: var(--crystal-radius-pill);
+  padding: 8px 20px;
+}
+window.crystal-settings-window button.pill:not(.suggested-action):not(.destructive-action) {
+  background: var(--crystal-surface);
+  background-image: none;
+  box-shadow: none;
+  border: 1px solid var(--crystal-border);
+  border-radius: var(--crystal-radius-pill);
+  padding: 8px 18px;
+  color: var(--crystal-text);
+  font-weight: 500;
+  min-height: 32px;
+}
+window.crystal-settings-window button.pill:not(.suggested-action):not(.destructive-action):hover {
+  background: var(--crystal-surface-hover);
+  background-image: none;
+  box-shadow: none;
+}
+window.crystal-settings-window button.pill:not(.suggested-action):not(.destructive-action):active {
+  background: var(--crystal-surface-active);
+  background-image: none;
+}
+window.crystal-settings-window button.pill:not(.suggested-action):not(.destructive-action):disabled {
+  opacity: 0.5;
+  color: var(--crystal-text-disabled);
+}
+window.crystal-settings-window button.flat {
+  background: transparent;
+  background-image: none;
+  box-shadow: none;
+  border: none;
+  color: var(--crystal-text-dim);
+}
+window.crystal-settings-window button.flat:hover {
+  background: var(--crystal-surface-hover);
+  background-image: none;
+  color: var(--crystal-text);
+}
+window.crystal-settings-window button.flat:active {
+  background: var(--crystal-surface-active);
+  background-image: none;
 }
 window.crystal-settings-window button:focus-visible {
   outline-color: var(--crystal-accent);
