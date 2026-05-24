@@ -8,8 +8,6 @@ import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core
 import { ACCENT_PALETTE, type AccentKey } from "../../../core/FluidCrystal"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
-// @ts-ignore
-import Adw from "gi://Adw?version=1"
 import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageHeader, pageBox } from "../SettingsHelpers"
 
 export default function AppearancePage() {

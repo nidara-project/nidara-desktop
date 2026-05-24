@@ -86,17 +86,10 @@
     }
 }
 
-/* Specific resets for AdwWindow in Crystal Shell */
+/* Reset for Crystal Settings window (Gtk.Window, decorated: false) */
 window.crystal-settings-window {
-    &, & > contents {
-        background: transparent;
-        box-shadow: none;
-        border: none;
-    }
-    
-    // Hide standard Adwaita window shadows to use our custom .glass shadow
-    decoration-node {
-        box-shadow: none;
-        background-color: transparent;
-    }
+    background: transparent;
+    box-shadow: none;
+    border: none;
+    // Glass surface + border-radius live on #settings-main-glass (its direct child)
 }

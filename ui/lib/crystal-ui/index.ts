@@ -13,3 +13,14 @@ export { CrystalOverlayManager } from "./overlay-manager"
 // CrystalSelect — dropdown, no manager needed (uses Gtk.Popover)
 export type { SelectOption, CrystalSelectResult } from "./select"
 export { CrystalSelect } from "./select"
+
+// CrystalClamp — max-width centering container (replaces Adw.Clamp)
+export { CrystalClamp } from "./clamp"
+
+// CrystalSplitView — sidebar+content with auto-collapse (replaces Adw.OverlaySplitView + Adw.Breakpoint)
+export type { CrystalSplitViewResult } from "./split-view"
+export { CrystalSplitView } from "./split-view"
+
+// showCrystalAlert — modal confirmation dialog (replaces Adw.AlertDialog)
+export type { AlertResponse } from "./alert-dialog"
+export { showCrystalAlert } from "./alert-dialog"

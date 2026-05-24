@@ -4,21 +4,22 @@
    CRYSTAL SETTINGS WINDOW
    ========================================================================== */
 
-// ── Window root reset ─────────────────────────────────────────────────────────
-window#crystal-settings-window {
-    @include crystal-reset;
-
-    > decoration, > contents { @include crystal-reset; }
-}
-
 // ── Main glass surface ────────────────────────────────────────────────────────
+// The window itself is transparent (decorated:false); glass lives here.
 #settings-main-glass {
     @include glass(floating);
 }
 
-// ── Adw.OverlaySplitView cleanup ──────────────────────────────────────────────
-#settings-splitview {
+// ── CrystalSplitView — transparent, no extra background ──────────────────────
+#settings-splitview,
+.crystal-split-view {
     @include crystal-reset;
+}
+
+// Transparent backdrop in collapsed mode — catches click-outside to close sidebar.
+// Must have a background (even transparent) so GTK4 picks up pointer events.
+.crystal-split-backdrop {
+    background: transparent;
 }
 
 // ── Sidebar panel ─────────────────────────────────────────────────────────────
@@ -44,9 +45,7 @@ row.sidebar-header-spacer-row {
 }
 
 // ── Sidebar list rows ─────────────────────────────────────────────────────────
-// Override Adwaita's navigation-sidebar defaults with consistent spacing
-// and a rounded-rect (not pill) row shape.
-window.crystal-settings-window list.settings-sidebar.navigation-sidebar {
+window.crystal-settings-window list.settings-sidebar {
     background: transparent;
     padding: 6px;
 
@@ -80,7 +79,7 @@ window.crystal-settings-window list.settings-sidebar.navigation-sidebar {
     color: var(--crystal-text-dim);
 }
 
-window.crystal-settings-window list.settings-sidebar.navigation-sidebar {
+window.crystal-settings-window list.settings-sidebar {
     > row:hover .settings-sidebar-row {
         color: var(--crystal-text);
     }
@@ -404,5 +403,71 @@ row.wallpaper-preview-row {
         border-radius: $crystal-radius-md;
         border: 2px solid var(--crystal-border);
         background-color: var(--crystal-surface);
+    }
+}
+
+// ── CrystalAlertDialog ────────────────────────────────────────────────────────
+// Undecorated Gtk.Window, glass surface, fully rounded.
+window.crystal-alert-dialog {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+
+    > box {
+        @include glass(floating);
+        overflow: hidden; // clips children to border-radius
+    }
+}
+
+.crystal-alert-heading {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--crystal-text);
+}
+
+.crystal-alert-body {
+    font-size: 0.875rem;
+    color: var(--crystal-text-dim);
+    margin-bottom: 0;
+}
+
+.crystal-alert-sep {
+    background: var(--crystal-border);
+    min-height: 1px;
+    margin: 0;
+}
+
+.crystal-alert-buttons {
+    button.crystal-alert-btn {
+        @include crystal-reset;
+        padding: 14px 16px;
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--crystal-text);
+        border-radius: 0;
+        transition: background 0.15s ease;
+
+        // Round the bottom corners to match the dialog
+        &:first-child { border-bottom-left-radius: $crystal-radius-lg; }
+        &:last-child  { border-bottom-right-radius: $crystal-radius-lg; }
+
+        &:hover  { background: var(--crystal-surface-hover); }
+        &:active { background: var(--crystal-surface-active); }
+        &:focus-visible { outline: 1px solid var(--crystal-accent); outline-offset: -2px; }
+
+        &.crystal-alert-btn--destructive {
+            color: var(--crystal-danger);
+            &:hover { background: rgba(var(--crystal-danger-rgb), 0.1); }
+        }
+
+        &.crystal-alert-btn--suggested {
+            color: var(--crystal-accent);
+            &:hover { background: var(--crystal-accent-10); }
+        }
+    }
+
+    // Vertical divider between sibling buttons
+    button.crystal-alert-btn + button.crystal-alert-btn {
+        border-left: 1px solid var(--crystal-border);
     }
 }

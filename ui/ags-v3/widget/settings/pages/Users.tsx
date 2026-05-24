@@ -1,9 +1,8 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-// @ts-ignore
-import Adw from "gi://Adw?version=1"
 import { execAsync } from "ags/process"
+import { showCrystalAlert } from "../../../../lib/crystal-ui"
 import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
@@ -327,21 +326,21 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
         tooltip_text: t("settings.users.other.delete"),
     })
     deleteBtn.connect("clicked", () => {
-        const alert = new Adw.AlertDialog({
+        showCrystalAlert({
+            parent: parentWin,
             heading: t("settings.users.other.delete.confirm.title"),
             body: `${t("settings.users.other.delete.confirm.body")} "${user.displayName}" (${user.username})?`,
+            responses: [
+                { id: "cancel", label: t("settings.users.other.cancel") },
+                { id: "delete", label: t("settings.users.other.delete"), destructive: true },
+            ],
+            onResponse: (id) => {
+                if (id !== "delete") return
+                execAsync(["pkexec", "userdel", "-r", user.username])
+                    .then(onRefresh)
+                    .catch(e => console.error("[Users] userdel:", e))
+            },
         })
-        alert.add_response("cancel", t("settings.users.other.cancel"))
-        alert.add_response("delete", t("settings.users.other.delete"))
-        alert.set_response_appearance("delete", Adw.ResponseAppearance.DESTRUCTIVE)
-        alert.set_default_response("cancel")
-        alert.connect("response", (_: any, id: string) => {
-            if (id !== "delete") return
-            execAsync(["pkexec", "userdel", "-r", user.username])
-                .then(onRefresh)
-                .catch(e => console.error("[Users] userdel:", e))
-        })
-        alert.present(parentWin ?? undefined)
     })
 
     const inner = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })

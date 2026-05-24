@@ -1,7 +1,6 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
-// @ts-ignore
-import Adw from "gi://Adw?version=1"
+import { CrystalClamp, CrystalSplitView } from "../../../lib/crystal-ui"
 
 // Page Imports
 import AppearancePage from "./pages/Appearance"
@@ -29,14 +28,12 @@ import Icons from "../../core/Icons"
 
 /**
  * Settings - System Configuration Panel
+ * Pure GTK4 — no Adwaita dependency.
  */
 export default function Settings(monitor: Gdk.Monitor) {
     clearSearchIndex()
 
-    // Navigation Controls
-    // NOTE: Adw.HeaderBar allocates its full height (44px) to packed children unless
-    // the button itself declares valign:CENTER. Use child Gtk.Image with explicit pixel_size
-    // to control content size independently of GTK's default icon sizing.
+    // ── Navigation controls ───────────────────────────────────────────────────
     const backBtn = new Gtk.Button({
         child: new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn", "nav-btn"],
@@ -54,61 +51,73 @@ export default function Settings(monitor: Gdk.Monitor) {
         halign: Gtk.Align.CENTER,
     })
 
-    // Navigation Capsule (pill shape via CSS)
-    const navCapsule = new Gtk.Box({ 
+    // Navigation capsule (pill shape via CSS)
+    const navCapsule = new Gtk.Box({
         css_classes: ["navigation-capsule"],
         valign: Gtk.Align.CENTER,
-        halign: Gtk.Align.CENTER
+        halign: Gtk.Align.CENTER,
     })
     navCapsule.append(backBtn)
     navCapsule.append(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nav-separator"] }))
     navCapsule.append(forwardBtn)
 
-
-    const win = new Adw.Window({
-        name: "crystal-settings",
+    // ── Window (pure Gtk.Window, no Adwaita) ──────────────────────────────────
+    // decorated: false + Gtk.WindowHandle on the header area = custom CSD
+    // without any Adwaita header plumbing.
+    const win = new Gtk.Window({
+        name: "crystal-settings-window",
         title: "Crystal Shell Settings",
         application: app,
-        css_classes: ["background", "glass", "fc-ignore", "crystal-settings-window"],
+        css_classes: ["fc-ignore", "crystal-settings-window"],
         default_width: 1000,
         default_height: 700,
+        decorated: false,
         visible: false,
     })
-    win.set_name("crystal-settings-window")
 
-    // Sidebar: Categories
+    // ── Sidebar ───────────────────────────────────────────────────────────────
     const sidebar = new Gtk.ListBox({
-        css_classes: ["settings-sidebar", "navigation-sidebar"],
+        css_classes: ["settings-sidebar"],
         selection_mode: Gtk.SelectionMode.SINGLE,
         activate_on_single_click: true,
         vexpand: true,
     })
 
     const categories = [
-        { id: "users",       label: t("settings.users.title"),                           icon: Icons.user,         component: UsersPage       },
-        { id: "appearance", label: t("settings.appearance.page.title.apariencia"),      icon: Icons.palette,      component: AppearancePage },
-        { id: "display",    label: t("settings.display.page.title.pantalla"),           icon: Icons.monitor,      component: DisplayPage     },
-        { id: "audio",      label: t("settings.audio.page.title.sonido"),               icon: Icons.speaker,      component: AudioPage       },
-        { id: "network",    label: t("settings.network.page.title.red"),                icon: Icons.globe,        component: NetworkPage     },
-        { id: "input",      label: t("settings.input.title"),                           icon: Icons.keyboard,     component: InputPage       },
-        { id: "bluetooth",  label: t("settings.bluetooth.page.title.bluetooth"),        icon: Icons.bluetooth,    component: BluetoothPage   },
-        { id: "region",     label: t("settings.region.title"),                          icon: Icons.clock,        component: RegionPage      },
-        { id: "defaultapps", label: t("settings.defaultapps.title"),                   icon: Icons.app,          component: DefaultAppsPage },
-        { id: "apps",       label: t("settings.apps.page.title.aplicaciones"),          icon: Icons.grid,         component: AppsPage        },
-        { id: "accessibility", label: t("settings.accessibility.title"),               icon: Icons.accessibility, component: AccessibilityPage },
-        { id: "notifications", label: t("settings.notif.title"),                        icon: Icons.bell,          component: NotificationsPage },
-        { id: "bar",        label: t("settings.bar.title"),                              icon: Icons.panelTop,      component: BarPage         },
-        { id: "dock",       label: t("settings.dock.page.title.dock"),                  icon: Icons.dock,          component: DockPage        },
-        { id: "widgets",    label: t("settings.widgets.page.title.widgets"),            icon: Icons.puzzle,        component: WidgetsPage     },
-        { id: "gaming",     label: t("settings.gaming.page.title.gaming"),              icon: Icons.gamepad,      component: GamingPage      },
-        { id: "autostart",  label: t("settings.autostart.page.title.inicio-automatico"), icon: Icons.rocket,      component: AutostartPage   },
-        { id: "power",      label: t("settings.power.page.title.energia"),              icon: Icons.battery,      component: PowerPage       },
-        { id: "about",      label: t("settings.about.page.title.acerca-de"),            icon: Icons.info,         component: AboutPage       },
+        { id: "users",        label: t("settings.users.title"),                              icon: Icons.user,          component: UsersPage        },
+        { id: "appearance",   label: t("settings.appearance.page.title.apariencia"),         icon: Icons.palette,       component: AppearancePage   },
+        { id: "display",      label: t("settings.display.page.title.pantalla"),              icon: Icons.monitor,       component: DisplayPage      },
+        { id: "audio",        label: t("settings.audio.page.title.sonido"),                  icon: Icons.speaker,       component: AudioPage        },
+        { id: "network",      label: t("settings.network.page.title.red"),                   icon: Icons.globe,         component: NetworkPage      },
+        { id: "input",        label: t("settings.input.title"),                              icon: Icons.keyboard,      component: InputPage        },
+        { id: "bluetooth",    label: t("settings.bluetooth.page.title.bluetooth"),           icon: Icons.bluetooth,     component: BluetoothPage    },
+        { id: "region",       label: t("settings.region.title"),                             icon: Icons.clock,         component: RegionPage       },
+        { id: "defaultapps",  label: t("settings.defaultapps.title"),                        icon: Icons.app,           component: DefaultAppsPage  },
+        { id: "apps",         label: t("settings.apps.page.title.aplicaciones"),             icon: Icons.grid,          component: AppsPage         },
+        { id: "accessibility",label: t("settings.accessibility.title"),                      icon: Icons.accessibility, component: AccessibilityPage },
+        { id: "notifications",label: t("settings.notif.title"),                              icon: Icons.bell,          component: NotificationsPage },
+        { id: "bar",          label: t("settings.bar.title"),                                icon: Icons.panelTop,      component: BarPage          },
+        { id: "dock",         label: t("settings.dock.page.title.dock"),                     icon: Icons.dock,          component: DockPage         },
+        { id: "widgets",      label: t("settings.widgets.page.title.widgets"),               icon: Icons.puzzle,        component: WidgetsPage      },
+        { id: "gaming",       label: t("settings.gaming.page.title.gaming"),                 icon: Icons.gamepad,       component: GamingPage       },
+        { id: "autostart",    label: t("settings.autostart.page.title.inicio-automatico"),   icon: Icons.rocket,        component: AutostartPage    },
+        { id: "power",        label: t("settings.power.page.title.energia"),                 icon: Icons.battery,       component: PowerPage        },
+        { id: "about",        label: t("settings.about.page.title.acerca-de"),               icon: Icons.info,          component: AboutPage        },
     ]
 
-    const stack = new Adw.ViewStack({
+    // ── Page stack (Gtk.Stack replaces Adw.ViewStack) ─────────────────────────
+    // hhomogeneous: false — don't propagate the maximum of ALL pages as the
+    // minimum width. With true (the default), the stack's minimum = max of every
+    // page's minimum, which prevented the window from narrowing below ~1043 px.
+    // With false, only the visible page's size is measured, so the window can
+    // resize freely and collapse detection works correctly.
+    const stack = new Gtk.Stack({
         hexpand: true,
         vexpand: true,
+        hhomogeneous: false,
+        vhomogeneous: false,
+        css_classes: ["settings-stack"],
+        transition_type: Gtk.StackTransitionType.NONE,
     })
 
     categories.forEach(cat => {
@@ -126,73 +135,44 @@ export default function Settings(monitor: Gdk.Monitor) {
         icon.gicon = cat.icon
 
         rowContent.append(icon)
-        rowContent.append(new Gtk.Label({
-            label: cat.label,
-            css_classes: ["sidebar-label"],
-        }))
+        rowContent.append(new Gtk.Label({ label: cat.label, css_classes: ["sidebar-label"] }))
 
-        const listRow = new Gtk.ListBoxRow({
-            css_classes: ["settings-row-container"],
-        })
+        const listRow = new Gtk.ListBoxRow({ css_classes: ["settings-row-container"] })
         listRow.set_child(rowContent)
         listRow.set_name(cat.id)
         sidebar.append(listRow)
 
-        // Modern Page Wrapper with Adw.Clamp
-        let pageWidget: Gtk.Widget;
-
-        if (cat.component) {
-            try {
-                beginPage(cat.id, cat.label)
-                pageWidget = cat.component();
-                endPage()
-            } catch (e) {
-                endPage()
-                console.error(`[Settings] Failed to load page ${cat.id}:`, e);
-                pageWidget = new Gtk.Label({ label: `Error cargando la página ${cat.label}` });
-            }
-        } else {
-            const placeholder = new Gtk.Box({
-                orientation: Gtk.Orientation.VERTICAL,
-                spacing: 20,
-                margin_top: 60,
-                vexpand: true,
-            })
-            placeholder.append(new Gtk.Label({
-                label: cat.label,
-                css_classes: ["settings-page-title"]
-            }))
-            placeholder.append(new Gtk.Label({
-                label: `La configuración de ${cat.label} estará disponible pronto.`,
-                css_classes: ["settings-placeholder"]
-            }))
-            pageWidget = placeholder;
+        // Build page widget
+        let pageWidget: Gtk.Widget
+        try {
+            beginPage(cat.id, cat.label)
+            pageWidget = cat.component()
+            endPage()
+        } catch (e) {
+            endPage()
+            console.error(`[Settings] Failed to load page ${cat.id}:`, e)
+            pageWidget = new Gtk.Label({ label: `Error cargando la página ${cat.label}` })
         }
 
-        const clamp = new Adw.Clamp({
-            maximum_size: 800,
-            tightening_threshold: 600,
-            vexpand: true,
-        })
-        clamp.set_child(pageWidget)
+        // CrystalClamp replaces Adw.Clamp
+        const clamp = CrystalClamp(pageWidget, 800, true)
 
         const scroll = new Gtk.ScrolledWindow({
             hscrollbar_policy: Gtk.PolicyType.NEVER,
             vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
             hexpand: true,
             vexpand: true,
-            css_classes: ["settings-page-scroll"]
+            css_classes: ["settings-page-scroll"],
         })
         scroll.set_child(clamp)
-
-        stack.add_titled(scroll, cat.id, cat.label)
+        stack.add_named(scroll, cat.id)
     })
 
     sidebar.set_name("crystal-settings-sidebar-list")
 
-    // --- Search results page ---
+    // ── Search results page ───────────────────────────────────────────────────
     const searchResultsList = new Gtk.ListBox({
-        css_classes: ["settings-list-box", "boxed-list", "search-results-list"],
+        css_classes: ["settings-list-box", "search-results-list"],
         selection_mode: Gtk.SelectionMode.NONE,
         activate_on_single_click: true,
     })
@@ -216,8 +196,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     searchResultsPage.append(searchResultsList)
     searchResultsPage.append(searchResultsEmpty)
 
-    const srClamp = new Adw.Clamp({ maximum_size: 800, tightening_threshold: 600, vexpand: true })
-    srClamp.set_child(searchResultsPage)
+    const srClamp = CrystalClamp(searchResultsPage, 800, true)
     const srScroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
@@ -259,12 +238,14 @@ export default function Settings(monitor: Gdk.Monitor) {
             text.append(new Gtk.Label({ label: item.label, css_classes: ["settings-row-label"], halign: Gtk.Align.START }))
             if (item.subtitle) {
                 text.append(new Gtk.Label({
-                    label: item.subtitle, css_classes: ["settings-row-subtitle"],
-                    halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 50,
+                    label: item.subtitle,
+                    css_classes: ["settings-row-subtitle"],
+                    halign: Gtk.Align.START,
+                    ellipsize: 3,
+                    max_width_chars: 50,
                 }))
             }
             row.append(text)
-
             row.append(new Gtk.Label({ label: item.pageLabel, css_classes: ["search-result-chip"] }))
             row.append(new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, opacity: 0.4, css_classes: ["cs-icon"] }))
 
@@ -282,12 +263,11 @@ export default function Settings(monitor: Gdk.Monitor) {
         const pageId = (row as any)._targetPageId
         if (pageId) {
             searchEntry.text = ""
-            sidebar.invalidate_filter()
             navigateTo(pageId)
         }
     })
 
-    // --- Navigation history ---
+    // ── Navigation history ────────────────────────────────────────────────────
     const history: string[] = []
     let historyIdx = -1
     let isProgrammaticNav = false
@@ -295,7 +275,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     const syncSidebarSelection = (pageId: string) => {
         isProgrammaticNav = true
         for (let i = 0; i < categories.length; i++) {
-            const row = sidebar.get_row_at_index(i + 1) // +1: spacer row is prepended at index 0
+            const row = sidebar.get_row_at_index(i + 1) // +1: spacer at index 0
             if (row?.get_name() === pageId) { sidebar.select_row(row); break }
         }
         isProgrammaticNav = false
@@ -308,7 +288,7 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     const navigateTo = (pageId: string, addToHistory = true) => {
         if (addToHistory) {
-            history.splice(historyIdx + 1) // discard forward history
+            history.splice(historyIdx + 1)
             history.push(pageId)
             historyIdx = history.length - 1
         }
@@ -322,8 +302,6 @@ export default function Settings(monitor: Gdk.Monitor) {
         navigateTo(row.name)
     })
 
-    // Revert any spurious selection change (focus, resize, keyboard navigation)
-    // that didn't originate from our own navigateTo/syncSidebarSelection calls.
     sidebar.connect("row-selected", () => {
         if (isProgrammaticNav) return
         const currentPage = stack.visible_child_name
@@ -334,12 +312,11 @@ export default function Settings(monitor: Gdk.Monitor) {
     backBtn.connect("clicked", () => {
         if (historyIdx > 0) navigateTo(history[--historyIdx], false)
     })
-
     forwardBtn.connect("clicked", () => {
         if (historyIdx < history.length - 1) navigateTo(history[++historyIdx], false)
     })
 
-    // Header spacer row — non-interactive, 44px tall, mirrors content header
+    // Header spacer row — non-interactive, 44px, mirrors content header height
     const spacerRow = new Gtk.ListBoxRow({
         css_classes: ["sidebar-header-spacer-row"],
         selectable: false,
@@ -349,7 +326,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     spacerRow.set_child(new Gtk.Box({}))
     sidebar.prepend(spacerRow)
 
-    // Sidebar scroll container
+    // Sidebar scroll
     const sidebarScroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
@@ -359,8 +336,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     sidebarScroll.set_child(sidebar)
     sidebarScroll.set_name("crystal-settings-sidebar-scroll")
 
-
-    // Search
+    // ── Search ────────────────────────────────────────────────────────────────
     const searchEntry = new Gtk.SearchEntry({
         placeholder_text: t("settings.search.placeholder"),
         css_classes: ["settings-search", "pill"],
@@ -374,27 +350,23 @@ export default function Settings(monitor: Gdk.Monitor) {
     searchEntry.connect("search-changed", () => {
         const query = searchEntry.text.trim()
         if (query) {
-            if (stack.visible_child_name !== "search-results") {
+            if (stack.visible_child_name !== "search-results")
                 pageBeforeSearch = stack.visible_child_name || categories[0]?.id || ""
-            }
             populateResults(query)
             stack.visible_child_name = "search-results"
             isProgrammaticNav = true
             sidebar.unselect_all()
             isProgrammaticNav = false
         } else {
-            sidebar.invalidate_filter()
             const target = pageBeforeSearch || categories[0]?.id || ""
             navigateTo(target, false)
             pageBeforeSearch = ""
         }
     })
 
-    searchEntry.connect("stop-search", () => {
-        searchEntry.text = ""
-    })
+    searchEntry.connect("stop-search", () => { searchEntry.text = "" })
 
-    // Sidebar toggle button
+    // ── Sidebar toggle ────────────────────────────────────────────────────────
     const sidebarToggle = new Gtk.Button({
         child: new Gtk.Image({ gicon: Icons.sidebar, pixel_size: 16, css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn", "sidebar-toggle"],
@@ -403,11 +375,11 @@ export default function Settings(monitor: Gdk.Monitor) {
         halign: Gtk.Align.CENTER,
     })
 
-    // Header Assembly — plain Gtk.Box, we own this completely (no Adw.HeaderBar quirks)
+    // ── Header ────────────────────────────────────────────────────────────────
     const headerStart = new Gtk.Box({
         spacing: 8,
         valign: Gtk.Align.CENTER,
-        css_classes: ["header-start-box"]
+        css_classes: ["header-start-box"],
     })
     headerStart.append(sidebarToggle)
     headerStart.append(navCapsule)
@@ -421,16 +393,17 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
     closeBtn.connect("clicked", () => win.set_visible(false))
 
-    // CenterBox header — start/center/end slots give true centering without spacers
-    const contentHeader = new Gtk.CenterBox({
-        css_classes: ["settings-header"],
-    })
+    const contentHeader = new Gtk.CenterBox({ css_classes: ["settings-header"] })
     contentHeader.set_start_widget(headerStart)
     contentHeader.set_center_widget(searchEntry)
     contentHeader.set_end_widget(closeBtn)
 
-    // Content column: header on top, stack below
-    // margin matches sidebar capsule (8px top/right/bottom, 0 left — sidebar provides left spacing)
+    // Gtk.WindowHandle makes the header draggable for window movement.
+    // This replaces the title bar drag area that Adw.Window provided implicitly.
+    const headerHandle = new Gtk.WindowHandle()
+    headerHandle.set_child(contentHeader)
+
+    // ── Content column ────────────────────────────────────────────────────────
     const contentColumn = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         hexpand: true,
@@ -439,61 +412,48 @@ export default function Settings(monitor: Gdk.Monitor) {
         margin_end: 8,
         margin_bottom: 8,
     })
-    contentColumn.append(contentHeader)
+    contentColumn.append(headerHandle)
     contentColumn.append(stack)
 
-    // Overlay split view — sidebar + content
-    const splitView = new Adw.OverlaySplitView({
-        name: "settings-splitview",
+    // ── CrystalSplitView (replaces Adw.OverlaySplitView + Adw.Breakpoint) ────
+    // collapseAt: CrystalSplitView self-manages the poll timer — no extra
+    // wiring needed here. The ZeroMinBox wrapper inside the split view ensures
+    // the window minimum stays near sidebarWidth so Hyprland can tile freely.
+    const splitView = CrystalSplitView({
         sidebar: sidebarScroll,
         content: contentColumn,
-        hexpand: true,
-        vexpand: true,
-        min_sidebar_width: 250,
-        max_sidebar_width: 250,
-        css_classes: ["crystal-split-view", "glass"]
+        sidebarWidth: 250,
+        collapseAt: 800,
+        cssClasses: ["crystal-split-view"],
+        name: "settings-splitview",
     })
 
     sidebarToggle.connect("clicked", () => {
-        splitView.set_show_sidebar(!splitView.show_sidebar)
+        splitView.setShowSidebar(!splitView.showSidebar)
     })
 
-    // Hide sidebar separator for a clean look
-    try {
-        // @ts-ignore
-        if (splitView.set_show_sidebar_separator) splitView.set_show_sidebar_separator(false)
-    } catch (e) {}
-
-    // Responsive breakpoint — collapse sidebar below 1100px
-    const breakpoint = new Adw.Breakpoint({
-        condition: Adw.BreakpointCondition.parse("max-width: 1100px")
-    })
-    breakpoint.add_setter(splitView, "collapsed", true)
-    win.add_breakpoint(breakpoint)
-
-    const mainContainer = new Gtk.Box({ css_classes: ["settings-main-glass"] })
-    mainContainer.set_name("settings-main-glass")
-    mainContainer.append(splitView)
-    win.set_content(mainContainer)
-
-    // Restore sidebar selection after collapse/expand
-    splitView.connect("notify::collapsed", () => {
+    splitView.connectCollapsedChanged(() => {
         if (!sidebar.get_selected_row() && stack.visible_child_name)
             syncSidebarSelection(stack.visible_child_name)
     })
 
-    // Hide instead of destroy so the window can be reopened later
-    win.connect("close-request", () => {
-        win.set_visible(false)
-        return true // Prevent GTK4 default destroy
-    })
+    // ── Main glass container ──────────────────────────────────────────────────
+    const mainContainer = new Gtk.Box({ css_classes: ["settings-main-glass"] })
+    mainContainer.set_name("settings-main-glass")
+    mainContainer.append(splitView.widget)
 
-    ; (win as any).toggle = () => {
+    // Gtk.Window.set_child() replaces Adw.Window.set_content()
+    win.set_child(mainContainer)
+
+    // Hide instead of destroy — window is reused across toggles
+    win.connect("close-request", () => { win.set_visible(false); return true })
+
+    ;(win as any).toggle = () => {
         win.visible = !win.visible
         if (win.visible) win.present()
     }
 
-    // Default selection — navigate to first page, seeding history
+    // Default page — seeds history
     if (categories.length > 0) navigateTo(categories[0].id)
 
     return win
