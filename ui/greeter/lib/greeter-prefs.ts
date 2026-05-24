@@ -5,7 +5,7 @@ export interface GreeterPrefs {
   kbLayout: string
 }
 
-const PREFS_PATH = "/var/lib/greeter/.config/crystal-shell/greeter-prefs.json"
+const PREFS_PATH = `${GLib.get_user_config_dir()}/crystal-shell/greeter-prefs.json`
 
 function load(): GreeterPrefs {
   try {

@@ -6,8 +6,7 @@ import AstalGreet from "gi://AstalGreet"
 import { getSessions } from "../lib/sessions"
 import { getDefaultUser } from "../lib/users"
 import { t, onLocaleChange } from "../lib/i18n"
-import LocaleBar from "./LocaleBar"
-import { CrystalSelect } from "../../lib/crystal-ui"
+import { CrystalSelect, CrystalOverlayManager } from "../../lib/crystal-ui"
 
 function greetLogin(username: string, password: string, cmd: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -20,7 +19,7 @@ function greetLogin(username: string, password: string, cmd: string): Promise<vo
   })
 }
 
-export default function LoginCard(): Gtk.Widget {
+export default function LoginCard(manager: CrystalOverlayManager): Gtk.Widget {
   const sessions = getSessions()
   const user = getDefaultUser()
 
@@ -31,13 +30,12 @@ export default function LoginCard(): Gtk.Widget {
     ? new Gtk.Image({ file: user.avatarPath, pixel_size: 80, css_classes: ["greeter-avatar"] })
     : new Gtk.Image({ icon_name: "avatar-default-symbolic", pixel_size: 80, css_classes: ["greeter-avatar"] })
   avatar.halign = Gtk.Align.CENTER
-  avatar.margin_top = 72
 
   const usernameLabel = new Gtk.Label({
     label: user.displayName,
     css_classes: ["greeter-username"],
     halign: Gtk.Align.CENTER,
-    margin_top: 10,
+    margin_top: 12,
   })
 
   const passwordEntry = new Gtk.PasswordEntry({
@@ -46,7 +44,7 @@ export default function LoginCard(): Gtk.Widget {
     css_classes: ["greeter-password"],
     halign: Gtk.Align.CENTER,
     width_request: 280,
-    margin_top: 20,
+    margin_top: 28,
   })
 
   const loginBtn = new Gtk.Button({
@@ -54,17 +52,18 @@ export default function LoginCard(): Gtk.Widget {
     css_classes: ["greeter-login-btn"],
     halign: Gtk.Align.CENTER,
     width_request: 280,
-    margin_top: 8,
+    margin_top: 10,
   })
 
   const sessionSelect = CrystalSelect(
     sessions.map(s => ({ label: s.name, value: s.id })),
     sessions[sessionIdx]?.id ?? "",
+    manager,
     "greeter-session-dropdown",
   )
   sessionSelect.widget.halign = Gtk.Align.CENTER
   sessionSelect.widget.width_request = 280
-  sessionSelect.widget.margin_top = 6
+  sessionSelect.widget.margin_top = 14
   sessionSelect.onChanged(value => {
     sessionIdx = sessions.findIndex(s => s.id === value)
   })
@@ -78,10 +77,6 @@ export default function LoginCard(): Gtk.Widget {
     halign: Gtk.Align.CENTER,
     margin_top: 6,
   })
-
-  const localeBar = LocaleBar()
-  localeBar.halign = Gtk.Align.CENTER
-  localeBar.margin_top = 16
 
   // ── Auth logic ────────────────────────────────────────────────────────────
   const setLoading = (loading: boolean) => {
@@ -141,7 +136,6 @@ export default function LoginCard(): Gtk.Widget {
   col.append(loginBtn)
   col.append(sessionDropdown)
   col.append(errorLabel)
-  col.append(localeBar)
 
   col.connect("map", () => {
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {

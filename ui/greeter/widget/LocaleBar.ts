@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import { getLocale, setLocale, type Locale } from "../lib/i18n"
 import { greeterPrefs, savePrefs } from "../lib/greeter-prefs"
+import { CrystalSelect, CrystalOverlayManager } from "../../lib/crystal-ui"
 
 // ── Keyboard layouts ──────────────────────────────────────────────────────────
 
@@ -41,25 +42,23 @@ const LANGUAGES: Language[] = [
 
 // ── Widget ────────────────────────────────────────────────────────────────────
 
-export default function LocaleBar(): Gtk.Widget {
-  // ── Keyboard layout dropdown ──────────────────────────────────────────────
+export default function LocaleBar(manager: CrystalOverlayManager): Gtk.Widget {
+  // ── Keyboard layout selector (CrystalSelect) ──────────────────────────────
   const currentLayout = detectCurrentLayout()
-  const layoutLabels = KB_LAYOUTS.map(l => l.label)
-  const layoutIdx = KB_LAYOUTS.findIndex(l => l.id === currentLayout)
 
-  const kbModel = Gtk.StringList.new(layoutLabels)
-  const kbDropdown = new Gtk.DropDown({
-    model: kbModel,
-    selected: layoutIdx >= 0 ? layoutIdx : 0,
-    css_classes: ["locale-bar-dropdown"],
-    tooltip_text: "Keyboard layout",
-  })
+  const kbSelect = CrystalSelect(
+    KB_LAYOUTS.map(l => ({ label: l.label, value: l.id })),
+    currentLayout,
+    manager,
+    "locale-bar-dropdown",
+  )
 
-  kbDropdown.connect("notify::selected", () => {
-    const layout = KB_LAYOUTS[kbDropdown.selected]?.id
-    if (!layout) return
-    savePrefs({ kbLayout: layout })
-    execAsync(["hyprctl", "keyword", "input:kb_layout", layout])
+  // Explicit width so the list inherits a stable, consistent size
+  kbSelect.widget.width_request = 100
+
+  kbSelect.onChanged(value => {
+    savePrefs({ kbLayout: value })
+    execAsync(["hyprctl", "keyword", "input:kb_layout", value])
       .catch(e => console.warn("[LocaleBar] kb_layout change:", e))
   })
 
@@ -89,7 +88,7 @@ export default function LocaleBar(): Gtk.Widget {
     langBox.append(btn)
   }
 
-  // ── Layout: [⌨ keyboard dropdown] + [lang buttons] ───────────────────────
+  // ── Layout: [⌨ kbSelect] [sep] [lang buttons] ────────────────────────────
   const kbIcon = new Gtk.Image({ icon_name: "input-keyboard-symbolic", pixel_size: 12 })
   kbIcon.add_css_class("locale-bar-icon")
 
@@ -100,7 +99,7 @@ export default function LocaleBar(): Gtk.Widget {
     css_classes: ["locale-bar"],
   })
   row.append(kbIcon)
-  row.append(kbDropdown)
+  row.append(kbSelect.widget)
   row.append(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["locale-bar-sep"] }))
   row.append(langBox)
 

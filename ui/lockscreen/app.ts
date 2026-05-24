@@ -1,12 +1,12 @@
 import app from "ags/gtk4/app"
-import { Gdk, Gtk } from "ags/gtk4"
+import { Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 // @ts-ignore
 import Gtk4SessionLock from "gi://Gtk4SessionLock"
 import { Lock, LockOverlay } from "./widget/Lock"
 
-// No Adwaita — plain GTK4 only
-GLib.setenv("GTK_THEME", "Default", true)
+// Use our blank theme instead of Adwaita.
+GLib.setenv("GTK_THEME", "crystal-shell", true)
 
 const cssPath = GLib.file_test("/usr/share/crystal-shell/ui/greeter/style.css", GLib.FileTest.EXISTS)
   ? "/usr/share/crystal-shell/ui/greeter/style.css"
@@ -32,7 +32,18 @@ function loadAccentCss(): string {
     const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
     const entry = ACCENT_PALETTE[cfg.accent as string]
     if (!entry) return ""
-    return `* { --crystal-accent: ${entry.color}; --crystal-accent-rgb: ${entry.rgb}; }`
+    const { color, rgb } = entry
+    return [
+      `* {`,
+      `  --crystal-accent:     ${color};`,
+      `  --crystal-accent-rgb: ${rgb};`,
+      `  --crystal-accent-10:  rgba(${rgb}, 0.10);`,
+      `  --crystal-accent-15:  rgba(${rgb}, 0.15);`,
+      `  --crystal-accent-20:  rgba(${rgb}, 0.20);`,
+      `  --crystal-accent-30:  rgba(${rgb}, 0.30);`,
+      `  --crystal-focus-ring: rgba(${rgb}, 0.35);`,
+      `}`,
+    ].join("\n")
   } catch {
     return ""
   }
@@ -59,16 +70,9 @@ app.start({
     const display = Gdk.Display.get_default()
     if (!display) { console.error("[Lock] No display"); return }
 
+    // Accent override: same USER priority but added AFTER base CSS → later wins
     const accentCss = loadAccentCss()
-    if (accentCss) {
-      const provider = new Gtk.CssProvider()
-      provider.load_from_string(accentCss)
-      Gtk.StyleContext.add_provider_for_display(
-        display,
-        provider,
-        Gtk.STYLE_PROVIDER_PRIORITY_USER + 1,
-      )
-    }
+    if (accentCss) app.apply_css(accentCss)
 
     try {
       const supported = Gtk4SessionLock.is_supported()

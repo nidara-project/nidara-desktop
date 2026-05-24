@@ -460,7 +460,20 @@ class ThemeManager extends GObject.Object {
             tintPanels: this.fcConfig.tintPanels,
             qtTheme: this.fcConfig.qtTheme,
         }
-        writeFile(this.configPath, JSON.stringify(merged, null, 2))
+        const json = JSON.stringify(merged, null, 2)
+        writeFile(this.configPath, json)
+
+        // Mirror to /var/tmp so the greeter (which runs as a system user without
+        // access to the user home dir) can read the accent on next login screen.
+        try {
+            const sharedDir = "/var/tmp/crystal-shell"
+            if (!GLib.file_test(sharedDir, GLib.FileTest.EXISTS))
+                GLib.mkdir_with_parents(sharedDir, 0o755)
+            writeFile(`${sharedDir}/appearance.json`, json)
+        } catch (e) {
+            console.warn("[ThemeManager] could not write shared appearance:", e)
+        }
+
         if (syncQt) writeQtSettings(this.fcConfig, this.state.iconTheme)
     }
 

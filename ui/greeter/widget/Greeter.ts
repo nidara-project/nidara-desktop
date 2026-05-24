@@ -4,8 +4,10 @@ import GLib from "gi://GLib"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import LoginCard from "./LoginCard"
 import PowerBar from "./PowerBar"
+import LocaleBar from "./LocaleBar"
 import Clock from "./Clock"
 import { getDefaultUser } from "../lib/users"
+import { CrystalOverlayManager } from "../../lib/crystal-ui"
 
 function readWallpaperPath(): string | null {
   try {
@@ -36,24 +38,37 @@ export default function Greeter(monitor: Gdk.Monitor) {
       })()
     : new Gtk.Box({ hexpand: true, vexpand: true, css_classes: ["greeter-backdrop"] })
 
+  // Build overlay first so the manager can be created before child widgets
+  const overlay = new Gtk.Overlay()
+  overlay.set_child(fill)
+
+  // The manager is the single source of truth for all floating UI in this window
+  const manager = new CrystalOverlayManager(overlay)
+
   const clockWidget = Clock()
   clockWidget.halign = Gtk.Align.CENTER
   clockWidget.valign = Gtk.Align.START
   clockWidget.margin_top = 72
 
-  const loginCard = LoginCard()
+  const loginCard = LoginCard(manager)
   loginCard.halign = Gtk.Align.CENTER
   loginCard.valign = Gtk.Align.CENTER
 
+  const localeBar = LocaleBar(manager)
+  localeBar.halign = Gtk.Align.START
+  localeBar.valign = Gtk.Align.END
+  localeBar.margin_start = 40
+  localeBar.margin_bottom = 40
+
   const powerBar = PowerBar()
-  powerBar.halign = Gtk.Align.CENTER
+  powerBar.halign = Gtk.Align.END
   powerBar.valign = Gtk.Align.END
+  powerBar.margin_end = 40
   powerBar.margin_bottom = 40
 
-  const overlay = new Gtk.Overlay()
-  overlay.set_child(fill)
   overlay.add_overlay(clockWidget)
   overlay.add_overlay(loginCard)
+  overlay.add_overlay(localeBar)
   overlay.add_overlay(powerBar)
 
   win.set_child(overlay)
