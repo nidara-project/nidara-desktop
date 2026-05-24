@@ -716,6 +716,41 @@ button.crystal-btn.crystal-btn--pill {
   padding: 5px 18px;
 }
 
+image.accent-icon {
+  color: var(--crystal-accent);
+}
+
+button.settings-icon-btn {
+  background: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  border-radius: var(--crystal-radius-sm);
+  padding: 4px;
+  color: var(--crystal-text-dim);
+  min-width: 28px;
+  min-height: 28px;
+}
+button.settings-icon-btn:hover {
+  background: rgba(var(--crystal-accent-rgb), 0.1);
+  color: var(--crystal-accent);
+  background-image: none;
+}
+button.settings-icon-btn:active {
+  background: rgba(var(--crystal-accent-rgb), 0.18);
+  background-image: none;
+}
+button.settings-icon-btn.settings-icon-btn--danger {
+  color: var(--crystal-danger);
+}
+button.settings-icon-btn.settings-icon-btn--danger:hover {
+  background: rgba(var(--crystal-danger-rgb), 0.12);
+  color: var(--crystal-danger);
+}
+button.settings-icon-btn.settings-icon-btn--danger:active {
+  background: rgba(var(--crystal-danger-rgb), 0.22);
+}
+
 /* --- Window Transparency Logic --- */
 window.crystal-dock-window,
 #crystal-dock {
@@ -2861,6 +2896,58 @@ button.settings-action-row:active {
   border-radius: var(--crystal-radius-pill);
   padding: 2px 8px;
   margin-right: 4px;
+}
+
+button.settings-preset-btn {
+  background-image: none;
+  box-shadow: none;
+  border-radius: var(--crystal-radius-sm);
+  padding: 5px 14px;
+  min-height: 0;
+  font-size: 0.875rem;
+  font-weight: 500;
+  background-color: var(--crystal-surface);
+  border: 1px solid var(--crystal-border);
+  color: var(--crystal-text);
+  transition: background 0.15s ease;
+}
+button.settings-preset-btn:hover {
+  background-color: var(--crystal-surface-hover);
+  background-image: none;
+  box-shadow: none;
+}
+button.settings-preset-btn:active {
+  background-color: var(--crystal-surface-active);
+  background-image: none;
+  box-shadow: none;
+}
+button.settings-preset-btn:disabled {
+  opacity: 0.45;
+}
+button.settings-preset-btn.crystal-btn--primary, button.settings-preset-btn:checked {
+  background-color: var(--crystal-accent);
+  border-color: transparent;
+  color: var(--crystal-accent-fg);
+  background-image: none;
+  box-shadow: none;
+}
+button.settings-preset-btn.crystal-btn--primary:hover, button.settings-preset-btn:checked:hover {
+  background-color: color-mix(in srgb, var(--crystal-accent) 85%, white 15%);
+}
+button.settings-preset-btn.crystal-btn--primary:active, button.settings-preset-btn:checked:active {
+  background-color: color-mix(in srgb, var(--crystal-accent) 70%, black 30%);
+}
+
+.linked > button.settings-preset-btn {
+  border-radius: 0;
+  border-right-width: 0;
+}
+.linked > button.settings-preset-btn:first-child {
+  border-radius: var(--crystal-radius-sm) 0 0 var(--crystal-radius-sm);
+}
+.linked > button.settings-preset-btn:last-child {
+  border-radius: 0 var(--crystal-radius-sm) var(--crystal-radius-sm) 0;
+  border-right-width: 1px;
 }
 
 row.wallpaper-preview-row {
