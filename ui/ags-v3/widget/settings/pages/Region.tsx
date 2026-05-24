@@ -6,6 +6,7 @@ import { listGroup, createRow, toggleRow, pageHeader, pageBox, staticLabel } fro
 import regionConfig, { TimeFormat, DateFormat } from "../../../core/RegionConfig"
 import inputConfig from "../../../core/InputConfig"
 import { t } from "../../../core/i18n"
+import { CrystalButton } from "../../../../lib/crystal-ui"
 
 const TIME_FORMAT_LABELS = (): Record<TimeFormat, string> => ({
     "24h": t("settings.region.time.24h"),
@@ -140,9 +141,10 @@ export default function RegionPage() {
 
     let tzStatusTimerId = 0
 
-    const tzApplyBtn = new Gtk.Button({
+    const tzApplyBtn = CrystalButton({
         label: t("settings.region.tz.apply"),
-        css_classes: ["suggested-action"],
+        variant: "primary",
+        pill: true,
         valign: Gtk.Align.CENTER,
     })
 
@@ -201,7 +203,7 @@ export default function RegionPage() {
     langCompletion.set_minimum_key_length(1)
     langEntry.set_completion(langCompletion)
 
-    const applyLangBtn = new Gtk.Button({ label: t("settings.region.tz.apply"), css_classes: ["suggested-action"], valign: Gtk.Align.CENTER })
+    const applyLangBtn = CrystalButton({ label: t("settings.region.tz.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
     const langEntryRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
     langEntryRow.append(langEntry)
     langEntryRow.append(applyLangBtn)
@@ -220,7 +222,7 @@ export default function RegionPage() {
     kbCompletion.set_minimum_key_length(1)
     kbEntry.set_completion(kbCompletion)
 
-    const applyKbBtn = new Gtk.Button({ label: t("settings.region.tz.apply"), css_classes: ["suggested-action"], valign: Gtk.Align.CENTER })
+    const applyKbBtn = CrystalButton({ label: t("settings.region.tz.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
     const kbEntryRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
     kbEntryRow.append(kbEntry)
     kbEntryRow.append(applyKbBtn)

@@ -21,6 +21,10 @@ export { CrystalClamp } from "./clamp"
 export type { CrystalSplitViewResult } from "./split-view"
 export { CrystalSplitView } from "./split-view"
 
+// CrystalButton — unified button component (replaces suggested-action / destructive-action / pill)
+export type { CrystalButtonVariant, CrystalButtonOpts } from "./button"
+export { CrystalButton } from "./button"
+
 // showCrystalAlert — modal confirmation dialog (replaces Adw.AlertDialog)
 export type { AlertResponse } from "./alert-dialog"
 export { showCrystalAlert } from "./alert-dialog"

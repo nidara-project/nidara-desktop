@@ -6,6 +6,7 @@ import Gaming, { type WallpaperMode } from "../../../core/GamingManager"
 import { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
 import { t } from "../../../core/i18n"
 import { listGroup, createRow, toggleRow, dropdownRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { CrystalButton } from "../../../../lib/crystal-ui"
 
 export default function GamingPage() {
     const page = pageBox("gaming-page")
@@ -76,9 +77,10 @@ export default function GamingPage() {
     previewRow.set_child(preview)
     wallGroup.listBox.append(previewRow)
 
-    const pickBtn = new Gtk.Button({
+    const pickBtn = CrystalButton({
         label: t("settings.appearance.label.explorar"),
-        css_classes: ["pill"],
+        variant: "secondary",
+        pill: true,
         valign: Gtk.Align.CENTER,
     })
     pickBtn.connect("clicked", () => {

@@ -4,6 +4,7 @@ import { execAsync } from "ags/process"
 import { listGroup, createRow, staticLabel, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
+import { CrystalButton } from "../../../../lib/crystal-ui"
 
 // ── nmcli helpers ─────────────────────────────────────────────────────────────
 
@@ -182,11 +183,12 @@ function buildApRow(ap: any, iface: string, onRefresh: () => void): Gtk.ListBoxR
             hexpand: true,
         })
 
-        const confirmBtn = new Gtk.Button({
+        const confirmBtn = CrystalButton({
             label: t("settings.network.ap.label.conectar"),
-            css_classes: ["suggested-action"],
-            hexpand: true,
+            variant: "primary",
+            pill: true,
         })
+        confirmBtn.hexpand = true
 
         const titleLabel = new Gtk.Label({
             label: `${t("settings.network.ap.title.contrasena-para")} ${ssid}`,
@@ -341,9 +343,9 @@ export default function NetworkPage() {
         const iface = String(network.wifi.device?.interface || "")
         const { box: apBox, listBox: apList } = listGroup(t("settings.network.group.puntos-de-acceso-cercanos"))
 
-        const scanBtn = new Gtk.Button({
+        const scanBtn = CrystalButton({
             label: t("settings.network.ap.label.buscar-redes"),
-            css_classes: ["flat"],
+            variant: "ghost",
             valign: Gtk.Align.CENTER,
             halign: Gtk.Align.END,
         })

@@ -4,6 +4,7 @@ import GLib from "gi://GLib"
 import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
+import { CrystalButton } from "../../../../lib/crystal-ui"
 
 // ── Config path ───────────────────────────────────────────────────────────────
 const USER_CONF = `${GLib.get_home_dir()}/.config/hypr/hyprland-user.lua`
@@ -168,9 +169,10 @@ export default function AutostartPage() {
             css_classes: ["settings-entry"],
         })
 
-        const addBtn = new Gtk.Button({
+        const addBtn = CrystalButton({
             label: t("settings.autostart.label.anadir"),
-            css_classes: ["suggested-action"],
+            variant: "primary",
+            pill: true,
             valign: Gtk.Align.CENTER,
             sensitive: false,
         })

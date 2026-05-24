@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import { execAsync } from "ags/process"
-import { showCrystalAlert } from "../../../../lib/crystal-ui"
+import { showCrystalAlert, CrystalButton } from "../../../../lib/crystal-ui"
 import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
@@ -142,8 +142,8 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
     const statusLabel = new Gtk.Label({ label: "", css_classes: ["settings-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
 
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
-    const cancelBtn = new Gtk.Button({ label: t("settings.users.other.cancel") })
-    const createBtn = new Gtk.Button({ label: t("settings.users.other.create"), css_classes: ["suggested-action"], sensitive: false })
+    const cancelBtn = CrystalButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
+    const createBtn = CrystalButton({ label: t("settings.users.other.create"), variant: "primary", pill: true, sensitive: false })
     btnRow.append(cancelBtn)
     btnRow.append(createBtn)
 
@@ -234,8 +234,8 @@ function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null
     const statusLabel = new Gtk.Label({ label: "", css_classes: ["settings-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
 
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
-    const cancelBtn = new Gtk.Button({ label: t("settings.users.other.cancel") })
-    const applyBtn  = new Gtk.Button({ label: t("settings.users.other.pw.apply"), css_classes: ["suggested-action"], sensitive: false })
+    const cancelBtn = CrystalButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
+    const applyBtn  = CrystalButton({ label: t("settings.users.other.pw.apply"), variant: "primary", pill: true, sensitive: false })
     btnRow.append(cancelBtn)
     btnRow.append(applyBtn)
 
@@ -373,7 +373,7 @@ export default function UsersPage() {
     if (avatarPath) { try { avatarImg.set_from_file(avatarPath) } catch { avatarImg.gicon = Icons.user } }
     else avatarImg.gicon = Icons.user
 
-    const changeAvatarBtn = new Gtk.Button({ label: t("settings.users.avatar.change"), css_classes: ["pill"], valign: Gtk.Align.CENTER })
+    const changeAvatarBtn = CrystalButton({ label: t("settings.users.avatar.change"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER })
     changeAvatarBtn.connect("clicked", () => {
         const dialog = new Gtk.FileDialog({ title: t("settings.users.avatar.pick"), modal: true })
         const filter = new Gtk.FileFilter()
@@ -400,7 +400,7 @@ export default function UsersPage() {
     profileGroup.listBox.append(createRow(t("settings.users.avatar"), "", avatarRow))
 
     const nameEntry = new Gtk.Entry({ text: displayName, placeholder_text: username, width_chars: 22, valign: Gtk.Align.CENTER })
-    const nameApplyBtn = new Gtk.Button({ label: t("settings.users.name.apply"), css_classes: ["suggested-action"], valign: Gtk.Align.CENTER })
+    const nameApplyBtn = CrystalButton({ label: t("settings.users.name.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
     const applyName = () => {
         const n = nameEntry.text.trim(); if (!n) return
         nameApplyBtn.sensitive = false
@@ -418,7 +418,7 @@ export default function UsersPage() {
 
     // ── Security ──────────────────────────────────────────────────────────────
     const secGroup = listGroup(t("settings.users.group.security"))
-    const pwBtn = new Gtk.Button({ label: t("settings.users.password.change"), css_classes: ["pill"], valign: Gtk.Align.CENTER })
+    const pwBtn = CrystalButton({ label: t("settings.users.password.change"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER })
     pwBtn.connect("clicked", () => spawnTerminalWithCommand(`passwd; read -p "${t("settings.users.password.done")}"`) )
     secGroup.listBox.append(createRow(t("settings.users.password"), t("settings.users.password.desc"), pwBtn))
     page.append(secGroup.box)

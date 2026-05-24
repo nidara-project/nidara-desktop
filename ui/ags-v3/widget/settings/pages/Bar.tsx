@@ -6,6 +6,7 @@ import { barSettings, updateBarSettings } from "../../bar/barState"
 import { LAUNCHER_ICON_PRESETS } from "../../bar/Bar"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
+import { CrystalButton } from "../../../../lib/crystal-ui"
 
 function resolveCurrentPath(key: string): string | null {
     if (LAUNCHER_ICON_PRESETS[key]) return LAUNCHER_ICON_PRESETS[key]
@@ -92,9 +93,10 @@ export default function BarPage() {
     }
     customEntry.connect("activate", applyCustom)
 
-    const applyBtn = new Gtk.Button({
+    const applyBtn = CrystalButton({
         label: t("settings.region.tz.apply"),
-        css_classes: ["suggested-action"],
+        variant: "primary",
+        pill: true,
         valign: Gtk.Align.CENTER,
     })
     applyBtn.connect("clicked", applyCustom)

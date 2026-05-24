@@ -4,6 +4,7 @@ import GLib from "gi://GLib"
 import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
+import { CrystalButton } from "../../../../lib/crystal-ui"
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -60,9 +61,10 @@ export default function BluetoothPage() {
 
     // ── Scan ─────────────────────────────────────────────────────────────────
     const scanGroup = listGroup(t("settings.bluetooth.group.buscar-dispositivos"))
-    const scanBtn = new Gtk.Button({
+    const scanBtn = CrystalButton({
         label: t("settings.bluetooth.label.buscar-ahora"),
-        css_classes: ["suggested-action"],
+        variant: "primary",
+        pill: true,
         valign: Gtk.Align.CENTER,
     })
     const scanSpinner = new Gtk.Spinner({ valign: Gtk.Align.CENTER, visible: false })

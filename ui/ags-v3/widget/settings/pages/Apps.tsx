@@ -6,6 +6,7 @@ import appService, { type AppData } from "../../../core/AppService"
 import { pageBox, pageHeader } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
+import { CrystalButton } from "../../../../lib/crystal-ui"
 
 // ── Icon preview helpers ──────────────────────────────────────────────────────
 
@@ -115,13 +116,14 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
     entry.connect("changed", () => updatePreview(entry.text))
 
     // File picker button
-    const fileBtn = new Gtk.Button({
+    const fileBtn = CrystalButton({
         label: t("settings.apps.label.desde-archivo"),
-        css_classes: ["pill"],
+        variant: "secondary",
+        pill: true,
         halign: Gtk.Align.START,
-        margin_top: 10,
-        margin_bottom: 4,
     })
+    fileBtn.margin_top = 10
+    fileBtn.margin_bottom = 4
     fileBtn.connect("clicked", () => {
         const fd = new Gtk.FileDialog({ title: t("settings.apps.dialog.title.seleccionar-icono"), modal: true })
         const filter = new Gtk.FileFilter()
@@ -147,9 +149,10 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END })
 
     const hasOverride = !!appService.getIconOverridePath(originalIcon)
-    const resetBtn = new Gtk.Button({
+    const resetBtn = CrystalButton({
         label: t("settings.apps.label.restaurar"),
-        css_classes: ["pill"],
+        variant: "secondary",
+        pill: true,
         sensitive: hasOverride,
         tooltip_text: t("settings.apps.tooltip.eliminar-el-override-y-volver-al-icono-d"),
     })
@@ -164,10 +167,10 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
         dialog.close()
     })
 
-    const cancelBtn = new Gtk.Button({ label: t("settings.apps.label.cancelar"), css_classes: ["pill"] })
+    const cancelBtn = CrystalButton({ label: t("settings.apps.label.cancelar"), variant: "secondary", pill: true })
     cancelBtn.connect("clicked", () => dialog.close())
 
-    const applyBtn = new Gtk.Button({ label: t("settings.apps.label.aplicar"), css_classes: ["pill", "suggested-action"] })
+    const applyBtn = CrystalButton({ label: t("settings.apps.label.aplicar"), variant: "primary", pill: true })
     applyBtn.connect("clicked", () => {
         const val = entry.text.trim()
         if (!val) { dialog.close(); return }

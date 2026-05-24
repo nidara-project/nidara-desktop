@@ -330,3 +330,82 @@ button.crystal-seg-btn {
     font-weight: 500;
     color: var(--crystal-text);
 }
+
+// =============================================================================
+// CRYSTAL BUTTON SYSTEM
+// =============================================================================
+// Single source of truth for all CrystalButton variants.
+// Use the CrystalButton() function from crystal-ui — never Adwaita classes
+// (suggested-action, destructive-action, pill, flat) directly in page code.
+//
+// Variants (crystal-btn--<variant>):
+//   secondary  default  surface + border
+//   primary             accent fill
+//   danger              danger tint + danger text/border
+//   ghost               transparent, dim text
+//
+// Modifier:
+//   crystal-btn--pill   fully rounded, slightly wider padding
+
+button.crystal-btn {
+    // Wipe Adwaita/GTK defaults completely
+    background-image: none;
+    box-shadow: none;
+    outline: none;
+
+    // Geometry
+    padding: 5px 14px;
+    min-height: 0;
+    border-radius: $crystal-radius-sm;
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background 0.15s ease;
+
+    // ── secondary (default) ───────────────────────────────────────────────────
+    background-color: var(--crystal-surface);
+    border: 1px solid var(--crystal-border);
+    color: var(--crystal-text);
+
+    &:hover   { background-color: var(--crystal-surface-hover);  background-image: none; box-shadow: none; }
+    &:active  { background-color: var(--crystal-surface-active); background-image: none; box-shadow: none; }
+    &:disabled { opacity: 0.45; }
+    &:focus-visible { outline: 1px solid var(--crystal-accent); outline-offset: 1px; }
+
+    // ── primary ───────────────────────────────────────────────────────────────
+    &.crystal-btn--primary {
+        background-color: var(--crystal-accent);
+        border-color: transparent;
+        color: var(--crystal-accent-fg);
+
+        &:hover  { background-color: color-mix(in srgb, var(--crystal-accent) 85%, white 15%); background-image: none; box-shadow: none; }
+        &:active { background-color: color-mix(in srgb, var(--crystal-accent) 70%, black 30%); background-image: none; }
+        &:focus-visible { outline-color: var(--crystal-accent); }
+    }
+
+    // ── danger ────────────────────────────────────────────────────────────────
+    &.crystal-btn--danger {
+        background-color: rgba(var(--crystal-danger-rgb), 0.10);
+        border-color:     rgba(var(--crystal-danger-rgb), 0.25);
+        color: var(--crystal-danger);
+
+        &:hover  { background-color: rgba(var(--crystal-danger-rgb), 0.20); background-image: none; box-shadow: none; }
+        &:active { background-color: rgba(var(--crystal-danger-rgb), 0.30); background-image: none; }
+        &:focus-visible { outline-color: var(--crystal-danger); }
+    }
+
+    // ── ghost ─────────────────────────────────────────────────────────────────
+    &.crystal-btn--ghost {
+        background-color: transparent;
+        border-color: transparent;
+        color: var(--crystal-text-dim);
+
+        &:hover  { background-color: var(--crystal-surface-hover); background-image: none; box-shadow: none; color: var(--crystal-text); }
+        &:active { background-color: var(--crystal-surface-active); background-image: none; }
+    }
+
+    // ── pill shape modifier ───────────────────────────────────────────────────
+    &.crystal-btn--pill {
+        border-radius: $crystal-radius-pill;
+        padding: 5px 18px;
+    }
+}

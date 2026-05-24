@@ -631,6 +631,91 @@ button.crystal-seg-btn.suggested-action:active {
   color: var(--crystal-text);
 }
 
+button.crystal-btn {
+  background-image: none;
+  box-shadow: none;
+  outline: none;
+  padding: 5px 14px;
+  min-height: 0;
+  border-radius: var(--crystal-radius-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 0.15s ease;
+  background-color: var(--crystal-surface);
+  border: 1px solid var(--crystal-border);
+  color: var(--crystal-text);
+}
+button.crystal-btn:hover {
+  background-color: var(--crystal-surface-hover);
+  background-image: none;
+  box-shadow: none;
+}
+button.crystal-btn:active {
+  background-color: var(--crystal-surface-active);
+  background-image: none;
+  box-shadow: none;
+}
+button.crystal-btn:disabled {
+  opacity: 0.45;
+}
+button.crystal-btn:focus-visible {
+  outline: 1px solid var(--crystal-accent);
+  outline-offset: 1px;
+}
+button.crystal-btn.crystal-btn--primary {
+  background-color: var(--crystal-accent);
+  border-color: transparent;
+  color: var(--crystal-accent-fg);
+}
+button.crystal-btn.crystal-btn--primary:hover {
+  background-color: color-mix(in srgb, var(--crystal-accent) 85%, white 15%);
+  background-image: none;
+  box-shadow: none;
+}
+button.crystal-btn.crystal-btn--primary:active {
+  background-color: color-mix(in srgb, var(--crystal-accent) 70%, black 30%);
+  background-image: none;
+}
+button.crystal-btn.crystal-btn--primary:focus-visible {
+  outline-color: var(--crystal-accent);
+}
+button.crystal-btn.crystal-btn--danger {
+  background-color: rgba(var(--crystal-danger-rgb), 0.1);
+  border-color: rgba(var(--crystal-danger-rgb), 0.25);
+  color: var(--crystal-danger);
+}
+button.crystal-btn.crystal-btn--danger:hover {
+  background-color: rgba(var(--crystal-danger-rgb), 0.2);
+  background-image: none;
+  box-shadow: none;
+}
+button.crystal-btn.crystal-btn--danger:active {
+  background-color: rgba(var(--crystal-danger-rgb), 0.3);
+  background-image: none;
+}
+button.crystal-btn.crystal-btn--danger:focus-visible {
+  outline-color: var(--crystal-danger);
+}
+button.crystal-btn.crystal-btn--ghost {
+  background-color: transparent;
+  border-color: transparent;
+  color: var(--crystal-text-dim);
+}
+button.crystal-btn.crystal-btn--ghost:hover {
+  background-color: var(--crystal-surface-hover);
+  background-image: none;
+  box-shadow: none;
+  color: var(--crystal-text);
+}
+button.crystal-btn.crystal-btn--ghost:active {
+  background-color: var(--crystal-surface-active);
+  background-image: none;
+}
+button.crystal-btn.crystal-btn--pill {
+  border-radius: var(--crystal-radius-pill);
+  padding: 5px 18px;
+}
+
 /* --- Window Transparency Logic --- */
 window.crystal-dock-window,
 #crystal-dock {
@@ -2737,102 +2822,6 @@ button.launcher-icon-btn:hover:not(.selected) {
   color: var(--crystal-danger);
 }
 
-window.crystal-settings-window button.suggested-action {
-  background-color: var(--crystal-accent);
-  background-image: none;
-  color: var(--crystal-accent-fg);
-  box-shadow: none;
-  border: none;
-  border-radius: var(--crystal-radius-sm);
-  padding: 8px 16px;
-  font-weight: 500;
-  min-height: 32px;
-}
-window.crystal-settings-window button.suggested-action:hover {
-  background-color: color-mix(in srgb, var(--crystal-accent) 85%, white 15%);
-  background-image: none;
-}
-window.crystal-settings-window button.suggested-action:active {
-  background-color: color-mix(in srgb, var(--crystal-accent) 70%, black 30%);
-  background-image: none;
-}
-window.crystal-settings-window button.suggested-action:disabled {
-  opacity: 0.5;
-}
-window.crystal-settings-window button.suggested-action.pill {
-  border-radius: var(--crystal-radius-pill);
-  padding: 8px 20px;
-}
-window.crystal-settings-window button.destructive-action {
-  background-color: rgba(var(--crystal-danger-rgb), 0.12);
-  background-image: none;
-  box-shadow: none;
-  color: var(--crystal-danger);
-  border: 1px solid rgba(var(--crystal-danger-rgb), 0.25);
-  border-radius: var(--crystal-radius-sm);
-  padding: 8px 16px;
-  font-weight: 500;
-  min-height: 32px;
-}
-window.crystal-settings-window button.destructive-action:hover {
-  background-color: rgba(var(--crystal-danger-rgb), 0.22);
-  background-image: none;
-  box-shadow: none;
-}
-window.crystal-settings-window button.destructive-action:active {
-  background-color: rgba(var(--crystal-danger-rgb), 0.32);
-  background-image: none;
-}
-window.crystal-settings-window button.destructive-action:disabled {
-  opacity: 0.5;
-}
-window.crystal-settings-window button.destructive-action:focus-visible {
-  outline-color: var(--crystal-danger);
-}
-window.crystal-settings-window button.destructive-action.pill {
-  border-radius: var(--crystal-radius-pill);
-  padding: 8px 20px;
-}
-window.crystal-settings-window button.pill:not(.suggested-action):not(.destructive-action) {
-  background: var(--crystal-surface);
-  background-image: none;
-  box-shadow: none;
-  border: 1px solid var(--crystal-border);
-  border-radius: var(--crystal-radius-pill);
-  padding: 8px 18px;
-  color: var(--crystal-text);
-  font-weight: 500;
-  min-height: 32px;
-}
-window.crystal-settings-window button.pill:not(.suggested-action):not(.destructive-action):hover {
-  background: var(--crystal-surface-hover);
-  background-image: none;
-  box-shadow: none;
-}
-window.crystal-settings-window button.pill:not(.suggested-action):not(.destructive-action):active {
-  background: var(--crystal-surface-active);
-  background-image: none;
-}
-window.crystal-settings-window button.pill:not(.suggested-action):not(.destructive-action):disabled {
-  opacity: 0.5;
-  color: var(--crystal-text-disabled);
-}
-window.crystal-settings-window button.flat {
-  background: transparent;
-  background-image: none;
-  box-shadow: none;
-  border: none;
-  color: var(--crystal-text-dim);
-}
-window.crystal-settings-window button.flat:hover {
-  background: var(--crystal-surface-hover);
-  background-image: none;
-  color: var(--crystal-text);
-}
-window.crystal-settings-window button.flat:active {
-  background: var(--crystal-surface-active);
-  background-image: none;
-}
 window.crystal-settings-window button:focus-visible {
   outline-color: var(--crystal-accent);
 }

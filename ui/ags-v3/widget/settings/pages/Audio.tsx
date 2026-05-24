@@ -4,6 +4,7 @@ import { execAsync } from "ags/process"
 import { listGroup, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
+import { CrystalButton } from "../../../../lib/crystal-ui"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -58,9 +59,9 @@ function createDeviceRow(
             valign: Gtk.Align.CENTER,
         }))
     } else {
-        const setBtn = new Gtk.Button({
+        const setBtn = CrystalButton({
             label: t("settings.audio.btn.set-default"),
-            css_classes: ["flat", "compact-btn"],
+            variant: "ghost",
             valign: Gtk.Align.CENTER,
         })
         setBtn.connect("clicked", onSetDefault)

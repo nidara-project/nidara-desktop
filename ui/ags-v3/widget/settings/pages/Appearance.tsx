@@ -3,6 +3,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Theme from "../../../core/ThemeManager"
+import { CrystalButton } from "../../../../lib/crystal-ui"
 import NightLight from "../../../core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
 import { ACCENT_PALETTE, type AccentKey } from "../../../core/FluidCrystal"
@@ -214,9 +215,10 @@ export default function AppearancePage() {
     wallGroup.listBox.append(transRow)
 
     // File picker row
-    const changeBtn = new Gtk.Button({
+    const changeBtn = CrystalButton({
         label: t("settings.appearance.label.explorar"),
-        css_classes: ["pill"],
+        variant: "secondary",
+        pill: true,
         valign: Gtk.Align.CENTER,
     })
     changeBtn.connect("clicked", () => {
