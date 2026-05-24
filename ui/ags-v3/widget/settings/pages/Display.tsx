@@ -37,13 +37,14 @@ function buildMonitorSection(mon: any): Gtk.Widget {
 
     // Scale
     const currentScale = String(monitorConfig.getScale(name))
-    const scaleDrp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
-    SCALE_PRESETS.forEach(s => scaleDrp.append_text(`${s}×`))
+    const scaleStrings = SCALE_PRESETS.map(s => `${s}×`)
+    const scaleModel = new Gtk.StringList({ strings: scaleStrings })
+    const scaleDrp = new Gtk.DropDown({ model: scaleModel, valign: Gtk.Align.CENTER })
     const initScaleIdx = SCALE_PRESETS.findIndex(s => parseFloat(s) === parseFloat(currentScale))
-    scaleDrp.active = initScaleIdx >= 0 ? initScaleIdx : 0
+    scaleDrp.selected = initScaleIdx >= 0 ? initScaleIdx : 0
 
-    scaleDrp.connect("changed", () => {
-        const val = scaleDrp.get_active_text()
+    scaleDrp.connect("notify::selected", () => {
+        const val = scaleStrings[scaleDrp.selected]
         if (!val) return
         monitorConfig.setScale(name, parseFloat(val.replace("×", "")))
     })
@@ -70,15 +71,13 @@ function buildMonitorSection(mon: any): Gtk.Widget {
         [ROT_NORMAL]: 0, "90°": 1, "180°": 2, "270°": 3,
     }
 
-    const rotDrp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
-    ROTATIONS.forEach(r => rotDrp.append_text(r))
+    const rotModel = new Gtk.StringList({ strings: ROTATIONS })
+    const rotDrp = new Gtk.DropDown({ model: rotModel, valign: Gtk.Align.CENTER })
     const currentTransform = monitorConfig.getTransform(name)
-    rotDrp.active = currentTransform < ROTATIONS.length ? currentTransform : 0
+    rotDrp.selected = currentTransform < ROTATIONS.length ? currentTransform : 0
 
-    rotDrp.connect("changed", () => {
-        const label = rotDrp.get_active_text()
-        if (!label) return
-        monitorConfig.setTransform(name, TRANSFORM_MAP[label] ?? 0)
+    rotDrp.connect("notify::selected", () => {
+        monitorConfig.setTransform(name, TRANSFORM_MAP[ROTATIONS[rotDrp.selected]] ?? 0)
     })
 
     listBox.append(createRow(
@@ -93,13 +92,13 @@ function buildMonitorSection(mon: any): Gtk.Widget {
         t("settings.display.vrr.solo-pantalla-completa"),
         t("settings.display.vrr.siempre"),
     ]
-    const vrrDrp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
-    VRR_OPTS.forEach(o => vrrDrp.append_text(o))
+    const vrrModel = new Gtk.StringList({ strings: VRR_OPTS })
+    const vrrDrp = new Gtk.DropDown({ model: vrrModel, valign: Gtk.Align.CENTER })
     const currentVrr = monitorConfig.vrr
-    vrrDrp.active = currentVrr < VRR_OPTS.length ? currentVrr : 0
+    vrrDrp.selected = currentVrr < VRR_OPTS.length ? currentVrr : 0
 
-    vrrDrp.connect("changed", () => {
-        monitorConfig.setVrr(vrrDrp.active)
+    vrrDrp.connect("notify::selected", () => {
+        monitorConfig.setVrr(vrrDrp.selected)
     })
 
     listBox.append(createRow(

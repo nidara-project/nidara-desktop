@@ -116,12 +116,13 @@ export const dropdownRow = (
     opts: string[],
     cb: (v: string) => void,
 ) => {
-    const drp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
-    opts.forEach(o => drp.append_text(o))
-    drp.active = opts.indexOf(init)
-    drp.connect("changed", () => {
-        const val = drp.get_active_text()
-        if (val) cb(val)
+    const model = new Gtk.StringList({ strings: opts })
+    const drp = new Gtk.DropDown({ model, valign: Gtk.Align.CENTER })
+    const initIdx = opts.indexOf(init)
+    drp.selected = initIdx >= 0 ? initIdx : 0
+    drp.connect("notify::selected", () => {
+        const idx = drp.selected
+        if (idx < opts.length) cb(opts[idx])
     })
     return createRow(label, subtitle, drp)
 }

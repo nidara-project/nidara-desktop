@@ -30,14 +30,14 @@ function appRow(
     // Make sure defName is in the list (it might be filtered out)
     const initName = names.includes(defName) ? defName : names[0]
 
-    const drp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
-    names.forEach(n => drp.append_text(n))
-    drp.active = names.indexOf(initName)
+    const model = new Gtk.StringList({ strings: names })
+    const drp = new Gtk.DropDown({ model, valign: Gtk.Align.CENTER })
+    drp.selected = Math.max(0, names.indexOf(initName))
 
-    drp.connect("changed", () => {
-        const selected = drp.get_active_text()
-        if (!selected) return
-        const app = apps.find(a => a.get_name() === selected)
+    drp.connect("notify::selected", () => {
+        const selectedName = names[drp.selected]
+        if (!selectedName) return
+        const app = apps.find(a => a.get_name() === selectedName)
         if (!app) return
         try { app.set_as_default_for_type(mimeType) } catch (e) {
             console.error("[DefaultApps] set_as_default_for_type:", e)

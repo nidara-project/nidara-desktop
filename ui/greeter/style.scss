@@ -143,22 +143,27 @@ window > contents {
 
 .greeter-shake { animation: greeter-shake 0.4s ease; }
 
-// ── CrystalSelect — dropdown trigger buttons ────────────────────────────────
-// crystal-ui node tree (same widget hierarchy, no separate Wayland surface):
-//   box.crystal-select-container   ← .widget returned by CrystalSelect()
-//     button.{cssClass}            ← trigger (greeter-session-dropdown / locale-bar-dropdown)
-//       box > label + .crystal-select-arrow
-//     revealer (Gtk.Revealer)
-//       box.crystal-select-list    ← item container
-//         box.crystal-select-item  ← Gtk.Box + GestureClick (NOT a button)
-//           label.crystal-select-item-label
-
-.greeter-session-dropdown {
+// ── Gtk.DropDown — session and keyboard layout selectors ─────────────────────
+// Base trigger: same ghost style for all dropdowns in the greeter.
+// GTK4 blank theme means zero defaults — define everything explicitly.
+dropdown > button.combo {
   background: transparent;
   border: none;
+  box-shadow: none;
+  background-image: none;
+  min-height: 0;
+  padding: 0;
+
+  > box { spacing: 4px; }
+
+  label { color: inherit; font-size: inherit; }
+  image { color: inherit; -gtk-icon-size: 10px; }
+}
+
+// Session selector — visible, medium weight
+dropdown.greeter-session-dropdown > button.combo {
   color: var(--crystal-text-secondary);
   font-size: 12px;
-  min-height: 0;
   padding: 4px 10px;
   border-radius: var(--crystal-radius-pill);
 
@@ -166,12 +171,10 @@ window > contents {
   &:active { background: rgba(255, 255, 255, 0.06); }
 }
 
-.locale-bar-dropdown {
-  background: transparent;
-  border: none;
+// Keyboard selector — compact, dimmed
+dropdown.locale-bar-dropdown > button.combo {
   color: var(--crystal-text-muted);
   font-size: 12px;
-  min-height: 0;
   padding: 3px 8px;
   border-radius: var(--crystal-radius-pill);
 
@@ -179,41 +182,46 @@ window > contents {
   &:active { background: rgba(255, 255, 255, 0.05); }
 }
 
-.crystal-select-arrow {
-  font-size: 10px;
-  color: inherit;
-}
+// Popover list — shared for both (auto-positions: above when near bottom)
+popover.combo {
+  background: transparent;
+  border: none;
+  box-shadow: none;
 
-// ── CrystalSelect — overlay dropdown list ────────────────────────────────────
-// Injected into the window-level Gtk.Overlay — same surface as the window,
-// our CSS provider applies with zero interference.
-// Width is set in code to match the trigger exactly.
+  > contents {
+    background: var(--crystal-popup-bg);
+    border: 1px solid var(--crystal-glass-border-sm);
+    border-radius: var(--crystal-radius-sm);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.60);
+    padding: 4px;
+    overflow: hidden;
+  }
 
-.crystal-select-list {
-  background: var(--crystal-popup-bg);
-  border: 1px solid var(--crystal-glass-border-sm);
-  border-radius: var(--crystal-radius-sm);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.60);
-  padding: 4px;
-}
+  > arrow {
+    background: var(--crystal-popup-bg);
+    border-color: var(--crystal-glass-border-sm);
+  }
 
-// Items are Gtk.Box — no button chrome, zero theme interference
-.crystal-select-item {
-  border-radius: 6px;
-  padding: 6px 12px;
+  scrolledwindow, viewport {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
 
-  &--hover    { background: rgba(255, 255, 255, 0.08); }
-  &--selected { background: var(--crystal-accent-15); }
-}
+  listview {
+    background: transparent;
 
-.crystal-select-item-label {
-  color: var(--crystal-text-secondary);
-  font-size: 13px;
-}
+    > row {
+      border-radius: 6px;
+      padding: 6px 12px;
+      min-height: 0;
+      color: var(--crystal-text-secondary);
+      font-size: 13px;
 
-.crystal-select-item--hover .crystal-select-item-label,
-.crystal-select-item--selected .crystal-select-item-label {
-  color: var(--crystal-text);
+      &:hover    { background: rgba(255, 255, 255, 0.08); color: var(--crystal-text); }
+      &:selected { background: var(--crystal-accent-15); color: var(--crystal-text); }
+    }
+  }
 }
 
 // ── Locale bar ───────────────────────────────────────────────────────────────

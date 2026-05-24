@@ -69,11 +69,12 @@ export default function RegionPage() {
 
     const tFmtsDict = TIME_FORMAT_LABELS()
     const timeFmts = Object.keys(tFmtsDict) as TimeFormat[]
-    const timeDrp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
-    timeFmts.forEach(k => timeDrp.append_text(tFmtsDict[k]))
-    timeDrp.active = timeFmts.indexOf(regionConfig.timeFormat)
-    timeDrp.connect("changed", () => {
-        const v = timeFmts[timeDrp.active]
+    const timeLabels = timeFmts.map(k => tFmtsDict[k])
+    const timeModel = new Gtk.StringList({ strings: timeLabels })
+    const timeDrp = new Gtk.DropDown({ model: timeModel, valign: Gtk.Align.CENTER })
+    timeDrp.selected = Math.max(0, timeFmts.indexOf(regionConfig.timeFormat))
+    timeDrp.connect("notify::selected", () => {
+        const v = timeFmts[timeDrp.selected]
         if (v) regionConfig.setTimeFormat(v)
     })
     timeList.append(createRow(t("settings.region.time.format"), t("settings.region.time.format.desc"), timeDrp))
@@ -93,11 +94,12 @@ export default function RegionPage() {
 
     const dFmtsDict = DATE_FORMAT_LABELS()
     const dateFmts = Object.keys(dFmtsDict) as DateFormat[]
-    const dateDrp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
-    dateFmts.forEach(k => dateDrp.append_text(dFmtsDict[k]))
-    dateDrp.active = dateFmts.indexOf(regionConfig.dateFormat)
-    dateDrp.connect("changed", () => {
-        const v = dateFmts[dateDrp.active]
+    const dateLabels = dateFmts.map(k => dFmtsDict[k])
+    const dateModel = new Gtk.StringList({ strings: dateLabels })
+    const dateDrp = new Gtk.DropDown({ model: dateModel, valign: Gtk.Align.CENTER })
+    dateDrp.selected = Math.max(0, dateFmts.indexOf(regionConfig.dateFormat))
+    dateDrp.connect("notify::selected", () => {
+        const v = dateFmts[dateDrp.selected]
         if (v) regionConfig.setDateFormat(v)
     })
     dateList.append(createRow(t("settings.region.date.format"), t("settings.region.date.format.desc"), dateDrp))
@@ -233,8 +235,8 @@ export default function RegionPage() {
     // A single locale choice that sets all "format" LC_* variables at once.
     // Populated from `locale -a`; "" means "same as LANG".
     const regionalValues: string[] = [""]
-    const regionalDrp = new Gtk.ComboBoxText({ valign: Gtk.Align.CENTER })
-    regionalDrp.append_text(t("settings.region.locale.regional.same"))
+    const regionalModel = new Gtk.StringList({ strings: [t("settings.region.locale.regional.same")] })
+    const regionalDrp = new Gtk.DropDown({ model: regionalModel, valign: Gtk.Align.CENTER })
 
     execAsync(["locale", "-a"]).then(output => {
         const locales = output.trim().split("\n")
@@ -244,20 +246,19 @@ export default function RegionPage() {
             .sort()
         locales.forEach(l => {
             regionalValues.push(l)
-            regionalDrp.append_text(l)
+            regionalModel.append(l)
         })
         const current = regionConfig.regionalLocale
         const idx = current ? regionalValues.indexOf(current) : 0
-        // Block signal while setting initial value
         GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-            regionalDrp.active = idx >= 0 ? idx : 0
+            regionalDrp.selected = idx >= 0 ? idx : 0
             return GLib.SOURCE_REMOVE
         })
     }).catch(console.error)
 
-    regionalDrp.connect("changed", () => {
-        const idx = regionalDrp.active
-        if (idx >= 0 && idx < regionalValues.length)
+    regionalDrp.connect("notify::selected", () => {
+        const idx = regionalDrp.selected
+        if (idx < regionalValues.length)
             regionConfig.setRegionalLocale(regionalValues[idx])
     })
 

@@ -413,6 +413,73 @@ button.crystal-btn {
 // Accent-coloured symbolic icon — replaces Adwaita suggested-action on Gtk.Image
 image.accent-icon { color: var(--crystal-accent); }
 
+// ── Gtk.DropDown ─────────────────────────────────────────────────────────────
+// GTK4 native dropdown — auto-positions above/below based on available space.
+// No CrystalOverlayManager needed; no off-screen bug.
+
+// Trigger button
+dropdown > button.combo {
+    @include crystal-reset;
+    background-color: var(--crystal-surface);
+    border: 1px solid var(--crystal-border);
+    border-radius: $crystal-radius-sm;
+    padding: 4px 10px;
+    min-height: 0;
+    transition: background 0.15s ease;
+
+    > box { spacing: 6px; }
+
+    label {
+        font-size: 0.875rem;
+        color: var(--crystal-text);
+    }
+    image {
+        color: var(--crystal-text-dim);
+    }
+
+    &:hover   { background-color: var(--crystal-surface-hover);  background-image: none; box-shadow: none; }
+    &:active  { background-color: var(--crystal-surface-active); background-image: none; }
+    &:disabled { opacity: 0.45; }
+}
+
+// Popover list (auto-flips above when near bottom of screen)
+popover.combo {
+    @include crystal-reset;
+
+    > contents {
+        background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.92));
+        border: 1px solid var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
+        border-radius: $crystal-radius-md;
+        box-shadow: 0 6px 28px rgba(0, 0, 0, 0.32);
+        padding: 4px;
+        overflow: hidden;
+    }
+
+    > arrow {
+        background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.92));
+        border-color: var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
+    }
+
+    scrolledwindow { @include crystal-reset; }
+    viewport       { @include crystal-reset; }
+
+    listview {
+        @include crystal-reset;
+
+        > row {
+            border-radius: $crystal-radius-sm;
+            padding: 6px 10px;
+            min-height: 0;
+            color: var(--crystal-text);
+            font-size: 0.875rem;
+            transition: background 0.15s ease;
+
+            &:hover    { background-color: var(--crystal-surface-hover); }
+            &:selected { background-color: var(--crystal-accent-10); color: var(--crystal-accent); }
+        }
+    }
+}
+
 // ── Icon-only action button ───────────────────────────────────────────────────
 // Compact, transparent, rounded — for mute/remove/add inline actions.
 // Originally scoped to .cc-detail-panel; promoted here so settings pages

@@ -6,7 +6,6 @@ import AstalGreet from "gi://AstalGreet"
 import { getSessions } from "../lib/sessions"
 import { getDefaultUser } from "../lib/users"
 import { t, onLocaleChange } from "../lib/i18n"
-import { CrystalSelect, CrystalOverlayManager } from "../../lib/crystal-ui"
 
 function greetLogin(username: string, password: string, cmd: string): Promise<void> {
   return new Promise((resolve, reject) => {
@@ -19,7 +18,7 @@ function greetLogin(username: string, password: string, cmd: string): Promise<vo
   })
 }
 
-export default function LoginCard(manager: CrystalOverlayManager): Gtk.Widget {
+export default function LoginCard(): Gtk.Widget {
   const sessions = getSessions()
   const user = getDefaultUser()
 
@@ -55,19 +54,20 @@ export default function LoginCard(manager: CrystalOverlayManager): Gtk.Widget {
     margin_top: 10,
   })
 
-  const sessionSelect = CrystalSelect(
-    sessions.map(s => ({ label: s.name, value: s.id })),
-    sessions[sessionIdx]?.id ?? "",
-    manager,
-    "greeter-session-dropdown",
-  )
-  sessionSelect.widget.halign = Gtk.Align.CENTER
-  sessionSelect.widget.width_request = 280
-  sessionSelect.widget.margin_top = 14
-  sessionSelect.onChanged(value => {
-    sessionIdx = sessions.findIndex(s => s.id === value)
+  // Session selector — Gtk.DropDown auto-positions its popover (no off-screen bug)
+  const sessionNames = sessions.map(s => s.name)
+  const sessionModel = new Gtk.StringList({ strings: sessionNames })
+  const sessionDrp = new Gtk.DropDown({
+    model: sessionModel,
+    halign: Gtk.Align.CENTER,
+    width_request: 280,
+    margin_top: 14,
+    css_classes: ["greeter-session-dropdown"],
   })
-  const sessionDropdown = sessionSelect.widget
+  sessionDrp.selected = sessionIdx
+  sessionDrp.connect("notify::selected", () => {
+    sessionIdx = sessionDrp.selected
+  })
 
   const errorLabel = new Gtk.Label({
     label: "",
@@ -83,7 +83,7 @@ export default function LoginCard(manager: CrystalOverlayManager): Gtk.Widget {
     isAuthenticating = loading
     loginBtn.sensitive = !loading
     passwordEntry.sensitive = !loading
-    sessionSelect.setSensitive(!loading)
+    sessionDrp.sensitive = !loading
     loginBtn.label = loading ? t("authenticating") : t("login")
   }
 
@@ -134,7 +134,7 @@ export default function LoginCard(manager: CrystalOverlayManager): Gtk.Widget {
   col.append(usernameLabel)
   col.append(passwordEntry)
   col.append(loginBtn)
-  col.append(sessionDropdown)
+  col.append(sessionDrp)
   col.append(errorLabel)
 
   col.connect("map", () => {

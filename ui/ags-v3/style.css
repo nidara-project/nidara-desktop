@@ -720,6 +720,103 @@ image.accent-icon {
   color: var(--crystal-accent);
 }
 
+dropdown > button.combo {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  background-color: var(--crystal-surface);
+  border: 1px solid var(--crystal-border);
+  border-radius: var(--crystal-radius-sm);
+  padding: 4px 10px;
+  min-height: 0;
+  transition: background 0.15s ease;
+}
+dropdown > button.combo > box {
+  spacing: 6px;
+}
+dropdown > button.combo label {
+  font-size: 0.875rem;
+  color: var(--crystal-text);
+}
+dropdown > button.combo image {
+  color: var(--crystal-text-dim);
+}
+dropdown > button.combo:hover {
+  background-color: var(--crystal-surface-hover);
+  background-image: none;
+  box-shadow: none;
+}
+dropdown > button.combo:active {
+  background-color: var(--crystal-surface-active);
+  background-image: none;
+}
+dropdown > button.combo:disabled {
+  opacity: 0.45;
+}
+
+popover.combo {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+popover.combo > contents {
+  background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.92));
+  border: 1px solid var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
+  border-radius: var(--crystal-radius-md);
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.32);
+  padding: 4px;
+  overflow: hidden;
+}
+popover.combo > arrow {
+  background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.92));
+  border-color: var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
+}
+popover.combo scrolledwindow {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+popover.combo viewport {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+popover.combo listview {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+popover.combo listview > row {
+  border-radius: var(--crystal-radius-sm);
+  padding: 6px 10px;
+  min-height: 0;
+  color: var(--crystal-text);
+  font-size: 0.875rem;
+  transition: background 0.15s ease;
+}
+popover.combo listview > row:hover {
+  background-color: var(--crystal-surface-hover);
+}
+popover.combo listview > row:selected {
+  background-color: var(--crystal-accent-10);
+  color: var(--crystal-accent);
+}
+
 button.settings-icon-btn {
   background: transparent;
   background-image: none;
