@@ -380,6 +380,56 @@ button.settings-action-row {
     margin-right: 4px;
 }
 
+// ── Preset / segmented control buttons ───────────────────────────────────────
+// Used in linked groups: Dock size presets, Gaming mode selector, etc.
+// Selected state is indicated by:
+//   - .crystal-btn--primary class  → Gtk.Button (added/removed dynamically)
+//   - :checked pseudo-class        → Gtk.ToggleButton (managed by GTK)
+button.settings-preset-btn {
+    background-image: none;
+    box-shadow: none;
+    border-radius: $crystal-radius-sm;
+    padding: 5px 14px;
+    min-height: 0;
+    font-size: 0.875rem;
+    font-weight: 500;
+    background-color: var(--crystal-surface);
+    border: 1px solid var(--crystal-border);
+    color: var(--crystal-text);
+    transition: background 0.15s ease;
+
+    &:hover   { background-color: var(--crystal-surface-hover);  background-image: none; box-shadow: none; }
+    &:active  { background-color: var(--crystal-surface-active); background-image: none; box-shadow: none; }
+    &:disabled { opacity: 0.45; }
+
+    // ── Active / selected state ───────────────────────────────────────────────
+    &.crystal-btn--primary,
+    &:checked {
+        background-color: var(--crystal-accent);
+        border-color: transparent;
+        color: var(--crystal-accent-fg);
+        background-image: none;
+        box-shadow: none;
+
+        &:hover  { background-color: color-mix(in srgb, var(--crystal-accent) 85%, white 15%); }
+        &:active { background-color: color-mix(in srgb, var(--crystal-accent) 70%, black 30%); }
+    }
+}
+
+// Linked-group shape overrides: collapse inner borders + adjust end-cap radii
+.linked > button.settings-preset-btn {
+    border-radius: 0;
+    border-right-width: 0; // collapse adjacent border
+
+    &:first-child {
+        border-radius: $crystal-radius-sm 0 0 $crystal-radius-sm;
+    }
+    &:last-child {
+        border-radius: 0 $crystal-radius-sm $crystal-radius-sm 0;
+        border-right-width: 1px; // restore trailing edge
+    }
+}
+
 // ── Wallpaper preview ─────────────────────────────────────────────────────────
 row.wallpaper-preview-row {
     padding: 12px;

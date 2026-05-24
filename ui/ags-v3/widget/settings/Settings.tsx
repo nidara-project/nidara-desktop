@@ -339,7 +339,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     // ── Search ────────────────────────────────────────────────────────────────
     const searchEntry = new Gtk.SearchEntry({
         placeholder_text: t("settings.search.placeholder"),
-        css_classes: ["settings-search", "pill"],
+        css_classes: ["settings-search"],
         width_request: 280,
         max_width_chars: 30,
         valign: Gtk.Align.CENTER,

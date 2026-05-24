@@ -56,7 +56,7 @@ export default function ControlCenterPage(): Gtk.Widget {
 
             const removeBtn = new Gtk.Button({
                 child: new Gtk.Image({ gicon: Icons.minus, pixel_size: 16 , css_classes: ["cs-icon"] }),
-                css_classes: ["settings-icon-btn", "destructive-action-subtle"],
+                css_classes: ["settings-icon-btn", "settings-icon-btn--danger"],
                 valign: Gtk.Align.CENTER,
                 tooltip_text: t("settings.controlcenter.tooltip.quitar-del-cc"),
             })

@@ -158,7 +158,7 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
         pixel_size: 16, css_classes: ["cs-icon"],
     })
     const muteBtn = new Gtk.Button({
-        child: muteImg, css_classes: ["settings-icon-btn", "flat"],
+        child: muteImg, css_classes: ["settings-icon-btn"],
         valign: Gtk.Align.CENTER,
     })
     muteBtn.connect("clicked", () => { stream.mute = !stream.mute })

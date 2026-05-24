@@ -122,7 +122,7 @@ export default function AutostartPage() {
 
                 const deleteBtn = new Gtk.Button({
                     child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 16 , css_classes: ["cs-icon"] }),
-                    css_classes: ["destructive-action", "settings-row-action"],
+                    css_classes: ["crystal-btn", "crystal-btn--danger"],
                     valign: Gtk.Align.CENTER,
                     tooltip_text: t("settings.autostart.tooltip.eliminar"),
                 })

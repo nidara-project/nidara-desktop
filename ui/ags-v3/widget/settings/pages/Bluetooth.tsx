@@ -161,7 +161,7 @@ export default function BluetoothPage() {
                 if (dev.connected) {
                     const disconnectBtn = new Gtk.Button({
                         label: t("settings.bluetooth.label.desconectar"),
-                        css_classes: ["settings-row-action"],
+                        css_classes: ["crystal-btn"],
                         valign: Gtk.Align.CENTER,
                     })
                     disconnectBtn.connect("clicked", () => {
@@ -171,7 +171,7 @@ export default function BluetoothPage() {
                 } else {
                     const connectBtn = new Gtk.Button({
                         label: t("settings.bluetooth.label.conectar"),
-                        css_classes: ["suggested-action", "settings-row-action"],
+                        css_classes: ["crystal-btn", "crystal-btn--primary"],
                         valign: Gtk.Align.CENTER,
                     })
                     connectBtn.connect("clicked", () => {
@@ -182,7 +182,7 @@ export default function BluetoothPage() {
 
                 const removeBtn = new Gtk.Button({
                     child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 16 , css_classes: ["cs-icon"] }),
-                    css_classes: ["settings-row-action", "destructive-action"],
+                    css_classes: ["crystal-btn", "crystal-btn--danger"],
                     valign: Gtk.Align.CENTER,
                     tooltip_text: t("settings.bluetooth.tooltip.olvidar-dispositivo"),
                 })

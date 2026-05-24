@@ -201,12 +201,12 @@ export const presetRow = (
         const btn = new Gtk.Button({
             label: `${val}${unit}`,
             css_classes: val === init
-                ? ["settings-preset-btn", "suggested-action"]
+                ? ["settings-preset-btn", "crystal-btn--primary"]
                 : ["settings-preset-btn"],
         })
         btn.connect("clicked", () => {
-            buttons.forEach(b => b.remove_css_class("suggested-action"))
-            btn.add_css_class("suggested-action")
+            buttons.forEach(b => b.remove_css_class("crystal-btn--primary"))
+            btn.add_css_class("crystal-btn--primary")
             cb(val)
         })
         buttons.push(btn)

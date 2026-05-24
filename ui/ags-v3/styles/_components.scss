@@ -409,3 +409,32 @@ button.crystal-btn {
         padding: 5px 18px;
     }
 }
+
+// Accent-coloured symbolic icon — replaces Adwaita suggested-action on Gtk.Image
+image.accent-icon { color: var(--crystal-accent); }
+
+// ── Icon-only action button ───────────────────────────────────────────────────
+// Compact, transparent, rounded — for mute/remove/add inline actions.
+// Originally scoped to .cc-detail-panel; promoted here so settings pages
+// get the same treatment without needing a parent class.
+button.settings-icon-btn {
+    background: transparent;
+    background-image: none;
+    border: none;
+    box-shadow: none;
+    border-radius: $crystal-radius-sm;
+    padding: 4px;
+    color: var(--crystal-text-dim);
+    min-width: 28px;
+    min-height: 28px;
+
+    &:hover  { background: rgba(var(--crystal-accent-rgb), 0.10); color: var(--crystal-accent); background-image: none; }
+    &:active { background: rgba(var(--crystal-accent-rgb), 0.18); background-image: none; }
+
+    // Danger tint variant — for destructive inline actions (remove/delete)
+    &.settings-icon-btn--danger {
+        color: var(--crystal-danger);
+        &:hover  { background: rgba(var(--crystal-danger-rgb), 0.12); color: var(--crystal-danger); }
+        &:active { background: rgba(var(--crystal-danger-rgb), 0.22); }
+    }
+}

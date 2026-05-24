@@ -134,7 +134,7 @@ export default function PowerPage() {
         const rowContent = new Gtk.Box({ spacing: 16, margin_start: 16, margin_end: 16, margin_top: 14, margin_bottom: 14 })
         rowContent.append(new Gtk.Image({ gicon: p.icon, pixel_size: 20, css_classes: ["sidebar-icon", "cs-icon"] }))
         rowContent.append(new Gtk.Label({ label: p.label, hexpand: true, halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
-        const checkIcon = new Gtk.Image({ gicon: Icons.check, css_classes: ["profile-check", "suggested-action", "cs-icon"], pixel_size: 16, visible: false })
+        const checkIcon = new Gtk.Image({ gicon: Icons.check, css_classes: ["profile-check", "accent-icon", "cs-icon"], pixel_size: 16, visible: false })
         rowContent.append(checkIcon)
         checkIcons.set(p.id, checkIcon)
         const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })

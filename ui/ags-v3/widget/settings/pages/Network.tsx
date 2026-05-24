@@ -65,17 +65,20 @@ function vpnTypeName(type: string): string {
 function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow {
     let active = profile.active
 
-    const btn = new Gtk.Button({ valign: Gtk.Align.CENTER })
+    const btn = new Gtk.Button({
+        valign: Gtk.Align.CENTER,
+        css_classes: ["crystal-btn", "crystal-btn--pill"],
+    })
 
     function setState(state: "connect" | "disconnect" | "loading" | "error") {
         switch (state) {
             case "connect":
                 btn.label = t("settings.network.vpn.btn.conectar")
-                btn.remove_css_class("destructive-action"); btn.add_css_class("suggested-action")
+                btn.remove_css_class("crystal-btn--danger"); btn.add_css_class("crystal-btn--primary")
                 btn.sensitive = true; break
             case "disconnect":
                 btn.label = t("settings.network.vpn.btn.desconectar")
-                btn.remove_css_class("suggested-action"); btn.add_css_class("destructive-action")
+                btn.remove_css_class("crystal-btn--primary"); btn.add_css_class("crystal-btn--danger")
                 btn.sensitive = true; break
             case "loading":
                 btn.label = t("settings.network.vpn.btn.conectando")
@@ -139,21 +142,24 @@ function buildApRow(ap: any, iface: string, onRefresh: () => void): Gtk.ListBoxR
         }))
     }
 
-    const btn = new Gtk.Button({ valign: Gtk.Align.CENTER })
+    const btn = new Gtk.Button({
+        valign: Gtk.Align.CENTER,
+        css_classes: ["crystal-btn", "crystal-btn--pill"],
+    })
     rightBox.append(btn)
 
     function setState(state: "connect" | "disconnect" | "loading" | "error") {
         switch (state) {
             case "connect":
                 btn.label = t("settings.network.ap.label.conectar")
-                btn.remove_css_class("destructive-action")
-                btn.add_css_class("suggested-action")
+                btn.remove_css_class("crystal-btn--danger")
+                btn.add_css_class("crystal-btn--primary")
                 btn.sensitive = true
                 break
             case "disconnect":
                 btn.label = t("settings.network.ap.label.desconectar")
-                btn.remove_css_class("suggested-action")
-                btn.add_css_class("destructive-action")
+                btn.remove_css_class("crystal-btn--primary")
+                btn.add_css_class("crystal-btn--danger")
                 btn.sensitive = true
                 break
             case "loading":
