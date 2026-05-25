@@ -2616,6 +2616,11 @@ row.sidebar-header-spacer-row:hover {
   background: transparent;
 }
 
+.settings-sidebar-row {
+  color: var(--crystal-text-dim);
+  transition: color 0.15s ease;
+}
+
 window.crystal-settings-window list.settings-sidebar {
   background: transparent;
   padding: 6px;
@@ -2633,24 +2638,14 @@ window.crystal-settings-window list.settings-sidebar > row {
 window.crystal-settings-window list.settings-sidebar > row:hover:not(.sidebar-header-spacer-row) {
   background-color: var(--crystal-surface-hover);
 }
+window.crystal-settings-window list.settings-sidebar > row:hover:not(.sidebar-header-spacer-row) .settings-sidebar-row {
+  color: var(--crystal-text);
+}
 window.crystal-settings-window list.settings-sidebar > row:selected, window.crystal-settings-window list.settings-sidebar > row:active {
   background-color: var(--crystal-accent-10);
 }
-window.crystal-settings-window list.settings-sidebar > row:selected label, window.crystal-settings-window list.settings-sidebar > row:selected image, window.crystal-settings-window list.settings-sidebar > row:selected .sidebar-label, window.crystal-settings-window list.settings-sidebar > row:active label, window.crystal-settings-window list.settings-sidebar > row:active image, window.crystal-settings-window list.settings-sidebar > row:active .sidebar-label {
-  color: var(--crystal-accent);
-  opacity: 1;
-}
-
-.settings-sidebar-row {
-  color: var(--crystal-text-dim);
-}
-
-window.crystal-settings-window list.settings-sidebar > row:hover .settings-sidebar-row {
+window.crystal-settings-window list.settings-sidebar > row:selected .settings-sidebar-row, window.crystal-settings-window list.settings-sidebar > row:active .settings-sidebar-row {
   color: var(--crystal-text);
-}
-window.crystal-settings-window list.settings-sidebar > row:selected .settings-sidebar-row,
-window.crystal-settings-window list.settings-sidebar > row:active .settings-sidebar-row {
-  color: var(--crystal-accent);
 }
 
 .settings-header {

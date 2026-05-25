@@ -131,7 +131,7 @@ export default function Settings(monitor: Gdk.Monitor) {
             valign: Gtk.Align.CENTER,
         })
 
-        const icon = new Gtk.Image({ pixel_size: 18, css_classes: ["sidebar-icon", "cs-icon"], opacity: 0.8 })
+        const icon = new Gtk.Image({ pixel_size: 18, css_classes: ["sidebar-icon", "cs-icon"] })
         icon.gicon = cat.icon
 
         rowContent.append(icon)

@@ -45,6 +45,14 @@ row.sidebar-header-spacer-row {
 }
 
 // ── Sidebar list rows ─────────────────────────────────────────────────────────
+// color drives both the label and symbolic icon tint simultaneously.
+// No hardcoded opacity on the icon widget — CSS color is the single source.
+
+.settings-sidebar-row {
+    color: var(--crystal-text-dim);
+    transition: color 0.15s ease;
+}
+
 window.crystal-settings-window list.settings-sidebar {
     background: transparent;
     padding: 6px;
@@ -61,31 +69,15 @@ window.crystal-settings-window list.settings-sidebar {
 
         &:hover:not(.sidebar-header-spacer-row) {
             background-color: var(--crystal-surface-hover);
+
+            .settings-sidebar-row { color: var(--crystal-text); }
         }
 
         &:selected, &:active {
             background-color: var(--crystal-accent-10);
 
-            label, image, .sidebar-label {
-                color: var(--crystal-accent);
-                opacity: 1;
-            }
+            .settings-sidebar-row { color: var(--crystal-text); }
         }
-    }
-}
-
-// Row inner content: default dimmed, hover brighter, selected accent
-.settings-sidebar-row {
-    color: var(--crystal-text-dim);
-}
-
-window.crystal-settings-window list.settings-sidebar {
-    > row:hover .settings-sidebar-row {
-        color: var(--crystal-text);
-    }
-    > row:selected .settings-sidebar-row,
-    > row:active  .settings-sidebar-row {
-        color: var(--crystal-accent);
     }
 }
 
