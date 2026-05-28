@@ -539,7 +539,7 @@ window.crystal-alert-dialog {
 
     > box {
         @include glass(floating);
-        overflow: hidden; // clips children to border-radius
+        // overflow: hidden not supported in GTK4 CSS
     }
 }
 

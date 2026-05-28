@@ -427,7 +427,9 @@ dropdown > button.combo {
     min-height: 0;
     transition: background 0.15s ease;
 
-    > box { spacing: 6px; }
+    // GTK4 CSS has no `spacing` property (that was GTK3-only).
+    // Add a left margin on the label so icon and label have a gap.
+    > box > label { margin-left: 6px; }
 
     label {
         font-size: 0.875rem;
@@ -452,7 +454,7 @@ popover.combo {
         border-radius: $crystal-radius-md;
         box-shadow: 0 6px 28px rgba(0, 0, 0, 0.32);
         padding: 4px;
-        overflow: hidden;
+        // overflow: hidden not supported in GTK4 CSS — clipping is handled by border-radius
     }
 
     > arrow {
