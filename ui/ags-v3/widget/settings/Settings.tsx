@@ -105,20 +105,30 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "about",        label: t("settings.about.page.title.acerca-de"),               icon: Icons.info,          component: AboutPage        },
     ]
 
-    // ── Page stack (Gtk.Stack replaces Adw.ViewStack) ─────────────────────────
-    // hhomogeneous: false — don't propagate the maximum of ALL pages as the
-    // minimum width. With true (the default), the stack's minimum = max of every
-    // page's minimum, which prevented the window from narrowing below ~1043 px.
-    // With false, only the visible page's size is measured, so the window can
-    // resize freely and collapse detection works correctly.
-    const stack = new Gtk.Stack({
+    // ── Page container — single-child swap model ──────────────────────────────
+    // We intentionally avoid Gtk.Stack here. With hhomogeneous/vhomogeneous:false,
+    // Gtk.Stack gives all hidden pages a 0×0 allocation. During CSS reloads
+    // (e.g. dark-mode toggle) GTK snapshots the full widget tree and calls
+    // pixman_region32_init_rect with those 0×0 rects, producing the
+    // "Invalid rectangle" BUG warning. Keeping only the active page in the
+    // widget tree at all times eliminates the problem entirely.
+    const pageCache = new Map<string, Gtk.Widget>()
+    const contentArea = new Gtk.Box({
         hexpand: true,
         vexpand: true,
-        hhomogeneous: false,
-        vhomogeneous: false,
         css_classes: ["settings-stack"],
-        transition_type: Gtk.StackTransitionType.NONE,
     })
+    let activePageId = ""
+
+    const showPage = (id: string) => {
+        if (id === activePageId) return
+        const next = pageCache.get(id)
+        if (!next) return
+        const current = pageCache.get(activePageId)
+        if (current) contentArea.remove(current)
+        contentArea.append(next)
+        activePageId = id
+    }
 
     categories.forEach(cat => {
         const rowContent = new Gtk.Box({
@@ -165,7 +175,7 @@ export default function Settings(monitor: Gdk.Monitor) {
             css_classes: ["settings-page-scroll"],
         })
         scroll.set_child(clamp)
-        stack.add_named(scroll, cat.id)
+        pageCache.set(cat.id, scroll)
     })
 
     sidebar.set_name("crystal-settings-sidebar-list")
@@ -205,7 +215,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         css_classes: ["settings-page-scroll"],
     })
     srScroll.set_child(srClamp)
-    stack.add_named(srScroll, "search-results")
+    pageCache.set("search-results", srScroll)
 
     const populateResults = (query: string) => {
         let child = searchResultsList.get_first_child()
@@ -292,7 +302,7 @@ export default function Settings(monitor: Gdk.Monitor) {
             history.push(pageId)
             historyIdx = history.length - 1
         }
-        stack.visible_child_name = pageId
+        showPage(pageId)
         syncSidebarSelection(pageId)
         updateNavButtons()
     }
@@ -304,9 +314,8 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     sidebar.connect("row-selected", () => {
         if (isProgrammaticNav) return
-        const currentPage = stack.visible_child_name
-        if (currentPage && currentPage !== "search-results")
-            syncSidebarSelection(currentPage)
+        if (activePageId && activePageId !== "search-results")
+            syncSidebarSelection(activePageId)
     })
 
     backBtn.connect("clicked", () => {
@@ -350,10 +359,10 @@ export default function Settings(monitor: Gdk.Monitor) {
     searchEntry.connect("search-changed", () => {
         const query = searchEntry.text.trim()
         if (query) {
-            if (stack.visible_child_name !== "search-results")
-                pageBeforeSearch = stack.visible_child_name || categories[0]?.id || ""
+            if (activePageId !== "search-results")
+                pageBeforeSearch = activePageId || categories[0]?.id || ""
             populateResults(query)
-            stack.visible_child_name = "search-results"
+            showPage("search-results")
             isProgrammaticNav = true
             sidebar.unselect_all()
             isProgrammaticNav = false
@@ -413,7 +422,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         margin_bottom: 8,
     })
     contentColumn.append(headerHandle)
-    contentColumn.append(stack)
+    contentColumn.append(contentArea)
 
     // ── CrystalSplitView (replaces Adw.OverlaySplitView + Adw.Breakpoint) ────
     // collapseAt: CrystalSplitView self-manages the poll timer — no extra
@@ -436,8 +445,8 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
 
     splitView.connectCollapsedChanged(() => {
-        if (!sidebar.get_selected_row() && stack.visible_child_name)
-            syncSidebarSelection(stack.visible_child_name)
+        if (!sidebar.get_selected_row() && activePageId)
+            syncSidebarSelection(activePageId)
     })
 
     // ── Main glass container ──────────────────────────────────────────────────
