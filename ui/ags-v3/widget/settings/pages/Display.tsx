@@ -107,7 +107,6 @@ function buildMonitorSection(mon: any): Gtk.Widget {
         vrrDrp
     ))
 
-    box.append(listBox)
     return box
 }
 
