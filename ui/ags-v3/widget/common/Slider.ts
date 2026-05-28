@@ -38,10 +38,12 @@ function pillPath(cr: any, leftX: number, rightX: number, cy: number, h: number)
 }
 
 function drawSlider(cr: any, w: number, h: number, frac: number, trackH: number, thumbR: number) {
+    if (w <= 0 || h <= 0) return        // not yet allocated (hidden stack page, etc.)
     const isDark = Theme.isDark
     const cy = h / 2
     const tx = thumbR                    // track left edge aligns with thumb center at min
     const tw = w - thumbR * 2           // track pixel width
+    if (tw <= 0) return                  // widget narrower than thumb — nothing to draw
     const thumbX = tx + frac * tw       // thumb center
 
     // ── Track background ─────────────────────────────────────────────
@@ -171,7 +173,9 @@ export function makeHSlider(opts: {
     // Handler wasn't connected when set_value(value) ran — prime the label now
     opts.onValueChanged?.(scale.get_value())
 
-    const themeSignalId = Theme.connect("changed", () => da.queue_draw())
+    // Only redraw when allocated — hidden stack pages have 0×0 allocation and
+    // calling queue_draw() on them triggers pixman "Invalid rectangle" errors.
+    const themeSignalId = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
     overlay.connect("unrealize", () => { try { Theme.disconnect(themeSignalId) } catch {} })
 
     if (onExtChange) {
