@@ -86,7 +86,6 @@ export default function RegionPage() {
         (v) => regionConfig.setShowSeconds(v),
     ))
 
-    timeBox.append(timeList)
     page.append(timeBox)
 
     // ── Fecha ─────────────────────────────────────────────────────────────────
@@ -104,7 +103,6 @@ export default function RegionPage() {
     })
     dateList.append(createRow(t("settings.region.date.format"), t("settings.region.date.format.desc"), dateDrp))
 
-    dateBox.append(dateList)
     page.append(dateBox)
 
     // ── Zona Horaria ──────────────────────────────────────────────────────────
@@ -187,7 +185,6 @@ export default function RegionPage() {
         tzEntryRow,
     ))
 
-    tzBox.append(tzList)
     page.append(tzBox)
 
     // ── Idioma del sistema y Teclado ──────────────────────────────────────────
@@ -314,7 +311,6 @@ export default function RegionPage() {
     applyKbBtn.connect("clicked", applyKb)
     kbEntry.connect("activate", applyKb)
 
-    localeBox.append(localeList)
     page.append(localeBox)
 
     const regionSigId = regionConfig.connect("changed", () => {

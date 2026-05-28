@@ -85,7 +85,6 @@ export default function AboutPage() {
     shellList.append(createRow(t("settings.about.row.label.version"), "Crystal Shell", staticLabel(readVersion())))
     shellList.append(createRow(t("settings.about.row.label.shell"), t("settings.about.row.desc.ags-v3-gjs-gtk4"), staticLabel("Hyprland WM")))
 
-    shellBox.append(shellList)
     page.append(shellBox)
 
     // ── Sistema ────────────────────────────────────────────────────────────────
@@ -108,7 +107,6 @@ export default function AboutPage() {
     sysList.append(createRow(t("settings.about.row.label.tiempo-activo"), t("settings.about.row.desc.desde-el-ultimo-arranque"), uptimeLabel))
     execAsync(["uptime", "-p"]).then(v => { uptimeLabel.label = v.trim().replace(/^up /, "") }).catch(() => {})
 
-    sysBox.append(sysList)
     page.append(sysBox)
 
     // ── Entorno ────────────────────────────────────────────────────────────────
@@ -128,7 +126,6 @@ export default function AboutPage() {
         hyprLabel.label = match ? match[1] : v.split("\n")[0].trim()
     }).catch(() => { hyprLabel.label = t("settings.about.label.no-disponible") })
 
-    envBox.append(envList)
     page.append(envBox)
 
     return page

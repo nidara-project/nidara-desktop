@@ -37,7 +37,6 @@ export default function InputPage() {
         (v) => inputConfig.setMouseNaturalScroll(v)
     ))
 
-    mouseBox.append(mouseList)
     page.append(mouseBox)
 
     // ── Touchpad ──────────────────────────────────────────────────────────────
@@ -57,7 +56,6 @@ export default function InputPage() {
         (v) => inputConfig.setTouchpadTap(v)
     ))
 
-    touchBox.append(touchList)
     page.append(touchBox)
 
     // ── Keyboard ──────────────────────────────────────────────────────────────
@@ -135,7 +133,6 @@ export default function InputPage() {
         { unit: "/s" }
     ))
 
-    kbBox.append(kbList)
     page.append(kbBox)
 
     // ── Signals Sync ──────────────────────────────────────────────────────────
