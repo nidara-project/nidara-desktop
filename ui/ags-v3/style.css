@@ -1,3 +1,4 @@
+@charset "UTF-8";
 /* ==========================================================================
    CRYSTAL DESIGN SYSTEM - BASE TOKENS (V3000)
    ========================================================================== */
@@ -2606,6 +2607,73 @@ window.workspace-cockpit {
   outline: none;
 }
 
+.sidebar-floating .crystal-sidebar-capsule {
+  background: var(--crystal-popover-bg, rgba(36, 36, 36, 0.94));
+  border-color: var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
+  box-shadow: 4px 0 28px rgba(0, 0, 0, 0.45);
+}
+
+popover.crystal-sidebar-popup {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  font-weight: 400;
+}
+popover.crystal-sidebar-popup > contents {
+  background: var(--crystal-popover-bg);
+  border: 1px solid var(--crystal-popover-border);
+  border-radius: var(--crystal-radius-md);
+  box-shadow: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+popover.crystal-sidebar-popup .crystal-sidebar-capsule {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  margin: 0;
+  box-shadow: none;
+}
+popover.crystal-sidebar-popup list.settings-sidebar {
+  background: transparent;
+  padding: 6px;
+  font-weight: 400;
+}
+popover.crystal-sidebar-popup list.settings-sidebar > row {
+  background: transparent;
+  padding: 0;
+  margin: 1px 0;
+  border-radius: var(--crystal-radius-sm);
+  min-height: 36px;
+  transition: background 0.15s ease;
+  border: none;
+  box-shadow: none;
+}
+popover.crystal-sidebar-popup list.settings-sidebar > row:hover:not(.sidebar-header-spacer-row) {
+  background-color: var(--crystal-surface-hover);
+}
+popover.crystal-sidebar-popup list.settings-sidebar > row:hover:not(.sidebar-header-spacer-row) .settings-sidebar-row {
+  color: var(--crystal-text);
+}
+popover.crystal-sidebar-popup list.settings-sidebar > row:selected, popover.crystal-sidebar-popup list.settings-sidebar > row:active {
+  background-color: var(--crystal-accent-10);
+}
+popover.crystal-sidebar-popup list.settings-sidebar > row:selected .settings-sidebar-row, popover.crystal-sidebar-popup list.settings-sidebar > row:active .settings-sidebar-row {
+  color: var(--crystal-text);
+}
+popover.crystal-sidebar-popup row.sidebar-header-spacer-row {
+  min-height: 0;
+  border: none;
+  padding: 0;
+  margin: 0;
+}
+
 row.sidebar-header-spacer-row {
   min-height: 44px;
   border-bottom: 1px solid var(--crystal-border);
@@ -3219,5 +3287,3 @@ window.prism-window decoration, window.prism-window contents {
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-
-/*# sourceMappingURL=style.css.map */

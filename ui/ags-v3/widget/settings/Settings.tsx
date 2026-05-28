@@ -426,6 +426,9 @@ export default function Settings(monitor: Gdk.Monitor) {
         collapseAt: 800,
         cssClasses: ["crystal-split-view"],
         name: "settings-splitview",
+        // floatAnchor enables Popover mode in collapsed state so Hyprland's
+        // blur:popups applies compositor blur to the content behind the sidebar.
+        floatAnchor: sidebarToggle,
     })
 
     sidebarToggle.connect("clicked", () => {

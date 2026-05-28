@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import { Gtk, Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 
 export interface CrystalSplitViewResult {
@@ -19,10 +19,16 @@ export interface CrystalSplitViewResult {
  *     [spacer sidebarWidth px | contentZeroMin hexpand]
  *     sidebar overlay anchored START fills the spacer area visually.
  *
- *   Collapsed:
+ *   Collapsed (no floatAnchor):
  *     [contentZeroMin takes full width]
  *     sidebar overlay floats on top when showSidebar = true.
  *     Transparent backdrop beneath catches click-outside → closes sidebar.
+ *
+ *   Collapsed (with floatAnchor):
+ *     sidebar is reparented into a Gtk.Popover (xdg_popup) attached to
+ *     floatAnchor. Hyprland's blur:popups = true applies compositor blur
+ *     to the settings content visible behind the semi-transparent panel.
+ *     Popover autohide handles click-outside; no separate backdrop needed.
  *
  * ── Zero-minimum content wrapper ─────────────────────────────────────────────
  *
@@ -52,6 +58,13 @@ export function CrystalSplitView(opts: {
     collapseAt?: number
     cssClasses?: string[]
     name?: string
+    /**
+     * When provided, the floating sidebar opens as a Gtk.Popover attached to
+     * this widget instead of an Overlay child. The Popover creates an xdg_popup
+     * surface, enabling Hyprland's blur:popups to blur the content behind it.
+     * If omitted, the original Overlay + backdrop approach is used.
+     */
+    floatAnchor?: Gtk.Widget
 }): CrystalSplitViewResult {
     const {
         sidebar,
@@ -60,6 +73,7 @@ export function CrystalSplitView(opts: {
         collapseAt   = 0,
         cssClasses   = [],
         name,
+        floatAnchor,
     } = opts
 
     let _showSidebar = true
@@ -75,7 +89,8 @@ export function CrystalSplitView(opts: {
         valign: Gtk.Align.FILL,
     })
     sidebarWrap.append(sidebar)
-    sidebar.vexpand = true
+    sidebar.vexpand  = true
+    sidebar.hexpand  = true  // fill sidebarWrap's full width in docked mode
 
     // ── Spacer: reserves inline space for sidebar in non-collapsed mode ───────
     const spacer = new Gtk.Box({
@@ -83,7 +98,8 @@ export function CrystalSplitView(opts: {
         hexpand: false,
     })
 
-    // ── Backdrop: catches click-outside in collapsed mode ─────────────────────
+    // ── Backdrop: catches click-outside in collapsed overlay mode ─────────────
+    // Only used when floatAnchor is NOT provided (Popover handles its own autohide).
     const backdrop = new Gtk.Box({
         hexpand: true,
         vexpand: true,
@@ -94,7 +110,7 @@ export function CrystalSplitView(opts: {
     backdrop.visible = false
     const bdClick = new Gtk.GestureClick()
     bdClick.connect("pressed", () => {
-        if (_collapsed && _showSidebar) {
+        if (_collapsed && _showSidebar && !floatAnchor) {
             _showSidebar = false
             applyLayout()
         }
@@ -102,15 +118,6 @@ export function CrystalSplitView(opts: {
     backdrop.add_controller(bdClick)
 
     // ── Zero-minimum content wrapper ──────────────────────────────────────────
-    // Gtk.Overlay measures only its BASE child for minimum size; overlay children
-    // (add_overlay) are NOT included in the minimum computation by default.
-    //
-    // Base = empty Gtk.Box → minimum width = 0
-    // content = overlay child with FILL alignment → allocated at full parent size
-    //
-    // Result: contentZeroMin.minimum_width = 0, so the root Overlay (and the
-    // ancestor window) reports minimum ≈ sidebarWidth instead of
-    // sidebarWidth + content_minimum.
     const contentZeroMin = new Gtk.Overlay({
         hexpand: true,
         vexpand: true,
@@ -142,26 +149,184 @@ export function CrystalSplitView(opts: {
     root.add_overlay(backdrop)     // z: below sidebar
     root.add_overlay(sidebarWrap)  // z: above backdrop
 
+    // ── Popover mode (floatAnchor) ─────────────────────────────────────────────
+    // Sidebar is reparented into an xdg_popup (Gtk.Popover) so Hyprland's
+    // blur:popups applies compositor blur to the content visible behind it.
+    // The Popover is created lazily on first use and reused thereafter.
+    //
+    // IMPORTANT — why the permanent wrapper Box?
+    // GTK4's Gtk.Popover.set_child() stores a `priv->child` pointer and skips
+    // the call if `priv->child == child`. After `sidebar.unparent()`, the
+    // sidebar's own parent pointer is cleared but the Popover's `priv->child`
+    // might still hold the old reference. A second call to set_child(sidebar)
+    // then hits the early-return path and never re-parents the widget, leaving
+    // the list blank from the second open onwards.
+    // Fix: set_child() is called ONCE with a permanent Box. The sidebar moves
+    // in/out of that Box via append/unparent — bypassing the Popover's
+    // single-child caching entirely.
+    //
+    // IMPORTANT — why set_parent(root) instead of set_parent(floatAnchor)?
+    // pointing_to coordinates are always in the parent widget's coordinate space.
+    // Parenting to floatAnchor (a button deep inside the header) would require
+    // translate_coordinates(root → floatAnchor) to convert the target window-space
+    // rect — this translation is fragile and produces a non-zero x offset that
+    // makes the popup appear shifted (visually "wider" than the docked sidebar).
+    // Parenting to `root` (the Gtk.Overlay that fills the window from 0,0) means
+    // pointing_to IS window-space: no translation, no offset error.
+    // Must match .crystal-sidebar-capsule's margin-left (8px) so the popup
+    // surface is the same width and left-aligned as the docked sidebar panel.
+    const SIDEBAR_GAP = 8
+
+    let _popover: Gtk.Popover | null    = null
+    let _popoverBox: Gtk.Overlay | null = null
+    let _sidebarInPopover = false
+
+    function ensurePopover(): Gtk.Popover {
+        if (_popover) return _popover
+
+        // ── Zero-minimum slot (same trick as contentZeroMin) ──────────────────
+        // Gtk.Overlay only measures its BASE child for natural size; overlay
+        // children are excluded. The base is an empty Box (natural width = 0),
+        // so the Popover width = its own width_request = sidebarWidth-SIDEBAR_GAP,
+        // regardless of how wide the sidebar's label text is naturally.
+        // The sidebar sits as an overlay child with halign/valign=FILL, so it
+        // fills the Overlay's full allocated area (= sidebarWidth-SIDEBAR_GAP).
+        const zeroMinBase = new Gtk.Box()
+        const sidebarSlot = new Gtk.Overlay({ hexpand: false, vexpand: true })
+        sidebarSlot.set_child(zeroMinBase)
+        _popoverBox = sidebarSlot
+
+        const pop = new Gtk.Popover({
+            has_arrow: false,
+            autohide:  true,
+            css_classes: ["crystal-sidebar-popup"],
+            // sidebarWidth - SIDEBAR_GAP: the popup spans x=SIDEBAR_GAP..x=sidebarWidth
+            // in root-space, matching the docked capsule (margin-left:8px inside a
+            // sidebarWidth-wide wrapper with no right margin).
+            width_request: sidebarWidth - SIDEBAR_GAP,
+            position: Gtk.PositionType.BOTTOM,
+        })
+        pop.set_child(sidebarSlot)  // called once, never again
+        // Parent to root (the full-window Overlay at 0,0) so pointing_to
+        // coordinates are in window-space — no translate_coordinates needed.
+        // floatAnchor is still used as the truthy flag in applyLayout but is
+        // NOT the Popover parent.
+        pop.set_parent(root)
+        pop.connect("closed", () => {
+            // Restore sidebar to sidebarWrap when popover closes (any reason)
+            if (_sidebarInPopover) {
+                sidebar.unparent()                    // removes from sidebarSlot
+                sidebar.width_request = -1
+                sidebar.halign        = Gtk.Align.FILL
+                sidebar.hexpand       = true          // fill sidebarWrap in docked mode
+                sidebarWrap.append(sidebar)
+                sidebar.vexpand = true
+                _sidebarInPopover = false
+            }
+            // Sync state without calling applyLayout (avoid re-open loop)
+            if (_collapsed && _showSidebar) _showSidebar = false
+        })
+        _popover = pop
+        return pop
+    }
+
+    function openSidebarInPopover() {
+        const pop = ensurePopover()
+        if (!_sidebarInPopover) {
+            sidebar.unparent()                        // removes from sidebarWrap
+            sidebar.halign        = Gtk.Align.FILL    // fill the Overlay slot width
+            sidebar.hexpand       = false             // don't push the Overlay wider
+            sidebar.width_request = -1                // Overlay allocation drives the width
+            _popoverBox!.add_overlay(sidebar)         // overlay child — excluded from measure
+            sidebar.vexpand = true
+            _sidebarInPopover = true
+        }
+
+        // ── Position: mirror the docked sidebar's visual placement ────────────
+        //
+        // pointing_to is in root's coordinate space (root fills the window from 0,0).
+        // .crystal-sidebar-capsule: margin: 8px 0 8px 8px inside a sidebarWidth-wide
+        // wrapper → capsule occupies x=[SIDEBAR_GAP, sidebarWidth].
+        //
+        // With position=BOTTOM the popup top = pointing_to.y + pointing_to.height.
+        // rect.y = SIDEBAR_GAP-1 → popup top at y=SIDEBAR_GAP (matches capsule margin-top).
+        // rect.width = popup.width_request = sidebarWidth - SIDEBAR_GAP.
+        // GTK centers the popup over rect.x + rect.width/2, so popup left = rect.x = SIDEBAR_GAP. ✓
+        {
+            const rect = new Gdk.Rectangle()
+            rect.x      = SIDEBAR_GAP
+            rect.y      = SIDEBAR_GAP - 1
+            rect.width  = sidebarWidth - SIDEBAR_GAP   // centering aligns left edge to SIDEBAR_GAP
+            rect.height = 1
+            pop.set_pointing_to(rect)
+        }
+
+        // ── Height: same top + bottom gap as the docked capsule ───────────────
+        const totalH = root.get_allocated_height() || 600
+        pop.height_request = Math.max(totalH - SIDEBAR_GAP * 2, 300)
+
+        if (!pop.visible) pop.popup()
+    }
+
+    function closeSidebarPopover() {
+        if (_popover?.visible) _popover.popdown()
+        // closed signal handles the reparenting
+    }
+
     // ── Layout sync ───────────────────────────────────────────────────────────
     const applyLayout = () => {
         if (!_collapsed) {
+            // ── Docked mode ───────────────────────────────────────────────────
             spacer.width_request = _showSidebar ? sidebarWidth : 0
             spacer.visible       = _showSidebar
             sidebarWrap.visible  = _showSidebar
             backdrop.visible     = false
+            sidebarWrap.remove_css_class("sidebar-floating")
+            if (floatAnchor) closeSidebarPopover()
+        } else if (floatAnchor) {
+            // ── Collapsed + Popover mode ──────────────────────────────────────
+            spacer.width_request = 0
+            spacer.visible       = false
+            sidebarWrap.visible  = false
+            backdrop.visible     = false
+            if (_showSidebar) {
+                openSidebarInPopover()
+            } else {
+                closeSidebarPopover()
+            }
         } else {
+            // ── Collapsed + Overlay fallback ──────────────────────────────────
             spacer.width_request = 0
             spacer.visible       = false
             sidebarWrap.visible  = _showSidebar
             backdrop.visible     = _showSidebar
+            if (_showSidebar) {
+                sidebarWrap.add_css_class("sidebar-floating")
+            } else {
+                sidebarWrap.remove_css_class("sidebar-floating")
+            }
         }
     }
 
     const doCollapse = (v: boolean) => {
         if (v === _collapsed) return
+
+        // If uncollapsing while sidebar is in the popover, restore it synchronously
+        // so sidebarWrap has its child back before applyLayout() runs.
+        if (!v && _sidebarInPopover) {
+            sidebar.unparent()
+            sidebar.width_request = -1
+            sidebar.halign        = Gtk.Align.FILL
+            sidebar.hexpand       = true  // fill sidebarWrap in docked mode
+            sidebarWrap.append(sidebar)
+            sidebar.vexpand = true
+            _sidebarInPopover = false
+            _popover?.popdown()
+        }
+
         _collapsed = v
-        // Collapsing → hide sidebar (it becomes overlay-on-demand)
-        // Uncollapsing → always restore sidebar (it belongs inline again)
+        // Collapsing → hide sidebar (becomes overlay-on-demand)
+        // Uncollapsing → always restore sidebar inline
         _showSidebar = !v
         applyLayout()
         callbacks.forEach(cb => cb(_collapsed))
@@ -170,10 +335,6 @@ export function CrystalSplitView(opts: {
     applyLayout()
 
     // ── Auto-collapse: 200 ms poll while mapped ────────────────────────────────
-    // notify::width is only available on top-level GtkWindow, not on internal
-    // widgets. GTK4 removed size-allocate as a vfunc-less signal. Polling
-    // root.get_width() every 200 ms while mapped is the portable solution:
-    // it handles floating resize, tiling, and multi-monitor moves equally.
     if (collapseAt > 0) {
         let timerId: number | null = null
 
@@ -192,10 +353,6 @@ export function CrystalSplitView(opts: {
             timerId = null
         }
 
-        // `map` fires when the widget is first drawn on screen;
-        // `unmap` fires when hidden. These are the correct GTK4 signals —
-        // `notify::mapped` is NOT a standard GObject property notification
-        // on GtkWidget and silently does nothing.
         root.connect("map", startPoll)
         root.connect("unmap", stopPoll)
     }
