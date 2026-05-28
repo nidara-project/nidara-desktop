@@ -60,6 +60,7 @@ export function createSchematicMap(wsId: number, width: number): SchematicHandle
     let currentRadius   = 0
 
     canvas.set_draw_func((da, cr, areaW, areaH) => {
+        if (areaW <= 0 || areaH <= 0) return
         // Dark background
         cr.setSourceRGBA(0, 0, 0, 0.3)
         cr.rectangle(0, 0, areaW, areaH)

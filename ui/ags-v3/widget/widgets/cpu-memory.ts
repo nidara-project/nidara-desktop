@@ -46,6 +46,7 @@ function makeArc(
     })
     let pct = 0
     canvas.set_draw_func((_, cr, w, h) => {
+        if (w <= 0 || h <= 0) return
         const r = Math.min(w, h) / 2 - 2
         const xc = w / 2, yc = h / 2
         const c = Theme.isDark ? 1 : 0

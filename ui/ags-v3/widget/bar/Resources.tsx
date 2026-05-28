@@ -56,6 +56,7 @@ function ResourceCircle(iconName: string, update: (cb: (val: number) => void) =>
     let percentage = 0
 
     canvas.set_draw_func((area, cr, width, height) => {
+        if (width <= 0 || height <= 0) return
         const radius = Math.min(width, height) / 2 - 2
         const xc = width / 2
         const yc = height / 2

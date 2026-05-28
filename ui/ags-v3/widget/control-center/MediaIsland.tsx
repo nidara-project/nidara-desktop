@@ -95,6 +95,7 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
     box.append(header); box.append(controls)
 
     artDa.set_draw_func((_, cr, w, h) => {
+        if (w <= 0 || h <= 0) return
         if (state.artPixbuf) {
             cr.save(); createSquirclePath(cr, 0, 0, w, h, 14, 3.2); cr.clip()
             Gdk.cairo_set_source_pixbuf(cr, state.artPixbuf, 0, 0); cr.paint(); cr.restore()
@@ -134,6 +135,7 @@ function buildWideContent(state: MediaState): Gtk.Widget {
         hexpand: false, vexpand: false,
     })
     artDa.set_draw_func((_, cr, w, h) => {
+        if (w <= 0 || h <= 0) return
         if (state.artPixbuf) {
             const small = state.artPixbuf.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
             cr.save(); createSquirclePath(cr, 0, 0, w, h, 10, 3.2); cr.clip()

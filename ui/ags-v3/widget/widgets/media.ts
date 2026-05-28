@@ -107,6 +107,7 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
         hexpand: false, vexpand: false,
     })
     artDa.set_draw_func((_, cr, w, h) => {
+        if (w <= 0 || h <= 0) return
         if (artPixbuf) {
             cr.save()
             createSquirclePath(cr, 0, 0, w, h, 14, 3.2)

@@ -57,6 +57,7 @@ export default function PillSlider({
     } catch (e) { }
 
     da.set_draw_func((_, cr, w, h) => {
+        if (w <= 0 || h <= 0) return
         const r = height / 2
         const insY = 2
         const insX = 2
