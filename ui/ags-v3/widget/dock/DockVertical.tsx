@@ -219,10 +219,11 @@ export default function DockVertical(gdkmonitor: any) {
         halign: Gtk.Align.FILL,
         can_focus: false,
     })
-    Theme.connect("changed", () => da.queue_draw())
+    Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
 
     da.set_draw_func((_, cr, _w, _h) => {
-        if (_h > 0 && _h !== realizedH) realizedH = _h
+        if (_w <= 0 || _h <= 0) return
+        if (_h !== realizedH) realizedH = _h
         const dockAlpha = Theme.dockOpacity
         const dockColor = Theme.isDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
         const borderCol = Theme.isDark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }

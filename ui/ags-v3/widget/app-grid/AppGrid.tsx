@@ -212,6 +212,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     const FADE = 32
     const fadeDA = new Gtk.DrawingArea({ hexpand: true, vexpand: true, can_target: false })
     fadeDA.set_draw_func((_da: any, cr: any, w: number, h: number) => {
+        if (w <= 0 || h <= 0) return
         const val   = adj.get_value()
         const upper = adj.get_upper()
         const page  = adj.get_page_size()
@@ -233,7 +234,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     })
     adj.connect("value-changed", () => fadeDA.queue_draw())
     adj.connect("changed",       () => fadeDA.queue_draw())
-    Theme.connect("changed",     () => fadeDA.queue_draw())
+    Theme.connect("changed",     () => { if (fadeDA.get_mapped()) fadeDA.queue_draw() })
 
     const scrollOverlay = new Gtk.Overlay()
     scrollOverlay.set_child(scroll)

@@ -151,13 +151,14 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
     const da = new Gtk.DrawingArea({ height_request: PEEK_H, margin_start: INSET, margin_end: INSET })
     da.add_css_class("nc-ghost-strip-0")
     da.set_draw_func((_da: any, cr: any, w: number, _h: number) => {
+        if (w <= 0 || _h <= 0) return
         const color = Theme.isDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
         cr.save()
         cr.translate(0, -(CARD_H - PEEK_H))
         drawSquircle(cr, w, CARD_H, undefined, Theme.shellOpacity, false, color, 28, false, { r: 1, g: 1, b: 1, a: 0.07 })
         cr.restore()
     })
-    const themeConn = Theme.connect("changed", () => da.queue_draw())
+    const themeConn = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
     da.connect("destroy", () => Theme.disconnect(themeConn))
     wrapper.append(da)
 

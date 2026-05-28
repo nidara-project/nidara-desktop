@@ -70,10 +70,11 @@ export default function SquircleContainer({
     const techInset = inset !== undefined ? inset : 2.0
 
     if (useShellOpacity) {
-        Theme.connect("changed", () => da.queue_draw())
+        Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
     }
 
     da.set_draw_func((_, cr, w, h) => {
+        if (w <= 0 || h <= 0) return
         const themeColor = Theme.isDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
         const baseColor = color || (useShellOpacity ? themeColor : { r: 1, g: 1, b: 1 })
         const baseAlpha = useShellOpacity ? Theme.shellOpacity : (alpha !== undefined ? alpha : 0.05)

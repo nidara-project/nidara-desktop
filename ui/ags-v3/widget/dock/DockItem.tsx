@@ -292,6 +292,7 @@ export function DockItem(
             ; (child as any).set_content_height(DOCK_CONSTANTS.ICON_SIZE)
 
             ; (child as any).set_draw_func((area: any, cr: any, w: number, h: number) => {
+                if (w <= 0 || h <= 0) return
                 // macOS HIG: The actual icon shape only occupies ~82% of the total canvas.
                 // V610: The global clipping and plate scale is locked at exactly 90%
                 // V700: No artificial SAFE_RATIO. Use full canvas area.
@@ -393,6 +394,7 @@ export function DockItem(
     ;(dot as any).set_content_height(DOT_SIZE)
     dot.set_visible(false)
     ;(dot as any).set_draw_func((_area: any, cr: any, w: number, h: number) => {
+        if (w <= 0 || h <= 0) return
         const r = Math.min(w, h) / 2
         cr.arc(w / 2, h / 2, r, 0, 2 * Math.PI)
         const c = Theme.isDark ? 1 : 0
@@ -762,7 +764,7 @@ export function DockItem(
     }
 
     const hsChangedId = hs.connect("changed", sync)
-    const themeChangedId = Theme.connect("changed", () => dot.queue_draw())
+    const themeChangedId = Theme.connect("changed", () => { if (dot.get_mapped()) dot.queue_draw() })
 
     // Note: notify::title per-client connections removed — they caused a dock surface
     // commit (and Hyprland blur pass) on every window title update from running apps
