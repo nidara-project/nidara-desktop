@@ -54,7 +54,7 @@ The installer:
    - `/usr/share/crystal-shell/` — configs, bundle, version file
    - `/usr/share/wayland-sessions/crystal-shell.desktop` — session entry
 4. Creates `~/.config/crystal-shell/` with default configs (never overwritten on updates).
-5. Enables system services: `pipewire`, `wireplumber`, `sddm`.
+5. Enables system services: `pipewire`, `wireplumber`, `power-profiles-daemon`, and `greetd` (only if no other display manager is already enabled).
 
 **To start:** reboot and select _Crystal Shell_ from the login screen.
 
@@ -64,32 +64,33 @@ The installer:
 
 User config lives in `~/.config/crystal-shell/` and is **never overwritten** by updates.
 
-To customize Hyprland (monitors, keyboard layout, startup apps, extra keybinds), edit:
+The Hyprland config is written in **Lua** (requires Hyprland ≥ 0.55). To customize
+Hyprland (monitors, keyboard layout, startup apps, extra keybinds), edit:
 
-**`~/.config/crystal-shell/hyprland-user.conf`**
+**`~/.config/crystal-shell/hyprland-user.lua`**
 
-```ini
-# Keyboard layout
-input {
-    kb_layout = es
-}
+```lua
+-- Keyboard layout
+hl.config({ input = { kb_layout = "es" } })
 
-# Monitors
-monitor = HDMI-A-1, 1920x1080@60, 0x0, 1
+-- Monitors
+hl.monitor({ output = "HDMI-A-1", mode = "1920x1080@60", position = "0x0", scale = 1 })
 
-# Custom keybinds
-bind = SUPER, F1, exec, firefox
+-- Custom keybinds
+hl.bind("SUPER + F1", hl.dsp.exec_cmd("firefox"))
 
-# Autostart
-exec-once = my-app
+-- Autostart (runs once on Hyprland start)
+hl.on("hyprland.start", function()
+    hl.exec_cmd("uwsm app -- my-app")
+end)
 
-# Override any Hyprland setting
-general {
-    gaps_out = 16
-}
+-- Override any Hyprland setting
+hl.config({ general = { gaps_out = 16 } })
 ```
 
-> **NVIDIA users** — uncomment the NVIDIA block in `hyprland-user.conf` after installation.
+> **NVIDIA users** — set NVIDIA / Wayland environment variables in
+> `~/.config/uwsm/env` and `~/.config/uwsm/env-hyprland` (both created on first
+> install), not in the Hyprland config.
 
 ---
 
@@ -122,6 +123,10 @@ general {
 | `Super + S` | Open Settings |
 | `Super + T` | Terminal (Kitty) |
 | `Super + E` | Files (Nautilus) |
+| `Super + L` | Lock screen |
+| `Super + G` | Game overlay (bar above fullscreen games) |
+| `Super + Shift + G` | Toggle game mode |
+| `Super + M` | Exit session (log out) |
 | `Super + Shift + R` | Reload Crystal Shell UI |
 | `Super` (tap) | Toggle App Launcher |
 

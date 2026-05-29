@@ -23,6 +23,26 @@ for arg in "$@"; do
     esac
 done
 
+# ── Pinned upstream versions ──────────────────────────────────────────────────
+# The Astal/AGS/appmenu libraries are built from source. Building against an
+# upstream's moving HEAD has bitten us before (e.g. the GJS 1.88 break of
+# `ags request`), so each source build is pinned to a known-good revision.
+#
+# MAINTAINERS: bump these and re-test a clean install before tagging a release.
+# Astal has no git tags, so it is pinned by commit SHA.
+ASTAL_REF="d8738f97ed01f4d87f668df35fa7bbad795c9e49"   # github.com/aylur/astal @ main
+AGS_REF="v3.1.2"                                        # github.com/aylur/ags release tag
+APPMENU_REF="aea4ea398b7c75494f23f5e5bdb4f495d615059f"  # gitlab vala-panel-appmenu @ master
+
+# Clone a repo if missing, then hard-check out the pinned ref (branch, tag or SHA).
+# Re-running the installer re-pins an existing checkout instead of reusing stale HEAD.
+clone_pinned() {
+    local url="$1" dir="$2" ref="$3"
+    [ -d "$dir/.git" ] || git clone "$url" "$dir"
+    git -C "$dir" fetch --tags --quiet origin || true
+    git -C "$dir" checkout --quiet "$ref"
+}
+
 echo ""
 echo "  Crystal Shell Installer"
 echo "  Mode: $MODE"
@@ -80,7 +100,7 @@ sudo pacman -Sy --needed --noconfirm \
     jq slurp grim wf-recorder wl-clipboard cliphist mesa pam \
     git nodejs npm gjs go \
     accountsservice greetd pavucontrol rust cargo \
-    hyprland hypridle hyprsunset uwsm \
+    hyprland hypridle hyprsunset uwsm power-profiles-daemon \
     kitty nautilus dolphin thunar \
     polkit-gnome \
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland \
@@ -94,13 +114,13 @@ echo "[2/7] Building Astal service libraries..."
 
 echo "  Building appmenu-glib-translator..."
 mkdir -p /tmp/astal-deps && cd /tmp/astal-deps
-[ ! -d "vala-panel-appmenu" ] && git clone https://gitlab.com/vala-panel-project/vala-panel-appmenu.git
+clone_pinned https://gitlab.com/vala-panel-project/vala-panel-appmenu.git vala-panel-appmenu "$APPMENU_REF"
 cd vala-panel-appmenu/subprojects/appmenu-glib-translator
 rm -rf build && meson setup build --prefix=/usr && sudo meson install -C build
 
 echo "  Building Astal components..."
 mkdir -p /tmp/astal-build && cd /tmp/astal-build
-[ ! -d "astal" ] && git clone https://github.com/aylur/astal.git
+clone_pinned https://github.com/aylur/astal.git astal "$ASTAL_REF"
 cd astal
 
 for comp in \
@@ -131,7 +151,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[4/7] Building AGS CLI..."
 mkdir -p /tmp/ags-build && cd /tmp/ags-build
-[ ! -d "ags" ] && git clone https://github.com/aylur/ags.git
+clone_pinned https://github.com/aylur/ags.git ags "$AGS_REF"
 cd ags
 rm -rf build && npm install && meson setup build --prefix=/usr && sudo meson install -C build
 
@@ -422,6 +442,11 @@ fi
 # ── Audio services ────────────────────────────────────────────────────────────
 echo "  Enabling audio services..."
 systemctl --user enable --now wireplumber pipewire pipewire-pulse 2>/dev/null || true
+
+# ── Power profiles ────────────────────────────────────────────────────────────
+# Game mode toggles performance/balanced via powerprofilesctl (hyprland.lua).
+echo "  Enabling power-profiles-daemon..."
+sudo systemctl enable --now power-profiles-daemon 2>/dev/null || true
 
 echo ""
 echo "  ✓ Installation complete ($MODE mode)"
