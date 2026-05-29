@@ -44,11 +44,18 @@ export default function WidgetsPage(): Gtk.Widget {
         barBox.append(barSwitch)
         box.append(barBox)
 
-        // CC toggle (only for widgets that support cc)
+        // CC toggle (only for widgets that support cc).
+        // Blocked when the grid is full and the widget isn't already in it
+        // (fixed-grid model — see CCLayoutManager.canAdd).
         const canCC = w.locations?.includes("cc") ?? false
+        const ccFits = placement.cc || ccLayout.canAdd(w.id)
         const ccBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, valign: Gtk.Align.CENTER })
         const ccLabel = new Gtk.Label({ label: t("settings.widgets.label.centro"), css_classes: ["settings-row-subtitle"], halign: Gtk.Align.CENTER })
-        const ccSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER, sensitive: canCC })
+        const ccSwitch = new Gtk.Switch({
+            valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
+            sensitive: canCC && ccFits,
+            tooltip_text: canCC && !ccFits ? t("settings.widgets.tooltip.sin-espacio") : "",
+        })
         ccSwitch.set_active(placement.cc)
         ccBox.append(ccLabel)
         ccBox.append(ccSwitch)

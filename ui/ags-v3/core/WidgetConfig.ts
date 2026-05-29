@@ -1,51 +1,15 @@
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import { readFile, writeFile } from "ags/file"
+import { DEFAULT_PLACEMENT as DEFAULTS, BAR_ORDER } from "../widget/widgets/index"
 
 export interface WidgetPlacement {
     bar: boolean
     cc: boolean
 }
 
-// Canonical left-to-right order for bar widgets.
-// System/connectivity widgets (wifi, volume) are rightmost, closest to the tray.
-// Optional/utility widgets sit in the middle. Unlisted widgets fall to the end.
-const BAR_ORDER = [
-    "media",
-    "cpu_memory",
-    "battery",
-    "brightness",
-    "dark_mode",
-    "focus",
-    "night_light",
-    "calculator",
-    "clipboard",
-    "screenshot",
-    "screenrecord",
-    "vpn",
-    "bt",
-    "ethernet",
-    "wifi",
-    "volume",
-]
-
-const DEFAULTS: Record<string, WidgetPlacement> = {
-    cpu_memory: { bar: true,  cc: true  },
-    volume:     { bar: false, cc: true  },
-    wifi:       { bar: false, cc: true  },
-    ethernet:   { bar: false, cc: true  },
-    bt:         { bar: false, cc: true  },
-    media:      { bar: false, cc: true  },
-    dark_mode:  { bar: false, cc: true  },
-    focus:      { bar: false, cc: true  },
-    calculator: { bar: false, cc: true  },
-    brightness:   { bar: false, cc: true  },
-    night_light:  { bar: false, cc: true  },
-    clipboard:    { bar: false, cc: true  },
-    screenshot:   { bar: false, cc: true  },
-    screenrecord: { bar: false, cc: true  },
-    vpn:          { bar: false, cc: true  },
-}
+// BAR_ORDER (curated bar pill order) and DEFAULTS (first-run placement) are
+// derived from the widget registry — see widget/widgets/index.ts.
 
 class WidgetConfigManager extends GObject.Object {
     static {

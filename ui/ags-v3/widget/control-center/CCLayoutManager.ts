@@ -1,8 +1,8 @@
 import GLib from "gi://GLib"
-import Icons from "../../core/Icons"
 import GObject from "gi://GObject"
 import { readFile, writeFile } from "ags/file"
 import { WidgetSize } from "./Types"
+import { WIDGET_META, CC_DEFAULT_ORDER } from "../widgets/index"
 
 export const UNIT = 80
 export const GAP = 12
@@ -19,30 +19,8 @@ export const SIZE_MAP: Record<WidgetSize, { w: number; h: number }> = {
     [WidgetSize.FULL_WIDTH]: { w: 4, h: 1 },
 }
 
-export interface WidgetMeta {
-    name: string
-    defaultSize: WidgetSize
-    sizes: WidgetSize[]
-    icon: string
-}
-
-export const WIDGET_META: Record<string, WidgetMeta> = {
-    brightness:   { name: "Brillo",        defaultSize: WidgetSize.FULL_WIDTH, sizes: [WidgetSize.FULL_WIDTH],                       icon: Icons.sun },
-    night_light:  { name: "Luz Nocturna",  defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.moon },
-    cpu_memory:   { name: "CPU & Memoria", defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE],                             icon: Icons.cpu },
-    media:        { name: "Media",         defaultSize: WidgetSize.SQUARE,     sizes: [WidgetSize.SQUARE],                          icon: Icons.play },
-    wifi:         { name: "Wi-Fi",         defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.wifi },
-    focus:        { name: "No Molestar",   defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.bellOff },
-    ethernet:     { name: "Ethernet",      defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.ethernet },
-    bt:           { name: "Bluetooth",     defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],          icon: Icons.bluetooth },
-    dark_mode:    { name: "Apariencia",    defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE, WidgetSize.WIDE],          icon: Icons.moon },
-    calculator:   { name: "Calculadora",   defaultSize: WidgetSize.SINGLE,     sizes: [WidgetSize.SINGLE],                           icon: Icons.calculator },
-    volume:       { name: "Volumen",       defaultSize: WidgetSize.FULL_WIDTH, sizes: [WidgetSize.FULL_WIDTH, WidgetSize.TALL],       icon: Icons.volumeHigh },
-    clipboard:    { name: "Portapapeles",  defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.clipboard },
-    screenshot:   { name: "Captura",       defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.camera },
-    screenrecord: { name: "Grabación",     defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.record },
-    vpn:          { name: "VPN",           defaultSize: WidgetSize.WIDE,       sizes: [WidgetSize.WIDE, WidgetSize.SINGLE],          icon: Icons.shield },
-}
+// WidgetMeta + WIDGET_META are derived from the widget registry (single source
+// of truth) and re-exported at the top of this file.
 
 // LayoutEntry is still the consumer-facing format; positions are always computed.
 export interface LayoutEntry {
@@ -51,19 +29,6 @@ export interface LayoutEntry {
     y: number
     size?: WidgetSize
 }
-
-// Default widget display order — positions are derived by flowPack.
-const DEFAULT_ORDER: string[] = [
-    "media",
-    "wifi",
-    "ethernet",
-    "focus",
-    "dark_mode",
-    "bt",
-    "volume",
-    "cpu_memory",
-    "calculator",
-]
 
 interface SaveData {
     order: string[]
@@ -114,7 +79,7 @@ class CCLayoutManager extends GObject.Object {
                 }
             }
         } catch {}
-        this._order = [...DEFAULT_ORDER]
+        this._order = [...CC_DEFAULT_ORDER]
         this._sizes = {}
     }
 
@@ -131,11 +96,12 @@ class CCLayoutManager extends GObject.Object {
 
     // Pack widgets left-to-right, top-to-bottom by their order.
     // Each widget is placed at the first fitting cell scanning in reading order.
-    private flowPack(order: string[]): Map<string, { x: number; y: number }> {
+    private flowPack(order: string[], sizeOf?: (id: string) => WidgetSize): Map<string, { x: number; y: number }> {
+        const size = sizeOf ?? ((id: string) => this.effectiveSize(id))
         const result = new Map<string, { x: number; y: number }>()
         const occupied = new Set<string>()
         for (const id of order) {
-            const { w, h } = SIZE_MAP[this.effectiveSize(id)]
+            const { w, h } = SIZE_MAP[size(id)]
             outer: for (let row = 0; row < GRID_ROWS + 4; row++) {
                 for (let col = 0; col <= GRID_COLS - w; col++) {
                     let fits = true
@@ -193,12 +159,44 @@ class CCLayoutManager extends GObject.Object {
         return this._sizes[id] ?? WIDGET_META[id]?.defaultSize ?? WidgetSize.SINGLE
     }
 
-    // Always returns the next size in the cycle — flow layout accommodates any size.
+    // ── Capacity ─────────────────────────────────────────────────────────────
+    // Fixed grid: no operation may push content beyond GRID_ROWS.
+    private rowsUsed(order: string[], sizeOf: (id: string) => WidgetSize): number {
+        const pos = this.flowPack(order, sizeOf)
+        let maxRow = 0
+        for (const id of order) {
+            const p = pos.get(id)
+            if (p) maxRow = Math.max(maxRow, p.y + SIZE_MAP[sizeOf(id)].h)
+        }
+        return maxRow
+    }
+
+    // Can `id` (at its current/default size) be added without overflowing the grid?
+    canAdd(id: string): boolean {
+        if (this._order.includes(id)) return false
+        if (!WIDGET_META[id]) return false
+        return this.rowsUsed([...this._order, id], (i) => this.effectiveSize(i)) <= GRID_ROWS
+    }
+
+    // Can `id` be resized to `newSize` without overflowing the grid?
+    canResize(id: string, newSize: WidgetSize): boolean {
+        const sizeOf = (i: string) => (i === id ? newSize : this.effectiveSize(i))
+        return this.rowsUsed(this._order, sizeOf) <= GRID_ROWS
+    }
+
+    // Next size in the cycle that still fits the grid (skips sizes that would
+    // overflow, reflowing/displacing neighbours as needed). null = no fitting
+    // alternative, so the resize affordance is hidden.
     nextResizeSize(id: string): WidgetSize | null {
         const meta = WIDGET_META[id]
         if (!meta || meta.sizes.length <= 1) return null
-        const idx = meta.sizes.indexOf(this.effectiveSize(id))
-        return meta.sizes[(idx + 1) % meta.sizes.length]
+        const cur = this.effectiveSize(id)
+        const idx = meta.sizes.indexOf(cur)
+        for (let step = 1; step < meta.sizes.length; step++) {
+            const cand = meta.sizes[(idx + step) % meta.sizes.length]
+            if (cand !== cur && this.canResize(id, cand)) return cand
+        }
+        return null
     }
 
     resize(id: string, newSize: WidgetSize): boolean {
@@ -239,6 +237,9 @@ class CCLayoutManager extends GObject.Object {
         this.emit("changed")
     }
 
+    // Low-level mutation: never blocks, so default seeding / reconciliation
+    // (syncCCLayout) always succeeds. Capacity is enforced at UI entry points
+    // via canAdd() (e.g. the Settings "+" button is disabled when full).
     add(id: string) {
         if (this._order.includes(id)) return
         if (!WIDGET_META[id]) return
@@ -247,21 +248,22 @@ class CCLayoutManager extends GObject.Object {
         this.emit("changed")
     }
 
+    // Empty cells across the full fixed grid (edit-mode placeholders). Fills up
+    // to GRID_ROWS — not just the last occupied row — so the trailing free rows
+    // also show their slots, making remaining capacity visible.
     getEmptyCells(): Array<{ x: number; y: number }> {
         const pos = this.flowPack(this._order)
         const occupied = new Set<string>()
-        let maxRow = 0
         for (const id of this._order) {
             const p = pos.get(id)
             if (!p) continue
             const { w, h } = SIZE_MAP[this.effectiveSize(id)]
-            maxRow = Math.max(maxRow, p.y + h)
             for (let dy = 0; dy < h; dy++)
                 for (let dx = 0; dx < w; dx++)
                     occupied.add(`${p.x + dx},${p.y + dy}`)
         }
         const empty: Array<{ x: number; y: number }> = []
-        for (let row = 0; row < maxRow; row++)
+        for (let row = 0; row < GRID_ROWS; row++)
             for (let col = 0; col < GRID_COLS; col++)
                 if (!occupied.has(`${col},${row}`)) empty.push({ x: col, y: row })
         return empty

@@ -16,6 +16,8 @@ export interface AtomicWidget {
     name: string
     icon?: Gio.FileIcon                 // icon for Settings UI
     locations?: WidgetLocation[]        // where this widget can appear
+    defaultInBar?: boolean              // shown in the bar by default (default false)
+    defaultInCc?: boolean               // seeded into the CC by default (default = "cc" in locations)
     defaultSize: WidgetSize
     supportedSizes: WidgetSize[]
     buildContent: (size: WidgetSize) => Gtk.Widget

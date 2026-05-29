@@ -1,15 +1,11 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
-import Pango from "gi://Pango"
 import app from "ags/gtk4/app"
-import AstalHyprland from "gi://AstalHyprland"
 import AstalNotifd from "gi://AstalNotifd"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
-// Astal Service Libraries
-import { getWordmark, getServiceSafe } from "../../utils"
 import SquircleContainer from "../common/SquircleContainer"
 import Theme from "../../core/ThemeManager"
 import appService from "../../core/AppService"
@@ -18,6 +14,9 @@ import widgetConfig from "../../core/WidgetConfig"
 import regionConfig from "../../core/RegionConfig"
 import registry from "../widgets/index"
 import Tray from "./Tray"
+import { SystemMenuOverlay } from "./SystemMenu"
+import { AppTitle } from "./AppTitle"
+import { Workspaces } from "./Workspaces"
 
 // Overlay panels mounted on the bar window (avoids separate layer-shell surfaces)
 import { ControlCenterWidget } from "../control-center/ControlCenter"
@@ -28,7 +27,7 @@ import WorkspaceOverview from "../overview/WorkspaceOverview"
 import { execAsync } from "ags/process"
 import { t } from "../../core/i18n"
 import { barSettings, onBarSettingsChanged } from "./barState"
-import { dockSideState } from "../dock/state"
+import { dockSideState, dockSettings, onDockSettingsChanged } from "../dock/state"
 import Icons from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
@@ -62,208 +61,6 @@ function SystemMenuIcon(): Gtk.Widget {
   onBarSettingsChanged(applyIcon)
 
   return SquircleContainer({ child: img, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleSystemMenu() })
-}
-
-function AppTitle(monitorWidth: number): Gtk.Widget {
-  // Max label width = half monitor - center capsule est. (100px) - icon capsule + gap overhead (~100px)
-  const labelMaxChars = Math.max(15, Math.floor((monitorWidth / 2 - 200) / 8))
-  const appName = new Gtk.Label({
-    label: "—",
-    css_classes: ["bar-app-name"],
-    ellipsize: Pango.EllipsizeMode.END,
-    max_width_chars: labelMaxChars,
-    margin_start: 16,
-    margin_end: 16,
-  })
-
-  GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-    let trackedClient: AstalHyprland.Client | null = null
-    let titleHandlerId = 0
-
-    const sync = () => {
-      const client = hs.focusedClient
-      const label = getWordmark(client, AstalHyprland.get_default())
-      if (label && label !== appName.label) appName.label = label
-
-      // Only rewire notify::title when the focused client actually changed
-      if (client === trackedClient) return
-      if (trackedClient && titleHandlerId) {
-        trackedClient.disconnect(titleHandlerId)
-        titleHandlerId = 0
-      }
-      trackedClient = client
-      if (client) {
-        titleHandlerId = client.connect("notify::title", sync)
-      }
-    }
-
-    hs.connect("changed", sync)
-    sync()
-    return GLib.SOURCE_REMOVE
-  })
-
-  return SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
-}
-
-function SystemMenuOverlay() {
-  // ── Shared confirm state ───────────────────────────────────────────────
-  let pendingCmd: (() => void) | null = null
-
-  const stack = new Gtk.Stack({
-    transition_type: Gtk.StackTransitionType.CROSSFADE,
-    transition_duration: 130,
-  })
-
-  // ── Normal menu page ───────────────────────────────────────────────────
-  const menuBox = new Gtk.Box({
-    orientation: Gtk.Orientation.VERTICAL,
-    spacing: 2,
-    margin_top: 6, margin_bottom: 6, margin_start: 6, margin_end: 6,
-  })
-
-  const makeRow = (ico: Gio.FileIcon, txt: string, _danger: boolean, cmd: () => void) => {
-    const lbl = new Gtk.Label({ label: txt, halign: Gtk.Align.START, hexpand: true,
-      css_classes: ["system-menu-label"] })
-    const img = new Gtk.Image({ gicon: ico, pixel_size: 16, css_classes: ["cs-icon"] })
-    const b = new Gtk.Box({ spacing: 12, margin_top: 2, margin_bottom: 2, margin_start: 4, margin_end: 16 })
-    b.append(img); b.append(lbl)
-    const btn = new Gtk.Button({ child: b, css_classes: ["system-menu-row"], hexpand: true })
-    btn.connect("clicked", cmd)
-    return btn
-  }
-
-  const sep = () => new Gtk.Separator({ css_classes: ["system-menu-sep"], margin_top: 4, margin_bottom: 4 })
-
-  const showConfirm = (ico: Gio.FileIcon, question: string, actionLabel: string, danger: boolean, cmd: () => void) => {
-    pendingCmd = cmd
-    confirmIcon.gicon = ico
-    confirmQuestion.label = question
-    confirmActionBtn.label = actionLabel
-    if (danger) confirmActionBtn.add_css_class("danger-action")
-    else confirmActionBtn.remove_css_class("danger-action")
-    stack.set_visible_child_name("confirm")
-  }
-
-  const closeAndRun = (cmd: string[]) => {
-    status.system_menu_open = false
-    execAsync(cmd).catch(console.error)
-  }
-
-  menuBox.append(makeRow(Icons.info, t("bar.system-menu.about"), false, () => {
-    status.system_menu_open = false; status.toggleAbout()
-  }))
-  menuBox.append(sep())
-  menuBox.append(makeRow(Icons.settings, t("bar.system-menu.settings"), false, () => {
-    status.system_menu_open = false; shellActions.toggleSettings?.()
-  }))
-  menuBox.append(sep())
-  menuBox.append(makeRow(Icons.lock, t("bar.system-menu.lock"), false, () => {
-    status.system_menu_open = false
-    execAsync(["crystal-lock"]).catch(console.error)
-  }))
-  menuBox.append(makeRow(Icons.moon, t("bar.system-menu.suspend"), false, () =>
-    closeAndRun(["systemctl", "suspend"])
-  ))
-  menuBox.append(sep())
-  menuBox.append(makeRow(Icons.logOut, t("bar.system-menu.logout"), true, () =>
-    showConfirm(Icons.logOut, t("bar.system-menu.confirm.logout"), t("bar.system-menu.confirm.action.logout"), true,
-      () => closeAndRun(["uwsm", "stop"]))
-  ))
-  menuBox.append(makeRow(Icons.rotateCcw, t("bar.system-menu.restart"), false, () =>
-    showConfirm(Icons.rotateCcw, t("bar.system-menu.confirm.restart"), t("bar.system-menu.confirm.action.restart"), false,
-      () => closeAndRun(["systemctl", "reboot"]))
-  ))
-  menuBox.append(makeRow(Icons.power, t("bar.system-menu.shutdown"), true, () =>
-    showConfirm(Icons.power, t("bar.system-menu.confirm.shutdown"), t("bar.system-menu.confirm.action.shutdown"), true,
-      () => closeAndRun(["systemctl", "poweroff"]))
-  ))
-
-  // ── Confirmation page ──────────────────────────────────────────────────
-  const confirmIcon = new Gtk.Image({ pixel_size: 28, halign: Gtk.Align.CENTER, css_classes: ["cs-icon"] })
-  const confirmQuestion = new Gtk.Label({
-    halign: Gtk.Align.CENTER,
-    justify: Gtk.Justification.CENTER,
-    css_classes: ["system-menu-label"],
-    wrap: true,
-    max_width_chars: 20,
-  })
-
-  const confirmCancelBtn = new Gtk.Button({ label: t("bar.system-menu.confirm.cancel"), css_classes: ["system-menu-row", "system-confirm-secondary"], hexpand: true })
-  confirmCancelBtn.connect("clicked", () => {
-    pendingCmd = null
-    stack.set_visible_child_name("menu")
-  })
-
-  const confirmActionBtn = new Gtk.Button({ label: "", css_classes: ["system-menu-row", "system-confirm-primary"], hexpand: true })
-  confirmActionBtn.connect("clicked", () => {
-    pendingCmd?.()
-    pendingCmd = null
-    stack.set_visible_child_name("menu")
-  })
-
-  const confirmBtnRow = new Gtk.Box({ spacing: 6, homogeneous: true, margin_top: 4 })
-  confirmBtnRow.append(confirmCancelBtn)
-  confirmBtnRow.append(confirmActionBtn)
-
-  const confirmBox = new Gtk.Box({
-    orientation: Gtk.Orientation.VERTICAL,
-    spacing: 10,
-    margin_top: 16, margin_bottom: 14, margin_start: 10, margin_end: 10,
-    width_request: 210,
-  })
-  confirmBox.append(confirmIcon)
-  confirmBox.append(confirmQuestion)
-  confirmBox.append(confirmBtnRow)
-
-  // Reset to menu page when closed
-  status.connect("notify::system-menu-open", () => {
-    if (!status.system_menu_open) {
-      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 200, () => {
-        stack.set_visible_child_name("menu")
-        pendingCmd = null
-        return GLib.SOURCE_REMOVE
-      })
-    }
-  })
-
-  stack.add_named(menuBox, "menu")
-  stack.add_named(confirmBox, "confirm")
-  stack.set_visible_child_name("menu")
-
-  const squircleWrapper = SquircleContainer({
-    child: stack,
-    radius: 24,
-    gloss: true,
-    useShellOpacity: true,
-    borderColor: { r: 1, g: 1, b: 1, a: 0.05 },
-    css_classes: ["system-menu-dropdown"],
-  })
-
-  const outerBox = new Gtk.Box({
-    valign: Gtk.Align.START,
-    halign: Gtk.Align.START,
-    margin_top: 56,
-    margin_start: 16,
-    visible: false,
-  })
-  outerBox.append(squircleWrapper)
-  return outerBox
-}
-
-function Workspaces() {
-  const box = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16 })
-  for (let i = 1; i <= 5; i++) {
-    const dot = new Gtk.Box({ css_classes: ["workspace-dot"], valign: Gtk.Align.CENTER })
-    const update = () => {
-      const active   = hs.focusedWorkspaceId === i
-      const occupied = hs.occupiedWorkspaces.has(i)
-      dot.set_css_classes(["workspace-dot", active ? "active" : occupied ? "occupied" : "empty"])
-    }
-    hs.connect("changed", update)
-    update()
-    box.append(dot)
-  }
-  return SquircleContainer({ child: box, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleOverview() })
 }
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
@@ -323,8 +120,23 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   popups.valign = Gtk.Align.START; popups.halign = Gtk.Align.END
   overview.valign = Gtk.Align.CENTER; overview.halign = Gtk.Align.CENTER
 
-  cc.margin_top = 56
-  nc.margin_top = 56
+  // ── Panel geometry ──────────────────────────────────────────────────────
+  // Derived from the bar height and the dock's actual footprint (dock size is
+  // user-configurable) instead of hardcoded magic numbers.
+  const BAR_H = 40
+  const PANEL_TOP = BAR_H + 16   // gap below the bar
+  const SAFETY = 28
+  const DOCK_VPAD = 20           // dock padding around its icons
+
+  // Vertical space the dock reserves at the bottom (0 when docked to a side —
+  // there it consumes horizontal space, handled by syncPanelMargins instead).
+  const dockBottomFootprint = () =>
+    dockSettings.position === 'bottom'
+      ? dockSettings.iconSize + dockSettings.screenGap + DOCK_VPAD
+      : 0
+
+  cc.margin_top = PANEL_TOP
+  nc.margin_top = PANEL_TOP
   const syncPanelMargins = () => {
     const end = 16 + (dockSideState.position === 'right' ? dockSideState.width : 0)
     cc.margin_end = end
@@ -334,11 +146,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   dockSideState.subscribe(syncPanelMargins)
 
   prism.margin_top = 0
-  popups.margin_top = 56; popups.margin_end = 16
+  popups.margin_top = PANEL_TOP; popups.margin_end = 16
 
-  // NC height: leave room for bar (40px) + dock (92px) + safety margin
-  const maxH = monGeo.height - 160 // 40 (Bar) + 92 (Dock) + 28 (Safety)
-  cc.height_request = 800; nc.height_request = maxH
+  // NC fills the gap between bar and dock; CC is capped to the same budget so it
+  // never overflows on short screens (was a fixed 800px). Reactive to dock size.
+  const applyPanelHeights = () => {
+    const maxH = monGeo.height - BAR_H - dockBottomFootprint() - SAFETY
+    nc.height_request = maxH
+    cc.height_request = Math.min(800, maxH)
+  }
+  applyPanelHeights()
+  onDockSettingsChanged(applyPanelHeights)
 
   const updateInputRegion = () => {
       const surface = win.get_native()?.get_surface()
@@ -592,7 +410,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     }
   }
   widgetConfig.connect("changed", () => {
-      rebuildBarWidgets()  // rebuild with all icons first (cachedMaxIcons may be stale)
+      // measureOverflow rebuilds against the full set, measures, then caps —
+      // so it recovers correctly when widgets are added/removed.
       GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { measureOverflow(); return GLib.SOURCE_REMOVE })
   })
   rebuildBarWidgets()
@@ -702,6 +521,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Uses measure() (natural/preferred width) instead of get_width() (allocated width)
   // so that a squished/overflowed bar state doesn't fool the calculation.
   const measureOverflow = () => {
+      // Measure against the full, uncapped widget set. A previously collapsed bar
+      // only contains the "···" pill, so measuring the live children would size the
+      // pill instead of the real widgets and could never recover. Reset the cache
+      // and rebuild (getMaxIcons → Infinity) so every widget is present first.
+      cachedMaxIcons = null
+      rebuildBarWidgets()
+
       const natW = (w: Gtk.Widget) => w.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
 
       const iconWidths: number[] = []

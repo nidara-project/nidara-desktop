@@ -309,14 +309,7 @@ export default {
     "settings.bluetooth.tooltip.olvidar-dispositivo": "Forget device",
 
     // Control Center
-    "settings.controlcenter.group.widgets-activos": "Active Widgets",
-    "settings.controlcenter.group.widgets-disponibles": "Available Widgets",
-    "settings.controlcenter.label.no-hay-widgets-activos": "No active widgets",
-    "settings.controlcenter.label.todos-los-widgets-estan-activos": "All widgets are active",
-    "settings.controlcenter.page.subtitle.gestiona-los-widgets-del-panel-de-contro": "Manage quick control panel widgets",
-    "settings.controlcenter.page.title.centro-de-control": "Control Center",
-    "settings.controlcenter.tooltip.anadir-al-cc": "Add to CC",
-    "settings.controlcenter.tooltip.quitar-del-cc": "Remove from CC",
+    "settings.widgets.tooltip.sin-espacio": "Not enough space — remove a widget first",
 
     // Display
     "settings.display.label.no-se-detectaron-monitores": "No monitors detected.",
@@ -533,6 +526,7 @@ export default {
     "widget.dark-mode.sub.light": "Light",
     "widget.focus.name": "Do Not Disturb",
     "widget.calculator.name": "Calculator",
+    "widget.cpu-memory.name": "CPU & Memory",
 
     // Ethernet bar popover rows
     "widget.ethernet.row.interface": "Interface",

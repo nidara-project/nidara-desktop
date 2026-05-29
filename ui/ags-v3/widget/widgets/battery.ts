@@ -1,12 +1,14 @@
 import { Gtk } from "ags/gtk4"
 import AstalBattery from "gi://AstalBattery"
-import Gio from "gi://Gio"
-import { makeExpandable } from "./bar-helpers"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
 const bat = AstalBattery.get_default()
+
+// A real battery device is present (false on desktops, where the display
+// device exists but reports is_present = false).
+const present = () => !!bat && bat.is_present
 
 function formatTime(seconds: number): string {
     if (!seconds || seconds <= 0) return ""
@@ -17,103 +19,68 @@ function formatTime(seconds: number): string {
     return `${m}m`
 }
 
-function getIcon(): Gio.FileIcon | string {
-    if (!bat) return Icons.battery
-    return bat.icon_name || Icons.battery
-}
-
-function getSummary(): string {
-    if (!bat) return "—"
-    const pct = Math.round(bat.percentage)
-    if (bat.charging || bat.charged) {
-        const timeStr = formatTime(bat.time_to_full)
-        return timeStr ? `${pct}% · ${timeStr}` : `${pct}% · ${t("widget.battery.state.cargando")}`
+function getStateText(): string {
+    if (!present()) return "—"
+    if (bat!.charged) return t("widget.battery.state.cargado")
+    if (bat!.charging) {
+        const ts = formatTime(bat!.time_to_full)
+        return ts ? `${t("widget.battery.state.cargando")} · ${ts}` : t("widget.battery.state.cargando")
     }
-    const timeStr = formatTime(bat.time_to_empty)
-    return timeStr ? `${pct}% · ${timeStr}` : `${pct}%`
+    const ts = formatTime(bat!.time_to_empty)
+    return ts ? `${t("widget.battery.state.descargando")} · ${ts}` : t("widget.battery.state.descargando")
 }
 
-function buildBarContent(): Gtk.Widget {
-    if (!bat) return new Gtk.Box({ visible: false })
+// ── Info panel (shared by bar expansion + CC detail) ──────────────────────────
+function buildPanel(_onClose: () => void): Gtk.Widget {
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: 240 })
 
-    const widget = makeExpandable({
-        getIcon,
-        getText: getSummary,
-    })
-
-    const sigId = bat.connect("notify", () => {
-        const icon = (widget as any).get_first_child()
-        if (icon) {
-            const ic = getIcon()
-            if (typeof ic === "string") icon.icon_name = ic; else icon.gicon = ic
-        }
-    })
-    widget.connect("unrealize", () => { try { bat.disconnect(sigId) } catch {} })
-
-    return widget
-}
-
-function buildContent(_size: WidgetSize): Gtk.Widget {
-    if (!bat) {
-        const label = new Gtk.Label({
+    if (!present()) {
+        box.append(new Gtk.Label({
             label: t("widget.battery.label.bateria-no-disponible"),
-            css_classes: ["settings-placeholder"],
+            css_classes: ["bar-popover-key"],
             halign: Gtk.Align.CENTER,
-            valign: Gtk.Align.CENTER,
-        })
-        return label
+            margin_top: 8, margin_bottom: 8,
+        }))
+        return box
     }
 
-    const pctLabel = new Gtk.Label({
-        css_classes: ["bar-popover-val"],
-        halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.CENTER,
-    })
-    const stateLabel = new Gtk.Label({
-        css_classes: ["bar-popover-key"],
-        halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.CENTER,
-    })
-    const icon = new Gtk.Image({
-        pixel_size: 32,
-        halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.CENTER,
-    })
+    const icon = new Gtk.Image({ gicon: Icons.battery, pixel_size: 32, css_classes: ["cs-icon"] })
+    const pct  = new Gtk.Label({ css_classes: ["bar-popover-val"], halign: Gtk.Align.START })
+    const head = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
+    head.append(icon); head.append(pct)
+
+    const state = new Gtk.Label({ css_classes: ["bar-popover-key"], halign: Gtk.Align.START })
+
+    box.append(head)
+    box.append(state)
 
     const sync = () => {
-        const pct = Math.round(bat.percentage)
-        const ic = getIcon()
-        if (typeof ic === "string") icon.icon_name = ic; else icon.gicon = ic
-        pctLabel.label = `${pct}%`
-        if (bat.charged) {
-            stateLabel.label = t("widget.battery.state.cargado")
-        } else if (bat.charging) {
-            const timeStr = formatTime(bat.time_to_full)
-            stateLabel.label = timeStr ? `${t("widget.battery.state.cargando")} · ${timeStr}` : t("widget.battery.state.cargando")
-        } else {
-            const timeStr = formatTime(bat.time_to_empty)
-            stateLabel.label = timeStr ? `${timeStr} · ${t("widget.battery.state.descargando")}` : t("widget.battery.state.descargando")
-        }
+        pct.label = `${Math.round(bat!.percentage)}%`
+        state.label = getStateText()
     }
-
     sync()
+    const sigId = bat!.connect("notify", sync)
+    box.connect("unrealize", () => { try { bat!.disconnect(sigId) } catch {} })
 
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 4,
-        halign: Gtk.Align.CENTER,
-        valign: Gtk.Align.CENTER,
-    })
-    box.append(icon)
-    box.append(pctLabel)
-    box.append(stateLabel)
+    return box
+}
 
-    const sigId = bat.connect("notify", sync)
-    box.connect("unrealize", () => { try { bat.disconnect(sigId) } catch {} })
+// ── Bar icon (plain icon; tap expands the panel) ──────────────────────────────
+function buildBarContent(): Gtk.Widget {
+    return new Gtk.Image({ gicon: Icons.battery, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+}
 
-    const outer = new Gtk.CenterBox()
-    outer.set_center_widget(box)
-    return outer
+// ── CC tile (centered icon, same footprint as other 1×1 widgets) ──────────────
+function buildContent(_size: WidgetSize): Gtk.Widget {
+    const box = new Gtk.Box({ hexpand: true, vexpand: true })
+    box.append(new Gtk.Image({
+        gicon: Icons.battery,
+        pixel_size: 28,
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+        hexpand: true, vexpand: true,
+        css_classes: ["cs-icon"],
+    }))
+    return box
 }
 
 const batteryWidget: AtomicWidget = {
@@ -121,10 +88,14 @@ const batteryWidget: AtomicWidget = {
     name: t("widget.battery.name"),
     icon: Icons.battery,
     locations: ["bar", "cc"],
+    defaultInCc: false,   // situational (laptops only) — available to add, but not seeded by default
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE],
     buildContent,
     buildBarContent,
+    buildBarExpanded: buildPanel,
+    buildCCDetail: buildPanel,
+    ccDetailRows: 2,
 }
 
 export default batteryWidget

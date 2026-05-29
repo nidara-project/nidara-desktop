@@ -3,6 +3,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import Theme from "../../core/ThemeManager"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
 function readFile(path: string): string {
@@ -127,9 +128,10 @@ function buildContent(_size: WidgetSize): Gtk.Widget {
 
 const cpuMemoryWidget: AtomicWidget = {
     id: "cpu_memory",
-    name: "CPU & Memoria",
+    name: t("widget.cpu-memory.name"),
     icon: Icons.cpu,
     locations: ["bar", "cc"],
+    defaultInBar: true,
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.WIDE],
     buildContent,

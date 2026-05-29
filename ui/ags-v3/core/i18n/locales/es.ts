@@ -297,14 +297,7 @@ export default {
     "settings.bluetooth.row.label.activar-bluetooth": "Activar Bluetooth",
     "settings.bluetooth.row.label.escanear": "Escanear",
     "settings.bluetooth.tooltip.olvidar-dispositivo": "Olvidar dispositivo",
-    "settings.controlcenter.group.widgets-activos": "Widgets activos",
-    "settings.controlcenter.group.widgets-disponibles": "Widgets disponibles",
-    "settings.controlcenter.label.no-hay-widgets-activos": "No hay widgets activos",
-    "settings.controlcenter.label.todos-los-widgets-estan-activos": "Todos los widgets están activos",
-    "settings.controlcenter.page.subtitle.gestiona-los-widgets-del-panel-de-contro": "Gestiona los widgets del panel de control rápido",
-    "settings.controlcenter.page.title.centro-de-control": "Centro de Control",
-    "settings.controlcenter.tooltip.anadir-al-cc": "Añadir al CC",
-    "settings.controlcenter.tooltip.quitar-del-cc": "Quitar del CC",
+    "settings.widgets.tooltip.sin-espacio": "Sin espacio suficiente — quita un widget primero",
     "settings.display.label.no-se-detectaron-monitores": "No se detectaron monitores.",
     "settings.display.label.servicio-hyprland-no-disponible": "Servicio Hyprland no disponible",
     "settings.display.page.subtitle.configura-resolucion-escala-y-orientacio": "Configura resolución, escala y orientación de tus monitores",
@@ -512,6 +505,7 @@ export default {
     "widget.dark-mode.sub.light": "Claro",
     "widget.focus.name": "No Molestar",
     "widget.calculator.name": "Calculadora",
+    "widget.cpu-memory.name": "CPU y Memoria",
 
     // Ethernet bar popover rows
     "widget.ethernet.row.interface": "Interfaz",
