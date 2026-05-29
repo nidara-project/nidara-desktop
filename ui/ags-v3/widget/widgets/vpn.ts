@@ -179,7 +179,7 @@ const vpnWidget: AtomicWidget = {
     icon: Icons.shield,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
-    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,
     buildBarContent,
     buildBarExpanded,

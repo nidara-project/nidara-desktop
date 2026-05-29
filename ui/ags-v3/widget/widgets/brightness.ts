@@ -35,7 +35,75 @@ function setBrightness(pct: number) {
 
 // ── CC slider widget ──────────────────────────────────────────────────────────
 
-function buildContent(_size: WidgetSize): Gtk.Widget {
+// Dispatch by tier: Small=icon, Medium=1×2 vertical, Large=4×1 horizontal.
+function buildContent(size: WidgetSize): Gtk.Widget {
+    if (size === WidgetSize.SINGLE) return buildBrightnessIcon()
+    if (size === WidgetSize.TALL) return buildVertical()
+    return buildHorizontal()
+}
+
+// Small (1×1): centered indicator icon, mirroring the bar icon.
+function buildBrightnessIcon(): Gtk.Widget {
+    return new Gtk.Image({
+        gicon: Icons.sun, pixel_size: 28,
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+        hexpand: true, vexpand: true,
+        css_classes: ["cs-icon"],
+    })
+}
+
+// Medium (1×2): native vertical scale.
+function buildVertical(): Gtk.Widget {
+    const box = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 6,
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.FILL,
+        vexpand: true,
+        margin_top: 10, margin_bottom: 10,
+    })
+
+    const scale = new Gtk.Scale({
+        orientation: Gtk.Orientation.VERTICAL,
+        vexpand: true, halign: Gtk.Align.CENTER,
+        draw_value: false, inverted: true,
+        css_classes: ["crystal-scale", "cc-atomic-scale-native", "cc-scale-vertical"],
+        width_request: 32,
+    })
+    scale.set_range(0, 100)
+    scale.set_value(_cachedPct)
+    scale.set_increments(1, 5)
+
+    const valueLabel = new Gtk.Label({ label: `${_cachedPct}%`, css_classes: ["slider-value-label"], halign: Gtk.Align.CENTER, width_chars: 5 })
+
+    box.append(new Gtk.Image({ gicon: Icons.sun, pixel_size: 18, halign: Gtk.Align.CENTER, css_classes: ["cs-icon"] }))
+    box.append(scale)
+    box.append(valueLabel)
+
+    let ignoreUntil = 0, pending = false
+    scale.connect("value-changed", () => {
+        const v = scale.get_value()
+        valueLabel.label = `${Math.round(v)}%`
+        ignoreUntil = GLib.get_monotonic_time() + 500_000
+        if (!pending) {
+            pending = true
+            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { setBrightness(scale.get_value()); pending = false; return GLib.SOURCE_REMOVE })
+        }
+    })
+
+    const id = GLib.timeout_add(GLib.PRIORITY_LOW, 2000, () => {
+        if (GLib.get_monotonic_time() < ignoreUntil) return GLib.SOURCE_CONTINUE
+        const prev = _cachedPct
+        fetchBrightness().then(v => { if (Math.abs(v - prev) > 1) scale.set_value(v) })
+        return GLib.SOURCE_CONTINUE
+    })
+    box.connect("unrealize", () => { try { GLib.source_remove(id) } catch {} })
+
+    fetchBrightness().then(v => scale.set_value(v))
+    return box
+}
+
+// Large (4×1): horizontal slider.
+function buildHorizontal(): Gtk.Widget {
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.HORIZONTAL,
         spacing: 10,
@@ -141,7 +209,8 @@ const brightnessWidget: AtomicWidget = {
     icon: Icons.sun,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.FULL_WIDTH,
-    supportedSizes: [WidgetSize.FULL_WIDTH],
+    // Slider tier mapping: Small=icon, Medium=1×2 vertical, Large=4×1 wide.
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.TALL, WidgetSize.FULL_WIDTH],
     buildContent,
     buildBarContent,
     buildBarExpanded,

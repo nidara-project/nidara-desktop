@@ -2,22 +2,18 @@ import { Gtk, Gdk } from "ags/gtk4"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import BaseIsland from "./BaseIsland"
-import ccLayout, { UNIT, GAP, GRID_COLS, GRID_ROWS, GRID_WIDTH, GRID_HEIGHT, SIZE_MAP } from "./CCLayoutManager"
-import { AtomicWidget, WidgetSize } from "./Types"
+import ccLayout, { UNIT, GAP, GRID_WIDTH, GRID_HEIGHT, SIZE_MAP } from "./CCLayoutManager"
+import { AtomicWidget } from "./Types"
 import status from "../../core/Status"
 import widgetConfig from "../../core/WidgetConfig"
 import registry from "../widgets/index"
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
 import SquircleContainer, { Shape } from "../common/SquircleContainer"
+import { createCCContextMenu } from "./CCContextMenu"
 
 const pixelX = (gx: number) => gx * (UNIT + GAP)
 const pixelY = (gy: number) => gy * (UNIT + GAP)
-
-const sizeLabel = (size: WidgetSize) => {
-    const { w, h } = SIZE_MAP[size]
-    return `${w}×${h}`
-}
 
 // Compute the pixel height needed to show all placed widgets (no extra padding)
 function computeContentHeight(): number {
@@ -46,26 +42,25 @@ export function getWidgetById(id: string): AtomicWidget | null {
     }
 }
 
-// Snap pixel coords (relative to fixed) to nearest valid grid cell
-function snapToGrid(id: string, dropX: number, dropY: number): { gx: number; gy: number } | null {
-    const size  = ccLayout.effectiveSize(id)
-    const { w, h } = SIZE_MAP[size]
-    let gx = Math.round((dropX - dragOffsetX) / (UNIT + GAP))
-    let gy = Math.round((dropY - dragOffsetY) / (UNIT + GAP))
-    gx = Math.max(0, Math.min(GRID_COLS - w, gx))
-    gy = Math.max(0, Math.min(GRID_ROWS - h, gy))
-    return { gx, gy }
+// Centre of the dragged tile, in fractional grid-cell units, from the pointer
+// position (relative to fixed). Accounts for where inside the tile it was grabbed
+// (dragOffset) so placement tracks the tile, not the cursor pixel. Feeds the
+// midpoint-based insertion in CCLayoutManager.insertIndexAt.
+function dragCentre(id: string, dropX: number, dropY: number): { cx: number; cy: number } {
+    const { w, h } = SIZE_MAP[ccLayout.effectiveSize(id)]
+    const cx = (dropX - dragOffsetX) / (UNIT + GAP) + w / 2
+    const cy = (dropY - dragOffsetY) / (UNIT + GAP) + h / 2
+    return { cx, cy }
 }
 
 function makeIslandWidget(
     id: string,
     editMode: boolean,
-    onRemove: () => void,
-    onResize: () => void,
     fixed: Gtk.Fixed,
     onDragBegin: (dragged: Gtk.Widget) => void,
     onDragEnd: (dragged: Gtk.Widget, deleteData: boolean) => void,
     showDetail: ((id: string) => void) | null,
+    openMenu: (id: string, anchorX: number, anchorY: number) => void,
 ): Gtk.Widget | null {
     const entry = ccLayout.layout.find(e => e.id === id)
     if (!entry) return null
@@ -81,50 +76,45 @@ function makeIslandWidget(
     const content = def.buildContent(effectiveSize)
     const island  = BaseIsland({ name: def.id, child: content, width, height, size: effectiveSize })
 
-    // Tiles with CC detail: BUBBLE + released so child buttons claim the sequence
-    // on press and deny this gesture — button taps work from the compact tile,
-    // neutral-area taps open the squircle detail. GestureClick self-cancels on
-    // motion > threshold, leaving slider drags unaffected.
-    if (!editMode && def.buildCCDetail && showDetail) {
-        const overlay = new Gtk.Overlay()
-        overlay.set_child(island)
-        overlay.set_size_request(width, height)
-        const click = new Gtk.GestureClick()
-        click.connect("released", () => showDetail(id))
-        overlay.add_controller(click)
-        return overlay
-    }
-
-    if (!editMode) return island
-
     const overlay = new Gtk.Overlay()
     overlay.set_child(island)
     overlay.set_size_request(width, height)
 
-    // × remove
+    // Secondary-click → context menu (size picker + remove), available in every
+    // mode. Anchor is the tile's grid origin + the local click point, expressed
+    // in the grid Fixed's coordinate space (where the menu overlay lives).
+    const secondary = new Gtk.GestureClick()
+    secondary.set_button(Gdk.BUTTON_SECONDARY)
+    secondary.connect("pressed", (_g: any, _n: number, x: number, y: number) => {
+        openMenu(id, pixelX(entry.x) + x, pixelY(entry.y) + y)
+    })
+    overlay.add_controller(secondary)
+
+    if (!editMode) {
+        // Primary tap opens the squircle detail (only for tiles that have one).
+        // Bound to PRIMARY so right-click is left to the context menu. GestureClick
+        // self-cancels on motion > threshold, leaving slider drags unaffected.
+        if (def.buildCCDetail && showDetail) {
+            const click = new Gtk.GestureClick()
+            click.set_button(Gdk.BUTTON_PRIMARY)
+            click.connect("released", () => showDetail(id))
+            overlay.add_controller(click)
+        }
+        return overlay
+    }
+
+    // ── edit mode: × remove (kept alongside the context menu's Remove) + drag ──
     const removeBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14 , css_classes: ["cs-icon"] }),
+        child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14, css_classes: ["cs-icon"] }),
         css_classes: ["cc-remove-btn"],
         halign: Gtk.Align.END, valign: Gtk.Align.START,
         margin_top: 4, margin_end: 4,
     })
-    removeBtn.connect("clicked", onRemove)
+    // Clear the placement flag too (not just the layout), or syncCCLayout re-adds
+    // the widget on next load — cc_layout.json and widgetConfig must agree.
+    removeBtn.connect("clicked", () => { widgetConfig.setCC(id, false); ccLayout.remove(id) })
     overlay.add_overlay(removeBtn)
 
-    // Resize pill
-    const nextSize = ccLayout.nextResizeSize(id)
-    if (nextSize !== null) {
-        const resizeBtn = new Gtk.Button({
-            label: `${sizeLabel(effectiveSize)} → ${sizeLabel(nextSize)}`,
-            css_classes: ["cc-resize-btn"],
-            halign: Gtk.Align.END, valign: Gtk.Align.END,
-            margin_bottom: 6, margin_end: 6,
-        })
-        resizeBtn.connect("clicked", onResize)
-        overlay.add_overlay(resizeBtn)
-    }
-
-    // Drag source
     const dragSrc = new Gtk.DragSource({ actions: Gdk.DragAction.MOVE })
 
     dragSrc.connect("prepare", (_: any, x: number, y: number) => {
@@ -173,8 +163,38 @@ export default function IslandGrid() {
         css_classes: ["island-grid-container"],
         width_request: GRID_WIDTH,
         height_request: GRID_HEIGHT,
-        halign: Gtk.Align.END,
     })
+
+    // Hard width clamp. The CC is a right-anchored, content-sized overlay child, so
+    // anything that makes its content wider than GRID_WIDTH shifts the whole panel
+    // left. Gtk.Fixed reports its children's *natural* width, and a tile whose
+    // content (e.g. a labelled capsule) overruns its cell pushes that natural past
+    // GRID_WIDTH — and which tile sits at the edge changes on reorder/resize, so the
+    // shift moves around. A ScrolledWindow with propagate_natural_width=false reports
+    // a width independent of its child; width_request then pins it to GRID_WIDTH and
+    // any per-tile overrun is clipped instead of widening the panel.
+    const gridClamp = new Gtk.ScrolledWindow({
+        hscrollbar_policy: Gtk.PolicyType.NEVER,
+        vscrollbar_policy: Gtk.PolicyType.NEVER,
+        propagate_natural_width: false,
+        propagate_natural_height: true,
+        width_request: GRID_WIDTH,
+        halign: Gtk.Align.END,
+        css_classes: ["cc-grid-clamp"],
+    })
+    gridClamp.set_child(fixed)
+
+    // Context menu (size picker + remove) floats in an overlay over the grid so
+    // it isn't clipped by tiles; its coordinates match the Fixed's space — see
+    // the anchor math in makeIslandWidget.
+    const ctxMenu = createCCContextMenu()
+    const openMenu = (id: string, anchorX: number, anchorY: number) =>
+        ctxMenu.open(id, anchorX, anchorY, fixed.height_request)
+
+    const gridOverlay = new Gtk.Overlay({ halign: Gtk.Align.END, width_request: GRID_WIDTH })
+    gridOverlay.set_child(gridClamp)
+    gridOverlay.add_overlay(ctxMenu.scrim)
+    gridOverlay.add_overlay(ctxMenu.menu)
 
     // ── Detail page (full-panel, macOS Tahoe style) ───────────────────────────
     const mainStack = new Gtk.Stack({
@@ -295,10 +315,9 @@ export default function IslandGrid() {
 
     dropTarget.connect("motion", (_: any, x: number, y: number) => {
         if (!dragWidgetId) return Gdk.DragAction.MOVE
-        const snap = snapToGrid(dragWidgetId, x, y)
-        if (!snap) return Gdk.DragAction.MOVE
+        const { cx, cy } = dragCentre(dragWidgetId, x, y)
 
-        const preview = ccLayout.previewLayout(dragWidgetId, snap.gx, snap.gy)
+        const preview = ccLayout.previewLayout(dragWidgetId, cx, cy)
         for (const [id, pos] of preview) {
             const ref = widgetRefs.get(id)
             if (ref) fixed.move(ref, pixelX(pos.x), pixelY(pos.y))
@@ -310,9 +329,8 @@ export default function IslandGrid() {
     dropTarget.connect("drop", (_: any, _value: any, x: number, y: number) => {
         const id = dragWidgetId
         if (!id) return false
-        const snap = snapToGrid(id, x, y)
-        if (!snap) return false
-        ccLayout.commitPreview(id, snap.gx, snap.gy)
+        const { cx, cy } = dragCentre(id, x, y)
+        ccLayout.commitPreview(id, cx, cy)
         return true
     })
 
@@ -327,7 +345,7 @@ export default function IslandGrid() {
     const editBtnWrapper = new Gtk.Box({ halign: Gtk.Align.CENTER, hexpand: true, margin_top: 24, margin_bottom: 12 })
     editBtnWrapper.append(editBtn)
 
-    overviewPage.append(fixed)
+    overviewPage.append(gridOverlay)
     overviewPage.append(editBtnWrapper)
     outer.append(mainStack)
 
@@ -336,6 +354,7 @@ export default function IslandGrid() {
         dragOrigSnapshot.clear()
         widgetRefs.clear()
         dragSourceWidget = null
+        ctxMenu.close()
 
         let child = fixed.get_first_child()
         while (child) {
@@ -363,15 +382,11 @@ export default function IslandGrid() {
         for (const entry of ccLayout.layout) {
             const widget = makeIslandWidget(
                 entry.id, editMode,
-                () => ccLayout.remove(entry.id),
-                () => {
-                    const next = ccLayout.nextResizeSize(entry.id)
-                    if (next !== null) ccLayout.resize(entry.id, next)
-                },
                 fixed,
                 handleDragBegin,
                 handleDragEnd,
                 editMode ? null : showDetail,
+                openMenu,
             )
             if (widget) {
                 fixed.put(widget, pixelX(entry.x), pixelY(entry.y))
@@ -407,6 +422,7 @@ export default function IslandGrid() {
     // Reset edit mode + detail strip when CC is closed
     status.connect("notify::cc-open", () => {
         if (!status.cc_open) {
+            ctxMenu.close()
             hideDetail()
             if (editMode) {
                 editMode = false

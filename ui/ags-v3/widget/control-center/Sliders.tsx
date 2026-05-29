@@ -108,6 +108,36 @@ function buildVerticalSlider(
     return box
 }
 
+// Small (1×1) variant: round mute-toggle icon, mirroring the bar icon.
+function buildVolumeIcon(speaker: any): Gtk.Widget {
+    const getIcon = () => {
+        if (!speaker) return Icons.volumeMuted
+        const muted = speaker.mute ?? false
+        const vol = speaker.volume
+        if (muted || vol === 0) return Icons.volumeMuted
+        if (vol < 0.34) return Icons.volumeLow
+        if (vol < 0.67) return Icons.volumeMedium
+        return Icons.volumeHigh
+    }
+    const icon = new Gtk.Image({ gicon: getIcon(), pixel_size: 28, css_classes: ["cs-icon"] })
+    const btn = new Gtk.Button({
+        css_classes: ["cc-atomic-round-btn"],
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+        hexpand: true, vexpand: true,
+        width_request: 48, height_request: 48,
+        child: icon,
+    })
+    btn.connect("clicked", () => { if (speaker) speaker.mute = !(speaker.mute ?? false); icon.gicon = getIcon() })
+    if (speaker) {
+        const ids = [
+            speaker.connect("notify::volume", () => { icon.gicon = getIcon() }),
+            speaker.connect?.("notify::mute", () => { icon.gicon = getIcon() }) ?? 0,
+        ]
+        btn.connect("unrealize", () => ids.forEach((id: number) => { if (id) try { speaker.disconnect(id) } catch {} }))
+    }
+    return btn
+}
+
 export function VolumeWidget(): AtomicWidget {
     const speaker = AstalWp.get_default()?.audio?.default_speaker
 
@@ -121,6 +151,9 @@ export function VolumeWidget(): AtomicWidget {
 
     const buildContent = (size: WidgetSize): Gtk.Widget => {
         const current = getValue()
+        if (size === WidgetSize.SINGLE) {
+            return buildVolumeIcon(speaker)
+        }
         if (size === WidgetSize.TALL) {
             return buildVerticalSlider(Icons.volumeHigh, () => current * 100, onChange, onExtChange)
         }
@@ -131,7 +164,8 @@ export function VolumeWidget(): AtomicWidget {
         id: "volume",
         name: t("cc.volume.name"),
         defaultSize: WidgetSize.FULL_WIDTH,
-        supportedSizes: [WidgetSize.FULL_WIDTH, WidgetSize.TALL],
+        // Slider tier mapping: Small=icon, Medium=1×2 vertical, Large=4×1 wide.
+        supportedSizes: [WidgetSize.SINGLE, WidgetSize.TALL, WidgetSize.FULL_WIDTH],
         buildContent,
     }
 }

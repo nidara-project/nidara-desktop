@@ -141,7 +141,7 @@ const screenshotWidget: AtomicWidget = {
     icon: Icons.camera,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
-    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,
     buildBarContent,
     buildBarExpanded,

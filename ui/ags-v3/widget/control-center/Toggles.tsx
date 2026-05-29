@@ -199,16 +199,15 @@ export function RoundToggle(
     const getSub    = wideSubtitle ?? (() => "")
 
     const buildContent = (size: WidgetSize): Gtk.Widget => {
-        if (size === WidgetSize.WIDE) {
-            return buildCapsuleContent(getIcon, () => name, getSub, onClick, getActive, subscribe)
-        }
-        return buildRoundContent(getIcon, getActive, onClick, subscribe)
+        if (size === WidgetSize.SINGLE)
+            return buildRoundContent(getIcon, getActive, onClick, subscribe)
+        return buildCapsuleContent(getIcon, () => name, getSub, onClick, getActive, subscribe)
     }
 
     return {
         id, name,
         defaultSize: WidgetSize.SINGLE,
-        supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
+        supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
         buildContent,
     }
 }

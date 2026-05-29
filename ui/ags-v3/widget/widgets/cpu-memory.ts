@@ -110,16 +110,17 @@ function buildBarContent(): Gtk.Widget {
     return box
 }
 
-// CC variant — always WIDE (2×1). CenterBox ensures the arcs stay centered
-// even after BaseIsland forces child to halign/valign FILL.
-function buildContent(_size: WidgetSize): Gtk.Widget {
+// CC variant. CenterBox keeps the arcs centered even after BaseIsland forces the
+// child to halign/valign FILL. Small (1×1) shows just CPU — two arcs don't fit a
+// single cell; Medium/Large show CPU + RAM.
+function buildContent(size: WidgetSize): Gtk.Widget {
     const inner = new Gtk.Box({
         spacing: 24,
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER,
     })
     inner.append(cpuArc(40))
-    inner.append(ramArc(40))
+    if (size !== WidgetSize.SINGLE) inner.append(ramArc(40))
 
     const outer = new Gtk.CenterBox()
     outer.set_center_widget(inner)
@@ -133,7 +134,7 @@ const cpuMemoryWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultInBar: true,
     defaultSize: WidgetSize.WIDE,
-    supportedSizes: [WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,
     buildBarContent,
 }

@@ -24,7 +24,7 @@ const nightLightWidget: AtomicWidget = {
     icon: Icons.moon,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
-    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent: (size) => RoundToggle(
         "night_light",
         t("widget.night-light.name"),

@@ -236,7 +236,7 @@ const screenrecordWidget: AtomicWidget = {
     icon: Icons.record,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
-    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,
     buildBarContent,
     buildBarExpanded,

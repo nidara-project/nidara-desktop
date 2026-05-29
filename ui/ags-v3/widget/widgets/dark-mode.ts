@@ -24,7 +24,7 @@ const darkModeWidget: AtomicWidget = {
     icon: Icons.moon,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
-    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent: (size) => RoundToggle(
         "dark-mode", t("widget.dark-mode.name"),
         () => Theme.isDark ? Icons.moon : Icons.sun,

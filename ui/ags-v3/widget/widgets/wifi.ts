@@ -161,7 +161,7 @@ const wifiWidget: AtomicWidget = {
     icon: Icons.wifi,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
-    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,
     buildBarContent,
     buildBarExpanded,

@@ -19,6 +19,21 @@ export const SIZE_MAP: Record<WidgetSize, { w: number; h: number }> = {
     [WidgetSize.FULL_WIDTH]: { w: 4, h: 1 },
 }
 
+// Standardized 3-tier scale (macOS-style). Every footprint maps to one of three
+// semantic tiers so the context menu always speaks the same vocabulary
+// (Small / Medium / Large) regardless of a widget's concrete geometry:
+//   · standard widgets:  1×1 → 2×1 → 2×2
+//   · slider widgets:    1×1 → 1×2 → 4×1  (volume, brightness)
+export enum SizeTier { SMALL = 0, MEDIUM = 1, LARGE = 2 }
+
+export const SIZE_TIER: Record<WidgetSize, SizeTier> = {
+    [WidgetSize.SINGLE]:     SizeTier.SMALL,
+    [WidgetSize.WIDE]:       SizeTier.MEDIUM,
+    [WidgetSize.TALL]:       SizeTier.MEDIUM,
+    [WidgetSize.SQUARE]:     SizeTier.LARGE,
+    [WidgetSize.FULL_WIDTH]: SizeTier.LARGE,
+}
+
 // WidgetMeta + WIDGET_META are derived from the widget registry (single source
 // of truth) and re-exported at the top of this file.
 
@@ -121,15 +136,23 @@ class CCLayoutManager extends GObject.Object {
         return result
     }
 
-    // Find the order-index at which inserting dragId puts it nearest to (snapX, snapY).
-    // Uses reading-order key (y * stride + x) to compare positions.
-    private insertIdx(dragId: string, snapX: number, snapY: number): number {
+    // Order-index at which to insert dragId, given the dragged tile's *centre*
+    // (cx, cy) in fractional grid-cell units. Midpoint rule: a widget claims the
+    // insertion point only once the cursor passes its centre, so hovering the left
+    // half of a tile drops before it and the right half drops after — reliable
+    // gaps, far-right reachable (returns base.length past the last), and the index
+    // changes only at centres (not cell edges), so distant tiles stop twitching.
+    private insertIndexAt(dragId: string, cx: number, cy: number): number {
         const base = this._order.filter(id => id !== dragId)
         const pos  = this.flowPack(base)
-        const snapKey = snapY * (GRID_COLS + 1) + snapX
         for (let i = 0; i < base.length; i++) {
             const p = pos.get(base[i])
-            if (p && p.y * (GRID_COLS + 1) + p.x >= snapKey) return i
+            if (!p) continue
+            const { w, h } = SIZE_MAP[this.effectiveSize(base[i])]
+            // Above this widget's vertical band → insert before it.
+            if (cy < p.y) return i
+            // Within its band and left of its horizontal centre → insert before it.
+            if (cy < p.y + h && cx < p.x + w / 2) return i
         }
         return base.length
     }
@@ -206,24 +229,18 @@ class CCLayoutManager extends GObject.Object {
         return true
     }
 
-    // Returns hypothetical positions for all widgets if dragId were inserted
-    // at the position in flow order that puts it nearest to (snapX, snapY).
-    // Widgets behind the insertion point shift down; those before shift up — no gaps.
-    previewLayout(dragId: string, snapX: number, snapY: number): Map<string, { x: number; y: number }> {
+    // Hypothetical positions for all widgets if dragId were inserted at the slot
+    // its centre (cx, cy in fractional cell units) points to. Widgets behind the
+    // insertion point shift down; those before shift up — no gaps.
+    previewLayout(dragId: string, cx: number, cy: number): Map<string, { x: number; y: number }> {
         const base = this._order.filter(id => id !== dragId)
-        const basePos = this.flowPack(base)
-        const snapKey = snapY * (GRID_COLS + 1) + snapX
-        let idx = base.length
-        for (let i = 0; i < base.length; i++) {
-            const p = basePos.get(base[i])
-            if (p && p.y * (GRID_COLS + 1) + p.x >= snapKey) { idx = i; break }
-        }
+        const idx = this.insertIndexAt(dragId, cx, cy)
         base.splice(idx, 0, dragId)
         return this.flowPack(base)
     }
 
-    commitPreview(dragId: string, snapX: number, snapY: number) {
-        const idx = this.insertIdx(dragId, snapX, snapY)
+    commitPreview(dragId: string, cx: number, cy: number) {
+        const idx = this.insertIndexAt(dragId, cx, cy)
         this._order = this._order.filter(id => id !== dragId)
         this._order.splice(idx, 0, dragId)
         this.save()

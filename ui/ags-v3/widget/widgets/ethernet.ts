@@ -123,7 +123,7 @@ const ethernetWidget: AtomicWidget = {
     icon: Icons.ethernet,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
-    supportedSizes: [WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,
     buildBarContent,
     buildBarExpanded,

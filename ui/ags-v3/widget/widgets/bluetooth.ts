@@ -21,7 +21,7 @@ const btWidget: AtomicWidget = {
     icon: Icons.bluetooth,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
-    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent: (size) => {
         const bt = AstalBluetooth.get_default()
         return RoundToggle(

@@ -244,7 +244,7 @@ const volumeWidget: AtomicWidget = {
     icon: Icons.volumeHigh,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.FULL_WIDTH,
-    supportedSizes: [WidgetSize.FULL_WIDTH, WidgetSize.TALL],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.TALL, WidgetSize.FULL_WIDTH],
     buildContent: (size) => VolumeWidget().buildContent(size),
     buildBarContent,
     buildBarExpanded,

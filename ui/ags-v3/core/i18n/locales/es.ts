@@ -568,6 +568,11 @@ export default {
     // Control Center — Island grid
     "cc.grid.edit": "Editar",
     "cc.grid.done": "Listo",
+    "cc.menu.size.small": "Pequeño",
+    "cc.menu.size.medium": "Mediano",
+    "cc.menu.size.large": "Grande",
+    "cc.menu.remove": "Quitar",
+    "cc.menu.size-full": "Sin espacio",
 
     // Control Center — Volume widget
     "cc.volume.name": "Volumen",
