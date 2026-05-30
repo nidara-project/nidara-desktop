@@ -34,13 +34,31 @@ ASTAL_REF="d8738f97ed01f4d87f668df35fa7bbad795c9e49"   # github.com/aylur/astal 
 AGS_REF="v3.1.2"                                        # github.com/aylur/ags release tag
 APPMENU_REF="aea4ea398b7c75494f23f5e5bdb4f495d615059f"  # gitlab vala-panel-appmenu @ master
 
-# Clone a repo if missing, then hard-check out the pinned ref (branch, tag or SHA).
-# Re-running the installer re-pins an existing checkout instead of reusing stale HEAD.
-clone_pinned() {
-    local url="$1" dir="$2" ref="$3"
-    [ -d "$dir/.git" ] || git clone "$url" "$dir"
-    git -C "$dir" fetch --tags --quiet origin || true
-    git -C "$dir" checkout --quiet "$ref"
+# Build dir for the source-built dependency packages (Astal libs, AGS, appmenu).
+PKG_CACHE="${REAL_HOME}/.cache/crystal-shell/pkgbuild"
+
+# Run a command as the unprivileged user. makepkg refuses to run as root, so when
+# the installer itself is invoked via `sudo` we drop back to $REAL_USER (with -H so
+# npm/go caches land in the user's home, not /root).
+run_user() {
+    if [ "$(id -u)" -eq 0 ]; then sudo -u "$REAL_USER" -H "$@"; else "$@"; fi
+}
+
+# makepkg the PKGBUILD in dir $1, then hand the result to pacman. We --overwrite
+# because earlier Crystal Shell releases `meson install`-ed these libs straight into
+# /usr as UNTRACKED files (invisible to `pacman -Qo`, unupgradable, unremovable —
+# the exact blind spot that hid a stale, crashing appmenu-glib-translator). This
+# transition gives those paths to pacman; from here they upgrade/remove cleanly.
+build_install_pkg() {
+    local dir="$1"
+    mkdir -p "$PKG_CACHE/src"
+    chown -R "$REAL_USER" "$dir" "$PKG_CACHE/src" 2>/dev/null || true
+    # -f rebuild, --nodeps (install order is managed below), --skipinteg (git sources)
+    run_user bash -c "cd '$dir' && SRCDEST='$PKG_CACHE/src' makepkg -f --noconfirm --nodeps --skipinteg --noprogressbar"
+    local pkgfile
+    pkgfile="$(ls -t "$dir"/*.pkg.tar.* 2>/dev/null | head -1)"
+    [ -n "$pkgfile" ] || { echo "  [ERR] makepkg produced no package in $dir" >&2; exit 1; }
+    sudo pacman -U --noconfirm --overwrite '*' "$pkgfile"
 }
 
 echo ""
@@ -92,7 +110,10 @@ echo ""
 # 1. System dependencies
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[1/7] Installing system dependencies..."
-sudo pacman -Sy --needed --noconfirm \
+# -Syu, never bare -Sy: syncing the DBs without a full upgrade leaves a partial-upgrade
+# state, and the next --needed install pulls a new lib (e.g. aquamarine) whose soname no
+# longer matches already-installed packages (e.g. hyprtoolkit) → transaction fails.
+sudo pacman -Syu --needed --noconfirm \
     base-devel glib2-devel cmake meson ninja gobject-introspection vala \
     gtk3 gtk4 gtk4-layer-shell libadwaita libpeas-2 \
     libpulse networkmanager bluez-libs upower libnotify \
@@ -110,31 +131,103 @@ sudo pacman -Sy --needed --noconfirm \
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. Build & install Astal dependencies
 # ─────────────────────────────────────────────────────────────────────────────
-echo "[2/7] Building Astal service libraries..."
+echo "[2/7] Building & packaging Astal service libraries..."
+mkdir -p "$PKG_CACHE/src"
+chown -R "$REAL_USER" "$PKG_CACHE" 2>/dev/null || true
 
-echo "  Building appmenu-glib-translator..."
-mkdir -p /tmp/astal-deps && cd /tmp/astal-deps
-clone_pinned https://gitlab.com/vala-panel-project/vala-panel-appmenu.git vala-panel-appmenu "$APPMENU_REF"
-cd vala-panel-appmenu/subprojects/appmenu-glib-translator
-rm -rf build && meson setup build --prefix=/usr && sudo meson install -C build
+# ── appmenu-glib-translator (build/runtime dep of libastal-tray) ──────────────
+# Build this FIRST: libastal-tray links it. Pinned by $APPMENU_REF.
+echo "  Packaging appmenu-glib-translator..."
+appmenu_dir="$PKG_CACHE/appmenu-glib-translator"
+mkdir -p "$appmenu_dir"
+cat > "$appmenu_dir/PKGBUILD" <<PKGB
+pkgname=appmenu-glib-translator
+pkgver=25.04.r${APPMENU_REF:0:7}
+_commit=$APPMENU_REF
+PKGB
+cat >> "$appmenu_dir/PKGBUILD" <<'PKGB'
+pkgrel=1
+pkgdesc="DBusMenu→GMenuModel translator (pinned for Crystal Shell)"
+arch=(x86_64)
+url="https://gitlab.com/vala-panel-project/vala-panel-appmenu"
+license=(LGPL3)
+depends=()
+makedepends=(meson ninja vala gobject-introspection git glib2-devel)
+options=(!debug)
+source=("vala-panel-appmenu::git+https://gitlab.com/vala-panel-project/vala-panel-appmenu.git#commit=$_commit")
+sha256sums=('SKIP')
+build() {
+  cd "$srcdir/vala-panel-appmenu/subprojects/appmenu-glib-translator"
+  meson setup build --prefix=/usr --buildtype=release
+  meson compile -C build
+}
+package() {
+  cd "$srcdir/vala-panel-appmenu/subprojects/appmenu-glib-translator"
+  DESTDIR="$pkgdir" meson install -C build
+}
+PKGB
+build_install_pkg "$appmenu_dir"
 
-echo "  Building Astal components..."
-mkdir -p /tmp/astal-build && cd /tmp/astal-build
-clone_pinned https://github.com/aylur/astal.git astal "$ASTAL_REF"
-cd astal
-
-for comp in \
-    "lib/astal/io" "lib/astal/gtk3" "lib/astal/gtk4" \
-    "lib/apps" "lib/hyprland" "lib/mpris" "lib/network" \
-    "lib/battery" "lib/notifd" "lib/bluetooth" "lib/tray" \
-    "lib/greet" \
-    "lib/auth" \
-    "lang/gjs"
-do
-    echo "  Building $comp..."
-    pushd "$comp" > /dev/null
-    rm -rf build && meson setup build --prefix=/usr && sudo meson install -C build
-    popd > /dev/null
+# ── Astal libraries ───────────────────────────────────────────────────────────
+# Astal has no root meson.build: each lib is built standalone and finds the others
+# via pkg-config, so they MUST be built+installed in dependency order (io first).
+# One package per lib (mirrors the AUR libastal-* layout) keeps each individually
+# trackable. The astal source is cloned once into the shared SRCDEST and reused.
+# depends=() is intentional: every runtime dep is already pulled in by step 1's
+# `pacman -S`, and empty deps keep this first packaging pass from failing on
+# transient resolution. (crystal-repo can tighten these later — see packaging/README.)
+echo "  Packaging Astal components (in dependency order)..."
+astal_pkgs=(
+    "lib/astal/io|libastal-io"
+    "lib/quarrel|astal-quarrel"
+    "lib/astal/gtk3|libastal-gtk3"
+    "lib/astal/gtk4|libastal-gtk4"
+    "lib/apps|libastal-apps"
+    "lib/hyprland|libastal-hyprland"
+    "lib/mpris|libastal-mpris"
+    "lib/network|libastal-network"
+    "lib/battery|libastal-battery"
+    "lib/notifd|libastal-notifd"
+    "lib/bluetooth|libastal-bluetooth"
+    "lib/tray|libastal-tray"
+    "lib/greet|libastal-greet"
+    "lib/auth|libastal-auth"
+    "lang/gjs|astal-gjs"
+)
+for entry in "${astal_pkgs[@]}"; do
+    subdir="${entry%%|*}"
+    name="${entry##*|}"
+    pdir="$PKG_CACHE/$name"
+    mkdir -p "$pdir"
+    cat > "$pdir/PKGBUILD" <<PKGB
+pkgname=$name
+pkgver=0.1.0.r${ASTAL_REF:0:7}
+_subdir=$subdir
+_commit=$ASTAL_REF
+PKGB
+    cat >> "$pdir/PKGBUILD" <<'PKGB'
+pkgrel=1
+pkgdesc="Astal library ($_subdir), pinned for Crystal Shell"
+arch=(x86_64)
+url="https://github.com/Aylur/astal"
+license=(LGPL3)
+depends=()
+makedepends=(meson ninja vala gobject-introspection git glib2-devel)
+options=(!debug)
+source=("astal::git+https://github.com/Aylur/astal.git#commit=$_commit")
+sha256sums=('SKIP')
+build() {
+  cd "$srcdir/astal/$_subdir"
+  meson setup build --prefix=/usr --buildtype=release
+  meson compile -C build
+}
+package() {
+  cd "$srcdir/astal/$_subdir"
+  DESTDIR="$pkgdir" meson install -C build
+}
+PKGB
+    echo "  → $name ($subdir)"
+    build_install_pkg "$pdir"
 done
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -149,11 +242,37 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. Build & install AGS CLI
 # ─────────────────────────────────────────────────────────────────────────────
-echo "[4/7] Building AGS CLI..."
-mkdir -p /tmp/ags-build && cd /tmp/ags-build
-clone_pinned https://github.com/aylur/ags.git ags "$AGS_REF"
-cd ags
-rm -rf build && npm install && meson setup build --prefix=/usr && sudo meson install -C build
+echo "[4/7] Building & packaging AGS CLI..."
+ags_dir="$PKG_CACHE/aylurs-gtk-shell"
+mkdir -p "$ags_dir"
+cat > "$ags_dir/PKGBUILD" <<PKGB
+pkgname=aylurs-gtk-shell
+pkgver=${AGS_REF#v}
+_ref=$AGS_REF
+PKGB
+cat >> "$ags_dir/PKGBUILD" <<'PKGB'
+pkgrel=1
+pkgdesc="Aylur's GTK Shell (ags) CLI, pinned for Crystal Shell"
+arch=(x86_64)
+url="https://github.com/Aylur/ags"
+license=(GPL3)
+depends=(astal-gjs gjs)
+makedepends=(meson ninja vala gobject-introspection git nodejs npm go glib2-devel)
+options=(!debug)
+source=("ags::git+https://github.com/Aylur/ags.git#tag=$_ref")
+sha256sums=('SKIP')
+build() {
+  cd "$srcdir/ags"
+  npm install
+  meson setup build --prefix=/usr --buildtype=release
+  meson compile -C build
+}
+package() {
+  cd "$srcdir/ags"
+  DESTDIR="$pkgdir" meson install -C build
+}
+PKGB
+build_install_pkg "$ags_dir"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. Build the Crystal Shell UI bundle
