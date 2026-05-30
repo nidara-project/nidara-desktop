@@ -22,6 +22,12 @@ export default function Tray(openMenu?: OpenMenu) {
     })
 
     const items = new Map<string, Gtk.Button>()
+    // Per-item teardown: disconnect EVERY signal handler we attached to the
+    // (churny) AstalTray TrayItem when the item goes away. Antigravity re-registers
+    // its tray item periodically; leaving `notify::` closures dangling on a TrayItem
+    // the library is about to free is what feeds the GParamSpec over-unref that the
+    // GC later trips on (g_param_spec_unref UAF → whole-UI segfault ~minutes later).
+    const cleanups = new Map<string, () => void>()
 
     const createItem = (tray: any, id: string) => {
         if (items.has(id)) return;
@@ -72,8 +78,9 @@ export default function Tray(openMenu?: OpenMenu) {
             if (name)        { img.set_from_icon_name(name) }
         }
         syncIcon()
-        item.connect("notify::gicon", syncIcon)
-        item.connect("notify::icon-name", syncIcon)
+        const handlerIds: number[] = []
+        handlerIds.push(item.connect("notify::gicon", syncIcon))
+        handlerIds.push(item.connect("notify::icon-name", syncIcon))
 
         const btn = new Gtk.Button({
             css_classes: ["bar-tray-btn"],
@@ -85,53 +92,65 @@ export default function Tray(openMenu?: OpenMenu) {
             try { item.activate(0, 0) } catch (e) { }
         })
 
-        // Build the context menu ONCE, now, while the tray item + its DBus menu
-        // model are valid. We then reuse this prebuilt Gtk.Box on every open and
-        // NEVER touch the tray/DBus stack again at open time.
+        // LAZY context menu — the DBus menu (appmenu-glib-translator's DbusMenuModel)
+        // is only iterated/parsed when the user actually opens it, never at boot.
         //
-        // Why: the tray item (e.g. Antigravity) re-registers every few seconds,
-        // which corrupts an internal GListStore (the recurring g_list_store_remove
-        // warning). Re-introspecting the menu model on each open then dereferenced a
-        // freed object → g_atomic_ref_count_inc UAF → whole-UI segfault. The native
-        // PopoverMenu was stable precisely because it bound the model a single time.
-        // Rendering once and reusing the box reproduces that stability.
-        const menuModel = item.menu_model
-        const actionGroup = item.action_group
-        if (menuModel && openMenu) {
-            const onClose = () => { status.bar_expanded_id = "" }
-            let menuBox: Gtk.Widget = renderMenuModel(menuModel, actionGroup, onClose)
-
-            // DBus tray menus are usually populated LAZILY after about_to_show(), so
-            // the model is empty at creation. We rebuild the cached box only when the
-            // model itself signals a change (a consistent state) — never on open — so
-            // the menu fills with real content while the open path never touches the
-            // (churny) DBus stack that was causing the use-after-free segfault.
-            let changedId = 0
-            try {
-                changedId = menuModel.connect("items-changed", () => {
-                    try { menuBox = renderMenuModel(menuModel, actionGroup, onClose) } catch (e) { }
-                })
-            } catch (e) { }
-            try { item.about_to_show() } catch (e) { }   // once, item is valid here
-
+        // Why: that translator (the crashy `layout_parse`/`get_layout_idle` in the
+        // coredump) parses the remote app's menu layout the moment something iterates
+        // the model or calls about_to_show(). Doing that eagerly for every item at
+        // startup kept a buggy parser live for the whole session, re-parsing each
+        // LayoutUpdated — which eventually read a corrupt GVariant length and aborted
+        // (g_malloc of ~140 TB). Building on demand shrinks that window to "while the
+        // menu is open" and removes the deterministic boot-time g_list_store_remove.
+        // Built once, on first right-click, then cached and reused. about_to_show()
+        // and model iteration (the two things that kick the buggy translator into
+        // parsing) therefore run exactly ONCE per item, on demand — not per open and
+        // not at boot. A single items-changed connection (torn down in removeItem)
+        // keeps the cached menu fresh; nothing fragile hangs off onClose, so an
+        // outside-click dismiss can't leak a connection.
+        let menuWrapper: Gtk.Box | null = null
+        let menuChangedId = 0
+        if (openMenu) {
             const gesture = new Gtk.GestureClick()
             gesture.set_button(3)
             gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
             gesture.connect("pressed", (g) => { g.set_state(Gtk.EventSequenceState.CLAIMED) })
-            // Secondary-click → show the prebuilt menu in the bar's shared expansion
-            // capsule. CAPTURE + claiming keeps the event from reaching the overlay
-            // catcher (which would otherwise dismiss the menu as it opens).
-            gesture.connect("released", () => { openMenu(btn, () => menuBox) })
+            gesture.connect("released", () => {
+                const menuModel = item.menu_model
+                if (!menuModel) return
+                if (!menuWrapper) {
+                    const actionGroup = item.action_group
+                    const wrapper = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+                    const onClose = () => { status.bar_expanded_id = "" }
+                    const repopulate = () => {
+                        let c = wrapper.get_first_child()
+                        while (c) { const n = c.get_next_sibling(); wrapper.remove(c); c = n }
+                        try { wrapper.append(renderMenuModel(menuModel, actionGroup, onClose)) } catch (e) { }
+                    }
+                    repopulate()
+                    try { menuChangedId = menuModel.connect("items-changed", repopulate) } catch (e) { }
+                    try { item.about_to_show() } catch (e) { }   // request layout, ONCE
+                    menuWrapper = wrapper
+                }
+                openMenu(btn, () => menuWrapper!)
+            })
             btn.add_controller(gesture)
-
-            btn.connect("unrealize", () => { if (changedId) try { menuModel.disconnect(changedId) } catch (e) { } })
         }
 
+        cleanups.set(id, () => {
+            for (const hid of handlerIds) { try { item.disconnect(hid) } catch (e) { } }
+            if (menuChangedId) { try { item.menu_model?.disconnect(menuChangedId) } catch (e) { } }
+        })
         items.set(id, btn)
         box.append(btn)
     }
 
     const removeItem = (id: string) => {
+        // Run teardown BEFORE dropping our references so the soon-to-be-freed
+        // TrayItem carries none of our dangling closures into finalization.
+        const clean = cleanups.get(id)
+        if (clean) { clean(); cleanups.delete(id) }
+
         const btn = items.get(id)
         if (btn) {
             try {
