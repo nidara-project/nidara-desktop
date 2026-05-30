@@ -18,7 +18,7 @@ export default function InputPage() {
         -1.0,
         1.0,
         (v) => inputConfig.setPointerSpeed(v),
-        { icons: [Icons.mousePointer, Icons.mousePointer] as [string, string], pct: true }
+        { icons: [Icons.mousePointer, Icons.mousePointer], pct: true }
     ))
 
     const accelProfiles = ["adaptive", "flat"]

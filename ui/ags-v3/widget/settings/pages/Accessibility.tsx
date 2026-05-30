@@ -36,7 +36,7 @@ export default function AccessibilityPage() {
         t("settings.accessibility.text-scale.desc"),
         Theme.textScaling, 0.75, 2.0,
         (v) => Theme.setTextScaling(v),
-        { decimals: 2, icons: [Icons.type, Icons.type] as [string, string] },
+        { decimals: 2, icons: [Icons.type, Icons.type] },
     ))
 
     visionGroup.listBox.append(sliderRow(
@@ -44,7 +44,7 @@ export default function AccessibilityPage() {
         t("settings.accessibility.cursor-size.desc"),
         getCursorSize(), 16, 96,
         (v) => setCursorSize(v),
-        { unit: "px", icons: [Icons.mousePointer, Icons.mousePointer] as [string, string] },
+        { unit: "px", icons: [Icons.mousePointer, Icons.mousePointer] },
     ))
 
     page.append(visionGroup.box)

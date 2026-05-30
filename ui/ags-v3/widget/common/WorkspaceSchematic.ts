@@ -86,7 +86,8 @@ export function createSchematicMap(wsId: number, width: number): SchematicHandle
         const ws = workspaces.find((w: any) => w.id === wsId)
 
         let hMonitor: any = monitors.find((m: any) => m.name === (ws?.monitor || ""))
-        if (!hMonitor) hMonitor = monitors.find((m: any) => m.id === (ws?.monitor_id ?? -1))
+        // monitor_id is a loose runtime fallback not in the Workspace typings.
+        if (!hMonitor) hMonitor = monitors.find((m: any) => m.id === ((ws as any)?.monitor_id ?? -1))
         if (!hMonitor && wsId === hs.focusedWorkspaceId) hMonitor = hs.focusedMonitor
         if (!hMonitor) hMonitor = monitors.find((m: any) => m.active_workspace?.id === wsId) ?? monitors[0]
         if (!hMonitor?.width) return
