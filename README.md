@@ -40,7 +40,7 @@ It is not a theme or a set of scripts — it registers as a proper Wayland sessi
 Requires **Arch Linux**.
 
 ```bash
-git clone https://github.com/Fluid-Crystal/Crystal-Shell.git ~/crystal-shell-install
+git clone https://github.com/fluid-crystal/crystal-shell.git ~/crystal-shell-install
 cd ~/crystal-shell-install
 ./install.sh
 ```
@@ -144,8 +144,8 @@ hl.config({ general = { gaps_out = 16 } })
 ### Setup
 
 ```bash
-git clone https://github.com/Fluid-Crystal/Crystal-Shell.git ~/Dev/Crystal-Shell
-cd ~/Dev/Crystal-Shell
+git clone https://github.com/fluid-crystal/crystal-shell.git ~/Dev/crystal-shell
+cd ~/Dev/crystal-shell
 ./install.sh --dev
 ```
 
@@ -159,7 +159,7 @@ npm install   # IDE support (TypeScript autocomplete)
 ### Project Structure
 
 ```
-Crystal-Shell/
+crystal-shell/
 ├── config/
 │   └── hypr/                  # Hyprland config (installed to /usr/share/crystal-shell/)
 ├── defaults/                  # Default user configs (copied once on first install)
@@ -184,6 +184,7 @@ Crystal-Shell/
 - **Logs:** `tail -f /tmp/crystal-shell-ui.log`
 - **Kill stale GJS process:** `killall gjs`
 - **Compile SCSS:** `cd ui/ags-v3 && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css`
+- **Type-check:** `cd ui/ags-v3 && npm run typecheck` (catches type errors before they reach the running shell)
 - **Send IPC command:** `ags request toggleAppGrid`
 
 ### Publishing a Release
@@ -198,6 +199,17 @@ git commit -m "release: vX.Y.Z"
 git tag vX.Y.Z
 git push && git push --tags
 ```
+
+---
+
+## License
+
+Crystal Shell is released under the **GNU General Public License v3.0** (GPL-3.0).
+See [`LICENSE`](LICENSE) for the full text.
+
+This is the same license used by AGS, and is compatible with the LGPL-2.1
+libraries it builds on (GTK4, Astal). You're free to use, study, modify, and
+redistribute it — derivative works must remain open under the same terms.
 
 ---
 
