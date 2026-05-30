@@ -1270,7 +1270,7 @@ export default function DockVertical(gdkmonitor: any) {
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
             Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
         }
-        appGrid.widget.visible = true
+        appGrid.setVisible(true)
         appGrid.onShow()
         const surface = win.get_native()?.get_surface()
         if (surface) surface.set_input_region(null)
@@ -1280,7 +1280,7 @@ export default function DockVertical(gdkmonitor: any) {
     const closeAppGridPanel = () => {
         if (!appGridPanelOpen) return
         appGridPanelOpen = false
-        appGrid.widget.visible = false
+        appGrid.setVisible(false)
         appGrid.setActive(false)
         win.set_focus(null)
         win.set_focusable(false)
