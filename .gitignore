@@ -106,6 +106,20 @@ MEMORY.md
 memory/
 AGENTS.md
 HEARTBEAT.md
+
+# AI assistant files — not shipped with the project
+CLAUDE.md
+.claude/
+
+# More runtime user state (root-level, personal to each install)
+/bar-settings.json
+/gaming.json
+/greeter-prefs.json
+/night-light.json
+/wallpaper
+
+# Hyprglass plugin — embedded repo, intentionally not part of this project
+hyprglass/
 SOUL.md
 USER.md
 IDENTITY.md
