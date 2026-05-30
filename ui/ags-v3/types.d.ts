@@ -3,9 +3,11 @@
 // so it ships no .d.ts. Re-export the real @girs types here: gives full editor
 // types AND a typecheck that doesn't need the system ags present (so CI works).
 declare module "ags/gtk4" {
-    export { default as Gtk } from "gi://Gtk?version=4.0";
-    export { default as Gdk } from "gi://Gdk?version=4.0";
-    export { default as Astal } from "gi://Astal?version=4.0";
+    // Re-export the NAMED namespaces (not the default) so they work as
+    // type-namespaces too (e.g. `Gtk.Box` in a type position), not just values.
+    export { Gtk } from "gi://Gtk?version=4.0";
+    export { Gdk } from "gi://Gdk?version=4.0";
+    export { Astal } from "gi://Astal?version=4.0";
 }
 
 declare module "ags/gtk4/app" {
