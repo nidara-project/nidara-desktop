@@ -171,6 +171,14 @@ $dur-slow: 260ms;  // popover/sheet open
     }
 }
 
+// macOS-style keyboard focus ring. Apply on :focus-visible (keyboard nav only,
+// not mouse click). Single source of truth — don't hand-roll outlines.
+// $offset: 2px outset (default) or negative for inset cases (rows inside lists).
+@mixin crystal-focus-ring($offset: 2px) {
+    outline: 2px solid var(--crystal-accent);
+    outline-offset: $offset;
+}
+
 // Vibrancy ladder for full-window layer-shell surfaces (bar/dock/overlays).
 // The compositor blur does the heavy lifting; this only sets how much of the
 // wallpaper bleeds through. Rule: lower in z-stack → thicker; higher → thinner.

@@ -219,7 +219,7 @@ button.crystal-icon-btn {
         box-shadow: none;
     }
     &:disabled    { color: var(--crystal-text-disabled); }
-    &:focus-visible { outline: 1px solid var(--crystal-accent); outline-offset: 1px; }
+    &:focus-visible { @include crystal-focus-ring; }
 }
 
 button.crystal-icon-btn.sidebar-toggle {
@@ -442,7 +442,7 @@ button.launcher-icon-btn {
 // ── Button focus ring ─────────────────────────────────────────────────────────
 // crystal-btn handles its own outline; this covers any remaining plain buttons.
 window.crystal-settings-window button:focus-visible {
-    outline-color: var(--crystal-accent);
+    @include crystal-focus-ring;
 }
 
 // ── User avatar ───────────────────────────────────────────────────────────────
@@ -590,7 +590,7 @@ window.crystal-alert-dialog {
 
         &:hover  { background: var(--crystal-surface-hover); }
         &:active { background: var(--crystal-surface-active); }
-        &:focus-visible { outline: 1px solid var(--crystal-accent); outline-offset: -2px; }
+        &:focus-visible { @include crystal-focus-ring(-2px); }
 
         &.crystal-alert-btn--destructive {
             color: var(--crystal-danger);

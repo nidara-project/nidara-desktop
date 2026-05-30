@@ -24,6 +24,9 @@ window.prism-window {
     border-radius: 12px;
     padding: 8px 16px;
     border: 1px solid var(--crystal-border);
+
+    // Keyboard focus: the search field is the primary input of the palette.
+    &:focus-within { @include crystal-focus-ring(2px); }
 }
 
 .prism-search-entry {
@@ -45,9 +48,14 @@ window.prism-window {
     transition: background 0.2s ease;
 }
 
-.prism-result-row:hover,
-.prism-result-row:selected {
+/* Hover = neutral; Selected (keyboard arrow nav) = accent, so the cursor is
+   clearly visible as you move through results. */
+.prism-result-row:hover {
     background-color: var(--crystal-surface-hover);
+}
+
+.prism-result-row:selected {
+    background-color: var(--crystal-accent-10);
 }
 
 .prism-result-content {

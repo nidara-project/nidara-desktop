@@ -4,6 +4,13 @@
    CONTROL CENTER - CLEAN GTK4 ARCHITECTURE
    ========================================================================== */
 
+/* Keyboard focus rings — one scoped rule covers every button/slider in the CC
+   (cc-*-btn, pills, chips, scales) instead of styling each. Keyboard nav only. */
+.cc-window-root button:focus-visible,
+.cc-window-root scale:focus-visible {
+    @include crystal-focus-ring;
+}
+
 /* --- Component Transparency --- */
 window.notification-center-win,
 window.notif-win,

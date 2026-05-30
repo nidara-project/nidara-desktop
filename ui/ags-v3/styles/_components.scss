@@ -369,7 +369,7 @@ button.crystal-btn {
     &:hover   { background-color: var(--crystal-surface-hover);  background-image: none; box-shadow: none; }
     &:active  { background-color: var(--crystal-surface-active); background-image: none; box-shadow: none; }
     &:disabled { opacity: 0.45; }
-    &:focus-visible { outline: 1px solid var(--crystal-accent); outline-offset: 1px; }
+    &:focus-visible { @include crystal-focus-ring; }
 
     // ── primary ───────────────────────────────────────────────────────────────
     &.crystal-btn--primary {
