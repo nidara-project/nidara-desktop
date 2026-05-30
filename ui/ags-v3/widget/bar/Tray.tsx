@@ -2,8 +2,14 @@ import { Gtk, Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import AstalTray from "gi://AstalTray"
 import { getServiceSafe } from "../../utils"
+import { renderMenuModel } from "../common/CrystalMenu"
+import status from "../../core/Status"
 
-export default function Tray() {
+// openMenu: opens arbitrary content in the bar's shared expansion capsule, anchored
+// under the given widget (same system as the bar widget popovers). Injected by Bar.
+type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget) => void
+
+export default function Tray(openMenu?: OpenMenu) {
     const box = new Gtk.Box({
         name: "bar-tray",
         css_classes: ["bar-tray"],
@@ -75,35 +81,51 @@ export default function Tray() {
             child: img
         })
 
-        // Context Menu Support 🖱️
-        let menu: Gtk.PopoverMenu | null = null
-        if (item.menu_model) {
-            menu = new Gtk.PopoverMenu({
-                menu_model: item.menu_model,
-                autohide: true,
-                has_arrow: false,
-                css_classes: ["bar-tray-menu"]
-            })
-            menu.set_parent(btn)
-            if (item.action_group) {
-                btn.insert_action_group("dbusmenu", item.action_group)
-            }
-        }
-
         btn.connect("clicked", () => {
             try { item.activate(0, 0) } catch (e) { }
         })
 
-        const gesture = new Gtk.GestureClick()
-        gesture.set_button(0)
-        gesture.connect("released", (g) => {
-            const b = g.get_current_button()
-            if (b === 3) { // Right Click
-                try { item.about_to_show() } catch (e) { }
-                if (menu) menu.popup()
-            }
-        })
-        btn.add_controller(gesture)
+        // Build the context menu ONCE, now, while the tray item + its DBus menu
+        // model are valid. We then reuse this prebuilt Gtk.Box on every open and
+        // NEVER touch the tray/DBus stack again at open time.
+        //
+        // Why: the tray item (e.g. Antigravity) re-registers every few seconds,
+        // which corrupts an internal GListStore (the recurring g_list_store_remove
+        // warning). Re-introspecting the menu model on each open then dereferenced a
+        // freed object → g_atomic_ref_count_inc UAF → whole-UI segfault. The native
+        // PopoverMenu was stable precisely because it bound the model a single time.
+        // Rendering once and reusing the box reproduces that stability.
+        const menuModel = item.menu_model
+        const actionGroup = item.action_group
+        if (menuModel && openMenu) {
+            const onClose = () => { status.bar_expanded_id = "" }
+            let menuBox: Gtk.Widget = renderMenuModel(menuModel, actionGroup, onClose)
+
+            // DBus tray menus are usually populated LAZILY after about_to_show(), so
+            // the model is empty at creation. We rebuild the cached box only when the
+            // model itself signals a change (a consistent state) — never on open — so
+            // the menu fills with real content while the open path never touches the
+            // (churny) DBus stack that was causing the use-after-free segfault.
+            let changedId = 0
+            try {
+                changedId = menuModel.connect("items-changed", () => {
+                    try { menuBox = renderMenuModel(menuModel, actionGroup, onClose) } catch (e) { }
+                })
+            } catch (e) { }
+            try { item.about_to_show() } catch (e) { }   // once, item is valid here
+
+            const gesture = new Gtk.GestureClick()
+            gesture.set_button(3)
+            gesture.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            gesture.connect("pressed", (g) => { g.set_state(Gtk.EventSequenceState.CLAIMED) })
+            // Secondary-click → show the prebuilt menu in the bar's shared expansion
+            // capsule. CAPTURE + claiming keeps the event from reaching the overlay
+            // catcher (which would otherwise dismiss the menu as it opens).
+            gesture.connect("released", () => { openMenu(btn, () => menuBox) })
+            btn.add_controller(gesture)
+
+            btn.connect("unrealize", () => { if (changedId) try { menuModel.disconnect(changedId) } catch (e) { } })
+        }
 
         items.set(id, btn)
         box.append(btn)

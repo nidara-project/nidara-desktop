@@ -81,6 +81,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   // ── Inline expansion panel ─────────────────────────────────────────────────
   const OVERFLOW_ID = "__overflow"
+  // Transient expansion (tray context menus etc.): arbitrary content anchored to
+  // an arbitrary bar widget, reusing the exact same capsule/fade/positioning.
+  const CUSTOM_ID = "__custom"
+  let customContentBuilder: ((onClose: () => void) => Gtk.Widget) | null = null
+  let customAnchor: Gtk.Widget | null = null
   let overflowContentBuilder: ((onClose: () => void) => Gtk.Widget) | null = null
   // Measurement cache — populated after first layout; used to cap visible icons
   let cachedMaxIcons: number | null = null
@@ -242,7 +247,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Centers the panel horizontally under the clicked bar capsule (hidden widgets
   // fall back to the overflow capsule).
   const positionExpansion = (id: string) => {
-      const capsule = capsuleRefs.get(id) ?? capsuleRefs.get(OVERFLOW_ID)
+      const capsule = id === CUSTOM_ID ? customAnchor : (capsuleRefs.get(id) ?? capsuleRefs.get(OVERFLOW_ID))
       if (!capsule) return
       const iconAlloc = capsule.get_allocation()
       if (iconAlloc.width <= 1) return
@@ -259,7 +264,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (expansionHideTimer) { GLib.source_remove(expansionHideTimer); expansionHideTimer = null }
       const onClose = () => { status.bar_expanded_id = "" }
       let content: Gtk.Widget | undefined
-      if (id === OVERFLOW_ID) {
+      if (id === CUSTOM_ID) {
+          if (!customContentBuilder) return
+          content = customContentBuilder(onClose)
+      } else if (id === OVERFLOW_ID) {
           if (!overflowContentBuilder) return
           content = overflowContentBuilder(onClose)
       } else {
@@ -295,6 +303,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           expansionHideTimer = null
           return GLib.SOURCE_REMOVE
       })
+  }
+  // Open arbitrary content (e.g. a tray context menu) in the shared expansion
+  // capsule, anchored under `anchor`. Same glass/fade/positioning/dismissal as
+  // the widget popovers — so it's consistent and free of Gtk.Popover quirks.
+  const openCustomExpansion = (anchor: Gtk.Widget, builder: (onClose: () => void) => Gtk.Widget) => {
+      customAnchor = anchor
+      customContentBuilder = builder
+      if (status.bar_expanded_id === CUSTOM_ID) showExpansion(CUSTOM_ID)  // refresh anchor + content
+      else status.bar_expanded_id = CUSTOM_ID
   }
   status.connect("notify::bar-expanded-id", () => {
       if (status.bar_expanded_id) showExpansion(status.bar_expanded_id)
@@ -469,7 +486,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   status.connect("notify::recording", syncRecIndicator)
   right.append(recCapsule)
 
-  const trayInner = Tray()
+  const trayInner = Tray(openCustomExpansion)
   const trayCapsule = SquircleContainer({ child: trayInner, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
   trayInner.connect("notify::visible", () => trayCapsule.set_visible(trayInner.get_visible()))
   trayCapsule.set_visible(trayInner.get_visible())
