@@ -55,7 +55,7 @@ function FileResultRow(uri: string, displayName: string, mimeType: string): Gtk.
 function SeparatorRow(label: string): Gtk.ListBoxRow {
     const box = new Gtk.Box({ margin_start: 14, margin_top: 4, margin_bottom: 2 })
     box.append(new Gtk.Label({ label, css_classes: ["prism-section-label"], halign: Gtk.Align.START }))
-    const row = new Gtk.ListBoxRow({ child: box, css_classes: ["prism-section-row"], selectable: false, activatable: false })
+    const row = new Gtk.ListBoxRow({ child: box, css_classes: ["prism-section-row"], selectable: false, activatable: false, focusable: false })
     return row
 }
 
@@ -151,21 +151,44 @@ export default function Prism() {
         if (first) resultsList.select_row(first as Gtk.ListBoxRow)
     })
 
+    // Find the first selectable row, or the next/prev selectable sibling — so
+    // arrow nav skips section headers (selectable:false) entirely.
+    const firstSelectable = (): Gtk.ListBoxRow | null => {
+        let r: any = resultsList.get_first_child()
+        while (r && (r as Gtk.ListBoxRow).selectable === false) r = r.get_next_sibling?.()
+        return (r as Gtk.ListBoxRow) ?? null
+    }
+    const siblingSelectable = (row: Gtk.ListBoxRow, dir: 1 | -1): Gtk.ListBoxRow | null => {
+        let r: any = row
+        do { r = dir === 1 ? r.get_next_sibling?.() : r.get_prev_sibling?.() }
+        while (r && (r as Gtk.ListBoxRow).selectable === false)
+        return (r as Gtk.ListBoxRow) ?? null
+    }
+
     const key = new Gtk.EventControllerKey()
     key.connect("key-pressed", (_, keyval) => {
         if (keyval === Gdk.KEY_Escape) { status.prism_open = false; return true }
         if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
             const s = resultsList.get_selected_row()
             if (s && (s as any).selectable !== false) { launchResult(s); status.prism_open = false; return true }
+            return false
         }
-        if (keyval === Gdk.KEY_Down || keyval === Gdk.KEY_Up) {
-            const selected = resultsList.get_selected_row()
-            if (!selected) {
-                let first = resultsList.get_first_child()
-                while (first && !(first as Gtk.ListBoxRow).selectable) first = (first as any).get_next_sibling?.()
-                if (first) resultsList.select_row(first as Gtk.ListBoxRow)
-                return true
+        // Own arrow nav fully: move SELECTION (not focus), skipping headers, so
+        // focus stays on the entry (keep typing) and you never "land" on a title.
+        if (keyval === Gdk.KEY_Down) {
+            const sel = resultsList.get_selected_row() as Gtk.ListBoxRow | null
+            const next = sel ? siblingSelectable(sel, 1) : firstSelectable()
+            if (next) resultsList.select_row(next)
+            return true
+        }
+        if (keyval === Gdk.KEY_Up) {
+            const sel = resultsList.get_selected_row() as Gtk.ListBoxRow | null
+            if (sel) {
+                const prev = siblingSelectable(sel, -1)
+                if (prev) resultsList.select_row(prev)
+                else resultsList.unselect_all()   // above the first result → back to the search field
             }
+            return true
         }
         return false
     })

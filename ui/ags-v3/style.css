@@ -3287,6 +3287,10 @@ window.prism-window decoration, window.prism-window contents {
   font-size: 17px;
   caret-color: var(--crystal-text);
 }
+.prism-search-entry:focus, .prism-search-entry:focus-visible, .prism-search-entry:focus-within {
+  outline: none;
+  box-shadow: none;
+}
 
 .prism-results-list {
   background: transparent;
@@ -3308,6 +3312,16 @@ window.prism-window decoration, window.prism-window contents {
 
 .prism-result-row:selected {
   background-color: var(--crystal-accent-10);
+}
+
+/* Kill GTK's default focus rectangle on the list rows (it's the blue ring that
+   was bleeding onto section headers too). The keyboard-nav indicator is the
+   accent :selected background above — no ring needed on rows. */
+.prism-results-list row:focus,
+.prism-results-list row:focus-visible,
+.prism-results-list row:focus-within {
+  outline: none;
+  box-shadow: none;
 }
 
 .prism-result-icon {

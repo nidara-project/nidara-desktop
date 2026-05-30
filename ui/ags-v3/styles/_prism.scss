@@ -34,6 +34,10 @@ window.prism-window {
     color: var(--crystal-text);
     font-size: $fs-title-3;
     caret-color: var(--crystal-text);
+
+    // The accent ring lives on .prism-search-box (:focus-within). Suppress the
+    // Gtk.Text's own default GTK focus outline so we don't get a second blue ring.
+    &:focus, &:focus-visible, &:focus-within { outline: none; box-shadow: none; }
 }
 
 .prism-results-list {
@@ -56,6 +60,16 @@ window.prism-window {
 
 .prism-result-row:selected {
     background-color: var(--crystal-accent-10);
+}
+
+/* Kill GTK's default focus rectangle on the list rows (it's the blue ring that
+   was bleeding onto section headers too). The keyboard-nav indicator is the
+   accent :selected background above — no ring needed on rows. */
+.prism-results-list row:focus,
+.prism-results-list row:focus-visible,
+.prism-results-list row:focus-within {
+    outline: none;
+    box-shadow: none;
 }
 
 .prism-result-content {
