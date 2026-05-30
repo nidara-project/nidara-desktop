@@ -29,7 +29,7 @@ window.prism-window {
 .prism-search-entry {
     background: none;
     color: var(--crystal-text);
-    font-size: 1.4rem;
+    font-size: $fs-title-3;
     caret-color: var(--crystal-text);
 }
 
@@ -59,13 +59,13 @@ window.prism-window {
 
 .prism-result-title {
     color: var(--crystal-text);
-    font-weight: 500;
-    font-size: 1.1rem;
+    font-weight: $fw-medium;
+    font-size: $fs-subtitle;
 }
 
 .prism-result-description {
     color: var(--crystal-text-disabled);
-    font-size: 0.9rem;
+    font-size: $fs-small;
 }
 
 .prism-section-row {
@@ -75,8 +75,8 @@ window.prism-window {
 
 .prism-section-label {
     color: rgba(255, 255, 255, 0.35);
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: $fs-caption;
+    font-weight: $fw-semibold;
     letter-spacing: 0.06em;
     text-transform: uppercase;
 }

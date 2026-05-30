@@ -16,7 +16,7 @@ switch,
     background-color: var(--crystal-surface);
     background-image: none;
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s #{$ease};
 
     &:checked {
         background-color: $crystal-accent;
@@ -32,12 +32,12 @@ switch,
         background-image: none;
         border: none;
         border-radius: $crystal-radius-pill;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.4);
-        transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: var(--crystal-shadow-sm);
+        transition: all 0.25s #{$ease};
     }
 
     &:hover slider {
-        box-shadow: 0 3px 8px rgba(0, 0, 0, 0.5);
+        box-shadow: var(--crystal-shadow-md);
     }
 }
 
@@ -79,7 +79,7 @@ scale,
         border-radius: 99px;
         border: none;
         outline: none;
-        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+        box-shadow: var(--crystal-shadow-sm);
         min-width: 20px;
         min-height: 20px;
         margin: 0;
@@ -93,7 +93,7 @@ scale,
     }
 
     &:hover slider {
-        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+        box-shadow: var(--crystal-shadow-md);
     }
 
     trough:focus, trough:focus-within,
@@ -131,7 +131,7 @@ scale.crystal-scale slider {
     background: var(--crystal-surface-back);
     border-radius: $crystal-radius-md;
     border: 1px solid var(--crystal-border);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--crystal-shadow-md);
     margin: 12px;
     padding: 8px 0;
     transition: all 0.3s ease;
@@ -140,7 +140,7 @@ scale.crystal-scale slider {
 .crystal-sidebar-row {
     margin: 4px 10px;
     border-radius: $crystal-radius-sm;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.25s #{$ease};
     border: 1px solid transparent;
     padding: 6px 14px;
     color: var(--crystal-text-dim);
@@ -181,8 +181,8 @@ button.crystal-btn,
     border: 1px solid var(--crystal-border);
     border-radius: $crystal-radius-sm;
     padding: 6px 16px;
-    font-weight: 600;
-    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    font-weight: $fw-semibold;
+    transition: all 0.25s #{$ease};
 
     &:hover {
         background: var(--crystal-surface-hover);
@@ -207,7 +207,7 @@ button.crystal-btn,
     border-radius: $crystal-radius-md;
     border: 1px solid var(--crystal-border);
     padding: 16px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--crystal-shadow-md);
 }
 
 /* --- CrystalPopover --- */
@@ -223,7 +223,7 @@ popover.crystal-popover {
         background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.82));
         border-radius: 14px;
         border: 1px solid var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
-        box-shadow: 0 6px 28px rgba(0, 0, 0, 0.32);
+        box-shadow: var(--crystal-shadow-popover);
         padding: 0;
     }
 
@@ -236,13 +236,13 @@ popover.crystal-popover {
 /* --- Shared list-row styles (Clipboard/VPN popovers + Settings) --- */
 /* These classes are reused across contexts so hover/active must be global. */
 .settings-row-label {
-    font-size: 0.9rem;
-    font-weight: 500;
+    font-size: $fs-small;
+    font-weight: $fw-medium;
     color: var(--crystal-text);
 }
 
 .settings-row-subtitle {
-    font-size: 0.8rem;
+    font-size: $fs-small;
     color: var(--crystal-text-dim);
 }
 
@@ -292,8 +292,8 @@ button.crystal-seg-btn {
     box-shadow: none;
     border-radius: $crystal-radius-xs;
     padding: 5px 10px;
-    font-size: 0.82rem;
-    font-weight: 500;
+    font-size: $fs-small;
+    font-weight: $fw-medium;
     color: var(--crystal-text-dim);
     transition: background 0.15s ease, color 0.15s ease;
 
@@ -313,21 +313,21 @@ button.crystal-seg-btn {
 /* --- Bar info-popover label typography --- */
 /* Used in wifi/ethernet info popovers (title + key/value pairs). */
 .bar-popover-title {
-    font-size: 0.75rem;
-    font-weight: 700;
+    font-size: $fs-caption;
+    font-weight: $fw-bold;
     color: var(--crystal-text-dim);
     letter-spacing: 0.06em;
     text-transform: uppercase;
 }
 
 .bar-popover-key {
-    font-size: 0.85rem;
+    font-size: $fs-small;
     color: var(--crystal-text-dim);
 }
 
 .bar-popover-val {
-    font-size: 0.85rem;
-    font-weight: 500;
+    font-size: $fs-small;
+    font-weight: $fw-medium;
     color: var(--crystal-text);
 }
 
@@ -357,8 +357,8 @@ button.crystal-btn {
     padding: 5px 14px;
     min-height: 0;
     border-radius: $crystal-radius-sm;
-    font-size: 0.875rem;
-    font-weight: 500;
+    font-size: $fs-small;
+    font-weight: $fw-medium;
     transition: background 0.15s ease;
 
     // ── secondary (default) ───────────────────────────────────────────────────
@@ -432,7 +432,7 @@ dropdown > button.combo {
     > box > label { margin-left: 6px; }
 
     label {
-        font-size: 0.875rem;
+        font-size: $fs-small;
         color: var(--crystal-text);
     }
     image {
@@ -452,7 +452,7 @@ popover.combo {
         background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.92));
         border: 1px solid var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
         border-radius: $crystal-radius-md;
-        box-shadow: 0 6px 28px rgba(0, 0, 0, 0.32);
+        box-shadow: var(--crystal-shadow-popover);
         padding: 4px;
         // overflow: hidden not supported in GTK4 CSS — clipping is handled by border-radius
     }
@@ -473,7 +473,7 @@ popover.combo {
             padding: 6px 10px;
             min-height: 0;
             color: var(--crystal-text);
-            font-size: 0.875rem;
+            font-size: $fs-small;
             transition: background 0.15s ease;
 
             &:hover    { background-color: var(--crystal-surface-hover); }

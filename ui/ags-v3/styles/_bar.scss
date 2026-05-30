@@ -86,8 +86,8 @@
     min-height: 6px;
     border-radius: 50%;
     background-color: var(--crystal-surface-raised);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: var(--crystal-shadow-sm);
+    transition: all 0.3s #{$ease};
     margin: 0;
     padding: 0;
 }
@@ -119,8 +119,8 @@
 
 .resource-label,
 .resource-icon {
-    font-size: 10px;
-    font-weight: 900;
+    font-size: $fs-mini;
+    font-weight: $fw-bold;
     color: var(--crystal-text);
     margin-bottom: 0px;
 }
@@ -152,7 +152,7 @@
     /* Adaptive separators */
     min-width: 1px;
     margin: 0 4px;
-    box-shadow: 1px 0 2px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--crystal-shadow-sm);
 }
 
 /* --- Spotlight Pill Refinement --- */
@@ -194,8 +194,8 @@
 }
 
 .system-menu-label {
-    font-size: 13px;
-    font-weight: 500;
+    font-size: $fs-small;
+    font-weight: $fw-medium;
 }
 
 
@@ -208,7 +208,7 @@
 .system-confirm-secondary {
     background: var(--crystal-surface-back);
     color: var(--crystal-text-dim);
-    font-size: 12px;
+    font-size: $fs-caption;
 
     &:hover {
         background: var(--crystal-surface-hover);
@@ -219,8 +219,8 @@
 .system-confirm-primary {
     background: var(--crystal-surface);
     color: var(--crystal-text);
-    font-size: 12px;
-    font-weight: 600;
+    font-size: $fs-caption;
+    font-weight: $fw-semibold;
 
     &:hover {
         background: var(--crystal-surface-active);
@@ -241,27 +241,27 @@
 }
 
 .about-shell-name {
-    font-size: 17px;
-    font-weight: 700;
+    font-size: $fs-title-3;
+    font-weight: $fw-bold;
     letter-spacing: 0.02em;
 }
 
 .about-os-name {
-    font-size: 13px;
-    font-weight: 400;
+    font-size: $fs-small;
+    font-weight: $fw-regular;
     opacity: 0.7;
 }
 
 .about-spec-key {
-    font-size: 12px;
-    font-weight: 500;
+    font-size: $fs-caption;
+    font-weight: $fw-medium;
     opacity: 0.55;
     min-width: 80px;
 }
 
 .about-spec-val {
-    font-size: 12px;
-    font-weight: 400;
+    font-size: $fs-caption;
+    font-weight: $fw-regular;
 }
 
 .about-sep {
@@ -293,15 +293,15 @@
 }
 
 .bar-rec-label {
-    font-size: 0.7rem;
-    font-weight: 700;
+    font-size: $fs-caption;
+    font-weight: $fw-bold;
     color: var(--crystal-danger);
     letter-spacing: 0.05em;
 }
 
 .bar-overflow-label {
-    font-size: 0.9rem;
-    font-weight: 700;
+    font-size: $fs-small;
+    font-weight: $fw-bold;
     color: var(--crystal-text);
     letter-spacing: 0.04em;
 }
@@ -320,8 +320,8 @@
         color: var(--crystal-accent-fg);
         border-radius: $crystal-radius-sm;
         padding: 6px 14px;
-        font-size: 0.84rem;
-        font-weight: 600;
+        font-size: $fs-small;
+        font-weight: $fw-semibold;
 
         &:hover  { background: rgba(var(--crystal-accent-rgb), 0.82); }
         &:active { background: rgba(var(--crystal-accent-rgb), 0.65); }
@@ -335,8 +335,8 @@
         box-shadow: none;
         border-radius: $crystal-radius-sm;
         padding: 6px 14px;
-        font-size: 0.84rem;
-        font-weight: 600;
+        font-size: $fs-small;
+        font-weight: $fw-semibold;
 
         &:hover  { background: rgba(var(--crystal-danger-rgb), 0.82); }
         &:active { background: rgba(var(--crystal-danger-rgb), 0.65); }
@@ -350,8 +350,8 @@
         color: var(--crystal-accent);
         border-radius: $crystal-radius-sm;
         padding: 6px 14px;
-        font-size: 0.84rem;
-        font-weight: 500;
+        font-size: $fs-small;
+        font-weight: $fw-medium;
 
         &:hover  { background: rgba(var(--crystal-accent-rgb), 0.10); }
         &:active { background: rgba(var(--crystal-accent-rgb), 0.18); }
@@ -372,8 +372,8 @@ button.clip-entry-btn {
 }
 
 .bar-popover-value {
-    font-size: 0.85rem;
-    font-weight: 500;
+    font-size: $fs-small;
+    font-weight: $fw-medium;
     color: var(--crystal-text);
     min-width: 38px;
 }

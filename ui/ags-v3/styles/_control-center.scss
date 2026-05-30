@@ -52,14 +52,14 @@ window.nc-window-2 {
 
 /* --- Media Widget --- */
 .cc-media-title-atomic {
-    font-size: 0.9em;
-    font-weight: 800;
+    font-size: $fs-small;
+    font-weight: $fw-bold;
     color: var(--crystal-text);
 }
 
 .cc-media-artist-atomic {
-    font-size: 0.8em;
-    font-weight: 400;
+    font-size: $fs-caption;
+    font-weight: $fw-regular;
     color: var(--crystal-text-dim);
 }
 
@@ -76,8 +76,8 @@ window.nc-window-2 {
 }
 
 .cc-media-time {
-    font-size: 0.72em;
-    font-weight: 500;
+    font-size: $fs-caption;
+    font-weight: $fw-medium;
     color: var(--crystal-text-dim);
     opacity: 0.7;
 }
@@ -120,7 +120,7 @@ window.nc-window-2 {
         border-radius: 99px;
         border: none;
         outline: none;
-        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+        box-shadow: var(--crystal-shadow-sm);
         min-width: 14px;
         min-height: 14px;
         margin: 0;
@@ -157,13 +157,13 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
 
 /* --- Typographical Utilities for Toggles --- */
 .cc-atomic-label-bold {
-    font-size: 0.9em;
-    font-weight: 700;
+    font-size: $fs-small;
+    font-weight: $fw-bold;
     color: var(--crystal-text);
 }
 
 .cc-atomic-label-dim {
-    font-size: 0.8em;
+    font-size: $fs-caption;
     color: var(--crystal-text-dim);
 }
 
@@ -187,7 +187,7 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
 .rec-label { color: #e03030; }
 
 .rec-elapsed {
-    font-size: 0.8em;
+    font-size: $fs-caption;
     color: var(--crystal-text-dim);
     font-variant-numeric: tabular-nums;
 }
@@ -214,8 +214,8 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
 /* --- Edit Mode Controls --- */
 .cc-edit-pill {
     label {
-        font-size: 0.85em;
-        font-weight: 700;
+        font-size: $fs-small;
+        font-weight: $fw-bold;
         color: var(--crystal-text-dim);
     }
 
@@ -261,8 +261,8 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
     border-radius: var(--crystal-radius-pill);
     color: rgba(255, 255, 255, 0.85);
     padding: 2px 8px;
-    font-size: 0.72em;
-    font-weight: 600;
+    font-size: $fs-caption;
+    font-weight: $fw-semibold;
 
     &:hover { background: rgba(0, 0, 0, 0.65); }
 }
@@ -277,7 +277,7 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
     border-radius: var(--crystal-radius-pill);
     color: var(--crystal-text-dim);
     padding: 4px 10px;
-    font-size: 0.8em;
+    font-size: $fs-caption;
 
     &:hover {
         background: var(--crystal-surface-hover);
@@ -286,7 +286,7 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
 }
 
 .cc-picker-empty {
-    font-size: 0.8em;
+    font-size: $fs-caption;
     color: var(--crystal-text-disabled);
 }
 
@@ -352,8 +352,8 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
 .nc-badge-header {
     background: var(--crystal-surface);
     color: var(--crystal-text-dim);
-    font-size: 10px;
-    font-weight: 800;
+    font-size: $fs-mini;
+    font-weight: $fw-bold;
     padding: 1px 6px;
     border-radius: 12px;
     margin-left: 6px;
@@ -367,8 +367,8 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
 }
 
 .nc-group-header-name {
-    font-size: 0.8em;
-    font-weight: 800;
+    font-size: $fs-caption;
+    font-weight: $fw-bold;
     color: var(--crystal-text-disabled);
 }
 
@@ -380,7 +380,7 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
     border: 1px solid var(--crystal-border);
     border-radius: 99px;
     color: var(--crystal-text-dim);
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.2s #{$ease};
 
     &:hover {
         background: var(--crystal-surface-hover);
@@ -428,8 +428,8 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
 }
 
 .nc-item-time {
-    font-size: 0.75rem;
-    font-weight: 600;
+    font-size: $fs-caption;
+    font-weight: $fw-semibold;
     color: var(--crystal-text-dim);
 }
 
@@ -445,15 +445,15 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
 }
 
 .nc-empty {
-    font-size: 1.1em;
-    font-weight: 500;
+    font-size: $fs-subtitle;
+    font-weight: $fw-medium;
     color: var(--crystal-text-disabled);
 }
 
 .nc-clear-all-pill {
     label {
-        font-size: 0.85em;
-        font-weight: 700;
+        font-size: $fs-small;
+        font-weight: $fw-bold;
         color: var(--crystal-text-dim);
     }
 
@@ -483,15 +483,15 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
 }
 
 .cc-detail-title {
-    font-size: 0.84rem;
-    font-weight: 700;
+    font-size: $fs-small;
+    font-weight: $fw-bold;
     color: var(--crystal-text);
     letter-spacing: 0.04em;
 }
 
 .cc-detail-section-label {
-    font-size: 0.7rem;
-    font-weight: 700;
+    font-size: $fs-caption;
+    font-weight: $fw-bold;
     color: var(--crystal-text-dim);
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -541,8 +541,8 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
         box-shadow: none;
         border-radius: $crystal-radius-sm;
         padding: 6px 14px;
-        font-size: 0.84rem;
-        font-weight: 600;
+        font-size: $fs-small;
+        font-weight: $fw-semibold;
 
         &:hover  { background: rgba(var(--crystal-accent-rgb), 0.82); }
         &:active { background: rgba(var(--crystal-accent-rgb), 0.65); }
@@ -557,8 +557,8 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
         box-shadow: none;
         border-radius: $crystal-radius-sm;
         padding: 6px 14px;
-        font-size: 0.84rem;
-        font-weight: 600;
+        font-size: $fs-small;
+        font-weight: $fw-semibold;
 
         &:hover  { background: rgba(var(--crystal-danger-rgb), 0.82); }
         &:active { background: rgba(var(--crystal-danger-rgb), 0.65); }
@@ -573,7 +573,7 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
         color: var(--crystal-accent);
         border-radius: $crystal-radius-sm;
         padding: 4px 10px;
-        font-weight: 500;
+        font-weight: $fw-medium;
 
         &:hover  { background: rgba(var(--crystal-accent-rgb), 0.10); }
         &:active { background: rgba(var(--crystal-accent-rgb), 0.18); }
@@ -581,8 +581,8 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
 
     // Compact text button (set-default, inside audio device rows)
     button.compact-btn {
-        font-size: 0.78rem;
-        font-weight: 500;
+        font-size: $fs-caption;
+        font-weight: $fw-medium;
         min-height: 24px;
         padding: 2px 8px;
     }
@@ -612,7 +612,7 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
             border-radius: $crystal-radius-sm;
             box-shadow: none;
             color: var(--crystal-text-dim);
-            font-size: 0.84rem;
+            font-size: $fs-small;
             padding: 6px 0;
 
             &:hover { background: rgba(var(--crystal-accent-rgb), 0.08); color: var(--crystal-text); }
@@ -622,7 +622,7 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
                 background-image: none;
                 border-color: rgba(var(--crystal-accent-rgb), 0.45);
                 color: var(--crystal-accent);
-                font-weight: 700;
+                font-weight: $fw-bold;
 
                 &:hover  { background: rgba(var(--crystal-accent-rgb), 0.26); }
                 &:active { background: rgba(var(--crystal-accent-rgb), 0.35); }
@@ -642,13 +642,13 @@ scale.cc-media-progress slider { margin: 0; padding: 0; }
         background: rgba(var(--crystal-accent-rgb), 0.14);
         border-radius: $crystal-radius-pill;
         padding: 2px 8px;
-        font-size: 0.75rem;
-        font-weight: 600;
+        font-size: $fs-caption;
+        font-weight: $fw-semibold;
     }
 
-    .settings-row-label   { font-size: 0.86rem; color: var(--crystal-text); }
-    .settings-row-subtitle { font-size: 0.82rem; color: var(--crystal-text-dim); }
-    .slider-value-label   { color: var(--crystal-text-dim); font-size: 0.82rem; font-variant-numeric: tabular-nums; }
+    .settings-row-label   { font-size: $fs-small; color: var(--crystal-text); }
+    .settings-row-subtitle { font-size: $fs-small; color: var(--crystal-text-dim); }
+    .slider-value-label   { color: var(--crystal-text-dim); font-size: $fs-small; font-variant-numeric: tabular-nums; }
 
     separator { background: var(--crystal-border); margin: 4px 0; min-height: 1px; }
 }

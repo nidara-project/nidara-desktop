@@ -33,7 +33,7 @@ window.workspace-cockpit {
     border-radius: 14px;
     padding: 10px 20px;
     color: var(--crystal-text);
-    font-size: 16px;
+    font-size: $fs-subtitle;
     transition: all 0.2s ease;
 
     &:focus {
@@ -71,8 +71,8 @@ window.workspace-cockpit {
 }
 
 .wo-label {
-    font-size: 1.1em;
-    font-weight: 600;
+    font-size: $fs-subtitle;
+    font-weight: $fw-semibold;
     color: var(--crystal-text);
     transition: all 0.2s;
 
@@ -82,8 +82,8 @@ window.workspace-cockpit {
 }
 
 .wo-count {
-    font-size: 0.8em;
-    font-weight: 500;
+    font-size: $fs-caption;
+    font-weight: $fw-medium;
     color: var(--crystal-text-dim);
     margin-bottom: 8px;
 }

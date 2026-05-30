@@ -119,6 +119,33 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
   const dBase   = (d * 0.50).toFixed(3)
   const dRaised = d.toFixed(3)
 
+  // Material vibrancy ladder — relative to the user's transparency choice so
+  // it respects the opacity sliders AND the light-mode WCAG floor (bgAlpha).
+  // lower z → thicker; higher z → thinner. Clamped to keep blur visible / text legible.
+  const ba = parseFloat(bgAlpha)
+  const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
+  const matThin    = clamp(ba * 0.60, 0.16, 0.45).toFixed(3)
+  const matRegular = clamp(ba,        0.20, 0.60).toFixed(3)
+  const matThick   = clamp(ba * 1.35, 0.40, 0.92).toFixed(3)
+  const matChrome  = clamp(ba * 1.70, 0.55, 0.96).toFixed(3)
+
+  // Shadows: "whisper" range, heavier in dark (less ambient contrast).
+  const sh = isDark
+    ? {
+        sm: "0 1px 2px rgba(0,0,0,0.20), 0 1px 1px rgba(0,0,0,0.16)",
+        md: "0 2px 8px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,0.18)",
+        lg: "0 8px 24px rgba(0,0,0,0.40), 0 2px 6px rgba(0,0,0,0.24)",
+        popover: "0 10px 32px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.30)",
+      }
+    : {
+        sm: "0 1px 2px rgba(0,0,0,0.06), 0 1px 1px rgba(0,0,0,0.04)",
+        md: "0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05)",
+        lg: "0 8px 24px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06)",
+        popover: "0 10px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)",
+      }
+  // Rim-of-light edge: faint white top hairline on glass.
+  const edge = isDark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(255,255,255,0.50)"
+
   lines.push(
     `  --crystal-accent: ${accent};`,
     `  --crystal-accent-rgb: ${r}, ${g}, ${b};`,
@@ -146,6 +173,15 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
     `  --crystal-warning-rgb: 243, 186, 75;`,
     `  --crystal-popover-bg: rgba(${pbR}, ${pbG}, ${pbB}, ${popoverAlpha});`,
     `  --crystal-popover-border: ${popoverBorder};`,
+    `  --crystal-material-thin: rgba(${bg}, ${matThin});`,
+    `  --crystal-material-regular: rgba(${bg}, ${matRegular});`,
+    `  --crystal-material-thick: rgba(${bg}, ${matThick});`,
+    `  --crystal-material-chrome: rgba(${bg}, ${matChrome});`,
+    `  --crystal-edge: ${edge};`,
+    `  --crystal-shadow-sm: ${sh.sm};`,
+    `  --crystal-shadow-md: ${sh.md};`,
+    `  --crystal-shadow-lg: ${sh.lg};`,
+    `  --crystal-shadow-popover: ${sh.popover};`,
     `}`,
     isDark ? `` : `.cs-icon { -gtk-icon-filter: none; }`,
   )
