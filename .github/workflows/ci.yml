@@ -1,0 +1,40 @@
+# CI — automated checks that run on every push and pull request.
+#
+# What this is: a robot on GitHub that, every time code is pushed, verifies the
+# project still assembles correctly. A green check = safe; a red check = something
+# to look at, caught BEFORE it reaches the running shell.
+#
+# Today it checks one thing that is reliably green and needs no system libraries:
+#   - The SCSS stylesheet compiles (catches CSS syntax errors that would otherwise
+#     break the whole UI's styling).
+#
+# Not yet here (deliberately):
+#   - Full TypeScript typecheck (`tsc --noEmit`): the type environment needs setup
+#     work first (missing vendor/astal_source + incomplete Gtk gir typings). It
+#     already surfaced a real bug, so it's the planned next gate once the types
+#     resolve cleanly.
+#   - `ags bundle`: needs the `ags` binary + GTK4 system libraries, which aren't
+#     available on a stock CI runner. Built locally instead.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  styles:
+    name: Build styles (SCSS)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+
+      - name: Compile SCSS (must succeed)
+        working-directory: ui/ags-v3
+        # Mirrors the sass step of `npm run build`. Pure JS — no GTK/ags needed.
+        run: npx --yes sass@1.97.3 --no-charset style.scss /tmp/style.css
