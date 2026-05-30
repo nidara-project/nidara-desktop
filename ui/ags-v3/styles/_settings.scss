@@ -372,7 +372,7 @@ button.accent-circle-btn {
     min-height: 32px;
     padding: 0;
     margin: 0;
-    transition: all 0.2s ease;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
     &.selected       { border-color: var(--crystal-text); box-shadow: 0 0 0 2px var(--crystal-text); }
     &:hover:not(.selected) { border-color: var(--crystal-text-dim); }
@@ -396,7 +396,7 @@ button.launcher-icon-btn {
     border-radius: $crystal-radius-sm;
     padding: 8px 10px;
     min-width: 52px;
-    transition: all 0.15s ease;
+    transition: background-color 0.15s ease, border-color 0.15s ease;
 
     &.selected {
         border-color: var(--crystal-accent);
@@ -435,7 +435,7 @@ button.launcher-icon-btn {
     letter-spacing: -0.5px;
 }
 
-.tz-status     { font-size: $fse-small; font-weight: $fw-medium; transition: all 0.2s ease; }
+.tz-status     { font-size: $fse-small; font-weight: $fw-medium; transition: color 0.2s ease; }
 .tz-status-ok  { color: var(--crystal-success); }
 .tz-status-err { color: var(--crystal-danger); }
 

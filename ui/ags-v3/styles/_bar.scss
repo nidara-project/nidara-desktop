@@ -87,7 +87,7 @@
     border-radius: 50%;
     background-color: var(--crystal-surface-raised);
     box-shadow: var(--crystal-shadow-sm);
-    transition: all 0.3s #{$ease};
+    transition: background-color 0.3s #{$ease}, box-shadow 0.3s #{$ease};
     margin: 0;
     padding: 0;
 }
@@ -181,7 +181,7 @@
     border: none;
     box-shadow: none;
     border-radius: 6px;
-    transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transition: background-color 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     min-height: 32px;
 }
 

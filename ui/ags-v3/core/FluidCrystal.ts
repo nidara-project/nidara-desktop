@@ -119,15 +119,18 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
   const dBase   = (d * 0.50).toFixed(3)
   const dRaised = d.toFixed(3)
 
-  // Material vibrancy ladder — relative to the user's transparency choice so
-  // it respects the opacity sliders AND the light-mode WCAG floor (bgAlpha).
-  // lower z → thicker; higher z → thinner. Clamped to keep blur visible / text legible.
+  // Material vibrancy ladder. Anchored to the macOS-skill values for our blur
+  // profile (size=2, passes=2, vibrancy=0.4 → "subtle" row: thin .30 / regular
+  // .45 / thick .65 / chrome .85), then OFFSET by the transparency slider so the
+  // ladder still responds to user opacity. delta = 0 at default transparency.
+  // lower z → thicker; higher z → thinner. Clamped to keep blur visible + legible.
   const ba = parseFloat(bgAlpha)
   const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
-  const matThin    = clamp(ba * 0.60, 0.16, 0.45).toFixed(3)
-  const matRegular = clamp(ba,        0.20, 0.60).toFixed(3)
-  const matThick   = clamp(ba * 1.35, 0.40, 0.92).toFixed(3)
-  const matChrome  = clamp(ba * 1.70, 0.55, 0.96).toFixed(3)
+  const delta = ba - 0.25
+  const matThin    = clamp(0.30 + delta, 0.18, 0.50).toFixed(3)
+  const matRegular = clamp(0.45 + delta, 0.30, 0.65).toFixed(3)
+  const matThick   = clamp(0.65 + delta, 0.50, 0.85).toFixed(3)
+  const matChrome  = clamp(0.85 + delta, 0.70, 0.95).toFixed(3)
 
   // Shadows: "whisper" range, heavier in dark (less ambient contrast).
   const sh = isDark

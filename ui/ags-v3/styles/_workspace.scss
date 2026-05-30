@@ -34,7 +34,7 @@ window.workspace-cockpit {
     padding: 10px 20px;
     color: var(--crystal-text);
     font-size: $fs-subtitle;
-    transition: all 0.2s ease;
+    transition: background-color 0.2s ease, border-color 0.2s ease;
 
     &:focus {
         background: var(--crystal-surface);
@@ -56,7 +56,7 @@ window.workspace-cockpit {
     border-radius: 24px;
     background-color: var(--crystal-surface-back);
     border: 1px solid var(--crystal-border);
-    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Cairo canvas reads 'color' to get the tile fill color */
@@ -74,7 +74,7 @@ window.workspace-cockpit {
     font-size: $fs-subtitle;
     font-weight: $fw-semibold;
     color: var(--crystal-text);
-    transition: all 0.2s;
+    transition: color 0.2s ease;
 
     &.active {
         color: #{"@accent_bg_color"};
@@ -100,7 +100,7 @@ window.workspace-cockpit {
 .bar-ws-dot {
     background-color: var(--crystal-surface-raised);
     border-radius: 999px;
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: background-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 
     &.active {
         background-color: #{"@accent_bg_color"};

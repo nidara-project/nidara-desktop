@@ -55,7 +55,7 @@
      lower in z → thicker (less blur bleeds); higher → thinner.
      Fallbacks below are the DARK set. */
   --crystal-material-thin: rgba(36, 36, 36, 0.30);
-  --crystal-material-regular: rgba(36, 36, 36, 0.50);
+  --crystal-material-regular: rgba(36, 36, 36, 0.45);
   --crystal-material-thick: rgba(36, 36, 36, 0.65);
   --crystal-material-chrome: rgba(36, 36, 36, 0.85);
   /* --- Component-specific --- */
@@ -304,7 +304,7 @@ switch,
   background-color: var(--crystal-surface);
   background-image: none;
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 switch:checked,
 .crystal-switch:checked {
@@ -322,7 +322,7 @@ switch slider,
   border: none;
   border-radius: var(--crystal-radius-pill);
   box-shadow: var(--crystal-shadow-sm);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 switch:hover slider,
 .crystal-switch:hover slider {
@@ -425,13 +425,13 @@ scale.crystal-scale slider {
   box-shadow: var(--crystal-shadow-md);
   margin: 12px;
   padding: 8px 0;
-  transition: all 0.3s ease;
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .crystal-sidebar-row {
   margin: 4px 10px;
   border-radius: var(--crystal-radius-sm);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid transparent;
   padding: 6px 14px;
   color: var(--crystal-text-dim);
@@ -474,7 +474,7 @@ button.crystal-btn,
   border-radius: var(--crystal-radius-sm);
   padding: 6px 16px;
   font-weight: 600;
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 button.crystal-btn:hover,
 .crystal-button:hover {
@@ -1198,7 +1198,7 @@ button.dock-v-icon image {
   border-radius: 50%;
   background-color: var(--crystal-surface-raised);
   box-shadow: var(--crystal-shadow-sm);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   margin: 0;
   padding: 0;
 }
@@ -1305,7 +1305,7 @@ button.dock-v-icon image {
   border: none;
   box-shadow: none;
   border-radius: 6px;
-  transition: all 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  transition: background-color 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
   min-height: 32px;
 }
 
@@ -1822,7 +1822,7 @@ scale.cc-media-progress slider {
   background: rgba(var(--crystal-accent-rgb), 0.12);
   border: 2px dashed rgba(var(--crystal-accent-rgb), 0.6);
   border-radius: var(--crystal-radius-lg);
-  transition: all 0.1s ease;
+  transition: background-color 0.1s ease, border-color 0.1s ease;
 }
 
 .cc-resize-btn {
@@ -1881,7 +1881,7 @@ scale.cc-media-progress slider {
   background-color: var(--crystal-surface);
   border: 1px solid var(--crystal-border);
   border-radius: var(--crystal-radius-lg);
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 .nc-capsule-glass:hover {
   background-color: var(--crystal-surface-hover);
@@ -1951,7 +1951,7 @@ scale.cc-media-progress slider {
   border: 1px solid var(--crystal-border);
   border-radius: 99px;
   color: var(--crystal-text-dim);
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .nc-group-collapse-btn:hover {
   background: var(--crystal-surface-hover);
@@ -1981,7 +1981,7 @@ scale.cc-media-progress slider {
   padding: 6px;
   min-width: 32px;
   min-height: 32px;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 .nc-item-expand-btn:hover, .nc-item-clear-btn:hover {
   background: var(--crystal-surface-hover);
@@ -2495,7 +2495,7 @@ window.workspace-cockpit {
   padding: 10px 20px;
   color: var(--crystal-text);
   font-size: 15px;
-  transition: all 0.2s ease;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 .cockpit-search:focus {
   background: var(--crystal-surface);
@@ -2516,7 +2516,7 @@ window.workspace-cockpit {
   border-radius: 24px;
   background-color: var(--crystal-surface-back);
   border: 1px solid var(--crystal-border);
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Cairo canvas reads 'color' to get the tile fill color */
@@ -2534,7 +2534,7 @@ window.workspace-cockpit {
   font-size: 15px;
   font-weight: 600;
   color: var(--crystal-text);
-  transition: all 0.2s;
+  transition: color 0.2s ease;
 }
 .wo-label.active {
   color: @accent_bg_color;
@@ -2559,7 +2559,7 @@ window.workspace-cockpit {
 .bar-ws-dot {
   background-color: var(--crystal-surface-raised);
   border-radius: 999px;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  transition: background-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .bar-ws-dot.active {
   background-color: @accent_bg_color;
@@ -2956,7 +2956,7 @@ button.accent-circle-btn {
   min-height: 32px;
   padding: 0;
   margin: 0;
-  transition: all 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 button.accent-circle-btn.selected {
   border-color: var(--crystal-text);
@@ -3000,7 +3000,7 @@ button.launcher-icon-btn {
   border-radius: var(--crystal-radius-sm);
   padding: 8px 10px;
   min-width: 52px;
-  transition: all 0.15s ease;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 button.launcher-icon-btn.selected {
   border-color: var(--crystal-accent);
@@ -3039,7 +3039,7 @@ button.launcher-icon-btn:hover:not(.selected) {
 .tz-status {
   font-size: 0.93em;
   font-weight: 500;
-  transition: all 0.2s ease;
+  transition: color 0.2s ease;
 }
 
 .tz-status-ok {
