@@ -1546,14 +1546,10 @@ button.clip-entry-btn:active {
 /* ==========================================================================
    CONTROL CENTER - CLEAN GTK4 ARCHITECTURE
    ========================================================================== */
-/* Keyboard focus rings — one scoped rule covers every button/slider in the CC
-   (cc-*-btn, pills, chips, scales) instead of styling each. Keyboard nav only. */
-.cc-window-root button:focus-visible,
-.cc-window-root scale:focus-visible {
-  outline: 2px solid var(--crystal-accent);
-  outline-offset: 2px;
-}
-
+/* NOTE: no keyboard focus rings here on purpose. The CC lives in the bar window
+   which only grants keyboard (ON_DEMAND) for prism_open, not cc_open — so the CC
+   never receives keyboard focus and is mouse/touch-only by design. Adding
+   :focus-visible rules here would be dead code. See [[project_design_tokens_macos]]. */
 /* --- Component Transparency --- */
 window.notification-center-win,
 window.notif-win,
