@@ -87,53 +87,8 @@ window.nc-window-2 {
     opacity: 0.7;
 }
 
-// Standalone thin progress-bar slider — does NOT inherit crystal-scale
-// so there is no specificity conflict to fight.
-.cc-media-progress {
-    min-height: 20px;
-    margin: 2px 0;
-    padding: 0;
-    outline: none;
-    box-shadow: none;
-
-    trough {
-        min-height: 4px;
-        background-color: var(--crystal-surface);
-        border-radius: 99px;
-        border: none;
-        outline: none;
-        box-shadow: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    highlight {
-        min-height: 4px;
-        background-color: var(--crystal-accent);
-        background-image: none;
-        border-radius: 99px;
-        border: none;
-        outline: none;
-        box-shadow: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    slider {
-        background-color: white;
-        background-image: none;
-        border-radius: 99px;
-        border: none;
-        outline: none;
-        box-shadow: var(--crystal-shadow-sm);
-        min-width: 14px;
-        min-height: 14px;
-        margin: 0;
-        padding: 0;
-    }
-}
-
-scale.cc-media-progress slider { margin: 0; padding: 0; }
+// (Removed dead .cc-media-progress GTK-scale rules — the media progress bar is a
+// Cairo-drawn slider via makeHSlider, so these never applied.)
 
 /* --- Connectivity Toggles (Capsule & Round) --- */
 .cc-island {

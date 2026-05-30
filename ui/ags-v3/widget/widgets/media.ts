@@ -2,6 +2,7 @@ import { Gtk, Gdk } from "ags/gtk4"
 import AstalMpris from "gi://AstalMpris"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
+import Pango from "gi://Pango"
 import { MediaIslandContent } from "../control-center/MediaIsland"
 import { createSquirclePath } from "../common/DrawingUtils"
 import { makeHSlider } from "../common/Slider"
@@ -122,9 +123,13 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
         }
     })
 
+    // Wrap to up to 2 lines (uses the width to the right of the artwork) and only
+    // ellipsize if the title still overflows two lines.
     const titleLabel = new Gtk.Label({
         label: t("cc.media.no-media"), css_classes: ["cc-media-title-atomic"],
-        halign: Gtk.Align.START, hexpand: true, ellipsize: 3, max_width_chars: 26,
+        halign: Gtk.Align.START, hexpand: true, xalign: 0,
+        wrap: true, wrap_mode: Pango.WrapMode.WORD_CHAR, lines: 2, ellipsize: 3,
+        max_width_chars: 30,
     })
     const artistLabel = new Gtk.Label({
         label: "", css_classes: ["cc-media-artist-atomic"],
@@ -174,15 +179,20 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
         },
     })
 
+    // Progress bar + its time labels read as one unit, so group them tightly.
+    const progressBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true })
+    progressBox.append(progressSlider)
+    progressBox.append(timeRow)
+
     const root = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL, spacing: 10, hexpand: true,
-        margin_top: 6, margin_start: 6, margin_end: 6,
+        orientation: Gtk.Orientation.VERTICAL, spacing: 12, hexpand: true,
+        margin_top: 6, margin_bottom: 6, margin_start: 6, margin_end: 6,
     })
     if (widthRequest > 0) root.set_size_request(widthRequest, -1)
+    // Order: artwork+title → progress (with times) → transport controls.
     root.append(topRow)
+    root.append(progressBox)
     root.append(ctrlBox)
-    root.append(progressSlider)
-    root.append(timeRow)
 
     const syncProgress = () => {
         const len = player?.length || 0
