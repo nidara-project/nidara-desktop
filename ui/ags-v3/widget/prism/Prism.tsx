@@ -1,4 +1,5 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
+import { makeFadeToggle } from "../common/fade"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
@@ -80,7 +81,7 @@ export default function Prism() {
     contentBox.append(searchContainer)
     contentBox.append(revealer)
 
-    const prismWrapper = SquircleContainer({ child: contentBox, radius: 32, n: 4.5, css_classes: ["prism-wrapper"], useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 } })
+    const prismWrapper = SquircleContainer({ child: contentBox, radius: 32, n: 4.5, css_classes: ["prism-wrapper", "overlay-fade"], useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 } })
 
     const clearList = () => {
         let child = resultsList.get_first_child()
@@ -194,8 +195,9 @@ export default function Prism() {
     })
     prismWrapper.add_controller(key)
 
+    const setPrismVisible = makeFadeToggle(prismWrapper)
     const sync = () => {
-        prismWrapper.set_visible(status.prism_open)
+        setPrismVisible(status.prism_open)
         if (status.prism_open) {
             entry.text = ""
             clearList()

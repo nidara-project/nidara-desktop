@@ -3,6 +3,7 @@ import app from "ags/gtk4/app"
 import AstalNotifd from "gi://AstalNotifd"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
+import { makeFadeToggle } from "../common/fade"
 import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
@@ -195,6 +196,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (surface.set_input_region) surface.set_input_region(region)
   }
 
+  // Unified overlay fade (opacity crossfade via .overlay-fade/.overlay-open CSS).
+  // makeFadeToggle lives in common/fade; pass updateInputRegion so the layer-shell
+  // input region is refreshed once each panel has actually faded out.
+  const setCCVisible = makeFadeToggle(cc, updateInputRegion)
+  const setNCVisible = makeFadeToggle(nc, updateInputRegion)
+  const setSystemMenuVisible = makeFadeToggle(systemMenu, updateInputRegion)
+
   // V9.0: Animated Overview — CSS transition driven by class toggle
   let overviewHideTimer: number | null = null
   const setOverviewVisible = (open: boolean) => {
@@ -216,7 +224,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   const syncOverlays = () => {
     catcher.set_visible(status.isAnyOverlayOpen && !status.cc_edit_mode)
-    cc.set_visible(status.cc_open); nc.set_visible(status.nc_open); prism.set_visible(status.prism_open); systemMenu.set_visible(status.system_menu_open)
+    setCCVisible(status.cc_open); setNCVisible(status.nc_open); prism.set_visible(status.prism_open); setSystemMenuVisible(status.system_menu_open)
     setOverviewVisible(status.overview_open)
     // Update immediately — get_visible() is already correct after set_visible() above,
     // so the region calculation is accurate without waiting for a layout pass.

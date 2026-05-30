@@ -156,6 +156,7 @@ export function SystemMenuOverlay() {
     margin_top: 56,
     margin_start: 16,
     visible: false,
+    css_classes: ["overlay-fade"],
   })
   outerBox.append(squircleWrapper)
   return outerBox
