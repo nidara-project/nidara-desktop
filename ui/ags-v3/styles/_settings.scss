@@ -377,15 +377,17 @@ button.accent-circle-btn {
     &.selected       { border-color: var(--crystal-text); box-shadow: 0 0 0 2px var(--crystal-text); }
     &:hover:not(.selected) { border-color: var(--crystal-text-dim); }
 
-    &.accent-blue   { background-color: #0088FF; }
-    &.accent-teal   { background-color: #2190a4; }
-    &.accent-green  { background-color: #79B757; }
-    &.accent-yellow { background-color: #F3BA4B; }
-    &.accent-orange { background-color: #E9873A; }
-    &.accent-red    { background-color: #ED5F5D; }
-    &.accent-pink   { background-color: #E55E9C; }
-    &.accent-purple { background-color: #9A57A3; }
-    &.accent-slate  { background-color: #6f8396; }
+    // Swatch colors come from the runtime tokens emitted by FluidCrystal.ts
+    // (--accent-<key>), so the palette has a single source of truth in TS.
+    &.accent-blue   { background-color: var(--accent-blue); }
+    &.accent-teal   { background-color: var(--accent-teal); }
+    &.accent-green  { background-color: var(--accent-green); }
+    &.accent-yellow { background-color: var(--accent-yellow); }
+    &.accent-orange { background-color: var(--accent-orange); }
+    &.accent-red    { background-color: var(--accent-red); }
+    &.accent-pink   { background-color: var(--accent-pink); }
+    &.accent-purple { background-color: var(--accent-purple); }
+    &.accent-slate  { background-color: var(--accent-slate); }
 }
 
 // ── Launcher icon preset buttons ──────────────────────────────────────────────

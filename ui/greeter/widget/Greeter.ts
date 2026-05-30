@@ -6,7 +6,7 @@ import LoginCard from "./LoginCard"
 import PowerBar from "./PowerBar"
 import LocaleBar from "./LocaleBar"
 import Clock from "./Clock"
-import { getDefaultUser } from "../lib/users"
+import { getDefaultUser } from "../../lib/users"
 
 function readWallpaperPath(): string | null {
   try {

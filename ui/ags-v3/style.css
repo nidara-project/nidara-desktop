@@ -2982,31 +2982,31 @@ button.accent-circle-btn:hover:not(.selected) {
   border-color: var(--crystal-text-dim);
 }
 button.accent-circle-btn.accent-blue {
-  background-color: #0088FF;
+  background-color: var(--accent-blue);
 }
 button.accent-circle-btn.accent-teal {
-  background-color: #2190a4;
+  background-color: var(--accent-teal);
 }
 button.accent-circle-btn.accent-green {
-  background-color: #79B757;
+  background-color: var(--accent-green);
 }
 button.accent-circle-btn.accent-yellow {
-  background-color: #F3BA4B;
+  background-color: var(--accent-yellow);
 }
 button.accent-circle-btn.accent-orange {
-  background-color: #E9873A;
+  background-color: var(--accent-orange);
 }
 button.accent-circle-btn.accent-red {
-  background-color: #ED5F5D;
+  background-color: var(--accent-red);
 }
 button.accent-circle-btn.accent-pink {
-  background-color: #E55E9C;
+  background-color: var(--accent-pink);
 }
 button.accent-circle-btn.accent-purple {
-  background-color: #9A57A3;
+  background-color: var(--accent-purple);
 }
 button.accent-circle-btn.accent-slate {
-  background-color: #6f8396;
+  background-color: var(--accent-slate);
 }
 
 button.launcher-icon-btn {

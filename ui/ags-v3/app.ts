@@ -87,7 +87,6 @@ app.start({
     import("ags/process").then(({ execAsync }) => {
         execAsync("hyprctl keyword layerrule 'blur, crystal-bar'").catch(() => {})
         execAsync("hyprctl keyword layerrule 'ignorealpha 0.5, crystal-bar'").catch(() => {})
-        // crystal-launcher is now embedded inside crystal-dock, no separate layerrule needed
     }).catch(() => {})
 
     const windows = new Set<ShellWindow>()

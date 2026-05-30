@@ -4,7 +4,7 @@ import GLib from "gi://GLib"
 // @ts-ignore
 import AstalGreet from "gi://AstalGreet"
 import { getSessions } from "../lib/sessions"
-import { getDefaultUser } from "../lib/users"
+import { getDefaultUser } from "../../lib/users"
 import { t, onLocaleChange } from "../lib/i18n"
 
 function greetLogin(username: string, password: string, cmd: string): Promise<void> {

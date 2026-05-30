@@ -5,7 +5,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import LockCard from "./LockCard"
 import PowerBar from "./PowerBar"
 import Clock from "./Clock"
-import { getDefaultUser } from "../lib/users"
+import { getDefaultUser } from "../../lib/users"
 
 function readWallpaperPath(): string | null {
   try {

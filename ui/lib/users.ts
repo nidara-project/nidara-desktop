@@ -1,5 +1,9 @@
 import GLib from "gi://GLib"
 
+// System user enumeration shared by the greeter and lockscreen bundles.
+// Context-independent (reads /etc/passwd + AccountsService), so it behaves the
+// same whether running as the `greeter` system user or the logged-in user.
+
 export interface User {
   username: string
   displayName: string
@@ -37,12 +41,12 @@ export function getUsers(): User[] {
 
     return users
   } catch (e) {
-    console.error("[Greeter] getUsers:", e)
+    console.error("[users] getUsers:", e)
     return []
   }
 }
 
 export function getDefaultUser(): User {
   const users = getUsers()
-  return users[0] ?? { username: "user", displayName: "User", avatarPath: null }
+  return users[0] ?? { username: "user", displayName: "User", avatarPath: null, homeDir: "" }
 }

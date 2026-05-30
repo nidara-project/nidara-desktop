@@ -30,8 +30,10 @@ It is not a theme or a set of scripts — it registers as a proper Wayland sessi
   - Power — performance profile, screen-off, lock, suspend timers (hypridle)
   - About — system info, Crystal Shell version
 - **Fluid Crystal Design System**: Dynamic accent colors, glassmorphism tokens, dark/light mode.
-- **Lock screen**: hyprlock with frosted-glass blur.
+- **Game Mode**: Steam games auto-move to a dedicated `gamespace` workspace (no blur/shadow/animations, `immediate` mode), optional library-art wallpaper and performance power profile; `Super + G` floats the bar above fullscreen games.
+- **Login & Lock**: Custom AGS apps — a greetd-based greeter (`crystal-greeter`) and a lock screen (`crystal-lock`) built on `ext-session-lock-v1`, both sharing the Crystal look. The greeter is launched directly by greetd (no regreet); the lock screen uses no hyprlock.
 - **Idle management**: hypridle — configurable screen-off, lock, and suspend timers.
+- **Internationalization**: All UI strings via `t()`; English + Spanish included.
 
 ---
 
@@ -158,25 +160,42 @@ npm install   # IDE support (TypeScript autocomplete)
 
 ### Project Structure
 
+Crystal Shell is **three independent AGS bundles** (shell, greeter, lock screen), plus the
+provisioning and Hyprland config:
+
 ```
 crystal-shell/
 ├── config/
-│   └── hypr/                  # Hyprland config (installed to /usr/share/crystal-shell/)
-├── defaults/                  # Default user configs (copied once on first install)
+│   ├── hypr/                  # Hyprland Lua config + hypridle (→ /usr/share/crystal-shell/)
+│   ├── greetd/                # greetd config + greeter Hyprland session
+│   └── applications/          # .desktop entries
+├── defaults/                  # Seed user configs (copied once on first install; never overwritten)
+│   ├── uwsm/                  # env / env-hyprland templates (toolkit & NVIDIA vars)
+│   └── wallpaper/             # Default wallpaper (shipped asset)
 ├── scripts/
 │   ├── crystal-shell          # Wayland session entry → /usr/bin/crystal-shell
-│   └── crystal-shell-ui       # UI launcher (dev/system) → /usr/bin/crystal-shell-ui
+│   ├── crystal-shell-ui       # UI launcher (dev/system) → /usr/bin/crystal-shell-ui
+│   ├── crystal-greeter        # Greeter launcher
+│   ├── crystal-lock           # Lock screen launcher (Super+L)
+│   ├── crystal-game-mode      # Game mode toggle (Super+Shift+G)
+│   └── *-i18n.mjs             # Translation extract/apply tooling
 ├── VERSION                    # Current version (semver)
-├── install.sh                 # Provisioning script
-└── ui/ags-v3/                 # Shell (TypeScript + AGS v3)
-    ├── app.ts                 # Entry point + IPC request handler
-    ├── core/                  # State, theme engine, services
-    ├── widget/                # UI components (Bar, Dock, AppGrid, Settings…)
-    ├── styles/                # Modular SCSS
-    ├── style.css              # Compiled CSS (committed for convenience)
-    └── build/
-        └── crystal-shell      # Standalone bundle (committed for releases)
+├── install.sh                 # Provisioning script (system / --dev)
+└── ui/
+    ├── ags-v3/                # Main shell (TypeScript + AGS v3)
+    │   ├── app.ts             # Entry point + IPC request handler
+    │   ├── core/              # State (Status), theme engine (FluidCrystal), services
+    │   ├── widget/            # UI components (Bar, Dock, AppGrid, Control Center, Settings…)
+    │   ├── styles/            # Modular SCSS (tokens, glass mixin, per-component)
+    │   ├── style.css          # Compiled CSS (committed for convenience)
+    │   └── build/crystal-shell    # Standalone bundle (committed for releases)
+    ├── greeter/               # Login screen (greetd + AstalGreet)
+    ├── lockscreen/            # Lock screen (ext-session-lock-v1, shares greeter CSS)
+    └── lib/crystal-ui/        # GTK4 primitive widgets (no Adwaita): SplitView, Select, Button…
 ```
+
+The runtime architecture, IPC contract, persistence layout and design-system rules are documented in
+`CRYSTAL_SHELL_ARCHITECTURE.md` (kept locally; not part of the published repo).
 
 ### Development Workflow
 

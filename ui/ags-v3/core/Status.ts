@@ -40,6 +40,40 @@ export class UIStatus extends GObject.Object {
     private _bar_expanded_id = ""
     private _cc_detail_id = ""
 
+    // The five mutually-exclusive overlays. Opening one closes the rest.
+    // Maps the snake-cased backing field to its GObject notify name.
+    private static readonly EXCLUSIVE: Record<string, string> = {
+        _cc_open: "cc-open",
+        _nc_open: "nc-open",
+        _prism_open: "prism-open",
+        _system_menu_open: "system-menu-open",
+        _overview_open: "overview-open",
+    }
+
+    /**
+     * Close every mutually-exclusive overlay except `keep`, plus optionally clear
+     * the popup/bar-expanded state. Only emits notify for fields that actually
+     * changed. Single source of truth for the exclusion logic the setters share.
+     */
+    private closeExclusive(keep: string, opts: { notif?: boolean; barExpanded?: boolean } = {}) {
+        const self = this as any
+        for (const [field, name] of Object.entries(UIStatus.EXCLUSIVE)) {
+            if (field === keep) continue
+            if (self[field]) {
+                self[field] = false
+                this.notify(name)
+            }
+        }
+        if (opts.notif && this._notif_active) {
+            this._notif_active = false
+            this.notify("notif-active")
+        }
+        if (opts.barExpanded && this._bar_expanded_id !== "") {
+            this._bar_expanded_id = ""
+            this.notify("bar-expanded-id")
+        }
+    }
+
     public get notif_active() { return this._notif_active }
     public set notif_active(v: boolean) {
         if (this._notif_active === v) return
@@ -51,20 +85,7 @@ export class UIStatus extends GObject.Object {
     public set cc_open(v: boolean) {
         if (this._cc_open === v) return
         this._cc_open = v
-        if (v) {
-            this._nc_open = false
-            this._prism_open = false
-            this._notif_active = false
-            this._system_menu_open = false
-            this._overview_open = false
-            this._bar_expanded_id = ""
-            this.notify("nc-open")
-            this.notify("prism-open")
-            this.notify("notif-active")
-            this.notify("system-menu-open")
-            this.notify("overview-open")
-            this.notify("bar-expanded-id")
-        }
+        if (v) this.closeExclusive("_cc_open", { notif: true, barExpanded: true })
         this.notify("cc-open")
     }
 
@@ -72,20 +93,7 @@ export class UIStatus extends GObject.Object {
     public set nc_open(v: boolean) {
         if (this._nc_open === v) return
         this._nc_open = v
-        if (v) {
-            this._cc_open = false
-            this._prism_open = false
-            this._notif_active = false
-            this._system_menu_open = false
-            this._overview_open = false
-            this._bar_expanded_id = ""
-            this.notify("cc-open")
-            this.notify("prism-open")
-            this.notify("notif-active")
-            this.notify("system-menu-open")
-            this.notify("overview-open")
-            this.notify("bar-expanded-id")
-        }
+        if (v) this.closeExclusive("_nc_open", { notif: true, barExpanded: true })
         this.notify("nc-open")
     }
 
@@ -93,18 +101,8 @@ export class UIStatus extends GObject.Object {
     public set prism_open(v: boolean) {
         if (this._prism_open === v) return
         this._prism_open = v
-        if (v) {
-            this._cc_open = false
-            this._nc_open = false
-            this._system_menu_open = false
-            this._overview_open = false
-            this._bar_expanded_id = ""
-            this.notify("cc-open")
-            this.notify("nc-open")
-            this.notify("system-menu-open")
-            this.notify("overview-open")
-            this.notify("bar-expanded-id")
-        }
+        // Note: opening Prism does not dismiss active popups (preserves prior behavior).
+        if (v) this.closeExclusive("_prism_open", { barExpanded: true })
         this.notify("prism-open")
     }
 
@@ -126,16 +124,7 @@ export class UIStatus extends GObject.Object {
     public set system_menu_open(v: boolean) {
         if (this._system_menu_open === v) return
         this._system_menu_open = v
-        if (v) {
-            this._cc_open = false
-            this._nc_open = false
-            this._prism_open = false
-            this._overview_open = false
-            this.notify("cc-open")
-            this.notify("nc-open")
-            this.notify("prism-open")
-            this.notify("overview-open")
-        }
+        if (v) this.closeExclusive("_system_menu_open")
         this.notify("system-menu-open")
     }
 
@@ -143,16 +132,7 @@ export class UIStatus extends GObject.Object {
     public set overview_open(v: boolean) {
         if (this._overview_open === v) return
         this._overview_open = v
-        if (v) {
-            this._cc_open = false
-            this._nc_open = false
-            this._prism_open = false
-            this._system_menu_open = false
-            this.notify("cc-open")
-            this.notify("nc-open")
-            this.notify("prism-open")
-            this.notify("system-menu-open")
-        }
+        if (v) this.closeExclusive("_overview_open")
         this.notify("overview-open")
     }
 

@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 // @ts-ignore
 import AstalAuth from "gi://AstalAuth"
-import { getDefaultUser } from "../lib/users"
+import { getDefaultUser } from "../../lib/users"
 import { t } from "../lib/i18n"
 
 export default function LockCard(onUnlock: () => void): Gtk.Widget {

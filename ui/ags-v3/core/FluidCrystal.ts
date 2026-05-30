@@ -7,24 +7,17 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { readFile, writeFile } from "ags/file"
+import { ACCENT_HEX, ACCENT_NAMES, type AccentKey } from "../../lib/accent"
 
 // -- COLOR PALETTES ---------------------------------------------------
+// The accent palette is the single source of truth in ui/lib/accent.ts.
+// Here we reshape it to { color, name } for existing consumers (Settings, etc).
 
-// Color palettes removed to let Adwaita handle them natively (V3006)
+export const ACCENT_PALETTE = Object.fromEntries(
+  (Object.keys(ACCENT_HEX) as AccentKey[]).map((k) => [k, { color: ACCENT_HEX[k], name: ACCENT_NAMES[k] }]),
+) as Record<AccentKey, { color: string; name: string }>
 
-export const ACCENT_PALETTE = {
-  blue: { color: "#0088FF", name: "Blue" },
-  teal: { color: "#2190a4", name: "Teal" },
-  green: { color: "#79B757", name: "Green" },
-  yellow: { color: "#F3BA4B", name: "Yellow" },
-  orange: { color: "#E9873A", name: "Orange" },
-  red: { color: "#ED5F5D", name: "Red" },
-  pink: { color: "#E55E9C", name: "Pink" },
-  purple: { color: "#9A57A3", name: "Purple" },
-  slate: { color: "#6f8396", name: "Slate" },
-} as const
-
-export type AccentKey = keyof typeof ACCENT_PALETTE
+export type { AccentKey }
 
 // ── TYPES & INTERFACES ──────────────────────────────────────────────
 

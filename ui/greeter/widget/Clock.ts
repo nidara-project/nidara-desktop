@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
-import { getDefaultUser } from "../lib/users"
+import { getDefaultUser } from "../../lib/users"
 
 type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
 

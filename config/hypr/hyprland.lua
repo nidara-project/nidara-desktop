@@ -386,7 +386,6 @@ hl.window_rule({
 hl.layer_rule({ match = { namespace = "crystal-bar" },      blur = true, ignore_alpha = 0.05  })
 hl.layer_rule({ match = { namespace = "crystal-dock" },     blur = true, ignore_alpha = 0.04 })
 hl.layer_rule({ match = { namespace = "notif-win" },        blur = true, ignore_alpha = 0.001 })
-hl.layer_rule({ match = { namespace = "crystal-launcher" }, blur = true, ignore_alpha = 0.001 })
 hl.layer_rule({ match = { namespace = "crystal-lock" },     blur = true, ignore_alpha = 0.3   })
 
 
