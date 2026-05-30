@@ -1456,7 +1456,7 @@ button.dock-v-icon image {
 }
 /* --- Bar inline expansion panel --- */
 .bar-expansion-panel {
-  margin-top: 44px;
+  /* Vertical gap set from TSX (PANEL_TOP) so it stays in sync with CC/NC. */
 }
 .bar-expansion-panel button.suggested-action {
   background: none;

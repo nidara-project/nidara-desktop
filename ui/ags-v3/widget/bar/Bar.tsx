@@ -3,7 +3,7 @@ import app from "ags/gtk4/app"
 import AstalNotifd from "gi://AstalNotifd"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
-import { makeFadeToggle } from "../common/fade"
+import { makeFadeToggle, FADE_HIDE_MS } from "../common/fade"
 import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
@@ -89,11 +89,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const expansionCapsule = SquircleContainer({
       child: expansionInner, gloss: true, useShellOpacity: true,
       borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, radius: 20,
-      css_classes: ["bar-expansion-panel"],
+      // overlay-fade → same opacity crossfade as CC/NC (toggled via overlay-open)
+      css_classes: ["bar-expansion-panel", "overlay-fade"],
   })
   expansionCapsule.valign = Gtk.Align.START
   expansionCapsule.halign = Gtk.Align.END
-  expansionCapsule.margin_top = 44
+  // margin_top set below to PANEL_TOP so the gap matches CC/NC exactly.
   expansionCapsule.visible = false
 
   const cc = ControlCenterWidget(gdkmonitor)
@@ -138,6 +139,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   cc.margin_top = PANEL_TOP
   nc.margin_top = PANEL_TOP
+  expansionCapsule.margin_top = PANEL_TOP   // same gap below the bar as CC/NC
   const syncPanelMargins = () => {
     const end = 16 + (dockSideState.position === 'right' ? dockSideState.width : 0)
     cc.margin_end = end
@@ -237,7 +239,24 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   status.connect("notify::cc-edit-mode", syncOverlays)
 
   // ── Bar expansion show/hide ────────────────────────────────────────────────
+  // Centers the panel horizontally under the clicked bar capsule (hidden widgets
+  // fall back to the overflow capsule).
+  const positionExpansion = (id: string) => {
+      const capsule = capsuleRefs.get(id) ?? capsuleRefs.get(OVERFLOW_ID)
+      if (!capsule) return
+      const iconAlloc = capsule.get_allocation()
+      if (iconAlloc.width <= 1) return
+      const [ok, tx] = capsule.translate_coordinates(masterOverlay, 0, 0)
+      if (!ok) return
+      const iconCenterX = tx + iconAlloc.width / 2
+      const panelAlloc = expansionCapsule.get_allocation()
+      const panelW = panelAlloc.width > 1 ? panelAlloc.width : 260
+      expansionCapsule.margin_end = Math.max(8, Math.round(monGeo.width - iconCenterX - panelW / 2))
+  }
+
+  let expansionHideTimer: number | null = null
   const showExpansion = (id: string) => {
+      if (expansionHideTimer) { GLib.source_remove(expansionHideTimer); expansionHideTimer = null }
       const onClose = () => { status.bar_expanded_id = "" }
       let content: Gtk.Widget | undefined
       if (id === OVERFLOW_ID) {
@@ -251,27 +270,31 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       let c = expansionInner.get_first_child()
       while (c) { const n = c.get_next_sibling(); expansionInner.remove(c); c = n }
       expansionInner.append(content)
-      expansionCapsule.visible = true
-      // Position centered under the capsule (hidden widgets fall back to overflow capsule)
-      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1, () => {
-          const capsule = capsuleRefs.get(id) ?? capsuleRefs.get(OVERFLOW_ID)
-          if (!capsule) return GLib.SOURCE_REMOVE
-          const iconAlloc = capsule.get_allocation()
-          if (iconAlloc.width <= 1) return GLib.SOURCE_REMOVE
-          const [ok, tx] = capsule.translate_coordinates(masterOverlay, 0, 0)
-          if (!ok) return GLib.SOURCE_REMOVE
-          const iconCenterX = tx + iconAlloc.width / 2
-          const panelAlloc = expansionCapsule.get_allocation()
-          const panelW = panelAlloc.width > 1 ? panelAlloc.width : 260
-          expansionCapsule.margin_end = Math.max(8, Math.round(monGeo.width - iconCenterX - panelW / 2))
+      // Mapped but still transparent (overlay-fade = opacity 0). Defer one frame so
+      // the panel is laid out, position it under the icon, THEN fade in — the panel
+      // never appears at the wrong spot first (no reposition jump).
+      expansionCapsule.set_visible(true)
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
+          positionExpansion(id)
+          expansionCapsule.add_css_class("overlay-open")   // no-op if already open (widget switch)
           updateInputRegion()
           return GLib.SOURCE_REMOVE
       })
   }
   const hideExpansion = () => {
-      expansionCapsule.visible = false
-      let c = expansionInner.get_first_child()
-      while (c) { const n = c.get_next_sibling(); expansionInner.remove(c); c = n }
+      if (expansionHideTimer) { GLib.source_remove(expansionHideTimer); expansionHideTimer = null }
+      expansionCapsule.remove_css_class("overlay-open")
+      // Defer the actual hide until the fade-out finishes (matches CC/NC).
+      expansionHideTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, FADE_HIDE_MS, () => {
+          if (!expansionCapsule.has_css_class("overlay-open")) {
+              expansionCapsule.set_visible(false)
+              let c = expansionInner.get_first_child()
+              while (c) { const n = c.get_next_sibling(); expansionInner.remove(c); c = n }
+              updateInputRegion()
+          }
+          expansionHideTimer = null
+          return GLib.SOURCE_REMOVE
+      })
   }
   status.connect("notify::bar-expanded-id", () => {
       if (status.bar_expanded_id) showExpansion(status.bar_expanded_id)
