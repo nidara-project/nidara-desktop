@@ -4,17 +4,19 @@
 # project still assembles correctly. A green check = safe; a red check = something
 # to look at, caught BEFORE it reaches the running shell.
 #
-# Two gates:
-#   - styles:    the SCSS stylesheet compiles (catches CSS syntax errors).
-#   - typecheck: TypeScript checks that all the pieces fit (catches typos, wrong
-#                arguments, missing translation keys, etc.) without running the app.
+# Gate here:
+#   - styles: the SCSS stylesheet compiles (catches CSS syntax errors). Pure JS,
+#     no system libraries needed.
 #
-# Neither needs GTK or the `ags` binary: the GI/ags types are provided by the
-# committed `@girs/` typings + the stubs in `types.d.ts` / `gi-types.d.ts`, so a
-# stock CI runner can type-check without installing the system shell.
+# Typecheck is intentionally NOT a CI gate:
+#   `tsc --noEmit` needs the GI type definitions (the local `@girs/` dir, ~58 MB
+#   of AUTO-GENERATED typings that are .gitignored). Committing 58 MB of generated
+#   files just to type-check in CI isn't worth the repo bloat. Instead the
+#   typecheck runs locally — `npm run typecheck` (and your editor) — where @girs
+#   is present. It's green and catches real bugs; it just isn't automated on push.
+#   (To make it a CI gate later, we'd commit @girs or install the GIR libs in CI.)
 #
-# Not here: `ags bundle` — needs the `ags` binary + GTK4 system libraries, which
-# aren't available on a stock runner. Built locally instead.
+# Also not here: `ags bundle` — needs the `ags` binary + GTK4 libraries.
 
 name: CI
 
@@ -35,17 +37,3 @@ jobs:
       - name: Compile SCSS (must succeed)
         working-directory: ui/ags-v3
         run: npx --yes sass@1.97.3 --no-charset style.scss /tmp/style.css
-
-  typecheck:
-    name: Typecheck (tsc)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: lts/*
-      - name: Type-check (no emit)
-        working-directory: ui/ags-v3
-        # Resolves ags/* via the stubs in types.d.ts and GI via committed @girs/,
-        # so no node_modules / system ags needed.
-        run: npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json
