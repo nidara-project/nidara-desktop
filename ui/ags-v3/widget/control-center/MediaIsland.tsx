@@ -2,6 +2,7 @@ import { Gtk, Gdk } from "ags/gtk4"
 import AstalMpris from "gi://AstalMpris"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
+import Pango from "gi://Pango"
 import { createSquirclePath } from "../common/DrawingUtils"
 import { AtomicWidget, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
@@ -57,50 +58,61 @@ function makeMediaState(): MediaState {
 
 // SQUARE (2×2): artwork + title/artist + prev/play/next
 function buildSquareContent(state: MediaState): Gtk.Widget {
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 0,
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        hexpand: false, vexpand: false,
-    })
-
     const artDa = new Gtk.DrawingArea({
-        width_request: 64, height_request: 64,
+        width_request: 62, height_request: 62,
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         hexpand: false, vexpand: false,
+        margin_bottom: 2, // breathing room between artwork and title
     })
 
+    // Two lines + word-char wrap so longer titles use the space below the artwork.
+    // CRITICAL: the tile lives in a Gtk.Fixed, which does NO height-for-width — a
+    // wrapping label measures as 1 line then paints 2, causing phantom slack + overflow.
+    // width_request pins the wrap width; height_request reserves the 2-line height
+    // unconditionally, so the parent always allocates enough regardless of measurement.
     const title = new Gtk.Label({
         label: t("cc.media.no-media"), css_classes: ["cc-media-title-atomic"],
-        halign: Gtk.Align.CENTER, ellipsize: 3, max_width_chars: 18,
+        halign: Gtk.Align.CENTER, justify: Gtk.Justification.CENTER,
+        wrap: true, wrap_mode: Pango.WrapMode.WORD_CHAR, lines: 2, ellipsize: 3,
+        width_request: 140, height_request: 36,
     })
     const artist = new Gtk.Label({
         label: "", css_classes: ["cc-media-artist-atomic"],
         halign: Gtk.Align.CENTER, ellipsize: 3, max_width_chars: 20,
     })
 
-    const header = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, halign: Gtk.Align.CENTER })
+    const header = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, halign: Gtk.Align.CENTER })
     header.append(artDa); header.append(title); header.append(artist)
 
-    const controls = new Gtk.Box({ halign: Gtk.Align.CENTER })
+    const controls = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 2 })
     const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 18 , css_classes: ["cs-icon"] })
     const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 18 , css_classes: ["cs-icon"] })
     const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 18 , css_classes: ["cs-icon"] })
     const prev = new Gtk.Button({ child: prevImg, css_classes: ["cc-media-btn-atomic"] })
     const play = new Gtk.Button({ child: playImg, css_classes: ["cc-media-btn-atomic"] })
     const next = new Gtk.Button({ child: nextImg, css_classes: ["cc-media-btn-atomic"] })
-    prev.set_size_request(32, 32); play.set_size_request(32, 32); next.set_size_request(32, 32)
+    prev.set_size_request(24, 24); play.set_size_request(24, 24); next.set_size_request(24, 24)
     controls.append(prev); controls.append(play); controls.append(next)
 
-    box.append(header); box.append(controls)
+    // BaseIsland forces the returned widget to valign=FILL, so the box stretches to
+    // the full tile. valign=CENTER on a vexpanding child is ignored (it fills instead),
+    // which top-packed the content and pooled slack below the controls. Two equal
+    // vexpand spacers above and below split the leftover space 50/50 → the group is
+    // genuinely centred, and they collapse to 0 cleanly if the content ever overflows.
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+    box.append(new Gtk.Box({ vexpand: true }))
+    box.append(header)
+    box.append(controls)
+    box.append(new Gtk.Box({ vexpand: true }))
 
     artDa.set_draw_func((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
         if (state.artPixbuf) {
-            cr.save(); createSquirclePath(cr, 0, 0, w, h, 14, 3.2); cr.clip()
-            Gdk.cairo_set_source_pixbuf(cr, state.artPixbuf, 0, 0); cr.paint(); cr.restore()
+            const small = state.artPixbuf.scale_simple(w, h, GdkPixbuf.InterpType.BILINEAR)
+            cr.save(); createSquirclePath(cr, 0, 0, w, h, 15, 3.2); cr.clip()
+            Gdk.cairo_set_source_pixbuf(cr, small, 0, 0); cr.paint(); cr.restore()
         } else {
-            cr.setSourceRGBA(1, 1, 1, 0.1); createSquirclePath(cr, 0, 0, w, h, 14, 3.2); cr.fill()
+            cr.setSourceRGBA(1, 1, 1, 0.1); createSquirclePath(cr, 0, 0, w, h, 15, 3.2); cr.fill()
         }
     })
 

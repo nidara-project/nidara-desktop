@@ -1653,6 +1653,9 @@ window.nc-window-2 contents {
   color: var(--crystal-text);
   background: transparent;
   border: none;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
 }
 
 .cc-media-play-btn {
@@ -1702,6 +1705,7 @@ window.nc-window-2 contents {
 
 .cc-atomic-label-dim {
   font-size: 12px;
+  font-weight: 400;
   color: var(--crystal-text-dim);
 }
 
