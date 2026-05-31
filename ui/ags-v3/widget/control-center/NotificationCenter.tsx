@@ -57,18 +57,23 @@ export function createHeroWidget(n: AstalNotifd.Notification, size: number): Gtk
     return da
 }
 
-export function GroupControlHeader(props: { name: string, count: number, onToggle: () => void }) {
-    const { name, count, onToggle } = props
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, css_classes: ["nc-group-ctrl-header"] })
-    const labelBox = new Gtk.Box({ spacing: 8, hexpand: true })
+export function GroupControlHeader(props: { name: string, count: number, onToggle: () => void, onClearGroup: () => void }) {
+    const { name, count, onToggle, onClearGroup } = props
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6, valign: Gtk.Align.CENTER, css_classes: ["nc-group-ctrl-header"] })
+    const labelBox = new Gtk.Box({ spacing: 8, hexpand: true, valign: Gtk.Align.CENTER })
     labelBox.append(new Gtk.Label({ label: name, css_classes: ["nc-group-header-name"], halign: Gtk.Align.START }))
     labelBox.append(new Gtk.Label({ label: `${count}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
-    const collapseBtn = new Gtk.Button({ 
+    const collapseBtn = new Gtk.Button({
         child: new Gtk.Image({ gicon: Icons.chevronUp, pixel_size: 14 , css_classes: ["cs-icon"] }),
         css_classes: ["nc-group-collapse-btn"],
         valign: Gtk.Align.CENTER
     }); collapseBtn.connect("clicked", () => onToggle())
-    box.append(labelBox); box.append(collapseBtn); return box
+    const clearAllBtn = new Gtk.Button({
+        child: new Gtk.Image({ gicon: Icons.close, pixel_size: 13 , css_classes: ["cs-icon"] }),
+        css_classes: ["nc-group-collapse-btn", "nc-group-clear-btn"],
+        valign: Gtk.Align.CENTER
+    }); clearAllBtn.connect("clicked", () => onClearGroup())
+    box.append(labelBox); box.append(collapseBtn); box.append(clearAllBtn); return box
 }
 
 export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupCount?: number, isExpanded?: boolean, onToggle?: () => void, onClearGroup?: () => void, isPopup?: boolean, onClose: () => void }) {
@@ -216,12 +221,19 @@ export default function NotificationCenter() {
     const expandedGroups = new Set<string>()
     const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string }>()
 
-    const scroll = new Gtk.ScrolledWindow({ visible: false, hscrollbar_policy: Gtk.PolicyType.NEVER, vscrollbar_policy: Gtk.PolicyType.AUTOMATIC, vexpand: true, width_request: 356, css_classes: ["nc-scroll", "nc-transparent-scroll", "overlay-fade"] })
+    // The content keeps its full width (GRID_WIDTH); LANE is extra space ADDED on the right
+    // to host the scrollbar. The overlay scrollbar floats in that lane only when there's
+    // overflow — so it never reflows the cards and never overlaps them, even inflated on hover.
+    const LANE = 14
+    const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, visible: false, width_request: GRID_WIDTH + LANE, css_classes: ["nc-outer", "overlay-fade"] })
+
+    const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vscrollbar_policy: Gtk.PolicyType.AUTOMATIC, vexpand: true, hexpand: true, css_classes: ["nc-scroll", "nc-transparent-scroll"] })
+    // The scroll forces its child to the full viewport width (GRID_WIDTH + LANE). A
+    // padding-right of LANE (in .nc-content-box) keeps the cards at GRID_WIDTH and leaves
+    // the lane free on the right for the overlay scrollbar — no reflow, no overlap.
     const listContainer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["nc-content-box"], margin_top: 0, margin_bottom: 0 })
-    // Dock-on-right: push NC away from dock by increasing outer margin (handled in Bar.tsx via dockSideState)
     scroll.set_child(listContainer)
 
-    const CAL_W = GRID_WIDTH               // 4 cols = 356px
     const CAL_H = 3 * UNIT + 2 * GAP      // 3 rows = 264px
     const calendarIsland = SquircleContainer({
         child: new Gtk.Calendar({ hexpand: true, vexpand: true, css_classes: ["nc-calendar-widget"] }),
@@ -229,15 +241,22 @@ export default function NotificationCenter() {
         borderColor: { r: 1, g: 1, b: 1, a: 0.05 },
         css_classes: ["cc-island", "nc-calendar-island"],
     })
-    calendarIsland.set_size_request(CAL_W, CAL_H)
+    // Calendar fixed to GRID_WIDTH and left-aligned, so its right edge lines up with the cards
+    // (the LANE sits to the right of both).
+    calendarIsland.set_size_request(GRID_WIDTH, CAL_H)
+    calendarIsland.set_halign(Gtk.Align.START)
     const emptyLabel = new Gtk.Label({ label: t("nc.empty"), css_classes: ["nc-empty"], margin_top: 64, halign: Gtk.Align.CENTER, visible: false })
     const pillBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 24, margin_bottom: 12, visible: false })
     const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: t("nc.clear-all"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => notifd.notifications.forEach(n => n.dismiss()), css_classes: ["nc-clear-all-pill"] })
     pillBox.append(clearAllBtn)
 
-    listContainer.append(calendarIsland); listContainer.append(emptyLabel)
-    const notificationItemsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12 })
-    listContainer.append(notificationItemsBox); listContainer.append(pillBox)
+    const notificationItemsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, hexpand: true })
+    listContainer.append(emptyLabel)
+    listContainer.append(notificationItemsBox)
+    listContainer.append(pillBox)
+
+    outer.append(calendarIsland)
+    outer.append(scroll)
 
     const updateNotifs = () => {
         const notifs = notifd.notifications; const groups = new Map<string, AstalNotifd.Notification[]>()
@@ -262,7 +281,7 @@ export default function NotificationCenter() {
                 const subBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_top: 4 })
                 const revealer = new (Gtk as any).Revealer({ child: subBox, transition_type: (Gtk as any).RevealerTransitionType.SLIDE_DOWN, transition_duration: 350 })
                 const headerBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
-                const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
+                const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
                 container.append(headerBox); container.append(revealer)
                 cache = { container, headerBox, revealer, subBox, sig: "" }
                 groupCache.set(id, cache); notificationItemsBox.append(container)
@@ -276,7 +295,7 @@ export default function NotificationCenter() {
                 if (gl.length > 1) {
                     if (isExpanded) {
                         cache.container.remove_css_class("nc-group-with-ghost")
-                        cache.headerBox.append(GroupControlHeader({ name: appName, count: gl.length, onToggle }))
+                        cache.headerBox.append(GroupControlHeader({ name: appName, count: gl.length, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()) }))
                         sortedGroup.forEach(n => cache!.subBox.append(NotificationCapsule({ n, groupCount: 1, isExpanded: true, onToggle: undefined, onClearGroup: () => n.dismiss(), onClose: closeNC })))
                     } else {
                         cache.container.add_css_class("nc-group-with-ghost")
@@ -316,5 +335,5 @@ export default function NotificationCenter() {
     notifd.connect("notified", () => { if (status.nc_open) updateNotifs() })
     notifd.connect("resolved", () => { if (status.nc_open) updateNotifs() })
     updateNotifs()
-    return scroll
+    return outer
 }

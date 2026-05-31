@@ -148,7 +148,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const syncPanelMargins = () => {
     const end = 16 + (dockSideState.position === 'right' ? dockSideState.width : 0)
     cc.margin_end = end
-    nc.margin_end = end
+    // NC reserves a 14px scrollbar lane on its right (see LANE in NotificationCenter).
+    // Pull the panel right by that much so its CONTENT edge still aligns with the CC,
+    // with the lane living in the gap toward the screen edge/dock.
+    nc.margin_end = Math.max(2, end - 14)
   }
   syncPanelMargins()
   dockSideState.subscribe(syncPanelMargins)

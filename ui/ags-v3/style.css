@@ -1911,12 +1911,22 @@ window.nc-window-2 contents {
   margin-bottom: 6px;
   margin-left: 8px;
   margin-right: 8px;
+  padding: 4px 6px 4px 14px;
+  background: var(--crystal-surface);
+  border: 1px solid var(--crystal-border);
+  border-radius: var(--crystal-radius-md);
 }
 
 .nc-group-header-name {
   font-size: 12px;
   font-weight: 700;
-  color: var(--crystal-text-disabled);
+  color: var(--crystal-text);
+}
+
+.nc-group-clear-btn:hover {
+  background: var(--crystal-danger);
+  border-color: var(--crystal-danger);
+  color: #fff;
 }
 
 .nc-group-collapse-btn {
@@ -2056,6 +2066,29 @@ window.nc-window-2 contents {
 /* --- NC Global Layout --- */
 .nc-content-box {
   padding: 0;
+  /* The scroll viewport is GRID_WIDTH + 14 (LANE). This padding keeps the cards at
+     GRID_WIDTH (no reflow/stretch) and frees the 14px lane on the right for the bar. */
+  padding-right: 14px;
+}
+
+/* Overlay scrollbar that floats inside the reserved LANE on the right (added width, not
+   stolen from the cards). It only shows when there's overflow, and even inflated on hover
+   it stays within the lane, never over the content. */
+.nc-scroll > scrollbar {
+  min-width: 0;
+  background: transparent;
+  border: none;
+}
+.nc-scroll > scrollbar > slider {
+  min-width: 6px;
+  min-height: 28px;
+  margin: 4px 3px;
+  background: var(--crystal-surface-raised);
+  border-radius: var(--crystal-radius-pill);
+  transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nc-scroll > scrollbar:hover > slider {
+  background: var(--crystal-text-dim);
 }
 
 .nc-empty {
