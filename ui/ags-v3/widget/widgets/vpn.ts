@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { buildCapsuleInner, wrapCapsuleTile } from "../control-center/Toggles"
 
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -102,49 +103,17 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         return box
     }
 
-    const iconBox = new Gtk.Box({
-        css_classes: ["cc-atomic-icon-circle-bg"],
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        width_request: 48, height_request: 48,
-        margin_start: 4,
-    })
-    const icon = new Gtk.Image({
-        gicon: Icons.shieldOff,
-        pixel_size: 26,
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        hexpand: true, vexpand: true,
-        css_classes: ["cs-icon"],
-    })
-    iconBox.append(icon)
-
-    const titleLabel = new Gtk.Label({
-        label: t("widget.vpn.name"),
-        css_classes: ["cc-atomic-label-bold"],
-        halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14,
-    })
-    const subLabel = new Gtk.Label({
-        label: t("widget.vpn.sub.disconnected"),
-        css_classes: ["cc-atomic-label-dim"],
-        halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14,
-    })
-
-    const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
-    textBox.append(titleLabel)
-    textBox.append(subLabel)
-
-    const inner = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true, vexpand: true })
-    inner.append(iconBox)
-    inner.append(textBox)
+    const inner = buildCapsuleInner(() => Icons.shieldOff, () => t("widget.vpn.name"), () => t("widget.vpn.sub.disconnected"))
 
     const syncState = (activeName: string | null) => {
         if (activeName) {
-            icon.gicon = Icons.shield
-            iconBox.add_css_class("vpn-active-bg")
-            subLabel.label = activeName
+            inner.icon.gicon = Icons.shield
+            inner.iconBox.add_css_class("vpn-active-bg")
+            inner.subLabel.label = activeName
         } else {
-            icon.gicon = Icons.shieldOff
-            iconBox.remove_css_class("vpn-active-bg")
-            subLabel.label = t("widget.vpn.sub.disconnected")
+            inner.icon.gicon = Icons.shieldOff
+            inner.iconBox.remove_css_class("vpn-active-bg")
+            inner.subLabel.label = t("widget.vpn.sub.disconnected")
         }
     }
 
@@ -152,9 +121,9 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
     refresh()
     const timerId = GLib.timeout_add(GLib.PRIORITY_LOW, 10000, () => { refresh(); return GLib.SOURCE_CONTINUE })
-    inner.connect("unrealize", () => { try { GLib.source_remove(timerId) } catch {} })
+    inner.box.connect("unrealize", () => { try { GLib.source_remove(timerId) } catch {} })
 
-    return inner
+    return wrapCapsuleTile(inner.box)
 }
 
 // ── Bar icon ──────────────────────────────────────────────────────────────────

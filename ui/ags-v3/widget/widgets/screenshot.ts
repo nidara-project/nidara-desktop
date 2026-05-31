@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { buildCapsuleInner, wrapCapsuleTile } from "../control-center/Toggles"
 
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -115,22 +116,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         return box
     }
 
-    const iconBox = new Gtk.Box({
-        css_classes: ["cc-atomic-icon-circle-bg"],
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        width_request: 48, height_request: 48,
-        margin_start: 4,
-    })
-    iconBox.append(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] }))
-
-    const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
-    textBox.append(new Gtk.Label({ label: t("widget.screenshot.name"), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START }))
-    textBox.append(new Gtk.Label({ label: t("widget.screenshot.sub"),  css_classes: ["cc-atomic-label-dim"],  halign: Gtk.Align.START }))
-
-    const inner = new Gtk.Box({ spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true })
-    inner.append(iconBox)
-    inner.append(textBox)
-    return inner
+    return wrapCapsuleTile(buildCapsuleInner(() => Icons.camera, () => t("widget.screenshot.name"), () => t("widget.screenshot.sub")).box)
 }
 
 // ── Widget registration ───────────────────────────────────────────────────────

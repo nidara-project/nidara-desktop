@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import AstalNetwork from "gi://AstalNetwork"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { buildCapsuleInner, wrapCapsuleTile } from "../control-center/Toggles"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
@@ -62,40 +63,13 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         return box
     }
 
-    const iconBox = new Gtk.Box({
-        css_classes: ["cc-atomic-icon-circle-bg"],
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        width_request: 48, height_request: 48,
-        margin_start: 4,
-    })
-    const icon = new Gtk.Image({
-        gicon: getIcon(), pixel_size: 26,
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        hexpand: true, vexpand: true,
-        css_classes: ["cs-icon"],
-    })
-    iconBox.append(icon)
-
-    const titleLabel = new Gtk.Label({ label: t("cc.wifi.name"), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
-    const subLabel = new Gtk.Label({ label: getSub(), css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
-
-    const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
-    textBox.append(titleLabel)
-    textBox.append(subLabel)
-
-    const inner = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL, spacing: 12,
-        halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER,
-        hexpand: true, vexpand: true,
-    })
-    inner.append(iconBox)
-    inner.append(textBox)
+    const inner = buildCapsuleInner(getIcon, () => t("cc.wifi.name"), getSub)
 
     if (wifi) {
-        const sigId = (wifi as any).connect("notify", () => { icon.gicon = getIcon(); subLabel.label = getSub() })
-        inner.connect("unrealize", () => { try { (wifi as any).disconnect(sigId) } catch {} })
+        const sigId = (wifi as any).connect("notify", inner.update)
+        inner.box.connect("unrealize", () => { try { (wifi as any).disconnect(sigId) } catch {} })
     }
-    return inner
+    return wrapCapsuleTile(inner.box)
 }
 
 function buildInfoPanel(): Gtk.Widget {

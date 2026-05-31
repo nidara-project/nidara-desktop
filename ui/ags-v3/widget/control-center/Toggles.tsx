@@ -14,6 +14,84 @@ function setIcon(img: Gtk.Image, icon: Gio.FileIcon) {
 // Shared capsule layout: icon circle + title/subtitle text stack
 type SubscribeFn = (sync: () => void) => () => void
 
+// Single source of truth for the 2×1 (WIDE) capsule inner layout: a 48px icon
+// circle + title/subtitle stack. Both the interactive RoundToggle capsules
+// (bluetooth, focus — wrapped in a button below) and the plain detail-opening
+// tiles (wifi, ethernet, vpn, clipboard, screenshot — which can't be a button,
+// or they'd swallow the tile's detail tap) consume this so every 2×1 widget is
+// spaced/aligned identically. Returns the box plus refs + an update() that
+// re-reads the getters. Keep this the *only* place these dimensions live.
+export interface CapsuleInner {
+    box: Gtk.Box
+    iconBox: Gtk.Box
+    icon: Gtk.Image
+    label: Gtk.Label
+    subLabel: Gtk.Label
+    update: () => void
+}
+
+export function buildCapsuleInner(
+    getIcon: () => Gio.FileIcon,
+    getTitle: () => string,
+    getSubTitle: () => string,
+): CapsuleInner {
+    // box fills the island (hexpand) so a non-expanding child isn't centred by the
+    // SquircleContainer — that's what pushes a plain (non-button) tile to the right.
+    // The expanding textStack then absorbs the trailing slack, pinning the icon hard
+    // left. Works identically whether this box is the island's direct child (wifi,
+    // ethernet, …) or nested inside a cc-capsule-btn (bluetooth, focus).
+    const box = new Gtk.Box({
+        orientation: Gtk.Orientation.HORIZONTAL,
+        spacing: 12,
+        halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER,
+        hexpand: true, vexpand: true,
+        margin_start: 4,
+    })
+
+    const iconBox = new Gtk.Box({
+        css_classes: ["cc-atomic-icon-circle-bg"],
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+        width_request: 48, height_request: 48,
+    })
+    const icon = new Gtk.Image({ pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] })
+    setIcon(icon, getIcon())
+    iconBox.append(icon)
+
+    const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
+    const label = new Gtk.Label({ label: getTitle(), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
+    const subLabel = new Gtk.Label({ label: getSubTitle(), css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
+
+    textStack.append(label)
+    textStack.append(subLabel)
+    box.append(iconBox)
+    box.append(textStack)
+
+    const update = () => {
+        setIcon(icon, getIcon())
+        label.label = getTitle()
+        const sub = getSubTitle()
+        subLabel.label = sub
+        subLabel.visible = sub.length > 0
+    }
+    return { box, iconBox, icon, label, subLabel, update }
+}
+
+// Non-button tiles (the open-detail capsules: wifi, ethernet, vpn, clipboard,
+// screenshot) must return this, not the bare capsule box. BaseIsland's
+// SquircleContainer overwrites its direct child's margins with its 12px padding;
+// the button-wrapped capsules survive that because the padding lands on the button
+// and the inner box keeps its margin_start. Plain tiles need the same extra nesting
+// level or their icon sits 4px further left/misaligned. The outer box absorbs the
+// padding so the capsule box keeps its margin_start — matching the button tiles 1:1.
+export function wrapCapsuleTile(box: Gtk.Box): Gtk.Box {
+    const outer = new Gtk.Box({
+        halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
+        hexpand: true, vexpand: true,
+    })
+    outer.append(box)
+    return outer
+}
+
 function buildCapsuleContent(
     getIcon: () => Gio.FileIcon,
     getTitle: () => string,
@@ -28,38 +106,11 @@ function buildCapsuleContent(
         hexpand: true, vexpand: true,
     })
 
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        spacing: 12,
-        halign: Gtk.Align.START, valign: Gtk.Align.CENTER,
-        margin_start: 4,
-    })
-
-    const iconBox = new Gtk.Box({
-        css_classes: ["cc-atomic-icon-circle-bg"],
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        width_request: 48, height_request: 48,
-    })
-    const icon = new Gtk.Image({ pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] })
-    setIcon(icon, getIcon())
-    iconBox.append(icon)
-
-    const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER })
-    const label = new Gtk.Label({ label: getTitle(), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
-    const subLabel = new Gtk.Label({ label: getSubTitle(), css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
-
-    textStack.append(label)
-    textStack.append(subLabel)
-    box.append(iconBox)
-    box.append(textStack)
-    btn.set_child(box)
+    const inner = buildCapsuleInner(getIcon, getTitle, getSubTitle)
+    btn.set_child(inner.box)
 
     const update = () => {
-        setIcon(icon, getIcon())
-        label.label = getTitle()
-        const sub = getSubTitle()
-        subLabel.label = sub
-        subLabel.visible = sub.length > 0
+        inner.update()
         if (getActive) {
             if (getActive()) btn.add_css_class("active")
             else btn.remove_css_class("active")

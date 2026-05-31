@@ -51,7 +51,18 @@ export default function BaseIsland({
         radius = 32
     }
 
-    child.halign = Gtk.Align.FILL
+    // WIDE capsules: pin content to the LEFT. halign FILL doesn't stretch a
+    // shrink-wrapping box — GTK centres it instead, so the icon x drifts with the
+    // text width (short label → more centred). START + no hexpand left-anchors every
+    // tile at the same inset regardless of label length. The capsule background is
+    // the DrawingArea (which still fills), so the content needn't fill. Other sizes
+    // keep FILL (round buttons, sliders, media all expect to fill their island).
+    if (size === WidgetSize.WIDE) {
+        child.halign = Gtk.Align.START
+        child.hexpand = false
+    } else {
+        child.halign = Gtk.Align.FILL
+    }
     child.valign = Gtk.Align.FILL
 
     const island = SquircleContainer({
