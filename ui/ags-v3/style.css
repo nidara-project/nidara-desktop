@@ -1950,6 +1950,42 @@ window.nc-window-2 contents {
   background-color: transparent;
   border: none;
 }
+.nc-calendar-island calendar grid label.day-name {
+  color: var(--crystal-text-dim);
+  font-weight: 600;
+}
+.nc-calendar-island calendar grid label:not(.day-name):not(.week-number) {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  outline-style: none;
+  outline-width: 0;
+  outline-color: transparent;
+  box-shadow: none;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.nc-calendar-island calendar grid label:focus,
+.nc-calendar-island calendar grid label:focus-visible,
+.nc-calendar-island calendar grid label:focus-within,
+.nc-calendar-island calendar grid label:selected {
+  outline-style: none;
+  outline-width: 0;
+  outline-color: transparent;
+  box-shadow: none;
+  border-color: transparent;
+}
+.nc-calendar-island calendar grid label.other-month {
+  color: var(--crystal-text-disabled);
+}
+.nc-calendar-island calendar grid label.today:not(:selected) {
+  color: var(--crystal-accent);
+  font-weight: 700;
+}
+.nc-calendar-island calendar grid label:selected {
+  background-color: var(--crystal-accent);
+  background-image: none;
+  color: #fff;
+  font-weight: 700;
+}
 
 .nc-item-expand-btn, .nc-item-clear-btn {
   background: var(--crystal-surface);

@@ -376,6 +376,47 @@ window.nc-window-2 {
             background-color: transparent;
             border: none;
         }
+
+        // Day cells: Crystal accent on selection + today (GtkCalendar paints these
+        // with Adwaita's default blue otherwise). Column headers (.day-name) and week
+        // numbers (.week-number) are left to the normal text tokens.
+        grid label.day-name {
+            color: var(--crystal-text-dim);
+            font-weight: $fw-semibold;
+        }
+        // Kill Adwaita's blue focus ring on every day cell. GTK4 has NO `outline`
+        // shorthand — must use the longhand props or the ring survives.
+        grid label:not(.day-name):not(.week-number) {
+            border-radius: 8px;
+            border: 1px solid transparent;
+            outline-style: none;
+            outline-width: 0;
+            outline-color: transparent;
+            box-shadow: none;
+            transition: background 0.12s ease, color 0.12s ease;
+        }
+        grid label:focus,
+        grid label:focus-visible,
+        grid label:focus-within,
+        grid label:selected {
+            outline-style: none;
+            outline-width: 0;
+            outline-color: transparent;
+            box-shadow: none;
+            border-color: transparent;
+        }
+        grid label.other-month { color: var(--crystal-text-disabled); }
+        // "Today" (when not selected): accent number
+        grid label.today:not(:selected) {
+            color: var(--crystal-accent);
+            font-weight: $fw-bold;
+        }
+        grid label:selected {
+            background-color: var(--crystal-accent);
+            background-image: none;
+            color: #fff;
+            font-weight: $fw-bold;
+        }
     }
 }
 
