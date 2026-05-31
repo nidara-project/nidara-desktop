@@ -2010,6 +2010,43 @@ window.nc-window-2 contents {
   color: var(--crystal-text-dim);
 }
 
+.nc-action-row {
+  margin-right: 4px;
+}
+
+.nc-right-col {
+  margin-left: 2px;
+  min-width: 24px;
+}
+
+/* Count badge when stacked in the right column (vertical), not inline in the header */
+.nc-badge-stacked {
+  margin-left: 0;
+}
+
+.nc-action-btn {
+  padding: 2px 8px;
+  min-height: 0;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--crystal-radius-xs);
+  color: var(--crystal-accent);
+  font-size: 12px;
+  font-weight: 600;
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.nc-action-btn label {
+  padding: 0;
+  margin: 0;
+}
+.nc-action-btn:hover {
+  background: var(--crystal-accent-10);
+}
+.nc-action-btn:active {
+  background: var(--crystal-accent-30);
+}
+
 .notif-app-icon,
 .nc-group-icon,
 .notif-item-icon {

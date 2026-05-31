@@ -1,8 +1,9 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
 import AstalNotifd from "gi://AstalNotifd"
 import GLib from "gi://GLib"
+import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
-import { drawSquircle } from "../common/DrawingUtils"
+import { drawSquircle, createSquirclePath } from "../common/DrawingUtils"
 import SquircleContainer, { Shape } from "../common/SquircleContainer"
 import Theme from "../../core/ThemeManager"
 import Gio from "gi://Gio"
@@ -29,6 +30,31 @@ export function createIconWidget(n: AstalNotifd.Notification, size: number) {
         else if (fallback) img.icon_name = fallback; else img.gicon = Icons.info
     }
     return img
+}
+
+// A "hero" image (image-path / image-data hint) — screenshot thumbnails, album art,
+// chat avatars sent as content rather than the app icon. Returns null when the hint is
+// absent, is an icon name (handled by the app icon), or points at a missing file.
+export function createHeroWidget(n: AstalNotifd.Notification, size: number): Gtk.Widget | null {
+    const raw = n.image
+    if (!raw) return null
+    const path = raw.replace("file://", "")
+    if (!path.startsWith("/") || !GLib.file_test(path, GLib.FileTest.EXISTS)) return null
+    let pixbuf: any = null
+    try { pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, size * 2, size * 2, true) } catch { return null }
+    if (!pixbuf) return null
+
+    const da = new Gtk.DrawingArea({ width_request: size, height_request: size, halign: Gtk.Align.END, valign: Gtk.Align.CENTER, css_classes: ["nc-hero"] })
+    da.set_draw_func((_da: any, cr: any, w: number, h: number) => {
+        if (w <= 0 || h <= 0) return
+        // cover-fit: scale so the shorter side fills, then centre-crop inside the squircle
+        const scale = Math.max(w / pixbuf.get_width(), h / pixbuf.get_height())
+        const sw = Math.max(1, Math.round(pixbuf.get_width() * scale)), sh = Math.max(1, Math.round(pixbuf.get_height() * scale))
+        const small = pixbuf.scale_simple(sw, sh, GdkPixbuf.InterpType.BILINEAR)
+        cr.save(); createSquirclePath(cr, 0, 0, w, h, 12, 3.2); cr.clip()
+        Gdk.cairo_set_source_pixbuf(cr, small, (w - sw) / 2, (h - sh) / 2); cr.paint(); cr.restore()
+    })
+    return da
 }
 
 export function GroupControlHeader(props: { name: string, count: number, onToggle: () => void }) {
@@ -62,28 +88,16 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
         const now = Math.floor(Date.now()/1000); const d = now - n.time
         const timeStr = d < 60 ? t("nc.time.now") : (d < 3600 ? `${Math.floor(d/60)}m` : `${Math.floor(d/3600)}h`)
         header.append(new Gtk.Label({ label: timeStr, css_classes: ["nc-item-time"], halign: Gtk.Align.END }))
-        if (groupCount > 1 && !isExpanded) header.append(new Gtk.Label({ label: `${groupCount}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
     }
 
-    const clearBtn = new Gtk.Button({ child: new Gtk.Image({ gicon: Icons.close, pixel_size: 11, css_classes: ["cs-icon"] }), css_classes: ["nc-item-clear-btn-compact"] })
+    textStack.append(header)
+
+    // Close button — collapsed groups clear the whole group, otherwise dismiss the one.
+    const isCollapsedGroup = !isPopup && groupCount > 1 && !isExpanded && !!onToggle
+    const clearBtn = new Gtk.Button({ child: new Gtk.Image({ gicon: Icons.close, pixel_size: 11, css_classes: ["cs-icon"] }), css_classes: ["nc-item-clear-btn-compact"], halign: Gtk.Align.CENTER })
     const stopPropClear = new Gtk.GestureClick(); stopPropClear.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
     stopPropClear.connect("pressed", (gesture) => { gesture.set_state(Gtk.EventSequenceState.CLAIMED); if (groupCount > 1 && !isExpanded && onClearGroup) onClearGroup(); else n.dismiss() })
     clearBtn.add_controller(stopPropClear)
-
-    const actionsBox = new Gtk.Box({ spacing: 4, halign: Gtk.Align.END })
-
-    // Group expand/collapse chevron — separate from card tap
-    if (!isPopup && groupCount > 1 && !isExpanded && onToggle) {
-        const expandBtn = new Gtk.Button({ child: new Gtk.Image({ gicon: Icons.chevronDown, pixel_size: 11, css_classes: ["cs-icon"] }), css_classes: ["nc-item-clear-btn-compact"] })
-        const stopPropExpand = new Gtk.GestureClick(); stopPropExpand.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-        stopPropExpand.connect("pressed", (gesture) => { gesture.set_state(Gtk.EventSequenceState.CLAIMED); onToggle() })
-        expandBtn.add_controller(stopPropExpand)
-        actionsBox.append(expandBtn)
-    }
-
-    actionsBox.append(clearBtn)
-    header.append(actionsBox)
-    textStack.append(header)
 
     let bodyLabel: Gtk.Label | null = null
     let bodyExpanded = false
@@ -91,7 +105,37 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
         bodyLabel = new Gtk.Label({ label: cleanBody, css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START, ellipsize: 3, lines: 2, wrap: true, xalign: 0, hexpand: true, max_width_chars: 40 })
         textStack.append(bodyLabel)
     }
+
+    // Action buttons (skip the implicit "default" action — that's the card tap).
+    // Only on concrete items: single notifications or notifications inside an expanded group.
+    const actions = (n.get_actions() || []).filter(a => a.id !== "default" && a.label)
+    if (actions.length > 0 && (groupCount === 1 || isExpanded)) {
+        const actionRow = new Gtk.Box({ spacing: 6, margin_top: 8, halign: Gtk.Align.START, css_classes: ["nc-action-row"] })
+        actions.forEach(a => {
+            const btn = new Gtk.Button({ label: a.label, css_classes: ["nc-action-btn"], halign: Gtk.Align.START })
+            const stopProp = new Gtk.GestureClick(); stopProp.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            stopProp.connect("pressed", (gesture) => {
+                gesture.set_state(Gtk.EventSequenceState.CLAIMED)
+                n.invoke(a.id)
+                if (onClose) onClose()
+            })
+            btn.add_controller(stopProp)
+            actionRow.append(btn)
+        })
+        textStack.append(actionRow)
+    }
+
     box.append(textStack)
+
+    const hero = createHeroWidget(n, 48)
+    if (hero) box.append(hero)
+
+    // Right column: count badge (collapsed group) stacked over the close button,
+    // centered vertically to the right of the hero image.
+    const rightCol = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER, css_classes: ["nc-right-col"] })
+    if (isCollapsedGroup) rightCol.append(new Gtk.Label({ label: `${groupCount}`, css_classes: ["nc-badge-header", "nc-badge-stacked"], halign: Gtk.Align.CENTER }))
+    rightCol.append(clearBtn)
+    box.append(rightCol)
 
     const openApp = async () => {
         const actions = n.get_actions() || []; const hasAction = (id: string) => actions.some(a => a.id === id)
@@ -124,6 +168,8 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     }
 
     const handleAction = async () => {
+        // Tapping a collapsed group expands it (replaces the old chevron button).
+        if (isCollapsedGroup && onToggle) { onToggle(); return }
         if (expandableBody && !bodyExpanded && bodyLabel) {
             bodyExpanded = true
             bodyLabel.set_lines(-1)
