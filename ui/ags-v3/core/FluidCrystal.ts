@@ -157,6 +157,7 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
     `  --crystal-surface-hover: rgba(${fg}, 0.12);`,
     `  --crystal-surface-active: rgba(${fg}, 0.16);`,
     `  --crystal-surface-raised: rgba(${fg}, 0.20);`,
+    `  --crystal-surface-strong: rgba(${fg}, 0.30);`,   // one step above raised, for hover on raised fills
     `  --crystal-dock-surface: rgba(${fg}, ${dBase});`,
     `  --crystal-dock-surface-raised: rgba(${fg}, ${dRaised});`,
     `  --crystal-text: ${whiteOrBlack};`,

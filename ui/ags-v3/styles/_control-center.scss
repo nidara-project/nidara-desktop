@@ -206,19 +206,17 @@ window.nc-window-2 {
     min-height: 0;
     /* Same fill as the count badge (nc-badge-header): simple, unified, no special tokens. */
     background: var(--crystal-surface-raised);
-    /* Transparent rim reserved so the hover rim doesn't shift layout (GtkGizmo-safe). */
-    border: 1px solid transparent;
-    background-clip: padding-box;
+    border: none;
     border-radius: 9999px;
-    transition: background-color 0.15s #{$ease}, border-color 0.15s #{$ease};
+    transition: background-color 0.15s #{$ease};
 
     image { margin: 0; }
 
-    /* Neutral hover (e.g. the collapse chevron): subtle rim feedback. */
-    &:hover { border-color: var(--crystal-text-dim); }
+    /* Neutral hover (e.g. the collapse chevron): brighter fill — no border (it left corner dots). */
+    &:hover { background: var(--crystal-surface-strong); }
 
     /* Destructive (close/remove): red on hover */
-    &.is-danger:hover { background: var(--crystal-danger); border-color: transparent; }
+    &.is-danger:hover { background: var(--crystal-danger); }
 }
 
 .cc-slot-placeholder {

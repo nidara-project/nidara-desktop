@@ -69,16 +69,16 @@ export function GroupControlHeader(props: { name: string, count: number, onToggl
     box.append(labelBox); box.append(collapseBtn); box.append(clearAllBtn); return box
 }
 
-export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupCount?: number, isExpanded?: boolean, onToggle?: () => void, onClearGroup?: () => void, isPopup?: boolean, onClose: () => void }) {
-    const { n, groupCount = 1, isExpanded = false, onToggle, onClearGroup, isPopup = false, onClose } = props
+export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupCount?: number, isExpanded?: boolean, onToggle?: () => void, onClearGroup?: () => void, isPopup?: boolean, itemExpanded?: boolean, onToggleItem?: () => void, onClose: () => void }) {
+    const { n, groupCount = 1, isExpanded = false, onToggle, onClearGroup, isPopup = false, itemExpanded = false, onToggleItem, onClose } = props
     const sanitize = (text: string) => (text || "").replace(/<[^>]*>/g, "").split("\n").join(" ").replace(/\s+/g, " ").trim()
     const cleanSummary = sanitize(n.summary); const cleanBody = sanitize(n.body)
-    const expandableBody = !isPopup && cleanBody.length > 60
 
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12, valign: Gtk.Align.CENTER, hexpand: true })
-    box.append(createIconWidget(n, 44))
+    // Content top-aligned: title sits at the same height as the badge/chevron on the right.
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12, valign: Gtk.Align.START, hexpand: true })
+    box.append(createIconWidget(n, 44))   // app icon stays vertically centred (like the hero)
 
-    const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
+    const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.START, hexpand: true })
     const header = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, hexpand: true })
     header.append(new Gtk.Label({ label: cleanSummary, css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, lines: 1, hexpand: true, max_width_chars: 30, xalign: 0 }))
 
@@ -97,17 +97,21 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
         onClick: () => { if (groupCount > 1 && !isExpanded && onClearGroup) onClearGroup(); else n.dismiss() },
     })
 
+    // Two fixed sizes: 2 body lines (normal) / 4 (expanded). Reserve the height so all
+    // normals (and all expanded) share one height regardless of how long the body is.
+    const bodyLines = itemExpanded ? 4 : 2
     let bodyLabel: Gtk.Label | null = null
-    let bodyExpanded = false
     if (cleanBody) {
-        bodyLabel = new Gtk.Label({ label: cleanBody, css_classes: ["nc-notif-body"], halign: Gtk.Align.START, ellipsize: 3, lines: 2, wrap: true, xalign: 0, hexpand: true, max_width_chars: 40 })
+        bodyLabel = new Gtk.Label({ label: cleanBody, css_classes: ["nc-notif-body"], halign: Gtk.Align.FILL, ellipsize: 3, lines: bodyLines, wrap: true, xalign: 0, hexpand: true })
+        // Normal reserves its 2 lines (uniform height); expanded grows to content up to 4.
+        if (!isPopup && !itemExpanded) bodyLabel.height_request = bodyLines * 17   // ~17px @ fs-caption 12
         textStack.append(bodyLabel)
     }
 
     // Action buttons (skip the implicit "default" action — that's the card tap).
-    // Only on concrete items: single notifications or notifications inside an expanded group.
+    // Only in the expanded size, so the normal size never grows/overflows.
     const actions = (n.get_actions() || []).filter(a => a.id !== "default" && a.label)
-    if (actions.length > 0 && (groupCount === 1 || isExpanded)) {
+    if (actions.length > 0 && itemExpanded) {
         const actionRow = new Gtk.Box({ spacing: 6, margin_top: 8, halign: Gtk.Align.START, css_classes: ["nc-action-row"] })
         actions.forEach(a => {
             const btn = new Gtk.Button({ label: a.label, css_classes: ["nc-action-btn"], halign: Gtk.Align.START })
@@ -128,10 +132,18 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     const hero = createHeroWidget(n, 48)
     if (hero) box.append(hero)
 
-    // Right column: count badge (collapsed group) stacked over the close button,
-    // centered vertically to the right of the hero image.
-    const rightCol = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER, css_classes: ["nc-right-col"] })
-    if (isCollapsedGroup) rightCol.append(new Gtk.Label({ label: `${groupCount}`, css_classes: ["nc-badge-header", "nc-badge-stacked"], halign: Gtk.Align.CENTER }))
+    // An individual notification is expandable if it has actions or a body longer than the
+    // 2-line normal size can show. The chevron sits where grouped notifs show their count.
+    const expandable = !isPopup && groupCount === 1 && !!onToggleItem && (actions.length > 0 || cleanBody.length > 70)
+
+    // Right column (top-aligned): count badge (collapsed group) OR expand chevron (individual),
+    // over the close button.
+    const rightCol = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, valign: Gtk.Align.START, halign: Gtk.Align.CENTER, css_classes: ["nc-right-col"] })
+    if (isCollapsedGroup) {
+        rightCol.append(new Gtk.Label({ label: `${groupCount}`, css_classes: ["nc-badge-header", "nc-badge-stacked"], halign: Gtk.Align.CENTER }))
+    } else if (expandable) {
+        rightCol.append(IconButton({ icon: itemExpanded ? Icons.chevronUp : Icons.chevronDown, iconSize: 13, variant: "neutral", captureClick: true, onClick: onToggleItem }))
+    }
     rightCol.append(clearBtn)
     box.append(rightCol)
 
@@ -166,18 +178,12 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     }
 
     const handleAction = async () => {
-        // Tapping a collapsed group expands it (replaces the old chevron button).
+        // Tapping a collapsed group expands it; individual notifs expand via the chevron only.
         if (isCollapsedGroup && onToggle) { onToggle(); return }
-        if (expandableBody && !bodyExpanded && bodyLabel) {
-            bodyExpanded = true
-            bodyLabel.set_lines(-1)
-            bodyLabel.set_ellipsize(0)
-            return
-        }
         await openApp()
     }
 
-    return SquircleContainer({ child: box, radius: 32, useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction })
+    return SquircleContainer({ child: box, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction })
 }
 
 function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
@@ -212,6 +218,8 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
 export default function NotificationCenter() {
     const notifd = AstalNotifd.get_default()
     const expandedGroups = new Set<string>()
+    const expandedItems = new Set<number>()   // individual notifs (by n.id) in expanded size
+    const toggleItem = (nid: number) => { if (expandedItems.has(nid)) expandedItems.delete(nid); else expandedItems.add(nid); updateNotifs() }
     const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string }>()
 
     // The content keeps its full width (GRID_WIDTH); LANE is extra space ADDED on the right
@@ -257,6 +265,9 @@ export default function NotificationCenter() {
             const id = appService.getResolvedApp(n.desktop_entry || n.app_name)?.id || n.app_name || "unknown"
             const list = groups.get(id) || []; list.push(n); groups.set(id, list)
         })
+        // Drop expand state for notifications that no longer exist.
+        const liveIds = new Set(notifs.map(n => n.id))
+        expandedItems.forEach(eid => { if (!liveIds.has(eid)) expandedItems.delete(eid) })
         const sortedIds = Array.from(groups.keys()).sort((a,b) => {
             const timeA = Math.max(...groups.get(a)!.map(x => x.time)); const timeB = Math.max(...groups.get(b)!.map(x => x.time))
             return timeB - timeA || Math.max(...groups.get(b)!.map(x => x.id)) - Math.max(...groups.get(a)!.map(x => x.id))
@@ -268,7 +279,7 @@ export default function NotificationCenter() {
             const gl = groups.get(id)!; const sortedGroup = gl.sort((a, b) => b.time - a.time || b.id - a.id)
             const isExpanded = expandedGroups.has(id)
             const timeBucket = Math.floor(Date.now() / 60_000)
-            const sig = `${gl.length}:${isExpanded}:${sortedGroup.map(n => n.id).join(",")}:${timeBucket}`
+            const sig = `${gl.length}:${isExpanded}:${sortedGroup.map(n => n.id).join(",")}:${sortedGroup.map(n => expandedItems.has(n.id) ? '1' : '0').join('')}:${timeBucket}`
             let cache = groupCache.get(id)
             if (!cache) {
                 const subBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_top: 4 })
@@ -289,7 +300,7 @@ export default function NotificationCenter() {
                     if (isExpanded) {
                         cache.container.remove_css_class("nc-group-with-ghost")
                         cache.headerBox.append(GroupControlHeader({ name: appName, count: gl.length, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()) }))
-                        sortedGroup.forEach(n => cache!.subBox.append(NotificationCapsule({ n, groupCount: 1, isExpanded: true, onToggle: undefined, onClearGroup: () => n.dismiss(), onClose: closeNC })))
+                        sortedGroup.forEach(n => cache!.subBox.append(NotificationCapsule({ n, groupCount: 1, isExpanded: true, onToggle: undefined, onClearGroup: () => n.dismiss(), itemExpanded: expandedItems.has(n.id), onToggleItem: () => toggleItem(n.id), onClose: closeNC })))
                     } else {
                         cache.container.add_css_class("nc-group-with-ghost")
                         const capsule = NotificationCapsule({ n: sortedGroup[0], groupCount: gl.length, isExpanded: false, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()), onClose: closeNC })
@@ -298,7 +309,7 @@ export default function NotificationCenter() {
                     cache.revealer.reveal_child = isExpanded
                 } else {
                     cache.container.remove_css_class("nc-group-with-ghost")
-                    cache.headerBox.append(NotificationCapsule({ n: sortedGroup[0], groupCount: 1, isExpanded: false, onToggle: undefined, onClearGroup: () => sortedGroup[0].dismiss(), onClose: closeNC }))
+                    cache.headerBox.append(NotificationCapsule({ n: sortedGroup[0], groupCount: 1, isExpanded: false, onToggle: undefined, onClearGroup: () => sortedGroup[0].dismiss(), itemExpanded: expandedItems.has(sortedGroup[0].id), onToggleItem: () => toggleItem(sortedGroup[0].id), onClose: closeNC }))
                     expandedGroups.delete(id); cache.revealer.reveal_child = false
                 }
                 cache.sig = sig

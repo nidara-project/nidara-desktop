@@ -27,6 +27,7 @@
   --crystal-text-secondary: rgba(255, 255, 255, 0.8);
   --crystal-text-dim: rgba(255, 255, 255, 0.55);
   --crystal-text-disabled: rgba(255, 255, 255, 0.3);
+  --crystal-surface-strong: rgba(255, 255, 255, 0.3);
   /* --- Geometry --- */
   --crystal-radius-lg: 24px;
   --crystal-radius-md: 16px;
@@ -1780,27 +1781,24 @@ window.nc-window-2 contents {
   min-height: 0;
   /* Same fill as the count badge (nc-badge-header): simple, unified, no special tokens. */
   background: var(--crystal-surface-raised);
-  /* Transparent rim reserved so the hover rim doesn't shift layout (GtkGizmo-safe). */
-  border: 1px solid transparent;
-  background-clip: padding-box;
+  border: none;
   border-radius: 9999px;
-  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .crystal-circle-btn image {
   margin: 0;
 }
 .crystal-circle-btn {
-  /* Neutral hover (e.g. the collapse chevron): subtle rim feedback. */
+  /* Neutral hover (e.g. the collapse chevron): brighter fill — no border (it left corner dots). */
 }
 .crystal-circle-btn:hover {
-  border-color: var(--crystal-text-dim);
+  background: var(--crystal-surface-strong);
 }
 .crystal-circle-btn {
   /* Destructive (close/remove): red on hover */
 }
 .crystal-circle-btn.is-danger:hover {
   background: var(--crystal-danger);
-  border-color: transparent;
 }
 
 .cc-slot-placeholder {
