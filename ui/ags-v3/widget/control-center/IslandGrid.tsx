@@ -10,6 +10,7 @@ import registry from "../widgets/index"
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
 import SquircleContainer, { Shape } from "../common/SquircleContainer"
+import IconButton from "../common/IconButton"
 import { createCCContextMenu } from "./CCContextMenu"
 
 const pixelX = (gx: number) => gx * (UNIT + GAP)
@@ -104,15 +105,14 @@ function makeIslandWidget(
     }
 
     // ── edit mode: × remove (kept alongside the context menu's Remove) + drag ──
-    const removeBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14, css_classes: ["cs-icon"] }),
-        css_classes: ["cc-remove-btn"],
-        halign: Gtk.Align.END, valign: Gtk.Align.START,
-        margin_top: 4, margin_end: 4,
-    })
     // Clear the placement flag too (not just the layout), or syncCCLayout re-adds
     // the widget on next load — cc_layout.json and widgetConfig must agree.
-    removeBtn.connect("clicked", () => { widgetConfig.setCC(id, false); ccLayout.remove(id) })
+    const removeBtn = IconButton({
+        icon: Icons.close, iconSize: 13, variant: "danger",
+        halign: Gtk.Align.END, valign: Gtk.Align.START,
+        onClick: () => { widgetConfig.setCC(id, false); ccLayout.remove(id) },
+    })
+    removeBtn.set_margin_top(4); removeBtn.set_margin_end(4)
     overlay.add_overlay(removeBtn)
 
     const dragSrc = new Gtk.DragSource({ actions: Gdk.DragAction.MOVE })

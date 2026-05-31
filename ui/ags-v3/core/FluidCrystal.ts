@@ -160,6 +160,7 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
     `  --crystal-dock-surface: rgba(${fg}, ${dBase});`,
     `  --crystal-dock-surface-raised: rgba(${fg}, ${dRaised});`,
     `  --crystal-text: ${whiteOrBlack};`,
+    `  --crystal-text-secondary: rgba(${fg}, 0.8);`,
     `  --crystal-text-dim: rgba(${fg}, 0.6);`,
     `  --crystal-text-disabled: rgba(${fg}, 0.3);`,
     `  --crystal-danger: #ff3b30;`,

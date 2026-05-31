@@ -5,6 +5,7 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
 import { drawSquircle, createSquirclePath } from "../common/DrawingUtils"
 import SquircleContainer, { Shape } from "../common/SquircleContainer"
+import IconButton from "../common/IconButton"
 import Theme from "../../core/ThemeManager"
 import Gio from "gi://Gio"
 import appService from "../../core/AppService"
@@ -63,16 +64,8 @@ export function GroupControlHeader(props: { name: string, count: number, onToggl
     const labelBox = new Gtk.Box({ spacing: 8, hexpand: true, valign: Gtk.Align.CENTER })
     labelBox.append(new Gtk.Label({ label: name, css_classes: ["nc-group-header-name"], halign: Gtk.Align.START }))
     labelBox.append(new Gtk.Label({ label: `${count}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
-    const collapseBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.chevronUp, pixel_size: 14 , css_classes: ["cs-icon"] }),
-        css_classes: ["nc-group-collapse-btn"],
-        valign: Gtk.Align.CENTER
-    }); collapseBtn.connect("clicked", () => onToggle())
-    const clearAllBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.close, pixel_size: 13 , css_classes: ["cs-icon"] }),
-        css_classes: ["nc-group-collapse-btn", "nc-group-clear-btn"],
-        valign: Gtk.Align.CENTER
-    }); clearAllBtn.connect("clicked", () => onClearGroup())
+    const collapseBtn = IconButton({ icon: Icons.chevronUp, iconSize: 14, variant: "neutral", onClick: onToggle })
+    const clearAllBtn = IconButton({ icon: Icons.close, iconSize: 14, variant: "danger", onClick: onClearGroup })
     box.append(labelBox); box.append(collapseBtn); box.append(clearAllBtn); return box
 }
 
@@ -99,15 +92,15 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
 
     // Close button — collapsed groups clear the whole group, otherwise dismiss the one.
     const isCollapsedGroup = !isPopup && groupCount > 1 && !isExpanded && !!onToggle
-    const clearBtn = new Gtk.Button({ child: new Gtk.Image({ gicon: Icons.close, pixel_size: 11, css_classes: ["cs-icon"] }), css_classes: ["nc-item-clear-btn-compact"], halign: Gtk.Align.CENTER })
-    const stopPropClear = new Gtk.GestureClick(); stopPropClear.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-    stopPropClear.connect("pressed", (gesture) => { gesture.set_state(Gtk.EventSequenceState.CLAIMED); if (groupCount > 1 && !isExpanded && onClearGroup) onClearGroup(); else n.dismiss() })
-    clearBtn.add_controller(stopPropClear)
+    const clearBtn = IconButton({
+        icon: Icons.close, iconSize: 13, variant: "danger", captureClick: true,
+        onClick: () => { if (groupCount > 1 && !isExpanded && onClearGroup) onClearGroup(); else n.dismiss() },
+    })
 
     let bodyLabel: Gtk.Label | null = null
     let bodyExpanded = false
     if (cleanBody) {
-        bodyLabel = new Gtk.Label({ label: cleanBody, css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START, ellipsize: 3, lines: 2, wrap: true, xalign: 0, hexpand: true, max_width_chars: 40 })
+        bodyLabel = new Gtk.Label({ label: cleanBody, css_classes: ["nc-notif-body"], halign: Gtk.Align.START, ellipsize: 3, lines: 2, wrap: true, xalign: 0, hexpand: true, max_width_chars: 40 })
         textStack.append(bodyLabel)
     }
 

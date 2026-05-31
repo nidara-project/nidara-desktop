@@ -194,18 +194,31 @@ window.nc-window-2 {
     }
 }
 
-.cc-remove-btn {
-    background: rgba(var(--crystal-danger-rgb), 0.85);
-    border: none;
+/* Shared round glass icon button (see widget/common/IconButton.ts). Single source of
+   truth for close/remove/collapse controls. Size is set inline per use; shape/icon/hover
+   are identical everywhere. NB: named -circle- to avoid the existing .crystal-icon-btn
+   in _settings.scss (the sidebar toggle), whose `button.` specificity would win. */
+.crystal-circle-btn {
+    /* Padding (not set_size_request) sizes the button to its glyph — crisp icon, circle
+       centred on it (same approach as the Settings close button). */
+    padding: 4px;
+    min-width: 0;
+    min-height: 0;
+    /* Same fill as the count badge (nc-badge-header): simple, unified, no special tokens. */
+    background: var(--crystal-surface-raised);
+    /* Transparent rim reserved so the hover rim doesn't shift layout (GtkGizmo-safe). */
+    border: 1px solid transparent;
+    background-clip: padding-box;
     border-radius: 9999px;
-    color: white;
-    min-width: 20px;
-    min-height: 20px;
-    padding: 0;
+    transition: background-color 0.15s #{$ease}, border-color 0.15s #{$ease};
 
-    image { margin: 0; -gtk-icon-size: 12px; }
+    image { margin: 0; }
 
-    &:hover { background: var(--crystal-danger); }
+    /* Neutral hover (e.g. the collapse chevron): subtle rim feedback. */
+    &:hover { border-color: var(--crystal-text-dim); }
+
+    /* Destructive (close/remove): red on hover */
+    &.is-danger:hover { background: var(--crystal-danger); border-color: transparent; }
 }
 
 .cc-slot-placeholder {
@@ -294,39 +307,22 @@ window.nc-window-2 {
     margin-bottom: 8px;
 }
 
-.nc-item-clear-btn-compact,
-.nc-item-expand-btn-compact {
-    padding: 2px;
-    min-width: 18px;
-    min-height: 18px;
-    background: var(--crystal-surface-back);
-    border-radius: 6px;
-    color: var(--crystal-text-disabled);
-
-    &:hover {
-        background: var(--crystal-surface);
-        color: var(--crystal-text);
-    }
-    
-    image { margin: 0; }
-}
-
-.nc-item-clear-btn-compact {
-    color: var(--crystal-text-dim);
-    &:hover {
-        background: var(--crystal-danger);
-        color: white;
-    }
-}
-
 .nc-badge-header {
-    background: var(--crystal-surface);
-    color: var(--crystal-text-dim);
+    background: var(--crystal-surface-raised);
+    color: var(--crystal-text);
     font-size: $fs-mini;
     font-weight: $fw-bold;
     padding: 1px 6px;
     border-radius: 12px;
     margin-left: 6px;
+}
+
+/* Notification body — a touch more opaque than the shared dim token, since the glass
+   background washes out 0.6-alpha text. */
+.nc-notif-body {
+    font-size: $fs-caption;
+    font-weight: $fw-regular;
+    color: var(--crystal-text-secondary);
 }
 
 .nc-group-ctrl-header {
@@ -344,33 +340,6 @@ window.nc-window-2 {
     font-size: $fs-caption;
     font-weight: $fw-bold;
     color: var(--crystal-text);
-}
-
-.nc-group-clear-btn:hover {
-    background: var(--crystal-danger);
-    border-color: var(--crystal-danger);
-    color: #fff;
-}
-
-.nc-group-collapse-btn {
-    padding: 0;
-    min-width: 28px;
-    min-height: 28px;
-    background: var(--crystal-surface);
-    border: 1px solid var(--crystal-border);
-    border-radius: 99px;
-    color: var(--crystal-text-dim);
-    transition: background-color 0.2s #{$ease}, border-color 0.2s #{$ease}, color 0.2s #{$ease};
-
-    &:hover {
-        background: var(--crystal-surface-hover);
-        border-color: var(--crystal-border);
-        color: var(--crystal-text);
-    }
-
-    &:active {
-        background: var(--crystal-surface-active);
-    }
 }
 
 /* Calendar Cleanup */
@@ -430,28 +399,10 @@ window.nc-window-2 {
     }
 }
 
-.nc-item-expand-btn, .nc-item-clear-btn {
-    background: var(--crystal-surface);
-    border-radius: 20px;
-    padding: 6px;
-    min-width: 32px;
-    min-height: 32px;
-    transition: background-color 0.2s ease, color 0.2s ease;
-
-    &:hover {
-        background: var(--crystal-surface-hover);
-        color: var(--crystal-text);
-    }
-}
-
-.nc-item-clear-btn:hover {
-    color: var(--crystal-danger);
-}
-
 .nc-item-time {
     font-size: $fs-caption;
     font-weight: $fw-semibold;
-    color: var(--crystal-text-dim);
+    color: var(--crystal-text-secondary);
 }
 
 .nc-action-row {
@@ -475,7 +426,8 @@ window.nc-window-2 {
     background: transparent;
     border: none;
     border-radius: var(--crystal-radius-xs);
-    color: var(--crystal-accent);
+    /* Solid text instead of accent — accent on glass reads poorly with some palettes. */
+    color: var(--crystal-text);
     font-size: $fs-caption;
     font-weight: $fw-semibold;
     transition: background-color 0.15s #{$ease}, color 0.15s #{$ease};
@@ -528,7 +480,8 @@ window.nc-window-2 {
 .nc-empty {
     font-size: $fs-subtitle;
     font-weight: $fw-medium;
-    color: var(--crystal-text-disabled);
+    /* No background behind it (sits straight on the glass), so 0.3 looked washed out. */
+    color: var(--crystal-text-secondary);
 }
 
 .nc-clear-all-pill {

@@ -27,6 +27,7 @@
        FluidCrystal.ts overrides these at runtime with dark/light-aware values.
        (#ffffff for dark, #000000 for light). These are just startup fallbacks. */
     --crystal-text: rgba(255, 255, 255, 0.95);
+    --crystal-text-secondary: rgba(255, 255, 255, 0.8);
     --crystal-text-dim: rgba(255, 255, 255, 0.55);
     --crystal-text-disabled: rgba(255, 255, 255, 0.3);
 
