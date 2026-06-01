@@ -1866,7 +1866,9 @@ window.nc-window-2 contents {
 }
 
 .nc-group-with-ghost {
-  margin-bottom: -8px;
+  /* The ghost strip's height is already accounted for; claw back just a little so the
+     gap to the next notification stays comfortable for both 1- and 2-layer stacks. */
+  margin-bottom: -2px;
 }
 
 .nc-capsule-glass {
