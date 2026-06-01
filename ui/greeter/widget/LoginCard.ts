@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import GLib from "gi://GLib"
 // @ts-ignore
@@ -78,6 +78,19 @@ export default function LoginCard(): Gtk.Widget {
     margin_top: 6,
   })
 
+  // Caps Lock warning — read from the seat keyboard device (updates live via
+  // notify::caps-lock-state, no laggy key-event polling).
+  const capsLabel = new Gtk.Label({
+    label: t("capsLock"),
+    css_classes: ["greeter-caps"],
+    visible: false,
+    halign: Gtk.Align.CENTER,
+    margin_top: 6,
+  })
+  const keyboard = Gdk.Display.get_default()?.get_default_seat()?.get_keyboard() ?? null
+  const syncCaps = () => { if (keyboard) capsLabel.visible = keyboard.get_caps_lock_state() }
+  if (keyboard) keyboard.connect("notify::caps-lock-state", syncCaps)
+
   // ── Auth logic ────────────────────────────────────────────────────────────
   const setLoading = (loading: boolean) => {
     isAuthenticating = loading
@@ -133,11 +146,13 @@ export default function LoginCard(): Gtk.Widget {
   col.append(avatar)
   col.append(usernameLabel)
   col.append(passwordEntry)
+  col.append(capsLabel)
   col.append(loginBtn)
   col.append(sessionDrp)
   col.append(errorLabel)
 
   col.connect("map", () => {
+    syncCaps()
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
       passwordEntry.grab_focus()
       return GLib.SOURCE_REMOVE
@@ -146,6 +161,7 @@ export default function LoginCard(): Gtk.Widget {
 
   onLocaleChange(() => {
     passwordEntry.placeholder_text = t("password")
+    capsLabel.label = t("capsLock")
     if (!isAuthenticating) loginBtn.label = t("login")
   })
 

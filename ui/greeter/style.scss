@@ -27,6 +27,7 @@
   --crystal-glass-border-sm:rgba(255, 255, 255, 0.14);
 
   --crystal-danger:         #ff6b6b;
+  --crystal-warning:        #f3ba4b;
   --crystal-popup-bg:       rgba(14, 14, 22, 0.97);
 
   --crystal-radius-lg:      24px;
@@ -133,6 +134,13 @@ window > contents {
   font-size: 12px;
 }
 
+.greeter-caps {
+  color: var(--crystal-warning);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
 @keyframes greeter-shake {
   0%, 100% { margin-left: 0; }
   20%       { margin-left: -8px; }
@@ -154,10 +162,8 @@ dropdown > button.combo {
   min-height: 0;
   padding: 0;
 
-  > box { spacing: 4px; }
-
   label { color: inherit; font-size: inherit; }
-  image { color: inherit; -gtk-icon-size: 10px; }
+  image { color: inherit; -gtk-icon-size: 10px; margin-start: 4px; }
 }
 
 // Session selector — visible, medium weight
@@ -194,7 +200,6 @@ popover.combo {
     border-radius: var(--crystal-radius-sm);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.60);
     padding: 4px;
-    overflow: hidden;
   }
 
   > arrow {

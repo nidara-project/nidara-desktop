@@ -19,6 +19,7 @@
   --crystal-glass-border: rgba(255, 255, 255, 0.22);
   --crystal-glass-border-sm:rgba(255, 255, 255, 0.14);
   --crystal-danger: #ff6b6b;
+  --crystal-warning: #f3ba4b;
   --crystal-popup-bg: rgba(14, 14, 22, 0.97);
   --crystal-radius-lg: 24px;
   --crystal-radius-md: 16px;
@@ -115,6 +116,13 @@ window > contents {
   font-size: 12px;
 }
 
+.greeter-caps {
+  color: var(--crystal-warning);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
 @keyframes greeter-shake {
   0%, 100% {
     margin-left: 0;
@@ -144,9 +152,6 @@ dropdown > button.combo {
   min-height: 0;
   padding: 0;
 }
-dropdown > button.combo > box {
-  spacing: 4px;
-}
 dropdown > button.combo label {
   color: inherit;
   font-size: inherit;
@@ -154,6 +159,7 @@ dropdown > button.combo label {
 dropdown > button.combo image {
   color: inherit;
   -gtk-icon-size: 10px;
+  margin-start: 4px;
 }
 
 dropdown.greeter-session-dropdown > button.combo {
@@ -195,7 +201,6 @@ popover.combo > contents {
   border-radius: var(--crystal-radius-sm);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
   padding: 4px;
-  overflow: hidden;
 }
 popover.combo > arrow {
   background: var(--crystal-popup-bg);

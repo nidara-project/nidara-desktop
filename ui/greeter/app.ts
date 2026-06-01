@@ -56,14 +56,16 @@ app.start({
       app.apply_css(accentCss)
     }
 
+    // Login UI on the primary monitor only. The other outputs already show the
+    // generic wallpaper painted by awww in the compositor (it covers all
+    // outputs), so a per-monitor greeter window would only duplicate the
+    // password field and race for keyboard focus.
     const monitors: any = display.get_monitors()
-    const n = monitors.get_n_items()
-    for (let i = 0; i < n; i++) {
-      try {
-        Greeter(monitors.get_item(i) as Gdk.Monitor)
-      } catch (e) {
-        console.error(`[Greeter] Failed on monitor ${i}:`, e)
-      }
+    if (monitors.get_n_items() === 0) { console.error("[Greeter] No monitors"); return }
+    try {
+      Greeter(monitors.get_item(0) as Gdk.Monitor)
+    } catch (e) {
+      console.error("[Greeter] Failed on primary monitor:", e)
     }
   },
 })
