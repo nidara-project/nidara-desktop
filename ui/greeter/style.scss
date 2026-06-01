@@ -126,6 +126,39 @@ window > contents {
     background: var(--crystal-accent-30);
     color: rgba(255, 255, 255, 0.5);
   }
+
+  spinner {
+    min-width: 14px;
+    min-height: 14px;
+    color: #fff;
+  }
+}
+
+// ── Card entrance (fade-in on map) ───────────────────────────────────────────
+.greeter-card {
+  opacity: 0;
+  transition: opacity 450ms ease;
+}
+.greeter-card.greeter-card-shown {
+  opacity: 1;
+}
+
+// ── Multi-user switcher ──────────────────────────────────────────────────────
+.greeter-user-chip {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 2px;
+  min-height: 0;
+  border-radius: var(--crystal-radius-pill);
+
+  &:hover { background: rgba(255, 255, 255, 0.08); }
+
+  image {
+    border-radius: var(--crystal-radius-pill);
+    border: 2px solid transparent;
+  }
+  &:checked image { border-color: var(--crystal-accent); }
 }
 
 // ── Error / Shake ────────────────────────────────────────────────────────────

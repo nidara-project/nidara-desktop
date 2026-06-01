@@ -4,7 +4,7 @@ import GLib from "gi://GLib"
 // @ts-ignore
 import AstalGreet from "gi://AstalGreet"
 import { getSessions } from "../lib/sessions"
-import { getDefaultUser } from "../../lib/users"
+import { getUsers, type User } from "../../lib/users"
 import { t, onLocaleChange } from "../lib/i18n"
 
 function greetLogin(username: string, password: string, cmd: string): Promise<void> {
@@ -18,20 +18,27 @@ function greetLogin(username: string, password: string, cmd: string): Promise<vo
   })
 }
 
+function avatarImage(u: User, size: number): Gtk.Image {
+  return u.avatarPath
+    ? new Gtk.Image({ file: u.avatarPath, pixel_size: size })
+    : new Gtk.Image({ icon_name: "avatar-default-symbolic", pixel_size: size })
+}
+
 export default function LoginCard(): Gtk.Widget {
   const sessions = getSessions()
-  const user = getDefaultUser()
+  const users = getUsers()
+  const fallback: User = { username: "user", displayName: "User", avatarPath: null, homeDir: "" }
+  let activeUser: User = users[0] ?? fallback
 
   let sessionIdx = Math.max(0, sessions.findIndex(s => s.id === "crystal-shell"))
   let isAuthenticating = false
 
-  const avatar = user.avatarPath
-    ? new Gtk.Image({ file: user.avatarPath, pixel_size: 80, css_classes: ["greeter-avatar"] })
-    : new Gtk.Image({ icon_name: "avatar-default-symbolic", pixel_size: 80, css_classes: ["greeter-avatar"] })
+  const avatar = avatarImage(activeUser, 80)
+  avatar.add_css_class("greeter-avatar")
   avatar.halign = Gtk.Align.CENTER
 
   const usernameLabel = new Gtk.Label({
-    label: user.displayName,
+    label: activeUser.displayName,
     css_classes: ["greeter-username"],
     halign: Gtk.Align.CENTER,
     margin_top: 12,
@@ -46,12 +53,18 @@ export default function LoginCard(): Gtk.Widget {
     margin_top: 28,
   })
 
+  // Login button — spinner + label so auth shows live progress, not just text.
+  const loginSpinner = new Gtk.Spinner({ visible: false })
+  const loginLabel = new Gtk.Label({ label: t("login") })
+  const loginInner = new Gtk.Box({ spacing: 8, halign: Gtk.Align.CENTER })
+  loginInner.append(loginSpinner)
+  loginInner.append(loginLabel)
   const loginBtn = new Gtk.Button({
-    label: t("login"),
     css_classes: ["greeter-login-btn"],
     halign: Gtk.Align.CENTER,
     width_request: 280,
     margin_top: 10,
+    child: loginInner,
   })
 
   // Session selector — Gtk.DropDown auto-positions its popover (no off-screen bug)
@@ -97,7 +110,9 @@ export default function LoginCard(): Gtk.Widget {
     loginBtn.sensitive = !loading
     passwordEntry.sensitive = !loading
     sessionDrp.sensitive = !loading
-    loginBtn.label = loading ? t("authenticating") : t("login")
+    loginLabel.label = loading ? t("authenticating") : t("login")
+    loginSpinner.visible = loading
+    if (loading) loginSpinner.start(); else loginSpinner.stop()
   }
 
   const showError = (msg: string) => {
@@ -108,6 +123,17 @@ export default function LoginCard(): Gtk.Widget {
       passwordEntry.remove_css_class("greeter-shake")
       return GLib.SOURCE_REMOVE
     })
+  }
+
+  const setActiveUser = (u: User) => {
+    if (u === activeUser) return
+    activeUser = u
+    if (u.avatarPath) avatar.set_from_file(u.avatarPath)
+    else avatar.set_from_icon_name("avatar-default-symbolic")
+    usernameLabel.label = u.displayName
+    passwordEntry.set_text("")
+    errorLabel.visible = false
+    passwordEntry.grab_focus()
   }
 
   const doLogin = async () => {
@@ -122,7 +148,7 @@ export default function LoginCard(): Gtk.Widget {
     errorLabel.visible = false
 
     try {
-      await greetLogin(user.username, password, session.exec)
+      await greetLogin(activeUser.username, password, session.exec)
       app.quit()
     } catch (e: any) {
       const msg = String(e?.message ?? e)
@@ -141,6 +167,7 @@ export default function LoginCard(): Gtk.Widget {
     orientation: Gtk.Orientation.VERTICAL,
     halign: Gtk.Align.CENTER,
     valign: Gtk.Align.CENTER,
+    css_classes: ["greeter-card"],
   })
 
   col.append(avatar)
@@ -151,8 +178,43 @@ export default function LoginCard(): Gtk.Widget {
   col.append(sessionDrp)
   col.append(errorLabel)
 
+  // Multi-user switcher — only when more than one human user exists. Selecting a
+  // chip swaps the active login target (avatar, name, password). One must stay
+  // selected, so a chip can't be toggled off.
+  if (users.length > 1) {
+    const switcher = new Gtk.Box({
+      orientation: Gtk.Orientation.HORIZONTAL,
+      spacing: 10,
+      halign: Gtk.Align.CENTER,
+      margin_top: 18,
+      css_classes: ["greeter-user-switcher"],
+    })
+    const chips: Gtk.ToggleButton[] = []
+    for (const u of users) {
+      const chip = new Gtk.ToggleButton({
+        child: avatarImage(u, 36),
+        active: u === activeUser,
+        tooltip_text: u.displayName,
+        css_classes: ["greeter-user-chip"],
+      })
+      chip.connect("toggled", () => {
+        if (!chip.active) { if (u === activeUser) chip.active = true; return }
+        for (const c of chips) if (c !== chip) c.active = false
+        setActiveUser(u)
+      })
+      chips.push(chip)
+      switcher.append(chip)
+    }
+    col.append(switcher)
+  }
+
   col.connect("map", () => {
     syncCaps()
+    // Trigger the entrance fade on the next frame so the transition runs.
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
+      col.add_css_class("greeter-card-shown")
+      return GLib.SOURCE_REMOVE
+    })
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
       passwordEntry.grab_focus()
       return GLib.SOURCE_REMOVE
@@ -162,7 +224,7 @@ export default function LoginCard(): Gtk.Widget {
   onLocaleChange(() => {
     passwordEntry.placeholder_text = t("password")
     capsLabel.label = t("capsLock")
-    if (!isAuthenticating) loginBtn.label = t("login")
+    if (!isAuthenticating) loginLabel.label = t("login")
   })
 
   return col

@@ -110,6 +110,39 @@ window > contents {
   background: var(--crystal-accent-30);
   color: rgba(255, 255, 255, 0.5);
 }
+.greeter-login-btn spinner {
+  min-width: 14px;
+  min-height: 14px;
+  color: #fff;
+}
+
+.greeter-card {
+  opacity: 0;
+  transition: opacity 450ms ease;
+}
+
+.greeter-card.greeter-card-shown {
+  opacity: 1;
+}
+
+.greeter-user-chip {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 2px;
+  min-height: 0;
+  border-radius: var(--crystal-radius-pill);
+}
+.greeter-user-chip:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.greeter-user-chip image {
+  border-radius: var(--crystal-radius-pill);
+  border: 2px solid transparent;
+}
+.greeter-user-chip:checked image {
+  border-color: var(--crystal-accent);
+}
 
 .greeter-error {
   color: var(--crystal-danger);
