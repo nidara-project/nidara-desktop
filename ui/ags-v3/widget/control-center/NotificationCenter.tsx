@@ -60,13 +60,16 @@ export function createHeroWidget(n: AstalNotifd.Notification, size: number): Gtk
 
 export function GroupControlHeader(props: { name: string, count: number, onToggle: () => void, onClearGroup: () => void }) {
     const { name, count, onToggle, onClearGroup } = props
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6, valign: Gtk.Align.CENTER, css_classes: ["nc-group-ctrl-header"] })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 6, valign: Gtk.Align.CENTER, hexpand: true, margin_start: 14, margin_end: 6, margin_top: 4, margin_bottom: 4 })
     const labelBox = new Gtk.Box({ spacing: 8, hexpand: true, valign: Gtk.Align.CENTER })
     labelBox.append(new Gtk.Label({ label: name, css_classes: ["nc-group-header-name"], halign: Gtk.Align.START }))
     labelBox.append(new Gtk.Label({ label: `${count}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
     const collapseBtn = IconButton({ icon: Icons.chevronUp, iconSize: 14, variant: "neutral", onClick: onToggle })
     const clearAllBtn = IconButton({ icon: Icons.close, iconSize: 14, variant: "danger", onClick: onClearGroup })
-    box.append(labelBox); box.append(collapseBtn); box.append(clearAllBtn); return box
+    box.append(labelBox); box.append(collapseBtn); box.append(clearAllBtn)
+    // Paint the background with the same shellOpacity squircle as the cards (the old CSS
+    // surface fill was fixed and didn't follow the Settings opacity).
+    return SquircleContainer({ child: box, radius: 16, useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-group-ctrl-header"] })
 }
 
 export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupCount?: number, isExpanded?: boolean, onToggle?: () => void, onClearGroup?: () => void, isPopup?: boolean, itemExpanded?: boolean, onToggleItem?: () => void, onClose: () => void }) {
@@ -189,24 +192,43 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
 function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
     if (groupCount <= 1) return card
 
-    const PEEK_H = 12
-    const INSET  = 8
     const CARD_H = 80
+    const RADIUS = 32          // match the real card's corner radius
+    const PEEK   = 14          // how far the nearest ghost peeks below the card
+    const STEP   = 10          // extra peek per deeper layer (enough to show body, not just the rim)
+    const layers = groupCount >= 3 ? 2 : 1   // a second ghost only once there are 3+
 
     card.add_css_class("nc-stack-card")
 
     const wrapper = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0 })
     wrapper.append(card)
 
-    const da = new Gtk.DrawingArea({ height_request: PEEK_H, margin_start: INSET, margin_end: INSET })
-    da.add_css_class("nc-ghost-strip-0")
+    // A single DrawingArea paints all ghost layers — no negative margins on a thin area
+    // (those reported "min height < 0"). Layers are drawn back-to-front: each deeper one is
+    // narrower (more inset), peeks a bit lower, and is fainter, for a stacked-card look.
+    const stripH = PEEK + (layers - 1) * STEP
+    const da = new Gtk.DrawingArea({ height_request: stripH })
     da.set_draw_func((_da: any, cr: any, w: number, _h: number) => {
         if (w <= 0 || _h <= 0) return
         const color = Theme.isDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
-        cr.save()
-        cr.translate(0, -(CARD_H - PEEK_H))
-        drawSquircle(cr, w, CARD_H, undefined, Theme.shellOpacity, false, color, 28, false, { r: 1, g: 1, b: 1, a: 0.07 })
-        cr.restore()
+        for (let i = layers - 1; i >= 0; i--) {
+            // Inset >= the card's corner radius so each ghost's straight top edge sits under the
+            // STRAIGHT part of the card's bottom (clear of the rounded corners) — no corner gap.
+            const inset = RADIUS + i * 16
+            const bottomY = PEEK + i * STEP
+            // Clip to this layer's band, overlapping the previous layer by ~2px of BODY. The
+            // card→ghost1 seam overlaps 4px but the card's inner inset (~2.5) eats most of it,
+            // leaving ~1.5px of body; ghosts draw with inset 0, so 2px matches that seam weight.
+            const bandTop = i === 0 ? 0 : PEEK + (i - 1) * STEP - 2
+            const depth = 1 - i * 0.12   // body stays nearly as solid as the front; just a hair fainter
+            cr.save()
+            cr.rectangle(0, bandTop, w, bottomY - bandTop)
+            cr.clip()
+            cr.translate(inset, bottomY - CARD_H)
+            // inset 0 so the squircle's bottom edge lands exactly at bottomY (no gap between bands).
+            drawSquircle(cr, w - inset * 2, CARD_H, undefined, Theme.shellOpacity * depth, false, color, RADIUS, false, { r: 1, g: 1, b: 1, a: 0.07 * depth }, 3.2, 1.0, 0)
+            cr.restore()
+        }
     })
     const themeConn = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
     da.connect("destroy", () => Theme.disconnect(themeConn))

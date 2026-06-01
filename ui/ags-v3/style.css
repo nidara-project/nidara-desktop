@@ -1859,15 +1859,10 @@ window.nc-window-2 contents {
 }
 
 .nc-stack-card {
-  /* Overlap the ghost strip from the card side: the card is a Box with a large
-     min-height, so a -4px margin never drives its min size below 0. Putting this
-     negative margin on the thin ghost DrawingArea instead reported min height -4
-     (GtkDrawingArea reported min height -4 … sizes must be >= 0). */
+  /* Overlap the ghost strip by 4px: the card's SquircleContainer has an inner inset, so
+     its fill stops short of the widget edge — without this overlap a gap shows. The ghost
+     bands overlap each other by the same 4px so both seams look identical. */
   margin-bottom: -4px;
-}
-
-.nc-ghost-strip-0 {
-  margin-top: 0;
 }
 
 .nc-group-with-ghost {
@@ -1909,14 +1904,12 @@ window.nc-window-2 contents {
 }
 
 .nc-group-ctrl-header {
+  /* Background/border/radius now painted by SquircleContainer (shellOpacity, Cairo);
+     only the outer margins remain here. Padding moved to the inner box (margin_*). */
   margin-top: 12px;
   margin-bottom: 6px;
   margin-left: 8px;
   margin-right: 8px;
-  padding: 4px 6px 4px 14px;
-  background: var(--crystal-surface);
-  border: 1px solid var(--crystal-border);
-  border-radius: var(--crystal-radius-md);
 }
 
 .nc-group-header-name {
