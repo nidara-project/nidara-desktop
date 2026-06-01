@@ -63,7 +63,7 @@ export function Separator(id: string, updateDock: () => void, register: (id: str
         name: "cd-separator", css_classes: ["cd-separator"],
         valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
         width_request: isSepVertical
-            ? Math.round(DOCK_CONSTANTS.SEPARATOR_HEIGHT * 0.7)
+            ? DOCK_CONSTANTS.SEPARATOR_HEIGHT
             : DOCK_CONSTANTS.SEPARATOR_LINE,
         height_request: isSepVertical
             ? DOCK_CONSTANTS.SEPARATOR_LINE
