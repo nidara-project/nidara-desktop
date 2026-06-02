@@ -1071,6 +1071,13 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
             axis.applySlide(win, Math.round(slideCurrent))
             const zone = dockSettings.autoHide ? (isRevealed ? DOCK_CONSTANTS.EXCLUSIVE_ZONE : 0) : DOCK_CONSTANTS.EXCLUSIVE_ZONE
             axis.setExclusiveZone(win, zone)
+            // applySlide just moved the surface to the new gap-derived position, but the tick
+            // short-circuits (return false) when nothing is animating — and a gap change leaves
+            // both the bar-size and slide-delta conditions false, so it would NEVER rebuild the
+            // input region. The region would stay frozen at the OLD position while the surface
+            // moved, drifting the autohide edge-trigger off the screen wall (worse the more the
+            // gap changes). Rebuild it here explicitly instead of relying on the tick.
+            axis.buildInputRegion(win, smoothedBarMain, revealState())
         }
         update()
     })

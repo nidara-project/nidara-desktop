@@ -696,11 +696,19 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             }
             const slideOff = Math.round(st.slideCurrent)
             if (dockSettings.autoHide && !st.isRevealed && slideOff >= this.hideDistance * 0.8) {
-                const TRIGGER_W = 4
-                const edgeX = position === 'left' ? slideOff : WIN_W - TRIGGER_W - slideOff
+                // Edge-reveal trigger. The window has slid fully off-screen by slideOff, so
+                // its outer edge sits past the monitor wall. A thin strip whose outer edge
+                // landed exactly on the monitor's clip boundary was unreliable to hit — the
+                // catchable area was a sliver at the very wall. Use a comfortable band
+                // anchored to the screen edge, and run its outer edge THROUGH the surface's
+                // far edge (0 / WIN_W) so the boundary column is interior to the region, not
+                // its truncated edge (same principle as the magnification last-pixel fix).
+                const BAND = 24
+                const edgeX = position === 'left' ? 0 : Math.max(0, WIN_W - slideOff - BAND)
+                const width = position === 'left' ? slideOff + BAND : WIN_W - edgeX
                 // @ts-ignore
-                region.unionRectangle({ x: Math.max(0, edgeX), y: 0, width: TRIGGER_W, height: realizedMain })
-                apply(`trig:${Math.max(0, edgeX)}`, () => surface.set_input_region(region)); return
+                region.unionRectangle({ x: edgeX, y: 0, width, height: realizedMain })
+                apply(`trig:${edgeX},${width},${realizedMain}`, () => surface.set_input_region(region)); return
             }
             if (st.menuOpenCount > 0) { apply("null", () => surface.set_input_region(null)); return }
             // Width tracks the dock's current silhouette (pill at rest, pill+bulge on hover).
@@ -734,6 +742,11 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
         onSettingsResize() {
             if (position === 'left') shim.margin_start = dockSettings.screenGap
             else shim.margin_end = dockSettings.screenGap
+            // The pill's X is computed inside the draw func from EXCLUSIVE_ZONE; nothing
+            // about the da's own size/margin changes on a gap change, so it would keep the
+            // stale position until the next forced redraw. Repaint it explicitly so the
+            // background tracks the icons' shim margin on the same settings callback.
+            da.queue_draw()
         },
     }
 }
