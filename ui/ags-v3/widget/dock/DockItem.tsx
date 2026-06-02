@@ -139,9 +139,14 @@ export function DockItem(
         // Vertical:   HORIZONTAL orientation keeps the side-indicator pattern.
         orientation: isVertical ? Gtk.Orientation.HORIZONTAL : Gtk.Orientation.VERTICAL,
         valign: isVertical ? Gtk.Align.START : Gtk.Align.END,
-        halign: isVertical ? Gtk.Align.FILL : Gtk.Align.START,
+        // Vertical mirrors horizontal: anchored to the screen-edge side (edgeAlign,
+        // not FILL) so the item grows toward screen center as the icon magnifies.
+        halign: isVertical ? edgeAlign : Gtk.Align.START,
         hexpand: false,
-        width_request:  isVertical ? DOCK_CONSTANTS.PILL_HEIGHT : DOCK_CONSTANTS.ICON_SIZE,
+        // Vertical shrink-wraps to [dotZone + iconBox] so its width is exactly
+        // PILL_PADDING + current icon size; anchored to the edge it stays centered at
+        // rest and grows toward center when magnified.
+        width_request:  isVertical ? -1 : DOCK_CONSTANTS.ICON_SIZE,
         height_request: isVertical ? DOCK_CONSTANTS.ICON_SIZE   : DOCK_CONSTANTS.PILL_HEIGHT,
         margin_top:    isVertical ? DOCK_CONSTANTS.ICON_MARGIN : 0,
         margin_bottom: isVertical ? DOCK_CONSTANTS.ICON_MARGIN : 0,
@@ -403,28 +408,27 @@ export function DockItem(
     })
 
     if (isVertical) {
-        // Dot on the screen-edge side of the pill
-        if (dockSettings.position === 'right') {
-            dot.set_halign(Gtk.Align.END)
-            dot.set_margin_end(GAP)
-        } else {
-            dot.set_halign(Gtk.Align.START)
-            dot.set_margin_start(GAP)
-        }
-        // Overlay spans the full pill width; icon is centered inside it
-        const overlay = new Gtk.Overlay({
-            name: "cd-overlay-" + appId,
-            css_classes: ["cd-overlay", "overlay"],
-            overflow: Gtk.Overflow.VISIBLE,
-            halign: Gtk.Align.FILL,
-            valign: Gtk.Align.CENTER,
-            width_request:  DOCK_CONSTANTS.PILL_HEIGHT,
-            height_request: DOCK_CONSTANTS.ICON_SIZE,
-            has_tooltip: false,
+        // Mirror of the horizontal dotZone (which sits PILL_PADDING tall below the icon):
+        // a PILL_PADDING-wide spacer on the screen-edge side that holds the indicator dot.
+        // It both creates the rest gap to the pill wall AND lets the icon zone grow toward
+        // center cleanly (pure Box layout — no Overlay main-child alignment quirks).
+        dot.set_halign(Gtk.Align.CENTER)
+        dot.set_valign(Gtk.Align.CENTER)
+        const dotZone = new Gtk.CenterBox({
+            orientation: Gtk.Orientation.VERTICAL,
+            width_request: DOCK_CONSTANTS.PILL_PADDING,
+            valign: Gtk.Align.FILL,
         })
-        overlay.set_child(iconBox)
-        overlay.add_overlay(dot)
-        itemBox.append(overlay)
+        dotZone.set_center_widget(dot)
+        if (dockSettings.position === 'right') {
+            itemBox.append(iconBox)   // center side
+            itemBox.append(dotZone)   // screen-edge side (right)
+        } else {
+            itemBox.append(dotZone)   // screen-edge side (left)
+            itemBox.append(iconBox)   // center side
+        }
+        ;(itemBox as any)._cdIconBox = iconBox
+        ;(itemBox as any)._cdDotZone = dotZone
     } else {
         // CenterBox guarantees its center_widget gets exactly its natural size (6×6),
         // rather than being stretched by a Gtk.Box parent layout pass.

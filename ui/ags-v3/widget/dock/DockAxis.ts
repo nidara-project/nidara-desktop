@@ -12,6 +12,7 @@
  */
 
 import { Gtk } from "ags/gtk4"
+import GLib from "gi://GLib"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import { DOCK_CONSTANTS, calculateDockItemMetrics } from "./DockPhysics"
@@ -85,6 +86,9 @@ export interface AxisAdapter {
     setupAnchors(win: Gtk.Window): void
     applySlide(win: Gtk.Window, offset: number): void
     setExclusiveZone(win: Gtk.Window, zone: number): void
+    // force a fresh layer-surface configure (V only; H no-op). Used once at startup
+    // to make Hyprland re-honor the bar's top exclusive zone — see forceReflow impl.
+    forceReflow(win: Gtk.Window): void
 
     // per-icon layout (tick step 2)
     applyIconLayout(m: IconLayout): void
@@ -235,6 +239,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             lastExclZone = zone
             Gtk4LayerShell.set_exclusive_zone(win, zone)
         },
+        forceReflow(_win: Gtk.Window) { /* H anchors BOTTOM; position is bar-independent */ },
 
         applyIconLayout(m: IconLayout) {
             const { slotMain, tps, marginLo, marginHi, slide, translate } = m
@@ -410,7 +415,18 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
             da.set_draw_func((_, cr, _w, _h) => {
                 if (_w <= 0 || _h <= 0) return
-                if (_h !== realizedMain) realizedMain = _h
+                if (_h !== realizedMain) {
+                    // The true compositor-allocated height arrived (or changed). The pill
+                    // below re-centers with it for free; keep the icon shim in sync too,
+                    // otherwise it stays at the seeded position until the next updateSize
+                    // (e.g. opening the AppGrid) — the "dock loads too high then drops" bug.
+                    realizedMain = _h
+                    const shimTop = Math.max(0, Math.round(getGtkCenter(_h) - smoothedBarMain / 2))
+                    if (shim && shimTop !== lastRenderedShimTop) {
+                        lastRenderedShimTop = shimTop
+                        shim.margin_top = shimTop
+                    }
+                }
                 const dockAlpha = Theme.dockOpacity
                 const dockColor = Theme.isDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
                 const borderCol = Theme.isDark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
@@ -478,35 +494,56 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             Gtk4LayerShell.set_exclusive_zone(win, zone)
             dockSideState.update(position, zone)
         },
+        forceReflow(win: Gtk.Window) {
+            // The dock is anchored SIDE+TOP+BOTTOM with an explicit set_size(WIN_H).
+            // Its vertical position is driven by the bar's TOP exclusive zone pushing
+            // it down to y=BAR_HEIGHT. At startup the dock often maps BEFORE the bar
+            // registers that zone, so Hyprland places it at y=0 ("loads too high") and
+            // doesn't reflow until the surface re-commits. Opening the AppGrid does
+            // exactly this — it toggles the layer (TOP→OVERLAY→…→TOP), which Hyprland
+            // treats as real state and fully reconfigures (incl. position). A transient
+            // set_size can't trigger it (final size == current → Hyprland no-ops).
+            // Replicate the proven path: flip to OVERLAY, then back to TOP on a LATER
+            // frame so the two changes land as SEPARATE commits (same-frame coalesces
+            // to no-op). Net layer is unchanged; the round-trip forces the reposition.
+            Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => {
+                Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
+                return GLib.SOURCE_REMOVE
+            })
+        },
 
         applyIconLayout(m: IconLayout) {
             const { gtkRev, slotMain, tps, marginLo, marginHi, slide } = m
-            if (!gtkRev) return
-            const itemBox = gtkRev.get_child ? gtkRev.get_child() : gtkRev
-            if (gtkRev.height_request !== slotMain) gtkRev.height_request = slotMain
-            if (gtkRev.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) gtkRev.width_request = DOCK_CONSTANTS.PILL_HEIGHT
-            if (itemBox) {
-                if (itemBox.height_request !== tps) itemBox.height_request = tps
-                if (itemBox.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) itemBox.width_request = DOCK_CONSTANTS.PILL_HEIGHT
-                if (itemBox.margin_top    !== marginLo + slide) itemBox.margin_top    = marginLo + slide
-                if (itemBox.margin_bottom !== marginHi - slide) itemBox.margin_bottom = marginHi - slide
+            const itemBox = (m.stateWidget || (gtkRev && gtkRev.get_child?.())) as any
+            if (!itemBox) return
+            // Revealer (cache) carries the slot along the main axis (Y) and pins to the
+            // screen edge; its width is natural so the item can grow toward center.
+            if (gtkRev) {
+                if (gtkRev.height_request !== slotMain) gtkRev.height_request = slotMain
+                if (gtkRev.width_request !== -1) gtkRev.width_request = -1
+                gtkRev.halign = edgeAlign
             }
-            const overlay = itemBox?.get_first_child() as Gtk.Overlay
-            if (overlay) {
-                overlay.set_size_request(DOCK_CONSTANTS.PILL_HEIGHT, tps)
-                overlay.halign = Gtk.Align.FILL
-                const iconBox = overlay.get_child ? overlay.get_child() as Gtk.Box : null
-                if (iconBox) {
-                    iconBox.set_size_request(tps, tps)
-                    iconBox.halign = Gtk.Align.CENTER
-                    iconBox.valign = Gtk.Align.CENTER
-                    ;(iconBox as any).margin_bottom = 0
-                    const icon = (iconBox as any).get_first_child()
-                    if (icon) {
-                        icon.set_size_request(tps, tps)
-                        ;(icon as any).set_content_width?.(tps)
-                        ;(icon as any).set_content_height?.(tps)
-                    }
+            // itemBox: tps tall (main axis), centered in the slot via top/bottom margins.
+            // Its width grows with the icon (pinned to the edge via halign in DockItem).
+            if (itemBox.height_request !== tps) itemBox.height_request = tps
+            if (itemBox.margin_top    !== marginLo + slide) itemBox.margin_top    = marginLo + slide
+            if (itemBox.margin_bottom !== marginHi - slide) itemBox.margin_bottom = marginHi - slide
+            const dotZone = itemBox._cdDotZone
+            if (dotZone && dotZone.width_request !== DOCK_CONSTANTS.PILL_PADDING) {
+                dotZone.width_request = DOCK_CONSTANTS.PILL_PADDING
+            }
+            const iconBox = itemBox._cdIconBox
+            if (iconBox) {
+                iconBox.set_size_request(tps, tps)
+                const icon = iconBox.get_first_child?.()
+                if (icon) {
+                    icon.set_size_request(tps, tps)
+                    ;(icon as any).set_content_width?.(tps)
+                    ;(icon as any).set_content_height?.(tps)
+                    // Flush against the dotZone (edge) so the rest gap is exactly
+                    // PILL_PADDING each side (centered in the pill) and it grows toward center.
+                    icon.halign = edgeAlign
                 }
             }
         },
@@ -533,33 +570,42 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             const mT = Math.floor((slotH - tps) / 2)
             const mB = Math.ceil((slotH - tps) / 2)
             if (gtkRev.height_request !== slotH) gtkRev.height_request = slotH
-            if (gtkRev.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) gtkRev.width_request = DOCK_CONSTANTS.PILL_HEIGHT
-            const itemBoxV = gtkRev.get_child?.()
-            if (itemBoxV) {
-                if (itemBoxV.height_request !== tps) itemBoxV.height_request = tps
-                if (itemBoxV.margin_top    !== mT) itemBoxV.margin_top    = mT
-                if (itemBoxV.margin_bottom !== mB) itemBoxV.margin_bottom = mB
-                const overlayV = itemBoxV.get_first_child?.()
-                if (overlayV) {
-                    overlayV.set_size_request(DOCK_CONSTANTS.PILL_HEIGHT, tps)
-                    overlayV.halign = Gtk.Align.FILL
-                    const iconBoxV = overlayV.get_child?.()
-                    if (iconBoxV) {
-                        iconBoxV.set_size_request(tps, tps)
-                        iconBoxV.halign = Gtk.Align.CENTER
-                        iconBoxV.valign = Gtk.Align.CENTER
-                        ;(iconBoxV as any).margin_bottom = 0
+            if (gtkRev.width_request !== -1) gtkRev.width_request = -1
+            gtkRev.halign = edgeAlign
+            const itemBox = gtkRev.get_child?.()
+            if (itemBox) {
+                if (itemBox.height_request !== tps) itemBox.height_request = tps
+                if (itemBox.margin_top    !== mT) itemBox.margin_top    = mT
+                if (itemBox.margin_bottom !== mB) itemBox.margin_bottom = mB
+                const dotZone = itemBox._cdDotZone
+                if (dotZone && dotZone.width_request !== DOCK_CONSTANTS.PILL_PADDING) {
+                    dotZone.width_request = DOCK_CONSTANTS.PILL_PADDING
+                }
+                const iconBox = itemBox._cdIconBox
+                if (iconBox) {
+                    iconBox.set_size_request(tps, tps)
+                    const icon = iconBox.get_first_child?.()
+                    if (icon) {
+                        icon.set_size_request(tps, tps)
+                        ;(icon as any).set_content_width?.(tps)
+                        ;(icon as any).set_content_height?.(tps)
+                        icon.halign = edgeAlign
                     }
                 }
             }
         },
 
-        // Vertical magnification needs a DockItem structure that mirrors horizontal
-        // (edge-anchored growth) — see the Overlay note in applyIconLayout. Until that
-        // restructure lands, the vertical dock stays flat (rest state), which is the
-        // user-verified good behaviour.
-        computeTargets(_mousePos: number, state: AnimState) {
-            setRestTargets(state)
+        // Magnification: same cosine-bell curve as horizontal. The slot grows along the
+        // main axis (Y); the icon scales up and — thanks to the mirrored DockItem layout
+        // (edge-anchored item + PILL_PADDING dotZone spacer) — bulges toward screen center.
+        computeTargets(mousePos: number, state: AnimState) {
+            if (mousePos === -1000) { setRestTargets(state); return }
+            const metrics = calculateDockItemMetrics(mousePos, state.staticCenter, state.isSeparator)
+            state.targetScale = metrics.scale
+            state.targetWidth = metrics.width
+            state.targetHeight = metrics.height || DOCK_CONSTANTS.PILL_HEIGHT
+            state.targetMargin = metrics.margin
+            state.targetTranslateY = metrics.translateY
         },
 
         buildInputRegion(win: Gtk.Window, totalMain: number, st: RevealState) {

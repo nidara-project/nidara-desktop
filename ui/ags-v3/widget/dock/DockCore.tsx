@@ -938,6 +938,19 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                     isSettlingIn = false
                     return GLib.SOURCE_REMOVE
                 })
+                // Startup race: the dock can map before the bar's top exclusive zone is
+                // honored, so it loads at y=0 until a later re-commit. The bar zone is
+                // registered before the dock (Bar created before Dock in app.ts), so
+                // force a fresh layer-surface configure as early as possible — here, at
+                // realize, BEFORE first map — so the dock appears already at its correct
+                // y=BAR_HEIGHT position rather than visibly dropping later. One delayed
+                // retry covers the case the zone wasn't yet committed at first map.
+                // No-op on the horizontal axis. See axis.forceReflow.
+                if (layerShellReady) axis.forceReflow(win)
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 250, () => {
+                    if (layerShellReady) axis.forceReflow(win)
+                    return GLib.SOURCE_REMOVE
+                })
             })
         } catch (e) { console.error(e) }
     }
