@@ -1145,6 +1145,10 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         }
         appGrid.setVisible(true)
         appGrid.onShow()
+        // Send the icons back to rest: the panel opens with the cursor still over the
+        // launching icon (magnified), and motion is ignored while the panel is open, so
+        // they'd otherwise stay frozen mid-bulge. Same as launching any app.
+        updateAllTargets(-1000)
         const surface = win.get_native()?.get_surface()
         if (surface) surface.set_input_region(null)
         if (!isRevealed) {
