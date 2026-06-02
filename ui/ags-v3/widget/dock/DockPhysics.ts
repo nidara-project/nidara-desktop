@@ -10,6 +10,12 @@ import { dockSettings } from "./state"
 // FIXED values (gaps/paddings) stay constant. SCALED values derive from iconSize.
 
 function deriveConstants(iconSize: number, maxSize: number, magnification: boolean, screenGap: number) {
+    // All geometry must be integer: a fractional input (e.g. a slider that stored 8.19)
+    // flows into EXCLUSIVE_ZONE and gets truncated by Cairo's int rectangles downstream,
+    // which silently dropped the dock's outermost interactive pixel at the screen wall.
+    iconSize  = Math.round(iconSize)
+    maxSize   = Math.round(maxSize)
+    screenGap = Math.round(screenGap)
     // ── PROPORTIONAL RATIOS (Based on user-provided table) ──
     // V24000: SLIGHT GAP BOOST
     // External padding (22%) balanced with slightly wider gap (16%).

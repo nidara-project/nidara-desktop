@@ -142,6 +142,13 @@ export const sliderRow = (
 ) => {
     const { unit = "", icons, pct = false, decimals } = opts
 
+    // Integer sliders (no `decimals`/`pct`) must STORE integers, not just display them:
+    // the raw Gtk.Scale value is fractional, and a fractional setting (e.g. screenGap=8.19)
+    // propagates into geometry (EXCLUSIVE_ZONE) and gets truncated downstream — that lost
+    // the dock's last interactive pixel column at the screen wall. Round at the source.
+    const quantize = (decimals === undefined && !pct) ? (v: number) => Math.round(v) : (v: number) => v
+    const onCommit = (v: number) => cb(quantize(v))
+
     const formatVal = (v: number) => {
         if (pct) return `${Math.round(v * 100)}%`
         if (decimals !== undefined) return `${v.toFixed(decimals)}${unit}`
@@ -163,7 +170,7 @@ export const sliderRow = (
 
     const sliderWidget = makeHSlider({
         min, max, value: init,
-        onChange: cb,
+        onChange: onCommit,
         onValueChanged: (v) => { valueLabel.label = formatVal(v) },
         debounce: 32,
         cssClasses: ["cc-atomic-scale-native"],

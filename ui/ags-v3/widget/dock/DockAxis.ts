@@ -91,6 +91,9 @@ export interface AxisAdapter {
     forceReflow(win: Gtk.Window): void
 
     // per-icon layout (tick step 2)
+    // called once at the start of each layout pass, before the per-item loop, so the
+    // axis can reset per-frame accumulators (V tracks the peak icon cross-extent here)
+    beginLayoutPass(): void
     applyIconLayout(m: IconLayout): void
     applySeparatorLayout(m: SepLayout): void
     // pre-size a rest-state item on first render to avoid a flash (V only; H no-op)
@@ -141,6 +144,24 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
     let smoothedBarMain = 0
     let lastRenderedWidth = -1
     let lastExclZone = -999
+
+    // Cross-axis (height) tracking — mirror of the vertical adapter. The dock window is
+    // full-height but only a strip at the bottom should be interactive, and that strip
+    // must match the dock's CURRENT silhouette: the resting pill at rest, the pill plus
+    // the magnified icon bulging UP on hover. Without this the gate (beyondPill) cut
+    // magnification off at the pill's top edge, so the pointer moving onto the bulged
+    // top of an icon cancelled the animation. reach() is the silhouette height measured
+    // up from the screen bottom; both buildInputRegion and beyondPill use it.
+    const CROSS_PAD = 6
+    let peakIconCross = DOCK_CONSTANTS.ICON_SIZE
+    const reach = () =>
+        Math.max(
+            DOCK_CONSTANTS.EXCLUSIVE_ZONE,
+            dockSettings.screenGap + DOCK_CONSTANTS.PILL_PADDING + peakIconCross,
+        ) + CROSS_PAD
+
+    // Skip redundant set_input_region calls — see the matching note in verticalAxis.
+    let lastRegionKey = ""
 
     return {
         vertical: false,
@@ -204,7 +225,9 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
         },
 
         mainCoord: (x: number, _y: number) => x,
-        beyondPill: (_x: number, y: number) => y < WIN_H - DOCK_CONSTANTS.PILL_HEIGHT,
+        // Gate magnification by the dock's CURRENT top edge (rises with the bulge), so
+        // moving the pointer onto the top of a magnified icon never cancels the animation.
+        beyondPill: (_x: number, y: number) => y < WIN_H - reach(),
 
         updateSize(s: number) {
             smoothedBarMain = s
@@ -241,8 +264,10 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
         },
         forceReflow(_win: Gtk.Window) { /* H anchors BOTTOM; position is bar-independent */ },
 
+        beginLayoutPass() { peakIconCross = DOCK_CONSTANTS.ICON_SIZE },
         applyIconLayout(m: IconLayout) {
             const { slotMain, tps, marginLo, marginHi, slide, translate } = m
+            if (tps > peakIconCross) peakIconCross = tps
             const revealer = (m.stateWidget || m.gtkRev) as any
             if (!revealer) return
             const itemBox = revealer.get_child ? (revealer.get_child() as Gtk.Box) : revealer
@@ -320,29 +345,42 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
         buildInputRegion(win: Gtk.Window, totalMain: number, st: RevealState) {
             const surface = win.get_native()?.get_surface()
             if (!surface) return
-            if (st.appGridPanelOpen) { surface.set_input_region(null); return }
+            // Apply only when the region's shape changed (see verticalAxis note).
+            const apply = (key: string, set: () => void) => {
+                if (key === lastRegionKey) return
+                lastRegionKey = key
+                set()
+            }
+            if (st.appGridPanelOpen) { apply("null", () => surface.set_input_region(null)); return }
             const region = new Cairo.Region()
             if (st.fullscreenMode && !st.appGridPanelOpen && !st.isRevealed) {
-                surface.set_input_region(region); return
+                apply("empty", () => surface.set_input_region(region)); return
             }
             if (dockSettings.autoHide && !st.isRevealed && st.slideTarget > 0
                     && st.slideCurrent >= this.hideDistance * 0.8) {
                 const triggerY = WIN_H - Math.round(this.hideDistance) - 4
                 // @ts-ignore
                 region.unionRectangle({ x: 0, y: triggerY, width: monMain, height: 4 })
-                surface.set_input_region(region); return
+                apply(`trig:${triggerY}`, () => surface.set_input_region(region)); return
             }
-            if (st.menuOpenCount > 0) { surface.set_input_region(null); return }
-            const width = totalMain + 500
-            const x = (monMain - width) / 2
-            const y = WIN_H - DOCK_CONSTANTS.PILL_HEIGHT
+            if (st.menuOpenCount > 0) { apply("null", () => surface.set_input_region(null)); return }
+            // Height tracks the dock's current silhouette (pill at rest, pill+bulge on hover)
+            // so the bulged top of a magnified icon stays inside the region. Pin the outer
+            // edge (screen bottom) to WIN_H exactly with integers — fractional geometry
+            // truncated by Cairo otherwise loses the last pixel row at the wall.
+            const h = reach()
+            const width = Math.round(totalMain + 500)
+            const x = Math.round((monMain - width) / 2)
+            const y = Math.floor(WIN_H - h)
+            const height = WIN_H - y
             // @ts-ignore
-            region.unionRectangle({ x: Math.round(x), y: Math.round(y), width: Math.round(width), height: DOCK_CONSTANTS.PILL_HEIGHT })
-            surface.set_input_region(region)
+            region.unionRectangle({ x, y, width, height })
+            apply(`body:${x},${y},${width},${height}`,
+                () => surface.set_input_region(region))
         },
 
         mainStart: (extent: number) => Math.max(0, (monMain - extent) / 2),
-        inDockStrip: (_x: number, y: number) => y >= WIN_H - DOCK_CONSTANTS.PILL_HEIGHT * 1.5,
+        inDockStrip: (_x: number, y: number) => y >= WIN_H - reach(),
 
         onSettingsResize() {
             da.height_request = DOCK_CONSTANTS.PILL_HEIGHT
@@ -377,6 +415,29 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
     let lastRenderedHeight = -1
     let lastRenderedShimTop = -1
     let lastExclZone = -999
+
+    // Cross-axis (thickness) tracking. The dock window is full-width but only a strip
+    // on the edge should be interactive — and that strip must match the dock's CURRENT
+    // silhouette: the resting pill at rest, the pill + the magnified icon's bulge on
+    // hover. peakIconCross is the largest icon cross-size seen this layout pass (reset
+    // in beginLayoutPass, accumulated in applyIconLayout). innerEdgeCross() turns it
+    // into the dock's inner edge X. Both the input region (buildInputRegion) and the
+    // pointer gate (beyondPill) use it, so they can never disagree — that disagreement
+    // was the bug: input region 128px swallowed window clicks while the gate cut
+    // magnification off at 78px.
+    const CROSS_PAD = 6
+    let peakIconCross = DOCK_CONSTANTS.ICON_SIZE
+    const innerEdgeCross = () =>
+        Math.max(
+            DOCK_CONSTANTS.EXCLUSIVE_ZONE,
+            dockSettings.screenGap + DOCK_CONSTANTS.PILL_PADDING + peakIconCross,
+        ) + CROSS_PAD
+
+    // The tick calls buildInputRegion every frame; re-applying an UNCHANGED region still
+    // makes the compositor re-evaluate pointer focus (a leave/enter cycle that even spams
+    // phantom motion on a still cursor). Guard every apply by a key of the region's shape
+    // so we only touch the surface when it actually changes.
+    let lastRegionKey = ""
 
     return {
         vertical: true,
@@ -456,10 +517,10 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
 
         mainCoord: (_x: number, y: number) => y,
         beyondPill: (x: number, _y: number) => {
-            const xLimit = position === 'right'
-                ? WIN_W - DOCK_CONSTANTS.EXCLUSIVE_ZONE
-                : DOCK_CONSTANTS.EXCLUSIVE_ZONE
-            return position === 'right' ? x < xLimit : x > xLimit
+            // Gate magnification by the dock's CURRENT inner edge (grows with the bulge),
+            // so moving the pointer onto a magnified icon never cancels the animation.
+            const cross = innerEdgeCross()
+            return position === 'right' ? x < WIN_W - cross : x > cross
         },
 
         updateSize(s: number) {
@@ -513,8 +574,10 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             })
         },
 
+        beginLayoutPass() { peakIconCross = DOCK_CONSTANTS.ICON_SIZE },
         applyIconLayout(m: IconLayout) {
             const { gtkRev, slotMain, tps, marginLo, marginHi, slide } = m
+            if (tps > peakIconCross) peakIconCross = tps
             const itemBox = (m.stateWidget || (gtkRev && gtkRev.get_child?.())) as any
             if (!itemBox) return
             // Revealer (cache) carries the slot along the main axis (Y) and pins to the
@@ -555,6 +618,15 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             if (gtkRev.height_request !== slotMain) gtkRev.height_request = slotMain
             if (gtkRev.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) gtkRev.width_request = DOCK_CONSTANTS.PILL_HEIGHT
             gtkRev.halign = edgeAlign
+            // The container's own width must track PILL_HEIGHT too. It is set once at
+            // construction; a hot icon-size change (no rebuild) would otherwise leave it
+            // stale — a Revealer sizes to its child, so a stale-wider container inflates
+            // gtkRev/bar and the centered line lands at the OLD PILL_HEIGHT/2, drifting
+            // off the (new) icon centers until the next reload.
+            if (itemBox && itemBox.width_request !== DOCK_CONSTANTS.PILL_HEIGHT) {
+                itemBox.width_request = DOCK_CONSTANTS.PILL_HEIGHT
+            }
+            if (itemBox && itemBox.height_request !== slotMain) itemBox.height_request = slotMain
             // Match the horizontal separator's length (its line is SEPARATOR_HEIGHT tall);
             // the vertical hairline is rotated, so that length becomes its width. Fixed —
             // not driven by currentHeight, so magnification doesn't shrink it.
@@ -611,10 +683,16 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
         buildInputRegion(win: Gtk.Window, totalMain: number, st: RevealState) {
             const surface = win.get_native()?.get_surface()
             if (!surface) return
-            if (st.appGridPanelOpen) { surface.set_input_region(null); return }
+            // Apply only when the region's shape changed (see lastRegionKey note above).
+            const apply = (key: string, set: () => void) => {
+                if (key === lastRegionKey) return
+                lastRegionKey = key
+                set()
+            }
+            if (st.appGridPanelOpen) { apply("null", () => surface.set_input_region(null)); return }
             const region = new Cairo.Region()
             if (st.fullscreenMode && !st.appGridPanelOpen && !st.isRevealed) {
-                surface.set_input_region(region); return
+                apply("empty", () => surface.set_input_region(region)); return
             }
             const slideOff = Math.round(st.slideCurrent)
             if (dockSettings.autoHide && !st.isRevealed && slideOff >= this.hideDistance * 0.8) {
@@ -622,23 +700,34 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 const edgeX = position === 'left' ? slideOff : WIN_W - TRIGGER_W - slideOff
                 // @ts-ignore
                 region.unionRectangle({ x: Math.max(0, edgeX), y: 0, width: TRIGGER_W, height: realizedMain })
-                surface.set_input_region(region); return
+                apply(`trig:${Math.max(0, edgeX)}`, () => surface.set_input_region(region)); return
             }
-            if (st.menuOpenCount > 0) { surface.set_input_region(null); return }
+            if (st.menuOpenCount > 0) { apply("null", () => surface.set_input_region(null)); return }
+            // Width tracks the dock's current silhouette (pill at rest, pill+bulge on hover).
+            // CRITICAL: the strip must reach the screen edge EXACTLY. Geometry can be
+            // fractional (e.g. EXCLUSIVE_ZONE = pillHeight + screenGap), and Cairo truncates
+            // the rect to ints — so `x = WIN_W - pillW` (fractional) lost the last pixel
+            // column, dropping the cursor out of the region at the very wall (1px in worked,
+            // the wall didn't). Pin the outer edge to 0 / WIN_W with integers.
+            const pillW = innerEdgeCross()
+            const edgeX = position === 'left' ? 0 : Math.floor(WIN_W - pillW)
+            const width = position === 'left' ? Math.ceil(pillW) : WIN_W - edgeX
             const ph = totalMain + DOCK_CONSTANTS.BASE_MARGIN * 2
             const py = Math.max(0, Math.round(getGtkCenter(realizedMain) - ph / 2))
-            const pillW = DOCK_CONSTANTS.PILL_HEIGHT + dockSettings.screenGap + 50 // buffer for tooltips
-            const edgeX = position === 'left' ? 0 : WIN_W - pillW
+            const PAD_MAIN = 250
+            const top = Math.max(0, py - PAD_MAIN)
+            const height = Math.min(realizedMain - top, ph + PAD_MAIN * 2)
             // @ts-ignore
-            region.unionRectangle({ x: edgeX, y: Math.max(0, py - 50), width: pillW, height: ph + 100 })
-            surface.set_input_region(region)
+            region.unionRectangle({ x: edgeX, y: top, width, height })
+            apply(`body:${edgeX},${top},${width},${Math.round(height)}`,
+                () => surface.set_input_region(region))
         },
 
         mainStart: (extent: number) =>
             Math.max(0, Math.round(getGtkCenter(realizedMain) - extent / 2)),
 
         inDockStrip: (x: number, _y: number) => {
-            const pillW = DOCK_CONSTANTS.PILL_HEIGHT + dockSettings.screenGap + 20
+            const pillW = innerEdgeCross()
             return position === 'left' ? x < pillW : x > WIN_W - pillW
         },
 

@@ -278,6 +278,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
             let currentFloat = 0
             let lastRounded = 0
 
+            axis.beginLayoutPass()
             orderedIds.forEach((id) => {
                 const state = animRegistry.get(id)
                 if (!state) return
