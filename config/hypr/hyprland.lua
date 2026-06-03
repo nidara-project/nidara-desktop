@@ -114,10 +114,13 @@ hl.animation({ leaf = "workspaces",    enabled = true, speed = 6,   bezier = "de
 hl.on("hyprland.start", function()
     hl.exec_cmd("uwsm finalize")
     hl.exec_cmd("uwsm app -- crystal-shell-ui")
-    hl.exec_cmd("uwsm app -- awww-daemon")
-    hl.exec_cmd("uwsm app -- /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1")
-    hl.exec_cmd("uwsm app -- hypridle")
-    hl.exec_cmd("uwsm app -- wl-paste --watch cliphist store")
+    -- Background daemons go in background-graphical.slice (-s b), not the foreground
+    -- app slice: systemd deprioritizes them under CPU/IO/memory pressure and the OOM
+    -- killer targets them before real apps — correct for wallpaper/idle/clipboard helpers.
+    hl.exec_cmd("uwsm app -s b -- awww-daemon")
+    hl.exec_cmd("uwsm app -s b -- /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1")
+    hl.exec_cmd("uwsm app -s b -- hypridle")
+    hl.exec_cmd("uwsm app -s b -- wl-paste --watch cliphist store")
 end)
 
 
