@@ -1,6 +1,7 @@
-import { Gtk } from "ags/gtk4"
+import { Gdk, Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
 import { showCrystalAlert, CrystalButton } from "../../../../lib/crystal-ui"
 import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
@@ -82,6 +83,33 @@ function saveAvatar(srcPath: string): Promise<void> {
             )
         } catch { /* AccountsService not available */ }
     })
+}
+
+// Set the user's full name (GECOS) via AccountsService, same path as the avatar.
+// chfn(1) can't be used non-interactively — it requires a PAM password prompt and
+// fails with no tty. AccountsService.SetRealName goes through polkit's
+// change-own-user-data action, which the active user is allowed to do.
+function setRealName(name: string): boolean {
+    try {
+        const bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, null)
+        const res = bus.call_sync(
+            "org.freedesktop.Accounts", "/org/freedesktop/Accounts",
+            "org.freedesktop.Accounts", "FindUserByName",
+            new GLib.Variant("(s)", [GLib.get_user_name()]),
+            new GLib.VariantType("(o)"), Gio.DBusCallFlags.NONE, 2000, null,
+        )
+        const userPath = res.get_child_value(0).get_string()[0]
+        bus.call_sync(
+            "org.freedesktop.Accounts", userPath,
+            "org.freedesktop.Accounts.User", "SetRealName",
+            new GLib.Variant("(s)", [name]),
+            null, Gio.DBusCallFlags.NONE, 5000, null,
+        )
+        return true
+    } catch (e) {
+        console.error("[Users] SetRealName:", e)
+        return false
+    }
 }
 
 function spawnTerminalWithCommand(cmd: string) {
@@ -369,11 +397,43 @@ export default function UsersPage() {
     // ── Your Account ─────────────────────────────────────────────────────────
     const profileGroup = listGroup(t("settings.users.group.profile"))
 
-    const avatarImg = new Gtk.Image({ pixel_size: 56, css_classes: ["users-avatar"], valign: Gtk.Align.CENTER })
-    if (avatarPath) { try { avatarImg.set_from_file(avatarPath) } catch { avatarImg.gicon = Icons.user } }
-    else avatarImg.gicon = Icons.user
+    // Large circular avatar: Gtk.Picture (COVER crops to fill the square, then the
+    // pill border-radius clips it to a circle) — same approach as the wallpaper
+    // preview in Appearance. A user-glyph overlay shows on the surface circle when
+    // there's no photo.
+    const AVATAR_SIZE = 96
+    const avatarPicture = new Gtk.Picture({
+        width_request: AVATAR_SIZE,
+        height_request: AVATAR_SIZE,
+        content_fit: Gtk.ContentFit.COVER,
+        css_classes: ["users-avatar"],
+    })
+    const avatarFallback = new Gtk.Image({
+        gicon: Icons.user,
+        pixel_size: 44,
+        css_classes: ["cs-icon", "users-avatar-fallback"],
+        halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER,
+    })
+    const avatarBox = new Gtk.Overlay({ valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER })
+    avatarBox.set_child(avatarPicture)
+    avatarBox.add_overlay(avatarFallback)
 
-    const changeAvatarBtn = CrystalButton({ label: t("settings.users.avatar.change"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER })
+    const setAvatar = (path: string | null) => {
+        if (path && GLib.file_test(path, GLib.FileTest.EXISTS)) {
+            try {
+                const pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
+                avatarPicture.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
+                avatarFallback.visible = false
+                return
+            } catch (_) { /* fall through to placeholder */ }
+        }
+        avatarPicture.set_paintable(null)
+        avatarFallback.visible = true
+    }
+    setAvatar(avatarPath)
+
+    const changeAvatarBtn = CrystalButton({ label: t("settings.users.avatar.change"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER })
     changeAvatarBtn.connect("clicked", () => {
         const dialog = new Gtk.FileDialog({ title: t("settings.users.avatar.pick"), modal: true })
         const filter = new Gtk.FileFilter()
@@ -387,24 +447,32 @@ export default function UsersPage() {
                 const file = dialog.open_finish(result)
                 const src = file?.get_path()
                 if (!src) return
-                saveAvatar(src).then(() => {
-                    try { avatarImg.set_from_file(`${GLib.get_home_dir()}/.face`) }
-                    catch { avatarImg.gicon = Icons.user }
-                }).catch(e => console.error("[Users]", e))
+                saveAvatar(src)
+                    .then(() => setAvatar(`${GLib.get_home_dir()}/.face`))
+                    .catch(e => console.error("[Users]", e))
             } catch { /* cancelled */ }
         })
     })
 
-    const avatarRow = new Gtk.Box({ spacing: 16, valign: Gtk.Align.CENTER })
-    avatarRow.append(avatarImg); avatarRow.append(changeAvatarBtn)
-    profileGroup.listBox.append(createRow(t("settings.users.avatar"), "", avatarRow))
+    // Centered profile header: large avatar with the change button beneath it,
+    // above the profile fields group.
+    const profileHeader = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        halign: Gtk.Align.CENTER,
+        spacing: 12,
+        margin_bottom: 4,
+    })
+    profileHeader.append(avatarBox)
+    profileHeader.append(changeAvatarBtn)
+    page.append(profileHeader)
 
     const nameEntry = new Gtk.Entry({ text: displayName, placeholder_text: username, width_chars: 22, valign: Gtk.Align.CENTER })
     const nameApplyBtn = CrystalButton({ label: t("settings.users.name.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
     const applyName = () => {
         const n = nameEntry.text.trim(); if (!n) return
         nameApplyBtn.sensitive = false
-        execAsync(["chfn", "-f", n, username]).catch(e => console.error("[Users]", e)).finally(() => { nameApplyBtn.sensitive = true })
+        setRealName(n)
+        nameApplyBtn.sensitive = true
     }
     nameApplyBtn.connect("clicked", applyName); nameEntry.connect("activate", applyName)
     const nameRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })

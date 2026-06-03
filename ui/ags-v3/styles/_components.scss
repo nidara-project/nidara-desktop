@@ -4,6 +4,50 @@
    CRYSTAL DESIGN SYSTEM - UNIFIED COMPONENTS
    ========================================================================== */
 
+/* --- Base text input -------------------------------------------------------
+   Every plain Gtk.Entry (and anything with .crystal-input) gets the crystal
+   look out of the box — no per-widget CSS, no GTK default-theme blue. This is
+   the single place text fields are themed. Custom inputs (the settings search
+   box, Prism) are Gtk.Text under their own class and override this. Accent
+   appears ONLY on focus + text selection, per the design system. */
+entry,
+.crystal-input {
+    background: var(--crystal-surface-back);
+    // 2px border kept at constant width (transparent at rest → accent on focus)
+    // with background-clip: padding-box so the visual thickness never changes the
+    // real geometry — no layout shift, and no thin 1px line that reads badly on the
+    // rounded corners / lighter backgrounds.
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: $crystal-radius-sm;
+    padding: 6px 10px;
+    min-height: 0;
+    color: var(--crystal-text);
+    caret-color: var(--crystal-accent);
+    box-shadow: none;
+    outline: none;
+    transition: border-color 0.15s ease;
+
+    &:focus, &:focus-within {
+        border-color: var(--crystal-accent);
+        box-shadow: none;
+        outline: none;
+    }
+    &:disabled { opacity: 0.5; }
+
+    > text {
+        background: transparent;
+        color: var(--crystal-text);
+        caret-color: var(--crystal-accent);
+    }
+}
+
+/* Selected text — accent tint everywhere (entries and labels alike). */
+selection {
+    background-color: rgba(var(--crystal-accent-rgb), 0.30);
+    color: var(--crystal-text);
+}
+
 /* --- Unified overlay entrance ---
    The single animation for all in-bar-window panels (CC, NC, Prism, system
    menu, overview): a pure opacity crossfade (no transform → no hit-testing

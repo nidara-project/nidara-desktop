@@ -294,6 +294,50 @@ window.crystal-settings-window {
 /* ==========================================================================
    CRYSTAL DESIGN SYSTEM - UNIFIED COMPONENTS
    ========================================================================== */
+/* --- Base text input -------------------------------------------------------
+   Every plain Gtk.Entry (and anything with .crystal-input) gets the crystal
+   look out of the box — no per-widget CSS, no GTK default-theme blue. This is
+   the single place text fields are themed. Custom inputs (the settings search
+   box, Prism) are Gtk.Text under their own class and override this. Accent
+   appears ONLY on focus + text selection, per the design system. */
+entry,
+.crystal-input {
+  background: var(--crystal-surface-back);
+  background-clip: padding-box;
+  border: 2px solid transparent;
+  border-radius: var(--crystal-radius-sm);
+  padding: 6px 10px;
+  min-height: 0;
+  color: var(--crystal-text);
+  caret-color: var(--crystal-accent);
+  box-shadow: none;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+entry:focus, entry:focus-within,
+.crystal-input:focus,
+.crystal-input:focus-within {
+  border-color: var(--crystal-accent);
+  box-shadow: none;
+  outline: none;
+}
+entry:disabled,
+.crystal-input:disabled {
+  opacity: 0.5;
+}
+entry > text,
+.crystal-input > text {
+  background: transparent;
+  color: var(--crystal-text);
+  caret-color: var(--crystal-accent);
+}
+
+/* Selected text — accent tint everywhere (entries and labels alike). */
+selection {
+  background-color: rgba(var(--crystal-accent-rgb), 0.3);
+  color: var(--crystal-text);
+}
+
 /* --- Unified overlay entrance ---
    The single animation for all in-bar-window panels (CC, NC, Prism, system
    menu, overview): a pure opacity crossfade (no transform → no hit-testing
@@ -3093,10 +3137,14 @@ window.crystal-settings-window button:focus-visible {
   outline-offset: 2px;
 }
 
-image.users-avatar {
+picture.users-avatar {
   border-radius: var(--crystal-radius-pill);
   border: 2px solid var(--crystal-border);
   background: var(--crystal-surface);
+}
+
+.users-avatar-fallback {
+  color: var(--crystal-text-dim);
 }
 
 image.users-avatar-sm {
@@ -3113,11 +3161,8 @@ button.settings-action-row {
   border-radius: 0;
   padding: 0;
 }
-button.settings-action-row:hover {
-  background: var(--crystal-surface);
-}
-button.settings-action-row:active {
-  background: var(--crystal-surface-active);
+button.settings-action-row:hover, button.settings-action-row:active {
+  background: transparent;
 }
 
 .users-admin-badge {

@@ -463,14 +463,15 @@ export default function Settings(monitor: Gdk.Monitor) {
     // Header (toolbar slot + search + close) over the content. The toolbar slot is
     // only populated while the sidebar is hidden; otherwise the toolbar lives in
     // the sidebar capsule.
+    // No right/bottom margin: the header separator reaches the glass right edge and
+    // the content fills down to the bottom (its own inner padding keeps it off the
+    // edge). The sidebar capsule's bottom gap and the popover are separate widgets,
+    // so they're unaffected.
     const contentColumn = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         hexpand: true,
         vexpand: true,
         margin_top: 8,
-        // No right margin: the header separator reaches the glass right edge. The
-        // page keeps its own inner padding so content isn't cramped.
-        margin_bottom: 8,
     })
     contentColumn.append(headerHandle)
     contentColumn.append(contentArea)

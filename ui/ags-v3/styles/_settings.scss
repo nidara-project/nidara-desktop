@@ -467,10 +467,16 @@ window.crystal-settings-window button:focus-visible {
 }
 
 // ── User avatar ───────────────────────────────────────────────────────────────
-image.users-avatar {
+// Large circular profile avatar (Gtk.Picture, COVER-cropped). Pill radius on the
+// square picture = a circle; surface background shows behind the fallback glyph.
+picture.users-avatar {
     border-radius: $crystal-radius-pill;
     border: 2px solid var(--crystal-border);
     background: var(--crystal-surface);
+}
+
+.users-avatar-fallback {
+    color: var(--crystal-text-dim);
 }
 
 image.users-avatar-sm {
@@ -480,6 +486,10 @@ image.users-avatar-sm {
 }
 
 // Flat full-width button used inside a ListBoxRow to make the whole row clickable
+// Flat full-width click target inside a .settings-item-row. Stays fully
+// transparent — the parent row provides the (rounded) hover/active background, so
+// the button must NOT paint its own (square) one, or the two overlap with mismatched
+// corners and colours.
 button.settings-action-row {
     background: transparent;
     background-image: none;
@@ -488,8 +498,7 @@ button.settings-action-row {
     border-radius: 0;
     padding: 0;
 
-    &:hover  { background: var(--crystal-surface); }
-    &:active { background: var(--crystal-surface-active); }
+    &:hover, &:active { background: transparent; }
 }
 
 .users-admin-badge {
