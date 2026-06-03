@@ -25,6 +25,7 @@ import GamingPage from "./pages/Gaming"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
+import IconButton from "../common/IconButton"
 
 /**
  * Settings - System Configuration Panel
@@ -272,7 +273,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     searchResultsList.connect("row-activated", (_: any, row: any) => {
         const pageId = (row as any)._targetPageId
         if (pageId) {
-            searchEntry.text = ""
+            searchInput.text = ""
             navigateTo(pageId)
         }
     })
@@ -285,7 +286,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     const syncSidebarSelection = (pageId: string) => {
         isProgrammaticNav = true
         for (let i = 0; i < categories.length; i++) {
-            const row = sidebar.get_row_at_index(i + 1) // +1: spacer at index 0
+            const row = sidebar.get_row_at_index(i)
             if (row?.get_name() === pageId) { sidebar.select_row(row); break }
         }
         isProgrammaticNav = false
@@ -325,39 +326,56 @@ export default function Settings(monitor: Gdk.Monitor) {
         if (historyIdx < history.length - 1) navigateTo(history[++historyIdx], false)
     })
 
-    // Header spacer row — non-interactive, 44px, mirrors content header height
-    const spacerRow = new Gtk.ListBoxRow({
-        css_classes: ["sidebar-header-spacer-row"],
-        selectable: false,
-        activatable: false,
-        focusable: false,
-    })
-    spacerRow.set_child(new Gtk.Box({}))
-    sidebar.prepend(spacerRow)
-
-    // Sidebar scroll
+    // Sidebar list scroll (lives inside the capsule column below).
     const sidebarScroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        css_classes: ["settings-sidebar-scroll", "crystal-sidebar-capsule"],
+        css_classes: ["settings-sidebar-scroll"],
         vexpand: true,
     })
     sidebarScroll.set_child(sidebar)
     sidebarScroll.set_name("crystal-settings-sidebar-scroll")
 
+    // The sidebar capsule = ONE glass column holding the toolbar (toggle + nav) at
+    // the top and the list below it. This whole column is the split view's sidebar,
+    // so the toolbar rides into the collapsed popover with the list. When the
+    // sidebar is hidden, the toolbar is parked in the header slot (see moveTools).
+    const sidebarColumn = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        css_classes: ["crystal-sidebar-capsule"],
+        vexpand: true,
+    })
+    sidebarColumn.append(sidebarScroll)
+
     // ── Search ────────────────────────────────────────────────────────────────
-    const searchEntry = new Gtk.SearchEntry({
+    // Custom search box: our own cs-icon magnifier + Gtk.Text. Gtk.SearchEntry
+    // would force the icon theme's magnifier glyph; this matches the rest of the
+    // shell (same pattern as Prism's search field).
+    const searchInput = new Gtk.Text({
         placeholder_text: t("settings.search.placeholder"),
-        css_classes: ["settings-search"],
-        width_request: 280,
-        max_width_chars: 30,
+        css_classes: ["settings-search-text"],
+        hexpand: true,
         valign: Gtk.Align.CENTER,
     })
+    const searchEntry = new Gtk.Box({
+        css_classes: ["settings-search"],
+        spacing: 8,
+        width_request: 220,
+        halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER,
+    })
+    searchEntry.append(new Gtk.Image({
+        gicon: Icons.search,
+        pixel_size: 15,
+        css_classes: ["cs-icon", "settings-search-icon"],
+        valign: Gtk.Align.CENTER,
+    }))
+    searchEntry.append(searchInput)
 
     let pageBeforeSearch = ""
 
-    searchEntry.connect("search-changed", () => {
-        const query = searchEntry.text.trim()
+    searchInput.connect("changed", () => {
+        const query = searchInput.text.trim()
         if (query) {
             if (activePageId !== "search-results")
                 pageBeforeSearch = activePageId || categories[0]?.id || ""
@@ -373,7 +391,13 @@ export default function Settings(monitor: Gdk.Monitor) {
         }
     })
 
-    searchEntry.connect("stop-search", () => { searchEntry.text = "" })
+    // Escape clears the search (Gtk.Text has no built-in stop-search signal).
+    const searchKeys = new Gtk.EventControllerKey()
+    searchKeys.connect("key-pressed", (_: any, keyval: number) => {
+        if (keyval === Gdk.KEY_Escape) { searchInput.text = ""; return true }
+        return false
+    })
+    searchInput.add_controller(searchKeys)
 
     // ── Sidebar toggle ────────────────────────────────────────────────────────
     const sidebarToggle = new Gtk.Button({
@@ -384,26 +408,49 @@ export default function Settings(monitor: Gdk.Monitor) {
         halign: Gtk.Align.CENTER,
     })
 
-    // ── Header ────────────────────────────────────────────────────────────────
-    const headerStart = new Gtk.Box({
+    // ── Sidebar toolbar (toggle + nav) ────────────────────────────────────────
+    // Lives INSIDE the sidebar capsule (its top). When the sidebar is hidden
+    // (collapsed + popover closed, or manually hidden) it parks in the header slot
+    // so it stays reachable; when the sidebar is presented again — docked or in the
+    // popover — it moves back into the capsule. Driven by onSidebarPresented below.
+    const sidebarTools = new Gtk.Box({
         spacing: 8,
         valign: Gtk.Align.CENTER,
-        css_classes: ["header-start-box"],
+        halign: Gtk.Align.START,
+        css_classes: ["settings-sidebar-tools"],
     })
-    headerStart.append(sidebarToggle)
-    headerStart.append(navCapsule)
+    sidebarTools.append(sidebarToggle)
+    sidebarTools.append(navCapsule)
 
-    const closeBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14, css_classes: ["cs-icon"] }),
-        css_classes: ["crystal-icon-btn"],
-        tooltip_text: t("settings.window.close"),
+    // Park slot for the toolbar inside the content header (shown only while the
+    // sidebar is hidden).
+    const headerToolsSlot = new Gtk.Box({
         valign: Gtk.Align.CENTER,
-        halign: Gtk.Align.CENTER,
+        css_classes: ["settings-header-tools"],
     })
-    closeBtn.connect("clicked", () => win.set_visible(false))
+
+    // Relocate the toolbar between the sidebar capsule (top) and the header slot.
+    const moveTools = (intoSidebar: boolean) => {
+        const target = intoSidebar ? sidebarColumn : headerToolsSlot
+        if (sidebarTools.get_parent() === target) return
+        if (sidebarTools.get_parent()) sidebarTools.unparent()
+        if (intoSidebar) sidebarColumn.prepend(sidebarTools)
+        else headerToolsSlot.append(sidebarTools)
+    }
+
+    // ── Content header (over the content, right side) ─────────────────────────
+    // Shared round glass close control (crystal-circle-btn, red on hover) — the
+    // single source of truth for close/remove buttons across the shell.
+    const closeBtn = IconButton({
+        icon: Icons.close,
+        iconSize: 14,
+        variant: "danger",
+        tooltip: t("settings.window.close"),
+        onClick: () => win.set_visible(false),
+    })
 
     const contentHeader = new Gtk.CenterBox({ css_classes: ["settings-header"] })
-    contentHeader.set_start_widget(headerStart)
+    contentHeader.set_start_widget(headerToolsSlot)
     contentHeader.set_center_widget(searchEntry)
     contentHeader.set_end_widget(closeBtn)
 
@@ -413,12 +460,16 @@ export default function Settings(monitor: Gdk.Monitor) {
     headerHandle.set_child(contentHeader)
 
     // ── Content column ────────────────────────────────────────────────────────
+    // Header (toolbar slot + search + close) over the content. The toolbar slot is
+    // only populated while the sidebar is hidden; otherwise the toolbar lives in
+    // the sidebar capsule.
     const contentColumn = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         hexpand: true,
         vexpand: true,
         margin_top: 8,
-        margin_end: 8,
+        // No right margin: the header separator reaches the glass right edge. The
+        // page keeps its own inner padding so content isn't cramped.
         margin_bottom: 8,
     })
     contentColumn.append(headerHandle)
@@ -430,7 +481,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     // the window can no longer fit sidebar + un-clipped content. The ZeroMinBox
     // wrapper keeps the window minimum near sidebarWidth so Hyprland can tile.
     const splitView = CrystalSplitView({
-        sidebar: sidebarScroll,
+        sidebar: sidebarColumn,
         content: contentColumn,
         sidebarWidth: 250,
         cssClasses: ["crystal-split-view"],
@@ -438,6 +489,9 @@ export default function Settings(monitor: Gdk.Monitor) {
         // floatAnchor enables Popover mode in collapsed state so Hyprland's
         // blur:popups applies compositor blur to the content behind the sidebar.
         floatAnchor: sidebarToggle,
+        // Toolbar rides inside the capsule when the sidebar is shown; parks in the
+        // header slot when it's hidden.
+        onSidebarPresented: (presented) => moveTools(presented),
     })
 
     sidebarToggle.connect("clicked", () => {

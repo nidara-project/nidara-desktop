@@ -76,6 +76,16 @@ export function CrystalSplitView(opts: {
      * If omitted, the original Overlay + backdrop approach is used.
      */
     floatAnchor?: Gtk.Widget
+    /**
+     * Called whenever the sidebar's "presentation" changes: `true` when the
+     * sidebar widget is on screen (docked, or shown in the collapsed popover),
+     * `false` when it is hidden (collapsed with the popover closed, or manually
+     * hidden). Lets the caller relocate controls that live inside the sidebar —
+     * e.g. move a toolbar into a header slot while the sidebar is gone, so it
+     * stays reachable. Called before the sidebar is reparented into the popover,
+     * so a toolbar placed back into the sidebar here rides along into the popup.
+     */
+    onSidebarPresented?: (presented: boolean) => void
 }): CrystalSplitViewResult {
     const {
         sidebar,
@@ -87,6 +97,7 @@ export function CrystalSplitView(opts: {
         cssClasses     = [],
         name,
         floatAnchor,
+        onSidebarPresented,
     } = opts
 
     let _showSidebar = true
@@ -237,7 +248,12 @@ export function CrystalSplitView(opts: {
                 _sidebarInPopover = false
             }
             // Sync state without calling applyLayout (avoid re-open loop)
-            if (_collapsed && _showSidebar) _showSidebar = false
+            if (_collapsed && _showSidebar) {
+                _showSidebar = false
+                // The sidebar is gone — hand its in-sidebar controls back to the
+                // caller (e.g. a toolbar parks in the header so it stays reachable).
+                onSidebarPresented?.(false)
+            }
         })
         _popover = pop
         return pop
@@ -288,6 +304,11 @@ export function CrystalSplitView(opts: {
 
     // ── Layout sync ───────────────────────────────────────────────────────────
     const applyLayout = () => {
+        // Relocate any in-sidebar controls FIRST: when the sidebar is about to be
+        // presented, a toolbar parked in the header moves back into the sidebar so
+        // it rides along (incl. into the popover); when hidden, it parks elsewhere.
+        onSidebarPresented?.(_showSidebar)
+
         if (!_collapsed) {
             // ── Docked mode ───────────────────────────────────────────────────
             spacer.width_request = _showSidebar ? sidebarWidth : 0

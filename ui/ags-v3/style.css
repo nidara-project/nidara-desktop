@@ -2677,6 +2677,10 @@ window.crystal-settings-window dropdown > button.combo {
   outline: none;
 }
 
+.settings-sidebar-scroll {
+  margin-top: 8px;
+}
+
 .sidebar-floating .crystal-sidebar-capsule {
   background: var(--crystal-popover-bg, rgba(36, 36, 36, 0.94));
   border-color: var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
@@ -2725,10 +2729,10 @@ popover.crystal-sidebar-popup list.settings-sidebar > row {
   border: none;
   box-shadow: none;
 }
-popover.crystal-sidebar-popup list.settings-sidebar > row:hover:not(.sidebar-header-spacer-row) {
+popover.crystal-sidebar-popup list.settings-sidebar > row:hover {
   background-color: var(--crystal-surface-hover);
 }
-popover.crystal-sidebar-popup list.settings-sidebar > row:hover:not(.sidebar-header-spacer-row) .settings-sidebar-row {
+popover.crystal-sidebar-popup list.settings-sidebar > row:hover .settings-sidebar-row {
   color: var(--crystal-text);
 }
 popover.crystal-sidebar-popup list.settings-sidebar > row:selected, popover.crystal-sidebar-popup list.settings-sidebar > row:active {
@@ -2736,22 +2740,6 @@ popover.crystal-sidebar-popup list.settings-sidebar > row:selected, popover.crys
 }
 popover.crystal-sidebar-popup list.settings-sidebar > row:selected .settings-sidebar-row, popover.crystal-sidebar-popup list.settings-sidebar > row:active .settings-sidebar-row {
   color: var(--crystal-text);
-}
-popover.crystal-sidebar-popup row.sidebar-header-spacer-row {
-  min-height: 0;
-  border: none;
-  padding: 0;
-  margin: 0;
-}
-
-row.sidebar-header-spacer-row {
-  min-height: 44px;
-  border-bottom: 1px solid var(--crystal-border);
-  background: transparent;
-  padding: 0;
-}
-row.sidebar-header-spacer-row:hover {
-  background: transparent;
 }
 
 .settings-sidebar-row {
@@ -2773,10 +2761,10 @@ window.crystal-settings-window list.settings-sidebar > row {
   border: none;
   box-shadow: none;
 }
-window.crystal-settings-window list.settings-sidebar > row:hover:not(.sidebar-header-spacer-row) {
+window.crystal-settings-window list.settings-sidebar > row:hover {
   background-color: var(--crystal-surface-hover);
 }
-window.crystal-settings-window list.settings-sidebar > row:hover:not(.sidebar-header-spacer-row) .settings-sidebar-row {
+window.crystal-settings-window list.settings-sidebar > row:hover .settings-sidebar-row {
   color: var(--crystal-text);
 }
 window.crystal-settings-window list.settings-sidebar > row:selected, window.crystal-settings-window list.settings-sidebar > row:active {
@@ -2789,8 +2777,18 @@ window.crystal-settings-window list.settings-sidebar > row:selected .settings-si
 .settings-header {
   background: transparent;
   border-bottom: 1px solid var(--crystal-border);
-  padding: 0 12px;
-  min-height: 44px;
+  padding: 0 12px 8px 8px;
+  min-height: 50px;
+}
+
+.settings-sidebar-tools {
+  min-height: 50px;
+  padding: 0 6px;
+}
+
+.settings-header-tools {
+  border-left: 1px solid transparent;
+  margin: 1px 4px 0 0;
 }
 
 button.crystal-icon-btn {
@@ -2861,6 +2859,9 @@ button.crystal-icon-btn.sidebar-toggle:hover {
   border-color: var(--crystal-surface-raised);
   box-shadow: none;
   outline: none;
+}
+.settings-search .settings-search-icon {
+  color: var(--crystal-text-dim);
 }
 .settings-search > text {
   background: transparent;

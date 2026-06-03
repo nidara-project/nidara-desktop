@@ -48,6 +48,13 @@ window.crystal-settings-window {
     viewport, list { @include crystal-reset; }
 }
 
+// Gap between the in-capsule toolbar (toggle + nav) and the list below it. Lives
+// on the scroll so it applies in both the docked capsule and the popover, and
+// never in the header (where the toolbar parks without the list).
+.settings-sidebar-scroll {
+    margin-top: 8px;
+}
+
 // When the sidebar is collapsed and floating over content (overlay fallback —
 // used when no floatAnchor is provided), use a near-opaque background so
 // content text doesn't bleed through.
@@ -121,7 +128,7 @@ popover.crystal-sidebar-popup {
             border: none;
             box-shadow: none;
 
-            &:hover:not(.sidebar-header-spacer-row) {
+            &:hover {
                 background-color: var(--crystal-surface-hover);
                 .settings-sidebar-row { color: var(--crystal-text); }
             }
@@ -133,24 +140,6 @@ popover.crystal-sidebar-popup {
         }
     }
 
-    // The spacer row mirrors the 44px header in docked mode so the list rows
-    // align visually with the content area. Inside the popup the header is
-    // above the popup (not inside it), so the spacer is not needed — collapse it.
-    row.sidebar-header-spacer-row {
-        min-height: 0;
-        border: none;
-        padding: 0;
-        margin: 0;
-    }
-}
-
-// ── Sidebar header spacer row — non-interactive, mirrors content header height ─
-row.sidebar-header-spacer-row {
-    min-height: 44px;
-    border-bottom: 1px solid var(--crystal-border);
-    background: transparent;
-    padding: 0;
-    &:hover { background: transparent; }
 }
 
 // ── Sidebar list rows ─────────────────────────────────────────────────────────
@@ -176,7 +165,7 @@ window.crystal-settings-window list.settings-sidebar {
         border: none;
         box-shadow: none;
 
-        &:hover:not(.sidebar-header-spacer-row) {
+        &:hover {
             background-color: var(--crystal-surface-hover);
 
             .settings-sidebar-row { color: var(--crystal-text); }
@@ -194,8 +183,33 @@ window.crystal-settings-window list.settings-sidebar {
 .settings-header {
     background: transparent;
     border-bottom: 1px solid var(--crystal-border);
-    padding: 0 12px;
-    min-height: 44px;
+    // Left pad 8 (not 12) so the parked toolbar's toggle aligns with the same
+    // toggle when it sits in the sidebar capsule / popover (both at x≈8+6).
+    // Bottom pad 8 drops the separator below the search to balance the 8px glass
+    // margin above the header — so the search reads as vertically centered without
+    // having to lift it above the (aligned) sidebar toolbar.
+    padding: 0 12px 8px 8px;
+    min-height: 50px;
+}
+
+// ── Sidebar toolbar (toggle + nav) ────────────────────────────────────────────
+// Lives INSIDE the sidebar capsule (its top) — transparent, the capsule provides
+// the glass. Reparents into .settings-header-tools (content header) while the
+// sidebar is hidden. Fixed 44px height + 6px left pad so the toggle lands at the
+// SAME x,y in all three homes (docked capsule / popover / header) — no jump when
+// it moves. 44px also matches the header height, aligning the list with the page.
+.settings-sidebar-tools {
+    min-height: 50px;
+    padding: 0 6px;
+}
+
+// Park slot for the toolbar inside the content header (only populated while the
+// sidebar is hidden). The 1px transparent left border + 1px top margin mimic the
+// 1px border that insets the toolbar inside the sidebar capsule and the popover,
+// so the toggle lands at the exact same x,y in all three homes — no jump.
+.settings-header-tools {
+    border-left: 1px solid transparent;
+    margin: 1px 4px 0 0;
 }
 
 // ── Icon buttons ──────────────────────────────────────────────────────────────
@@ -259,6 +273,11 @@ button.crystal-icon-btn.sidebar-toggle {
         border-color: var(--crystal-surface-raised);
         box-shadow: none;
         outline: none;
+    }
+
+    // Our own cs-icon magnifier (a Gtk.Image), dimmed at rest.
+    .settings-search-icon {
+        color: var(--crystal-text-dim);
     }
 
     > text {
