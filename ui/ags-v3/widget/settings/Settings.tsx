@@ -425,14 +425,14 @@ export default function Settings(monitor: Gdk.Monitor) {
     contentColumn.append(contentArea)
 
     // ── CrystalSplitView (replaces Adw.OverlaySplitView + Adw.Breakpoint) ────
-    // collapseAt: CrystalSplitView self-manages the poll timer — no extra
-    // wiring needed here. The ZeroMinBox wrapper inside the split view ensures
-    // the window minimum stays near sidebarWidth so Hyprland can tile freely.
+    // Content-driven collapse (no fixed collapseAt): the split view measures the
+    // active page's natural width every poll and collapses the sidebar only when
+    // the window can no longer fit sidebar + un-clipped content. The ZeroMinBox
+    // wrapper keeps the window minimum near sidebarWidth so Hyprland can tile.
     const splitView = CrystalSplitView({
         sidebar: sidebarScroll,
         content: contentColumn,
         sidebarWidth: 250,
-        collapseAt: 800,
         cssClasses: ["crystal-split-view"],
         name: "settings-splitview",
         // floatAnchor enables Popover mode in collapsed state so Hyprland's

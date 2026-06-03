@@ -54,8 +54,19 @@ export function CrystalSplitView(opts: {
     sidebar: Gtk.Widget
     content: Gtk.Widget
     sidebarWidth?: number
-    /** px — sidebar auto-collapses when widget width drops below this. 0 = manual only. */
+    /**
+     * px — explicit fixed breakpoint: sidebar collapses when widget width drops
+     * below this. When omitted (or 0), the breakpoint is CONTENT-DRIVEN: it is
+     * derived every poll from `sidebarWidth + content.naturalWidth + collapseMargin`,
+     * so the sidebar only collapses once there is no longer room for the sidebar
+     * AND the content at its natural (un-clipped) width. This adapts per page —
+     * narrow pages keep the sidebar docked at smaller widths than wide ones.
+     */
     collapseAt?: number
+    /** false disables auto-collapse entirely (manual setCollapsed only). Default true. */
+    autoCollapse?: boolean
+    /** px added to the content-driven breakpoint (sidebar gap + breathing room). Default 24. */
+    collapseMargin?: number
     cssClasses?: string[]
     name?: string
     /**
@@ -69,9 +80,11 @@ export function CrystalSplitView(opts: {
     const {
         sidebar,
         content,
-        sidebarWidth = 250,
-        collapseAt   = 0,
-        cssClasses   = [],
+        sidebarWidth   = 250,
+        collapseAt     = 0,
+        autoCollapse   = true,
+        collapseMargin = 24,
+        cssClasses     = [],
         name,
         floatAnchor,
     } = opts
@@ -335,14 +348,27 @@ export function CrystalSplitView(opts: {
     applyLayout()
 
     // ── Auto-collapse: 200 ms poll while mapped ────────────────────────────────
-    if (collapseAt > 0) {
+    //
+    // Breakpoint is either the explicit `collapseAt` px, or — when that is 0 —
+    // content-driven: sidebarWidth + the content's current natural width +
+    // collapseMargin. The content natural is measured every tick so it adapts to
+    // the active page (Settings swaps pages), and the sidebar collapses exactly
+    // when the window can no longer fit the sidebar plus un-clipped content.
+    const collapseThreshold = (): number => {
+        if (collapseAt > 0) return collapseAt
+        // measure() → [minimum, natural, min_baseline, nat_baseline]
+        const contentNat = content.measure(Gtk.Orientation.HORIZONTAL, -1)[1]
+        return sidebarWidth + contentNat + collapseMargin
+    }
+
+    if (autoCollapse) {
         let timerId: number | null = null
 
         const startPoll = () => {
             if (timerId !== null) return
             timerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT_IDLE, 200, () => {
                 const w = root.get_width()
-                if (w > 0) doCollapse(w < collapseAt)
+                if (w > 0) doCollapse(w < collapseThreshold())
                 return GLib.SOURCE_CONTINUE
             })
         }
