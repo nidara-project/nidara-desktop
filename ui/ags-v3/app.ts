@@ -1,3 +1,6 @@
+// MUST be first: captures the asset root and moves the process CWD to $HOME
+// before anything else can spawn a child or read the CWD.
+import { SHELL_ROOT } from "./core/Paths"
 import app from "ags/gtk4/app"
 import { Gdk, Gtk } from "ags/gtk4"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
@@ -32,7 +35,7 @@ try {
   if (display) {
     const candidates = [
       `${GLib.get_user_config_dir()}/crystal-shell/ui/ags-v3/assets/icons`,
-      `${GLib.get_current_dir()}/assets/icons`,
+      `${SHELL_ROOT}/assets/icons`,
     ]
     const theme = Gtk.IconTheme.get_for_display(display)
     for (const p of candidates) {

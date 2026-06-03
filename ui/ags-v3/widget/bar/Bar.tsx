@@ -32,8 +32,9 @@ import { dockSideState, dockSettings, onDockSettingsChanged } from "../dock/stat
 import Icons from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
+import { SHELL_ROOT } from "../../core/Paths"
 
-const ASSETS_DIR = GLib.get_current_dir()
+const ASSETS_DIR = SHELL_ROOT
 
 export const LAUNCHER_ICON_PRESETS: Record<string, string> = {
   "arch": `${ASSETS_DIR}/assets/logos/arch-symbolic.svg`,

@@ -1,10 +1,11 @@
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import { SHELL_ROOT } from "./Paths"
 
 function resolveIconsDir(): string {
     const candidates = [
         `${GLib.get_user_config_dir()}/crystal-shell/ui/ags-v3/assets/icons/hicolor/scalable/actions`,
-        `${GLib.get_current_dir()}/assets/icons/hicolor/scalable/actions`,
+        `${SHELL_ROOT}/assets/icons/hicolor/scalable/actions`,
     ]
     for (const p of candidates) {
         if (GLib.file_test(p, GLib.FileTest.IS_DIR)) return p

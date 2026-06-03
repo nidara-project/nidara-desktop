@@ -18,6 +18,7 @@ import {
     writeQtSettings,
     getSystemQtTheme,
 } from "./FluidCrystal"
+import { SHELL_ROOT } from "./Paths"
 
 // ── CONSTANTS ────────────────────────────────────────────────────────
 // No default theme forced — themeFamily is read from system on first run via syncFromSystem()
@@ -356,7 +357,7 @@ class ThemeManager extends GObject.Object {
                 
                 // V921: Environment Isolation (Dev Sandbox)
                 const isDevMode = GLib.getenv("CRYSTAL_DEV_MODE") === "1";
-                const activeDir = GLib.get_current_dir();
+                const activeDir = SHELL_ROOT;
 
                 let configPaths: string[] = [];
 
