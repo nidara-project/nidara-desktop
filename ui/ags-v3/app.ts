@@ -8,8 +8,6 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import status from "./core/Status"
 import shellActions from "./core/ShellActions"
-// @ts-ignore
-import Adw from "gi://Adw?version=1"
 import { readFile } from "ags/file"
 
 // @ts-ignore
@@ -19,12 +17,14 @@ import type { Window } from "gi://Gtk?version=4.0"
 
 /**
  *  THEME STRATEGY:
- * We use Libadwaita exclusively for modern theme management.
+ * Pure GTK4 dark/light coordination via Gtk.Settings — no libadwaita.
+ * ThemeManager applies the persisted dark/light state right after boot;
+ * this just seeds the startup default.
  */
 try {
   GLib.unsetenv("GTK_THEME")
-  Adw.init()
-  Adw.StyleManager.get_default().set_color_scheme(Adw.ColorScheme.PREFER_DARK)
+  const gtkSettings = Gtk.Settings.get_default()
+  if (gtkSettings) gtkSettings.gtk_application_prefer_dark_theme = true
 } catch (e) {
   console.warn("[App] Initialization failed:", e)
 }

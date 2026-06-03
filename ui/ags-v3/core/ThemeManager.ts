@@ -3,8 +3,6 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { Gdk, Gtk } from "ags/gtk4"
 import app from "ags/gtk4/app"
-// @ts-ignore
-import Adw from "gi://Adw?version=1"
 import { execAsync } from "ags/process"
 import { readFile, writeFile } from "ags/file"
 import {
@@ -416,10 +414,9 @@ class ThemeManager extends GObject.Object {
                 if (settings) settings.gtk_theme_name = theme
             }
             
-            // USE Adw.StyleManager exclusively for dark-mode coordination
-            Adw.StyleManager.get_default().set_color_scheme(
-                this.state.isDark ? Adw.ColorScheme.PREFER_DARK : Adw.ColorScheme.PREFER_LIGHT
-            )
+            // Pure GTK4 dark/light coordination — no libadwaita
+            const gtkSettings = Gtk.Settings.get_default()
+            if (gtkSettings) gtkSettings.gtk_application_prefer_dark_theme = this.state.isDark
         } catch (e) { }
         writeQtSettings(this.fcConfig, this.state.iconTheme)
     }
