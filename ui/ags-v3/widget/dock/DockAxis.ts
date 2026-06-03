@@ -358,10 +358,17 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             }
             if (dockSettings.autoHide && !st.isRevealed && st.slideTarget > 0
                     && st.slideCurrent >= this.hideDistance * 0.8) {
-                const triggerY = WIN_H - Math.round(this.hideDistance) - 4
+                // Edge-reveal band anchored to the screen bottom, with its outer edge run
+                // THROUGH the surface's far edge (WIN_H) so the boundary row is interior to
+                // the region, not its truncated edge. Mirrors verticalAxis — a thin strip
+                // sitting exactly on the off-screen clip boundary was a fragile sliver to hit.
+                const BAND = 24
+                const slideOff = Math.round(st.slideCurrent)
+                const triggerY = Math.max(0, WIN_H - slideOff - BAND)
+                const height = WIN_H - triggerY
                 // @ts-ignore
-                region.unionRectangle({ x: 0, y: triggerY, width: monMain, height: 4 })
-                apply(`trig:${triggerY}`, () => surface.set_input_region(region)); return
+                region.unionRectangle({ x: 0, y: triggerY, width: monMain, height })
+                apply(`trig:${triggerY},${height}`, () => surface.set_input_region(region)); return
             }
             if (st.menuOpenCount > 0) { apply("null", () => surface.set_input_region(null)); return }
             // Height tracks the dock's current silhouette (pill at rest, pill+bulge on hover)
