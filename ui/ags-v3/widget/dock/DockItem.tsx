@@ -722,9 +722,12 @@ export function DockItem(
                 } else if (appId === "crystal-shell-settings") {
                     shellActions.toggleSettings?.()
                 } else {
-                    // gtk-launch reads the .desktop file directly — no CWD inheritance
-                    // from the AGS process (which runs from ui/ags-v3).
-                    execAsync(["uwsm", "app", "--", "gtk-launch", appId])
+                    // gtk-launch DOES inherit the launcher's CWD (verified) — without the
+                    // cd, the app opens in the AGS process's dir (ui/ags-v3) instead of
+                    // $HOME. Reset it explicitly, mirroring DockCore.getLaunch. `exec` so
+                    // gtk-launch replaces the shell (clean process tree under uwsm's scope).
+                    execAsync(["uwsm", "app", "--", "sh", "-c",
+                        `cd "$HOME" && exec gtk-launch ${GLib.shell_quote(appId)}`])
                         .catch(() => { try { appItem.launch() } catch (_) {} })
                 }
             } catch (fallbackError) {
