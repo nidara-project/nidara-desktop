@@ -2,16 +2,22 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # crystal-shell-ui — Crystal Shell UI launcher
 # Installed to /usr/bin/crystal-shell-ui
-# Called by Hyprland exec-once and by SUPER+SHIFT+R to restart the UI
+# Run as ExecStart of crystal-shell.service (auto-respawns on crash). The startup
+# exec and SUPER+SHIFT+R go through `systemctl --user start/restart` of that unit.
 # ─────────────────────────────────────────────────────────────────────────────
 
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/crystal-shell"
 SYS_BUNDLE="/usr/share/crystal-shell/ui/ags-v3/build/crystal-shell"
 LOG="/tmp/crystal-shell-ui.log"
 
-# Kill any existing instance cleanly
-killall -9 gjs 2>/dev/null || true
-sleep 0.2
+# Kill any existing instance cleanly — but ONLY when run standalone. Under the
+# systemd unit, systemd already kills the old process's cgroup on restart, and a
+# blind `killall -9 gjs` here would also nuke unrelated gjs apps and fight
+# systemd's lifecycle. INVOCATION_ID is set only when systemd runs us.
+if [ -z "$INVOCATION_ID" ]; then
+    killall -9 gjs 2>/dev/null || true
+    sleep 0.2
+fi
 
 export GDK_BACKEND=wayland
 export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"

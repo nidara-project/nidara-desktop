@@ -113,7 +113,10 @@ hl.animation({ leaf = "workspaces",    enabled = true, speed = 6,   bezier = "de
 -- ── Crystal Shell startup ─────────────────────────────────────────────────────
 hl.on("hyprland.start", function()
     hl.exec_cmd("uwsm finalize")
-    hl.exec_cmd("uwsm app -- crystal-shell-ui")
+    -- The shell runs as a systemd user unit so it respawns on crash (segfault etc.)
+    -- instead of leaving a bare compositor. `finalize` above has just activated
+    -- graphical-session.target, which the (enabled) unit is WantedBy.
+    hl.exec_cmd("systemctl --user start crystal-shell.service")
     -- Background daemons go in background-graphical.slice (-s b), not the foreground
     -- app slice: systemd deprioritizes them under CPU/IO/memory pressure and the OOM
     -- killer targets them before real apps — correct for wallpaper/idle/clipboard helpers.
@@ -131,7 +134,7 @@ local mainMod     = "SUPER"
 
 
 -- ── Keybinds — Crystal Shell UI ──────────────────────────────────────────────
-hl.bind(mainMod .. " + SHIFT + R", hl.dsp.exec_cmd("uwsm app -- crystal-shell-ui"))
+hl.bind(mainMod .. " + SHIFT + R", hl.dsp.exec_cmd("systemctl --user restart crystal-shell.service"))
 hl.bind(mainMod .. " + L",         hl.dsp.exec_cmd("crystal-lock"))
 
 -- ── Keybinds — App launchers ─────────────────────────────────────────────────

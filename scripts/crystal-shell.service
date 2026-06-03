@@ -1,0 +1,25 @@
+[Unit]
+Description=Crystal Shell UI (bar, dock, overlays)
+Documentation=https://github.com/fluid-crystal/crystal-shell
+PartOf=graphical-session.target
+After=graphical-session.target
+# Crash-loop guard: if the shell dies more than 5 times in 30s (e.g. a broken
+# build or a config that crashes on startup), stop retrying instead of respawning
+# forever in a flickering loop — drop to a TTY and fix it. Re-arm with
+# `systemctl --user reset-failed crystal-shell.service`.
+StartLimitIntervalSec=30
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/crystal-shell-ui
+# Respawn on crash (segfault / non-zero exit / signal). A clean exit is NOT
+# restarted, so quitting on purpose stays quit.
+Restart=on-failure
+RestartSec=1
+# Keep restarts snappy: SIGKILL the cgroup quickly if it doesn't exit on SIGTERM.
+TimeoutStopSec=3
+Slice=session-graphical.slice
+
+[Install]
+WantedBy=graphical-session.target

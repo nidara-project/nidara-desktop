@@ -359,6 +359,11 @@ sudo cp "$REPO_DIR/scripts/crystal-lock"      /usr/bin/crystal-lock
 sudo cp "$REPO_DIR/scripts/crystal-game-mode" /usr/bin/crystal-game-mode
 sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-game-mode
 
+# systemd user unit — the shell respawns on crash instead of leaving a bare
+# compositor (see scripts/crystal-shell.service). Enabled below.
+sudo mkdir -p /usr/lib/systemd/user
+sudo cp "$REPO_DIR/scripts/crystal-shell.service" /usr/lib/systemd/user/crystal-shell.service
+
 # Wayland session entry
 sudo mkdir -p /usr/share/wayland-sessions
 cat <<'EOF' | sudo tee /usr/share/wayland-sessions/crystal-shell.desktop > /dev/null
@@ -557,6 +562,13 @@ if [ "$ACTIVE_DM" = "none" ]; then
 else
     echo "  Display manager '$ACTIVE_DM' already enabled — skipping greetd setup."
 fi
+
+# ── Crystal Shell unit ────────────────────────────────────────────────────────
+# WantedBy=graphical-session.target → starts with the session; Restart=on-failure
+# respawns it on crash. Not --now: it starts inside the graphical session.
+echo "  Enabling crystal-shell.service (auto-respawn)..."
+systemctl --user daemon-reload 2>/dev/null || true
+systemctl --user enable crystal-shell.service 2>/dev/null || true
 
 # ── Audio services ────────────────────────────────────────────────────────────
 echo "  Enabling audio services..."
