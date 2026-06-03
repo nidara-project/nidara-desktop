@@ -45,7 +45,7 @@ function createDeviceRow(
         pixel_size: 18, css_classes: ["cs-icon"],
     }))
     header.append(new Gtk.Label({
-        label: endpoint.description || endpoint.name || t("settings.audio.label.dispositivo"),
+        label: endpoint.description || endpoint.name || t("settings.audio.device"),
         halign: Gtk.Align.START, hexpand: true,
         css_classes: ["settings-row-label"],
         ellipsize: 3, max_width_chars: 26,
@@ -54,7 +54,7 @@ function createDeviceRow(
     // Default badge / set-default button
     if (isDefault) {
         header.append(new Gtk.Label({
-            label: t("settings.audio.label.por-defecto"),
+            label: t("settings.audio.default"),
             css_classes: ["settings-row-status", "accent-label"],
             valign: Gtk.Align.CENTER,
         }))
@@ -211,20 +211,20 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
 export default function AudioPage() {
     const wp    = AstalWp.get_default()
     const audio = wp?.audio
-    if (!audio) return new Gtk.Label({ label: t("settings.audio.label.servicio-de-audio-no-disponible") })
+    if (!audio) return new Gtk.Label({ label: t("settings.audio.error.no-service") })
 
     const page = pageBox("audio-page")
     page.append(pageHeader(
-        t("settings.audio.page.title.sonido"),
-        t("settings.audio.page.subtitle.administra-tus-dispositivos-de-entrada-y")
+        t("settings.audio.title"),
+        t("settings.audio.subtitle")
     ))
 
-    const speakerGroup = listGroup(t("settings.audio.group.dispositivos-de-salida"))
-    const micGroup     = listGroup(t("settings.audio.group.entrada-microfonos"))
-    const streamGroup  = listGroup(t("settings.audio.group.aplicaciones"))
+    const speakerGroup = listGroup(t("settings.audio.group.output"))
+    const micGroup     = listGroup(t("settings.audio.group.input"))
+    const streamGroup  = listGroup(t("settings.audio.group.apps"))
 
     const emptyStreams = new Gtk.Label({
-        label: t("settings.audio.label.sin-apps"),
+        label: t("settings.audio.no-apps"),
         css_classes: ["settings-row-subtitle"],
         margin_top: 12, margin_bottom: 12, margin_start: 16,
         halign: Gtk.Align.START,

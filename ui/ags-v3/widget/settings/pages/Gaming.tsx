@@ -11,8 +11,8 @@ import { CrystalButton } from "../../../../lib/crystal-ui"
 export default function GamingPage() {
     const page = pageBox("gaming-page")
     page.append(pageHeader(
-        t("settings.gaming.page.title.gaming"),
-        t("settings.gaming.page.subtitle.configura-el-modo-juego"),
+        t("settings.gaming.title"),
+        t("settings.gaming.subtitle"),
     ))
 
     // ── Wallpaper ─────────────────────────────────────────────────────────────
@@ -50,8 +50,8 @@ export default function GamingPage() {
     })
 
     wallGroup.listBox.append(createRow(
-        t("settings.gaming.row.label.wallpaper-mode"),
-        t("settings.gaming.row.desc.wallpaper-mode"),
+        t("settings.gaming.wallpaper-mode"),
+        t("settings.gaming.wallpaper-mode.desc"),
         modeBox,
     ))
 
@@ -78,14 +78,14 @@ export default function GamingPage() {
     wallGroup.listBox.append(previewRow)
 
     const pickBtn = CrystalButton({
-        label: t("settings.appearance.label.explorar"),
+        label: t("settings.appearance.browse"),
         variant: "secondary",
         pill: true,
         valign: Gtk.Align.CENTER,
     })
     pickBtn.connect("clicked", () => {
         const dialog = new Gtk.FileDialog({
-            title: t("settings.gaming.dialog.title.seleccionar-wallpaper"),
+            title: t("settings.gaming.dialog.wallpaper"),
             modal: true,
         })
         const filter = new Gtk.FileFilter()
@@ -93,7 +93,7 @@ export default function GamingPage() {
         filter.add_mime_type("image/png")
         filter.add_mime_type("image/gif")
         filter.add_mime_type("image/webp")
-        filter.set_name(t("settings.appearance.filter.imagenes"))
+        filter.set_name(t("settings.appearance.filter.images"))
         const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
         filters.append(filter)
         dialog.set_filters(filters)
@@ -111,8 +111,8 @@ export default function GamingPage() {
     })
 
     const pickerRow = createRow(
-        t("settings.gaming.row.label.custom-wallpaper"),
-        t("settings.gaming.row.desc.custom-wallpaper"),
+        t("settings.gaming.custom-wallpaper"),
+        t("settings.gaming.custom-wallpaper.desc"),
         pickBtn,
     )
     wallGroup.listBox.append(pickerRow)
@@ -128,8 +128,8 @@ export default function GamingPage() {
     const transitions = Object.keys(TRANSITION_LABELS) as TransitionType[]
     const transLabels = transitions.map(k => TRANSITION_LABELS[k])
     wallGroup.listBox.append(dropdownRow(
-        t("settings.appearance.row.label.transicion"),
-        t("settings.gaming.row.desc.transicion"),
+        t("settings.appearance.transition"),
+        t("settings.gaming.transition.desc"),
         TRANSITION_LABELS[Gaming.transition],
         transLabels,
         (label) => {
@@ -141,11 +141,11 @@ export default function GamingPage() {
     page.append(wallGroup.box)
 
     // ── Performance ───────────────────────────────────────────────────────────
-    const perfGroup = listGroup(t("settings.gaming.group.rendimiento"))
+    const perfGroup = listGroup(t("settings.gaming.group.performance"))
 
     perfGroup.listBox.append(toggleRow(
-        t("settings.gaming.row.label.performance-profile"),
-        t("settings.gaming.row.desc.performance-profile"),
+        t("settings.gaming.performance-profile"),
+        t("settings.gaming.performance-profile.desc"),
         Gaming.performanceProfile,
         (v) => Gaming.setPerformanceProfile(v),
     ))

@@ -9,8 +9,8 @@ export default function NotificationsPage() {
     const popupsGroup = listGroup(t("settings.notif.group.popups"))
 
     popupsGroup.listBox.append(sliderRow(
-        t("settings.notif.row.label.timeout"),
-        t("settings.notif.row.desc.timeout"),
+        t("settings.notif.timeout"),
+        t("settings.notif.timeout.desc"),
         notifConfig.popupTimeout, 2, 15,
         (v) => notifConfig.setPopupTimeout(v),
         { unit: "s" },
@@ -21,8 +21,8 @@ export default function NotificationsPage() {
     const dndGroup = listGroup(t("settings.notif.group.dnd"))
 
     dndGroup.listBox.append(toggleRow(
-        t("settings.notif.row.label.dnd-default"),
-        t("settings.notif.row.desc.dnd-default"),
+        t("settings.notif.dnd-default"),
+        t("settings.notif.dnd-default.desc"),
         notifConfig.dndDefault,
         (v) => notifConfig.setDndDefault(v),
     ))

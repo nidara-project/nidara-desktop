@@ -39,7 +39,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
     const originalIcon = app.icon ?? ""
 
     const dialog = new Gtk.Window({
-        title: `${t("settings.apps.dialog.title.icono")} — ${app.name}`,
+        title: `${t("settings.apps.dialog.icon")} — ${app.name}`,
         default_width: 420,
         modal: true,
         resizable: false,
@@ -77,7 +77,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
 
     // Current icon name hint
     box.append(new Gtk.Label({
-        label: t("settings.apps.label.nombre-de-icono-del-tema"),
+        label: t("settings.apps.theme-icon-name"),
         css_classes: ["settings-group-title"],
         halign: Gtk.Align.START,
         margin_bottom: 6,
@@ -85,7 +85,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
 
     // Icon name entry
     const entry = new Gtk.Entry({
-        placeholder_text: originalIcon || t("settings.apps.entry.placeholder.ej-firefox-web-browser"),
+        placeholder_text: originalIcon || t("settings.apps.entry.icon-name"),
         hexpand: true,
     })
     if (originalIcon) entry.text = originalIcon
@@ -104,10 +104,10 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
             if (isFile || isThemed) {
                 const pb = loadPixbuf(iconInput.startsWith("/") ? iconInput : iconInput, 72)
                 if (pb) previewImg.set_from_pixbuf(pb)
-                previewStatus.label = isFile ? t("settings.apps.status.archivo-personalizado") : t("settings.apps.status.encontrado-en-tema")
+                previewStatus.label = isFile ? t("settings.apps.status.custom-file") : t("settings.apps.status.in-theme")
                 entry.remove_css_class("error")
             } else {
-                previewStatus.label = t("settings.apps.status.no-encontrado-en-el-tema-actual")
+                previewStatus.label = t("settings.apps.status.not-in-theme")
                 entry.add_css_class("error")
             }
             return GLib.SOURCE_REMOVE
@@ -117,7 +117,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
 
     // File picker button
     const fileBtn = CrystalButton({
-        label: t("settings.apps.label.desde-archivo"),
+        label: t("settings.apps.from-file"),
         variant: "secondary",
         pill: true,
         halign: Gtk.Align.START,
@@ -125,11 +125,11 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
     fileBtn.margin_top = 10
     fileBtn.margin_bottom = 4
     fileBtn.connect("clicked", () => {
-        const fd = new Gtk.FileDialog({ title: t("settings.apps.dialog.title.seleccionar-icono"), modal: true })
+        const fd = new Gtk.FileDialog({ title: t("settings.apps.dialog.select-icon"), modal: true })
         const filter = new Gtk.FileFilter()
         filter.add_mime_type("image/svg+xml")
         filter.add_mime_type("image/png")
-        filter.set_name(t("settings.apps.filter.imagenes-svg-png"))
+        filter.set_name(t("settings.apps.filter.images"))
         const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
         filters.append(filter)
         fd.set_filters(filters)
@@ -150,11 +150,11 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
 
     const hasOverride = !!appService.getIconOverridePath(originalIcon)
     const resetBtn = CrystalButton({
-        label: t("settings.apps.label.restaurar"),
+        label: t("settings.apps.restore"),
         variant: "secondary",
         pill: true,
         sensitive: hasOverride,
-        tooltip_text: t("settings.apps.tooltip.eliminar-el-override-y-volver-al-icono-d"),
+        tooltip_text: t("settings.apps.tooltip.remove-override"),
     })
     resetBtn.connect("clicked", () => {
         appService.removeIconOverride(originalIcon)
@@ -167,10 +167,10 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
         dialog.close()
     })
 
-    const cancelBtn = CrystalButton({ label: t("settings.apps.label.cancelar"), variant: "secondary", pill: true })
+    const cancelBtn = CrystalButton({ label: t("settings.apps.cancel"), variant: "secondary", pill: true })
     cancelBtn.connect("clicked", () => dialog.close())
 
-    const applyBtn = CrystalButton({ label: t("settings.apps.label.aplicar"), variant: "primary", pill: true })
+    const applyBtn = CrystalButton({ label: t("settings.apps.apply"), variant: "primary", pill: true })
     applyBtn.connect("clicked", () => {
         const val = entry.text.trim()
         if (!val) { dialog.close(); return }
@@ -183,7 +183,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
             rowIconLabel.label = canonical ?? originalIcon
             dialog.close()
         } else {
-            previewStatus.label = t("settings.apps.status.no-se-pudo-aplicar-el-override")
+            previewStatus.label = t("settings.apps.status.apply-failed")
         }
     })
 
@@ -215,7 +215,7 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
     textBox.append(new Gtk.Label({ label: app.name, halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
 
     const iconLabel = new Gtk.Label({
-        label: canonical ?? (app.icon ?? t("settings.apps.label.sin-icono")),
+        label: canonical ?? (app.icon ?? t("settings.apps.no-icon")),
         halign: Gtk.Align.START,
         css_classes: ["settings-row-subtitle"],
         ellipsize: 3, // PANGO_ELLIPSIZE_END
@@ -235,7 +235,7 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
         child: new Gtk.Image({ gicon: Icons.filePen, pixel_size: 14 , css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn"],
         valign: Gtk.Align.CENTER,
-        tooltip_text: t("settings.apps.tooltip.cambiar-icono"),
+        tooltip_text: t("settings.apps.tooltip.change-icon"),
     })
     editBtn.connect("clicked", () => {
         const win = row.get_root() as Gtk.Window | null
@@ -259,11 +259,11 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
 
 export default function AppsPage() {
     const page = pageBox("apps-page")
-    page.append(pageHeader(t("settings.apps.page.title.aplicaciones"), t("settings.apps.page.subtitle.personaliza-los-iconos-de-las-aplicacion")))
+    page.append(pageHeader(t("settings.apps.title"), t("settings.apps.subtitle")))
 
     // Search
     const searchEntry = new Gtk.SearchEntry({
-        placeholder_text: t("settings.apps.entry.placeholder.buscar-aplicacion"),
+        placeholder_text: t("settings.apps.entry.search"),
         hexpand: true,
         margin_bottom: 4,
     })
@@ -273,7 +273,7 @@ export default function AppsPage() {
     // App list — build the group manually so we can wrap the ListBox in a ScrolledWindow
     const groupBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["settings-group"] })
     groupBox.append(new Gtk.Label({
-        label: t("settings.apps.label.aplicaciones-instaladas"),
+        label: t("settings.apps.installed"),
         css_classes: ["settings-group-title"],
         halign: Gtk.Align.START,
         margin_start: 10,

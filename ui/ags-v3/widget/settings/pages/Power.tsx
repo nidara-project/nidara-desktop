@@ -39,7 +39,7 @@ const parseHypridle = (): IdleConfig => {
 const writeHypridle = ({ screenOff, lock, suspend }: IdleConfig) => {
     const lines = [
         "# --- HYPRIDLE - Crystal Shell Idle Management ---",
-        "# Edited via Settings → Energía → Inactividad",
+        "# Managed by Crystal Shell Settings → Power → Idle & Lock",
         "",
         "general {",
         "    lock_cmd = crystal-lock",
@@ -83,7 +83,7 @@ const writeHypridle = ({ screenOff, lock, suspend }: IdleConfig) => {
 
 // ── Option tables ─────────────────────────────────────────────────────────────
 const screenOpts = [
-    { label: t("settings.power.label.nunca"),                              s: 0    },
+    { label: t("settings.power.opt.never"),                              s: 0    },
     { label: `2 ${t("settings.power.time.min")}`,                         s: 120  },
     { label: `5 ${t("settings.power.time.min")}`,                         s: 300  },
     { label: `10 ${t("settings.power.time.min")}`,                        s: 600  },
@@ -91,24 +91,24 @@ const screenOpts = [
     { label: `30 ${t("settings.power.time.min")}`,                        s: 1800 },
 ]
 const lockOpts = [
-    { label: t("settings.power.label.nunca"),                              s: 0    },
+    { label: t("settings.power.opt.never"),                              s: 0    },
     { label: `5 ${t("settings.power.time.min")}`,                         s: 300  },
     { label: `10 ${t("settings.power.time.min")}`,                        s: 600  },
     { label: `30 ${t("settings.power.time.min")}`,                        s: 1800 },
-    { label: `1 ${t("settings.power.time.hora")}`,                        s: 3600 },
-    { label: `2 ${t("settings.power.time.horas")}`,                       s: 7200 },
+    { label: `1 ${t("settings.power.time.hour")}`,                        s: 3600 },
+    { label: `2 ${t("settings.power.time.hours")}`,                       s: 7200 },
 ]
 const suspendOpts = [
-    { label: t("settings.power.label.nunca"),                              s: 0     },
+    { label: t("settings.power.opt.never"),                              s: 0     },
     { label: `15 ${t("settings.power.time.min")}`,                        s: 900   },
     { label: `30 ${t("settings.power.time.min")}`,                        s: 1800  },
-    { label: `1 ${t("settings.power.time.hora")}`,                        s: 3600  },
-    { label: `2 ${t("settings.power.time.horas")}`,                       s: 7200  },
-    { label: `3 ${t("settings.power.time.horas")}`,                       s: 10800 },
+    { label: `1 ${t("settings.power.time.hour")}`,                        s: 3600  },
+    { label: `2 ${t("settings.power.time.hours")}`,                       s: 7200  },
+    { label: `3 ${t("settings.power.time.hours")}`,                       s: 10800 },
 ]
 
 const closestLabel = (opts: { label: string; s: number }[], seconds: number) => {
-    if (seconds === 0) return t("settings.power.label.nunca")
+    if (seconds === 0) return t("settings.power.opt.never")
     let best = opts[0]
     for (const o of opts) if (Math.abs(o.s - seconds) < Math.abs(best.s - seconds)) best = o
     return best.label
@@ -117,16 +117,16 @@ const closestLabel = (opts: { label: string; s: number }[], seconds: number) => 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function PowerPage() {
     const page = pageBox("power-page")
-    page.append(pageHeader(t("settings.power.page.title.energia"), t("settings.power.page.subtitle.gestion-de-energia-inactividad-y-bloqueo")))
+    page.append(pageHeader(t("settings.power.title"), t("settings.power.subtitle")))
 
     // ── Performance profile ───────────────────────────────────────────────────
-    const profileGroup = listGroup(t("settings.power.group.perfil-de-rendimiento"))
+    const profileGroup = listGroup(t("settings.power.group.profile"))
     profileGroup.listBox.selection_mode = Gtk.SelectionMode.SINGLE
 
     const profiles = [
-        { id: "performance", label: t("settings.power.label.alto-rendimiento"),  icon: Icons.zap },
-        { id: "balanced",    label: t("settings.power.label.equilibrado"),        icon: Icons.battery },
-        { id: "power-saver", label: t("settings.power.label.ahorro-de-energia"),  icon: Icons.leaf },
+        { id: "performance", label: t("settings.power.profile.performance"),  icon: Icons.zap },
+        { id: "balanced",    label: t("settings.power.profile.balanced"),        icon: Icons.battery },
+        { id: "power-saver", label: t("settings.power.profile.power-saver"),  icon: Icons.leaf },
     ]
     const checkIcons = new Map<string, Gtk.Image>()
 
@@ -170,14 +170,14 @@ export default function PowerPage() {
 
     // ── Idle / lock ───────────────────────────────────────────────────────────
     const cfg = parseHypridle()
-    const idleGroup = listGroup(t("settings.power.group.inactividad-y-bloqueo"))
+    const idleGroup = listGroup(t("settings.power.group.idle"))
     let current = { ...cfg }
 
     const save = () => writeHypridle(current)
 
     idleGroup.listBox.append(dropdownRow(
-        t("settings.power.row.label.apagar-pantalla"),
-        t("settings.power.row.desc.tiempo-sin-actividad-antes-de-apagar-la-"),
+        t("settings.power.screen-off"),
+        t("settings.power.screen-off.desc"),
         closestLabel(screenOpts, cfg.screenOff),
         screenOpts.map(o => o.label),
         (label) => {
@@ -187,8 +187,8 @@ export default function PowerPage() {
     ))
 
     idleGroup.listBox.append(dropdownRow(
-        t("settings.power.row.label.bloquear-sesion"),
-        t("settings.power.row.desc.tiempo-sin-actividad-antes-de-bloquear-l"),
+        t("settings.power.lock"),
+        t("settings.power.lock.desc"),
         closestLabel(lockOpts, cfg.lock),
         lockOpts.map(o => o.label),
         (label) => {
@@ -198,8 +198,8 @@ export default function PowerPage() {
     ))
 
     idleGroup.listBox.append(dropdownRow(
-        t("settings.power.row.label.suspender"),
-        t("settings.power.row.desc.tiempo-sin-actividad-antes-de-suspender-"),
+        t("settings.power.suspend"),
+        t("settings.power.suspend.desc"),
         closestLabel(suspendOpts, cfg.suspend),
         suspendOpts.map(o => o.label),
         (label) => {
@@ -210,7 +210,7 @@ export default function PowerPage() {
 
     // Info note: lock must fire before suspend
     const note = new Gtk.Label({
-        label: t("settings.power.label.el-bloqueo-debe-ocurrir-antes-que-la-sus"),
+        label: t("settings.power.lock-note"),
         css_classes: ["settings-row-subtitle"],
         halign: Gtk.Align.START,
         margin_start: 10,

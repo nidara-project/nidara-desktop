@@ -5,18 +5,18 @@ import { t } from "../../../core/i18n"
 
 export default function DockPage() {
     const page = pageBox("dock-page")
-    page.append(pageHeader(t("settings.dock.page.title.dock"), t("settings.dock.page.subtitle.personaliza-el-tamano-animacion-e-indica")))
+    page.append(pageHeader(t("settings.dock.title"), t("settings.dock.subtitle")))
 
     // 0. Position
-    const posGroup = listGroup(t("settings.dock.group.posicion"))
+    const posGroup = listGroup(t("settings.dock.group.position"))
     const posOptions: { label: string; value: DockPosition }[] = [
-        { label: t("settings.dock.label.inferior"),  value: 'bottom' },
-        { label: t("settings.dock.label.izquierda"), value: 'left'   },
-        { label: t("settings.dock.label.derecha"),   value: 'right'  },
+        { label: t("settings.dock.opt.bottom"),  value: 'bottom' },
+        { label: t("settings.dock.opt.left"), value: 'left'   },
+        { label: t("settings.dock.opt.right"),   value: 'right'  },
     ]
     posGroup.listBox.append(dropdownRow(
-        t("settings.dock.row.label.posicion-del-dock"), t("settings.dock.row.desc.donde-aparece-el-dock-en-la-pantalla"),
-        posOptions.find(o => o.value === dockSettings.position)?.label ?? t("settings.dock.label.inferior"),
+        t("settings.dock.position"), t("settings.dock.position.desc"),
+        posOptions.find(o => o.value === dockSettings.position)?.label ?? t("settings.dock.opt.bottom"),
         posOptions.map(o => o.label),
         (label) => {
             const opt = posOptions.find(o => o.label === label)
@@ -26,7 +26,7 @@ export default function DockPage() {
     ))
 
     const verticalNote = new Gtk.Label({
-        label: t("settings.dock.label.en-posicion-lateral-ocultacion-automatic"),
+        label: t("settings.dock.side-autohide-note"),
         css_classes: ["settings-row-subtitle"],
         halign: Gtk.Align.START,
         margin_start: 10,
@@ -39,14 +39,14 @@ export default function DockPage() {
     page.append(posGroup.box)
 
     // 1. Geometry
-    const geoGroup = listGroup(t("settings.dock.group.geometria"))
+    const geoGroup = listGroup(t("settings.dock.group.geometry"))
     geoGroup.listBox.append(presetRow(
-        t("settings.dock.row.label.tamano-de-icono"), t("settings.dock.row.desc.tamano-base-en-reposo"),
+        t("settings.dock.icon-size"), t("settings.dock.icon-size.desc"),
         [32, 48, 64, 80, 96], dockSettings.iconSize, "px",
         (v) => updateDockSettings({ iconSize: v }),
     ))
     geoGroup.listBox.append(sliderRow(
-        t("settings.dock.row.label.margen-inferior"), t("settings.dock.row.desc.distancia-al-borde-de-la-pantalla"),
+        t("settings.dock.bottom-margin"), t("settings.dock.bottom-margin.desc"),
         dockSettings.screenGap, 4, 32,
         (v) => updateDockSettings({ screenGap: v }),
         { unit: "px" },
@@ -54,14 +54,14 @@ export default function DockPage() {
     page.append(geoGroup.box)
 
     // 2. Effects
-    const effectsGroup = listGroup(t("settings.dock.group.efectos"))
+    const effectsGroup = listGroup(t("settings.dock.group.effects"))
     effectsGroup.listBox.append(toggleRow(
-        t("settings.dock.row.label.magnificacion-activa"), t("settings.dock.row.desc.efecto-de-zoom-al-pasar-el-cursor"),
+        t("settings.dock.magnification"), t("settings.dock.magnification.desc"),
         dockSettings.magnification,
         (v) => updateDockSettings({ magnification: v }),
     ))
     effectsGroup.listBox.append(sliderRow(
-        t("settings.dock.row.label.tamano-maximo"), t("settings.dock.row.desc.limite-de-expansion-al-magnificar"),
+        t("settings.dock.max-size"), t("settings.dock.max-size.desc"),
         dockSettings.maxIconSize, 64, 128,
         (v) => updateDockSettings({ maxIconSize: v }),
         { unit: "px" },
@@ -69,9 +69,9 @@ export default function DockPage() {
     page.append(effectsGroup.box)
 
     // 3. Behavior
-    const behGroup = listGroup(t("settings.dock.group.comportamiento"))
+    const behGroup = listGroup(t("settings.dock.group.behavior"))
     behGroup.listBox.append(toggleRow(
-        t("settings.dock.row.label.mostrar-indicadores"), t("settings.dock.row.desc.punto-bajo-los-iconos-de-apps-abiertas"),
+        t("settings.dock.indicators"), t("settings.dock.indicators.desc"),
         dockSettings.showIndicators,
         (v) => updateDockSettings({ showIndicators: v }),
     ))
@@ -79,7 +79,7 @@ export default function DockPage() {
     // Auto-hide — built manually so we can update it reactively when position changes
     const autoHideSwitch = new Gtk.Switch({ active: dockSettings.autoHide, valign: Gtk.Align.CENTER })
     const autoHideSubtitle = new Gtk.Label({
-        label: t("settings.dock.row.desc.el-dock-se-esconde-al-alejar-el-cursor"),
+        label: t("settings.dock.autohide.desc"),
         css_classes: ["settings-row-subtitle"],
         halign: Gtk.Align.START,
         ellipsize: 3,
@@ -88,7 +88,7 @@ export default function DockPage() {
         updateDockSettings({ autoHide: state })
         return false
     })
-    const autoHideRow = createRow(t("settings.dock.row.label.ocultar-automaticamente"), t("settings.dock.row.desc.el-dock-se-esconde-al-alejar-el-cursor"), autoHideSwitch)
+    const autoHideRow = createRow(t("settings.dock.autohide"), t("settings.dock.autohide.desc"), autoHideSwitch)
     behGroup.listBox.append(autoHideRow)
 
     const syncAutoHide = () => {
@@ -101,7 +101,7 @@ export default function DockPage() {
     page.connect("unrealize", () => { try { unsub?.() } catch {} })
 
     const delaySlider = sliderRow(
-        t("settings.dock.row.label.retardo-al-ocultar"), t("settings.dock.row.desc.tiempo-antes-de-que-el-dock-se-oculte"),
+        t("settings.dock.hide-delay"), t("settings.dock.hide-delay.desc"),
         dockSettings.hideDelay, 0, 2000,
         (v) => updateDockSettings({ hideDelay: Math.round(v) }),
         { unit: "ms" },

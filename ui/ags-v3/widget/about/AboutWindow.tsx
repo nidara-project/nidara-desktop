@@ -94,17 +94,17 @@ export default function AboutWindow(): Gtk.Window | null {
 
     // ── Specs ─────────────────────────────────────────────────────────────────
     const specsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8, margin_start: 16, margin_end: 16 })
-    specsBox.append(specRow(t("settings.about.row.label.cpu"), cpu))
-    specsBox.append(specRow(t("settings.about.row.label.memoria-ram"), ram))
-    specsBox.append(asyncSpecRow(t("settings.about.row.label.graficos"), ["bash", "-c",
+    specsBox.append(specRow(t("settings.about.cpu"), cpu))
+    specsBox.append(specRow(t("settings.about.ram"), ram))
+    specsBox.append(asyncSpecRow(t("settings.about.graphics"), ["bash", "-c",
         "lspci 2>/dev/null | grep -i 'vga\\|3d\\|display' | head -1 | sed 's/.*: //' | sed 's/(.*)//' | xargs || echo '—'"
     ]))
-    specsBox.append(asyncSpecRow(t("settings.about.row.label.kernel"), ["uname", "-r"]))
-    specsBox.append(asyncSpecRow(t("settings.about.row.label.tiempo-activo"), ["bash", "-c", "uptime -p | sed 's/^up //'"] ))
+    specsBox.append(asyncSpecRow(t("settings.about.kernel"), ["uname", "-r"]))
+    specsBox.append(asyncSpecRow(t("settings.about.uptime"), ["bash", "-c", "uptime -p | sed 's/^up //'"] ))
 
     // ── Versions ──────────────────────────────────────────────────────────────
     const verBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8, margin_start: 16, margin_end: 16 })
-    verBox.append(asyncSpecRow(t("settings.about.row.label.hyprland"), ["bash", "-c",
+    verBox.append(asyncSpecRow(t("settings.about.hyprland"), ["bash", "-c",
         "hyprctl version 2>/dev/null | grep -oP 'v?[\\d]+\\.[\\d]+\\.[\\d]+' | head -1 || echo '—'"
     ]))
     verBox.append(specRow("AGS", "v3 (GJS + GTK4)"))
@@ -114,7 +114,7 @@ export default function AboutWindow(): Gtk.Window | null {
         child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14 , css_classes: ["cs-icon"] }),
         css_classes: ["about-close-btn"],
         halign: Gtk.Align.END,
-        tooltip_text: t("settings.about.label.cerrar"),
+        tooltip_text: t("settings.about.close"),
     })
     closeBtn.connect("clicked", () => { status.about_open = false })
 

@@ -73,15 +73,15 @@ function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow
     function setState(state: "connect" | "disconnect" | "loading" | "error") {
         switch (state) {
             case "connect":
-                btn.label = t("settings.network.vpn.btn.conectar")
+                btn.label = t("settings.network.vpn.btn.connect")
                 btn.remove_css_class("crystal-btn--danger"); btn.add_css_class("crystal-btn--primary")
                 btn.sensitive = true; break
             case "disconnect":
-                btn.label = t("settings.network.vpn.btn.desconectar")
+                btn.label = t("settings.network.vpn.btn.disconnect")
                 btn.remove_css_class("crystal-btn--primary"); btn.add_css_class("crystal-btn--danger")
                 btn.sensitive = true; break
             case "loading":
-                btn.label = t("settings.network.vpn.btn.conectando")
+                btn.label = t("settings.network.vpn.btn.connecting")
                 btn.sensitive = false; break
             case "error":
                 btn.label = t("settings.network.ap.label.error")
@@ -151,19 +151,19 @@ function buildApRow(ap: any, iface: string, onRefresh: () => void): Gtk.ListBoxR
     function setState(state: "connect" | "disconnect" | "loading" | "error") {
         switch (state) {
             case "connect":
-                btn.label = t("settings.network.ap.label.conectar")
+                btn.label = t("settings.network.ap.connect")
                 btn.remove_css_class("crystal-btn--danger")
                 btn.add_css_class("crystal-btn--primary")
                 btn.sensitive = true
                 break
             case "disconnect":
-                btn.label = t("settings.network.ap.label.desconectar")
+                btn.label = t("settings.network.ap.disconnect")
                 btn.remove_css_class("crystal-btn--primary")
                 btn.add_css_class("crystal-btn--danger")
                 btn.sensitive = true
                 break
             case "loading":
-                btn.label = t("settings.network.ap.label.conectando")
+                btn.label = t("settings.network.ap.connecting")
                 btn.sensitive = false
                 break
             case "error":
@@ -184,20 +184,20 @@ function buildApRow(ap: any, iface: string, onRefresh: () => void): Gtk.ListBoxR
         if (pwdPopover) return pwdPopover
 
         pwdEntry = new Gtk.PasswordEntry({
-            placeholder_text: t("settings.network.ap.placeholder.contrasena"),
+            placeholder_text: t("settings.network.ap.password-placeholder"),
             show_peek_icon: true,
             hexpand: true,
         })
 
         const confirmBtn = CrystalButton({
-            label: t("settings.network.ap.label.conectar"),
+            label: t("settings.network.ap.connect"),
             variant: "primary",
             pill: true,
         })
         confirmBtn.hexpand = true
 
         const titleLabel = new Gtk.Label({
-            label: `${t("settings.network.ap.title.contrasena-para")} ${ssid}`,
+            label: `${t("settings.network.ap.password-for")} ${ssid}`,
             css_classes: ["settings-row-label"],
             halign: Gtk.Align.START,
             ellipsize: 3, // PANGO_ELLIPSIZE_END
@@ -278,39 +278,39 @@ function buildApRow(ap: any, iface: string, onRefresh: () => void): Gtk.ListBoxR
 
 export default function NetworkPage() {
     const network = AstalNetwork.get_default()
-    if (!network) return new Gtk.Label({ label: t("settings.network.label.servicio-de-red-no-disponible") })
+    if (!network) return new Gtk.Label({ label: t("settings.network.error.no-service") })
 
     const page = pageBox("network-page")
     page.append(pageHeader(
-        t("settings.network.page.title.red"),
-        t("settings.network.page.subtitle.administra-las-conexiones-de-red-y-param")
+        t("settings.network.title"),
+        t("settings.network.subtitle")
     ))
 
     // ── Ethernet ──────────────────────────────────────────────────────────────
     if (network.wired) {
-        const { box, listBox } = listGroup(t("settings.network.group.cableada-ethernet"))
+        const { box, listBox } = listGroup(t("settings.network.group.ethernet"))
 
         const wiredStatus    = staticLabel(
             network.wired.internet === AstalNetwork.Internet.CONNECTED
-                ? t("settings.network.label.conectada")
-                : t("settings.network.label.desconectada")
+                ? t("settings.network.status.connected")
+                : t("settings.network.status.disconnected")
         )
         const interfaceLabel = staticLabel(network.wired.device?.interface || "---")
         const ipLabel        = staticLabel(getIp(network.wired))
 
         const updateWired = () => {
             wiredStatus.label    = network.wired.internet === AstalNetwork.Internet.CONNECTED
-                ? t("settings.network.label.conectada")
-                : t("settings.network.label.desconectada")
+                ? t("settings.network.status.connected")
+                : t("settings.network.status.disconnected")
             interfaceLabel.label = String(network.wired.device?.interface || "---")
             ipLabel.label        = getIp(network.wired)
         }
         network.wired.connect("notify::internet", updateWired)
         network.wired.connect("notify::ip4-address", updateWired)
 
-        listBox.append(createRow(t("settings.network.row.label.conexion-ethernet"),  t("settings.network.row.desc.estado-actual-de-la-interfaz-fisica"),    wiredStatus))
-        listBox.append(createRow(t("settings.network.row.label.interfaz"),           t("settings.network.row.desc.nombre-del-dispositivo-en-el-nucleo"),     interfaceLabel))
-        listBox.append(createRow(t("settings.network.row.label.direccion-ipv4"),     t("settings.network.row.desc.identificador-unico-en-la-red-local"),     ipLabel))
+        listBox.append(createRow(t("settings.network.ethernet"),  t("settings.network.hw-status.desc"),    wiredStatus))
+        listBox.append(createRow(t("settings.network.interface"),           t("settings.network.kernel-device.desc"),     interfaceLabel))
+        listBox.append(createRow(t("settings.network.ipv4"),     t("settings.network.ip.desc"),     ipLabel))
         page.append(box)
     }
 
@@ -320,7 +320,7 @@ export default function NetworkPage() {
 
         const wifiSwitch = new Gtk.Switch({ active: network.wifi.enabled, valign: Gtk.Align.CENTER })
         wifiSwitch.connect("notify::active", () => { network.wifi.enabled = wifiSwitch.active })
-        wifiList.append(createRow(t("settings.network.row.label.activar-wi-fi"), t("settings.network.row.desc.habilita-la-sincronizacion-del-espectro-"), wifiSwitch))
+        wifiList.append(createRow(t("settings.network.enable-wifi"), t("settings.network.enable-wifi.desc"), wifiSwitch))
 
         const ssidLabel      = staticLabel("---")
         const ipLabel        = staticLabel("---")
@@ -329,7 +329,7 @@ export default function NetworkPage() {
 
         const updateWifi = () => {
             if (!network.wifi) return
-            ssidLabel.label  = String(network.wifi.ssid || t("settings.network.label.desconectado"))
+            ssidLabel.label  = String(network.wifi.ssid || t("settings.network.status.disconnected-hw"))
             ipLabel.label    = getIp(network.wifi)
             const spd        = network.wifi.active_access_point?.speed || 0
             speedLabel.label = spd > 0 ? `${spd} Mbps` : "---"
@@ -339,18 +339,18 @@ export default function NetworkPage() {
         network.wifi.connect("notify::ip4-address", updateWifi)
         updateWifi()
 
-        wifiList.append(createRow(t("settings.network.row.label.interfaz"),      t("settings.network.row.desc.nombre-del-adaptador-inalambrico"),          ifaceLabel))
-        wifiList.append(createRow(t("settings.network.row.label.punto-de-acceso"), t("settings.network.row.desc.red-conectada-actualmente"),              ssidLabel))
-        wifiList.append(createRow(t("settings.network.row.label.direccion-ip"),  t("settings.network.row.desc.asignacion-actual-de-la-red-inalambrica"),   ipLabel))
-        wifiList.append(createRow(t("settings.network.row.label.velocidad"),     t("settings.network.row.desc.rendimiento-maximo-teorico"),                speedLabel))
+        wifiList.append(createRow(t("settings.network.interface"),      t("settings.network.wireless-interface.desc"),          ifaceLabel))
+        wifiList.append(createRow(t("settings.network.access-point"), t("settings.network.connected-network.desc"),              ssidLabel))
+        wifiList.append(createRow(t("settings.network.ip"),  t("settings.network.access-point.desc"),   ipLabel))
+        wifiList.append(createRow(t("settings.network.speed"),     t("settings.network.speed.desc"),                speedLabel))
         page.append(wifiBox)
 
         // ── AP list ───────────────────────────────────────────────────────────
         const iface = String(network.wifi.device?.interface || "")
-        const { box: apBox, listBox: apList } = listGroup(t("settings.network.group.puntos-de-acceso-cercanos"))
+        const { box: apBox, listBox: apList } = listGroup(t("settings.network.group.access-points"))
 
         const scanBtn = CrystalButton({
-            label: t("settings.network.ap.label.buscar-redes"),
+            label: t("settings.network.ap.scan"),
             variant: "ghost",
             valign: Gtk.Align.CENTER,
             halign: Gtk.Align.END,
@@ -358,7 +358,7 @@ export default function NetworkPage() {
 
         const headerBox = new Gtk.Box({ spacing: 0, hexpand: true })
         const groupTitleLabel = new Gtk.Label({
-            label: t("settings.network.group.puntos-de-acceso-cercanos").toUpperCase(),
+            label: t("settings.network.group.access-points").toUpperCase(),
             css_classes: ["settings-group-title"],
             halign: Gtk.Align.START,
             hexpand: true,
@@ -404,11 +404,11 @@ export default function NetworkPage() {
         page.append(apBox)
 
     } else {
-        const { box, listBox } = listGroup(t("settings.network.group.inalambrica"))
+        const { box, listBox } = listGroup(t("settings.network.group.wireless"))
         listBox.append(createRow(
-            t("settings.network.row.label.estado-del-hardware"),
-            t("settings.network.row.desc.no-se-encontro-ningun-adaptador-compatib"),
-            staticLabel(t("settings.network.label.hw-wifi-no-detectado"))
+            t("settings.network.hw-status"),
+            t("settings.network.no-adapter.desc"),
+            staticLabel(t("settings.network.error.no-wifi-hw"))
         ))
         page.append(box)
     }

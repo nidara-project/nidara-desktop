@@ -6,7 +6,7 @@ import Icons from "../../../core/Icons"
 import monitorConfig from "../../../core/MonitorConfig"
 
 function monitorLabel(name: string): string {
-    if (name.startsWith("eDP")) return `${name} (${t("settings.display.label.integrada")})`
+    if (name.startsWith("eDP")) return `${name} (${t("settings.display.label.builtin")})`
     return name
 }
 
@@ -14,7 +14,7 @@ function currentMode(mon: any): string {
     const w = mon.width ?? 0
     const h = mon.height ?? 0
     const hz = Math.round(mon.refresh_rate ?? mon.refreshRate ?? 0)
-    if (!w || !h) return t("settings.display.label.desconocida")
+    if (!w || !h) return t("settings.display.label.unknown")
     return `${w}×${h} @ ${hz}Hz`
 }
 
@@ -30,8 +30,8 @@ function buildMonitorSection(mon: any): Gtk.Widget {
 
     // Current mode (static info)
     listBox.append(createRow(
-        t("settings.display.row.label.resolucion-activa"),
-        t("settings.display.row.desc.modo-actual"),
+        t("settings.display.resolution"),
+        t("settings.display.resolution.desc"),
         staticLabel(currentMode(mon))
     ))
 
@@ -50,16 +50,16 @@ function buildMonitorSection(mon: any): Gtk.Widget {
     })
 
     listBox.append(createRow(
-        t("settings.display.row.label.escala"),
-        t("settings.display.row.desc.factor-de-escala-de-la-pantalla"),
+        t("settings.display.scale"),
+        t("settings.display.scale.desc"),
         scaleDrp
     ))
 
     // Make/model info
     if (description) {
         listBox.append(createRow(
-            t("settings.display.row.label.modelo"),
-            t("settings.display.row.desc.identificador-del-monitor"),
+            t("settings.display.model"),
+            t("settings.display.model.desc"),
             staticLabel(description)
         ))
     }
@@ -81,16 +81,16 @@ function buildMonitorSection(mon: any): Gtk.Widget {
     })
 
     listBox.append(createRow(
-        t("settings.display.row.label.rotacion"),
-        t("settings.display.row.desc.orientacion-de-la-pantalla"),
+        t("settings.display.rotation"),
+        t("settings.display.rotation.desc"),
         rotDrp
     ))
 
     // VRR
     const VRR_OPTS = [
-        t("settings.display.vrr.desactivado"),
-        t("settings.display.vrr.solo-pantalla-completa"),
-        t("settings.display.vrr.siempre"),
+        t("settings.display.vrr.off"),
+        t("settings.display.vrr.fullscreen"),
+        t("settings.display.vrr.always"),
     ]
     const vrrModel = new Gtk.StringList({ strings: VRR_OPTS })
     const vrrDrp = new Gtk.DropDown({ model: vrrModel, valign: Gtk.Align.CENTER })
@@ -102,8 +102,8 @@ function buildMonitorSection(mon: any): Gtk.Widget {
     })
 
     listBox.append(createRow(
-        t("settings.display.row.label.vrr-freesync"),
-        t("settings.display.row.desc.tasa-de-refresco-variable-requiere-panta"),
+        t("settings.display.vrr"),
+        t("settings.display.vrr.desc"),
         vrrDrp
     ))
 
@@ -113,14 +113,14 @@ function buildMonitorSection(mon: any): Gtk.Widget {
 export default function DisplayPage() {
     const page = pageBox("display-page")
     page.append(pageHeader(
-        t("settings.display.page.title.pantalla"),
-        t("settings.display.page.subtitle.configura-resolucion-escala-y-orientacio")
+        t("settings.display.title"),
+        t("settings.display.subtitle")
     ))
 
     const hypr = AstalHyprland.get_default()
     if (!hypr) {
         page.append(new Gtk.Label({
-            label: t("settings.display.label.servicio-hyprland-no-disponible"),
+            label: t("settings.display.error.no-hyprland"),
             css_classes: ["settings-placeholder"],
             margin_top: 40,
         }))
@@ -131,7 +131,7 @@ export default function DisplayPage() {
 
     if (monitors.length === 0) {
         page.append(new Gtk.Label({
-            label: t("settings.display.label.no-se-detectaron-monitores"),
+            label: t("settings.display.error.no-monitors"),
             css_classes: ["settings-placeholder"],
             margin_top: 40,
         }))

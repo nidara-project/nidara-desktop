@@ -82,9 +82,9 @@ const writeEntries = (newEntries: AutostartEntry[]) => {
 
 export default function AutostartPage() {
     const page = pageBox("autostart-page")
-    page.append(pageHeader(t("settings.autostart.page.title.inicio-automatico"), t("settings.autostart.page.subtitle.programas-que-se-inician-con-hyprland")))
+    page.append(pageHeader(t("settings.autostart.title"), t("settings.autostart.subtitle")))
 
-    const { box, listBox } = listGroup(t("settings.autostart.group.entradas-exec-once-en-hyprland-user-conf"))
+    const { box, listBox } = listGroup(t("settings.autostart.group.entries"))
     page.append(box)
 
     let entries: AutostartEntry[] = parseEntries(readConf())
@@ -96,7 +96,7 @@ export default function AutostartPage() {
         if (entries.length === 0) {
             const emptyRow = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
             emptyRow.set_child(new Gtk.Label({
-                label: t("settings.autostart.label.sin-entradas-exec-once-en-hyprland-user-"),
+                label: t("settings.autostart.empty"),
                 css_classes: ["settings-placeholder"],
                 margin_top: 14,
                 margin_bottom: 14,
@@ -124,7 +124,7 @@ export default function AutostartPage() {
                     child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 16 , css_classes: ["cs-icon"] }),
                     css_classes: ["crystal-btn", "crystal-btn--danger"],
                     valign: Gtk.Align.CENTER,
-                    tooltip_text: t("settings.autostart.tooltip.eliminar"),
+                    tooltip_text: t("settings.autostart.tooltip.remove"),
                 })
                 deleteBtn.connect("clicked", () => {
                     entries.splice(idx, 1)
@@ -170,7 +170,7 @@ export default function AutostartPage() {
         })
 
         const addBtn = CrystalButton({
-            label: t("settings.autostart.label.anadir"),
+            label: t("settings.autostart.add"),
             variant: "primary",
             pill: true,
             valign: Gtk.Align.CENTER,
@@ -212,7 +212,7 @@ export default function AutostartPage() {
 
     // Info note
     const note = new Gtk.Label({
-        label: t("settings.autostart.label.los-cambios-se-aplican-la-proxima-vez-qu"),
+        label: t("settings.autostart.apply-note"),
         css_classes: ["settings-row-subtitle"],
         halign: Gtk.Align.START,
         margin_start: 10,

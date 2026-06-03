@@ -63,11 +63,11 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
                     const btn = new Gtk.Button({
                         valign: Gtk.Align.CENTER,
                         css_classes: active ? ["destructive-action"] : ["suggested-action"],
-                        label: active ? t("settings.network.vpn.btn.desconectar") : t("settings.network.vpn.btn.conectar"),
+                        label: active ? t("settings.network.vpn.btn.disconnect") : t("settings.network.vpn.btn.connect"),
                     })
                     btn.connect("clicked", async () => {
                         btn.sensitive = false
-                        btn.label = t("settings.network.vpn.btn.conectando")
+                        btn.label = t("settings.network.vpn.btn.connecting")
                         try {
                             if (active) await execAsync(["nmcli", "connection", "down", p.name])
                             else        await execAsync(["nmcli", "connection", "up", p.name])

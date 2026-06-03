@@ -85,24 +85,24 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     const categories = [
         { id: "users",        label: t("settings.users.title"),                              icon: Icons.user,          component: UsersPage        },
-        { id: "appearance",   label: t("settings.appearance.page.title.apariencia"),         icon: Icons.palette,       component: AppearancePage   },
-        { id: "display",      label: t("settings.display.page.title.pantalla"),              icon: Icons.monitor,       component: DisplayPage      },
-        { id: "audio",        label: t("settings.audio.page.title.sonido"),                  icon: Icons.speaker,       component: AudioPage        },
-        { id: "network",      label: t("settings.network.page.title.red"),                   icon: Icons.globe,         component: NetworkPage      },
+        { id: "appearance",   label: t("settings.appearance.title"),         icon: Icons.palette,       component: AppearancePage   },
+        { id: "display",      label: t("settings.display.title"),              icon: Icons.monitor,       component: DisplayPage      },
+        { id: "audio",        label: t("settings.audio.title"),                  icon: Icons.speaker,       component: AudioPage        },
+        { id: "network",      label: t("settings.network.title"),                   icon: Icons.globe,         component: NetworkPage      },
         { id: "input",        label: t("settings.input.title"),                              icon: Icons.keyboard,      component: InputPage        },
-        { id: "bluetooth",    label: t("settings.bluetooth.page.title.bluetooth"),           icon: Icons.bluetooth,     component: BluetoothPage    },
+        { id: "bluetooth",    label: t("settings.bluetooth.title"),           icon: Icons.bluetooth,     component: BluetoothPage    },
         { id: "region",       label: t("settings.region.title"),                             icon: Icons.clock,         component: RegionPage       },
         { id: "defaultapps",  label: t("settings.defaultapps.title"),                        icon: Icons.app,           component: DefaultAppsPage  },
-        { id: "apps",         label: t("settings.apps.page.title.aplicaciones"),             icon: Icons.grid,          component: AppsPage         },
+        { id: "apps",         label: t("settings.apps.title"),             icon: Icons.grid,          component: AppsPage         },
         { id: "accessibility",label: t("settings.accessibility.title"),                      icon: Icons.accessibility, component: AccessibilityPage },
         { id: "notifications",label: t("settings.notif.title"),                              icon: Icons.bell,          component: NotificationsPage },
         { id: "bar",          label: t("settings.bar.title"),                                icon: Icons.panelTop,      component: BarPage          },
-        { id: "dock",         label: t("settings.dock.page.title.dock"),                     icon: Icons.dock,          component: DockPage         },
-        { id: "widgets",      label: t("settings.widgets.page.title.widgets"),               icon: Icons.puzzle,        component: WidgetsPage      },
-        { id: "gaming",       label: t("settings.gaming.page.title.gaming"),                 icon: Icons.gamepad,       component: GamingPage       },
-        { id: "autostart",    label: t("settings.autostart.page.title.inicio-automatico"),   icon: Icons.rocket,        component: AutostartPage    },
-        { id: "power",        label: t("settings.power.page.title.energia"),                 icon: Icons.battery,       component: PowerPage        },
-        { id: "about",        label: t("settings.about.page.title.acerca-de"),               icon: Icons.info,          component: AboutPage        },
+        { id: "dock",         label: t("settings.dock.title"),                     icon: Icons.dock,          component: DockPage         },
+        { id: "widgets",      label: t("settings.widgets.title"),               icon: Icons.puzzle,        component: WidgetsPage      },
+        { id: "gaming",       label: t("settings.gaming.title"),                 icon: Icons.gamepad,       component: GamingPage       },
+        { id: "autostart",    label: t("settings.autostart.title"),   icon: Icons.rocket,        component: AutostartPage    },
+        { id: "power",        label: t("settings.power.title"),                 icon: Icons.battery,       component: PowerPage        },
+        { id: "about",        label: t("settings.about.title"),               icon: Icons.info,          component: AboutPage        },
     ]
 
     // ── Page container — single-child swap model ──────────────────────────────
@@ -161,7 +161,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         } catch (e) {
             endPage()
             console.error(`[Settings] Failed to load page ${cat.id}:`, e)
-            pageWidget = new Gtk.Label({ label: `Error cargando la página ${cat.label}` })
+            pageWidget = new Gtk.Label({ label: `${t("settings.page.load-error")}: ${cat.label}` })
         }
 
         // CrystalClamp replaces Adw.Clamp
@@ -188,7 +188,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
 
     const searchResultsEmpty = new Gtk.Label({
-        label: "Sin resultados",
+        label: t("settings.search.no-results"),
         css_classes: ["settings-placeholder"],
         margin_top: 40,
         visible: false,

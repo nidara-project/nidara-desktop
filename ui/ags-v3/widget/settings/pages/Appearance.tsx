@@ -13,15 +13,15 @@ import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageHeader, pa
 
 export default function AppearancePage() {
     const page = pageBox("appearance-page")
-    page.append(pageHeader(t("settings.appearance.page.title.apariencia"), t("settings.appearance.page.subtitle.personaliza-el-alma-visual-de-tu-sistema")))
+    page.append(pageHeader(t("settings.appearance.title"), t("settings.appearance.subtitle")))
 
     // 1. General style
-    const styleGroup = listGroup(t("settings.appearance.group.diseno-base"))
+    const styleGroup = listGroup(t("settings.appearance.group.base-style"))
     const darkSwitch = new Gtk.Switch({ active: Theme.isDark, valign: Gtk.Align.CENTER })
     darkSwitch.connect("state-set", (_: any, state: boolean) => { Theme.setDarkMode(state); return false })
     styleGroup.listBox.append(createRow(
-        t("settings.appearance.row.label.modo-oscuro"),
-        t("settings.appearance.row.desc.sincroniza-el-nucleo-visual-con-la-noche"),
+        t("settings.appearance.dark-mode"),
+        t("settings.appearance.dark-mode.desc"),
         darkSwitch,
     ))
     page.append(styleGroup.box)
@@ -47,24 +47,24 @@ export default function AppearancePage() {
         accentButtons[key] = btn
     })
 
-    fcGroup.listBox.append(createRow(t("settings.appearance.row.label.color-de-acento"), t("settings.appearance.row.desc.define-el-tono-vibrante-de-la-interfaz"), accentPicker))
+    fcGroup.listBox.append(createRow(t("settings.appearance.accent"), t("settings.appearance.accent.desc"), accentPicker))
     fcGroup.listBox.append(sliderRow(
-        t("settings.appearance.row.label.shell-opacity"),
-        t("settings.appearance.row.desc.shell-opacity"),
+        t("settings.appearance.shell-opacity"),
+        t("settings.appearance.shell-opacity.desc"),
         Theme.shellOpacity, 0.06, 0.75,
         (v) => Theme.setShellOpacity(v),
         { pct: true, icons: [Icons.sun, Icons.sun] },
     ))
     fcGroup.listBox.append(sliderRow(
-        t("settings.appearance.row.label.dock-opacity"),
-        t("settings.appearance.row.desc.dock-opacity"),
+        t("settings.appearance.dock-opacity"),
+        t("settings.appearance.dock-opacity.desc"),
         Theme.dockOpacity, 0.05, 0.60,
         (v) => Theme.setDockOpacity(v),
         { pct: true, icons: [Icons.sun, Icons.sun] },
     ))
     fcGroup.listBox.append(sliderRow(
-        t("settings.appearance.row.label.transparencia-profunda"),
-        t("settings.appearance.row.desc.controla-la-permeabilidad-de-la-luz-en-l"),
+        t("settings.appearance.window-transparency"),
+        t("settings.appearance.window-transparency.desc"),
         Theme.transparency, 0.10, 0.90,
         (v) => Theme.setTransparency(v),
         { pct: true, icons: [Icons.sun, Icons.sun] },
@@ -78,14 +78,14 @@ export default function AppearancePage() {
     const nlSwitch = new Gtk.Switch({ active: NightLight.enabled, valign: Gtk.Align.CENTER, sensitive: !NightLight.scheduleEnabled })
     nlSwitch.connect("state-set", (_: any, v: boolean) => { NightLight.setEnabled(v); return false })
     nlGroup.listBox.append(createRow(
-        t("settings.appearance.row.label.night-light"),
-        t("settings.appearance.row.desc.night-light"),
+        t("settings.appearance.night-light"),
+        t("settings.appearance.night-light.desc"),
         nlSwitch,
     ))
 
     nlGroup.listBox.append(sliderRow(
-        t("settings.appearance.row.label.night-light-temp"),
-        t("settings.appearance.row.desc.night-light-temp"),
+        t("settings.appearance.night-light-temp"),
+        t("settings.appearance.night-light-temp.desc"),
         NightLight.temperature, 2700, 6500,
         (v) => NightLight.setTemperature(v),
         { unit: "K", icons: [Icons.moon, Icons.sun] },
@@ -100,8 +100,8 @@ export default function AppearancePage() {
         return false
     })
     nlGroup.listBox.append(createRow(
-        t("settings.appearance.row.label.night-light-schedule"),
-        t("settings.appearance.row.desc.night-light-schedule"),
+        t("settings.appearance.night-light-schedule"),
+        t("settings.appearance.night-light-schedule.desc"),
         schedSwitch,
     ))
 
@@ -146,11 +146,11 @@ export default function AppearancePage() {
     const schedTimeBox = new Gtk.Box({ spacing: 24, valign: Gtk.Align.CENTER })
 
     const fromBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
-    fromBox.append(new Gtk.Label({ label: t("settings.appearance.row.label.night-light-from"), halign: Gtk.Align.START, css_classes: ["settings-row-subtitle"] }))
+    fromBox.append(new Gtk.Label({ label: t("settings.appearance.night-light-from"), halign: Gtk.Align.START, css_classes: ["settings-row-subtitle"] }))
     fromBox.append(timePicker(NightLight.scheduleFrom, (v) => NightLight.setScheduleFrom(v)))
 
     const toBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
-    toBox.append(new Gtk.Label({ label: t("settings.appearance.row.label.night-light-to"), halign: Gtk.Align.START, css_classes: ["settings-row-subtitle"] }))
+    toBox.append(new Gtk.Label({ label: t("settings.appearance.night-light-to"), halign: Gtk.Align.START, css_classes: ["settings-row-subtitle"] }))
     toBox.append(timePicker(NightLight.scheduleTo, (v) => NightLight.setScheduleTo(v)))
 
     schedTimeBox.append(fromBox)
@@ -172,7 +172,7 @@ export default function AppearancePage() {
     page.append(nlGroup.box)
 
     // 4. Wallpaper
-    const wallGroup = listGroup(t("settings.appearance.group.fondo-de-pantalla"))
+    const wallGroup = listGroup(t("settings.appearance.group.wallpaper"))
 
     // Preview
     const preview = new Gtk.Picture({
@@ -203,8 +203,8 @@ export default function AppearancePage() {
     const transitions = Object.keys(TRANSITION_LABELS) as TransitionType[]
     const transLabels = transitions.map(k => TRANSITION_LABELS[k])
     const transRow = dropdownRow(
-        t("settings.appearance.row.label.transicion"),
-        t("settings.appearance.row.desc.efecto-al-cambiar-el-fondo-de-pantalla"),
+        t("settings.appearance.transition"),
+        t("settings.appearance.transition.desc"),
         TRANSITION_LABELS[Wallpaper.transition],
         transLabels,
         (label) => {
@@ -216,14 +216,14 @@ export default function AppearancePage() {
 
     // File picker row
     const changeBtn = CrystalButton({
-        label: t("settings.appearance.label.explorar"),
+        label: t("settings.appearance.browse"),
         variant: "secondary",
         pill: true,
         valign: Gtk.Align.CENTER,
     })
     changeBtn.connect("clicked", () => {
         const dialog = new Gtk.FileDialog({
-            title: t("settings.appearance.dialog.title.seleccionar-fondo-de-pantalla"),
+            title: t("settings.appearance.dialog.wallpaper"),
             modal: true,
         })
         const filter = new Gtk.FileFilter()
@@ -232,7 +232,7 @@ export default function AppearancePage() {
         filter.add_mime_type("image/gif")
         filter.add_mime_type("image/webp")
         filter.add_mime_type("image/avif")
-        filter.set_name(t("settings.appearance.filter.imagenes"))
+        filter.set_name(t("settings.appearance.filter.images"))
         const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
         filters.append(filter)
         dialog.set_filters(filters)
@@ -251,8 +251,8 @@ export default function AppearancePage() {
         })
     })
     wallGroup.listBox.append(createRow(
-        t("settings.appearance.row.label.imagen"),
-        t("settings.appearance.row.desc.elige-el-fondo-de-pantalla-desde-tus-arc"),
+        t("settings.appearance.image"),
+        t("settings.appearance.image.desc"),
         changeBtn,
     ))
 
@@ -260,21 +260,21 @@ export default function AppearancePage() {
     page.append(wallGroup.box)
 
     // 5. System Assets
-    const assetsGroup = listGroup(t("settings.appearance.group.recursos-del-sistema"))
+    const assetsGroup = listGroup(t("settings.appearance.group.resources"))
     assetsGroup.listBox.append(dropdownRow(
-        t("settings.appearance.row.label.tema-gtk"), t("settings.appearance.row.desc.estetica-estructural-de-aplicaciones"),
+        t("settings.appearance.gtk-theme"), t("settings.appearance.gtk-theme.desc"),
         Theme.themeFamily, Theme.getAvailableGtkThemes(), (v) => Theme.setGtkTheme(v),
     ))
     assetsGroup.listBox.append(dropdownRow(
-        t("settings.appearance.row.label.tema-qt-kvantum"), t("settings.appearance.row.desc.sincroniza-el-estilo-con-apps-qt-kde"),
+        t("settings.appearance.qt-theme"), t("settings.appearance.qt-theme.desc"),
         Theme.qtTheme, Theme.getAvailableQtThemes(), (v) => Theme.setQtTheme(v),
     ))
     assetsGroup.listBox.append(dropdownRow(
-        t("settings.appearance.row.label.iconos"), t("settings.appearance.row.desc.paquete-de-glifos-del-sistema"),
+        t("settings.appearance.icons"), t("settings.appearance.icons.desc"),
         Theme.iconTheme, Theme.getAvailableIconThemes(), (v) => Theme.setIconTheme(v),
     ))
     assetsGroup.listBox.append(dropdownRow(
-        t("settings.appearance.row.label.cursor"), t("settings.appearance.row.desc.estilo-del-puntero-de-precision"),
+        t("settings.appearance.cursor"), t("settings.appearance.cursor.desc"),
         Theme.cursorTheme, Theme.getAvailableCursorThemes(), (v) => Theme.setCursorTheme(v),
     ))
     page.append(assetsGroup.box)
@@ -292,8 +292,8 @@ export default function AppearancePage() {
         if (f) Theme.setFont(f)
     })
     fontsGroup.listBox.append(createRow(
-        t("settings.appearance.row.label.interface-font"),
-        t("settings.appearance.row.desc.interface-font"),
+        t("settings.appearance.interface-font"),
+        t("settings.appearance.interface-font.desc"),
         interfaceFontBtn,
     ))
 
@@ -307,14 +307,14 @@ export default function AppearancePage() {
         if (f) Theme.setMonoFont(f)
     })
     fontsGroup.listBox.append(createRow(
-        t("settings.appearance.row.label.mono-font"),
-        t("settings.appearance.row.desc.mono-font"),
+        t("settings.appearance.mono-font"),
+        t("settings.appearance.mono-font.desc"),
         monoFontBtn,
     ))
 
     fontsGroup.listBox.append(sliderRow(
-        t("settings.appearance.row.label.text-scaling"),
-        t("settings.appearance.row.desc.text-scaling"),
+        t("settings.appearance.text-scaling"),
+        t("settings.appearance.text-scaling.desc"),
         Theme.textScaling, 0.75, 2.0,
         (v) => Theme.setTextScaling(v),
         { decimals: 2, icons: [Icons.type, Icons.type] },

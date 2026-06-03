@@ -538,7 +538,7 @@ export function DockItem(
         }
 
         let mainTitle = appItem.name || "App"
-        if (appId === "launcher" || appId === "special:launcher") mainTitle = t("settings.dock.dockitem.label.aplicaciones")
+        if (appId === "launcher" || appId === "special:launcher") mainTitle = t("settings.dock.dockitem.apps")
         if (appId === "home-shortcut" || appId === "special:home") mainTitle = t("dock.special.home.label")
         if (appId === "trash" || appId === "special:trash") mainTitle = t("dock.special.trash.name")
         const mainSection = addSection(mainTitle)
@@ -555,7 +555,7 @@ export function DockItem(
             }))
         } else if (appId === "trash" || appId === "special:trash") {
             mainSection.append(t("dock.menu.open"), addAction(() => appItem.launch()))
-            mainSection.append(t("settings.dock.dockitem.label.vaciar-papelera"), addAction(() => execAsync("gio trash --empty").catch(print)))
+            mainSection.append(t("settings.dock.dockitem.empty-trash"), addAction(() => execAsync("gio trash --empty").catch(print)))
         }
 
         if (desktopActions.length > 0) {
@@ -573,7 +573,7 @@ export function DockItem(
         if (!isSpecialItem) {
             const pinSection = addSection(null)
             pinSection.append(
-                isPinned ? t("settings.dock.dockitem.label.desanclar-del-dock") : t("settings.dock.dockitem.label.mantener-en-el-dock"),
+                isPinned ? t("settings.dock.dockitem.unpin") : t("settings.dock.dockitem.keep"),
                 addAction(() => { const cid = cleanId || appId; if (isPinned) onUnpin(cid); else onPin(cid) })
             )
         }
@@ -595,7 +595,7 @@ export function DockItem(
             }
             const closeSection = addSection(null)
             closeSection.append(
-                winCount > 1 ? `${t("settings.dock.dockitem.label.cerrar-todas")} (${winCount})` : t("settings.dock.dockitem.label.salir"),
+                winCount > 1 ? `${t("settings.dock.dockitem.close-all")} (${winCount})` : t("settings.dock.dockitem.quit"),
                 addAction(() => {
                     state.addresses.forEach(addr => {
                         const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
@@ -756,7 +756,7 @@ export function DockItem(
             dot.remove_css_class("focused")
         }
         let targetTitle = appItem.name || "App"
-        if (appId === "launcher" || appId === "special:launcher") targetTitle = t("settings.dock.dockitem.label.aplicaciones")
+        if (appId === "launcher" || appId === "special:launcher") targetTitle = t("settings.dock.dockitem.apps")
         if (appId === "home-shortcut" || appId === "special:home") targetTitle = t("dock.special.home.label")
         if (appId === "trash" || appId === "special:trash") targetTitle = t("dock.special.trash.name")
         if (focused && addresses.includes(focused.address)) {

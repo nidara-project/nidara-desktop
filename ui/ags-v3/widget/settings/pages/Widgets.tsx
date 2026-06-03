@@ -8,7 +8,7 @@ import Icons from "../../../core/Icons"
 
 export default function WidgetsPage(): Gtk.Widget {
     const page = pageBox("widgets-page")
-    page.append(pageHeader(t("settings.widgets.page.title.widgets"), t("settings.widgets.page.subtitle.elige-donde-aparece-cada-widget-en-la-ba")))
+    page.append(pageHeader(t("settings.widgets.title"), t("settings.widgets.subtitle")))
 
     const group = listGroup("Widgets disponibles")
 
@@ -37,7 +37,7 @@ export default function WidgetsPage(): Gtk.Widget {
         // Bar toggle (only for widgets that support bar)
         const canBar = w.locations?.includes("bar") && w.buildBarContent != null
         const barBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, valign: Gtk.Align.CENTER, margin_end: 8 })
-        const barLabel = new Gtk.Label({ label: t("settings.widgets.label.barra"), css_classes: ["settings-row-subtitle"], halign: Gtk.Align.CENTER })
+        const barLabel = new Gtk.Label({ label: t("settings.widgets.opt.bar"), css_classes: ["settings-row-subtitle"], halign: Gtk.Align.CENTER })
         const barSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER, sensitive: canBar ?? false })
         barSwitch.set_active(placement.bar)
         barBox.append(barLabel)
@@ -50,11 +50,11 @@ export default function WidgetsPage(): Gtk.Widget {
         const canCC = w.locations?.includes("cc") ?? false
         const ccFits = placement.cc || ccLayout.canAdd(w.id)
         const ccBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, valign: Gtk.Align.CENTER })
-        const ccLabel = new Gtk.Label({ label: t("settings.widgets.label.centro"), css_classes: ["settings-row-subtitle"], halign: Gtk.Align.CENTER })
+        const ccLabel = new Gtk.Label({ label: t("settings.widgets.opt.center"), css_classes: ["settings-row-subtitle"], halign: Gtk.Align.CENTER })
         const ccSwitch = new Gtk.Switch({
             valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
             sensitive: canCC && ccFits,
-            tooltip_text: canCC && !ccFits ? t("settings.widgets.tooltip.sin-espacio") : "",
+            tooltip_text: canCC && !ccFits ? t("settings.widgets.tooltip.no-space") : "",
         })
         ccSwitch.set_active(placement.cc)
         ccBox.append(ccLabel)
@@ -82,7 +82,7 @@ export default function WidgetsPage(): Gtk.Widget {
 
     // Hint about CC layout ordering
     const hint = new Gtk.Label({
-        label: t("settings.widgets.label.para-reordenar-los-widgets-en-el-centro-"),
+        label: t("settings.widgets.reorder-note"),
         css_classes: ["settings-row-subtitle"],
         wrap: true,
         halign: Gtk.Align.START,

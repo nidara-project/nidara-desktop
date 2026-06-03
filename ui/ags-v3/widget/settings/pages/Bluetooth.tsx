@@ -11,15 +11,15 @@ import { CrystalButton } from "../../../../lib/crystal-ui"
 export default function BluetoothPage() {
     const page = pageBox("bluetooth-page")
     page.append(pageHeader(
-        t("settings.bluetooth.page.title.bluetooth"),
-        t("settings.bluetooth.page.subtitle.gestiona-dispositivos-bluetooth-empareja"),
+        t("settings.bluetooth.title"),
+        t("settings.bluetooth.subtitle"),
     ))
 
     const bt = AstalBluetooth.get_default()
 
     if (!bt || !bt.adapter) {
         const banner = new Gtk.Label({
-            label: t("settings.bluetooth.label.bluetooth-no-disponible"),
+            label: t("settings.bluetooth.error.no-adapter"),
             css_classes: ["settings-placeholder"],
             margin_top: 24,
             halign: Gtk.Align.CENTER,
@@ -29,7 +29,7 @@ export default function BluetoothPage() {
     }
 
     // ── Power toggle ─────────────────────────────────────────────────────────
-    const powerGroup = listGroup(t("settings.bluetooth.page.title.bluetooth"))
+    const powerGroup = listGroup(t("settings.bluetooth.title"))
     const powerSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER, active: bt.is_powered })
 
     let ignoreStateSet = false
@@ -49,20 +49,20 @@ export default function BluetoothPage() {
     powerSwitch.connect("unrealize", () => { try { bt.disconnect(powerId) } catch {} })
 
     powerGroup.listBox.append(createRow(
-        t("settings.bluetooth.row.label.activar-bluetooth"),
-        t("settings.bluetooth.row.desc.encender-o-apagar-el-adaptador-bluetooth"),
+        t("settings.bluetooth.enable"),
+        t("settings.bluetooth.enable.desc"),
         powerSwitch,
     ))
     page.append(powerGroup.box)
 
     // ── Paired devices ────────────────────────────────────────────────────────
-    const devicesGroup = listGroup(t("settings.bluetooth.group.dispositivos-emparejados"))
+    const devicesGroup = listGroup(t("settings.bluetooth.group.paired"))
     page.append(devicesGroup.box)
 
     // ── Scan ─────────────────────────────────────────────────────────────────
-    const scanGroup = listGroup(t("settings.bluetooth.group.buscar-dispositivos"))
+    const scanGroup = listGroup(t("settings.bluetooth.group.search"))
     const scanBtn = CrystalButton({
-        label: t("settings.bluetooth.label.buscar-ahora"),
+        label: t("settings.bluetooth.search-now"),
         variant: "primary",
         pill: true,
         valign: Gtk.Align.CENTER,
@@ -96,14 +96,14 @@ export default function BluetoothPage() {
     scanBtn.connect("unrealize", () => stopScan())
 
     scanGroup.listBox.append(createRow(
-        t("settings.bluetooth.row.label.escanear"),
-        t("settings.bluetooth.row.desc.busca-dispositivos-bluetooth-cercanos-du"),
+        t("settings.bluetooth.scan"),
+        t("settings.bluetooth.scan.desc"),
         scanBox,
     ))
     page.append(scanGroup.box)
 
     // ── Nearby devices list ───────────────────────────────────────────────────
-    const nearbyGroup = listGroup(t("settings.bluetooth.group.dispositivos-detectados"))
+    const nearbyGroup = listGroup(t("settings.bluetooth.group.detected"))
     page.append(nearbyGroup.box)
 
     // ── Device list builder ───────────────────────────────────────────────────
@@ -117,7 +117,7 @@ export default function BluetoothPage() {
 
         if (devices.length === 0) {
             const empty = new Gtk.Label({
-                label: t("settings.bluetooth.label.sin-dispositivos"),
+                label: t("settings.bluetooth.no-devices"),
                 css_classes: ["settings-placeholder"],
                 margin_top: 12,
                 margin_bottom: 12,
@@ -160,7 +160,7 @@ export default function BluetoothPage() {
             if (allowActions) {
                 if (dev.connected) {
                     const disconnectBtn = new Gtk.Button({
-                        label: t("settings.bluetooth.label.desconectar"),
+                        label: t("settings.bluetooth.disconnect"),
                         css_classes: ["crystal-btn"],
                         valign: Gtk.Align.CENTER,
                     })
@@ -170,7 +170,7 @@ export default function BluetoothPage() {
                     rowBox.append(disconnectBtn)
                 } else {
                     const connectBtn = new Gtk.Button({
-                        label: t("settings.bluetooth.label.conectar"),
+                        label: t("settings.bluetooth.connect"),
                         css_classes: ["crystal-btn", "crystal-btn--primary"],
                         valign: Gtk.Align.CENTER,
                     })
@@ -184,7 +184,7 @@ export default function BluetoothPage() {
                     child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 16 , css_classes: ["cs-icon"] }),
                     css_classes: ["crystal-btn", "crystal-btn--danger"],
                     valign: Gtk.Align.CENTER,
-                    tooltip_text: t("settings.bluetooth.tooltip.olvidar-dispositivo"),
+                    tooltip_text: t("settings.bluetooth.tooltip.forget"),
                 })
                 removeBtn.connect("clicked", () => {
                     try { bt.adapter.remove_device(dev) } catch {}
@@ -192,7 +192,7 @@ export default function BluetoothPage() {
                 rowBox.append(removeBtn)
             } else {
                 const pairBtn = new Gtk.Button({
-                    label: t("settings.bluetooth.label.emparejar"),
+                    label: t("settings.bluetooth.pair"),
                     css_classes: ["settings-row-action"],
                     valign: Gtk.Align.CENTER,
                 })

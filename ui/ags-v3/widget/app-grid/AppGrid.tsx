@@ -394,7 +394,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             })
             actionGroup.add_action(pinAction)
             menuModel.append(
-                isPinned ? t("settings.dock.dockitem.label.desanclar-del-dock") : t("app-grid.menu.pin"),
+                isPinned ? t("settings.dock.dockitem.unpin") : t("app-grid.menu.pin"),
                 "context.pin"
             )
 

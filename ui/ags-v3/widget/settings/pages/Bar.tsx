@@ -22,20 +22,20 @@ export default function BarPage() {
     const layoutGroup = listGroup(t("settings.bar.group.layout"))
 
     layoutGroup.listBox.append(toggleRow(
-        t("settings.bar.row.label.system-menu"),
-        t("settings.bar.row.desc.system-menu"),
+        t("settings.bar.system-menu"),
+        t("settings.bar.system-menu.desc"),
         barSettings.showSystemMenu,
         (v) => updateBarSettings({ showSystemMenu: v }),
     ))
     layoutGroup.listBox.append(toggleRow(
-        t("settings.bar.row.label.app-title"),
-        t("settings.bar.row.desc.app-title"),
+        t("settings.bar.app-title"),
+        t("settings.bar.app-title.desc"),
         barSettings.showAppTitle,
         (v) => updateBarSettings({ showAppTitle: v }),
     ))
     layoutGroup.listBox.append(toggleRow(
-        t("settings.bar.row.label.workspaces"),
-        t("settings.bar.row.desc.workspaces"),
+        t("settings.bar.workspaces"),
+        t("settings.bar.workspaces.desc"),
         barSettings.showWorkspaces,
         (v) => updateBarSettings({ showWorkspaces: v }),
     ))
@@ -71,8 +71,8 @@ export default function BarPage() {
     previewBox.append(resetBtn)
 
     iconGroup.listBox.append(createRow(
-        t("settings.bar.row.label.icon-preset"),
-        t("settings.bar.row.desc.icon-preset"),
+        t("settings.bar.icon-preset"),
+        t("settings.bar.icon-preset.desc"),
         previewBox,
     ))
 
@@ -106,8 +106,8 @@ export default function BarPage() {
     customBox.append(applyBtn)
 
     iconGroup.listBox.append(createRow(
-        t("settings.bar.row.label.icon-custom"),
-        t("settings.bar.row.desc.icon-custom"),
+        t("settings.bar.icon-custom"),
+        t("settings.bar.icon-custom.desc"),
         customBox,
     ))
 

@@ -94,13 +94,13 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
 
     const header = new Gtk.Box({ spacing: 8 })
     header.append(new Gtk.Label({
-        label: ep.description || ep.name || t("settings.audio.label.dispositivo"),
+        label: ep.description || ep.name || t("settings.audio.device"),
         halign: Gtk.Align.START, hexpand: true,
         css_classes: ["settings-row-label"], ellipsize: 3, max_width_chars: 18,
     }))
     if (isDefault) {
         header.append(new Gtk.Label({
-            label: t("settings.audio.label.por-defecto"),
+            label: t("settings.audio.default"),
             css_classes: ["settings-row-status", "accent-label"], valign: Gtk.Align.CENTER,
         }))
     } else {
@@ -177,7 +177,7 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
 
     if (!audio) {
         box.append(new Gtk.Label({
-            label: t("settings.audio.label.servicio-de-audio-no-disponible"),
+            label: t("settings.audio.error.no-service"),
             css_classes: ["settings-row-subtitle"],
             margin_top: 12, margin_start: 14, halign: Gtk.Align.START,
         }))
@@ -192,7 +192,7 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
     const speakersList = new Gtk.ListBox({ css_classes: ["settings-list-box"], selection_mode: Gtk.SelectionMode.NONE })
     const streamsList  = new Gtk.ListBox({ css_classes: ["settings-list-box"], selection_mode: Gtk.SelectionMode.NONE })
     const emptyStreams  = new Gtk.Label({
-        label: t("settings.audio.label.sin-apps"),
+        label: t("settings.audio.no-apps"),
         css_classes: ["settings-row-subtitle"],
         margin_top: 8, margin_bottom: 8, margin_start: 14, halign: Gtk.Align.START,
     })
@@ -228,9 +228,9 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
     refreshSpeakers()
     refreshStreams()
 
-    box.append(sectionLabel(t("settings.audio.group.dispositivos-de-salida")))
+    box.append(sectionLabel(t("settings.audio.group.output")))
     box.append(speakersList)
-    box.append(sectionLabel(t("settings.audio.group.aplicaciones")))
+    box.append(sectionLabel(t("settings.audio.group.apps")))
     box.append(streamsList)
 
     return box
