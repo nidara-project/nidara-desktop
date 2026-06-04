@@ -57,20 +57,20 @@ export function renderMenuModel(
         try { return m.get_item_link(i, name) } catch { return null }
     }
 
-    const separator = () => new Gtk.Separator({ css_classes: ["system-menu-sep"], margin_top: 4, margin_bottom: 4 })
+    const separator = () => new Gtk.Separator({ css_classes: ["crystal-menu-sep"], margin_top: 4, margin_bottom: 4 })
     const dimHeader = (label: string) => new Gtk.Label({
         label, halign: Gtk.Align.START, xalign: 0,
         margin_start: 8, margin_top: 4, margin_bottom: 2,
-        css_classes: ["cc-atomic-label-dim"],
+        css_classes: ["crystal-menu-header"],
     })
 
     const makeRow = (label: string, onClick: () => void): Gtk.Button => {
         const inner = new Gtk.Box({ spacing: 10, margin_top: 2, margin_bottom: 2, margin_start: 8, margin_end: 10 })
         inner.append(new Gtk.Label({
             label, halign: Gtk.Align.START, hexpand: true, xalign: 0, ellipsize: 3, max_width_chars: 34,
-            css_classes: ["system-menu-label"],
+            css_classes: ["crystal-menu-label"],
         }))
-        const btn = new Gtk.Button({ child: inner, css_classes: ["system-menu-row"], hexpand: true })
+        const btn = new Gtk.Button({ child: inner, css_classes: ["crystal-menu-row"], hexpand: true })
         btn.connect("clicked", onClick)
         return btn
     }

@@ -169,49 +169,14 @@
     @include crystal-reset;
 }
 
-/* --- System Menu Dropdown (Native Overlay) --- */
-.system-menu-dropdown {
-    @include crystal-reset;
-    color: var(--crystal-text);
-    -gtk-icon-palette: success white, warning white, error white;
-}
-
-.system-menu-row {
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    border-radius: 6px;
-    transition: background-color 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-    min-height: 32px;
-}
-
-.system-menu-row:hover {
-    background: var(--crystal-surface-hover);
-}
-
-.system-menu-row:active {
-    background: var(--crystal-surface-active);
-}
-
-.system-menu-label {
-    font-size: $fs-small;
-    font-weight: $fw-medium;
-}
-
-
-.system-menu-sep {
-    background: var(--crystal-surface);
-    min-height: 1px;
-}
+/* The system menu uses the universal .crystal-menu component (_components.scss). */
 
 // ── Inline confirmation view ──────────────────────────────────────────────────
+// Confirm view buttons = crystal-menu-row (geometry + hover) + an emphasis tone.
 .system-confirm-secondary {
     background: var(--crystal-surface-back);
     color: var(--crystal-text-dim);
     font-size: $fs-caption;
-    transition: background-color 0.15s ease, box-shadow 0.15s ease;
-
-    @include crystal-tile-states;
     &:hover { color: var(--crystal-text); }
 }
 
@@ -220,9 +185,6 @@
     color: var(--crystal-text);
     font-size: $fs-caption;
     font-weight: $fw-semibold;
-    transition: background-color 0.15s ease, box-shadow 0.15s ease;
-
-    @include crystal-tile-states;
 }
 
 /* ── About Window ──────────────────────────────────────────────────────────── */

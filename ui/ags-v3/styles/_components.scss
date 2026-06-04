@@ -136,6 +136,35 @@ selection {
     transition: color 0.15s ease;
 }
 
+/* Menu — shared by the tray menu (renderMenuModel), the bar system menu and the
+   CC context menu. A flat list of .crystal-menu-row buttons, not a Gtk.Popover. */
+.crystal-menu {
+    @include crystal-reset;
+    color: var(--crystal-text);
+    -gtk-icon-palette: success white, warning white, error white;
+}
+.crystal-menu-row {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    border-radius: $crystal-radius-xs;
+    min-height: 32px;
+    @include crystal-row-states;
+}
+.crystal-menu-label {
+    font-size: $fs-small;
+    font-weight: $fw-medium;
+}
+.crystal-menu-header {        // dim section/submenu header inside a menu
+    font-size: $fs-caption;
+    font-weight: $fw-regular;
+    color: var(--crystal-text-dim);
+}
+.crystal-menu-sep {
+    background: var(--crystal-surface);
+    min-height: 1px;
+}
+
 /* --- Unified overlay entrance ---
    The single animation for all in-bar-window panels (CC, NC, Prism, system
    menu, overview): a pure opacity crossfade (no transform → no hit-testing

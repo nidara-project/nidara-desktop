@@ -99,7 +99,7 @@ export function createCCContextMenu(): CCContextMenu {
     }
 
     const makeSizeRow = (label: string, current: boolean, fits: boolean, onClick: () => void) => {
-        const lbl = new Gtk.Label({ label, halign: Gtk.Align.START, hexpand: true, css_classes: ["system-menu-label"] })
+        const lbl = new Gtk.Label({ label, halign: Gtk.Align.START, hexpand: true, css_classes: ["crystal-menu-label"] })
         const inner = new Gtk.Box({ spacing: 10, margin_top: 2, margin_bottom: 2, margin_start: 4, margin_end: 12 })
         inner.append(lbl)
         if (current) {
@@ -107,7 +107,7 @@ export function createCCContextMenu(): CCContextMenu {
         } else if (!fits) {
             inner.append(new Gtk.Label({ label: t("cc.menu.size-full"), css_classes: ["cc-atomic-label-dim"], valign: Gtk.Align.CENTER }))
         }
-        const btn = new Gtk.Button({ child: inner, css_classes: ["system-menu-row"], hexpand: true, sensitive: !current && fits })
+        const btn = new Gtk.Button({ child: inner, css_classes: ["crystal-menu-row"], hexpand: true, sensitive: !current && fits })
         btn.connect("clicked", onClick)
         return btn
     }
@@ -128,14 +128,14 @@ export function createCCContextMenu(): CCContextMenu {
                     close()
                 }))
             }
-            rows.append(new Gtk.Separator({ css_classes: ["system-menu-sep"], margin_top: 4, margin_bottom: 4 }))
+            rows.append(new Gtk.Separator({ css_classes: ["crystal-menu-sep"], margin_top: 4, margin_bottom: 4 }))
         }
 
-        const removeLbl = new Gtk.Label({ label: t("cc.menu.remove"), halign: Gtk.Align.START, hexpand: true, css_classes: ["system-menu-label"] })
+        const removeLbl = new Gtk.Label({ label: t("cc.menu.remove"), halign: Gtk.Align.START, hexpand: true, css_classes: ["crystal-menu-label"] })
         const removeInner = new Gtk.Box({ spacing: 10, margin_top: 2, margin_bottom: 2, margin_start: 4, margin_end: 12 })
         removeInner.append(new Gtk.Image({ gicon: Icons.trash, pixel_size: 15, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER }))
         removeInner.append(removeLbl)
-        const removeBtn = new Gtk.Button({ child: removeInner, css_classes: ["system-menu-row", "danger-action"], hexpand: true })
+        const removeBtn = new Gtk.Button({ child: removeInner, css_classes: ["crystal-menu-row", "danger-action"], hexpand: true })
         // Clear the authoritative placement flag too, else syncCCLayout re-adds the
         // widget on next load (cc_layout.json and widgetConfig must agree).
         removeBtn.connect("clicked", () => { widgetConfig.setCC(id, false); ccLayout.remove(id); close() })
