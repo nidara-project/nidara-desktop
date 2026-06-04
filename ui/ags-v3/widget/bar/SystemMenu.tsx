@@ -31,14 +31,14 @@ export function SystemMenuOverlay() {
   const menuBox = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
     spacing: 2,
-    margin_top: 6, margin_bottom: 6, margin_start: 6, margin_end: 6,
+    margin_top: 10, margin_bottom: 10, margin_start: 10, margin_end: 10,
   })
 
   const makeRow = (ico: Gio.FileIcon, txt: string, _danger: boolean, cmd: () => void) => {
     const lbl = new Gtk.Label({ label: txt, halign: Gtk.Align.START, hexpand: true,
       css_classes: ["crystal-menu-label"] })
     const img = new Gtk.Image({ gicon: ico, pixel_size: 16, css_classes: ["cs-icon"] })
-    const b = new Gtk.Box({ spacing: 12, margin_top: 2, margin_bottom: 2, margin_start: 4, margin_end: 16 })
+    const b = new Gtk.Box({ spacing: 12 })
     b.append(img); b.append(lbl)
     const btn = new Gtk.Button({ child: b, css_classes: ["crystal-menu-row"], hexpand: true })
     btn.connect("clicked", cmd)

@@ -520,8 +520,8 @@ selection {
   background: transparent;
   border: none;
   box-shadow: none;
-  border-radius: var(--crystal-radius-xs);
-  min-height: 32px;
+  padding: 7px 12px;
+  border-radius: var(--crystal-radius-sm);
   transition: background-color 0.12s ease;
 }
 .crystal-menu-row:hover {
@@ -1735,22 +1735,6 @@ button.dock-v-icon image {
 }
 .bar-expansion-panel button.flat:active {
   background: rgba(var(--crystal-accent-rgb), 0.18);
-}
-
-button.clip-entry-btn {
-  background: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  border-radius: var(--crystal-radius-xs);
-  padding: 9px 12px;
-  transition: background 0.15s ease;
-}
-button.clip-entry-btn:hover {
-  background: var(--crystal-surface-hover);
-}
-button.clip-entry-btn:active {
-  background: var(--crystal-surface-active);
 }
 
 .bar-popover-value {

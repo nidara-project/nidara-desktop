@@ -180,8 +180,12 @@ selection {
     background: transparent;
     border: none;
     box-shadow: none;
-    border-radius: $crystal-radius-xs;
-    min-height: 32px;
+    // Padding lives on the row (single source) — makeRow inner boxes only set the
+    // icon↔label spacing, no ad-hoc margins. Generous like the clipboard list so
+    // the hover reads roomy, and radius-sm so the rounded hover sits comfortably
+    // inside the menu's squircle instead of fighting its corner.
+    padding: 7px 12px;
+    border-radius: $crystal-radius-sm;
     @include crystal-row-states;
 }
 .crystal-menu-label {

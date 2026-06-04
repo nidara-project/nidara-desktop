@@ -388,7 +388,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const row = new Gtk.Box({ spacing: 10 })
       row.append(new Gtk.Image({ gicon: w.icon, pixel_size: 16, css_classes: ["cs-icon"] }))
       row.append(new Gtk.Label({ label: w.name, halign: Gtk.Align.START, hexpand: true }))
-      const btn = new Gtk.Button({ child: row, css_classes: ["clip-entry-btn"], hexpand: true })
+      const btn = new Gtk.Button({ child: row, css_classes: ["crystal-menu-row"], hexpand: true })
       btn.connect("clicked", () => {
         if (hasExpand) {
           status.bar_expanded_id = id

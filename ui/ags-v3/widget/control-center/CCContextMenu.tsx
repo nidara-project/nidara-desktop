@@ -51,7 +51,7 @@ export function createCCContextMenu(): CCContextMenu {
     const rows = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 2,
-        margin_top: 6, margin_bottom: 6, margin_start: 6, margin_end: 6,
+        margin_top: 9, margin_bottom: 9, margin_start: 9, margin_end: 9,
     })
 
     const card = SquircleContainer({
@@ -100,7 +100,7 @@ export function createCCContextMenu(): CCContextMenu {
 
     const makeSizeRow = (label: string, current: boolean, fits: boolean, onClick: () => void) => {
         const lbl = new Gtk.Label({ label, halign: Gtk.Align.START, hexpand: true, css_classes: ["crystal-menu-label"] })
-        const inner = new Gtk.Box({ spacing: 10, margin_top: 2, margin_bottom: 2, margin_start: 4, margin_end: 12 })
+        const inner = new Gtk.Box({ spacing: 10 })
         inner.append(lbl)
         if (current) {
             inner.append(new Gtk.Image({ gicon: Icons.check, pixel_size: 15, css_classes: ["cs-icon", "accent-label"], valign: Gtk.Align.CENTER }))
@@ -132,7 +132,7 @@ export function createCCContextMenu(): CCContextMenu {
         }
 
         const removeLbl = new Gtk.Label({ label: t("cc.menu.remove"), halign: Gtk.Align.START, hexpand: true, css_classes: ["crystal-menu-label"] })
-        const removeInner = new Gtk.Box({ spacing: 10, margin_top: 2, margin_bottom: 2, margin_start: 4, margin_end: 12 })
+        const removeInner = new Gtk.Box({ spacing: 10 })
         removeInner.append(new Gtk.Image({ gicon: Icons.trash, pixel_size: 15, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER }))
         removeInner.append(removeLbl)
         const removeBtn = new Gtk.Button({ child: removeInner, css_classes: ["crystal-menu-row", "danger-action"], hexpand: true })

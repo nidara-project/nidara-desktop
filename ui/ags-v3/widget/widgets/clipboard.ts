@@ -66,7 +66,7 @@ function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh:
                     max_width_chars: 36, css_classes: ["crystal-row-title"],
                 })
                 const btn = new Gtk.Button({
-                    css_classes: ["clip-entry-btn"],
+                    css_classes: ["crystal-menu-row"],
                     hexpand: true, halign: Gtk.Align.FILL,
                     child: lbl,
                 })
