@@ -1800,16 +1800,16 @@ window.nc-window-2 contents {
 }
 
 .rec-active-bg {
-  background-color: rgba(220, 30, 30, 0.25);
+  background-color: rgba(var(--crystal-danger-rgb), 0.25);
   animation: rec-pulse-cc 1.4s ease-in-out infinite;
 }
 
 .rec-stop-icon {
-  color: #e03030;
+  color: var(--crystal-danger);
 }
 
 .rec-label {
-  color: #e03030;
+  color: var(--crystal-danger);
 }
 
 .rec-elapsed {
@@ -1819,7 +1819,7 @@ window.nc-window-2 contents {
 }
 
 .rec-btn-active {
-  background-color: rgba(220, 30, 30, 0.08);
+  background-color: rgba(var(--crystal-danger-rgb), 0.08);
 }
 
 @keyframes rec-pulse-cc {
@@ -2045,7 +2045,7 @@ window.nc-window-2 contents {
 .nc-calendar-island calendar grid label:selected {
   background-color: var(--crystal-accent);
   background-image: none;
-  color: #fff;
+  color: var(--crystal-accent-fg);
   font-weight: 700;
 }
 
@@ -2203,15 +2203,20 @@ window.nc-window-2 contents {
   outline: none;
   border-radius: var(--crystal-radius-sm);
   margin: 1px 0;
-  transition: background 0.12s ease;
+  transition: background-color 0.12s ease;
 }
 .cc-detail-panel list.settings-list-box row:hover,
 .cc-detail-panel list.boxed-list row:hover {
-  background: rgba(var(--crystal-accent-rgb), 0.08);
+  background-color: var(--crystal-state-hover);
 }
 .cc-detail-panel list.settings-list-box row:active,
 .cc-detail-panel list.boxed-list row:active {
-  background: rgba(var(--crystal-accent-rgb), 0.15);
+  background-color: var(--crystal-state-pressed);
+}
+.cc-detail-panel list.settings-list-box row:selected, .cc-detail-panel list.settings-list-box row.is-selected,
+.cc-detail-panel list.boxed-list row:selected,
+.cc-detail-panel list.boxed-list row.is-selected {
+  background-color: var(--crystal-state-selected);
 }
 .cc-detail-panel list.settings-list-box row:selected,
 .cc-detail-panel list.boxed-list row:selected {
@@ -2225,17 +2230,21 @@ window.nc-window-2 contents {
   box-shadow: none;
   outline: none;
   border-radius: var(--crystal-radius-sm);
+  transition: background-color 0.12s ease;
 }
 .cc-detail-panel button.settings-action-row:hover {
-  background: rgba(var(--crystal-accent-rgb), 0.08);
+  background-color: var(--crystal-state-hover);
 }
 .cc-detail-panel button.settings-action-row:active {
-  background: rgba(var(--crystal-accent-rgb), 0.15);
+  background-color: var(--crystal-state-pressed);
+}
+.cc-detail-panel button.settings-action-row:selected, .cc-detail-panel button.settings-action-row.is-selected {
+  background-color: var(--crystal-state-selected);
 }
 .cc-detail-panel button.suggested-action {
   background: var(--crystal-accent);
   background-image: none;
-  color: #fff;
+  color: var(--crystal-accent-fg);
   border: none;
   box-shadow: none;
   border-radius: var(--crystal-radius-sm);
@@ -2252,7 +2261,7 @@ window.nc-window-2 contents {
 .cc-detail-panel button.destructive-action {
   background: var(--crystal-danger);
   background-image: none;
-  color: #fff;
+  color: var(--crystal-accent-fg);
   border: none;
   box-shadow: none;
   border-radius: var(--crystal-radius-sm);
@@ -2307,7 +2316,7 @@ window.nc-window-2 contents {
   background: rgba(var(--crystal-accent-rgb), 0.18);
 }
 .cc-detail-panel .linked > button {
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--crystal-surface-back);
   background-image: none;
   border: 1px solid var(--crystal-border);
   border-radius: var(--crystal-radius-sm);
@@ -2317,7 +2326,7 @@ window.nc-window-2 contents {
   padding: 6px 0;
 }
 .cc-detail-panel .linked > button:hover {
-  background: rgba(var(--crystal-accent-rgb), 0.08);
+  background: var(--crystal-state-hover);
   color: var(--crystal-text);
 }
 .cc-detail-panel .linked > button.suggested-action {
@@ -2334,7 +2343,7 @@ window.nc-window-2 contents {
   background: rgba(var(--crystal-accent-rgb), 0.35);
 }
 .cc-detail-panel switch:checked slider {
-  background: #fff;
+  background: var(--crystal-thumb);
 }
 .cc-detail-panel switch:checked {
   background: var(--crystal-accent);
@@ -2371,7 +2380,7 @@ window.nc-window-2 contents {
   border-radius: var(--crystal-radius-sm);
 }
 .audio-device-row:hover {
-  background: rgba(var(--crystal-accent-rgb), 0.06);
+  background: var(--crystal-state-hover);
 }
 
 .cc-detail-close-btn {
@@ -3461,7 +3470,7 @@ window.prism-window decoration, window.prism-window contents {
 }
 
 .prism-section-label {
-  color: rgba(255, 255, 255, 0.35);
+  color: var(--crystal-text-dim);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;

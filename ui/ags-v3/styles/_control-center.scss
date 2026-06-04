@@ -148,13 +148,13 @@ window.nc-window-2 {
 
 // Recording widget states
 .rec-active-bg {
-    background-color: rgba(220, 30, 30, 0.25);
+    background-color: rgba(var(--crystal-danger-rgb), 0.25);
     animation: rec-pulse-cc 1.4s ease-in-out infinite;
 }
 
-.rec-stop-icon { color: #e03030; }
+.rec-stop-icon { color: var(--crystal-danger); }
 
-.rec-label { color: #e03030; }
+.rec-label { color: var(--crystal-danger); }
 
 .rec-elapsed {
     font-size: $fs-caption;
@@ -163,7 +163,7 @@ window.nc-window-2 {
 }
 
 .rec-btn-active {
-    background-color: rgba(220, 30, 30, 0.08);
+    background-color: rgba(var(--crystal-danger-rgb), 0.08);
 }
 
 @keyframes rec-pulse-cc {
@@ -390,7 +390,7 @@ window.nc-window-2 {
         grid label:selected {
             background-color: var(--crystal-accent);
             background-image: none;
-            color: #fff;
+            color: var(--crystal-accent-fg);
             font-weight: $fw-bold;
         }
     }
@@ -546,11 +546,8 @@ window.nc-window-2 {
             @include crystal-reset;
             border-radius: $crystal-radius-sm;
             margin: 1px 0;
-            transition: background 0.12s ease;
-
-            &:hover   { background: rgba(var(--crystal-accent-rgb), 0.08); }
-            &:active  { background: rgba(var(--crystal-accent-rgb), 0.15); }
-            &:selected { background: transparent; }
+            @include crystal-row-states;
+            &:selected { background: transparent; }   // list rows aren't selectable
         }
     }
 
@@ -558,16 +555,14 @@ window.nc-window-2 {
     button.settings-action-row {
         @include crystal-reset;
         border-radius: $crystal-radius-sm;
-
-        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.08); }
-        &:active { background: rgba(var(--crystal-accent-rgb), 0.15); }
+        @include crystal-row-states;
     }
 
     // Primary action (VPN connect, screenshot save, start recording)
     button.suggested-action {
         background: var(--crystal-accent);
         background-image: none;
-        color: #fff;
+        color: var(--crystal-accent-fg);
         border: none;
         box-shadow: none;
         border-radius: $crystal-radius-sm;
@@ -583,7 +578,7 @@ window.nc-window-2 {
     button.destructive-action {
         background: var(--crystal-danger);
         background-image: none;
-        color: #fff;
+        color: var(--crystal-accent-fg);
         border: none;
         box-shadow: none;
         border-radius: $crystal-radius-sm;
@@ -637,7 +632,7 @@ window.nc-window-2 {
     // Linked mode-selector button groups (screenshot / screenrecord)
     .linked {
         > button {
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--crystal-surface-back);
             background-image: none;
             border: 1px solid var(--crystal-border);
             border-radius: $crystal-radius-sm;
@@ -646,7 +641,9 @@ window.nc-window-2 {
             font-size: $fs-small;
             padding: 6px 0;
 
-            &:hover { background: rgba(var(--crystal-accent-rgb), 0.08); color: var(--crystal-text); }
+            // Unselected: deepen neutrally on hover; accent stays for the selected
+            // (.suggested-action) segment only.
+            &:hover { background: var(--crystal-state-hover); color: var(--crystal-text); }
 
             &.suggested-action {
                 background: rgba(var(--crystal-accent-rgb), 0.18);
@@ -663,7 +660,7 @@ window.nc-window-2 {
 
     // Audio enable switch
     switch {
-        &:checked slider { background: #fff; }
+        &:checked slider { background: var(--crystal-thumb); }
         &:checked       { background: var(--crystal-accent); }
     }
 
@@ -687,7 +684,7 @@ window.nc-window-2 {
 .audio-device-row {
     background: transparent;
     border-radius: $crystal-radius-sm;
-    &:hover { background: rgba(var(--crystal-accent-rgb), 0.06); }
+    &:hover { background: var(--crystal-state-hover); }
 }
 
 .cc-detail-close-btn {
