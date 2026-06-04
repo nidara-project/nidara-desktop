@@ -47,7 +47,7 @@ function createDeviceRow(
     header.append(new Gtk.Label({
         label: endpoint.description || endpoint.name || t("settings.audio.device"),
         halign: Gtk.Align.START, hexpand: true,
-        css_classes: ["settings-row-label"],
+        css_classes: ["crystal-row-title"],
         ellipsize: 3, max_width_chars: 26,
     }))
 
@@ -122,7 +122,7 @@ function createDeviceRow(
     sliderRow.append(valLabel)
     box.append(sliderRow)
 
-    const row = new Gtk.ListBoxRow({ css_classes: ["audio-device-row"] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
     row.set_child(box)
     return row
 }
@@ -147,7 +147,7 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
     box.append(new Gtk.Label({
         label: appName,
         halign: Gtk.Align.START,
-        css_classes: ["settings-row-label"],
+        css_classes: ["crystal-row-title"],
         ellipsize: 3, max_width_chars: 18,
         width_chars: 14,
     }))
@@ -201,7 +201,7 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
     box.append(scale)
     box.append(valLabel)
 
-    const row = new Gtk.ListBoxRow({ css_classes: ["audio-device-row"] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
     row.set_child(box)
     return row
 }
@@ -225,7 +225,7 @@ export default function AudioPage() {
 
     const emptyStreams = new Gtk.Label({
         label: t("settings.audio.no-apps"),
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         margin_top: 12, margin_bottom: 12, margin_start: 16,
         halign: Gtk.Align.START,
     })

@@ -183,7 +183,7 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     // ── Search results page ───────────────────────────────────────────────────
     const searchResultsList = new Gtk.ListBox({
-        css_classes: ["settings-list-box", "search-results-list"],
+        css_classes: ["crystal-list", "search-results-list"],
         selection_mode: Gtk.SelectionMode.NONE,
         activate_on_single_click: true,
     })
@@ -246,11 +246,11 @@ export default function Settings(monitor: Gdk.Monitor) {
             }))
 
             const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true })
-            text.append(new Gtk.Label({ label: item.label, css_classes: ["settings-row-label"], halign: Gtk.Align.START }))
+            text.append(new Gtk.Label({ label: item.label, css_classes: ["crystal-row-title"], halign: Gtk.Align.START }))
             if (item.subtitle) {
                 text.append(new Gtk.Label({
                     label: item.subtitle,
-                    css_classes: ["settings-row-subtitle"],
+                    css_classes: ["crystal-row-subtitle"],
                     halign: Gtk.Align.START,
                     ellipsize: 3,
                     max_width_chars: 50,
@@ -260,7 +260,7 @@ export default function Settings(monitor: Gdk.Monitor) {
             row.append(new Gtk.Label({ label: item.pageLabel, css_classes: ["search-result-chip"] }))
             row.append(new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, opacity: 0.4, css_classes: ["cs-icon"] }))
 
-            const lbr = new Gtk.ListBoxRow({ css_classes: ["settings-item-row", "search-result-row"] })
+            const lbr = new Gtk.ListBoxRow({ css_classes: ["crystal-row", "search-result-row"] })
             lbr.set_child(row)
             ;(lbr as any)._targetPageId = item.pageId
             searchResultsList.append(lbr)

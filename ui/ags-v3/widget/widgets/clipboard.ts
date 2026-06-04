@@ -46,7 +46,7 @@ function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh:
     const entriesBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
     const emptyLabel = new Gtk.Label({
         label: t("widget.clipboard.empty"),
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         margin_top: 16, margin_bottom: 16,
         halign: Gtk.Align.CENTER,
     })
@@ -63,7 +63,7 @@ function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh:
             for (const entry of entries) {
                 const lbl = new Gtk.Label({
                     label: entry.preview, halign: Gtk.Align.START, ellipsize: 3,
-                    max_width_chars: 36, css_classes: ["settings-row-label"],
+                    max_width_chars: 36, css_classes: ["crystal-row-title"],
                 })
                 const btn = new Gtk.Button({
                     css_classes: ["clip-entry-btn"],

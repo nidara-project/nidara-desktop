@@ -96,7 +96,7 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
     header.append(new Gtk.Label({
         label: ep.description || ep.name || t("settings.audio.device"),
         halign: Gtk.Align.START, hexpand: true,
-        css_classes: ["settings-row-label"], ellipsize: 3, max_width_chars: 18,
+        css_classes: ["crystal-row-title"], ellipsize: 3, max_width_chars: 18,
     }))
     if (isDefault) {
         header.append(new Gtk.Label({
@@ -131,7 +131,7 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
     sliderRow.append(valLabel)
     box.append(sliderRow)
 
-    const row = new Gtk.ListBoxRow({ css_classes: ["audio-device-row"] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
     row.set_child(box)
     return row
 }
@@ -153,7 +153,7 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
     box.append(new Gtk.Label({
         label: appName,
         halign: Gtk.Align.START, hexpand: true,
-        css_classes: ["settings-row-label"], ellipsize: 3, max_width_chars: 16,
+        css_classes: ["crystal-row-title"], ellipsize: 3, max_width_chars: 16,
     }))
     const adj = new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 2, page_increment: 10, value: Math.round(stream.volume * 100) })
     const scale = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false, adjustment: adj, css_classes: ["crystal-scale", "cc-atomic-scale-native"] })
@@ -166,7 +166,7 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
     })
     box.append(scale)
     box.append(valLabel)
-    const row = new Gtk.ListBoxRow({ css_classes: ["audio-device-row"] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
     row.set_child(box)
     return row
 }
@@ -178,7 +178,7 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
     if (!audio) {
         box.append(new Gtk.Label({
             label: t("settings.audio.error.no-service"),
-            css_classes: ["settings-row-subtitle"],
+            css_classes: ["crystal-row-subtitle"],
             margin_top: 12, margin_start: 14, halign: Gtk.Align.START,
         }))
         return box
@@ -189,11 +189,11 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
         halign: Gtk.Align.START, margin_start: 14, margin_top: 4,
     })
 
-    const speakersList = new Gtk.ListBox({ css_classes: ["settings-list-box"], selection_mode: Gtk.SelectionMode.NONE })
-    const streamsList  = new Gtk.ListBox({ css_classes: ["settings-list-box"], selection_mode: Gtk.SelectionMode.NONE })
+    const speakersList = new Gtk.ListBox({ css_classes: ["crystal-list"], selection_mode: Gtk.SelectionMode.NONE })
+    const streamsList  = new Gtk.ListBox({ css_classes: ["crystal-list"], selection_mode: Gtk.SelectionMode.NONE })
     const emptyStreams  = new Gtk.Label({
         label: t("settings.audio.no-apps"),
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         margin_top: 8, margin_bottom: 8, margin_start: 14, halign: Gtk.Align.START,
     })
 

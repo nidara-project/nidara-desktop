@@ -150,7 +150,7 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
 
     const field = (label: string, widget: Gtk.Widget) => {
         const vbox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
-        vbox.append(new Gtk.Label({ label, halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
+        vbox.append(new Gtk.Label({ label, halign: Gtk.Align.START, css_classes: ["crystal-row-title"] }))
         vbox.append(widget)
         return vbox
     }
@@ -167,7 +167,7 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
     const adminSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER })
     adminRow.append(adminSwitch)
 
-    const statusLabel = new Gtk.Label({ label: "", css_classes: ["settings-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
+    const statusLabel = new Gtk.Label({ label: "", css_classes: ["crystal-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
 
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
     const cancelBtn = CrystalButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
@@ -251,7 +251,7 @@ function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null
 
     const field = (label: string, widget: Gtk.Widget) => {
         const vbox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
-        vbox.append(new Gtk.Label({ label, halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
+        vbox.append(new Gtk.Label({ label, halign: Gtk.Align.START, css_classes: ["crystal-row-title"] }))
         vbox.append(widget)
         return vbox
     }
@@ -259,7 +259,7 @@ function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null
     const pwEntry  = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true })
     const pw2Entry = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true })
 
-    const statusLabel = new Gtk.Label({ label: "", css_classes: ["settings-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
+    const statusLabel = new Gtk.Label({ label: "", css_classes: ["crystal-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
 
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
     const cancelBtn = CrystalButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
@@ -315,8 +315,8 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
     else avatarImg.gicon = Icons.user
 
     const nameBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
-    nameBox.append(new Gtk.Label({ label: user.displayName, css_classes: ["settings-row-label"], halign: Gtk.Align.START }))
-    nameBox.append(new Gtk.Label({ label: user.username, css_classes: ["settings-row-subtitle"], halign: Gtk.Align.START }))
+    nameBox.append(new Gtk.Label({ label: user.displayName, css_classes: ["crystal-row-title"], halign: Gtk.Align.START }))
+    nameBox.append(new Gtk.Label({ label: user.username, css_classes: ["crystal-row-subtitle"], halign: Gtk.Align.START }))
 
     const adminBadge = new Gtk.Label({
         label: t("settings.users.other.admin-badge"),
@@ -379,7 +379,7 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
     inner.append(pwBtn)
     inner.append(deleteBtn)
 
-    const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
     row.set_child(inner)
     return row
 }
@@ -480,7 +480,7 @@ export default function UsersPage() {
     profileGroup.listBox.append(createRow(t("settings.users.name"), t("settings.users.name.desc"), nameRow))
     profileGroup.listBox.append(createRow(
         t("settings.users.username"), "",
-        new Gtk.Label({ label: username, css_classes: ["settings-row-subtitle"], valign: Gtk.Align.CENTER }),
+        new Gtk.Label({ label: username, css_classes: ["crystal-row-subtitle"], valign: Gtk.Align.CENTER }),
     ))
     page.append(profileGroup.box)
 
@@ -507,10 +507,10 @@ export default function UsersPage() {
 
         const others = parseUsers().filter(u => u.username !== username)
         if (others.length === 0) {
-            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
             emptyRow.set_child(new Gtk.Label({
                 label: t("settings.users.other.empty"),
-                css_classes: ["settings-row-subtitle"],
+                css_classes: ["crystal-row-subtitle"],
                 margin_start: 16, margin_top: 12, margin_bottom: 12,
                 halign: Gtk.Align.START,
             }))
@@ -526,10 +526,10 @@ export default function UsersPage() {
         })
         const addInner = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
         addInner.append(new Gtk.Image({ gicon: Icons.plus, pixel_size: 16, opacity: 0.7 , css_classes: ["cs-icon"] }))
-        addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["settings-row-label"], halign: Gtk.Align.START }))
+        addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["crystal-row-title"], halign: Gtk.Align.START }))
         addBtn.set_child(addInner)
         addBtn.connect("clicked", () => showAddUserDialog(parentWin, rebuildOtherUsers))
-        const addRow = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+        const addRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
         addRow.set_child(addBtn)
         otherList.append(addRow)
     }

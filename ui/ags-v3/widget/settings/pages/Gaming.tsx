@@ -73,7 +73,7 @@ export default function GamingPage() {
     }
     updatePreview(Gaming.customWallpaper)
 
-    const previewRow = new Gtk.ListBoxRow({ css_classes: ["settings-item-row", "wallpaper-preview-row"] })
+    const previewRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row", "wallpaper-preview-row"] })
     previewRow.set_child(preview)
     wallGroup.listBox.append(previewRow)
 

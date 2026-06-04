@@ -294,7 +294,7 @@ window.nc-window-2 {
     transition: background-color 0.2s ease, border-color 0.2s ease;
     
     &:hover {
-        background-color: var(--crystal-state-hover);
+        background-color: var(--crystal-surface-hover);
         border-color: var(--crystal-border);
     }
 }
@@ -529,8 +529,9 @@ window.nc-window-2 {
 /* --- CC Detail Panel — styles for content inside the squircle island --------- */
 .cc-detail-panel {
 
-    // Strip the settings-page card look from list boxes
-    list.settings-list-box,
+    // Strip the boxed-card look: inside the detail panel a crystal-list sits flat
+    // on the island, not as a frosted card.
+    list.crystal-list,
     list.boxed-list {
         background: transparent;
         background-image: none;
@@ -640,7 +641,7 @@ window.nc-window-2 {
 
             // Unselected: deepen neutrally on hover; accent stays for the selected
             // (.suggested-action) segment only.
-            &:hover { background: var(--crystal-state-hover); color: var(--crystal-text); }
+            &:hover { background: var(--crystal-surface-hover); color: var(--crystal-text); }
 
             &.suggested-action {
                 background: rgba(var(--crystal-accent-rgb), 0.18);
@@ -671,17 +672,11 @@ window.nc-window-2 {
         font-weight: $fw-semibold;
     }
 
-    .settings-row-label   { font-size: $fs-small; color: var(--crystal-text); }
-    .settings-row-subtitle { font-size: $fs-small; color: var(--crystal-text-dim); }
+    .crystal-row-title    { font-size: $fs-small; color: var(--crystal-text); }
+    .crystal-row-subtitle { font-size: $fs-small; color: var(--crystal-text-dim); }
     .slider-value-label   { color: var(--crystal-text-dim); font-size: $fs-small; font-variant-numeric: tabular-nums; }
 
     separator { background: var(--crystal-border); margin: 4px 0; min-height: 1px; }
-}
-
-.audio-device-row {
-    background: transparent;
-    border-radius: $crystal-radius-sm;
-    &:hover { background: var(--crystal-state-hover); }
 }
 
 .cc-detail-close-btn {

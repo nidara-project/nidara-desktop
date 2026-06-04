@@ -27,7 +27,7 @@ export default function DockPage() {
 
     const verticalNote = new Gtk.Label({
         label: t("settings.dock.side-autohide-note"),
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         halign: Gtk.Align.START,
         margin_start: 10,
         margin_top: 2,
@@ -80,7 +80,7 @@ export default function DockPage() {
     const autoHideSwitch = new Gtk.Switch({ active: dockSettings.autoHide, valign: Gtk.Align.CENTER })
     const autoHideSubtitle = new Gtk.Label({
         label: t("settings.dock.autohide.desc"),
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         halign: Gtk.Align.START,
         ellipsize: 3,
     })

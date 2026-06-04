@@ -55,7 +55,7 @@ window.prism-window {
 /* Hover = neutral; Selected (keyboard arrow nav) = accent, so the cursor is
    clearly visible as you move through results. */
 .prism-result-row:hover {
-    background-color: var(--crystal-state-hover);
+    background-color: var(--crystal-surface-hover);
 }
 
 .prism-result-row:selected {

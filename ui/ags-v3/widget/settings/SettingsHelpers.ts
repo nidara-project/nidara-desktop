@@ -1,6 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import { makeHSlider } from "../common/Slider"
+import { CrystalRow, CrystalList } from "../../../lib/crystal-ui"
 
 /**
  * Shared UI helpers for Settings pages.
@@ -24,79 +25,17 @@ export const clearSearchIndex = () => { _searchIndex = []; _pageCtx = { id: "", 
 export const getSearchIndex = (): SearchItem[] => [..._searchIndex]
 
 // ── Boxed List Group ──────────────────────────────────────────────────────────
-export const listGroup = (title: string) => {
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 12,
-        css_classes: ["settings-group"],
-    })
-
-    if (title) {
-        box.append(new Gtk.Label({
-            label: title.toUpperCase(),
-            css_classes: ["settings-group-title"],
-            halign: Gtk.Align.START,
-            margin_start: 10,
-        }))
-    }
-
-    const listBox = new Gtk.ListBox({
-        css_classes: ["settings-list-box"],
-        selection_mode: Gtk.SelectionMode.NONE,
-    })
-
-    box.append(listBox)
-    return { box, listBox }
-}
+// Thin wrapper over the universal CrystalList component. Settings-specific code
+// keeps its own entry point, but the actual list is the shared component.
+export const listGroup = (title: string) => CrystalList(title)
 
 // ── Generic Row ───────────────────────────────────────────────────────────────
+// Universal CrystalRow + the settings-only side effect (search-index registration).
 export const createRow = (label: string, subtitle: string, widget: Gtk.Widget) => {
-    const box = new Gtk.Box({
-        spacing: 16,
-        margin_start: 16,
-        margin_end: 16,
-        margin_top: 14,
-        margin_bottom: 14,
-    })
-
-    const text = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 2,
-        hexpand: true,
-        valign: Gtk.Align.CENTER,
-    })
-
-    text.append(new Gtk.Label({
-        label,
-        css_classes: ["settings-row-label"],
-        halign: Gtk.Align.START,
-        xalign: 0,
-        wrap: true,
-    }))
-
-    if (subtitle) {
-        text.append(new Gtk.Label({
-            // wrap lets a long subtitle shrink/wrap instead of forcing the text
-            // column wide and pushing the right-hand control out of alignment.
-            label: subtitle,
-            css_classes: ["settings-row-subtitle"],
-            halign: Gtk.Align.START,
-            xalign: 0,
-            wrap: true,
-        }))
-    }
-
-    box.append(text)
-    box.append(widget)
-
-    // Auto-register in search index when inside a page build
     if (_pageCtx.id) {
         _searchIndex.push({ pageId: _pageCtx.id, pageLabel: _pageCtx.label, label, subtitle })
     }
-
-    const lbr = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
-    lbr.set_child(box)
-    return lbr
+    return CrystalRow(label, subtitle, widget)
 }
 
 // ── Toggle Row ────────────────────────────────────────────────────────────────

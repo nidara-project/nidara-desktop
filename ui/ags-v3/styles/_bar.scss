@@ -186,11 +186,11 @@
 }
 
 .system-menu-row:hover {
-    background: var(--crystal-state-hover);
+    background: var(--crystal-surface-hover);
 }
 
 .system-menu-row:active {
-    background: var(--crystal-state-pressed);
+    background: var(--crystal-surface-active);
 }
 
 .system-menu-label {
@@ -365,8 +365,8 @@ button.clip-entry-btn {
     padding: 9px 12px;
     transition: background 0.15s ease;
 
-    &:hover  { background: var(--crystal-state-hover); }
-    &:active { background: var(--crystal-state-pressed); }
+    &:hover  { background: var(--crystal-surface-hover); }
+    &:active { background: var(--crystal-surface-active); }
 }
 
 .bar-popover-value {

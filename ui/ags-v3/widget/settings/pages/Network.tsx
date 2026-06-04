@@ -198,7 +198,7 @@ function buildApRow(ap: any, iface: string, onRefresh: () => void): Gtk.ListBoxR
 
         const titleLabel = new Gtk.Label({
             label: `${t("settings.network.ap.password-for")} ${ssid}`,
-            css_classes: ["settings-row-label"],
+            css_classes: ["crystal-row-title"],
             halign: Gtk.Align.START,
             ellipsize: 3, // PANGO_ELLIPSIZE_END
             max_width_chars: 26,
@@ -359,7 +359,7 @@ export default function NetworkPage() {
         const headerBox = new Gtk.Box({ spacing: 0, hexpand: true })
         const groupTitleLabel = new Gtk.Label({
             label: t("settings.network.group.access-points").toUpperCase(),
-            css_classes: ["settings-group-title"],
+            css_classes: ["crystal-list-title"],
             halign: Gtk.Align.START,
             hexpand: true,
             margin_start: 10,
@@ -418,7 +418,7 @@ export default function NetworkPage() {
 
     const emptyVpn = new Gtk.Label({
         label: t("settings.network.vpn.no-profiles"),
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         margin_top: 12, margin_bottom: 12, margin_start: 16,
         halign: Gtk.Align.START,
     })
@@ -429,7 +429,7 @@ export default function NetworkPage() {
 
         listVpnProfiles().then(profiles => {
             if (profiles.length === 0) {
-                const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+                const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
                 row.set_child(emptyVpn)
                 vpnList.append(row)
             } else {

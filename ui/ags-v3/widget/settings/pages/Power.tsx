@@ -133,11 +133,11 @@ export default function PowerPage() {
     profiles.forEach(p => {
         const rowContent = new Gtk.Box({ spacing: 16, margin_start: 16, margin_end: 16, margin_top: 14, margin_bottom: 14 })
         rowContent.append(new Gtk.Image({ gicon: p.icon, pixel_size: 20, css_classes: ["sidebar-icon", "cs-icon"] }))
-        rowContent.append(new Gtk.Label({ label: p.label, hexpand: true, halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
+        rowContent.append(new Gtk.Label({ label: p.label, hexpand: true, halign: Gtk.Align.START, css_classes: ["crystal-row-title"] }))
         const checkIcon = new Gtk.Image({ gicon: Icons.check, css_classes: ["profile-check", "accent-icon", "cs-icon"], pixel_size: 16, visible: false })
         rowContent.append(checkIcon)
         checkIcons.set(p.id, checkIcon)
-        const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+        const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
         row.set_child(rowContent); row.set_name(p.id)
         profileGroup.listBox.append(row)
     })
@@ -211,7 +211,7 @@ export default function PowerPage() {
     // Info note: lock must fire before suspend
     const note = new Gtk.Label({
         label: t("settings.power.lock-note"),
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         halign: Gtk.Align.START,
         margin_start: 10,
         margin_top: 4,

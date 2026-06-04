@@ -43,7 +43,7 @@ export default function RegionPage() {
 
     const clockSubLabel = new Gtk.Label({
         label: t("settings.region.preview"),
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         halign: Gtk.Align.CENTER,
     })
 

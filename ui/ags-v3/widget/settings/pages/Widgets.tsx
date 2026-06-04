@@ -28,7 +28,7 @@ export default function WidgetsPage(): Gtk.Widget {
         box.append(wImg)
         const label = new Gtk.Label({
             label: w.name,
-            css_classes: ["settings-row-label"],
+            css_classes: ["crystal-row-title"],
             hexpand: true,
             halign: Gtk.Align.START,
         })
@@ -37,7 +37,7 @@ export default function WidgetsPage(): Gtk.Widget {
         // Bar toggle (only for widgets that support bar)
         const canBar = w.locations?.includes("bar") && w.buildBarContent != null
         const barBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, valign: Gtk.Align.CENTER, margin_end: 8 })
-        const barLabel = new Gtk.Label({ label: t("settings.widgets.opt.bar"), css_classes: ["settings-row-subtitle"], halign: Gtk.Align.CENTER })
+        const barLabel = new Gtk.Label({ label: t("settings.widgets.opt.bar"), css_classes: ["crystal-row-subtitle"], halign: Gtk.Align.CENTER })
         const barSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER, sensitive: canBar ?? false })
         barSwitch.set_active(placement.bar)
         barBox.append(barLabel)
@@ -50,7 +50,7 @@ export default function WidgetsPage(): Gtk.Widget {
         const canCC = w.locations?.includes("cc") ?? false
         const ccFits = placement.cc || ccLayout.canAdd(w.id)
         const ccBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, valign: Gtk.Align.CENTER })
-        const ccLabel = new Gtk.Label({ label: t("settings.widgets.opt.center"), css_classes: ["settings-row-subtitle"], halign: Gtk.Align.CENTER })
+        const ccLabel = new Gtk.Label({ label: t("settings.widgets.opt.center"), css_classes: ["crystal-row-subtitle"], halign: Gtk.Align.CENTER })
         const ccSwitch = new Gtk.Switch({
             valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
             sensitive: canCC && ccFits,
@@ -73,7 +73,7 @@ export default function WidgetsPage(): Gtk.Widget {
             else ccLayout.remove(w.id)
         })
 
-        const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+        const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
         row.set_child(box)
         group.listBox.append(row)
     }
@@ -83,7 +83,7 @@ export default function WidgetsPage(): Gtk.Widget {
     // Hint about CC layout ordering
     const hint = new Gtk.Label({
         label: t("settings.widgets.reorder-note"),
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         wrap: true,
         halign: Gtk.Align.START,
         margin_start: 10,

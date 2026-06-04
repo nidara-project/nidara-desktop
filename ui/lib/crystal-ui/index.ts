@@ -25,6 +25,13 @@ export { CrystalSplitView } from "./split-view"
 export type { CrystalButtonVariant, CrystalButtonOpts } from "./button"
 export { CrystalButton } from "./button"
 
+// CrystalRow / CrystalList — universal list row + boxed list card (the one place
+// a row/list is built; used by Settings, Control Center and any future surface)
+export { CrystalRow } from "./row"
+export type { CrystalRowResult } from "./row"
+export { CrystalList } from "./list"
+export type { CrystalListResult } from "./list"
+
 // showCrystalAlert — modal confirmation dialog (replaces Adw.AlertDialog)
 export type { AlertResponse } from "./alert-dialog"
 export { showCrystalAlert } from "./alert-dialog"

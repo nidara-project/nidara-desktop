@@ -351,6 +351,117 @@ selection {
   font-size: 18px;
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   UNIVERSAL INTERACTIVE COMPONENTS
+   Reusable building blocks for ANY surface (settings, CC, bar, future windows).
+   Add these classes from TSX (or via the lib/crystal-ui factories) — never
+   reinvent a per-surface row/list/tile. Only geometry lives here; the interaction
+   model is the single source in _base.scss (crystal-row-states / -tile-states,
+   both mode-aware so the hover is visible on any wallpaper). See
+   feedback_universal_components in memory.
+   ════════════════════════════════════════════════════════════════════════════ */
+/* Clickable text row in a list/menu (settings rows, CC rows, menu items). */
+.crystal-row {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  border-radius: var(--crystal-radius-sm);
+  margin: 1px 0;
+  transition: background-color 0.12s ease;
+}
+.crystal-row:hover {
+  background-color: var(--crystal-surface-hover);
+}
+.crystal-row:active {
+  background-color: var(--crystal-surface-active);
+}
+.crystal-row:selected, .crystal-row.is-selected {
+  background-color: var(--crystal-state-selected);
+}
+
+/* Floating icon tile/button over a translucent panel (bar/dock/app-grid widgets,
+   CC icon tiles). Hover raises a glass capsule (mode-aware fill + inner edge). */
+.crystal-tile {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  border-radius: var(--crystal-radius-md);
+}
+.crystal-tile:hover {
+  background-color: var(--crystal-surface-hover);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.crystal-tile:active {
+  background-color: var(--crystal-surface-active);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.crystal-tile:selected, .crystal-tile.is-selected {
+  background-color: var(--crystal-state-selected);
+}
+
+/* Title + label typography for the list/row components. */
+.crystal-list-title {
+  font-size: 0.86em;
+  font-weight: 700;
+  color: var(--crystal-text-dim);
+  letter-spacing: 0.08em;
+  margin-left: 4px;
+  margin-bottom: 6px;
+}
+
+.crystal-row-title {
+  font-size: 0.93em;
+  font-weight: 500;
+  color: var(--crystal-text);
+}
+
+.crystal-row-subtitle {
+  font-size: 0.93em;
+  color: var(--crystal-text-dim);
+}
+
+/* Boxed list container — dense frosted card holding .crystal-row children. */
+.crystal-list {
+  background-color: var(--crystal-surface-back);
+  border: 1px solid var(--crystal-border);
+  border-radius: var(--crystal-radius-md);
+  padding: 3px;
+  box-shadow: none;
+}
+
+/* Navigation sidebar list (icon+label rows, single-select → accent). */
+.crystal-sidebar {
+  background: transparent;
+  padding: 6px;
+}
+.crystal-sidebar > row {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  border-radius: var(--crystal-radius-sm);
+  margin: 1px 0;
+  min-height: 36px;
+  transition: background-color 0.12s ease;
+}
+.crystal-sidebar > row:hover {
+  background-color: var(--crystal-surface-hover);
+}
+.crystal-sidebar > row:active {
+  background-color: var(--crystal-surface-active);
+}
+.crystal-sidebar > row:selected, .crystal-sidebar > row.is-selected {
+  background-color: var(--crystal-state-selected);
+}
+
 /* --- Unified overlay entrance ---
    The single animation for all in-bar-window panels (CC, NC, Prism, system
    menu, overview): a pure opacity crossfade (no transform → no hit-testing
@@ -551,12 +662,12 @@ button.crystal-btn,
 }
 button.crystal-btn:hover,
 .crystal-button:hover {
-  background: var(--crystal-state-hover);
+  background: var(--crystal-surface-hover);
   border-color: var(--crystal-border);
 }
 button.crystal-btn:active,
 .crystal-button:active {
-  background: var(--crystal-state-pressed);
+  background: var(--crystal-surface-active);
 }
 button.crystal-btn.accent,
 .crystal-button.accent {
@@ -603,33 +714,6 @@ popover.crystal-popover > arrow {
   border-color: var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
 }
 
-/* --- Shared list-row styles (Clipboard/VPN popovers + Settings) --- */
-/* These classes are reused across contexts so hover/active must be global. */
-.settings-row-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--crystal-text);
-}
-
-.settings-row-subtitle {
-  font-size: 13px;
-  color: var(--crystal-text-dim);
-}
-
-row.settings-item-row {
-  border-radius: var(--crystal-radius-sm);
-  transition: background 0.15s ease;
-}
-row.settings-item-row:hover {
-  background: var(--crystal-state-hover);
-}
-row.settings-item-row:active {
-  background: var(--crystal-state-pressed);
-}
-row.settings-item-row:selected {
-  background: transparent;
-}
-
 button.settings-action-row {
   background: none;
   background-color: transparent;
@@ -642,19 +726,19 @@ button.settings-action-row {
   transition: background 0.15s ease;
 }
 button.settings-action-row:hover {
-  background: var(--crystal-state-hover);
+  background: var(--crystal-surface-hover);
 }
 button.settings-action-row:active {
-  background: var(--crystal-state-pressed);
+  background: var(--crystal-surface-active);
 }
 
 /* Hover/active for non-accent buttons inside any crystal popover */
 popover.crystal-popover button:not(.suggested-action):not(.destructive-action):not(.settings-action-row):hover {
-  background: var(--crystal-state-hover);
+  background: var(--crystal-surface-hover);
   transition: background 0.15s ease;
 }
 popover.crystal-popover button:not(.suggested-action):not(.destructive-action):not(.settings-action-row):active {
-  background: var(--crystal-state-pressed);
+  background: var(--crystal-surface-active);
   transition: background 0.05s ease;
 }
 
@@ -688,11 +772,11 @@ button.crystal-seg-btn {
   transition: background 0.15s ease, color 0.15s ease;
 }
 button.crystal-seg-btn:hover {
-  background: var(--crystal-state-hover);
+  background: var(--crystal-surface-hover);
   color: var(--crystal-text);
 }
 button.crystal-seg-btn:active {
-  background: var(--crystal-state-pressed);
+  background: var(--crystal-surface-active);
 }
 button.crystal-seg-btn.suggested-action {
   background: none;
@@ -748,12 +832,12 @@ button.crystal-btn {
   color: var(--crystal-text);
 }
 button.crystal-btn:hover {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
   background-image: none;
   box-shadow: none;
 }
 button.crystal-btn:active {
-  background-color: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
   background-image: none;
   box-shadow: none;
 }
@@ -804,13 +888,13 @@ button.crystal-btn.crystal-btn--ghost {
   color: var(--crystal-text-dim);
 }
 button.crystal-btn.crystal-btn--ghost:hover {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
   background-image: none;
   box-shadow: none;
   color: var(--crystal-text);
 }
 button.crystal-btn.crystal-btn--ghost:active {
-  background-color: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
   background-image: none;
 }
 button.crystal-btn.crystal-btn--pill {
@@ -848,12 +932,12 @@ dropdown > button image {
   color: var(--crystal-text-dim);
 }
 dropdown > button:hover {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
   background-image: none;
   box-shadow: none;
 }
 dropdown > button:active {
-  background-color: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
   background-image: none;
 }
 dropdown > button:focus-visible {
@@ -925,11 +1009,11 @@ dropdown popover listview > row {
 }
 popover.combo listview > row:hover,
 dropdown popover listview > row:hover {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
 }
 popover.combo listview > row:active,
 dropdown popover listview > row:active {
-  background-color: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
 }
 popover.combo listview > row:selected, popover.combo listview > row.is-selected,
 dropdown popover listview > row:selected,
@@ -938,7 +1022,7 @@ dropdown popover listview > row.is-selected {
 }
 popover.combo listview > row:selected,
 dropdown popover listview > row:selected {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
 }
 
 button.settings-icon-btn {
@@ -1406,11 +1490,11 @@ button.dock-v-icon image {
 }
 
 .system-menu-row:hover {
-  background: var(--crystal-state-hover);
+  background: var(--crystal-surface-hover);
 }
 
 .system-menu-row:active {
-  background: var(--crystal-state-pressed);
+  background: var(--crystal-surface-active);
 }
 
 .system-menu-label {
@@ -1637,10 +1721,10 @@ button.clip-entry-btn {
   transition: background 0.15s ease;
 }
 button.clip-entry-btn:hover {
-  background: var(--crystal-state-hover);
+  background: var(--crystal-surface-hover);
 }
 button.clip-entry-btn:active {
-  background: var(--crystal-state-pressed);
+  background: var(--crystal-surface-active);
 }
 
 .bar-popover-value {
@@ -2010,7 +2094,7 @@ window.nc-window-2 contents {
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 .nc-capsule-glass:hover {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
   border-color: var(--crystal-border);
 }
 
@@ -2241,7 +2325,7 @@ window.nc-window-2 contents {
 }
 
 /* --- CC Detail Panel — styles for content inside the squircle island --------- */
-.cc-detail-panel list.settings-list-box,
+.cc-detail-panel list.crystal-list,
 .cc-detail-panel list.boxed-list {
   background: transparent;
   background-image: none;
@@ -2250,7 +2334,7 @@ window.nc-window-2 contents {
   margin-bottom: 4px;
   padding: 0;
 }
-.cc-detail-panel list.settings-list-box row,
+.cc-detail-panel list.crystal-list row,
 .cc-detail-panel list.boxed-list row {
   background: none;
   background-color: transparent;
@@ -2262,20 +2346,20 @@ window.nc-window-2 contents {
   margin: 1px 0;
   transition: background-color 0.12s ease;
 }
-.cc-detail-panel list.settings-list-box row:hover,
+.cc-detail-panel list.crystal-list row:hover,
 .cc-detail-panel list.boxed-list row:hover {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
 }
-.cc-detail-panel list.settings-list-box row:active,
+.cc-detail-panel list.crystal-list row:active,
 .cc-detail-panel list.boxed-list row:active {
-  background-color: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
 }
-.cc-detail-panel list.settings-list-box row:selected, .cc-detail-panel list.settings-list-box row.is-selected,
+.cc-detail-panel list.crystal-list row:selected, .cc-detail-panel list.crystal-list row.is-selected,
 .cc-detail-panel list.boxed-list row:selected,
 .cc-detail-panel list.boxed-list row.is-selected {
   background-color: var(--crystal-state-selected);
 }
-.cc-detail-panel list.settings-list-box row:selected,
+.cc-detail-panel list.crystal-list row:selected,
 .cc-detail-panel list.boxed-list row:selected {
   background: transparent;
 }
@@ -2290,10 +2374,10 @@ window.nc-window-2 contents {
   transition: background-color 0.12s ease;
 }
 .cc-detail-panel button.settings-action-row:hover {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
 }
 .cc-detail-panel button.settings-action-row:active {
-  background-color: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
 }
 .cc-detail-panel button.settings-action-row:selected, .cc-detail-panel button.settings-action-row.is-selected {
   background-color: var(--crystal-state-selected);
@@ -2383,7 +2467,7 @@ window.nc-window-2 contents {
   padding: 6px 0;
 }
 .cc-detail-panel .linked > button:hover {
-  background: var(--crystal-state-hover);
+  background: var(--crystal-surface-hover);
   color: var(--crystal-text);
 }
 .cc-detail-panel .linked > button.suggested-action {
@@ -2413,11 +2497,11 @@ window.nc-window-2 contents {
   font-size: 12px;
   font-weight: 600;
 }
-.cc-detail-panel .settings-row-label {
+.cc-detail-panel .crystal-row-title {
   font-size: 13px;
   color: var(--crystal-text);
 }
-.cc-detail-panel .settings-row-subtitle {
+.cc-detail-panel .crystal-row-subtitle {
   font-size: 13px;
   color: var(--crystal-text-dim);
 }
@@ -2430,14 +2514,6 @@ window.nc-window-2 contents {
   background: var(--crystal-border);
   margin: 4px 0;
   min-height: 1px;
-}
-
-.audio-device-row {
-  background: transparent;
-  border-radius: var(--crystal-radius-sm);
-}
-.audio-device-row:hover {
-  background: var(--crystal-state-hover);
 }
 
 .cc-detail-close-btn {
@@ -2886,10 +2962,10 @@ popover.crystal-sidebar-popup list.settings-sidebar > row {
   transition: background-color 0.12s ease;
 }
 popover.crystal-sidebar-popup list.settings-sidebar > row:hover {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
 }
 popover.crystal-sidebar-popup list.settings-sidebar > row:active {
-  background-color: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
 }
 popover.crystal-sidebar-popup list.settings-sidebar > row:selected, popover.crystal-sidebar-popup list.settings-sidebar > row.is-selected {
   background-color: var(--crystal-state-selected);
@@ -2918,10 +2994,10 @@ window.crystal-settings-window list.settings-sidebar > row {
   transition: background-color 0.12s ease;
 }
 window.crystal-settings-window list.settings-sidebar > row:hover {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
 }
 window.crystal-settings-window list.settings-sidebar > row:active {
-  background-color: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
 }
 window.crystal-settings-window list.settings-sidebar > row:selected, window.crystal-settings-window list.settings-sidebar > row.is-selected {
   background-color: var(--crystal-state-selected);
@@ -2961,13 +3037,13 @@ button.crystal-icon-btn {
   color: var(--crystal-text-dim);
 }
 button.crystal-icon-btn:hover {
-  background: var(--crystal-state-hover);
+  background: var(--crystal-surface-hover);
   background-image: none;
   box-shadow: none;
   color: var(--crystal-text);
 }
 button.crystal-icon-btn:active {
-  background: var(--crystal-state-pressed);
+  background: var(--crystal-surface-active);
   background-image: none;
   box-shadow: none;
 }
@@ -2985,7 +3061,7 @@ button.crystal-icon-btn.sidebar-toggle {
   border: 1px solid var(--crystal-border);
 }
 button.crystal-icon-btn.sidebar-toggle:hover {
-  background: var(--crystal-state-hover);
+  background: var(--crystal-surface-hover);
 }
 
 .navigation-capsule {
@@ -3069,55 +3145,6 @@ stack.settings-stack {
   color: var(--crystal-text-dim);
 }
 
-.settings-group-title {
-  font-size: 0.86em;
-  font-weight: 700;
-  color: var(--crystal-text-dim);
-  letter-spacing: 0.08em;
-  margin-left: 4px;
-  margin-bottom: 6px;
-}
-
-list.settings-list-box {
-  background-color: var(--crystal-surface-back);
-  border: 1px solid var(--crystal-border);
-  border-radius: var(--crystal-radius-md);
-  padding: 3px;
-  box-shadow: none;
-  margin-bottom: 24px;
-}
-list.settings-list-box row.settings-item-row {
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-  border-radius: var(--crystal-radius-sm);
-  margin: 1px 0;
-  transition: background 0.15s ease;
-}
-list.settings-list-box row.settings-item-row:hover {
-  background: var(--crystal-state-hover);
-}
-list.settings-list-box row.settings-item-row:active {
-  background: var(--crystal-state-pressed);
-}
-list.settings-list-box row.settings-item-row:selected {
-  background: transparent;
-}
-
-.settings-row-label {
-  font-size: 0.93em;
-  font-weight: 500;
-  color: var(--crystal-text);
-}
-
-.settings-row-subtitle {
-  font-size: 0.93em;
-  color: var(--crystal-text-dim);
-}
-
 spinbutton.time-spin {
   background: var(--crystal-surface);
   border: 1px solid var(--crystal-border);
@@ -3138,7 +3165,7 @@ spinbutton.time-spin button {
 }
 spinbutton.time-spin button:hover {
   color: var(--crystal-text);
-  background: var(--crystal-state-hover);
+  background: var(--crystal-surface-hover);
 }
 
 button.accent-circle-btn {
@@ -3206,7 +3233,7 @@ button.launcher-icon-btn.selected {
   background: var(--crystal-accent-10);
 }
 button.launcher-icon-btn:hover:not(.selected) {
-  background: var(--crystal-state-hover);
+  background: var(--crystal-surface-hover);
   border-color: var(--crystal-border);
 }
 
@@ -3306,12 +3333,12 @@ button.settings-preset-btn {
   transition: background 0.15s ease;
 }
 button.settings-preset-btn:hover {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
   background-image: none;
   box-shadow: none;
 }
 button.settings-preset-btn:active {
-  background-color: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
   background-image: none;
   box-shadow: none;
 }
@@ -3407,10 +3434,10 @@ window.crystal-alert-dialog > box {
   border-bottom-right-radius: var(--crystal-radius-lg);
 }
 .crystal-alert-buttons button.crystal-alert-btn:hover {
-  background: var(--crystal-state-hover);
+  background: var(--crystal-surface-hover);
 }
 .crystal-alert-buttons button.crystal-alert-btn:active {
-  background: var(--crystal-state-pressed);
+  background: var(--crystal-surface-active);
 }
 .crystal-alert-buttons button.crystal-alert-btn:focus-visible {
   outline: 2px solid var(--crystal-accent);
@@ -3499,7 +3526,7 @@ window.prism-window decoration, window.prism-window contents {
 /* Hover = neutral; Selected (keyboard arrow nav) = accent, so the cursor is
    clearly visible as you move through results. */
 .prism-result-row:hover {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
 }
 
 .prism-result-row:selected {

@@ -36,7 +36,7 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
     const listBox = new Gtk.ListBox({ css_classes: ["boxed-list"], selection_mode: Gtk.SelectionMode.NONE })
     const emptyLabel = new Gtk.Label({
         label: t("settings.network.vpn.no-profiles"),
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         margin_top: 10, margin_bottom: 10, margin_start: 14, margin_end: 14,
     })
     const spinner = new Gtk.Spinner({ spinning: true, margin_top: 10, margin_bottom: 10 })
@@ -74,13 +74,13 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
                         } catch (e) { console.error("[VPN widget]", e) }
                         onClose()
                     })
-                    const typeTag = new Gtk.Label({ label: p.type === "wireguard" ? "WireGuard" : "VPN", css_classes: ["settings-row-subtitle"], valign: Gtk.Align.CENTER })
+                    const typeTag = new Gtk.Label({ label: p.type === "wireguard" ? "WireGuard" : "VPN", css_classes: ["crystal-row-subtitle"], valign: Gtk.Align.CENTER })
                     const right = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
                     right.append(typeTag); right.append(btn)
                     const inner = new Gtk.Box({ spacing: 8, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10 })
-                    const nameLabel = new Gtk.Label({ label: p.name, hexpand: true, halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 16, css_classes: ["settings-row-label"] })
+                    const nameLabel = new Gtk.Label({ label: p.name, hexpand: true, halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 16, css_classes: ["crystal-row-title"] })
                     inner.append(nameLabel); inner.append(right)
-                    const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+                    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
                     row.set_child(inner); listBox.append(row)
                 })
                 stack.set_visible_child_name("list")

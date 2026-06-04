@@ -69,7 +69,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
 
     const previewStatus = new Gtk.Label({
         label: "",
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         halign: Gtk.Align.CENTER,
     })
     previewBox.append(previewStatus)
@@ -78,7 +78,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
     // Current icon name hint
     box.append(new Gtk.Label({
         label: t("settings.apps.theme-icon-name"),
-        css_classes: ["settings-group-title"],
+        css_classes: ["crystal-list-title"],
         halign: Gtk.Align.START,
         margin_bottom: 6,
     }))
@@ -199,7 +199,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
 // ── App row ───────────────────────────────────────────────────────────────────
 
 function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBoxRow {
-    const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
     const box = new Gtk.Box({
         spacing: 14,
         margin_start: 14,
@@ -212,12 +212,12 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
     const rowIcon = makeIconImage(canonical, 32)
 
     const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
-    textBox.append(new Gtk.Label({ label: app.name, halign: Gtk.Align.START, css_classes: ["settings-row-label"] }))
+    textBox.append(new Gtk.Label({ label: app.name, halign: Gtk.Align.START, css_classes: ["crystal-row-title"] }))
 
     const iconLabel = new Gtk.Label({
         label: canonical ?? (app.icon ?? t("settings.apps.no-icon")),
         halign: Gtk.Align.START,
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         ellipsize: 3, // PANGO_ELLIPSIZE_END
     })
     textBox.append(iconLabel)
@@ -226,7 +226,7 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
     const hasOverride = !!appService.getIconOverridePath(app.icon ?? "")
     const badge = new Gtk.Label({
         label: t("settings.apps.badge.override"),
-        css_classes: ["settings-row-subtitle", "app-override-badge"],
+        css_classes: ["crystal-row-subtitle", "app-override-badge"],
         visible: hasOverride,
         valign: Gtk.Align.CENTER,
     })
@@ -271,16 +271,16 @@ export default function AppsPage() {
     page.append(searchEntry)
 
     // App list — build the group manually so we can wrap the ListBox in a ScrolledWindow
-    const groupBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["settings-group"] })
+    const groupBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["crystal-list-group"] })
     groupBox.append(new Gtk.Label({
         label: t("settings.apps.installed"),
-        css_classes: ["settings-group-title"],
+        css_classes: ["crystal-list-title"],
         halign: Gtk.Align.START,
         margin_start: 10,
     }))
 
     const appList = new Gtk.ListBox({
-        css_classes: ["settings-list-box", "boxed-list"],
+        css_classes: ["crystal-list", "boxed-list"],
         selection_mode: Gtk.SelectionMode.NONE,
     })
 

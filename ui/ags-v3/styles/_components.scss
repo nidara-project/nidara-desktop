@@ -57,6 +57,72 @@ selection {
     &.is-lg { font-size: 18px; }
 }
 
+/* ════════════════════════════════════════════════════════════════════════════
+   UNIVERSAL INTERACTIVE COMPONENTS
+   Reusable building blocks for ANY surface (settings, CC, bar, future windows).
+   Add these classes from TSX (or via the lib/crystal-ui factories) — never
+   reinvent a per-surface row/list/tile. Only geometry lives here; the interaction
+   model is the single source in _base.scss (crystal-row-states / -tile-states,
+   both mode-aware so the hover is visible on any wallpaper). See
+   feedback_universal_components in memory.
+   ════════════════════════════════════════════════════════════════════════════ */
+
+/* Clickable text row in a list/menu (settings rows, CC rows, menu items). */
+.crystal-row {
+    @include crystal-reset;
+    border-radius: $crystal-radius-sm;
+    margin: 1px 0;
+    @include crystal-row-states;
+}
+
+/* Floating icon tile/button over a translucent panel (bar/dock/app-grid widgets,
+   CC icon tiles). Hover raises a glass capsule (mode-aware fill + inner edge). */
+.crystal-tile {
+    @include crystal-reset;
+    border-radius: $crystal-radius-md;
+    @include crystal-tile-states;
+}
+
+/* Title + label typography for the list/row components. */
+.crystal-list-title {
+    font-size: $fse-caption;
+    font-weight: $fw-bold;
+    color: var(--crystal-text-dim);
+    letter-spacing: 0.08em;
+    margin-left: 4px;
+    margin-bottom: 6px;
+}
+.crystal-row-title {
+    font-size: $fse-small;
+    font-weight: $fw-medium;
+    color: var(--crystal-text);
+}
+.crystal-row-subtitle {
+    font-size: $fse-small;
+    color: var(--crystal-text-dim);
+}
+
+/* Boxed list container — dense frosted card holding .crystal-row children. */
+.crystal-list {
+    @include material-card;
+    padding: 3px;
+    box-shadow: none;
+}
+
+/* Navigation sidebar list (icon+label rows, single-select → accent). */
+.crystal-sidebar {
+    background: transparent;
+    padding: 6px;
+
+    > row {
+        @include crystal-reset;
+        border-radius: $crystal-radius-sm;
+        margin: 1px 0;
+        min-height: 36px;
+        @include crystal-row-states;
+    }
+}
+
 /* --- Unified overlay entrance ---
    The single animation for all in-bar-window panels (CC, NC, Prism, system
    menu, overview): a pure opacity crossfade (no transform → no hit-testing
@@ -251,12 +317,12 @@ button.crystal-btn,
     transition: background-color 0.25s #{$ease}, border-color 0.25s #{$ease};
 
     &:hover {
-        background: var(--crystal-state-hover);
+        background: var(--crystal-surface-hover);
         border-color: var(--crystal-border);
     }
 
     &:active {
-        background: var(--crystal-state-pressed);
+        background: var(--crystal-surface-active);
     }
 
     &.accent {
@@ -299,42 +365,20 @@ popover.crystal-popover {
     }
 }
 
-/* --- Shared list-row styles (Clipboard/VPN popovers + Settings) --- */
-/* These classes are reused across contexts so hover/active must be global. */
-.settings-row-label {
-    font-size: $fs-small;
-    font-weight: $fw-medium;
-    color: var(--crystal-text);
-}
-
-.settings-row-subtitle {
-    font-size: $fs-small;
-    color: var(--crystal-text-dim);
-}
-
-row.settings-item-row {
-    border-radius: $crystal-radius-sm;
-    transition: background 0.15s ease;
-
-    &:hover   { background: var(--crystal-state-hover); }
-    &:active  { background: var(--crystal-state-pressed); }
-    &:selected { background: transparent; }   // settings rows aren't selectable
-}
-
 button.settings-action-row {
     @include crystal-reset;
     border-radius: 0;
     padding: 0;
     transition: background 0.15s ease;
 
-    &:hover  { background: var(--crystal-state-hover); }
-    &:active { background: var(--crystal-state-pressed); }
+    &:hover  { background: var(--crystal-surface-hover); }
+    &:active { background: var(--crystal-surface-active); }
 }
 
 /* Hover/active for non-accent buttons inside any crystal popover */
 popover.crystal-popover button:not(.suggested-action):not(.destructive-action):not(.settings-action-row) {
-    &:hover  { background: var(--crystal-state-hover);   transition: background 0.15s ease; }
-    &:active { background: var(--crystal-state-pressed); transition: background 0.05s ease; }
+    &:hover  { background: var(--crystal-surface-hover);   transition: background 0.15s ease; }
+    &:active { background: var(--crystal-surface-active); transition: background 0.05s ease; }
 }
 
 /* Accent (selected/primary) buttons inside crystal popovers */
@@ -363,8 +407,8 @@ button.crystal-seg-btn {
     color: var(--crystal-text-dim);
     transition: background 0.15s ease, color 0.15s ease;
 
-    &:hover  { background: var(--crystal-state-hover); color: var(--crystal-text); }
-    &:active { background: var(--crystal-state-pressed); }
+    &:hover  { background: var(--crystal-surface-hover); color: var(--crystal-text); }
+    &:active { background: var(--crystal-surface-active); }
 
     &.suggested-action {
         @include crystal-reset;
@@ -432,8 +476,8 @@ button.crystal-btn {
     border: 1px solid var(--crystal-border);
     color: var(--crystal-text);
 
-    &:hover   { background-color: var(--crystal-state-hover);   background-image: none; box-shadow: none; }
-    &:active  { background-color: var(--crystal-state-pressed); background-image: none; box-shadow: none; }
+    &:hover   { background-color: var(--crystal-surface-hover);   background-image: none; box-shadow: none; }
+    &:active  { background-color: var(--crystal-surface-active); background-image: none; box-shadow: none; }
     &:disabled { opacity: 0.45; }
     &:focus-visible { @include crystal-focus-ring; }
 
@@ -465,8 +509,8 @@ button.crystal-btn {
         border-color: transparent;
         color: var(--crystal-text-dim);
 
-        &:hover  { background-color: var(--crystal-state-hover); background-image: none; box-shadow: none; color: var(--crystal-text); }
-        &:active { background-color: var(--crystal-state-pressed); background-image: none; }
+        &:hover  { background-color: var(--crystal-surface-hover); background-image: none; box-shadow: none; color: var(--crystal-text); }
+        &:active { background-color: var(--crystal-surface-active); background-image: none; }
     }
 
     // ── pill shape modifier ───────────────────────────────────────────────────
@@ -509,8 +553,8 @@ dropdown > button {
         color: var(--crystal-text-dim);
     }
 
-    &:hover  { background-color: var(--crystal-state-hover); background-image: none; box-shadow: none; }
-    &:active { background-color: var(--crystal-state-pressed); background-image: none; }
+    &:hover  { background-color: var(--crystal-surface-hover); background-image: none; box-shadow: none; }
+    &:active { background-color: var(--crystal-surface-active); background-image: none; }
     // Accent only on KEYBOARD focus — :focus alone flashes the accent border on
     // every mouse click and when the popover closes (focus returns to the button).
     &:focus-visible { border-color: var(--crystal-accent); box-shadow: none; outline: none; }
@@ -560,7 +604,7 @@ dropdown popover {
             // GTK highlights the pointed item via :selected (hover-select), and the
             // trigger already shows the current value — so deepen it like a hover
             // instead of drawing the accent (accent is for PERSISTENT selection).
-            &:selected { background-color: var(--crystal-state-hover); }
+            &:selected { background-color: var(--crystal-surface-hover); }
         }
     }
 }

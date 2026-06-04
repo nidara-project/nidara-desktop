@@ -159,12 +159,12 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
     `  --crystal-surface: rgba(${fg}, 0.08);`,
     `  --crystal-surface-hover: rgba(${fg}, 0.12);`,
     `  --crystal-surface-active: rgba(${fg}, 0.16);`,
-    // ── Interaction state fills — apply ON TOP of any material ────────────────
-    // We are a GLASS system. States DEEPEN (darken → denser glass, white text gains
-    // contrast), they never lighten (lightening a translucent layer washes out the
-    // text, the Adwaita-on-opaque trap). Selection is the ONLY place accent enters.
-    `  --crystal-state-hover:    rgba(0, 0, 0, ${isDark ? "0.20" : "0.06"});`,
-    `  --crystal-state-pressed:  rgba(0, 0, 0, ${isDark ? "0.30" : "0.10"});`,
+    // ── Interaction states ───────────────────────────────────────────────────
+    // hover/pressed are MODE-AWARE (--crystal-surface-hover/-active = rgba(fg,…)):
+    // they lighten in dark / darken in light, always moving toward the mode's
+    // contrast, so they stay visible on ANY background — including a translucent
+    // panel over a dark wallpaper, where a fixed dark "deepen" overlay vanished.
+    // Selection is the ONLY place accent enters.
     `  --crystal-state-selected: rgba(${r}, ${g}, ${b}, ${isDark ? "0.22" : "0.16"});`,
     `  --crystal-surface-raised: rgba(${fg}, 0.20);`,
     `  --crystal-surface-strong: rgba(${fg}, 0.30);`,   // one step above raised, for hover on raised fills

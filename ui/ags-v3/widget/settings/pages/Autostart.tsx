@@ -94,7 +94,7 @@ export default function AutostartPage() {
         while (child) { listBox.remove(child); child = listBox.get_first_child() }
 
         if (entries.length === 0) {
-            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
             emptyRow.set_child(new Gtk.Label({
                 label: t("settings.autostart.empty"),
                 css_classes: ["settings-placeholder"],
@@ -106,7 +106,7 @@ export default function AutostartPage() {
             entries.forEach((entry, idx) => {
                 const cmdLabel = new Gtk.Label({
                     label: entry.command,
-                    css_classes: ["settings-row-label"],
+                    css_classes: ["crystal-row-title"],
                     halign: Gtk.Align.START,
                     hexpand: true,
                     ellipsize: 3,
@@ -150,7 +150,7 @@ export default function AutostartPage() {
                 rowBox.append(toggle)
                 rowBox.append(deleteBtn)
 
-                const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+                const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
                 row.set_child(rowBox)
                 listBox.append(row)
             })
@@ -203,7 +203,7 @@ export default function AutostartPage() {
         rowBox.append(entry)
         rowBox.append(addBtn)
 
-        const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+        const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
         row.set_child(rowBox)
         return row
     }
@@ -213,7 +213,7 @@ export default function AutostartPage() {
     // Info note
     const note = new Gtk.Label({
         label: t("settings.autostart.apply-note"),
-        css_classes: ["settings-row-subtitle"],
+        css_classes: ["crystal-row-subtitle"],
         halign: Gtk.Align.START,
         margin_start: 10,
         margin_top: 4,

@@ -140,7 +140,7 @@ export default function AppearancePage() {
 
         const box = new Gtk.Box({ spacing: 4, valign: Gtk.Align.CENTER })
         box.append(hSpin)
-        box.append(new Gtk.Label({ label: ":", css_classes: ["settings-row-subtitle"] }))
+        box.append(new Gtk.Label({ label: ":", css_classes: ["crystal-row-subtitle"] }))
         box.append(mSpin)
         return box
     }
@@ -148,11 +148,11 @@ export default function AppearancePage() {
     const schedTimeBox = new Gtk.Box({ spacing: 24, valign: Gtk.Align.CENTER })
 
     const fromBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
-    fromBox.append(new Gtk.Label({ label: t("settings.appearance.night-light-from"), halign: Gtk.Align.START, css_classes: ["settings-row-subtitle"] }))
+    fromBox.append(new Gtk.Label({ label: t("settings.appearance.night-light-from"), halign: Gtk.Align.START, css_classes: ["crystal-row-subtitle"] }))
     fromBox.append(timePicker(NightLight.scheduleFrom, (v) => NightLight.setScheduleFrom(v)))
 
     const toBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
-    toBox.append(new Gtk.Label({ label: t("settings.appearance.night-light-to"), halign: Gtk.Align.START, css_classes: ["settings-row-subtitle"] }))
+    toBox.append(new Gtk.Label({ label: t("settings.appearance.night-light-to"), halign: Gtk.Align.START, css_classes: ["crystal-row-subtitle"] }))
     toBox.append(timePicker(NightLight.scheduleTo, (v) => NightLight.setScheduleTo(v)))
 
     schedTimeBox.append(fromBox)
@@ -197,7 +197,7 @@ export default function AppearancePage() {
     updatePreview(Wallpaper.current)
     Wallpaper.refreshFromDaemon()
 
-    const previewRow = new Gtk.ListBoxRow({ css_classes: ["settings-item-row", "wallpaper-preview-row"] })
+    const previewRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row", "wallpaper-preview-row"] })
     previewRow.set_child(preview)
     wallGroup.listBox.append(previewRow)
 

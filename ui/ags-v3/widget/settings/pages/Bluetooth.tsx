@@ -122,7 +122,7 @@ export default function BluetoothPage() {
                 margin_top: 12,
                 margin_bottom: 12,
             })
-            const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+            const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
             row.set_child(empty)
             listBox.append(row)
             return
@@ -131,14 +131,14 @@ export default function BluetoothPage() {
         devices.forEach(dev => {
             const nameLabel = new Gtk.Label({
                 label: dev.name || dev.address,
-                css_classes: ["settings-row-label"],
+                css_classes: ["crystal-row-title"],
                 halign: Gtk.Align.START,
                 hexpand: true,
                 ellipsize: 3,
             })
             const addrLabel = new Gtk.Label({
                 label: dev.address,
-                css_classes: ["settings-row-subtitle"],
+                css_classes: ["crystal-row-subtitle"],
                 halign: Gtk.Align.START,
             })
             const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
@@ -202,7 +202,7 @@ export default function BluetoothPage() {
                 rowBox.append(pairBtn)
             }
 
-            const row = new Gtk.ListBoxRow({ css_classes: ["settings-item-row"] })
+            const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
             row.set_child(rowBox)
             listBox.append(row)
         })
