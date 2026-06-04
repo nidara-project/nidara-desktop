@@ -136,6 +136,39 @@ selection {
     transition: color 0.15s ease;
 }
 
+/* ── Window shell (CrystalWindow) ──────────────────────────────────────────────
+   Chrome for a settings-style window. The sidebar capsule / collapsed popover /
+   icon-btn live with the rest of the window CSS for now. */
+.crystal-window-glass {
+    @include glass(floating);
+}
+.crystal-window-header {
+    background: transparent;
+    border-bottom: 1px solid var(--crystal-border);
+    // Left pad 8 (not 12) so the parked toolbar's toggle aligns with the same
+    // toggle inside the sidebar capsule / popover. Bottom pad 8 balances the 8px
+    // glass margin above the header so the centered search reads as centered.
+    padding: 0 12px 8px 8px;
+    min-height: 50px;
+}
+.crystal-window-tools {
+    // Toolbar inside the sidebar capsule top. Fixed height/pad so the toggle lands
+    // at the SAME x,y in all three homes (capsule / popover / header) — no jump.
+    min-height: 50px;
+    padding: 0 6px;
+}
+.crystal-window-tools-slot {
+    // Park slot in the header. 1px transparent left border + 1px top margin mimic
+    // the 1px border that insets the toolbar in the capsule, so the toggle lands
+    // at the exact same x,y when parked here.
+    border-left: 1px solid transparent;
+    margin: 1px 4px 0 0;
+}
+.crystal-window-sidebar-scroll {
+    // Gap between the in-capsule toolbar and the list below it.
+    margin-top: 8px;
+}
+
 /* Menu — shared by the tray menu (renderMenuModel), the bar system menu and the
    CC context menu. A flat list of .crystal-menu-row buttons, not a Gtk.Popover. */
 .crystal-menu {

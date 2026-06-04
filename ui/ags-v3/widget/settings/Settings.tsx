@@ -1,6 +1,6 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
-import { CrystalClamp, CrystalSplitView, CrystalSidebar } from "../../../lib/crystal-ui"
+import { CrystalClamp, CrystalSidebar, CrystalWindow } from "../../../lib/crystal-ui"
 
 // Page Imports
 import AppearancePage from "./pages/Appearance"
@@ -62,19 +62,8 @@ export default function Settings(monitor: Gdk.Monitor) {
     navCapsule.append(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nav-separator"] }))
     navCapsule.append(forwardBtn)
 
-    // ── Window (pure Gtk.Window, no Adwaita) ──────────────────────────────────
-    // decorated: false + Gtk.WindowHandle on the header area = custom CSD
-    // without any Adwaita header plumbing.
-    const win = new Gtk.Window({
-        name: "crystal-settings-window",
-        title: "Crystal Shell Settings",
-        application: app,
-        css_classes: ["fc-ignore", "crystal-settings-window"],
-        default_width: 1000,
-        default_height: 700,
-        decorated: false,
-        visible: false,
-    })
+    // The glass window itself is assembled by CrystalWindow at the end (so its
+    // header/toolbar can wire to the sidebar, search and nav built below).
 
     // ── Sidebar ───────────────────────────────────────────────────────────────
     // The navigation list itself is the universal CrystalSidebar component; it's
@@ -301,27 +290,6 @@ export default function Settings(monitor: Gdk.Monitor) {
         if (historyIdx < history.length - 1) navigateTo(history[++historyIdx], false)
     })
 
-    // Sidebar list scroll (lives inside the capsule column below).
-    const sidebarScroll = new Gtk.ScrolledWindow({
-        hscrollbar_policy: Gtk.PolicyType.NEVER,
-        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        css_classes: ["settings-sidebar-scroll"],
-        vexpand: true,
-    })
-    sidebarScroll.set_child(sidebar.widget)
-    sidebarScroll.set_name("crystal-settings-sidebar-scroll")
-
-    // The sidebar capsule = ONE glass column holding the toolbar (toggle + nav) at
-    // the top and the list below it. This whole column is the split view's sidebar,
-    // so the toolbar rides into the collapsed popover with the list. When the
-    // sidebar is hidden, the toolbar is parked in the header slot (see moveTools).
-    const sidebarColumn = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        css_classes: ["crystal-sidebar-capsule"],
-        vexpand: true,
-    })
-    sidebarColumn.append(sidebarScroll)
-
     // ── Search ────────────────────────────────────────────────────────────────
     // Custom search box: our own cs-icon magnifier + Gtk.Text. Gtk.SearchEntry
     // would force the icon theme's magnifier glyph; this matches the rest of the
@@ -374,126 +342,42 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
     searchInput.add_controller(searchKeys)
 
-    // ── Sidebar toggle ────────────────────────────────────────────────────────
-    const sidebarToggle = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.sidebar, pixel_size: 16, css_classes: ["cs-icon"] }),
-        css_classes: ["crystal-icon-btn", "sidebar-toggle"],
-        tooltip_text: t("settings.nav.menu"),
-        valign: Gtk.Align.CENTER,
-        halign: Gtk.Align.CENTER,
-    })
-
-    // ── Sidebar toolbar (toggle + nav) ────────────────────────────────────────
-    // Lives INSIDE the sidebar capsule (its top). When the sidebar is hidden
-    // (collapsed + popover closed, or manually hidden) it parks in the header slot
-    // so it stays reachable; when the sidebar is presented again — docked or in the
-    // popover — it moves back into the capsule. Driven by onSidebarPresented below.
-    const sidebarTools = new Gtk.Box({
-        spacing: 8,
-        valign: Gtk.Align.CENTER,
-        halign: Gtk.Align.START,
-        css_classes: ["settings-sidebar-tools"],
-    })
-    sidebarTools.append(sidebarToggle)
-    sidebarTools.append(navCapsule)
-
-    // Park slot for the toolbar inside the content header (shown only while the
-    // sidebar is hidden).
-    const headerToolsSlot = new Gtk.Box({
-        valign: Gtk.Align.CENTER,
-        css_classes: ["settings-header-tools"],
-    })
-
-    // Relocate the toolbar between the sidebar capsule (top) and the header slot.
-    const moveTools = (intoSidebar: boolean) => {
-        const target = intoSidebar ? sidebarColumn : headerToolsSlot
-        if (sidebarTools.get_parent() === target) return
-        if (sidebarTools.get_parent()) sidebarTools.unparent()
-        if (intoSidebar) sidebarColumn.prepend(sidebarTools)
-        else headerToolsSlot.append(sidebarTools)
-    }
-
-    // ── Content header (over the content, right side) ─────────────────────────
-    // Shared round glass close control (crystal-circle-btn, red on hover) — the
-    // single source of truth for close/remove buttons across the shell.
+    // ── Window shell ──────────────────────────────────────────────────────────
+    // The glass window + split view + reparenting header/toolbar are the universal
+    // CrystalWindow. Settings only supplies the sidebar, the content, the search
+    // box (header center), the nav capsule (toolbar extra) and the close button.
     const closeBtn = IconButton({
         icon: Icons.close,
         iconSize: 14,
         variant: "danger",
         tooltip: t("settings.window.close"),
-        onClick: () => win.set_visible(false),
+        onClick: () => cw.window.set_visible(false),
     })
 
-    const contentHeader = new Gtk.CenterBox({ css_classes: ["settings-header"] })
-    contentHeader.set_start_widget(headerToolsSlot)
-    contentHeader.set_center_widget(searchEntry)
-    contentHeader.set_end_widget(closeBtn)
-
-    // Gtk.WindowHandle makes the header draggable for window movement.
-    // This replaces the title bar drag area that Adw.Window provided implicitly.
-    const headerHandle = new Gtk.WindowHandle()
-    headerHandle.set_child(contentHeader)
-
-    // ── Content column ────────────────────────────────────────────────────────
-    // Header (toolbar slot + search + close) over the content. The toolbar slot is
-    // only populated while the sidebar is hidden; otherwise the toolbar lives in
-    // the sidebar capsule.
-    // No right/bottom margin: the header separator reaches the glass right edge and
-    // the content fills down to the bottom (its own inner padding keeps it off the
-    // edge). The sidebar capsule's bottom gap and the popover are separate widgets,
-    // so they're unaffected.
-    const contentColumn = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        hexpand: true,
-        vexpand: true,
-        margin_top: 8,
-    })
-    contentColumn.append(headerHandle)
-    contentColumn.append(contentArea)
-
-    // ── CrystalSplitView (replaces Adw.OverlaySplitView + Adw.Breakpoint) ────
-    // Content-driven collapse (no fixed collapseAt): the split view measures the
-    // active page's natural width every poll and collapses the sidebar only when
-    // the window can no longer fit sidebar + un-clipped content. The ZeroMinBox
-    // wrapper keeps the window minimum near sidebarWidth so Hyprland can tile.
-    const splitView = CrystalSplitView({
-        sidebar: sidebarColumn,
-        content: contentColumn,
+    const cw = CrystalWindow({
+        app,
+        title: "Crystal Shell Settings",
+        name: "crystal-settings-window",
+        cssClasses: ["fc-ignore", "crystal-settings-window"],
+        sidebar: sidebar.widget,
+        content: contentArea,
+        toggleIcon: Icons.sidebar,
+        toggleTooltip: t("settings.nav.menu"),
+        headerCenter: searchEntry,
+        headerEnd: closeBtn,
+        toolbarExtra: navCapsule,
         sidebarWidth: 250,
-        cssClasses: ["crystal-split-view"],
-        name: "settings-splitview",
-        // floatAnchor enables Popover mode in collapsed state so Hyprland's
-        // blur:popups applies compositor blur to the content behind the sidebar.
-        floatAnchor: sidebarToggle,
-        // Toolbar rides inside the capsule when the sidebar is shown; parks in the
-        // header slot when it's hidden.
-        onSidebarPresented: (presented) => moveTools(presented),
+        defaultWidth: 1000,
+        defaultHeight: 700,
     })
+    const win = cw.window
 
-    sidebarToggle.connect("clicked", () => {
-        splitView.setShowSidebar(!splitView.showSidebar)
-    })
-
-    splitView.connectCollapsedChanged(() => {
+    cw.splitView.connectCollapsedChanged(() => {
         if (!sidebar.getSelectedId() && activePageId)
             syncSidebarSelection(activePageId)
     })
 
-    // ── Main glass container ──────────────────────────────────────────────────
-    const mainContainer = new Gtk.Box({ css_classes: ["settings-main-glass"] })
-    mainContainer.set_name("settings-main-glass")
-    mainContainer.append(splitView.widget)
-
-    // Gtk.Window.set_child() replaces Adw.Window.set_content()
-    win.set_child(mainContainer)
-
-    // Hide instead of destroy — window is reused across toggles
-    win.connect("close-request", () => { win.set_visible(false); return true })
-
-    ;(win as any).toggle = () => {
-        win.visible = !win.visible
-        if (win.visible) win.present()
-    }
+    ;(win as any).toggle = cw.toggle
 
     // Default page — seeds history
     if (categories.length > 0) navigateTo(categories[0].id)

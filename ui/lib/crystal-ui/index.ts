@@ -36,6 +36,10 @@ export type { CrystalListResult } from "./list"
 export { CrystalSidebar } from "./sidebar"
 export type { CrystalSidebarItem, CrystalSidebarResult } from "./sidebar"
 
+// CrystalWindow — settings-style window shell (glass + split + reparenting header)
+export { CrystalWindow } from "./window"
+export type { CrystalWindowOpts, CrystalWindowResult } from "./window"
+
 // showCrystalAlert — modal confirmation dialog (replaces Adw.AlertDialog)
 export type { AlertResponse } from "./alert-dialog"
 export { showCrystalAlert } from "./alert-dialog"

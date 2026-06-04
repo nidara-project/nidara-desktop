@@ -472,6 +472,37 @@ selection {
   transition: color 0.15s ease;
 }
 
+/* ── Window shell (CrystalWindow) ──────────────────────────────────────────────
+   Chrome for a settings-style window. The sidebar capsule / collapsed popover /
+   icon-btn live with the rest of the window CSS for now. */
+.crystal-window-glass {
+  background-color: var(--crystal-bg);
+  border: var(--crystal-edge);
+  border-radius: var(--crystal-radius-lg);
+  box-shadow: var(--crystal-shadow-lg);
+}
+
+.crystal-window-header {
+  background: transparent;
+  border-bottom: 1px solid var(--crystal-border);
+  padding: 0 12px 8px 8px;
+  min-height: 50px;
+}
+
+.crystal-window-tools {
+  min-height: 50px;
+  padding: 0 6px;
+}
+
+.crystal-window-tools-slot {
+  border-left: 1px solid transparent;
+  margin: 1px 4px 0 0;
+}
+
+.crystal-window-sidebar-scroll {
+  margin-top: 8px;
+}
+
 /* Menu — shared by the tray menu (renderMenuModel), the bar system menu and the
    CC context menu. A flat list of .crystal-menu-row buttons, not a Gtk.Popover. */
 .crystal-menu {
@@ -2861,20 +2892,12 @@ window.workspace-cockpit {
 /* ==========================================================================
    CRYSTAL SETTINGS WINDOW
    ========================================================================== */
-#settings-main-glass {
-  background-color: var(--crystal-bg);
-  border: var(--crystal-edge);
-  border-radius: var(--crystal-radius-lg);
-  box-shadow: var(--crystal-shadow-lg);
-}
-
 window.crystal-settings-window button.crystal-btn,
 window.crystal-settings-window button.crystal-seg-btn,
 window.crystal-settings-window dropdown > button {
   font-size: 0.93em;
 }
 
-#settings-splitview,
 .crystal-split-view {
   background: none;
   background-color: transparent;
@@ -2902,10 +2925,6 @@ window.crystal-settings-window dropdown > button {
   border: none;
   box-shadow: none;
   outline: none;
-}
-
-.settings-sidebar-scroll {
-  margin-top: 8px;
 }
 
 .sidebar-floating .crystal-sidebar-capsule {
@@ -2940,23 +2959,6 @@ popover.crystal-sidebar-popup .crystal-sidebar-capsule {
   border-radius: 0;
   margin: 0;
   box-shadow: none;
-}
-
-.settings-header {
-  background: transparent;
-  border-bottom: 1px solid var(--crystal-border);
-  padding: 0 12px 8px 8px;
-  min-height: 50px;
-}
-
-.settings-sidebar-tools {
-  min-height: 50px;
-  padding: 0 6px;
-}
-
-.settings-header-tools {
-  border-left: 1px solid transparent;
-  margin: 1px 4px 0 0;
 }
 
 button.crystal-icon-btn {

@@ -97,5 +97,5 @@ window.crystal-settings-window {
     background: transparent;
     box-shadow: none;
     border: none;
-    // Glass surface + border-radius live on #settings-main-glass (its direct child)
+    // Glass surface + border-radius live on .crystal-window-glass (its direct child)
 }
