@@ -24,6 +24,8 @@ interface SquircleContainerProps {
     perfect?: boolean
     borderColor?: { r: number, g: number, b: number, a: number }
     hoverBorderColor?: { r: number, g: number, b: number, a: number }
+    /** On hover, paint the border with the current accent at full opacity. */
+    hoverBorderAccent?: boolean
     n?: number
     shape?: Shape
     borderWidth?: number
@@ -48,6 +50,7 @@ export default function SquircleContainer({
     perfect = false,
     borderColor,
     hoverBorderColor,
+    hoverBorderAccent = false,
     n = 3.2,
     shape = Shape.SQUIRCLE,
     borderWidth = 1.0,
@@ -89,6 +92,16 @@ export default function SquircleContainer({
             if (hoverColor) shareColor = hoverColor
             if (hoverAlpha !== undefined) shareAlpha = hoverAlpha
             if (hoverBorderColor) shareBorder = hoverBorderColor
+            if (hoverBorderAccent) {
+                // Read the accent live so the outline tracks accent changes.
+                const hex = Theme.accentPalette[Theme.accentColor].color
+                shareBorder = {
+                    r: parseInt(hex.slice(1, 3), 16) / 255,
+                    g: parseInt(hex.slice(3, 5), 16) / 255,
+                    b: parseInt(hex.slice(5, 7), 16) / 255,
+                    a: 1,
+                }
+            }
         }
 
         // Gtk4 provides a clean surface; OVER is the standard blending mode.
@@ -138,7 +151,7 @@ export default function SquircleContainer({
     // Content second (top)
     grid.attach(child, 0, 0, 1, 1)
 
-    if (hoverColor || hoverAlpha !== undefined || onClick) {
+    if (hoverColor || hoverAlpha !== undefined || hoverBorderColor || hoverBorderAccent || onClick) {
         const motion = new Gtk.EventControllerMotion()
         motion.connect("enter", () => { isHovered = true; da.queue_draw() })
         motion.connect("leave", () => { isHovered = false; da.queue_draw() })

@@ -8,6 +8,7 @@ import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
 import SquircleContainer from "../common/SquircleContainer"
+import { CAPSULE_BORDER } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
@@ -62,7 +63,7 @@ function SystemMenuIcon(): Gtk.Widget {
   applyIcon()
   onBarSettingsChanged(applyIcon)
 
-  return SquircleContainer({ child: img, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleSystemMenu() })
+  return SquircleContainer({ child: img, gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleSystemMenu() })
 }
 
 export default function Bar(gdkmonitor: Gdk.Monitor) {
@@ -430,8 +431,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               : undefined
       const capsule = SquircleContainer({
           child: w.buildBarContent(), gloss: true, useShellOpacity: true,
-          borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true,
-          hoverAlpha: onRelease ? 0.06 : undefined,
+          borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true,
       })
       if (onRelease) {
           // BUBBLE + released: child buttons claim on press → deny this gesture → released
@@ -449,7 +449,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const overflowLabel = new Gtk.Label({ label: "···", css_classes: ["bar-overflow-label"], margin_start: 12, margin_end: 12 })
       const overflowCapsule = SquircleContainer({
           child: overflowLabel, gloss: true, useShellOpacity: true,
-          borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, hoverAlpha: 0.06,
+          borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true,
       })
       const g = new Gtk.GestureClick()
       g.connect("released", () => {
@@ -491,15 +491,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   right.append(recCapsule)
 
   const trayInner = Tray(openCustomExpansion)
-  const trayCapsule = SquircleContainer({ child: trayInner, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  const trayCapsule = SquircleContainer({ child: trayInner, gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   trayInner.connect("notify::visible", () => trayCapsule.set_visible(trayInner.get_visible()))
   trayCapsule.set_visible(trayInner.get_visible())
   right.append(trayCapsule)
-  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(searchCapsule)
-  const ccBtn = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.settings2, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  const ccBtn = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.settings2, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(ccBtn)
-  const timeCapsule = SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  const timeCapsule = SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(timeCapsule)
 
   barBox.set_start_widget(left); barBox.set_center_widget(center); barBox.set_end_widget(right)

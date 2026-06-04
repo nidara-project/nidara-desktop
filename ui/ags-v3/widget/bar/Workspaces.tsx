@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import SquircleContainer from "../common/SquircleContainer"
+import { CAPSULE_BORDER } from "./capsule"
 import status from "../../core/Status"
 import hs from "../../core/HyprlandState"
 
@@ -18,7 +19,7 @@ export function Workspaces(): Gtk.Widget {
     update()
     box.append(dot)
   }
-  return SquircleContainer({ child: box, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, onClick: () => status.toggleOverview() })
+  return SquircleContainer({ child: box, gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleOverview() })
 }
 
 export default Workspaces

@@ -4,6 +4,7 @@ import AstalHyprland from "gi://AstalHyprland"
 import GLib from "gi://GLib"
 import { getWordmark } from "../../utils"
 import SquircleContainer from "../common/SquircleContainer"
+import { CAPSULE_BORDER } from "./capsule"
 import hs from "../../core/HyprlandState"
 
 // Bar-left capsule showing the focused window's app name (wordmark), kept in
@@ -46,7 +47,7 @@ export function AppTitle(monitorWidth: number): Gtk.Widget {
     return GLib.SOURCE_REMOVE
   })
 
-  return SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true })
+  return SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
 }
 
 export default AppTitle
