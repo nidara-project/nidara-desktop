@@ -39,9 +39,7 @@ window.crystal-settings-window {
 // Rounded rectangle card floating in the left column — NOT a pill.
 // margin: top right bottom left — 8px all except right (content starts there).
 .crystal-sidebar-capsule {
-    background: var(--crystal-surface-back);
-    border: 1px solid var(--crystal-border);
-    border-radius: $crystal-radius-md;
+    @include material-card;
     margin: 8px 0 8px 8px;
     min-width: 210px;
 
@@ -315,9 +313,7 @@ stack.settings-stack {
 
 // ── Settings list cards ───────────────────────────────────────────────────────
 list.settings-list-box {
-    background: var(--crystal-surface-back);
-    border: 1px solid var(--crystal-border);
-    border-radius: $crystal-radius-md;
+    @include material-card;
     padding: 3px;
     box-shadow: none;
     margin-bottom: 24px;

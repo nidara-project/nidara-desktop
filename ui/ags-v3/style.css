@@ -2742,7 +2742,7 @@ window.crystal-settings-window dropdown > button {
 }
 
 .crystal-sidebar-capsule {
-  background: var(--crystal-surface-back);
+  background-color: var(--crystal-surface-back);
   border: 1px solid var(--crystal-border);
   border-radius: var(--crystal-radius-md);
   margin: 8px 0 8px 8px;
@@ -3003,7 +3003,7 @@ stack.settings-stack {
 }
 
 list.settings-list-box {
-  background: var(--crystal-surface-back);
+  background-color: var(--crystal-surface-back);
   border: 1px solid var(--crystal-border);
   border-radius: var(--crystal-radius-md);
   padding: 3px;

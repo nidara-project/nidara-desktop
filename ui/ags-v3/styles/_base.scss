@@ -173,6 +173,27 @@ $dur-slow: 260ms;  // popover/sheet open
     }
 }
 
+// ── Material mixins — the surface system (one per level; NO @if — a parametric
+//    @mixin material($level) silently mis-emitted branches here). Pick a material;
+//    never hand-write background/border. Glass = thin border + subtle frost. ──────
+@mixin material-card {            // settings groups, sidebar: border + subtle frost
+    background-color: var(--crystal-surface-back);
+    border: 1px solid var(--crystal-border);
+    border-radius: $crystal-radius-md;
+}
+@mixin material-control {         // inputs / dropdown triggers (accent on focus)
+    background: var(--crystal-surface-back);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+    border-radius: $crystal-radius-sm;
+}
+@mixin material-popover {         // floating surfaces (floored alpha for blur)
+    background-color: var(--crystal-popover-bg);
+    border: 1px solid var(--crystal-popover-border);
+    border-radius: $crystal-radius-md;
+    box-shadow: var(--crystal-shadow-popover);
+}
+
 // ── Interaction states for ANY row / list-item / menu-item ─────────────────────
 // THE single source of truth for hover/pressed/selected on glass. Include it on
 // every clickable row (sidebar, dropdown list, settings rows, menus, CC) instead
