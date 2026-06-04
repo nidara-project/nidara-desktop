@@ -173,6 +173,18 @@ $dur-slow: 260ms;  // popover/sheet open
     }
 }
 
+// ── Interaction states for ANY row / list-item / menu-item ─────────────────────
+// THE single source of truth for hover/pressed/selected on glass. Include it on
+// every clickable row (sidebar, dropdown list, settings rows, menus, CC) instead
+// of redefining hover backgrounds per context. Glass deepens, selection = accent.
+// Works with `:selected` (GTK selection) and `.is-selected` (our own widgets).
+@mixin crystal-row-states {
+    transition: background-color 0.12s ease;
+    &:hover                 { background-color: var(--crystal-state-hover); }
+    &:active                { background-color: var(--crystal-state-pressed); }
+    &:selected, &.is-selected { background-color: var(--crystal-state-selected); }
+}
+
 // macOS-style keyboard focus ring. Apply on :focus-visible (keyboard nav only,
 // not mouse click). Single source of truth — don't hand-roll outlines.
 // $offset: 2px outset (default) or negative for inset cases (rows inside lists).

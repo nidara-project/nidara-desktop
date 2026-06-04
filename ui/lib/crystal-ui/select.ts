@@ -40,7 +40,9 @@ export function CrystalSelect(
   const triggerLabel = new Gtk.Label({
     label: opts.find(o => o.value === current)?.label ?? opts[0]?.label ?? "",
     hexpand: true,
-    halign: Gtk.Align.CENTER,
+    halign: Gtk.Align.START,
+    xalign: 0,
+    ellipsize: 3,
   })
   const triggerArrow = new Gtk.Label({
     label: "▾",
@@ -61,6 +63,16 @@ export function CrystalSelect(
     orientation: Gtk.Orientation.VERTICAL,
     css_classes: ["crystal-select-list", `${cssClass}-list`],
   })
+  // Scroll wrapper so long lists (themes, icons…) cap their height and scroll
+  // instead of overflowing the window.
+  const listScroll = new Gtk.ScrolledWindow({
+    hscrollbar_policy: Gtk.PolicyType.NEVER,
+    vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+    propagate_natural_height: true,
+    max_content_height: 300,
+    css_classes: ["crystal-select-scroll", `${cssClass}-scroll`],
+  })
+  listScroll.set_child(listBox)
 
   // ── Open / close ──────────────────────────────────────────────────────────
   function open() {
@@ -75,14 +87,21 @@ export function CrystalSelect(
     } catch (e) { console.warn("[CrystalSelect]", e) }
 
     // List matches trigger width exactly — no centering needed.
-    // Callers set width_request on the trigger widget; the list follows.
-    listBox.width_request = trigger.get_width()
+    const tw = trigger.get_width()
+    const th = trigger.get_height()
+    listScroll.width_request = tw
 
-    manager.show(listBox, ax, ay + trigger.get_height())
+    // Open below the trigger; flip above if it would overflow the bottom.
+    const [, natH] = listScroll.measure(Gtk.Orientation.VERTICAL, tw)
+    const overlayH = manager.overlay.get_height() || 600
+    let y = ay + th + 2
+    if (y + natH > overlayH - 8) y = Math.max(8, ay - natH - 2)
+
+    manager.show(listScroll, ax, y)
   }
 
   trigger.connect("clicked", () => {
-    if (listBox.get_parent() !== null) manager.hide()
+    if (listScroll.get_parent() !== null) manager.hide()
     else open()
   })
 
@@ -102,6 +121,8 @@ export function CrystalSelect(
         label: opt.label,
         halign: Gtk.Align.START,
         hexpand: true,
+        xalign: 0,
+        ellipsize: 3,        // PANGO_ELLIPSIZE_END — long names truncate, never overflow
       })
       itemLabel.add_css_class("crystal-select-item-label")
 

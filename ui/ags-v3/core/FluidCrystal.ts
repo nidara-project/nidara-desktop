@@ -69,7 +69,10 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
   const bgAlpha = (!isDark && parseFloat(baseAlpha) < 0.40) ? "0.40" : baseAlpha
 
   const baseBg = isDark ? "#242424" : "#fafafa"
-  const popoverBg = isDark ? "#303030" : "#ffffff"
+  // Popovers share the window's base tone (not a lighter shade) so a frosted
+  // dropdown reads as the same glass as the window, just floored in alpha enough
+  // for compositor blur (see popoverAlpha).
+  const popoverBg = baseBg
   // Popovers need alpha ≥ 0.32 so Hyprland's popups_ignorealpha=0.30 applies blur.
   const popoverAlpha = Math.max(parseFloat(bgAlpha), 0.38).toFixed(2)
   const popoverBorder = isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.10)"
@@ -131,7 +134,7 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
         sm: "0 1px 2px rgba(0,0,0,0.20), 0 1px 1px rgba(0,0,0,0.16)",
         md: "0 2px 8px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,0.18)",
         lg: "0 8px 24px rgba(0,0,0,0.40), 0 2px 6px rgba(0,0,0,0.24)",
-        popover: "0 10px 32px rgba(0,0,0,0.50), 0 2px 8px rgba(0,0,0,0.30)",
+        popover: "0 8px 24px rgba(0,0,0,0.22), 0 2px 6px rgba(0,0,0,0.14)",
       }
     : {
         sm: "0 1px 2px rgba(0,0,0,0.06), 0 1px 1px rgba(0,0,0,0.04)",
@@ -156,6 +159,13 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
     `  --crystal-surface: rgba(${fg}, 0.08);`,
     `  --crystal-surface-hover: rgba(${fg}, 0.12);`,
     `  --crystal-surface-active: rgba(${fg}, 0.16);`,
+    // ── Interaction state fills — apply ON TOP of any material ────────────────
+    // We are a GLASS system. States DEEPEN (darken → denser glass, white text gains
+    // contrast), they never lighten (lightening a translucent layer washes out the
+    // text, the Adwaita-on-opaque trap). Selection is the ONLY place accent enters.
+    `  --crystal-state-hover:    rgba(0, 0, 0, ${isDark ? "0.20" : "0.06"});`,
+    `  --crystal-state-pressed:  rgba(0, 0, 0, ${isDark ? "0.30" : "0.10"});`,
+    `  --crystal-state-selected: rgba(${r}, ${g}, ${b}, ${isDark ? "0.22" : "0.16"});`,
     `  --crystal-surface-raised: rgba(${fg}, 0.20);`,
     `  --crystal-surface-strong: rgba(${fg}, 0.30);`,   // one step above raised, for hover on raised fills
     `  --crystal-dock-surface: rgba(${fg}, ${dBase});`,

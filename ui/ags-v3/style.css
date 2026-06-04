@@ -338,6 +338,19 @@ selection {
   color: var(--crystal-text);
 }
 
+/* Small/large "A" endpoints for a text-size slider — real text (crisp at any
+   size) instead of a tiny SVG glyph that loses detail. */
+.slider-text-endpoint {
+  color: var(--crystal-text-dim);
+  font-weight: 500;
+}
+.slider-text-endpoint.is-sm {
+  font-size: 11px;
+}
+.slider-text-endpoint.is-lg {
+  font-size: 18px;
+}
+
 /* --- Unified overlay entrance ---
    The single animation for all in-bar-window panels (CC, NC, Prism, system
    menu, overview): a pure opacity crossfade (no transform → no hit-testing
@@ -608,10 +621,10 @@ row.settings-item-row {
   transition: background 0.15s ease;
 }
 row.settings-item-row:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
 }
 row.settings-item-row:active {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-pressed);
 }
 row.settings-item-row:selected {
   background: transparent;
@@ -809,44 +822,51 @@ image.accent-icon {
   color: var(--crystal-accent);
 }
 
-dropdown > button.combo {
+dropdown > button {
   background: none;
   background-color: transparent;
   background-image: none;
   border: none;
   box-shadow: none;
   outline: none;
-  background-color: var(--crystal-surface);
-  border: 1px solid var(--crystal-border);
+  background: var(--crystal-surface-back);
+  background-clip: padding-box;
+  border: 2px solid transparent;
   border-radius: var(--crystal-radius-sm);
-  padding: 4px 10px;
+  padding: 3px 10px;
   min-height: 0;
-  transition: background 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
-dropdown > button.combo > box > label {
+dropdown > button > box > label {
   margin-left: 6px;
 }
-dropdown > button.combo label {
+dropdown > button label {
   font-size: 13px;
   color: var(--crystal-text);
 }
-dropdown > button.combo image {
+dropdown > button image {
   color: var(--crystal-text-dim);
 }
-dropdown > button.combo:hover {
-  background-color: var(--crystal-surface-hover);
+dropdown > button:hover {
+  background-color: var(--crystal-surface);
   background-image: none;
   box-shadow: none;
 }
-dropdown > button.combo:active {
+dropdown > button:active {
   background-color: var(--crystal-surface-active);
   background-image: none;
 }
-dropdown > button.combo:disabled {
+dropdown > button:focus-visible {
+  border-color: var(--crystal-accent);
+  box-shadow: none;
+  outline: none;
+}
+dropdown > button:disabled {
   opacity: 0.45;
 }
 
-popover.combo {
+popover.combo,
+dropdown popover {
   background: none;
   background-color: transparent;
   background-image: none;
@@ -854,18 +874,21 @@ popover.combo {
   box-shadow: none;
   outline: none;
 }
-popover.combo > contents {
-  background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.92));
+popover.combo > contents,
+dropdown popover > contents {
+  background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.85));
   border: 1px solid var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
   border-radius: var(--crystal-radius-md);
   box-shadow: var(--crystal-shadow-popover);
   padding: 4px;
 }
-popover.combo > arrow {
-  background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.92));
+popover.combo > arrow,
+dropdown popover > arrow {
+  background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.85));
   border-color: var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
 }
-popover.combo scrolledwindow {
+popover.combo scrolledwindow,
+dropdown popover scrolledwindow {
   background: none;
   background-color: transparent;
   background-image: none;
@@ -873,7 +896,8 @@ popover.combo scrolledwindow {
   box-shadow: none;
   outline: none;
 }
-popover.combo viewport {
+popover.combo viewport,
+dropdown popover viewport {
   background: none;
   background-color: transparent;
   background-image: none;
@@ -881,7 +905,8 @@ popover.combo viewport {
   box-shadow: none;
   outline: none;
 }
-popover.combo listview {
+popover.combo listview,
+dropdown popover listview {
   background: none;
   background-color: transparent;
   background-image: none;
@@ -889,20 +914,31 @@ popover.combo listview {
   box-shadow: none;
   outline: none;
 }
-popover.combo listview > row {
+popover.combo listview > row,
+dropdown popover listview > row {
   border-radius: var(--crystal-radius-sm);
   padding: 6px 10px;
   min-height: 0;
   color: var(--crystal-text);
   font-size: 13px;
-  transition: background 0.15s ease;
+  transition: background-color 0.12s ease;
 }
-popover.combo listview > row:hover {
-  background-color: var(--crystal-surface-hover);
+popover.combo listview > row:hover,
+dropdown popover listview > row:hover {
+  background-color: var(--crystal-state-hover);
 }
-popover.combo listview > row:selected {
-  background-color: var(--crystal-accent-10);
-  color: var(--crystal-accent);
+popover.combo listview > row:active,
+dropdown popover listview > row:active {
+  background-color: var(--crystal-state-pressed);
+}
+popover.combo listview > row:selected, popover.combo listview > row.is-selected,
+dropdown popover listview > row:selected,
+dropdown popover listview > row.is-selected {
+  background-color: var(--crystal-state-selected);
+}
+popover.combo listview > row:selected,
+dropdown popover listview > row:selected {
+  background-color: var(--crystal-state-hover);
 }
 
 button.settings-icon-btn {
@@ -1370,11 +1406,11 @@ button.dock-v-icon image {
 }
 
 .system-menu-row:hover {
-  background: var(--crystal-surface);
+  background: var(--crystal-state-hover);
 }
 
 .system-menu-row:active {
-  background: var(--crystal-surface-back);
+  background: var(--crystal-state-pressed);
 }
 
 .system-menu-label {
@@ -2687,7 +2723,7 @@ window.workspace-cockpit {
 
 window.crystal-settings-window button.crystal-btn,
 window.crystal-settings-window button.crystal-seg-btn,
-window.crystal-settings-window dropdown > button.combo {
+window.crystal-settings-window dropdown > button {
   font-size: 0.93em;
 }
 
@@ -2769,20 +2805,20 @@ popover.crystal-sidebar-popup list.settings-sidebar > row {
   margin: 1px 0;
   border-radius: var(--crystal-radius-sm);
   min-height: 36px;
-  transition: background 0.15s ease;
   border: none;
   box-shadow: none;
+  transition: background-color 0.12s ease;
 }
 popover.crystal-sidebar-popup list.settings-sidebar > row:hover {
-  background-color: var(--crystal-surface-hover);
+  background-color: var(--crystal-state-hover);
 }
-popover.crystal-sidebar-popup list.settings-sidebar > row:hover .settings-sidebar-row {
-  color: var(--crystal-text);
+popover.crystal-sidebar-popup list.settings-sidebar > row:active {
+  background-color: var(--crystal-state-pressed);
 }
-popover.crystal-sidebar-popup list.settings-sidebar > row:selected, popover.crystal-sidebar-popup list.settings-sidebar > row:active {
-  background-color: var(--crystal-accent-10);
+popover.crystal-sidebar-popup list.settings-sidebar > row:selected, popover.crystal-sidebar-popup list.settings-sidebar > row.is-selected {
+  background-color: var(--crystal-state-selected);
 }
-popover.crystal-sidebar-popup list.settings-sidebar > row:selected .settings-sidebar-row, popover.crystal-sidebar-popup list.settings-sidebar > row:active .settings-sidebar-row {
+popover.crystal-sidebar-popup list.settings-sidebar > row:hover .settings-sidebar-row, popover.crystal-sidebar-popup list.settings-sidebar > row:selected .settings-sidebar-row, popover.crystal-sidebar-popup list.settings-sidebar > row:active .settings-sidebar-row {
   color: var(--crystal-text);
 }
 
@@ -2801,20 +2837,20 @@ window.crystal-settings-window list.settings-sidebar > row {
   margin: 1px 0;
   border-radius: var(--crystal-radius-sm);
   min-height: 36px;
-  transition: background 0.15s ease;
   border: none;
   box-shadow: none;
+  transition: background-color 0.12s ease;
 }
 window.crystal-settings-window list.settings-sidebar > row:hover {
-  background-color: var(--crystal-surface-hover);
+  background-color: var(--crystal-state-hover);
 }
-window.crystal-settings-window list.settings-sidebar > row:hover .settings-sidebar-row {
-  color: var(--crystal-text);
+window.crystal-settings-window list.settings-sidebar > row:active {
+  background-color: var(--crystal-state-pressed);
 }
-window.crystal-settings-window list.settings-sidebar > row:selected, window.crystal-settings-window list.settings-sidebar > row:active {
-  background-color: var(--crystal-accent-10);
+window.crystal-settings-window list.settings-sidebar > row:selected, window.crystal-settings-window list.settings-sidebar > row.is-selected {
+  background-color: var(--crystal-state-selected);
 }
-window.crystal-settings-window list.settings-sidebar > row:selected .settings-sidebar-row, window.crystal-settings-window list.settings-sidebar > row:active .settings-sidebar-row {
+window.crystal-settings-window list.settings-sidebar > row:hover .settings-sidebar-row, window.crystal-settings-window list.settings-sidebar > row:selected .settings-sidebar-row, window.crystal-settings-window list.settings-sidebar > row:active .settings-sidebar-row {
   color: var(--crystal-text);
 }
 
@@ -2986,10 +3022,10 @@ list.settings-list-box row.settings-item-row {
   transition: background 0.15s ease;
 }
 list.settings-list-box row.settings-item-row:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
 }
 list.settings-list-box row.settings-item-row:active {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-pressed);
 }
 list.settings-list-box row.settings-item-row:selected {
   background: transparent;
@@ -3034,11 +3070,16 @@ button.accent-circle-btn {
   background-color: transparent;
   border: 3px solid transparent;
   border-radius: var(--crystal-radius-pill);
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 30px;
+  min-height: 30px;
   padding: 0;
   margin: 0;
+  box-shadow: none;
+  outline: none;
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+button.accent-circle-btn:focus, button.accent-circle-btn:focus-visible {
+  outline: none;
 }
 button.accent-circle-btn.selected {
   border-color: var(--crystal-text);

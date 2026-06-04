@@ -48,6 +48,15 @@ selection {
     color: var(--crystal-text);
 }
 
+/* Small/large "A" endpoints for a text-size slider — real text (crisp at any
+   size) instead of a tiny SVG glyph that loses detail. */
+.slider-text-endpoint {
+    color: var(--crystal-text-dim);
+    font-weight: $fw-medium;
+    &.is-sm { font-size: 11px; }
+    &.is-lg { font-size: 18px; }
+}
+
 /* --- Unified overlay entrance ---
    The single animation for all in-bar-window panels (CC, NC, Prism, system
    menu, overview): a pure opacity crossfade (no transform → no hit-testing
@@ -307,9 +316,9 @@ row.settings-item-row {
     border-radius: $crystal-radius-sm;
     transition: background 0.15s ease;
 
-    &:hover   { background: var(--crystal-surface-hover); }
-    &:active  { background: var(--crystal-surface-active); }
-    &:selected { background: transparent; }
+    &:hover   { background: var(--crystal-state-hover); }
+    &:active  { background: var(--crystal-state-pressed); }
+    &:selected { background: transparent; }   // settings rows aren't selectable
 }
 
 button.settings-action-row {
@@ -475,14 +484,18 @@ image.accent-icon { color: var(--crystal-accent); }
 // No CrystalOverlayManager needed; no off-screen bug.
 
 // Trigger button
-dropdown > button.combo {
+// Trigger button styled like the base text input (.crystal-input): surface-back
+// fill + constant 2px border (transparent at rest → accent on focus, via
+// background-clip: padding-box so there's no jump).
+dropdown > button {
     @include crystal-reset;
-    background-color: var(--crystal-surface);
-    border: 1px solid var(--crystal-border);
+    background: var(--crystal-surface-back);
+    background-clip: padding-box;
+    border: 2px solid transparent;
     border-radius: $crystal-radius-sm;
-    padding: 4px 10px;
+    padding: 3px 10px;
     min-height: 0;
-    transition: background 0.15s ease;
+    transition: border-color 0.15s ease, background 0.15s ease;
 
     // GTK4 CSS has no `spacing` property (that was GTK3-only).
     // Add a left margin on the label so icon and label have a gap.
@@ -496,17 +509,29 @@ dropdown > button.combo {
         color: var(--crystal-text-dim);
     }
 
-    &:hover   { background-color: var(--crystal-surface-hover);  background-image: none; box-shadow: none; }
-    &:active  { background-color: var(--crystal-surface-active); background-image: none; }
+    &:hover  { background-color: var(--crystal-surface); background-image: none; box-shadow: none; }
+    &:active { background-color: var(--crystal-surface-active); background-image: none; }
+    // Accent only on KEYBOARD focus — :focus alone flashes the accent border on
+    // every mouse click and when the popover closes (focus returns to the button).
+    &:focus-visible { border-color: var(--crystal-accent); box-shadow: none; outline: none; }
     &:disabled { opacity: 0.45; }
 }
 
-// Popover list (auto-flips above when near bottom of screen)
-popover.combo {
+// Popover list (auto-flips above when near bottom of screen).
+// `dropdown popover` is REQUIRED: GTK4 puts the `.combo` class on the dropdown's
+// button but NOT on its popover, so `popover.combo` alone never matched it and the
+// list fell back to GTK4's opaque default popover. Match it structurally instead.
+popover.combo,
+dropdown popover {
     @include crystal-reset;
 
+    // --crystal-popover-bg now shares the WINDOW tone (FluidCrystal: popoverBg=baseBg)
+    // and floors its alpha so compositor blur applies (popups_ignorealpha=0.30) — a
+    // frosted glass that follows the opacity slider down to that floor, instead of a
+    // lighter always-opaque block. (`dropdown popover` is REQUIRED: GTK4 puts `.combo`
+    // on the dropdown's button but NOT its popover, so popover.combo never matched.)
     > contents {
-        background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.92));
+        background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.85));
         border: 1px solid var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
         border-radius: $crystal-radius-md;
         box-shadow: var(--crystal-shadow-popover);
@@ -515,7 +540,7 @@ popover.combo {
     }
 
     > arrow {
-        background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.92));
+        background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.85));
         border-color: var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
     }
 
@@ -531,13 +556,15 @@ popover.combo {
             min-height: 0;
             color: var(--crystal-text);
             font-size: $fs-small;
-            transition: background 0.15s ease;
-
-            &:hover    { background-color: var(--crystal-surface-hover); }
-            &:selected { background-color: var(--crystal-accent-10); color: var(--crystal-accent); }
+            @include crystal-row-states;
+            // GTK highlights the pointed item via :selected (hover-select), and the
+            // trigger already shows the current value — so deepen it like a hover
+            // instead of drawing the accent (accent is for PERSISTENT selection).
+            &:selected { background-color: var(--crystal-state-hover); }
         }
     }
 }
+
 
 // ── Icon-only action button ───────────────────────────────────────────────────
 // Compact, transparent, rounded — for mute/remove/add inline actions.

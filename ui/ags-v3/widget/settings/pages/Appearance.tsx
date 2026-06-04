@@ -30,7 +30,7 @@ export default function AppearancePage() {
     const fcGroup = listGroup("Crystal Shell")
 
     // Accent Color Picker
-    const accentPicker = new Gtk.Box({ spacing: 10, valign: Gtk.Align.CENTER })
+    const accentPicker = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
     const accentButtons: Record<string, Gtk.Button> = {}
 
     Object.keys(ACCENT_PALETTE).forEach(key => {
@@ -53,21 +53,23 @@ export default function AppearancePage() {
         t("settings.appearance.shell-opacity.desc"),
         Theme.shellOpacity, 0.06, 0.75,
         (v) => Theme.setShellOpacity(v),
-        { pct: true, icons: [Icons.sun, Icons.sun] },
+        { pct: true },
     ))
     fcGroup.listBox.append(sliderRow(
         t("settings.appearance.dock-opacity"),
         t("settings.appearance.dock-opacity.desc"),
         Theme.dockOpacity, 0.05, 0.60,
         (v) => Theme.setDockOpacity(v),
-        { pct: true, icons: [Icons.sun, Icons.sun] },
+        { pct: true },
     ))
+    // Window Glass = opacity (1 - transparency), so it reads like the other two:
+    // higher = more opaque. Theme stores transparency, so we invert in/out.
     fcGroup.listBox.append(sliderRow(
-        t("settings.appearance.window-transparency"),
-        t("settings.appearance.window-transparency.desc"),
-        Theme.transparency, 0.10, 0.90,
-        (v) => Theme.setTransparency(v),
-        { pct: true, icons: [Icons.sun, Icons.sun] },
+        t("settings.appearance.window-glass"),
+        t("settings.appearance.window-glass.desc"),
+        1 - Theme.transparency, 0.10, 0.90,
+        (v) => Theme.setTransparency(1 - v),
+        { pct: true },
     ))
     page.append(fcGroup.box)
 
@@ -317,7 +319,15 @@ export default function AppearancePage() {
         t("settings.appearance.text-scaling.desc"),
         Theme.textScaling, 0.75, 2.0,
         (v) => Theme.setTextScaling(v),
-        { decimals: 2, icons: [Icons.type, Icons.type] },
+        // small "A" → large "A" text endpoints: crisp at any size (font hinting),
+        // unlike a tiny SVG glyph, and the right metaphor for a text-size slider.
+        {
+            decimals: 2,
+            endpoints: [
+                new Gtk.Label({ label: "A", css_classes: ["slider-text-endpoint", "is-sm"], valign: Gtk.Align.CENTER }),
+                new Gtk.Label({ label: "A", css_classes: ["slider-text-endpoint", "is-lg"], valign: Gtk.Align.CENTER }),
+            ],
+        },
     ))
 
     page.append(fontsGroup.box)

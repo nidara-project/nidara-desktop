@@ -52,6 +52,9 @@ hl.config({
             size               = 2,
             passes             = 2,
             popups             = true,
+            -- Keep at 0.30: lower values blur the popup's own drop SHADOW (low-alpha
+            -- pixels), an ugly halo (also seen on Chrome/GTK menus). Popovers instead
+            -- floor their background alpha (popoverAlpha ≥ 0.38) so the content still blurs.
             popups_ignorealpha = 0.30,
             ignore_opacity     = true,
             new_optimizations  = true,

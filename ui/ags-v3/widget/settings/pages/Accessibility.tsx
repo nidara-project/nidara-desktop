@@ -36,7 +36,13 @@ export default function AccessibilityPage() {
         t("settings.accessibility.text-scale.desc"),
         Theme.textScaling, 0.75, 2.0,
         (v) => Theme.setTextScaling(v),
-        { decimals: 2, icons: [Icons.type, Icons.type] },
+        {
+            decimals: 2,
+            endpoints: [
+                new Gtk.Label({ label: "A", css_classes: ["slider-text-endpoint", "is-sm"], valign: Gtk.Align.CENTER }),
+                new Gtk.Label({ label: "A", css_classes: ["slider-text-endpoint", "is-lg"], valign: Gtk.Align.CENTER }),
+            ],
+        },
     ))
 
     visionGroup.listBox.append(sliderRow(

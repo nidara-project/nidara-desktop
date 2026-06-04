@@ -18,7 +18,7 @@
 window.crystal-settings-window {
     button.crystal-btn,
     button.crystal-seg-btn,
-    dropdown > button.combo {
+    dropdown > button {
         font-size: $fse-small;
     }
 }
@@ -124,17 +124,11 @@ popover.crystal-sidebar-popup {
             margin: 1px 0;
             border-radius: $crystal-radius-sm;
             min-height: 36px;
-            transition: background 0.15s ease;
             border: none;
             box-shadow: none;
+            @include crystal-row-states;
 
-            &:hover {
-                background-color: var(--crystal-surface-hover);
-                .settings-sidebar-row { color: var(--crystal-text); }
-            }
-
-            &:selected, &:active {
-                background-color: var(--crystal-accent-10);
+            &:hover, &:selected, &:active {
                 .settings-sidebar-row { color: var(--crystal-text); }
             }
         }
@@ -161,19 +155,11 @@ window.crystal-settings-window list.settings-sidebar {
         margin: 1px 0;
         border-radius: $crystal-radius-sm;
         min-height: 36px;
-        transition: background 0.15s ease;
         border: none;
         box-shadow: none;
+        @include crystal-row-states;
 
-        &:hover {
-            background-color: var(--crystal-surface-hover);
-
-            .settings-sidebar-row { color: var(--crystal-text); }
-        }
-
-        &:selected, &:active {
-            background-color: var(--crystal-accent-10);
-
+        &:hover, &:selected, &:active {
             .settings-sidebar-row { color: var(--crystal-text); }
         }
     }
@@ -342,9 +328,9 @@ list.settings-list-box {
         margin: 1px 0;
         transition: background 0.15s ease;
 
-        &:hover  { background: var(--crystal-surface-hover); }
-        &:active { background: var(--crystal-surface-active); }
-        &:selected { background: transparent; }
+        &:hover  { background: var(--crystal-state-hover); }
+        &:active { background: var(--crystal-state-pressed); }
+        &:selected { background: transparent; }   // settings rows aren't selectable
     }
 }
 
@@ -387,12 +373,18 @@ button.accent-circle-btn {
     background-color: transparent;
     border: 3px solid transparent;
     border-radius: $crystal-radius-pill;
-    min-width: 32px;
-    min-height: 32px;
+    min-width: 30px;
+    min-height: 30px;
     padding: 0;
     margin: 0;
+    // Kill the GTK4 default-theme button chrome (shadow + focus outline) that the
+    // libadwaita stylesheet used to suppress — it bulked the swatches and pushed
+    // the row past its right margin.
+    box-shadow: none;
+    outline: none;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
 
+    &:focus, &:focus-visible { outline: none; }
     &.selected       { border-color: var(--crystal-text); box-shadow: 0 0 0 2px var(--crystal-text); }
     &:hover:not(.selected) { border-color: var(--crystal-text-dim); }
 

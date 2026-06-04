@@ -70,13 +70,19 @@ export const createRow = (label: string, subtitle: string, widget: Gtk.Widget) =
         label,
         css_classes: ["settings-row-label"],
         halign: Gtk.Align.START,
+        xalign: 0,
+        wrap: true,
     }))
 
     if (subtitle) {
         text.append(new Gtk.Label({
+            // wrap lets a long subtitle shrink/wrap instead of forcing the text
+            // column wide and pushing the right-hand control out of alignment.
             label: subtitle,
             css_classes: ["settings-row-subtitle"],
             halign: Gtk.Align.START,
+            xalign: 0,
+            wrap: true,
         }))
     }
 
@@ -116,6 +122,9 @@ export const dropdownRow = (
     opts: string[],
     cb: (v: string) => void,
 ) => {
+    // Native Gtk.DropDown: its popover is a separate Wayland surface, so Hyprland's
+    // popup blur frosts it (a window-overlay list would only show the content behind
+    // it, no compositor blur). Styled via `dropdown popover` in _components.scss.
     const model = new Gtk.StringList({ strings: opts })
     const drp = new Gtk.DropDown({ model, valign: Gtk.Align.CENTER })
     const initIdx = opts.indexOf(init)
@@ -138,9 +147,9 @@ export const sliderRow = (
     min: number,
     max: number,
     cb: (v: number) => void,
-    opts: { unit?: string; icons?: [Gio.FileIcon, Gio.FileIcon]; pct?: boolean; decimals?: number } = {},
+    opts: { unit?: string; icons?: [Gio.FileIcon, Gio.FileIcon]; iconSizes?: [number, number]; endpoints?: [Gtk.Widget, Gtk.Widget]; pct?: boolean; decimals?: number } = {},
 ) => {
-    const { unit = "", icons, pct = false, decimals } = opts
+    const { unit = "", icons, iconSizes = [16, 16], endpoints, pct = false, decimals } = opts
 
     // Integer sliders (no `decimals`/`pct`) must STORE integers, not just display them:
     // the raw Gtk.Scale value is fractional, and a fractional setting (e.g. screenGap=8.19)
@@ -155,11 +164,12 @@ export const sliderRow = (
         return `${Math.round(v)}${unit}`
     }
 
-    const container = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
-
-    if (icons) {
-        container.append(new Gtk.Image({ gicon: icons[0], pixel_size: 16, opacity: 0.5, css_classes: ["cs-icon"] }))
-    }
+    // hexpand:false is REQUIRED: makeHSlider's overlay sets hexpand:true, which
+    // otherwise propagates up to this container, making createRow treat it as an
+    // expanding widget that shares row space with the text — so the slider's width
+    // and position drift with the subtitle length. Pin it to shrink-wrap (the slider
+    // keeps its fixed width_request) so every slider row aligns.
+    const container = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, hexpand: false })
 
     const valueLabel = new Gtk.Label({
         label: formatVal(init),
@@ -177,13 +187,17 @@ export const sliderRow = (
         width_request: 140,
     })
 
-    if (icons) {
-        container.append(sliderWidget)
-        container.append(new Gtk.Image({ gicon: icons[1], pixel_size: 16, opacity: 0.5, css_classes: ["cs-icon"] }))
-    } else {
-        container.append(sliderWidget)
-    }
+    // Endpoints flanking the slider: arbitrary widgets via `endpoints` (e.g. small/
+    // large "A" labels, which stay crisp where a tiny SVG icon would not), else a
+    // pair of cs-icon images via `icons`.
+    const mkIcon = (i: number) =>
+        new Gtk.Image({ gicon: icons![i], pixel_size: iconSizes[i], opacity: 0.5, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER })
+    const leftEnd  = endpoints?.[0] ?? (icons ? mkIcon(0) : null)
+    const rightEnd = endpoints?.[1] ?? (icons ? mkIcon(1) : null)
 
+    if (leftEnd)  container.append(leftEnd)
+    container.append(sliderWidget)
+    if (rightEnd) container.append(rightEnd)
     container.append(valueLabel)
     return createRow(label, subtitle, container)
 }

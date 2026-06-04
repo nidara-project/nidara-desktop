@@ -186,11 +186,11 @@
 }
 
 .system-menu-row:hover {
-    background: var(--crystal-surface);
+    background: var(--crystal-state-hover);
 }
 
 .system-menu-row:active {
-    background: var(--crystal-surface-back);
+    background: var(--crystal-state-pressed);
 }
 
 .system-menu-label {
