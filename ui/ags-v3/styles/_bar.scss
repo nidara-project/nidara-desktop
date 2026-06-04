@@ -209,11 +209,10 @@
     background: var(--crystal-surface-back);
     color: var(--crystal-text-dim);
     font-size: $fs-caption;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
 
-    &:hover {
-        background: var(--crystal-state-hover);
-        color: var(--crystal-text);
-    }
+    @include crystal-tile-states;
+    &:hover { color: var(--crystal-text); }
 }
 
 .system-confirm-primary {
@@ -221,10 +220,9 @@
     color: var(--crystal-text);
     font-size: $fs-caption;
     font-weight: $fw-semibold;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
 
-    &:hover {
-        background: var(--crystal-state-hover);
-    }
+    @include crystal-tile-states;
 }
 
 /* ── About Window ──────────────────────────────────────────────────────────── */
@@ -274,10 +272,10 @@
     border-radius: 6px;
     padding: 4px;
     opacity: 0.5;
-    transition: opacity 0.15s ease;
+    transition: opacity 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 
-    &:hover { opacity: 1; background: var(--crystal-state-hover); }
-    &:active { background: var(--crystal-state-pressed); }
+    @include crystal-tile-states;
+    &:hover { opacity: 1; }
 }
 
 // ── Recording indicator ───────────────────────────────────────────────────────
@@ -385,8 +383,7 @@ button.clip-entry-btn {
     box-shadow: none;
     padding: 4px;
     border-radius: $crystal-radius-xs;
-    transition: background 0.15s ease;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
 
-    &:hover  { background: var(--crystal-state-hover); }
-    &:active { background: var(--crystal-state-pressed); }
+    @include crystal-tile-states;
 }

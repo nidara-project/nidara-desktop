@@ -206,6 +206,28 @@ $dur-slow: 260ms;  // popover/sheet open
     &:selected, &.is-selected { background-color: var(--crystal-state-selected); }
 }
 
+// ── Interaction states for floating ICON TILES over the wallpaper ──────────────
+// Use on bar/dock/app-grid widgets and CC icon tiles — anything that sits on a
+// TRANSLUCENT panel showing the wallpaper through it. A dark deepen overlay
+// (crystal-row-states) is nearly invisible there when the wallpaper is dark and
+// opacity is maxed. Instead RAISE a glass capsule: a mode-aware frost fill
+// (`--crystal-surface-hover` = rgba(fg,…) → lightens in dark / darkens in light,
+// always toward the mode's contrast) + a 1px inner edge drawn with an inset
+// box-shadow (no geometry shift, no GtkGizmo break) so the tile reads on ANY
+// wallpaper. Reserve this for icon tiles; text rows on dense material use
+// crystal-row-states (deepen) so the text never washes out. Accent = selection.
+@mixin crystal-tile-states {
+    &:hover {
+        background-color: var(--crystal-surface-hover);
+        box-shadow: inset 0 0 0 1px var(--crystal-border);
+    }
+    &:active {
+        background-color: var(--crystal-surface-active);
+        box-shadow: inset 0 0 0 1px var(--crystal-border);
+    }
+    &:selected, &.is-selected { background-color: var(--crystal-state-selected); }
+}
+
 // macOS-style keyboard focus ring. Apply on :focus-visible (keyboard nav only,
 // not mouse click). Single source of truth — don't hand-roll outlines.
 // $offset: 2px outset (default) or negative for inset cases (rows inside lists).

@@ -175,10 +175,9 @@ window.nc-window-2 {
     background-color: var(--crystal-surface);
     border-radius: 12px;
     color: var(--crystal-text);
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
 
-    &:hover {
-        background-color: var(--crystal-state-hover);
-    }
+    @include crystal-tile-states;
 }
 
 /* --- Edit Mode Controls --- */
@@ -259,11 +258,10 @@ window.nc-window-2 {
     color: var(--crystal-text-dim);
     padding: 4px 10px;
     font-size: $fs-caption;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
 
-    &:hover {
-        background: var(--crystal-state-hover);
-        color: var(--crystal-text);
-    }
+    @include crystal-tile-states;
+    &:hover { color: var(--crystal-text); }
 }
 
 .cc-picker-empty {
@@ -500,10 +498,9 @@ window.nc-window-2 {
     box-shadow: none;
     border-radius: $crystal-radius-sm;
     color: var(--crystal-text);
-    transition: background 0.15s ease;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
 
-    &:hover  { background: var(--crystal-state-hover); }
-    &:active { background: var(--crystal-state-pressed); }
+    @include crystal-tile-states;
 }
 
 .cc-detail-sep {
@@ -696,10 +693,9 @@ window.nc-window-2 {
     border-radius: $crystal-radius-pill;
     min-width: 24px;
     min-height: 24px;
-    transition: background 0.15s ease;
+    transition: background-color 0.15s ease, box-shadow 0.15s ease;
 
-    &:hover  { background: var(--crystal-state-hover); }
-    &:active { background: var(--crystal-state-pressed); }
+    @include crystal-tile-states;
 }
 
 /* --- CC Tile Cover (invisible intercept for detail-strip tiles) --- */

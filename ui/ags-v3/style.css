@@ -1427,9 +1427,20 @@ button.dock-v-icon image {
   background: var(--crystal-surface-back);
   color: var(--crystal-text-dim);
   font-size: 12px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .system-confirm-secondary:hover {
-  background: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.system-confirm-secondary:active {
+  background-color: var(--crystal-surface-active);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.system-confirm-secondary:selected, .system-confirm-secondary.is-selected {
+  background-color: var(--crystal-state-selected);
+}
+.system-confirm-secondary:hover {
   color: var(--crystal-text);
 }
 
@@ -1438,9 +1449,18 @@ button.dock-v-icon image {
   color: var(--crystal-text);
   font-size: 12px;
   font-weight: 600;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .system-confirm-primary:hover {
-  background: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.system-confirm-primary:active {
+  background-color: var(--crystal-surface-active);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.system-confirm-primary:selected, .system-confirm-primary.is-selected {
+  background-color: var(--crystal-state-selected);
 }
 
 /* ── About Window ──────────────────────────────────────────────────────────── */
@@ -1494,14 +1514,21 @@ button.dock-v-icon image {
   border-radius: 6px;
   padding: 4px;
   opacity: 0.5;
-  transition: opacity 0.15s ease;
+  transition: opacity 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
+}
+.about-close-btn:hover {
+  background-color: var(--crystal-surface-hover);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.about-close-btn:active {
+  background-color: var(--crystal-surface-active);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.about-close-btn:selected, .about-close-btn.is-selected {
+  background-color: var(--crystal-state-selected);
 }
 .about-close-btn:hover {
   opacity: 1;
-  background: var(--crystal-state-hover);
-}
-.about-close-btn:active {
-  background: var(--crystal-state-pressed);
 }
 
 .bar-rec-capsule {
@@ -1630,13 +1657,18 @@ button.clip-entry-btn:active {
   box-shadow: none;
   padding: 4px;
   border-radius: var(--crystal-radius-xs);
-  transition: background 0.15s ease;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .bar-popover-icon-btn:hover {
-  background: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
 }
 .bar-popover-icon-btn:active {
-  background: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.bar-popover-icon-btn:selected, .bar-popover-icon-btn.is-selected {
+  background-color: var(--crystal-state-selected);
 }
 
 /* ==========================================================================
@@ -1834,9 +1866,18 @@ window.nc-window-2 contents {
   background-color: var(--crystal-surface);
   border-radius: 12px;
   color: var(--crystal-text);
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .cc-atomic-focus-btn:hover {
-  background-color: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.cc-atomic-focus-btn:active {
+  background-color: var(--crystal-surface-active);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.cc-atomic-focus-btn:selected, .cc-atomic-focus-btn.is-selected {
+  background-color: var(--crystal-state-selected);
 }
 
 /* --- Edit Mode Controls --- */
@@ -1922,9 +1963,20 @@ window.nc-window-2 contents {
   color: var(--crystal-text-dim);
   padding: 4px 10px;
   font-size: 12px;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .cc-add-chip:hover {
-  background: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.cc-add-chip:active {
+  background-color: var(--crystal-surface-active);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.cc-add-chip:selected, .cc-add-chip.is-selected {
+  background-color: var(--crystal-state-selected);
+}
+.cc-add-chip:hover {
   color: var(--crystal-text);
 }
 
@@ -2151,13 +2203,18 @@ window.nc-window-2 contents {
   box-shadow: none;
   border-radius: var(--crystal-radius-sm);
   color: var(--crystal-text);
-  transition: background 0.15s ease;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .cc-detail-back-btn:hover {
-  background: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
 }
 .cc-detail-back-btn:active {
-  background: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.cc-detail-back-btn:selected, .cc-detail-back-btn.is-selected {
+  background-color: var(--crystal-state-selected);
 }
 
 .cc-detail-sep {
@@ -2392,13 +2449,18 @@ window.nc-window-2 contents {
   border-radius: var(--crystal-radius-pill);
   min-width: 24px;
   min-height: 24px;
-  transition: background 0.15s ease;
+  transition: background-color 0.15s ease, box-shadow 0.15s ease;
 }
 .cc-detail-close-btn:hover {
-  background: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
 }
 .cc-detail-close-btn:active {
-  background: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.cc-detail-close-btn:selected, .cc-detail-close-btn.is-selected {
+  background-color: var(--crystal-state-selected);
 }
 
 /* --- CC Tile Cover (invisible intercept for detail-strip tiles) --- */
@@ -2514,10 +2576,15 @@ window#crystal-app-launcher,
   transition: background 0.15s ease;
 }
 .app-grid-button:hover {
-  background: var(--crystal-state-hover);
+  background-color: var(--crystal-surface-hover);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
 }
 .app-grid-button:active {
-  background: var(--crystal-state-pressed);
+  background-color: var(--crystal-surface-active);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
+}
+.app-grid-button:selected, .app-grid-button.is-selected {
+  background-color: var(--crystal-state-selected);
 }
 
 /* ── Icon plate ── */
@@ -2553,8 +2620,8 @@ window#crystal-app-launcher,
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 .ws-strip-item.hover {
-  background: var(--crystal-state-hover);
-  border-color: var(--crystal-border);
+  background: var(--crystal-surface-hover);
+  box-shadow: inset 0 0 0 1px var(--crystal-border);
 }
 .ws-strip-item.active {
   background: alpha(@accent_bg_color, 0.07);
