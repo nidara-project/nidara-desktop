@@ -32,6 +32,10 @@ export type { CrystalRowResult } from "./row"
 export { CrystalList } from "./list"
 export type { CrystalListResult } from "./list"
 
+// CrystalSidebar — universal navigation list (icon+label rows, single-select)
+export { CrystalSidebar } from "./sidebar"
+export type { CrystalSidebarItem, CrystalSidebarResult } from "./sidebar"
+
 // showCrystalAlert — modal confirmation dialog (replaces Adw.AlertDialog)
 export type { AlertResponse } from "./alert-dialog"
 export { showCrystalAlert } from "./alert-dialog"

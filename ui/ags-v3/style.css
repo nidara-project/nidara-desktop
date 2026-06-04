@@ -461,6 +461,16 @@ selection {
 .crystal-sidebar > row:selected, .crystal-sidebar > row.is-selected {
   background-color: var(--crystal-state-selected);
 }
+.crystal-sidebar > row:hover .crystal-sidebar-item, .crystal-sidebar > row:selected .crystal-sidebar-item, .crystal-sidebar > row:active .crystal-sidebar-item {
+  color: var(--crystal-text);
+}
+
+/* Sidebar row content — a single CSS color drives both the label and the
+   symbolic icon tint (no hardcoded opacity on the icon widget). */
+.crystal-sidebar-item {
+  color: var(--crystal-text-dim);
+  transition: color 0.15s ease;
+}
 
 /* --- Unified overlay entrance ---
    The single animation for all in-bar-window panels (CC, NC, Prism, system
@@ -2945,65 +2955,6 @@ popover.crystal-sidebar-popup .crystal-sidebar-capsule {
   border-radius: 0;
   margin: 0;
   box-shadow: none;
-}
-popover.crystal-sidebar-popup list.settings-sidebar {
-  background: transparent;
-  padding: 6px;
-  font-weight: 400;
-}
-popover.crystal-sidebar-popup list.settings-sidebar > row {
-  background: transparent;
-  padding: 0;
-  margin: 1px 0;
-  border-radius: var(--crystal-radius-sm);
-  min-height: 36px;
-  border: none;
-  box-shadow: none;
-  transition: background-color 0.12s ease;
-}
-popover.crystal-sidebar-popup list.settings-sidebar > row:hover {
-  background-color: var(--crystal-surface-hover);
-}
-popover.crystal-sidebar-popup list.settings-sidebar > row:active {
-  background-color: var(--crystal-surface-active);
-}
-popover.crystal-sidebar-popup list.settings-sidebar > row:selected, popover.crystal-sidebar-popup list.settings-sidebar > row.is-selected {
-  background-color: var(--crystal-state-selected);
-}
-popover.crystal-sidebar-popup list.settings-sidebar > row:hover .settings-sidebar-row, popover.crystal-sidebar-popup list.settings-sidebar > row:selected .settings-sidebar-row, popover.crystal-sidebar-popup list.settings-sidebar > row:active .settings-sidebar-row {
-  color: var(--crystal-text);
-}
-
-.settings-sidebar-row {
-  color: var(--crystal-text-dim);
-  transition: color 0.15s ease;
-}
-
-window.crystal-settings-window list.settings-sidebar {
-  background: transparent;
-  padding: 6px;
-}
-window.crystal-settings-window list.settings-sidebar > row {
-  background: transparent;
-  padding: 0;
-  margin: 1px 0;
-  border-radius: var(--crystal-radius-sm);
-  min-height: 36px;
-  border: none;
-  box-shadow: none;
-  transition: background-color 0.12s ease;
-}
-window.crystal-settings-window list.settings-sidebar > row:hover {
-  background-color: var(--crystal-surface-hover);
-}
-window.crystal-settings-window list.settings-sidebar > row:active {
-  background-color: var(--crystal-surface-active);
-}
-window.crystal-settings-window list.settings-sidebar > row:selected, window.crystal-settings-window list.settings-sidebar > row.is-selected {
-  background-color: var(--crystal-state-selected);
-}
-window.crystal-settings-window list.settings-sidebar > row:hover .settings-sidebar-row, window.crystal-settings-window list.settings-sidebar > row:selected .settings-sidebar-row, window.crystal-settings-window list.settings-sidebar > row:active .settings-sidebar-row {
-  color: var(--crystal-text);
 }
 
 .settings-header {

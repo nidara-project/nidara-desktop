@@ -120,7 +120,20 @@ selection {
         margin: 1px 0;
         min-height: 36px;
         @include crystal-row-states;
+
+        // The row content (icon+label) tints with the row state: dim at rest,
+        // full text colour on hover/selected.
+        &:hover, &:selected, &:active {
+            .crystal-sidebar-item { color: var(--crystal-text); }
+        }
     }
+}
+
+/* Sidebar row content — a single CSS color drives both the label and the
+   symbolic icon tint (no hardcoded opacity on the icon widget). */
+.crystal-sidebar-item {
+    color: var(--crystal-text-dim);
+    transition: color 0.15s ease;
 }
 
 /* --- Unified overlay entrance ---

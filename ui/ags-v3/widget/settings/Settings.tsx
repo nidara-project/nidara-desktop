@@ -1,6 +1,6 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
-import { CrystalClamp, CrystalSplitView } from "../../../lib/crystal-ui"
+import { CrystalClamp, CrystalSplitView, CrystalSidebar } from "../../../lib/crystal-ui"
 
 // Page Imports
 import AppearancePage from "./pages/Appearance"
@@ -77,13 +77,8 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
 
     // ── Sidebar ───────────────────────────────────────────────────────────────
-    const sidebar = new Gtk.ListBox({
-        css_classes: ["settings-sidebar"],
-        selection_mode: Gtk.SelectionMode.SINGLE,
-        activate_on_single_click: true,
-        vexpand: true,
-    })
-
+    // The navigation list itself is the universal CrystalSidebar component; it's
+    // created after the pages are built (below) so its onSelect can call navigateTo.
     const categories = [
         { id: "users",        label: t("settings.users.title"),                              icon: Icons.user,          component: UsersPage        },
         { id: "appearance",   label: t("settings.appearance.title"),         icon: Icons.palette,       component: AppearancePage   },
@@ -132,27 +127,6 @@ export default function Settings(monitor: Gdk.Monitor) {
     }
 
     categories.forEach(cat => {
-        const rowContent = new Gtk.Box({
-            spacing: 12,
-            css_classes: ["settings-sidebar-row"],
-            margin_start: 14,
-            margin_end: 14,
-            margin_top: 0,
-            margin_bottom: 0,
-            valign: Gtk.Align.CENTER,
-        })
-
-        const icon = new Gtk.Image({ pixel_size: 18, css_classes: ["sidebar-icon", "cs-icon"] })
-        icon.gicon = cat.icon
-
-        rowContent.append(icon)
-        rowContent.append(new Gtk.Label({ label: cat.label, css_classes: ["sidebar-label"] }))
-
-        const listRow = new Gtk.ListBoxRow({ css_classes: ["settings-row-container"] })
-        listRow.set_child(rowContent)
-        listRow.set_name(cat.id)
-        sidebar.append(listRow)
-
         // Build page widget
         let pageWidget: Gtk.Widget
         try {
@@ -179,7 +153,13 @@ export default function Settings(monitor: Gdk.Monitor) {
         pageCache.set(cat.id, scroll)
     })
 
-    sidebar.set_name("crystal-settings-sidebar-list")
+    // navigateTo is defined further down; the onSelect closure only runs on a
+    // user click, by which point it's assigned.
+    const sidebar = CrystalSidebar(
+        categories.map(c => ({ id: c.id, label: c.label, icon: c.icon })),
+        (id) => navigateTo(id),
+    )
+    sidebar.widget.set_name("crystal-settings-sidebar-list")
 
     // ── Search results page ───────────────────────────────────────────────────
     const searchResultsList = new Gtk.ListBox({
@@ -285,10 +265,7 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     const syncSidebarSelection = (pageId: string) => {
         isProgrammaticNav = true
-        for (let i = 0; i < categories.length; i++) {
-            const row = sidebar.get_row_at_index(i)
-            if (row?.get_name() === pageId) { sidebar.select_row(row); break }
-        }
+        sidebar.select(pageId)
         isProgrammaticNav = false
     }
 
@@ -308,12 +285,10 @@ export default function Settings(monitor: Gdk.Monitor) {
         updateNavButtons()
     }
 
-    sidebar.connect("row-activated", (_, row) => {
-        if (!row?.name) return
-        navigateTo(row.name)
-    })
-
-    sidebar.connect("row-selected", () => {
+    // Row activation (user click) is handled by CrystalSidebar's onSelect →
+    // navigateTo. row-selected stays here for the defensive re-sync (e.g. GTK
+    // clearing selection when the search page steals focus).
+    sidebar.widget.connect("row-selected", () => {
         if (isProgrammaticNav) return
         if (activePageId && activePageId !== "search-results")
             syncSidebarSelection(activePageId)
@@ -333,7 +308,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         css_classes: ["settings-sidebar-scroll"],
         vexpand: true,
     })
-    sidebarScroll.set_child(sidebar)
+    sidebarScroll.set_child(sidebar.widget)
     sidebarScroll.set_name("crystal-settings-sidebar-scroll")
 
     // The sidebar capsule = ONE glass column holding the toolbar (toggle + nav) at
@@ -382,7 +357,7 @@ export default function Settings(monitor: Gdk.Monitor) {
             populateResults(query)
             showPage("search-results")
             isProgrammaticNav = true
-            sidebar.unselect_all()
+            sidebar.unselectAll()
             isProgrammaticNav = false
         } else {
             const target = pageBeforeSearch || categories[0]?.id || ""
@@ -500,7 +475,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
 
     splitView.connectCollapsedChanged(() => {
-        if (!sidebar.get_selected_row() && activePageId)
+        if (!sidebar.getSelectedId() && activePageId)
             syncSidebarSelection(activePageId)
     })
 

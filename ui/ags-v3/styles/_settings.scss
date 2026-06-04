@@ -107,60 +107,9 @@ popover.crystal-sidebar-popup {
         box-shadow: none;
     }
 
-    // ── List styling inside the popup ─────────────────────────────────────────
-    // The rule `window.crystal-settings-window list.settings-sidebar` doesn't
-    // match inside a Gtk.Popover (no window ancestor). Mirror it here so the
-    // sidebar rows look identical in both docked and popup modes.
-    list.settings-sidebar {
-        background: transparent;
-        padding: 6px;
-        font-weight: $fw-regular;
+    // Sidebar rows use the universal .crystal-sidebar component (styled globally
+    // in _components.scss), identical in the docked capsule and this popup.
 
-        > row {
-            background: transparent;
-            padding: 0;
-            margin: 1px 0;
-            border-radius: $crystal-radius-sm;
-            min-height: 36px;
-            border: none;
-            box-shadow: none;
-            @include crystal-row-states;
-
-            &:hover, &:selected, &:active {
-                .settings-sidebar-row { color: var(--crystal-text); }
-            }
-        }
-    }
-
-}
-
-// ── Sidebar list rows ─────────────────────────────────────────────────────────
-// color drives both the label and symbolic icon tint simultaneously.
-// No hardcoded opacity on the icon widget — CSS color is the single source.
-
-.settings-sidebar-row {
-    color: var(--crystal-text-dim);
-    transition: color 0.15s ease;
-}
-
-window.crystal-settings-window list.settings-sidebar {
-    background: transparent;
-    padding: 6px;
-
-    > row {
-        background: transparent;
-        padding: 0;
-        margin: 1px 0;
-        border-radius: $crystal-radius-sm;
-        min-height: 36px;
-        border: none;
-        box-shadow: none;
-        @include crystal-row-states;
-
-        &:hover, &:selected, &:active {
-            .settings-sidebar-row { color: var(--crystal-text); }
-        }
-    }
 }
 
 // ── Header ────────────────────────────────────────────────────────────────────
