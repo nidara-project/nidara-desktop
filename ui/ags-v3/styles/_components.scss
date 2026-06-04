@@ -251,12 +251,12 @@ button.crystal-btn,
     transition: background-color 0.25s #{$ease}, border-color 0.25s #{$ease};
 
     &:hover {
-        background: var(--crystal-surface-hover);
+        background: var(--crystal-state-hover);
         border-color: var(--crystal-border);
     }
 
     &:active {
-        background: var(--crystal-surface-active);
+        background: var(--crystal-state-pressed);
     }
 
     &.accent {
@@ -327,14 +327,14 @@ button.settings-action-row {
     padding: 0;
     transition: background 0.15s ease;
 
-    &:hover  { background: var(--crystal-surface-hover); }
-    &:active { background: var(--crystal-surface-active); }
+    &:hover  { background: var(--crystal-state-hover); }
+    &:active { background: var(--crystal-state-pressed); }
 }
 
 /* Hover/active for non-accent buttons inside any crystal popover */
 popover.crystal-popover button:not(.suggested-action):not(.destructive-action):not(.settings-action-row) {
-    &:hover  { background: var(--crystal-surface-hover);  transition: background 0.15s ease; }
-    &:active { background: var(--crystal-surface-active); transition: background 0.05s ease; }
+    &:hover  { background: var(--crystal-state-hover);   transition: background 0.15s ease; }
+    &:active { background: var(--crystal-state-pressed); transition: background 0.05s ease; }
 }
 
 /* Accent (selected/primary) buttons inside crystal popovers */
@@ -363,8 +363,8 @@ button.crystal-seg-btn {
     color: var(--crystal-text-dim);
     transition: background 0.15s ease, color 0.15s ease;
 
-    &:hover  { background: var(--crystal-surface-hover); color: var(--crystal-text); }
-    &:active { background: var(--crystal-surface-active); }
+    &:hover  { background: var(--crystal-state-hover); color: var(--crystal-text); }
+    &:active { background: var(--crystal-state-pressed); }
 
     &.suggested-action {
         @include crystal-reset;
@@ -432,8 +432,8 @@ button.crystal-btn {
     border: 1px solid var(--crystal-border);
     color: var(--crystal-text);
 
-    &:hover   { background-color: var(--crystal-surface-hover);  background-image: none; box-shadow: none; }
-    &:active  { background-color: var(--crystal-surface-active); background-image: none; box-shadow: none; }
+    &:hover   { background-color: var(--crystal-state-hover);   background-image: none; box-shadow: none; }
+    &:active  { background-color: var(--crystal-state-pressed); background-image: none; box-shadow: none; }
     &:disabled { opacity: 0.45; }
     &:focus-visible { @include crystal-focus-ring; }
 
@@ -465,8 +465,8 @@ button.crystal-btn {
         border-color: transparent;
         color: var(--crystal-text-dim);
 
-        &:hover  { background-color: var(--crystal-surface-hover); background-image: none; box-shadow: none; color: var(--crystal-text); }
-        &:active { background-color: var(--crystal-surface-active); background-image: none; }
+        &:hover  { background-color: var(--crystal-state-hover); background-image: none; box-shadow: none; color: var(--crystal-text); }
+        &:active { background-color: var(--crystal-state-pressed); background-image: none; }
     }
 
     // ── pill shape modifier ───────────────────────────────────────────────────
@@ -509,8 +509,8 @@ dropdown > button {
         color: var(--crystal-text-dim);
     }
 
-    &:hover  { background-color: var(--crystal-surface); background-image: none; box-shadow: none; }
-    &:active { background-color: var(--crystal-surface-active); background-image: none; }
+    &:hover  { background-color: var(--crystal-state-hover); background-image: none; box-shadow: none; }
+    &:active { background-color: var(--crystal-state-pressed); background-image: none; }
     // Accent only on KEYBOARD focus — :focus alone flashes the accent border on
     // every mouse click and when the popover closes (focus returns to the button).
     &:focus-visible { border-color: var(--crystal-accent); box-shadow: none; outline: none; }

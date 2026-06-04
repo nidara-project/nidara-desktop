@@ -177,7 +177,7 @@ window.nc-window-2 {
     color: var(--crystal-text);
 
     &:hover {
-        background-color: var(--crystal-surface-hover);
+        background-color: var(--crystal-state-hover);
     }
 }
 
@@ -261,7 +261,7 @@ window.nc-window-2 {
     font-size: $fs-caption;
 
     &:hover {
-        background: var(--crystal-surface-hover);
+        background: var(--crystal-state-hover);
         color: var(--crystal-text);
     }
 }
@@ -296,7 +296,7 @@ window.nc-window-2 {
     transition: background-color 0.2s ease, border-color 0.2s ease;
     
     &:hover {
-        background-color: var(--crystal-surface-hover);
+        background-color: var(--crystal-state-hover);
         border-color: var(--crystal-border);
     }
 }
@@ -502,8 +502,8 @@ window.nc-window-2 {
     color: var(--crystal-text);
     transition: background 0.15s ease;
 
-    &:hover  { background: var(--crystal-surface-hover); }
-    &:active { background: var(--crystal-surface-active); }
+    &:hover  { background: var(--crystal-state-hover); }
+    &:active { background: var(--crystal-state-pressed); }
 }
 
 .cc-detail-sep {
@@ -698,8 +698,8 @@ window.nc-window-2 {
     min-height: 24px;
     transition: background 0.15s ease;
 
-    &:hover  { background: var(--crystal-surface-hover); }
-    &:active { background: var(--crystal-surface-active); }
+    &:hover  { background: var(--crystal-state-hover); }
+    &:active { background: var(--crystal-state-pressed); }
 }
 
 /* --- CC Tile Cover (invisible intercept for detail-strip tiles) --- */

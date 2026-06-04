@@ -211,7 +211,7 @@
     font-size: $fs-caption;
 
     &:hover {
-        background: var(--crystal-surface-hover);
+        background: var(--crystal-state-hover);
         color: var(--crystal-text);
     }
 }
@@ -223,7 +223,7 @@
     font-weight: $fw-semibold;
 
     &:hover {
-        background: var(--crystal-surface-active);
+        background: var(--crystal-state-hover);
     }
 }
 
@@ -276,8 +276,8 @@
     opacity: 0.5;
     transition: opacity 0.15s ease;
 
-    &:hover { opacity: 1; background: var(--crystal-surface); }
-    &:active { background: var(--crystal-surface-back); }
+    &:hover { opacity: 1; background: var(--crystal-state-hover); }
+    &:active { background: var(--crystal-state-pressed); }
 }
 
 // ── Recording indicator ───────────────────────────────────────────────────────
@@ -367,8 +367,8 @@ button.clip-entry-btn {
     padding: 9px 12px;
     transition: background 0.15s ease;
 
-    &:hover  { background: var(--crystal-surface-hover); }
-    &:active { background: var(--crystal-surface-active); }
+    &:hover  { background: var(--crystal-state-hover); }
+    &:active { background: var(--crystal-state-pressed); }
 }
 
 .bar-popover-value {
@@ -387,6 +387,6 @@ button.clip-entry-btn {
     border-radius: $crystal-radius-xs;
     transition: background 0.15s ease;
 
-    &:hover  { background: var(--crystal-surface-hover); }
-    &:active { background: var(--crystal-surface-active); }
+    &:hover  { background: var(--crystal-state-hover); }
+    &:active { background: var(--crystal-state-pressed); }
 }

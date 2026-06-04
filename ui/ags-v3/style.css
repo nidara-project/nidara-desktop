@@ -551,12 +551,12 @@ button.crystal-btn,
 }
 button.crystal-btn:hover,
 .crystal-button:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
   border-color: var(--crystal-border);
 }
 button.crystal-btn:active,
 .crystal-button:active {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-pressed);
 }
 button.crystal-btn.accent,
 .crystal-button.accent {
@@ -642,19 +642,19 @@ button.settings-action-row {
   transition: background 0.15s ease;
 }
 button.settings-action-row:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
 }
 button.settings-action-row:active {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-pressed);
 }
 
 /* Hover/active for non-accent buttons inside any crystal popover */
 popover.crystal-popover button:not(.suggested-action):not(.destructive-action):not(.settings-action-row):hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
   transition: background 0.15s ease;
 }
 popover.crystal-popover button:not(.suggested-action):not(.destructive-action):not(.settings-action-row):active {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-pressed);
   transition: background 0.05s ease;
 }
 
@@ -688,11 +688,11 @@ button.crystal-seg-btn {
   transition: background 0.15s ease, color 0.15s ease;
 }
 button.crystal-seg-btn:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
   color: var(--crystal-text);
 }
 button.crystal-seg-btn:active {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-pressed);
 }
 button.crystal-seg-btn.suggested-action {
   background: none;
@@ -748,12 +748,12 @@ button.crystal-btn {
   color: var(--crystal-text);
 }
 button.crystal-btn:hover {
-  background-color: var(--crystal-surface-hover);
+  background-color: var(--crystal-state-hover);
   background-image: none;
   box-shadow: none;
 }
 button.crystal-btn:active {
-  background-color: var(--crystal-surface-active);
+  background-color: var(--crystal-state-pressed);
   background-image: none;
   box-shadow: none;
 }
@@ -804,13 +804,13 @@ button.crystal-btn.crystal-btn--ghost {
   color: var(--crystal-text-dim);
 }
 button.crystal-btn.crystal-btn--ghost:hover {
-  background-color: var(--crystal-surface-hover);
+  background-color: var(--crystal-state-hover);
   background-image: none;
   box-shadow: none;
   color: var(--crystal-text);
 }
 button.crystal-btn.crystal-btn--ghost:active {
-  background-color: var(--crystal-surface-active);
+  background-color: var(--crystal-state-pressed);
   background-image: none;
 }
 button.crystal-btn.crystal-btn--pill {
@@ -848,12 +848,12 @@ dropdown > button image {
   color: var(--crystal-text-dim);
 }
 dropdown > button:hover {
-  background-color: var(--crystal-surface);
+  background-color: var(--crystal-state-hover);
   background-image: none;
   box-shadow: none;
 }
 dropdown > button:active {
-  background-color: var(--crystal-surface-active);
+  background-color: var(--crystal-state-pressed);
   background-image: none;
 }
 dropdown > button:focus-visible {
@@ -1429,7 +1429,7 @@ button.dock-v-icon image {
   font-size: 12px;
 }
 .system-confirm-secondary:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
   color: var(--crystal-text);
 }
 
@@ -1440,7 +1440,7 @@ button.dock-v-icon image {
   font-weight: 600;
 }
 .system-confirm-primary:hover {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-hover);
 }
 
 /* ── About Window ──────────────────────────────────────────────────────────── */
@@ -1498,10 +1498,10 @@ button.dock-v-icon image {
 }
 .about-close-btn:hover {
   opacity: 1;
-  background: var(--crystal-surface);
+  background: var(--crystal-state-hover);
 }
 .about-close-btn:active {
-  background: var(--crystal-surface-back);
+  background: var(--crystal-state-pressed);
 }
 
 .bar-rec-capsule {
@@ -1610,10 +1610,10 @@ button.clip-entry-btn {
   transition: background 0.15s ease;
 }
 button.clip-entry-btn:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
 }
 button.clip-entry-btn:active {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-pressed);
 }
 
 .bar-popover-value {
@@ -1633,10 +1633,10 @@ button.clip-entry-btn:active {
   transition: background 0.15s ease;
 }
 .bar-popover-icon-btn:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
 }
 .bar-popover-icon-btn:active {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-pressed);
 }
 
 /* ==========================================================================
@@ -1836,7 +1836,7 @@ window.nc-window-2 contents {
   color: var(--crystal-text);
 }
 .cc-atomic-focus-btn:hover {
-  background-color: var(--crystal-surface-hover);
+  background-color: var(--crystal-state-hover);
 }
 
 /* --- Edit Mode Controls --- */
@@ -1924,7 +1924,7 @@ window.nc-window-2 contents {
   font-size: 12px;
 }
 .cc-add-chip:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
   color: var(--crystal-text);
 }
 
@@ -1958,7 +1958,7 @@ window.nc-window-2 contents {
   transition: background-color 0.2s ease, border-color 0.2s ease;
 }
 .nc-capsule-glass:hover {
-  background-color: var(--crystal-surface-hover);
+  background-color: var(--crystal-state-hover);
   border-color: var(--crystal-border);
 }
 
@@ -2154,10 +2154,10 @@ window.nc-window-2 contents {
   transition: background 0.15s ease;
 }
 .cc-detail-back-btn:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
 }
 .cc-detail-back-btn:active {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-pressed);
 }
 
 .cc-detail-sep {
@@ -2395,10 +2395,10 @@ window.nc-window-2 contents {
   transition: background 0.15s ease;
 }
 .cc-detail-close-btn:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
 }
 .cc-detail-close-btn:active {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-pressed);
 }
 
 /* --- CC Tile Cover (invisible intercept for detail-strip tiles) --- */
@@ -2514,10 +2514,10 @@ window#crystal-app-launcher,
   transition: background 0.15s ease;
 }
 .app-grid-button:hover {
-  background: var(--crystal-surface);
+  background: var(--crystal-state-hover);
 }
 .app-grid-button:active {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-pressed);
 }
 
 /* ── Icon plate ── */
@@ -2553,8 +2553,8 @@ window#crystal-app-launcher,
   transition: background 0.15s ease, border-color 0.15s ease;
 }
 .ws-strip-item.hover {
-  background: var(--crystal-surface-hover);
-  border-color: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
+  border-color: var(--crystal-border);
 }
 .ws-strip-item.active {
   background: alpha(@accent_bg_color, 0.07);
@@ -2894,13 +2894,13 @@ button.crystal-icon-btn {
   color: var(--crystal-text-dim);
 }
 button.crystal-icon-btn:hover {
-  background: var(--crystal-surface);
+  background: var(--crystal-state-hover);
   background-image: none;
   box-shadow: none;
   color: var(--crystal-text);
 }
 button.crystal-icon-btn:active {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-pressed);
   background-image: none;
   box-shadow: none;
 }
@@ -2918,7 +2918,7 @@ button.crystal-icon-btn.sidebar-toggle {
   border: 1px solid var(--crystal-border);
 }
 button.crystal-icon-btn.sidebar-toggle:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
 }
 
 .navigation-capsule {
@@ -3071,7 +3071,7 @@ spinbutton.time-spin button {
 }
 spinbutton.time-spin button:hover {
   color: var(--crystal-text);
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
 }
 
 button.accent-circle-btn {
@@ -3139,7 +3139,7 @@ button.launcher-icon-btn.selected {
   background: var(--crystal-accent-10);
 }
 button.launcher-icon-btn:hover:not(.selected) {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
   border-color: var(--crystal-border);
 }
 
@@ -3239,12 +3239,12 @@ button.settings-preset-btn {
   transition: background 0.15s ease;
 }
 button.settings-preset-btn:hover {
-  background-color: var(--crystal-surface-hover);
+  background-color: var(--crystal-state-hover);
   background-image: none;
   box-shadow: none;
 }
 button.settings-preset-btn:active {
-  background-color: var(--crystal-surface-active);
+  background-color: var(--crystal-state-pressed);
   background-image: none;
   box-shadow: none;
 }
@@ -3340,10 +3340,10 @@ window.crystal-alert-dialog > box {
   border-bottom-right-radius: var(--crystal-radius-lg);
 }
 .crystal-alert-buttons button.crystal-alert-btn:hover {
-  background: var(--crystal-surface-hover);
+  background: var(--crystal-state-hover);
 }
 .crystal-alert-buttons button.crystal-alert-btn:active {
-  background: var(--crystal-surface-active);
+  background: var(--crystal-state-pressed);
 }
 .crystal-alert-buttons button.crystal-alert-btn:focus-visible {
   outline: 2px solid var(--crystal-accent);
@@ -3432,7 +3432,7 @@ window.prism-window decoration, window.prism-window contents {
 /* Hover = neutral; Selected (keyboard arrow nav) = accent, so the cursor is
    clearly visible as you move through results. */
 .prism-result-row:hover {
-  background-color: var(--crystal-surface-hover);
+  background-color: var(--crystal-state-hover);
 }
 
 .prism-result-row:selected {

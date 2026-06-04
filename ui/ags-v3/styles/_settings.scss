@@ -206,13 +206,13 @@ button.crystal-icon-btn {
     color: var(--crystal-text-dim);
 
     &:hover {
-        background: var(--crystal-surface);
+        background: var(--crystal-state-hover);
         background-image: none;
         box-shadow: none;
         color: var(--crystal-text);
     }
     &:active {
-        background: var(--crystal-surface-active);
+        background: var(--crystal-state-pressed);
         background-image: none;
         box-shadow: none;
     }
@@ -224,7 +224,7 @@ button.crystal-icon-btn.sidebar-toggle {
     padding: 8px;
     background: var(--crystal-surface);
     border: 1px solid var(--crystal-border);
-    &:hover { background: var(--crystal-surface-hover); }
+    &:hover { background: var(--crystal-state-hover); }
 }
 
 // ── Navigation capsule (back / forward) ───────────────────────────────────────
@@ -359,7 +359,7 @@ spinbutton.time-spin {
         padding: 0;
         color: var(--crystal-text-dim);
 
-        &:hover { color: var(--crystal-text); background: var(--crystal-surface-hover); }
+        &:hover { color: var(--crystal-text); background: var(--crystal-state-hover); }
     }
 }
 
@@ -412,7 +412,7 @@ button.launcher-icon-btn {
         background: var(--crystal-accent-10);
     }
     &:hover:not(.selected) {
-        background: var(--crystal-surface-hover);
+        background: var(--crystal-state-hover);
         border-color: var(--crystal-border);
     }
 }
@@ -517,8 +517,8 @@ button.settings-preset-btn {
     color: var(--crystal-text);
     transition: background 0.15s ease;
 
-    &:hover   { background-color: var(--crystal-surface-hover);  background-image: none; box-shadow: none; }
-    &:active  { background-color: var(--crystal-surface-active); background-image: none; box-shadow: none; }
+    &:hover   { background-color: var(--crystal-state-hover);   background-image: none; box-shadow: none; }
+    &:active  { background-color: var(--crystal-state-pressed); background-image: none; box-shadow: none; }
     &:disabled { opacity: 0.45; }
 
     // ── Active / selected state ───────────────────────────────────────────────
@@ -606,8 +606,8 @@ window.crystal-alert-dialog {
         &:first-child { border-bottom-left-radius: $crystal-radius-lg; }
         &:last-child  { border-bottom-right-radius: $crystal-radius-lg; }
 
-        &:hover  { background: var(--crystal-surface-hover); }
-        &:active { background: var(--crystal-surface-active); }
+        &:hover  { background: var(--crystal-state-hover); }
+        &:active { background: var(--crystal-state-pressed); }
         &:focus-visible { @include crystal-focus-ring(-2px); }
 
         &.crystal-alert-btn--destructive {

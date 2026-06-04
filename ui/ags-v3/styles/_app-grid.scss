@@ -99,11 +99,11 @@ window#crystal-app-launcher,
     transition: background 0.15s ease;
 
     &:hover {
-        background: var(--crystal-surface);
+        background: var(--crystal-state-hover);
     }
 
     &:active {
-        background: var(--crystal-surface-hover);
+        background: var(--crystal-state-pressed);
     }
 }
 
@@ -140,8 +140,8 @@ window#crystal-app-launcher,
     transition: background 0.15s ease, border-color 0.15s ease;
 
     &.hover {
-        background: var(--crystal-surface-hover);
-        border-color: var(--crystal-surface-hover);
+        background: var(--crystal-state-hover);
+        border-color: var(--crystal-border);
     }
 
     &.active {
