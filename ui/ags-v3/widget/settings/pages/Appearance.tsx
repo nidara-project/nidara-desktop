@@ -275,6 +275,10 @@ export default function AppearancePage() {
         t("settings.appearance.cursor"), t("settings.appearance.cursor.desc"),
         Theme.cursorTheme, Theme.getAvailableCursorThemes(), (v) => Theme.setCursorTheme(v),
     ))
+    assetsGroup.listBox.append(dropdownRow(
+        t("settings.appearance.cursor-size"), t("settings.appearance.cursor-size.desc"),
+        String(Theme.cursorSize), Theme.getAvailableCursorSizes(), (v) => Theme.setCursorSize(Number(v)),
+    ))
     page.append(assetsGroup.box)
 
     // 6. Fonts

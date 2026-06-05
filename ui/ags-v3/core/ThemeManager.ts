@@ -140,6 +140,13 @@ class ThemeManager extends GObject.Object {
         })
     }
 
+    getAvailableCursorSizes(): string[] {
+        const sizes = ["16", "24", "32", "48", "64"]
+        const current = String(this.cursorSize)
+        if (!sizes.includes(current)) sizes.push(current)
+        return sizes.sort((a, b) => Number(a) - Number(b))
+    }
+
     private listDirs(paths: string[]): string[] {
         const sets = new Set<string>()
         paths.forEach(p => {
@@ -161,6 +168,7 @@ class ThemeManager extends GObject.Object {
     get themeFamily() { return this.state.themeFamily }
     get iconTheme() { return this.state.iconTheme }
     get cursorTheme() { return this.state.cursorTheme }
+    get cursorSize(): number { return this.interfaceSettings.get_int("cursor-size") || 24 }
     get isDark() { return this.state.isDark }
     get accentColor(): AccentKey { return this.fcConfig.accent }
     get transparency() { return this.fcConfig.transparency }
@@ -207,6 +215,14 @@ class ThemeManager extends GObject.Object {
         execAsync(["hyprctl", "setcursor", cursor, String(size)]).catch(() => {})
         if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
         this.saveSettings()
+        this.emit("changed")
+    }
+
+    async setCursorSize(size: number) {
+        await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-size", String(size)])
+        // Same three consumers as the theme — push the size everywhere it's read.
+        if (this.state.cursorTheme) execAsync(["hyprctl", "setcursor", this.state.cursorTheme, String(size)]).catch(() => {})
+        if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
         this.emit("changed")
     }
 
