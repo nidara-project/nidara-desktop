@@ -89,7 +89,12 @@ hl.config({
 
     misc = {
         disable_hyprland_logo        = true,
+        disable_splash_rendering     = true,
         force_default_wallpaper      = 0,
+        -- Fallback color shown for the brief window where awww-daemon is already
+        -- torn down (background-graphical.slice stops early on logout/reboot) but
+        -- Hyprland hasn't exited yet. Dark neutral instead of Hyprland's gray+splash.
+        background_color             = 0x101014,
         allow_session_lock_restore   = true,
     },
 
