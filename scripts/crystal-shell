@@ -20,4 +20,10 @@ export CLUTTER_BACKEND=wayland
 export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
-exec uwsm start -e -D Hyprland hyprland.desktop -- -c /usr/share/crystal-shell/config/hypr/hyprland.lua
+# Load the shared config from /usr/share (NOT ~/.config/hypr). The double `--` is
+# deliberate: uwsm appends args after its `--` straight onto `start-hyprland`, and
+# `start-hyprland` only forwards args after ITS OWN `--` to Hyprland. So we need
+# `start-hyprland -- -c <path>` → which means `uwsm ... -- -- -c <path>` here.
+# A single `--` produces `start-hyprland -c <path>`, which start-hyprland swallows
+# and Hyprland then falls back to ~/.config/hypr/hyprland.lua. Don't remove the second `--`.
+exec uwsm start -e -D Hyprland hyprland.desktop -- -- -c /usr/share/crystal-shell/config/hypr/hyprland.lua
