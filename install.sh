@@ -337,6 +337,9 @@ if [ "$MODE" = "system" ]; then
     sudo cp "$REPO_DIR/ui/ags-v3/build/crystal-shell" /usr/share/crystal-shell/ui/ags-v3/build/
 fi
 sudo cp "$REPO_DIR/ui/ags-v3/style.css" /usr/share/crystal-shell/ui/ags-v3/
+# Static assets (icons, svgs) — resolved via SHELL_ROOT in prod (core/Paths.ts).
+sudo rm -rf /usr/share/crystal-shell/ui/ags-v3/assets
+sudo cp -r "$REPO_DIR/ui/ags-v3/assets" /usr/share/crystal-shell/ui/ags-v3/
 
 # Greeter bundle + style
 sudo mkdir -p /usr/share/crystal-shell/ui/greeter/build

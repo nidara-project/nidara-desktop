@@ -90,7 +90,7 @@ class ThemeManager extends GObject.Object {
     }
 
     private setupStyleMonitor() {
-        const stylePath = `${GLib.get_user_config_dir()}/crystal-shell/ui/ags-v3/style.css`
+        const stylePath = `${SHELL_ROOT}/style.css`
         const file = Gio.File.new_for_path(stylePath)
         try {
             const monitor = file.monitor_file(Gio.FileMonitorFlags.NONE, null)
@@ -342,18 +342,12 @@ class ThemeManager extends GObject.Object {
                 Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, tokenPriority)
                 Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, priority)
                 
-                // style.css: prefer the installed copy, fall back to the source tree (dev).
-                const configPaths = [
-                    `${GLib.get_user_config_dir()}/crystal-shell/ui/ags-v3/style.css`,
-                    `${SHELL_ROOT}/style.css`,
-                ]
-
-                for (const stylePath of configPaths) {
-                    if (GLib.file_test(stylePath, GLib.FileTest.EXISTS)) {
-                        this.mainProvider.load_from_path(stylePath)
-                        console.log(`[ThemeManager] Static style.css loaded from: ${stylePath}`)
-                        break
-                    }
+                // style.css resolves against SHELL_ROOT (source tree in dev,
+                // /usr/share in prod). install.sh ships style.css into both.
+                const stylePath = `${SHELL_ROOT}/style.css`
+                if (GLib.file_test(stylePath, GLib.FileTest.EXISTS)) {
+                    this.mainProvider.load_from_path(stylePath)
+                    console.log(`[ThemeManager] Static style.css loaded from: ${stylePath}`)
                 }
                 this.providersLinked = true
             }

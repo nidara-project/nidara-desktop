@@ -1,19 +1,9 @@
-import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import { SHELL_ROOT } from "./Paths"
 
-function resolveIconsDir(): string {
-    const candidates = [
-        `${GLib.get_user_config_dir()}/crystal-shell/ui/ags-v3/assets/icons/hicolor/scalable/actions`,
-        `${SHELL_ROOT}/assets/icons/hicolor/scalable/actions`,
-    ]
-    for (const p of candidates) {
-        if (GLib.file_test(p, GLib.FileTest.IS_DIR)) return p
-    }
-    return candidates[1]
-}
-
-const DIR = resolveIconsDir()
+// Assets resolve against SHELL_ROOT (source tree in dev, /usr/share in prod).
+// See core/Paths.ts. install.sh ships assets/ into both.
+const DIR = `${SHELL_ROOT}/assets/icons/hicolor/scalable/actions`
 const f = (name: string) => Gio.FileIcon.new(Gio.File.new_for_path(`${DIR}/${name}.svg`))
 
 const Icons = {
