@@ -11,7 +11,9 @@ export XDG_SESSION_TYPE=wayland
 export MOZ_ENABLE_WAYLAND=1
 export ELECTRON_OZONE_PLATFORM_HINT=auto
 export OZONE_PLATFORM=wayland
-export QT_QPA_PLATFORMTHEME=qt6ct
+# Qt apps follow the freedesktop color-scheme (dark/light) straight from the portal —
+# no qt6ct/Kvantum config needed. Qt 6.5+ reads org.freedesktop.appearance live.
+export QT_QPA_PLATFORMTHEME=xdgdesktopportal
 export CLUTTER_BACKEND=wayland
 
 # GObject Introspection

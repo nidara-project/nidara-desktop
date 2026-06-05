@@ -268,10 +268,6 @@ export default function AppearancePage() {
         Theme.themeFamily, Theme.getAvailableGtkThemes(), (v) => Theme.setGtkTheme(v),
     ))
     assetsGroup.listBox.append(dropdownRow(
-        t("settings.appearance.qt-theme"), t("settings.appearance.qt-theme.desc"),
-        Theme.qtTheme, Theme.getAvailableQtThemes(), (v) => Theme.setQtTheme(v),
-    ))
-    assetsGroup.listBox.append(dropdownRow(
         t("settings.appearance.icons"), t("settings.appearance.icons.desc"),
         Theme.iconTheme, Theme.getAvailableIconThemes(), (v) => Theme.setIconTheme(v),
     ))

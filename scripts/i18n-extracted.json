@@ -219,11 +219,6 @@
     "file": "appearance",
     "ctx": "row.label"
   },
-  "settings.appearance.row.label.tema-qt-kvantum": {
-    "value": "Tema Qt (Kvantum)",
-    "file": "appearance",
-    "ctx": "row.label"
-  },
   "settings.appearance.row.label.transicion": {
     "value": "Transición",
     "file": "appearance",

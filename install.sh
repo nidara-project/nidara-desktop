@@ -126,7 +126,7 @@ sudo pacman -Syu --needed --noconfirm \
     polkit-gnome \
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland \
     ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji \
-    hyprlauncher kvantum kvantum-qt5 qt5ct qt6ct awww lz4
+    hyprlauncher awww lz4
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. Build & install Astal dependencies

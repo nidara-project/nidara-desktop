@@ -13,8 +13,6 @@ import {
     ACCENT_PALETTE,
     generateTokensCss,
     generateTintCss,
-    writeQtSettings,
-    getSystemQtTheme,
 } from "./FluidCrystal"
 import { SHELL_ROOT } from "./Paths"
 
@@ -142,41 +140,6 @@ class ThemeManager extends GObject.Object {
         })
     }
 
-    getAvailableQtThemes(): string[] {
-        const paths = ["/usr/share/Kvantum", `${GLib.get_home_dir()}/.config/Kvantum`]
-        const themes = new Set<string>()
-        paths.forEach(p => {
-            if (!GLib.file_test(p, GLib.FileTest.EXISTS)) return
-            const dir = Gio.File.new_for_path(p)
-            try {
-                const enumerator = dir.enumerate_children("standard::name,standard::type", Gio.FileQueryInfoFlags.NONE, null)
-                let info
-                while ((info = enumerator.next_file(null))) {
-                    const name = info.get_name()
-                    if (name.endsWith("#")) continue
-                    if (info.get_file_type() === Gio.FileType.DIRECTORY) {
-                        try {
-                            const subDir = Gio.File.new_for_path(`${p}/${name}`)
-                            const subEnum = subDir.enumerate_children("standard::name", Gio.FileQueryInfoFlags.NONE, null)
-                            let subInfo
-                            while ((subInfo = subEnum.next_file(null))) {
-                                const subName = subInfo.get_name()
-                                if (subName.endsWith(".kvconfig")) {
-                                    themes.add(subName.replace(".kvconfig", ""))
-                                }
-                            }
-                        } catch (e) { themes.add(name) }
-                    } else if (name.endsWith(".kvconfig")) {
-                        themes.add(name.replace(".kvconfig", ""))
-                    }
-                }
-            } catch (e) { }
-        })
-        const result = Array.from(themes).sort()
-        if (!result.includes("Default")) result.unshift("Default")
-        return result
-    }
-
     private listDirs(paths: string[]): string[] {
         const sets = new Set<string>()
         paths.forEach(p => {
@@ -205,7 +168,6 @@ class ThemeManager extends GObject.Object {
     get dockOpacity()  { return this.fcConfig.dockOpacity }
     get tintStrength() { return this.fcConfig.tintStrength }
     get tintPanels() { return this.fcConfig.tintPanels }
-    get qtTheme() { return this.fcConfig.qtTheme }
     get accentPalette() { return ACCENT_PALETTE }
     get interfaceFont(): string {
         try { return this.interfaceSettings.get_string("font-name") } catch (_) { return "Sans 11" }
@@ -228,7 +190,7 @@ class ThemeManager extends GObject.Object {
         this.state.iconTheme = icons
         try {
             await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", icons])
-            this.saveSettings(true)
+            this.saveSettings()
             this.emit("changed")
         } catch (e) { console.error(e) }
     }
@@ -237,12 +199,6 @@ class ThemeManager extends GObject.Object {
         this.state.cursorTheme = cursor
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", cursor])
         this.saveSettings()
-        this.emit("changed")
-    }
-
-    async setQtTheme(theme: string) {
-        this.fcConfig.qtTheme = theme
-        this.saveSettings(true)
         this.emit("changed")
     }
 
@@ -422,7 +378,6 @@ class ThemeManager extends GObject.Object {
             const gtkSettings = Gtk.Settings.get_default()
             if (gtkSettings) gtkSettings.gtk_application_prefer_dark_theme = this.state.isDark
         } catch (e) { }
-        writeQtSettings(this.fcConfig, this.state.iconTheme)
     }
 
     private updateSettingsIni(theme: string) {
@@ -452,7 +407,7 @@ class ThemeManager extends GObject.Object {
         console.log("[ThemeManager] Global Styles READY! ")
     }
 
-    private saveSettings(syncQt = false) {
+    private saveSettings() {
         const dir = `${GLib.get_user_config_dir()}/crystal-shell`
         if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
         const merged = {
@@ -463,7 +418,6 @@ class ThemeManager extends GObject.Object {
             dockOpacity: this.fcConfig.dockOpacity,
             tintStrength: this.fcConfig.tintStrength,
             tintPanels: this.fcConfig.tintPanels,
-            qtTheme: this.fcConfig.qtTheme,
         }
         const json = JSON.stringify(merged, null, 2)
         writeFile(this.configPath, json)
@@ -478,12 +432,9 @@ class ThemeManager extends GObject.Object {
         } catch (e) {
             console.warn("[ThemeManager] could not write shared appearance:", e)
         }
-
-        if (syncQt) writeQtSettings(this.fcConfig, this.state.iconTheme)
     }
 
     private loadSettings() {
-        const systemQt = getSystemQtTheme()
         try {
             let data: Record<string, unknown> = {}
 
@@ -513,11 +464,9 @@ class ThemeManager extends GObject.Object {
                 dockOpacity:  (data.dockOpacity as number)               ?? DEFAULT_CONFIG.dockOpacity,
                 tintStrength: (data.tintStrength as number)              ?? DEFAULT_CONFIG.tintStrength,
                 tintPanels:   (data.tintPanels as typeof DEFAULT_CONFIG.tintPanels) ?? DEFAULT_CONFIG.tintPanels,
-                qtTheme:      systemQt || (data.qtTheme as string)       || DEFAULT_CONFIG.qtTheme,
             }
         } catch (e) {
             this.syncFromSystem()
-            if (systemQt) this.fcConfig.qtTheme = systemQt
         }
     }
 
