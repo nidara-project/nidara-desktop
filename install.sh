@@ -122,11 +122,11 @@ sudo pacman -Syu --needed --noconfirm \
     git nodejs npm gjs go \
     accountsservice greetd pavucontrol rust cargo \
     hyprland hypridle hyprsunset uwsm power-profiles-daemon \
-    kitty nautilus dolphin thunar \
+    kitty nautilus \
     polkit-gnome \
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland \
     ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji \
-    xfce4-settings hyprlauncher kvantum kvantum-qt5 qt5ct qt6ct awww lz4
+    hyprlauncher kvantum kvantum-qt5 qt5ct qt6ct awww lz4
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. Build & install Astal dependencies
