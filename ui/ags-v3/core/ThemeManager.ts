@@ -108,7 +108,7 @@ class ThemeManager extends GObject.Object {
             const fontCss = `* { font-family: "${family}", "Symbols Nerd Font", sans-serif; }`
             
             this.ensureProvidersLinked()
-            this.fontProvider.load_from_data(fontCss, fontCss.length)
+            this.fontProvider.load_from_string(fontCss)
             console.log(`[ThemeManager] Font Sync: ${family}`)
         } catch (e) { }
     }
@@ -197,7 +197,13 @@ class ThemeManager extends GObject.Object {
 
     async setCursorTheme(cursor: string) {
         this.state.cursorTheme = cursor
+        const size = this.interfaceSettings.get_int("cursor-size") || 24
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", cursor])
+        // gsettings only reaches GTK/GNOME Wayland apps. Hyprland's compositor cursor and
+        // XWayland clients (Steam, etc.) read XCURSOR, not gsettings — push it live so the
+        // cursor stays consistent everywhere instead of reverting to the default X cursor.
+        execAsync(["hyprctl", "setcursor", cursor, String(size)]).catch(() => {})
+        if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
         this.saveSettings()
         this.emit("changed")
     }
@@ -249,8 +255,7 @@ class ThemeManager extends GObject.Object {
 
     async setAccentColor(accent: AccentKey) {
         this.fcConfig.accent = accent
-        this.ensureProvidersLinked()
-        this.themeProvider.load_from_string(generateTokensCss(this.fcConfig, this.state.isDark))
+        this.applyTokens()
         execAsync(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", accent]).catch(() => {})
         this.schedulePersistence()
         this.emit("changed")
@@ -258,27 +263,21 @@ class ThemeManager extends GObject.Object {
 
     async setTransparency(value: number) {
         this.fcConfig.transparency = Math.max(0.10, Math.min(0.90, value))
-        this.ensureProvidersLinked()
-        const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
-        this.themeProvider.load_from_data(tokens, tokens.length)
+        this.applyTokens()
         this.schedulePersistence()
         this.emit("changed")
     }
 
     async setShellOpacity(value: number) {
         this.fcConfig.shellOpacity = Math.max(0.06, Math.min(0.75, value))
-        this.ensureProvidersLinked()
-        const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
-        this.themeProvider.load_from_data(tokens, tokens.length)
+        this.applyTokens()
         this.schedulePersistence()
         this.emit("changed")
     }
 
     async setDockOpacity(value: number) {
         this.fcConfig.dockOpacity = Math.max(0.05, Math.min(0.60, value))
-        this.ensureProvidersLinked()
-        const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
-        this.themeProvider.load_from_data(tokens, tokens.length)
+        this.applyTokens()
         this.schedulePersistence()
         this.emit("changed")
     }
@@ -313,23 +312,12 @@ class ThemeManager extends GObject.Object {
                 Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, tokenPriority)
                 Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, priority)
                 
-                // V921: Environment Isolation (Dev Sandbox)
-                const isDevMode = GLib.getenv("CRYSTAL_DEV_MODE") === "1";
-                const activeDir = SHELL_ROOT;
+                // style.css: prefer the installed copy, fall back to the source tree (dev).
+                const configPaths = [
+                    `${GLib.get_user_config_dir()}/crystal-shell/ui/ags-v3/style.css`,
+                    `${SHELL_ROOT}/style.css`,
+                ]
 
-                let configPaths: string[] = [];
-
-                if (isDevMode) {
-                    console.log("[ThemeManager] Dev mode: loading local style.css");
-                    configPaths = [`${activeDir}/style.css`];
-                } else {
-                    // Production behavior: crystal-shell config dir first, fallback to cwd
-                    configPaths = [
-                        `${GLib.get_user_config_dir()}/crystal-shell/ui/ags-v3/style.css`,
-                        `${activeDir}/style.css`
-                    ];
-                }
-                
                 for (const stylePath of configPaths) {
                     if (GLib.file_test(stylePath, GLib.FileTest.EXISTS)) {
                         this.mainProvider.load_from_path(stylePath)
@@ -351,15 +339,20 @@ class ThemeManager extends GObject.Object {
         }
     }
 
+    /** Regenerate + apply the Fluid Crystal token CSS (accent / opacities), deduped. */
+    private applyTokens() {
+        this.ensureProvidersLinked()
+        const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
+        if (this._lastTokensCss !== tokens) {
+            this.themeProvider.load_from_string(tokens)
+            this._lastTokensCss = tokens
+        }
+    }
+
     private async syncGtkTheme() {
         const theme = this.state.themeFamily
 
-        this.ensureProvidersLinked()
-        const tokensCss = generateTokensCss(this.fcConfig, this.state.isDark)
-        if (this._lastTokensCss !== tokensCss) {
-            this.themeProvider.load_from_string(tokensCss)
-            this._lastTokensCss = tokensCss
-        }
+        this.applyTokens()
         this.refreshTintCss()
         GLib.unsetenv("GTK_THEME")
 
@@ -384,7 +377,16 @@ class ThemeManager extends GObject.Object {
         // GTK3 apps (and the GTK3 file chooser served by xdg-desktop-portal-gtk) don't
         // read the portal's color-scheme — they switch dark/light via this flag. Without
         // it, every GTK3 surface renders light Adwaita even though gsettings says prefer-dark.
-        const ini = `[Settings]\ngtk-theme-name=${theme}\ngtk-application-prefer-dark-theme=${this.state.isDark ? 1 : 0}\ngtk-icon-theme-name=${this.state.iconTheme}\ngtk-font-name=${this.interfaceFont}\n`
+        const cursorSize = this.interfaceSettings.get_int("cursor-size") || 24
+        let ini = `[Settings]\n`
+            + `gtk-theme-name=${theme}\n`
+            + `gtk-application-prefer-dark-theme=${this.state.isDark ? 1 : 0}\n`
+            + `gtk-icon-theme-name=${this.state.iconTheme}\n`
+            + `gtk-font-name=${this.interfaceFont}\n`
+        if (this.state.cursorTheme) {
+            ini += `gtk-cursor-theme-name=${this.state.cursorTheme}\n`
+                + `gtk-cursor-theme-size=${cursorSize}\n`
+        }
         for (const d of ["gtk-3.0", "gtk-4.0"]) {
             writeFile(`${GLib.get_user_config_dir()}/${d}/settings.ini`, ini)
         }
@@ -398,6 +400,9 @@ class ThemeManager extends GObject.Object {
         const settings = this.interfaceSettings
         if (settings.get_string("icon-theme") !== this.state.iconTheme) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", this.state.iconTheme])
         if (settings.get_string("cursor-theme") !== this.state.cursorTheme) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", this.state.cursorTheme])
+        // Apply the cursor to Hyprland/XWayland too, so apps started later (Steam, etc.)
+        // inherit it instead of the default X cursor. gsettings alone doesn't reach them.
+        if (this.state.cursorTheme) execAsync(["hyprctl", "setcursor", this.state.cursorTheme, String(settings.get_int("cursor-size") || 24)]).catch(() => {})
         const target = this.state.isDark ? "prefer-dark" : "prefer-light"
         if (settings.get_string("color-scheme") !== target) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", target])
         if (settings.get_string("accent-color") !== this.fcConfig.accent) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", this.fcConfig.accent]).catch(() => {})
