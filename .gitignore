@@ -107,9 +107,12 @@ memory/
 AGENTS.md
 HEARTBEAT.md
 
-# AI assistant files — not shipped with the project
+# AI assistant files
 CLAUDE.md
-.claude/
+# Ignore everything under .claude/ (personal Claude Code state) EXCEPT the skill,
+# which ships with the project so any user's agent can extend it and contribute back.
+.claude/*
+!.claude/skills/
 
 # More runtime user state (root-level, personal to each install)
 /bar-settings.json

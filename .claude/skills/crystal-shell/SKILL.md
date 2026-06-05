@@ -1,0 +1,78 @@
+---
+name: crystal-shell
+description: "Authoritative reference for working on the Crystal Shell desktop environment codebase — a full Wayland session for Arch Linux built with AGS v3 + TypeScript/TSX → GJS on GTK4 + libadwaita + Hyprland. Use this skill whenever the user mentions Crystal Shell, fluid-crystal, the shell bar, dock, control center, notification center, prism/spotlight, app grid, overview, system menu, settings window, lockscreen, or greeter; asks to edit files under `ui/ags-v3/`, `ui/greeter/`, `ui/lockscreen/`, or `ui/lib/crystal-ui/`; wants to modify `hyprland.lua`, SCSS in `styles/`, a `core/` service, or run `install.sh`. Also trigger on questions about reloading the UI (Super+Shift+R), `ags request` IPC, `Status.ts`, the three build bundles, or the Fluid Crystal design system. ALWAYS consult this skill BEFORE editing files in this repo — strict conventions (no `Adw.OverlaySplitView`, no transform scale on clickables, no hardcoded colors, scoped CSS only, IPC via `ShellActions` not `globalThis`) are easy to violate without it."
+---
+
+# Crystal Shell
+
+> Repo: `github.com/fluid-crystal/crystal-shell` · License: GPL-3.0 · Version in `VERSION` (0.1.0).
+
+## What this project is
+
+Crystal Shell is a **full Wayland desktop environment** for Arch Linux — not a theme, not a set of scripts. It registers as a proper Wayland session (like GNOME/KDE) and is launched by the display manager. The compositor is **Hyprland**; the UI is **AGS v3 (Aylur's GTK Shell)** written in **TypeScript/TSX → GJS**, on **GTK4 + libadwaita + gtk4-layer-shell**, styled with **SCSS** and painted with **Cairo** where shapes get custom (dock squircles, workspace dots, resource rings, schematic).
+
+The aesthetic is "Crystal literal": heavy-blur glass capsules with a 1px inner white edge, soft outer shadow, top sheen; the accent color is used **only for active/selected state**.
+
+It is also **AI-native by design**: this skill ships *inside* the repo so that any user's agent can extend, customize, and fix their own desktop — and propose globally-useful improvements back upstream. If you're helping a user with their installed copy rather than the project itself, start at `references/agent-contribution.md`.
+
+## The repo is THREE separate bundles, not one app
+
+This is the single most important fact to internalize before touching anything:
+
+| Bundle | Source | Output binary | Role |
+|---|---|---|---|
+| **Shell** | `ui/ags-v3/` | `build/crystal-shell` | Desktop: bar, dock, overlays, settings |
+| **Greeter** | `ui/greeter/` | `build/crystal-greeter` | Login (greetd + AstalGreet) |
+| **Lockscreen** | `ui/lockscreen/` | `build/crystal-lock` | Lock via `Gtk4SessionLock` (OVERLAY-layer fallback) |
+
+Each has its own `app.ts`, its own `package.json`, its own `ags bundle` invocation. Code shared between the greeter and the lockscreen is currently duplicated (see `references/tech-debt.md`).
+
+## The ten inviolable commandments
+
+These are non-negotiable. Violating them produces bugs that are hard to debug because the symptoms don't point at the cause.
+
+1. **Never use `Adw.OverlaySplitView` in Settings** — use `CrystalSplitView` from `ui/lib/crystal-ui/`. Adw's version breaks capsule margins.
+2. **Never write unscoped global CSS** — every widget's CSS goes inside `window#name { … }`.
+3. **Kill zombies before debugging.** A stuck terminal or "styles won't refresh" almost always means a zombie GJS is still drawing the dead UI. Run `killall gjs` before changing code in a loop.
+4. **`core/` never touches the UI.** All visibility changes flow through `Status.ts`. Widgets never flip each other directly.
+5. **Overlays live inside the Bar's window** via `Gtk.Overlay`, not in their own windows. This avoids Hyprland layer conflicts; that's why fades are GTK-side (`common/fade.ts`).
+6. **IPC goes through `ags request` + `core/ShellActions`** — never reintroduce `globalThis` coupling.
+7. **The Settings window appears in Hyprland as class `io.Astal.ags`**, not `com.crystalshell.fluid`. The dock filters and remaps it to `crystal-shell-settings`. Don't "fix" this without understanding why.
+8. **`AboutWindow` is create+destroy, not hide** (Settings is the opposite — it hides on close).
+9. **No `transform: scale` or `transform: translate` on clickable widgets.** GTK respects them but they break hit-testing. Use `margin`, or scale in Cairo.
+10. **No hardcoded colors. No emoji as iconography.** Resolve against `--crystal-*` tokens; use SVGs in `assets/fluid-crystal/assets/scalable/` or the `cs-*-symbolic` icon set.
+
+## Quick orientation: where to start
+
+Before doing anything that touches code:
+
+- **Editing TSX widgets, adding overlays, changing dock/bar/CC behaviour** → read `references/architecture.md` first, then `references/state-and-ipc.md`.
+- **Editing SCSS, restyling anything, working on the design tokens** → read `references/design-system.md`.
+- **Adding a new core service or modifying state** → read `references/architecture.md` (core/ section) and `references/state-and-ipc.md` (Status.ts).
+- **Working on the installer, build, or session boot** → read `references/dev-workflow.md`.
+- **Debugging something weird, or considering a refactor** → check `references/tech-debt.md` first — it might already be a known issue.
+- **Helping a user customize their OWN installed copy** (not the canonical repo) → read `references/agent-contribution.md` FIRST. It tells you whether a change is personal (→ config layer), should become a Setting, or is a global improvement worth proposing back upstream as a PR.
+
+The references are short and load-on-demand. Don't try to hold the whole project in context; read the specific reference you need.
+
+## The dev loop in one screen
+
+```bash
+./install.sh --dev                       # one-time setup: system binaries + ~/.config/crystal-shell/.dev
+# ... edit TSX/SCSS in ui/ags-v3/ ...
+# In a graphical session:
+Super+Shift+R                            # reload the UI (re-runs crystal-shell-ui → ags run)
+tail -f /tmp/crystal-shell-ui.log        # logs
+killall gjs                              # nuke stuck old UI when reload misbehaves
+cd ui/ags-v3 && npm run typecheck        # local typecheck (needs the git-ignored @girs/)
+cd ui/ags-v3 && npm run build            # SCSS compile + ags bundle
+ags request toggleAppGrid                # send an IPC command to the running shell
+```
+
+CI only gates SCSS compile (pure JS, no system libs). Typecheck is local-only because it needs `@girs/` (≈58 MB of auto-generated GI typings, git-ignored).
+
+## When in doubt
+
+- The codebase is intentionally **pure GTK4 + Cairo** for anything custom-painted (Dock, Bar, dots, rings, schematic) and **AGS/GTK + custom CSS** for floating overlays. **Adwaita is used only where it saves architecture** (e.g. `Adw.AlertDialog` is replaced by `showCrystalAlert`, but `Adw.init()` + `PREFER_DARK` is fine at startup). See `references/design-system.md`.
+- The state model is **one central GObject (`Status.ts`)** with mutually-exclusive overlay setters. Subscribe via `notify::prop`. See `references/state-and-ipc.md`.
+- If a change feels like it requires touching both `DockHorizontal.tsx` and `DockVertical.tsx` separately, you've hit known tech debt (~75% duplication) — see `references/tech-debt.md` before just patching both.
