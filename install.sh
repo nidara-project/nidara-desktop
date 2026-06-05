@@ -526,6 +526,71 @@ for f in env env-hyprland; do
     fi
 done
 
+ENVFILE="$UWSM_DIR/env"
+
+# Migrate two objectively-broken shipped defaults in pre-0.1 env files. These match
+# the exact bad lines only, so a user's own edits are never touched. uwsm SOURCES
+# this file as shell:
+#   - QT_QPA_PLATFORM=wayland;xcb  → the bare ';' ran 'xcb' as a command, truncating
+#     the var to just 'wayland'. Quote it.
+#   - QT_QPA_PLATFORMTHEME=qt6ct   → contradicts the portal-based Qt theming the
+#     launcher sets; since the env file is sourced AFTER the launcher it wins, so the
+#     stale qt6ct value was actually overriding xdgdesktopportal.
+# sed -i recreates the file as root when we run under sudo, so chown it back after.
+sed -i \
+    -e 's|^export QT_QPA_PLATFORM=wayland;xcb$|export QT_QPA_PLATFORM="wayland;xcb"|' \
+    -e 's|^export QT_QPA_PLATFORMTHEME=qt6ct$|export QT_QPA_PLATFORMTHEME=xdgdesktopportal|' \
+    "$ENVFILE"
+chown "$REAL_USER" "$ENVFILE"
+
+# ── NVIDIA GPU autodetection ──────────────────────────────────────────────────
+# A fresh NVIDIA user otherwise gets a black screen / glitches until they manually
+# uncomment the GPU vars. Detect the hardware AND the active driver: the nvidia-drm
+# GBM backend vars apply ONLY to the proprietary/open driver — under nouveau they
+# break the session (nouveau uses the standard mesa GBM path). Idempotent: only flips
+# the commented hint lines to active, so it's safe to re-run (e.g. after installing
+# the driver later).
+if command -v lspci >/dev/null 2>&1 \
+   && lspci -nn 2>/dev/null | grep -iE 'VGA|3D|Display' | grep -qi nvidia; then
+    echo "  [GPU] NVIDIA hardware detected."
+    if lsmod 2>/dev/null | grep -q '^nouveau'; then
+        echo "  [GPU] nouveau driver in use — leaving NVIDIA env vars commented (nouveau uses mesa/GBM)."
+    elif ! lsmod 2>/dev/null | grep -q '^nvidia'; then
+        echo "  [GPU] NVIDIA card present but no nvidia kernel module loaded."
+        echo "        Install nvidia-dkms (or nvidia-open-dkms) + nvidia-utils + egl-wayland, then re-run."
+    else
+        echo "  [GPU] Proprietary/open driver active — enabling Wayland GPU env vars in $ENVFILE."
+        sed -i \
+            -e 's|^# *export LIBVA_DRIVER_NAME=nvidia|export LIBVA_DRIVER_NAME=nvidia|' \
+            -e 's|^# *export GBM_BACKEND=nvidia-drm|export GBM_BACKEND=nvidia-drm|' \
+            -e 's|^# *export __GLX_VENDOR_LIBRARY_NAME=nvidia|export __GLX_VENDOR_LIBRARY_NAME=nvidia|' \
+            "$ENVFILE"
+        if pacman -Qq libva-nvidia-driver >/dev/null 2>&1; then
+            sed -i 's|^# *export NVD_BACKEND=direct|export NVD_BACKEND=direct|' "$ENVFILE"
+            echo "  [GPU] libva-nvidia-driver found — enabled NVD_BACKEND=direct (VA-API)."
+        else
+            echo "  [GPU] (optional) install libva-nvidia-driver for hardware video acceleration."
+        fi
+        chown "$REAL_USER" "$ENVFILE"
+
+        # DRM modeset must be ON for Wayland. Arch enables it by default; only warn.
+        # Never edit /etc/modprobe.d or rebuild initramfs silently — that touches boot.
+        if [ -r /sys/module/nvidia_drm/parameters/modeset ] \
+           && [ "$(cat /sys/module/nvidia_drm/parameters/modeset)" != "Y" ]; then
+            echo "  [GPU] WARNING: nvidia_drm modeset is OFF — Wayland needs it ON."
+            echo "        Add 'options nvidia_drm modeset=1' to /etc/modprobe.d/nvidia.conf,"
+            echo "        then run 'sudo mkinitcpio -P' and reboot."
+        fi
+
+        # Hybrid graphics (iGPU + NVIDIA dGPU): don't guess the card — just inform.
+        if lspci -nn 2>/dev/null | grep -iE 'VGA|3D|Display' | grep -qiE 'intel|amd|radeon|ati'; then
+            echo "  [GPU] Hybrid graphics detected (iGPU + NVIDIA)."
+            echo "        If displays on the NVIDIA GPU misbehave, set AQ_DRM_DEVICES in"
+            echo "        ~/.config/uwsm/env-hyprland (see the commented hint there)."
+        fi
+    fi
+fi
+
 # ── Display manager ───────────────────────────────────────────────────────────
 # Only install and enable greetd if no other display manager is already active.
 # If the user already has sddm/gdm/lightdm/etc. enabled we leave it untouched.
