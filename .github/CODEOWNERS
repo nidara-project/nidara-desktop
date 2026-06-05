@@ -1,0 +1,25 @@
+# Code owners — Crystal Shell
+#
+# Once branch protection's "Require review from Code Owners" is enabled (at
+# publication, when the repo is public — same constraint as branch protection),
+# any PR that touches these paths CANNOT merge without @aalonx's explicit review.
+#
+# We protect the GUARDIAN as much as the guarded:
+#   - .claude/skills/  is read by agents as AUTHORITATIVE INSTRUCTIONS. A poisoned
+#     skill is a prompt-injection / supply-chain attack on every user's agent.
+#   - .github/         holds CI and THIS file — a malicious PR could otherwise edit
+#     them to disable the protections themselves.
+#   - install.sh / scripts/ run with elevated/session privileges at install/boot.
+#
+# Syntax: <path>  <owner>. Later matches win, so keep these specific.
+
+# The agent skill — highest scrutiny, review every diff with a prompt-injection lens.
+/.claude/skills/      @aalonx
+
+# CI, PR template, and this CODEOWNERS file — the protection machinery itself.
+/.github/             @aalonx
+
+# Contribution rules and privileged executables.
+/CONTRIBUTING.md      @aalonx
+/install.sh           @aalonx
+/scripts/             @aalonx
