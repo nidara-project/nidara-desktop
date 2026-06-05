@@ -5,7 +5,9 @@
 
 # Wayland backends
 export GDK_BACKEND=wayland,x11
-export QT_QPA_PLATFORM=wayland;xcb
+# Quote the value: this file is SOURCED as shell by uwsm, so a bare ';' would end
+# the export and run 'xcb' as a command (truncating the var to just 'wayland').
+export QT_QPA_PLATFORM="wayland;xcb"
 export SDL_VIDEODRIVER=wayland
 export CLUTTER_BACKEND=wayland
 
@@ -14,8 +16,11 @@ export MOZ_ENABLE_WAYLAND=1
 export OZONE_PLATFORM=wayland
 export ELECTRON_OZONE_PLATFORM_HINT=wayland
 
-# Qt theming
-export QT_QPA_PLATFORMTHEME=qt6ct
+# Qt theming — Qt 6.5+ reads the freedesktop color-scheme (dark/light) straight from
+# the portal, so no qt6ct/Kvantum config is needed. Must match scripts/crystal-shell;
+# since uwsm sources this file AFTER the launcher's exports, this value is the one that
+# actually wins.
+export QT_QPA_PLATFORMTHEME=xdgdesktopportal
 
 # ── NVIDIA (uncomment if needed) ──────────────────────────────────────────────
 # export LIBVA_DRIVER_NAME=nvidia
