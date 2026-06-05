@@ -199,13 +199,27 @@ class ThemeManager extends GObject.Object {
         this.state.cursorTheme = cursor
         const size = this.interfaceSettings.get_int("cursor-size") || 24
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", cursor])
-        // gsettings only reaches GTK/GNOME Wayland apps. Hyprland's compositor cursor and
-        // XWayland clients (Steam, etc.) read XCURSOR, not gsettings — push it live so the
-        // cursor stays consistent everywhere instead of reverting to the default X cursor.
+        // Three different consumers, three different mechanisms:
+        //  - gsettings      → GTK/GNOME Wayland apps
+        //  - hyprctl        → Hyprland's live compositor cursor
+        //  - Xcursor default → XWayland/X apps (Steam, etc.), which ignore the other two
+        this.writeXcursorDefault(cursor)
         execAsync(["hyprctl", "setcursor", cursor, String(size)]).catch(() => {})
         if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
         this.saveSettings()
         this.emit("changed")
+    }
+
+    /**
+     * Pin the "default" Xcursor theme that XWayland and legacy X apps resolve against.
+     * Without this, those apps stay on whatever Inherits= was last written (e.g. by
+     * nwg-look) regardless of gsettings/hyprctl — which is why Steam ignored the picker.
+     */
+    private writeXcursorDefault(cursor: string) {
+        const dir = `${GLib.get_home_dir()}/.local/share/icons/default`
+        if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
+        writeFile(`${dir}/index.theme`,
+            `[Icon Theme]\nName=Default\nComment=Default Cursor Theme\nInherits=${cursor}\n`)
     }
 
     async setFont(fontName: string) {
@@ -400,9 +414,12 @@ class ThemeManager extends GObject.Object {
         const settings = this.interfaceSettings
         if (settings.get_string("icon-theme") !== this.state.iconTheme) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", this.state.iconTheme])
         if (settings.get_string("cursor-theme") !== this.state.cursorTheme) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-theme", this.state.cursorTheme])
-        // Apply the cursor to Hyprland/XWayland too, so apps started later (Steam, etc.)
-        // inherit it instead of the default X cursor. gsettings alone doesn't reach them.
-        if (this.state.cursorTheme) execAsync(["hyprctl", "setcursor", this.state.cursorTheme, String(settings.get_int("cursor-size") || 24)]).catch(() => {})
+        // Apply the cursor to Hyprland + the Xcursor default, so apps started later
+        // (Steam, etc.) inherit it instead of a stale default. gsettings alone misses them.
+        if (this.state.cursorTheme) {
+            this.writeXcursorDefault(this.state.cursorTheme)
+            execAsync(["hyprctl", "setcursor", this.state.cursorTheme, String(settings.get_int("cursor-size") || 24)]).catch(() => {})
+        }
         const target = this.state.isDark ? "prefer-dark" : "prefer-light"
         if (settings.get_string("color-scheme") !== target) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", target])
         if (settings.get_string("accent-color") !== this.fcConfig.accent) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", this.fcConfig.accent]).catch(() => {})
