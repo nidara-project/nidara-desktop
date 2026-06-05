@@ -273,6 +273,10 @@ class ThemeManager extends GObject.Object {
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", scheme])
         this.saveSettings()
         await this.syncGtkTheme()
+        // The GTK3 file chooser served by xdg-desktop-portal-gtk reads the dark-theme flag
+        // once at process start and never re-reads settings.ini, so it stays stuck on the
+        // previous mode. Restart it so the next portal-driven picker matches the new mode.
+        execAsync(["systemctl", "--user", "restart", "xdg-desktop-portal-gtk.service"]).catch(() => {})
         this.emit("changed")
     }
 
@@ -422,7 +426,10 @@ class ThemeManager extends GObject.Object {
     }
 
     private updateSettingsIni(theme: string) {
-        const ini = `[Settings]\ngtk-theme-name=${theme}\ngtk-icon-theme-name=${this.state.iconTheme}\ngtk-font-name=${this.interfaceFont}\n`
+        // GTK3 apps (and the GTK3 file chooser served by xdg-desktop-portal-gtk) don't
+        // read the portal's color-scheme — they switch dark/light via this flag. Without
+        // it, every GTK3 surface renders light Adwaita even though gsettings says prefer-dark.
+        const ini = `[Settings]\ngtk-theme-name=${theme}\ngtk-application-prefer-dark-theme=${this.state.isDark ? 1 : 0}\ngtk-icon-theme-name=${this.state.iconTheme}\ngtk-font-name=${this.interfaceFont}\n`
         for (const d of ["gtk-3.0", "gtk-4.0"]) {
             writeFile(`${GLib.get_user_config_dir()}/${d}/settings.ini`, ini)
         }
