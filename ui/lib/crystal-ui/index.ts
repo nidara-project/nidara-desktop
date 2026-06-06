@@ -25,6 +25,10 @@ export { CrystalSplitView } from "./split-view"
 export type { CrystalButtonVariant, CrystalButtonOpts } from "./button"
 export { CrystalButton } from "./button"
 
+// CrystalFontButton — pill font picker (replaces Gtk.FontButton)
+export type { CrystalFontButtonOpts } from "./fontbutton"
+export { CrystalFontButton } from "./fontbutton"
+
 // CrystalRow / CrystalList — universal list row + boxed list card (the one place
 // a row/list is built; used by Settings, Control Center and any future surface)
 export { CrystalRow } from "./row"

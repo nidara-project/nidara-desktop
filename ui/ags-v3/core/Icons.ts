@@ -15,6 +15,7 @@ const Icons = {
     volumeLow:    f("volume"),
     volumeMuted:  f("volume-x"),
     user:         f("user"),
+    userRoundPlus: f("user-round-plus"),
     battery:      f("battery"),
     bluetooth:    f("bluetooth"),
     cpu:          f("cpu"),

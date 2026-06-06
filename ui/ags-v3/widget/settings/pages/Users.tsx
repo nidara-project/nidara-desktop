@@ -556,7 +556,7 @@ export default function UsersPage() {
             hexpand: true,
         })
         const addInner = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
-        addInner.append(new Gtk.Image({ gicon: Icons.plus, pixel_size: 16, opacity: 0.7 , css_classes: ["cs-icon"] }))
+        addInner.append(new Gtk.Image({ gicon: Icons.userRoundPlus, pixel_size: 16, opacity: 0.7 , css_classes: ["cs-icon"] }))
         addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["crystal-row-title"], halign: Gtk.Align.START }))
         addBtn.set_child(addInner)
         addBtn.connect("clicked", () => showAddUserDialog(parentWin, rebuildOtherUsers))

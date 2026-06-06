@@ -3,7 +3,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Theme from "../../../core/ThemeManager"
-import { CrystalButton } from "../../../../lib/crystal-ui"
+import { CrystalButton, CrystalFontButton } from "../../../../lib/crystal-ui"
 import NightLight from "../../../core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
 import { ACCENT_PALETTE, type AccentKey } from "../../../core/FluidCrystal"
@@ -286,14 +286,10 @@ export default function AppearancePage() {
     // 6. Fonts
     const fontsGroup = listGroup(t("settings.appearance.group.fonts"))
 
-    const interfaceFontBtn = new Gtk.FontButton({
+    const interfaceFontBtn = CrystalFontButton({
         font: Theme.interfaceFont,
-        use_font: true,
-        valign: Gtk.Align.CENTER,
-    })
-    interfaceFontBtn.connect("font-set", () => {
-        const f = (interfaceFontBtn as any).get_font?.()
-        if (f) Theme.setFont(f)
+        title: t("settings.appearance.interface-font"),
+        onFontSet: (f) => Theme.setFont(f),
     })
     fontsGroup.listBox.append(createRow(
         t("settings.appearance.interface-font"),
@@ -301,14 +297,10 @@ export default function AppearancePage() {
         interfaceFontBtn,
     ))
 
-    const monoFontBtn = new Gtk.FontButton({
+    const monoFontBtn = CrystalFontButton({
         font: Theme.monoFont,
-        use_font: true,
-        valign: Gtk.Align.CENTER,
-    })
-    monoFontBtn.connect("font-set", () => {
-        const f = (monoFontBtn as any).get_font?.()
-        if (f) Theme.setMonoFont(f)
+        title: t("settings.appearance.mono-font"),
+        onFontSet: (f) => Theme.setMonoFont(f),
     })
     fontsGroup.listBox.append(createRow(
         t("settings.appearance.mono-font"),
