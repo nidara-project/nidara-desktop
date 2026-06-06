@@ -69,7 +69,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     // The navigation list itself is the universal CrystalSidebar component; it's
     // created after the pages are built (below) so its onSelect can call navigateTo.
     const categories = [
-        { id: "users",        label: t("settings.users.title"),                              icon: Icons.user,          component: UsersPage        },
+        { id: "users",        label: t("settings.users.title"),                              icon: Icons.userRound,     component: UsersPage        },
         { id: "appearance",   label: t("settings.appearance.title"),         icon: Icons.palette,       component: AppearancePage   },
         { id: "display",      label: t("settings.display.title"),              icon: Icons.monitor,       component: DisplayPage      },
         { id: "audio",        label: t("settings.audio.title"),                  icon: Icons.speaker,       component: AudioPage        },
