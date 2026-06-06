@@ -318,8 +318,8 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
     const avatar = avatarFor(user.username, user.homeDir)
 
     const avatarImg = new Gtk.Image({ pixel_size: 36, css_classes: ["users-avatar-sm"], valign: Gtk.Align.CENTER })
-    if (avatar) { try { avatarImg.set_from_file(avatar) } catch { avatarImg.gicon = Icons.user } }
-    else avatarImg.gicon = Icons.user
+    if (avatar) { try { avatarImg.set_from_file(avatar) } catch { avatarImg.gicon = Icons.userRound } }
+    else avatarImg.gicon = Icons.userRound
 
     const nameBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
     nameBox.append(new Gtk.Label({ label: user.displayName, css_classes: ["crystal-row-title"], halign: Gtk.Align.START }))
@@ -430,7 +430,7 @@ export default function UsersPage() {
     })
     // Glyph placeholder when there's no photo — same circular footprint.
     const avatarFallback = new Gtk.Image({
-        gicon: Icons.user,
+        gicon: Icons.userRound,
         pixel_size: 60,
         width_request: AVATAR_SIZE,
         height_request: AVATAR_SIZE,
@@ -556,7 +556,7 @@ export default function UsersPage() {
             hexpand: true,
         })
         const addInner = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
-        addInner.append(new Gtk.Image({ gicon: Icons.userRoundPlus, pixel_size: 16, opacity: 0.7 , css_classes: ["cs-icon"] }))
+        addInner.append(new Gtk.Image({ gicon: Icons.userRoundPlus, pixel_size: 20, opacity: 0.7 , css_classes: ["cs-icon"] }))
         addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["crystal-row-title"], halign: Gtk.Align.START }))
         addBtn.set_child(addInner)
         addBtn.connect("clicked", () => showAddUserDialog(parentWin, rebuildOtherUsers))
