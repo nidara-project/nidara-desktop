@@ -212,18 +212,9 @@ with the code on purpose — see [Contributing](#contributing).
 - **Type-check:** `cd ui/ags-v3 && npm run typecheck` (catches type errors before they reach the running shell)
 - **Send IPC command:** `ags request toggleAppGrid`
 
-### Publishing a Release
-
-```bash
-cd ui/ags-v3
-npm run build          # compiles SCSS + bundles app
-
-cd ../..
-git add ui/ags-v3/style.css ui/ags-v3/build/crystal-shell
-git commit -m "release: vX.Y.Z"
-git tag vX.Y.Z
-git push && git push --tags
-```
+Before opening a PR, make sure the SCSS build passes (`cd ui/ags-v3 && npm run build`) and, if you
+have the git-ignored `@girs/` typings, the typecheck too. See [Contributing](#contributing) for the
+personal-vs-global heuristic and the full PR flow.
 
 ---
 
