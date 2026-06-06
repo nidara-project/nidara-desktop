@@ -122,8 +122,10 @@ hl.animation({ leaf = "workspaces",    enabled = true, speed = 6,   bezier = "de
 hl.on("hyprland.start", function()
     hl.exec_cmd("uwsm finalize")
     -- The shell runs as a systemd user unit so it respawns on crash (segfault etc.)
-    -- instead of leaving a bare compositor. `finalize` above has just activated
-    -- graphical-session.target, which the (enabled) unit is WantedBy.
+    -- instead of leaving a bare compositor. We START it explicitly here (the unit is
+    -- intentionally NOT enabled via graphical-session.target — that would leak the UI
+    -- into every Hyprland session; see scripts/crystal-shell.service). `finalize`
+    -- above has just activated graphical-session.target, which the unit orders After.
     hl.exec_cmd("systemctl --user start crystal-shell.service")
     -- Background daemons go in background-graphical.slice (-s b), not the foreground
     -- app slice: systemd deprioritizes them under CPU/IO/memory pressure and the OOM

@@ -21,5 +21,11 @@ RestartSec=1
 TimeoutStopSec=3
 Slice=session-graphical.slice
 
-[Install]
-WantedBy=graphical-session.target
+# NOTE: intentionally NO [Install]/WantedBy=graphical-session.target. The Crystal
+# session and a plain uwsm-managed Hyprland session are indistinguishable at the
+# systemd-target level (both are compositor "Hyprland" reaching the same generic
+# graphical-session.target), so binding here would start the Crystal UI in ANY
+# Hyprland session — leaking the bar/dock into sessions that aren't ours. Instead
+# this service is started explicitly from the Crystal Hyprland config
+# (config/hypr/hyprland.lua → `systemctl --user start crystal-shell.service`),
+# which only loads in the Crystal session. PartOf= still stops it cleanly on logout.

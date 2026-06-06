@@ -363,7 +363,9 @@ sudo cp "$REPO_DIR/scripts/crystal-game-mode" /usr/bin/crystal-game-mode
 sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-game-mode
 
 # systemd user unit — the shell respawns on crash instead of leaving a bare
-# compositor (see scripts/crystal-shell.service). Enabled below.
+# compositor (see scripts/crystal-shell.service). NOT enabled by target: it's
+# started explicitly from the Crystal Hyprland config so it can't leak into other
+# Hyprland sessions (see the unit's NOTE and the migration disable in step 7).
 sudo mkdir -p /usr/lib/systemd/user
 sudo cp "$REPO_DIR/scripts/crystal-shell.service" /usr/lib/systemd/user/crystal-shell.service
 
@@ -632,11 +634,14 @@ else
 fi
 
 # ── Crystal Shell unit ────────────────────────────────────────────────────────
-# WantedBy=graphical-session.target → starts with the session; Restart=on-failure
-# respawns it on crash. Not --now: it starts inside the graphical session.
-echo "  Enabling crystal-shell.service (auto-respawn)..."
+# Deliberately NOT enabled via graphical-session.target — that would start the
+# Crystal UI in every uwsm-managed Hyprland session, not just ours. The Crystal
+# Hyprland config starts it (config/hypr/hyprland.lua → systemctl --user start),
+# which only loads in the Crystal session. Restart=on-failure still respawns it
+# on crash. Migration: disable any enablement left by older installs.
+echo "  Refreshing crystal-shell.service (started by the Crystal session, not enabled)..."
 systemctl --user daemon-reload 2>/dev/null || true
-systemctl --user enable crystal-shell.service 2>/dev/null || true
+systemctl --user disable crystal-shell.service 2>/dev/null || true
 
 # ── Audio services ────────────────────────────────────────────────────────────
 echo "  Enabling audio services..."
