@@ -210,7 +210,9 @@ with the code on purpose — see [Contributing](#contributing).
 - **Kill stale GJS process:** `killall gjs`
 - **Compile SCSS:** `cd ui/ags-v3 && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css`
 - **Type-check:** `cd ui/ags-v3 && npm run typecheck` (catches type errors before they reach the running shell)
-- **Send IPC command:** `ags request toggleAppGrid`
+
+Optionally, you can drive the running shell from the CLI to test a specific surface — e.g.
+`ags request toggleAppGrid` (the full command list lives in the `requestHandler` in `ui/ags-v3/app.ts`).
 
 Before opening a PR, make sure the SCSS build passes (`cd ui/ags-v3 && npm run build`) and, if you
 have the git-ignored `@girs/` typings, the typecheck too. See [Contributing](#contributing) for the
