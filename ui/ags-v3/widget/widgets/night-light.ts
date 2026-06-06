@@ -12,7 +12,9 @@ const subscribe = (sync: () => void) => {
 
 function buildBarContent() {
     return makeIconAction({
-        getIcon: () => nightLight.enabled ? Icons.moon : Icons.sun,
+        // Dedicated icon (warm sunset) — distinct from dark-mode's moon/sun. On/off
+        // is conveyed by the toggle's active state, not an icon swap.
+        getIcon: () => Icons.sunset,
         onAction: () => nightLight.setEnabled(!nightLight.enabled),
         subscribe,
     })
@@ -21,14 +23,14 @@ function buildBarContent() {
 const nightLightWidget: AtomicWidget = {
     id: "night_light",
     name: t("widget.night-light.name"),
-    icon: Icons.moon,
+    icon: Icons.sunset,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent: (size) => RoundToggle(
         "night_light",
         t("widget.night-light.name"),
-        () => nightLight.enabled ? Icons.moon : Icons.sun,
+        () => Icons.sunset,
         () => nightLight.enabled,
         () => nightLight.setEnabled(!nightLight.enabled),
         () => nightLight.enabled

@@ -143,14 +143,14 @@ export default function AppearancePage() {
         t("settings.appearance.shell-opacity.desc"),
         Theme.shellOpacity, 0.06, 0.75,
         (v) => Theme.setShellOpacity(v),
-        { pct: true },
+        { pct: true, icons: [Icons.minus, Icons.plus] },
     ))
     fcGroup.listBox.append(sliderRow(
         t("settings.appearance.dock-opacity"),
         t("settings.appearance.dock-opacity.desc"),
         Theme.dockOpacity, 0.05, 0.60,
         (v) => Theme.setDockOpacity(v),
-        { pct: true },
+        { pct: true, icons: [Icons.minus, Icons.plus] },
     ))
     // Window Glass = opacity (1 - transparency), so it reads like the other two:
     // higher = more opaque. Theme stores transparency, so we invert in/out.
@@ -159,7 +159,7 @@ export default function AppearancePage() {
         t("settings.appearance.window-glass.desc"),
         1 - Theme.transparency, 0.10, 0.90,
         (v) => Theme.setTransparency(1 - v),
-        { pct: true },
+        { pct: true, icons: [Icons.minus, Icons.plus] },
     ))
     page.append(fcGroup.box)
 
@@ -180,7 +180,7 @@ export default function AppearancePage() {
         t("settings.appearance.night-light-temp.desc"),
         NightLight.temperature, 2700, 6500,
         (v) => NightLight.setTemperature(v),
-        { unit: "K", icons: [Icons.moon, Icons.sun] },
+        { unit: "K", icons: [Icons.minus, Icons.plus] },
     ))
 
     // Schedule toggle
