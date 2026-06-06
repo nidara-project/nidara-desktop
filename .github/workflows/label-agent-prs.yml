@@ -1,0 +1,75 @@
+# Auto-label agent-submitted PRs.
+#
+# Why this exists: external contributors (anyone who isn't a collaborator) CANNOT
+# add a label to their own PR — applying labels needs triage/write permission they
+# don't have. But our triage model relies on the `agent-submitted` label to spot
+# PRs prepared by a user's AI agent. So a contributor literally cannot self-serve
+# the label the workflow expects.
+#
+# This Action closes that gap: it runs on OUR side with write permission and applies
+# the label automatically when it detects an agent contribution — no permissions
+# handed to the contributor.
+#
+# How it decides a PR is agent-submitted (either signal is enough):
+#   1. The PR template checkbox "This PR was prepared with an AI coding agent" is ticked.
+#   2. Any commit carries a `Co-Authored-By: … Claude …` trailer (the agent's trailer).
+#
+# Why `pull_request_target` (not `pull_request`): for PRs opened from a fork, the
+# default `pull_request` token is read-only and runs in the fork's context, so it
+# can't label. `pull_request_target` runs in THIS repo's context with a writable
+# token. It's safe here because we never check out or execute the PR's code — we only
+# read PR metadata via the API.
+
+name: Auto-label agent PRs
+
+on:
+  pull_request_target:
+    types: [opened, reopened, edited, synchronize]
+
+permissions:
+  pull-requests: write
+  issues: write        # creating the label definition (gh label create) is an issues-scoped op
+  contents: read
+
+jobs:
+  label:
+    name: Detect and label agent contributions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Apply agent-submitted label when detected
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          matched=""
+
+          # Signal 1: PR template checkbox ticked (- [x] This PR was prepared with an AI coding agent)
+          if grep -qiE '^\s*-\s*\[x\]\s*This PR was prepared with an AI coding agent' <<< "${BODY:-}"; then
+            matched="PR template checkbox"
+          fi
+
+          # Signal 2: an agent Co-Authored-By trailer on any commit
+          if [ -z "$matched" ]; then
+            if gh api "repos/$REPO/pulls/$PR/commits" --paginate --jq '.[].commit.message' \
+                 | grep -qiE 'co-authored-by:.*(claude|noreply@anthropic\.com)'; then
+              matched="Co-Authored-By agent trailer"
+            fi
+          fi
+
+          if [ -z "$matched" ]; then
+            echo "No agent signal detected; leaving PR #$PR unlabelled."
+            exit 0
+          fi
+
+          # Ensure the label exists (idempotent — harmless if it already does).
+          gh label create "agent-submitted" \
+            --repo "$REPO" \
+            --color "5319e7" \
+            --description "Opened by a contributor's AI agent; triage per CONTRIBUTING.md" \
+            2>/dev/null || true
+
+          gh pr edit "$PR" --repo "$REPO" --add-label "agent-submitted"
+          echo "Labelled PR #$PR as agent-submitted (matched: $matched)."

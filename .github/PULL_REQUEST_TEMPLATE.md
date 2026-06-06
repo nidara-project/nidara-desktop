@@ -44,5 +44,10 @@ See CONTRIBUTING.md for the personal-vs-global heuristic and conventions.
 
 ## For agent-submitted PRs
 
+<!-- Tick the box below if an AI coding agent prepared this PR. A GitHub Action reads
+     it and applies the `agent-submitted` label automatically — you do NOT need label
+     permissions (external contributors can't self-label). The label is also applied
+     automatically when commits carry the agent's `Co-Authored-By` trailer. -->
+
+- [ ] This PR was prepared with an AI coding agent (e.g. Claude Code).
 - [ ] The user reviewed and explicitly approved opening this PR.
-- [ ] Add the `agent-submitted` label.

@@ -94,8 +94,8 @@ informed consent.
 auto-merge — every PR is human-reviewed.
 
 1. **Self-review FIRST.** Re-read the ten commandments (SKILL.md) and the relevant reference.
-   Confirm the change violates none. If it touches both `DockHorizontal`/`DockVertical`, or
-   any area flagged in `references/tech-debt.md`, account for it.
+   Confirm the change violates none. If it touches the dock, edit `DockCore.tsx` / `DockAxis.ts`
+   (not the thin H/V wrappers), and account for any area flagged in `references/tech-debt.md`.
 2. **Make CI-passable.** CI gates the SCSS compile. Run `cd ui/ags-v3 && npm run build` and,
    if `@girs/` is present, `npm run typecheck`. A red PR wastes everyone's time.
 3. **Gather evidence.** Especially for hardware/compat fixes: what hardware (GPU, adapter,
@@ -104,14 +104,24 @@ auto-merge — every PR is human-reviewed.
 4. **Ask the user.** Summarize the change, that it's a general improvement, and that you'd
    like to open a PR to `github.com/fluid-crystal/crystal-shell` under their GitHub account.
    Proceed only on a clear yes.
-5. **Branch, commit, PR.** Never push to `main`. Use a topic branch and `gh`:
+5. **Branch, fork, PR.** The user almost certainly cloned the upstream repo directly and has
+   **no push access and no fork** — so you cannot push a branch to `fluid-crystal/crystal-shell`.
+   Create the branch locally, then fork explicitly (don't rely on `gh pr create`'s interactive
+   fork prompt — it hangs a non-interactive agent), push to the fork, and open a cross-repo PR:
    ```bash
    git checkout -b fix/nvidia-cursor-glitch
-   git commit ...   # end body with the project's Co-Authored-By trailer
+   git commit ...                              # end body with the project's Co-Authored-By trailer
+   gh repo fork --remote --remote-name fork    # creates the user's fork + adds it as remote 'fork'
+   git push -u fork HEAD
+   GH_USER=$(gh api user --jq .login)
    gh pr create --repo fluid-crystal/crystal-shell \
-     --title "fix(nvidia): …" --body-file <PR body> --label agent-submitted
+     --head "$GH_USER:fix/nvidia-cursor-glitch" \
+     --title "fix(nvidia): …" --body-file <PR body>
    ```
-   Fill the PR template fully. Apply the `agent-submitted` label so maintainers can triage.
+   Fill the PR template fully and **tick its "prepared with an AI coding agent" checkbox** — a
+   GitHub Action applies the `agent-submitted` label from that (or from the `Co-Authored-By`
+   trailer). Do **not** pass `--label agent-submitted`: an external contributor lacks the triage
+   permission to set labels, so it would error. If the user already has a fork, `gh` reuses it.
 6. **Keep personal bits out.** Strip the user's accent, wallpaper, pinned apps, keybinds,
    layout — anything PERSONAL — from the diff. A global PR contains only the global change.
 7. **Hand back the link.** Give the user the PR URL and tell them a maintainer will review;

@@ -39,19 +39,24 @@ PR on your behalf. It will:
 2. Make sure CI passes (`cd ui/ags-v3 && npm run build`).
 3. Gather evidence — especially your hardware and what you verified.
 4. **Ask for your explicit confirmation** before opening anything.
-5. Open a PR labelled `agent-submitted`, with the personal bits stripped out.
+5. Open the PR with the personal bits stripped out, forking on your behalf if you don't already
+   have one (you don't need push access to this repo). The `agent-submitted` label is applied
+   automatically — you don't need label permissions.
 
 You stay in control: nothing is pushed or opened without your say-so, and nothing is merged
 automatically — a maintainer always reviews.
 
 ## Contributing the traditional way
 
-1. Fork and clone. Run `./install.sh --dev` for a source-running dev setup.
+1. Fork the repo to your account, then clone your fork. (If you already cloned this repo
+   directly, you don't need to re-clone — `gh pr create` will offer to create the fork and push
+   your branch to it when you open the PR.) Run `./install.sh --dev` for a source-running dev setup.
 2. Read `.claude/skills/crystal-shell/SKILL.md` and the relevant reference under
    `.claude/skills/crystal-shell/references/`. The conventions there are strict and easy to
    violate without context (no `Adw.OverlaySplitView` in Settings, scoped CSS only, no
    hardcoded colours, IPC via `ShellActions`, …).
-3. Make your change on a topic branch. Keep personal preferences out of the diff.
+3. Make your change on a topic branch (it lives on your fork — you can't push branches to this
+   repo without write access). Keep personal preferences out of the diff.
 4. Ensure CI passes: `cd ui/ags-v3 && npm run build` (CI gates the SCSS compile). If you have
    the git-ignored `@girs/` typings, also run `npm run typecheck`.
 5. If your change alters behaviour or conventions, **update the relevant skill reference in
