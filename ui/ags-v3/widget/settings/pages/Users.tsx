@@ -474,13 +474,14 @@ export default function UsersPage() {
         const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
         filters.append(filter)
         dialog.set_filters(filters)
-        dialog.open(null, null, (_: any, result: any) => {
+        const win = changeAvatarBtn.get_root() as Gtk.Window
+        dialog.open(win, null, (_: any, result: any) => {
             try {
                 const file = dialog.open_finish(result)
                 const src = file?.get_path()
                 if (!src) return
                 // Let the user frame/zoom the photo into the circle before saving.
-                showAvatarCropper(parentWin, src, (cropped) => {
+                showAvatarCropper(win, src, (cropped) => {
                     saveAvatarPixbuf(cropped)
                     setAvatar(`${GLib.get_home_dir()}/.face`)
                 })

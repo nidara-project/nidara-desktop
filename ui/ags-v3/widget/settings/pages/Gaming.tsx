@@ -98,7 +98,8 @@ export default function GamingPage() {
         filters.append(filter)
         dialog.set_filters(filters)
         dialog.set_initial_folder(Gio.File.new_for_path(GLib.get_home_dir()))
-        dialog.open(null, null, (_: any, result: any) => {
+        // Parent to the Settings window so it floats/centers over it (not tiled).
+        dialog.open(pickBtn.get_root() as Gtk.Window, null, (_: any, result: any) => {
             try {
                 const file = dialog.open_finish(result)
                 const path = file?.get_path()

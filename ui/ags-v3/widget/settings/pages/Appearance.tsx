@@ -94,7 +94,9 @@ export default function AppearancePage() {
 
         dialog.set_initial_folder(Gio.File.new_for_path(GLib.get_home_dir()))
 
-        dialog.open(null, null, (_: any, result: any) => {
+        // Parent the dialog to the Settings window so it opens modal/centered over
+        // it (like the font picker) instead of as an unparented, tiled toplevel.
+        dialog.open(changeBtn.get_root() as Gtk.Window, null, (_: any, result: any) => {
             try {
                 const file = dialog.open_finish(result)
                 const path = file?.get_path()

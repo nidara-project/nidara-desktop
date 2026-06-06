@@ -133,7 +133,8 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
         const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
         filters.append(filter)
         fd.set_filters(filters)
-        fd.open(null, null, (_: any, res: any) => {
+        // Parent to the Settings window so it floats/centers over it (not tiled).
+        fd.open(fileBtn.get_root() as Gtk.Window, null, (_: any, res: any) => {
             try {
                 const path = fd.open_finish(res)?.get_path()
                 if (path) { entry.text = path; updatePreview(path) }
