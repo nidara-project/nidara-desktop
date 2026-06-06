@@ -18,6 +18,14 @@ window.crystal-settings-window {
     dropdown > button {
         font-size: $fse-small;
     }
+    // The dropdown's popover list too (its rows pin $fs-small px in _components).
+    // Scoped to the Settings window only — the popover is a descendant of the
+    // dropdown in the CSS tree, so this matches; bar/widget lists use CrystalSelect
+    // (a Gtk.Box overlay, not a native `dropdown`), so they're untouched.
+    dropdown popover listview > row,
+    popover.combo listview > row {
+        font-size: $fse-small;
+    }
 }
 
 // ── CrystalSplitView — transparent, no extra background ──────────────────────

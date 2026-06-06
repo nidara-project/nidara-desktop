@@ -623,13 +623,18 @@ dropdown > button {
     padding: 4px 14px;
     min-height: 0;
     transition: border-color 0.15s ease, background 0.15s ease;
+    // Same text as CrystalButton (size + weight). Set on the button — NOT the inner
+    // label — so the Settings-only `$fse-*` em re-anchor (in _settings.scss, which
+    // targets `dropdown > button`) is inherited by the label. A font-size on the
+    // label itself would out-specify that override and pin the text to fixed px.
+    font-size: $fs-small;
+    font-weight: $fw-medium;
 
     // GTK4 CSS has no `spacing` property (that was GTK3-only).
     // Add a left margin on the label so icon and label have a gap.
     > box > label { margin-left: 6px; }
 
     label {
-        font-size: $fs-small;
         color: var(--crystal-text);
     }
     image {

@@ -1008,12 +1008,13 @@ dropdown > button {
   padding: 4px 14px;
   min-height: 0;
   transition: border-color 0.15s ease, background 0.15s ease;
+  font-size: 13px;
+  font-weight: 500;
 }
 dropdown > button > box > label {
   margin-left: 6px;
 }
 dropdown > button label {
-  font-size: 13px;
   color: var(--crystal-text);
 }
 dropdown > button image {
@@ -2879,6 +2880,10 @@ window.workspace-cockpit {
 window.crystal-settings-window button.crystal-btn,
 window.crystal-settings-window button.crystal-seg-btn,
 window.crystal-settings-window dropdown > button {
+  font-size: 0.93em;
+}
+window.crystal-settings-window dropdown popover listview > row,
+window.crystal-settings-window popover.combo listview > row {
   font-size: 0.93em;
 }
 
