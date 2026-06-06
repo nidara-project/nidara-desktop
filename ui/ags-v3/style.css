@@ -3203,7 +3203,14 @@ window.crystal-settings-window button:focus-visible {
   outline-offset: 2px;
 }
 
-picture.users-avatar {
+row.users-avatar-row:hover {
+  background-color: transparent;
+}
+row.users-avatar-row:first-child {
+  padding-top: 18px;
+}
+
+.users-avatar {
   border-radius: var(--crystal-radius-pill);
   border: 2px solid var(--crystal-border);
   background: var(--crystal-surface);
@@ -3211,6 +3218,11 @@ picture.users-avatar {
 
 .users-avatar-fallback {
   color: var(--crystal-text-dim);
+}
+
+.avatar-cropper-canvas {
+  border-radius: var(--crystal-radius-md);
+  background-color: var(--crystal-surface-back);
 }
 
 image.users-avatar-sm {

@@ -5,6 +5,7 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
 import { showCrystalAlert, CrystalButton } from "../../../../lib/crystal-ui"
 import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { showAvatarCropper } from "../../common/AvatarCropper"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 
@@ -63,26 +64,32 @@ function getDisplayName(): string {
     } catch { return GLib.get_user_name() ?? "" }
 }
 
-function saveAvatar(srcPath: string): Promise<void> {
+// Register the written ~/.face with AccountsService so the greeter / other DEs pick
+// it up too (best-effort — fine if the service isn't running).
+function applyFaceToAccounts(face: string) {
+    try {
+        const bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, null)
+        const res = bus.call_sync(
+            "org.freedesktop.Accounts", "/org/freedesktop/Accounts",
+            "org.freedesktop.Accounts", "FindUserByName",
+            new GLib.Variant("(s)", [GLib.get_user_name()]),
+            new GLib.VariantType("(o)"), Gio.DBusCallFlags.NONE, 2000, null,
+        )
+        const userPath = res.get_child_value(0).get_string()[0]
+        bus.call_sync(
+            "org.freedesktop.Accounts", userPath,
+            "org.freedesktop.Accounts.User", "SetIconFile",
+            new GLib.Variant("(s)", [face]),
+            null, Gio.DBusCallFlags.NONE, 5000, null,
+        )
+    } catch { /* AccountsService not available */ }
+}
+
+// Save an already-cropped square pixbuf as the user's avatar.
+function saveAvatarPixbuf(pixbuf: any) {
     const face = `${GLib.get_home_dir()}/.face`
-    return execAsync(["cp", srcPath, face]).then(() => {
-        try {
-            const bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, null)
-            const res = bus.call_sync(
-                "org.freedesktop.Accounts", "/org/freedesktop/Accounts",
-                "org.freedesktop.Accounts", "FindUserByName",
-                new GLib.Variant("(s)", [GLib.get_user_name()]),
-                new GLib.VariantType("(o)"), Gio.DBusCallFlags.NONE, 2000, null,
-            )
-            const userPath = res.get_child_value(0).get_string()[0]
-            bus.call_sync(
-                "org.freedesktop.Accounts", userPath,
-                "org.freedesktop.Accounts.User", "SetIconFile",
-                new GLib.Variant("(s)", [face]),
-                null, Gio.DBusCallFlags.NONE, 5000, null,
-            )
-        } catch { /* AccountsService not available */ }
-    })
+    try { pixbuf.savev(face, "png", [], []) } catch (e) { console.error("[Users] save avatar:", e); return }
+    applyFaceToAccounts(face)
 }
 
 // Set the user's full name (GECOS) via AccountsService, same path as the avatar.
@@ -401,35 +408,60 @@ export default function UsersPage() {
     // pill border-radius clips it to a circle) — same approach as the wallpaper
     // preview in Appearance. A user-glyph overlay shows on the surface circle when
     // there's no photo.
-    const AVATAR_SIZE = 96
+    const AVATAR_SIZE = 112
     const avatarPicture = new Gtk.Picture({
         width_request: AVATAR_SIZE,
         height_request: AVATAR_SIZE,
-        content_fit: Gtk.ContentFit.COVER,
-        css_classes: ["users-avatar"],
-    })
-    const avatarFallback = new Gtk.Image({
-        gicon: Icons.user,
-        pixel_size: 44,
-        css_classes: ["cs-icon", "users-avatar-fallback"],
+        // SCALE_DOWN (not COVER) is the fix: COVER's height-for-width grows with the
+        // proposed width — the row measures the Picture at the full card width, so
+        // COVER reported a ~720px natural height and the row became that tall (the
+        // avatar then sat 96px-centered in it). SCALE_DOWN never upscales, so the
+        // natural stays the paintable's size (we pre-crop it to 96²). No growth.
+        content_fit: Gtk.ContentFit.SCALE_DOWN,
+        // can_shrink defaults TRUE, letting the Picture compress below 96 when the
+        // window gets short (instead of the page scrolling). Pin it so the avatar
+        // keeps its size and the ScrolledWindow takes over.
+        can_shrink: false,
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER,
+        hexpand: false,
+        vexpand: false,
+        css_classes: ["users-avatar"],
     })
-    const avatarBox = new Gtk.Overlay({ valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER })
-    avatarBox.set_child(avatarPicture)
-    avatarBox.add_overlay(avatarFallback)
+    // Glyph placeholder when there's no photo — same circular footprint.
+    const avatarFallback = new Gtk.Image({
+        gicon: Icons.user,
+        pixel_size: 60,
+        width_request: AVATAR_SIZE,
+        height_request: AVATAR_SIZE,
+        halign: Gtk.Align.CENTER,
+        css_classes: ["cs-icon", "users-avatar", "users-avatar-fallback"],
+    })
+
+    // The avatar lives DIRECTLY as a ListBoxRow child, exactly like the wallpaper
+    // preview in Appearance. A Gtk.Picture wrapped in a halign:CENTER box reports a
+    // height-for-width natural that the page's clamp over-allocates (opening a big
+    // vertical gap); as the row's direct child, its width/height_request pin it.
+    const avatarRow = new Gtk.ListBoxRow({ activatable: false, selectable: false, css_classes: ["users-avatar-row"] })
+    profileGroup.listBox.append(avatarRow)
 
     const setAvatar = (path: string | null) => {
         if (path && GLib.file_test(path, GLib.FileTest.EXISTS)) {
             try {
-                const pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
+                let pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
+                // Center-crop to a square, then scale to AVATAR_SIZE so the paintable
+                // is exactly 96² (keeps SCALE_DOWN from leaving the avatar at the
+                // image's own size, and crops non-square photos into the circle).
+                const w = pixbuf.get_width(), h = pixbuf.get_height()
+                const side = Math.min(w, h)
+                if (w !== h) pixbuf = pixbuf.new_subpixbuf((w - side) >> 1, (h - side) >> 1, side, side)
+                pixbuf = pixbuf.scale_simple(AVATAR_SIZE, AVATAR_SIZE, GdkPixbuf.InterpType.BILINEAR)!
                 avatarPicture.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
-                avatarFallback.visible = false
+                avatarRow.set_child(avatarPicture)
                 return
             } catch (_) { /* fall through to placeholder */ }
         }
-        avatarPicture.set_paintable(null)
-        avatarFallback.visible = true
+        avatarRow.set_child(avatarFallback)
     }
     setAvatar(avatarPath)
 
@@ -447,24 +479,22 @@ export default function UsersPage() {
                 const file = dialog.open_finish(result)
                 const src = file?.get_path()
                 if (!src) return
-                saveAvatar(src)
-                    .then(() => setAvatar(`${GLib.get_home_dir()}/.face`))
-                    .catch(e => console.error("[Users]", e))
+                // Let the user frame/zoom the photo into the circle before saving.
+                showAvatarCropper(parentWin, src, (cropped) => {
+                    saveAvatarPixbuf(cropped)
+                    setAvatar(`${GLib.get_home_dir()}/.face`)
+                })
             } catch { /* cancelled */ }
         })
     })
 
-    // Centered profile header: large avatar with the change button beneath it,
-    // above the profile fields group.
-    const profileHeader = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        halign: Gtk.Align.CENTER,
-        spacing: 12,
-        margin_bottom: 4,
-    })
-    profileHeader.append(avatarBox)
-    profileHeader.append(changeAvatarBtn)
-    page.append(profileHeader)
+    // Change-avatar button — its own centered row, directly under the avatar row.
+    // (Kept out of a wrapping box so nothing reintroduces the Picture stretch.)
+    changeAvatarBtn.margin_top = 4
+    changeAvatarBtn.margin_bottom = 10
+    const changeRow = new Gtk.ListBoxRow({ activatable: false, selectable: false, css_classes: ["users-avatar-row"] })
+    changeRow.set_child(changeAvatarBtn)
+    profileGroup.listBox.append(changeRow)
 
     const nameEntry = new Gtk.Entry({ text: displayName, placeholder_text: username, width_chars: 22, valign: Gtk.Align.CENTER })
     const nameApplyBtn = CrystalButton({ label: t("settings.users.name.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })

@@ -331,7 +331,13 @@ window.crystal-settings-window button:focus-visible {
 // ── User avatar ───────────────────────────────────────────────────────────────
 // Large circular profile avatar (Gtk.Picture, COVER-cropped). Pill radius on the
 // square picture = a circle; surface background shows behind the fallback glyph.
-picture.users-avatar {
+// Avatar + change-button rows: no row hover, a touch of breathing room on top.
+row.users-avatar-row {
+    &:hover { background-color: transparent; }
+    &:first-child { padding-top: 18px; }
+}
+
+.users-avatar {
     border-radius: $crystal-radius-pill;
     border: 2px solid var(--crystal-border);
     background: var(--crystal-surface);
@@ -339,6 +345,11 @@ picture.users-avatar {
 
 .users-avatar-fallback {
     color: var(--crystal-text-dim);
+}
+
+.avatar-cropper-canvas {
+    border-radius: $crystal-radius-md;
+    background-color: var(--crystal-surface-back);
 }
 
 image.users-avatar-sm {
