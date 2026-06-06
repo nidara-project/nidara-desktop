@@ -68,7 +68,7 @@ This is the table that decides almost every "which widget should I use?" questio
 | Settings window | **`ui/lib/crystal-ui`** (`CrystalSplitView`, `CrystalClamp`, `CrystalButton`, `CrystalSelect`) | Custom split view. **Do NOT use `Adw.OverlaySplitView`** — it breaks capsule margins. |
 | Modal dialogs | **`showCrystalAlert`** from `crystal-ui` | Clean, themeable. |
 
-**Rule of thumb:** Adwaita only where it saves architecture (e.g. `Adw.init()` + `PREFER_DARK` at startup, `Adw.AboutWindow` for About). Everything else: pure GTK4.
+**Rule of thumb:** everything is **pure GTK4** — libadwaita has been fully removed. Dark/light is set via `Gtk.Settings.gtk_application_prefer_dark_theme` (no `Adw.init()`); the About window is a plain `Gtk.Window` (no `Adw.AboutWindow`). Don't reintroduce any `Adw.*`.
 
 ## SCSS conventions and anti-patterns
 

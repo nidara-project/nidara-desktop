@@ -2,17 +2,15 @@
 
 Read this before starting any refactor or before "fixing" something that feels weird. Many of the strange patterns in the codebase are known issues with documented reasons. The items are ordered by impact.
 
-## 1. Dock H/V duplication (~75%)
+## 1. Dock H/V duplication — ✅ RESOLVED (2026-06)
 
-- `DockHorizontal.tsx` — 1434 LOC
-- `DockVertical.tsx` — 1367 LOC
-- They share **123 identifiers** that have drifted out of sync.
+The old ~75% duplication between `DockHorizontal.tsx` (1434 LOC) and `DockVertical.tsx` (1367 LOC) — the source of the divergence bugs (e.g. the vertical-dock-jump fix that landed only in the horizontal file) — has been refactored away.
 
-**Most dock bugs come from divergence** — the vertical-dock-jump issue is the canonical example: a fix landed in `DockHorizontal.tsx` and the vertical version kept the old buggy path.
+- `DockHorizontal.tsx` and `DockVertical.tsx` are now **7-line wrappers**.
+- Shared logic lives in **`DockCore.tsx`** (~1254 LOC); the axis-specific differences are isolated in **`DockAxis.ts`** (~759 LOC).
+- Net result ≈ 3266 LOC (−19%), declared production-ready 2026-06-03. Vertical magnification works; the input region is integer-pinned and guarded against the last-pixel-at-wall bug.
 
-**Right fix when you can afford it:** extract a `DockCore` + axis adapters. The two TSX files become thin wrappers that wire the adapter and forward to `DockCore`.
-
-**What to do in the meantime:** if you're patching a dock bug, **diff the two files for the relevant function before submitting**. If the function exists in both, fix both. If it only exists in one, ask why.
+**Going forward:** fix dock bugs in `DockCore.tsx` / `DockAxis.ts`, never in the wrappers. There's no longer two copies to keep in sync.
 
 ## 2. `ACCENT_PALETTE` single source of truth — ✅ RESOLVED (2026-05)
 

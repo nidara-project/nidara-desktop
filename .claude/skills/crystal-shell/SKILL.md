@@ -1,6 +1,6 @@
 ---
 name: crystal-shell
-description: "Authoritative reference for working on the Crystal Shell desktop environment codebase — a full Wayland session for Arch Linux built with AGS v3 + TypeScript/TSX → GJS on GTK4 + libadwaita + Hyprland. Use this skill whenever the user mentions Crystal Shell, fluid-crystal, the shell bar, dock, control center, notification center, prism/spotlight, app grid, overview, system menu, settings window, lockscreen, or greeter; asks to edit files under `ui/ags-v3/`, `ui/greeter/`, `ui/lockscreen/`, or `ui/lib/crystal-ui/`; wants to modify `hyprland.lua`, SCSS in `styles/`, a `core/` service, or run `install.sh`. Also trigger on questions about reloading the UI (Super+Shift+R), `ags request` IPC, `Status.ts`, the three build bundles, or the Fluid Crystal design system. ALWAYS consult this skill BEFORE editing files in this repo — strict conventions (no `Adw.OverlaySplitView`, no transform scale on clickables, no hardcoded colors, scoped CSS only, IPC via `ShellActions` not `globalThis`) are easy to violate without it."
+description: "Authoritative reference for working on the Crystal Shell desktop environment codebase — a full Wayland session for Arch Linux built with AGS v3 + TypeScript/TSX → GJS on GTK4 + Hyprland. Use this skill whenever the user mentions Crystal Shell, fluid-crystal, the shell bar, dock, control center, notification center, prism/spotlight, app grid, overview, system menu, settings window, lockscreen, or greeter; asks to edit files under `ui/ags-v3/`, `ui/greeter/`, `ui/lockscreen/`, or `ui/lib/crystal-ui/`; wants to modify `hyprland.lua`, SCSS in `styles/`, a `core/` service, or run `install.sh`. Also trigger on questions about reloading the UI (Super+Shift+R), `ags request` IPC, `Status.ts`, the three build bundles, or the Fluid Crystal design system. ALWAYS consult this skill BEFORE editing files in this repo — strict conventions (no `Adw.OverlaySplitView`, no transform scale on clickables, no hardcoded colors, scoped CSS only, IPC via `ShellActions` not `globalThis`) are easy to violate without it."
 ---
 
 # Crystal Shell
@@ -9,7 +9,7 @@ description: "Authoritative reference for working on the Crystal Shell desktop e
 
 ## What this project is
 
-Crystal Shell is a **full Wayland desktop environment** for Arch Linux — not a theme, not a set of scripts. It registers as a proper Wayland session (like GNOME/KDE) and is launched by the display manager. The compositor is **Hyprland**; the UI is **AGS v3 (Aylur's GTK Shell)** written in **TypeScript/TSX → GJS**, on **GTK4 + libadwaita + gtk4-layer-shell**, styled with **SCSS** and painted with **Cairo** where shapes get custom (dock squircles, workspace dots, resource rings, schematic).
+Crystal Shell is a **full Wayland desktop environment** for Arch Linux — not a theme, not a set of scripts. It registers as a proper Wayland session (like GNOME/KDE) and is launched by the display manager. The compositor is **Hyprland**; the UI is **AGS v3 (Aylur's GTK Shell)** written in **TypeScript/TSX → GJS**, on **GTK4 + gtk4-layer-shell** (libadwaita fully removed), styled with **SCSS** and painted with **Cairo** where shapes get custom (dock squircles, workspace dots, resource rings, schematic).
 
 The aesthetic is "Crystal literal": heavy-blur glass capsules with a 1px inner white edge, soft outer shadow, top sheen; the accent color is used **only for active/selected state**.
 
@@ -73,6 +73,6 @@ CI only gates SCSS compile (pure JS, no system libs). Typecheck is local-only be
 
 ## When in doubt
 
-- The codebase is intentionally **pure GTK4 + Cairo** for anything custom-painted (Dock, Bar, dots, rings, schematic) and **AGS/GTK + custom CSS** for floating overlays. **Adwaita is used only where it saves architecture** (e.g. `Adw.AlertDialog` is replaced by `showCrystalAlert`, but `Adw.init()` + `PREFER_DARK` is fine at startup). See `references/design-system.md`.
+- The codebase is intentionally **pure GTK4 + Cairo** for anything custom-painted (Dock, Bar, dots, rings, schematic) and **AGS/GTK + custom CSS** for floating overlays. **libadwaita has been fully removed** — windows are `Gtk.Window`, `Adw.AlertDialog` → `showCrystalAlert`, `Adw.Clamp` → `CrystalClamp`, and dark/light is driven by `Gtk.Settings.gtk_application_prefer_dark_theme` (no `Adw.init()`). Don't reintroduce any `Adw.*`. See `references/design-system.md`.
 - The state model is **one central GObject (`Status.ts`)** with mutually-exclusive overlay setters. Subscribe via `notify::prop`. See `references/state-and-ipc.md`.
-- If a change feels like it requires touching both `DockHorizontal.tsx` and `DockVertical.tsx` separately, you've hit known tech debt (~75% duplication) — see `references/tech-debt.md` before just patching both.
+- The dock H/V split is **already deduplicated**: `DockHorizontal.tsx` and `DockVertical.tsx` are 7-line wrappers; shared logic lives in `DockCore.tsx` with axis differences isolated in `DockAxis.ts`. Edit those, not the wrappers — see `references/tech-debt.md`.

@@ -8,7 +8,7 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 |---|---|
 | Language | TypeScript / TSX → compiled to GJS |
 | UI framework | AGS v3 (Astal + Gnim JSX) |
-| Toolkit | GTK4 + libadwaita |
+| Toolkit | GTK4 (pure — libadwaita fully removed) |
 | Wayland surfaces | gtk4-layer-shell (layer-shell protocol), `Gtk4SessionLock` (ext-session-lock-v1) |
 | Compositor | Hyprland ≥ 0.55 (config in **Lua**) |
 | Session manager | **uwsm** (manages the session as systemd units/scopes) |
@@ -34,7 +34,7 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
    - **Dev mode:** if `~/.config/crystal-shell/.dev` exists, `cd` to its path and `ags run app.ts`.
    - **Prod mode:** exec the bundle at `/usr/share/crystal-shell/ui/ags-v3/build/crystal-shell`.
    - Log: `/tmp/crystal-shell-ui.log`.
-5. **`app.ts`** (`ui/ags-v3/app.ts`): `Adw.init()` + `PREFER_DARK`; registers the `cs-*-symbolic` icon search path; `app.start({ applicationId: "com.crystalshell.fluid", main, requestHandler })`. In `main()`: applies `hyprctl keyword layerrule blur`, iterates monitors → `createUI(monitor)` (Bar + Dock per monitor), wires the dock-rebuild debounce, and populates `core/ShellActions` + the IPC registry.
+5. **`app.ts`** (`ui/ags-v3/app.ts`): sets dark/light via `Gtk.Settings.gtk_application_prefer_dark_theme` (pure GTK4 — no `Adw.init()`); registers the `cs-*-symbolic` icon search path; `app.start({ applicationId: "com.crystalshell.fluid", main, requestHandler })`. In `main()`: applies `hyprctl keyword layerrule blur`, iterates monitors → `createUI(monitor)` (Bar + Dock per monitor), wires the dock-rebuild debounce, and populates `core/ShellActions` + the IPC registry.
 6. Reload in dev: **`Super+Shift+R`** re-runs `crystal-shell-ui` (the old `start_ui.sh`/`reload_ui.sh` no longer exist).
 
 ## Directory map (`ui/ags-v3/`)
