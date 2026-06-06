@@ -15,20 +15,7 @@ It is not a theme or a set of scripts — it registers as a proper Wayland sessi
 - **App Launcher**: Full-screen grid with instant fuzzy search.
 - **Control Center**: Volume (WirePlumber), brightness, Wi-Fi, Bluetooth, battery, MPRIS media.
 - **Notification Center**: Grouped notifications with inline actions.
-- **Settings**: Multi-page settings panel:
-  - Appearance — theme, accent color, glassmorphism, dark/light mode
-  - Display — per-monitor scale, rotation, VRR/FreeSync
-  - Audio — output/input device selection, volumes
-  - Network — Wi-Fi and wired connections
-  - Input — pointer speed, acceleration, touchpad, keyboard layout
-  - Bluetooth — paired devices, scan, pair/connect/forget
-  - Language & Region — time format, timezone
-  - Applications — per-app icon overrides
-  - Dock & Panel — position, size, behavior
-  - Widgets — Control Center layout
-  - Autostart — manage `exec-once` entries
-  - Power — performance profile, screen-off, lock, suspend timers (hypridle)
-  - About — system info, Crystal Shell version
+- **Settings**: Multi-page panel — Appearance, Display, Audio, Network, Input, Bluetooth, Language & Region, Applications, Dock & Panel, Widgets, Autostart, Power, and About.
 - **Fluid Crystal Design System**: Dynamic accent colors, glassmorphism tokens, dark/light mode.
 - **Game Mode**: Steam games auto-move to a dedicated `gamespace` workspace (no blur/shadow/animations, `immediate` mode), optional library-art wallpaper and performance power profile; `Super + G` floats the bar above fullscreen games.
 - **Login & Lock**: Custom AGS apps — a greetd-based greeter (`crystal-greeter`) and a lock screen (`crystal-lock`) built on `ext-session-lock-v1`, both sharing the Crystal look. The greeter is launched directly by greetd (no regreet); the lock screen uses no hyprlock.
@@ -39,7 +26,19 @@ It is not a theme or a set of scripts — it registers as a proper Wayland sessi
 
 ## Installation
 
-Requires **Arch Linux**.
+Crystal Shell targets **Arch Linux** (and Arch-based distros such as EndeavourOS). The intended
+path is the simplest one: install a **minimal Arch base with no desktop environment**, log in at
+the TTY, and run the installer — it pulls everything else in. It also works on top of an existing
+Arch desktop: if a display manager is already enabled it's left untouched and Crystal Shell is just
+added as another session to pick at login.
+
+**Prerequisites:** a normal user account with `sudo`, an internet connection, and `git`:
+
+```bash
+sudo pacman -S --needed git
+```
+
+Then clone and run:
 
 ```bash
 git clone https://github.com/fluid-crystal/crystal-shell.git ~/crystal-shell-install
@@ -47,18 +46,24 @@ cd ~/crystal-shell-install
 ./install.sh
 ```
 
-The installer:
-1. Installs system dependencies (GTK4, Libadwaita, Hyprland, GJS, Astal libraries, AGS CLI).
-2. Builds the UI bundle (`ags bundle`).
+The installer needs no AUR helper — it builds the Astal/AGS libraries from pinned sources, packages
+them, and hands them to `pacman` so they stay trackable and upgradable. It:
+
+1. Installs system dependencies (Hyprland, GTK4, GJS, the Astal libraries + AGS CLI, audio/network/bluetooth stacks, fonts).
+2. Builds the shell, greeter, and lock-screen bundles (`ags bundle`).
 3. Installs system files:
    - `/usr/bin/crystal-shell` — Wayland session entry point
    - `/usr/bin/crystal-shell-ui` — UI launcher (auto-detects dev/system mode)
-   - `/usr/share/crystal-shell/` — configs, bundle, version file
+   - `/usr/share/crystal-shell/` — configs, bundles, version file
    - `/usr/share/wayland-sessions/crystal-shell.desktop` — session entry
-4. Creates `~/.config/crystal-shell/` with default configs (never overwritten on updates).
-5. Enables system services: `pipewire`, `wireplumber`, `power-profiles-daemon`, and `greetd` (only if no other display manager is already enabled).
+4. Creates `~/.config/crystal-shell/` with default configs (never overwritten on updates), seeding keyboard layout, timezone and locale from your existing Arch setup — it never prompts.
+5. Enables `pipewire`, `wireplumber`, `power-profiles-daemon`, and (only if no display manager is already enabled) `greetd` with the Crystal greeter.
 
 **To start:** reboot and select _Crystal Shell_ from the login screen.
+
+> **Status:** Crystal Shell installs onto an existing Arch system today. A fully automated path —
+> a minimal Arch install bundled with Crystal Shell via a Calamares installer — is planned but not
+> here yet.
 
 ---
 
@@ -195,7 +200,8 @@ crystal-shell/
 ```
 
 The runtime architecture, IPC contract, persistence layout and design-system rules are documented in
-`CRYSTAL_SHELL_ARCHITECTURE.md` (kept locally; not part of the published repo).
+the in-repo agent skill at `.claude/skills/crystal-shell/` (`SKILL.md` + `references/`). It ships
+with the code on purpose — see [Contributing](#contributing).
 
 ### Development Workflow
 
@@ -218,6 +224,19 @@ git commit -m "release: vX.Y.Z"
 git tag vX.Y.Z
 git push && git push --tags
 ```
+
+---
+
+## Contributing
+
+Crystal Shell is **AI-native by design**: it ships an agent skill inside the repo
+(`.claude/skills/crystal-shell/`) so that anyone running [Claude Code](https://claude.com/claude-code)
+— or a similar coding agent — can extend, customize, and fix their own desktop, and propose
+globally-useful improvements back upstream. You can also contribute the traditional way.
+
+Start with [`CONTRIBUTING.md`](CONTRIBUTING.md). The key idea: classify each change as **personal**
+(stays in your config), **a setting** (add the knob, not a hardcode), or **global** (worth a PR —
+correctness, hardware compatibility, performance, accessibility).
 
 ---
 
