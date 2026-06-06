@@ -226,8 +226,6 @@ export default {
     "settings.appearance.interface-font.desc": "Fuente usada en el shell y apps GTK",
     "settings.appearance.mono-font": "Fuente Monoespaciada",
     "settings.appearance.mono-font.desc": "Fuente para terminales y editores de código",
-    "settings.appearance.text-scaling": "Escala de Texto",
-    "settings.appearance.text-scaling.desc": "Factor de escala aplicado a todo el texto del sistema",
 
     // Wallpaper transitions
     "wallpaper.transition.random": "Aleatoria",

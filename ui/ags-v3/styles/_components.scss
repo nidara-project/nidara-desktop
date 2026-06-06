@@ -616,7 +616,11 @@ dropdown > button {
     background-clip: padding-box;
     border: 2px solid transparent;
     border-radius: $crystal-radius-sm;
-    padding: 3px 10px;
+    // Match the CrystalButton box height: a button is 5px padding + 1px border;
+    // this trigger carries a 2px border (input look), so 4px padding lands at the
+    // same outer height instead of reading 2px shorter and cramped. Horizontal
+    // 14px gives the same breathing room as a secondary button.
+    padding: 4px 14px;
     min-height: 0;
     transition: border-color 0.15s ease, background 0.15s ease;
 

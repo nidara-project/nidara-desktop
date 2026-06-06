@@ -1,4 +1,4 @@
-import { Gtk } from "ags/gtk4"
+import { Gtk, Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 
 // Palette tokens are CSS variables; for Cairo we read the accent from ThemeManager
@@ -83,12 +83,17 @@ export function makeHSlider(opts: {
     onValueChanged?: (v: number) => void   // called on every value change (for label sync)
     onExtChange?: (cb: (v: number) => void) => (() => void)
     debounce?: number
+    // When true, onChange fires ONLY when the interaction ends (pointer/key/touch
+    // release), not on every value tick. The thumb + value label still track live;
+    // only the committed callback waits. Use for sliders whose effect reflows the
+    // whole UI (e.g. text scaling), where applying mid-drag makes the page jump.
+    commitOnRelease?: boolean
     cssClasses?: string[]
     width_request?: number
     trackH?: number   // track height in px (default 6)
     thumbR?: number   // thumb radius in px (default 9)
 }): Gtk.Widget {
-    const { min = 0, max = 100, value, onChange, onExtChange, debounce = 0 } = opts
+    const { min = 0, max = 100, value, onChange, onExtChange, debounce = 0, commitOnRelease = false } = opts
     const trackH = opts.trackH ?? TRACK_H
     const thumbR = opts.thumbR ?? THUMB_R
     const step = opts.step ?? (max - min) / 20
@@ -167,8 +172,26 @@ export function makeHSlider(opts: {
         opts.onValueChanged?.(scale.get_value())   // always sync label
         if (isSyncing) return   // programmatic sync — don't seek
         ignoreUntil = GLib.get_monotonic_time() + 300_000
-        triggerChange()
+        if (!commitOnRelease) triggerChange()   // release-commit sliders fire below
     })
+
+    // Release-commit: a non-claiming legacy controller (it only observes, returns
+    // false, so it never interferes with the Scale's own drag) commits the value at
+    // natural stopping points — pointer/touch up, key up, or a scroll notch — instead
+    // of on every tick. The value is already updated when these fire.
+    if (commitOnRelease) {
+        const commit = () => { if (!isSyncing) onChange(scale.get_value()) }
+        const legacy = new Gtk.EventControllerLegacy()
+        legacy.connect("event", (_c: any, ev: any) => {
+            const t = ev.get_event_type()
+            if (t === Gdk.EventType.BUTTON_RELEASE ||
+                t === Gdk.EventType.KEY_RELEASE ||
+                t === Gdk.EventType.TOUCH_END ||
+                t === Gdk.EventType.SCROLL) commit()
+            return false
+        })
+        scale.add_controller(legacy)
+    }
 
     // Handler wasn't connected when set_value(value) ran — prime the label now
     opts.onValueChanged?.(scale.get_value())

@@ -1005,7 +1005,7 @@ dropdown > button {
   background-clip: padding-box;
   border: 2px solid transparent;
   border-radius: var(--crystal-radius-sm);
-  padding: 3px 10px;
+  padding: 4px 14px;
   min-height: 0;
   transition: border-color 0.15s ease, background 0.15s ease;
 }

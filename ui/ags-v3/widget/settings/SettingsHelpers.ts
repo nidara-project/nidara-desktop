@@ -86,9 +86,9 @@ export const sliderRow = (
     min: number,
     max: number,
     cb: (v: number) => void,
-    opts: { unit?: string; icons?: [Gio.FileIcon, Gio.FileIcon]; iconSizes?: [number, number]; endpoints?: [Gtk.Widget, Gtk.Widget]; pct?: boolean; decimals?: number } = {},
+    opts: { unit?: string; icons?: [Gio.FileIcon, Gio.FileIcon]; iconSizes?: [number, number]; endpoints?: [Gtk.Widget, Gtk.Widget]; pct?: boolean; decimals?: number; commitOnRelease?: boolean } = {},
 ) => {
-    const { unit = "", icons, iconSizes = [16, 16], endpoints, pct = false, decimals } = opts
+    const { unit = "", icons, iconSizes = [16, 16], endpoints, pct = false, decimals, commitOnRelease = false } = opts
 
     // Integer sliders (no `decimals`/`pct`) must STORE integers, not just display them:
     // the raw Gtk.Scale value is fractional, and a fractional setting (e.g. screenGap=8.19)
@@ -122,6 +122,7 @@ export const sliderRow = (
         onChange: onCommit,
         onValueChanged: (v) => { valueLabel.label = formatVal(v) },
         debounce: 32,
+        commitOnRelease,
         cssClasses: ["cc-atomic-scale-native"],
         width_request: 140,
     })

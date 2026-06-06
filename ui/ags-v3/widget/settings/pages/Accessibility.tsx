@@ -38,6 +38,9 @@ export default function AccessibilityPage() {
         (v) => Theme.setTextScaling(v),
         {
             decimals: 2,
+            // Rescaling reflows the whole UI; apply on release so the page doesn't
+            // jump line-by-line while dragging. Thumb + value track live.
+            commitOnRelease: true,
             endpoints: [
                 new Gtk.Label({ label: "A", css_classes: ["slider-text-endpoint", "is-sm"], valign: Gtk.Align.CENTER }),
                 new Gtk.Label({ label: "A", css_classes: ["slider-text-endpoint", "is-lg"], valign: Gtk.Align.CENTER }),
