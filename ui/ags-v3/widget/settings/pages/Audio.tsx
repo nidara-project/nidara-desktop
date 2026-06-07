@@ -5,6 +5,7 @@ import { listGroup, pageHeader, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { CrystalButton } from "../../../../lib/crystal-ui"
+import { makeHSlider } from "../../common/Slider"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -21,6 +22,24 @@ function volumeIcon(vol: number, muted: boolean) {
     if (vol < 0.34) return Icons.volumeLow
     if (vol < 0.67) return Icons.volumeMedium
     return Icons.volumeHigh
+}
+
+// Cairo volume slider (makeHSlider) — fill + thumb are drawn together so they never
+// separate like the native Gtk.Scale highlight/slider, and its sync guards stop the
+// WirePlumber volume feedback from fighting the drag. `target` has a 0–1 `volume`.
+function volumeSlider(target: any, valLabel: Gtk.Label, refreshMute: () => void): Gtk.Widget {
+    return makeHSlider({
+        min: 0, max: 100,
+        value: Math.round((target.volume ?? 0) * 100),
+        onChange: (v) => { target.volume = v / 100 },
+        onValueChanged: (v) => { valLabel.label = `${Math.round(v)}%` },
+        onExtChange: (cb) => {
+            const id = target.connect("notify::volume", () => { cb((target.volume ?? 0) * 100); refreshMute() })
+            return () => { try { target.disconnect(id) } catch {} }
+        },
+        debounce: 24,
+        cssClasses: ["cc-atomic-scale-native"],
+    })
 }
 
 // ── Device row (speakers / mics) ──────────────────────────────────────────────
@@ -86,33 +105,12 @@ function createDeviceRow(
     box.append(header)
 
     // ── Volume slider ─────────────────────────────────────────────────────────
-    const adj = new Gtk.Adjustment({
-        lower: 0, upper: 100,
-        step_increment: 2, page_increment: 10,
-        value: Math.round(endpoint.volume * 100),
-    })
-    const scale = new Gtk.Scale({
-        orientation: Gtk.Orientation.HORIZONTAL, hexpand: true,
-        draw_value: false, adjustment: adj,
-        css_classes: ["crystal-scale", "cc-atomic-scale-native"],
-    })
     const valLabel = new Gtk.Label({
         label: `${Math.round(endpoint.volume * 100)}%`,
         css_classes: ["slider-value-label"],
         width_chars: 5, xalign: 1.0,
     })
-
-    scale.connect("value-changed", () => {
-        const v = scale.get_value()
-        endpoint.volume = v / 100
-        valLabel.label = `${Math.round(v)}%`
-    })
-    endpoint.connect("notify::volume", () => {
-        const v = Math.round(endpoint.volume * 100)
-        if (Math.abs(scale.get_value() - v) >= 1) {
-            scale.set_value(v)
-            valLabel.label = `${v}%`
-        }
+    const scale = volumeSlider(endpoint, valLabel, () => {
         muteImg.gicon = volumeIcon(endpoint.volume, endpoint.mute ?? false)
     })
 
@@ -137,26 +135,30 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
         ? rawIcon
         : (stream.name?.toLowerCase() ?? "audio-x-generic-symbolic")
 
+    // Same vertical layout as the device rows: header (icon + name + mute) on top,
+    // slider underneath.
     const box = new Gtk.Box({
-        spacing: 12,
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 10,
         margin_start: 16, margin_end: 16,
-        margin_top: 12, margin_bottom: 12,
-        valign: Gtk.Align.CENTER,
+        margin_top: 14, margin_bottom: 14,
     })
 
-    box.append(new Gtk.Image({ icon_name: iconName, pixel_size: 16, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER }))
-    box.append(new Gtk.Label({
+    // ── Header ────────────────────────────────────────────────────────────────
+    const header = new Gtk.Box({ spacing: 10 })
+    // Real app icon — NO cs-icon: that class recolours/inverts monochrome UI glyphs,
+    // which mangles a full-colour app icon. Sized to match the device leading icon.
+    header.append(new Gtk.Image({ icon_name: iconName, pixel_size: 24, valign: Gtk.Align.CENTER }))
+    header.append(new Gtk.Label({
         label: appName,
-        halign: Gtk.Align.START,
+        halign: Gtk.Align.START, hexpand: true,
         css_classes: ["crystal-row-title"],
-        ellipsize: 3, max_width_chars: 18,
-        width_chars: 14,
+        ellipsize: 3, max_width_chars: 26,
     }))
 
-    // Mute
     const muteImg = new Gtk.Image({
         gicon: volumeIcon(stream.volume, stream.mute ?? false),
-        pixel_size: 16, css_classes: ["cs-icon"],
+        pixel_size: 18, css_classes: ["cs-icon"],
     })
     const muteBtn = new Gtk.Button({
         child: muteImg, css_classes: ["settings-icon-btn"],
@@ -166,41 +168,25 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
     stream.connect("notify::mute", () => {
         muteImg.gicon = volumeIcon(stream.volume, stream.mute ?? false)
     })
+    header.append(muteBtn)
+    box.append(header)
 
-    // Slider
-    const adj = new Gtk.Adjustment({
-        lower: 0, upper: 100,
-        step_increment: 2, page_increment: 10,
-        value: Math.round(stream.volume * 100),
-    })
-    const scale = new Gtk.Scale({
-        orientation: Gtk.Orientation.HORIZONTAL, hexpand: true,
-        draw_value: false, adjustment: adj,
-        css_classes: ["crystal-scale", "cc-atomic-scale-native"],
-    })
+    // ── Volume slider ─────────────────────────────────────────────────────────
     const valLabel = new Gtk.Label({
         label: `${Math.round(stream.volume * 100)}%`,
         css_classes: ["slider-value-label"],
         width_chars: 5, xalign: 1.0,
     })
-
-    scale.connect("value-changed", () => {
-        const v = scale.get_value()
-        stream.volume = v / 100
-        valLabel.label = `${Math.round(v)}%`
-    })
-    stream.connect("notify::volume", () => {
-        const v = Math.round(stream.volume * 100)
-        if (Math.abs(scale.get_value() - v) >= 1) {
-            scale.set_value(v)
-            valLabel.label = `${v}%`
-        }
+    const scale = volumeSlider(stream, valLabel, () => {
         muteImg.gicon = volumeIcon(stream.volume, stream.mute ?? false)
     })
 
-    box.append(muteBtn)
-    box.append(scale)
-    box.append(valLabel)
+    const sliderRow = new Gtk.Box({ spacing: 8 })
+    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
+    sliderRow.append(scale)
+    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
+    sliderRow.append(valLabel)
+    box.append(sliderRow)
 
     const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
     row.set_child(box)

@@ -1,10 +1,10 @@
-import { Gtk, Gdk } from "ags/gtk4"
+import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 
 // Palette tokens are CSS variables; for Cairo we read the accent from ThemeManager
 import Theme from "../../core/ThemeManager"
 
-const TRACK_H  = 6   // px — track height
+const TRACK_H  = 6   // px — track thickness
 const THUMB_R  = 9   // px — thumb radius (visual)
 
 const PALETTE: Record<string, [number, number, number]> = {
@@ -19,200 +19,232 @@ const PALETTE: Record<string, [number, number, number]> = {
     slate:  [0.44, 0.51, 0.59],
 }
 
-// Draw a filled horizontal pill from leftX to rightX, centered on cy, height h.
-// Uses Cairo arc convention: angles clockwise in screen (y-down) coords.
-function pillPath(cr: any, leftX: number, rightX: number, cy: number, h: number) {
-    const r = h / 2
-    const lc = leftX  + r  // left cap center X
-    const rc = rightX - r  // right cap center X
-    if (rc > lc) {
-        // Normal pill: left semicircle (bottom→left→top), top line, right semicircle (top→right→bottom), bottom line
-        cr.arc(lc, cy, r, Math.PI / 2, 3 * Math.PI / 2)    // left cap
-        cr.arc(rc, cy, r, -Math.PI / 2, Math.PI / 2)        // right cap (Cairo adds top line)
-    } else {
-        // Too narrow: single circle at midpoint
-        const mx = (leftX + rightX) / 2
-        cr.arc(mx, cy, r, 0, 2 * Math.PI)
-    }
+// Rounded-rectangle (capsule) path.
+function roundRectPath(cr: any, x: number, y: number, w: number, h: number, r: number) {
+    if (w <= 0 || h <= 0) return
+    r = Math.min(r, w / 2, h / 2)
+    cr.newPath()
+    cr.arc(x + w - r, y + r,     r, -Math.PI / 2, 0)
+    cr.arc(x + w - r, y + h - r, r, 0,            Math.PI / 2)
+    cr.arc(x + r,     y + h - r, r, Math.PI / 2,  Math.PI)
+    cr.arc(x + r,     y + r,     r, Math.PI,      1.5 * Math.PI)
     cr.closePath()
 }
 
-function drawSlider(cr: any, w: number, h: number, frac: number, trackH: number, thumbR: number) {
-    if (w <= 0 || h <= 0) return        // not yet allocated (hidden stack page, etc.)
-    const isDark = Theme.isDark
-    const cy = h / 2
-    const tx = thumbR                    // track left edge aligns with thumb center at min
-    const tw = w - thumbR * 2           // track pixel width
-    if (tw <= 0) return                  // widget narrower than thumb — nothing to draw
-    const thumbX = tx + frac * tw       // thumb center
-
-    // ── Track background ─────────────────────────────────────────────
-    const baseC = isDark ? 1 : 0
-    cr.setSourceRGBA(baseC, baseC, baseC, isDark ? 0.18 : 0.14)
-    cr.newPath()
-    pillPath(cr, tx, tx + tw, cy, trackH)
-    cr.fill()
-
-    // ── Fill (accent) ─────────────────────────────────────────────────
-    if (frac > 0.001) {
-        const [ar, ag, ab] = PALETTE[Theme.accentColor] ?? PALETTE.blue
-        cr.setSourceRGBA(ar, ag, ab, 0.9)
-        cr.newPath()
-        pillPath(cr, tx, thumbX, cy, trackH)
-        cr.fill()
-    }
-
-    // ── Thumb ────────────────────────────────────────────────────────
-    const tr = thumbR - 1
-    cr.setSourceRGBA(0, 0, 0, 0.25)
-    cr.newPath()
-    cr.arc(thumbX, cy + 1, tr, 0, 2 * Math.PI)
-    cr.fill()
-    cr.setSourceRGBA(1, 1, 1, 0.95)
-    cr.newPath()
-    cr.arc(thumbX, cy, tr, 0, 2 * Math.PI)
-    cr.fill()
+// Capsule spanning [m0,m1] along the main axis, centered on the cross axis (cc).
+function capsuleMain(cr: any, m0: number, m1: number, cc: number, t: number, horiz: boolean) {
+    const r = t / 2
+    const len = Math.max(0, m1 - m0)
+    if (horiz) roundRectPath(cr, m0, cc - r, len, t, r)
+    else       roundRectPath(cr, cc - r, m0, t, len, r)
 }
 
-export function makeHSlider(opts: {
+export type SliderOrientation = "horizontal" | "vertical"
+
+export interface SliderOpts {
     min?: number
     max?: number
     value: number
     step?: number
+    orientation?: SliderOrientation
+    /** Draw the circular thumb (default true). false = bar/fill only. */
+    thumb?: boolean
     onChange: (v: number) => void
-    onValueChanged?: (v: number) => void   // called on every value change (for label sync)
+    onValueChanged?: (v: number) => void   // every change (for label sync)
     onExtChange?: (cb: (v: number) => void) => (() => void)
     debounce?: number
-    // When true, onChange fires ONLY when the interaction ends (pointer/key/touch
-    // release), not on every value tick. The thumb + value label still track live;
-    // only the committed callback waits. Use for sliders whose effect reflows the
-    // whole UI (e.g. text scaling), where applying mid-drag makes the page jump.
+    /** Commit onChange only when the interaction ends (drag release / scroll). */
     commitOnRelease?: boolean
     cssClasses?: string[]
-    width_request?: number
-    trackH?: number   // track height in px (default 6)
-    thumbR?: number   // thumb radius in px (default 9)
-}): Gtk.Widget {
+    /** Main-axis size request (width for horizontal, height for vertical). */
+    length?: number
+    trackH?: number
+    thumbR?: number
+}
+
+/**
+ * makeSlider — the ONE slider for the whole shell (Cairo-drawn, horizontal or
+ * vertical). Input is a custom GestureDrag + scroll (NOT a Gtk.Scale), so:
+ *   • clicking the track jumps to that position,
+ *   • grabbing the thumb never warps it (the old Gtk.Scale bug),
+ *   • scroll adjusts by one step,
+ *   • the thumb goes translucent while pressed.
+ * Fill and thumb are drawn together, so they can never visually separate.
+ */
+export function makeSlider(opts: SliderOpts): Gtk.Widget {
     const { min = 0, max = 100, value, onChange, onExtChange, debounce = 0, commitOnRelease = false } = opts
+    const horiz = (opts.orientation ?? "horizontal") !== "vertical"
+    const thumb = opts.thumb ?? true
     const trackH = opts.trackH ?? TRACK_H
     const thumbR = opts.thumbR ?? THUMB_R
     const step = opts.step ?? (max - min) / 20
+    const range = (max - min) || 1
+    const crossMin = Math.max(thumb ? thumbR * 2 : trackH, 20)   // hit-area thickness
 
-    // ── Input layer: invisible Gtk.Scale with 0-px thumb ────────────
-    const scale = new Gtk.Scale({
-        orientation: Gtk.Orientation.HORIZONTAL,
-        hexpand: true,
-        valign: Gtk.Align.FILL,
-        draw_value: false,
-        css_classes: ["cc-slider-scale-input"],
-    })
-    scale.set_range(min, max)
-    scale.set_value(value)
-    scale.set_increments(step, step * 4)
+    let frac = Math.max(0, Math.min(1, (value - min) / range))
+    let pressed = false
+    const valueOf = () => min + frac * range
 
-    // ── Visual layer: Cairo drawing (main child — controls height) ──
     const da = new Gtk.DrawingArea({
-        hexpand: true,
-        halign: Gtk.Align.FILL,
-        valign: Gtk.Align.CENTER,
-        height_request: thumbR * 2,
-        can_target: false,
+        can_target: true,
+        focusable: true,
     })
-    da.set_draw_func((_, cr, w, h) => {
-        const v = scale.get_value()
-        const frac = (max - min) <= 0 ? 0 : (v - min) / (max - min)
-        drawSlider(cr, w, h, frac, trackH, thumbR)
-    })
+    if (horiz) {
+        da.hexpand = true; da.halign = Gtk.Align.FILL; da.valign = Gtk.Align.CENTER
+        da.height_request = crossMin
+        if (opts.length !== undefined) da.width_request = opts.length
+    } else {
+        da.vexpand = true; da.valign = Gtk.Align.FILL; da.halign = Gtk.Align.CENTER
+        da.width_request = crossMin
+        if (opts.length !== undefined) da.height_request = opts.length
+    }
+    if (opts.cssClasses?.length) opts.cssClasses.forEach(c => da.add_css_class(c))
 
-    // ── Overlay: DrawingArea as base, Scale on top (invisible, input-only) ──
-    const overlay = new Gtk.Overlay({ hexpand: true, valign: Gtk.Align.CENTER })
-    overlay.set_child(da)           // da controls sizing
-    overlay.add_overlay(scale)      // scale receives pointer events (opacity:0 via CSS)
-    scale.halign = Gtk.Align.FILL
-    scale.valign = Gtk.Align.FILL
-
-    if (opts.width_request !== undefined) overlay.set_size_request(opts.width_request, -1)
-
-    // Apply extra CSS classes to the overlay wrapper (e.g. cc-atomic-scale-native)
-    if (opts.cssClasses?.length) {
-        opts.cssClasses.forEach(c => overlay.add_css_class(c))
+    // ── Geometry helpers (use current allocation) ───────────────────────────────
+    const pad = thumb ? thumbR : trackH / 2
+    const mainLen = () => horiz ? da.get_width() : da.get_height()
+    const track   = () => Math.max(1, mainLen() - 2 * pad)
+    const fracToMain = (f: number) => horiz ? pad + f * track() : pad + (1 - f) * track()
+    const posToFrac  = (p: number) => {
+        const pf = Math.max(0, Math.min(1, (p - pad) / track()))
+        return horiz ? pf : 1 - pf
     }
 
-    // ── onChange / debounce ──────────────────────────────────────────
-    let ignoreUntil = 0
-    let isSyncing = false   // true while external callback is setting the value
-    let triggerChange: () => void
+    // ── Draw ────────────────────────────────────────────────────────────────────
+    da.set_draw_func((_: any, cr: any, w: number, h: number) => {
+        if (w <= 0 || h <= 0) return
+        const L = horiz ? w : h
+        const cc = (horiz ? h : w) / 2
+        const trk = L - 2 * pad
+        if (trk <= 0) return
+        const tMain = fracToMain(frac)
 
-    if (debounce > 0) {
-        let pendingId = 0
-        triggerChange = () => {
+        // Track
+        const base = Theme.isDark ? 1 : 0
+        cr.setSourceRGBA(base, base, base, Theme.isDark ? 0.18 : 0.14)
+        capsuleMain(cr, pad, L - pad, cc, trackH, horiz); cr.fill()
+
+        // Fill (accent)
+        const [ar, ag, ab] = PALETTE[Theme.accentColor] ?? PALETTE.blue
+        cr.setSourceRGBA(ar, ag, ab, 0.9)
+        if (horiz) capsuleMain(cr, pad, tMain, cc, trackH, true)
+        else       capsuleMain(cr, tMain, L - pad, cc, trackH, false)
+        cr.fill()
+
+        // Thumb
+        if (thumb) {
+            const tr = thumbR - 1
+            const cx = horiz ? tMain : cc
+            const cy = horiz ? cc : tMain
+            cr.setSourceRGBA(0, 0, 0, 0.25); cr.newPath(); cr.arc(cx, cy + 1, tr, 0, 2 * Math.PI); cr.fill()
+            cr.setSourceRGBA(1, 1, 1, pressed ? 0.55 : 0.95); cr.newPath(); cr.arc(cx, cy, tr, 0, 2 * Math.PI); cr.fill()
+        }
+    })
+
+    // ── Commit machinery ────────────────────────────────────────────────────────
+    let pendingId = 0
+    const triggerChange = () => {
+        if (debounce > 0) {
             if (pendingId) GLib.source_remove(pendingId)
             pendingId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, debounce, () => {
-                onChange(scale.get_value())
-                pendingId = 0
-                return GLib.SOURCE_REMOVE
+                onChange(valueOf()); pendingId = 0; return GLib.SOURCE_REMOVE
             })
-        }
-    } else {
-        let pending = false
-        triggerChange = () => {
-            if (!pending) {
-                pending = true
-                GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                    onChange(scale.get_value())
-                    pending = false
-                    return GLib.SOURCE_REMOVE
+        } else {
+            if (!pendingId) {
+                pendingId = GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
+                    onChange(valueOf()); pendingId = 0; return GLib.SOURCE_REMOVE
                 })
             }
         }
     }
-
-    scale.connect("value-changed", () => {
+    const commit = () => {
+        if (pendingId) { GLib.source_remove(pendingId); pendingId = 0 }
+        onChange(valueOf())
+    }
+    // Apply a fraction from interaction: redraw + label, and (unless release-commit)
+    // push the debounced onChange.
+    const applyFrac = (f: number) => {
+        const nf = Math.max(0, Math.min(1, f))
+        if (nf === frac) return
+        frac = nf
         da.queue_draw()
-        opts.onValueChanged?.(scale.get_value())   // always sync label
-        if (isSyncing) return   // programmatic sync — don't seek
-        ignoreUntil = GLib.get_monotonic_time() + 300_000
-        if (!commitOnRelease) triggerChange()   // release-commit sliders fire below
+        opts.onValueChanged?.(valueOf())
+        if (!commitOnRelease) triggerChange()
+    }
+
+    // ── Pointer input — grab the thumb without warping; click track to jump ──────
+    const drag = new Gtk.GestureDrag()
+    let startMain = 0
+    let grabOffset = 0
+    drag.connect("drag-begin", (_g: any, sx: number, sy: number) => {
+        // Claim the sequence so the press/release doesn't bubble to a parent click
+        // handler (e.g. a CC widget tile that would open its detail on release).
+        _g.set_state(Gtk.EventSequenceState.CLAIMED)
+        startMain = horiz ? sx : sy
+        const tPos = fracToMain(frac)
+        if (thumb && Math.abs(startMain - tPos) <= thumbR + 3) {
+            grabOffset = startMain - tPos          // grabbed the thumb → keep it put
+        } else {
+            grabOffset = 0
+            applyFrac(posToFrac(startMain))        // clicked the track → jump there
+        }
+        pressed = true; da.queue_draw()
     })
+    drag.connect("drag-update", (_g: any, ox: number, oy: number) => {
+        const off = horiz ? ox : oy
+        applyFrac(posToFrac(startMain + off - grabOffset))
+    })
+    drag.connect("drag-end", () => { pressed = false; commit(); da.queue_draw() })
+    da.add_controller(drag)
 
-    // Release-commit: a non-claiming legacy controller (it only observes, returns
-    // false, so it never interferes with the Scale's own drag) commits the value at
-    // natural stopping points — pointer/touch up, key up, or a scroll notch — instead
-    // of on every tick. The value is already updated when these fire.
-    if (commitOnRelease) {
-        const commit = () => { if (!isSyncing) onChange(scale.get_value()) }
-        const legacy = new Gtk.EventControllerLegacy()
-        legacy.connect("event", (_c: any, ev: any) => {
-            const t = ev.get_event_type()
-            if (t === Gdk.EventType.BUTTON_RELEASE ||
-                t === Gdk.EventType.KEY_RELEASE ||
-                t === Gdk.EventType.TOUCH_END ||
-                t === Gdk.EventType.SCROLL) commit()
-            return false
-        })
-        scale.add_controller(legacy)
-    }
+    // Scroll to adjust (up = increase, both axes).
+    const scroll = new Gtk.EventControllerScroll({ flags: Gtk.EventControllerScrollFlags.BOTH_AXES })
+    scroll.connect("scroll", (_c: any, dx: number, dy: number) => {
+        const d = dy !== 0 ? dy : dx
+        if (d === 0) return false
+        applyFrac(frac + (d < 0 ? 1 : -1) * (step / range))
+        commit()
+        return true
+    })
+    da.add_controller(scroll)
 
-    // Handler wasn't connected when set_value(value) ran — prime the label now
-    opts.onValueChanged?.(scale.get_value())
+    // Keyboard (accessibility).
+    const keys = new Gtk.EventControllerKey()
+    keys.connect("key-pressed", (_c: any, keyval: number) => {
+        let nf = frac
+        const s = step / range
+        if (keyval === 0xff51 || keyval === 0xff54) nf = frac - s          // Left / Down
+        else if (keyval === 0xff53 || keyval === 0xff52) nf = frac + s     // Right / Up
+        else if (keyval === 0xff50) nf = 0                                  // Home
+        else if (keyval === 0xff57) nf = 1                                  // End
+        else return false
+        applyFrac(nf); commit()
+        return true
+    })
+    da.add_controller(keys)
 
-    // Only redraw when allocated — hidden stack pages have 0×0 allocation and
-    // calling queue_draw() on them triggers pixman "Invalid rectangle" errors.
+    // Theme accent change → redraw.
     const themeSignalId = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
-    overlay.connect("unrealize", () => { try { Theme.disconnect(themeSignalId) } catch {} })
+    da.connect("unrealize", () => { try { Theme.disconnect(themeSignalId) } catch {} })
 
+    // External value updates (ignored while the user is dragging).
     if (onExtChange) {
-        const cleanup = onExtChange((v) => {
-            if (GLib.get_monotonic_time() < ignoreUntil) return
-            if (Math.abs(scale.get_value() - v) >= 1) {
-                isSyncing = true
-                scale.set_value(v)
-                isSyncing = false
-                da.queue_draw()
-            }
+        const cleanup = onExtChange((v: number) => {
+            if (pressed) return
+            const f = Math.max(0, Math.min(1, (v - min) / range))
+            if (Math.abs(f - frac) > 0.001) { frac = f; da.queue_draw(); opts.onValueChanged?.(valueOf()) }
         })
-        overlay.connect("unrealize", cleanup)
+        da.connect("unrealize", cleanup)
     }
 
-    return overlay
+    // Prime the label.
+    opts.onValueChanged?.(valueOf())
+
+    return da
+}
+
+/** Horizontal convenience wrapper (back-compat: width_request → length). */
+export function makeHSlider(opts: Omit<SliderOpts, "orientation" | "length"> & { width_request?: number }): Gtk.Widget {
+    const { width_request, ...rest } = opts
+    return makeSlider({ ...rest, orientation: "horizontal", length: width_request })
 }
