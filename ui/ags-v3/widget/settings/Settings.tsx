@@ -22,7 +22,7 @@ import DefaultAppsPage from "./pages/DefaultApps"
 import AccessibilityPage from "./pages/Accessibility"
 import UsersPage from "./pages/Users"
 import GamingPage from "./pages/Gaming"
-import { beginPage, endPage, clearSearchIndex, getSearchIndex } from "./SettingsHelpers"
+import { beginPage, endPage, clearSearchIndex, getSearchIndex, type SettingsNav } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import IconButton from "../common/IconButton"
@@ -115,22 +115,8 @@ export default function Settings(monitor: Gdk.Monitor) {
         activePageId = id
     }
 
-    categories.forEach(cat => {
-        // Build page widget
-        let pageWidget: Gtk.Widget
-        try {
-            beginPage(cat.id, cat.label)
-            pageWidget = cat.component()
-            endPage()
-        } catch (e) {
-            endPage()
-            console.error(`[Settings] Failed to load page ${cat.id}:`, e)
-            pageWidget = new Gtk.Label({ label: `${t("settings.page.load-error")}: ${cat.label}` })
-        }
-
-        // CrystalClamp replaces Adw.Clamp
-        const clamp = CrystalClamp(pageWidget, 800, true)
-
+    // Every page (and dynamically-pushed subpage) is a clamped, scrollable box.
+    const wrapPage = (widget: Gtk.Widget): Gtk.Widget => {
         const scroll = new Gtk.ScrolledWindow({
             hscrollbar_policy: Gtk.PolicyType.NEVER,
             vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
@@ -138,8 +124,41 @@ export default function Settings(monitor: Gdk.Monitor) {
             vexpand: true,
             css_classes: ["settings-page-scroll"],
         })
-        scroll.set_child(clamp)
-        pageCache.set(cat.id, scroll)
+        scroll.set_child(CrystalClamp(widget, 800, true))   // CrystalClamp replaces Adw.Clamp
+        return scroll
+    }
+
+    // Navigation handle handed to each page so it can push detail subpages. Its
+    // methods reference navigateTo/history defined below; they only run on user
+    // interaction, by which point those are initialised.
+    const nav: SettingsNav = {
+        pushSubpage: ({ id, build }) => {
+            let w: Gtk.Widget
+            try { w = build() }
+            catch (e) {
+                console.error(`[Settings] Failed to build subpage ${id}:`, e)
+                w = new Gtk.Label({ label: t("settings.page.load-error") })
+            }
+            pageCache.set(id, wrapPage(w))   // rebuild on each push → fresh content
+            navigateTo(id)
+        },
+        goBack: () => { if (historyIdx > 0) navigateTo(history[--historyIdx], false) },
+    }
+
+    categories.forEach(cat => {
+        // Build page widget
+        let pageWidget: Gtk.Widget
+        try {
+            beginPage(cat.id, cat.label)
+            pageWidget = (cat.component as (n: SettingsNav) => Gtk.Widget)(nav)
+            endPage()
+        } catch (e) {
+            endPage()
+            console.error(`[Settings] Failed to load page ${cat.id}:`, e)
+            pageWidget = new Gtk.Label({ label: `${t("settings.page.load-error")}: ${cat.label}` })
+        }
+
+        pageCache.set(cat.id, wrapPage(pageWidget))
     })
 
     // navigateTo is defined further down; the onSelect closure only runs on a

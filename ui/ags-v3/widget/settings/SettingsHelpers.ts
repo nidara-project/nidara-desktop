@@ -2,11 +2,26 @@ import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import { makeHSlider } from "../common/Slider"
 import { CrystalRow, CrystalList } from "../../../lib/crystal-ui"
+import Icons from "../../core/Icons"
+import { t } from "../../core/i18n"
 
 /**
  * Shared UI helpers for Settings pages.
  * All pages use the same listGroup / createRow / toggleRow / sliderRow / etc.
  */
+
+// ── Subpage navigation ──────────────────────────────────────────────────────────
+// Settings is a single-child page swapper (see Settings.tsx). A page component
+// receives a SettingsNav so it can push a detail subpage (e.g. a Wi-Fi network's
+// info) into the same shell — the history/back-forward capsule handles return.
+// One nav per Settings window instance (there is a Settings per monitor), so it's
+// passed in, never a module singleton.
+export interface SettingsNav {
+    /** Build + push a subpage, then navigate to it. `id` must be unique & stable. */
+    pushSubpage: (opts: { id: string; build: () => Gtk.Widget }) => void
+    /** Go back one step in history (same as the nav-capsule back button). */
+    goBack: () => void
+}
 
 // ── Search index ──────────────────────────────────────────────────────────────
 export interface SearchItem {
@@ -198,6 +213,30 @@ export const pageHeader = (title: string, subtitle: string) => {
         halign: Gtk.Align.START,
     }))
     box.append(new Gtk.Label({
+        label: subtitle,
+        css_classes: ["settings-page-subtitle"],
+        halign: Gtk.Align.START,
+    }))
+    return box
+}
+
+// ── Subpage Header (back button + title) ───────────────────────────────────────
+export const subpageHeader = (title: string, subtitle: string, onBack: () => void) => {
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, margin_bottom: 16 })
+
+    const top = new Gtk.Box({ spacing: 10, valign: Gtk.Align.CENTER })
+    const back = new Gtk.Button({
+        child: new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["cs-icon"] }),
+        css_classes: ["crystal-icon-btn", "nav-btn"],
+        tooltip_text: t("settings.nav.back"),
+        valign: Gtk.Align.CENTER,
+    })
+    back.connect("clicked", onBack)
+    top.append(back)
+    top.append(new Gtk.Label({ label: title, css_classes: ["settings-page-title"], halign: Gtk.Align.START }))
+    box.append(top)
+
+    if (subtitle) box.append(new Gtk.Label({
         label: subtitle,
         css_classes: ["settings-page-subtitle"],
         halign: Gtk.Align.START,

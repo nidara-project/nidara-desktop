@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import AstalNetwork from "gi://AstalNetwork"
 import { execAsync } from "ags/process"
-import { listGroup, createRow, staticLabel, pageHeader, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, staticLabel, pageHeader, pageBox, subpageHeader, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { CrystalButton } from "../../../../lib/crystal-ui"
@@ -14,6 +14,39 @@ function isSecured(ap: any): boolean {
     return (ap.flags & NM_AP_FLAGS_PRIVACY) !== 0
         || (ap.wpa_flags ?? 0) !== 0
         || (ap.rsn_flags ?? 0) !== 0
+}
+
+// NM.80211ApSecurityFlags bits used to classify the security scheme.
+const SEC_KEY_8021X = 0x200
+const SEC_KEY_SAE   = 0x400   // WPA3 personal
+const SEC_KEY_OWE   = 0x800   // Enhanced Open
+
+function securityLabel(ap: any): string {
+    const rsn = ap.rsn_flags ?? 0
+    const wpa = ap.wpa_flags ?? 0
+    if (rsn === 0 && wpa === 0) {
+        return (ap.flags & NM_AP_FLAGS_PRIVACY) ? "WEP" : t("settings.network.security.open")
+    }
+    const parts: string[] = []
+    if (rsn & SEC_KEY_SAE) parts.push("WPA3")
+    if (rsn & SEC_KEY_OWE) parts.push("OWE")
+    if ((rsn & SEC_KEY_8021X) || (wpa & SEC_KEY_8021X)) parts.push(t("settings.network.security.enterprise"))
+    if (parts.length === 0) parts.push(rsn !== 0 ? "WPA2" : "WPA")
+    return parts.join(" / ")
+}
+
+function freqBand(freq: number): string {
+    if (freq >= 5925) return "6 GHz"
+    if (freq >= 4900) return "5 GHz"
+    return "2.4 GHz"
+}
+
+function freqChannel(freq: number): number {
+    if (freq === 2484) return 14
+    if (freq >= 2412 && freq <= 2484) return Math.round((freq - 2407) / 5)
+    if (freq >= 5000 && freq < 5925)  return Math.round((freq - 5000) / 5)
+    if (freq >= 5925)                 return Math.round((freq - 5950) / 5)
+    return 0
 }
 
 // Saved Wi-Fi connection profiles, by name. Filtering on the wifi type avoids
@@ -136,15 +169,23 @@ function getIp(service: any): string {
 
 // ── AP row ────────────────────────────────────────────────────────────────────
 
-function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean, onRefresh: () => void): Gtk.ListBoxRow {
+function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean, onRefresh: () => void, onDetails?: () => void): Gtk.ListBoxRow {
     const ssid    = ap.ssid as string
     const secured = isSecured(ap)
     // AstalNetwork.AccessPoint has no `active` property — the active AP is derived
     // by the caller from network.wifi.active_access_point.bssid.
     let active    = isActive
 
-    // Right-side widget: optional lock icon + (forget) + action button
+    // Right-side widget: optional info + lock icon + (forget) + action button
     const rightBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+
+    // Network details subpage (security, band, channel, BSSID, IP when connected).
+    if (onDetails) {
+        const infoBtn = CrystalButton({ variant: "ghost", pill: true, tooltip_text: t("settings.network.ap.details") })
+        infoBtn.set_child(new Gtk.Image({ gicon: Icons.wifiCog, pixel_size: 16, css_classes: ["cs-icon"] }))
+        infoBtn.connect("clicked", onDetails)
+        rightBox.append(infoBtn)
+    }
 
     if (secured) {
         rightBox.append(new Gtk.Image({
@@ -309,9 +350,55 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
     return createRow(ssid, subtitle, rightBox)
 }
 
+// ── AP detail subpage ───────────────────────────────────────────────────────────
+
+function buildApDetailPage(ap: any, network: any, nav: SettingsNav): Gtk.Widget {
+    const ssid = ap.ssid as string
+    const page = pageBox("network-ap-detail-page")
+    page.append(subpageHeader(ssid, t("settings.network.detail.subtitle"), () => nav.goBack()))
+
+    const { box: infoBox, listBox: infoList } = listGroup(t("settings.network.detail.group.info"))
+    infoList.append(createRow(t("settings.network.detail.security"),  t("settings.network.detail.security.desc"),  staticLabel(securityLabel(ap))))
+    infoList.append(createRow(t("settings.network.detail.signal"),    t("settings.network.detail.signal.desc"),    staticLabel(`${ap.strength}%`)))
+    infoList.append(createRow(t("settings.network.detail.band"),      t("settings.network.detail.band.desc"),      staticLabel(freqBand(ap.frequency))))
+    infoList.append(createRow(t("settings.network.detail.channel"),   t("settings.network.detail.channel.desc"),   staticLabel(String(freqChannel(ap.frequency)))))
+    infoList.append(createRow(t("settings.network.detail.frequency"), t("settings.network.detail.frequency.desc"), staticLabel(`${ap.frequency} MHz`)))
+    infoList.append(createRow(t("settings.network.detail.bssid"),     t("settings.network.detail.bssid.desc"),     staticLabel(ap.bssid)))
+    const maxRate = ap.max_bitrate ? `${Math.round(ap.max_bitrate / 1000)} Mbps` : "---"
+    infoList.append(createRow(t("settings.network.detail.max-rate"),  t("settings.network.detail.max-rate.desc"),  staticLabel(maxRate)))
+    page.append(infoBox)
+
+    // IPv4 details — only meaningful while this AP is the active connection.
+    const activeBssid = network.wifi?.active_access_point?.bssid
+    if (activeBssid && ap.bssid === activeBssid) {
+        const dev = network.wifi.device
+        let ip = "---", gw = "---", dns = "---", mac = "---", speed = "---"
+        try {
+            const cfg   = dev?.get_ip4_config?.()
+            const addrs = cfg?.get_addresses?.()
+            if (addrs?.length > 0) ip = `${addrs[0].get_address()}/${addrs[0].get_prefix()}`
+            gw = cfg?.get_gateway?.() || "---"
+            const ns = cfg?.get_nameservers?.()
+            if (ns?.length > 0) dns = ns.join(", ")
+        } catch {}
+        try { mac = dev?.hw_address || dev?.get_hw_address?.() || "---" } catch {}
+        try { const kbps = dev?.bitrate || 0; if (kbps > 0) speed = `${Math.round(kbps / 1000)} Mbps` } catch {}
+
+        const { box: connBox, listBox: connList } = listGroup(t("settings.network.detail.group.ipv4"))
+        connList.append(createRow(t("settings.network.ipv4"),           t("settings.network.detail.ipv4.desc"),    staticLabel(ip)))
+        connList.append(createRow(t("settings.network.detail.gateway"), t("settings.network.detail.gateway.desc"), staticLabel(gw)))
+        connList.append(createRow(t("settings.network.detail.dns"),     t("settings.network.detail.dns.desc"),     staticLabel(dns)))
+        connList.append(createRow(t("settings.network.detail.mac"),     t("settings.network.detail.mac.desc"),     staticLabel(mac)))
+        connList.append(createRow(t("settings.network.speed"),          t("settings.network.detail.speed.desc"),   staticLabel(speed)))
+        page.append(connBox)
+    }
+
+    return page
+}
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function NetworkPage() {
+export default function NetworkPage(nav?: SettingsNav) {
     const network = AstalNetwork.get_default()
     if (!network) return new Gtk.Label({ label: t("settings.network.error.no-service") })
 
@@ -444,11 +531,15 @@ export default function NetworkPage() {
             while (child) { apList.remove(child); child = apList.get_first_child() }
 
             for (const ap of aps) {
+                const onDetails = nav
+                    ? () => nav.pushSubpage({ id: `network/ap/${ap.bssid}`, build: () => buildApDetailPage(ap, network, nav) })
+                    : undefined
                 apList.append(buildApRow(
                     ap, iface,
                     !!activeBssid && ap.bssid === activeBssid,
                     savedSsids.has(ap.ssid),
                     refreshAps,
+                    onDetails,
                 ))
             }
 
