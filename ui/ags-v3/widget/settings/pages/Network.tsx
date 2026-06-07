@@ -16,13 +16,25 @@ function isSecured(ap: any): boolean {
         || (ap.rsn_flags ?? 0) !== 0
 }
 
-async function hasSavedProfile(ssid: string): Promise<boolean> {
+// Saved Wi-Fi connection profiles, by name. Filtering on the wifi type avoids
+// matching a VPN/wired profile that happens to share an SSID's name.
+async function listSavedWifiSsids(): Promise<Set<string>> {
+    const set = new Set<string>()
     try {
-        const out = await execAsync(["nmcli", "-t", "-f", "NAME", "connection", "show"])
-        return out.split("\n").some(line => line.trim() === ssid)
-    } catch {
-        return false
-    }
+        const out = await execAsync(["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"])
+        for (const line of out.trim().split("\n")) {
+            if (!line) continue
+            const parts = line.split(":")
+            const type = parts.pop() ?? ""           // TYPE is the last field, never contains ":"
+            const name = parts.join(":").replace(/\\:/g, ":")
+            if (type === "802-11-wireless") set.add(name)
+        }
+    } catch {}
+    return set
+}
+
+function deleteProfile(name: string): Promise<string> {
+    return execAsync(["nmcli", "connection", "delete", name])
 }
 
 function connectAp(ssid: string, password?: string): Promise<string> {
@@ -124,14 +136,14 @@ function getIp(service: any): string {
 
 // ── AP row ────────────────────────────────────────────────────────────────────
 
-function buildApRow(ap: any, iface: string, isActive: boolean, onRefresh: () => void): Gtk.ListBoxRow {
+function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean, onRefresh: () => void): Gtk.ListBoxRow {
     const ssid    = ap.ssid as string
     const secured = isSecured(ap)
     // AstalNetwork.AccessPoint has no `active` property — the active AP is derived
     // by the caller from network.wifi.active_access_point.bssid.
     let active    = isActive
 
-    // Right-side widget: optional lock icon + action button
+    // Right-side widget: optional lock icon + (forget) + action button
     const rightBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
 
     if (secured) {
@@ -142,6 +154,24 @@ function buildApRow(ap: any, iface: string, isActive: boolean, onRefresh: () => 
             valign: Gtk.Align.CENTER,
             css_classes: ["cs-icon"],
         }))
+    }
+
+    // Forget — only for saved, currently-disconnected networks (you disconnect
+    // first, then forget). The row is rebuilt on connect/disconnect so this tracks.
+    if (isSaved && !active) {
+        const forgetBtn = CrystalButton({
+            variant: "ghost",
+            pill: true,
+            tooltip_text: t("settings.network.ap.forget"),
+        })
+        forgetBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 14, css_classes: ["cs-icon"] }))
+        forgetBtn.connect("clicked", async () => {
+            forgetBtn.sensitive = false
+            try { await deleteProfile(ssid) }
+            catch (e) { console.error("[Network] forget failed:", e); forgetBtn.sensitive = true }
+            setTimeout(onRefresh, 800)
+        })
+        rightBox.append(forgetBtn)
     }
 
     const btn = new Gtk.Button({
@@ -226,7 +256,7 @@ function buildApRow(ap: any, iface: string, isActive: boolean, onRefresh: () => 
             const pwd = pwdEntry!.text.trim()
             if (!pwd) return
             pwdPopover!.popdown()
-            performConnect(pwd)
+            performConnect(pwd, true)
         }
         confirmBtn.connect("clicked", submit)
         pwdEntry.connect("activate", submit)
@@ -234,7 +264,7 @@ function buildApRow(ap: any, iface: string, isActive: boolean, onRefresh: () => 
         return pwdPopover
     }
 
-    async function performConnect(password?: string) {
+    async function performConnect(password?: string, freshProfile = false) {
         setState("loading")
         try {
             await connectAp(ssid, password)
@@ -243,6 +273,10 @@ function buildApRow(ap: any, iface: string, isActive: boolean, onRefresh: () => 
             setTimeout(onRefresh, 2000)
         } catch (e) {
             console.error("[Network] connect failed:", e)
+            // A wrong password still leaves a broken saved profile behind; the next
+            // attempt would silently reuse it and fail forever. Drop the just-created
+            // profile so the password prompt reappears.
+            if (freshProfile) { try { await deleteProfile(ssid) } catch {} }
             setState("error")
         }
     }
@@ -262,8 +296,7 @@ function buildApRow(ap: any, iface: string, isActive: boolean, onRefresh: () => 
             return
         }
 
-        const saved = await hasSavedProfile(ssid)
-        if (!secured || saved) {
+        if (!secured || isSaved) {
             performConnect()
         } else {
             const pop = getOrBuildPopover()
@@ -333,12 +366,21 @@ export default function NetworkPage() {
             if (!network.wifi) return
             ssidLabel.label  = String(network.wifi.ssid || t("settings.network.status.disconnected-hw"))
             ipLabel.label    = getIp(network.wifi)
-            const spd        = network.wifi.active_access_point?.speed || 0
-            speedLabel.label = spd > 0 ? `${spd} Mbps` : "---"
+            // Link speed: AstalNetwork exposes none — read the NM device's bitrate (kb/s).
+            const kbps       = (network.wifi.device as any)?.bitrate || 0
+            speedLabel.label = kbps > 0 ? `${Math.round(kbps / 1000)} Mbps` : "---"
         }
+        // Wifi has no `ip4-address` property, and notify::ssid fires before DHCP
+        // assigns an address — so drive live updates from the NM device's own
+        // ip4-config / bitrate / state changes as well.
         network.wifi.connect("notify::enabled", updateWifi)
         network.wifi.connect("notify::ssid", updateWifi)
-        network.wifi.connect("notify::ip4-address", updateWifi)
+        network.wifi.connect("notify::active-access-point", updateWifi)
+        network.wifi.connect("notify::internet", updateWifi)
+        const wifiDev = network.wifi.device as any
+        wifiDev?.connect?.("notify::ip4-config", updateWifi)
+        wifiDev?.connect?.("notify::bitrate", updateWifi)
+        wifiDev?.connect?.("notify::state", updateWifi)
         updateWifi()
 
         wifiList.append(createRow(t("settings.network.interface"),      t("settings.network.wireless-interface.desc"),          ifaceLabel))
@@ -374,19 +416,40 @@ export default function NetworkPage() {
         if (firstChild) apBox.remove(firstChild)
         apBox.prepend(headerBox)
 
-        function refreshAps() {
+        // Bumped on every refresh; the async saved-profiles fetch below bails if a
+        // newer refresh superseded it, so overlapping scan bursts can't duplicate rows.
+        let refreshGen = 0
+        async function refreshAps() {
             if (!network.wifi) return
-            let child = apList.get_first_child()
-            while (child) { apList.remove(child); child = apList.get_first_child() }
+            const gen = ++refreshGen
+
+            const enabled    = network.wifi.enabled
+            const activeAp   = network.wifi.active_access_point
+            const activeBssid = activeAp?.bssid
 
             const aps: any[] = (network.wifi.get_access_points() || [])
                 .filter((ap: any) => !!ap.ssid)
                 .sort((a: any, b: any) => b.strength - a.strength)
                 .slice(0, 12)
 
-            const activeBssid = network.wifi.active_access_point?.bssid
+            // The connected AP must always be shown, even if it fell outside top-12.
+            if (activeAp && activeBssid && !aps.some((ap: any) => ap.bssid === activeBssid)) {
+                aps.unshift(activeAp)
+            }
+
+            const savedSsids = await listSavedWifiSsids()
+            if (gen !== refreshGen) return   // a newer refresh already ran
+
+            let child = apList.get_first_child()
+            while (child) { apList.remove(child); child = apList.get_first_child() }
+
             for (const ap of aps) {
-                apList.append(buildApRow(ap, iface, !!activeBssid && ap.bssid === activeBssid, refreshAps))
+                apList.append(buildApRow(
+                    ap, iface,
+                    !!activeBssid && ap.bssid === activeBssid,
+                    savedSsids.has(ap.ssid),
+                    refreshAps,
+                ))
             }
 
             // The Scan button lives in this group's header, so the group must stay
@@ -403,7 +466,7 @@ export default function NetworkPage() {
                 apList.append(emptyRow)
             }
 
-            apBox.visible = network.wifi.enabled
+            apBox.visible = enabled
         }
 
         scanBtn.connect("clicked", () => {
