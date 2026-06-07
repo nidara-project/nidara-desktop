@@ -315,7 +315,7 @@ export default function NetworkPage() {
     }
 
     // ── Wi-Fi ─────────────────────────────────────────────────────────────────
-    if (network.wifi && network.wifi.get_devices().length > 0) {
+    if (network.wifi && network.wifi.device) {
         const { box: wifiBox, listBox: wifiList } = listGroup(t("settings.network.group.wi-fi"))
 
         const wifiSwitch = new Gtk.Switch({ active: network.wifi.enabled, valign: Gtk.Align.CENTER })
@@ -399,7 +399,7 @@ export default function NetworkPage() {
             })
         })
 
-        network.wifi.connect("access-points-changed", refreshAps)
+        network.wifi.connect("notify::access-points", refreshAps)
         refreshAps()
         page.append(apBox)
 
