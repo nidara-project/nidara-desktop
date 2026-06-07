@@ -99,6 +99,14 @@ class HyprlandStateClass extends GObject.Object {
         return this.availableModesByName.get(name) ?? []
     }
 
+    /** Read an effective Hyprland option's int value via `hyprctl getoption` (works
+     *  with the Lua parser, unlike `keyword`). On-demand read — the first of the
+     *  "effective config in HyprlandState" idea (gaps etc. could follow the same way). */
+    getOptionInt(name: string): number {
+        try { return JSON.parse(exec(["hyprctl", "getoption", name, "-j"])).int ?? 0 }
+        catch (e) { console.error("[HyprlandState] getOptionInt", name, e); return 0 }
+    }
+
     // Coalesces multiple signals that fire in the same GLib iteration into one refresh.
     private _scheduleRefresh() {
         if (this._refreshPending) return

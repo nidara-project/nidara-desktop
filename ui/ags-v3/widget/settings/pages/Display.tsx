@@ -246,11 +246,12 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
         rotDrp
     ))
 
-    // VRR
+    // VRR — order matches Hyprland's misc:vrr int: 0=off, 1=always, 2=fullscreen-only,
+    // so the dropdown index equals the value applied (they were swapped before).
     const VRR_OPTS = [
         t("settings.display.vrr.off"),
-        t("settings.display.vrr.fullscreen"),
         t("settings.display.vrr.always"),
+        t("settings.display.vrr.fullscreen"),
     ]
     const vrrModel = new Gtk.StringList({ strings: VRR_OPTS })
     const vrrDrp = new Gtk.DropDown({ model: vrrModel, valign: Gtk.Align.CENTER })

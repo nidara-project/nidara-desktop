@@ -1,6 +1,7 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
+import hs from "./HyprlandState"
 
 interface MonitorState {
     scale: number
@@ -26,7 +27,10 @@ class MonitorConfig extends GObject.Object {
                 transform: mon.transform ?? 0,
             })
         }
-        this._vrr = monitors[0]?.vrr ?? 0
+        // misc:vrr is a GLOBAL int (0=off, 1=always, 2=fullscreen-only). AstalHyprland's
+        // Monitor.vrr is just a per-monitor bool and doesn't reflect it, so read the real
+        // effective value via HyprlandState (otherwise it resets to off on UI reload).
+        this._vrr = hs.getOptionInt("misc:vrr")
     }
 
     getScale(name: string) { return this.state.get(name)?.scale ?? 1.0 }
