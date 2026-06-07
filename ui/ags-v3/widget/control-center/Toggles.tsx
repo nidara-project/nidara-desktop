@@ -1,11 +1,11 @@
 import { Gtk } from "ags/gtk4"
-import { execAsync } from "ags/process"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalNotifd from "gi://AstalNotifd"
 import { AtomicWidget, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Gio from "gi://Gio"
 import Icons from "../../core/Icons"
+import * as Net from "../../core/NetworkService"
 
 function setIcon(img: Gtk.Image, icon: Gio.FileIcon) {
     img.gicon = icon
@@ -159,11 +159,10 @@ export function EthernetWidget(): AtomicWidget {
     const wired   = network?.wired
 
     const getIcon   = () => Icons.ethernet
-    const getActive = () => !!(wired && (wired as any).internet === (AstalNetwork as any).Internet?.CONNECTED)
+    const getActive = () => Net.wiredConnected(wired)
     const getSub = () => {
         if (!wired) return t("cc.ethernet.sub.no-cable")
-        const connected = (wired as any).internet === (AstalNetwork as any).Internet?.CONNECTED
-        if (!connected) return t("cc.ethernet.sub.disconnected")
+        if (!Net.wiredConnected(wired)) return t("cc.ethernet.sub.disconnected")
         return (wired as any).device?.interface || t("cc.ethernet.sub.connected")
     }
     const subscribe: SubscribeFn = (sync) => {
@@ -186,15 +185,13 @@ export function EthernetWidget(): AtomicWidget {
 
 export function WifiWidget(): AtomicWidget {
     const wifi   = AstalNetwork.get_default()?.wifi
-    const toggle = () => execAsync(["bash", "-c",
-        "nmcli radio wifi | grep -q enabled && nmcli radio wifi off || nmcli radio wifi on"
-    ]).catch(() => {})
+    const toggle = () => Net.toggleWifi()
 
-    const getIcon   = () => (wifi as any)?.enabled === false ? Icons.wifiOff : Icons.wifi
-    const getActive = () => !!((wifi as any)?.enabled !== false && (wifi as any)?.ssid)
+    const getIcon   = () => Net.wifiEnabled(wifi) ? Icons.wifi : Icons.wifiOff
+    const getActive = () => !!(Net.wifiEnabled(wifi) && (wifi as any)?.ssid)
     const getSub    = () => {
         if (!wifi) return t("cc.wifi.sub.off")
-        return (wifi as any).ssid || ((wifi as any).enabled === false ? t("cc.wifi.sub.off") : t("cc.wifi.sub.connected"))
+        return (wifi as any).ssid || (Net.wifiEnabled(wifi) ? t("cc.wifi.sub.connected") : t("cc.wifi.sub.off"))
     }
     const subscribe: SubscribeFn = (sync) => {
         if (!wifi) return () => {}

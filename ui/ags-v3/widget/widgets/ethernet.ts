@@ -4,17 +4,7 @@ import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { buildCapsuleInner, wrapCapsuleTile } from "../control-center/Toggles"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
-
-function getIp(service: any): string {
-    if (!service) return "—"
-    const addr = (service as any)?.ip4_address
-    if (addr && addr !== "None") return String(addr)
-    try {
-        const addrs = service.device?.get_ip4_config()?.get_addresses()
-        if (addrs?.length > 0) return String(addrs[0].get_address())
-    } catch {}
-    return "—"
-}
+import * as Net from "../../core/NetworkService"
 
 function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; update: () => void } {
     const key = new Gtk.Label({ label, css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
@@ -31,7 +21,7 @@ function buildBarContent(): Gtk.Widget {
 
 function buildContent(size: WidgetSize): Gtk.Widget {
     const wired = AstalNetwork.get_default()?.wired
-    const isConnected = () => (wired as any)?.internet === (AstalNetwork as any).Internet?.CONNECTED
+    const isConnected = () => Net.wiredConnected(wired)
     const getSub = () => {
         if (!wired) return t("cc.ethernet.sub.no-cable")
         return isConnected() ? t("cc.ethernet.sub.connected") : t("cc.ethernet.sub.disconnected")
@@ -59,11 +49,11 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
 function buildInfoPanel(): Gtk.Widget {
     const wired = AstalNetwork.get_default()?.wired
-    const isConnected = () => (wired as any)?.internet === (AstalNetwork as any).Internet?.CONNECTED
+    const isConnected = () => Net.wiredConnected(wired)
 
     const iface = infoRow(t("widget.ethernet.row.interface"), () => (wired as any)?.device?.interface || "—")
     const state = infoRow(t("widget.ethernet.row.status"),    () => isConnected() ? t("cc.ethernet.sub.connected") : t("cc.ethernet.sub.disconnected"))
-    const ip    = infoRow("IP",                               () => getIp(wired))
+    const ip    = infoRow("IP",                               () => Net.getIp(wired))
     const speed = infoRow(t("widget.ethernet.row.speed"),     () => { const s = (wired as any)?.device?.speed; return s ? `${s} Mb/s` : "—" })
 
     const updateAll = () => { iface.update(); state.update(); ip.update(); speed.update() }

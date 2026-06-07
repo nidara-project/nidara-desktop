@@ -2973,18 +2973,6 @@ stack.settings-stack {
   padding: 32px 40px 40px;
 }
 
-.settings-page-title {
-  font-size: 1.21em;
-  font-weight: 700;
-  color: var(--crystal-text);
-  margin-bottom: 6px;
-}
-
-.settings-page-subtitle {
-  font-size: 0.93em;
-  color: var(--crystal-text-dim);
-}
-
 spinbutton.time-spin {
   background: var(--crystal-surface);
   border: 1px solid var(--crystal-border);

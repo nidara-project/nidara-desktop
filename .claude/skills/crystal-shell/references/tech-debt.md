@@ -49,10 +49,13 @@ stub, all ~19 `page.append(pageHeader(...))` call sites + their imports, and the
 `.settings-page-title`/`-subtitle` CSS have been swept. Only leftover: the
 `settings.*.subtitle` i18n keys are now dead (left in place per the bulk-i18n workflow).
 
-### 8. Settings subpages don't refresh while open
+### 8. Settings subpages: the framework still builds them once
 A subpage pushed via `SettingsNav.pushSubpage` is built once (fresh on each push, but static
-after). The Wi-Fi AP detail page snapshots IP/gateway/DNS/signal at open time; it won't live-
-update like the main page's header. Fine for now; revisit if a subpage needs reactivity.
+after) — `pushSubpage` itself has no live-rebuild story, so a subpage that needs reactivity
+must wire its own signals. The Wi-Fi AP detail page now does exactly that (it subscribes via
+`NetworkService.watchWifi` + the AP's `notify::strength` and updates its labels in place, with
+the IPv4 group shown only while that AP is the active connection). So the *pattern* for a
+reactive subpage exists; the generic framework convenience does not.
 
 ## Resolved — rules that still apply
 

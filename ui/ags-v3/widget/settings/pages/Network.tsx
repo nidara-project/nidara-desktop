@@ -1,111 +1,11 @@
 import { Gtk } from "ags/gtk4"
 import AstalNetwork from "gi://AstalNetwork"
-import { execAsync } from "ags/process"
 import { listGroup, createRow, staticLabel, pageBox, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
+import * as Net from "../../../core/NetworkService"
+import type { VpnProfile } from "../../../core/NetworkService"
 import { CrystalButton } from "../../../../lib/crystal-ui"
-
-// ── nmcli helpers ─────────────────────────────────────────────────────────────
-
-const NM_AP_FLAGS_PRIVACY = 0x1
-
-function isSecured(ap: any): boolean {
-    return (ap.flags & NM_AP_FLAGS_PRIVACY) !== 0
-        || (ap.wpa_flags ?? 0) !== 0
-        || (ap.rsn_flags ?? 0) !== 0
-}
-
-// NM.80211ApSecurityFlags bits used to classify the security scheme.
-const SEC_KEY_8021X = 0x200
-const SEC_KEY_SAE   = 0x400   // WPA3 personal
-const SEC_KEY_OWE   = 0x800   // Enhanced Open
-
-function securityLabel(ap: any): string {
-    const rsn = ap.rsn_flags ?? 0
-    const wpa = ap.wpa_flags ?? 0
-    if (rsn === 0 && wpa === 0) {
-        return (ap.flags & NM_AP_FLAGS_PRIVACY) ? "WEP" : t("settings.network.security.open")
-    }
-    const parts: string[] = []
-    if (rsn & SEC_KEY_SAE) parts.push("WPA3")
-    if (rsn & SEC_KEY_OWE) parts.push("OWE")
-    if ((rsn & SEC_KEY_8021X) || (wpa & SEC_KEY_8021X)) parts.push(t("settings.network.security.enterprise"))
-    if (parts.length === 0) parts.push(rsn !== 0 ? "WPA2" : "WPA")
-    return parts.join(" / ")
-}
-
-function freqBand(freq: number): string {
-    if (freq >= 5925) return "6 GHz"
-    if (freq >= 4900) return "5 GHz"
-    return "2.4 GHz"
-}
-
-function freqChannel(freq: number): number {
-    if (freq === 2484) return 14
-    if (freq >= 2412 && freq <= 2484) return Math.round((freq - 2407) / 5)
-    if (freq >= 5000 && freq < 5925)  return Math.round((freq - 5000) / 5)
-    if (freq >= 5925)                 return Math.round((freq - 5950) / 5)
-    return 0
-}
-
-// Saved Wi-Fi connection profiles, by name. Filtering on the wifi type avoids
-// matching a VPN/wired profile that happens to share an SSID's name.
-async function listSavedWifiSsids(): Promise<Set<string>> {
-    const set = new Set<string>()
-    try {
-        const out = await execAsync(["nmcli", "-t", "-f", "NAME,TYPE", "connection", "show"])
-        for (const line of out.trim().split("\n")) {
-            if (!line) continue
-            const parts = line.split(":")
-            const type = parts.pop() ?? ""           // TYPE is the last field, never contains ":"
-            const name = parts.join(":").replace(/\\:/g, ":")
-            if (type === "802-11-wireless") set.add(name)
-        }
-    } catch {}
-    return set
-}
-
-function deleteProfile(name: string): Promise<string> {
-    return execAsync(["nmcli", "connection", "delete", name])
-}
-
-function connectAp(ssid: string, password?: string): Promise<string> {
-    const args = ["nmcli", "device", "wifi", "connect", ssid]
-    if (password) args.push("password", password)
-    return execAsync(args)
-}
-
-function disconnectIface(iface: string): Promise<string> {
-    return execAsync(["nmcli", "device", "disconnect", iface])
-}
-
-function rescan(): Promise<string> {
-    return execAsync(["nmcli", "device", "wifi", "rescan"]).catch(() => "")
-}
-
-// ── VPN helpers ───────────────────────────────────────────────────────────────
-
-interface VpnProfile { name: string; type: string; active: boolean }
-
-async function listVpnProfiles(): Promise<VpnProfile[]> {
-    try {
-        const out = await execAsync(["nmcli", "-t", "-f", "NAME,TYPE,ACTIVE", "connection", "show"])
-        return out.trim().split("\n")
-            .map(line => {
-                const parts = line.split(":")
-                return { name: parts[0] ?? "", type: parts[1] ?? "", active: parts[2] === "yes" }
-            })
-            .filter(p => p.type === "vpn" || p.type === "wireguard")
-    } catch {
-        return []
-    }
-}
-
-function vpnTypeName(type: string): string {
-    if (type === "wireguard") return "WireGuard"
-    return "VPN"
-}
 
 function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow {
     let active = profile.active
@@ -140,10 +40,10 @@ function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow
         setState("loading")
         try {
             if (active) {
-                await execAsync(["nmcli", "connection", "down", profile.name])
+                await Net.vpnDown(profile.name)
                 active = false
             } else {
-                await execAsync(["nmcli", "connection", "up", profile.name])
+                await Net.vpnUp(profile.name)
                 active = true
             }
             setState(active ? "disconnect" : "connect")
@@ -154,24 +54,17 @@ function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow
         }
     })
 
-    return createRow(profile.name, vpnTypeName(profile.type), btn)
+    return createRow(profile.name, Net.vpnTypeName(profile.type), btn)
 }
 
-function getIp(service: any): string {
-    if (!service) return t("settings.network.label.none")
-    if (service.ip4_address && service.ip4_address !== "None") return String(service.ip4_address)
-    try {
-        const addrs = service.device?.get_ip4_config()?.get_addresses()
-        if (addrs?.length > 0) return String(addrs[0].get_address())
-    } catch {}
-    return t("settings.network.label.none")
-}
+// IP with the Settings-style "None" fallback (the CC/bar widgets use a dash).
+const ipOf = (service: any) => Net.getIp(service, t("settings.network.label.none"))
 
 // ── AP row ────────────────────────────────────────────────────────────────────
 
 function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean, onRefresh: () => void, onDetails?: () => void): Gtk.ListBoxRow {
     const ssid    = ap.ssid as string
-    const secured = isSecured(ap)
+    const secured = Net.isSecured(ap)
     // AstalNetwork.AccessPoint has no `active` property — the active AP is derived
     // by the caller from network.wifi.active_access_point.bssid.
     let active    = isActive
@@ -208,7 +101,7 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
         forgetBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 14, css_classes: ["cs-icon"] }))
         forgetBtn.connect("clicked", async () => {
             forgetBtn.sensitive = false
-            try { await deleteProfile(ssid) }
+            try { await Net.forgetProfile(ssid) }
             catch (e) { console.error("[Network] forget failed:", e); forgetBtn.sensitive = true }
             setTimeout(onRefresh, 800)
         })
@@ -308,7 +201,7 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
     async function performConnect(password?: string, freshProfile = false) {
         setState("loading")
         try {
-            await connectAp(ssid, password)
+            await Net.connectAp(ssid, password)
             active = true
             setState("disconnect")
             setTimeout(onRefresh, 2000)
@@ -317,7 +210,7 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
             // A wrong password still leaves a broken saved profile behind; the next
             // attempt would silently reuse it and fail forever. Drop the just-created
             // profile so the password prompt reappears.
-            if (freshProfile) { try { await deleteProfile(ssid) } catch {} }
+            if (freshProfile) { try { await Net.forgetProfile(ssid) } catch {} }
             setState("error")
         }
     }
@@ -326,7 +219,7 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
         if (active) {
             setState("loading")
             try {
-                await disconnectIface(iface)
+                await Net.disconnectIface(iface)
                 active = false
                 setState("connect")
                 setTimeout(onRefresh, 1000)
@@ -358,20 +251,46 @@ function buildApDetailPage(ap: any, network: any): Gtk.Widget {
     const page = pageBox("network-ap-detail-page")
 
     const { box: infoBox, listBox: infoList } = listGroup(t("settings.network.detail.group.info"))
-    infoList.append(createRow(t("settings.network.detail.security"),  t("settings.network.detail.security.desc"),  staticLabel(securityLabel(ap))))
-    infoList.append(createRow(t("settings.network.detail.signal"),    t("settings.network.detail.signal.desc"),    staticLabel(`${ap.strength}%`)))
-    infoList.append(createRow(t("settings.network.detail.band"),      t("settings.network.detail.band.desc"),      staticLabel(freqBand(ap.frequency))))
-    infoList.append(createRow(t("settings.network.detail.channel"),   t("settings.network.detail.channel.desc"),   staticLabel(String(freqChannel(ap.frequency)))))
+    const signalLabel = staticLabel(`${ap.strength}%`)
+    infoList.append(createRow(t("settings.network.detail.security"),  t("settings.network.detail.security.desc"),  staticLabel(Net.securityLabel(ap))))
+    infoList.append(createRow(t("settings.network.detail.signal"),    t("settings.network.detail.signal.desc"),    signalLabel))
+    infoList.append(createRow(t("settings.network.detail.band"),      t("settings.network.detail.band.desc"),      staticLabel(Net.freqBand(ap.frequency))))
+    infoList.append(createRow(t("settings.network.detail.channel"),   t("settings.network.detail.channel.desc"),   staticLabel(String(Net.freqChannel(ap.frequency)))))
     infoList.append(createRow(t("settings.network.detail.frequency"), t("settings.network.detail.frequency.desc"), staticLabel(`${ap.frequency} MHz`)))
     infoList.append(createRow(t("settings.network.detail.bssid"),     t("settings.network.detail.bssid.desc"),     staticLabel(ap.bssid)))
     const maxRate = ap.max_bitrate ? `${Math.round(ap.max_bitrate / 1000)} Mbps` : "---"
     infoList.append(createRow(t("settings.network.detail.max-rate"),  t("settings.network.detail.max-rate.desc"),  staticLabel(maxRate)))
     page.append(infoBox)
 
-    // IPv4 details — only meaningful while this AP is the active connection.
-    const activeBssid = network.wifi?.active_access_point?.bssid
-    if (activeBssid && ap.bssid === activeBssid) {
-        const dev = network.wifi.device
+    // IPv4 details — only meaningful while this AP is the active connection, and the
+    // values arrive after DHCP. Build the group once and live-update it (visible only
+    // while active) instead of snapshotting at open time. A hidden Box child takes no
+    // space, so there's no phantom gap when this AP isn't the active one.
+    const { box: connBox, listBox: connList } = listGroup(t("settings.network.detail.group.ipv4"))
+    const ipLabel    = staticLabel("---")
+    const gwLabel    = staticLabel("---")
+    const dnsLabel   = staticLabel("---")
+    const macLabel   = staticLabel("---")
+    const speedLabel = staticLabel("---")
+    connList.append(createRow(t("settings.network.ipv4"),           t("settings.network.detail.ipv4.desc"),    ipLabel))
+    connList.append(createRow(t("settings.network.detail.gateway"), t("settings.network.detail.gateway.desc"), gwLabel))
+    connList.append(createRow(t("settings.network.detail.dns"),     t("settings.network.detail.dns.desc"),     dnsLabel))
+    connList.append(createRow(t("settings.network.detail.mac"),     t("settings.network.detail.mac.desc"),     macLabel))
+    connList.append(createRow(t("settings.network.speed"),          t("settings.network.detail.speed.desc"),   speedLabel))
+    page.append(connBox)
+
+    const isActive = () => {
+        const b = network.wifi?.active_access_point?.bssid
+        return !!b && b === ap.bssid
+    }
+
+    const update = () => {
+        signalLabel.label = `${ap.strength}%`
+        const active = isActive()
+        connBox.visible = active
+        if (!active) return
+
+        const dev = network.wifi?.device as any
         let ip = "---", gw = "---", dns = "---", mac = "---", speed = "---"
         try {
             const cfg   = dev?.get_ip4_config?.()
@@ -384,14 +303,19 @@ function buildApDetailPage(ap: any, network: any): Gtk.Widget {
         try { mac = dev?.hw_address || dev?.get_hw_address?.() || "---" } catch {}
         try { const kbps = dev?.bitrate || 0; if (kbps > 0) speed = `${Math.round(kbps / 1000)} Mbps` } catch {}
 
-        const { box: connBox, listBox: connList } = listGroup(t("settings.network.detail.group.ipv4"))
-        connList.append(createRow(t("settings.network.ipv4"),           t("settings.network.detail.ipv4.desc"),    staticLabel(ip)))
-        connList.append(createRow(t("settings.network.detail.gateway"), t("settings.network.detail.gateway.desc"), staticLabel(gw)))
-        connList.append(createRow(t("settings.network.detail.dns"),     t("settings.network.detail.dns.desc"),     staticLabel(dns)))
-        connList.append(createRow(t("settings.network.detail.mac"),     t("settings.network.detail.mac.desc"),     staticLabel(mac)))
-        connList.append(createRow(t("settings.network.speed"),          t("settings.network.detail.speed.desc"),   staticLabel(speed)))
-        page.append(connBox)
+        ipLabel.label = ip; gwLabel.label = gw; dnsLabel.label = dns
+        macLabel.label = mac; speedLabel.label = speed
     }
+
+    // The signal lives on the AP object itself; IP/speed/active-state live on the
+    // wifi + device (covered by watchWifi). Both refresh the page in place.
+    const apStrengthId = ap.connect?.("notify::strength", update) ?? 0
+    const disposeWifi  = Net.watchWifi(update)
+    page.connect("unrealize", () => {
+        try { if (apStrengthId) ap.disconnect(apStrengthId) } catch {}
+        disposeWifi()
+    })
+    update()
 
     return page
 }
@@ -408,23 +332,19 @@ export default function NetworkPage(nav?: SettingsNav) {
     if (network.wired) {
         const { box, listBox } = listGroup(t("settings.network.group.ethernet"))
 
-        const wiredStatus    = staticLabel(
-            network.wired.internet === AstalNetwork.Internet.CONNECTED
-                ? t("settings.network.status.connected")
-                : t("settings.network.status.disconnected")
-        )
+        const wiredStatusText = () => Net.wiredConnected(network.wired)
+            ? t("settings.network.status.connected")
+            : t("settings.network.status.disconnected")
+        const wiredStatus    = staticLabel(wiredStatusText())
         const interfaceLabel = staticLabel(network.wired.device?.interface || "---")
-        const ipLabel        = staticLabel(getIp(network.wired))
+        const ipLabel        = staticLabel(ipOf(network.wired))
 
         const updateWired = () => {
-            wiredStatus.label    = network.wired.internet === AstalNetwork.Internet.CONNECTED
-                ? t("settings.network.status.connected")
-                : t("settings.network.status.disconnected")
+            wiredStatus.label    = wiredStatusText()
             interfaceLabel.label = String(network.wired.device?.interface || "---")
-            ipLabel.label        = getIp(network.wired)
+            ipLabel.label        = ipOf(network.wired)
         }
-        network.wired.connect("notify::internet", updateWired)
-        network.wired.connect("notify::ip4-address", updateWired)
+        Net.watchWired(updateWired)
 
         listBox.append(createRow(t("settings.network.ethernet"),  t("settings.network.hw-status.desc"),    wiredStatus))
         listBox.append(createRow(t("settings.network.interface"),           t("settings.network.kernel-device.desc"),     interfaceLabel))
@@ -436,8 +356,12 @@ export default function NetworkPage(nav?: SettingsNav) {
     if (network.wifi && network.wifi.device) {
         const { box: wifiBox, listBox: wifiList } = listGroup(t("settings.network.group.wi-fi"))
 
-        const wifiSwitch = new Gtk.Switch({ active: network.wifi.enabled, valign: Gtk.Align.CENTER })
-        wifiSwitch.connect("notify::active", () => { network.wifi.enabled = wifiSwitch.active })
+        const wifiSwitch = new Gtk.Switch({ active: Net.wifiEnabled(network.wifi), valign: Gtk.Align.CENTER })
+        // state-set issues the radio command; the switch's visible state is driven
+        // back from notify::enabled so it stays truthful if the radio is toggled
+        // elsewhere (CC tile, nmcli) and doesn't fight the command.
+        wifiSwitch.connect("state-set", (_sw, state) => { Net.setWifiEnabled(state); return false })
+        network.wifi.connect("notify::enabled", () => { wifiSwitch.active = Net.wifiEnabled(network.wifi) })
         wifiList.append(createRow(t("settings.network.enable-wifi"), t("settings.network.enable-wifi.desc"), wifiSwitch))
 
         const ssidLabel      = staticLabel("---")
@@ -448,22 +372,15 @@ export default function NetworkPage(nav?: SettingsNav) {
         const updateWifi = () => {
             if (!network.wifi) return
             ssidLabel.label  = String(network.wifi.ssid || t("settings.network.status.disconnected-hw"))
-            ipLabel.label    = getIp(network.wifi)
+            ipLabel.label    = ipOf(network.wifi)
             // Link speed: AstalNetwork exposes none — read the NM device's bitrate (kb/s).
             const kbps       = (network.wifi.device as any)?.bitrate || 0
             speedLabel.label = kbps > 0 ? `${Math.round(kbps / 1000)} Mbps` : "---"
         }
-        // Wifi has no `ip4-address` property, and notify::ssid fires before DHCP
-        // assigns an address — so drive live updates from the NM device's own
-        // ip4-config / bitrate / state changes as well.
-        network.wifi.connect("notify::enabled", updateWifi)
-        network.wifi.connect("notify::ssid", updateWifi)
-        network.wifi.connect("notify::active-access-point", updateWifi)
-        network.wifi.connect("notify::internet", updateWifi)
-        const wifiDev = network.wifi.device as any
-        wifiDev?.connect?.("notify::ip4-config", updateWifi)
-        wifiDev?.connect?.("notify::bitrate", updateWifi)
-        wifiDev?.connect?.("notify::state", updateWifi)
+        // watchWifi also wires the NM device's ip4-config / bitrate / state — WiFi
+        // has no `ip4-address` property and notify::ssid fires before DHCP assigns
+        // an address, so the device signals are what actually carry IP/speed.
+        Net.watchWifi(updateWifi)
         updateWifi()
 
         wifiList.append(createRow(t("settings.network.interface"),      t("settings.network.wireless-interface.desc"),          ifaceLabel))
@@ -520,7 +437,7 @@ export default function NetworkPage(nav?: SettingsNav) {
                 aps.unshift(activeAp)
             }
 
-            const savedSsids = await listSavedWifiSsids()
+            const savedSsids = await Net.listSavedWifiSsids()
             if (gen !== refreshGen) return   // a newer refresh already ran
 
             let child = apList.get_first_child()
@@ -563,7 +480,7 @@ export default function NetworkPage(nav?: SettingsNav) {
 
         scanBtn.connect("clicked", () => {
             scanBtn.sensitive = false
-            rescan().then(() => {
+            Net.rescan().then(() => {
                 setTimeout(() => {
                     refreshAps()
                     scanBtn.sensitive = true
@@ -601,7 +518,7 @@ export default function NetworkPage(nav?: SettingsNav) {
         let child = vpnList.get_first_child()
         while (child) { vpnList.remove(child); child = vpnList.get_first_child() }
 
-        listVpnProfiles().then(profiles => {
+        Net.listVpnProfiles().then(profiles => {
             if (profiles.length === 0) {
                 const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
                 row.set_child(emptyVpn)

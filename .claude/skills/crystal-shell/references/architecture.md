@@ -74,6 +74,7 @@ These are GObject singletons. Widgets subscribe to them via `notify::prop`. **No
 | `WidgetConfig.ts` | 88 | CC widget metadata/registry (`widgets.json`). |
 | `GamingManager.ts` | 79 | Game-mode state + `gaming.json`. |
 | `NotifConfig.ts` | 60 | Notification DND default. |
+| `NetworkService.ts` | ~190 | **Stateless facade** (a plain function module, *not* a GObject — AstalNetwork is already a reactive singleton) for all network domain logic: nmcli command vocabulary (`connectAp`/`disconnectIface`/`forgetProfile`/`rescan`/`setWifiEnabled`/`toggleWifi`/`listSavedWifiSsids`/VPN), NM-flag + frequency derivations (`isSecured`/`securityLabel`/`freqBand`/`freqChannel`), `getIp`/`wiredConnected`/`wifiEnabled`, and `watchWifi`/`watchWired` notify-subscription helpers. Consumed by Settings → Network, the CC wifi/ethernet tiles (`Toggles.tsx`), and the bar widgets (`widgets/wifi.ts`, `widgets/ethernet.ts`) — they used to each re-derive `getIp` and toggle WiFi three different ways. Never imports Gtk. |
 | `PowerManager.ts` | 43 | hypridle hooks (screen-off/lock/suspend). |
 | `ShellActions.ts` | 21 | Typed action registry populated by `app.ts main()`; consumed by Dock/Bar/AppGrid (replaces `globalThis`). |
 
