@@ -110,6 +110,42 @@ Three non-obvious traps this setup exposes, all of which bit real code:
   `get_devices()` and no `access-points-changed` signal — use the `device` property and
   `notify::access-points`. These were latent bugs that never ran on wired-only hardware.
 
+### Testing Bluetooth without a Bluetooth adapter
+
+`AstalBluetooth` talks to **BlueZ over the system D-Bus**, so (unlike Wi-Fi's real
+`mac80211_hwsim` radio) you fake the whole `org.bluez` service with **python-dbusmock**'s
+`bluez5` template — the same approach GNOME uses for its BT panel. Dev helper:
+`scripts/dev/fake-bluetooth.sh` (needs `pacman -S python-dbusmock`; run as root — it
+stops `bluetooth.service` and owns `org.bluez`).
+
+```bash
+sudo scripts/dev/fake-bluetooth.sh start   # adapter + Keyboard/Mouse (paired) + Phone (nearby)
+# Super+Shift+R, then Settings → Bluetooth
+sudo scripts/dev/fake-bluetooth.sh stop    # restores real bluetooth.service
+```
+
+The bluez5 template has **two quirks the script works around**, plus one hard limit:
+
+- **`StartDiscovery` throws `KeyError: 'DiscoveryFilter'`** — the template reads that
+  adapter prop without initialising it. The script seeds it with an empty
+  `Adapter1.SetDiscoveryFilter` after `AddAdapter`, so the Scan button works.
+- **`Device1.Connect`/`Disconnect` (what the UI buttons call) update an internal
+  `device.connected` *attribute* + emit `PropertiesChanged`, but NOT the property store**,
+  while the `Mock.ConnectDevice` *control* method does the opposite. Mixing them desyncs a
+  device (the guard then raises `AlreadyConnected`/`NotConnected` and the click silently
+  no-ops). So the script creates devices **paired-but-disconnected** and never pre-connects.
+  Live connect↔disconnect then works within a session, but **after a UI reload a device
+  reverts to disconnected** (the store was never updated) and reconnecting can stick —
+  `stop && start` the mock to reset.
+- **Pairing is "just works" only** — the template's `Pair` never calls back into a
+  registered `Agent1`, so the passkey/PIN flow can't be exercised with this mock (see the
+  pairing-agent gap in `tech-debt.md`).
+
+This setup surfaced a real latent bug, fixed in `BluetoothService.setPowered`:
+`AstalBluetooth.Bluetooth.is_powered` is **read-only** (writing it throws "not writable"),
+so the old `bt.is_powered = state` toggle flipped the switch visually but never powered the
+radio. Drive `bt.adapter.powered` instead.
+
 ## Persistence
 
 All persistent state lives in `~/.config/crystal-shell/`:

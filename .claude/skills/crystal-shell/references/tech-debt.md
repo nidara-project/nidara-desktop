@@ -57,6 +57,18 @@ must wire its own signals. The Wi-Fi AP detail page now does exactly that (it su
 the IPv4 group shown only while that AP is the active connection). So the *pattern* for a
 reactive subpage exists; the generic framework convenience does not.
 
+### 9. Bluetooth pairing has no agent (passkey/PIN UI missing)
+Settings → Bluetooth pairs via a bare `device.pair()`, with **no `org.bluez.Agent1`
+registered**, so it's "just works" only: devices that need a 6-digit passkey confirmation
+or a PIN have no UI and will pair blind or fail. AstalBluetooth offers no agent helper —
+implementing it means raw Gio D-Bus: register an `Agent1` (capability `KeyboardDisplay`)
+via `AgentManager1.RegisterAgent` + `RequestDefaultAgent`, handle `RequestConfirmation` /
+`RequestPasskey` / `RequestPinCode` / `DisplayPasskey` / `DisplayPinCode` → drive a Crystal
+dialog. Agent registration belongs in `BluetoothService`, the dialog in the page. **Testing
+caveat:** the python-dbusmock bluez5 template's `Pair` never calls back into the agent, so
+the passkey flow can't be exercised with the fake-bluetooth mock — needs real hardware or
+manual D-Bus invocation of the agent methods.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

@@ -1,17 +1,16 @@
-import AstalBluetooth from "gi://AstalBluetooth"
 import { RoundToggle } from "../control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
+import * as BT from "../../core/BluetoothService"
 
 function buildBarContent() {
-    const bt = AstalBluetooth.get_default()
     return makeIconAction({
         getIcon: () => Icons.bluetooth,
-        onAction: () => { if (bt) bt.is_powered = !bt.is_powered },
+        onAction: () => BT.togglePower(),
         activeClass: "bar-widget-active",
-        getActive: () => bt?.is_powered ?? false,
+        getActive: () => BT.isPowered(),
     })
 }
 
@@ -23,13 +22,12 @@ const btWidget: AtomicWidget = {
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent: (size) => {
-        const bt = AstalBluetooth.get_default()
         return RoundToggle(
             "bt", t("widget.bluetooth.name"),
             Icons.bluetooth,
-            () => bt?.is_powered ?? false,
-            () => { if (bt) bt.is_powered = !bt.is_powered },
-            () => bt?.is_powered ? t("widget.bluetooth.sub.active") : t("widget.bluetooth.sub.inactive"),
+            () => BT.isPowered(),
+            () => BT.togglePower(),
+            () => BT.isPowered() ? t("widget.bluetooth.sub.active") : t("widget.bluetooth.sub.inactive"),
         ).buildContent(size)
     },
     buildBarContent,

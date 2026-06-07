@@ -4,6 +4,7 @@ import GLib from "gi://GLib"
 import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
+import * as BT from "../../../core/BluetoothService"
 import { CrystalButton } from "../../../../lib/crystal-ui"
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -11,7 +12,7 @@ import { CrystalButton } from "../../../../lib/crystal-ui"
 export default function BluetoothPage() {
     const page = pageBox("bluetooth-page")
 
-    const bt = AstalBluetooth.get_default()
+    const bt = BT.bt()
 
     if (!bt || !bt.adapter) {
         const banner = new Gtk.Label({
@@ -26,23 +27,22 @@ export default function BluetoothPage() {
 
     // ── Power toggle ─────────────────────────────────────────────────────────
     const powerGroup = listGroup(t("settings.bluetooth.title"))
-    const powerSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER, active: bt.is_powered })
+    const powerSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER, active: BT.isPowered(bt) })
 
     let ignoreStateSet = false
     powerSwitch.connect("state-set", (_: any, state: boolean) => {
         if (ignoreStateSet) return false
-        bt.is_powered = state
+        BT.setPowered(state)
         return false
     })
 
     const syncPower = () => {
         ignoreStateSet = true
-        powerSwitch.active = bt.is_powered
+        powerSwitch.active = BT.isPowered(bt)
         ignoreStateSet = false
     }
-
-    const powerId = bt.connect("notify::is-powered", syncPower)
-    powerSwitch.connect("unrealize", () => { try { bt.disconnect(powerId) } catch {} })
+    // The watch is wired once at the end (combined with list/scan visibility),
+    // since those groups don't exist yet here.
 
     powerGroup.listBox.append(createRow(
         t("settings.bluetooth.enable"),
@@ -72,7 +72,7 @@ export default function BluetoothPage() {
 
     const stopScan = () => {
         if (scanTimerId !== null) { GLib.source_remove(scanTimerId); scanTimerId = null }
-        try { bt.adapter.stop_discovery() } catch {}
+        BT.stopDiscovery()
         scanBtn.sensitive = true
         scanSpinner.stop()
         scanSpinner.visible = false
@@ -82,7 +82,7 @@ export default function BluetoothPage() {
         scanBtn.sensitive = false
         scanSpinner.visible = true
         scanSpinner.start()
-        try { bt.adapter.start_discovery() } catch {}
+        BT.startDiscovery()
         if (scanTimerId !== null) GLib.source_remove(scanTimerId)
         scanTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 8000, () => {
             stopScan()
@@ -126,7 +126,7 @@ export default function BluetoothPage() {
 
         devices.forEach(dev => {
             const nameLabel = new Gtk.Label({
-                label: dev.name || dev.address,
+                label: BT.deviceName(dev),
                 css_classes: ["crystal-row-title"],
                 halign: Gtk.Align.START,
                 hexpand: true,
@@ -161,7 +161,7 @@ export default function BluetoothPage() {
                         valign: Gtk.Align.CENTER,
                     })
                     disconnectBtn.connect("clicked", () => {
-                        dev.disconnect_device(null)
+                        BT.disconnectDevice(dev)
                     })
                     rowBox.append(disconnectBtn)
                 } else {
@@ -171,7 +171,7 @@ export default function BluetoothPage() {
                         valign: Gtk.Align.CENTER,
                     })
                     connectBtn.connect("clicked", () => {
-                        dev.connect_device(null)
+                        BT.connectDevice(dev)
                     })
                     rowBox.append(connectBtn)
                 }
@@ -183,7 +183,7 @@ export default function BluetoothPage() {
                     tooltip_text: t("settings.bluetooth.tooltip.forget"),
                 })
                 removeBtn.connect("clicked", () => {
-                    try { bt.adapter.remove_device(dev) } catch {}
+                    BT.removeDevice(dev)
                 })
                 rowBox.append(removeBtn)
             } else {
@@ -193,7 +193,7 @@ export default function BluetoothPage() {
                     valign: Gtk.Align.CENTER,
                 })
                 pairBtn.connect("clicked", () => {
-                    try { dev.pair() } catch (e) { console.error("[BT] pair:", e) }
+                    BT.pairDevice(dev)
                 })
                 rowBox.append(pairBtn)
             }
@@ -206,17 +206,28 @@ export default function BluetoothPage() {
 
     // ── Live device updates ───────────────────────────────────────────────────
     const refreshLists = () => {
-        const all: AstalBluetooth.Device[] = bt.devices ?? []
-        const paired = all.filter(d => d.paired)
-        const unpaired = all.filter(d => !d.paired)
-        rebuildList(devicesGroup.listBox, paired, true)
-        rebuildList(nearbyGroup.listBox, unpaired, false)
+        rebuildList(devicesGroup.listBox, BT.pairedDevices(bt), true)
+        rebuildList(nearbyGroup.listBox, BT.nearbyDevices(bt), false)
     }
 
-    const devicesId = bt.connect("notify::devices", refreshLists)
-    page.connect("unrealize", () => { try { bt.disconnect(devicesId) } catch {} })
+    const disposeDevices = BT.watchDevices(refreshLists)
+
+    // With the radio off you can't scan or hold a connection, so the device lists
+    // and the scan control are meaningless — hide them (and stop any in-flight
+    // scan), matching how the adapter actually behaves once powered down.
+    const applyPowered = () => {
+        const on = BT.isPowered(bt)
+        devicesGroup.box.visible = on
+        scanGroup.box.visible = on
+        nearbyGroup.box.visible = on
+        if (!on) stopScan()
+    }
+
+    const disposePower = BT.watchPower(() => { syncPower(); applyPowered() })
+    page.connect("unrealize", () => { disposeDevices(); disposePower() })
 
     refreshLists()
+    applyPowered()
 
     return page
 }
