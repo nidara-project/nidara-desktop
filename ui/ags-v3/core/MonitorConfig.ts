@@ -70,6 +70,14 @@ class MonitorConfig extends GObject.Object {
         this._apply(name, cfg)
     }
 
+    /** Apply a rotation WITHOUT persisting — pair with commit() (revert-safe). */
+    applyTransform(name: string, transform: number) {
+        const cfg = this.state.get(name) ?? { scale: 1.0, transform: 0 }
+        cfg.transform = transform
+        this.state.set(name, cfg)
+        this._apply(name, cfg)
+    }
+
     /** Persist the current in-memory state to crystal-monitor.lua. */
     commit() { this._save() }
 

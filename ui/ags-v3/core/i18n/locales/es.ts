@@ -308,7 +308,7 @@ export default {
     "settings.display.temporary-changes.desc": "Los cambios se aplican en vivo pero no persisten. Añádelos a hyprland-user.lua para hacerlos permanentes.",
     "settings.display.resolution.desc": "Resolución y frecuencia de actualización",
     "settings.display.confirm.title": "¿Mantener la configuración de pantalla?",
-    "settings.display.confirm.body": "Revirtiendo al modo anterior en %d segundos…",
+    "settings.display.confirm.body": "Revirtiendo a la configuración anterior en %d segundos…",
     "settings.display.confirm.keep": "Mantener cambios",
     "settings.display.confirm.revert": "Revertir",
     "settings.display.rotation.desc": "Orientación de la pantalla",

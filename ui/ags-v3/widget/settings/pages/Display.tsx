@@ -206,8 +206,38 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
     const currentTransform = monitorConfig.getTransform(name)
     rotDrp.selected = currentTransform < ROTATIONS.length ? currentTransform : 0
 
+    // Rotation can leave the screen disorienting/hard to navigate, so it gets the
+    // same revert-safety dialog as the resolution change.
+    let rotApplying = false
+    let prevTransform = currentTransform
     rotDrp.connect("notify::selected", () => {
-        monitorConfig.setTransform(name, TRANSFORM_MAP[ROTATIONS[rotDrp.selected]] ?? 0)
+        if (rotApplying) return
+        const newT = TRANSFORM_MAP[ROTATIONS[rotDrp.selected]] ?? 0
+        if (newT === prevTransform) return
+        monitorConfig.applyTransform(name, newT)
+        showCrystalAlert({
+            parent: box.get_root() as Gtk.Window,
+            heading: t("settings.display.confirm.title"),
+            countdown: {
+                seconds: 12, respondId: "revert",
+                format: (s) => t("settings.display.confirm.body").replace("%d", String(s)),
+            },
+            responses: [
+                { id: "revert", label: t("settings.display.confirm.revert") },
+                { id: "keep", label: t("settings.display.confirm.keep"), suggested: true },
+            ],
+            onResponse: (id) => {
+                if (id === "keep") {
+                    prevTransform = newT
+                    monitorConfig.commit()
+                } else {
+                    monitorConfig.applyTransform(name, prevTransform)
+                    rotApplying = true
+                    rotDrp.selected = prevTransform < ROTATIONS.length ? prevTransform : 0
+                    rotApplying = false
+                }
+            },
+        })
     })
 
     listBox.append(createRow(
