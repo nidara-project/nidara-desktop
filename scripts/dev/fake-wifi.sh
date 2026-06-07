@@ -27,6 +27,10 @@ CHANNEL="6"
 COUNTRY="ES"   # world domain "00" forbids AP/beaconing on 2.4GHz (NO-IR); pick a real country
 CONF="/tmp/crystal-hostapd.conf"
 PIDFILE="/tmp/crystal-hostapd.pid"
+DNSMASQ_PID="/tmp/crystal-dnsmasq.pid"
+GATEWAY="10.42.0.1"      # AP-side address; client gets DHCP from this subnet
+DHCP_LO="10.42.0.10"
+DHCP_HI="10.42.0.100"
 
 if [ "$(id -u)" -ne 0 ]; then echo "Run with sudo." >&2; exit 1; fi
 
@@ -61,16 +65,34 @@ EOF
 
     echo "Starting hostapd on $AP_IFACE → SSID '$SSID' (WPA2, pass: $PASSPHRASE)"
     hostapd -B -P "$PIDFILE" "$CONF"
-    echo "AP up. In Settings → Network, hit Scan; '$SSID' should appear."
+    sleep 1
+
+    # hostapd is layer-2 only. Without DHCP the client associates but never gets an
+    # IP, so NetworkManager fails the activation ("IP configuration could not be
+    # reserved") and the page bounces Connect → Error. Give the AP an address and
+    # serve DHCP with dnsmasq so the client lands a real IP and NM reports connected.
+    ip addr flush dev "$AP_IFACE" 2>/dev/null || true
+    ip addr add "$GATEWAY/24" dev "$AP_IFACE"
+    ip link set "$AP_IFACE" up
+    dnsmasq --interface="$AP_IFACE" --bind-interfaces --except-interface=lo \
+        --no-resolv --no-hosts --dhcp-authoritative \
+        --dhcp-range="$DHCP_LO,$DHCP_HI,255.255.255.0,12h" \
+        --dhcp-option=3,"$GATEWAY" \
+        --pid-file="$DNSMASQ_PID"
+
+    echo "AP up + DHCP serving $DHCP_LO–$DHCP_HI. In Settings → Network, hit Scan."
     echo "Stop with: sudo $0 stop"
     ;;
 
   stop)
+    if [ -f "$DNSMASQ_PID" ]; then kill "$(cat "$DNSMASQ_PID")" 2>/dev/null || true; rm -f "$DNSMASQ_PID"; fi
+    pkill -f "dnsmasq --interface=$AP_IFACE" 2>/dev/null || true
     if [ -f "$PIDFILE" ]; then kill "$(cat "$PIDFILE")" 2>/dev/null || true; rm -f "$PIDFILE"; fi
     pkill -f "hostapd .*crystal-hostapd.conf" 2>/dev/null || true
     rm -f "$CONF"
+    ip addr flush dev "$AP_IFACE" 2>/dev/null || true
     nmcli device set "$AP_IFACE" managed yes || true
-    echo "AP torn down; $AP_IFACE returned to NetworkManager."
+    echo "AP + DHCP torn down; $AP_IFACE returned to NetworkManager."
     ;;
 
   *)
