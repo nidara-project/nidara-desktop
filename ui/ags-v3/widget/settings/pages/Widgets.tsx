@@ -2,13 +2,12 @@ import { Gtk } from "ags/gtk4"
 import widgetConfig from "../../../core/WidgetConfig"
 import ccLayout from "../../control-center/CCLayoutManager"
 import registry from "../../widgets/index"
-import { pageBox, pageHeader, listGroup } from "../SettingsHelpers"
+import { pageBox, listGroup } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 
 export default function WidgetsPage(): Gtk.Widget {
     const page = pageBox("widgets-page")
-    page.append(pageHeader(t("settings.widgets.title"), t("settings.widgets.subtitle")))
 
     const group = listGroup("Widgets disponibles")
 

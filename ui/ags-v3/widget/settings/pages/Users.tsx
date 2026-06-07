@@ -4,7 +4,7 @@ import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
 import { showCrystalAlert, CrystalButton } from "../../../../lib/crystal-ui"
-import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { showAvatarCropper } from "../../common/AvatarCropper"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
@@ -395,7 +395,6 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
 
 export default function UsersPage() {
     const page = pageBox("users-page")
-    page.append(pageHeader(t("settings.users.title"), t("settings.users.subtitle")))
 
     const username    = GLib.get_user_name() ?? ""
     const displayName = getDisplayName()

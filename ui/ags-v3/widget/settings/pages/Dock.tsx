@@ -1,11 +1,10 @@
 import { Gtk } from "ags/gtk4"
 import { dockSettings, updateDockSettings, onDockSettingsChanged, type DockPosition } from "../../dock/state"
-import { listGroup, createRow, toggleRow, sliderRow, presetRow, dropdownRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, toggleRow, sliderRow, presetRow, dropdownRow, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 
 export default function DockPage() {
     const page = pageBox("dock-page")
-    page.append(pageHeader(t("settings.dock.title"), t("settings.dock.subtitle")))
 
     // 0. Position
     const posGroup = listGroup(t("settings.dock.group.position"))

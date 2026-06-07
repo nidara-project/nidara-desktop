@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
-import { listGroup, createRow, pageHeader, pageBox, staticLabel } from "../SettingsHelpers"
+import { listGroup, createRow, pageBox, staticLabel } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 
 function readVersion(): string {
@@ -77,7 +77,6 @@ function readTotalRam(): string {
 
 export default function AboutPage() {
     const page = pageBox("about-page")
-    page.append(pageHeader(t("settings.about.title"), t("settings.about.subtitle")))
 
     // ── Crystal Shell ──────────────────────────────────────────────────────────
     const { box: shellBox, listBox: shellList } = listGroup(t("settings.about.group.crystal-shell"))

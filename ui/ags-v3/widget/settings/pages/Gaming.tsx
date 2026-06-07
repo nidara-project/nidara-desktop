@@ -5,15 +5,11 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import Gaming, { type WallpaperMode } from "../../../core/GamingManager"
 import { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
 import { t } from "../../../core/i18n"
-import { listGroup, createRow, toggleRow, dropdownRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, toggleRow, dropdownRow, pageBox } from "../SettingsHelpers"
 import { CrystalButton } from "../../../../lib/crystal-ui"
 
 export default function GamingPage() {
     const page = pageBox("gaming-page")
-    page.append(pageHeader(
-        t("settings.gaming.title"),
-        t("settings.gaming.subtitle"),
-    ))
 
     // ── Wallpaper ─────────────────────────────────────────────────────────────
     const wallGroup = listGroup(t("settings.gaming.group.wallpaper"))

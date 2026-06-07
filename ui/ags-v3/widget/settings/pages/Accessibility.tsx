@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import Theme from "../../../core/ThemeManager"
-import { listGroup, createRow, toggleRow, sliderRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, toggleRow, sliderRow, pageBox } from "../SettingsHelpers"
 import Icons from "../../../core/Icons"
 import { t } from "../../../core/i18n"
 
@@ -26,7 +26,6 @@ function setAnimations(v: boolean) {
 
 export default function AccessibilityPage() {
     const page = pageBox("accessibility-page")
-    page.append(pageHeader(t("settings.accessibility.title"), t("settings.accessibility.subtitle")))
 
     // ── Vision ────────────────────────────────────────────────────────────────
     const visionGroup = listGroup(t("settings.accessibility.group.vision"))

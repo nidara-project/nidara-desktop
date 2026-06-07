@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { CrystalButton } from "../../../../lib/crystal-ui"
@@ -82,7 +82,6 @@ const writeEntries = (newEntries: AutostartEntry[]) => {
 
 export default function AutostartPage() {
     const page = pageBox("autostart-page")
-    page.append(pageHeader(t("settings.autostart.title"), t("settings.autostart.subtitle")))
 
     const { box, listBox } = listGroup(t("settings.autostart.group.entries"))
     page.append(box)

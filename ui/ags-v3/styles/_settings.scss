@@ -237,17 +237,8 @@ stack.settings-stack {
     padding: 32px 40px 40px;
 }
 
-.settings-page-title {
-    font-size: $fse-title-3;
-    font-weight: $fw-bold;
-    color: var(--crystal-text);
-    margin-bottom: 6px;
-}
-
-.settings-page-subtitle {
-    font-size: $fse-small;
-    color: var(--crystal-text-dim);
-}
+// Page titles now live in the window header breadcrumb (Settings.tsx), so the
+// in-body .settings-page-title/-subtitle were removed along with pageHeader().
 
 // List card, group title and row label/subtitle are now the universal
 // .crystal-list / .crystal-list-title / .crystal-row-title / .crystal-row-subtitle

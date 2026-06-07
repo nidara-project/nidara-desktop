@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import AstalNetwork from "gi://AstalNetwork"
 import { execAsync } from "ags/process"
-import { listGroup, createRow, staticLabel, pageHeader, pageBox, type SettingsNav } from "../SettingsHelpers"
+import { listGroup, createRow, staticLabel, pageBox, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { CrystalButton } from "../../../../lib/crystal-ui"
@@ -403,10 +403,6 @@ export default function NetworkPage(nav?: SettingsNav) {
     if (!network) return new Gtk.Label({ label: t("settings.network.error.no-service") })
 
     const page = pageBox("network-page")
-    page.append(pageHeader(
-        t("settings.network.title"),
-        t("settings.network.subtitle")
-    ))
 
     // ── Ethernet ──────────────────────────────────────────────────────────────
     if (network.wired) {

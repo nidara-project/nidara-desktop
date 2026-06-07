@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import { execAsync } from "ags/process"
-import { listGroup, createRow, toggleRow, pageHeader, pageBox, staticLabel } from "../SettingsHelpers"
+import { listGroup, createRow, toggleRow, pageBox, staticLabel } from "../SettingsHelpers"
 import regionConfig, { TimeFormat, DateFormat } from "../../../core/RegionConfig"
 import inputConfig from "../../../core/InputConfig"
 import { t } from "../../../core/i18n"
@@ -32,7 +32,6 @@ function clockPreview(): string {
 
 export default function RegionPage() {
     const page = pageBox("region-page")
-    page.append(pageHeader(t("settings.region.title"), t("settings.region.subtitle")))
 
     // ── Live Clock Preview ─────────────────────────────────────────────────────
     const clockLabel = new Gtk.Label({

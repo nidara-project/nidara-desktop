@@ -1,10 +1,9 @@
-import { listGroup, pageHeader, pageBox, toggleRow, sliderRow } from "../SettingsHelpers"
+import { listGroup, pageBox, toggleRow, sliderRow } from "../SettingsHelpers"
 import notifConfig from "../../../core/NotifConfig"
 import { t } from "../../../core/i18n"
 
 export default function NotificationsPage() {
     const page = pageBox("notifications-page")
-    page.append(pageHeader(t("settings.notif.title"), t("settings.notif.subtitle")))
 
     const popupsGroup = listGroup(t("settings.notif.group.popups"))
 

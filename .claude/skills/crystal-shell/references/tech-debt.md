@@ -42,13 +42,12 @@ for most PRs, but know it when testing locale changes.
 owner's decision. Record architectural decisions there and/or in this skill's `references/`,
 not in a tracked repo doc.
 
-### 7. `pageHeader()` is a no-op stub awaiting a sweep
-Settings page titles now live in the **window header** as a breadcrumb (driven by
-`Settings.tsx`, shown via `CrystalWindow`'s `headerTitle`). `SettingsHelpers.pageHeader()`
-was reduced to an invisible no-op so the ~19 `page.append(pageHeader(...))` call sites
-(and their now-dropped subtitle strings) didn't all have to change at once. **Sweep:** remove
-those calls + the `pageHeader` imports, then delete the stub and the `settings-page-title`/
-`-subtitle` CSS. The subtitle i18n keys (`settings.*.subtitle`) become dead once swept.
+### 7. `pageHeader()` removed — RESOLVED
+Settings page titles live in the **window header** as a breadcrumb (driven by
+`Settings.tsx`, shown via `CrystalWindow`'s `headerTitle`). The in-body `pageHeader()`
+stub, all ~19 `page.append(pageHeader(...))` call sites + their imports, and the
+`.settings-page-title`/`-subtitle` CSS have been swept. Only leftover: the
+`settings.*.subtitle` i18n keys are now dead (left in place per the bulk-i18n workflow).
 
 ### 8. Settings subpages don't refresh while open
 A subpage pushed via `SettingsNav.pushSubpage` is built once (fresh on each push, but static

@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import AstalWp from "gi://AstalWp"
 import { execAsync } from "ags/process"
-import { listGroup, pageHeader, pageBox } from "../SettingsHelpers"
+import { listGroup, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { CrystalButton } from "../../../../lib/crystal-ui"
@@ -201,10 +201,6 @@ export default function AudioPage() {
     if (!audio) return new Gtk.Label({ label: t("settings.audio.error.no-service") })
 
     const page = pageBox("audio-page")
-    page.append(pageHeader(
-        t("settings.audio.title"),
-        t("settings.audio.subtitle")
-    ))
 
     const speakerGroup = listGroup(t("settings.audio.group.output"))
     const micGroup     = listGroup(t("settings.audio.group.input"))

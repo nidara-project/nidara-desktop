@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
-import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 
 // Build a dropdown row backed by GIO app list for a given MIME type.
@@ -49,7 +49,6 @@ function appRow(
 
 export default function DefaultAppsPage() {
     const page = pageBox("defaultapps-page")
-    page.append(pageHeader(t("settings.defaultapps.title"), t("settings.defaultapps.subtitle")))
 
     // ── Web ──────────────────────────────────────────────────────────────────
     const webGroup = listGroup(t("settings.defaultapps.group.web"))

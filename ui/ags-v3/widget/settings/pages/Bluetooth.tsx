@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import AstalBluetooth from "gi://AstalBluetooth"
 import GLib from "gi://GLib"
-import { listGroup, createRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { CrystalButton } from "../../../../lib/crystal-ui"
@@ -10,10 +10,6 @@ import { CrystalButton } from "../../../../lib/crystal-ui"
 
 export default function BluetoothPage() {
     const page = pageBox("bluetooth-page")
-    page.append(pageHeader(
-        t("settings.bluetooth.title"),
-        t("settings.bluetooth.subtitle"),
-    ))
 
     const bt = AstalBluetooth.get_default()
 

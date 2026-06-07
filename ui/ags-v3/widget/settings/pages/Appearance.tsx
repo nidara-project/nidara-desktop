@@ -9,11 +9,10 @@ import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core
 import { ACCENT_PALETTE, type AccentKey } from "../../../core/FluidCrystal"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
-import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageHeader, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageBox } from "../SettingsHelpers"
 
 export default function AppearancePage() {
     const page = pageBox("appearance-page")
-    page.append(pageHeader(t("settings.appearance.title"), t("settings.appearance.subtitle")))
 
     // 1. General style
     const styleGroup = listGroup(t("settings.appearance.group.base-style"))

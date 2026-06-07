@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import AstalHyprland from "gi://AstalHyprland"
-import { listGroup, createRow, pageHeader, pageBox, staticLabel } from "../SettingsHelpers"
+import { listGroup, createRow, pageBox, staticLabel } from "../SettingsHelpers"
 import { showCrystalAlert } from "../../../../lib/crystal-ui"
 import hs from "../../../core/HyprlandState"
 import { t } from "../../../core/i18n"
@@ -273,10 +273,6 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
 
 export default function DisplayPage() {
     const page = pageBox("display-page")
-    page.append(pageHeader(
-        t("settings.display.title"),
-        t("settings.display.subtitle")
-    ))
 
     const hypr = AstalHyprland.get_default()
     if (!hypr) {

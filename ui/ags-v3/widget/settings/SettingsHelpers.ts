@@ -205,14 +205,6 @@ export const staticLabel = (text: any) => new Gtk.Label({
     halign: Gtk.Align.END,
 })
 
-// ── Page Header ───────────────────────────────────────────────────────────────
-// Page titles now live in the window header (a breadcrumb driven by Settings.tsx),
-// so the in-body header is gone. Kept as an invisible no-op until the ~19 call
-// sites are swept (see references/tech-debt.md). `visible:false` means the parent
-// pageBox skips it for spacing, so no phantom gap above the first group.
-export const pageHeader = (_title: string, _subtitle: string) =>
-    new Gtk.Box({ visible: false })
-
 // ── Page Root Box ─────────────────────────────────────────────────────────────
 export const pageBox = (...extraClasses: string[]) =>
     new Gtk.Box({

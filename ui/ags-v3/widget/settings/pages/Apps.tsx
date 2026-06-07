@@ -3,7 +3,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
 import appService, { type AppData } from "../../../core/AppService"
-import { pageBox, pageHeader } from "../SettingsHelpers"
+import { pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { CrystalButton } from "../../../../lib/crystal-ui"
@@ -260,7 +260,6 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
 
 export default function AppsPage() {
     const page = pageBox("apps-page")
-    page.append(pageHeader(t("settings.apps.title"), t("settings.apps.subtitle")))
 
     // Search
     const searchEntry = new Gtk.SearchEntry({

@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import { listGroup, pageHeader, pageBox, dropdownRow, createRow } from "../SettingsHelpers"
+import { listGroup, pageBox, dropdownRow, createRow } from "../SettingsHelpers"
 import Icons from "../../../core/Icons"
 import { t } from "../../../core/i18n"
 
@@ -117,7 +117,6 @@ const closestLabel = (opts: { label: string; s: number }[], seconds: number) => 
 // ── Page ──────────────────────────────────────────────────────────────────────
 export default function PowerPage() {
     const page = pageBox("power-page")
-    page.append(pageHeader(t("settings.power.title"), t("settings.power.subtitle")))
 
     // ── Performance profile ───────────────────────────────────────────────────
     const profileGroup = listGroup(t("settings.power.group.profile"))

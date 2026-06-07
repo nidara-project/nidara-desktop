@@ -1,12 +1,11 @@
 import { Gtk } from "ags/gtk4"
-import { listGroup, pageHeader, pageBox, toggleRow, sliderRow, dropdownRow } from "../SettingsHelpers"
+import { listGroup, pageBox, toggleRow, sliderRow, dropdownRow } from "../SettingsHelpers"
 import Icons from "../../../core/Icons"
 import inputConfig from "../../../core/InputConfig"
 import { t } from "../../../core/i18n"
 
 export default function InputPage() {
     const page = pageBox("input-page")
-    page.append(pageHeader(t("settings.input.title"), t("settings.input.subtitle")))
 
     // ── Mouse ─────────────────────────────────────────────────────────────────
     const { box: mouseBox, listBox: mouseList } = listGroup(t("settings.input.mouse.group"))

@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
-import { listGroup, pageHeader, pageBox, toggleRow, createRow } from "../SettingsHelpers"
+import { listGroup, pageBox, toggleRow, createRow } from "../SettingsHelpers"
 import { barSettings, updateBarSettings } from "../../bar/barState"
 import { LAUNCHER_ICON_PRESETS } from "../../bar/Bar"
 import { t } from "../../../core/i18n"
@@ -16,7 +16,6 @@ function resolveCurrentPath(key: string): string | null {
 
 export default function BarPage() {
     const page = pageBox("bar-page")
-    page.append(pageHeader(t("settings.bar.title"), t("settings.bar.subtitle")))
 
     // ── Layout group ──────────────────────────────────────────────────────────
     const layoutGroup = listGroup(t("settings.bar.group.layout"))
