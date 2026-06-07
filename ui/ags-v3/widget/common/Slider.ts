@@ -265,3 +265,31 @@ export function makeHSlider(opts: Omit<SliderOpts, "orientation" | "length"> & {
     const { width_request, ...rest } = opts
     return makeSlider({ ...rest, orientation: "horizontal", length: width_request })
 }
+
+/** Volume slider bound to an AstalWp endpoint/stream (`target` has a 0–1 `volume`).
+ *  Fill + thumb are drawn together (no native Gtk.Scale highlight/slider split) and
+ *  the sync guards stop the WirePlumber feedback from fighting the drag. Used by the
+ *  Audio settings page, the CC volume detail, and the bar volume panel — they all had
+ *  their own near-identical copy of this wrapper. `onExternal` fires on an outside
+ *  volume change (e.g. to refresh a mute icon). */
+export function makeVolumeSlider(target: any, opts: {
+    onValueChanged?: (v: number) => void
+    onExternal?: () => void
+    cssClasses?: string[]
+    width_request?: number
+} = {}): Gtk.Widget {
+    return makeHSlider({
+        min: 0, max: 100,
+        value: Math.round((target?.volume ?? 0) * 100),
+        onChange: (v) => { if (target) target.volume = v / 100 },
+        onValueChanged: (v) => opts.onValueChanged?.(v),
+        onExtChange: (cb) => {
+            if (!target?.connect) return () => {}
+            const id = target.connect("notify::volume", () => { cb((target.volume ?? 0) * 100); opts.onExternal?.() })
+            return () => { try { target.disconnect(id) } catch {} }
+        },
+        debounce: 24,
+        cssClasses: opts.cssClasses,
+        width_request: opts.width_request,
+    })
+}

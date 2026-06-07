@@ -1,50 +1,23 @@
 import { Gtk } from "ags/gtk4"
 import AstalWp from "gi://AstalWp"
-import { execAsync } from "ags/process"
-import { makeHSlider } from "../common/Slider"
+import { makeVolumeSlider } from "../common/Slider"
 import { VolumeWidget } from "../control-center/Sliders"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
-
-// Shared Cairo volume slider for the endpoint/stream rows (target has 0–1 `volume`).
-function volSlider(target: any, valLabel: Gtk.Label, refreshMute: () => void): Gtk.Widget {
-    return makeHSlider({
-        min: 0, max: 100,
-        value: Math.round((target.volume ?? 0) * 100),
-        onChange: (v) => { target.volume = v / 100 },
-        onValueChanged: (v) => { valLabel.label = `${Math.round(v)}%` },
-        onExtChange: (cb) => {
-            const id = target.connect("notify::volume", () => { cb((target.volume ?? 0) * 100); refreshMute() })
-            return () => { try { target.disconnect(id) } catch {} }
-        },
-        debounce: 24,
-    })
-}
+import * as AudioSvc from "../../core/AudioService"
 
 // ── Bar icon (dynamic, reflects mute/volume level) ────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
     const speaker = AstalWp.get_default()?.audio?.default_speaker
-
-    const getIcon = () => {
-        if (!speaker) return Icons.volumeMuted
-        const muted = (speaker as any).mute ?? false
-        const vol = speaker.volume
-        if (muted || vol === 0) return Icons.volumeMuted
-        if (vol < 0.34)         return Icons.volumeLow
-        if (vol < 0.67)         return Icons.volumeMedium
-        return Icons.volumeHigh
-    }
+    const getIcon = () => speaker ? AudioSvc.targetVolumeIcon(speaker) : Icons.volumeMuted
 
     const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
 
     if (speaker) {
-        const ids = [
-            speaker.connect("notify::volume", () => { image.gicon = getIcon() }),
-            (speaker as any).connect?.("notify::mute", () => { image.gicon = getIcon() }) ?? 0,
-        ]
-        image.connect("unrealize", () => ids.forEach(id => { if (id) try { speaker.disconnect(id) } catch {} }))
+        const dispose = AudioSvc.watchVolume(speaker, () => { image.gicon = getIcon() })
+        image.connect("unrealize", dispose)
     }
 
     return image
@@ -61,15 +34,8 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
         width_chars: 5, xalign: 1.0, valign: Gtk.Align.CENTER,
     })
 
-    const sliderWidget = makeHSlider({
-        value: speaker ? Math.round(speaker.volume * 100) : 50,
-        onChange: (v) => { if (speaker) speaker.volume = v / 100 },
+    const sliderWidget = makeVolumeSlider(speaker, {
         onValueChanged: (v) => { volLabel.label = `${Math.round(v)}%` },
-        onExtChange: (cb) => {
-            if (!speaker) return () => {}
-            const id = speaker.connect("notify::volume", () => cb(Math.round(speaker.volume * 100)))
-            return () => { try { speaker.disconnect(id) } catch {} }
-        },
         width_request: 200,
     })
 
@@ -97,13 +63,6 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
 
 // ── CC detail: per-device output sliders + per-app stream sliders ─────────────
 
-function endpointVolumeIcon(vol: number, muted: boolean) {
-    if (muted || vol === 0) return Icons.volumeMuted
-    if (vol < 0.34) return Icons.volumeLow
-    if (vol < 0.67) return Icons.volumeMedium
-    return Icons.volumeHigh
-}
-
 function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10 })
 
@@ -120,18 +79,21 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
         }))
     } else {
         const setBtn = new Gtk.Button({ label: t("settings.audio.btn.set-default"), css_classes: ["flat", "compact-btn"], valign: Gtk.Align.CENTER })
-        setBtn.connect("clicked", () => execAsync(["wpctl", "set-default", String(ep.id)]).catch((e: unknown) => console.error("[Volume CC]", e)))
+        setBtn.connect("clicked", () => AudioSvc.setDefault(ep))
         header.append(setBtn)
     }
-    const muteImg = new Gtk.Image({ gicon: endpointVolumeIcon(ep.volume, ep.mute ?? false), pixel_size: 16, css_classes: ["cs-icon"] })
+    const muteImg = new Gtk.Image({ gicon: AudioSvc.targetVolumeIcon(ep), pixel_size: 16, css_classes: ["cs-icon"] })
     const muteBtn = new Gtk.Button({ child: muteImg, css_classes: ["settings-icon-btn"], valign: Gtk.Align.CENTER })
-    muteBtn.connect("clicked", () => { ep.mute = !ep.mute })
-    ep.connect("notify::mute", () => { muteImg.gicon = endpointVolumeIcon(ep.volume, ep.mute ?? false) })
+    muteBtn.connect("clicked", () => { AudioSvc.toggleMute(ep) })
+    ep.connect("notify::mute", () => { muteImg.gicon = AudioSvc.targetVolumeIcon(ep) })
     header.append(muteBtn)
     box.append(header)
 
     const valLabel = new Gtk.Label({ label: `${Math.round(ep.volume * 100)}%`, css_classes: ["slider-value-label"], width_chars: 5, xalign: 1.0 })
-    const scale = volSlider(ep, valLabel, () => { muteImg.gicon = endpointVolumeIcon(ep.volume, ep.mute ?? false) })
+    const scale = makeVolumeSlider(ep, {
+        onValueChanged: (v) => { valLabel.label = `${Math.round(v)}%` },
+        onExternal: () => { muteImg.gicon = AudioSvc.targetVolumeIcon(ep) },
+    })
     const sliderRow = new Gtk.Box({ spacing: 8 })
     sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
     sliderRow.append(scale)
@@ -146,16 +108,13 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
 
 function buildStreamRow(stream: any): Gtk.ListBoxRow {
     const appName = stream.description || stream.name || "App"
-    const rawIcon: string = stream.icon ?? ""
-    const iconName = (rawIcon && rawIcon !== "audio-card-symbolic")
-        ? rawIcon
-        : (stream.name?.toLowerCase() ?? "audio-x-generic-symbolic")
+    const iconName = AudioSvc.streamIconName(stream)
 
     const box = new Gtk.Box({ spacing: 10, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10, valign: Gtk.Align.CENTER })
-    const muteImg = new Gtk.Image({ gicon: endpointVolumeIcon(stream.volume, stream.mute ?? false), pixel_size: 16, css_classes: ["cs-icon"] })
+    const muteImg = new Gtk.Image({ gicon: AudioSvc.targetVolumeIcon(stream), pixel_size: 16, css_classes: ["cs-icon"] })
     const muteBtn = new Gtk.Button({ child: muteImg, css_classes: ["settings-icon-btn", "flat"], valign: Gtk.Align.CENTER })
-    muteBtn.connect("clicked", () => { stream.mute = !stream.mute })
-    stream.connect("notify::mute", () => { muteImg.gicon = endpointVolumeIcon(stream.volume, stream.mute ?? false) })
+    muteBtn.connect("clicked", () => { AudioSvc.toggleMute(stream) })
+    stream.connect("notify::mute", () => { muteImg.gicon = AudioSvc.targetVolumeIcon(stream) })
     box.append(new Gtk.Image({ icon_name: iconName, pixel_size: 16, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER }))
     box.append(muteBtn)
     box.append(new Gtk.Label({
@@ -164,7 +123,10 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
         css_classes: ["crystal-row-title"], ellipsize: 3, max_width_chars: 16,
     }))
     const valLabel = new Gtk.Label({ label: `${Math.round(stream.volume * 100)}%`, css_classes: ["slider-value-label"], width_chars: 5, xalign: 1.0 })
-    const scale = volSlider(stream, valLabel, () => { muteImg.gicon = endpointVolumeIcon(stream.volume, stream.mute ?? false) })
+    const scale = makeVolumeSlider(stream, {
+        onValueChanged: (v) => { valLabel.label = `${Math.round(v)}%` },
+        onExternal: () => { muteImg.gicon = AudioSvc.targetVolumeIcon(stream) },
+    })
     box.append(scale)
     box.append(valLabel)
     const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
@@ -201,15 +163,14 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
     const refreshSpeakers = () => {
         let c = speakersList.get_first_child()
         while (c) { speakersList.remove(c); c = speakersList.get_first_child() }
-        const defId = (audio.default_speaker as any)?.id
-        const speakers: any[] = (audio as any).get_speakers?.() ?? []
-        speakers.forEach((ep: any) => speakersList.append(buildSpeakerRow(ep, ep.id === defId)))
+        const defId = AudioSvc.defaultSpeaker(audio)?.id
+        AudioSvc.speakers(audio).forEach((ep: any) => speakersList.append(buildSpeakerRow(ep, ep.id === defId)))
     }
 
     const refreshStreams = () => {
         let c = streamsList.get_first_child()
         while (c) { streamsList.remove(c); c = streamsList.get_first_child() }
-        const streams: any[] = (audio as any).get_streams?.() ?? []
+        const streams = AudioSvc.streams(audio)
         if (streams.length === 0) {
             streamsList.append(emptyStreams)
         } else {
@@ -217,14 +178,9 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
         }
     }
 
-    const sigs = [
-        audio.connect("speaker-added", refreshSpeakers),
-        audio.connect("speaker-removed", refreshSpeakers),
-        audio.connect("notify::default-speaker", refreshSpeakers),
-        audio.connect("stream-added", refreshStreams),
-        audio.connect("stream-removed", refreshStreams),
-    ]
-    box.connect("unrealize", () => sigs.forEach(id => { try { audio.disconnect(id) } catch {} }))
+    const disposeDevices = AudioSvc.watchDevices(refreshSpeakers, audio)
+    const disposeStreams = AudioSvc.watchStreams(refreshStreams, audio)
+    box.connect("unrealize", () => { disposeDevices(); disposeStreams() })
 
     refreshSpeakers()
     refreshStreams()

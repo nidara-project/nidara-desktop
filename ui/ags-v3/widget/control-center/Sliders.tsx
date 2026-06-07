@@ -5,6 +5,7 @@ import { makeHSlider, makeSlider } from "../common/Slider"
 import { AtomicWidget, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
+import * as AudioSvc from "../../core/AudioService"
 
 function buildHorizontalSlider(
     iconNameLow: Gio.FileIcon,
@@ -85,15 +86,7 @@ function buildVerticalSlider(
 
 // Small (1×1) variant: round mute-toggle icon, mirroring the bar icon.
 function buildVolumeIcon(speaker: any): Gtk.Widget {
-    const getIcon = () => {
-        if (!speaker) return Icons.volumeMuted
-        const muted = speaker.mute ?? false
-        const vol = speaker.volume
-        if (muted || vol === 0) return Icons.volumeMuted
-        if (vol < 0.34) return Icons.volumeLow
-        if (vol < 0.67) return Icons.volumeMedium
-        return Icons.volumeHigh
-    }
+    const getIcon = () => speaker ? AudioSvc.targetVolumeIcon(speaker) : Icons.volumeMuted
     const icon = new Gtk.Image({ gicon: getIcon(), pixel_size: 28, css_classes: ["cs-icon"] })
     const btn = new Gtk.Button({
         css_classes: ["cc-atomic-round-btn"],
@@ -102,7 +95,7 @@ function buildVolumeIcon(speaker: any): Gtk.Widget {
         width_request: 48, height_request: 48,
         child: icon,
     })
-    btn.connect("clicked", () => { if (speaker) speaker.mute = !(speaker.mute ?? false); icon.gicon = getIcon() })
+    btn.connect("clicked", () => { AudioSvc.toggleMute(speaker); icon.gicon = getIcon() })
     if (speaker) {
         const ids = [
             speaker.connect("notify::volume", () => { icon.gicon = getIcon() }),
