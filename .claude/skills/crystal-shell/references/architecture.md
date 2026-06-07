@@ -66,16 +66,27 @@ These are GObject singletons. Widgets subscribe to them via `notify::prop`. **No
 | `FluidCrystal.ts` | 436 | Token engine: `generateTokensCss()` emits `@define-color` + `--crystal-*` for accent, transparency, materials, shadows, tint. Holds the canonical `ACCENT_PALETTE`. Syncs Kvantum/qt. |
 | `RegionConfig.ts` | 218 | Time/date format, timezone (`region.json`). |
 | `InputConfig.ts` | 194 | Keyboard/mouse/touchpad → writes `crystal-settings.lua`. |
-| `HyprlandState.ts` | 186 | Reactive wrapper over AstalHyprland. |
+| `HyprlandState.ts` | ~210 | Reactive wrapper over AstalHyprland (clients/workspaces/monitors + dispatch helpers). Also caches **effective** config that AstalHyprland doesn't expose: `availableModesByName` (from `hyprctl monitors -j` — `Monitor.available_modes` is always null) and `getOptionInt(name)` (`hyprctl getoption`). Read-once, not yet reactive to `configreloaded` (see `tech-debt.md`). |
 | `NightLightManager.ts` | 174 | Blue-light filter via hyprsunset (`night-light.json`). |
 | `WallpaperManager.ts` | 127 | Wallpaper + transitions via `awww` (`wallpaper`). |
-| `MonitorConfig.ts` | 99 | Per-monitor scale/rotation/VRR → `crystal-monitor.lua`. |
+| `MonitorConfig.ts` | ~120 | Per-monitor mode/scale/rotation + VRR → `crystal-monitor.lua`. Applies at runtime via **`hyprctl eval "hl.monitor({...})"`** (see the Lua-parser note below). `applyMode`/`applyTransform` apply without persisting; `commit()` writes the .lua — used for the revert-safety dialog on resolution/rotation changes. |
 | `Icons.ts` | 92 | `cs-*-symbolic` icon catalog. |
 | `WidgetConfig.ts` | 88 | CC widget metadata/registry (`widgets.json`). |
 | `GamingManager.ts` | 79 | Game-mode state + `gaming.json`. |
 | `NotifConfig.ts` | 60 | Notification DND default. |
 | `PowerManager.ts` | 43 | hypridle hooks (screen-off/lock/suspend). |
 | `ShellActions.ts` | 21 | Typed action registry populated by `app.ts main()`; consumed by Dock/Bar/AppGrid (replaces `globalThis`). |
+
+### Gotcha: changing Hyprland config at runtime → `hyprctl eval`, not `keyword`
+
+This shell configures Hyprland through the **Lua parser** (`config/hypr/hyprland.lua`, `hl.*`).
+Under it, **`hyprctl keyword …` is rejected** (`"can't work with non-legacy parsers. Use eval."`).
+To change config live, use **`hyprctl eval "hl.<call>(...)"`** — e.g.
+`hl.monitor({...})`, `hl.config({ general = { layout = '…' } })`, `hl.config({ misc = { vrr = 1 } })`.
+`hyprctl dispatch …` and `hyprctl getoption …` still work. (Fixed in `MonitorConfig` and
+`HyprlandState.setLayout`, which were silently broken on `keyword`.) Also: a fractional monitor
+scale must divide the native resolution into whole logical pixels or Hyprland snaps it — the
+Display page filters scale presets to exact-valid per monitor.
 
 ## `ui/lib/crystal-ui/`
 

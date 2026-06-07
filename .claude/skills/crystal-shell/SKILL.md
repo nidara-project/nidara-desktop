@@ -76,3 +76,18 @@ CI only gates SCSS compile (pure JS, no system libs). Typecheck is local-only be
 - The codebase is intentionally **pure GTK4 + Cairo** for anything custom-painted (Dock, Bar, dots, rings, schematic) and **AGS/GTK + custom CSS** for floating overlays. **libadwaita has been fully removed** — windows are `Gtk.Window`, `Adw.AlertDialog` → `showCrystalAlert`, `Adw.Clamp` → `CrystalClamp`, and dark/light is driven by `Gtk.Settings.gtk_application_prefer_dark_theme` (no `Adw.init()`). Don't reintroduce any `Adw.*`. See `references/design-system.md`.
 - The state model is **one central GObject (`Status.ts`)** with mutually-exclusive overlay setters. Subscribe via `notify::prop`. See `references/state-and-ipc.md`.
 - The dock H/V split is **already deduplicated**: `DockHorizontal.tsx` and `DockVertical.tsx` are 7-line wrappers; shared logic lives in `DockCore.tsx` with axis differences isolated in `DockAxis.ts`. Edit those, not the wrappers — see `references/tech-debt.md`.
+- Sliders are **one component**: `makeSlider` (Cairo) in `widget/common/Slider.ts` — horizontal or vertical, optional thumb, custom non-warp input. There is no native `Gtk.Scale`. See `references/design-system.md`.
+
+## Keep this skill current (part of "done", not a follow-up)
+
+This skill is only useful if it matches reality. **When a change introduces or alters
+something that needs explanation** — a new mechanism, a non-obvious pattern, a "why is it
+done this way", a new shared component, or a gotcha that bit you — **update the skill in the
+same change**:
+
+- Put the *how/why* in the right `references/` file (architecture / design-system /
+  state-and-ipc / dev-workflow), not just in the commit message. If a contributor's agent
+  would need it to work correctly, it belongs here.
+- Keep `references/tech-debt.md` honest: **remove items you just resolved** and **add new
+  debt or deferred work** you created or found. The list must reflect the current state.
+- Fix any statement in `SKILL.md`/references that your change made wrong.

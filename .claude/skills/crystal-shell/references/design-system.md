@@ -64,11 +64,29 @@ This is the table that decides almost every "which widget should I use?" questio
 |---|---|---|
 | Dock, Bar, workspace dots, resource circles, schematic | **Pure GTK4 + Cairo** (`Gtk.DrawingArea` / `Gtk.Snapshot`) | Adwaita adds nothing here; painting direct = zero defensive CSS. |
 | Floating overlays (CC, NotifCenter, Prism/Spotlight, SystemMenu, Overview) | **`Gtk.Box` + gtk4-layer-shell + custom CSS** | Adwaita would only add chrome you'd have to undo. |
-| Toggles / sliders / switches inside overlays | **`Gtk.Switch`, `Gtk.Scale`, `Gtk.Button`** (NOT `Adw.*Row`) | Base widgets style cleanly; `Adw.*Row` brings padding/focus-ring/separators that have to be killed one by one. |
+| Toggles / switches / buttons inside overlays | **`Gtk.Switch`, `Gtk.Button`** (NOT `Adw.*Row`) | Base widgets style cleanly; `Adw.*Row` brings padding/focus-ring/separators that have to be killed one by one. |
+| Sliders (any) | **`makeSlider`** from `widget/common/Slider.ts` (NOT `Gtk.Scale`) | See "Sliders" below — one Cairo component for the whole shell. |
 | Settings window | **`ui/lib/crystal-ui`** (`CrystalSplitView`, `CrystalClamp`, `CrystalButton`, `CrystalSelect`) | Custom split view. **Do NOT use `Adw.OverlaySplitView`** — it breaks capsule margins. |
 | Modal dialogs | **`showCrystalAlert`** from `crystal-ui` | Clean, themeable. |
 
 **Rule of thumb:** everything is **pure GTK4** — libadwaita has been fully removed. Dark/light is set via `Gtk.Settings.gtk_application_prefer_dark_theme` (no `Adw.init()`); the About window is a plain `Gtk.Window` (no `Adw.AboutWindow`). Don't reintroduce any `Adw.*`.
+
+## Sliders — one component
+
+All sliders are **`makeSlider`** (Cairo) in `widget/common/Slider.ts` (`makeHSlider` is just a
+horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — don't add them.
+
+- **Cairo-drawn**: fill + thumb are painted together so they never visually separate (the
+  native `scale` highlight/slider misalignment bug). Accent comes from `PALETTE[Theme.accentColor]`.
+- **Custom input** (a `GestureDrag` + scroll + arrow keys, *not* a `Gtk.Scale`): clicking the
+  track jumps to that position; grabbing the thumb never warps it; `drag-begin` claims the
+  sequence so a slider inside a clickable tile (e.g. a CC widget) doesn't trigger the tile.
+- **Options:** `orientation: "horizontal" | "vertical"`, `thumb` (default true). `thumb: false`
+  + a wide `trackH` = the macOS-style vertical capsule (fill rises, clipped to the capsule so
+  the end follows the rounded cap). Thumb goes translucent while pressed.
+- **Wiring:** `onChange` (committed, optional `debounce` / `commitOnRelease`), `onValueChanged`
+  (live, for the % label), `onExtChange(cb) → cleanup` for external value updates (ignored
+  while the user drags).
 
 ## SCSS conventions and anti-patterns
 
