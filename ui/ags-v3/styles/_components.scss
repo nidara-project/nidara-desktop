@@ -252,91 +252,6 @@ switch,
     }
 }
 
-/* --- Sliders (Scales) --- */
-scale,
-.crystal-scale {
-    min-height: 28px;
-    margin: 4px 0;
-    padding: 0;
-    outline: none;
-    box-shadow: none;
-
-    trough {
-        min-height: 8px;
-        background-color: var(--crystal-surface);
-        border-radius: 99px;
-        border: none;
-        outline: none;
-        box-shadow: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    highlight {
-        min-height: 8px;
-        background-color: $crystal-accent;
-        background-image: none;
-        border-radius: 99px;
-        border: none;
-        outline: none;
-        box-shadow: none;
-        padding: 0;
-        margin: 0;
-    }
-
-    slider {
-        background-color: var(--crystal-thumb);
-        background-image: none;
-        border-radius: 99px;
-        border: none;
-        outline: none;
-        box-shadow: var(--crystal-shadow-sm);
-        min-width: 20px;
-        min-height: 20px;
-        margin: 0;
-        padding: 0;
-        transition: background-color 0.15s ease, box-shadow 0.15s ease;
-    }
-
-    &:active slider {
-        background-color: rgba(255, 255, 255, 0.55); // pressed: slight translucency over --crystal-thumb
-        box-shadow: none;
-    }
-
-    &:hover slider {
-        box-shadow: var(--crystal-shadow-md);
-    }
-
-    trough:focus, trough:focus-within,
-    highlight:focus,
-    slider:focus {
-        outline: none;
-        box-shadow: none;
-        border: none;
-    }
-}
-
-/* GLOBAL GJS STABILITY: Safe-guard for GtkGizmo (highlight) sizing errors */
-highlight {
-    min-height: 4px;
-    min-width: 4px;
-}
-
-/* Override #crystal-bar reset (ID specificity 1,0,1) for scale fill highlights.
-   scale highlight = 1,0,2 > 1,0,1, so this wins. */
-#crystal-bar scale highlight,
-#crystal-bar .crystal-scale highlight {
-    background-color: $crystal-accent;
-    background-image: none;
-}
-
-/* Adwaita: "scale.horizontal slider { margin: -7px }" → specificity 0,1,1.
-   "scale.crystal-scale slider" = 0,1,2 → wins without !important. */
-scale.crystal-scale slider {
-    margin: 0;
-    padding: 0;
-}
-
 /* --- Global Sidebar System (Tahoe Island) --- */
 .crystal-sidebar-island {
     background: var(--crystal-surface-back);
@@ -366,22 +281,6 @@ scale.crystal-scale slider {
         background-color: rgba(var(--crystal-accent-rgb), 0.15);
         color: $crystal-accent;
         border-color: rgba(var(--crystal-accent-rgb), 0.2);
-    }
-}
-
-/* --- PillSlider Specific Reset --- */
-/* This class is applied to the invisible input-only Gtk.Scale underneath the Cairo visual layer.
-   opacity:0 hides it completely; pointer events still work because GTK ignores opacity for hit-testing. */
-.cc-slider-scale-input {
-    min-height: 0;
-    margin: 0;
-    opacity: 0;
-
-    trough, highlight, slider {
-        @include crystal-reset;
-        min-height: 0;
-        min-width: 0;
-        margin: 0;
     }
 }
 

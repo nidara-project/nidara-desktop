@@ -1,8 +1,7 @@
 import { Gtk } from "ags/gtk4"
-import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import AstalWp from "gi://AstalWp"
-import { makeHSlider } from "../common/Slider"
+import { makeHSlider, makeSlider } from "../common/Slider"
 import { AtomicWidget, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -60,18 +59,6 @@ function buildVerticalSlider(
 
     const icon = new Gtk.Image({ gicon: iconName, pixel_size: 18, halign: Gtk.Align.CENTER, css_classes: ["cs-icon"] })
 
-    const scale = new Gtk.Scale({
-        orientation: Gtk.Orientation.VERTICAL,
-        vexpand: true, halign: Gtk.Align.CENTER,
-        draw_value: false,
-        inverted: true,
-        css_classes: ["crystal-scale", "cc-atomic-scale-native", "cc-scale-vertical"],
-        width_request: 32,
-    })
-    scale.set_range(0, 100)
-    scale.set_value(getValue())
-    scale.set_increments(1, 5)
-
     const valueLabel = new Gtk.Label({
         label: `${Math.round(getValue())}%`,
         css_classes: ["slider-value-label"],
@@ -79,31 +66,19 @@ function buildVerticalSlider(
         width_chars: 5,
     })
 
+    const slider = makeSlider({
+        orientation: "vertical",
+        thumb: false,            // macOS-style wide capsule, fill rises, no thumb
+        trackH: 36,
+        value: getValue(),
+        onChange: (v) => onChange(v / 100),
+        onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%` },
+        onExtChange: (cb) => onExtChange((v) => cb(Math.round(v * 100))),
+    })
+
     box.append(icon)
-    box.append(scale)
+    box.append(slider)
     box.append(valueLabel)
-
-    let ignoreUntil = 0, pending = false
-    scale.connect("value-changed", () => {
-        const v = scale.get_value()
-        valueLabel.label = `${Math.round(v)}%`
-        ignoreUntil = GLib.get_monotonic_time() + 300_000
-        if (!pending) {
-            pending = true
-            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => {
-                onChange(scale.get_value() / 100)
-                pending = false
-                return GLib.SOURCE_REMOVE
-            })
-        }
-    })
-
-    const cleanup = onExtChange((v) => {
-        if (GLib.get_monotonic_time() < ignoreUntil) return
-        const val = Math.round(v * 100)
-        if (Math.abs(scale.get_value() - val) >= 1) scale.set_value(val)
-    })
-    box.connect("unrealize", cleanup)
 
     return box
 }

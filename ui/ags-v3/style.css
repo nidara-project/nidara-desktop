@@ -601,94 +601,6 @@ switch:hover slider,
   box-shadow: var(--crystal-shadow-md);
 }
 
-/* --- Sliders (Scales) --- */
-scale,
-.crystal-scale {
-  min-height: 28px;
-  margin: 4px 0;
-  padding: 0;
-  outline: none;
-  box-shadow: none;
-}
-scale trough,
-.crystal-scale trough {
-  min-height: 8px;
-  background-color: var(--crystal-surface);
-  border-radius: 99px;
-  border: none;
-  outline: none;
-  box-shadow: none;
-  padding: 0;
-  margin: 0;
-}
-scale highlight,
-.crystal-scale highlight {
-  min-height: 8px;
-  background-color: var(--crystal-accent);
-  background-image: none;
-  border-radius: 99px;
-  border: none;
-  outline: none;
-  box-shadow: none;
-  padding: 0;
-  margin: 0;
-}
-scale slider,
-.crystal-scale slider {
-  background-color: var(--crystal-thumb);
-  background-image: none;
-  border-radius: 99px;
-  border: none;
-  outline: none;
-  box-shadow: var(--crystal-shadow-sm);
-  min-width: 20px;
-  min-height: 20px;
-  margin: 0;
-  padding: 0;
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
-}
-scale:active slider,
-.crystal-scale:active slider {
-  background-color: rgba(255, 255, 255, 0.55);
-  box-shadow: none;
-}
-scale:hover slider,
-.crystal-scale:hover slider {
-  box-shadow: var(--crystal-shadow-md);
-}
-scale trough:focus, scale trough:focus-within,
-scale highlight:focus,
-scale slider:focus,
-.crystal-scale trough:focus,
-.crystal-scale trough:focus-within,
-.crystal-scale highlight:focus,
-.crystal-scale slider:focus {
-  outline: none;
-  box-shadow: none;
-  border: none;
-}
-
-/* GLOBAL GJS STABILITY: Safe-guard for GtkGizmo (highlight) sizing errors */
-highlight {
-  min-height: 4px;
-  min-width: 4px;
-}
-
-/* Override #crystal-bar reset (ID specificity 1,0,1) for scale fill highlights.
-   scale highlight = 1,0,2 > 1,0,1, so this wins. */
-#crystal-bar scale highlight,
-#crystal-bar .crystal-scale highlight {
-  background-color: var(--crystal-accent);
-  background-image: none;
-}
-
-/* Adwaita: "scale.horizontal slider { margin: -7px }" → specificity 0,1,1.
-   "scale.crystal-scale slider" = 0,1,2 → wins without !important. */
-scale.crystal-scale slider {
-  margin: 0;
-  padding: 0;
-}
-
 /* --- Global Sidebar System (Tahoe Island) --- */
 .crystal-sidebar-island {
   background: var(--crystal-surface-back);
@@ -716,26 +628,6 @@ scale.crystal-scale slider {
   background-color: rgba(var(--crystal-accent-rgb), 0.15);
   color: var(--crystal-accent);
   border-color: rgba(var(--crystal-accent-rgb), 0.2);
-}
-
-/* --- PillSlider Specific Reset --- */
-/* This class is applied to the invisible input-only Gtk.Scale underneath the Cairo visual layer.
-   opacity:0 hides it completely; pointer events still work because GTK ignores opacity for hit-testing. */
-.cc-slider-scale-input {
-  min-height: 0;
-  margin: 0;
-  opacity: 0;
-}
-.cc-slider-scale-input trough, .cc-slider-scale-input highlight, .cc-slider-scale-input slider {
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-  min-height: 0;
-  min-width: 0;
-  margin: 0;
 }
 
 /* --- Buttons (Premium Crystal) --- */
@@ -1828,21 +1720,6 @@ window.nc-window-2 contents {
 
 .cc-atomic-scale-native {
   background: transparent;
-}
-
-.cc-scale-vertical trough {
-  min-width: 6px;
-  min-height: unset;
-  border: none;
-}
-.cc-scale-vertical highlight {
-  min-width: 6px;
-  min-height: unset;
-  border: none;
-}
-.cc-scale-vertical slider {
-  min-width: 20px;
-  min-height: 20px;
 }
 
 /* --- Media Widget --- */

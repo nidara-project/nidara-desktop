@@ -101,7 +101,10 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
     if (opts.cssClasses?.length) opts.cssClasses.forEach(c => da.add_css_class(c))
 
     // ── Geometry helpers (use current allocation) ───────────────────────────────
-    const pad = thumb ? thumbR : trackH / 2
+    // With a thumb, inset the track by the thumb radius so the thumb stays inside the
+    // widget at the ends. Thumbless (macOS-style capsule), the bar spans the full
+    // length with rounded caps.
+    const pad = thumb ? thumbR : 0
     const mainLen = () => horiz ? da.get_width() : da.get_height()
     const track   = () => Math.max(1, mainLen() - 2 * pad)
     const fracToMain = (f: number) => horiz ? pad + f * track() : pad + (1 - f) * track()
@@ -127,9 +130,23 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
         // Fill (accent)
         const [ar, ag, ab] = PALETTE[Theme.accentColor] ?? PALETTE.blue
         cr.setSourceRGBA(ar, ag, ab, 0.9)
-        if (horiz) capsuleMain(cr, pad, tMain, cc, trackH, true)
-        else       capsuleMain(cr, tMain, L - pad, cc, trackH, false)
-        cr.fill()
+        if (thumb) {
+            // Capsule whose rounded end meets the thumb.
+            if (horiz) capsuleMain(cr, pad, tMain, cc, trackH, true)
+            else       capsuleMain(cr, tMain, L - pad, cc, trackH, false)
+            cr.fill()
+        } else {
+            // Thumbless capsule: clip to the track shape and fill a rect so the fill's
+            // far end follows the capsule's rounded cap (instead of going flat when short).
+            cr.save()
+            capsuleMain(cr, pad, L - pad, cc, trackH, horiz)
+            cr.clip()
+            const r = trackH / 2
+            if (horiz) cr.rectangle(pad, cc - r, tMain - pad, trackH)
+            else       cr.rectangle(cc - r, tMain, trackH, (L - pad) - tMain)
+            cr.fill()
+            cr.restore()
+        }
 
         // Thumb
         if (thumb) {

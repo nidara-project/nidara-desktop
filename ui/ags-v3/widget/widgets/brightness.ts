@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
-import { makeHSlider } from "../common/Slider"
+import { makeHSlider, makeSlider } from "../common/Slider"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -62,43 +62,32 @@ function buildVertical(): Gtk.Widget {
         margin_top: 10, margin_bottom: 10,
     })
 
-    const scale = new Gtk.Scale({
-        orientation: Gtk.Orientation.VERTICAL,
-        vexpand: true, halign: Gtk.Align.CENTER,
-        draw_value: false, inverted: true,
-        css_classes: ["crystal-scale", "cc-atomic-scale-native", "cc-scale-vertical"],
-        width_request: 32,
-    })
-    scale.set_range(0, 100)
-    scale.set_value(_cachedPct)
-    scale.set_increments(1, 5)
-
     const valueLabel = new Gtk.Label({ label: `${_cachedPct}%`, css_classes: ["slider-value-label"], halign: Gtk.Align.CENTER, width_chars: 5 })
 
+    // Brightness has no change signal — poll every 2s. Skip polling briefly after a
+    // user change so the in-flight brightnessctl result doesn't snap the slider back.
+    let ignoreUntil = 0
+    const slider = makeSlider({
+        orientation: "vertical",
+        thumb: false,            // macOS-style wide capsule, fill rises, no thumb
+        trackH: 36,
+        value: _cachedPct,
+        onChange: (v) => { ignoreUntil = GLib.get_monotonic_time() + 800_000; setBrightness(v) },
+        onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%` },
+        onExtChange: (cb) => {
+            fetchBrightness().then(v => cb(v))   // initial
+            const id = GLib.timeout_add(GLib.PRIORITY_LOW, 2000, () => {
+                if (GLib.get_monotonic_time() < ignoreUntil) return GLib.SOURCE_CONTINUE
+                fetchBrightness().then(v => cb(v))
+                return GLib.SOURCE_CONTINUE
+            })
+            return () => { try { GLib.source_remove(id) } catch {} }
+        },
+    })
+
     box.append(new Gtk.Image({ gicon: Icons.sun, pixel_size: 18, halign: Gtk.Align.CENTER, css_classes: ["cs-icon"] }))
-    box.append(scale)
+    box.append(slider)
     box.append(valueLabel)
-
-    let ignoreUntil = 0, pending = false
-    scale.connect("value-changed", () => {
-        const v = scale.get_value()
-        valueLabel.label = `${Math.round(v)}%`
-        ignoreUntil = GLib.get_monotonic_time() + 500_000
-        if (!pending) {
-            pending = true
-            GLib.idle_add(GLib.PRIORITY_DEFAULT_IDLE, () => { setBrightness(scale.get_value()); pending = false; return GLib.SOURCE_REMOVE })
-        }
-    })
-
-    const id = GLib.timeout_add(GLib.PRIORITY_LOW, 2000, () => {
-        if (GLib.get_monotonic_time() < ignoreUntil) return GLib.SOURCE_CONTINUE
-        const prev = _cachedPct
-        fetchBrightness().then(v => { if (Math.abs(v - prev) > 1) scale.set_value(v) })
-        return GLib.SOURCE_CONTINUE
-    })
-    box.connect("unrealize", () => { try { GLib.source_remove(id) } catch {} })
-
-    fetchBrightness().then(v => scale.set_value(v))
     return box
 }
 

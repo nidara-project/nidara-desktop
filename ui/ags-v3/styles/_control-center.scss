@@ -38,23 +38,6 @@ window.nc-window-2 {
     background: transparent;
 }
 
-.cc-scale-vertical {
-    trough {
-        min-width: 6px;
-        min-height: unset;
-        border: none;
-    }
-    highlight {
-        min-width: 6px;
-        min-height: unset;
-        border: none;
-    }
-    slider {
-        min-width: 20px;
-        min-height: 20px;
-    }
-}
-
 /* --- Media Widget --- */
 .cc-media-title-atomic {
     font-size: $fs-small;

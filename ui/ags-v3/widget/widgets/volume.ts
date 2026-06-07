@@ -7,6 +7,21 @@ import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
+// Shared Cairo volume slider for the endpoint/stream rows (target has 0–1 `volume`).
+function volSlider(target: any, valLabel: Gtk.Label, refreshMute: () => void): Gtk.Widget {
+    return makeHSlider({
+        min: 0, max: 100,
+        value: Math.round((target.volume ?? 0) * 100),
+        onChange: (v) => { target.volume = v / 100 },
+        onValueChanged: (v) => { valLabel.label = `${Math.round(v)}%` },
+        onExtChange: (cb) => {
+            const id = target.connect("notify::volume", () => { cb((target.volume ?? 0) * 100); refreshMute() })
+            return () => { try { target.disconnect(id) } catch {} }
+        },
+        debounce: 24,
+    })
+}
+
 // ── Bar icon (dynamic, reflects mute/volume level) ────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
@@ -115,15 +130,8 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
     header.append(muteBtn)
     box.append(header)
 
-    const adj = new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 2, page_increment: 10, value: Math.round(ep.volume * 100) })
-    const scale = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false, adjustment: adj, css_classes: ["crystal-scale", "cc-atomic-scale-native"] })
     const valLabel = new Gtk.Label({ label: `${Math.round(ep.volume * 100)}%`, css_classes: ["slider-value-label"], width_chars: 5, xalign: 1.0 })
-    scale.connect("value-changed", () => { ep.volume = scale.get_value() / 100; valLabel.label = `${Math.round(scale.get_value())}%` })
-    ep.connect("notify::volume", () => {
-        const v = Math.round(ep.volume * 100)
-        if (Math.abs(scale.get_value() - v) >= 1) { scale.set_value(v); valLabel.label = `${v}%` }
-        muteImg.gicon = endpointVolumeIcon(ep.volume, ep.mute ?? false)
-    })
+    const scale = volSlider(ep, valLabel, () => { muteImg.gicon = endpointVolumeIcon(ep.volume, ep.mute ?? false) })
     const sliderRow = new Gtk.Box({ spacing: 8 })
     sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
     sliderRow.append(scale)
@@ -155,15 +163,8 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
         halign: Gtk.Align.START, hexpand: true,
         css_classes: ["crystal-row-title"], ellipsize: 3, max_width_chars: 16,
     }))
-    const adj = new Gtk.Adjustment({ lower: 0, upper: 100, step_increment: 2, page_increment: 10, value: Math.round(stream.volume * 100) })
-    const scale = new Gtk.Scale({ orientation: Gtk.Orientation.HORIZONTAL, hexpand: true, draw_value: false, adjustment: adj, css_classes: ["crystal-scale", "cc-atomic-scale-native"] })
     const valLabel = new Gtk.Label({ label: `${Math.round(stream.volume * 100)}%`, css_classes: ["slider-value-label"], width_chars: 5, xalign: 1.0 })
-    scale.connect("value-changed", () => { stream.volume = scale.get_value() / 100; valLabel.label = `${Math.round(scale.get_value())}%` })
-    stream.connect("notify::volume", () => {
-        const v = Math.round(stream.volume * 100)
-        if (Math.abs(scale.get_value() - v) >= 1) { scale.set_value(v); valLabel.label = `${v}%` }
-        muteImg.gicon = endpointVolumeIcon(stream.volume, stream.mute ?? false)
-    })
+    const scale = volSlider(stream, valLabel, () => { muteImg.gicon = endpointVolumeIcon(stream.volume, stream.mute ?? false) })
     box.append(scale)
     box.append(valLabel)
     const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
