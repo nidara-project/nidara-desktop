@@ -5,6 +5,8 @@ import { execAsync } from "ags/process"
 interface MonitorState {
     scale: number
     transform: number
+    /** Explicit mode "WxH@Hz"; undefined → "preferred". */
+    mode?: string
 }
 
 class MonitorConfig extends GObject.Object {
@@ -29,16 +31,25 @@ class MonitorConfig extends GObject.Object {
 
     getScale(name: string) { return this.state.get(name)?.scale ?? 1.0 }
     getTransform(name: string) { return this.state.get(name)?.transform ?? 0 }
+    getMode(name: string) { return this.state.get(name)?.mode }
     get vrr() { return this._vrr }
+
+    private _apply(name: string, cfg: MonitorState) {
+        // This config uses Hyprland's Lua parser, where `hyprctl keyword` is rejected
+        // ("can't work with non-legacy parsers. Use eval."). Apply via `hyprctl eval`
+        // running the same hl.monitor() call the persisted .lua uses.
+        const mode = cfg.mode ?? "preferred"
+        execAsync([
+            "hyprctl", "eval",
+            `hl.monitor({ output = '${name}', mode = '${mode}', position = 'auto', scale = ${cfg.scale}, transform = ${cfg.transform} })`,
+        ]).catch(e => console.error("[MonitorConfig] apply:", e))
+    }
 
     setScale(name: string, scale: number) {
         const cfg = this.state.get(name) ?? { scale: 1.0, transform: 0 }
         cfg.scale = scale
         this.state.set(name, cfg)
-        execAsync([
-            "hyprctl", "keyword", "monitor",
-            `${name},preferred,auto,${scale},transform,${cfg.transform}`,
-        ]).catch(e => console.error("[MonitorConfig] scale:", e))
+        this._apply(name, cfg)
         this._save()
     }
 
@@ -46,16 +57,25 @@ class MonitorConfig extends GObject.Object {
         const cfg = this.state.get(name) ?? { scale: 1.0, transform: 0 }
         cfg.transform = transform
         this.state.set(name, cfg)
-        execAsync([
-            "hyprctl", "keyword", "monitor",
-            `${name},preferred,auto,${cfg.scale},transform,${transform}`,
-        ]).catch(e => console.error("[MonitorConfig] transform:", e))
+        this._apply(name, cfg)
         this._save()
     }
 
+    /** Apply a resolution/refresh mode WITHOUT persisting — pair with commit() once
+     *  the user confirms (so a bad mode can be reverted without touching the .lua). */
+    applyMode(name: string, mode: string) {
+        const cfg = this.state.get(name) ?? { scale: 1.0, transform: 0 }
+        cfg.mode = mode
+        this.state.set(name, cfg)
+        this._apply(name, cfg)
+    }
+
+    /** Persist the current in-memory state to crystal-monitor.lua. */
+    commit() { this._save() }
+
     setVrr(val: number) {
         this._vrr = val
-        execAsync(["hyprctl", "keyword", "misc:vrr", String(val)])
+        execAsync(["hyprctl", "eval", `hl.config({ misc = { vrr = ${val} } })`])
             .catch(e => console.error("[MonitorConfig] vrr:", e))
         this._save()
     }
@@ -68,10 +88,11 @@ class MonitorConfig extends GObject.Object {
         ]
 
         for (const [name, cfg] of this.state.entries()) {
+            const mode = cfg.mode ?? "preferred"
             if (cfg.transform !== 0) {
-                lines.push(`hl.monitor({ output = "${name}", mode = "preferred", position = "auto", scale = ${cfg.scale}, transform = ${cfg.transform} })`)
+                lines.push(`hl.monitor({ output = "${name}", mode = "${mode}", position = "auto", scale = ${cfg.scale}, transform = ${cfg.transform} })`)
             } else {
-                lines.push(`hl.monitor({ output = "${name}", mode = "preferred", position = "auto", scale = ${cfg.scale} })`)
+                lines.push(`hl.monitor({ output = "${name}", mode = "${mode}", position = "auto", scale = ${cfg.scale} })`)
             }
         }
 

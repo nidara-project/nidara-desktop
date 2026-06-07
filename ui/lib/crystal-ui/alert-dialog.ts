@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import GLib from "gi://GLib"
 
 export interface AlertResponse {
     id: string
@@ -23,8 +24,11 @@ export function showCrystalAlert(opts: {
     body?: string
     responses: AlertResponse[]
     onResponse: (id: string) => void
+    /** Auto-respond after a countdown (e.g. revert a risky change if not confirmed).
+     *  `format(remaining)` renders the body text each tick. */
+    countdown?: { seconds: number; respondId: string; format: (remaining: number) => string }
 }): void {
-    const { parent, heading, body, responses, onResponse } = opts
+    const { parent, heading, body, responses, onResponse, countdown } = opts
 
     // ── Window ────────────────────────────────────────────────────────────────
     const dialog = new Gtk.Window({
@@ -52,17 +56,19 @@ export function showCrystalAlert(opts: {
         margin_end: 24,
     }))
 
-    // Body
-    if (body) {
-        root.append(new Gtk.Label({
-            label: body,
+    // Body (kept as a reference so a countdown can update it live).
+    let bodyLabel: Gtk.Label | null = null
+    if (body || countdown) {
+        bodyLabel = new Gtk.Label({
+            label: countdown ? countdown.format(countdown.seconds) : (body ?? ""),
             wrap: true,
             justify: Gtk.Justification.CENTER,
             css_classes: ["crystal-alert-body"],
             margin_top: 8,
             margin_start: 24,
             margin_end: 24,
-        }))
+        })
+        root.append(bodyLabel)
     }
 
     // Separator
@@ -80,11 +86,24 @@ export function showCrystalAlert(opts: {
     })
 
     let done = false
+    let tickId = 0
     const respond = (id: string) => {
         if (done) return
         done = true
+        if (tickId) { GLib.source_remove(tickId); tickId = 0 }
         onResponse(id)
         dialog.destroy()
+    }
+
+    // Countdown: tick the body text down each second, auto-respond at zero.
+    if (countdown) {
+        let remaining = countdown.seconds
+        tickId = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, 1, () => {
+            remaining -= 1
+            if (remaining <= 0) { tickId = 0; respond(countdown.respondId); return GLib.SOURCE_REMOVE }
+            bodyLabel?.set_label(countdown.format(remaining))
+            return GLib.SOURCE_CONTINUE
+        })
     }
 
     // Close-request → cancel (first non-destructive response, fallback to first)

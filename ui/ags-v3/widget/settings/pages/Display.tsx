@@ -1,6 +1,8 @@
 import { Gtk } from "ags/gtk4"
 import AstalHyprland from "gi://AstalHyprland"
 import { listGroup, createRow, pageHeader, pageBox, staticLabel } from "../SettingsHelpers"
+import { showCrystalAlert } from "../../../../lib/crystal-ui"
+import { exec } from "ags/process"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import monitorConfig from "../../../core/MonitorConfig"
@@ -29,7 +31,7 @@ function isScaleValid(w: number, h: number, s: number): boolean {
         && Math.abs(Math.round(h / s) - h / s) < 0.001
 }
 
-function buildMonitorSection(mon: any): Gtk.Widget {
+function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
     const name: string  = mon.name ?? t("settings.display.label.monitor")
     const model: string = mon.model ?? mon.description ?? ""
     const make: string  = mon.make ?? ""
@@ -37,35 +39,145 @@ function buildMonitorSection(mon: any): Gtk.Widget {
 
     const { box, listBox } = listGroup(monitorLabel(name))
 
-    // Current mode (static info)
-    listBox.append(createRow(
-        t("settings.display.resolution"),
-        t("settings.display.resolution.desc"),
-        staticLabel(currentMode(mon))
-    ))
-
-    // Scale — only exact-valid presets for this monitor (1.0 is always valid).
-    const currentScaleNum = parseFloat(String(monitorConfig.getScale(name)))
-    const validStrings = SCALE_PRESETS.filter(s => {
-        const sv = parseFloat(s)
-        return sv === 1 || isScaleValid(mon.width ?? 0, mon.height ?? 0, sv)
-    })
-    // Keep the currently-applied scale selectable even if it isn't an exact preset.
-    if (!validStrings.some(s => Math.abs(parseFloat(s) - currentScaleNum) < 0.001)) {
-        validStrings.push(String(currentScaleNum))
-        validStrings.sort((a, b) => parseFloat(a) - parseFloat(b))
+    // ── Scale dropdown (rebuilt when the resolution changes) ────────────────────
+    // Only exact-valid presets for the current resolution (1.0 always valid).
+    const buildScaleStrings = (w: number, h: number): string[] => {
+        const vs = SCALE_PRESETS.filter(s => {
+            const sv = parseFloat(s)
+            return sv === 1 || isScaleValid(w, h, sv)
+        })
+        const cur = parseFloat(String(monitorConfig.getScale(name)))
+        if (!vs.some(s => Math.abs(parseFloat(s) - cur) < 0.001)) {
+            vs.push(String(cur)); vs.sort((a, b) => parseFloat(a) - parseFloat(b))
+        }
+        return vs
     }
-    const scaleStrings = validStrings.map(s => `${s}×`)
-    const scaleModel = new Gtk.StringList({ strings: scaleStrings })
-    const scaleDrp = new Gtk.DropDown({ model: scaleModel, valign: Gtk.Align.CENTER })
-    const initScaleIdx = validStrings.findIndex(s => Math.abs(parseFloat(s) - currentScaleNum) < 0.001)
-    scaleDrp.selected = initScaleIdx >= 0 ? initScaleIdx : 0
-
+    let scaleVals = buildScaleStrings(mon.width ?? 0, mon.height ?? 0)
+    const scaleDrp = new Gtk.DropDown({ model: new Gtk.StringList({ strings: scaleVals.map(s => `${s}×`) }), valign: Gtk.Align.CENTER })
+    let scaleApplying = false
+    const syncScaleSel = () => {
+        const cur = parseFloat(String(monitorConfig.getScale(name)))
+        const i = scaleVals.findIndex(s => Math.abs(parseFloat(s) - cur) < 0.001)
+        scaleDrp.selected = i >= 0 ? i : 0
+    }
+    syncScaleSel()
     scaleDrp.connect("notify::selected", () => {
-        const val = validStrings[scaleDrp.selected]
-        if (val == null) return
-        monitorConfig.setScale(name, parseFloat(val))
+        if (scaleApplying) return
+        const v = scaleVals[scaleDrp.selected]
+        if (v != null) monitorConfig.setScale(name, parseFloat(v))
     })
+    const rebuildScaleOptions = (w: number, h: number) => {
+        scaleApplying = true
+        scaleVals = buildScaleStrings(w, h)
+        scaleDrp.set_model(new Gtk.StringList({ strings: scaleVals.map(s => `${s}×`) }))
+        syncScaleSel()
+        scaleApplying = false
+    }
+
+    // ── Resolution + refresh (two dependent dropdowns, with revert safety) ───────
+    type DMode = { w: number; h: number; hz: number }
+    // AstalHyprland's Monitor.available_modes is always null, so the list is read
+    // from `hyprctl monitors -j` by the page and passed in here.
+    const rawModes: string[] = availableModes ?? []
+    const modes: DMode[] = []
+    for (const s of rawModes) {
+        const m = String(s).match(/^(\d+)x(\d+)@([\d.]+)/)
+        if (m) modes.push({ w: +m[1], h: +m[2], hz: Math.round(parseFloat(m[3])) })
+    }
+    const resKey = (w: number, h: number) => `${w}x${h}`
+    const resList: { w: number; h: number }[] = []
+    const hzByRes = new Map<string, number[]>()
+    for (const md of modes) {
+        const k = resKey(md.w, md.h)
+        if (!hzByRes.has(k)) { hzByRes.set(k, []); resList.push({ w: md.w, h: md.h }) }
+        const hzs = hzByRes.get(k)!
+        if (!hzs.includes(md.hz)) hzs.push(md.hz)
+    }
+    resList.sort((a, b) => b.w * b.h - a.w * a.h)
+    for (const hzs of hzByRes.values()) hzs.sort((a, b) => b - a)
+    const hzForRes = (i: number) => hzByRes.get(resKey(resList[i].w, resList[i].h)) ?? []
+
+    const curW = mon.width ?? (resList[0]?.w ?? 0)
+    const curH = mon.height ?? (resList[0]?.h ?? 0)
+    const curHz = Math.round(mon.refresh_rate ?? mon.refreshRate ?? 0)
+
+    if (resList.length === 0) {
+        // No mode list available — keep the static read-out.
+        listBox.append(createRow(
+            t("settings.display.resolution"), t("settings.display.resolution.desc"),
+            staticLabel(currentMode(mon)),
+        ))
+    } else {
+        let modeApplying = false
+        let prevMode = `${curW}x${curH}@${curHz}`
+
+        const resDrp = new Gtk.DropDown({ model: new Gtk.StringList({ strings: resList.map(r => `${r.w} × ${r.h}`) }), valign: Gtk.Align.CENTER })
+        resDrp.selected = Math.max(0, resList.findIndex(r => r.w === curW && r.h === curH))
+
+        const hzDrp = new Gtk.DropDown({ model: new Gtk.StringList({ strings: hzForRes(resDrp.selected).map(hz => `${hz} Hz`) }), valign: Gtk.Align.CENTER })
+        const hzInit = hzForRes(resDrp.selected).findIndex(hz => hz === curHz)
+        hzDrp.selected = hzInit >= 0 ? hzInit : 0
+
+        const repopulateHz = (resIdx: number, preferHz?: number) => {
+            const hzs = hzForRes(resIdx)
+            hzDrp.set_model(new Gtk.StringList({ strings: hzs.map(hz => `${hz} Hz`) }))
+            let idx = preferHz != null ? hzs.findIndex(h => h === preferHz) : 0
+            hzDrp.selected = idx >= 0 ? idx : 0
+        }
+
+        const applyMode = () => {
+            if (modeApplying) return
+            const r = resList[resDrp.selected]
+            const hzs = hzForRes(resDrp.selected)
+            const hz = hzs[hzDrp.selected] ?? hzs[0]
+            const newMode = `${r.w}x${r.h}@${hz}`
+            if (newMode === prevMode) return
+            monitorConfig.applyMode(name, newMode)
+            showCrystalAlert({
+                parent: box.get_root() as Gtk.Window,
+                heading: t("settings.display.confirm.title"),
+                countdown: {
+                    seconds: 12, respondId: "revert",
+                    format: (s) => t("settings.display.confirm.body").replace("%d", String(s)),
+                },
+                responses: [
+                    { id: "revert", label: t("settings.display.confirm.revert") },
+                    { id: "keep", label: t("settings.display.confirm.keep"), suggested: true },
+                ],
+                onResponse: (id) => {
+                    if (id === "keep") {
+                        prevMode = newMode
+                        // The new resolution may invalidate the current scale.
+                        if (!isScaleValid(r.w, r.h, monitorConfig.getScale(name))) monitorConfig.setScale(name, 1.0)
+                        monitorConfig.commit()
+                        rebuildScaleOptions(r.w, r.h)
+                    } else {
+                        monitorConfig.applyMode(name, prevMode)
+                        const pm = prevMode.match(/^(\d+)x(\d+)@(\d+)/)
+                        if (pm) {
+                            modeApplying = true
+                            const pi = resList.findIndex(rr => rr.w === +pm[1] && rr.h === +pm[2])
+                            if (pi >= 0) { resDrp.selected = pi; repopulateHz(pi, +pm[3]) }
+                            modeApplying = false
+                        }
+                    }
+                },
+            })
+        }
+
+        resDrp.connect("notify::selected", () => {
+            if (modeApplying) return
+            modeApplying = true; repopulateHz(resDrp.selected); modeApplying = false
+            applyMode()
+        })
+        hzDrp.connect("notify::selected", () => applyMode())
+
+        const resBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+        resBox.append(resDrp); resBox.append(hzDrp)
+        listBox.append(createRow(
+            t("settings.display.resolution"), t("settings.display.resolution.desc"), resBox,
+        ))
+    }
 
     listBox.append(createRow(
         t("settings.display.scale"),
@@ -158,8 +270,15 @@ export default function DisplayPage() {
 
     monitorConfig.init(monitors)
 
+    // AstalHyprland doesn't expose available modes, so read them once from hyprctl.
+    const modesByName = new Map<string, string[]>()
+    try {
+        const arr = JSON.parse(exec(["hyprctl", "monitors", "-j"]))
+        for (const m of arr) modesByName.set(m.name, m.availableModes ?? [])
+    } catch (e) { console.error("[Display] read modes:", e) }
+
     monitors.forEach(mon => {
-        page.append(buildMonitorSection(mon))
+        page.append(buildMonitorSection(mon, modesByName.get(mon.name) ?? []))
     })
 
     return page
