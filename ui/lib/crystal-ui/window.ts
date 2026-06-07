@@ -12,12 +12,17 @@ export interface CrystalWindowOpts {
     /** Icon for the sidebar toggle button (passed in so the lib stays free of the
      *  app's icon set). */
     toggleIcon: Gio.FileIcon
-    /** Optional widget centered in the header (a search box, etc.). */
+    /** Optional widget centered in the header (rarely used now). */
     headerCenter?: Gtk.Widget
+    /** Optional widget in the header start, after the toggle + nav (e.g. a title /
+     *  breadcrumb). */
+    headerTitle?: Gtk.Widget
     /** Optional widget at the header's end (a close button, etc.). */
     headerEnd?: Gtk.Widget
-    /** Optional widget placed in the toolbar next to the toggle (e.g. a back/
-     *  forward nav capsule). It rides with the toggle when the toolbar reparents. */
+    /** Optional widget pinned at the top of the sidebar capsule (e.g. a search box). */
+    sidebarTop?: Gtk.Widget
+    /** Optional widget placed in the header next to the toggle (e.g. a back/forward
+     *  nav capsule). */
     toolbarExtra?: Gtk.Widget
     sidebarWidth?: number
     defaultWidth?: number
@@ -41,17 +46,17 @@ export interface CrystalWindowResult {
 /**
  * CrystalWindow — the ONE place a settings-style window shell is assembled.
  *
- * Undecorated glass window + CrystalSplitView (sidebar capsule | content), a
- * draggable header (toggle · center · end), and the toolbar that reparents between
- * the sidebar capsule and the header slot as the sidebar shows/hides. The caller
- * supplies the sidebar, the content, and optional header/toolbar widgets — so any
- * new window is built by reusing this, not by re-assembling the chrome. See
- * feedback_universal_components.
+ * Undecorated glass window + CrystalSplitView (sidebar capsule | content) and a
+ * draggable header. The toggle + nav capsule + title live permanently in the
+ * header start (toggle · nav · title … end); the sidebar capsule top holds an
+ * optional search box. The caller supplies the sidebar, the content, and optional
+ * header/sidebar widgets — so any new window is built by reusing this, not by
+ * re-assembling the chrome. See feedback_universal_components.
  */
 export function CrystalWindow(opts: CrystalWindowOpts): CrystalWindowResult {
     const {
         app, title, sidebar, content, toggleIcon,
-        headerCenter, headerEnd, toolbarExtra,
+        headerCenter, headerTitle, headerEnd, sidebarTop, toolbarExtra,
         sidebarWidth = 250, defaultWidth = 1000, defaultHeight = 700,
         cssClasses = [], name, toggleTooltip,
     } = opts
@@ -82,9 +87,15 @@ export function CrystalWindow(opts: CrystalWindowOpts): CrystalWindowResult {
         css_classes: ["crystal-sidebar-capsule"],
         vexpand: true,
     })
+    // Optional search box pinned above the navigation list.
+    if (sidebarTop) {
+        const topSlot = new Gtk.Box({ css_classes: ["crystal-sidebar-top"] })
+        topSlot.append(sidebarTop)
+        sidebarColumn.append(topSlot)
+    }
     sidebarColumn.append(sidebarScroll)
 
-    // ── Sidebar toggle + toolbar ──────────────────────────────────────────────
+    // ── Sidebar toggle ────────────────────────────────────────────────────────
     const sidebarToggle = new Gtk.Button({
         child: new Gtk.Image({ gicon: toggleIcon, pixel_size: 16, css_classes: ["cs-icon"] }),
         css_classes: ["crystal-icon-btn", "sidebar-toggle"],
@@ -93,35 +104,21 @@ export function CrystalWindow(opts: CrystalWindowOpts): CrystalWindowResult {
     })
     if (toggleTooltip) sidebarToggle.tooltip_text = toggleTooltip
 
-    // The toolbar (toggle + optional nav) lives in the capsule top while the sidebar
-    // is presented (docked or in the collapsed popover) and parks in the header slot
-    // while it's hidden — so it stays reachable. Fixed geometry keeps the toggle at
-    // the same x,y in all three homes (see crystal-window-tools / -tools-slot CSS).
-    const sidebarTools = new Gtk.Box({
+    // ── Header over the content (draggable) ───────────────────────────────────
+    // Toggle + nav capsule + title live here permanently (no reparenting): the
+    // toggle stays reachable whether the sidebar is docked, collapsed or hidden.
+    const headerStart = new Gtk.Box({
         spacing: 8,
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.START,
         css_classes: ["crystal-window-tools"],
     })
-    sidebarTools.append(sidebarToggle)
-    if (toolbarExtra) sidebarTools.append(toolbarExtra)
+    headerStart.append(sidebarToggle)
+    if (toolbarExtra) headerStart.append(toolbarExtra)
+    if (headerTitle) headerStart.append(headerTitle)
 
-    const headerToolsSlot = new Gtk.Box({
-        valign: Gtk.Align.CENTER,
-        css_classes: ["crystal-window-tools-slot"],
-    })
-
-    const moveTools = (intoSidebar: boolean) => {
-        const target = intoSidebar ? sidebarColumn : headerToolsSlot
-        if (sidebarTools.get_parent() === target) return
-        if (sidebarTools.get_parent()) sidebarTools.unparent()
-        if (intoSidebar) sidebarColumn.prepend(sidebarTools)
-        else headerToolsSlot.append(sidebarTools)
-    }
-
-    // ── Header over the content (draggable) ───────────────────────────────────
     const contentHeader = new Gtk.CenterBox({ css_classes: ["crystal-window-header"] })
-    contentHeader.set_start_widget(headerToolsSlot)
+    contentHeader.set_start_widget(headerStart)
     if (headerCenter) contentHeader.set_center_widget(headerCenter)
     if (headerEnd) contentHeader.set_end_widget(headerEnd)
 
@@ -144,7 +141,6 @@ export function CrystalWindow(opts: CrystalWindowOpts): CrystalWindowResult {
         cssClasses: ["crystal-split-view"],
         name: "crystal-window-splitview",
         floatAnchor: sidebarToggle,
-        onSidebarPresented: (presented: boolean) => moveTools(presented),
     })
 
     sidebarToggle.connect("clicked", () => {

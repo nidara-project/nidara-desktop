@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import AstalNetwork from "gi://AstalNetwork"
 import { execAsync } from "ags/process"
-import { listGroup, createRow, staticLabel, pageHeader, pageBox, subpageHeader, type SettingsNav } from "../SettingsHelpers"
+import { listGroup, createRow, staticLabel, pageHeader, pageBox, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { CrystalButton } from "../../../../lib/crystal-ui"
@@ -352,10 +352,10 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
 
 // ── AP detail subpage ───────────────────────────────────────────────────────────
 
-function buildApDetailPage(ap: any, network: any, nav: SettingsNav): Gtk.Widget {
-    const ssid = ap.ssid as string
+function buildApDetailPage(ap: any, network: any): Gtk.Widget {
+    // Title (the SSID) rides in the window-header breadcrumb — see the pushSubpage
+    // call in refreshAps — so the page body starts straight at the info group.
     const page = pageBox("network-ap-detail-page")
-    page.append(subpageHeader(ssid, t("settings.network.detail.subtitle"), () => nav.goBack()))
 
     const { box: infoBox, listBox: infoList } = listGroup(t("settings.network.detail.group.info"))
     infoList.append(createRow(t("settings.network.detail.security"),  t("settings.network.detail.security.desc"),  staticLabel(securityLabel(ap))))
@@ -532,7 +532,12 @@ export default function NetworkPage(nav?: SettingsNav) {
 
             for (const ap of aps) {
                 const onDetails = nav
-                    ? () => nav.pushSubpage({ id: `network/ap/${ap.bssid}`, build: () => buildApDetailPage(ap, network, nav) })
+                    ? () => nav.pushSubpage({
+                        id: `network/ap/${ap.bssid}`,
+                        title: ap.ssid,
+                        parentId: "network",
+                        build: () => buildApDetailPage(ap, network),
+                    })
                     : undefined
                 apList.append(buildApRow(
                     ap, iface,

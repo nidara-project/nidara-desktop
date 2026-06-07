@@ -109,8 +109,8 @@ popover.crystal-sidebar-popup {
 
 }
 
-// Header + toolbar (.crystal-window-header / -tools / -tools-slot) are the
-// universal CrystalWindow chrome in _components.scss.
+// Header + toolbar (.crystal-window-header / -tools) are the universal
+// CrystalWindow chrome in _components.scss.
 
 // ── Icon buttons ──────────────────────────────────────────────────────────────
 button.crystal-icon-btn {
@@ -157,6 +157,37 @@ button.crystal-icon-btn.sidebar-toggle {
         min-height: 1px;
         margin: 5px 1px;
     }
+}
+
+// ── Header title / breadcrumb ─────────────────────────────────────────────────
+// Header chrome → fixed px ramp (must NOT reflow with the Settings font-size picker).
+.crystal-window-breadcrumb {
+    margin-left: 2px;
+}
+.crystal-window-title {
+    font-size: $fs-title-3;
+    font-weight: $fw-semibold;
+    color: var(--crystal-text);
+}
+button.crystal-breadcrumb-link {
+    @include crystal-reset;
+    padding: 2px 6px;
+    border-radius: $crystal-radius-sm;
+    font-size: $fs-title-3;
+    font-weight: $fw-medium;
+    color: var(--crystal-text-dim);
+
+    &:hover { color: var(--crystal-text); background: var(--crystal-surface-hover); }
+    &:focus-visible { @include crystal-focus-ring; }
+}
+.crystal-breadcrumb-sep {
+    font-size: $fs-title-3;
+    color: var(--crystal-text-disabled);
+}
+
+// ── Sidebar search slot (search box pinned above the nav list) ─────────────────
+.crystal-sidebar-top {
+    padding: 8px 8px 4px;
 }
 
 // ── Search entry ──────────────────────────────────────────────────────────────

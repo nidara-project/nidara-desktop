@@ -105,6 +105,10 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
     let activePageId = ""
 
+    // Page id → breadcrumb metadata. Seeded from categories; subpages add their own.
+    const pageTitles = new Map<string, { title: string; parentId?: string }>()
+    categories.forEach(c => pageTitles.set(c.id, { title: c.label }))
+
     const showPage = (id: string) => {
         if (id === activePageId) return
         const next = pageCache.get(id)
@@ -128,11 +132,33 @@ export default function Settings(monitor: Gdk.Monitor) {
         return scroll
     }
 
+    // ── Header breadcrumb (title, with a clickable parent for subpages) ─────────
+    const breadcrumb = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER, css_classes: ["crystal-window-breadcrumb"] })
+    const updateBreadcrumb = (pageId: string) => {
+        let c = breadcrumb.get_first_child()
+        while (c) { breadcrumb.remove(c); c = breadcrumb.get_first_child() }
+        const meta = pageTitles.get(pageId)
+        if (!meta) return   // e.g. the search-results page — no title
+        if (meta.parentId) {
+            const parent = pageTitles.get(meta.parentId)
+            const link = new Gtk.Button({
+                label: parent?.title ?? "",
+                css_classes: ["crystal-breadcrumb-link"],
+                valign: Gtk.Align.CENTER,
+            })
+            link.connect("clicked", () => navigateTo(meta.parentId!))
+            breadcrumb.append(link)
+            breadcrumb.append(new Gtk.Label({ label: "›", css_classes: ["crystal-breadcrumb-sep"] }))
+        }
+        breadcrumb.append(new Gtk.Label({ label: meta.title, css_classes: ["crystal-window-title"], halign: Gtk.Align.START }))
+    }
+
     // Navigation handle handed to each page so it can push detail subpages. Its
     // methods reference navigateTo/history defined below; they only run on user
     // interaction, by which point those are initialised.
     const nav: SettingsNav = {
-        pushSubpage: ({ id, build }) => {
+        pushSubpage: ({ id, title, parentId, build }) => {
+            pageTitles.set(id, { title, parentId })
             let w: Gtk.Widget
             try { w = build() }
             catch (e) {
@@ -290,6 +316,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         }
         showPage(pageId)
         syncSidebarSelection(pageId)
+        updateBreadcrumb(pageId)
         updateNavButtons()
     }
 
@@ -322,8 +349,8 @@ export default function Settings(monitor: Gdk.Monitor) {
     const searchEntry = new Gtk.Box({
         css_classes: ["settings-search"],
         spacing: 8,
-        width_request: 220,
-        halign: Gtk.Align.CENTER,
+        hexpand: true,
+        halign: Gtk.Align.FILL,
         valign: Gtk.Align.CENTER,
     })
     searchEntry.append(new Gtk.Image({
@@ -362,9 +389,9 @@ export default function Settings(monitor: Gdk.Monitor) {
     searchInput.add_controller(searchKeys)
 
     // ── Window shell ──────────────────────────────────────────────────────────
-    // The glass window + split view + reparenting header/toolbar are the universal
-    // CrystalWindow. Settings only supplies the sidebar, the content, the search
-    // box (header center), the nav capsule (toolbar extra) and the close button.
+    // The universal CrystalWindow assembles the glass window + split view + header.
+    // Settings supplies the sidebar, the content, the search box (sidebar top), the
+    // nav capsule + breadcrumb title (header start) and the close button (header end).
     const closeBtn = IconButton({
         icon: Icons.close,
         iconSize: 14,
@@ -382,7 +409,8 @@ export default function Settings(monitor: Gdk.Monitor) {
         content: contentArea,
         toggleIcon: Icons.sidebar,
         toggleTooltip: t("settings.nav.menu"),
-        headerCenter: searchEntry,
+        sidebarTop: searchEntry,
+        headerTitle: breadcrumb,
         headerEnd: closeBtn,
         toolbarExtra: navCapsule,
         sidebarWidth: 250,

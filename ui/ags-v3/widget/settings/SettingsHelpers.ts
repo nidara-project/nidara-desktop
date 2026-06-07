@@ -2,8 +2,6 @@ import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import { makeHSlider } from "../common/Slider"
 import { CrystalRow, CrystalList } from "../../../lib/crystal-ui"
-import Icons from "../../core/Icons"
-import { t } from "../../core/i18n"
 
 /**
  * Shared UI helpers for Settings pages.
@@ -13,12 +11,19 @@ import { t } from "../../core/i18n"
 // ── Subpage navigation ──────────────────────────────────────────────────────────
 // Settings is a single-child page swapper (see Settings.tsx). A page component
 // receives a SettingsNav so it can push a detail subpage (e.g. a Wi-Fi network's
-// info) into the same shell — the history/back-forward capsule handles return.
-// One nav per Settings window instance (there is a Settings per monitor), so it's
-// passed in, never a module singleton.
+// info) into the same shell. The subpage's title rides in the window header as a
+// breadcrumb (`parentTitle › title`); return is via the breadcrumb parent or the
+// header back/forward capsule. One nav per Settings window (there is a Settings per
+// monitor), so it's passed in, never a module singleton.
 export interface SettingsNav {
-    /** Build + push a subpage, then navigate to it. `id` must be unique & stable. */
-    pushSubpage: (opts: { id: string; build: () => Gtk.Widget }) => void
+    /**
+     * Build + push a subpage, then navigate to it.
+     * @param id        unique & stable page key
+     * @param title     shown in the header breadcrumb
+     * @param parentId  page to return to (breadcrumb parent); usually the caller
+     * @param build     constructs the page widget (called fresh on each push)
+     */
+    pushSubpage: (opts: { id: string; title: string; parentId?: string; build: () => Gtk.Widget }) => void
     /** Go back one step in history (same as the nav-capsule back button). */
     goBack: () => void
 }
@@ -201,48 +206,12 @@ export const staticLabel = (text: any) => new Gtk.Label({
 })
 
 // ── Page Header ───────────────────────────────────────────────────────────────
-export const pageHeader = (title: string, subtitle: string) => {
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 4,
-        margin_bottom: 16,
-    })
-    box.append(new Gtk.Label({
-        label: title,
-        css_classes: ["settings-page-title"],
-        halign: Gtk.Align.START,
-    }))
-    box.append(new Gtk.Label({
-        label: subtitle,
-        css_classes: ["settings-page-subtitle"],
-        halign: Gtk.Align.START,
-    }))
-    return box
-}
-
-// ── Subpage Header (back button + title) ───────────────────────────────────────
-export const subpageHeader = (title: string, subtitle: string, onBack: () => void) => {
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, margin_bottom: 16 })
-
-    const top = new Gtk.Box({ spacing: 10, valign: Gtk.Align.CENTER })
-    const back = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["cs-icon"] }),
-        css_classes: ["crystal-icon-btn", "nav-btn"],
-        tooltip_text: t("settings.nav.back"),
-        valign: Gtk.Align.CENTER,
-    })
-    back.connect("clicked", onBack)
-    top.append(back)
-    top.append(new Gtk.Label({ label: title, css_classes: ["settings-page-title"], halign: Gtk.Align.START }))
-    box.append(top)
-
-    if (subtitle) box.append(new Gtk.Label({
-        label: subtitle,
-        css_classes: ["settings-page-subtitle"],
-        halign: Gtk.Align.START,
-    }))
-    return box
-}
+// Page titles now live in the window header (a breadcrumb driven by Settings.tsx),
+// so the in-body header is gone. Kept as an invisible no-op until the ~19 call
+// sites are swept (see references/tech-debt.md). `visible:false` means the parent
+// pageBox skips it for spacing, so no phantom gap above the first group.
+export const pageHeader = (_title: string, _subtitle: string) =>
+    new Gtk.Box({ visible: false })
 
 // ── Page Root Box ─────────────────────────────────────────────────────────────
 export const pageBox = (...extraClasses: string[]) =>
