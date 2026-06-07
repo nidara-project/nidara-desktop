@@ -124,10 +124,12 @@ function getIp(service: any): string {
 
 // ── AP row ────────────────────────────────────────────────────────────────────
 
-function buildApRow(ap: any, iface: string, onRefresh: () => void): Gtk.ListBoxRow {
+function buildApRow(ap: any, iface: string, isActive: boolean, onRefresh: () => void): Gtk.ListBoxRow {
     const ssid    = ap.ssid as string
     const secured = isSecured(ap)
-    let active    = ap.active as boolean
+    // AstalNetwork.AccessPoint has no `active` property — the active AP is derived
+    // by the caller from network.wifi.active_access_point.bssid.
+    let active    = isActive
 
     // Right-side widget: optional lock icon + action button
     const rightBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
@@ -382,8 +384,9 @@ export default function NetworkPage() {
                 .sort((a: any, b: any) => b.strength - a.strength)
                 .slice(0, 12)
 
+            const activeBssid = network.wifi.active_access_point?.bssid
             for (const ap of aps) {
-                apList.append(buildApRow(ap, iface, refreshAps))
+                apList.append(buildApRow(ap, iface, !!activeBssid && ap.bssid === activeBssid, refreshAps))
             }
 
             // The Scan button lives in this group's header, so the group must stay
@@ -415,6 +418,7 @@ export default function NetworkPage() {
 
         network.wifi.connect("notify::access-points", refreshAps)
         network.wifi.connect("notify::enabled", refreshAps)
+        network.wifi.connect("notify::active-access-point", refreshAps)
         refreshAps()
         page.append(apBox)
 
