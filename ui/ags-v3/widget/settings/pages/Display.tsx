@@ -20,6 +20,15 @@ function currentMode(mon: any): string {
 
 const SCALE_PRESETS = ["1.0", "1.25", "1.5", "1.75", "2.0"]
 
+// Hyprland requires a fractional scale to divide the native resolution into a whole
+// number of logical pixels; otherwise it rejects it and snaps to a valid one. Offer
+// only exact-valid scales for this monitor's resolution (same as GNOME).
+function isScaleValid(w: number, h: number, s: number): boolean {
+    if (!w || !h) return true
+    return Math.abs(Math.round(w / s) - w / s) < 0.001
+        && Math.abs(Math.round(h / s) - h / s) < 0.001
+}
+
 function buildMonitorSection(mon: any): Gtk.Widget {
     const name: string  = mon.name ?? t("settings.display.label.monitor")
     const model: string = mon.model ?? mon.description ?? ""
@@ -35,18 +44,27 @@ function buildMonitorSection(mon: any): Gtk.Widget {
         staticLabel(currentMode(mon))
     ))
 
-    // Scale
-    const currentScale = String(monitorConfig.getScale(name))
-    const scaleStrings = SCALE_PRESETS.map(s => `${s}×`)
+    // Scale — only exact-valid presets for this monitor (1.0 is always valid).
+    const currentScaleNum = parseFloat(String(monitorConfig.getScale(name)))
+    const validStrings = SCALE_PRESETS.filter(s => {
+        const sv = parseFloat(s)
+        return sv === 1 || isScaleValid(mon.width ?? 0, mon.height ?? 0, sv)
+    })
+    // Keep the currently-applied scale selectable even if it isn't an exact preset.
+    if (!validStrings.some(s => Math.abs(parseFloat(s) - currentScaleNum) < 0.001)) {
+        validStrings.push(String(currentScaleNum))
+        validStrings.sort((a, b) => parseFloat(a) - parseFloat(b))
+    }
+    const scaleStrings = validStrings.map(s => `${s}×`)
     const scaleModel = new Gtk.StringList({ strings: scaleStrings })
     const scaleDrp = new Gtk.DropDown({ model: scaleModel, valign: Gtk.Align.CENTER })
-    const initScaleIdx = SCALE_PRESETS.findIndex(s => parseFloat(s) === parseFloat(currentScale))
+    const initScaleIdx = validStrings.findIndex(s => Math.abs(parseFloat(s) - currentScaleNum) < 0.001)
     scaleDrp.selected = initScaleIdx >= 0 ? initScaleIdx : 0
 
     scaleDrp.connect("notify::selected", () => {
-        const val = scaleStrings[scaleDrp.selected]
-        if (!val) return
-        monitorConfig.setScale(name, parseFloat(val.replace("×", "")))
+        const val = validStrings[scaleDrp.selected]
+        if (val == null) return
+        monitorConfig.setScale(name, parseFloat(val))
     })
 
     listBox.append(createRow(

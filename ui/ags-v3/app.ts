@@ -148,6 +148,14 @@ app.start({
           }
         })
 
+        // Display scale / resolution change: the axis captures monMain/WIN_W/WIN_H
+        // from the monitor geometry at build time, so a runtime scale change leaves
+        // them stale and the dock's centering + input-region math breaks ("goes
+        // crazy"). The monitor's logical geometry changes on any scale/mode change,
+        // so rebuild with fresh geometry. (Debounced by scheduleDockRebuild.)
+        try { monitor.connect("notify::geometry", scheduleDockRebuild) }
+        catch (e) { console.error("[UI] monitor geometry watch failed:", e) }
+
       } catch (e) { console.error(`[UI] Error:`, e) }
     }
 
