@@ -265,7 +265,7 @@ export default {
     "settings.apps.status.not-in-theme": "No encontrado en el tema actual",
     "settings.apps.status.apply-failed": "No se pudo aplicar el override",
     "settings.audio.group.output": "Dispositivos de Salida",
-    "settings.audio.group.input": "Entrada (Micrófonos)",
+    "settings.audio.group.input": "Dispositivos de Entrada",
     "settings.audio.error.no-service": "Servicio de Audio no disponible",
     "settings.audio.subtitle": "Administra tus dispositivos de entrada y salida",
     "settings.audio.title": "Sonido",

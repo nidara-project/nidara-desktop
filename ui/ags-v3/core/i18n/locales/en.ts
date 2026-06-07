@@ -271,7 +271,7 @@ export default {
 
     // Audio
     "settings.audio.group.output": "Output Devices",
-    "settings.audio.group.input": "Input (Microphones)",
+    "settings.audio.group.input": "Input Devices",
     "settings.audio.error.no-service": "Audio service not available",
     "settings.audio.subtitle": "Manage your input and output devices",
     "settings.audio.title": "Sound",

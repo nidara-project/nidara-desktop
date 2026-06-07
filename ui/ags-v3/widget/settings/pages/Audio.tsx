@@ -14,8 +14,9 @@ function setDefault(endpoint: any, isMic: boolean) {
         .catch(e => console.error("[Audio] set-default failed:", e))
 }
 
-function volumeIcon(isMic: boolean, vol: number, muted: boolean) {
-    if (isMic) return Icons.mic
+// Volume-level icon (used for the mute button) — same gradient for inputs and
+// outputs; a muted mic reads better as volume-muted than a plain mic glyph.
+function volumeIcon(vol: number, muted: boolean) {
     if (muted || vol === 0) return Icons.volumeMuted
     if (vol < 0.34) return Icons.volumeLow
     if (vol < 0.67) return Icons.volumeMedium
@@ -70,7 +71,7 @@ function createDeviceRow(
 
     // Mute button
     const muteImg = new Gtk.Image({
-        gicon: volumeIcon(isMic, endpoint.volume, endpoint.mute ?? false),
+        gicon: volumeIcon(endpoint.volume, endpoint.mute ?? false),
         pixel_size: 18, css_classes: ["cs-icon"],
     })
     const muteBtn = new Gtk.Button({
@@ -79,7 +80,7 @@ function createDeviceRow(
     })
     muteBtn.connect("clicked", () => { endpoint.mute = !endpoint.mute })
     endpoint.connect("notify::mute", () => {
-        muteImg.gicon = volumeIcon(isMic, endpoint.volume, endpoint.mute ?? false)
+        muteImg.gicon = volumeIcon(endpoint.volume, endpoint.mute ?? false)
     })
     header.append(muteBtn)
     box.append(header)
@@ -112,13 +113,13 @@ function createDeviceRow(
             scale.set_value(v)
             valLabel.label = `${v}%`
         }
-        muteImg.gicon = volumeIcon(isMic, endpoint.volume, endpoint.mute ?? false)
+        muteImg.gicon = volumeIcon(endpoint.volume, endpoint.mute ?? false)
     })
 
     const sliderRow = new Gtk.Box({ spacing: 8 })
-    sliderRow.append(new Gtk.Image({ gicon: isMic ? Icons.mic : Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
+    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
     sliderRow.append(scale)
-    sliderRow.append(new Gtk.Image({ gicon: isMic ? Icons.mic : Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
+    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
     sliderRow.append(valLabel)
     box.append(sliderRow)
 
@@ -154,7 +155,7 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
 
     // Mute
     const muteImg = new Gtk.Image({
-        gicon: volumeIcon(false, stream.volume, stream.mute ?? false),
+        gicon: volumeIcon(stream.volume, stream.mute ?? false),
         pixel_size: 16, css_classes: ["cs-icon"],
     })
     const muteBtn = new Gtk.Button({
@@ -163,7 +164,7 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
     })
     muteBtn.connect("clicked", () => { stream.mute = !stream.mute })
     stream.connect("notify::mute", () => {
-        muteImg.gicon = volumeIcon(false, stream.volume, stream.mute ?? false)
+        muteImg.gicon = volumeIcon(stream.volume, stream.mute ?? false)
     })
 
     // Slider
@@ -194,7 +195,7 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
             scale.set_value(v)
             valLabel.label = `${v}%`
         }
-        muteImg.gicon = volumeIcon(false, stream.volume, stream.mute ?? false)
+        muteImg.gicon = volumeIcon(stream.volume, stream.mute ?? false)
     })
 
     box.append(muteBtn)
