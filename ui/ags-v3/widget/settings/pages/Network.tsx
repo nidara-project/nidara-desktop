@@ -386,7 +386,21 @@ export default function NetworkPage() {
                 apList.append(buildApRow(ap, iface, refreshAps))
             }
 
-            apBox.visible = aps.length > 0 && network.wifi.enabled
+            // The Scan button lives in this group's header, so the group must stay
+            // visible whenever Wi-Fi is on — otherwise there's no way to scan for
+            // the first network. Show an empty placeholder when nothing is found.
+            if (aps.length === 0) {
+                const emptyRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+                emptyRow.set_child(new Gtk.Label({
+                    label: t("settings.network.ap.empty"),
+                    css_classes: ["crystal-row-subtitle"],
+                    margin_top: 12, margin_bottom: 12, margin_start: 16,
+                    halign: Gtk.Align.START,
+                }))
+                apList.append(emptyRow)
+            }
+
+            apBox.visible = network.wifi.enabled
         }
 
         scanBtn.connect("clicked", () => {
@@ -400,6 +414,7 @@ export default function NetworkPage() {
         })
 
         network.wifi.connect("notify::access-points", refreshAps)
+        network.wifi.connect("notify::enabled", refreshAps)
         refreshAps()
         page.append(apBox)
 

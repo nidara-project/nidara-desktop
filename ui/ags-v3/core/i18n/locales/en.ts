@@ -430,6 +430,7 @@ export default {
     "settings.network.ap.label.error": "Error",
     "settings.network.ap.cancel": "Cancel",
     "settings.network.ap.scan": "Scan",
+    "settings.network.ap.empty": "No networks found. Tap Scan to search.",
     "settings.network.ap.password-for": "Password for",
     "settings.network.ap.password-placeholder": "Wi-Fi password",
     "settings.network.ap.strength": "Strength:",
