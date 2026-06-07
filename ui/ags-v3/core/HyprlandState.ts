@@ -1,7 +1,7 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import AstalHyprland from "gi://AstalHyprland"
-import { execAsync } from "ags/process"
+import { execAsync, exec } from "ags/process"
 
 // Tracked IPC event names that require a full state refresh
 const TRACKED_EVENTS = [
@@ -29,6 +29,11 @@ class HyprlandStateClass extends GObject.Object {
     workspaces: AstalHyprland.Workspace[] = []
     monitors:   AstalHyprland.Monitor[]   = []
 
+    // AstalHyprland.Monitor.available_modes is always null, so the mode list is read
+    // from `hyprctl monitors -j` and cached here (refreshed only on monitor add/remove,
+    // not on every event). Consumers (Display settings) read it instead of re-shelling.
+    availableModesByName = new Map<string, string[]>()
+
     // Pre-computed derived state — rebuilt on every refresh
     clientsByWorkspace = new Map<number, AstalHyprland.Client[]>()
     occupiedWorkspaces = new Set<number>()
@@ -49,13 +54,14 @@ class HyprlandStateClass extends GObject.Object {
         this.hl = AstalHyprland.get_default()
 
         const refresh = () => this._scheduleRefresh()
+        const onMonitors = () => { this._refreshModes(); refresh() }
         // Avoid notify::clients and notify::focused-* — AstalHyprland re-emits them
         // whenever it rebuilds its internal state (e.g. on windowtitle events from Chrome/
         // YouTube), even when the logical state hasn't changed. TRACKED_EVENTS IPC signals
         // cover all structural changes: focus (activewindow), workspace (workspace),
         // open/close (openwindow/closewindow), move (movewindow), monitor (focusedmon).
-        this.hl.connect("monitor-added",   refresh)
-        this.hl.connect("monitor-removed", refresh)
+        this.hl.connect("monitor-added",   onMonitors)
+        this.hl.connect("monitor-removed", onMonitors)
         this.hl.connect("event", (_h: any, name: string, data: string) => {
             if (name === "submap") {
                 this.submap = data || ""
@@ -76,6 +82,21 @@ class HyprlandStateClass extends GObject.Object {
         })
 
         this._refresh()
+        this._refreshModes()
+    }
+
+    // Cache available modes per monitor from hyprctl (one sync read; modes only
+    // change when a monitor is added/removed). Returns [] if unknown.
+    private _refreshModes() {
+        try {
+            const arr = JSON.parse(exec(["hyprctl", "monitors", "-j"]))
+            this.availableModesByName.clear()
+            for (const m of arr) this.availableModesByName.set(m.name, m.availableModes ?? [])
+        } catch (e) { console.error("[HyprlandState] modes refresh failed:", e) }
+    }
+
+    getAvailableModes(name: string): string[] {
+        return this.availableModesByName.get(name) ?? []
     }
 
     // Coalesces multiple signals that fire in the same GLib iteration into one refresh.
@@ -177,7 +198,8 @@ class HyprlandStateClass extends GObject.Object {
     }
 
     setLayout(layout: "dwindle" | "master") {
-        return execAsync(["hyprctl", "keyword", "general:layout", layout])
+        // Lua parser: keyword is rejected, use eval (see MonitorConfig._apply).
+        return execAsync(["hyprctl", "eval", `hl.config({ general = { layout = '${layout}' } })`])
             .catch(console.error)
     }
 }

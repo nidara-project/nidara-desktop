@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import AstalHyprland from "gi://AstalHyprland"
 import { listGroup, createRow, pageHeader, pageBox, staticLabel } from "../SettingsHelpers"
 import { showCrystalAlert } from "../../../../lib/crystal-ui"
-import { exec } from "ags/process"
+import hs from "../../../core/HyprlandState"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import monitorConfig from "../../../core/MonitorConfig"
@@ -270,15 +270,10 @@ export default function DisplayPage() {
 
     monitorConfig.init(monitors)
 
-    // AstalHyprland doesn't expose available modes, so read them once from hyprctl.
-    const modesByName = new Map<string, string[]>()
-    try {
-        const arr = JSON.parse(exec(["hyprctl", "monitors", "-j"]))
-        for (const m of arr) modesByName.set(m.name, m.availableModes ?? [])
-    } catch (e) { console.error("[Display] read modes:", e) }
-
+    // Available modes come from HyprlandState's cache (read once from hyprctl there,
+    // since AstalHyprland doesn't expose them) — no per-open re-shell.
     monitors.forEach(mon => {
-        page.append(buildMonitorSection(mon, modesByName.get(mon.name) ?? []))
+        page.append(buildMonitorSection(mon, hs.getAvailableModes(mon.name)))
     })
 
     return page
