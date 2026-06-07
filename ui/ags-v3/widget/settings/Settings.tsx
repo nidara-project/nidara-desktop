@@ -18,7 +18,6 @@ import InputPage from "./pages/Input"
 import AppsPage from "./pages/Apps"
 import BluetoothPage from "./pages/Bluetooth"
 import AutostartPage from "./pages/Autostart"
-import DefaultAppsPage from "./pages/DefaultApps"
 import AccessibilityPage from "./pages/Accessibility"
 import UsersPage from "./pages/Users"
 import GamingPage from "./pages/Gaming"
@@ -68,26 +67,30 @@ export default function Settings(monitor: Gdk.Monitor) {
     // ── Sidebar ───────────────────────────────────────────────────────────────
     // The navigation list itself is the universal CrystalSidebar component; it's
     // created after the pages are built (below) so its onSelect can call navigateTo.
+    // Order = macOS-style thematic clusters with title-less dividers (groupStart):
+    // 1) connectivity · 2) the bulk (look/shell/behaviour/apps) · 3) system & devices.
     const categories = [
-        { id: "users",        label: t("settings.users.title"),                              icon: Icons.userRound,     component: UsersPage        },
-        { id: "appearance",   label: t("settings.appearance.title"),         icon: Icons.palette,       component: AppearancePage   },
-        { id: "display",      label: t("settings.display.title"),              icon: Icons.monitor,       component: DisplayPage      },
-        { id: "audio",        label: t("settings.audio.title"),                  icon: Icons.speaker,       component: AudioPage        },
-        { id: "network",      label: t("settings.network.title"),                   icon: Icons.globe,         component: NetworkPage      },
-        { id: "input",        label: t("settings.input.title"),                              icon: Icons.keyboard,      component: InputPage        },
-        { id: "bluetooth",    label: t("settings.bluetooth.title"),           icon: Icons.bluetooth,     component: BluetoothPage    },
-        { id: "region",       label: t("settings.region.title"),                             icon: Icons.clock,         component: RegionPage       },
-        { id: "defaultapps",  label: t("settings.defaultapps.title"),                        icon: Icons.app,           component: DefaultAppsPage  },
-        { id: "apps",         label: t("settings.apps.title"),             icon: Icons.grid,          component: AppsPage         },
-        { id: "accessibility",label: t("settings.accessibility.title"),                      icon: Icons.accessibility, component: AccessibilityPage },
-        { id: "notifications",label: t("settings.notif.title"),                              icon: Icons.bell,          component: NotificationsPage },
-        { id: "bar",          label: t("settings.bar.title"),                                icon: Icons.panelTop,      component: BarPage          },
-        { id: "dock",         label: t("settings.dock.title"),                     icon: Icons.dock,          component: DockPage         },
-        { id: "widgets",      label: t("settings.widgets.title"),               icon: Icons.puzzle,        component: WidgetsPage      },
-        { id: "gaming",       label: t("settings.gaming.title"),                 icon: Icons.gamepad,       component: GamingPage       },
+        // ── Connectivity ────────────────────────────────────────────────────────
+        { id: "network",      label: t("settings.network.title"),     icon: Icons.globe,         component: NetworkPage      },
+        { id: "bluetooth",    label: t("settings.bluetooth.title"),   icon: Icons.bluetooth,     component: BluetoothPage    },
+        // ── Look, shell & behaviour ─────────────────────────────────────────────
+        { id: "appearance",   label: t("settings.appearance.title"),  icon: Icons.palette,       component: AppearancePage,   groupStart: true },
+        { id: "display",      label: t("settings.display.title"),     icon: Icons.monitor,       component: DisplayPage      },
+        { id: "audio",        label: t("settings.audio.title"),       icon: Icons.speaker,       component: AudioPage        },
+        { id: "bar",          label: t("settings.bar.title"),         icon: Icons.panelTop,      component: BarPage          },
+        { id: "dock",         label: t("settings.dock.title"),        icon: Icons.dock,          component: DockPage         },
+        { id: "widgets",      label: t("settings.widgets.title"),     icon: Icons.puzzle,        component: WidgetsPage      },
+        { id: "gaming",       label: t("settings.gaming.title"),      icon: Icons.gamepad,       component: GamingPage       },
+        { id: "notifications",label: t("settings.notif.title"),       icon: Icons.bell,          component: NotificationsPage },
+        { id: "accessibility",label: t("settings.accessibility.title"),icon: Icons.accessibility,component: AccessibilityPage },
+        { id: "apps",         label: t("settings.apps.section"),      icon: Icons.grid,          component: AppsPage         },
+        // ── System & devices ────────────────────────────────────────────────────
+        { id: "input",        label: t("settings.input.title"),       icon: Icons.keyboard,      component: InputPage,        groupStart: true },
+        { id: "power",        label: t("settings.power.title"),       icon: Icons.battery,       component: PowerPage        },
+        { id: "region",       label: t("settings.region.title"),      icon: Icons.clock,         component: RegionPage       },
         { id: "autostart",    label: t("settings.autostart.title"),   icon: Icons.rocket,        component: AutostartPage    },
-        { id: "power",        label: t("settings.power.title"),                 icon: Icons.battery,       component: PowerPage        },
-        { id: "about",        label: t("settings.about.title"),               icon: Icons.info,          component: AboutPage        },
+        { id: "users",        label: t("settings.users.title"),       icon: Icons.userRound,     component: UsersPage        },
+        { id: "about",        label: t("settings.about.title"),       icon: Icons.info,          component: AboutPage        },
     ]
 
     // ── Page container — single-child swap model ──────────────────────────────
@@ -190,7 +193,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     // navigateTo is defined further down; the onSelect closure only runs on a
     // user click, by which point it's assigned.
     const sidebar = CrystalSidebar(
-        categories.map(c => ({ id: c.id, label: c.label, icon: c.icon })),
+        categories.map(c => ({ id: c.id, label: c.label, icon: c.icon, groupStart: c.groupStart })),
         (id) => navigateTo(id),
     )
     sidebar.widget.set_name("crystal-settings-sidebar-list")
@@ -426,8 +429,10 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     ;(win as any).toggle = cw.toggle
 
-    // Default page — seeds history
-    if (categories.length > 0) navigateTo(categories[0].id)
+    // Default page — seeds history. Appearance is the chosen landing (not the
+    // sidebar's first item), falling back to the first category if it's ever gone.
+    const defaultPage = categories.find(c => c.id === "appearance")?.id ?? categories[0]?.id
+    if (defaultPage) navigateTo(defaultPage)
 
     return win
 }

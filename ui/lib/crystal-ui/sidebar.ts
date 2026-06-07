@@ -6,6 +6,9 @@ export interface CrystalSidebarItem {
     label: string
     /** Symbolic gicon shown before the label (tinted via .cs-icon). */
     icon?: Gio.FileIcon
+    /** Draw a thin, title-less divider before this item (macOS-style thematic
+     *  clustering). Ignored on the first item. Non-selectable, non-activatable. */
+    groupStart?: boolean
 }
 
 export interface CrystalSidebarResult {
@@ -46,7 +49,19 @@ export function CrystalSidebar(
         vexpand: true,
     })
 
-    items.forEach(item => {
+    items.forEach((item, i) => {
+        // Thematic divider before a group (never before the first item). It's a
+        // non-selectable/non-activatable row so it stays out of keyboard/selection.
+        if (item.groupStart && i > 0) {
+            const divider = new Gtk.ListBoxRow({
+                css_classes: ["sidebar-divider"],
+                selectable: false,
+                activatable: false,
+            })
+            divider.set_child(new Gtk.Box({ css_classes: ["sidebar-divider-line"] }))
+            list.append(divider)
+        }
+
         const content = new Gtk.Box({
             spacing: 12,
             css_classes: ["crystal-sidebar-item"],

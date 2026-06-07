@@ -127,6 +127,22 @@ selection {
             .crystal-sidebar-item { color: var(--crystal-text); }
         }
     }
+
+    // Thematic divider (macOS-style): a thin title-less line between groups.
+    // Override the row interaction model — it must be inert.
+    > row.sidebar-divider {
+        min-height: 0;
+        margin: 7px 12px;
+        padding: 0;
+        background: transparent;
+        box-shadow: none;
+        &:hover, &:selected, &:active { background: transparent; box-shadow: none; }
+
+        .sidebar-divider-line {
+            min-height: 1px;
+            background: var(--crystal-border);
+        }
+    }
 }
 
 /* Sidebar row content — a single CSS color drives both the label and the

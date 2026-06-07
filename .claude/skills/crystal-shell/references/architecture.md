@@ -99,8 +99,13 @@ Pure-GTK4 primitives + Crystal tokens, **no Adwaita, no resets**. Consumed only 
 - `CrystalClamp` — replaces `Adw.Clamp`
 - `CrystalButton` — suggested/destructive/pill variants
 - `CrystalSelect` — dropdown
+- `CrystalSidebar` — single-select nav list; items take an optional `groupStart` to draw a thin **title-less divider** before them (macOS-style thematic clusters, no group labels). The Settings sidebar uses this for its 3 clusters (connectivity · look/shell/behaviour · system & devices).
 - `showCrystalAlert` — replaces `Adw.AlertDialog`
 - `CrystalOverlayManager` — for future floating UI
+
+### Settings information architecture
+
+The Settings sidebar (`Settings.tsx` `categories[]`) is **ordered into 3 unlabelled clusters** via `CrystalSidebar`'s `groupStart` dividers; the array order *is* the IA, so reorder there. The window opens on **Appearance** by default (not the first item). Pages that contain sub-screens use the **parent-page + `pushSubpage` pattern**: e.g. **Apps** is a landing (`pages/Apps.tsx`) with two navigable rows that push **Default Apps** (`pages/DefaultApps.tsx`) and **App Icons** (`pages/AppIcons.tsx`). Caveat: subpage rows aren't in the search index (subpages build lazily), so a parent's landing rows should carry searchable labels.
 
 This is the right place for new shared, Adwaita-free primitives.
 

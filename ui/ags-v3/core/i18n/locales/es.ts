@@ -250,6 +250,7 @@ export default {
     "settings.apps.theme-icon-name": "Nombre de icono del tema",
     "settings.apps.restore": "Restaurar",
     "settings.apps.subtitle": "Personaliza los iconos de las aplicaciones instaladas",
+    "settings.apps.section": "Aplicaciones",
     "settings.apps.title": "Iconos de Apps",
     "settings.apps.tooltip.change-icon": "Cambiar icono",
     "settings.apps.tooltip.remove-override": "Eliminar el override y volver al icono del tema",

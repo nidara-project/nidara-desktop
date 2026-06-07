@@ -464,6 +464,21 @@ selection {
 .crystal-sidebar > row:hover .crystal-sidebar-item, .crystal-sidebar > row:selected .crystal-sidebar-item, .crystal-sidebar > row:active .crystal-sidebar-item {
   color: var(--crystal-text);
 }
+.crystal-sidebar > row.sidebar-divider {
+  min-height: 0;
+  margin: 7px 12px;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.crystal-sidebar > row.sidebar-divider:hover, .crystal-sidebar > row.sidebar-divider:selected, .crystal-sidebar > row.sidebar-divider:active {
+  background: transparent;
+  box-shadow: none;
+}
+.crystal-sidebar > row.sidebar-divider .sidebar-divider-line {
+  min-height: 1px;
+  background: var(--crystal-border);
+}
 
 /* Sidebar row content — a single CSS color drives both the label and the
    symbolic icon tint (no hardcoded opacity on the icon widget). */
