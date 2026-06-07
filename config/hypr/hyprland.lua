@@ -227,6 +227,15 @@ hl.window_rule({
     rounding = 0,
 })
 
+-- The Crystal Shell "About" window (a small fixed-size GTK toplevel) floats and
+-- centers. Matched by title since AGS windows share the io.Astal.ags class.
+hl.window_rule({
+    name   = "float-about",
+    match  = { title = "^About Crystal Shell$" },
+    float  = true,
+    center = true,
+})
+
 
 -- ── Game mode — workspace, window rules & auto-return ────────────────────────
 local lastNonGameWs    = nil

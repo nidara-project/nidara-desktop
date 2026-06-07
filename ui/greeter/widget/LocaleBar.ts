@@ -60,7 +60,9 @@ export default function LocaleBar(): Gtk.Widget {
     const id = kbIds[kbDrp.selected]
     if (!id) return
     savePrefs({ kbLayout: id })
-    execAsync(["hyprctl", "keyword", "input:kb_layout", id])
+    // The greeter also runs under Hyprland's Lua parser (hyprland-greeter.lua),
+    // which rejects `hyprctl keyword` — apply via eval.
+    execAsync(["hyprctl", "eval", `hl.config({ input = { kb_layout = "${id}" } })`])
       .catch(e => console.warn("[LocaleBar] kb_layout change:", e))
   })
 

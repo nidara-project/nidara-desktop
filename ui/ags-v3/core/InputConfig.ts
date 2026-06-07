@@ -2,6 +2,18 @@ import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 
+// Build a `hl.config({ input = { … } })` expression from a keyword-style option
+// path ("input:touchpad:tap_to_click") + value, for `hyprctl eval`. String values
+// are quoted; numbers/booleans pass through. The Lua parser rejects `hyprctl
+// keyword`, so this is the only way to apply input options live.
+function inputConfigEval(option: string, value: string | number): string {
+    const path = option.replace(/^input:/, "").split(":")
+    const lit = typeof value === "string" ? `"${value}"` : String(value)
+    let inner = `${path[path.length - 1]} = ${lit}`
+    for (let i = path.length - 2; i >= 0; i--) inner = `${path[i]} = { ${inner} }`
+    return `hl.config({ input = { ${inner} } })`
+}
+
 class InputConfig extends GObject.Object {
     static {
         GObject.registerClass({
@@ -101,8 +113,10 @@ class InputConfig extends GObject.Object {
     private applyAndSave(option: string, value: string | number) {
         if (!this.initialized) return
 
-        // 1. Live apply
-        execAsync(["hyprctl", "keyword", option, String(value)]).catch(console.error)
+        // 1. Live apply. The config uses Hyprland's Lua parser, which REJECTS
+        // `hyprctl keyword` ("Use eval.") — so live changes go through `hyprctl
+        // eval "hl.config({ input = { … } })"`.
+        execAsync(["hyprctl", "eval", inputConfigEval(option, value)]).catch(console.error)
 
         // 2. Save to persistent UI-owned file
         const configPath = GLib.build_filenamev([GLib.get_home_dir(), ".config", "crystal-shell", "crystal-settings.lua"])
@@ -184,8 +198,7 @@ hl.config({
     setKbLayout(layout: string, variant = "") {
         this._kbLayout = layout
         this._kbVariant = variant
-        execAsync(["hyprctl", "keyword", "input:kb_layout", layout]).catch(console.error)
-        execAsync(["hyprctl", "keyword", "input:kb_variant", variant]).catch(console.error)
+        execAsync(["hyprctl", "eval", `hl.config({ input = { kb_layout = "${layout}", kb_variant = "${variant}" } })`]).catch(console.error)
         this.applyAndSave("input:kb_layout", layout)
     }
 }

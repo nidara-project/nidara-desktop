@@ -81,11 +81,10 @@ app.start({
 
     installPowerHooks()
 
-    //  STABILIZATION: Set Hyprland rules
-    import("ags/process").then(({ execAsync }) => {
-        execAsync("hyprctl keyword layerrule 'blur, crystal-bar'").catch(() => {})
-        execAsync("hyprctl keyword layerrule 'ignorealpha 0.5, crystal-bar'").catch(() => {})
-    }).catch(() => {})
+    // Note: the crystal-bar/dock blur layer rules live in hyprland.lua
+    // (hl.layer_rule). They used to be re-applied here via `hyprctl keyword`,
+    // which the Lua parser rejects ("Use eval.") — so those calls were dead
+    // duplicates and have been removed.
 
     const windows = new Set<ShellWindow>()
     const settingsWindows: ShellWindow[] = []

@@ -86,10 +86,19 @@ This shell configures Hyprland through the **Lua parser** (`config/hypr/hyprland
 Under it, **`hyprctl keyword …` is rejected** (`"can't work with non-legacy parsers. Use eval."`).
 To change config live, use **`hyprctl eval "hl.<call>(...)"`** — e.g.
 `hl.monitor({...})`, `hl.config({ general = { layout = '…' } })`, `hl.config({ misc = { vrr = 1 } })`.
-`hyprctl dispatch …` and `hyprctl getoption …` still work. (Fixed in `MonitorConfig` and
-`HyprlandState.setLayout`, which were silently broken on `keyword`.) Also: a fractional monitor
-scale must divide the native resolution into whole logical pixels or Hyprland snaps it — the
-Display page filters scale presets to exact-valid per monitor.
+`hyprctl dispatch …` and `hyprctl getoption …` still work. A full audit (2026-06-08)
+migrated every remaining `keyword` caller — they were all silently broken on the Lua parser:
+- `InputConfig` live-apply → `hl.config({ input = { … } })` (incl. nested `touchpad`, and
+  `kb_layout`/`kb_variant`). The whole Input page was a no-op live until this.
+- `AboutWindow` float/center → a static `hl.window_rule` in `hyprland.lua` (matched by the
+  "About Crystal Shell" title; the `windowrulev2` keyword calls were removed).
+- greeter `LocaleBar` kb_layout → eval (the greeter runs its OWN Lua config,
+  `config/greetd/hyprland-greeter.lua`, so it's the same parser).
+- `app.ts` bar-blur layerrules → **deleted** (dead duplicates of the `hl.layer_rule`
+  already in `hyprland.lua`).
+Only `dispatch`/`getoption`/`monitors`/`eval` callers remain (all valid). Also: a fractional
+monitor scale must divide the native resolution into whole logical pixels or Hyprland snaps
+it — the Display page filters scale presets to exact-valid per monitor.
 
 ## `ui/lib/crystal-ui/`
 

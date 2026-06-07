@@ -140,9 +140,9 @@ export default function AboutWindow(): Gtk.Window | null {
     win.set_child(squircle)
     _instance = win
 
-    // Hyprland: float and center
-    execAsync(["hyprctl", "keyword", "windowrulev2", "float, title:^(About Crystal Shell)$"]).catch(() => {})
-    execAsync(["hyprctl", "keyword", "windowrulev2", "center, title:^(About Crystal Shell)$"]).catch(() => {})
+    // Float + center come from a static window rule in hyprland.lua (matched by the
+    // "About Crystal Shell" title). The old `hyprctl keyword windowrulev2` calls here
+    // were rejected by the Lua parser ("Use eval.") and have been removed.
 
     // Escape key
     const escKey = new Gtk.EventControllerKey()
