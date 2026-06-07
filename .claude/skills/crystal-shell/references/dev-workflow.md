@@ -80,6 +80,36 @@ When a reload seems to do nothing or styles refuse to refresh, the cause is almo
 
 CI gates **only SCSS compile** (pure JS, no system libs). Local typecheck is required because it needs the git-ignored `@girs/` (~58 MB of GI typings).
 
+### Testing Wi-Fi without a Wi-Fi adapter
+
+The Network settings page is driven by `AstalNetwork`, so most of it only exercises
+when a Wi-Fi device exists. On a wired-only box, simulate one with the kernel's
+`mac80211_hwsim` (virtual 802.11 radios that NetworkManager treats as real). A dev
+helper lives at `scripts/dev/fake-wifi.sh` (start/stop a WPA2 AP). The recipe:
+
+```bash
+sudo modprobe mac80211_hwsim radios=2     # → wlan0 + wlan1; not persistent across reboot
+sudo pacman -S hostapd                    # broadcaster
+nmcli radio wifi on                       # radios boot "unavailable" until wifi is enabled
+sudo scripts/dev/fake-wifi.sh start       # AP "CrystalTest" / pass crystal123
+# Settings → Network → Scan → connect
+sudo scripts/dev/fake-wifi.sh stop
+```
+
+Three non-obvious traps this setup exposes, all of which bit real code:
+
+- **`AstalNetwork` watches exactly ONE Wi-Fi device.** `network.vala`'s `get_device()`
+  prefers a device with an active connection, else returns the **first** wifi device
+  (`wlan0`). So the *fake AP must run on `wlan1`* and `wlan0` stays the managed client —
+  otherwise the page watches the broadcaster and sees an empty AP list while `nmcli`
+  on the other interface sees everything.
+- **The world regulatory domain `00` sets `NO-IR` on 2.4 GHz**, which silently stops
+  hostapd from ever beaconing — the interface stays `type managed` instead of `type AP`.
+  Pin a real country first (`iw reg set ES`, also `country_code=` in the hostapd conf).
+- **`AstalNetwork.Wifi` is a single object, not a collection.** There is no
+  `get_devices()` and no `access-points-changed` signal — use the `device` property and
+  `notify::access-points`. These were latent bugs that never ran on wired-only hardware.
+
 ## Persistence
 
 All persistent state lives in `~/.config/crystal-shell/`:
