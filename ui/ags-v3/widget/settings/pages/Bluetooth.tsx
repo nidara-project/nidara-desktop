@@ -154,6 +154,20 @@ export default function BluetoothPage() {
             rowBox.append(textBox)
 
             if (allowActions) {
+                // Forget — destructive → danger, matching Network's forget button.
+                // Sits to the LEFT of the connect/disconnect action, like the Wi-Fi row.
+                const removeBtn = CrystalButton({
+                    variant: "danger",
+                    pill: true,
+                    icon: true,
+                    tooltip_text: t("settings.bluetooth.tooltip.forget"),
+                })
+                removeBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["cs-icon"] }))
+                removeBtn.connect("clicked", () => {
+                    BT.removeDevice(dev)
+                })
+                rowBox.append(removeBtn)
+
                 if (dev.connected) {
                     // Disconnect is reversible → neutral (secondary).
                     const disconnectBtn = CrystalButton({
@@ -175,19 +189,6 @@ export default function BluetoothPage() {
                     })
                     rowBox.append(connectBtn)
                 }
-
-                // Forget — destructive → danger, matching Network's forget button.
-                const removeBtn = CrystalButton({
-                    variant: "danger",
-                    pill: true,
-                    icon: true,
-                    tooltip_text: t("settings.bluetooth.tooltip.forget"),
-                })
-                removeBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["cs-icon"] }))
-                removeBtn.connect("clicked", () => {
-                    BT.removeDevice(dev)
-                })
-                rowBox.append(removeBtn)
             } else {
                 const pairBtn = CrystalButton({
                     label: t("settings.bluetooth.pair"),

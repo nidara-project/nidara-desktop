@@ -448,7 +448,11 @@ button.crystal-btn {
 
     // Geometry
     padding: 5px 14px;
-    min-height: 0;
+    // Shared content min-height so EVERY crystal-btn is the same height regardless of
+    // content — a labelled button (13px text, ~18px line) and an icon-only one (16px
+    // glyph) end up identical, so icon buttons (details/forget) don't render shorter
+    // than the Connect button next to them.
+    min-height: 20px;
     border-radius: $crystal-radius-sm;
     font-size: $fs-small;
     font-weight: $fw-medium;
