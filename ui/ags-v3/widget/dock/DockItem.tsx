@@ -589,7 +589,7 @@ export function DockItem(
                     let winTitle = hyprClient?.title || `${t("dock.menu.window-of")} ${appItem.name || "App"}`
                     if (winTitle.length > 35) winTitle = winTitle.substring(0, 32) + "..."
                     windowsSection.append(winTitle, addAction(() => {
-                        execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ window = 'address:${cleanAddr}'})`]).catch(print)
+                        hs.focusWindow(cleanAddr)
                     }))
                 })
             }
@@ -598,8 +598,7 @@ export function DockItem(
                 winCount > 1 ? `${t("settings.dock.dockitem.close-all")} (${winCount})` : t("settings.dock.dockitem.quit"),
                 addAction(() => {
                     state.addresses.forEach(addr => {
-                        const cleanAddr = addr.startsWith("0x") ? addr : "0x" + addr
-                        execAsync(["hyprctl", "dispatch", `hl.dsp.window.close({ window = 'address:${cleanAddr}'})`]).catch(print)
+                        hs.closeWindow(addr)
                     })
                 })
             )
@@ -670,10 +669,9 @@ export function DockItem(
             const focusedAddr = hypr.focusedClient?.address
             const idx = addresses.indexOf(focusedAddr || "")
             const nextIdx = (idx + 1) % addresses.length
-            let target = addresses[nextIdx]
+            const target = addresses[nextIdx]
             if (target) {
-                if (!target.startsWith("0x")) target = "0x" + target
-                execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ window = 'address:${target}'})`]).catch(print)
+                hs.focusWindow(target)
             }
         } else {
             // Fallback or Launch

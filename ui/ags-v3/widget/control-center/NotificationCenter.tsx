@@ -3,6 +3,7 @@ import AstalNotifd from "gi://AstalNotifd"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
+import hs from "../../core/HyprlandState"
 import { drawSquircle, createSquirclePath } from "../common/DrawingUtils"
 import SquircleContainer, { Shape } from "../common/SquircleContainer"
 import IconButton from "../common/IconButton"
@@ -159,10 +160,12 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
             if (lowerApp.includes("chrome")) searchClass = "google-chrome"
             if (lowerApp.includes("discord")) searchClass = "discord"
             try {
-                const clients = JSON.parse(await execAsync(["hyprctl", "-j", "clients"]))
-                const target = clients.find((c: any) => c.class.toLowerCase().includes(lowerApp) || c.class === searchClass)
+                // hs.clients is the cached, always-current client list — no per-open
+                // `hyprctl -j clients` re-shell — and hs.focusWindow centralizes the
+                // focus dispatch (same Lua dispatch string the dock uses).
+                const target = hs.clients.find((c: any) => c.class?.toLowerCase().includes(lowerApp) || c.class === searchClass)
                 if (target) {
-                    await execAsync(["hyprctl", "dispatch", "focuswindow", `address:${target.address}`])
+                    await hs.focusWindow(target.address)
                     if (hasAction("default")) n.invoke("default")
                 } else {
                     if (hasAction("default")) n.invoke("default")
