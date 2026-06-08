@@ -282,6 +282,14 @@ cd "$REPO_DIR/ui/ags-v3"
 npm install
 npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
 
+# Dev mode: generate the git-ignored @girs/ GI typings so typecheck + editor
+# IntelliSense work straight after a clone — no manual `ags types` step. Only if
+# missing (regenerable, ~58MB); system mode doesn't typecheck so it's skipped.
+if [ "$MODE" = "dev" ]; then
+    echo "  Generating @girs/ TypeScript typings..."
+    [ -d @girs ] || ags types -d .
+fi
+
 if [ "$MODE" = "system" ]; then
     echo "  Bundling shell UI..."
     mkdir -p build
