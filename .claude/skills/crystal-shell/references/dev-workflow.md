@@ -65,6 +65,7 @@ to be a symlink to the repo (see footgun below); it was removed from
 Super+Shift+R                            # reload UI in a graphical session
 tail -f /tmp/crystal-shell-ui.log        # logs
 killall gjs                              # nuke stale GJS holding the old UI
+cd ui/ags-v3 && ags types -d .           # (re)generate @girs/ typings — see below
 cd ui/ags-v3 && npm run typecheck        # needs @girs/
 cd ui/ags-v3 && npm run build            # SCSS + ags bundle
 ags request toggleAppGrid                # send an IPC command
@@ -79,6 +80,20 @@ When a reload seems to do nothing or styles refuse to refresh, the cause is almo
 3. `tail -f /tmp/crystal-shell-ui.log` and re-trigger; look for stack traces.
 
 CI gates **only SCSS compile** (pure JS, no system libs). Local typecheck is required because it needs the git-ignored `@girs/` (~58 MB of GI typings).
+
+**Regenerating `@girs/` (and the trap it sets).** `@girs/` is git-ignored, so a fresh clone / a new
+environment has none. Regenerate with `cd ui/ags-v3 && ags types -d .` (offline — reads the system
+`.gir` files; ~208 `.d.ts`; do **not** pass `-u`, which would rewrite the committed `tsconfig`).
+**The trap:** without `@girs/`, `npm run typecheck` doesn't fail loudly — it floods you with ~57
+*false* `Namespace '"ags/gtk4".Gtk' has no exported member 'Box'`-style errors. Real errors hide in
+that noise, so a regression can sit unnoticed (it did: typecheck silently went 0→32 between work
+sessions). **If you see "has no exported member" on GI types, you're missing `@girs/` — regenerate
+before trusting any typecheck result.**
+
+**i18n key types come from `en`, not `es`.** `t()` is typed `key: keyof typeof en` (canonical
+English-first source); `es`/future locales may lag and fall back at runtime (`es → en → key`). Add
+new strings to `en.ts`; don't expect a missing `es` entry to be a type error. (It used to derive from
+`es`, which broke the typecheck on every English-first key added — fixed in `core/i18n/index.ts`.)
 
 ### Testing Wi-Fi without a Wi-Fi adapter
 
