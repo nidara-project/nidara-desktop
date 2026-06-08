@@ -7,6 +7,16 @@ import { t } from "../../../core/i18n"
 export default function InputPage() {
     const page = pageBox("input-page")
 
+    // Live external-sync factory: each control re-reads its value from InputConfig
+    // whenever InputConfig emits "changed" — which it does on boot and, crucially, on
+    // `config-reloaded` (an external `hyprctl reload` / a hyprland-user.lua edit). The
+    // control applies the value through its own guarded setter (no `setX`, no loop) and
+    // disconnects on unrealize. Closes the old no-op "changed" stub.
+    const onCfg = <T,>(read: () => T) => (apply: (v: T) => void) => {
+        const id = inputConfig.connect("changed", () => apply(read()))
+        return () => { try { inputConfig.disconnect(id) } catch {} }
+    }
+
     // ── Mouse ─────────────────────────────────────────────────────────────────
     const { box: mouseBox, listBox: mouseList } = listGroup(t("settings.input.mouse.group"))
 
@@ -17,7 +27,7 @@ export default function InputPage() {
         -1.0,
         1.0,
         (v) => inputConfig.setPointerSpeed(v),
-        { icons: [Icons.mousePointer, Icons.mousePointer], pct: true }
+        { icons: [Icons.mousePointer, Icons.mousePointer], pct: true, onExtChange: onCfg(() => inputConfig.pointerSpeed) }
     ))
 
     const accelProfiles = ["adaptive", "flat"]
@@ -26,14 +36,16 @@ export default function InputPage() {
         t("settings.input.mouse.accel.desc"),
         inputConfig.accelProfile,
         accelProfiles,
-        (v) => inputConfig.setAccelProfile(v)
+        (v) => inputConfig.setAccelProfile(v),
+        onCfg(() => inputConfig.accelProfile)
     ))
 
     mouseList.append(toggleRow(
         t("settings.input.mouse.natural"),
         t("settings.input.mouse.natural.desc"),
         inputConfig.mouseNaturalScroll,
-        (v) => inputConfig.setMouseNaturalScroll(v)
+        (v) => inputConfig.setMouseNaturalScroll(v),
+        onCfg(() => inputConfig.mouseNaturalScroll)
     ))
 
     page.append(mouseBox)
@@ -45,14 +57,16 @@ export default function InputPage() {
         t("settings.input.touchpad.natural"),
         t("settings.input.touchpad.natural.desc"),
         inputConfig.touchpadNaturalScroll,
-        (v) => inputConfig.setTouchpadNaturalScroll(v)
+        (v) => inputConfig.setTouchpadNaturalScroll(v),
+        onCfg(() => inputConfig.touchpadNaturalScroll)
     ))
 
     touchList.append(toggleRow(
         t("settings.input.touchpad.tap"),
         t("settings.input.touchpad.tap.desc"),
         inputConfig.touchpadTap,
-        (v) => inputConfig.setTouchpadTap(v)
+        (v) => inputConfig.setTouchpadTap(v),
+        onCfg(() => inputConfig.touchpadTap)
     ))
 
     page.append(touchBox)
@@ -106,14 +120,16 @@ export default function InputPage() {
         (label) => {
             const entry = layouts.find(([l]) => l === label)
             if (entry) inputConfig.setKbLayout(entry[1], entry[2])
-        }
+        },
+        onCfg(() => currentLayoutLabel())
     ))
 
     kbList.append(toggleRow(
         t("settings.input.keyboard.numlock"),
         t("settings.input.keyboard.numlock.desc"),
         inputConfig.numlockOnBoot,
-        (v) => inputConfig.setNumlockOnBoot(v)
+        (v) => inputConfig.setNumlockOnBoot(v),
+        onCfg(() => inputConfig.numlockOnBoot)
     ))
 
     kbList.append(sliderRow(
@@ -121,7 +137,7 @@ export default function InputPage() {
         t("settings.input.keyboard.repeat-delay.desc"),
         inputConfig.kbRepeatDelay, 100, 2000,
         (v) => inputConfig.setKbRepeatDelay(v),
-        { unit: "ms" }
+        { unit: "ms", onExtChange: onCfg(() => inputConfig.kbRepeatDelay) }
     ))
 
     kbList.append(sliderRow(
@@ -129,22 +145,10 @@ export default function InputPage() {
         t("settings.input.keyboard.repeat-rate.desc"),
         inputConfig.kbRepeatRate, 1, 100,
         (v) => inputConfig.setKbRepeatRate(v),
-        { unit: "/s" }
+        { unit: "/s", onExtChange: onCfg(() => inputConfig.kbRepeatRate) }
     ))
 
     page.append(kbBox)
-
-    // ── Signals Sync ──────────────────────────────────────────────────────────
-    // The inputs could potentially change from outside
-    const sigId = inputConfig.connect("changed", () => {
-        // Simple UI rebinding would go here if needed, but since users interact with
-        // this page directly it's fine. For full reactive binding on the slider, etc,
-        // it requires GObject properties. For now we only handle initial state injection.
-    })
-
-    page.connect("unrealize", () => {
-        try { inputConfig.disconnect(sigId) } catch {}
-    })
 
     return page
 }

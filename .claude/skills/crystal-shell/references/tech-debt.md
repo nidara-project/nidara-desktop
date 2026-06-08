@@ -31,12 +31,18 @@ cache. The effective-config services subscribe and re-read: `InputConfig.syncFro
 and `MonitorConfig._vrr`. This protects against the **clobber bug** — both services rewrite
 their whole `.lua` override from in-memory state on the next `setX()`, so without re-sync an
 external edit would be overwritten.
-**What's still missing:** most Settings *pages* read these values **once at build** and aren't
-rebuilt on `config-reloaded`, and `Input.tsx`'s `inputConfig.connect("changed")` handler is a
-no-op stub (no live rebind of sliders/switches). So an external config change is reflected in
-the in-memory model immediately but in the **visible page only on next build / UI reload**.
-Closing it means live-rebinding page controls (same "pages built once" limitation as #8) — use
-`config-reloaded` (services) or the service `changed` signal (UI) as the hook.
+**Mostly closed now.** The shared helpers `toggleRow` / `dropdownRow` (in `SettingsHelpers.ts`)
+take an optional `onExt?: (apply) => (() => void)` and `sliderRow` takes `opts.onExtChange` —
+each registers a live external-sync callback that updates the control through a **guarded**
+setter (no `setX`, so no feedback loop) and disconnects on `unrealize`. `Input.tsx` wires every
+control to `inputConfig.connect("changed")` via a local `onCfg(read)` factory, so an external
+`hyprctl reload` (→ `config-reloaded` → `syncFromHyprland` → `"changed"`) now live-updates the
+sliders/switches/dropdowns. The old no-op `"changed"` stub is gone.
+**Pattern for any future reactive control:** prefer the helper's `onExt`/`onExtChange` over a
+hand-rolled signal — the guard against the cb→setX→`"changed"`→cb loop lives inside the helper.
+**Still missing:** the *monitor* (Display) page reflects topology live (#8-style) but not external
+geometry/scale edits; and the generic per-page rebuild convenience for arbitrary content still
+doesn't exist (you wire per-control or per-signature, as Input/Display do).
 **Page-level precedent now exists** (`Display.tsx`): it subscribes to `hs.connect("changed")`
 and rebuilds its monitor sections, but **only when a stable signature changes** — there, the
 sorted set of monitor *names* (topology), so monitor hot-plug/unplug is reflected live. It

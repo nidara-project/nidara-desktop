@@ -64,12 +64,25 @@ export const toggleRow = (
     subtitle: string,
     init: boolean,
     cb: (v: boolean) => void,
+    // Optional live external-sync: register a callback that the page invokes when the
+    // underlying value changes outside the UI (e.g. an external `hyprctl reload`). It
+    // applies the new state WITHOUT firing `cb` (guarded), so there's no feedback loop.
+    // Returns a disconnect, wired to the switch's unrealize.
+    onExt?: (apply: (v: boolean) => void) => (() => void),
 ) => {
     const sw = new Gtk.Switch({ active: init, valign: Gtk.Align.CENTER })
+    let syncing = false
     sw.connect("state-set", (_: any, state: boolean) => {
-        cb(state)
+        if (!syncing) cb(state)
         return false
     })
+    if (onExt) {
+        const cleanup = onExt((v: boolean) => {
+            if (sw.active === v) return
+            syncing = true; sw.active = v; syncing = false
+        })
+        sw.connect("unrealize", cleanup)
+    }
     return createRow(label, subtitle, sw)
 }
 
@@ -80,6 +93,8 @@ export const dropdownRow = (
     init: string,
     opts: string[],
     cb: (v: string) => void,
+    // See toggleRow's `onExt` — same live external-sync contract (guarded, no loop).
+    onExt?: (apply: (v: string) => void) => (() => void),
 ) => {
     // Native Gtk.DropDown: its popover is a separate Wayland surface, so Hyprland's
     // popup blur frosts it (a window-overlay list would only show the content behind
@@ -88,10 +103,20 @@ export const dropdownRow = (
     const drp = new Gtk.DropDown({ model, valign: Gtk.Align.CENTER })
     const initIdx = opts.indexOf(init)
     drp.selected = initIdx >= 0 ? initIdx : 0
+    let syncing = false
     drp.connect("notify::selected", () => {
+        if (syncing) return
         const idx = drp.selected
         if (idx < opts.length) cb(opts[idx])
     })
+    if (onExt) {
+        const cleanup = onExt((v: string) => {
+            const idx = opts.indexOf(v)
+            if (idx < 0 || idx === drp.selected) return
+            syncing = true; drp.selected = idx; syncing = false
+        })
+        drp.connect("unrealize", cleanup)
+    }
     return createRow(label, subtitle, drp)
 }
 
@@ -106,9 +131,9 @@ export const sliderRow = (
     min: number,
     max: number,
     cb: (v: number) => void,
-    opts: { unit?: string; icons?: [Gio.FileIcon, Gio.FileIcon]; iconSizes?: [number, number]; endpoints?: [Gtk.Widget, Gtk.Widget]; pct?: boolean; decimals?: number; commitOnRelease?: boolean } = {},
+    opts: { unit?: string; icons?: [Gio.FileIcon, Gio.FileIcon]; iconSizes?: [number, number]; endpoints?: [Gtk.Widget, Gtk.Widget]; pct?: boolean; decimals?: number; commitOnRelease?: boolean; onExtChange?: (cb: (v: number) => void) => (() => void) } = {},
 ) => {
-    const { unit = "", icons, iconSizes = [16, 16], endpoints, pct = false, decimals, commitOnRelease = false } = opts
+    const { unit = "", icons, iconSizes = [16, 16], endpoints, pct = false, decimals, commitOnRelease = false, onExtChange } = opts
 
     // Integer sliders (no `decimals`/`pct`) must STORE integers, not just display them:
     // the raw Gtk.Scale value is fractional, and a fractional setting (e.g. screenGap=8.19)
@@ -141,6 +166,7 @@ export const sliderRow = (
         min, max, value: init,
         onChange: onCommit,
         onValueChanged: (v) => { valueLabel.label = formatVal(v) },
+        onExtChange,
         debounce: 32,
         commitOnRelease,
         cssClasses: ["cc-atomic-scale-native"],
