@@ -18,6 +18,14 @@ class MonitorConfig extends GObject.Object {
     private state: Map<string, MonitorState> = new Map()
     private _vrr = 0
 
+    constructor() {
+        super()
+        // Re-read the effective vrr if Hyprland reloads its config (e.g. the user
+        // edits hyprland-user.lua). Otherwise the next _save() would persist our
+        // stale _vrr back into crystal-monitor.lua, clobbering the external change.
+        hs.connect("config-reloaded", () => { this._vrr = hs.getOptionInt("misc:vrr") })
+    }
+
     /** Call once with the monitor list from AstalHyprland.get_monitors() */
     init(monitors: Array<{ name: string; scale?: number; transform?: number; vrr?: number }>) {
         this.state.clear()

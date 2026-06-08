@@ -17,7 +17,12 @@ class HyprlandStateClass extends GObject.Object {
     static {
         GObject.registerClass({
             GTypeName: "CrystalHyprlandState",
-            Signals: { "changed": {} },
+            // "changed" = structural window/workspace state (fires often).
+            // "config-reloaded" = Hyprland re-read its config (`hyprctl reload` or a
+            //   hyprland-user.lua edit). Effective-config consumers (InputConfig,
+            //   MonitorConfig) listen to THIS, not "changed", to re-sync from the live
+            //   config so they don't clobber external edits on their next write.
+            Signals: { "changed": {}, "config-reloaded": {} },
         }, this)
     }
 
@@ -66,6 +71,14 @@ class HyprlandStateClass extends GObject.Object {
             if (name === "submap") {
                 this.submap = data || ""
                 this._scheduleRefresh()
+                return
+            }
+            // Hyprland re-read its config (`hyprctl reload`, or a hyprland-user.lua
+            // edit). Refresh the modes cache (a monitor's modes can change) and let
+            // effective-config consumers re-sync via "config-reloaded".
+            if (name === "configreloaded") {
+                this._refreshModes()
+                this.emit("config-reloaded")
                 return
             }
             // Sync workspace ID from IPC data directly — before idle_add fires —

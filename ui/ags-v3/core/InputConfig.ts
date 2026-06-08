@@ -1,6 +1,7 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
+import hs from "./HyprlandState"
 
 // Build a `hl.config({ input = { … } })` expression from a keyword-style option
 // path ("input:touchpad:tap_to_click") + value, for `hyprctl eval`. String values
@@ -40,6 +41,11 @@ class InputConfig extends GObject.Object {
     constructor() {
         super()
         this.syncFromHyprland()
+        // Re-read the effective input options whenever Hyprland reloads its config
+        // (e.g. the user edits hyprland-user.lua and runs `hyprctl reload`). Without
+        // this, the next setX() would rewrite crystal-settings.lua from our stale
+        // in-memory state and clobber the user's external change.
+        hs.connect("config-reloaded", () => this.syncFromHyprland())
     }
 
     get pointerSpeed() { return this._pointerSpeed }

@@ -24,14 +24,30 @@ use `@mixin crystal-reset` or switch the widget to base GTK4 / `ui/lib/crystal-u
 follows the Settings font-size picker. Intentional for chrome (must not reflow) but worth a
 look when polishing the CC — decide whether CC text should track the picker like Settings.
 
-### 4. HyprlandState effective-config is read-once, not reactive
-`HyprlandState.getOptionInt()` / `availableModesByName` read effective Hyprland config
-(`hyprctl getoption` / `monitors -j`), but consumers read **once** (e.g. the Settings page
-build, which is cached). An external change (terminal / `hyprland-user.lua` reload) isn't
-reflected until a UI reload. Deferred fix: have HyprlandState listen to Hyprland's
-`configreloaded` event to refresh its caches, and consumers re-sync. This is also the path for
-reading gaps/rules so the UI (e.g. dock spacing) can adapt to user overrides instead of our
-own `hyprland.lua` defaults.
+### 4. Effective-config re-sync exists at the service layer, not the page layer
+`HyprlandState` now emits **`config-reloaded`** (caught from Hyprland's `configreloaded` IPC
+event — `hyprctl reload` / a `hyprland-user.lua` edit) and refreshes its `availableModesByName`
+cache. The effective-config services subscribe and re-read: `InputConfig.syncFromHyprland()`
+and `MonitorConfig._vrr`. This protects against the **clobber bug** — both services rewrite
+their whole `.lua` override from in-memory state on the next `setX()`, so without re-sync an
+external edit would be overwritten.
+**What's still missing:** the Settings *pages* read these values **once at build** and aren't
+rebuilt on `config-reloaded`, and `Input.tsx`'s `inputConfig.connect("changed")` handler is a
+no-op stub (no live rebind of sliders/switches). So an external config change is reflected in
+the in-memory model immediately but in the **visible page only on next build / UI reload**.
+Closing it means live-rebinding page controls (same "pages built once" limitation as #8) — use
+`config-reloaded` (services) or the service `changed` signal (UI) as the hook.
+NB: the dock's bottom *screen* gap and rounding are its OWN (`dockSettings.screenGap`, fixed
+Cairo `DOCK_CONSTANTS` rounding) — independent of Hyprland's `gaps_out`/`rounding`. So
+`config-reloaded` as shipped exists for the input/monitor/vrr clobber fix, not for layout.
+**BUT effective `gaps_out` does have a real (not-yet-built) consumer:** the vertical dock's
+length bounds. `DockAxis.ts` (vertical adapter) currently hardcodes `BAR_HEIGHT = 40` and sets
+`WIN_H = monMain - BAR_HEIGHT`, centering the dock in that span with **no `gaps_out` inset**.
+The intended model (deferred, undefined): top limit = the bar's *actual* exclusive zone +
+`gaps_out`, bottom limit = `gaps_out`; and later the horizontal dock's max width = monitor
+width − `gaps_out` each side. When that's built it should read effective `gaps_out` via
+`HyprlandState.getOptionInt("general:gaps_out")` and refresh on `config-reloaded`, and replace
+the hardcoded `BAR_HEIGHT = 40` with the bar's real exclusive zone.
 
 ### 5. i18n has no hot-reload
 `detectLanguage()` runs once at startup; a locale change needs `Super+Shift+R`. Out of scope
