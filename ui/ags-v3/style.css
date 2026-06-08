@@ -1923,6 +1923,11 @@ window.nc-window-2 contents {
   border: 2px dashed rgba(var(--crystal-accent-rgb), 0.6);
   border-radius: var(--crystal-radius-lg);
   transition: background-color 0.1s ease, border-color 0.1s ease;
+  /* No valid drop here (off-grid, or a displaced tile wouldn't fit). */
+}
+.cc-drop-ghost.cc-drop-ghost-invalid {
+  background: rgba(var(--crystal-danger-rgb), 0.12);
+  border-color: rgba(var(--crystal-danger-rgb), 0.6);
 }
 
 .cc-resize-btn {

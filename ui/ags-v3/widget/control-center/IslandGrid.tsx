@@ -2,7 +2,7 @@ import { Gtk, Gdk } from "ags/gtk4"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import BaseIsland from "./BaseIsland"
-import ccLayout, { UNIT, GAP, GRID_WIDTH, GRID_HEIGHT, SIZE_MAP } from "./CCLayoutManager"
+import ccLayout, { UNIT, GAP, GRID_COLS, GRID_ROWS, GRID_WIDTH, GRID_HEIGHT, SIZE_MAP } from "./CCLayoutManager"
 import { AtomicWidget } from "./Types"
 import status from "../../core/Status"
 import widgetConfig from "../../core/WidgetConfig"
@@ -43,15 +43,18 @@ export function getWidgetById(id: string): AtomicWidget | null {
     }
 }
 
-// Centre of the dragged tile, in fractional grid-cell units, from the pointer
-// position (relative to fixed). Accounts for where inside the tile it was grabbed
-// (dragOffset) so placement tracks the tile, not the cursor pixel. Feeds the
-// midpoint-based insertion in CCLayoutManager.insertIndexAt.
-function dragCentre(id: string, dropX: number, dropY: number): { cx: number; cy: number } {
+// Grid cell (top-left) the dragged tile snaps to, from the pointer position
+// (relative to fixed). Accounts for where inside the tile it was grabbed
+// (dragOffset) so the tile — not the cursor pixel — tracks the grid, then clamps
+// the cell so the whole footprint stays on the board. Free 2D placement: the tile
+// lands exactly here if it fits (CCLayoutManager.canPlace).
+function dragCell(id: string, dropX: number, dropY: number): { x: number; y: number } {
     const { w, h } = SIZE_MAP[ccLayout.effectiveSize(id)]
-    const cx = (dropX - dragOffsetX) / (UNIT + GAP) + w / 2
-    const cy = (dropY - dragOffsetY) / (UNIT + GAP) + h / 2
-    return { cx, cy }
+    let x = Math.round((dropX - dragOffsetX) / (UNIT + GAP))
+    let y = Math.round((dropY - dragOffsetY) / (UNIT + GAP))
+    x = Math.max(0, Math.min(x, GRID_COLS - w))
+    y = Math.max(0, Math.min(y, GRID_ROWS - h))
+    return { x, y }
 }
 
 function makeIslandWidget(
@@ -165,6 +168,20 @@ export default function IslandGrid() {
         height_request: GRID_HEIGHT,
     })
 
+    // Empty-slot placeholders live on their OWN layer *below* the tiles. Tiles are
+    // translucent glass, so a placeholder behind an occupied cell would bleed
+    // through; keeping slots on a separate base layer (z-order guaranteed, no
+    // Gtk.Fixed reorder API) and driving them from the live layout means an occupied
+    // cell never shows the free-slot background, and the cell a dragged tile vacates
+    // correctly reveals one.
+    const slotLayer = new Gtk.Fixed({
+        width_request: GRID_WIDTH,
+        height_request: GRID_HEIGHT,
+    })
+    const gridLayers = new Gtk.Overlay()
+    gridLayers.set_child(slotLayer)
+    gridLayers.add_overlay(fixed)
+
     // Hard width clamp. The CC is a right-anchored, content-sized overlay child, so
     // anything that makes its content wider than GRID_WIDTH shifts the whole panel
     // left. Gtk.Fixed reports its children's *natural* width, and a tile whose
@@ -182,7 +199,7 @@ export default function IslandGrid() {
         halign: Gtk.Align.END,
         css_classes: ["cc-grid-clamp"],
     })
-    gridClamp.set_child(fixed)
+    gridClamp.set_child(gridLayers)
 
     // Context menu (size picker + remove) floats in an overlay over the grid so
     // it isn't clipped by tiles; its coordinates match the Fixed's space — see
@@ -285,27 +302,149 @@ export default function IslandGrid() {
     // Per-instance reflow state
     const widgetRefs = new Map<string, Gtk.Widget>()
 
-    const applySnapshotVisually = () => {
-        for (const [id, pos] of dragOrigSnapshot) {
+    // ── Animated reflow ───────────────────────────────────────────────────────
+    // During a drag the non-dragged tiles glide to their new positions instead of
+    // snapping. A tick callback lerps each tile's current pixel position toward its
+    // target; when all have arrived it removes itself. animPos holds the live
+    // (possibly mid-flight) position so re-targeting mid-animation is seamless.
+    const animPos = new Map<string, { x: number; y: number }>()
+    const animTarget = new Map<string, { x: number; y: number }>()
+    let animId = 0
+
+    const animStep = (): boolean => {
+        const k = 0.32 // per-frame approach factor (~snappy but smooth)
+        let moving = false
+        for (const [id, target] of animTarget) {
             const ref = widgetRefs.get(id)
-            if (ref) fixed.move(ref, pixelX(pos.x), pixelY(pos.y))
+            if (!ref) continue
+            let cur = animPos.get(id)
+            if (!cur) { cur = { x: target.x, y: target.y }; animPos.set(id, cur) }
+            const dx = target.x - cur.x, dy = target.y - cur.y
+            if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+                if (cur.x !== target.x || cur.y !== target.y) {
+                    cur.x = target.x; cur.y = target.y
+                    fixed.move(ref, cur.x, cur.y)
+                }
+            } else {
+                cur.x += dx * k; cur.y += dy * k
+                fixed.move(ref, Math.round(cur.x), Math.round(cur.y))
+                moving = true
+            }
         }
+        if (!moving) { animId = 0; return false }
+        return true
+    }
+
+    const animateTo = (targets: Map<string, { x: number; y: number }>) => {
+        animTarget.clear()
+        for (const [id, p] of targets) animTarget.set(id, p)
+        if (!animId) animId = fixed.add_tick_callback(animStep)
+    }
+
+    const stopAnim = () => {
+        if (animId) { try { fixed.remove_tick_callback(animId) } catch {} ; animId = 0 }
+        animTarget.clear()
+        animPos.clear()
+    }
+
+    // ── Empty-slot placeholders (on slotLayer, below the tiles) ────────────────
+    // Reconciled to a target set of cells: kept across motions to avoid flicker,
+    // added/removed only where the empty set changes.
+    const slotRefs = new Map<string, Gtk.Widget>()
+    const makeSlot = () => {
+        const s = new Gtk.Box({ css_classes: ["cc-slot-placeholder"], width_request: UNIT, height_request: UNIT })
+        s.set_can_target(false)
+        return s
+    }
+    const syncSlots = (cells: Array<{ x: number; y: number }>) => {
+        const want = new Set(cells.map(c => `${c.x},${c.y}`))
+        for (const [k, w] of [...slotRefs])
+            if (!want.has(k)) { try { slotLayer.remove(w) } catch {} ; slotRefs.delete(k) }
+        for (const c of cells) {
+            const k = `${c.x},${c.y}`
+            if (!slotRefs.has(k)) {
+                const s = makeSlot()
+                slotLayer.put(s, pixelX(c.x), pixelY(c.y))
+                slotRefs.set(k, s)
+            }
+        }
+    }
+    const clearSlots = () => {
+        for (const [, w] of slotRefs) { try { slotLayer.remove(w) } catch {} }
+        slotRefs.clear()
+    }
+
+    // Empty cells implied by a previewed reflow (Map id→cell), so a drag updates
+    // the slot backdrop live: the dragged tile's landing cell is occupied (the ghost
+    // sits there, no slot), and the cell it left turns into a slot.
+    const emptyCellsOf = (preview: Map<string, { x: number; y: number }>): Array<{ x: number; y: number }> => {
+        const occ = new Set<string>()
+        for (const [id, pos] of preview) {
+            const { w, h } = SIZE_MAP[ccLayout.effectiveSize(id)]
+            for (let dy = 0; dy < h; dy++)
+                for (let dx = 0; dx < w; dx++)
+                    occ.add(`${pos.x + dx},${pos.y + dy}`)
+        }
+        const empty: Array<{ x: number; y: number }> = []
+        for (let row = 0; row < GRID_ROWS; row++)
+            for (let col = 0; col < GRID_COLS; col++)
+                if (!occ.has(`${col},${row}`)) empty.push({ x: col, y: row })
+        return empty
+    }
+
+    // Accent dashed slot showing exactly where the dragged tile will land. It rides
+    // the same tween as the tiles (registered under a sentinel key) so it glides into
+    // the opening gap instead of snapping ahead of the parting tiles.
+    const GHOST_KEY = " drop-ghost"
+    let dropGhost: Gtk.Widget | null = null
+    const removeGhost = () => {
+        if (dropGhost) { try { fixed.remove(dropGhost) } catch {} ; dropGhost = null }
+        widgetRefs.delete(GHOST_KEY)
+    }
+
+    // Animate every tile (and the ghost, under GHOST_KEY) back to the pre-drag
+    // snapshot — used on drag-leave (re-enterable) and on a cancelled drop.
+    const applySnapshotVisually = () => {
+        const targets = new Map<string, { x: number; y: number }>()
+        for (const [id, pos] of dragOrigSnapshot) {
+            const key = id === dragWidgetId ? GHOST_KEY : id
+            targets.set(key, { x: pixelX(pos.x), y: pixelY(pos.y) })
+        }
+        animateTo(targets)
+        syncSlots(ccLayout.getEmptyCells())  // back to the resting empty-slot set
     }
 
     const handleDragBegin = (overlay: Gtk.Widget) => {
         dragOrigSnapshot.clear()
-        for (const entry of ccLayout.layout)
+        animPos.clear()
+        for (const entry of ccLayout.layout) {
             dragOrigSnapshot.set(entry.id, { x: entry.x, y: entry.y })
+            // Seed live positions so the first reflow lerps from the real spot.
+            animPos.set(entry.id, { x: pixelX(entry.x), y: pixelY(entry.y) })
+        }
         dragSourceWidget = overlay
         overlay.add_css_class("cc-drag-source")
+
+        // Spawn the landing-slot ghost at the dragged tile's footprint; it rides the
+        // tween into the opening gap so the displacement reads clearly.
+        const { w, h } = SIZE_MAP[ccLayout.effectiveSize(dragWidgetId)]
+        const gw = w * UNIT + (w - 1) * GAP
+        const gh = h * UNIT + (h - 1) * GAP
+        removeGhost()
+        dropGhost = new Gtk.Box({ css_classes: ["cc-drop-ghost"], width_request: gw, height_request: gh })
+        dropGhost.set_can_target(false)
+        const src = dragOrigSnapshot.get(dragWidgetId)
+        const sx = src ? pixelX(src.x) : 0, sy = src ? pixelY(src.y) : 0
+        fixed.put(dropGhost, sx, sy)
+        widgetRefs.set(GHOST_KEY, dropGhost)
+        animPos.set(GHOST_KEY, { x: sx, y: sy })
     }
 
     const handleDragEnd = (overlay: Gtk.Widget, deleteData: boolean) => {
         try { overlay.remove_css_class("cc-drag-source") } catch {}
         dragSourceWidget = null
-        if (!deleteData) {
-            applySnapshotVisually()
-        }
+        removeGhost()
+        if (!deleteData) applySnapshotVisually()  // cancelled drop → reflow back
         dragOrigSnapshot.clear()
         dragWidgetId = ""
     }
@@ -315,13 +454,28 @@ export default function IslandGrid() {
 
     dropTarget.connect("motion", (_: any, x: number, y: number) => {
         if (!dragWidgetId) return Gdk.DragAction.MOVE
-        const { cx, cy } = dragCentre(dragWidgetId, x, y)
+        const cell = dragCell(dragWidgetId, x, y)
 
-        const preview = ccLayout.previewLayout(dragWidgetId, cx, cy)
-        for (const [id, pos] of preview) {
-            const ref = widgetRefs.get(id)
-            if (ref) fixed.move(ref, pixelX(pos.x), pixelY(pos.y))
+        // Insert the dragged tile at the pointed cell and reflow everything else to
+        // make room; tiles (and the ghost, for the dragged tile) glide to the result.
+        const preview = ccLayout.previewLayout(dragWidgetId, cell.x, cell.y)
+        if (!preview) {
+            // Can't drop here (off-grid or a displaced tile wouldn't fit anywhere):
+            // mark the ghost invalid and hold the other tiles where they are.
+            if (dropGhost) dropGhost.add_css_class("cc-drop-ghost-invalid")
+            animateTo(new Map([[GHOST_KEY, { x: pixelX(cell.x), y: pixelY(cell.y) }]]))
+            return 0 as any
         }
+        if (dropGhost) dropGhost.remove_css_class("cc-drop-ghost-invalid")
+
+        // Drop where pointed; only overlapped tiles slide aside (downward-biased).
+        const targets = new Map<string, { x: number; y: number }>()
+        for (const [id, pos] of preview) {
+            const key = id === dragWidgetId ? GHOST_KEY : id
+            targets.set(key, { x: pixelX(pos.x), y: pixelY(pos.y) })
+        }
+        animateTo(targets)
+        syncSlots(emptyCellsOf(preview))  // vacated cell shows a slot; occupied cells don't
 
         return Gdk.DragAction.MOVE
     })
@@ -329,9 +483,8 @@ export default function IslandGrid() {
     dropTarget.connect("drop", (_: any, _value: any, x: number, y: number) => {
         const id = dragWidgetId
         if (!id) return false
-        const { cx, cy } = dragCentre(id, x, y)
-        ccLayout.commitPreview(id, cx, cy)
-        return true
+        const cell = dragCell(id, x, y)
+        return ccLayout.commitPreview(id, cell.x, cell.y)  // false → invalid, source reverts
     })
 
     dropTarget.connect("leave", () => {
@@ -354,6 +507,8 @@ export default function IslandGrid() {
         dragOrigSnapshot.clear()
         widgetRefs.clear()
         dragSourceWidget = null
+        stopAnim()
+        dropGhost = null   // cleared by the child-removal loop below
         ctxMenu.close()
 
         let child = fixed.get_first_child()
@@ -363,21 +518,12 @@ export default function IslandGrid() {
             child = next
         }
 
-        // Resize fixed to match actual content in normal mode; full grid in edit mode
-        fixed.height_request = editMode ? GRID_HEIGHT : computeContentHeight()
+        // Resize both layers to match actual content in normal mode; full grid in edit mode
+        fixed.height_request = slotLayer.height_request = editMode ? GRID_HEIGHT : computeContentHeight()
 
-        // Empty slot placeholders — only in edit mode, plain boxes (no cairo drawing)
-        if (editMode) {
-            for (const cell of ccLayout.getEmptyCells()) {
-                const slot = new Gtk.Box({
-                    css_classes: ["cc-slot-placeholder"],
-                    width_request: UNIT,
-                    height_request: UNIT,
-                })
-                slot.set_can_target(false)
-                fixed.put(slot, pixelX(cell.x), pixelY(cell.y))
-            }
-        }
+        // Empty-slot placeholders live on slotLayer (below tiles); only in edit mode.
+        clearSlots()
+        if (editMode) syncSlots(ccLayout.getEmptyCells())
 
         for (const entry of ccLayout.layout) {
             const widget = makeIslandWidget(
