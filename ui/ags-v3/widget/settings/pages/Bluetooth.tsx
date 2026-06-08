@@ -59,7 +59,7 @@ export default function BluetoothPage() {
     const scanGroup = listGroup(t("settings.bluetooth.group.search"))
     const scanBtn = CrystalButton({
         label: t("settings.bluetooth.search-now"),
-        variant: "primary",
+        variant: "secondary",
         pill: true,
         valign: Gtk.Align.CENTER,
     })
@@ -155,20 +155,20 @@ export default function BluetoothPage() {
 
             if (allowActions) {
                 if (dev.connected) {
-                    const disconnectBtn = new Gtk.Button({
+                    // Disconnect is reversible → neutral (secondary).
+                    const disconnectBtn = CrystalButton({
                         label: t("settings.bluetooth.disconnect"),
-                        css_classes: ["crystal-btn"],
-                        valign: Gtk.Align.CENTER,
+                        pill: true,
                     })
                     disconnectBtn.connect("clicked", () => {
                         BT.disconnectDevice(dev)
                     })
                     rowBox.append(disconnectBtn)
                 } else {
-                    const connectBtn = new Gtk.Button({
+                    const connectBtn = CrystalButton({
                         label: t("settings.bluetooth.connect"),
-                        css_classes: ["crystal-btn", "crystal-btn--primary"],
-                        valign: Gtk.Align.CENTER,
+                        variant: "primary",
+                        pill: true,
                     })
                     connectBtn.connect("clicked", () => {
                         BT.connectDevice(dev)
@@ -176,21 +176,22 @@ export default function BluetoothPage() {
                     rowBox.append(connectBtn)
                 }
 
-                const removeBtn = new Gtk.Button({
-                    child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 16 , css_classes: ["cs-icon"] }),
-                    css_classes: ["crystal-btn", "crystal-btn--danger"],
-                    valign: Gtk.Align.CENTER,
+                // Forget — destructive → danger, matching Network's forget button.
+                const removeBtn = CrystalButton({
+                    variant: "danger",
+                    pill: true,
                     tooltip_text: t("settings.bluetooth.tooltip.forget"),
                 })
+                removeBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["cs-icon"] }))
                 removeBtn.connect("clicked", () => {
                     BT.removeDevice(dev)
                 })
                 rowBox.append(removeBtn)
             } else {
-                const pairBtn = new Gtk.Button({
+                const pairBtn = CrystalButton({
                     label: t("settings.bluetooth.pair"),
-                    css_classes: ["settings-row-action"],
-                    valign: Gtk.Align.CENTER,
+                    variant: "primary",
+                    pill: true,
                 })
                 pairBtn.connect("clicked", () => {
                     BT.pairDevice(dev)

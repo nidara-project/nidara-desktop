@@ -10,20 +10,19 @@ import { CrystalButton } from "../../../../lib/crystal-ui"
 function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow {
     let active = profile.active
 
-    const btn = new Gtk.Button({
-        valign: Gtk.Align.CENTER,
-        css_classes: ["crystal-btn", "crystal-btn--pill"],
-    })
+    const btn = CrystalButton({ pill: true })
 
     function setState(state: "connect" | "disconnect" | "loading" | "error") {
         switch (state) {
             case "connect":
                 btn.label = t("settings.network.vpn.btn.connect")
-                btn.remove_css_class("crystal-btn--danger"); btn.add_css_class("crystal-btn--primary")
+                btn.add_css_class("crystal-btn--primary")
                 btn.sensitive = true; break
             case "disconnect":
+                // Disconnect is reversible → neutral (secondary). Danger is reserved
+                // for destructive actions (forget). See CrystalButton convention.
                 btn.label = t("settings.network.vpn.btn.disconnect")
-                btn.remove_css_class("crystal-btn--primary"); btn.add_css_class("crystal-btn--danger")
+                btn.remove_css_class("crystal-btn--primary")
                 btn.sensitive = true; break
             case "loading":
                 btn.label = t("settings.network.vpn.btn.connecting")
@@ -94,11 +93,11 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
     // first, then forget). The row is rebuilt on connect/disconnect so this tracks.
     if (isSaved && !active) {
         const forgetBtn = CrystalButton({
-            variant: "ghost",
+            variant: "danger",
             pill: true,
             tooltip_text: t("settings.network.ap.forget"),
         })
-        forgetBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 14, css_classes: ["cs-icon"] }))
+        forgetBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["cs-icon"] }))
         forgetBtn.connect("clicked", async () => {
             forgetBtn.sensitive = false
             try { await Net.forgetProfile(ssid) }
@@ -108,24 +107,20 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
         rightBox.append(forgetBtn)
     }
 
-    const btn = new Gtk.Button({
-        valign: Gtk.Align.CENTER,
-        css_classes: ["crystal-btn", "crystal-btn--pill"],
-    })
+    const btn = CrystalButton({ pill: true })
     rightBox.append(btn)
 
     function setState(state: "connect" | "disconnect" | "loading" | "error") {
         switch (state) {
             case "connect":
                 btn.label = t("settings.network.ap.connect")
-                btn.remove_css_class("crystal-btn--danger")
                 btn.add_css_class("crystal-btn--primary")
                 btn.sensitive = true
                 break
             case "disconnect":
+                // Reversible → neutral (secondary); danger is reserved for forget.
                 btn.label = t("settings.network.ap.disconnect")
                 btn.remove_css_class("crystal-btn--primary")
-                btn.add_css_class("crystal-btn--danger")
                 btn.sensitive = true
                 break
             case "loading":
@@ -395,7 +390,8 @@ export default function NetworkPage(nav?: SettingsNav) {
 
         const scanBtn = CrystalButton({
             label: t("settings.network.ap.scan"),
-            variant: "ghost",
+            variant: "secondary",
+            pill: true,
             valign: Gtk.Align.CENTER,
             halign: Gtk.Align.END,
         })

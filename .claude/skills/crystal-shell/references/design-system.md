@@ -71,6 +71,30 @@ This is the table that decides almost every "which widget should I use?" questio
 
 **Rule of thumb:** everything is **pure GTK4** — libadwaita has been fully removed. Dark/light is set via `Gtk.Settings.gtk_application_prefer_dark_theme` (no `Adw.init()`); the About window is a plain `Gtk.Window` (no `Adw.AboutWindow`). Don't reintroduce any `Adw.*`.
 
+## Buttons — one component + a variant convention
+
+All action buttons go through **`CrystalButton`** (`ui/lib/crystal-ui/button.ts`) — never
+`new Gtk.Button({ css_classes: ["crystal-btn", …] })` by hand, and never per-surface classes
+(`settings-row-action` was a dead class that left its button rendering as raw Adwaita). CSS
+lives once in `_components.scss` under `button.crystal-btn`.
+
+Variants carry **intent**, applied consistently across pages (Network/Bluetooth were unified
+to this in 2026-06):
+
+| Action | `variant` | `pill` | Shape |
+|---|---|---|---|
+| Connect / Pair / Apply / the affirmative CTA | `primary` | `true` | label |
+| Disconnect / neutral secondary action | `secondary` (default) | `true` | label |
+| **Destructive** (Forget network, Remove device) | `danger` | `true` | trash icon |
+| Scan / Search / other plain actions | `secondary` | `true` | label |
+
+- **`danger` is for destructive only.** Disconnect is reversible → `secondary`, NOT danger.
+- **`ghost`** (transparent, dim text) reads as *text with a hover*, not a button — use it only
+  for subtle nav affordances (e.g. a row "details" chevron), never for a real action like Scan.
+- For a button whose intent toggles at runtime (e.g. connect⇄disconnect), build it with
+  `CrystalButton({ pill: true })` and `add/remove_css_class("crystal-btn--primary")` in your
+  state setter (the base `--secondary` class is a no-op, so removing `--primary` = neutral).
+
 ## Sliders — one component
 
 All sliders are **`makeSlider`** (Cairo) in `widget/common/Slider.ts` (`makeHSlider` is just a
