@@ -2,6 +2,7 @@
   "scripts": {
     "dev": "sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ags run app.ts",
     "run": "ags run app.ts",
+    "pretypecheck": "[ -d @girs ] || ags types -d .",
     "typecheck": "npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json",
     "build": "mkdir -p build && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ags bundle app.ts build/crystal-shell"
   },
