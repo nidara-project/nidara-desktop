@@ -77,7 +77,10 @@ const ClampBin = GObject.registerClass(
         }
 
         setChild(child: Gtk.Widget): void {
-            child.set_parent(this)
+            // `this` is a Gtk.Widget at runtime (the class extends it); the cast is the
+            // GJS-TS escape hatch for registerClass-wrapped subclasses, whose instance
+            // type TS doesn't infer as carrying the GI base.
+            child.set_parent(this as unknown as Gtk.Widget)
         }
 
         vfunc_dispose(): void {

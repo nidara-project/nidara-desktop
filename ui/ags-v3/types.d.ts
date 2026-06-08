@@ -23,6 +23,7 @@ declare module "ags/file" {
 
 declare module "ags/process" {
     export const execAsync: any;
+    export const exec: any;   // synchronous variant (used by HyprlandState for sync hyprctl reads)
 }
 
 declare module "ags" {

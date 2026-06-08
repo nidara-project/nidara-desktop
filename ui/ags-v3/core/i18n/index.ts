@@ -22,7 +22,12 @@ export function detectLanguage() {
 // Initial detection
 detectLanguage()
 
-export function t(key: keyof typeof es): string {
+// Key type derives from `en` — the canonical English-first source of truth. es (and
+// future locales) may lag behind; missing translations fall back to en at runtime
+// (below). Deriving from `es` would break the typecheck every time an English key is
+// added mid-development, which contradicts the i18n workflow (translate in bulk at
+// publication, not per-key).
+export function t(key: keyof typeof en): string {
     const dict = locales[activeLocale] || locales["en"]
     const text = dict[key]
     if (text !== undefined) return text
