@@ -273,35 +273,54 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
 
 export default function DisplayPage() {
     const page = pageBox("display-page")
-
     const hypr = AstalHyprland.get_default()
-    if (!hypr) {
-        page.append(new Gtk.Label({
-            label: t("settings.display.error.no-hyprland"),
-            css_classes: ["settings-placeholder"],
-            margin_top: 40,
-        }))
-        return page
+
+    const placeholder = (label: string) =>
+        page.append(new Gtk.Label({ label, css_classes: ["settings-placeholder"], margin_top: 40 }))
+
+    const clearPage = () => {
+        let child = page.get_first_child()
+        while (child) {
+            const next = child.get_next_sibling()
+            page.remove(child)
+            child = next
+        }
     }
 
-    const monitors: any[] = hypr.get_monitors() ?? []
+    const render = () => {
+        clearPage()
+        if (!hypr) { placeholder(t("settings.display.error.no-hyprland")); return }
+        const monitors: any[] = hypr.get_monitors() ?? []
+        if (monitors.length === 0) { placeholder(t("settings.display.error.no-monitors")); return }
 
-    if (monitors.length === 0) {
-        page.append(new Gtk.Label({
-            label: t("settings.display.error.no-monitors"),
-            css_classes: ["settings-placeholder"],
-            margin_top: 40,
-        }))
-        return page
+        monitorConfig.init(monitors)
+        // Available modes come from HyprlandState's cache (read from hyprctl there,
+        // since AstalHyprland doesn't expose them) — no per-render re-shell.
+        monitors.forEach(mon => {
+            page.append(buildMonitorSection(mon, hs.getAvailableModes(mon.name)))
+        })
     }
 
-    monitorConfig.init(monitors)
+    // The Settings page is built once and cached for the window's lifetime (it hides,
+    // not destroys), so a monitor hot-plugged later would never appear. Rebuild the
+    // sections when the monitor TOPOLOGY changes (the set of connected outputs).
+    // Deliberately keyed on names only — not geometry/scale — because hs."changed"
+    // fires on every window/workspace event, and a resolution/rotation change is
+    // user-driven through these very dropdowns: rebuilding mid-interaction would
+    // clobber the in-flight revert dialog's closure state.
+    const topology = (): string =>
+        hypr ? (hypr.get_monitors() ?? []).map(m => m.name).sort().join("|") : "::no-hypr"
 
-    // Available modes come from HyprlandState's cache (read once from hyprctl there,
-    // since AstalHyprland doesn't expose them) — no per-open re-shell.
-    monitors.forEach(mon => {
-        page.append(buildMonitorSection(mon, hs.getAvailableModes(mon.name)))
+    let lastTopology = topology()
+    render()
+
+    const sigId = hs.connect("changed", () => {
+        const next = topology()
+        if (next === lastTopology) return
+        lastTopology = next
+        render()
     })
+    page.connect("unrealize", () => { try { hs.disconnect(sigId) } catch {} })
 
     return page
 }

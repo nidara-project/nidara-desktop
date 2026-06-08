@@ -31,12 +31,20 @@ cache. The effective-config services subscribe and re-read: `InputConfig.syncFro
 and `MonitorConfig._vrr`. This protects against the **clobber bug** — both services rewrite
 their whole `.lua` override from in-memory state on the next `setX()`, so without re-sync an
 external edit would be overwritten.
-**What's still missing:** the Settings *pages* read these values **once at build** and aren't
+**What's still missing:** most Settings *pages* read these values **once at build** and aren't
 rebuilt on `config-reloaded`, and `Input.tsx`'s `inputConfig.connect("changed")` handler is a
 no-op stub (no live rebind of sliders/switches). So an external config change is reflected in
 the in-memory model immediately but in the **visible page only on next build / UI reload**.
 Closing it means live-rebinding page controls (same "pages built once" limitation as #8) — use
 `config-reloaded` (services) or the service `changed` signal (UI) as the hook.
+**Page-level precedent now exists** (`Display.tsx`): it subscribes to `hs.connect("changed")`
+and rebuilds its monitor sections, but **only when a stable signature changes** — there, the
+sorted set of monitor *names* (topology), so monitor hot-plug/unplug is reflected live. It
+deliberately does NOT rebuild on geometry/scale `"changed"` churn: `hs."changed"` fires on every
+window/workspace event, and resolution/rotation are user-driven through that page's own
+dropdowns, so a mid-interaction rebuild would clobber the in-flight revert-dialog closure state.
+Any future reactive page should copy this **"subscribe broadly, rebuild on a narrow signature"**
+shape rather than rebuilding on raw `"changed"`.
 NB: the dock's bottom *screen* gap and rounding are its OWN (`dockSettings.screenGap`, fixed
 Cairo `DOCK_CONSTANTS` rounding) — independent of Hyprland's `gaps_out`/`rounding`. So
 `config-reloaded` as shipped exists for the input/monitor/vrr clobber fix, not for layout.
