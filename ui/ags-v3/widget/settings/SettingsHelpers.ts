@@ -51,11 +51,11 @@ export const listGroup = (title: string) => CrystalList(title)
 
 // ── Generic Row ───────────────────────────────────────────────────────────────
 // Universal CrystalRow + the settings-only side effect (search-index registration).
-export const createRow = (label: string, subtitle: string, widget: Gtk.Widget) => {
+export const createRow = (label: string, subtitle: string, widget: Gtk.Widget, titleIcon?: Gtk.Widget) => {
     if (_pageCtx.id) {
         _searchIndex.push({ pageId: _pageCtx.id, pageLabel: _pageCtx.label, label, subtitle })
     }
-    return CrystalRow(label, subtitle, widget)
+    return CrystalRow(label, subtitle, widget, [], titleIcon)
 }
 
 // ── Toggle Row ────────────────────────────────────────────────────────────────

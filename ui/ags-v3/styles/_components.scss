@@ -501,6 +501,15 @@ button.crystal-btn {
         border-radius: $crystal-radius-pill;
         padding: 5px 18px;
     }
+
+    // ── icon-only modifier ────────────────────────────────────────────────────
+    // Compact, uniform square-ish footprint so an icon button matches the height
+    // of a labelled one in a cluster (e.g. details/forget next to Connect).
+    // Defined after --pill so its tighter horizontal padding wins.
+    &.crystal-btn--icon {
+        padding: 5px 8px;
+        min-width: 0;
+    }
 }
 
 // Accent-coloured symbolic icon — replaces Adwaita suggested-action on Gtk.Image

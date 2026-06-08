@@ -24,6 +24,8 @@ export function CrystalRow(
     subtitle: string = "",
     control?: Gtk.Widget,
     extraClasses: string[] = [],
+    /** Small icon shown right after the title (e.g. a lock on a secured Wi-Fi row). */
+    titleIcon?: Gtk.Widget,
 ): Gtk.ListBoxRow {
     const box = new Gtk.Box({
         spacing: 16, margin_start: 16, margin_end: 16, margin_top: 14, margin_bottom: 14,
@@ -33,10 +35,18 @@ export function CrystalRow(
         orientation: Gtk.Orientation.VERTICAL, spacing: 2,
         hexpand: true, valign: Gtk.Align.CENTER,
     })
-    text.append(new Gtk.Label({
+    const titleLabel = new Gtk.Label({
         label, css_classes: ["crystal-row-title"],
         halign: Gtk.Align.START, xalign: 0, wrap: true,
-    }))
+    })
+    if (titleIcon) {
+        const titleLine = new Gtk.Box({ spacing: 6, halign: Gtk.Align.START })
+        titleLine.append(titleLabel)
+        titleLine.append(titleIcon)
+        text.append(titleLine)
+    } else {
+        text.append(titleLabel)
+    }
     if (subtitle) {
         // wrap lets a long subtitle shrink/wrap instead of forcing the text column
         // wide and pushing the trailing control out of alignment.

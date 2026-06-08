@@ -68,25 +68,21 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
     // by the caller from network.wifi.active_access_point.bssid.
     let active    = isActive
 
-    // Right-side widget: optional info + lock icon + (forget) + action button
+    // Right-side widget: optional info + (forget) + action button. (The lock for a
+    // secured AP rides next to the SSID via createRow's titleIcon, not here.)
     const rightBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+
+    // Lock badge next to the network name when the AP is secured.
+    const lockIcon = secured
+        ? new Gtk.Image({ gicon: Icons.lock, pixel_size: 13, opacity: 0.5, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"] })
+        : undefined
 
     // Network details subpage (security, band, channel, BSSID, IP when connected).
     if (onDetails) {
-        const infoBtn = CrystalButton({ variant: "ghost", pill: true, tooltip_text: t("settings.network.ap.details") })
+        const infoBtn = CrystalButton({ variant: "secondary", pill: true, icon: true, tooltip_text: t("settings.network.ap.details") })
         infoBtn.set_child(new Gtk.Image({ gicon: Icons.wifiCog, pixel_size: 16, css_classes: ["cs-icon"] }))
         infoBtn.connect("clicked", onDetails)
         rightBox.append(infoBtn)
-    }
-
-    if (secured) {
-        rightBox.append(new Gtk.Image({
-            gicon: Icons.lock,
-            pixel_size: 14,
-            opacity: 0.5,
-            valign: Gtk.Align.CENTER,
-            css_classes: ["cs-icon"],
-        }))
     }
 
     // Forget — only for saved, currently-disconnected networks (you disconnect
@@ -95,6 +91,7 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
         const forgetBtn = CrystalButton({
             variant: "danger",
             pill: true,
+            icon: true,
             tooltip_text: t("settings.network.ap.forget"),
         })
         forgetBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["cs-icon"] }))
@@ -235,7 +232,7 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
     })
 
     const subtitle = `${ap.strength}% • ${ap.frequency} MHz`
-    return createRow(ssid, subtitle, rightBox)
+    return createRow(ssid, subtitle, rightBox, lockIcon)
 }
 
 // ── AP detail subpage ───────────────────────────────────────────────────────────

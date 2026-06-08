@@ -180,6 +180,7 @@ export default function BluetoothPage() {
                 const removeBtn = CrystalButton({
                     variant: "danger",
                     pill: true,
+                    icon: true,
                     tooltip_text: t("settings.bluetooth.tooltip.forget"),
                 })
                 removeBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["cs-icon"] }))

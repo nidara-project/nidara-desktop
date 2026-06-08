@@ -94,6 +94,14 @@ to this in 2026-06):
 - For a button whose intent toggles at runtime (e.g. connect⇄disconnect), build it with
   `CrystalButton({ pill: true })` and `add/remove_css_class("crystal-btn--primary")` in your
   state setter (the base `--secondary` class is a no-op, so removing `--primary` = neutral).
+- **Icon-only buttons:** pass `icon: true` (adds `crystal-btn--icon` — compact uniform padding)
+  and `set_child(new Gtk.Image({ … css_classes: ["cs-icon"] }))`. This keeps an icon button the
+  same height as a labelled one in a cluster (e.g. details/forget sitting next to Connect),
+  instead of looking smaller/odd. Don't hand-roll icon buttons with ad-hoc sizing.
+
+For an icon that belongs **next to a row's title** rather than as a trailing control (e.g. a
+lock on a secured Wi-Fi row), pass it as `CrystalRow`'s `titleIcon` arg (threaded through
+`createRow(label, subtitle, widget, titleIcon)`) — don't park it in the trailing control box.
 
 ## Sliders — one component
 
