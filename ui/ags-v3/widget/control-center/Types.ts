@@ -21,6 +21,8 @@ export interface AtomicWidget {
     defaultSize: WidgetSize
     supportedSizes: WidgetSize[]
     buildContent: (size: WidgetSize) => Gtk.Widget
+    centerContent?: boolean             // center the WIDE (2×1) content instead of the
+                                        // default left-anchored capsule layout (icon+label)
     buildBarContent?: () => Gtk.Widget                      // compact bar variant (icon only)
     buildBarExpanded?: (onClose: () => void) => Gtk.Widget  // bar inline expansion panel
     buildCCDetail?: (onClose: () => void) => Gtk.Widget     // CC full-panel detail (no inner scroll)

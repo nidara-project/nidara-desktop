@@ -17,6 +17,7 @@ interface BaseIslandProps {
     size: WidgetSize
     alpha?: number
     gloss?: boolean
+    centerContent?: boolean
 }
 
 export default function BaseIsland({
@@ -26,7 +27,8 @@ export default function BaseIsland({
     height,
     size,
     alpha,
-    gloss = true
+    gloss = true,
+    centerContent = false
 }: BaseIslandProps): Gtk.Widget {
 
     //  GEOMETRIC RULES:
@@ -57,9 +59,14 @@ export default function BaseIsland({
     // tile at the same inset regardless of label length. The capsule background is
     // the DrawingArea (which still fills), so the content needn't fill. Other sizes
     // keep FILL (round buttons, sliders, media all expect to fill their island).
-    if (size === WidgetSize.WIDE) {
+    if (size === WidgetSize.WIDE && !centerContent) {
         child.halign = Gtk.Align.START
         child.hexpand = false
+    } else if (size === WidgetSize.WIDE && centerContent) {
+        // centerContent WIDE tiles (e.g. cpu/memory) fill the width so their inner
+        // CenterBox can sit dead-centre instead of drifting with content width.
+        child.halign = Gtk.Align.FILL
+        child.hexpand = true
     } else {
         child.halign = Gtk.Align.FILL
     }

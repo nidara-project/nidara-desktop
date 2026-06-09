@@ -1809,6 +1809,20 @@ window.nc-window-2 contents {
   color: var(--crystal-text-dim);
 }
 
+/* CPU/Memory metric: % inside the ring + CPU/RAM caption below */
+.resource-value {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--crystal-text);
+}
+
+.resource-caption {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--crystal-text-dim);
+}
+
 .vpn-active-bg {
   background-color: rgba(var(--crystal-accent-rgb), 0.25);
 }

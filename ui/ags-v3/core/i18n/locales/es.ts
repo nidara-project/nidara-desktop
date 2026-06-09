@@ -514,6 +514,8 @@ export default {
     "widget.focus.name": "No Molestar",
     "widget.calculator.name": "Calculadora",
     "widget.cpu-memory.name": "CPU y Memoria",
+    "widget.cpu-memory.cpu": "CPU",
+    "widget.cpu-memory.ram": "RAM",
 
     // Ethernet bar popover rows
     "widget.ethernet.row.interface": "Interfaz",

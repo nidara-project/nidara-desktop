@@ -84,7 +84,7 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
     const header = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, halign: Gtk.Align.CENTER })
     header.append(artDa); header.append(title); header.append(artist)
 
-    const controls = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 2 })
+    const controls = new Gtk.Box({ halign: Gtk.Align.CENTER, spacing: 18, margin_top: 4 })
     const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 18 , css_classes: ["cs-icon"] })
     const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 18 , css_classes: ["cs-icon"] })
     const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 18 , css_classes: ["cs-icon"] })

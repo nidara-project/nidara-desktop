@@ -78,7 +78,7 @@ function makeIslandWidget(
     const height = h * UNIT + (h - 1) * GAP
 
     const content = def.buildContent(effectiveSize)
-    const island  = BaseIsland({ name: def.id, child: content, width, height, size: effectiveSize })
+    const island  = BaseIsland({ name: def.id, child: content, width, height, size: effectiveSize, centerContent: def.centerContent })
 
     const overlay = new Gtk.Overlay()
     overlay.set_child(island)

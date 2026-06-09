@@ -120,6 +120,20 @@ window.nc-window-2 {
     color: var(--crystal-text-dim);
 }
 
+/* CPU/Memory metric: % inside the ring + CPU/RAM caption below */
+.resource-value {
+    font-size: $fs-small;
+    font-weight: $fw-bold;
+    color: var(--crystal-text);
+}
+
+.resource-caption {
+    font-size: $fs-caption;
+    font-weight: $fw-semibold;
+    letter-spacing: 0.04em;
+    color: var(--crystal-text-dim);
+}
+
 // VPN widget active state
 .vpn-active-bg {
     background-color: rgba(var(--crystal-accent-rgb), 0.25);
