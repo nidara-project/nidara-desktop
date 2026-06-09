@@ -102,8 +102,14 @@ not in a tracked repo doc.
 Settings page titles live in the **window header** as a breadcrumb (driven by
 `Settings.tsx`, shown via `CrystalWindow`'s `headerTitle`). The in-body `pageHeader()`
 stub, all ~19 `page.append(pageHeader(...))` call sites + their imports, and the
-`.settings-page-title`/`-subtitle` CSS have been swept. Only leftover: the
-`settings.*.subtitle` i18n keys are now dead (left in place per the bulk-i18n workflow).
+`.settings-page-title`/`-subtitle` CSS have been swept. The dead `settings.*.subtitle`
+i18n keys were purged 2026-06-10 along with 13 other dead keys (32 total, both locales) —
+detector: keys in `en.ts` minus literal `t("…")` uses; **dynamic lookups are the trap**
+(`t(TIER_LABEL[tier])` keeps `cc.menu.size.*` alive), and the typecheck (`keyof typeof en`)
+is the authoritative safety net: a wrongly-removed live key fails `npm run typecheck`.
+Asset sweep verdict, same date: do NOT prune `assets/fluid-crystal/scalable/` by grep —
+those SVGs are GTK theme assets resolved by NAME CONVENTION (checkbox/radio/window-control
+glyphs), invisible to code search.
 
 ### 8. Settings subpages: the framework still builds them once
 A subpage pushed via `SettingsNav.pushSubpage` is built once (fresh on each push, but static
