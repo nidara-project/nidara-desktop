@@ -320,7 +320,7 @@ window#crystal-bar-zone {
         font-size: $fs-small;
         font-weight: $fw-medium;
 
-        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.10); }
+        &:hover  { background: var(--crystal-accent-10); }
         &:active { background: rgba(var(--crystal-accent-rgb), 0.18); }
     }
 }

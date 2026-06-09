@@ -249,15 +249,15 @@ window.nc-window-2 {
 }
 
 .cc-resize-btn {
-    background: rgba(0, 0, 0, 0.45);
+    background: var(--crystal-scrim);
     border: none;
     border-radius: var(--crystal-radius-pill);
-    color: rgba(255, 255, 255, 0.85);
+    color: var(--crystal-on-scrim);
     padding: 2px 8px;
     font-size: $fs-caption;
     font-weight: $fw-semibold;
 
-    &:hover { background: rgba(0, 0, 0, 0.65); }
+    &:hover { background: var(--crystal-scrim-strong); }
 }
 
 .cc-picker-row {
@@ -612,7 +612,7 @@ window.nc-window-2 {
         padding: 4px 10px;
         font-weight: $fw-medium;
 
-        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.10); }
+        &:hover  { background: var(--crystal-accent-10); }
         &:active { background: rgba(var(--crystal-accent-rgb), 0.18); }
     }
 
@@ -636,7 +636,7 @@ window.nc-window-2 {
         min-width: 28px;
         min-height: 28px;
 
-        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.10); color: var(--crystal-accent); }
+        &:hover  { background: var(--crystal-accent-10); color: var(--crystal-accent); }
         &:active { background: rgba(var(--crystal-accent-rgb), 0.18); }
     }
 

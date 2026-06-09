@@ -139,13 +139,13 @@ window#crystal-app-launcher,
     }
 
     &.active {
-        background: #{"alpha(@accent_bg_color, 0.07)"};
-        border-color: #{"alpha(@accent_bg_color, 0.55)"};
+        background: rgba(var(--crystal-accent-rgb), 0.07);
+        border-color: rgba(var(--crystal-accent-rgb), 0.55);
     }
 
     &.keyboard-focus {
-        background: #{"alpha(@accent_bg_color, 0.15)"};
-        border-color: #{"@accent_bg_color"};
+        background: rgba(var(--crystal-accent-rgb), 0.15);
+        border-color: var(--crystal-accent);
     }
 }
 
@@ -156,7 +156,7 @@ window#crystal-app-launcher,
     min-width: 110px;
 
     &.active {
-        color: #{"@accent_bg_color"};
+        color: var(--crystal-accent);
     }
 }
 

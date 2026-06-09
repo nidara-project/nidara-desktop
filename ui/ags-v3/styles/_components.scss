@@ -630,7 +630,7 @@ button.settings-icon-btn {
     min-width: 28px;
     min-height: 28px;
 
-    &:hover  { background: rgba(var(--crystal-accent-rgb), 0.10); color: var(--crystal-accent); background-image: none; }
+    &:hover  { background: var(--crystal-accent-10); color: var(--crystal-accent); background-image: none; }
     &:active { background: rgba(var(--crystal-accent-rgb), 0.18); background-image: none; }
 
     // Danger tint variant — for destructive inline actions (remove/delete)

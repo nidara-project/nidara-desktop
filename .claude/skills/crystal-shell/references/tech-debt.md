@@ -7,11 +7,21 @@ debt, add it. It must match reality.
 
 ## Active debt
 
-### 1. `@mixin glass()` underused
-Defined in `_base.scss` (levels `surface`, `raised`, `floating`) but only ~2 call sites use
-it, vs ~20 manual glass blocks scattered across components. **Don't add new manual glass
-blocks** — use the mixin. Migrate manual blocks opportunistically. (For contrast,
-`@mixin crystal-reset` is well-adopted, ~45 sites.)
+### 1. `@mixin glass()` underused — audited 2026-06-09, mostly NOT migratable
+Defined in `_base.scss` (levels `surface`, `raised`, `floating`) with few call sites. A
+sweep audit found the manual glass-ish blocks **diverge deliberately** (different radii,
+inset shadows, transitions, extra colors) — force-migrating them would change pixels, so
+they stay. The actionable parts of that sweep were done instead: Adwaita named colors
+eradicated (`@accent_bg_color` in `_workspace.scss`/`_app-grid.scss` rendered Adwaita BLUE
+instead of the user's accent — real visible bug), scrim tokens added
+(`--crystal-scrim/-strong/--crystal-on-scrim` — use them for dark badges over imagery,
+never hardcoded rgba blacks), `--crystal-accent-10` unified (5 sites), orphaned
+`.bar-ws-dot` CSS deleted. Rules that stand: **new code uses the mixins/tokens**
+(`glass()`, `material-*`, `crystal-row-states`/`-tile-states`, scrims); two accent-button
+hover conventions coexist (`rgba(accent, .82/.85)` translucent vs `color-mix(… white 15%)`
+lightened) — they look intentional per-material, don't blind-unify without a visual pass.
+Sweep-verification recipe: compile `style.scss` before/after and diff — a pure refactor
+must produce an identical (or fully-accounted) CSS diff.
 
 ### 2. Anti-Adwaita resets still dense in two files
 `_control-center.scss` (~33 reset rules) and `_settings.scss` (~24). High reset counts signal

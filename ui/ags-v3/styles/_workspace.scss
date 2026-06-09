@@ -76,8 +76,10 @@ window.workspace-cockpit {
     color: var(--crystal-text);
     transition: color 0.2s ease;
 
+    // NB: this file used Adwaita NAMED colors (@accent_bg_color) — they resolve
+    // to Adwaita's blue, never the user's accent token. Migrated to --crystal-*.
     &.active {
-        color: #{"@accent_bg_color"};
+        color: var(--crystal-accent);
     }
 }
 
@@ -93,24 +95,11 @@ window.workspace-cockpit {
 }
 
 .wo-item.active {
-    background-color: #{"alpha(@accent_bg_color, 0.05)"};
-    border: 1px solid #{"alpha(@accent_bg_color, 0.6)"};
+    background-color: rgba(var(--crystal-accent-rgb), 0.05);
+    border: 1px solid rgba(var(--crystal-accent-rgb), 0.6);
 }
 
-.bar-ws-dot {
-    background-color: var(--crystal-surface-raised);
-    border-radius: 999px;
-    transition: background-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-
-    &.active {
-        background-color: #{"@accent_bg_color"};
-        box-shadow: 0 0 10px #{"alpha(@accent_bg_color, 0.5)"};
-    }
-
-    &.occupied {
-        background-color: var(--crystal-text-dim);
-    }
-}
+/* (.bar-ws-dot deleted — orphaned; the live bar dots are .workspace-dot in _bar.scss) */
 
 /* --- Buttons --- */
 .wo-btn {
@@ -130,8 +119,8 @@ window.workspace-cockpit {
         border-color: var(--crystal-surface-hover);
 
         &.active {
-            background-color: #{"alpha(@accent_bg_color, 0.08)"};
-            border-color: #{"alpha(@accent_bg_color, 0.8)"};
+            background-color: rgba(var(--crystal-accent-rgb), 0.08);
+            border-color: rgba(var(--crystal-accent-rgb), 0.8);
         }
     }
 }

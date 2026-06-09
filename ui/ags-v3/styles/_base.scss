@@ -32,6 +32,14 @@
     --crystal-text-disabled: rgba(255, 255, 255, 0.3);
     --crystal-surface-strong: rgba(255, 255, 255, 0.3);
 
+    /* --- Scrim: dark overlay badges/chips ON TOP of imagery (artwork, tiles).
+       Mode-INDEPENDENT by design — a scrim must guarantee contrast over any
+       content, so it stays dark + white text in both modes (macOS badge style).
+       Use these instead of hardcoding rgba blacks/whites (commandment #10). */
+    --crystal-scrim: rgba(0, 0, 0, 0.45);
+    --crystal-scrim-strong: rgba(0, 0, 0, 0.65);
+    --crystal-on-scrim: rgba(255, 255, 255, 0.85);
+
     /* --- Geometry --- */
     --crystal-radius-lg: 24px;
     --crystal-radius-md: 16px;
