@@ -87,7 +87,40 @@ must wire its own signals. The Wi-Fi AP detail page now does exactly that (it su
 the IPv4 group shown only while that AP is the active connection). So the *pattern* for a
 reactive subpage exists; the generic framework convenience does not.
 
-### 9. Bluetooth pairing has no agent (passkey/PIN UI missing)
+### 9. One Adwaita-WARNING per boot is unavoidable (don't chase it)
+The shell is libadwaita-free, but **AGS's runtime calls `Adw.init()` whenever libadwaita
+exists on the system** (`/usr/share/ags/js/lib/gtk4/app.ts` — unconditional, `catch`-guarded).
+Two consequences: (a) in-process dark/light MUST go through `setPreferDark()` in
+`ThemeManager.ts` (routes via `AdwStyleManager` when Adw is initialized, plain
+`Gtk.Settings` otherwise — writing `gtk_application_prefer_dark_theme` directly logs
+`Adwaita-WARNING` and risks being overridden); (b) exactly **one** warning per boot remains,
+fired inside `Adw.init()` itself when GTK loads `~/.config/gtk-4.0/settings.ini` (which we
+legitimately write so third-party plain-GTK4 apps follow dark mode). That one is framework
+noise — harmless, not fixable from our side, don't burn time on it. It also means the
+Adwaita stylesheet IS loaded in-process, which is why the anti-Adwaita resets (#2) are
+still needed despite the Adwaita removal.
+
+### 10. Known log noise: one boot-time `g_list_store_remove` CRITICAL (upstream astal-tray)
+`GLib-GIO-CRITICAL … g_list_store_remove: assertion '!g_sequence_iter_is_end (it)'` fires
+once ~0.5 s after every shell boot. **It is NOT our code** — captured backtrace (2026-06-09,
+via the recipe in `dev-workflow.md`) lands in `libastal-tray.so`: `Tray.on_item_unregister`
+in Astal's `lib/tray/src/tray.vala` ignores `_items_store.find()`'s boolean and calls
+`remove(pos)` with an undefined `pos` when a tray item unregisters before its `ready`
+callback ever appended it (boot-time registration churn). Still unfixed on Astal `main`;
+no upstream issue exists. Fix is two lines (guard on `item != null` + on `find()`'s return).
+Don't chase this in shell code; it's harmless. The lazy tray-menu in `widget/bar/Tray.tsx`
+fixed a *different* (menu-parsing) instance — this one is inside the library itself.
+
+### 11. Sporadic double-disconnect CRITICALs — unreproduced, capture recipe ready
+Rare bursts (≈2 in 30 h) of `GLib-GObject-CRITICAL … instance has no handler with id` (3–4
+ids at once, 2 instances) and `GLib-CRITICAL … Source ID not found when attempting to
+remove it`. Some cleanup path disconnects handlers / removes sources twice. Ruled out by
+direct exercise (no critical emitted): all five overlay toggles, window open/close churn,
+notifications (incl. `-r` replacement + NC open), DPMS off/on. Next occurrence: don't
+theorize — run the shell once under `G_DEBUG=fatal-criticals` while reproducing the user's
+action of that moment and read the coredump backtrace (recipe in `dev-workflow.md`).
+
+### 12. Bluetooth pairing has no agent (passkey/PIN UI missing)
 Settings → Bluetooth pairs via a bare `device.pair()`, with **no `org.bluez.Agent1`
 registered**, so it's "just works" only: devices that need a 6-digit passkey confirmation
 or a PIN have no UI and will pair blind or fail. AstalBluetooth offers no agent helper —

@@ -87,6 +87,23 @@ needed. **If CI typecheck fails on a type that exists locally, the snapshot is s
 maintainer refreshes it with `scripts/dev/publish-ci-typings.sh` (re-run after any GTK/Astal
 update that changes the typings).
 
+**Getting a native backtrace from a GLib CRITICAL/WARNING** (proven 2026-06-09 — this is how
+the boot-time `g_list_store_remove` CRITICAL was attributed to libastal-tray): stop the unit,
+run the shell once with criticals made fatal so it aborts and leaves a coredump, restore, read
+the trace:
+```bash
+systemctl --user stop crystal-shell
+CRYSTAL_SHELL_ROOT="$PWD/ui/ags-v3" G_DEBUG=fatal-criticals timeout 20 \
+  bash -c 'cd ui/ags-v3 && ags run app.ts' > /tmp/fatal-crit.log 2>&1
+systemctl --user start crystal-shell      # restore the session UI immediately
+coredumpctl gdb -1 --debugger-arguments="-batch -ex 'bt 30'"
+```
+Even with stripped libs the frames name the guilty LIBRARY, which is usually enough to decide
+ours-vs-upstream. (`G_DEBUG=fatal-warnings` exists for warnings, but it aborts on the first
+harmless warning — see tech-debt #9 — so prefer fatal-criticals.) Astal's Vala sources for
+cross-referencing a frame: `https://raw.githubusercontent.com/Aylur/astal/<ASTAL_REF from
+install.sh>/lib/<lib>/src/…`.
+
 **`crystal-shell-doctor`** (installed to `/usr/bin`) prints a Markdown diagnostic report:
 versions, hardware, `hyprctl monitors`, systemd unit state, `ags request dumpState`, recent
 log errors. Run it FIRST when debugging a user's install, and attach its output as evidence
