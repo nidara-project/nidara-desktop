@@ -1,19 +1,5 @@
 @use 'base' as *;
 
-window.prism-window {
-    @include crystal-reset;
-
-    & decoration, & contents { @include crystal-reset; }
-}
-
-.prism-window-root {
-    background-color: transparent;
-}
-
-.prism-container {
-    background-color: transparent;
-}
-
 .prism-box {
     background: transparent;
     padding: 12px;

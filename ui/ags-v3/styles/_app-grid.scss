@@ -5,14 +5,8 @@
    ========================================================================== */
 
 /* ── Window ── */
-window#crystal-app-launcher,
-.app-grid-window {
+window#crystal-app-launcher {
     @include crystal-reset;
-}
-
-/* ── Background overlay (click to close) ── */
-.app-grid-background {
-    background: transparent;
 }
 
 /* ── Search bar ── */

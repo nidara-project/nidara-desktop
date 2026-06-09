@@ -257,41 +257,8 @@ switch,
     }
 }
 
-/* --- Global Sidebar System (Tahoe Island) --- */
-.crystal-sidebar-island {
-    background: var(--crystal-surface-back);
-    border-radius: $crystal-radius-md;
-    border: 1px solid var(--crystal-border);
-    box-shadow: var(--crystal-shadow-md);
-    margin: 12px;
-    padding: 8px 0;
-    transition: background-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.crystal-sidebar-row {
-    margin: 4px 10px;
-    border-radius: $crystal-radius-sm;
-    transition: background-color 0.25s #{$ease}, color 0.25s #{$ease}, border-color 0.25s #{$ease};
-    border: 1px solid transparent;
-    padding: 6px 14px;
-    color: var(--crystal-text-dim);
-
-    &:hover {
-        background-color: var(--crystal-surface-back);
-        color: var(--crystal-text);
-    }
-
-    &:selected,
-    &.active {
-        background-color: rgba(var(--crystal-accent-rgb), 0.15);
-        color: $crystal-accent;
-        border-color: rgba(var(--crystal-accent-rgb), 0.2);
-    }
-}
-
 /* --- Buttons (Premium Crystal) --- */
-button.crystal-btn,
-.crystal-button {
+button.crystal-btn {
     background: var(--crystal-surface);
     border: 1px solid var(--crystal-border);
     border-radius: $crystal-radius-sm;
@@ -315,14 +282,6 @@ button.crystal-btn,
         
         &:hover { background: rgba(var(--crystal-accent-rgb), 0.85); }
     }
-}
-
-.crystal-card {
-    background: var(--crystal-surface-back);
-    border-radius: $crystal-radius-md;
-    border: 1px solid var(--crystal-border);
-    padding: 16px;
-    box-shadow: var(--crystal-shadow-md);
 }
 
 /* --- CrystalPopover --- */
@@ -401,16 +360,6 @@ button.crystal-seg-btn {
         &:hover  { background: rgba(var(--crystal-accent-rgb), 0.82); color: var(--crystal-accent-fg); }
         &:active { background: rgba(var(--crystal-accent-rgb), 0.65); }
     }
-}
-
-/* --- Bar info-popover label typography --- */
-/* Used in wifi/ethernet info popovers (title + key/value pairs). */
-.bar-popover-title {
-    font-size: $fs-caption;
-    font-weight: $fw-bold;
-    color: var(--crystal-text-dim);
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
 }
 
 .bar-popover-key {

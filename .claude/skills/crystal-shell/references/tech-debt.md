@@ -27,6 +27,17 @@ hover conventions coexist (`rgba(accent, .82/.85)` translucent vs `color-mix(…
 lightened) — they look intentional per-material, don't blind-unify without a visual pass.
 Sweep-verification recipe: compile `style.scss` before/after and diff — a pure refactor
 must produce an identical (or fully-accounted) CSS diff.
+**Systematic orphan purge done 2026-06-10:** a detector script (extract every `.class` from
+`styles/*.scss`, `grep -rF` each against `widget/ core/ app.ts ../lib`) found and removed
+~45 dead classes (−459 compiled lines, −13%) — remnants of the dock pre-DockCore, the
+pre-commandment-5 separate overlay windows, the old Tahoe sidebar, deleted Resources.tsx,
+and the pre-context-menu CC edit chrome. **False-positive traps for the next run:** classes
+built dynamically (`accent-${key}` in Appearance.tsx, `crystal-btn--${variant}` in
+crystal-ui/button.ts), GTK-internal node classes (`day-name`/`other-month`/`week-number` =
+Gtk.Calendar, `combo`), and live names that look stale (`notif-win`). Deliberately KEPT
+with zero direct consumers: the `entry, .crystal-input` / `switch, .crystal-switch` API
+aliases and `.crystal-tile` (canonical tile recipe, referenced by the
+`crystal-tile-states` docs).
 
 ### 2. Anti-Adwaita resets still dense in two files
 `_control-center.scss` (~33 reset rules) and `_settings.scss` (~24). High reset counts signal

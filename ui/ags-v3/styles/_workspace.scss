@@ -4,11 +4,6 @@
    WORKSPACE COCKPIT
    ========================================================================== */
 
-/* --- Window --- */
-window.workspace-cockpit {
-    @include crystal-reset;
-}
-
 .cockpit-window-content {
     background: transparent;
     // Pure opacity crossfade — same as the shared .overlay-fade used by CC/NC/
@@ -19,26 +14,6 @@ window.workspace-cockpit {
 
     &.overview-open {
         opacity: 1;
-    }
-}
-
-/* --- Search Bar --- */
-.cockpit-search-box {
-    margin-bottom: 20px;
-}
-
-.cockpit-search {
-    background: var(--crystal-surface-back);
-    border: 1px solid var(--crystal-border);
-    border-radius: 14px;
-    padding: 10px 20px;
-    color: var(--crystal-text);
-    font-size: $fs-subtitle;
-    transition: background-color 0.2s ease, border-color 0.2s ease;
-
-    &:focus {
-        background: var(--crystal-surface);
-        border-color: var(--crystal-surface-raised);
     }
 }
 

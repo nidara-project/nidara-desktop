@@ -10,13 +10,7 @@
    :focus-visible rules here would be dead code. See [[project_design_tokens_macos]]. */
 
 /* --- Component Transparency --- */
-window.notification-center-win,
-window.notif-win,
-window.atomic-island-win,
-window.control-center-win,
-window.nc-window-0,
-window.nc-window-1,
-window.nc-window-2 {
+window.notif-win {
     @include crystal-reset;
 
     & decoration, & contents { @include crystal-reset; }
@@ -149,10 +143,6 @@ window.nc-window-2 {
     background-color: rgba(var(--crystal-accent-rgb), 0.25);
 }
 
-.vpn-btn-active {
-    background-color: rgba(var(--crystal-accent-rgb), 0.08);
-}
-
 // Recording widget states
 .rec-active-bg {
     background-color: rgba(var(--crystal-danger-rgb), 0.25);
@@ -169,22 +159,9 @@ window.nc-window-2 {
     font-variant-numeric: tabular-nums;
 }
 
-.rec-btn-active {
-    background-color: rgba(var(--crystal-danger-rgb), 0.08);
-}
-
 @keyframes rec-pulse-cc {
     0%, 100% { opacity: 1; }
     50%       { opacity: 0.5; }
-}
-
-.cc-atomic-focus-btn {
-    background-color: var(--crystal-surface);
-    border-radius: 12px;
-    color: var(--crystal-text);
-    transition: background-color 0.15s ease, box-shadow 0.15s ease;
-
-    @include crystal-tile-states;
 }
 
 /* --- Edit Mode Controls --- */
@@ -251,28 +228,6 @@ window.nc-window-2 {
 /* (.cc-resize-btn deleted — dead CSS from the pre-context-menu resize approach;
    tile resizing lives in CCContextMenu.tsx since the 3-tier menu landed.) */
 
-.cc-picker-row {
-    background: transparent;
-}
-
-.cc-add-chip {
-    background: var(--crystal-surface);
-    border: 1px solid var(--crystal-border);
-    border-radius: var(--crystal-radius-pill);
-    color: var(--crystal-text-dim);
-    padding: 4px 10px;
-    font-size: $fs-caption;
-    transition: background-color 0.15s ease, box-shadow 0.15s ease;
-
-    @include crystal-tile-states;
-    &:hover { color: var(--crystal-text); }
-}
-
-.cc-picker-empty {
-    font-size: $fs-caption;
-    color: var(--crystal-text-disabled);
-}
-
 /* --- Notifications: Steel Symmetry --- */
 .nc-capsule-item {
     min-height: 80px;
@@ -289,23 +244,6 @@ window.nc-window-2 {
     /* The ghost strip's height is already accounted for; claw back just a little so the
        gap to the next notification stays comfortable for both 1- and 2-layer stacks. */
     margin-bottom: -2px;
-}
-
-.nc-capsule-glass {
-    background-color: var(--crystal-surface);
-    border: 1px solid var(--crystal-border);
-    border-radius: var(--crystal-radius-lg);
-    transition: background-color 0.2s ease, border-color 0.2s ease;
-    
-    &:hover {
-        background-color: var(--crystal-surface-hover);
-        border-color: var(--crystal-border);
-    }
-}
-
-.notif-card {
-    background: transparent;
-    margin-bottom: 8px;
 }
 
 .nc-badge-header {
@@ -440,12 +378,6 @@ window.nc-window-2 {
     &:active {
         background: var(--crystal-accent-30);
     }
-}
-
-.notif-app-icon,
-.nc-group-icon,
-.notif-item-icon {
-    -gtk-icon-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* --- NC Global Layout --- */
@@ -681,27 +613,4 @@ window.nc-window-2 {
     .slider-value-label   { color: var(--crystal-text-dim); font-size: $fs-small; font-variant-numeric: tabular-nums; }
 
     separator { background: var(--crystal-border); margin: 4px 0; min-height: 1px; }
-}
-
-.cc-detail-close-btn {
-    background: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    padding: 4px;
-    border-radius: $crystal-radius-pill;
-    min-width: 24px;
-    min-height: 24px;
-    transition: background-color 0.15s ease, box-shadow 0.15s ease;
-
-    @include crystal-tile-states;
-}
-
-/* --- CC Tile Cover (invisible intercept for detail-strip tiles) --- */
-.cc-tile-cover {
-    opacity: 0;
-    background: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
 }

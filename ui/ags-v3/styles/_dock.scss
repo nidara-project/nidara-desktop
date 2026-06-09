@@ -61,60 +61,6 @@ window.crystal-dock-window,
     transition: none;
 }
 
-/* --- Squircle Icon Plates --- */
-#crystal-dock box.cd-squircle-plate {
-    background-color: white;
-    border-radius: var(--crystal-radius-squircle);
-    min-width: 32px;
-    min-height: 32px;
-    margin: 0;
-    padding: 0;
-    opacity: 1;
-    box-shadow: none;
-    border: none;
-}
-
-/* V411: KILL ALL RIPPLES INSIDE PLATE */
-window#crystal-dock box.cd-squircle-plate>ripple,
-window#crystal-dock box.cd-squircle-plate>highlight,
-window#crystal-dock box.cd-squircle-plate>focus-ring,
-window#crystal-dock box.cd-squircle-plate>outline,
-window#crystal-dock box.cd-squircle-plate:focus>ripple,
-window#crystal-dock box.cd-squircle-plate:hover>ripple,
-window#crystal-dock box.cd-squircle-plate:active>ripple {
-    @include crystal-reset;
-    opacity: 0;
-}
-
-window#crystal-dock box.cd-squircle-plate image,
-window#crystal-dock box.cd-squircle-plate widget,
-window#crystal-dock box.cd-squircle-plate drawingarea {
-    @include crystal-reset;
-    -gtk-icon-shadow: none;
-}
-
-window#crystal-dock box.cd-squircle-plate.show-bg {
-    background-color: var(--crystal-dock-surface-raised);
-    /* Explicit hover state */
-    box-shadow: var(--crystal-shadow-md);
-    /* Optional: add explicit shadow on hover */
-}
-
-/* Removed ineffective specificity fixes */
-
-
-/* --- Indicators (Dots) --- */
-#crystal-dock .cd-dot {
-    min-width: 5px;
-    min-height: 5px;
-    border-radius: 9999px;
-    background-color: var(--crystal-text);
-    border: none;
-    box-shadow: none;
-    outline: none;
-    padding: 0;
-}
-
 /* --- Separator - macOS Tahoe: dark hairline --- */
 #crystal-dock .cd-separator {
     min-width: 1px;
@@ -125,8 +71,7 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
 }
 
 /* --- Hover Shadow Killer --- */
-#crystal-dock .cd-item:hover,
-#crystal-dock .cd-squircle-plate:hover {
+#crystal-dock .cd-item:hover {
     box-shadow: none;
     -gtk-icon-shadow: none;
 }
@@ -141,43 +86,6 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
 /* ── Vertical Dock ───────────────────────────────────────────────────────── */
 window#crystal-dock-vertical {
     background: transparent;
-}
-
-.dock-v-pill {
-    background-color: var(--crystal-surface-back);
-    border: 1px solid var(--crystal-border);
-    border-radius: 24px;
-    padding: 8px 0;
-    box-shadow: var(--crystal-shadow-lg);
-    min-width: 0;
-}
-
-.dock-v-list {
-    padding: 4px 0;
-}
-
-button.dock-v-icon {
-    background: transparent;
-    border: none;
-    border-radius: 14px;
-    padding: 0;
-    transition: background 150ms ease;
-
-    &:hover {
-        background-color: var(--crystal-surface);
-    }
-
-    image {
-        -gtk-icon-shadow: 0 2px 6px rgba(0,0,0,0.5);
-    }
-}
-
-.dock-ctx-item {
-    border-radius: 8px;
-    padding: 6px 16px;
-    min-width: 160px;
-
-    &:hover { background-color: var(--crystal-surface); }
 }
 
 .dock-menu {

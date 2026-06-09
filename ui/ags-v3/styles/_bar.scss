@@ -7,7 +7,6 @@
 /* --- Focus Kill --- */
 /* Focus reset for bar items only */
 .bar-capsule,
-.bar-ws-btn,
 .bar-tray-btn {
     outline-width: 0;
     outline-color: transparent;
@@ -71,21 +70,12 @@ window#crystal-bar-zone {
 .bar-left button,
 .bar-center button,
 .bar-right button,
-.bar-tray-btn,
-.bar-ws-btn {
+.bar-tray-btn {
     @include crystal-reset;
     padding: 0;
     margin: 0;
     min-width: 0;
     min-height: 0;
-}
-
-/* --- Workspace Dots (Stitch Style) --- */
-.bar-workspaces {
-    background: none;
-    background-color: transparent;
-    border: none;
-    padding: 0 4px;
 }
 
 .workspace-dot {
@@ -113,28 +103,12 @@ window#crystal-bar-zone {
     background-color: var(--crystal-surface-hover);
 }
 
-/* --- Resource Circles (Cairo) --- */
-.resource-circle {
-    min-width: 24px;
-    min-height: 24px;
-}
-
-.resource-canvas {
-    /* Background circle logic handled in Cairo, but we can set opacity here */
-}
-
-
-.resource-label,
+/* --- Resource ring icon (bar cpu-memory arcs) --- */
 .resource-icon {
     font-size: $fs-mini;
     font-weight: $fw-bold;
     color: var(--crystal-text);
     margin-bottom: 0px;
-}
-
-.bar-time,
-.bar-app-name {
-    /* Inherited from universal rule above */
 }
 
 /* Ensure all symbolic icons in the bar use adaptive text color */
@@ -146,30 +120,9 @@ window#crystal-bar-zone {
 }
 
 /* Specific styling for the Control Center pill icon */
-.bar-app-menu-pill image,
-.bar-ws-pill image,
 .bar-right image {
     opacity: 1;
     /* Full opacity for better contrast */
-}
-
-.bar-app-sep,
-.bar-time-sep {
-    background: var(--crystal-text-disabled);
-    /* Adaptive separators */
-    min-width: 1px;
-    margin: 0 4px;
-    box-shadow: var(--crystal-shadow-sm);
-}
-
-/* --- Spotlight Pill Refinement --- */
-.spotlight-pill {
-    @include crystal-reset;
-
-    image {
-        padding: 0;
-        margin: 0;
-    }
 }
 
 .overlay-catcher {
