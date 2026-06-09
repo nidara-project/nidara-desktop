@@ -248,17 +248,8 @@ window.nc-window-2 {
     }
 }
 
-.cc-resize-btn {
-    background: var(--crystal-scrim);
-    border: none;
-    border-radius: var(--crystal-radius-pill);
-    color: var(--crystal-on-scrim);
-    padding: 2px 8px;
-    font-size: $fs-caption;
-    font-weight: $fw-semibold;
-
-    &:hover { background: var(--crystal-scrim-strong); }
-}
+/* (.cc-resize-btn deleted — dead CSS from the pre-context-menu resize approach;
+   tile resizing lives in CCContextMenu.tsx since the 3-tier menu landed.) */
 
 .cc-picker-row {
     background: transparent;

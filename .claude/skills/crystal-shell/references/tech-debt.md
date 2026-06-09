@@ -12,11 +12,16 @@ Defined in `_base.scss` (levels `surface`, `raised`, `floating`) with few call s
 sweep audit found the manual glass-ish blocks **diverge deliberately** (different radii,
 inset shadows, transitions, extra colors) — force-migrating them would change pixels, so
 they stay. The actionable parts of that sweep were done instead: Adwaita named colors
-eradicated (`@accent_bg_color` in `_workspace.scss`/`_app-grid.scss` rendered Adwaita BLUE
-instead of the user's accent — real visible bug), scrim tokens added
-(`--crystal-scrim/-strong/--crystal-on-scrim` — use them for dark badges over imagery,
-never hardcoded rgba blacks), `--crystal-accent-10` unified (5 sites), orphaned
-`.bar-ws-dot` CSS deleted. Rules that stand: **new code uses the mixins/tokens**
+eradicated (`@accent_bg_color` in `_workspace.scss`/`_app-grid.scss` — those DID track the
+accent, but only via a fragile accidental chain: our gsettings `accent-color` → the
+libadwaita that AGS force-loads defines the named color → GNOME's palette flavor of the
+accent, not our exact token; on an Adwaita-free system it breaks silently. Now they use
+`--crystal-accent` directly), `--crystal-accent-10` unified (5 sites), orphaned
+`.bar-ws-dot` and `.cc-resize-btn` CSS deleted (the latter was the pre-context-menu tile
+resize UI). For dark badges over imagery, don't hardcode rgba blacks — add scrim tokens
+when a real user appears (a `--crystal-scrim` trio existed briefly; removed as speculative
+once its only consumer turned out to be dead CSS). Rules that stand: **new code uses the
+mixins/tokens**
 (`glass()`, `material-*`, `crystal-row-states`/`-tile-states`, scrims); two accent-button
 hover conventions coexist (`rgba(accent, .82/.85)` translucent vs `color-mix(… white 15%)`
 lightened) — they look intentional per-material, don't blind-unify without a visual pass.
