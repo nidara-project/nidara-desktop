@@ -18,3 +18,28 @@ export const SHELL_ROOT = GLib.getenv("CRYSTAL_SHELL_ROOT") || GLib.get_current_
 // Importing this module before anything spawns a child (see app.ts) makes this the
 // effective default for the whole shell, replacing the per-launch `cd "$HOME"`.
 GLib.chdir(GLib.get_home_dir())
+
+/**
+ * The shell's own version string. Dev checkouts win over the system install:
+ * the `.dev` marker (written by `install.sh --dev`) points at the repo, whose
+ * VERSION is the live one; /usr/share/crystal-shell/VERSION is the copy frozen
+ * at install time.
+ */
+export function readShellVersion(): string {
+    const devMarker = `${GLib.get_home_dir()}/.config/crystal-shell/.dev`
+    try {
+        const [devOk, devBytes] = GLib.file_get_contents(devMarker)
+        if (devOk) {
+            const repoDir = new TextDecoder().decode(devBytes).trim()
+            const [ok, bytes] = GLib.file_get_contents(`${repoDir}/VERSION`)
+            if (ok) return new TextDecoder().decode(bytes).trim()
+        }
+    } catch {}
+
+    try {
+        const [ok, bytes] = GLib.file_get_contents("/usr/share/crystal-shell/VERSION")
+        if (ok) return new TextDecoder().decode(bytes).trim()
+    } catch {}
+
+    return "0.1.0"
+}

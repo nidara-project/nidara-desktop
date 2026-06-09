@@ -1,6 +1,6 @@
 // MUST be first: captures the asset root and moves the process CWD to $HOME
 // before anything else can spawn a child or read the CWD.
-import { SHELL_ROOT } from "./core/Paths"
+import { SHELL_ROOT, readShellVersion } from "./core/Paths"
 import app from "ags/gtk4/app"
 import { Gdk, Gtk } from "ags/gtk4"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
@@ -8,6 +8,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import status from "./core/Status"
 import shellActions from "./core/ShellActions"
+import { currentLocale } from "./core/i18n"
 import { readFile } from "ags/file"
 
 // @ts-ignore
@@ -67,6 +68,90 @@ interface ShellWindow {
 // Widget code (Dock, Bar, AppGrid) uses core/ShellActions — a shared typed registry
 // populated here after main() runs, avoiding circular imports with app.ts.
 const ipc: Record<string, (() => void) | undefined> = {}
+
+// Declarative IPC surface — the single source of truth for `ags request`.
+// `listActions` introspects this table, so adding a command here is ALL it takes
+// for scripts and agents to discover it; never grow a parallel switch elsewhere.
+// Commands that need main()-time closures (windows, monitors) go through `ipc`.
+interface IpcCommand {
+  desc: string
+  aliases?: string[]
+  run: () => string | void
+}
+
+const IPC_COMMANDS: Record<string, IpcCommand> = {
+  toggleCC: {
+    desc: "Toggle the Control Center overlay",
+    aliases: ["toggleControlCenter"],
+    run: () => status.toggleCC(),
+  },
+  toggleNC: {
+    desc: "Toggle the Notification Center overlay",
+    aliases: ["toggleNotificationCenter"],
+    run: () => status.toggleNC(),
+  },
+  togglePrism: {
+    desc: "Toggle Prism (spotlight-style search)",
+    aliases: ["toggleSpotlight"],
+    run: () => status.togglePrism(),
+  },
+  toggleAppGrid: { desc: "Toggle the fullscreen app grid", run: () => ipc.toggleAppGrid?.() },
+  toggleSettings: { desc: "Show/hide the Settings window", run: () => ipc.toggleSettings?.() },
+  toggleOverview: { desc: "Toggle the workspaces overview", run: () => ipc.toggleOverview?.() },
+  toggleGameOverlay: {
+    desc: "Toggle game mode (bar promoted above fullscreen surfaces)",
+    run: () => ipc.toggleGameOverlay?.(),
+  },
+  hideForLock: { desc: "Hide bar+dock while the lockscreen is up", run: () => ipc.lockScreen?.() },
+  showAfterLock: { desc: "Restore bar+dock after unlock", run: () => ipc.unlockScreen?.() },
+  listActions: {
+    desc: "Describe every IPC command as JSON (machine-readable: this output)",
+    run: () => {
+      const out: Record<string, { desc: string; aliases?: string[] }> = {}
+      for (const [name, { desc, aliases }] of Object.entries(IPC_COMMANDS))
+        out[name] = aliases ? { desc, aliases } : { desc }
+      return JSON.stringify(out, null, 2)
+    },
+  },
+  dumpState: {
+    desc: "Dump live shell state as JSON (version, theme, locale, overlay visibility)",
+    run: () => {
+      const display = Gdk.Display.get_default()
+      return JSON.stringify(
+        {
+          shell: {
+            version: readShellVersion(),
+            locale: currentLocale(),
+            darkMode: Theme.isDark,
+            monitors: display ? display.get_monitors().get_n_items() : 0,
+          },
+          overlays: {
+            controlCenter: status.cc_open,
+            notificationCenter: status.nc_open,
+            prism: status.prism_open,
+            systemMenu: status.system_menu_open,
+            overview: status.overview_open,
+            settings: status.settings_open,
+            about: status.about_open,
+          },
+          flags: {
+            ccEditMode: status.cc_edit_mode,
+            recording: status.recording,
+            barExpandedId: status.bar_expanded_id,
+            ccDetailId: status.cc_detail_id,
+          },
+        },
+        null,
+        2,
+      )
+    },
+  },
+}
+
+// alias → canonical command name, derived once from the table above.
+const IPC_ALIASES: Record<string, string> = {}
+for (const [name, { aliases }] of Object.entries(IPC_COMMANDS))
+  for (const alias of aliases ?? []) IPC_ALIASES[alias] = name
 
 app.start({
   applicationId: "com.crystalshell.fluid",
@@ -245,33 +330,11 @@ app.start({
   requestHandler(argv, res) {
     if (!argv || argv.length === 0) return res("ok")
     const cmd = argv[0].replace("()", "")
-    
-    switch (cmd) {
-      case "toggleCC":
-      case "toggleControlCenter":
-        status.toggleCC(); break;
-      case "toggleNC":
-      case "toggleNotificationCenter":
-        status.toggleNC(); break;
-      case "togglePrism":
-      case "toggleSpotlight":
-        status.togglePrism(); break;
-      case "toggleAppGrid":
-        ipc.toggleAppGrid?.(); break;
-      case "toggleSettings":
-        ipc.toggleSettings?.(); break;
-      case "toggleOverview":
-        ipc.toggleOverview?.(); break;
-      case "toggleGameOverlay":
-        ipc.toggleGameOverlay?.(); break;
-      case "hideForLock":
-        ipc.lockScreen?.(); break;
-      case "showAfterLock":
-        ipc.unlockScreen?.(); break;
-      default:
-        console.warn(`[Handler] Unknown command: ${cmd}`)
-        return res("unknown command")
+    const entry = IPC_COMMANDS[cmd] ?? IPC_COMMANDS[IPC_ALIASES[cmd]]
+    if (!entry) {
+      console.warn(`[Handler] Unknown command: ${cmd}`)
+      return res("unknown command — try `ags request listActions`")
     }
-    res("ok")
+    res(entry.run() ?? "ok")
   }
 })

@@ -22,6 +22,11 @@ export function detectLanguage() {
 // Initial detection
 detectLanguage()
 
+/** The locale currently in effect ("en", "es", …) — e.g. for dumpState/diagnostics. */
+export function currentLocale(): string {
+    return activeLocale
+}
+
 // Key type derives from `en` — the canonical English-first source of truth. es (and
 // future locales) may lag behind; missing translations fall back to en at runtime
 // (below). Deriving from `es` would break the typecheck every time an English key is
