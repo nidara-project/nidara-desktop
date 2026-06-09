@@ -161,6 +161,38 @@ This setup surfaced a real latent bug, fixed in `BluetoothService.setPowered`:
 so the old `bt.is_powered = state` toggle flipped the switch visually but never powered the
 radio. Drive `bt.adapter.powered` instead.
 
+### Testing the battery widget on a desktop (no battery)
+
+`AstalBattery` reads UPower's composite **DisplayDevice over the system D-Bus**, so on a
+desktop (`is_present = false`) the battery tiles only render a dim fallback icon and the
+Cairo glyph can't be seen. Fake it with python-dbusmock's `upower` template via
+`scripts/dev/fake-battery.sh` (run as root — it stops `upower.service` and owns
+`org.freedesktop.UPower`):
+
+```bash
+sudo scripts/dev/fake-battery.sh start 72              # 72% discharging (neutral fill)
+sudo scripts/dev/fake-battery.sh start 10 discharging  # low → red fill + "low" warning
+sudo scripts/dev/fake-battery.sh start 45 charging     # green fill
+sudo scripts/dev/fake-battery.sh start 100 full        # fully charged
+sudo scripts/dev/fake-battery.sh stop                  # restores real upower.service
+```
+
+**Policy gotcha (why not `SetupDisplayDevice`):** UPower's D-Bus system policy
+(`/usr/share/dbus-1/system.d/org.freedesktop.UPower.conf`) whitelists `send_interface` to
+Introspectable/Peer/Properties/UPower[.Device] — the dbusmock control interface
+`org.freedesktop.DBus.Mock` is **not** in it, so the template's `SetupDisplayDevice` method
+is **"Access denied"** (bluez5 works only because `org.bluez`'s policy is permissive). The
+script instead seeds the DisplayDevice via `org.freedesktop.DBus.Properties.Set` (whitelisted),
+which dbusmock honours. Re-running `start` with new values **re-seeds live** (the glyph
+updates without a reload — `Set` emits `PropertiesChanged`). Only the **first** `start` flips
+`is_present` false→true, which `buildContent` reads at build time — so reload once
+(Super+Shift+R) after the first start, then change values freely.
+
+**Range gotcha:** UPower's `Percentage` is **0–100**, but `AstalBattery.percentage` divides
+it to a **0–1 fraction** (per the GI docs). The widget uses `bat.percentage` (0–1) directly
+for the Cairo fill and `× 100` for the label — an earlier `Math.round(bat.percentage)` in
+the detail panel was a latent "0%/1%" bug, hidden only because desktops never showed it.
+
 ## Persistence
 
 All persistent state lives in `~/.config/crystal-shell/`:

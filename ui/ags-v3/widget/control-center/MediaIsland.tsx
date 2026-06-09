@@ -193,6 +193,52 @@ function buildWideContent(state: MediaState): Gtk.Widget {
     return row
 }
 
+// SINGLE (1×1): just the cover art, clipped to a circle to sit inside the round
+// island (with a play-glyph fallback when nothing is playing). Tap opens the detail
+// panel, like the other 1×1 status tiles.
+function buildSingleContent(state: MediaState): Gtk.Widget {
+    const artDa = new Gtk.DrawingArea({ hexpand: true, vexpand: true, halign: Gtk.Align.FILL, valign: Gtk.Align.FILL })
+    artDa.set_draw_func((_, cr, w, h) => {
+        if (w <= 0 || h <= 0) return
+        const d = Math.min(w, h)
+        const x = (w - d) / 2, y = (h - d) / 2
+        cr.save()
+        cr.arc(x + d / 2, y + d / 2, d / 2, 0, 2 * Math.PI)
+        cr.clip()
+        if (state.artPixbuf) {
+            const small = state.artPixbuf.scale_simple(d, d, GdkPixbuf.InterpType.BILINEAR)
+            Gdk.cairo_set_source_pixbuf(cr, small, x, y)
+            cr.paint()
+        } else {
+            cr.setSourceRGBA(1, 1, 1, 0.1)
+            cr.paint()
+        }
+        cr.restore()
+    })
+
+    const fallback = new Gtk.Image({
+        gicon: Icons.play, pixel_size: 22, css_classes: ["cs-icon"],
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
+    })
+
+    const overlay = new Gtk.Overlay({ hexpand: true, vexpand: true })
+    overlay.set_child(artDa)
+    overlay.add_overlay(fallback)
+
+    const update = () => {
+        fallback.visible = !state.artPixbuf
+        artDa.queue_draw()
+    }
+
+    state.listeners.push(update)
+    overlay.connect("unrealize", () => {
+        const i = state.listeners.indexOf(update)
+        if (i >= 0) state.listeners.splice(i, 1)
+    })
+    update()
+    return overlay
+}
+
 export function MediaIslandContent(): AtomicWidget {
     const state = makeMediaState()
 
@@ -200,9 +246,10 @@ export function MediaIslandContent(): AtomicWidget {
         id: "media",
         name: t("cc.media.name"),
         defaultSize: WidgetSize.SQUARE,
-        supportedSizes: [WidgetSize.SQUARE, WidgetSize.WIDE],
-        buildContent: (size) => size === WidgetSize.WIDE
-            ? buildWideContent(state)
-            : buildSquareContent(state),
+        supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
+        buildContent: (size) =>
+            size === WidgetSize.WIDE   ? buildWideContent(state)   :
+            size === WidgetSize.SINGLE ? buildSingleContent(state) :
+                                         buildSquareContent(state),
     }
 }

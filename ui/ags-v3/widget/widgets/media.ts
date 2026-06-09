@@ -271,7 +271,7 @@ const mediaWidget: AtomicWidget = {
     icon: Icons.play,
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SQUARE,
-    supportedSizes: [WidgetSize.SQUARE],
+    supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent: (size) => MediaIslandContent().buildContent(size),
     buildBarContent,
     buildBarExpanded,
