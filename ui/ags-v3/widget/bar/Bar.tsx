@@ -526,8 +526,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   //     → protocol: compositor MUST NOT adjust position/size based on other
   //       surfaces' exclusive zones. Bar stays monGeo.width always.
   const zoneWin = new Gtk.Window({ name: "crystal-bar-zone", application: app, visible: false })
-  zoneWin.set_child(new Gtk.Box()) // GTK requires a child to present
-  zoneWin.set_opacity(0)
+  // GTK requires a child to present; height_request 1 shrinks the surface to a
+  // 1 px strip (an empty window defaults to 200 px) — the exclusive zone (40)
+  // is independent of surface size.
+  zoneWin.set_child(new Gtk.Box({ height_request: 1 }))
+  // Invisible via transparent CSS background (_bar.scss), NOT set_opacity(0):
+  // toplevel opacity routes every frame through the compositing pipeline and is
+  // the prime suspect for this window's frame clock spinning at refresh rate
+  // (tech-debt #11).
+  zoneWin.set_default_size(-1, 1)
   zoneWin.connect("realize", () => {
     // Empty input region — this window must never intercept pointer events
     const surf = zoneWin.get_native()?.get_surface()

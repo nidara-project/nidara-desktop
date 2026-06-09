@@ -31,6 +31,13 @@
     margin: 0;
 }
 
+/* The invisible exclusive-zone reservor (see Bar.tsx "Zone reservor"). Transparent
+   via CSS, NOT gtk_widget_set_opacity(0) — toplevel opacity goes through the
+   compositing pipeline and is the suspect for tech-debt #11's frame-clock spin. */
+window#crystal-bar-zone {
+    background: transparent;
+}
+
 /* --- Centerbox --- */
 .bar-centerbox {
     background-color: transparent;
