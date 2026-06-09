@@ -49,22 +49,32 @@ This is the canonical pattern: **events go up through actions, state changes pro
 
 `ags request '<cmd>'` works out of the box because `app.ts` implements `requestHandler(argv, res)`. Hyprland keybinds call `hl.dsp.exec_cmd("ags request <cmd>")`.
 
-### Supported commands
+### The IPC surface is self-describing
 
-```
-toggleCC | toggleControlCenter        toggleNC | toggleNotificationCenter
-togglePrism | toggleSpotlight         toggleAppGrid
-toggleSettings                        toggleOverview
-toggleGameOverlay                     hideForLock | showAfterLock
-```
+The commands live in a **declarative table** (`IPC_COMMANDS` in `app.ts`) — name, description,
+optional aliases, handler. `requestHandler` is a thin lookup over it; there is no switch.
+Two built-in commands make the surface introspectable, so scripts and agents never need to
+read source to discover it:
 
-Aliases are intentional — Hyprland keybinds were renamed at one point and old names are kept for compatibility.
+- `ags request listActions` → JSON describing every command (name, desc, aliases).
+- `ags request dumpState` → JSON snapshot of live shell state: version, locale, dark mode,
+  monitor count, which overlays are open, edit/recording flags. Read state → act → re-read
+  to verify: that's the intended agent loop. (`crystal-shell-doctor` embeds this output in
+  its diagnostic report.)
+
+Current commands (run `listActions` for the live list): `toggleCC|toggleControlCenter`,
+`toggleNC|toggleNotificationCenter`, `togglePrism|toggleSpotlight`, `toggleAppGrid`,
+`toggleSettings`, `toggleOverview`, `toggleGameOverlay`, `hideForLock`, `showAfterLock`,
+`listActions`, `dumpState`. Aliases are intentional — Hyprland keybinds were renamed at one
+point and old names are kept for compatibility.
 
 ### Adding a new IPC command
 
 1. Add the action to the typed `core/ShellActions` registry.
 2. Wire it inside `app.ts main()` (where the registry is populated).
-3. Add the case to `requestHandler` in `app.ts`.
+3. Add an entry to the `IPC_COMMANDS` table in `app.ts` — **with a real description**; that
+   string is the command's documentation (it's what `listActions` serves). Never grow a
+   parallel switch or a second command list elsewhere.
 4. Use it from `hyprland.lua` as `hl.dsp.exec_cmd("ags request <yourCmd>")`.
 
 ## `ShellActions` replaces `globalThis`

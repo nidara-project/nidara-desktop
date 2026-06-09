@@ -66,10 +66,14 @@ tail -f /tmp/crystal-shell-ui.log        # logs
 killall gjs                              # nuke stuck old UI when reload misbehaves
 cd ui/ags-v3 && npm run typecheck        # local typecheck (needs the git-ignored @girs/)
 cd ui/ags-v3 && npm run build            # SCSS compile + ags bundle
-ags request toggleAppGrid                # send an IPC command to the running shell
+ags request listActions                  # discover the shell's IPC surface (JSON)
+ags request dumpState                    # live shell state as JSON (overlays, version…)
+crystal-shell-doctor                     # Markdown diagnostic report (bug/PR evidence)
 ```
 
-CI only gates SCSS compile (pure JS, no system libs). Typecheck is local-only because it needs `@girs/` (≈58 MB of auto-generated GI typings, git-ignored).
+CI gates SCSS compile **and** typecheck. The typecheck job downloads a compressed `@girs/`
+snapshot from the repo's `ci-assets` release (`@girs/` itself stays git-ignored, ≈58 MB
+generated); when it goes stale a maintainer refreshes it — see `references/dev-workflow.md`.
 
 ## When in doubt
 

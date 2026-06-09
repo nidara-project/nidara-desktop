@@ -79,7 +79,18 @@ When a reload seems to do nothing or styles refuse to refresh, the cause is almo
 2. `killall gjs` — then `Super+Shift+R` once it's gone.
 3. `tail -f /tmp/crystal-shell-ui.log` and re-trigger; look for stack traces.
 
-CI gates **only SCSS compile** (pure JS, no system libs). Local typecheck is required because it needs the git-ignored `@girs/` (~58 MB of GI typings).
+CI gates **SCSS compile + typecheck**. The SCSS job is pure JS. The typecheck job can't run
+`ags types` (no ags binary / Astal libs on a runner), so it downloads a ~4 MB compressed
+snapshot of `@girs/` from the repo's `ci-assets` release and runs `tsc --noEmit` against it —
+the repo's own `types.d.ts` declares the `ags/*` modules ambiently, so no `node_modules` is
+needed. **If CI typecheck fails on a type that exists locally, the snapshot is stale**: a
+maintainer refreshes it with `scripts/dev/publish-ci-typings.sh` (re-run after any GTK/Astal
+update that changes the typings).
+
+**`crystal-shell-doctor`** (installed to `/usr/bin`) prints a Markdown diagnostic report:
+versions, hardware, `hyprctl monitors`, systemd unit state, `ags request dumpState`, recent
+log errors. Run it FIRST when debugging a user's install, and attach its output as evidence
+on bug reports and hardware/compat PRs.
 
 **Regenerating `@girs/` (and the trap it sets).** `@girs/` is git-ignored, so a fresh clone / a new
 environment has none. Regenerate with `cd ui/ags-v3 && ags types -d .` (offline — reads the system
