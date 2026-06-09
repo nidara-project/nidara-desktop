@@ -118,7 +118,26 @@ build dir's typelib — and if that one embeds a prefix you can't write to (`/us
 binary-patch a copy with a same-length `/tmp` path (python `bytes.replace`, assert equal
 lengths) and place the patched `.so` there.
 
-### 11. Sporadic double-disconnect CRITICALs — unreproduced, capture recipe ready
+### 11. Frame clock never re-idles after an overlay's first use (~137 wakeups/s)
+Measured 2026-06-09 (main-thread voluntary ctx switches, 144 Hz monitor): a **fresh boot
+idles at 0 wakeups/s** (genuinely event-driven — keep it that way), but after opening and
+closing the CC once, the main thread wakes ~137/s (≈ the monitor refresh rate) **forever**.
+More overlays can add more (a second window's clock); occluding everything with the
+fullscreen AppGrid collapses the rate (Hyprland stops frame callbacks for hidden surfaces),
+confirming these are per-window GDK frame clocks that something keeps requesting frames on.
+NC adds nothing after CC (same bar window → same clock). CPU stays ~0.2% so this is a
+**power/battery concern, not a perf one** — relevant pre-laptop. Repro:
+`systemctl --user restart crystal-shell`, measure `awk '/voluntary/{s+=$2} END{print s}'
+/proc/$PID/task/$PID/status` over a few seconds (0/s), `ags request toggleCC` twice,
+re-measure (~137/s). Next diagnostic step: GTK Inspector on a dev run, or audit for CSS
+transitions/`Gtk.Revealer`s left in a never-settled state inside the lazily-built overlay
+content (the fade itself completes — `fade.ts` one-shots are clean; `GDK_DEBUG=frames`
+prints nothing on GTK 4.22, don't bother). Related nit while auditing: the cpu-memory tile's
+`timeout_add` polls (`widget/widgets/cpu-memory.ts`) run forever once the tile is built,
+even with the CC closed — cheap (only `queue_draw`s on value change) but the clean pattern
+is pause-while-hidden.
+
+### 12. Sporadic double-disconnect CRITICALs — unreproduced, capture recipe ready
 Rare bursts (≈2 in 30 h) of `GLib-GObject-CRITICAL … instance has no handler with id` (3–4
 ids at once, 2 instances) and `GLib-CRITICAL … Source ID not found when attempting to
 remove it`. Some cleanup path disconnects handlers / removes sources twice. Ruled out by
@@ -127,7 +146,7 @@ notifications (incl. `-r` replacement + NC open), DPMS off/on. Next occurrence: 
 theorize — run the shell once under `G_DEBUG=fatal-criticals` while reproducing the user's
 action of that moment and read the coredump backtrace (recipe in `dev-workflow.md`).
 
-### 12. Bluetooth pairing has no agent (passkey/PIN UI missing)
+### 13. Bluetooth pairing has no agent (passkey/PIN UI missing)
 Settings → Bluetooth pairs via a bare `device.pair()`, with **no `org.bluez.Agent1`
 registered**, so it's "just works" only: devices that need a 6-digit passkey confirmation
 or a PIN have no UI and will pair blind or fail. AstalBluetooth offers no agent helper —
