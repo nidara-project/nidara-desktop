@@ -19,6 +19,39 @@ import { SHELL_ROOT } from "./Paths"
 // ── CONSTANTS ────────────────────────────────────────────────────────
 // No default theme forced — themeFamily is read from system on first run via syncFromSystem()
 
+// ── DARK/LIGHT: the one allowed way to set it in-process ────────────────────
+// The shell is libadwaita-free, but AGS's own runtime (lib/gtk4/app.ts) calls
+// Adw.init() whenever libadwaita exists on the system — we can't opt out. An
+// initialized libadwaita OWNS GtkSettings:gtk-application-prefer-dark-theme:
+// writing it directly logs Adwaita-WARNING and risks being overridden. So:
+// route through AdwStyleManager when Adw is initialized, and fall back to plain
+// Gtk.Settings on systems without libadwaita (where AGS's init no-ops).
+let adwStyleManager: any | null | undefined // undefined = not probed yet
+let adwForceDark = 0
+let adwForceLight = 0
+async function probeAdwStyleManager(): Promise<any | null> {
+    if (adwStyleManager !== undefined) return adwStyleManager
+    try {
+        const Adw = (await import("gi://Adw?version=1")).default as any
+        adwStyleManager = Adw.is_initialized() ? Adw.StyleManager.get_default() : null
+        adwForceDark = Adw.ColorScheme.FORCE_DARK
+        adwForceLight = Adw.ColorScheme.FORCE_LIGHT
+    } catch {
+        adwStyleManager = null
+    }
+    return adwStyleManager
+}
+
+export async function setPreferDark(dark: boolean) {
+    const sm = await probeAdwStyleManager()
+    if (sm) {
+        sm.color_scheme = dark ? adwForceDark : adwForceLight
+    } else {
+        const gtkSettings = Gtk.Settings.get_default()
+        if (gtkSettings) gtkSettings.gtk_application_prefer_dark_theme = dark
+    }
+}
+
 /**
  * ThemeEngine State Interface
  */
@@ -391,9 +424,9 @@ class ThemeManager extends GObject.Object {
                 if (settings) settings.gtk_theme_name = theme
             }
             
-            // Pure GTK4 dark/light coordination — no libadwaita
-            const gtkSettings = Gtk.Settings.get_default()
-            if (gtkSettings) gtkSettings.gtk_application_prefer_dark_theme = this.state.isDark
+            // Dark/light via setPreferDark — AdwStyleManager when AGS init'd
+            // libadwaita, plain Gtk.Settings otherwise (see helper above).
+            await setPreferDark(this.state.isDark)
         } catch (e) { }
     }
 

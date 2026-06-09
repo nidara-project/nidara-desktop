@@ -18,14 +18,15 @@ import type { Window } from "gi://Gtk?version=4.0"
 
 /**
  *  THEME STRATEGY:
- * Pure GTK4 dark/light coordination via Gtk.Settings — no libadwaita.
+ * The shell uses no Adwaita widgets, but AGS's runtime calls Adw.init() when
+ * libadwaita exists on the system — so dark/light goes through setPreferDark
+ * (AdwStyleManager if initialized, plain Gtk.Settings otherwise).
  * ThemeManager applies the persisted dark/light state right after boot;
  * this just seeds the startup default.
  */
 try {
   GLib.unsetenv("GTK_THEME")
-  const gtkSettings = Gtk.Settings.get_default()
-  if (gtkSettings) gtkSettings.gtk_application_prefer_dark_theme = true
+  void setPreferDark(true)
 } catch (e) {
   console.warn("[App] Initialization failed:", e)
 }
@@ -48,7 +49,7 @@ import { syncConstants } from "./widget/dock/DockPhysics"
 import { onDockSettingsChanged, dockSettings } from "./widget/dock/state"
 import Bar from "./widget/bar/Bar"
 import Settings from "./widget/settings/Settings"
-import Theme from "./core/ThemeManager"
+import Theme, { setPreferDark } from "./core/ThemeManager"
 import AboutWindow from "./widget/about/AboutWindow"
 import notifConfig from "./core/NotifConfig"
 import { installPowerHooks } from "./core/PowerManager"
