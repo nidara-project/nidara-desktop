@@ -4,19 +4,19 @@
 # project still assembles correctly. A green check = safe; a red check = something
 # to look at, caught BEFORE it reaches the running shell.
 #
-# Gate here:
+# Gates here:
 #   - styles: the SCSS stylesheet compiles (catches CSS syntax errors). Pure JS,
 #     no system libraries needed.
+#   - typecheck: `tsc --noEmit` over ui/ags-v3. The GI typings it needs (@girs/,
+#     ~58 MB generated, git-ignored) can't be produced on a runner — `ags types`
+#     needs the ags binary + Astal libs. Instead a maintainer publishes a ~4 MB
+#     compressed snapshot as an asset on the `ci-assets` release
+#     (scripts/dev/publish-ci-typings.sh) and this job downloads it. The repo's
+#     own types.d.ts declares the "ags/*" modules ambiently, so tsc needs no
+#     node_modules at all. If this job fails on a type that exists locally, the
+#     snapshot is stale → re-run the publish script.
 #
-# Typecheck is intentionally NOT a CI gate:
-#   `tsc --noEmit` needs the GI type definitions (the local `@girs/` dir, ~58 MB
-#   of AUTO-GENERATED typings that are .gitignored). Committing 58 MB of generated
-#   files just to type-check in CI isn't worth the repo bloat. Instead the
-#   typecheck runs locally — `npm run typecheck` (and your editor) — where @girs
-#   is present. It's green and catches real bugs; it just isn't automated on push.
-#   (To make it a CI gate later, we'd commit @girs or install the GIR libs in CI.)
-#
-# Also not here: `ags bundle` — needs the `ags` binary + GTK4 libraries.
+# Not here: `ags bundle` — needs the `ags` binary + GTK4 libraries.
 
 name: CI
 
@@ -37,3 +37,27 @@ jobs:
       - name: Compile SCSS (must succeed)
         working-directory: ui/ags-v3
         run: npx --yes sass@1.97.3 --no-charset style.scss /tmp/style.css
+
+  typecheck:
+    name: Typecheck (tsc)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Download @girs snapshot (ci-assets release)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release download ci-assets --repo "$GITHUB_REPOSITORY" \
+               --pattern girs-snapshot.tar.zst --output /tmp/girs-snapshot.tar.zst; then
+            echo "::error::No @girs snapshot found on the 'ci-assets' release."
+            echo "A maintainer must publish it once: scripts/dev/publish-ci-typings.sh"
+            exit 1
+          fi
+          tar --zstd -xf /tmp/girs-snapshot.tar.zst -C ui/ags-v3
+          echo "Extracted @girs: $(du -sh ui/ags-v3/@girs | cut -f1)"
+      - name: tsc --noEmit (must succeed)
+        working-directory: ui/ags-v3
+        run: npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json
