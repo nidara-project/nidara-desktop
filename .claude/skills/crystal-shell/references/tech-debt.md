@@ -137,12 +137,22 @@ TOP layer, always mapped). Proof on a live armed instance: with `hideForLock` un
 bar+dock, the rate persisted (~125/s — zone is the only shell surface left), and fullscreen
 AppGrid occlusion collapses it (compositor stops frame callbacks). A DPMS off/on cycle does
 NOT disarm it. **Unknown: what arms it** — fresh boots sometimes start armed, sometimes
-clean, with no identified difference. Fix directions for whoever takes this: (a) find why a
-static, empty, opacity-0 GTK window ever enters a continuous frame-clock cycle (suspect
-GTK/GSK internals around opacity-0 toplevels or a configure loop with the compositor); or
-(b) delete the hack: replace zoneWin with Hyprland-native reserved area (`addreserved`) —
-BUT that lives in monitor config, which `MonitorConfig` rewrites wholesale (see #4's
-clobber risk) and must stay per-monitor-dynamic, so it's a design change, not a patch.
+clean, with no identified difference.
+**Mitigation shipped (a6c00e8, 2026-06-09):** the zone is now invisible via scoped
+transparent CSS instead of `set_opacity(0)` — toplevel opacity composits every frame and
+was the prime spin suspect. **Status: under observation** — the trigger was never
+on-demand reproducible, so only days of the doctor's wakeup section reading 0/s can confirm
+the kill. If it arms again despite this, the remaining suspects are a GTK/GSK frame loop on
+the (still 200 px tall — gtk4-layer-shell ignores child height) empty surface, or a
+configure interaction with the compositor.
+**Plan B (design change, not a patch):** delete the zoneWin hack entirely and reserve the
+bar strip with Hyprland-native `addreserved`. Why it's not trivial: the current `hl.*` Lua
+DSL exposes no reserved-area call (check the parser), the reservation must follow monitors
+dynamically (bars are per-monitor), and monitor config is rewritten wholesale by
+`MonitorConfig` (see #4's clobber risk). The zone window exists because a LEFT+RIGHT
+anchored surface gets squished by the vertical dock's side exclusive zone, and the visible
+bar (fullscreen overlay host, `exclusive_zone=-1`) must never be — the *mechanism* is
+sound; only its GTK implementation details are in question.
 
 ### 12. Sporadic double-disconnect CRITICALs — unreproduced, capture recipe ready
 Rare bursts (≈2 in 30 h) of `GLib-GObject-CRITICAL … instance has no handler with id` (3–4
