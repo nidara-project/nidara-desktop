@@ -1,8 +1,8 @@
 import { Gtk } from "ags/gtk4"
-import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import Theme from "../../core/ThemeManager"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { pollWhileMapped } from "../common/poll"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
@@ -76,9 +76,7 @@ function makeArc(
     overlay.set_child(canvas)
     overlay.add_overlay(icon)
 
-    const sync = () => { poll(v => { if (v !== pct) { pct = v; canvas.queue_draw() } }); return true }
-    sync()
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, sync)
+    pollWhileMapped(overlay, interval, () => poll(v => { if (v !== pct) { pct = v; canvas.queue_draw() } }))
 
     return overlay
 }
@@ -161,9 +159,7 @@ function makeCCMetric(
     col.append(overlay)
     col.append(cap)
 
-    const sync = () => { poll(v => { if (v !== pct) { pct = v; value.label = `${v}`; canvas.queue_draw() } }); return true }
-    sync()
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, interval, sync)
+    pollWhileMapped(col, interval, () => poll(v => { if (v !== pct) { pct = v; value.label = `${v}`; canvas.queue_draw() } }))
     return col
 }
 

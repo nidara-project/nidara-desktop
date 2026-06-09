@@ -67,6 +67,20 @@ codeblock systemctl --user --no-pager status crystal-shell
 section "Shell live state (ags request dumpState)"
 codeblock ags request dumpState
 
+section "Idle wakeups (main thread, 4 s sample — healthy ≈ 0/s when idle)"
+{
+    SHELL_PID=$(pgrep -f "gjs -m .*/ags.js" | head -1)
+    if [ -n "${SHELL_PID:-}" ]; then
+        TS="/proc/$SHELL_PID/task/$SHELL_PID/status"
+        W1=$(awk '/voluntary/{s+=$2} END{print s}' "$TS" 2>/dev/null)
+        sleep 4
+        W2=$(awk '/voluntary/{s+=$2} END{print s}' "$TS" 2>/dev/null)
+        printf '```\n%s wakeups/s\n```\n' "$(( (W2-W1)/4 ))"
+    else
+        printf '_n/a (shell process not found)_\n'
+    fi
+}
+
 section "Recent log errors (last 40 matching lines of $LOG)"
 codeblock sh -c "grep -iE 'error|critical|warning|failed|exception' '$LOG' 2>/dev/null | tail -40"
 

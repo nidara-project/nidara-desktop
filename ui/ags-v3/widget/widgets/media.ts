@@ -223,14 +223,18 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
         syncProgress()
     }
 
+    // The 1 Hz progress tick only runs while the panel is both mapped and has a
+    // player — built-once-hidden surfaces must not keep session-long timers.
     const startTimer = () => {
-        if (progressTimer !== null) return
+        if (progressTimer !== null || !root.get_mapped()) return
         progressTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
-            if (!player) { progressTimer = null; return GLib.SOURCE_REMOVE }
+            if (!player || !root.get_mapped()) { progressTimer = null; return GLib.SOURCE_REMOVE }
             syncProgress()
             return GLib.SOURCE_CONTINUE
         })
     }
+
+    root.connect("map", () => { if (player) { syncProgress(); startTimer() } })
 
     const updatePlayer = () => {
         if (player && playerSigId !== null) { try { player.disconnect(playerSigId) } catch {} ; playerSigId = null }
