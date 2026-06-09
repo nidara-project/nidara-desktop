@@ -368,7 +368,8 @@ sudo cp "$REPO_DIR/scripts/crystal-shell-ui"  /usr/bin/crystal-shell-ui
 sudo cp "$REPO_DIR/scripts/crystal-greeter"   /usr/bin/crystal-greeter
 sudo cp "$REPO_DIR/scripts/crystal-lock"      /usr/bin/crystal-lock
 sudo cp "$REPO_DIR/scripts/crystal-game-mode" /usr/bin/crystal-game-mode
-sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-game-mode
+sudo cp "$REPO_DIR/scripts/crystal-shell-doctor" /usr/bin/crystal-shell-doctor
+sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-game-mode /usr/bin/crystal-shell-doctor
 
 # systemd user unit — the shell respawns on crash instead of leaving a bare
 # compositor (see scripts/crystal-shell.service). NOT enabled by target: it's
