@@ -106,10 +106,17 @@ once ~0.5 s after every shell boot. **It is NOT our code** — captured backtrac
 via the recipe in `dev-workflow.md`) lands in `libastal-tray.so`: `Tray.on_item_unregister`
 in Astal's `lib/tray/src/tray.vala` ignores `_items_store.find()`'s boolean and calls
 `remove(pos)` with an undefined `pos` when a tray item unregisters before its `ready`
-callback ever appended it (boot-time registration churn). Still unfixed on Astal `main`;
-no upstream issue exists. Fix is two lines (guard on `item != null` + on `find()`'s return).
-Don't chase this in shell code; it's harmless. The lazy tray-menu in `widget/bar/Tray.tsx`
-fixed a *different* (menu-parsing) instance — this one is inside the library itself.
+callback ever appended it (boot-time registration churn). Fix proposed upstream:
+**https://github.com/Aylur/astal/pull/451** (2026-06-09; verified locally — patched lib =
+0 CRITICALs across boots). Until it merges and the `ASTAL_REF` pin in `install.sh` advances
+past it, the once-per-boot CRITICAL remains expected noise. Don't chase this in shell code.
+The lazy tray-menu in `widget/bar/Tray.tsx` fixed a *different* (menu-parsing) instance —
+this one is inside the library itself.
+**Testing a patched Astal lib gotcha:** the installed typelib embeds the **absolute** `.so`
+path, so `LD_LIBRARY_PATH` alone won't load your build. Point `GI_TYPELIB_PATH` at the
+build dir's typelib — and if that one embeds a prefix you can't write to (`/usr/local/lib`),
+binary-patch a copy with a same-length `/tmp` path (python `bytes.replace`, assert equal
+lengths) and place the patched `.so` there.
 
 ### 11. Sporadic double-disconnect CRITICALs — unreproduced, capture recipe ready
 Rare bursts (≈2 in 30 h) of `GLib-GObject-CRITICAL … instance has no handler with id` (3–4
