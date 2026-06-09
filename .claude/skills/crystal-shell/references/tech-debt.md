@@ -118,24 +118,31 @@ build dir's typelib — and if that one embeds a prefix you can't write to (`/us
 binary-patch a copy with a same-length `/tmp` path (python `bytes.replace`, assert equal
 lengths) and place the patched `.so` there.
 
-### 11. Frame clock never re-idles after an overlay's first use (~137 wakeups/s)
-Measured 2026-06-09 (main-thread voluntary ctx switches, 144 Hz monitor): a **fresh boot
-idles at 0 wakeups/s** (genuinely event-driven — keep it that way), but after opening and
-closing the CC once, the main thread wakes ~137/s (≈ the monitor refresh rate) **forever**.
-More overlays can add more (a second window's clock); occluding everything with the
-fullscreen AppGrid collapses the rate (Hyprland stops frame callbacks for hidden surfaces),
-confirming these are per-window GDK frame clocks that something keeps requesting frames on.
-NC adds nothing after CC (same bar window → same clock). CPU stays ~0.2% so this is a
-**power/battery concern, not a perf one** — relevant pre-laptop. Repro:
-`systemctl --user restart crystal-shell`, measure `awk '/voluntary/{s+=$2} END{print s}'
-/proc/$PID/task/$PID/status` over a few seconds (0/s), `ags request toggleCC` twice,
-re-measure (~137/s). Next diagnostic step: GTK Inspector on a dev run, or audit for CSS
-transitions/`Gtk.Revealer`s left in a never-settled state inside the lazily-built overlay
-content (the fade itself completes — `fade.ts` one-shots are clean; `GDK_DEBUG=frames`
-prints nothing on GTK 4.22, don't bother). Related nit while auditing: the cpu-memory tile's
-`timeout_add` polls (`widget/widgets/cpu-memory.ts`) run forever once the tile is built,
-even with the CC closed — cheap (only `queue_draw`s on value change) but the clean pattern
-is pause-while-hidden.
+### 11. Sometimes the main thread wakes at ~monitor refresh (~137/s) — UNREPRODUCED Heisenbug
+Idle baseline is **0 wakeups/s** (genuinely event-driven — keep it that way; measure with
+`awk '/voluntary/{s+=$2} END{print s}' /proc/$PID/task/$PID/status` deltas, or
+`crystal-shell-doctor` which now reports it). On 2026-06-09 several instances armed to a
+permanent ~137/s (≈144 Hz refresh) during real desktop use — but an exhaustive controlled
+hunt **failed to reproduce it**: all five overlay open/closes, Settings window, AppGrid,
+dock context menus, grouped notifications + NC, workspace overview, system menu + power
+menu, MPRIS media actively playing, tooltips, smooth + coarse cursor sweeps across dock and
+bar, and the cursor parked on every interactive element — every one left 0/s.
+**Methodology trap that created a false lead:** measurements taken while the user's cursor
+sat wherever they left it (or mid-interaction) read 130–450/s and made it look like "opening
+the CC leaks" — always park the cursor in a dead zone (`hyprctl dispatch movecursor`) before
+sampling. CPU stays ~0.2% — battery concern, not perf.
+**The spinning surface IS identified: `crystal-bar-zone`** (the invisible 40 px
+exclusive-zone reservor window, `Bar.tsx` "Zone reservor" block — empty box, opacity 0,
+TOP layer, always mapped). Proof on a live armed instance: with `hideForLock` unmapping
+bar+dock, the rate persisted (~125/s — zone is the only shell surface left), and fullscreen
+AppGrid occlusion collapses it (compositor stops frame callbacks). A DPMS off/on cycle does
+NOT disarm it. **Unknown: what arms it** — fresh boots sometimes start armed, sometimes
+clean, with no identified difference. Fix directions for whoever takes this: (a) find why a
+static, empty, opacity-0 GTK window ever enters a continuous frame-clock cycle (suspect
+GTK/GSK internals around opacity-0 toplevels or a configure loop with the compositor); or
+(b) delete the hack: replace zoneWin with Hyprland-native reserved area (`addreserved`) —
+BUT that lives in monitor config, which `MonitorConfig` rewrites wholesale (see #4's
+clobber risk) and must stay per-monitor-dynamic, so it's a design change, not a patch.
 
 ### 12. Sporadic double-disconnect CRITICALs — unreproduced, capture recipe ready
 Rare bursts (≈2 in 30 h) of `GLib-GObject-CRITICAL … instance has no handler with id` (3–4
