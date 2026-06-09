@@ -94,8 +94,6 @@
 #crystal-dock,
 #crystal-bar,
 #crystal-app-launcher,
-.crystal-control-center,
-.crystal-notification-center,
 .crystal-dock-window,
 .crystal-bar-window {
   /* Deterministic type base: macOS-style 14px body. The whole ramp ($fs-*)
@@ -111,8 +109,6 @@
 #crystal-dock image,
 #crystal-bar image,
 #crystal-app-launcher image,
-.crystal-control-center image,
-.crystal-notification-center image,
 .crystal-dock-window image,
 .crystal-bar-window image {
   color: var(--crystal-text);
@@ -120,8 +116,6 @@
 #crystal-dock,
 #crystal-bar,
 #crystal-app-launcher,
-.crystal-control-center,
-.crystal-notification-center,
 .crystal-dock-window,
 .crystal-bar-window {
   /* Neutralize intrusive GTK internal nodes */
@@ -137,16 +131,6 @@
 #crystal-app-launcher outline,
 #crystal-app-launcher focus-ring,
 #crystal-app-launcher decoration,
-.crystal-control-center ripple,
-.crystal-control-center highlight,
-.crystal-control-center outline,
-.crystal-control-center focus-ring,
-.crystal-control-center decoration,
-.crystal-notification-center ripple,
-.crystal-notification-center highlight,
-.crystal-notification-center outline,
-.crystal-notification-center focus-ring,
-.crystal-notification-center decoration,
 .crystal-dock-window ripple,
 .crystal-dock-window highlight,
 .crystal-dock-window outline,
@@ -165,8 +149,6 @@
 #crystal-dock,
 #crystal-bar,
 #crystal-app-launcher,
-.crystal-control-center,
-.crystal-notification-center,
 .crystal-dock-window,
 .crystal-bar-window {
   /* Suppress GTK4 drop-target highlight border */
@@ -177,10 +159,6 @@
 #crystal-bar *:drop(active),
 #crystal-app-launcher:drop(active),
 #crystal-app-launcher *:drop(active),
-.crystal-control-center:drop(active),
-.crystal-control-center *:drop(active),
-.crystal-notification-center:drop(active),
-.crystal-notification-center *:drop(active),
 .crystal-dock-window:drop(active),
 .crystal-dock-window *:drop(active),
 .crystal-bar-window:drop(active),
@@ -192,8 +170,6 @@
 #crystal-dock,
 #crystal-bar,
 #crystal-app-launcher,
-.crystal-control-center,
-.crystal-notification-center,
 .crystal-dock-window,
 .crystal-bar-window {
   /* Suppress Adwaita decorations on scale internals */
@@ -205,12 +181,6 @@
 #crystal-app-launcher scale trough,
 #crystal-app-launcher scale highlight,
 #crystal-app-launcher scale slider,
-.crystal-control-center scale trough,
-.crystal-control-center scale highlight,
-.crystal-control-center scale slider,
-.crystal-notification-center scale trough,
-.crystal-notification-center scale highlight,
-.crystal-notification-center scale slider,
 .crystal-dock-window scale trough,
 .crystal-dock-window scale highlight,
 .crystal-dock-window scale slider,
@@ -226,8 +196,6 @@
 #crystal-dock scrollbar,
 #crystal-bar scrollbar,
 #crystal-app-launcher scrollbar,
-.crystal-control-center scrollbar,
-.crystal-notification-center scrollbar,
 .crystal-dock-window scrollbar,
 .crystal-bar-window scrollbar,
 .crystal-settings-window scrollbar {
@@ -237,8 +205,6 @@
 #crystal-dock scrollbar trough,
 #crystal-bar scrollbar trough,
 #crystal-app-launcher scrollbar trough,
-.crystal-control-center scrollbar trough,
-.crystal-notification-center scrollbar trough,
 .crystal-dock-window scrollbar trough,
 .crystal-bar-window scrollbar trough,
 .crystal-settings-window scrollbar trough {
@@ -248,8 +214,6 @@
 #crystal-dock scrollbar slider,
 #crystal-bar scrollbar slider,
 #crystal-app-launcher scrollbar slider,
-.crystal-control-center scrollbar slider,
-.crystal-notification-center scrollbar slider,
 .crystal-dock-window scrollbar slider,
 .crystal-bar-window scrollbar slider,
 .crystal-settings-window scrollbar slider {
@@ -263,8 +227,6 @@
 #crystal-dock scrollbar slider:hover,
 #crystal-bar scrollbar slider:hover,
 #crystal-app-launcher scrollbar slider:hover,
-.crystal-control-center scrollbar slider:hover,
-.crystal-notification-center scrollbar slider:hover,
 .crystal-dock-window scrollbar slider:hover,
 .crystal-bar-window scrollbar slider:hover,
 .crystal-settings-window scrollbar slider:hover {
@@ -273,8 +235,6 @@
 #crystal-dock scrollbar button,
 #crystal-bar scrollbar button,
 #crystal-app-launcher scrollbar button,
-.crystal-control-center scrollbar button,
-.crystal-notification-center scrollbar button,
 .crystal-dock-window scrollbar button,
 .crystal-bar-window scrollbar button,
 .crystal-settings-window scrollbar button {
@@ -611,38 +571,8 @@ switch:hover slider,
   box-shadow: var(--crystal-shadow-md);
 }
 
-/* --- Global Sidebar System (Tahoe Island) --- */
-.crystal-sidebar-island {
-  background: var(--crystal-surface-back);
-  border-radius: var(--crystal-radius-md);
-  border: 1px solid var(--crystal-border);
-  box-shadow: var(--crystal-shadow-md);
-  margin: 12px;
-  padding: 8px 0;
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-.crystal-sidebar-row {
-  margin: 4px 10px;
-  border-radius: var(--crystal-radius-sm);
-  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  border: 1px solid transparent;
-  padding: 6px 14px;
-  color: var(--crystal-text-dim);
-}
-.crystal-sidebar-row:hover {
-  background-color: var(--crystal-surface-back);
-  color: var(--crystal-text);
-}
-.crystal-sidebar-row:selected, .crystal-sidebar-row.active {
-  background-color: rgba(var(--crystal-accent-rgb), 0.15);
-  color: var(--crystal-accent);
-  border-color: rgba(var(--crystal-accent-rgb), 0.2);
-}
-
 /* --- Buttons (Premium Crystal) --- */
-button.crystal-btn,
-.crystal-button {
+button.crystal-btn {
   background: var(--crystal-surface);
   border: 1px solid var(--crystal-border);
   border-radius: var(--crystal-radius-sm);
@@ -650,32 +580,20 @@ button.crystal-btn,
   font-weight: 600;
   transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
-button.crystal-btn:hover,
-.crystal-button:hover {
+button.crystal-btn:hover {
   background: var(--crystal-surface-hover);
   border-color: var(--crystal-border);
 }
-button.crystal-btn:active,
-.crystal-button:active {
+button.crystal-btn:active {
   background: var(--crystal-surface-active);
 }
-button.crystal-btn.accent,
-.crystal-button.accent {
+button.crystal-btn.accent {
   background: var(--crystal-accent);
   color: var(--crystal-accent-fg);
   border: none;
 }
-button.crystal-btn.accent:hover,
-.crystal-button.accent:hover {
+button.crystal-btn.accent:hover {
   background: rgba(var(--crystal-accent-rgb), 0.85);
-}
-
-.crystal-card {
-  background: var(--crystal-surface-back);
-  border-radius: var(--crystal-radius-md);
-  border: 1px solid var(--crystal-border);
-  padding: 16px;
-  box-shadow: var(--crystal-shadow-md);
 }
 
 /* --- CrystalPopover --- */
@@ -784,16 +702,6 @@ button.crystal-seg-btn.suggested-action:hover {
 }
 button.crystal-seg-btn.suggested-action:active {
   background: rgba(var(--crystal-accent-rgb), 0.65);
-}
-
-/* --- Bar info-popover label typography --- */
-/* Used in wifi/ethernet info popovers (title + key/value pairs). */
-.bar-popover-title {
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--crystal-text-dim);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .bar-popover-key {
@@ -1032,7 +940,7 @@ button.settings-icon-btn {
   min-height: 28px;
 }
 button.settings-icon-btn:hover {
-  background: rgba(var(--crystal-accent-rgb), 0.1);
+  background: var(--crystal-accent-10);
   color: var(--crystal-accent);
   background-image: none;
 }
@@ -1128,68 +1036,6 @@ window.crystal-dock-window decoration, window.crystal-dock-window > box,
   transition: none;
 }
 
-/* --- Squircle Icon Plates --- */
-#crystal-dock box.cd-squircle-plate {
-  background-color: white;
-  border-radius: var(--crystal-radius-squircle);
-  min-width: 32px;
-  min-height: 32px;
-  margin: 0;
-  padding: 0;
-  opacity: 1;
-  box-shadow: none;
-  border: none;
-}
-
-/* V411: KILL ALL RIPPLES INSIDE PLATE */
-window#crystal-dock box.cd-squircle-plate > ripple,
-window#crystal-dock box.cd-squircle-plate > highlight,
-window#crystal-dock box.cd-squircle-plate > focus-ring,
-window#crystal-dock box.cd-squircle-plate > outline,
-window#crystal-dock box.cd-squircle-plate:focus > ripple,
-window#crystal-dock box.cd-squircle-plate:hover > ripple,
-window#crystal-dock box.cd-squircle-plate:active > ripple {
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-  opacity: 0;
-}
-
-window#crystal-dock box.cd-squircle-plate image,
-window#crystal-dock box.cd-squircle-plate widget,
-window#crystal-dock box.cd-squircle-plate drawingarea {
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-  -gtk-icon-shadow: none;
-}
-
-window#crystal-dock box.cd-squircle-plate.show-bg {
-  background-color: var(--crystal-dock-surface-raised);
-  /* Explicit hover state */
-  box-shadow: var(--crystal-shadow-md);
-  /* Optional: add explicit shadow on hover */
-}
-
-/* Removed ineffective specificity fixes */
-/* --- Indicators (Dots) --- */
-#crystal-dock .cd-dot {
-  min-width: 5px;
-  min-height: 5px;
-  border-radius: 9999px;
-  background-color: var(--crystal-text);
-  border: none;
-  box-shadow: none;
-  outline: none;
-  padding: 0;
-}
-
 /* --- Separator - macOS Tahoe: dark hairline --- */
 #crystal-dock .cd-separator {
   min-width: 1px;
@@ -1200,8 +1046,7 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
 }
 
 /* --- Hover Shadow Killer --- */
-#crystal-dock .cd-item:hover,
-#crystal-dock .cd-squircle-plate:hover {
+#crystal-dock .cd-item:hover {
   box-shadow: none;
   -gtk-icon-shadow: none;
 }
@@ -1215,42 +1060,6 @@ window#crystal-dock box.cd-squircle-plate.show-bg {
 /* ── Vertical Dock ───────────────────────────────────────────────────────── */
 window#crystal-dock-vertical {
   background: transparent;
-}
-
-.dock-v-pill {
-  background-color: var(--crystal-surface-back);
-  border: 1px solid var(--crystal-border);
-  border-radius: 24px;
-  padding: 8px 0;
-  box-shadow: var(--crystal-shadow-lg);
-  min-width: 0;
-}
-
-.dock-v-list {
-  padding: 4px 0;
-}
-
-button.dock-v-icon {
-  background: transparent;
-  border: none;
-  border-radius: 14px;
-  padding: 0;
-  transition: background 150ms ease;
-}
-button.dock-v-icon:hover {
-  background-color: var(--crystal-surface);
-}
-button.dock-v-icon image {
-  -gtk-icon-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
-}
-
-.dock-ctx-item {
-  border-radius: 8px;
-  padding: 6px 16px;
-  min-width: 160px;
-}
-.dock-ctx-item:hover {
-  background-color: var(--crystal-surface);
 }
 
 .dock-menu {
@@ -1280,7 +1089,6 @@ button.dock-v-icon image {
 /* --- Focus Kill --- */
 /* Focus reset for bar items only */
 .bar-capsule,
-.bar-ws-btn,
 .bar-tray-btn {
   outline-width: 0;
   outline-color: transparent;
@@ -1302,6 +1110,13 @@ button.dock-v-icon image {
   background: transparent;
   padding: 0;
   margin: 0;
+}
+
+/* The invisible exclusive-zone reservor (see Bar.tsx "Zone reservor"). Transparent
+   via CSS, NOT gtk_widget_set_opacity(0) — toplevel opacity goes through the
+   compositing pipeline and is the suspect for tech-debt #11's frame-clock spin. */
+window#crystal-bar-zone {
+  background: transparent;
 }
 
 /* --- Centerbox --- */
@@ -1345,8 +1160,7 @@ button.dock-v-icon image {
 .bar-left button,
 .bar-center button,
 .bar-right button,
-.bar-tray-btn,
-.bar-ws-btn {
+.bar-tray-btn {
   background: none;
   background-color: transparent;
   background-image: none;
@@ -1357,14 +1171,6 @@ button.dock-v-icon image {
   margin: 0;
   min-width: 0;
   min-height: 0;
-}
-
-/* --- Workspace Dots (Stitch Style) --- */
-.bar-workspaces {
-  background: none;
-  background-color: transparent;
-  border: none;
-  padding: 0 4px;
 }
 
 .workspace-dot {
@@ -1392,27 +1198,12 @@ button.dock-v-icon image {
   background-color: var(--crystal-surface-hover);
 }
 
-/* --- Resource Circles (Cairo) --- */
-.resource-circle {
-  min-width: 24px;
-  min-height: 24px;
-}
-
-.resource-canvas {
-  /* Background circle logic handled in Cairo, but we can set opacity here */
-}
-
-.resource-label,
+/* --- Resource ring icon (bar cpu-memory arcs) --- */
 .resource-icon {
   font-size: 11px;
   font-weight: 700;
   color: var(--crystal-text);
   margin-bottom: 0px;
-}
-
-.bar-time,
-.bar-app-name {
-  /* Inherited from universal rule above */
 }
 
 /* Ensure all symbolic icons in the bar use adaptive text color */
@@ -1424,34 +1215,9 @@ button.dock-v-icon image {
 }
 
 /* Specific styling for the Control Center pill icon */
-.bar-app-menu-pill image,
-.bar-ws-pill image,
 .bar-right image {
   opacity: 1;
   /* Full opacity for better contrast */
-}
-
-.bar-app-sep,
-.bar-time-sep {
-  background: var(--crystal-text-disabled);
-  /* Adaptive separators */
-  min-width: 1px;
-  margin: 0 4px;
-  box-shadow: var(--crystal-shadow-sm);
-}
-
-/* --- Spotlight Pill Refinement --- */
-.spotlight-pill {
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-}
-.spotlight-pill image {
-  padding: 0;
-  margin: 0;
 }
 
 .overlay-catcher {
@@ -1638,7 +1404,7 @@ button.dock-v-icon image {
   font-weight: 500;
 }
 .bar-expansion-panel button.flat:hover {
-  background: rgba(var(--crystal-accent-rgb), 0.1);
+  background: var(--crystal-accent-10);
 }
 .bar-expansion-panel button.flat:active {
   background: rgba(var(--crystal-accent-rgb), 0.18);
@@ -1680,13 +1446,7 @@ button.dock-v-icon image {
    never receives keyboard focus and is mouse/touch-only by design. Adding
    :focus-visible rules here would be dead code. See [[project_design_tokens_macos]]. */
 /* --- Component Transparency --- */
-window.notification-center-win,
-window.notif-win,
-window.atomic-island-win,
-window.control-center-win,
-window.nc-window-0,
-window.nc-window-1,
-window.nc-window-2 {
+window.notif-win {
   background: none;
   background-color: transparent;
   background-image: none;
@@ -1694,19 +1454,7 @@ window.nc-window-2 {
   box-shadow: none;
   outline: none;
 }
-window.notification-center-win decoration, window.notification-center-win contents,
-window.notif-win decoration,
-window.notif-win contents,
-window.atomic-island-win decoration,
-window.atomic-island-win contents,
-window.control-center-win decoration,
-window.control-center-win contents,
-window.nc-window-0 decoration,
-window.nc-window-0 contents,
-window.nc-window-1 decoration,
-window.nc-window-1 contents,
-window.nc-window-2 decoration,
-window.nc-window-2 contents {
+window.notif-win decoration, window.notif-win contents {
   background: none;
   background-color: transparent;
   background-image: none;
@@ -1837,10 +1585,6 @@ window.nc-window-2 contents {
   background-color: rgba(var(--crystal-accent-rgb), 0.25);
 }
 
-.vpn-btn-active {
-  background-color: rgba(var(--crystal-accent-rgb), 0.08);
-}
-
 .rec-active-bg {
   background-color: rgba(var(--crystal-danger-rgb), 0.25);
   animation: rec-pulse-cc 1.4s ease-in-out infinite;
@@ -1860,10 +1604,6 @@ window.nc-window-2 contents {
   font-variant-numeric: tabular-nums;
 }
 
-.rec-btn-active {
-  background-color: rgba(var(--crystal-danger-rgb), 0.08);
-}
-
 @keyframes rec-pulse-cc {
   0%, 100% {
     opacity: 1;
@@ -1872,24 +1612,6 @@ window.nc-window-2 contents {
     opacity: 0.5;
   }
 }
-.cc-atomic-focus-btn {
-  background-color: var(--crystal-surface);
-  border-radius: 12px;
-  color: var(--crystal-text);
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
-}
-.cc-atomic-focus-btn:hover {
-  background-color: var(--crystal-surface-hover);
-  box-shadow: inset 0 0 0 1px var(--crystal-border);
-}
-.cc-atomic-focus-btn:active {
-  background-color: var(--crystal-surface-active);
-  box-shadow: inset 0 0 0 1px var(--crystal-border);
-}
-.cc-atomic-focus-btn:selected, .cc-atomic-focus-btn.is-selected {
-  background-color: var(--crystal-state-selected);
-}
-
 /* --- Edit Mode Controls --- */
 .cc-edit-pill label {
   font-size: 13px;
@@ -1954,52 +1676,8 @@ window.nc-window-2 contents {
   border-color: rgba(var(--crystal-danger-rgb), 0.6);
 }
 
-.cc-resize-btn {
-  background: rgba(0, 0, 0, 0.45);
-  border: none;
-  border-radius: var(--crystal-radius-pill);
-  color: rgba(255, 255, 255, 0.85);
-  padding: 2px 8px;
-  font-size: 12px;
-  font-weight: 600;
-}
-.cc-resize-btn:hover {
-  background: rgba(0, 0, 0, 0.65);
-}
-
-.cc-picker-row {
-  background: transparent;
-}
-
-.cc-add-chip {
-  background: var(--crystal-surface);
-  border: 1px solid var(--crystal-border);
-  border-radius: var(--crystal-radius-pill);
-  color: var(--crystal-text-dim);
-  padding: 4px 10px;
-  font-size: 12px;
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
-}
-.cc-add-chip:hover {
-  background-color: var(--crystal-surface-hover);
-  box-shadow: inset 0 0 0 1px var(--crystal-border);
-}
-.cc-add-chip:active {
-  background-color: var(--crystal-surface-active);
-  box-shadow: inset 0 0 0 1px var(--crystal-border);
-}
-.cc-add-chip:selected, .cc-add-chip.is-selected {
-  background-color: var(--crystal-state-selected);
-}
-.cc-add-chip:hover {
-  color: var(--crystal-text);
-}
-
-.cc-picker-empty {
-  font-size: 12px;
-  color: var(--crystal-text-disabled);
-}
-
+/* (.cc-resize-btn deleted — dead CSS from the pre-context-menu resize approach;
+   tile resizing lives in CCContextMenu.tsx since the 3-tier menu landed.) */
 /* --- Notifications: Steel Symmetry --- */
 .nc-capsule-item {
   min-height: 80px;
@@ -2016,22 +1694,6 @@ window.nc-window-2 contents {
   /* The ghost strip's height is already accounted for; claw back just a little so the
      gap to the next notification stays comfortable for both 1- and 2-layer stacks. */
   margin-bottom: -2px;
-}
-
-.nc-capsule-glass {
-  background-color: var(--crystal-surface);
-  border: 1px solid var(--crystal-border);
-  border-radius: var(--crystal-radius-lg);
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-.nc-capsule-glass:hover {
-  background-color: var(--crystal-surface-hover);
-  border-color: var(--crystal-border);
-}
-
-.notif-card {
-  background: transparent;
-  margin-bottom: 8px;
 }
 
 .nc-badge-header {
@@ -2158,12 +1820,6 @@ window.nc-window-2 contents {
 }
 .nc-action-btn:active {
   background: var(--crystal-accent-30);
-}
-
-.notif-app-icon,
-.nc-group-icon,
-.notif-item-icon {
-  -gtk-icon-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 /* --- NC Global Layout --- */
@@ -2358,7 +2014,7 @@ window.nc-window-2 contents {
   font-weight: 500;
 }
 .cc-detail-panel button.flat:hover {
-  background: rgba(var(--crystal-accent-rgb), 0.1);
+  background: var(--crystal-accent-10);
 }
 .cc-detail-panel button.flat:active {
   background: rgba(var(--crystal-accent-rgb), 0.18);
@@ -2381,7 +2037,7 @@ window.nc-window-2 contents {
   min-height: 28px;
 }
 .cc-detail-panel button.settings-icon-btn:hover {
-  background: rgba(var(--crystal-accent-rgb), 0.1);
+  background: var(--crystal-accent-10);
   color: var(--crystal-accent);
 }
 .cc-detail-panel button.settings-icon-btn:active {
@@ -2447,55 +2103,17 @@ window.nc-window-2 contents {
   min-height: 1px;
 }
 
-.cc-detail-close-btn {
-  background: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  padding: 4px;
-  border-radius: var(--crystal-radius-pill);
-  min-width: 24px;
-  min-height: 24px;
-  transition: background-color 0.15s ease, box-shadow 0.15s ease;
-}
-.cc-detail-close-btn:hover {
-  background-color: var(--crystal-surface-hover);
-  box-shadow: inset 0 0 0 1px var(--crystal-border);
-}
-.cc-detail-close-btn:active {
-  background-color: var(--crystal-surface-active);
-  box-shadow: inset 0 0 0 1px var(--crystal-border);
-}
-.cc-detail-close-btn:selected, .cc-detail-close-btn.is-selected {
-  background-color: var(--crystal-state-selected);
-}
-
-/* --- CC Tile Cover (invisible intercept for detail-strip tiles) --- */
-.cc-tile-cover {
-  opacity: 0;
-  background: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-}
-
 /* ==========================================================================
    APP GRID — Launchpad Style
    ========================================================================== */
 /* ── Window ── */
-window#crystal-app-launcher,
-.app-grid-window {
+window#crystal-app-launcher {
   background: none;
   background-color: transparent;
   background-image: none;
   border: none;
   box-shadow: none;
   outline: none;
-}
-
-/* ── Background overlay (click to close) ── */
-.app-grid-background {
-  background: transparent;
 }
 
 /* ── Search bar ── */
@@ -2631,12 +2249,12 @@ window#crystal-app-launcher,
   box-shadow: inset 0 0 0 1px var(--crystal-border);
 }
 .ws-strip-item.active {
-  background: alpha(@accent_bg_color, 0.07);
-  border-color: alpha(@accent_bg_color, 0.55);
+  background: rgba(var(--crystal-accent-rgb), 0.07);
+  border-color: rgba(var(--crystal-accent-rgb), 0.55);
 }
 .ws-strip-item.keyboard-focus {
-  background: alpha(@accent_bg_color, 0.15);
-  border-color: @accent_bg_color;
+  background: rgba(var(--crystal-accent-rgb), 0.15);
+  border-color: var(--crystal-accent);
 }
 
 .ws-strip-label {
@@ -2646,7 +2264,7 @@ window#crystal-app-launcher,
   min-width: 110px;
 }
 .ws-strip-label.active {
-  color: @accent_bg_color;
+  color: var(--crystal-accent);
 }
 
 /* ── No results ── */
@@ -2664,16 +2282,6 @@ window#crystal-app-launcher,
 /* ==========================================================================
    WORKSPACE COCKPIT
    ========================================================================== */
-/* --- Window --- */
-window.workspace-cockpit {
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-}
-
 .cockpit-window-content {
   background: transparent;
   opacity: 0;
@@ -2681,25 +2289,6 @@ window.workspace-cockpit {
 }
 .cockpit-window-content.overview-open {
   opacity: 1;
-}
-
-/* --- Search Bar --- */
-.cockpit-search-box {
-  margin-bottom: 20px;
-}
-
-.cockpit-search {
-  background: var(--crystal-surface-back);
-  border: 1px solid var(--crystal-border);
-  border-radius: 14px;
-  padding: 10px 20px;
-  color: var(--crystal-text);
-  font-size: 15px;
-  transition: background-color 0.2s ease, border-color 0.2s ease;
-}
-.cockpit-search:focus {
-  background: var(--crystal-surface);
-  border-color: var(--crystal-surface-raised);
 }
 
 /* --- Overview Panel --- */
@@ -2737,7 +2326,7 @@ window.workspace-cockpit {
   transition: color 0.2s ease;
 }
 .wo-label.active {
-  color: @accent_bg_color;
+  color: var(--crystal-accent);
 }
 
 .wo-count {
@@ -2752,23 +2341,11 @@ window.workspace-cockpit {
 }
 
 .wo-item.active {
-  background-color: alpha(@accent_bg_color, 0.05);
-  border: 1px solid alpha(@accent_bg_color, 0.6);
+  background-color: rgba(var(--crystal-accent-rgb), 0.05);
+  border: 1px solid rgba(var(--crystal-accent-rgb), 0.6);
 }
 
-.bar-ws-dot {
-  background-color: var(--crystal-surface-raised);
-  border-radius: 999px;
-  transition: background-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.bar-ws-dot.active {
-  background-color: @accent_bg_color;
-  box-shadow: 0 0 10px alpha(@accent_bg_color, 0.5);
-}
-.bar-ws-dot.occupied {
-  background-color: var(--crystal-text-dim);
-}
-
+/* (.bar-ws-dot deleted — orphaned; the live bar dots are .workspace-dot in _bar.scss) */
 /* --- Buttons --- */
 .wo-btn {
   background: none;
@@ -2790,8 +2367,8 @@ window.workspace-cockpit {
   border-color: var(--crystal-surface-hover);
 }
 .wo-btn:hover .wo-item.active {
-  background-color: alpha(@accent_bg_color, 0.08);
-  border-color: alpha(@accent_bg_color, 0.8);
+  background-color: rgba(var(--crystal-accent-rgb), 0.08);
+  border-color: rgba(var(--crystal-accent-rgb), 0.8);
 }
 
 /* ==========================================================================
@@ -3138,20 +2715,6 @@ button.launcher-icon-btn:hover:not(.selected) {
   letter-spacing: -0.5px;
 }
 
-.tz-status {
-  font-size: 0.93em;
-  font-weight: 500;
-  transition: color 0.2s ease;
-}
-
-.tz-status-ok {
-  color: var(--crystal-success);
-}
-
-.tz-status-err {
-  color: var(--crystal-danger);
-}
-
 window.crystal-settings-window button:focus-visible {
   outline: 2px solid var(--crystal-accent);
   outline-offset: 2px;
@@ -3345,31 +2908,6 @@ window.crystal-alert-dialog > box {
 }
 .crystal-alert-buttons button.crystal-alert-btn + button.crystal-alert-btn {
   border-left: 1px solid var(--crystal-border);
-}
-
-window.prism-window {
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-}
-window.prism-window decoration, window.prism-window contents {
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-}
-
-.prism-window-root {
-  background-color: transparent;
-}
-
-.prism-container {
-  background-color: transparent;
 }
 
 .prism-box {
