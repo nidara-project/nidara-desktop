@@ -90,10 +90,17 @@ that noise, so a regression can sit unnoticed (it did: typecheck silently went 0
 sessions). **If you see "has no exported member" on GI types, you're missing `@girs/` — regenerate
 before trusting any typecheck result.**
 
-**i18n key types come from `en`, not `es`.** `t()` is typed `key: keyof typeof en` (canonical
-English-first source); `es`/future locales may lag and fall back at runtime (`es → en → key`). Add
-new strings to `en.ts`; don't expect a missing `es` entry to be a type error. (It used to derive from
-`es`, which broke the typecheck on every English-first key added — fixed in `core/i18n/index.ts`.)
+**i18n: add every string to BOTH `en.ts` AND `es.ts`, with a real Spanish translation.**
+English and Spanish are both first-class working languages, kept in sync by hand at all times —
+the maintainer runs the shell in Spanish, so an `en`-only key shows stray English (runtime
+fallback is `es → en → key`). Doing es alongside en also validates the wording immediately.
+*Other* locales (fr, pt, de…) are the only ones deferred to a single bulk pass at publication —
+don't hand-translate them mid-development.
+
+Type-wise, `t()` is typed `key: keyof typeof en` (`en` is the canonical key source), so a missing
+`es` entry is **not** a type error — that's a safety net for the bulk-translated locales, not a
+licence to skip es. (It used to derive from `es`, which broke the typecheck on every new key —
+fixed in `core/i18n/index.ts`.)
 
 ### Testing Wi-Fi without a Wi-Fi adapter
 
