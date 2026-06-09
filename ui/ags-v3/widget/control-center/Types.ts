@@ -27,4 +27,8 @@ export interface AtomicWidget {
     buildBarExpanded?: (onClose: () => void) => Gtk.Widget  // bar inline expansion panel
     buildCCDetail?: (onClose: () => void) => Gtk.Widget     // CC full-panel detail (no inner scroll)
     ccDetailRows?: number                                   // squircle height in grid rows (default 2)
+    // Per-widget settings page. When present, the Settings → Widgets card shows a
+    // "Configure" row that pushes this as a subpage. Keep the widget's own options
+    // co-located with the widget (the "mini-app" contract). Omit if it has none.
+    buildSettings?: () => Gtk.Widget
 }

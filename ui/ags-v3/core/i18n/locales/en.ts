@@ -495,6 +495,9 @@ export default {
     // Widgets
     "settings.widgets.opt.bar": "Bar",
     "settings.widgets.opt.center": "Center",
+    "settings.widgets.show-in-bar": "Show in the bar",
+    "settings.widgets.show-in-cc": "Show in the Control Center",
+    "settings.widgets.configure": "Configure",
     "settings.widgets.reorder-note": "To reorder widgets in the Control Center, use the panel's Edit mode.",
     "settings.widgets.subtitle": "Choose where each widget appears: in the Bar, in the Control Center, or both",
     "settings.widgets.title": "Widgets",
