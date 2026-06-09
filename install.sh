@@ -369,7 +369,8 @@ sudo cp "$REPO_DIR/scripts/crystal-greeter"   /usr/bin/crystal-greeter
 sudo cp "$REPO_DIR/scripts/crystal-lock"      /usr/bin/crystal-lock
 sudo cp "$REPO_DIR/scripts/crystal-game-mode" /usr/bin/crystal-game-mode
 sudo cp "$REPO_DIR/scripts/crystal-shell-doctor" /usr/bin/crystal-shell-doctor
-sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-game-mode /usr/bin/crystal-shell-doctor
+sudo cp "$REPO_DIR/scripts/crystal-portal"    /usr/bin/crystal-portal
+sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-game-mode /usr/bin/crystal-shell-doctor /usr/bin/crystal-portal
 
 # systemd user unit — the shell respawns on crash instead of leaving a bare
 # compositor (see scripts/crystal-shell.service). NOT enabled by target: it's
@@ -395,12 +396,34 @@ sudo cp "$REPO_DIR/config/applications/"*.desktop /usr/share/applications/
 sudo update-desktop-database /usr/share/applications/ 2>/dev/null || true
 
 # XDG portals
-sudo mkdir -p /usr/share/xdg-desktop-portal/portals
-cat <<'EOF' | sudo tee /usr/share/xdg-desktop-portal/portals/crystal-shell.conf > /dev/null
+# - crystal.portal declares Crystal's own Settings backend (crystal-portal
+#   daemon, D-Bus-activated): serves org.freedesktop.appearance accent-color so
+#   libadwaita/GNOME apps follow the Crystal accent under Hyprland. The Settings
+#   portal AGGREGATES backends (verified in x-d-p 1.20 src/settings.c): crystal
+#   serves only accent-color; gtk keeps serving color-scheme/contrast.
+# - Config goes in /etc/xdg-desktop-portal/hyprland-portals.conf (matched via
+#   XDG_CURRENT_DESKTOP=Hyprland; /etc outranks /usr/share, and the /usr/share
+#   one is OWNED BY THE HYPRLAND PACKAGE — never overwrite it). NOTE: the
+#   portals/ subdir is for .portal files ONLY — a .conf there is dead (we
+#   shipped one there by mistake once; remove it on upgrade).
+sudo mkdir -p /usr/share/xdg-desktop-portal/portals /usr/share/dbus-1/services /etc/xdg-desktop-portal
+sudo rm -f /usr/share/xdg-desktop-portal/portals/crystal-shell.conf  # misplaced legacy
+cat <<'EOF' | sudo tee /usr/share/xdg-desktop-portal/portals/crystal.portal > /dev/null
+[portal]
+DBusName=org.freedesktop.impl.portal.desktop.crystal
+Interfaces=org.freedesktop.impl.portal.Settings
+EOF
+cat <<'EOF' | sudo tee /usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.crystal.service > /dev/null
+[D-BUS Service]
+Name=org.freedesktop.impl.portal.desktop.crystal
+Exec=/usr/bin/crystal-portal
+EOF
+cat <<'EOF' | sudo tee /etc/xdg-desktop-portal/hyprland-portals.conf > /dev/null
 [preferred]
-default=gtk
+default=hyprland;gtk
 org.freedesktop.impl.portal.ScreenCast=hyprland
 org.freedesktop.impl.portal.Screenshot=hyprland
+org.freedesktop.impl.portal.Settings=crystal;gtk
 EOF
 
 # ─────────────────────────────────────────────────────────────────────────────

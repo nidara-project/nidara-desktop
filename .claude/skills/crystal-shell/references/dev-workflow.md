@@ -104,6 +104,22 @@ harmless warning — see tech-debt #9 — so prefer fatal-criticals.) Astal's Va
 cross-referencing a frame: `https://raw.githubusercontent.com/Aylur/astal/<ASTAL_REF from
 install.sh>/lib/<lib>/src/…`.
 
+**`crystal-portal`** (installed to `/usr/bin`, D-Bus-activated as
+`org.freedesktop.impl.portal.desktop.crystal`) is Crystal's xdg-desktop-portal **Settings
+backend**: it serves exactly one key — `org.freedesktop.appearance accent-color` as the
+`(ddd)` RGB of the Crystal accent — so libadwaita/GNOME apps (Calendar, nautilus) follow
+the accent under Hyprland (they read the PORTAL, never gsettings; no per-key fallback).
+Everything else returns NotFound so the frontend falls through to the gtk backend
+(color-scheme/contrast): the Settings portal AGGREGATES backends (verified in x-d-p 1.20
+`src/settings.c` — `org.freedesktop.impl.portal.Settings=crystal;gtk` in
+`/etc/xdg-desktop-portal/hyprland-portals.conf`; NEVER edit the `/usr/share` one, it's
+owned by the hyprland package). Live updates: the daemon watches gsettings
+`accent-color` (which ThemeManager keeps in sync) and emits `SettingChanged`. Its accent
+table is a deliberate copy of `ui/lib/accent.ts` `ACCENT_HEX` — keep them in sync.
+Testing gotcha: `XDG_DESKTOP_PORTAL_DIR` redirects BOTH `.portal` discovery AND
+`portals.conf` lookup; GJS gotcha: a bare `v` out-arg needs the `*Async` + manual
+`invocation.return_value` pattern (auto-marshalling hangs the reply).
+
 **`crystal-shell-doctor`** (installed to `/usr/bin`) prints a Markdown diagnostic report:
 versions, hardware, `hyprctl monitors`, systemd unit state, `ags request dumpState`, recent
 log errors. Run it FIRST when debugging a user's install, and attach its output as evidence
