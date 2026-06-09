@@ -50,7 +50,7 @@ Three pillars by responsibility:
   - `bar/`, `dock/`, `control-center/`, `app-grid/`, `overview/`, `prism/`
   - `settings/` (+ `settings/pages/`, 18 pages), `about/`
   - `widgets/` — atomic CC widgets
-  - `common/` — shared: `SquircleContainer`, `DrawingUtils`, `PillSlider`, `ManagedWindow`, `CrystalPopover`, `WorkspaceSchematic`, `fade.ts`
+  - `common/` — shared: `SquircleContainer`, `DrawingUtils`, `Slider.ts` (the ONE Cairo slider — no `Gtk.Scale`, no PillSlider), `ManagedWindow`, `CrystalPopover`, `WorkspaceSchematic`, `fade.ts`, `poll.ts` (`pollWhileMapped` — ANY recurring widget poll must gate on map/unmap: built-once-hidden surfaces like CC tiles must not keep session-long timers; idle baseline is 0 wakeups/s and we keep it that way)
 
 Other top-level dirs: `ui/lib/crystal-ui/` (pure-GTK4 primitives lib — see end of file) and the greeter/lockscreen bundles.
 
