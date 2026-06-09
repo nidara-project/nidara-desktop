@@ -1823,6 +1823,16 @@ window.nc-window-2 contents {
   color: var(--crystal-text-dim);
 }
 
+/* 1×2 capsule slider (volume/brightness): % overlaid on top, icon at the bottom.
+   Both sit over the track/fill, so a soft shadow keeps them legible either way. */
+.slider-fill-value {
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--crystal-text);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
 .vpn-active-bg {
   background-color: rgba(var(--crystal-accent-rgb), 0.25);
 }

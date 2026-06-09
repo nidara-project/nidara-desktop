@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import AstalWp from "gi://AstalWp"
-import { makeHSlider, makeSlider } from "../common/Slider"
+import { makeHSlider, makeVerticalFillTile } from "../common/Slider"
 import { AtomicWidget, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -50,38 +50,13 @@ function buildVerticalSlider(
     onChange: (v: number) => void,
     onExtChange: (cb: (v: number) => void) => (() => void),
 ): Gtk.Widget {
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 6,
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.FILL,
-        vexpand: true,
-        margin_top: 10, margin_bottom: 10,
-    })
-
-    const icon = new Gtk.Image({ gicon: iconName, pixel_size: 18, halign: Gtk.Align.CENTER, css_classes: ["cs-icon"] })
-
-    const valueLabel = new Gtk.Label({
-        label: `${Math.round(getValue())}%`,
-        css_classes: ["slider-value-label"],
-        halign: Gtk.Align.CENTER,
-        width_chars: 5,
-    })
-
-    const slider = makeSlider({
-        orientation: "vertical",
-        thumb: false,            // macOS-style wide capsule, fill rises, no thumb
-        trackH: 36,
+    // Capsule-filling vertical slider: fill rises edge-to-edge, % overlaid on top,
+    // icon at the bottom (shared with brightness).
+    return makeVerticalFillTile(iconName, {
         value: getValue(),
         onChange: (v) => onChange(v / 100),
-        onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%` },
         onExtChange: (cb) => onExtChange((v) => cb(Math.round(v * 100))),
     })
-
-    box.append(icon)
-    box.append(slider)
-    box.append(valueLabel)
-
-    return box
 }
 
 // Small (1×1) variant: round mute-toggle icon, mirroring the bar icon.

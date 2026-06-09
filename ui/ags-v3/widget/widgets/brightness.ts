@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
-import { makeHSlider, makeSlider } from "../common/Slider"
+import { makeHSlider, makeVerticalFillTile } from "../common/Slider"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -52,28 +52,15 @@ function buildBrightnessIcon(): Gtk.Widget {
     })
 }
 
-// Medium (1×2): native vertical scale.
+// Medium (1×2): capsule-filling vertical slider (fill rises edge-to-edge, % on top,
+// sun icon at the bottom — shared layout with volume via makeVerticalFillTile).
 function buildVertical(): Gtk.Widget {
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 6,
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.FILL,
-        vexpand: true,
-        margin_top: 10, margin_bottom: 10,
-    })
-
-    const valueLabel = new Gtk.Label({ label: `${_cachedPct}%`, css_classes: ["slider-value-label"], halign: Gtk.Align.CENTER, width_chars: 5 })
-
     // Brightness has no change signal — poll every 2s. Skip polling briefly after a
     // user change so the in-flight brightnessctl result doesn't snap the slider back.
     let ignoreUntil = 0
-    const slider = makeSlider({
-        orientation: "vertical",
-        thumb: false,            // macOS-style wide capsule, fill rises, no thumb
-        trackH: 36,
+    return makeVerticalFillTile(Icons.sun, {
         value: _cachedPct,
         onChange: (v) => { ignoreUntil = GLib.get_monotonic_time() + 800_000; setBrightness(v) },
-        onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%` },
         onExtChange: (cb) => {
             fetchBrightness().then(v => cb(v))   // initial
             const id = GLib.timeout_add(GLib.PRIORITY_LOW, 2000, () => {
@@ -84,11 +71,6 @@ function buildVertical(): Gtk.Widget {
             return () => { try { GLib.source_remove(id) } catch {} }
         },
     })
-
-    box.append(new Gtk.Image({ gicon: Icons.sun, pixel_size: 18, halign: Gtk.Align.CENTER, css_classes: ["cs-icon"] }))
-    box.append(slider)
-    box.append(valueLabel)
-    return box
 }
 
 // Large (4×1): horizontal slider.

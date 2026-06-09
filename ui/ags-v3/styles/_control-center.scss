@@ -134,6 +134,16 @@ window.nc-window-2 {
     color: var(--crystal-text-dim);
 }
 
+/* 1×2 capsule slider (volume/brightness): % overlaid on top, icon at the bottom.
+   Both sit over the track/fill, so a soft shadow keeps them legible either way. */
+.slider-fill-value {
+    font-size: $fs-small;
+    font-weight: $fw-bold;
+    font-variant-numeric: tabular-nums;
+    color: var(--crystal-text);
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
 // VPN widget active state
 .vpn-active-bg {
     background-color: rgba(var(--crystal-accent-rgb), 0.25);

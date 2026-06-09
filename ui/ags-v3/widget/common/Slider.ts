@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
+import Gio from "gi://Gio"
 
 // Palette tokens are CSS variables; for Cairo we read the accent from ThemeManager
 import Theme from "../../core/ThemeManager"
@@ -49,6 +50,9 @@ export interface SliderOpts {
     orientation?: SliderOrientation
     /** Draw the circular thumb (default true). false = bar/fill only. */
     thumb?: boolean
+    /** Draw the track background behind the fill (default true). false = fill only,
+     *  letting the host widget's own background show through the unfilled part. */
+    track?: boolean
     onChange: (v: number) => void
     onValueChanged?: (v: number) => void   // every change (for label sync)
     onExtChange?: (cb: (v: number) => void) => (() => void)
@@ -75,6 +79,7 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
     const { min = 0, max = 100, value, onChange, onExtChange, debounce = 0, commitOnRelease = false } = opts
     const horiz = (opts.orientation ?? "horizontal") !== "vertical"
     const thumb = opts.thumb ?? true
+    const drawTrack = opts.track ?? true
     const trackH = opts.trackH ?? TRACK_H
     const thumbR = opts.thumbR ?? THUMB_R
     const step = opts.step ?? (max - min) / 20
@@ -122,10 +127,12 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
         if (trk <= 0) return
         const tMain = fracToMain(frac)
 
-        // Track
-        const base = Theme.isDark ? 1 : 0
-        cr.setSourceRGBA(base, base, base, Theme.isDark ? 0.18 : 0.14)
-        capsuleMain(cr, pad, L - pad, cc, trackH, horiz); cr.fill()
+        // Track (skipped when track:false — the host widget's background shows through)
+        if (drawTrack) {
+            const base = Theme.isDark ? 1 : 0
+            cr.setSourceRGBA(base, base, base, Theme.isDark ? 0.18 : 0.14)
+            capsuleMain(cr, pad, L - pad, cc, trackH, horiz); cr.fill()
+        }
 
         // Fill (accent)
         const [ar, ag, ab] = PALETTE[Theme.accentColor] ?? PALETTE.blue
@@ -258,6 +265,46 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
     opts.onValueChanged?.(valueOf())
 
     return da
+}
+
+/**
+ * makeVerticalFillTile — the 1×2 (TALL) CC slider tile. The slider fills the whole
+ * capsule (fill rises from the bottom); the percentage is overlaid at the top and the
+ * icon at the bottom. Shared by volume + brightness. The host (BaseIsland TALL) draws
+ * the CAPSULE with no padding, so `trackH` is sized to nearly span the cell width.
+ */
+export function makeVerticalFillTile(icon: Gio.FileIcon, opts: SliderOpts): Gtk.Widget {
+    const valueLabel = new Gtk.Label({
+        css_classes: ["slider-fill-value"],
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.START, margin_top: 12,
+    })
+    valueLabel.set_can_target(false)
+
+    const iconImg = new Gtk.Image({
+        gicon: icon, pixel_size: 18, css_classes: ["cs-icon", "slider-fill-icon"],
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.END, margin_bottom: 14,
+    })
+    iconImg.set_can_target(false)
+
+    const slider = makeSlider({
+        ...opts,
+        orientation: "vertical",
+        thumb: false,
+        track: false,            // no dark track — the tile's glass shows through
+
+        // Inner width of the 1×2 cell: UNIT(80) − 2× BaseIsland's TALL padding(4).
+        // Keep in sync with BaseIsland so the fill sits flush inside the border.
+        trackH: opts.trackH ?? 72,
+        onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%`; opts.onValueChanged?.(v) },
+    })
+    slider.hexpand = true
+    slider.vexpand = true
+
+    const overlay = new Gtk.Overlay({ hexpand: true, vexpand: true })
+    overlay.set_child(slider)
+    overlay.add_overlay(valueLabel)
+    overlay.add_overlay(iconImg)
+    return overlay
 }
 
 /** Horizontal convenience wrapper (back-compat: width_request → length). */

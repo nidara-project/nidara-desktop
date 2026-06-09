@@ -43,6 +43,11 @@ export default function BaseIsland({
         // 🔒 2x1: CAPSULAS PERFECTAS (Semicircles)
         shape = Shape.CAPSULE
         radius = height / 2
+    } else if (size === WidgetSize.TALL) {
+        // 1x2: vertical capsule — the slider fills it edge-to-edge (CAPSULE auto-
+        // computes radius = min(w,h)/2, so the pill is rounded on the short axis).
+        shape = Shape.CAPSULE
+        radius = width / 2
     } else if (size === WidgetSize.FULL_WIDTH) {
         // 4x1: Sync with Dock profile
         shape = Shape.DOCK_PILL
@@ -83,7 +88,11 @@ export default function BaseIsland({
         shape,
         css_classes: ["cc-island", `cc-${name}-island`],
         inset: 2.0,
-        padding: 12
+        // TALL slider tiles fill the capsule flush against the INSIDE of the drawn Cairo
+        // border. The border occupies ~2.75–4.25px in (glass fill at inset 2 + a 1.5px
+        // stroke inset a further 1.5), so padding 4 lands the fill right at the border's
+        // inner edge — no gap, no covering. trackH = inner width (UNIT − 2·4); keep synced.
+        padding: size === WidgetSize.TALL ? 4 : 12
     })
 
     island.set_size_request(width, height)
