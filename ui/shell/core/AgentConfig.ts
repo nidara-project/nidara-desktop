@@ -10,10 +10,12 @@ const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/ai.json`
 
 interface AgentSettings {
     allowConfigWrite: boolean // agents may change settings via setConfig, default true
+    allowScreenshot: boolean  // agents may capture the screen via the screenshot IPC, default true
 }
 
 const DEFAULTS: AgentSettings = {
     allowConfigWrite: true,
+    allowScreenshot: true,
 }
 
 let _settings: AgentSettings = { ...DEFAULTS }
@@ -39,9 +41,16 @@ const _listeners = new Set<() => void>()
 
 export const agentConfig = {
     get allowConfigWrite() { return _settings.allowConfigWrite },
+    get allowScreenshot() { return _settings.allowScreenshot },
 
     setAllowConfigWrite(val: boolean) {
         _settings.allowConfigWrite = val
+        save()
+        _listeners.forEach(fn => fn())
+    },
+
+    setAllowScreenshot(val: boolean) {
+        _settings.allowScreenshot = val
         save()
         _listeners.forEach(fn => fn())
     },

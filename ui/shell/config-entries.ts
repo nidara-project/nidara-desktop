@@ -118,4 +118,10 @@ export function registerConfigEntries() {
         writable: false,
         get: () => agentConfig.allowConfigWrite,
     })
+    registerConfig("ai.allowScreenshot", {
+        desc: "Whether agents may capture the screen via the screenshot IPC. Toggle it in Settings → AI.",
+        type: "boolean",
+        writable: false,
+        get: () => agentConfig.allowScreenshot,
+    })
 }

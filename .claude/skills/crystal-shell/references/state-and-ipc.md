@@ -66,8 +66,14 @@ Current commands (run `listActions` for the live list): `toggleCC|toggleControlC
 `toggleNC|toggleNotificationCenter`, `togglePrism|toggleSpotlight`, `toggleAppGrid`,
 `toggleSettings`, `settingsPage <pageId>`, `toggleOverview`, `toggleGameOverlay`,
 `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`, `setConfig <key> <value>`,
-`listActions`, `dumpState`. Aliases are intentional — Hyprland keybinds were renamed at one
-point and old names are kept for compatibility. `dumpState` also reports the **effective**
+`screenshot [path]`, `listActions`, `dumpState`. Aliases are intentional — Hyprland keybinds
+were renamed at one point and old names are kept for compatibility.
+
+`screenshot [path]` captures the focused monitor with grim and returns the PNG path
+(default `/tmp/crystal-shell-shot-<ts>.png`) — the visual-verification leg of the agent
+loop: open a surface (`toggleCC`, `settingsPage X`), wait ~1.5 s, `screenshot`, read the
+image. Gated by Settings → AI (`allowScreenshot`), separately from config writes —
+capturing the screen is privacy-sensitive. `dumpState` also reports the **effective**
 Hyprland config (gaps/rounding/border via `getoption` — includes `hyprland-user.lua`
 overrides) and the AI-governance flags.
 

@@ -10,6 +10,7 @@ import status from "./core/Status"
 import shellActions from "./core/ShellActions"
 import { currentLocale } from "./core/i18n"
 import { readFile } from "ags/file"
+import { exec } from "ags/process"
 import agentConfig from "./core/AgentConfig"
 import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue } from "./core/ConfigRegistry"
 import { registerConfigEntries } from "./config-entries"
@@ -134,6 +135,22 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       return setConfigValue(args[0], args.slice(1).join(" "))
     },
   },
+  screenshot: {
+    desc: "Capture the focused monitor to a PNG and return its path (`screenshot [path]`) — agent visual verification; gated by Settings → AI",
+    run: args => {
+      if (!agentConfig.allowScreenshot)
+        return "screenshots are disabled — enable them in Settings → AI (or ai.json)"
+      const path = args[0] || `/tmp/crystal-shell-shot-${Date.now()}.png`
+      try {
+        const mon = hyprlandState.focusedMonitor?.name
+        exec(mon ? ["grim", "-o", mon, path] : ["grim", path])
+        return path
+      } catch (e) {
+        console.error("[IPC] screenshot failed:", e)
+        return `screenshot failed: ${e}`
+      }
+    },
+  },
   listActions: {
     desc: "Describe every IPC command as JSON (machine-readable: this output)",
     run: () => {
@@ -165,6 +182,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
           },
           ai: {
             allowConfigWrite: agentConfig.allowConfigWrite,
+            allowScreenshot: agentConfig.allowScreenshot,
           },
           overlays: {
             controlCenter: status.cc_open,

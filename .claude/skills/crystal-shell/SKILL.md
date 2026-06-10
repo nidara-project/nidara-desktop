@@ -70,6 +70,7 @@ ags request listActions                  # discover the shell's IPC surface (JSO
 ags request dumpState                    # live shell state as JSON (overlays, version, effective Hyprland config…)
 ags request describeConfig               # agent-facing settings: schema + current values (JSON)
 ags request setConfig <key> <value>      # change a setting officially (validated; gated by Settings → AI)
+ags request screenshot [path]            # capture the focused monitor → PNG path (visual verification; gated)
 crystal-shell-doctor                     # Markdown diagnostic report (bug/PR evidence)
 ```
 

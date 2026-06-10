@@ -19,6 +19,14 @@ export default function AiPage() {
         (apply) => agentConfig.onChange(() => apply(agentConfig.allowConfigWrite)),
     ))
 
+    accessGroup.listBox.append(toggleRow(
+        t("settings.ai.allow-screenshot"),
+        t("settings.ai.allow-screenshot.desc"),
+        agentConfig.allowScreenshot,
+        (v) => agentConfig.setAllowScreenshot(v),
+        (apply) => agentConfig.onChange(() => apply(agentConfig.allowScreenshot)),
+    ))
+
     page.append(accessGroup.box)
 
     const surfaceGroup = listGroup(t("settings.ai.group.surface"))
