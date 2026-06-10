@@ -14,16 +14,23 @@ export default function BluetoothPage() {
 
     const bt = BT.bt()
 
-    if (!bt || !bt.adapter) {
-        const banner = new Gtk.Label({
-            label: t("settings.bluetooth.error.no-adapter"),
-            css_classes: ["settings-placeholder"],
-            margin_top: 24,
-            halign: Gtk.Align.CENTER,
-        })
-        page.append(banner)
-        return page
-    }
+    // Settings builds every page once and caches it for the window's lifetime, so
+    // adapter presence cannot be a build-time check: bluetoothd may stop or a USB
+    // adapter may be plugged in afterwards. Both the no-adapter banner and the
+    // real content are always built; applyAdapter() (bottom) switches between
+    // them live via watchAdapter.
+    const banner = new Gtk.Label({
+        label: t("settings.bluetooth.error.no-adapter"),
+        css_classes: ["settings-placeholder"],
+        margin_top: 24,
+        halign: Gtk.Align.CENTER,
+    })
+    page.append(banner)
+
+    if (!bt) return page   // singleton missing entirely — nothing to watch
+
+    const content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 24 })
+    page.append(content)
 
     // ── Pairing agent ─────────────────────────────────────────────────────────
     // While this page exists, Crystal Shell is the BlueZ pairing agent: passkey
@@ -92,7 +99,7 @@ export default function BluetoothPage() {
             }
         })
 
-    BT.registerPairingAgent({ prompt: promptDialog, cancel: closeActiveDialog })
+    // (The pairing agent registers in applyAdapter() — only while an adapter exists.)
 
     // ── Power toggle ─────────────────────────────────────────────────────────
     const powerGroup = listGroup(t("settings.bluetooth.title"))
@@ -118,11 +125,11 @@ export default function BluetoothPage() {
         t("settings.bluetooth.enable.desc"),
         powerSwitch,
     ))
-    page.append(powerGroup.box)
+    content.append(powerGroup.box)
 
     // ── Paired devices ────────────────────────────────────────────────────────
     const devicesGroup = listGroup(t("settings.bluetooth.group.paired"))
-    page.append(devicesGroup.box)
+    content.append(devicesGroup.box)
 
     // ── Scan ─────────────────────────────────────────────────────────────────
     const scanGroup = listGroup(t("settings.bluetooth.group.search"))
@@ -165,11 +172,11 @@ export default function BluetoothPage() {
         t("settings.bluetooth.scan.desc"),
         scanBox,
     ))
-    page.append(scanGroup.box)
+    content.append(scanGroup.box)
 
     // ── Nearby devices list ───────────────────────────────────────────────────
     const nearbyGroup = listGroup(t("settings.bluetooth.group.detected"))
-    page.append(nearbyGroup.box)
+    content.append(nearbyGroup.box)
 
     // ── Device list builder ───────────────────────────────────────────────────
     const rebuildList = (
@@ -296,15 +303,37 @@ export default function BluetoothPage() {
     }
 
     const disposePower = BT.watchPower(() => { syncPower(); applyPowered() })
+
+    // ── Adapter presence ──────────────────────────────────────────────────────
+    // Banner ↔ content switch. The pairing agent only lives while an adapter
+    // exists: registering against a stopped bluetoothd would just log errors
+    // (and D-Bus-activate it as a side effect).
+    const applyAdapter = () => {
+        const has = BT.hasAdapter(bt)
+        banner.visible = !has
+        content.visible = has
+        if (has) {
+            BT.registerPairingAgent({ prompt: promptDialog, cancel: closeActiveDialog })
+            syncPower()
+            refreshLists()
+            applyPowered()
+        } else {
+            stopScan()
+            closeActiveDialog()
+            BT.unregisterPairingAgent()
+        }
+    }
+    const disposeAdapter = BT.watchAdapter(applyAdapter)
+
     page.connect("unrealize", () => {
         disposeDevices()
         disposePower()
+        disposeAdapter()
         closeActiveDialog()
         BT.unregisterPairingAgent()
     })
 
-    refreshLists()
-    applyPowered()
+    applyAdapter()
 
     return page
 }

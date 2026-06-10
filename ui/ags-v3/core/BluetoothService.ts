@@ -116,6 +116,17 @@ export function watchPower(cb: () => void): Dispose {
     return () => { try { b.disconnect(id) } catch {} }
 }
 
+// Fires when adapter presence may have changed (bluetoothd start/stop, USB dongle
+// hotplug). NOTE: `adapter` is a derived getter (first of `adapters`) and never
+// notifies on its own — Astal only emits notify::adapters — so watch that and
+// re-read hasAdapter() in the callback.
+export function watchAdapter(cb: () => void): Dispose {
+    const b = bt() as any
+    if (!b) return () => {}
+    const id = b.connect("notify::adapters", cb)
+    return () => { try { b.disconnect(id) } catch {} }
+}
+
 // Fires when the device set changes AND when any existing device's pairing /
 // connection / name changes. `notify::devices` alone only covers add/remove — it
 // does NOT fire when a device's `paired`/`connected` flips, so a freshly-paired
