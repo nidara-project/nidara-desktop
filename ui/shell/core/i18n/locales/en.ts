@@ -354,6 +354,8 @@ export default {
     "settings.ai.allow-config-write.desc": "Local agents and scripts can modify shell settings through the official interface. Reading state is always available.",
     "settings.ai.allow-screenshot": "Allow Agents to Capture the Screen",
     "settings.ai.allow-screenshot.desc": "Lets agents take a screenshot to visually verify their changes (`ags request screenshot`)",
+    "settings.ai.allow-mcp": "Enable MCP Server",
+    "settings.ai.allow-mcp.desc": "Lets `crystal-shell-mcp` serve shell tools (actions, settings, state, screenshots, diagnostics) to MCP clients like Claude Code. Takes effect immediately.",
     "settings.ai.group.surface": "Agent Interface",
     "settings.ai.exposed-settings": "Exposed Settings",
     "settings.ai.exposed-settings.desc": "Settings agents can discover and change — run `ags request describeConfig` to list them",

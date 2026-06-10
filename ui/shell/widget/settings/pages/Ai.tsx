@@ -27,6 +27,14 @@ export default function AiPage() {
         (apply) => agentConfig.onChange(() => apply(agentConfig.allowScreenshot)),
     ))
 
+    accessGroup.listBox.append(toggleRow(
+        t("settings.ai.allow-mcp"),
+        t("settings.ai.allow-mcp.desc"),
+        agentConfig.allowMcp,
+        (v) => agentConfig.setAllowMcp(v),
+        (apply) => agentConfig.onChange(() => apply(agentConfig.allowMcp)),
+    ))
+
     page.append(accessGroup.box)
 
     const surfaceGroup = listGroup(t("settings.ai.group.surface"))

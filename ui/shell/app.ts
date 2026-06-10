@@ -183,6 +183,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
           ai: {
             allowConfigWrite: agentConfig.allowConfigWrite,
             allowScreenshot: agentConfig.allowScreenshot,
+            allowMcp: agentConfig.allowMcp,
           },
           overlays: {
             controlCenter: status.cc_open,

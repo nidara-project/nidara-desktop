@@ -105,6 +105,27 @@ Rules:
   and delegate `set` to the owning service's setter. That's ALL it takes to appear in
   `describeConfig`.
 
+### The MCP server: `crystal-shell-mcp`
+
+The whole surface above is also served over MCP by `bin/crystal-shell-mcp` (installed to
+`/usr/bin`), a standalone GJS script — same no-Node pattern as `crystal-portal` — speaking
+MCP over stdio. The repo's `.mcp.json` registers it, so an agent working in this repo gets
+the tools automatically; users register it in their client with
+`{"mcpServers": {"crystal-shell": {"command": "crystal-shell-mcp"}}}`.
+
+It is a **thin adapter with no logic of its own**: every tool shells out to `ags request`
+(or `crystal-shell-doctor`), so the `IPC_COMMANDS` table stays the single source of truth —
+a new IPC command is reachable through the `run_action` tool with zero MCP changes. Tools:
+`list_actions`, `run_action(name, args)`, `dump_state`, `describe_config`, `get_config`,
+`set_config`, `screenshot` (returns the PNG **inline as MCP image content** — the client
+sees it without a separate read), `doctor`.
+
+Governance: `ai.json.allowMcp` (Settings → AI → "Enable MCP Server") is re-read on **every**
+tool call, so the toggle applies live with no restarts; when off, every tool refuses with a
+pointer to the page. The finer gates (`allowConfigWrite`, `allowScreenshot`) are enforced
+downstream by the shell itself — never duplicate them in the MCP layer. Like the rest of
+`ai.*`, `allowMcp` is visible via `describeConfig` but not writable via `setConfig`.
+
 ### Adding a new IPC command
 
 1. Add the action to the typed `core/ShellActions` registry.

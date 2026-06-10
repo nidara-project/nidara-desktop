@@ -72,6 +72,7 @@ ags request describeConfig               # agent-facing settings: schema + curre
 ags request setConfig <key> <value>      # change a setting officially (validated; gated by Settings → AI)
 ags request screenshot [path]            # capture the focused monitor → PNG path (visual verification; gated)
 crystal-shell-doctor                     # Markdown diagnostic report (bug/PR evidence)
+crystal-shell-mcp                        # all of the above as MCP tools over stdio (repo .mcp.json registers it)
 ```
 
 CI gates SCSS compile **and** typecheck. The typecheck job downloads a compressed `@girs/`

@@ -11,11 +11,13 @@ const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/ai.json`
 interface AgentSettings {
     allowConfigWrite: boolean // agents may change settings via setConfig, default true
     allowScreenshot: boolean  // agents may capture the screen via the screenshot IPC, default true
+    allowMcp: boolean         // crystal-shell-mcp serves tools to MCP clients, default true
 }
 
 const DEFAULTS: AgentSettings = {
     allowConfigWrite: true,
     allowScreenshot: true,
+    allowMcp: true,
 }
 
 let _settings: AgentSettings = { ...DEFAULTS }
@@ -42,6 +44,7 @@ const _listeners = new Set<() => void>()
 export const agentConfig = {
     get allowConfigWrite() { return _settings.allowConfigWrite },
     get allowScreenshot() { return _settings.allowScreenshot },
+    get allowMcp() { return _settings.allowMcp },
 
     setAllowConfigWrite(val: boolean) {
         _settings.allowConfigWrite = val
@@ -51,6 +54,14 @@ export const agentConfig = {
 
     setAllowScreenshot(val: boolean) {
         _settings.allowScreenshot = val
+        save()
+        _listeners.forEach(fn => fn())
+    },
+
+    // Read live by the standalone crystal-shell-mcp process (it re-reads
+    // ai.json on every tool call), so flipping this needs no restarts.
+    setAllowMcp(val: boolean) {
+        _settings.allowMcp = val
         save()
         _listeners.forEach(fn => fn())
     },

@@ -124,4 +124,10 @@ export function registerConfigEntries() {
         writable: false,
         get: () => agentConfig.allowScreenshot,
     })
+    registerConfig("ai.allowMcp", {
+        desc: "Whether crystal-shell-mcp serves tools to MCP clients. Toggle it in Settings → AI.",
+        type: "boolean",
+        writable: false,
+        get: () => agentConfig.allowMcp,
+    })
 }

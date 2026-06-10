@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "crystal-shell": {
+      "command": "./bin/crystal-shell-mcp"
+    }
+  }
+}

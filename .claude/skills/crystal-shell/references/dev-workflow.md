@@ -125,6 +125,12 @@ versions, hardware, `hyprctl monitors`, systemd unit state, `ags request dumpSta
 log errors. Run it FIRST when debugging a user's install, and attach its output as evidence
 on bug reports and hardware/compat PRs.
 
+**`crystal-shell-mcp`** (installed to `/usr/bin`; registered for this repo via `.mcp.json`)
+serves the agent surface — IPC actions, config, state, screenshots (inline images), doctor —
+as MCP tools over stdio. Plain GJS, no Node/npm at runtime; a thin adapter over
+`ags request`, so it needs no changes when IPC commands are added. Details and governance
+(`ai.json.allowMcp`, live-read per call) in `references/state-and-ipc.md`.
+
 **Regenerating `@girs/` (and the trap it sets).** `@girs/` is git-ignored, so a fresh clone / a new
 environment has none. Regenerate with `cd ui/shell && ags types -d .` (offline — reads the system
 `.gir` files; ~208 `.d.ts`; do **not** pass `-u`, which would rewrite the committed `tsconfig`).
