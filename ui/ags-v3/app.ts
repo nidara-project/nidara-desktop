@@ -68,7 +68,7 @@ interface ShellWindow {
 // requestHandler and main() share this object directly (no globalThis needed for IPC).
 // Widget code (Dock, Bar, AppGrid) uses core/ShellActions — a shared typed registry
 // populated here after main() runs, avoiding circular imports with app.ts.
-const ipc: Record<string, (() => void) | undefined> = {}
+const ipc: Record<string, ((...args: string[]) => string | void) | undefined> = {}
 
 // Declarative IPC surface — the single source of truth for `ags request`.
 // `listActions` introspects this table, so adding a command here is ALL it takes
@@ -77,7 +77,7 @@ const ipc: Record<string, (() => void) | undefined> = {}
 interface IpcCommand {
   desc: string
   aliases?: string[]
-  run: () => string | void
+  run: (args: string[]) => string | void
 }
 
 const IPC_COMMANDS: Record<string, IpcCommand> = {
@@ -98,6 +98,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
   },
   toggleAppGrid: { desc: "Toggle the fullscreen app grid", run: () => ipc.toggleAppGrid?.() },
   toggleSettings: { desc: "Show/hide the Settings window", run: () => ipc.toggleSettings?.() },
+  settingsPage: {
+    desc: "Open the Settings window on a specific page (e.g. `settingsPage bluetooth`)",
+    run: args => ipc.openSettingsPage?.(args[0] ?? ""),
+  },
   toggleOverview: { desc: "Toggle the workspaces overview", run: () => ipc.toggleOverview?.() },
   toggleGameOverlay: {
     desc: "Toggle game mode (bar promoted above fullscreen surfaces)",
@@ -277,6 +281,16 @@ app.start({
           try { s.present() } catch (e) { console.error(e) }
       })
     }
+    const openSettingsPage = (id: string): string => {
+      if (!id) return "usage: settingsPage <pageId> (e.g. bluetooth, network, appearance)"
+      if (settingsWindows.length === 0) toggleSettings()   // lazy-create + present
+      else settingsWindows.forEach(s => { try { s.present() } catch (e) { console.error(e) } })
+      let found = false
+      settingsWindows.forEach(s => {
+        if ((s as any).navigateToPage?.(id)) found = true
+      })
+      return found ? "ok" : `unknown page: ${id}`
+    }
     const toggleOverview = () => {
       status.toggleOverview()
     }
@@ -314,6 +328,7 @@ app.start({
     // Register IPC handlers (used by requestHandler)
     ipc.toggleAppGrid = toggleAppGrid
     ipc.toggleSettings = toggleSettings
+    ipc.openSettingsPage = openSettingsPage as (...args: string[]) => string
     ipc.toggleOverview = toggleOverview
     ipc.toggleGameOverlay = toggleGameOverlay
     ipc.lockScreen = lockScreen
@@ -322,6 +337,7 @@ app.start({
     // Typed shared registry used by Dock, DockItem, Bar, AppGrid widgets
     shellActions.toggleAppGrid = toggleAppGrid
     shellActions.toggleSettings = toggleSettings
+    shellActions.openSettingsPage = openSettingsPage
     shellActions.toggleOverview = toggleOverview
     shellActions.toggleGameOverlay = toggleGameOverlay
     shellActions.lockScreen = lockScreen
@@ -336,6 +352,6 @@ app.start({
       console.warn(`[Handler] Unknown command: ${cmd}`)
       return res("unknown command — try `ags request listActions`")
     }
-    res(entry.run() ?? "ok")
+    res(entry.run(argv.slice(1)) ?? "ok")
   }
 })

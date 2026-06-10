@@ -429,6 +429,14 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     ;(win as any).toggle = cw.toggle
 
+    // Drive navigation from outside (`ags request settingsPage <id>`) — lets
+    // scripts and agents open a specific page without synthesizing clicks.
+    ;(win as any).navigateToPage = (id: string): boolean => {
+        if (!pageCache.has(id)) return false
+        navigateTo(id)
+        return true
+    }
+
     // Default page — seeds history. Appearance is the chosen landing (not the
     // sidebar's first item), falling back to the first category if it's ever gone.
     const defaultPage = categories.find(c => c.id === "appearance")?.id ?? categories[0]?.id

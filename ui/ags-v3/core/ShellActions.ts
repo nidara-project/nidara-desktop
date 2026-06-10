@@ -10,6 +10,8 @@
 export interface ShellActionsMap {
   toggleAppGrid?: () => void
   toggleSettings?: () => void
+  /** Open the Settings window directly on a page id (e.g. "bluetooth"). */
+  openSettingsPage?: (id: string) => string
   toggleOverview?: () => void
   toggleGameOverlay?: () => void
   lockScreen?: () => void

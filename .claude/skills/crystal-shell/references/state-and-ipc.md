@@ -64,9 +64,14 @@ read source to discover it:
 
 Current commands (run `listActions` for the live list): `toggleCC|toggleControlCenter`,
 `toggleNC|toggleNotificationCenter`, `togglePrism|toggleSpotlight`, `toggleAppGrid`,
-`toggleSettings`, `toggleOverview`, `toggleGameOverlay`, `hideForLock`, `showAfterLock`,
-`listActions`, `dumpState`. Aliases are intentional — Hyprland keybinds were renamed at one
-point and old names are kept for compatibility.
+`toggleSettings`, `settingsPage <pageId>`, `toggleOverview`, `toggleGameOverlay`,
+`hideForLock`, `showAfterLock`, `listActions`, `dumpState`. Aliases are intentional —
+Hyprland keybinds were renamed at one point and old names are kept for compatibility.
+
+Commands receive arguments: `requestHandler` passes `argv.slice(1)` to the handler
+(`run(args)`). `ags request settingsPage bluetooth` opens the Settings window directly on
+that page (sidebar category ids; returns `unknown page: <id>` for bad ids) — the agent-
+friendly way to reach a Settings page without synthesizing clicks.
 
 ### Adding a new IPC command
 
