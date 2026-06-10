@@ -204,8 +204,18 @@ The bluez5 template has **two quirks the script works around**, plus one hard li
   reverts to disconnected** (the store was never updated) and reconnecting can stick —
   `stop && start` the mock to reset.
 - **Pairing is "just works" only** — the template's `Pair` never calls back into a
-  registered `Agent1`, so the passkey/PIN flow can't be exercised with this mock (see the
-  pairing-agent gap in `tech-debt.md`).
+  registered `Agent1`, so the passkey/PIN dialogs (the shell's pairing agent in
+  `BluetoothService`) can't be exercised with this mock. Test those by calling the agent
+  directly as root (`sudo busctl` recipe in `architecture.md`) or with real hardware.
+- **`RegisterAgent` errors `AlreadyExists: Another agent is already registered`** after the
+  first shell (re)load — the mock remembers the first registration forever and never cleans
+  up on disconnect (real BlueZ tracks the sender and auto-unregisters). Benign, but it means
+  agent registration can only be observed on the first load after `start`.
+- **The mock outlives dev sessions.** It's a root daemon; nothing stops it when you move on,
+  and every BT (and battery — `fake-battery.sh` mocks UPower the same way) symptom you debug
+  afterwards is the mock's, not the real stack's. When BT/battery behaves oddly, FIRST check
+  who owns the name: `busctl --system status org.bluez` (a `python3 -m dbusmock` PID = mock
+  still up → `sudo scripts/dev/fake-bluetooth.sh stop`).
 
 This setup surfaced a real latent bug, fixed in `BluetoothService.setPowered`:
 `AstalBluetooth.Bluetooth.is_powered` is **read-only** (writing it throws "not writable"),

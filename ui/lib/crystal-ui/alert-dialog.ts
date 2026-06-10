@@ -41,14 +41,17 @@ export function showCrystalAlert(opts: {
     const { parent, heading, body, responses, onResponse, countdown, entry } = opts
 
     // ── Window ────────────────────────────────────────────────────────────────
+    // transient_for is set post-construction: GJS rejects `undefined` in the
+    // initializer, and parentless dialogs (e.g. pairing prompts with Settings
+    // hidden) are legitimate.
     const dialog = new Gtk.Window({
-        transient_for: parent ?? undefined,
         modal: true,
         resizable: false,
         decorated: false,
         default_width: 360,
         css_classes: ["crystal-alert-dialog"],
     })
+    if (parent) dialog.transient_for = parent
 
     // ── Layout ────────────────────────────────────────────────────────────────
     const root = new Gtk.Box({
