@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import widgetConfig from "../../../core/WidgetConfig"
 import ccLayout from "../../control-center/CCLayoutManager"
-import registry from "../../widgets/index"
+import registry, { widgetAvailable } from "../../widgets/index"
 import { AtomicWidget } from "../../control-center/Types"
 import { pageBox, listGroup, createRow, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
@@ -43,30 +43,36 @@ export default function WidgetsPage(nav: SettingsNav): Gtk.Widget {
 
     for (const w of registry.all()) {
         const placement = widgetConfig.get(w.id)
+        // Hardware gate: card stays visible (so the user sees WHY it's off) but
+        // both toggles render off + disabled with a hint. Placement config is
+        // untouched — the saved state comes back with the hardware.
+        const available = widgetAvailable(w)
+        const noHw = t("settings.widgets.tooltip.no-hardware")
         const { box, listBox } = listGroup("")
 
         // Identity header (icon + name) — prepended ABOVE the listBox so it doesn't
         // pick up a clickable row's hover/press state (it isn't interactive).
         const header = new Gtk.Box({ spacing: 10, margin_start: 10, margin_bottom: 2, valign: Gtk.Align.CENTER })
-        header.append(new Gtk.Image({ gicon: w.icon ?? Icons.app, pixel_size: 18, css_classes: ["cs-icon"] }))
-        header.append(new Gtk.Label({ label: w.name, css_classes: ["crystal-row-title"], halign: Gtk.Align.START }))
+        header.append(new Gtk.Image({ gicon: w.icon ?? Icons.app, pixel_size: 18, css_classes: ["cs-icon"], opacity: available ? 1 : 0.5 }))
+        header.append(new Gtk.Label({ label: w.name, css_classes: ["crystal-row-title"], halign: Gtk.Align.START, opacity: available ? 1 : 0.5 }))
         box.prepend(header)
 
         // Bar toggle — only for widgets that can actually render in the bar.
         if (w.locations?.includes("bar") && w.buildBarContent != null) {
             listBox.append(switchRow(
-                t("settings.widgets.show-in-bar"), placement.bar, true, "",
+                t("settings.widgets.show-in-bar"), available && placement.bar, available,
+                available ? "" : noHw,
                 (v) => widgetConfig.setBar(w.id, v),
             ))
         }
 
-        // Control Center toggle — disabled (with a tooltip) when the grid is full
-        // and the widget isn't already in it.
+        // Control Center toggle — disabled (with a tooltip) when the hardware is
+        // missing, or when the grid is full and the widget isn't already in it.
         if (w.locations?.includes("cc")) {
             const ccFits = placement.cc || ccLayout.canAdd(w.id)
             listBox.append(switchRow(
-                t("settings.widgets.show-in-cc"), placement.cc, ccFits,
-                ccFits ? "" : t("settings.widgets.tooltip.no-space"),
+                t("settings.widgets.show-in-cc"), available && placement.cc, available && ccFits,
+                !available ? noHw : ccFits ? "" : t("settings.widgets.tooltip.no-space"),
                 (v) => {
                     widgetConfig.setCC(w.id, v)
                     if (v) ccLayout.add(w.id)
@@ -75,7 +81,7 @@ export default function WidgetsPage(nav: SettingsNav): Gtk.Widget {
             ))
         }
 
-        if (w.buildSettings) listBox.append(configureRow(nav, w))
+        if (w.buildSettings && available) listBox.append(configureRow(nav, w))
 
         page.append(box)
     }

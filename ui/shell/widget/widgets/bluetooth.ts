@@ -19,6 +19,8 @@ const btWidget: AtomicWidget = {
     name: t("widget.bluetooth.name"),
     icon: Icons.bluetooth,
     locations: ["bar", "cc"],
+    isAvailable: () => BT.hasAdapter(),
+    watchAvailable: (cb) => { BT.watchAdapter(cb) },
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent: (size) => {

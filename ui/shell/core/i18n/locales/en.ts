@@ -304,6 +304,7 @@ export default {
 
     // Control Center
     "settings.widgets.tooltip.no-space": "Not enough space — remove a widget first",
+    "settings.widgets.tooltip.no-hardware": "No compatible hardware detected on this device",
 
     // Display
     "settings.display.error.no-monitors": "No monitors detected.",

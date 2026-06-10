@@ -31,4 +31,13 @@ export interface AtomicWidget {
     // "Configure" row that pushes this as a subpage. Keep the widget's own options
     // co-located with the widget (the "mini-app" contract). Omit if it has none.
     buildSettings?: () => Gtk.Widget
+    // Hardware gate. When it returns false the widget does not exist for the user:
+    // hidden from the bar and the CC, disabled (with a hint) in Settings → Widgets.
+    // Omit for widgets with no hardware dependency (= always available). User
+    // placement config is NOT touched by availability, so the widget comes back
+    // when the hardware does.
+    isAvailable?: () => boolean
+    // Optional companion: invoke cb whenever availability may have changed (e.g.
+    // BT adapter plugged/removed). Subscriptions are shell-lifetime — no dispose.
+    watchAvailable?: (cb: () => void) => void
 }

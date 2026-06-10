@@ -6,7 +6,7 @@ import ccLayout, { UNIT, GAP, GRID_COLS, GRID_ROWS, GRID_WIDTH, GRID_HEIGHT, SIZ
 import { AtomicWidget } from "./Types"
 import status from "../../core/Status"
 import widgetConfig from "../../core/WidgetConfig"
-import registry from "../widgets/index"
+import registry, { widgetAvailable, watchWidgetAvailability } from "../widgets/index"
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
 import SquircleContainer, { Shape } from "../common/SquircleContainer"
@@ -395,7 +395,7 @@ export default function IslandGrid() {
     // Accent dashed slot showing exactly where the dragged tile will land. It rides
     // the same tween as the tiles (registered under a sentinel key) so it glides into
     // the opening gap instead of snapping ahead of the parting tiles.
-    const GHOST_KEY = " drop-ghost"
+    const GHOST_KEY = "\u0000drop-ghost"
     let dropGhost: Gtk.Widget | null = null
     const removeGhost = () => {
         if (dropGhost) { try { fixed.remove(dropGhost) } catch {} ; dropGhost = null }
@@ -553,17 +553,21 @@ export default function IslandGrid() {
     editBtn.add_controller(gestureClick)
     ccLayout.connect("changed", () => rebuild())
 
-    // Sync CC layout with widget placement config
+    // Sync CC layout with widget placement config. Hardware gate at the layout
+    // level (not render) so the grid stays coherent: no invisible tiles blocking
+    // cells in edit mode. widgetConfig (the user's intent) is never mutated —
+    // when the hardware returns, the widget is re-added on the next sync.
     const syncCCLayout = () => {
         const activeInCC = new Set(ccLayout.activeIds())
         for (const w of registry.ccCapable()) {
-            const inCC = widgetConfig.get(w.id).cc
+            const inCC = widgetConfig.get(w.id).cc && widgetAvailable(w)
             if (inCC && !activeInCC.has(w.id)) ccLayout.add(w.id)
             else if (!inCC && activeInCC.has(w.id)) ccLayout.remove(w.id)
         }
     }
     syncCCLayout()  // initial pass — catches widgets enabled before WIDGET_META had their entry
     widgetConfig.connect("changed", syncCCLayout)
+    watchWidgetAvailability(syncCCLayout)
 
     // Reset edit mode + detail strip when CC is closed
     status.connect("notify::cc-open", () => {

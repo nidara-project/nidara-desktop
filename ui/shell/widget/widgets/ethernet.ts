@@ -87,6 +87,8 @@ const ethernetWidget: AtomicWidget = {
     name: t("cc.ethernet.name"),
     icon: Icons.ethernet,
     locations: ["bar", "cc"],
+    isAvailable: () => !!AstalNetwork.get_default()?.wired,
+    watchAvailable: (cb) => { AstalNetwork.get_default()?.connect("notify::wired", cb) },
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,

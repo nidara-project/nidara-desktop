@@ -14,7 +14,7 @@ import appService from "../../core/AppService"
 import status from "../../core/Status"
 import widgetConfig from "../../core/WidgetConfig"
 import regionConfig from "../../core/RegionConfig"
-import registry from "../widgets/index"
+import registry, { widgetAvailable, watchWidgetAvailability } from "../widgets/index"
 import Tray from "./Tray"
 import { SystemMenuOverlay } from "./SystemMenu"
 import { AppTitle } from "./AppTitle"
@@ -411,7 +411,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     let child = optWidgets.get_first_child()
     while (child) { const n = child.get_next_sibling(); optWidgets.remove(child); child = n }
 
-    const allIds = widgetConfig.barWidgetIds()
+    // Hardware gate: widgets without their hardware don't render or take a slot,
+    // regardless of the user's saved placement (which stays untouched).
+    const allIds = widgetConfig.barWidgetIds().filter(id => {
+        const w = registry.get(id)
+        return !!w && widgetAvailable(w)
+    })
     const maxIcons = getMaxIcons()
     const needsOverflow = allIds.length > maxIcons
     // Reserve 1 slot for the overflow capsule itself when overflow is needed
@@ -464,6 +469,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   widgetConfig.connect("changed", () => {
       // measureOverflow rebuilds against the full set, measures, then caps —
       // so it recovers correctly when widgets are added/removed.
+      GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { measureOverflow(); return GLib.SOURCE_REMOVE })
+  })
+  // Hardware appearing/disappearing (BT dongle, wifi device…) re-runs the same path.
+  watchWidgetAvailability(() => {
       GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { measureOverflow(); return GLib.SOURCE_REMOVE })
   })
   rebuildBarWidgets()

@@ -89,6 +89,12 @@ in `widgets/index.ts` (unlisted ids fall to the end). The codegen hard-errors
 on non-widget files in `widgets/` (helpers go in `widget/common/`) and on
 duplicate ids — fix what it says and re-run.
 
+If the widget depends on hardware (battery, radios, backlight…), declare
+`isAvailable()` (+ `watchAvailable(cb)` if presence can change at runtime) —
+without hardware the widget must not exist for the user (see the hardware-gate
+rules in `architecture.md`). On a dev desktop, exercise it with the fake-*
+scripts above.
+
 ### Debugging "the change didn't apply"
 
 When a reload seems to do nothing or styles refuse to refresh, the cause is almost always a zombie `gjs` process still drawing the previous UI. Order of escalation:

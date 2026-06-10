@@ -59,6 +59,14 @@ Three pillars by responsibility:
     unique `id`; no module-scope dependency on another widget (import order is
     alphabetical). Curated `BAR_ORDER`/`CC_DEFAULT_ORDER` stay editorial in
     `widgets/index.ts` — unlisted widgets fall to the end, listing is optional.
+    **Hardware gate**: a widget tied to hardware declares `isAvailable()` (+
+    optional `watchAvailable(cb)` for hotplug) — when false it's hidden from
+    bar + CC (filtered in `Bar.rebuildBarWidgets` and `IslandGrid.syncCCLayout`,
+    at the layout level so edit-mode cells stay coherent) and its Settings card
+    renders off+disabled with a "no hardware" hint. Placement config is NEVER
+    mutated by availability. battery/wifi/bt/ethernet/brightness implement it;
+    a fallback "not present" buildContent branch is no longer the mechanism for
+    hiding (battery keeps one only as defense in depth).
   - `common/` — shared: `SquircleContainer`, `DrawingUtils`, `Slider.ts` (the ONE Cairo slider — no `Gtk.Scale`, no PillSlider), `ManagedWindow`, `CrystalPopover`, `WorkspaceSchematic`, `fade.ts`, `poll.ts` (`pollWhileMapped` — ANY recurring widget poll must gate on map/unmap: built-once-hidden surfaces like CC tiles must not keep session-long timers; idle baseline is 0 wakeups/s and we keep it that way)
 
 Other top-level dirs: `ui/lib/crystal-ui/` (pure-GTK4 primitives lib — see end of file) and the greeter/lockscreen bundles.

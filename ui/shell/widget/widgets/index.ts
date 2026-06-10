@@ -16,6 +16,20 @@ export const registry = {
 
 export default registry
 
+// ── Hardware availability ─────────────────────────────────────────────────────
+// A widget without hardware does not exist for the user: hidden from bar + CC,
+// disabled in Settings → Widgets. Placement config is never mutated by this, so
+// the widget reappears when the hardware does (see AtomicWidget.isAvailable).
+
+export const widgetAvailable = (w: AtomicWidget): boolean => w.isAvailable?.() ?? true
+
+// Re-run cb whenever any widget's availability may have changed (BT adapter
+// plugged, wifi device gone…). Subscriptions are shell-lifetime — callers are
+// the per-monitor bar and the CC grid, which live as long as the shell.
+export function watchWidgetAvailability(cb: () => void) {
+    for (const w of ALL_WIDGETS) w.watchAvailable?.(cb)
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Single source of truth — derived metadata
 //

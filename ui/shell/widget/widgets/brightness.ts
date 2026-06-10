@@ -174,11 +174,23 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
 
 // ── Widget registration ───────────────────────────────────────────────────────
 
+// Desktops have no controllable backlight (brightnessctl drives /sys/class/backlight,
+// which only laptops/eDP panels populate). No hotplug signal exists → no watchAvailable.
+function hasBacklight(): boolean {
+    try {
+        const dir = GLib.Dir.open("/sys/class/backlight", 0)
+        const has = dir.read_name() !== null
+        dir.close()
+        return has
+    } catch { return false }
+}
+
 const brightnessWidget: AtomicWidget = {
     id: "brightness",
     name: t("widget.brightness.name"),
     icon: Icons.sun,
     locations: ["bar", "cc"],
+    isAvailable: hasBacklight,
     defaultSize: WidgetSize.FULL_WIDTH,
     // Slider tier mapping: Small=icon, Medium=1×2 vertical, Large=4×1 wide.
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.TALL, WidgetSize.FULL_WIDTH],
