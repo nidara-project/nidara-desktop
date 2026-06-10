@@ -87,6 +87,7 @@ const Icons = {
     recordStop:        f("record-stop"),
     shield:            f("shield"),
     shieldOff:         f("shield-off"),
+    sparkles:          f("sparkles"),
     gamepad:           f("gamepad-2"),
 } as const
 

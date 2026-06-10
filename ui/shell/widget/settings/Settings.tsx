@@ -21,6 +21,7 @@ import AutostartPage from "./pages/Autostart"
 import AccessibilityPage from "./pages/Accessibility"
 import UsersPage from "./pages/Users"
 import GamingPage from "./pages/Gaming"
+import AiPage from "./pages/Ai"
 import { beginPage, endPage, clearSearchIndex, getSearchIndex, type SettingsNav } from "./SettingsHelpers"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -90,6 +91,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "region",       label: t("settings.region.title"),      icon: Icons.clock,         component: RegionPage       },
         { id: "autostart",    label: t("settings.autostart.title"),   icon: Icons.rocket,        component: AutostartPage    },
         { id: "users",        label: t("settings.users.title"),       icon: Icons.userRound,     component: UsersPage        },
+        { id: "ai",           label: t("settings.ai.title"),          icon: Icons.sparkles,      component: AiPage           },
         { id: "about",        label: t("settings.about.title"),       icon: Icons.info,          component: AboutPage        },
     ]
 

@@ -348,6 +348,16 @@ export default {
     "settings.notif.dnd-default": "Enable on Login",
     "settings.notif.dnd-default.desc": "Start each session with Do Not Disturb active",
 
+    "settings.ai.title": "AI",
+    "settings.ai.group.access": "Agent Access",
+    "settings.ai.allow-config-write": "Allow Agents to Change Settings",
+    "settings.ai.allow-config-write.desc": "Local agents and scripts can modify shell settings through the official interface. Reading state is always available.",
+    "settings.ai.group.surface": "Agent Interface",
+    "settings.ai.exposed-settings": "Exposed Settings",
+    "settings.ai.exposed-settings.desc": "Settings agents can discover and change — run `ags request describeConfig` to list them",
+    "settings.ai.state-read": "State & Diagnostics",
+    "settings.ai.state-read.desc": "`dumpState` and crystal-shell-doctor stay available regardless of the switch above",
+
     "settings.bar.title": "Top Bar",
     "settings.bar.group.layout": "Layout",
     "settings.bar.system-menu": "System Menu",

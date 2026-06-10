@@ -65,13 +65,39 @@ read source to discover it:
 Current commands (run `listActions` for the live list): `toggleCC|toggleControlCenter`,
 `toggleNC|toggleNotificationCenter`, `togglePrism|toggleSpotlight`, `toggleAppGrid`,
 `toggleSettings`, `settingsPage <pageId>`, `toggleOverview`, `toggleGameOverlay`,
-`hideForLock`, `showAfterLock`, `listActions`, `dumpState`. Aliases are intentional —
-Hyprland keybinds were renamed at one point and old names are kept for compatibility.
+`hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`, `setConfig <key> <value>`,
+`listActions`, `dumpState`. Aliases are intentional — Hyprland keybinds were renamed at one
+point and old names are kept for compatibility. `dumpState` also reports the **effective**
+Hyprland config (gaps/rounding/border via `getoption` — includes `hyprland-user.lua`
+overrides) and the AI-governance flags.
 
 Commands receive arguments: `requestHandler` passes `argv.slice(1)` to the handler
 (`run(args)`). `ags request settingsPage bluetooth` opens the Settings window directly on
 that page (sidebar category ids; returns `unknown page: <id>` for bad ids) — the agent-
 friendly way to reach a Settings page without synthesizing clicks.
+
+### The agent config surface: `describeConfig` / `getConfig` / `setConfig`
+
+Settings are exposed to agents through a typed registry (`core/ConfigRegistry.ts`; entries
+registered in `config-entries.ts`):
+
+- `ags request describeConfig` → JSON schema of every exposed setting: description, type,
+  enum values / min/max, writability, current value. **Read this first** — never guess keys.
+- `ags request getConfig dock.iconSize` (one key) / `ags request getConfig` (all values).
+- `ags request setConfig appearance.accent blue` → validates against the declared
+  type/constraints, applies through the owning service (persists + notifies the UI exactly
+  like Settings would), and echoes `{key, value}` back. Invalid input returns a
+  self-explanatory error, not a crash.
+
+Rules:
+- Writes are **gated by Settings → AI** (`AgentConfig.allowConfigWrite`, `ai.json`). When
+  disabled, `setConfig` refuses with a pointer to the page. Reads are never gated.
+- `ai.*` keys are visible but **not writable via setConfig** — the gate must not be
+  flippable through the door it controls.
+- **Adding a setting:** register it in `config-entries.ts` (NOT in core/ — dock settings
+  import widget state) with a real `desc` (that string is the agent-facing documentation)
+  and delegate `set` to the owning service's setter. That's ALL it takes to appear in
+  `describeConfig`.
 
 ### Adding a new IPC command
 

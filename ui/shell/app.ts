@@ -10,6 +10,10 @@ import status from "./core/Status"
 import shellActions from "./core/ShellActions"
 import { currentLocale } from "./core/i18n"
 import { readFile } from "ags/file"
+import agentConfig from "./core/AgentConfig"
+import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue } from "./core/ConfigRegistry"
+import { registerConfigEntries } from "./config-entries"
+import hyprlandState from "./core/HyprlandState"
 
 // @ts-ignore
 import type { Monitor } from "gi://Gdk?version=4.0"
@@ -109,6 +113,27 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
   },
   hideForLock: { desc: "Hide bar+dock while the lockscreen is up", run: () => ipc.lockScreen?.() },
   showAfterLock: { desc: "Restore bar+dock after unlock", run: () => ipc.unlockScreen?.() },
+  describeConfig: {
+    desc: "Describe every agent-facing setting as JSON: type, constraints, current value, writability",
+    run: () => JSON.stringify(describeConfig(), null, 2),
+  },
+  getConfig: {
+    desc: "Read a setting (`getConfig dock.iconSize`) or all of them (`getConfig`) as JSON",
+    run: args => {
+      if (!args[0]) return JSON.stringify(getAllConfigValues(), null, 2)
+      const r = getConfigValue(args[0])
+      return r.ok ? JSON.stringify({ key: args[0], value: r.value }) : r.error ?? "error"
+    },
+  },
+  setConfig: {
+    desc: "Change a setting (`setConfig appearance.accent blue`) — validated against describeConfig; gated by Settings → AI",
+    run: args => {
+      if (!args[0] || args[1] === undefined) return "usage: setConfig <key> <value>"
+      if (!agentConfig.allowConfigWrite)
+        return "config writes are disabled — enable them in Settings → AI (or ai.json)"
+      return setConfigValue(args[0], args.slice(1).join(" "))
+    },
+  },
   listActions: {
     desc: "Describe every IPC command as JSON (machine-readable: this output)",
     run: () => {
@@ -119,7 +144,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     },
   },
   dumpState: {
-    desc: "Dump live shell state as JSON (version, theme, locale, overlay visibility)",
+    desc: "Dump live shell state as JSON (version, theme, locale, overlays, effective Hyprland config)",
     run: () => {
       const display = Gdk.Display.get_default()
       return JSON.stringify(
@@ -129,6 +154,17 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             locale: currentLocale(),
             darkMode: Theme.isDark,
             monitors: display ? display.get_monitors().get_n_items() : 0,
+          },
+          // EFFECTIVE compositor config (includes hyprland-user.lua overrides) —
+          // what the system actually runs, not our shipped defaults.
+          hyprland: {
+            gapsIn: hyprlandState.getOptionInt("general:gaps_in"),
+            gapsOut: hyprlandState.getOptionInt("general:gaps_out"),
+            rounding: hyprlandState.getOptionInt("decoration:rounding"),
+            borderSize: hyprlandState.getOptionInt("general:border_size"),
+          },
+          ai: {
+            allowConfigWrite: agentConfig.allowConfigWrite,
           },
           overlays: {
             controlCenter: status.cc_open,
@@ -170,6 +206,9 @@ app.start({
     }
 
     installPowerHooks()
+
+    // Agent-facing config surface (describeConfig/getConfig/setConfig)
+    registerConfigEntries()
 
     // Note: the crystal-bar/dock blur layer rules live in hyprland.lua
     // (hl.layer_rule). They used to be re-applied here via `hyprctl keyword`,

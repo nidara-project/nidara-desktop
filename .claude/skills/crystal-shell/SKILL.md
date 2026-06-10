@@ -67,7 +67,9 @@ killall gjs                              # nuke stuck old UI when reload misbeha
 cd ui/shell && npm run typecheck        # local typecheck (needs the git-ignored @girs/)
 cd ui/shell && npm run build            # SCSS compile + ags bundle
 ags request listActions                  # discover the shell's IPC surface (JSON)
-ags request dumpState                    # live shell state as JSON (overlays, version…)
+ags request dumpState                    # live shell state as JSON (overlays, version, effective Hyprland config…)
+ags request describeConfig               # agent-facing settings: schema + current values (JSON)
+ags request setConfig <key> <value>      # change a setting officially (validated; gated by Settings → AI)
 crystal-shell-doctor                     # Markdown diagnostic report (bug/PR evidence)
 ```
 

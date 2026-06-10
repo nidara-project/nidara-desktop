@@ -74,9 +74,13 @@ costs nothing; a noisy or taste-specific PR costs the maintainer review time and
 
 ## Step 2 — Route it
 
-- **PERSONAL** → write to the config layer (`~/.config/crystal-shell/`, `hyprland-user.lua`,
-  Settings UI). Never edit shared repo code for a personal preference. See the config
-  ownership model in `references/dev-workflow.md`.
+- **PERSONAL** → **first try `ags request setConfig <key> <value>`** (discover keys with
+  `ags request describeConfig`) — it validates, persists and live-applies through the
+  owning service, no reload needed. If the setting isn't exposed there yet, write to the
+  config layer (`~/.config/crystal-shell/`, `hyprland-user.lua`, Settings UI) — and
+  consider exposing it in `config-entries.ts` as a small GLOBAL improvement. Never edit
+  shared repo code for a personal preference. See the config ownership model in
+  `references/dev-workflow.md`.
 - **MAKE-IT-A-SETTING** → add the knob (follow the widget-registry / Settings conventions),
   set the user's value through it, and treat the *new knob* as a GLOBAL change.
 - **GLOBAL** → make the change in repo code following all conventions (the ten commandments,
