@@ -6,6 +6,7 @@ import { buildCapsuleInner, wrapCapsuleTile } from "../control-center/Toggles"
 
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
+import hs from "../../core/HyprlandState"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,10 +25,14 @@ function saveFilename(): string {
 }
 
 function buildCommand(mode: CaptureMode, action: CaptureAction): string {
+    // Window geometry comes from HyprlandState at this point — capture() calls
+    // this AFTER the close-delay, so the focused client is current (this used to
+    // be a `hyprctl | jq` pipeline evaluated inside bash; same moment, no jq).
+    const focused = hs.focusedClient
     const geometry = mode === "area"
         ? '$(slurp -d)'
-        : mode === "window"
-            ? '$(hyprctl -j activewindow | jq -r \'"\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"\')'
+        : mode === "window" && focused
+            ? `${focused.x},${focused.y} ${focused.width}x${focused.height}`
             : null
 
     const grimFlag = geometry ? `-g "${geometry}"` : ""

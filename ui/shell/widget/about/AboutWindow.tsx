@@ -4,6 +4,7 @@ import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import SquircleContainer from "../common/SquircleContainer"
 import status from "../../core/Status"
+import hs from "../../core/HyprlandState"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
@@ -56,9 +57,10 @@ function specRow(label: string, value: string): Gtk.Box {
     return box
 }
 
-function asyncSpecRow(label: string, cmd: string[]): Gtk.Box {
+function asyncSpecRow(label: string, src: string[] | Promise<string>): Gtk.Box {
     const val = new Gtk.Label({ label: "…", css_classes: ["about-spec-val"], halign: Gtk.Align.START, hexpand: true, xalign: 0, ellipsize: 3 })
-    execAsync(cmd).then(v => { val.label = v.trim() }).catch(() => { val.label = "—" })
+    const promise = Array.isArray(src) ? execAsync(src) : src
+    promise.then(v => { val.label = v.trim() || "—" }).catch(() => { val.label = "—" })
     const box = new Gtk.Box({ spacing: 0, margin_top: 4, margin_bottom: 4 })
     box.append(new Gtk.Label({ label, css_classes: ["about-spec-key"], halign: Gtk.Align.START, width_request: 80, xalign: 0 }))
     box.append(val)
@@ -104,9 +106,7 @@ export default function AboutWindow(): Gtk.Window | null {
 
     // ── Versions ──────────────────────────────────────────────────────────────
     const verBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8, margin_start: 16, margin_end: 16 })
-    verBox.append(asyncSpecRow(t("settings.about.hyprland"), ["bash", "-c",
-        "hyprctl version 2>/dev/null | grep -oP 'v?[\\d]+\\.[\\d]+\\.[\\d]+' | head -1 || echo '—'"
-    ]))
+    verBox.append(asyncSpecRow(t("settings.about.hyprland"), hs.version()))
     verBox.append(specRow("AGS", "v3 (GJS + GTK4)"))
 
     // ── Close button ──────────────────────────────────────────────────────────

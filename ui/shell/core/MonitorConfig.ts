@@ -1,6 +1,5 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import { execAsync } from "ags/process"
 import hs from "./HyprlandState"
 
 interface MonitorState {
@@ -48,13 +47,10 @@ class MonitorConfig extends GObject.Object {
 
     private _apply(name: string, cfg: MonitorState) {
         // This config uses Hyprland's Lua parser, where `hyprctl keyword` is rejected
-        // ("can't work with non-legacy parsers. Use eval."). Apply via `hyprctl eval`
+        // ("can't work with non-legacy parsers. Use eval."). Apply via eval
         // running the same hl.monitor() call the persisted .lua uses.
         const mode = cfg.mode ?? "preferred"
-        execAsync([
-            "hyprctl", "eval",
-            `hl.monitor({ output = '${name}', mode = '${mode}', position = 'auto', scale = ${cfg.scale}, transform = ${cfg.transform} })`,
-        ]).catch(e => console.error("[MonitorConfig] apply:", e))
+        hs.evalLua(`hl.monitor({ output = '${name}', mode = '${mode}', position = 'auto', scale = ${cfg.scale}, transform = ${cfg.transform} })`)
     }
 
     setScale(name: string, scale: number) {
@@ -95,8 +91,7 @@ class MonitorConfig extends GObject.Object {
 
     setVrr(val: number) {
         this._vrr = val
-        execAsync(["hyprctl", "eval", `hl.config({ misc = { vrr = ${val} } })`])
-            .catch(e => console.error("[MonitorConfig] vrr:", e))
+        hs.evalLua(`hl.config({ misc = { vrr = ${val} } })`)
         this._save()
     }
 

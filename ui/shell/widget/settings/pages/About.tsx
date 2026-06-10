@@ -4,6 +4,7 @@ import { execAsync } from "ags/process"
 import { listGroup, createRow, pageBox, staticLabel } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import { readShellVersion } from "../../../core/Paths"
+import hs from "../../../core/HyprlandState"
 
 /**
  * Reads a field from /etc/os-release synchronously.
@@ -98,9 +99,8 @@ export default function AboutPage() {
     // Hyprland version — async
     const hyprLabel = staticLabel("…")
     envList.append(createRow(t("settings.about.hyprland"), t("settings.about.hyprland.desc"), hyprLabel))
-    execAsync(["hyprctl", "version"]).then(v => {
-        const match = v.match(/Hyprland\s+([\w.-]+)/)
-        hyprLabel.label = match ? match[1] : v.split("\n")[0].trim()
+    hs.version().then(v => {
+        hyprLabel.label = v || t("settings.about.unavailable")
     }).catch(() => { hyprLabel.label = t("settings.about.unavailable") })
 
     page.append(envBox)

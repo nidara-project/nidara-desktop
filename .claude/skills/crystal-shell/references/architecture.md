@@ -66,7 +66,7 @@ These are GObject singletons. Widgets subscribe to them via `notify::prop`. **No
 | `FluidCrystal.ts` | 436 | Token engine: `generateTokensCss()` emits `@define-color` + `--crystal-*` for accent, transparency, materials, shadows, tint. Holds the canonical `ACCENT_PALETTE`. Syncs Kvantum/qt. |
 | `RegionConfig.ts` | 218 | Time/date format, timezone (`region.json`). |
 | `InputConfig.ts` | 194 | Keyboard/mouse/touchpad → writes `crystal-settings.lua`. |
-| `HyprlandState.ts` | ~210 | Reactive wrapper over AstalHyprland (clients/workspaces/monitors + dispatch helpers). Also caches **effective** config that AstalHyprland doesn't expose: `availableModesByName` (from `hyprctl monitors -j` — `Monitor.available_modes` is always null) and `getOptionInt(name)` (`hyprctl getoption`). Read-once, not yet reactive to `configreloaded` (see `tech-debt.md`). |
+| `HyprlandState.ts` | ~270 | Reactive wrapper over AstalHyprland (clients/workspaces/monitors + dispatch helpers) **and the ONLY door to hyprctl** — services/widgets never shell out to hyprctl directly; they call (or add) a method here. Vocabulary: dispatch helpers (`focusWindow`/`closeWindow`/…), `evalLua(call)` (live config changes — the Lua parser rejects `keyword`), `getOptionInt(name)` (sync) / `getOptionJson(name)` (async batch re-syncs), `setCursor(theme, size)`, `version()`. Caches **effective** config AstalHyprland doesn't expose (`availableModesByName` — `Monitor.available_modes` is always null) and emits `config-reloaded` on Hyprland's `configreloaded` IPC event (effective-config consumers re-sync on it). Exempt from the single-door rule: config text *written for other daemons* (hypridle hooks in PowerManager/Power.tsx — those lines execute outside the shell). |
 | `NightLightManager.ts` | 174 | Blue-light filter via hyprsunset (`night-light.json`). |
 | `WallpaperManager.ts` | 127 | Wallpaper + transitions via `awww` (`wallpaper`). |
 | `MonitorConfig.ts` | ~120 | Per-monitor mode/scale/rotation + VRR → `crystal-monitor.lua`. Applies at runtime via **`hyprctl eval "hl.monitor({...})"`** (see the Lua-parser note below). `applyMode`/`applyTransform` apply without persisting; `commit()` writes the .lua — used for the revert-safety dialog on resolution/rotation changes. |
@@ -101,6 +101,12 @@ migrated every remaining `keyword` caller — they were all silently broken on t
 Only `dispatch`/`getoption`/`monitors`/`eval` callers remain (all valid). Also: a fractional
 monitor scale must divide the native resolution into whole logical pixels or Hyprland snaps
 it — the Display page filters scale presets to exact-valid per monitor.
+
+**Since 2026-06-10 all of this goes through `HyprlandState`** (single-door sweep): use
+`hs.evalLua(...)` / `hs.getOptionJson(...)` / `hs.setCursor(...)` / `hs.version()` instead of
+shelling out to hyprctl — add a method to HyprlandState if the vocabulary is missing. The
+shell itself (greeter excluded — separate bundle, own Lua config) has zero direct hyprctl
+calls outside HyprlandState.
 
 ## `ui/lib/crystal-ui/`
 

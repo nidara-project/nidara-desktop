@@ -15,6 +15,7 @@ import {
     generateTintCss,
 } from "./FluidCrystal"
 import { SHELL_ROOT } from "./Paths"
+import hs from "./HyprlandState"
 
 // ── CONSTANTS ────────────────────────────────────────────────────────
 // No default theme forced — themeFamily is read from system on first run via syncFromSystem()
@@ -245,7 +246,7 @@ class ThemeManager extends GObject.Object {
         //  - hyprctl        → Hyprland's live compositor cursor
         //  - Xcursor default → XWayland/X apps (Steam, etc.), which ignore the other two
         this.writeXcursorDefault(cursor)
-        execAsync(["hyprctl", "setcursor", cursor, String(size)]).catch(() => {})
+        hs.setCursor(cursor, size)
         if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
         this.saveSettings()
         this.emit("changed")
@@ -254,7 +255,7 @@ class ThemeManager extends GObject.Object {
     async setCursorSize(size: number) {
         await execAsync(["gsettings", "set", "org.gnome.desktop.interface", "cursor-size", String(size)])
         // Same three consumers as the theme — push the size everywhere it's read.
-        if (this.state.cursorTheme) execAsync(["hyprctl", "setcursor", this.state.cursorTheme, String(size)]).catch(() => {})
+        if (this.state.cursorTheme) hs.setCursor(this.state.cursorTheme, size)
         if (this.state.themeFamily) this.updateSettingsIni(this.state.themeFamily)
         this.emit("changed")
     }
@@ -461,7 +462,7 @@ class ThemeManager extends GObject.Object {
         // (Steam, etc.) inherit it instead of a stale default. gsettings alone misses them.
         if (this.state.cursorTheme) {
             this.writeXcursorDefault(this.state.cursorTheme)
-            execAsync(["hyprctl", "setcursor", this.state.cursorTheme, String(settings.get_int("cursor-size") || 24)]).catch(() => {})
+            hs.setCursor(this.state.cursorTheme, settings.get_int("cursor-size") || 24)
         }
         const target = this.state.isDark ? "prefer-dark" : "prefer-light"
         if (settings.get_string("color-scheme") !== target) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", target])

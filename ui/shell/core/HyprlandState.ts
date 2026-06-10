@@ -120,6 +120,35 @@ class HyprlandStateClass extends GObject.Object {
         catch (e) { console.error("[HyprlandState] getOptionInt", name, e); return 0 }
     }
 
+    /** Async read of an effective option: resolves the parsed `getoption -j` JSON
+     *  ({int, float, str, set…}) or null on failure. Use for batch re-syncs
+     *  (InputConfig); prefer getOptionInt for one-off sync reads. */
+    async getOptionJson(name: string): Promise<any | null> {
+        try { return JSON.parse(await execAsync(["hyprctl", "getoption", "-j", name])) }
+        catch (e) { console.error("[HyprlandState] getOptionJson", name, e); return null }
+    }
+
+    /** Run a Lua-parser eval — the ONLY way to change Hyprland config live (the Lua
+     *  parser rejects `hyprctl keyword`). Failures are logged with the offending call. */
+    evalLua(luaCall: string) {
+        return execAsync(["hyprctl", "eval", luaCall])
+            .catch(e => console.error("[HyprlandState] evalLua:", luaCall, e))
+    }
+
+    /** Set the compositor cursor theme + size (`hyprctl setcursor`). */
+    setCursor(theme: string, size: number) {
+        return execAsync(["hyprctl", "setcursor", theme, String(size)]).catch(() => {})
+    }
+
+    /** Hyprland version, e.g. "0.55.2" ("" on failure). */
+    async version(): Promise<string> {
+        try {
+            const out = await execAsync(["hyprctl", "version"])
+            const m = out.match(/Hyprland\s+v?([\d][\w.-]*)/)
+            return m ? m[1] : out.split("\n")[0].trim()
+        } catch { return "" }
+    }
+
     // Coalesces multiple signals that fire in the same GLib iteration into one refresh.
     private _scheduleRefresh() {
         if (this._refreshPending) return
@@ -171,7 +200,11 @@ class HyprlandStateClass extends GObject.Object {
     }
 
     // ── Dispatch API ─────────────────────────────────────────────────────────
-    // Single source of truth for all hyprctl dispatch strings
+    // Single source of truth for all hyprctl dispatch strings.
+    // RULE: HyprlandState is the ONLY door to hyprctl — services and widgets
+    // never shell out to hyprctl directly; they call (or add) a method here.
+    // (Exempt: config text we WRITE for other daemons to run, e.g. the
+    // hypridle hooks in PowerManager/Power.tsx — those execute outside the shell.)
 
     focusWorkspace(id: number) {
         return execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ workspace = ${id}})`])
@@ -219,9 +252,7 @@ class HyprlandStateClass extends GObject.Object {
     }
 
     setLayout(layout: "dwindle" | "master") {
-        // Lua parser: keyword is rejected, use eval (see MonitorConfig._apply).
-        return execAsync(["hyprctl", "eval", `hl.config({ general = { layout = '${layout}' } })`])
-            .catch(console.error)
+        return this.evalLua(`hl.config({ general = { layout = '${layout}' } })`)
     }
 }
 

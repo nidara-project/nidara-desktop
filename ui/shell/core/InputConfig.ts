@@ -1,6 +1,5 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import { execAsync } from "ags/process"
 import hs from "./HyprlandState"
 
 // Build a `hl.config({ input = { … } })` expression from a keyword-style option
@@ -59,58 +58,43 @@ class InputConfig extends GObject.Object {
     get kbRepeatDelay() { return this._kbRepeatDelay }
     get kbRepeatRate() { return this._kbRepeatRate }
 
-    // Parse options directly from Hyprland live state
+    // Parse options directly from Hyprland live state (via HyprlandState — the
+    // single door to hyprctl)
     private async syncFromHyprland() {
-        try {
-            const out = await execAsync(["hyprctl", "getoption", "-j", "input:sensitivity"])
-            this._pointerSpeed = JSON.parse(out).float || 0.0
-        } catch {}
+        const opt = (name: string) => hs.getOptionJson(`input:${name}`)
 
-        try {
-            const out = await execAsync(["hyprctl", "getoption", "-j", "input:accel_profile"])
-            const raw = JSON.parse(out).str || ""
+        const sens = await opt("sensitivity")
+        if (sens) this._pointerSpeed = sens.float || 0.0
+
+        const accel = await opt("accel_profile")
+        if (accel) {
+            const raw = accel.str || ""
             this._accelProfile = (raw === "" || raw === "[[EMPTY]]") ? "adaptive" : raw
-        } catch {}
+        }
 
-        try {
-            const out = await execAsync(["hyprctl", "getoption", "-j", "input:natural_scroll"])
-            this._mouseNaturalScroll = JSON.parse(out).int === 1
-        } catch {}
+        const mNat = await opt("natural_scroll")
+        if (mNat) this._mouseNaturalScroll = mNat.int === 1
 
-        try {
-            const out = await execAsync(["hyprctl", "getoption", "-j", "input:touchpad:natural_scroll"])
-            this._touchpadNaturalScroll = JSON.parse(out).int === 1
-        } catch {}
+        const tNat = await opt("touchpad:natural_scroll")
+        if (tNat) this._touchpadNaturalScroll = tNat.int === 1
 
-        try {
-            const out = await execAsync(["hyprctl", "getoption", "-j", "input:touchpad:tap_to_click"])
-            this._touchpadTap = JSON.parse(out).int === 1
-        } catch {}
+        const tap = await opt("touchpad:tap_to_click")
+        if (tap) this._touchpadTap = tap.int === 1
 
-        try {
-            const out = await execAsync(["hyprctl", "getoption", "-j", "input:numlock_by_default"])
-            this._numlockOnBoot = JSON.parse(out).int === 1
-        } catch {}
+        const num = await opt("numlock_by_default")
+        if (num) this._numlockOnBoot = num.int === 1
 
-        try {
-            const out = await execAsync(["hyprctl", "getoption", "-j", "input:kb_layout"])
-            this._kbLayout = JSON.parse(out).str || "us"
-        } catch {}
+        const layout = await opt("kb_layout")
+        if (layout) this._kbLayout = layout.str || "us"
 
-        try {
-            const out = await execAsync(["hyprctl", "getoption", "-j", "input:kb_variant"])
-            this._kbVariant = JSON.parse(out).str || ""
-        } catch {}
+        const variant = await opt("kb_variant")
+        if (variant) this._kbVariant = variant.str || ""
 
-        try {
-            const out = await execAsync(["hyprctl", "getoption", "-j", "input:repeat_delay"])
-            this._kbRepeatDelay = JSON.parse(out).int || 600
-        } catch {}
+        const delay = await opt("repeat_delay")
+        if (delay) this._kbRepeatDelay = delay.int || 600
 
-        try {
-            const out = await execAsync(["hyprctl", "getoption", "-j", "input:repeat_rate"])
-            this._kbRepeatRate = JSON.parse(out).int || 25
-        } catch {}
+        const rate = await opt("repeat_rate")
+        if (rate) this._kbRepeatRate = rate.int || 25
 
         this.initialized = true
         this.emit("changed")
@@ -120,9 +104,8 @@ class InputConfig extends GObject.Object {
         if (!this.initialized) return
 
         // 1. Live apply. The config uses Hyprland's Lua parser, which REJECTS
-        // `hyprctl keyword` ("Use eval.") — so live changes go through `hyprctl
-        // eval "hl.config({ input = { … } })"`.
-        execAsync(["hyprctl", "eval", inputConfigEval(option, value)]).catch(console.error)
+        // `hyprctl keyword` ("Use eval.") — so live changes go through eval.
+        hs.evalLua(inputConfigEval(option, value))
 
         // 2. Save to persistent UI-owned file
         const configPath = GLib.build_filenamev([GLib.get_home_dir(), ".config", "crystal-shell", "crystal-settings.lua"])
@@ -204,7 +187,7 @@ hl.config({
     setKbLayout(layout: string, variant = "") {
         this._kbLayout = layout
         this._kbVariant = variant
-        execAsync(["hyprctl", "eval", `hl.config({ input = { kb_layout = "${layout}", kb_variant = "${variant}" } })`]).catch(console.error)
+        hs.evalLua(`hl.config({ input = { kb_layout = "${layout}", kb_variant = "${variant}" } })`)
         this.applyAndSave("input:kb_layout", layout)
     }
 }
