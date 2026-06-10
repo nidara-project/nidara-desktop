@@ -45,5 +45,5 @@ export { CrystalWindow } from "./window"
 export type { CrystalWindowOpts, CrystalWindowResult } from "./window"
 
 // showCrystalAlert — modal confirmation dialog (replaces Adw.AlertDialog)
-export type { AlertResponse } from "./alert-dialog"
+export type { AlertResponse, AlertHandle } from "./alert-dialog"
 export { showCrystalAlert } from "./alert-dialog"

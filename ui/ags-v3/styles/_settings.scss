@@ -497,6 +497,24 @@ window.crystal-alert-dialog {
     margin-bottom: 0;
 }
 
+// Single-line input (PIN / passkey prompts)
+entry.crystal-alert-entry {
+    background: var(--crystal-surface-back);
+    border: 1px solid var(--crystal-border);
+    border-radius: $crystal-radius-pill;
+    padding: 6px 14px;
+    font-size: $fse-body;
+    color: var(--crystal-text);
+    caret-color: var(--crystal-text);
+    outline: none;
+    box-shadow: none;
+
+    &:focus, &:focus-within {
+        border-color: var(--crystal-surface-raised);
+        box-shadow: none;
+    }
+}
+
 .crystal-alert-sep {
     background: var(--crystal-border);
     min-height: 1px;

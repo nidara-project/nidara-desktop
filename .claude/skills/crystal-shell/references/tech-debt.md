@@ -195,21 +195,14 @@ notifications (incl. `-r` replacement + NC open), DPMS off/on. Next occurrence: 
 theorize — run the shell once under `G_DEBUG=fatal-criticals` while reproducing the user's
 action of that moment and read the coredump backtrace (recipe in `dev-workflow.md`).
 
-### 13. Bluetooth pairing has no agent (passkey/PIN UI missing)
-Settings → Bluetooth pairs via a bare `device.pair()`, with **no `org.bluez.Agent1`
-registered**, so it's "just works" only: devices that need a 6-digit passkey confirmation
-or a PIN have no UI and will pair blind or fail. AstalBluetooth offers no agent helper —
-implementing it means raw Gio D-Bus: register an `Agent1` (capability `KeyboardDisplay`)
-via `AgentManager1.RegisterAgent` + `RequestDefaultAgent`, handle `RequestConfirmation` /
-`RequestPasskey` / `RequestPinCode` / `DisplayPasskey` / `DisplayPinCode` → drive a Crystal
-dialog. Agent registration belongs in `BluetoothService`, the dialog in the page. **Testing
-caveat:** the python-dbusmock bluez5 template's `Pair` never calls back into the agent, so
-the passkey flow can't be exercised with the fake-bluetooth mock — needs real hardware or
-manual D-Bus invocation of the agent methods.
-
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
+- **(was #13) Bluetooth pairing agent** is implemented: `org.bluez.Agent1` lives in
+  `BluetoothService` (`registerPairingAgent`), the dialogs in the Bluetooth page. Real-device
+  pairing (passkey/PIN flows) is still UNVERIFIED on hardware — D-Bus policy only lets root
+  call agent methods, so the dbusmock template can't exercise it (see `architecture.md` for
+  the `sudo busctl` recipe).
 - **Dock H/V** is deduplicated — fix dock logic in `DockCore.tsx` / `DockAxis.ts`, never the
   7-line wrappers.
 - **Accent colors** live only in `ui/lib/accent.ts` — add/change them there.

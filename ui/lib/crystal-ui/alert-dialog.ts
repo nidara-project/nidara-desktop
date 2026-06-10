@@ -10,6 +10,11 @@ export interface AlertResponse {
     suggested?: boolean
 }
 
+export interface AlertHandle {
+    /** Close programmatically, responding with `id` (default: the cancel action). */
+    close: (id?: string) => void
+}
+
 /**
  * showCrystalAlert — modal confirmation dialog
  *
@@ -17,18 +22,23 @@ export interface AlertResponse {
  * Gtk.Window; destroys it after any response (button click or window close).
  * On close-request without an explicit button, the first non-destructive
  * response id is used as the cancel action.
+ *
+ * With `entry`, a single-line input is shown under the body; its text reaches
+ * `onResponse` as the second argument, and Enter triggers the suggested response.
  */
 export function showCrystalAlert(opts: {
     parent?: Gtk.Window | null
     heading: string
     body?: string
     responses: AlertResponse[]
-    onResponse: (id: string) => void
+    onResponse: (id: string, text?: string) => void
     /** Auto-respond after a countdown (e.g. revert a risky change if not confirmed).
      *  `format(remaining)` renders the body text each tick. */
     countdown?: { seconds: number; respondId: string; format: (remaining: number) => string }
-}): void {
-    const { parent, heading, body, responses, onResponse, countdown } = opts
+    /** Optional single-line input (PIN / passkey prompts). */
+    entry?: { placeholder?: string; digitsOnly?: boolean; maxLength?: number }
+}): AlertHandle {
+    const { parent, heading, body, responses, onResponse, countdown, entry } = opts
 
     // ── Window ────────────────────────────────────────────────────────────────
     const dialog = new Gtk.Window({
@@ -71,6 +81,33 @@ export function showCrystalAlert(opts: {
         root.append(bodyLabel)
     }
 
+    // Entry (PIN / passkey input)
+    let entryWidget: Gtk.Entry | null = null
+    if (entry) {
+        entryWidget = new Gtk.Entry({
+            placeholder_text: entry.placeholder ?? "",
+            max_length: entry.maxLength ?? 0,
+            input_purpose: entry.digitsOnly ? Gtk.InputPurpose.DIGITS : Gtk.InputPurpose.FREE_FORM,
+            css_classes: ["crystal-alert-entry"],
+            margin_top: 16,
+            margin_start: 24,
+            margin_end: 24,
+        })
+        if (entry.digitsOnly) {
+            // input_purpose is only a hint to virtual keyboards — enforce it.
+            entryWidget.connect("changed", () => {
+                const txt = entryWidget!.text
+                const digits = txt.replace(/\D+/g, "")
+                if (txt !== digits) entryWidget!.text = digits
+            })
+        }
+        entryWidget.connect("activate", () => {
+            const def = responses.find(r => r.suggested) ?? responses[responses.length - 1]
+            if (def) respond(def.id)
+        })
+        root.append(entryWidget)
+    }
+
     // Separator
     root.append(new Gtk.Separator({
         orientation: Gtk.Orientation.HORIZONTAL,
@@ -91,7 +128,7 @@ export function showCrystalAlert(opts: {
         if (done) return
         done = true
         if (tickId) { GLib.source_remove(tickId); tickId = 0 }
-        onResponse(id)
+        onResponse(id, entryWidget?.text)
         dialog.destroy()
     }
 
@@ -123,4 +160,7 @@ export function showCrystalAlert(opts: {
     root.append(btnBox)
     dialog.set_child(root)
     dialog.present()
+    entryWidget?.grab_focus()
+
+    return { close: (id?: string) => respond(id ?? cancelId) }
 }

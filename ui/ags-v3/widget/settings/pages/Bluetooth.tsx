@@ -5,7 +5,7 @@ import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as BT from "../../../core/BluetoothService"
-import { CrystalButton } from "../../../../lib/crystal-ui"
+import { CrystalButton, showCrystalAlert, type AlertHandle } from "../../../../lib/crystal-ui"
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,75 @@ export default function BluetoothPage() {
         page.append(banner)
         return page
     }
+
+    // ── Pairing agent ─────────────────────────────────────────────────────────
+    // While this page exists, Crystal Shell is the BlueZ pairing agent: passkey
+    // confirmations, PIN prompts, and authorization requests surface as alert
+    // dialogs. One request at a time (BlueZ serializes them); a new prompt or a
+    // BlueZ Cancel() closes whatever is open.
+    let activeDialog: AlertHandle | null = null
+    let activeDevWatch: (() => void) | null = null
+
+    const closeActiveDialog = () => {
+        activeDevWatch?.(); activeDevWatch = null
+        const d = activeDialog; activeDialog = null
+        d?.close()
+    }
+
+    const promptDialog = (p: BT.PairingPrompt) =>
+        new Promise<{ ok: boolean; value?: string }>(resolve => {
+            closeActiveDialog()
+
+            let body: string, entry: { digitsOnly?: boolean; maxLength?: number } | undefined
+            switch (p.kind) {
+                case "confirm":
+                    body = `${t("settings.bluetooth.pairing.confirm-code")}\n\n${p.code}`
+                    break
+                case "display":
+                    body = `${t("settings.bluetooth.pairing.enter-on-device")}\n\n${p.code}`
+                    break
+                case "enter-passkey":
+                    body = t("settings.bluetooth.pairing.enter-passkey")
+                    entry = { digitsOnly: true, maxLength: 6 }
+                    break
+                case "enter-pin":
+                    body = t("settings.bluetooth.pairing.enter-pin")
+                    entry = { maxLength: 16 }
+                    break
+                case "authorize":
+                    body = t("settings.bluetooth.pairing.authorize")
+                    break
+            }
+
+            const root = page.get_root()
+            activeDialog = showCrystalAlert({
+                parent: root instanceof Gtk.Window && root.visible ? root : null,
+                heading: p.deviceName,
+                body,
+                entry,
+                responses: p.kind === "display"
+                    ? [{ id: "cancel", label: t("settings.bluetooth.pairing.close") }]
+                    : [
+                        { id: "cancel", label: t("settings.bluetooth.pairing.cancel") },
+                        { id: "ok", label: t("settings.bluetooth.pairing.confirm"), suggested: true },
+                    ],
+                onResponse: (id, text) => {
+                    activeDevWatch?.(); activeDevWatch = null
+                    activeDialog = null
+                    resolve({ ok: id === "ok", value: text })
+                },
+            })
+
+            // "Type this code on the device" dialogs have no success reply of their
+            // own — auto-close once the device reports paired.
+            if (p.kind === "display" && p.device) {
+                const dev: any = p.device
+                const wid = dev.connect("notify::paired", () => { if (dev.paired) closeActiveDialog() })
+                activeDevWatch = () => { try { dev.disconnect(wid) } catch {} }
+            }
+        })
+
+    BT.registerPairingAgent({ prompt: promptDialog, cancel: closeActiveDialog })
 
     // ── Power toggle ─────────────────────────────────────────────────────────
     const powerGroup = listGroup(t("settings.bluetooth.title"))
@@ -227,7 +296,12 @@ export default function BluetoothPage() {
     }
 
     const disposePower = BT.watchPower(() => { syncPower(); applyPowered() })
-    page.connect("unrealize", () => { disposeDevices(); disposePower() })
+    page.connect("unrealize", () => {
+        disposeDevices()
+        disposePower()
+        closeActiveDialog()
+        BT.unregisterPairingAgent()
+    })
 
     refreshLists()
     applyPowered()

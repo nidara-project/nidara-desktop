@@ -293,6 +293,14 @@ export default {
     "settings.bluetooth.enable": "Enable Bluetooth",
     "settings.bluetooth.scan": "Scan",
     "settings.bluetooth.tooltip.forget": "Forget device",
+    "settings.bluetooth.pairing.confirm": "Confirm",
+    "settings.bluetooth.pairing.cancel": "Cancel",
+    "settings.bluetooth.pairing.close": "Close",
+    "settings.bluetooth.pairing.confirm-code": "Confirm that this code is shown on the device:",
+    "settings.bluetooth.pairing.enter-on-device": "Type this code on the device, then confirm there:",
+    "settings.bluetooth.pairing.enter-passkey": "Enter the 6-digit code shown on the device:",
+    "settings.bluetooth.pairing.enter-pin": "Enter the PIN for the device:",
+    "settings.bluetooth.pairing.authorize": "This device wants to connect to this computer.",
 
     // Control Center
     "settings.widgets.tooltip.no-space": "Not enough space — remove a widget first",
