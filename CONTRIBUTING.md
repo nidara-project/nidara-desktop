@@ -36,7 +36,7 @@ skill is auto-discovered. When you make a global improvement, the agent will off
 PR on your behalf. It will:
 
 1. Self-review against the project conventions (the "ten commandments" in the skill).
-2. Make sure CI passes (`cd ui/ags-v3 && npm run build`).
+2. Make sure CI passes (`cd ui/shell && npm run build`).
 3. Gather evidence — especially your hardware and what you verified.
 4. **Ask for your explicit confirmation** before opening anything.
 5. Open the PR with the personal bits stripped out, forking on your behalf if you don't already
@@ -57,7 +57,7 @@ automatically — a maintainer always reviews.
    hardcoded colours, IPC via `ShellActions`, …).
 3. Make your change on a topic branch (it lives on your fork — you can't push branches to this
    repo without write access). Keep personal preferences out of the diff.
-4. Ensure CI passes: `cd ui/ags-v3 && npm run build` (CI gates the SCSS compile). If you have
+4. Ensure CI passes: `cd ui/shell && npm run build` (CI gates the SCSS compile). If you have
    the git-ignored `@girs/` typings, also run `npm run typecheck`.
 5. If your change alters behaviour or conventions, **update the relevant skill reference in
    the same PR** — the skill is versioned with the code and is the single source of truth.

@@ -47,12 +47,12 @@ User config always under `~/.config/crystal-shell/`.
 ### Asset resolution — `SHELL_ROOT`, never the config dir
 
 Code-shipped assets (icons in `assets/icons/`, `style.css`) resolve ONLY against
-`SHELL_ROOT` (`core/Paths.ts` = `$CRYSTAL_SHELL_ROOT`, set by `scripts/crystal-shell-ui`):
-the source tree `repo/ui/ags-v3` in `--dev`, `/usr/share/crystal-shell/ui/ags-v3` in
-`--system`. `install.sh` ships `ui/ags-v3/assets/` into `/usr/share/...`.
+`SHELL_ROOT` (`core/Paths.ts` = `$CRYSTAL_SHELL_ROOT`, set by `bin/crystal-shell-ui`):
+the source tree `repo/ui/shell` in `--dev`, `/usr/share/crystal-shell/ui/shell` in
+`--system`. `install.sh` ships `ui/shell/assets/` into `/usr/share/...`.
 
 Do NOT resolve assets against `~/.config/crystal-shell/` — an old secondary
-`${config}/crystal-shell/ui/ags-v3/...` path existed only because the config dir used
+`${config}/crystal-shell/ui/shell/...` path existed only because the config dir used
 to be a symlink to the repo (see footgun below); it was removed from
 `Icons.ts`/`app.ts`/`ThemeManager.ts` (2026-06-05). Rule of thumb: **shipped assets →
 `SHELL_ROOT`; user state → `~/.config/crystal-shell/`.** They are never the same place.
@@ -61,13 +61,13 @@ to be a symlink to the repo (see footgun below); it was removed from
 
 ```bash
 ./install.sh --dev                       # one-time setup
-# edit TSX/SCSS in ui/ags-v3/
+# edit TSX/SCSS in ui/shell/
 Super+Shift+R                            # reload UI in a graphical session
 tail -f /tmp/crystal-shell-ui.log        # logs
 killall gjs                              # nuke stale GJS holding the old UI
-cd ui/ags-v3 && ags types -d .           # (re)generate @girs/ typings — see below
-cd ui/ags-v3 && npm run typecheck        # needs @girs/
-cd ui/ags-v3 && npm run build            # SCSS + ags bundle
+cd ui/shell && ags types -d .           # (re)generate @girs/ typings — see below
+cd ui/shell && npm run typecheck        # needs @girs/
+cd ui/shell && npm run build            # SCSS + ags bundle
 ags request toggleAppGrid                # send an IPC command
 ```
 
@@ -93,8 +93,8 @@ run the shell once with criticals made fatal so it aborts and leaves a coredump,
 the trace:
 ```bash
 systemctl --user stop crystal-shell
-CRYSTAL_SHELL_ROOT="$PWD/ui/ags-v3" G_DEBUG=fatal-criticals timeout 20 \
-  bash -c 'cd ui/ags-v3 && ags run app.ts' > /tmp/fatal-crit.log 2>&1
+CRYSTAL_SHELL_ROOT="$PWD/ui/shell" G_DEBUG=fatal-criticals timeout 20 \
+  bash -c 'cd ui/shell && ags run app.ts' > /tmp/fatal-crit.log 2>&1
 systemctl --user start crystal-shell      # restore the session UI immediately
 coredumpctl gdb -1 --debugger-arguments="-batch -ex 'bt 30'"
 ```
@@ -126,7 +126,7 @@ log errors. Run it FIRST when debugging a user's install, and attach its output 
 on bug reports and hardware/compat PRs.
 
 **Regenerating `@girs/` (and the trap it sets).** `@girs/` is git-ignored, so a fresh clone / a new
-environment has none. Regenerate with `cd ui/ags-v3 && ags types -d .` (offline — reads the system
+environment has none. Regenerate with `cd ui/shell && ags types -d .` (offline — reads the system
 `.gir` files; ~208 `.d.ts`; do **not** pass `-u`, which would rewrite the committed `tsconfig`).
 **The trap:** without `@girs/`, `npm run typecheck` doesn't fail loudly — it floods you with ~57
 *false* `Namespace '"ags/gtk4".Gtk' has no exported member 'Box'`-style errors. Real errors hide in
@@ -322,7 +322,7 @@ Why two: `uwsm` forwards args after *its* `--` onto `start-hyprland`; `start-hyp
 only forwards args after *its own* `--` to `Hyprland`. A single `--` yields
 `start-hyprland -c <path>`, which `start-hyprland` swallows → Hyprland silently falls
 back to `~/.config/hypr/hyprland.lua`. Don't "simplify" the double dash away
-(`scripts/crystal-shell`, commit d03c9f1).
+(`bin/crystal-shell`, commit d03c9f1).
 
 Verify which config is live: `cat /proc/$(pidof Hyprland)/cmdline | tr '\0' ' '` →
 must show `-c /usr/share/crystal-shell/config/hypr/hyprland.lua`. (Hyprland 0.55.2
@@ -341,7 +341,7 @@ symlink, that's the bug — make it a real dir.
 ### Env vars
 
 - `~/.config/uwsm/env` + `~/.config/uwsm/env-hyprland` — toolkit/NVIDIA env. **This is where env vars live, NOT in the Hyprland config.** A new contributor's first instinct is to drop env vars in `hyprland.lua`; that's wrong.
-- Session-wide env (Wayland backend, `QT_QPA_PLATFORMTHEME=xdgdesktopportal`, GI paths) is exported by the `scripts/crystal-shell` launcher itself.
+- Session-wide env (Wayland backend, `QT_QPA_PLATFORMTHEME=xdgdesktopportal`, GI paths) is exported by the `bin/crystal-shell` launcher itself.
 - **GOTCHA — sourcing order:** uwsm **sources** `~/.config/uwsm/env` as a shell, and it does so AFTER the launcher's own exports, so the env file WINS on any conflicting var. (A stale `QT_QPA_PLATFORMTHEME=qt6ct` in the env file was silently overriding the launcher's `xdgdesktopportal` — fixed in `defaults/uwsm/env` + an idempotent migration in install.sh.) Because it's sourced, values with shell metachars must be quoted: `export QT_QPA_PLATFORM="wayland;xcb"` (a bare `;` truncates the var and runs `xcb` as a command).
 - **NVIDIA autodetect:** `install.sh` detects NVIDIA hardware + active driver (`lspci` + `lsmod`) and uncomments the GPU env vars in `~/.config/uwsm/env` ONLY for the proprietary/open driver (never nouveau — those `nvidia-drm`/GBM vars break a nouveau/mesa session). It warns (never auto-edits boot) if `nvidia_drm modeset` is off, and informs on hybrid graphics. AMD/Intel need nothing.
 

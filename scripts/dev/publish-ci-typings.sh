@@ -19,24 +19,24 @@
 #         ./scripts/dev/publish-ci-typings.sh --dry  # package only, no upload
 #
 # Requires: gh (authenticated with repo write), zstd, a fresh @girs/
-# (regenerate with: cd ui/ags-v3 && rm -rf @girs && ags types -d .)
+# (regenerate with: cd ui/shell && rm -rf @girs && ags types -d .)
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
-GIRS_DIR="$REPO_DIR/ui/ags-v3/@girs"
+GIRS_DIR="$REPO_DIR/ui/shell/@girs"
 TAG="ci-assets"
 ASSET="girs-snapshot.tar.zst"
 OUT="/tmp/$ASSET"
 
 [ -d "$GIRS_DIR" ] || {
   echo "ERROR: $GIRS_DIR not found. Generate it first:"
-  echo "  cd ui/ags-v3 && ags types -d ."
+  echo "  cd ui/shell && ags types -d ."
   exit 1
 }
 
 echo "Packaging @girs ($(du -sh "$GIRS_DIR" | cut -f1)) ..."
-tar -C "$REPO_DIR/ui/ags-v3" -cf - @girs | zstd -19 -T0 -q -f -o "$OUT"
+tar -C "$REPO_DIR/ui/shell" -cf - @girs | zstd -19 -T0 -q -f -o "$OUT"
 echo "  → $OUT ($(du -h "$OUT" | cut -f1))"
 
 if [ "${1:-}" = "--dry" ]; then

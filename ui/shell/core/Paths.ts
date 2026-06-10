@@ -3,10 +3,10 @@ import GLib from "gi://GLib"
 /**
  * Root of the shell's bundled resources (assets/, style.css, icons).
  *
- * The launcher starts the AGS process inside ui/ags-v3 (so `ags run app.ts`
+ * The launcher starts the AGS process inside ui/shell (so `ags run app.ts`
  * bundles and finds style.css) and exports CRYSTAL_SHELL_ROOT pointing there.
  * We capture it here and then immediately move the process CWD to $HOME (below) —
- * otherwise every app launched from the dock/AppGrid inherits ui/ags-v3 as its
+ * otherwise every app launched from the dock/AppGrid inherits ui/shell as its
  * working directory instead of $HOME (kitty opening in the source tree, etc.).
  *
  * So: assets resolve against SHELL_ROOT (fixed), never the live CWD. The env var

@@ -38,7 +38,7 @@ See CONTRIBUTING.md for the personal-vs-global heuristic and conventions.
 - [ ] I read `SKILL.md` and the relevant `references/` doc, and followed the conventions
       (the "ten commandments": scoped CSS, no hardcoded colours, IPC via `ShellActions`,
       `Status.ts` for visibility, no `transform: scale` on clickables, etc.).
-- [ ] CI passes locally (`cd ui/ags-v3 && npm run build`).
+- [ ] CI passes locally (`cd ui/shell && npm run build`).
 - [ ] If this changes behaviour or conventions, I updated the relevant skill reference in
       this PR.
 

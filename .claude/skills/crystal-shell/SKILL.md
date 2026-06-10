@@ -1,6 +1,6 @@
 ---
 name: crystal-shell
-description: "Authoritative reference for working on the Crystal Shell desktop environment codebase — a full Wayland session for Arch Linux built with AGS v3 + TypeScript/TSX → GJS on GTK4 + Hyprland. Use this skill whenever the user mentions Crystal Shell, fluid-crystal, the shell bar, dock, control center, notification center, prism/spotlight, app grid, overview, system menu, settings window, lockscreen, or greeter; asks to edit files under `ui/ags-v3/`, `ui/greeter/`, `ui/lockscreen/`, or `ui/lib/crystal-ui/`; wants to modify `hyprland.lua`, SCSS in `styles/`, a `core/` service, or run `install.sh`. Also trigger on questions about reloading the UI (Super+Shift+R), `ags request` IPC, `Status.ts`, the three build bundles, or the Fluid Crystal design system. ALWAYS consult this skill BEFORE editing files in this repo — strict conventions (no `Adw.OverlaySplitView`, no transform scale on clickables, no hardcoded colors, scoped CSS only, IPC via `ShellActions` not `globalThis`) are easy to violate without it."
+description: "Authoritative reference for working on the Crystal Shell desktop environment codebase — a full Wayland session for Arch Linux built with AGS v3 + TypeScript/TSX → GJS on GTK4 + Hyprland. Use this skill whenever the user mentions Crystal Shell, fluid-crystal, the shell bar, dock, control center, notification center, prism/spotlight, app grid, overview, system menu, settings window, lockscreen, or greeter; asks to edit files under `ui/shell/`, `ui/greeter/`, `ui/lockscreen/`, or `ui/lib/crystal-ui/`; wants to modify `hyprland.lua`, SCSS in `styles/`, a `core/` service, or run `install.sh`. Also trigger on questions about reloading the UI (Super+Shift+R), `ags request` IPC, `Status.ts`, the three build bundles, or the Fluid Crystal design system. ALWAYS consult this skill BEFORE editing files in this repo — strict conventions (no `Adw.OverlaySplitView`, no transform scale on clickables, no hardcoded colors, scoped CSS only, IPC via `ShellActions` not `globalThis`) are easy to violate without it."
 ---
 
 # Crystal Shell
@@ -21,7 +21,7 @@ This is the single most important fact to internalize before touching anything:
 
 | Bundle | Source | Output binary | Role |
 |---|---|---|---|
-| **Shell** | `ui/ags-v3/` | `build/crystal-shell` | Desktop: bar, dock, overlays, settings |
+| **Shell** | `ui/shell/` | `build/crystal-shell` | Desktop: bar, dock, overlays, settings |
 | **Greeter** | `ui/greeter/` | `build/crystal-greeter` | Login (greetd + AstalGreet) |
 | **Lockscreen** | `ui/lockscreen/` | `build/crystal-lock` | Lock via `Gtk4SessionLock` (OVERLAY-layer fallback) |
 
@@ -59,13 +59,13 @@ The references are short and load-on-demand. Don't try to hold the whole project
 
 ```bash
 ./install.sh --dev                       # one-time setup: system binaries + ~/.config/crystal-shell/.dev
-# ... edit TSX/SCSS in ui/ags-v3/ ...
+# ... edit TSX/SCSS in ui/shell/ ...
 # In a graphical session:
 Super+Shift+R                            # reload the UI (re-runs crystal-shell-ui → ags run)
 tail -f /tmp/crystal-shell-ui.log        # logs
 killall gjs                              # nuke stuck old UI when reload misbehaves
-cd ui/ags-v3 && npm run typecheck        # local typecheck (needs the git-ignored @girs/)
-cd ui/ags-v3 && npm run build            # SCSS compile + ags bundle
+cd ui/shell && npm run typecheck        # local typecheck (needs the git-ignored @girs/)
+cd ui/shell && npm run build            # SCSS compile + ags bundle
 ags request listActions                  # discover the shell's IPC surface (JSON)
 ags request dumpState                    # live shell state as JSON (overlays, version…)
 crystal-shell-doctor                     # Markdown diagnostic report (bug/PR evidence)

@@ -12,8 +12,8 @@ import { readFileSync, writeFileSync, readdirSync } from "fs"
 import { join, basename } from "path"
 
 const ROOT = new URL("..", import.meta.url).pathname
-const PAGES_DIR = join(ROOT, "ui/ags-v3/widget/settings/pages")
-const DOCK_DIR  = join(ROOT, "ui/ags-v3/widget/dock")
+const PAGES_DIR = join(ROOT, "ui/shell/widget/settings/pages")
+const DOCK_DIR  = join(ROOT, "ui/shell/widget/dock")
 const OUT_FILE  = join(ROOT, "scripts/i18n-extracted.json")
 
 // ── Patterns that identify translatable string arguments ──────────────────────

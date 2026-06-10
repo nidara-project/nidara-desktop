@@ -721,7 +721,7 @@ export function DockItem(
                     shellActions.toggleSettings?.()
                 } else {
                     // gtk-launch DOES inherit the launcher's CWD (verified) — without the
-                    // cd, the app opens in the AGS process's dir (ui/ags-v3) instead of
+                    // cd, the app opens in the AGS process's dir (ui/shell) instead of
                     // $HOME. Reset it explicitly, mirroring DockCore.getLaunch. `exec` so
                     // gtk-launch replaces the shell (clean process tree under uwsm's scope).
                     execAsync(["uwsm", "app", "--", "sh", "-c",

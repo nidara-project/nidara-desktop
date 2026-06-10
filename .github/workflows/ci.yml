@@ -7,7 +7,7 @@
 # Gates here:
 #   - styles: the SCSS stylesheet compiles (catches CSS syntax errors). Pure JS,
 #     no system libraries needed.
-#   - typecheck: `tsc --noEmit` over ui/ags-v3. The GI typings it needs (@girs/,
+#   - typecheck: `tsc --noEmit` over ui/shell. The GI typings it needs (@girs/,
 #     ~58 MB generated, git-ignored) can't be produced on a runner — `ags types`
 #     needs the ags binary + Astal libs. Instead a maintainer publishes a ~4 MB
 #     compressed snapshot as an asset on the `ci-assets` release
@@ -35,7 +35,7 @@ jobs:
         with:
           node-version: lts/*
       - name: Compile SCSS (must succeed)
-        working-directory: ui/ags-v3
+        working-directory: ui/shell
         run: npx --yes sass@1.97.3 --no-charset style.scss /tmp/style.css
 
   typecheck:
@@ -56,8 +56,8 @@ jobs:
             echo "A maintainer must publish it once: scripts/dev/publish-ci-typings.sh"
             exit 1
           fi
-          tar --zstd -xf /tmp/girs-snapshot.tar.zst -C ui/ags-v3
-          echo "Extracted @girs: $(du -sh ui/ags-v3/@girs | cut -f1)"
+          tar --zstd -xf /tmp/girs-snapshot.tar.zst -C ui/shell
+          echo "Extracted @girs: $(du -sh ui/shell/@girs | cut -f1)"
       - name: tsc --noEmit (must succeed)
-        working-directory: ui/ags-v3
+        working-directory: ui/shell
         run: npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json

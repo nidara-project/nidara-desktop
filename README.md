@@ -159,7 +159,7 @@ cd ~/Dev/crystal-shell
 `--dev` installs system binaries normally but writes `~/.config/crystal-shell/.dev` pointing to your repo. The `crystal-shell-ui` launcher detects this file and runs `ags run app.ts` from source — no full rebuild needed to see changes.
 
 ```bash
-cd ui/ags-v3
+cd ui/shell
 npm install   # IDE support (TypeScript autocomplete)
 ```
 
@@ -177,17 +177,17 @@ crystal-shell/
 ├── defaults/                  # Seed user configs (copied once on first install; never overwritten)
 │   ├── uwsm/                  # env / env-hyprland templates (toolkit & NVIDIA vars)
 │   └── wallpaper/             # Default wallpaper (shipped asset)
-├── scripts/
+├── bin/                       # Installed binaries/launchers (→ /usr/bin, /usr/lib/systemd)
 │   ├── crystal-shell          # Wayland session entry → /usr/bin/crystal-shell
 │   ├── crystal-shell-ui       # UI launcher (dev/system) → /usr/bin/crystal-shell-ui
 │   ├── crystal-greeter        # Greeter launcher
 │   ├── crystal-lock           # Lock screen launcher (Super+L)
-│   ├── crystal-game-mode      # Game mode toggle (Super+Shift+G)
-│   └── *-i18n.mjs             # Translation extract/apply tooling
+│   └── crystal-game-mode      # Game mode toggle (Super+Shift+G)
+├── scripts/                   # Repo tooling (not installed): i18n extract/apply, dev helpers
 ├── VERSION                    # Current version (semver)
 ├── install.sh                 # Provisioning script (system / --dev)
 └── ui/
-    ├── ags-v3/                # Main shell (TypeScript + AGS v3)
+    ├── shell/                 # Main shell (TypeScript + AGS v3)
     │   ├── app.ts             # Entry point + IPC request handler
     │   ├── core/              # State (Status), theme engine (FluidCrystal), services
     │   ├── widget/            # UI components (Bar, Dock, AppGrid, Control Center, Settings…)
@@ -208,13 +208,13 @@ with the code on purpose — see [Contributing](#contributing).
 - **Reload UI:** `Super + Shift + R`
 - **Logs:** `tail -f /tmp/crystal-shell-ui.log`
 - **Kill stale GJS process:** `killall gjs`
-- **Compile SCSS:** `cd ui/ags-v3 && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css`
-- **Type-check:** `cd ui/ags-v3 && npm run typecheck` (catches type errors before they reach the running shell)
+- **Compile SCSS:** `cd ui/shell && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css`
+- **Type-check:** `cd ui/shell && npm run typecheck` (catches type errors before they reach the running shell)
 
 Optionally, you can drive the running shell from the CLI to test a specific surface — e.g.
-`ags request toggleAppGrid` (the full command list lives in the `requestHandler` in `ui/ags-v3/app.ts`).
+`ags request toggleAppGrid` (the full command list lives in the `requestHandler` in `ui/shell/app.ts`).
 
-Before opening a PR, make sure the SCSS build passes (`cd ui/ags-v3 && npm run build`) and, if you
+Before opening a PR, make sure the SCSS build passes (`cd ui/shell && npm run build`) and, if you
 have the git-ignored `@girs/` typings, the typecheck too. See [Contributing](#contributing) for the
 personal-vs-global heuristic and the full PR flow.
 

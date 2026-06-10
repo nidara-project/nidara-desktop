@@ -89,8 +89,8 @@ crystal-monitor.lua
 hyprland-user.lua
 
 # Generated CSS (kept in repo as pre-compiled convenience for users)
-# ui/ags-v3/style.css  ← intentionally NOT ignored
-ui/ags-v3/style.css.map
+# ui/shell/style.css  ← intentionally NOT ignored
+ui/shell/style.css.map
 # User configs — generated at runtime, personal to each installation
 # (root-level only; defaults/ folder is intentionally tracked)
 theme_settings.json

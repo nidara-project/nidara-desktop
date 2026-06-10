@@ -278,7 +278,7 @@ build_install_pkg "$ags_dir"
 # 5. Build the Crystal Shell UI bundle
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[5/7] Building Crystal Shell UI..."
-cd "$REPO_DIR/ui/ags-v3"
+cd "$REPO_DIR/ui/shell"
 npm install
 npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
 
@@ -294,12 +294,12 @@ if [ "$MODE" = "system" ]; then
     echo "  Bundling shell UI..."
     mkdir -p build
     ags bundle app.ts build/crystal-shell
-    echo "  [OK] Bundle: $REPO_DIR/ui/ags-v3/build/crystal-shell"
+    echo "  [OK] Bundle: $REPO_DIR/ui/shell/build/crystal-shell"
 fi
 
 echo "  Building greeter..."
-# Use ags-v3's sass installation for SCSS compilation
-cd "$REPO_DIR/ui/ags-v3"
+# Use the shell bundle's sass installation for SCSS compilation
+cd "$REPO_DIR/ui/shell"
 npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css
 cd "$REPO_DIR/ui/greeter"
 if [ "$MODE" = "system" ]; then
@@ -340,14 +340,16 @@ if [ -f "$REPO_DIR/defaults/wallpaper/wallpaper.png" ]; then
 fi
 
 # Shell UI bundle + style
-sudo mkdir -p /usr/share/crystal-shell/ui/ags-v3/build
+# Migration: drop the pre-rename system tree (ui/ags-v3 → ui/shell, 2026-06)
+sudo rm -rf /usr/share/crystal-shell/ui/ags-v3
+sudo mkdir -p /usr/share/crystal-shell/ui/shell/build
 if [ "$MODE" = "system" ]; then
-    sudo cp "$REPO_DIR/ui/ags-v3/build/crystal-shell" /usr/share/crystal-shell/ui/ags-v3/build/
+    sudo cp "$REPO_DIR/ui/shell/build/crystal-shell" /usr/share/crystal-shell/ui/shell/build/
 fi
-sudo cp "$REPO_DIR/ui/ags-v3/style.css" /usr/share/crystal-shell/ui/ags-v3/
+sudo cp "$REPO_DIR/ui/shell/style.css" /usr/share/crystal-shell/ui/shell/
 # Static assets (icons, svgs) — resolved via SHELL_ROOT in prod (core/Paths.ts).
-sudo rm -rf /usr/share/crystal-shell/ui/ags-v3/assets
-sudo cp -r "$REPO_DIR/ui/ags-v3/assets" /usr/share/crystal-shell/ui/ags-v3/
+sudo rm -rf /usr/share/crystal-shell/ui/shell/assets
+sudo cp -r "$REPO_DIR/ui/shell/assets" /usr/share/crystal-shell/ui/shell/
 
 # Greeter bundle + style
 sudo mkdir -p /usr/share/crystal-shell/ui/greeter/build
@@ -363,21 +365,21 @@ if [ "$MODE" = "system" ]; then
 fi
 
 # Session wrapper scripts
-sudo cp "$REPO_DIR/scripts/crystal-shell"     /usr/bin/crystal-shell
-sudo cp "$REPO_DIR/scripts/crystal-shell-ui"  /usr/bin/crystal-shell-ui
-sudo cp "$REPO_DIR/scripts/crystal-greeter"   /usr/bin/crystal-greeter
-sudo cp "$REPO_DIR/scripts/crystal-lock"      /usr/bin/crystal-lock
-sudo cp "$REPO_DIR/scripts/crystal-game-mode" /usr/bin/crystal-game-mode
-sudo cp "$REPO_DIR/scripts/crystal-shell-doctor" /usr/bin/crystal-shell-doctor
-sudo cp "$REPO_DIR/scripts/crystal-portal"    /usr/bin/crystal-portal
+sudo cp "$REPO_DIR/bin/crystal-shell"     /usr/bin/crystal-shell
+sudo cp "$REPO_DIR/bin/crystal-shell-ui"  /usr/bin/crystal-shell-ui
+sudo cp "$REPO_DIR/bin/crystal-greeter"   /usr/bin/crystal-greeter
+sudo cp "$REPO_DIR/bin/crystal-lock"      /usr/bin/crystal-lock
+sudo cp "$REPO_DIR/bin/crystal-game-mode" /usr/bin/crystal-game-mode
+sudo cp "$REPO_DIR/bin/crystal-shell-doctor" /usr/bin/crystal-shell-doctor
+sudo cp "$REPO_DIR/bin/crystal-portal"    /usr/bin/crystal-portal
 sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-game-mode /usr/bin/crystal-shell-doctor /usr/bin/crystal-portal
 
 # systemd user unit — the shell respawns on crash instead of leaving a bare
-# compositor (see scripts/crystal-shell.service). NOT enabled by target: it's
+# compositor (see bin/crystal-shell.service). NOT enabled by target: it's
 # started explicitly from the Crystal Hyprland config so it can't leak into other
 # Hyprland sessions (see the unit's NOTE and the migration disable in step 7).
 sudo mkdir -p /usr/lib/systemd/user
-sudo cp "$REPO_DIR/scripts/crystal-shell.service" /usr/lib/systemd/user/crystal-shell.service
+sudo cp "$REPO_DIR/bin/crystal-shell.service" /usr/lib/systemd/user/crystal-shell.service
 
 # Wayland session entry
 sudo mkdir -p /usr/share/wayland-sessions

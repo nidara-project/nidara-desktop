@@ -16,9 +16,9 @@ const DRY = process.argv.includes("--dry-run")
 const ROOT = new URL("..", import.meta.url).pathname
 
 const EXTRACTED  = join(ROOT, "scripts/i18n-extracted.json")
-const PAGES_DIR  = join(ROOT, "ui/ags-v3/widget/settings/pages")
-const DOCK_DIR   = join(ROOT, "ui/ags-v3/widget/dock")
-const I18N_DIR   = join(ROOT, "ui/ags-v3/core/i18n/locales")
+const PAGES_DIR  = join(ROOT, "ui/shell/widget/settings/pages")
+const DOCK_DIR   = join(ROOT, "ui/shell/widget/dock")
+const I18N_DIR   = join(ROOT, "ui/shell/core/i18n/locales")
 const EN_FILE    = join(I18N_DIR, "en.ts")
 const ES_FILE    = join(I18N_DIR, "es.ts")
 
