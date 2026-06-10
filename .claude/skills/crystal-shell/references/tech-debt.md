@@ -195,6 +195,17 @@ notifications (incl. `-r` replacement + NC open), DPMS off/on. Next occurrence: 
 theorize — run the shell once under `G_DEBUG=fatal-criticals` while reproducing the user's
 action of that moment and read the coredump backtrace (recipe in `dev-workflow.md`).
 
+### 13. Lockscreen GTK4 segfault when a wl_output vanishes — upstream, mitigated by watchdog
+On wake-from-suspend the DP link re-trains and the wl_output disappears for ~1 s; GTK
+destroys the session-lock window bound to that output and segfaults inside
+`gtk_window_destroy` (stack is pure libgtk-4/libwayland — our JS is not in it; coredump
+2026-06-10 11:53). With the lock client dead, Hyprland showed its red "lock app crashed"
+screen. Mitigation shipped: `bin/crystal-lock` relaunches the bundle on abnormal exit
+(≤5 attempts) and `misc.allow_session_lock_restore = true` lets the new instance take the
+lock over. Real fix is upstream (GTK4 / gtk4-layer-shell `Gtk4SessionLock`); if a clean
+reproducer emerges, file it there. Don't try to "handle" output removal in lockscreen JS —
+the crash happens below us, during Wayland event dispatch.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

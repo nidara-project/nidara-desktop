@@ -1,0 +1,13 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# crystal-before-sleep — hypridle before_sleep_cmd
+# Installed to /usr/bin/crystal-before-sleep
+# Persists the current volume and locks the session before suspend.
+# ─────────────────────────────────────────────────────────────────────────────
+
+wpctl get-volume @DEFAULT_SINK@ 2>/dev/null | grep -Eo '[0-9]+\.[0-9]+' | head -1 > /tmp/.crystal-vol
+
+# Lock via logind: hypridle receives the dbus lock event and runs lock_cmd
+# (crystal-lock) detached. Must NOT call crystal-lock here directly — it blocks
+# until unlock, and hypridle holds the sleep inhibitor until this returns.
+loginctl lock-session 2>/dev/null || true

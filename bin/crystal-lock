@@ -29,9 +29,25 @@ fi
 ags request hideForLock >> "$LOG" 2>&1 || true
 hyprctl dispatch 'hl.dsp.submap("lock")' >> "$LOG" 2>&1 || true
 
-# Run lockscreen — blocks until app.quit() on successful auth
+# Run lockscreen — blocks until app.quit() on successful auth.
+# Watchdog: if the bundle dies abnormally (e.g. GTK4 segfault when a wl_output
+# vanishes on wake — seen 2026-06-10), relaunch it. misc.allow_session_lock_restore
+# lets the new instance take over the lock instead of leaving Hyprland's red
+# "lock app crashed" screen.
 cd /usr/share/crystal-shell/ui/lockscreen
-"$BUNDLE" >> "$LOG" 2>&1
+attempts=0
+while true; do
+    "$BUNDLE" >> "$LOG" 2>&1
+    code=$?
+    [ "$code" -eq 0 ] && break
+    attempts=$((attempts + 1))
+    if [ "$attempts" -ge 5 ]; then
+        echo "[$(date '+%H:%M:%S')] crystal-lock: bundle crashed $attempts times (last exit $code) — giving up" | tee -a "$LOG"
+        break
+    fi
+    echo "[$(date '+%H:%M:%S')] crystal-lock: bundle exited $code — relaunching ($attempts/5)" >> "$LOG"
+    sleep 1
+done
 
 # Restore everything after unlock
 hyprctl dispatch 'hl.dsp.submap("reset")' >> "$LOG" 2>&1 || true

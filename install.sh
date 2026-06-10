@@ -369,11 +369,13 @@ sudo cp "$REPO_DIR/bin/crystal-shell"     /usr/bin/crystal-shell
 sudo cp "$REPO_DIR/bin/crystal-shell-ui"  /usr/bin/crystal-shell-ui
 sudo cp "$REPO_DIR/bin/crystal-greeter"   /usr/bin/crystal-greeter
 sudo cp "$REPO_DIR/bin/crystal-lock"      /usr/bin/crystal-lock
+sudo cp "$REPO_DIR/bin/crystal-before-sleep" /usr/bin/crystal-before-sleep
+sudo cp "$REPO_DIR/bin/crystal-after-sleep"  /usr/bin/crystal-after-sleep
 sudo cp "$REPO_DIR/bin/crystal-game-mode" /usr/bin/crystal-game-mode
 sudo cp "$REPO_DIR/bin/crystal-shell-doctor" /usr/bin/crystal-shell-doctor
 sudo cp "$REPO_DIR/bin/crystal-portal"    /usr/bin/crystal-portal
 sudo cp "$REPO_DIR/bin/crystal-shell-mcp" /usr/bin/crystal-shell-mcp
-sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-game-mode /usr/bin/crystal-shell-doctor /usr/bin/crystal-portal /usr/bin/crystal-shell-mcp
+sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-before-sleep /usr/bin/crystal-after-sleep /usr/bin/crystal-game-mode /usr/bin/crystal-shell-doctor /usr/bin/crystal-portal /usr/bin/crystal-shell-mcp
 
 # systemd user unit — the shell respawns on crash instead of leaving a bare
 # compositor (see bin/crystal-shell.service). NOT enabled by target: it's

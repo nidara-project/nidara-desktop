@@ -204,7 +204,7 @@ class HyprlandStateClass extends GObject.Object {
     // RULE: HyprlandState is the ONLY door to hyprctl — services and widgets
     // never shell out to hyprctl directly; they call (or add) a method here.
     // (Exempt: config text we WRITE for other daemons to run, e.g. the
-    // hypridle hooks in PowerManager/Power.tsx — those execute outside the shell.)
+    // hypridle config in Power.tsx — those execute outside the shell.)
 
     focusWorkspace(id: number) {
         return execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ workspace = ${id}})`])

@@ -415,8 +415,8 @@ hl.layer_rule({ match = { namespace = "crystal-lock" },     blur = true, ignore_
 
 
 -- ── Lock screen submap ────────────────────────────────────────────────────────
--- crystal-lock activates with:  hyprctl dispatch submap lock
--- crystal-lock resets with:     hyprctl dispatch submap reset
+-- crystal-lock activates with:  hyprctl dispatch 'hl.dsp.submap("lock")'
+-- crystal-lock resets with:     hyprctl dispatch 'hl.dsp.submap("reset")'
 hl.define_submap("lock", function()
     hl.bind("SUPER + SHIFT + CTRL + ALT + Escape", hl.dsp.submap("reset"))
 end)

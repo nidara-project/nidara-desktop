@@ -57,7 +57,6 @@ import Settings from "./widget/settings/Settings"
 import Theme, { setPreferDark } from "./core/ThemeManager"
 import AboutWindow from "./widget/about/AboutWindow"
 import notifConfig from "./core/NotifConfig"
-import { installPowerHooks } from "./core/PowerManager"
 
 // Minimal interface for windows managed by the shell
 interface ShellWindow {
@@ -223,8 +222,6 @@ app.start({
             if (notifd) notifd.dont_disturb = true
         }).catch(() => {})
     }
-
-    installPowerHooks()
 
     // Agent-facing config surface (describeConfig/getConfig/setConfig)
     registerConfigEntries()

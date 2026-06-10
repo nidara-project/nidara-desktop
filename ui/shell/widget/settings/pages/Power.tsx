@@ -27,7 +27,7 @@ const parseHypridle = (): IdleConfig => {
             blocks.push({ timeout, onTimeout })
         }
         return {
-            screenOff: blocks.find(b => b.onTimeout.includes("dpms off"))?.timeout ?? 0,
+            screenOff: blocks.find(b => /dpms.*(off|disable)/.test(b.onTimeout))?.timeout ?? 0,
             lock:      blocks.find(b => b.onTimeout.includes("crystal-lock") || b.onTimeout.includes("lock-session"))?.timeout ?? 0,
             suspend:   blocks.find(b => b.onTimeout.includes("suspend"))?.timeout ?? 0,
         }
@@ -52,8 +52,10 @@ const writeHypridle = ({ screenOff, lock, suspend }: IdleConfig) => {
     if (screenOff > 0) lines.push(
         "listener {",
         `    timeout = ${screenOff}`,
-        "    on-timeout = hyprctl dispatch dpms off",
-        "    on-resume  = hyprctl dispatch dpms on",
+        // Lua-parser syntax — the legacy `hyprctl dispatch dpms off` is a Lua
+        // error on Crystal's Hyprland and leaves the screen unrecoverable on wake
+        `    on-timeout = hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })'`,
+        `    on-resume  = hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })'`,
         "}", ""
     )
     if (lock > 0) lines.push(

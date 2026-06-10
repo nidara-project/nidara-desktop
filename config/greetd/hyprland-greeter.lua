@@ -14,7 +14,9 @@ hl.on("hyprland.start", function()
     hl.exec_cmd("awww-daemon")
     hl.exec_cmd("sleep 1 && awww img /usr/share/crystal-shell/wallpaper.png --transition-type fade --transition-duration 1")
     -- Launch greeter; exit Hyprland when it closes
-    hl.exec_cmd("crystal-greeter; hyprctl dispatch exit")
+    -- (Lua parser: the legacy `hyprctl dispatch exit` errors out and the
+    -- greeter compositor would never exit)
+    hl.exec_cmd("crystal-greeter; hyprctl dispatch 'hl.dsp.exit()'")
 end)
 
 -- ── Keyboard layout: read saved greeter pref, fall back to "us" ──────────────
