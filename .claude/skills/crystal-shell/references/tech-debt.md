@@ -227,6 +227,10 @@ These were paid down; the *rule* remains:
   no `PillSlider`. See `design-system.md`.
 - **Monitor config** — applies via `hyprctl eval "hl.monitor({...})"`, NOT `hyprctl keyword`
   (rejected by the Lua parser). See `architecture.md`.
+- **Widget registration is generated** — never hand-edit `widgets/widgets.gen.ts` or re-add
+  manual imports to `widgets/index.ts`; the registry comes from `scripts/gen-widget-index.mjs`
+  (phase 1 of the widget plugin system; phase 2 — zero-layout contract — still deferred).
+  `bar-helpers.ts` is the only grandfathered non-widget in `widgets/` (EXCLUDE list).
 
 ---
 

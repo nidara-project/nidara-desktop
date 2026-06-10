@@ -49,7 +49,16 @@ Three pillars by responsibility:
 - **`widget/`** — TSX components that consume `core/` state. Each widget is a function that takes a `Gdk.Monitor` and returns a `Gtk.Widget`. Sub-dirs:
   - `bar/`, `dock/`, `control-center/`, `app-grid/`, `overview/`, `prism/`
   - `settings/` (+ `settings/pages/`, 18 pages), `about/`
-  - `widgets/` — atomic CC widgets
+  - `widgets/` — atomic CC/bar widgets, **auto-registered**: one file that
+    default-exports a `const w: AtomicWidget = {...}` is ALL it takes —
+    `scripts/gen-widget-index.mjs` scans the dir and regenerates the committed
+    `widgets.gen.ts` (imports + `ALL_WIDGETS`; runs on npm build/dev hooks, on
+    the dev launcher before `ags run`, and CI job `widgets-gen` fails if stale).
+    Rules: widgets-only directory (anything else is a codegen hard-error; new
+    helpers go in `common/` — `bar-helpers.ts` is grandfathered in EXCLUDE);
+    unique `id`; no module-scope dependency on another widget (import order is
+    alphabetical). Curated `BAR_ORDER`/`CC_DEFAULT_ORDER` stay editorial in
+    `widgets/index.ts` — unlisted widgets fall to the end, listing is optional.
   - `common/` — shared: `SquircleContainer`, `DrawingUtils`, `Slider.ts` (the ONE Cairo slider — no `Gtk.Scale`, no PillSlider), `ManagedWindow`, `CrystalPopover`, `WorkspaceSchematic`, `fade.ts`, `poll.ts` (`pollWhileMapped` — ANY recurring widget poll must gate on map/unmap: built-once-hidden surfaces like CC tiles must not keep session-long timers; idle baseline is 0 wakeups/s and we keep it that way)
 
 Other top-level dirs: `ui/lib/crystal-ui/` (pure-GTK4 primitives lib — see end of file) and the greeter/lockscreen bundles.

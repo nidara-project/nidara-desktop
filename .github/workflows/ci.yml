@@ -15,6 +15,10 @@
 #     own types.d.ts declares the "ags/*" modules ambiently, so tsc needs no
 #     node_modules at all. If this job fails on a type that exists locally, the
 #     snapshot is stale → re-run the publish script.
+#   - widgets-gen: the committed widgets.gen.ts (widget auto-registration) is
+#     fresh — regenerates it with scripts/gen-widget-index.mjs and fails if it
+#     differs. Pure node; also surfaces the codegen's own validation errors
+#     (stray non-widget file in widgets/, duplicate widget id).
 #
 # Not here: `ags bundle` — needs the `ags` binary + GTK4 libraries.
 
@@ -61,3 +65,21 @@ jobs:
       - name: tsc --noEmit (must succeed)
         working-directory: ui/shell
         run: npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json
+
+  widgets-gen:
+    name: Widget registry freshness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: lts/*
+      - name: Regenerate widgets.gen.ts (must succeed)
+        run: node scripts/gen-widget-index.mjs
+      - name: Verify committed file is fresh
+        run: |
+          if ! git diff --exit-code -- ui/shell/widget/widgets/widgets.gen.ts; then
+            echo "::error::ui/shell/widget/widgets/widgets.gen.ts is STALE."
+            echo "Fix: run 'node scripts/gen-widget-index.mjs' and commit the updated widgets.gen.ts alongside your widget change."
+            exit 1
+          fi

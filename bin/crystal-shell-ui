@@ -37,6 +37,14 @@ if [ -f "$DEV_FILE" ]; then
         # assets resolve against this fixed root, not the live CWD.
         export CRYSTAL_SHELL_ROOT="$SOURCE_DIR/ui/shell"
         cd "$SOURCE_DIR/ui/shell"
+        # Widget auto-registration: regenerate widgets.gen.ts so a freshly added
+        # widget file is picked up by Super+Shift+R. Fail-SOFT on purpose — a
+        # hard failure here would brick the reload path; the committed .gen.ts
+        # is a stale-but-working fallback and CI is the hard gate.
+        if command -v node >/dev/null 2>&1; then
+            node "$SOURCE_DIR/scripts/gen-widget-index.mjs" >> "$LOG" 2>&1 \
+                || echo "[$(date '+%H:%M:%S')] crystal-shell-ui: WARN — widget codegen failed, running with committed widgets.gen.ts" | tee -a "$LOG"
+        fi
         exec ags run app.ts >> "$LOG" 2>&1
     else
         echo "[$(date '+%H:%M:%S')] crystal-shell-ui: WARNING — .dev points to '$SOURCE_DIR' but app.ts not found" | tee -a "$LOG"

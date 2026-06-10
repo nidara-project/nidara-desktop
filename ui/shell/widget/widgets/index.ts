@@ -1,40 +1,9 @@
 import Gio from "gi://Gio"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
-import cpuMemory from "./cpu-memory"
-import volume    from "./volume"
-import wifi      from "./wifi"
-import ethernet  from "./ethernet"
-import bluetooth from "./bluetooth"
-import darkMode  from "./dark-mode"
-import focus     from "./focus"
-import calculator from "./calculator"
-import media     from "./media"
-import battery   from "./battery"
-import brightness from "./brightness"
-import clipboard from "./clipboard"
-import nightLight from "./night-light"
-import screenshot from "./screenshot"
-import screenrecord from "./screenrecord"
-import vpn from "./vpn"
-
-const ALL_WIDGETS: AtomicWidget[] = [
-    cpuMemory,
-    volume,
-    wifi,
-    ethernet,
-    bluetooth,
-    darkMode,
-    focus,
-    calculator,
-    media,
-    battery,
-    brightness,
-    clipboard,
-    nightLight,
-    screenshot,
-    screenrecord,
-    vpn,
-]
+// Auto-registration: ALL_WIDGETS comes from the generated widgets.gen.ts —
+// dropping a file in widgets/ that default-exports an AtomicWidget is ALL it
+// takes to register a widget (see scripts/gen-widget-index.mjs).
+import { ALL_WIDGETS } from "./widgets.gen"
 
 const _map = new Map<string, AtomicWidget>(ALL_WIDGETS.map(w => [w.id, w]))
 
