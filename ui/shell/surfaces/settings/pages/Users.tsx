@@ -1,0 +1,570 @@
+import { Gdk, Gtk } from "ags/gtk4"
+import GLib from "gi://GLib"
+import Gio from "gi://Gio"
+import GdkPixbuf from "gi://GdkPixbuf"
+import { execAsync } from "ags/process"
+import { showCrystalAlert, CrystalButton } from "../../../../lib/crystal-ui"
+import { listGroup, createRow, pageBox } from "../SettingsHelpers"
+import { showAvatarCropper } from "../../../common/AvatarCropper"
+import { t } from "../../../core/i18n"
+import Icons from "../../../core/Icons"
+
+// ── Data helpers ──────────────────────────────────────────────────────────────
+
+interface SystemUser {
+    username: string
+    displayName: string
+    homeDir: string
+    uid: number
+}
+
+function parseUsers(): SystemUser[] {
+    try {
+        const [ok, bytes] = GLib.file_get_contents("/etc/passwd")
+        if (!ok) return []
+        const text = new TextDecoder().decode(bytes as Uint8Array)
+        return text.split("\n").flatMap(line => {
+            const p = line.split(":")
+            if (p.length < 7) return []
+            const uid = parseInt(p[2])
+            const shell = p[6].trim()
+            if (uid < 1000 || !shell || shell.includes("nologin") || shell.includes("false")) return []
+            return [{ username: p[0], displayName: (p[4] ?? "").split(",")[0].trim() || p[0], homeDir: p[5] ?? "", uid }]
+        })
+    } catch { return [] }
+}
+
+function isInWheel(username: string): boolean {
+    try {
+        const [ok, bytes] = GLib.file_get_contents("/etc/group")
+        if (!ok) return false
+        const text = new TextDecoder().decode(bytes as Uint8Array)
+        for (const line of text.split("\n")) {
+            const p = line.split(":")
+            if (p[0] === "wheel") return (p[3] ?? "").split(",").includes(username)
+        }
+    } catch {}
+    return false
+}
+
+function avatarFor(username: string, homeDir: string): string | null {
+    const accounts = `/var/lib/AccountsService/icons/${username}`
+    const face     = `${homeDir}/.face`
+    if (GLib.file_test(accounts, GLib.FileTest.EXISTS)) return accounts
+    if (GLib.file_test(face,     GLib.FileTest.EXISTS)) return face
+    return null
+}
+
+// ── Current-user helpers ──────────────────────────────────────────────────────
+
+function getDisplayName(): string {
+    try {
+        const n = GLib.get_real_name()
+        return n ? n.split(",")[0].trim() : GLib.get_user_name() ?? ""
+    } catch { return GLib.get_user_name() ?? "" }
+}
+
+// Register the written ~/.face with AccountsService so the greeter / other DEs pick
+// it up too (best-effort — fine if the service isn't running).
+function applyFaceToAccounts(face: string) {
+    try {
+        const bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, null)
+        const res = bus.call_sync(
+            "org.freedesktop.Accounts", "/org/freedesktop/Accounts",
+            "org.freedesktop.Accounts", "FindUserByName",
+            new GLib.Variant("(s)", [GLib.get_user_name()]),
+            new GLib.VariantType("(o)"), Gio.DBusCallFlags.NONE, 2000, null,
+        )
+        const userPath = res.get_child_value(0).get_string()[0]
+        bus.call_sync(
+            "org.freedesktop.Accounts", userPath,
+            "org.freedesktop.Accounts.User", "SetIconFile",
+            new GLib.Variant("(s)", [face]),
+            null, Gio.DBusCallFlags.NONE, 5000, null,
+        )
+    } catch { /* AccountsService not available */ }
+}
+
+// Save an already-cropped square pixbuf as the user's avatar.
+function saveAvatarPixbuf(pixbuf: any) {
+    const face = `${GLib.get_home_dir()}/.face`
+    try { pixbuf.savev(face, "png", [], []) } catch (e) { console.error("[Users] save avatar:", e); return }
+    applyFaceToAccounts(face)
+}
+
+// Set the user's full name (GECOS) via AccountsService, same path as the avatar.
+// chfn(1) can't be used non-interactively — it requires a PAM password prompt and
+// fails with no tty. AccountsService.SetRealName goes through polkit's
+// change-own-user-data action, which the active user is allowed to do.
+function setRealName(name: string): boolean {
+    try {
+        const bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, null)
+        const res = bus.call_sync(
+            "org.freedesktop.Accounts", "/org/freedesktop/Accounts",
+            "org.freedesktop.Accounts", "FindUserByName",
+            new GLib.Variant("(s)", [GLib.get_user_name()]),
+            new GLib.VariantType("(o)"), Gio.DBusCallFlags.NONE, 2000, null,
+        )
+        const userPath = res.get_child_value(0).get_string()[0]
+        bus.call_sync(
+            "org.freedesktop.Accounts", userPath,
+            "org.freedesktop.Accounts.User", "SetRealName",
+            new GLib.Variant("(s)", [name]),
+            null, Gio.DBusCallFlags.NONE, 5000, null,
+        )
+        return true
+    } catch (e) {
+        console.error("[Users] SetRealName:", e)
+        return false
+    }
+}
+
+function spawnTerminalWithCommand(cmd: string) {
+    const map: Record<string, string[]> = {
+        kitty:          ["kitty", "--", "bash", "-c", cmd],
+        alacritty:      ["alacritty", "-e", "bash", "-c", cmd],
+        wezterm:        ["wezterm", "start", "--", "bash", "-c", cmd],
+        foot:           ["foot", "bash", "-c", cmd],
+        "gnome-terminal": ["gnome-terminal", "--", "bash", "-c", cmd],
+        xterm:          ["xterm", "-e", "bash", "-c", cmd],
+    }
+    for (const term of Object.keys(map)) {
+        if (GLib.find_program_in_path(term)) {
+            execAsync(map[term]).catch(e => console.error("[Users]", e))
+            return
+        }
+    }
+    console.error("[Users] No terminal found")
+}
+
+// ── "Add user" dialog ─────────────────────────────────────────────────────────
+
+function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) {
+    const dialog = new Gtk.Window({
+        title: t("settings.users.other.add"),
+        modal: true,
+        transient_for: parentWin ?? undefined,
+        resizable: false,
+        default_width: 380,
+    })
+
+    const box = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 12,
+        margin_start: 24, margin_end: 24,
+        margin_top: 24, margin_bottom: 24,
+    })
+
+    const field = (label: string, widget: Gtk.Widget) => {
+        const vbox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+        vbox.append(new Gtk.Label({ label, halign: Gtk.Align.START, css_classes: ["crystal-row-title"] }))
+        vbox.append(widget)
+        return vbox
+    }
+
+    const nameEntry  = new Gtk.Entry({ placeholder_text: t("settings.users.other.fullname.placeholder"), hexpand: true })
+    const unameEntry = new Gtk.Entry({ placeholder_text: t("settings.users.other.username.placeholder"), hexpand: true })
+    const pwEntry    = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true,
+        placeholder_text: t("settings.users.other.pw.placeholder") })
+    const pw2Entry   = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true,
+        placeholder_text: t("settings.users.other.pw2.placeholder") })
+
+    const adminRow = new Gtk.Box({ spacing: 12, margin_top: 4 })
+    adminRow.append(new Gtk.Label({ label: t("settings.users.other.admin"), hexpand: true, halign: Gtk.Align.START }))
+    const adminSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER })
+    adminRow.append(adminSwitch)
+
+    const statusLabel = new Gtk.Label({ label: "", css_classes: ["crystal-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
+
+    const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
+    const cancelBtn = CrystalButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
+    const createBtn = CrystalButton({ label: t("settings.users.other.create"), variant: "primary", pill: true, sensitive: false })
+    btnRow.append(cancelBtn)
+    btnRow.append(createBtn)
+
+    box.append(field(t("settings.users.other.fullname"), nameEntry))
+    box.append(field(t("settings.users.other.username"), unameEntry))
+    box.append(field(t("settings.users.other.pw"),  pwEntry))
+    box.append(field(t("settings.users.other.pw2"), pw2Entry))
+    box.append(adminRow)
+    box.append(statusLabel)
+    box.append(btnRow)
+    dialog.set_child(box)
+
+    const validateCreate = () => {
+        const uname = unameEntry.text.trim()
+        const pw  = pwEntry.text
+        const pw2 = pw2Entry.text
+        createBtn.sensitive = uname.length > 0 && pw.length > 0 && pw === pw2
+        if (pw2.length > 0 && pw !== pw2) {
+            statusLabel.label = t("settings.users.other.err.pwmatch"); statusLabel.visible = true
+        } else { statusLabel.visible = false }
+    }
+    unameEntry.connect("notify::text", validateCreate)
+    pwEntry.connect("notify::text",    validateCreate)
+    pw2Entry.connect("notify::text",   validateCreate)
+
+    cancelBtn.connect("clicked", () => dialog.close())
+
+    createBtn.connect("clicked", () => {
+        const uname = unameEntry.text.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "")
+        const fname = nameEntry.text.trim()
+        const pw    = pwEntry.text
+
+        createBtn.sensitive = false
+        statusLabel.visible = false
+
+        const addCmd = adminSwitch.active
+            ? ["pkexec", "useradd", "-m", "-G", "wheel", "-c", fname, uname]
+            : ["pkexec", "useradd", "-m", "-c", fname, uname]
+
+        execAsync(addCmd).then(() => {
+            const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
+            proc.communicate_utf8_async(`${uname}:${pw}\n`, null, (_: any, res: any) => {
+                try { proc.communicate_utf8_finish(res) } catch (e) {
+                    console.error("[Users] chpasswd:", e)
+                }
+                dialog.close()
+                onCreated()
+            })
+        }).catch(e => {
+            console.error("[Users] useradd:", e)
+            statusLabel.label = t("settings.users.other.err.create")
+            statusLabel.visible = true
+            createBtn.sensitive = true
+        })
+    })
+
+    dialog.present()
+}
+
+// ── "Change password" dialog ──────────────────────────────────────────────────
+
+function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null) {
+    const dialog = new Gtk.Window({
+        title: `${t("settings.users.other.pw.change")} — ${user.displayName}`,
+        modal: true,
+        transient_for: parentWin ?? undefined,
+        resizable: false,
+        default_width: 360,
+    })
+
+    const box = new Gtk.Box({
+        orientation: Gtk.Orientation.VERTICAL,
+        spacing: 12,
+        margin_start: 24, margin_end: 24,
+        margin_top: 24, margin_bottom: 24,
+    })
+
+    const field = (label: string, widget: Gtk.Widget) => {
+        const vbox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
+        vbox.append(new Gtk.Label({ label, halign: Gtk.Align.START, css_classes: ["crystal-row-title"] }))
+        vbox.append(widget)
+        return vbox
+    }
+
+    const pwEntry  = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true })
+    const pw2Entry = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true })
+
+    const statusLabel = new Gtk.Label({ label: "", css_classes: ["crystal-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
+
+    const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
+    const cancelBtn = CrystalButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
+    const applyBtn  = CrystalButton({ label: t("settings.users.other.pw.apply"), variant: "primary", pill: true, sensitive: false })
+    btnRow.append(cancelBtn)
+    btnRow.append(applyBtn)
+
+    const validate = () => {
+        const pw = pwEntry.text; const pw2 = pw2Entry.text
+        applyBtn.sensitive = pw.length > 0 && pw === pw2
+        if (pw2.length > 0 && pw !== pw2) {
+            statusLabel.label = t("settings.users.other.err.pwmatch"); statusLabel.visible = true
+        } else { statusLabel.visible = false }
+    }
+    pwEntry.connect("notify::text",  validate)
+    pw2Entry.connect("notify::text", validate)
+
+    box.append(field(t("settings.users.other.pw"),  pwEntry))
+    box.append(field(t("settings.users.other.pw2"), pw2Entry))
+    box.append(statusLabel)
+    box.append(btnRow)
+    dialog.set_child(box)
+
+    cancelBtn.connect("clicked", () => dialog.close())
+
+    applyBtn.connect("clicked", () => {
+        const pw = pwEntry.text
+        applyBtn.sensitive = false
+        statusLabel.visible = false
+
+        const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
+        proc.communicate_utf8_async(`${user.username}:${pw}\n`, null, (_: any, res: any) => {
+            try { proc.communicate_utf8_finish(res); dialog.close() } catch (e) {
+                console.error("[Users] chpasswd:", e)
+                statusLabel.label = t("settings.users.other.err.pw")
+                statusLabel.visible = true
+                applyBtn.sensitive = true
+            }
+        })
+    })
+
+    dialog.present()
+}
+
+// ── Other-user row ─────────────────────────────────────────────────────────────
+
+function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh: () => void): Gtk.ListBoxRow {
+    const admin = isInWheel(user.username)
+    const avatar = avatarFor(user.username, user.homeDir)
+
+    const avatarImg = new Gtk.Image({ pixel_size: 36, css_classes: ["users-avatar-sm"], valign: Gtk.Align.CENTER })
+    if (avatar) { try { avatarImg.set_from_file(avatar) } catch { avatarImg.gicon = Icons.userRound } }
+    else avatarImg.gicon = Icons.userRound
+
+    const nameBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
+    nameBox.append(new Gtk.Label({ label: user.displayName, css_classes: ["crystal-row-title"], halign: Gtk.Align.START }))
+    nameBox.append(new Gtk.Label({ label: user.username, css_classes: ["crystal-row-subtitle"], halign: Gtk.Align.START }))
+
+    const adminBadge = new Gtk.Label({
+        label: t("settings.users.other.admin-badge"),
+        css_classes: ["users-admin-badge"],
+        valign: Gtk.Align.CENTER,
+        visible: admin,
+    })
+
+    const adminToggle = new Gtk.Switch({ active: admin, valign: Gtk.Align.CENTER, tooltip_text: t("settings.users.other.admin.tip") })
+    adminToggle.connect("state-set", (_: any, state: boolean) => {
+        const cmd = state
+            ? ["pkexec", "usermod", "-aG", "wheel", user.username]
+            : ["pkexec", "gpasswd", "-d", user.username, "wheel"]
+        execAsync(cmd).then(() => {
+            adminBadge.visible = state
+        }).catch(e => {
+            console.error("[Users] admin toggle:", e)
+            adminToggle.active = !state  // revert
+        })
+        return false
+    })
+
+    const pwBtn = new Gtk.Button({
+        child: new Gtk.Image({ gicon: Icons.key, pixel_size: 14 , css_classes: ["cs-icon"] }),
+        css_classes: ["crystal-icon-btn"],
+        valign: Gtk.Align.CENTER,
+        tooltip_text: t("settings.users.other.pw.change"),
+    })
+    pwBtn.connect("clicked", () => showChangePasswordDialog(user, parentWin))
+
+    const deleteBtn = new Gtk.Button({
+        child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 14 , css_classes: ["cs-icon"] }),
+        css_classes: ["crystal-icon-btn"],
+        valign: Gtk.Align.CENTER,
+        tooltip_text: t("settings.users.other.delete"),
+    })
+    deleteBtn.connect("clicked", () => {
+        showCrystalAlert({
+            parent: parentWin,
+            heading: t("settings.users.other.delete.confirm.title"),
+            body: `${t("settings.users.other.delete.confirm.body")} "${user.displayName}" (${user.username})?`,
+            responses: [
+                { id: "cancel", label: t("settings.users.other.cancel") },
+                { id: "delete", label: t("settings.users.other.delete"), destructive: true },
+            ],
+            onResponse: (id) => {
+                if (id !== "delete") return
+                execAsync(["pkexec", "userdel", "-r", user.username])
+                    .then(onRefresh)
+                    .catch(e => console.error("[Users] userdel:", e))
+            },
+        })
+    })
+
+    const inner = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
+    inner.append(avatarImg)
+    inner.append(nameBox)
+    inner.append(adminBadge)
+    inner.append(adminToggle)
+    inner.append(pwBtn)
+    inner.append(deleteBtn)
+
+    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+    row.set_child(inner)
+    return row
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
+
+export default function UsersPage() {
+    const page = pageBox("users-page")
+
+    const username    = GLib.get_user_name() ?? ""
+    const displayName = getDisplayName()
+    const avatarPath  = avatarFor(username, GLib.get_home_dir() ?? "")
+
+    // ── Your Account ─────────────────────────────────────────────────────────
+    const profileGroup = listGroup(t("settings.users.group.profile"))
+
+    // Large circular avatar: Gtk.Picture (COVER crops to fill the square, then the
+    // pill border-radius clips it to a circle) — same approach as the wallpaper
+    // preview in Appearance. A user-glyph overlay shows on the surface circle when
+    // there's no photo.
+    const AVATAR_SIZE = 112
+    const avatarPicture = new Gtk.Picture({
+        width_request: AVATAR_SIZE,
+        height_request: AVATAR_SIZE,
+        // SCALE_DOWN (not COVER) is the fix: COVER's height-for-width grows with the
+        // proposed width — the row measures the Picture at the full card width, so
+        // COVER reported a ~720px natural height and the row became that tall (the
+        // avatar then sat 96px-centered in it). SCALE_DOWN never upscales, so the
+        // natural stays the paintable's size (we pre-crop it to 96²). No growth.
+        content_fit: Gtk.ContentFit.SCALE_DOWN,
+        // can_shrink defaults TRUE, letting the Picture compress below 96 when the
+        // window gets short (instead of the page scrolling). Pin it so the avatar
+        // keeps its size and the ScrolledWindow takes over.
+        can_shrink: false,
+        halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER,
+        hexpand: false,
+        vexpand: false,
+        css_classes: ["users-avatar"],
+    })
+    // Glyph placeholder when there's no photo — same circular footprint.
+    const avatarFallback = new Gtk.Image({
+        gicon: Icons.userRound,
+        pixel_size: 60,
+        width_request: AVATAR_SIZE,
+        height_request: AVATAR_SIZE,
+        halign: Gtk.Align.CENTER,
+        css_classes: ["cs-icon", "users-avatar", "users-avatar-fallback"],
+    })
+
+    // The avatar lives DIRECTLY as a ListBoxRow child, exactly like the wallpaper
+    // preview in Appearance. A Gtk.Picture wrapped in a halign:CENTER box reports a
+    // height-for-width natural that the page's clamp over-allocates (opening a big
+    // vertical gap); as the row's direct child, its width/height_request pin it.
+    const avatarRow = new Gtk.ListBoxRow({ activatable: false, selectable: false, css_classes: ["users-avatar-row"] })
+    profileGroup.listBox.append(avatarRow)
+
+    const setAvatar = (path: string | null) => {
+        if (path && GLib.file_test(path, GLib.FileTest.EXISTS)) {
+            try {
+                let pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
+                // Center-crop to a square, then scale to AVATAR_SIZE so the paintable
+                // is exactly 96² (keeps SCALE_DOWN from leaving the avatar at the
+                // image's own size, and crops non-square photos into the circle).
+                const w = pixbuf.get_width(), h = pixbuf.get_height()
+                const side = Math.min(w, h)
+                if (w !== h) pixbuf = pixbuf.new_subpixbuf((w - side) >> 1, (h - side) >> 1, side, side)
+                pixbuf = pixbuf.scale_simple(AVATAR_SIZE, AVATAR_SIZE, GdkPixbuf.InterpType.BILINEAR)!
+                avatarPicture.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
+                avatarRow.set_child(avatarPicture)
+                return
+            } catch (_) { /* fall through to placeholder */ }
+        }
+        avatarRow.set_child(avatarFallback)
+    }
+    setAvatar(avatarPath)
+
+    const changeAvatarBtn = CrystalButton({ label: t("settings.users.avatar.change"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER })
+    changeAvatarBtn.connect("clicked", () => {
+        const dialog = new Gtk.FileDialog({ title: t("settings.users.avatar.pick"), modal: true })
+        const filter = new Gtk.FileFilter()
+        filter.add_mime_type("image/jpeg"); filter.add_mime_type("image/png"); filter.add_mime_type("image/webp")
+        filter.set_name(t("settings.users.avatar.filter"))
+        const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
+        filters.append(filter)
+        dialog.set_filters(filters)
+        const win = changeAvatarBtn.get_root() as Gtk.Window
+        dialog.open(win, null, (_: any, result: any) => {
+            try {
+                const file = dialog.open_finish(result)
+                const src = file?.get_path()
+                if (!src) return
+                // Let the user frame/zoom the photo into the circle before saving.
+                showAvatarCropper(win, src, (cropped) => {
+                    saveAvatarPixbuf(cropped)
+                    setAvatar(`${GLib.get_home_dir()}/.face`)
+                })
+            } catch { /* cancelled */ }
+        })
+    })
+
+    // Change-avatar button — its own centered row, directly under the avatar row.
+    // (Kept out of a wrapping box so nothing reintroduces the Picture stretch.)
+    changeAvatarBtn.margin_top = 4
+    changeAvatarBtn.margin_bottom = 10
+    const changeRow = new Gtk.ListBoxRow({ activatable: false, selectable: false, css_classes: ["users-avatar-row"] })
+    changeRow.set_child(changeAvatarBtn)
+    profileGroup.listBox.append(changeRow)
+
+    const nameEntry = new Gtk.Entry({ text: displayName, placeholder_text: username, width_chars: 22, valign: Gtk.Align.CENTER })
+    const nameApplyBtn = CrystalButton({ label: t("settings.users.name.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
+    const applyName = () => {
+        const n = nameEntry.text.trim(); if (!n) return
+        nameApplyBtn.sensitive = false
+        setRealName(n)
+        nameApplyBtn.sensitive = true
+    }
+    nameApplyBtn.connect("clicked", applyName); nameEntry.connect("activate", applyName)
+    const nameRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+    nameRow.append(nameEntry); nameRow.append(nameApplyBtn)
+    profileGroup.listBox.append(createRow(t("settings.users.name"), t("settings.users.name.desc"), nameRow))
+    profileGroup.listBox.append(createRow(
+        t("settings.users.username"), "",
+        new Gtk.Label({ label: username, css_classes: ["crystal-row-subtitle"], valign: Gtk.Align.CENTER }),
+    ))
+    page.append(profileGroup.box)
+
+    // ── Security ──────────────────────────────────────────────────────────────
+    const secGroup = listGroup(t("settings.users.group.security"))
+    const pwBtn = CrystalButton({ label: t("settings.users.password.change"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER })
+    pwBtn.connect("clicked", () => spawnTerminalWithCommand(`passwd; read -p "${t("settings.users.password.done")}"`) )
+    secGroup.listBox.append(createRow(t("settings.users.password"), t("settings.users.password.desc"), pwBtn))
+    page.append(secGroup.box)
+
+    // ── Other Users ───────────────────────────────────────────────────────────
+    const otherGroup = listGroup(t("settings.users.group.other"))
+    const otherList  = otherGroup.listBox
+
+    // Resolve the parent window lazily (needed for transient dialogs)
+    let parentWin: Gtk.Window | null = null
+    page.connect("realize", () => {
+        let w = page.get_root() as any
+        parentWin = w instanceof Gtk.Window ? w : null
+    })
+
+    const rebuildOtherUsers = () => {
+        while (otherList.get_first_child()) otherList.get_first_child()!.unparent()
+
+        const others = parseUsers().filter(u => u.username !== username)
+        if (others.length === 0) {
+            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+            emptyRow.set_child(new Gtk.Label({
+                label: t("settings.users.other.empty"),
+                css_classes: ["crystal-row-subtitle"],
+                margin_start: 16, margin_top: 12, margin_bottom: 12,
+                halign: Gtk.Align.START,
+            }))
+            otherList.append(emptyRow)
+        } else {
+            others.forEach(u => otherList.append(buildUserRow(u, parentWin, rebuildOtherUsers)))
+        }
+
+        // Add User row — uses a flat Button so click always works regardless of SelectionMode
+        const addBtn = new Gtk.Button({
+            css_classes: ["settings-action-row"],
+            hexpand: true,
+        })
+        const addInner = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
+        addInner.append(new Gtk.Image({ gicon: Icons.userRoundPlus, pixel_size: 20, opacity: 0.7 , css_classes: ["cs-icon"] }))
+        addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["crystal-row-title"], halign: Gtk.Align.START }))
+        addBtn.set_child(addInner)
+        addBtn.connect("clicked", () => showAddUserDialog(parentWin, rebuildOtherUsers))
+        const addRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+        addRow.set_child(addBtn)
+        otherList.append(addRow)
+    }
+    rebuildOtherUsers()
+    page.append(otherGroup.box)
+
+    return page
+}

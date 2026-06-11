@@ -15,7 +15,7 @@ import NightLight from "./core/NightLightManager"
 import notifConfig from "./core/NotifConfig"
 import Gaming, { type WallpaperMode } from "./core/GamingManager"
 import agentConfig from "./core/AgentConfig"
-import { dockSettings, updateDockSettings, type DockPosition } from "./widget/dock/state"
+import { dockSettings, updateDockSettings, type DockPosition } from "./surfaces/dock/state"
 
 export function registerConfigEntries() {
     // ── Appearance ────────────────────────────────────────────────────────

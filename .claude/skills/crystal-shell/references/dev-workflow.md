@@ -73,8 +73,8 @@ ags request toggleAppGrid                # send an IPC command
 
 ### Adding a widget (auto-registration)
 
-Create ONE file in `ui/shell/widget/widgets/` that default-exports a
-`const w: AtomicWidget = {...}` (contract in `widget/control-center/Types.ts`;
+Create ONE file in `ui/shell/widgets/` that default-exports a
+`const w: AtomicWidget = {...}` (contract in `surfaces/control-center/Types.ts`;
 copy `calculator.ts` as a minimal template). Then:
 
 ```bash
@@ -86,7 +86,7 @@ Commit `widgets.gen.ts` **together with** the new widget file — the CI job
 `widgets-gen` fails the PR if the committed file is stale. No registry edit is
 needed; optionally add the id to the curated `BAR_ORDER` / `CC_DEFAULT_ORDER`
 in `widgets/index.ts` (unlisted ids fall to the end). The codegen hard-errors
-on non-widget files in `widgets/` (helpers go in `widget/common/`) and on
+on non-widget files in `widgets/` (helpers go in `common/`) and on
 duplicate ids — fix what it says and re-run.
 
 If the widget depends on hardware (battery, radios, backlight…), declare

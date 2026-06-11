@@ -2,7 +2,7 @@
 // the `getConfig`/`setConfig`/`describeConfig` IPC surface (see app.ts).
 // Same pattern as ShellActions: this module only defines the registry; the
 // entries are registered from config-entries.ts at main() time, so core/ never
-// imports widget code (dock settings live in widget/dock/state.ts).
+// imports widget code (dock settings live in surfaces/dock/state.ts).
 //
 // Every entry is self-describing (desc/type/constraints) — `describeConfig`
 // serves it as JSON, so agents discover the whole configurable surface without

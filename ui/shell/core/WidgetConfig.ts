@@ -1,7 +1,7 @@
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import { readFile, writeFile } from "ags/file"
-import { DEFAULT_PLACEMENT as DEFAULTS, BAR_ORDER } from "../widget/widgets/index"
+import { DEFAULT_PLACEMENT as DEFAULTS, BAR_ORDER } from "../widgets/index"
 
 export interface WidgetPlacement {
     bar: boolean
@@ -9,7 +9,7 @@ export interface WidgetPlacement {
 }
 
 // BAR_ORDER (curated bar pill order) and DEFAULTS (first-run placement) are
-// derived from the widget registry — see widget/widgets/index.ts.
+// derived from the widget registry — see widgets/index.ts.
 
 class WidgetConfigManager extends GObject.Object {
     static {

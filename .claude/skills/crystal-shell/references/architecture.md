@@ -39,17 +39,19 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 
 ## Directory map (`ui/shell/`)
 
-Three pillars by responsibility:
+Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026-06-11):
 
 - **`core/`** — singleton services. **Never touch the UI directly.** (Detailed below.)
 - **`styles/`** — all SCSS, compiled to one `style.css`.
   - `_base.scss` holds design tokens + `@mixin glass` + `@mixin crystal-reset`.
   - `_reset.scss` neutralizes Adwaita residue.
   - Per-component modules are scoped with `window#id { … }`.
-- **`widget/`** — TSX components that consume `core/` state. Each widget is a function that takes a `Gdk.Monitor` and returns a `Gtk.Widget`. Sub-dirs:
+- **`surfaces/`** — whole TSX surfaces that consume `core/` state. Each surface is a function that takes a `Gdk.Monitor` and returns a `Gtk.Widget`:
   - `bar/`, `dock/`, `control-center/`, `app-grid/`, `overview/`, `prism/`
   - `settings/` (+ `settings/pages/`, 18 pages), `about/`
-  - `widgets/` — atomic CC/bar widgets, **auto-registered**: one file that
+- **`common/`** — shared UI pieces used across surfaces and widgets
+  (`Slider`, `SquircleContainer`, `fade`, `MenuRow`, `widget-kit`, `DrawingUtils`…).
+- **`widgets/`** — atomic CC/bar widgets, **auto-registered**: one file that
     default-exports a `const w: AtomicWidget = {...}` is ALL it takes —
     `scripts/gen-widget-index.mjs` scans the dir and regenerates the committed
     `widgets.gen.ts` (imports + `ALL_WIDGETS`; runs on npm build/dev hooks, on
@@ -66,7 +68,7 @@ Three pillars by responsibility:
     from `UNIT`/`GAP`/padding knowledge (cpu-memory's ring derives from it; a
     widget's own intrinsic sizes — icon circles, buttons, its caption height —
     are fine). Panel widths (bar expansions / CC details) come from the
-    **`PANEL_W` tier vocabulary** in `widget/common/widget-kit.ts`
+    **`PANEL_W` tier vocabulary** in `common/widget-kit.ts`
     (sm 200 / md 220 / lg 240 / xl 280 / full 356), never hardcoded px.
     GOTCHA: widget-kit MUST stay a leaf module — importing `CCLayoutManager`
     from it closes the cycle CCLayoutManager → widgets/index → widget →
@@ -106,13 +108,13 @@ These are GObject singletons. Widgets subscribe to them via `notify::prop`. **No
 | `WidgetConfig.ts` | 88 | CC widget metadata/registry (`widgets.json`). |
 | `GamingManager.ts` | 79 | Game-mode state + `gaming.json`. |
 | `NotifConfig.ts` | 60 | Notification DND default. |
-| `AudioService.ts` | ~120 | **Stateless facade** over the reactive `AstalWp` singleton (PipeWire/WirePlumber). `volumeIcon`/`targetVolumeIcon` (the volume-level icon ladder that used to live in FOUR copies), `streamIconName` (per-app stream icon), `setDefault` (`wpctl set-default`), `toggleMute`, endpoint/stream/default accessors, and `watchDevices`/`watchStreams`/`watchVolume`. Consumed by Settings → Audio + the CC volume tile/detail (`Sliders.tsx`, `widgets/volume.ts`) + the bar volume widget. Returns Gio icons via `core/Icons` (core→core); the volume *slider widget* is `makeVolumeSlider` in `widget/common/Slider.ts` (UI layer). Never imports Gtk. |
+| `AudioService.ts` | ~120 | **Stateless facade** over the reactive `AstalWp` singleton (PipeWire/WirePlumber). `volumeIcon`/`targetVolumeIcon` (the volume-level icon ladder that used to live in FOUR copies), `streamIconName` (per-app stream icon), `setDefault` (`wpctl set-default`), `toggleMute`, endpoint/stream/default accessors, and `watchDevices`/`watchStreams`/`watchVolume`. Consumed by Settings → Audio + the CC volume tile/detail (`Sliders.tsx`, `widgets/volume.ts`) + the bar volume widget. Returns Gio icons via `core/Icons` (core→core); the volume *slider widget* is `makeVolumeSlider` in `common/Slider.ts` (UI layer). Never imports Gtk. |
 | `BluetoothService.ts` | ~330 | **Stateless facade** over the reactive `AstalBluetooth` singleton (same pattern as NetworkService): power (`isPowered`/`setPowered`/`togglePower`), device categorisation (`pairedDevices`/`nearbyDevices`/`deviceName`), guarded command wrappers (`connectDevice`/`disconnectDevice`/`pairDevice`/`removeDevice`/`startDiscovery`/`stopDiscovery`), and `watchPower`/`watchDevices` notify helpers. `watchDevices` also wires each device's own `notify::paired/connected/name` (re-wiring on set change) — `notify::devices` alone misses in-place pairing/connection changes. Also owns the **BlueZ pairing agent** (`org.bluez.Agent1`, capability `KeyboardDisplay`, raw Gio D-Bus on the SYSTEM bus — AstalBluetooth has no agent support): `registerPairingAgent(handler)`/`unregisterPairingAgent()`; the Settings → Bluetooth page supplies the dialog handler (`PairingPrompt` kinds: `confirm`/`display`/`enter-passkey`/`enter-pin`/`authorize`), so core stays UI-free. The agent registers when the page is built (first Settings open; effectively session-lifetime since Settings hides rather than closes). `pairDevice` sets `trusted=true` on successful pairing so reconnections skip authorization; `RequestAuthorization`/`AuthorizeService` auto-accept trusted/paired devices. **Testing gotcha:** D-Bus policy only lets root call `Agent1` methods, so exercise dialogs with `sudo busctl --system call <shell-unique-bus-name> /com/crystalshell/bluetooth/agent org.bluez.Agent1 RequestConfirmation ou /org/bluez/hci0/dev_00_11_22_33_44_55 123456` (find the bus name by matching the gjs PID in `busctl --system list`; the python-dbusmock bluez5 template never calls back into agents). Consumed by Settings → Bluetooth + the bar/CC bt tile. **Gotcha:** `setPowered` drives `adapter.powered`, NOT the read-only `is_powered`. Never imports Gtk. |
 | `NetworkService.ts` | ~190 | **Stateless facade** (a plain function module, *not* a GObject — AstalNetwork is already a reactive singleton) for all network domain logic: nmcli command vocabulary (`connectAp`/`disconnectIface`/`forgetProfile`/`rescan`/`setWifiEnabled`/`toggleWifi`/`listSavedWifiSsids`/VPN), NM-flag + frequency derivations (`isSecured`/`securityLabel`/`freqBand`/`freqChannel`), `getIp`/`wiredConnected`/`wifiEnabled`, and `watchWifi`/`watchWired` notify-subscription helpers. Consumed by Settings → Network, the CC wifi/ethernet tiles (`Toggles.tsx`), and the bar widgets (`widgets/wifi.ts`, `widgets/ethernet.ts`) — they used to each re-derive `getIp` and toggle WiFi three different ways. Never imports Gtk. |
 | `PowerManager.ts` | 43 | hypridle hooks (screen-off/lock/suspend). |
 | `ShellActions.ts` | 21 | Typed action registry populated by `app.ts main()`; consumed by Dock/Bar/AppGrid (replaces `globalThis`). |
 | `AgentConfig.ts` | ~70 | Governance of the agent-facing surface (`ai.json`): `allowConfigWrite` gates `setConfig` writes; `allowScreenshot` gates the `screenshot` IPC (separate toggles — screen capture is privacy-sensitive independently of config writes). Toggled from Settings → AI. It is a **consent layer over the official door, not a security boundary** (any local process can still edit config files directly) — keep that framing in docs/UI copy. Reading state is never gated (doctor/diagnostics depend on it). |
-| `ConfigRegistry.ts` | ~120 | Typed registry of agent-readable/-writable settings — the data half of `describeConfig`/`getConfig`/`setConfig` (see `state-and-ipc.md`). Same pattern as ShellActions: core defines the registry; **entries are registered from `config-entries.ts`** (app level, NOT core) because dock settings live in `widget/dock/state.ts` and core must never import widget code. Each entry is self-describing (desc/type/enum/min/max) and delegates `set` to the owning service, so validation/persistence/notify behave exactly as if Settings had been used. NB: result types use optional fields, not discriminated unions — tsconfig has `strict:false`, under which tsc doesn't narrow `r.ok ? r.value : r.error`. |
+| `ConfigRegistry.ts` | ~120 | Typed registry of agent-readable/-writable settings — the data half of `describeConfig`/`getConfig`/`setConfig` (see `state-and-ipc.md`). Same pattern as ShellActions: core defines the registry; **entries are registered from `config-entries.ts`** (app level, NOT core) because dock settings live in `surfaces/dock/state.ts` and core must never import widget code. Each entry is self-describing (desc/type/enum/min/max) and delegates `set` to the owning service, so validation/persistence/notify behave exactly as if Settings had been used. NB: result types use optional fields, not discriminated unions — tsconfig has `strict:false`, under which tsc doesn't narrow `r.ok ? r.value : r.error`. |
 
 ### Gotcha: changing Hyprland config at runtime → `hyprctl eval`, not `keyword`
 

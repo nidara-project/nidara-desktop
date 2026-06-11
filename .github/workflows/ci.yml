@@ -138,8 +138,8 @@ jobs:
         run: node scripts/gen-widget-index.mjs
       - name: Verify committed file is fresh
         run: |
-          if ! git diff --exit-code -- ui/shell/widget/widgets/widgets.gen.ts; then
-            echo "::error::ui/shell/widget/widgets/widgets.gen.ts is STALE."
+          if ! git diff --exit-code -- ui/shell/widgets/widgets.gen.ts; then
+            echo "::error::ui/shell/widgets/widgets.gen.ts is STALE."
             echo "Fix: run 'node scripts/gen-widget-index.mjs' and commit the updated widgets.gen.ts alongside your widget change."
             exit 1
           fi

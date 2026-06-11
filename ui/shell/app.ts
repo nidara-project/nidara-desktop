@@ -49,13 +49,13 @@ try {
 }
 
 // Widget Imports
-import Dock from "./widget/dock/Dock"
-import { syncConstants } from "./widget/dock/DockPhysics"
-import { onDockSettingsChanged, dockSettings } from "./widget/dock/state"
-import Bar from "./widget/bar/Bar"
-import Settings from "./widget/settings/Settings"
+import Dock from "./surfaces/dock/Dock"
+import { syncConstants } from "./surfaces/dock/DockPhysics"
+import { onDockSettingsChanged, dockSettings } from "./surfaces/dock/state"
+import Bar from "./surfaces/bar/Bar"
+import Settings from "./surfaces/settings/Settings"
 import Theme, { setPreferDark } from "./core/ThemeManager"
-import AboutWindow from "./widget/about/AboutWindow"
+import AboutWindow from "./surfaces/about/AboutWindow"
 import notifConfig from "./core/NotifConfig"
 
 // Minimal interface for windows managed by the shell
