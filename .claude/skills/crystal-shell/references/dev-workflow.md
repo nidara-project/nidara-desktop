@@ -103,7 +103,26 @@ When a reload seems to do nothing or styles refuse to refresh, the cause is almo
 2. `killall gjs` — then `Super+Shift+R` once it's gone.
 3. `tail -f /tmp/crystal-shell-ui.log` and re-trigger; look for stack traces.
 
-CI gates **SCSS compile + typecheck**. The SCSS job is pure JS. The typecheck job can't run
+CI gates **SCSS compile + typecheck + widgets-gen freshness + headless boot smoke**.
+
+The **smoke job** (`scripts/ci/headless-smoke.sh`, `smoke` in ci.yml) is the only gate that
+actually RUNS the shell: in an `archlinux:latest` container it builds the pinned
+Astal/AGS/appmenu stack straight from `install.sh`'s refs (so a broken source build fails
+CI, not a user's clean install), `ags bundle`s the shell, boots Hyprland with the SHIPPED
+`config/hypr/hyprland.lua` under `HYPRLAND_HEADLESS_ONLY=1` (aquamarine skips DRM/libseat —
+the same mechanism Hyprland's own hyprtester uses; rendering is llvmpipe, a virtual output
+comes from `hyprctl output create headless`), runs the bundle exactly as production does
+(`CRYSTAL_SHELL_ROOT` + cwd = shell root), and FAILS if the process dies, `ags request
+listActions`/`dumpState` don't answer with valid JSON, or the boot log contains `JS ERROR`.
+It then grims a desktop + Control Center screenshot into the `smoke-artifacts` artifact for
+HUMAN review — deliberately not a pixel diff (rejected as fragile). The built dependency
+stack is cached as a tarball keyed on `install.sh`'s hash + a month stamp (bounds soname
+drift against the moving `archlinux:latest`); Hyprland refuses root, so the boot phase
+re-runs the script as an unprivileged `ci` user (`run` subcommand). Note the smoke job
+builds the COMMITTED tree (it does not re-run the widget codegen — staleness is the
+`widgets-gen` job's gate).
+
+The SCSS job is pure JS. The typecheck job can't run
 `ags types` (no ags binary / Astal libs on a runner), so it downloads a ~4 MB compressed
 snapshot of `@girs/` from the repo's `ci-assets` release and runs `tsc --noEmit` against it —
 the repo's own `types.d.ts` declares the `ags/*` modules ambiently, so no `node_modules` is

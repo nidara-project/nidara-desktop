@@ -85,13 +85,24 @@ jobs:
       - name: Compute cache month stamp
         id: stamp
         run: echo "month=$(date +%Y-%m)" >> "$GITHUB_OUTPUT"
-      - name: Cache built dependency stack
-        uses: actions/cache@v4
+      # restore/save split (not plain actions/cache): the combined action only
+      # saves in its post step when the JOB succeeds, so a red smoke run would
+      # rebuild the whole stack on every iteration — exactly when the cache is
+      # most valuable. save with if:always() persists it even on failure.
+      - name: Restore built dependency stack
+        id: deps-cache
+        uses: actions/cache/restore@v4
         with:
           path: /opt/crystal-deps.tar.zst
           key: smoke-deps-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh') }}
       - name: Build deps + bundle + headless boot
         run: bash scripts/ci/headless-smoke.sh
+      - name: Save built dependency stack
+        if: always() && steps.deps-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: /opt/crystal-deps.tar.zst
+          key: smoke-deps-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh') }}
       - name: Upload screenshots + logs
         if: always()
         uses: actions/upload-artifact@v4
