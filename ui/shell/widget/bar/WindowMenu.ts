@@ -7,8 +7,8 @@ import { menuRow, menuHeader, menuSeparator } from "../common/MenuRow"
 
 // Window-options menu for the AppTitle capsule — the visual gateway to Hyprland's
 // window management for people who'd never learn the keybinds. Opens in the bar's
-// shared expansion capsule (openCustomExpansion); built section-by-section so a
-// groups/tabs section can slot in for v2 between "move to" and the workspace part.
+// shared expansion capsule (openCustomExpansion). Sections: window actions,
+// move-to-workspace strip, group/tabs (v2), workspace actions.
 
 const WORKSPACE_COUNT = 5   // matches Workspaces.tsx
 
@@ -34,6 +34,17 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
         // wrong checks + skipped windows, 2026-06-11).
         const windowSection = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
         root.append(windowSection)
+        // Group section (v2) — appended into the slot after the move-to strip,
+        // filled by the SAME authoritative read (`grouped` lives in clients -j).
+        const groupSection = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
+        const hypr = AstalHyprland.get_default()
+        const norm = (a: string) => (a.startsWith("0x") ? a : "0x" + a)
+        // Astal client lookup is for IDENTITY only (title/class for the tab
+        // label) — never for window state.
+        const labelFor = (memberAddr: string) => {
+            const c = hypr.get_clients().find(c => norm(c.address) === memberAddr)
+            return c ? (getWordmark(c, hypr) || c.title || c.class) : memberAddr
+        }
         hs.getClientJson(addr).then(json => {
             const floating = json ? !!json.floating : !!client.floating
             const fullscreen = json ? !!json.fullscreen : !!(client.fullscreen as any)
@@ -65,6 +76,42 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
                     onClick: () => { hs.togglePin(addr); onClose() },
                 }))
             }
+
+            // --- Group (tabs) ---
+            // `grouped` = member addresses in tab order; the menu's window is
+            // the active tab (it's focused). Clicking another member focuses
+            // it, which IS the tab switch. No "move into group" row:
+            // `into_group` only acts on the focused window and needs a
+            // direction — grouping is done by drag or keybind.
+            const grouped: string[] = (json?.grouped ?? []) as string[]
+            const self = norm(addr)
+            if (grouped.length > 0) {
+                groupSection.append(menuHeader(`${t("bar.window-menu.group")} — ${grouped.length}`))
+                for (const member of grouped) {
+                    groupSection.append(menuRow({
+                        label: labelFor(member),
+                        checked: member === self,
+                        onClick: () => { if (member !== self) hs.focusWindow(member); onClose() },
+                    }))
+                }
+                if (grouped.length > 1) {
+                    groupSection.append(menuRow({
+                        label: t("bar.window-menu.group.move-out"),
+                        onClick: () => { hs.moveOutOfGroup(addr); onClose() },
+                    }))
+                }
+                groupSection.append(menuRow({
+                    label: t("bar.window-menu.group.ungroup"),
+                    onClick: () => { hs.toggleGroup(addr); onClose() },
+                }))
+                groupSection.append(menuSeparator())
+            } else {
+                groupSection.append(menuRow({
+                    label: t("bar.window-menu.group.create"),
+                    onClick: () => { hs.toggleGroup(addr); onClose() },
+                }))
+                groupSection.append(menuSeparator())
+            }
         })
 
         root.append(menuSeparator())
@@ -87,8 +134,7 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
         root.append(wsRow)
 
         root.append(menuSeparator())
-        // (v2: groups/tabs section slots in here — hl.dsp.group.* is already
-        // wired in HyprlandState, `grouped` comes from the same getClientJson read)
+        root.append(groupSection)
     } else {
         root.append(menuHeader(t("bar.window-menu.no-window")))
         root.append(menuSeparator())

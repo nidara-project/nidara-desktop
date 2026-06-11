@@ -68,7 +68,7 @@ Three pillars by responsibility:
     a fallback "not present" buildContent branch is no longer the mechanism for
     hiding (battery keeps one only as defense in depth).
   - `common/` — shared: `SquircleContainer`, `DrawingUtils`, `Slider.ts` (the ONE Cairo slider — no `Gtk.Scale`, no PillSlider), `ManagedWindow`, `CrystalPopover`, `WorkspaceSchematic`, `fade.ts`, `poll.ts` (`pollWhileMapped` — ANY recurring widget poll must gate on map/unmap: built-once-hidden surfaces like CC tiles must not keep session-long timers; idle baseline is 0 wakeups/s and we keep it that way), `MenuRow.ts` (`menuRow`/`menuSeparator`/`menuHeader`/`setRowChecked` — the shared row builder for flat `crystal-menu-*` lists; used by the CC context menu and the bar window menu. New flat menus use it, not hand-rolled rows)
-  - `bar/WindowMenu.ts` — the **window-options menu**: any-button click on the AppTitle capsule opens it in the bar's shared expansion capsule (`openCustomExpansion`, same system as tray menus — glass/fade/anchoring/outside-click for free). Sections: window actions (float/pseudo/fullscreen + center/pin when floating; checks from `Client` props, pin check async via `hs.getClientJson`), inline move-to-workspace strip (1..5, current disabled), workspace actions (float all). Built section-shaped so a v2 groups/tabs section (`hl.dsp.group.*`, already in HyprlandState) slots in between move-to and workspace.
+  - `bar/WindowMenu.ts` — the **window-options menu**: any-button click on the AppTitle capsule opens it in the bar's shared expansion capsule (`openCustomExpansion`, same system as tray menus — glass/fade/anchoring/outside-click for free). Sections: window actions (float/pseudo/fullscreen + center/pin when floating; all checks from the one `hs.getClientJson` read), inline move-to-workspace strip (1..5, current disabled), **group/tabs (v2, 2026-06-11)**, workspace actions (float all). The group section reads `grouped` (member addresses in tab order) from the same json read: one `menuRow` per member (checked = the menu's window, i.e. the active tab; clicking another member = `hs.focusWindow` — focusing a member IS the tab switch), plus "Move Out of Group" (`hs.moveOutOfGroup`, only when ≥2 members) and "Ungroup" (`hs.toggleGroup(addr)`, dissolves the whole group); ungrouped windows get a single "Create Group" row (lone group → groupbar appears, others join by drag/keybind). Astal clients are used for tab LABELS only (identity: wordmark/title) — never state. Deliberately absent: "move into group" (`into_group` ignores the window selector — acts on the focused window only — and needs a direction, meaningless in a menu) and group-lock (`lock_active` dispatches fine but its state is not readable anywhere, and a check you can't read is bad menu UX).
 
 Other top-level dirs: `ui/lib/crystal-ui/` (pure-GTK4 primitives lib — see end of file) and the greeter/lockscreen bundles.
 
@@ -143,7 +143,14 @@ silently broken (the `.catch` swallowed the Lua error) until 2026-06-11. The
 `{ window = 'address:0x..' }` selector is verified on `window.float/pin/move/close`.
 The full dispatcher surface is documented in `/usr/share/hypr/stubs/hl.meta.lua`
 (`hl.dsp.window.*`, `hl.dsp.group.*`, `hl.dsp.workspace.*`) — check it before assuming a
-dispatcher doesn't exist. Gotcha: pseudo-tile **state** is not readable anywhere
+dispatcher doesn't exist. The stubs type args as `fun(...)`; when the exact table shape
+matters, the binary's error strings are authoritative (`strings /usr/bin/Hyprland | grep
+'expected a table'`). Group vocabulary verified live 2026-06-11: `hl.dsp.group.toggle()`
+takes the window selector; `hl.dsp.group.active({ index, window })` (1-based) switches
+tabs (so does plain focus on a member address); `hl.dsp.window.move` accepts `out_of_group
+= true` + selector, and `into_group = '<dir>'` but **selector-less** (focused window
+only). Group membership/order reads from `grouped` in `clients -j`; group-lock state is
+not readable anywhere. Gotcha: pseudo-tile **state** is not readable anywhere
 (no `pseudo` field in `hyprctl clients -j` nor `HL.Window`) — `togglePseudo` is fire-only.
 Bigger gotcha: **`AstalHyprland.Client` window-state props go stale** — `floating` can
 read true on a tiled window (observed live 2026-06-11: wrong menu checks, float-all

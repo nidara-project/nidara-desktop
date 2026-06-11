@@ -1346,6 +1346,38 @@ window#crystal-bar-zone {
     opacity: 0.3;
   }
 }
+/* --- Window menu (AppTitle expansion) --- */
+.window-menu-ws-btn {
+  background: none;
+  background-color: transparent;
+  background-image: none;
+  border: none;
+  box-shadow: none;
+  outline: none;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  border-radius: var(--crystal-radius-sm);
+  font-size: 13px;
+  font-weight: 500;
+  transition: background-color 0.12s ease;
+}
+.window-menu-ws-btn:hover {
+  background-color: var(--crystal-surface-hover);
+}
+.window-menu-ws-btn:active {
+  background-color: var(--crystal-surface-active);
+}
+.window-menu-ws-btn:selected, .window-menu-ws-btn.is-selected {
+  background-color: var(--crystal-state-selected);
+}
+.window-menu-ws-btn.current {
+  color: var(--crystal-accent);
+}
+
 /* --- Bar inline expansion panel --- */
 .bar-expansion-panel {
   /* Vertical gap set from TSX (PANEL_TOP) so it stays in sync with CC/NC. */

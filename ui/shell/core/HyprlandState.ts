@@ -271,8 +271,19 @@ class HyprlandStateClass extends GObject.Object {
         }
     }
 
-    toggleGroup() {
-        return this._dispatch(`hl.dsp.group.toggle()`)
+    // Group vocabulary — verified live 2026-06-11: `group.toggle` accepts the
+    // window selector (creates a lone group / dissolves the whole group);
+    // `window.move({ out_of_group })` pulls ONE window out and also honors the
+    // selector. `into_group` does NOT take a selector (acts on the focused
+    // window only) and tab switching is just `focusWindow` on a member address.
+    toggleGroup(address?: string) {
+        return this._dispatch(address
+            ? `hl.dsp.group.toggle({ ${this._winSel(address)} })`
+            : `hl.dsp.group.toggle()`)
+    }
+
+    moveOutOfGroup(address: string) {
+        return this._dispatch(`hl.dsp.window.move({ out_of_group = true, ${this._winSel(address)} })`)
     }
 
     sendToSpecial(name = "magic") {

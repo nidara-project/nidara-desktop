@@ -487,6 +487,10 @@ export default {
     "bar.window-menu.workspace": "Espacio",
     "bar.window-menu.float-all": "Hacer Flotantes Todas las Ventanas",
     "bar.window-menu.no-window": "Ninguna Ventana Enfocada",
+    "bar.window-menu.group": "Grupo",
+    "bar.window-menu.group.create": "Crear Grupo",
+    "bar.window-menu.group.move-out": "Sacar del Grupo",
+    "bar.window-menu.group.ungroup": "Deshacer Grupo",
 
     // Widget names (bar + settings panel)
     "widget.bluetooth.name": "Bluetooth",

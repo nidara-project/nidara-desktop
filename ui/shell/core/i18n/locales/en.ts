@@ -560,6 +560,10 @@ export default {
     "bar.window-menu.workspace": "Workspace",
     "bar.window-menu.float-all": "Float All Windows",
     "bar.window-menu.no-window": "No Focused Window",
+    "bar.window-menu.group": "Group",
+    "bar.window-menu.group.create": "Create Group",
+    "bar.window-menu.group.move-out": "Move Out of Group",
+    "bar.window-menu.group.ungroup": "Ungroup",
 
     // Widget names (bar + settings panel)
     "widget.bluetooth.name": "Bluetooth",
