@@ -13,10 +13,17 @@ package.path = package.path
     .. ";" .. home .. "/.config/hypr/?.lua"
 
 -- Soft-load a module: missing files produce a notification, not a crash.
+-- The handler itself is pcall-guarded: it once called a non-existent
+-- hl.notify(), so the "soft" path crashed the WHOLE config load on any
+-- machine missing a user .lua (caught by the CI smoke test's screenshot).
 local function safe_require(mod)
     local ok, err = pcall(require, mod)
     if not ok then
-        hl.notify("Crystal Shell: failed to load " .. mod .. ".lua\n" .. tostring(err), 8000)
+        local msg = "Crystal Shell: failed to load " .. mod .. ".lua\n" .. tostring(err)
+        local notified = pcall(function()
+            hl.notification.create({ text = msg, duration = 8000 })
+        end)
+        if not notified then print(msg) end
     end
 end
 
