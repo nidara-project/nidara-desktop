@@ -230,6 +230,28 @@ window#crystal-bar-zone {
     0%, 100% { opacity: 1; }
     50%       { opacity: 0.3; }
 }
+/* --- Window menu (AppTitle expansion) --- */
+// Inline move-to-workspace strip: flat numbered buttons, current one accented
+// and disabled. Rows/headers/separators come from the shared crystal-menu-*
+// classes (MenuRow.ts) — only the strip needs its own style.
+.window-menu-ws-btn {
+    @include crystal-reset;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    min-width: 28px;
+    min-height: 28px;
+    padding: 0;
+    border-radius: $crystal-radius-sm;
+    font-size: $fs-small;
+    font-weight: $fw-medium;
+    @include crystal-row-states;
+
+    &.current {
+        color: var(--crystal-accent);   // persistent state = accent (design system)
+    }
+}
+
 /* --- Bar inline expansion panel --- */
 .bar-expansion-panel {
     /* Vertical gap set from TSX (PANEL_TOP) so it stays in sync with CC/NC. */

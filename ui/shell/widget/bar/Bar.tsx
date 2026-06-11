@@ -333,7 +333,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 8 })
   const sysMenuWidget = SystemMenuIcon()
-  const appTitleWidget = AppTitle(monGeo.width)
+  const appTitleWidget = AppTitle(monGeo.width, openCustomExpansion)
   sysMenuWidget.set_visible(barSettings.showSystemMenu)
   appTitleWidget.set_visible(barSettings.showAppTitle)
   left.append(sysMenuWidget)

@@ -6,6 +6,7 @@ import registry from "../widgets/index"
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
 import SquircleContainer from "../common/SquircleContainer"
+import { menuRow, menuSeparator } from "../common/MenuRow"
 
 // Right-click context menu for CC tiles — macOS-style.
 // Replaces the old cycling "1×1 → 2×1" pill with a standardized size picker
@@ -98,20 +99,6 @@ export function createCCContextMenu(): CCContextMenu {
         clearRows()
     }
 
-    const makeSizeRow = (label: string, current: boolean, fits: boolean, onClick: () => void) => {
-        const lbl = new Gtk.Label({ label, halign: Gtk.Align.START, hexpand: true, css_classes: ["crystal-menu-label"] })
-        const inner = new Gtk.Box({ spacing: 10 })
-        inner.append(lbl)
-        if (current) {
-            inner.append(new Gtk.Image({ gicon: Icons.check, pixel_size: 15, css_classes: ["cs-icon", "accent-label"], valign: Gtk.Align.CENTER }))
-        } else if (!fits) {
-            inner.append(new Gtk.Label({ label: t("cc.menu.size-full"), css_classes: ["cc-atomic-label-dim"], valign: Gtk.Align.CENTER }))
-        }
-        const btn = new Gtk.Button({ child: inner, css_classes: ["crystal-menu-row"], hexpand: true, sensitive: !current && fits })
-        btn.connect("clicked", onClick)
-        return btn
-    }
-
     const populate = (id: string) => {
         clearRows()
         const cur = ccLayout.effectiveSize(id)
@@ -123,23 +110,27 @@ export function createCCContextMenu(): CCContextMenu {
             for (const { tier, size } of tiers) {
                 const isCurrent = size === cur
                 const fits = isCurrent || ccLayout.canResize(id, size)
-                rows.append(makeSizeRow(t(TIER_LABEL[tier]), isCurrent, fits, () => {
-                    ccLayout.resize(id, size)
-                    close()
+                rows.append(menuRow({
+                    label: t(TIER_LABEL[tier]),
+                    checked: isCurrent,
+                    sensitive: !isCurrent && fits,
+                    trailing: !isCurrent && !fits
+                        ? new Gtk.Label({ label: t("cc.menu.size-full"), css_classes: ["cc-atomic-label-dim"], valign: Gtk.Align.CENTER })
+                        : undefined,
+                    onClick: () => { ccLayout.resize(id, size); close() },
                 }))
             }
-            rows.append(new Gtk.Separator({ css_classes: ["crystal-menu-sep"], margin_top: 4, margin_bottom: 4 }))
+            rows.append(menuSeparator())
         }
 
-        const removeLbl = new Gtk.Label({ label: t("cc.menu.remove"), halign: Gtk.Align.START, hexpand: true, css_classes: ["crystal-menu-label"] })
-        const removeInner = new Gtk.Box({ spacing: 10 })
-        removeInner.append(new Gtk.Image({ gicon: Icons.trash, pixel_size: 15, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER }))
-        removeInner.append(removeLbl)
-        const removeBtn = new Gtk.Button({ child: removeInner, css_classes: ["crystal-menu-row", "danger-action"], hexpand: true })
         // Clear the authoritative placement flag too, else syncCCLayout re-adds the
         // widget on next load (cc_layout.json and widgetConfig must agree).
-        removeBtn.connect("clicked", () => { widgetConfig.setCC(id, false); ccLayout.remove(id); close() })
-        rows.append(removeBtn)
+        rows.append(menuRow({
+            label: t("cc.menu.remove"),
+            icon: Icons.trash,
+            danger: true,
+            onClick: () => { widgetConfig.setCC(id, false); ccLayout.remove(id); close() },
+        }))
     }
 
     const doOpen = (id: string, anchorX: number, anchorY: number, gridHeight: number) => {

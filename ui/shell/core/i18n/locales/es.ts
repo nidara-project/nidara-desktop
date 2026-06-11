@@ -477,6 +477,17 @@ export default {
     "bar.system-menu.confirm.action.restart": "Reiniciar",
     "bar.system-menu.confirm.action.shutdown": "Apagar",
 
+    // Window menu (AppTitle)
+    "bar.window-menu.float": "Flotante",
+    "bar.window-menu.pseudo": "Pseudomosaico",
+    "bar.window-menu.fullscreen": "Pantalla Completa",
+    "bar.window-menu.center": "Centrar en Pantalla",
+    "bar.window-menu.pin": "Fijar en Todos los Espacios",
+    "bar.window-menu.move-to": "Mover al Espacio",
+    "bar.window-menu.workspace": "Espacio",
+    "bar.window-menu.float-all": "Hacer Flotantes Todas las Ventanas",
+    "bar.window-menu.no-window": "Ninguna Ventana Enfocada",
+
     // Widget names (bar + settings panel)
     "widget.bluetooth.name": "Bluetooth",
     "widget.bluetooth.sub.active": "Activo",

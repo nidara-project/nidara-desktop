@@ -206,6 +206,13 @@ lock over. Real fix is upstream (GTK4 / gtk4-layer-shell `Gtk4SessionLock`); if 
 reproducer emerges, file it there. Don't try to "handle" output removal in lockscreen JS —
 the crash happens below us, during Wayland event dispatch.
 
+### 14. Two more flat-menu row implementations could migrate to `MenuRow.ts`
+`widget/common/MenuRow.ts` (2026-06-11) is the shared builder for flat `crystal-menu-row`
+lists; the CC context menu and the bar window menu use it. Two hand-rolled siblings remain:
+`CrystalMenu.ts` `makeRow` (renders Gio menu models — tray menus; different shape: model
+iteration, submenus flattened to headers) and `Bar.tsx` `buildOverflowList` rows. Migrate
+opportunistically if already editing those files; not worth a standalone pass.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

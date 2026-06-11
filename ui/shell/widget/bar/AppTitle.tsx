@@ -6,10 +6,17 @@ import { getWordmark } from "../../utils"
 import SquircleContainer from "../common/SquircleContainer"
 import { CAPSULE_BORDER } from "./capsule"
 import hs from "../../core/HyprlandState"
+import status from "../../core/Status"
+import buildWindowMenu from "./WindowMenu"
+
+// openMenu: opens arbitrary content in the bar's shared expansion capsule,
+// anchored under the given widget. Injected by Bar (same pattern as Tray).
+type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget) => void
 
 // Bar-left capsule showing the focused window's app name (wordmark), kept in
-// sync with Hyprland's focused client and its title changes.
-export function AppTitle(monitorWidth: number): Gtk.Widget {
+// sync with Hyprland's focused client and its title changes. Clicking it (any
+// button) opens the window-options menu (WindowMenu.ts).
+export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): Gtk.Widget {
   // Max label width = half monitor - center capsule est. (100px) - icon capsule + gap overhead (~100px)
   const labelMaxChars = Math.max(15, Math.floor((monitorWidth / 2 - 200) / 8))
   const appName = new Gtk.Label({
@@ -47,7 +54,29 @@ export function AppTitle(monitorWidth: number): Gtk.Widget {
     return GLib.SOURCE_REMOVE
   })
 
-  return SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const capsule = SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+
+  if (openMenu) {
+    let menuOpen = false
+    const gesture = new Gtk.GestureClick()
+    gesture.set_button(0)   // 0 = any button: left and right click both open
+    gesture.connect("released", () => {
+      if (status.cc_open) return   // same guard as the other bar capsules
+      // Light toggle: a second click while our menu is up closes it. "__custom"
+      // is the bar's shared transient-expansion id; outside-click dismissal
+      // resets it, so a stale menuOpen just falls through to re-open.
+      if (menuOpen && status.bar_expanded_id === "__custom") {
+        menuOpen = false
+        status.bar_expanded_id = ""
+        return
+      }
+      menuOpen = true
+      openMenu(capsule, (onClose) => buildWindowMenu(() => { menuOpen = false; onClose() }))
+    })
+    capsule.add_controller(gesture)
+  }
+
+  return capsule
 }
 
 export default AppTitle

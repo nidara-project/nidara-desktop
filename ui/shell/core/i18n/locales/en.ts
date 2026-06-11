@@ -550,6 +550,17 @@ export default {
     "bar.system-menu.confirm.action.restart": "Restart",
     "bar.system-menu.confirm.action.shutdown": "Shut Down",
 
+    // Window menu (AppTitle)
+    "bar.window-menu.float": "Float",
+    "bar.window-menu.pseudo": "Pseudo-tile",
+    "bar.window-menu.fullscreen": "Fullscreen",
+    "bar.window-menu.center": "Center on Screen",
+    "bar.window-menu.pin": "Pin to All Workspaces",
+    "bar.window-menu.move-to": "Move to Workspace",
+    "bar.window-menu.workspace": "Workspace",
+    "bar.window-menu.float-all": "Float All Windows",
+    "bar.window-menu.no-window": "No Focused Window",
+
     // Widget names (bar + settings panel)
     "widget.bluetooth.name": "Bluetooth",
     "widget.bluetooth.sub.active": "Active",
