@@ -205,50 +205,94 @@ class HyprlandStateClass extends GObject.Object {
     // never shell out to hyprctl directly; they call (or add) a method here.
     // (Exempt: config text we WRITE for other daemons to run, e.g. the
     // hypridle config in Power.tsx — those execute outside the shell.)
+    // RULE: dispatch strings are hl.dsp.* Lua ONLY — the classic syntax
+    // (`togglefloating addr`, `movetoworkspace N,addr`…) is a Lua error that
+    // .catch swallows, so it fails silently (four methods shipped broken that
+    // way until 2026-06-11).
+
+    private _dispatch(call: string) {
+        return execAsync(["hyprctl", "dispatch", call])
+            .catch(e => console.error("[HyprlandState] dispatch:", call, e))
+    }
+
+    // `{ window = 'address:0x..' }` selector — verified on float/pin/move/close.
+    private _winSel(address: string): string {
+        const addr = address.startsWith("0x") ? address : "0x" + address
+        return `window = 'address:${addr}'`
+    }
 
     focusWorkspace(id: number) {
-        return execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ workspace = ${id}})`])
-            .catch(console.error)
+        return this._dispatch(`hl.dsp.focus({ workspace = ${id} })`)
     }
 
     focusWindow(address: string) {
-        const addr = address.startsWith("0x") ? address : "0x" + address
-        return execAsync(["hyprctl", "dispatch", `hl.dsp.focus({ window = 'address:${addr}'})`])
-            .catch(console.error)
+        return this._dispatch(`hl.dsp.focus({ ${this._winSel(address)} })`)
     }
 
     closeWindow(address: string) {
-        const addr = address.startsWith("0x") ? address : "0x" + address
-        return execAsync(["hyprctl", "dispatch", `hl.dsp.window.close({ window = 'address:${addr}'})`])
-            .catch(console.error)
+        return this._dispatch(`hl.dsp.window.close({ ${this._winSel(address)} })`)
     }
 
     sendToWorkspace(address: string, wsId: number) {
-        const addr = address.startsWith("0x") ? address : "0x" + address
-        return execAsync(["hyprctl", "dispatch", `movetoworkspace ${wsId},address:${addr}`])
-            .catch(console.error)
+        return this._dispatch(`hl.dsp.window.move({ workspace = ${wsId}, ${this._winSel(address)} })`)
     }
 
     floatWindow(address: string) {
-        const addr = address.startsWith("0x") ? address : "0x" + address
-        return execAsync(["hyprctl", "dispatch", `togglefloating address:${addr}`])
-            .catch(console.error)
+        return this._dispatch(`hl.dsp.window.float({ action = 'toggle', ${this._winSel(address)} })`)
+    }
+
+    /** Pseudo-tile toggle. NOTE: pseudo state is NOT readable (`hyprctl clients -j`
+     *  has no `pseudo` field, nor does HL.Window) — callers can't show a check. */
+    togglePseudo(address: string) {
+        return this._dispatch(`hl.dsp.window.pseudo({ ${this._winSel(address)} })`)
+    }
+
+    /** Pin = visible on every workspace (floating windows only). */
+    togglePin(address: string) {
+        return this._dispatch(`hl.dsp.window.pin({ ${this._winSel(address)} })`)
+    }
+
+    toggleFullscreen(address: string) {
+        return this._dispatch(`hl.dsp.window.fullscreen({ ${this._winSel(address)} })`)
+    }
+
+    /** Center on screen (floating windows only). */
+    centerWindow(address: string) {
+        return this._dispatch(`hl.dsp.window.center({ ${this._winSel(address)} })`)
     }
 
     async floatAllInWorkspace(wsId: number) {
-        const clients = this.clientsByWorkspace.get(wsId) || []
-        for (const c of clients) {
-            if (!(c as any).floating) await this.floatWindow(c.address)
+        // Window state comes from hyprctl, NOT AstalHyprland.Client.floating —
+        // that prop goes stale (a tiled window can read floating=true), which
+        // made this skip windows and the menu draw wrong checks (2026-06-11).
+        const arr = await this.getClientsJson()
+        for (const c of arr) {
+            if (c.workspace?.id === wsId && !c.floating) await this.floatWindow(c.address)
         }
     }
 
     toggleGroup() {
-        return execAsync(["hyprctl", "dispatch", "togglegroup"]).catch(console.error)
+        return this._dispatch(`hl.dsp.group.toggle()`)
     }
 
     sendToSpecial(name = "magic") {
-        return execAsync(["hyprctl", "dispatch", `movetoworkspace special:${name}`])
-            .catch(console.error)
+        return this._dispatch(`hl.dsp.window.move({ workspace = 'special:${name}' })`)
+    }
+
+    /** One-shot raw read of ALL clients from hyprctl. This is the authoritative
+     *  window state: AstalHyprland.Client props (floating, fullscreen) go stale,
+     *  and pinned/grouped aren't exposed at all. Called on demand (menu open,
+     *  bulk ops) — deliberately NOT part of _refresh, which runs on every IPC
+     *  event. Returns [] on failure. */
+    async getClientsJson(): Promise<any[]> {
+        try { return JSON.parse(await execAsync(["hyprctl", "clients", "-j"])) }
+        catch (e) { console.error("[HyprlandState] getClientsJson:", e); return [] }
+    }
+
+    /** getClientsJson narrowed to one window (null if gone). */
+    async getClientJson(address: string): Promise<any | null> {
+        const addr = address.startsWith("0x") ? address : "0x" + address
+        return (await this.getClientsJson()).find((c: any) => c.address === addr) ?? null
     }
 
     setLayout(layout: "dwindle" | "master") {
