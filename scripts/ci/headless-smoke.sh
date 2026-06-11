@@ -262,8 +262,8 @@ phase_run() {
     jq -e . /tmp/smoke/listActions.json >/dev/null || { log "FAIL: listActions is not valid JSON"; exit 1; }
 
     ags request dumpState >/tmp/smoke/dumpState.json
-    jq -e '.version' /tmp/smoke/dumpState.json >/dev/null || { log "FAIL: dumpState has no .version"; exit 1; }
-    log "IPC OK — shell version $(jq -r '.version' /tmp/smoke/dumpState.json)"
+    jq -e '.shell.version' /tmp/smoke/dumpState.json >/dev/null || { log "FAIL: dumpState has no .shell.version"; exit 1; }
+    log "IPC OK — shell version $(jq -r '.shell.version' /tmp/smoke/dumpState.json)"
 
     # ── 5. Screenshots for human review (NOT a gate beyond grim succeeding) ───
     sleep 4                                   # let the first frames render
