@@ -213,6 +213,31 @@ lists; the CC context menu and the bar window menu use it. Two hand-rolled sibli
 iteration, submenus flattened to headers) and `Bar.tsx` `buildOverflowList` rows. Migrate
 opportunistically if already editing those files; not worth a standalone pass.
 
+### 15. `widget/` is an inherited AGS naming convention — rename planned PRE-PUBLICATION
+`ui/shell/widget/` (singular) comes from AGS community templates, not from any framework
+requirement. The structure *inside* is sound (separation core/styles/widget is the valuable
+part — keep it); the problem is naming: the dir holds whole **surfaces** (bar, dock,
+control-center, settings, overview, prism, app-grid, about), and the nested
+`widget/widgets/` ("widget containing widgets") forces an explanation every time. Agreed
+target (owner decision 2026-06-11):
+
+```
+ui/shell/
+  core/        (unchanged)
+  styles/      (unchanged)
+  surfaces/    ← bar, dock, control-center, settings, overview, prism, app-grid, about
+  widgets/     ← the auto-registered atomics (moves up one level)
+  common/      ← shared pieces (Slider, SquircleContainer, fade, MenuRow…)
+```
+
+Mechanical, low-risk (typecheck + CI catch broken paths) but touches: all import paths,
+`scripts/gen-widget-index.mjs` (`WIDGETS_DIR`), tsconfig, the SCSS orphan-detector grep
+paths, BOTH skills (this one references `widget/` throughout), and `install.sh` if it
+copies by path. greeter/lockscreen `widget/` dirs may stay or follow for coherence (they
+don't have the widget/widgets problem). **Timing is the whole point: do it right before
+publishing the repo** — after publication every rename breaks open PRs, links, and
+contributor muscle memory. Don't do it as a side-effect of another change (rule 3 below).
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
