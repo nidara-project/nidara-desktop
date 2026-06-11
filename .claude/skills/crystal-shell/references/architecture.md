@@ -80,7 +80,7 @@ These are GObject singletons. Widgets subscribe to them via `notify::prop`. **No
 |---|---|---|
 | `Status.ts` | 202 | Central GObject state machine for overlays. Mutually-exclusive setters (opening one closes the others). Props: `cc/nc/prism/system-menu/overview/about/settings-open`, `recording`, `cc-edit-mode`, `bar-expanded-id`, `cc-detail-id`. **See `state-and-ipc.md`.** |
 | `AppService.ts` | 685 | `.desktop` discovery, icon resolution + fallbacks, WM-class → Desktop-ID mapping. Backs Dock + AppGrid. |
-| `ThemeManager.ts` | 534 | GTK/icon/cursor theme, dark mode, CSS providers (main/font/tokens/tint), hot-reload of `style.css` in dev. |
+| `ThemeManager.ts` | 534 | GTK/icon/cursor theme, dark mode, CSS providers (main/font/tokens/tint), hot-reload of `style.css` in dev. Also pushes the accent into Hyprland's **groupbar** active-tab color (`syncHyprlandGroupAccent`, at boot + on accent change, via `hs.evalLua`) — the one place accent enters compositor chrome; the rest of the group styling is static in `hyprland.lua`'s `group` block (glass borders like windows). Gotcha: a groupbar **bakes its colors at group creation** — config changes only affect groups made afterwards. |
 | `FluidCrystal.ts` | 436 | Token engine: `generateTokensCss()` emits `@define-color` + `--crystal-*` for accent, transparency, materials, shadows, tint. Holds the canonical `ACCENT_PALETTE`. Syncs Kvantum/qt. |
 | `RegionConfig.ts` | 218 | Time/date format, timezone (`region.json`). |
 | `InputConfig.ts` | 194 | Keyboard/mouse/touchpad → writes `crystal-settings.lua`. |

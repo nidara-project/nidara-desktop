@@ -320,9 +320,22 @@ class ThemeManager extends GObject.Object {
     async setAccentColor(accent: AccentKey) {
         this.fcConfig.accent = accent
         this.applyTokens()
+        this.syncHyprlandGroupAccent()
         execAsync(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", accent]).catch(() => {})
         this.schedulePersistence()
         this.emit("changed")
+    }
+
+    /** Push the accent into Hyprland's groupbar (active tab = persistent
+     *  selection — the one place accent enters compositor chrome; window
+     *  borders stay neutral glass on purpose). The rest of the groupbar
+     *  styling is static in hyprland.lua's `group` block. Gotcha: a groupbar
+     *  bakes its colors at group creation, so this colors FUTURE groups —
+     *  existing ones keep the old accent until recreated. */
+    private syncHyprlandGroupAccent() {
+        const hex = ACCENT_PALETTE[this.fcConfig.accent].color.slice(1)
+        const col = `rgba(${hex}99)`
+        hs.evalLua(`hl.config({ group = { groupbar = { col = { active = '${col}', locked_active = '${col}' } } } })`)
     }
 
     async setTransparency(value: number) {
@@ -464,6 +477,7 @@ class ThemeManager extends GObject.Object {
             this.writeXcursorDefault(this.state.cursorTheme)
             hs.setCursor(this.state.cursorTheme, settings.get_int("cursor-size") || 24)
         }
+        this.syncHyprlandGroupAccent()
         const target = this.state.isDark ? "prefer-dark" : "prefer-light"
         if (settings.get_string("color-scheme") !== target) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "color-scheme", target])
         if (settings.get_string("accent-color") !== this.fcConfig.accent) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "accent-color", this.fcConfig.accent]).catch(() => {})

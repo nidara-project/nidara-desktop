@@ -74,6 +74,40 @@ hl.config({
         },
     },
 
+    -- Groups (tabbed windows): same glass language as window borders. The
+    -- groupbar tab colors below are a neutral fallback — the shell re-pushes
+    -- the accent over groupbar col.active at boot and on accent change
+    -- (ThemeManager.syncHyprlandGroupAccent). NOTE: a groupbar BAKES its
+    -- colors when the group is created — config changes only affect groups
+    -- made afterwards (verified live 2026-06-11).
+    group = {
+        col = {
+            border_active          = { colors = {"rgba(ffffff4d)", "rgba(ffffff1a)"}, angle = 45 },
+            border_inactive        = "rgba(59595933)",
+            border_locked_active   = { colors = {"rgba(ffffff4d)", "rgba(ffffff1a)"}, angle = 45 },
+            border_locked_inactive = "rgba(59595933)",
+        },
+        groupbar = {
+            enabled          = true,
+            gradients        = true,
+            render_titles    = true,
+            height           = 22,
+            font_size        = 11,
+            indicator_height = 0,
+            gradient_rounding       = 8,
+            gradient_rounding_power = 4.0,   -- squircle, like the rest of the shell
+            text_color          = "rgba(ffffffee)",
+            text_color_inactive = "rgba(ffffff99)",
+            blur = false,
+            col = {
+                active          = "rgba(ffffff33)",
+                inactive        = "rgba(ffffff14)",
+                locked_active   = "rgba(ffffff33)",
+                locked_inactive = "rgba(ffffff14)",
+            },
+        },
+    },
+
     input = {
         kb_layout               = "us",
         follow_mouse            = 1,
