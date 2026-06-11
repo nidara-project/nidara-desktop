@@ -106,12 +106,14 @@ When a reload seems to do nothing or styles refuse to refresh, the cause is almo
 CI gates **SCSS compile + typecheck + widgets-gen freshness + headless boot smoke**.
 
 The **smoke job** (`scripts/ci/headless-smoke.sh`, `smoke` in ci.yml) is the only gate that
-actually RUNS the shell: in an `archlinux:latest` container it builds the pinned
+actually RUNS the shell: the runner loads the kernel's **vkms** module (virtual KMS — needed
+because Hyprland cannot boot with zero DRM devices: aquamarine's GBM allocator wants a node,
+and `HYPRLAND_HEADLESS_ONLY` is set by hyprtester but read by NOTHING, verified on v0.55.2
+and main), then a privileged `archlinux:latest` container builds the pinned
 Astal/AGS/appmenu stack straight from `install.sh`'s refs (so a broken source build fails
 CI, not a user's clean install), `ags bundle`s the shell, boots Hyprland with the SHIPPED
-`config/hypr/hyprland.lua` under `HYPRLAND_HEADLESS_ONLY=1` (aquamarine skips DRM/libseat —
-the same mechanism Hyprland's own hyprtester uses; rendering is llvmpipe, a virtual output
-comes from `hyprctl output create headless`), runs the bundle exactly as production does
+`config/hypr/hyprland.lua` on the vkms display (seatd session + systemd-udevd for device
+enumeration; rendering is kms_swrast/llvmpipe), runs the bundle exactly as production does
 (`CRYSTAL_SHELL_ROOT` + cwd = shell root), and FAILS if the process dies, `ags request
 listActions`/`dumpState` don't answer with valid JSON, or the boot log contains `JS ERROR`.
 It then grims a desktop + Control Center screenshot into the `smoke-artifacts` artifact for

@@ -12,24 +12,28 @@
 #   6. Screenshots (grim) are captured for HUMAN review — deliberately NOT a
 #      pixel diff (fragile, rejected); a person glances at the artifact.
 #
-# How headless works: HYPRLAND_HEADLESS_ONLY=1 makes aquamarine skip DRM/libseat
-# entirely (the same mechanism Hyprland's own hyprtester uses); rendering falls
-# back to llvmpipe (mesa software GL). A virtual output is created with
-# `hyprctl output create headless` if none exists.
+# How "headless" actually works — vkms, not a headless backend: Hyprland cannot
+# run with zero DRM devices (aquamarine's GBM allocator needs a node; its
+# headless backend alone fails with "no allocator available", and
+# HYPRLAND_HEADLESS_ONLY is set by hyprtester but read by nothing — verified
+# against Hyprland v0.55.2 AND main). So the CI job loads the kernel's vkms
+# (virtual KMS) module on the runner VM and hands /dev/dri to this container;
+# mesa renders on it with kms_swrast/llvmpipe (software GL). seatd provides the
+# seat session, systemd-udevd lets aquamarine enumerate the device.
 #
-# Runs INSIDE an archlinux:latest container as root (see the `smoke` job in
-# .github/workflows/ci.yml). Hyprland refuses to run as root, so the boot phase
+# Runs INSIDE a privileged archlinux:latest container (docker run, see the
+# `smoke` job in ci.yml). Hyprland refuses to run as root, so the boot phase
 # runs as an unprivileged `ci` user (`run` subcommand, re-invoked via runuser).
 #
-# Dependency cache: if /opt/crystal-deps.tar.zst exists (restored by
-# actions/cache), the built dependency stack is unpacked instead of rebuilt;
+# Dependency cache: if $DEPS_TARBALL exists (restored by actions/cache and
+# mounted in), the built dependency stack is unpacked instead of rebuilt;
 # otherwise it is built from source and the tarball is created for the cache.
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT="${OUT:-${GITHUB_WORKSPACE:-$REPO}/smoke-out}"   # uploaded as artifact (always())
-DEPS_TARBALL="/opt/crystal-deps.tar.zst"
+DEPS_TARBALL="${DEPS_TARBALL:-/opt/crystal-deps.tar.zst}"
 STAGE="/opt/crystal-deps-stage"              # DESTDIR staging → tarball content
 
 # Single source of truth for the pinned revisions: install.sh.
@@ -51,7 +55,7 @@ phase_deps() {
         libpulse networkmanager bluez-libs upower libnotify \
         pipewire wireplumber \
         nodejs npm gjs go \
-        hyprland mesa dbus zstd \
+        hyprland mesa dbus zstd seatd systemd \
         grim jq \
         ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji
 
@@ -125,7 +129,7 @@ phase_bundle() {
 phase_boot() {
     id ci &>/dev/null || useradd -m -s /bin/bash ci
     # The boot phase only WRITES to /tmp — but it must read the whole repo,
-    # and `actions/checkout` leaves it owned by root.
+    # and the workspace arrives owned by another uid.
     chmod -R a+rX "$REPO"
 
     export XDG_RUNTIME_DIR=/run/smoke
@@ -136,6 +140,18 @@ phase_boot() {
     # desktop without BT/battery is a supported install).
     dbus-uuidgen --ensure
     mkdir -p /run/dbus && dbus-daemon --system --fork
+
+    # aquamarine discovers DRM devices through libudev — run udevd and replay
+    # device events so the vkms node handed in by the runner is enumerable.
+    /usr/lib/systemd/systemd-udevd --daemon
+    udevadm trigger --action=add || true
+    udevadm settle || true
+
+    # Seat session: aquamarine's DRM backend needs libseat; seatd is the
+    # daemonless-friendly provider. `ci` must be in its group to connect.
+    seatd -g seat >/tmp/seatd.log 2>&1 &
+    usermod -aG seat,video ci
+    sleep 1
 
     mkdir -p "$OUT" /tmp/smoke && chown ci /tmp/smoke "$OUT"
 
@@ -148,11 +164,11 @@ phase_boot() {
 # Subcommand: run — the actual boot + checks (executed as `ci`)
 # ─────────────────────────────────────────────────────────────────────────────
 phase_run() {
-    export HYPRLAND_HEADLESS_ONLY=1      # aquamarine: no DRM, no libseat (hyprtester's mode)
-    export LIBGL_ALWAYS_SOFTWARE=1       # mesa llvmpipe for both Hyprland and GTK
+    export LIBGL_ALWAYS_SOFTWARE=1       # mesa llvmpipe/kms_swrast on the vkms node
     export LANG=C.UTF-8
+    mkdir -p "$HOME/.cache"              # Hyprland's crash-report dir lives under it
 
-    local hypr_log=/tmp/smoke/hyprland.log shell_log=/tmp/smoke/shell.log
+    local hypr_log=/tmp/smoke/hyprland-stdout.log shell_log=/tmp/smoke/shell.log
     local hypr_pid= shell_pid=
 
     # Always ship the logs + screenshots as artifacts, pass or fail.
@@ -160,10 +176,14 @@ phase_run() {
         local rc=$?
         [ -n "$shell_pid" ] && kill "$shell_pid" 2>/dev/null || true
         [ -n "$hypr_pid" ]  && kill "$hypr_pid"  2>/dev/null || true
+        # Hyprland switches its detailed log to disk early ("Disabling stdout
+        # logs!") — that file has the real backend errors; ship it too.
+        cp -f "$XDG_RUNTIME_DIR"/hypr/*/hyprland*.log /tmp/smoke/ 2>/dev/null || true
         cp -f /tmp/smoke/*.png /tmp/smoke/*.log /tmp/smoke/*.json "$OUT"/ 2>/dev/null || true
         if [ $rc -ne 0 ]; then
             echo "─── shell.log (tail) ───────────────────────────────"; tail -n 80 "$shell_log" 2>/dev/null || true
-            echo "─── hyprland.log (tail) ────────────────────────────"; tail -n 40 "$hypr_log" 2>/dev/null || true
+            echo "─── hyprland stdout (tail) ─────────────────────────"; tail -n 40 "$hypr_log" 2>/dev/null || true
+            echo "─── hyprland disk log (tail) ───────────────────────"; tail -n 60 /tmp/smoke/hyprland.log 2>/dev/null || true
         fi
         return $rc
     }
