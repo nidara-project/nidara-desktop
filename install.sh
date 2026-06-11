@@ -119,6 +119,7 @@ sudo pacman -Syu --needed --noconfirm \
     libpulse networkmanager bluez-libs upower libnotify \
     intltool scdoc brightnessctl pamixer hyprpicker \
     jq slurp grim wf-recorder wl-clipboard cliphist mesa pam \
+    pipewire wireplumber \
     git nodejs npm gjs go \
     accountsservice greetd pavucontrol rust cargo \
     hyprland hypridle hyprsunset uwsm power-profiles-daemon \
@@ -190,6 +191,7 @@ astal_pkgs=(
     "lib/notifd|libastal-notifd"
     "lib/bluetooth|libastal-bluetooth"
     "lib/tray|libastal-tray"
+    "lib/wireplumber|libastal-wireplumber"
     "lib/greet|libastal-greet"
     "lib/auth|libastal-auth"
     "lang/gjs|astal-gjs"

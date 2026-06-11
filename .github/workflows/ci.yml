@@ -19,8 +19,13 @@
 #     fresh — regenerates it with scripts/gen-widget-index.mjs and fails if it
 #     differs. Pure node; also surfaces the codegen's own validation errors
 #     (stray non-widget file in widgets/, duplicate widget id).
-#
-# Not here: `ags bundle` — needs the `ags` binary + GTK4 libraries.
+#   - smoke: the REAL thing — in an Arch container, build the pinned Astal/AGS
+#     stack (proves install.sh's source builds still work), `ags bundle` the
+#     shell, boot Hyprland headless (HYPRLAND_HEADLESS_ONLY=1, llvmpipe), boot
+#     the bundle on it, and require: process stays alive, IPC answers
+#     (listActions/dumpState), no JS errors in the boot log. Screenshots are
+#     uploaded as artifacts for HUMAN review — deliberately not a pixel diff.
+#     All logic lives in scripts/ci/headless-smoke.sh.
 
 name: CI
 
@@ -65,6 +70,35 @@ jobs:
       - name: tsc --noEmit (must succeed)
         working-directory: ui/shell
         run: npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json
+
+  smoke:
+    name: Headless boot smoke
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      # The built Astal/AGS/appmenu stack is cached as a tarball. Key parts:
+      #   - install.sh hash → covers the pinned refs (they live there)
+      #   - month stamp → archlinux:latest moves; a monthly rebuild bounds the
+      #     window for soname drift between cached binaries and fresh pacman libs
+      - name: Compute cache month stamp
+        id: stamp
+        run: echo "month=$(date +%Y-%m)" >> "$GITHUB_OUTPUT"
+      - name: Cache built dependency stack
+        uses: actions/cache@v4
+        with:
+          path: /opt/crystal-deps.tar.zst
+          key: smoke-deps-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh') }}
+      - name: Build deps + bundle + headless boot
+        run: bash scripts/ci/headless-smoke.sh
+      - name: Upload screenshots + logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: smoke-out/
+          if-no-files-found: ignore
 
   widgets-gen:
     name: Widget registry freshness
