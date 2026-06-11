@@ -23,3 +23,8 @@
 /CONTRIBUTING.md      @aalonx
 /install.sh           @aalonx
 /scripts/             @aalonx
+
+# Installed binaries — bin/ ships the session launchers and crystal-shell-mcp,
+# the MCP server users' agent clients execute. A hostile edit here runs inside
+# every user's agent session.
+/bin/                 @aalonx

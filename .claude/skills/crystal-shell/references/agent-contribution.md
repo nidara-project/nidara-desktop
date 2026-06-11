@@ -129,6 +129,17 @@ auto-merge — every PR is human-reviewed.
    GitHub Action applies the `agent-submitted` label from that (or from the `Co-Authored-By`
    trailer). Do **not** pass `--label agent-submitted`: an external contributor lacks the triage
    permission to set labels, so it would error. If the user already has a fork, `gh` reuses it.
+
+   **After opening, an automated triage comment appears on the PR** (deterministic — no AI
+   reads it, no PR code runs). React to its labels like this:
+   - `needs-evidence` → the template is incomplete. Fix it by **editing the PR description**
+     (`gh pr edit <n> --repo fluid-crystal/crystal-shell --body-file <fixed body>`), completing
+     the missing checkboxes/sections **honestly — never tick a box that isn't true**. The label
+     and the comment clear automatically on the next run.
+   - `guardian-files` → the diff touches protected paths; it means a longer human review, not a
+     rejection. Don't try to work around it.
+   - Do not attempt to remove labels or argue with the bot comment; it's metadata for the human
+     reviewer, who makes every decision.
 6. **Keep personal bits out.** Strip the user's accent, wallpaper, pinned apps, keybinds,
    layout — anything PERSONAL — from the diff. A global PR contains only the global change.
 7. **Hand back the link.** Give the user the PR URL and tell them a maintainer will review;
@@ -142,6 +153,10 @@ These PRs arrive from many users' agents, of varying quality and origin. Treat t
 a funnel that *shapes* contributions, never as a merge gate:
 
 - **Branch protection on `main`**; CI required; **no auto-merge, ever.**
+- A deterministic triage workflow (`.github/workflows/triage.yml`) pre-chews every PR:
+  labels (`agent-submitted`, `guardian-files`, `needs-evidence`) plus one sticky summary
+  comment, all computed from metadata only — it never executes PR code and contains no AI.
+  The AI-assisted review itself happens on the maintainer's machine, on demand.
 - Triage via the `agent-submitted` label; require the PR template's hardware/testing evidence.
 - Reward the high-value long tail: hardware/compat fixes the maintainer can't reproduce solo.
 - When a contribution changes behaviour or conventions, the PR must also update the relevant

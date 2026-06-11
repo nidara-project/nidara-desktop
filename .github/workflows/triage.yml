@@ -1,0 +1,240 @@
+# Deterministic PR triage.
+#
+# This workflow is the AUTOMATED HALF of the project's hybrid triage model:
+#   - This side (GitHub Actions) computes ONLY deterministic signals — labels and a
+#     single sticky summary comment derived from PR metadata, changed-file paths and
+#     the PR template. No LLM runs here and no AI credentials live in this repo.
+#   - The judgment half runs on the maintainer's machine: a private (non-shipped)
+#     skill drives an AI review of the diff/evidence/CI artifacts on demand.
+#
+# What it does on every PR (opened / reopened / edited / synchronize):
+#   1. Detects agent-submitted PRs (template checkbox OR Co-Authored-By trailer)
+#      and applies `agent-submitted`. External contributors can't self-label —
+#      labelling needs triage permission they don't have — so we do it for them.
+#   2. Applies/removes `guardian-files` when the diff touches CODEOWNERS-protected
+#      paths (skills / CI / CONTRIBUTING / install.sh / scripts / bin).
+#   3. Applies/removes `needs-evidence` when the PR template is incomplete. The
+#      `edited` trigger makes this self-healing: fixing the PR description clears it.
+#   4. Upserts ONE sticky summary comment (anchor: <!-- crystal-triage -->) —
+#      updated in place on every run, never a second comment.
+#
+# Why `pull_request_target` (not `pull_request`): for PRs opened from a fork, the
+# default `pull_request` token is read-only and runs in the fork's context, so it
+# can't label or comment. `pull_request_target` runs in THIS repo's context with a
+# writable token. It's safe here because we NEVER check out or execute the PR's
+# code — we only read PR metadata via the API. Consequently same-repo and fork PRs
+# behave identically for this workflow (base-repo token, base-branch workflow file,
+# no PR checkout).
+#
+# Security invariants — keep these when editing:
+#   - No actions/checkout. Ever. PR code must not reach this runner.
+#   - PR title/body reach the script only via `env:` (shell interpolation of
+#     ${{ ...body }} inside `run:` would be script injection). They are only
+#     grep'd; never eval'd, never echoed back into the comment.
+#   - The sticky comment contains only computed facts plus SANITIZED filenames
+#     (backticks/newlines stripped, truncated, capped at 20).
+
+name: PR triage (deterministic)
+
+on:
+  pull_request_target:
+    types: [opened, reopened, edited, synchronize]
+
+permissions:
+  pull-requests: write
+  issues: write        # label create + issue comments are issues-scoped ops
+  contents: read
+
+concurrency:
+  group: triage-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    name: Compute triage labels and summary
+    runs-on: ubuntu-latest
+    steps:
+      - name: Triage PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          BODY: ${{ github.event.pull_request.body }}
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          set -euo pipefail
+
+          # ---------------------------------------------------------------
+          # Labels (idempotent; --force also corrects color/description drift)
+          # ---------------------------------------------------------------
+          gh label create "agent-submitted" --repo "$REPO" --force \
+            --color "5319e7" \
+            --description "Opened by a contributor's AI agent; triage per CONTRIBUTING.md"
+          gh label create "guardian-files" --repo "$REPO" --force \
+            --color "b60205" \
+            --description "Touches protected paths (skills/CI/install/scripts/bin) - highest scrutiny"
+          gh label create "needs-evidence" --repo "$REPO" --force \
+            --color "d93f0b" \
+            --description "PR template incomplete - edit the PR description to add the missing items"
+
+          # ---------------------------------------------------------------
+          # 1. Agent detection (either signal is enough)
+          # ---------------------------------------------------------------
+          agent="no"; agent_how=""
+
+          # Signal 1: PR template checkbox ticked
+          if grep -qiE '^\s*-\s*\[x\]\s*This PR was prepared with an AI coding agent' <<< "${BODY:-}"; then
+            agent="yes"; agent_how="PR template checkbox"
+          fi
+
+          # Signal 2: an agent Co-Authored-By trailer on any commit
+          if [ "$agent" = "no" ]; then
+            if gh api "repos/$REPO/pulls/$PR/commits" --paginate --jq '.[].commit.message' \
+                 | grep -qiE 'co-authored-by:.*(claude|noreply@anthropic\.com)'; then
+              agent="yes"; agent_how="Co-Authored-By agent trailer"
+            fi
+          fi
+
+          # ---------------------------------------------------------------
+          # 2. Changed files via API only (never a checkout) + guardian match
+          # ---------------------------------------------------------------
+          files=$(gh api "repos/$REPO/pulls/$PR/files" --paginate --jq '.[].filename')
+
+          # Guardian prefixes — must mirror .github/CODEOWNERS.
+          guardian_files=""
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            case "$f" in
+              .claude/skills/*|.github/*|CONTRIBUTING.md|install.sh|scripts/*|bin/*)
+                guardian_files+="$f"$'\n' ;;
+            esac
+          done <<< "$files"
+
+          # ---------------------------------------------------------------
+          # 3. Template completeness (-> needs-evidence)
+          # ---------------------------------------------------------------
+          missing=""
+
+          if [ "$agent" = "yes" ] && \
+             ! grep -qiE '^\s*-\s*\[x\]\s*The user reviewed and explicitly approved' <<< "${BODY:-}"; then
+            missing+='- Tick "The user reviewed and explicitly approved opening this PR" (required for agent-submitted PRs)'$'\n'
+          fi
+
+          if ! grep -qiE '^\s*-\s*\[x\]\s*This change benefits all users' <<< "${BODY:-}"; then
+            missing+='- Tick "This change benefits all users" (or reconsider: personal changes belong in your config layer, not a PR)'$'\n'
+          fi
+
+          if ! grep -qiE '^\s*-\s*\[x\]\s*No personal preferences' <<< "${BODY:-}"; then
+            missing+='- Tick "No personal preferences are included in this diff" after checking it really holds'$'\n'
+          fi
+
+          # Hardware/compat claims need at least one Environment & hardware line.
+          # Title-only keyword match on purpose: the PR template's own boilerplate
+          # contains 'nvidia|nouveau|amdgpu' and 'WiFi/Bluetooth' in the section
+          # hints, so scanning the body would always fire.
+          if grep -qiE '\b(nvidia|nouveau|amdgpu|gpu|driver|wifi|bluetooth|adapter|hardware|compat)' <<< "${TITLE:-}"; then
+            hw_filled="no"
+            grep -qE '^\s*-\s*GPU / driver.*:\s*\S'        <<< "${BODY:-}" && hw_filled="yes"
+            grep -qE '^\s*-\s*Hyprland version:\s*\S'      <<< "${BODY:-}" && hw_filled="yes"
+            grep -qE '^\s*-\s*Relevant adapters.*:\s*\S'   <<< "${BODY:-}" && hw_filled="yes"
+            grep -qE '^\s*-\s*Other:\s*\S'                 <<< "${BODY:-}" && hw_filled="yes"
+            if [ "$hw_filled" = "no" ]; then
+              missing+='- Fill at least one "Environment & hardware" line - the title suggests a hardware/compat fix, and your environment IS the evidence'$'\n'
+            fi
+          fi
+
+          # ---------------------------------------------------------------
+          # 4. Skill-drift advisory (comment line only — deliberately NO label:
+          #    path heuristics cannot tell behaviour changes from pure bugfixes,
+          #    so a label would cry wolf; the maintainer-side AI triage judges it)
+          # ---------------------------------------------------------------
+          advisory=""
+          if grep -qE '^ui/' <<< "$files" && \
+             ! grep -qE '^\.claude/skills/crystal-shell/references/' <<< "$files"; then
+            advisory="Code changed under \`ui/\` without a skill-reference update. If this PR changes behaviour or conventions, the relevant \`references/\` doc must be updated in the same PR (see CONTRIBUTING.md); if it is a pure fix, ignore this line."
+          fi
+
+          # ---------------------------------------------------------------
+          # Apply / remove labels (removal makes `edited` reruns self-healing;
+          # agent-submitted is add-only — a maintainer may have set it manually)
+          # ---------------------------------------------------------------
+          if [ "$agent" = "yes" ]; then
+            gh pr edit "$PR" --repo "$REPO" --add-label "agent-submitted"
+          fi
+          if [ -n "$guardian_files" ]; then
+            gh pr edit "$PR" --repo "$REPO" --add-label "guardian-files"
+          else
+            gh pr edit "$PR" --repo "$REPO" --remove-label "guardian-files" 2>/dev/null || true
+          fi
+          if [ -n "$missing" ]; then
+            gh pr edit "$PR" --repo "$REPO" --add-label "needs-evidence"
+          else
+            gh pr edit "$PR" --repo "$REPO" --remove-label "needs-evidence" 2>/dev/null || true
+          fi
+
+          # ---------------------------------------------------------------
+          # Sticky summary comment (one per PR, updated in place)
+          # ---------------------------------------------------------------
+          # Filenames come from the untrusted diff: strip backticks/CR/LF,
+          # truncate each to 200 chars, list at most 20.
+          guardian_md=""
+          shown=0; total=0
+          while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            total=$((total + 1))
+            if [ "$shown" -lt 20 ]; then
+              clean=$(printf '%s' "$f" | tr -d '`\r\n' | cut -c1-200)
+              guardian_md+="  - \`$clean\`"$'\n'
+              shown=$((shown + 1))
+            fi
+          done <<< "$guardian_files"
+          if [ "$total" -gt "$shown" ]; then
+            guardian_md+="  - …and $((total - shown)) more"$'\n'
+          fi
+
+          comment="<!-- crystal-triage -->"$'\n'
+          comment+="## Automated triage summary"$'\n\n'
+          comment+="_Deterministic checks computed from PR metadata — no AI reads your PR here, and no code from this PR was executed._"$'\n\n'
+
+          if [ "$agent" = "yes" ]; then
+            comment+="- **Agent-submitted:** yes ($agent_how)"$'\n'
+          else
+            comment+="- **Agent-submitted:** no signal detected"$'\n'
+          fi
+
+          if [ -n "$guardian_files" ]; then
+            comment+="- **Guardian files touched** (CODEOWNERS-protected — expect closer review):"$'\n'
+            comment+="$guardian_md"
+          else
+            comment+="- **Guardian files touched:** none"$'\n'
+          fi
+
+          if [ -n "$missing" ]; then
+            comment+="- **PR template:** incomplete (label \`needs-evidence\`). Missing:"$'\n'
+            while IFS= read -r m; do
+              [ -n "$m" ] || continue
+              comment+="  $m"$'\n'
+            done <<< "$missing"
+          else
+            comment+="- **PR template:** complete"$'\n'
+          fi
+
+          if [ -n "$advisory" ]; then
+            comment+=$'\n'"> $advisory"$'\n'
+          fi
+
+          comment+=$'\n'"---"$'\n'
+          comment+="_Contributors: this comment and the labels update automatically when you edit the PR description or push commits — fix \`needs-evidence\` by completing the template (honestly; never tick a box that isn't true)._"$'\n'
+          comment+="_Maintainer: run the local AI triage before reviewing._"$'\n'
+
+          cid=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq '[.[] | select(.user.type == "Bot") | select(.body | startswith("<!-- crystal-triage -->"))][0].id // empty')
+          if [ -n "$cid" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$cid" -f body="$comment" > /dev/null
+            echo "Updated sticky triage comment $cid on PR #$PR."
+          else
+            gh api "repos/$REPO/issues/$PR/comments" -f body="$comment" > /dev/null
+            echo "Created sticky triage comment on PR #$PR."
+          fi
+
+          echo "Triage done: agent=$agent guardian=$([ -n "$guardian_files" ] && echo yes || echo no) needs-evidence=$([ -n "$missing" ] && echo yes || echo no)"

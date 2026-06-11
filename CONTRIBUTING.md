@@ -69,6 +69,21 @@ automatically — a maintainer always reviews.
 - Maintainers triage `agent-submitted` PRs by the evidence in the template.
 - Behaviour/convention changes must come with the corresponding skill-reference update.
 
+### Automated triage
+
+Every PR gets a deterministic triage pass (a GitHub Action — no AI reads your PR, and none
+of your PR's code is executed). It applies labels and maintains **one** summary comment that
+updates in place whenever you edit the PR description or push commits:
+
+| Label | Meaning | What you should do |
+|---|---|---|
+| `agent-submitted` | Prepared with an AI coding agent (template checkbox or commit trailer) | Nothing — it's informational, applied for you |
+| `guardian-files` | The diff touches protected paths (`.claude/skills/`, `.github/`, `CONTRIBUTING.md`, `install.sh`, `scripts/`, `bin/`) | Nothing — just expect a closer, slower review |
+| `needs-evidence` | The PR template is incomplete (unticked classification boxes, missing hardware details on a compat fix, missing user approval on an agent PR) | Edit the PR **description** to complete the template — the label and the comment clear automatically |
+
+Complete the template honestly: never tick a box that isn't true. The triage comment is
+metadata for the human reviewer, not a gate you need to argue with.
+
 ## License
 
 By contributing you agree your contributions are licensed under the project's
