@@ -96,6 +96,12 @@ hl.config({
         -- Hyprland hasn't exited yet. Dark neutral instead of Hyprland's gray+splash.
         background_color             = 0x101014,
         allow_session_lock_restore   = true,
+        -- Compositor-level wake fallback: hypridle's on-resume only fires if its
+        -- own idle tracking saw the timeout (a daemon restart or inhibitor churn
+        -- resets it, leaving the screen black with no way back — incident 2026-06-10).
+        -- With these, any input re-enables DPMS regardless of hypridle's state.
+        mouse_move_enables_dpms      = true,
+        key_press_enables_dpms       = true,
     },
 
     ecosystem = {

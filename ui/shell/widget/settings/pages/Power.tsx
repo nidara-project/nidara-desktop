@@ -16,7 +16,11 @@ interface IdleConfig { screenOff: number; lock: number; suspend: number }
 const parseHypridle = (): IdleConfig => {
     try {
         const [, bytes] = Gio.File.new_for_path(HYPRIDLE_CONF).load_contents(null)
+        // Drop comment lines first: a commented-out `# listener { ... }` block
+        // otherwise parses as real and gets silently re-enabled on the next save
+        // (this is how a phantom 30-min auto-suspend shipped on 2026-06-10).
         const content = new TextDecoder().decode(bytes)
+            .split("\n").filter(l => !/^\s*#/.test(l)).join("\n")
         const regex = /listener\s*\{([^}]+)\}/g
         let m
         const blocks: { timeout: number; onTimeout: string }[] = []
@@ -71,12 +75,26 @@ const writeHypridle = ({ screenOff, lock, suspend }: IdleConfig) => {
         "}", ""
     )
     try {
+        // FileCreateFlags.NONE follows the symlink and writes through to the real
+        // target. REPLACE_DESTINATION would replace the symlink itself with a
+        // plain file, silently detaching the config from its install-mode target.
         Gio.File.new_for_path(HYPRIDLE_CONF).replace_contents(
             new TextEncoder().encode(lines.join("\n")),
-            null, false, Gio.FileCreateFlags.REPLACE_DESTINATION, null
+            null, false, Gio.FileCreateFlags.NONE, null
         )
+        // Single-owner restart. The session launches hypridle via `uwsm app -s b`
+        // (hyprland.lua), but the hypridle package ALSO ships a user unit, and
+        // `systemctl --user restart hypridle` would start a SECOND instance next
+        // to the session one — both register idle timers and fight over the
+        // org.freedesktop.ScreenSaver name, dropping app inhibitors (videos kept
+        // playing while the screen went dark — incident 2026-06-10). Stop the
+        // unit if present, kill any stragglers, wait until truly dead, relaunch.
         execAsync(["bash", "-c",
-            "systemctl --user restart hypridle 2>/dev/null || (pkill -TERM hypridle 2>/dev/null; sleep 0.8; uwsm app -- hypridle)"
+            "systemctl --user stop hypridle.service 2>/dev/null; " +
+            "pkill -x -TERM hypridle 2>/dev/null; " +
+            "for i in $(seq 1 30); do pgrep -x hypridle >/dev/null || break; sleep 0.1; done; " +
+            "pkill -x -KILL hypridle 2>/dev/null; " +
+            "exec uwsm app -s b -- hypridle"
         ]).catch(() => {})
     } catch (e) {
         console.error("[PowerPage] Failed to write hypridle config:", e)
@@ -182,7 +200,9 @@ export default function PowerPage() {
         closestLabel(screenOpts, cfg.screenOff),
         screenOpts.map(o => o.label),
         (label) => {
-            current.screenOff = screenOpts.find(o => o.label === label)?.s ?? 0
+            const v = screenOpts.find(o => o.label === label)?.s ?? 0
+            if (v === current.screenOff) return
+            current.screenOff = v
             save()
         }
     ))
@@ -193,7 +213,9 @@ export default function PowerPage() {
         closestLabel(lockOpts, cfg.lock),
         lockOpts.map(o => o.label),
         (label) => {
-            current.lock = lockOpts.find(o => o.label === label)?.s ?? 0
+            const v = lockOpts.find(o => o.label === label)?.s ?? 0
+            if (v === current.lock) return
+            current.lock = v
             save()
         }
     ))
@@ -204,7 +226,9 @@ export default function PowerPage() {
         closestLabel(suspendOpts, cfg.suspend),
         suspendOpts.map(o => o.label),
         (label) => {
-            current.suspend = suspendOpts.find(o => o.label === label)?.s ?? 0
+            const v = suspendOpts.find(o => o.label === label)?.s ?? 0
+            if (v === current.suspend) return
+            current.suspend = v
             save()
         }
     ))
