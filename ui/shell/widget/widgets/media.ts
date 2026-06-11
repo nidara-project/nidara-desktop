@@ -1,4 +1,5 @@
 import { Gtk, Gdk } from "ags/gtk4"
+import { PANEL_W } from "../common/widget-kit"
 import AstalMpris from "gi://AstalMpris"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
@@ -262,7 +263,7 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
 
 // Bar pill expansion: same rich panel, fixed width to match CC detail squircle
 function buildBarExpanded(_onClose: () => void): Gtk.Widget {
-    return buildDetailPanel(356)
+    return buildDetailPanel(PANEL_W.full)
 }
 
 function buildCCDetail(_onClose: () => void): Gtk.Widget {
@@ -276,7 +277,7 @@ const mediaWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SQUARE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
-    buildContent: (size) => MediaIslandContent().buildContent(size),
+    buildContent: (size, budget) => MediaIslandContent().buildContent(size, budget),
     buildBarContent,
     buildBarExpanded,
     buildCCDetail,

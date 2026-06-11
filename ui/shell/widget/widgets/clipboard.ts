@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import { PANEL_W } from "../common/widget-kit"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { buildCapsuleInner, wrapCapsuleTile } from "../control-center/Toggles"
@@ -92,7 +93,7 @@ function buildClipboardContent(onClose: () => void): Gtk.Widget {
         propagate_natural_height: true,
         min_content_height: 60,
         max_content_height: 360,
-        width_request: 280,
+        width_request: PANEL_W.xl,
     })
     scroll.set_child(list)
     return scroll

@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import { PANEL_W } from "../common/widget-kit"
 import AstalBattery from "gi://AstalBattery"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
 import { wrapCapsuleTile } from "../control-center/Toggles"
@@ -215,7 +216,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
 // ── Info panel (shared by bar expansion + CC detail) ──────────────────────────
 function buildPanel(_onClose: () => void): Gtk.Widget {
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: 240 })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: PANEL_W.lg })
 
     if (!present()) {
         box.append(new Gtk.Label({

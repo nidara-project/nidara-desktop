@@ -22,7 +22,7 @@ const focusWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
-    buildContent: (size) => FocusWidget().buildContent(size),
+    buildContent: (size, budget) => FocusWidget().buildContent(size, budget),
     buildBarContent,
 }
 

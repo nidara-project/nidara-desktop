@@ -21,12 +21,12 @@ const calculatorWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
-    buildContent: (size) => RoundToggle(
+    buildContent: (size, budget) => RoundToggle(
         "calculator", t("widget.calculator.name"),
         Icons.calculator,
         false,
         launch,
-    ).buildContent(size),
+    ).buildContent(size, budget),
     buildBarContent,
 }
 

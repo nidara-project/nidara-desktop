@@ -25,14 +25,14 @@ const darkModeWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
-    buildContent: (size) => RoundToggle(
+    buildContent: (size, budget) => RoundToggle(
         "dark-mode", t("widget.dark-mode.name"),
         () => Theme.isDark ? Icons.moon : Icons.sun,
         () => Theme.isDark,
         () => Theme.setDarkMode(!Theme.isDark),
         () => Theme.isDark ? t("widget.dark-mode.sub.dark") : t("widget.dark-mode.sub.light"),
         themeSubscribe,
-    ).buildContent(size),
+    ).buildContent(size, budget),
     buildBarContent,
 }
 

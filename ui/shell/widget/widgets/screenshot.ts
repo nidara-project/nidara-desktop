@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import { PANEL_W } from "../common/widget-kit"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
@@ -95,7 +96,7 @@ function buildControls(onClose: () => void): Gtk.Widget {
     actionRow.append(makeActionBtn("copy", t("widget.screenshot.action.copy"), "flat"))
     actionRow.append(makeActionBtn("save", t("widget.screenshot.action.save"), "suggested-action"))
 
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: 240 })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: PANEL_W.lg })
     box.append(modeRow)
     box.append(new Gtk.Separator())
     box.append(actionRow)

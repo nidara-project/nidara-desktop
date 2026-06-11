@@ -27,7 +27,7 @@ const nightLightWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
-    buildContent: (size) => RoundToggle(
+    buildContent: (size, budget) => RoundToggle(
         "night_light",
         t("widget.night-light.name"),
         () => Icons.sunset,
@@ -37,7 +37,7 @@ const nightLightWidget: AtomicWidget = {
             ? `${nightLight.temperature}K`
             : t("widget.night-light.sub.off"),
         subscribe,
-    ).buildContent(size),
+    ).buildContent(size, budget),
     buildBarContent,
 }
 

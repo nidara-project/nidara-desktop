@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import Theme from "../../core/ThemeManager"
-import { AtomicWidget, WidgetSize } from "../control-center/Types"
+import { AtomicWidget, WidgetSize, ContentBudget } from "../control-center/Types"
 import { pollWhileMapped } from "../common/poll"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
@@ -175,13 +175,14 @@ function ramMetric(ring: number, gap: number) {
 
 // CC variant. CenterBox keeps the metrics centered even after BaseIsland forces the
 // child to halign/valign FILL. Small (1×1) shows just CPU — two rings don't fit a
-// single cell; Medium/Large show CPU + RAM. SINGLE/WIDE have only ~56px of vertical
-// room (80px cell − the island's 12px top+bottom padding), so the ring stays small
-// enough that ring+caption fits without growing the tile; SQUARE has 148px to spare.
-function buildContent(size: WidgetSize): Gtk.Widget {
+// single cell; Medium/Large show CPU + RAM. The ring takes what the host's budget
+// leaves after its own caption line, capped at 56 for taste (1×1/2×1 budgets are
+// caption-bound → ring 34; 2×2 hits the cap).
+function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     const large = size === WidgetSize.SQUARE
-    const ring = large ? 56 : 34
     const gap  = large ? 5 : 2
+    const CAPTION_H = 20   // the metric's own caption line under the ring
+    const ring = Math.min(56, budget.height - CAPTION_H - gap)
     const inner = new Gtk.Box({
         spacing: large ? 28 : 20,
         halign: Gtk.Align.CENTER,

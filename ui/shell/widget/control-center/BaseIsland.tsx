@@ -9,6 +9,16 @@ import { WidgetSize } from "./Types"
  * - 2x1 (WIDE): Force perfect Capsules 💊
  * - 2x2/4x1: Sync with Dock System (n=3.2)
  */
+// The island's inner padding per size — single source for BaseIsland itself
+// AND for IslandGrid's ContentBudget math (tile span − 2·padding). TALL
+// slider tiles fill the capsule flush against the INSIDE of the drawn Cairo
+// border: the border occupies ~2.75–4.25px in (glass fill at inset 2 + a
+// 1.5px stroke inset a further 1.5), so padding 4 lands the fill right at the
+// border's inner edge — no gap, no covering. trackH = inner width (UNIT − 2·4).
+export function islandPadding(size: WidgetSize): number {
+    return size === WidgetSize.TALL ? 4 : 12
+}
+
 interface BaseIslandProps {
     name: string
     child: Gtk.Widget
@@ -88,11 +98,7 @@ export default function BaseIsland({
         shape,
         css_classes: ["cc-island", `cc-${name}-island`],
         inset: 2.0,
-        // TALL slider tiles fill the capsule flush against the INSIDE of the drawn Cairo
-        // border. The border occupies ~2.75–4.25px in (glass fill at inset 2 + a 1.5px
-        // stroke inset a further 1.5), so padding 4 lands the fill right at the border's
-        // inner edge — no gap, no covering. trackH = inner width (UNIT − 2·4); keep synced.
-        padding: size === WidgetSize.TALL ? 4 : 12
+        padding: islandPadding(size)
     })
 
     island.set_size_request(width, height)

@@ -59,6 +59,20 @@ Three pillars by responsibility:
     unique `id`; no module-scope dependency on another widget (import order is
     alphabetical). Curated `BAR_ORDER`/`CC_DEFAULT_ORDER` stay editorial in
     `widgets/index.ts` — unlisted widgets fall to the end, listing is optional.
+    **Zero-layout contract (2026-06-11)**: a widget never does host-geometry math.
+    `buildContent(size, budget)` receives a `ContentBudget` (inner px the host
+    guarantees: tile span − island padding, computed in `IslandGrid` from
+    `islandPadding()` exported by `BaseIsland`) — size content from it, never
+    from `UNIT`/`GAP`/padding knowledge (cpu-memory's ring derives from it; a
+    widget's own intrinsic sizes — icon circles, buttons, its caption height —
+    are fine). Panel widths (bar expansions / CC details) come from the
+    **`PANEL_W` tier vocabulary** in `widget/common/widget-kit.ts`
+    (sm 200 / md 220 / lg 240 / xl 280 / full 356), never hardcoded px.
+    GOTCHA: widget-kit MUST stay a leaf module — importing `CCLayoutManager`
+    from it closes the cycle CCLayoutManager → widgets/index → widget →
+    widget-kit → CCLayoutManager and **crashes the shell at boot**
+    (CC_DEFAULT_ORDER undefined mid-cycle; typecheck does NOT catch module
+    cycles — only a runtime boot does).
     **Hardware gate**: a widget tied to hardware declares `isAvailable()` (+
     optional `watchAvailable(cb)` for hotplug) — when false it's hidden from
     bar + CC (filtered in `Bar.rebuildBarWidgets` and `IslandGrid.syncCCLayout`,

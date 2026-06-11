@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import { PANEL_W } from "../common/widget-kit"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
@@ -46,7 +47,7 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
     stack.add_named(listBox, "list")
     stack.set_visible_child_name("loading")
 
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: 220, margin_top: 8, margin_bottom: 8 })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: PANEL_W.md, margin_top: 8, margin_bottom: 8 })
     box.append(stack)
 
     const refresh = () => {

@@ -23,14 +23,14 @@ const btWidget: AtomicWidget = {
     watchAvailable: (cb) => { BT.watchAdapter(cb) },
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
-    buildContent: (size) => {
+    buildContent: (size, budget) => {
         return RoundToggle(
             "bt", t("widget.bluetooth.name"),
             Icons.bluetooth,
             () => BT.isPowered(),
             () => BT.togglePower(),
             () => BT.isPowered() ? t("widget.bluetooth.sub.active") : t("widget.bluetooth.sub.inactive"),
-        ).buildContent(size)
+        ).buildContent(size, budget)
     },
     buildBarContent,
 }

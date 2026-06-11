@@ -11,6 +11,15 @@ export enum WidgetSize {
     FULL_WIDTH = "4x1"
 }
 
+// Inner space the host guarantees to a tile's content at a given size — the
+// cell span minus the island's own padding. Computed by the host (IslandGrid)
+// from its layout constants; widgets size their content from THIS, never from
+// UNIT/GAP/padding math (host constants can change under you).
+export interface ContentBudget {
+    width: number
+    height: number
+}
+
 export interface AtomicWidget {
     id: string
     name: string
@@ -20,7 +29,8 @@ export interface AtomicWidget {
     defaultInCc?: boolean               // seeded into the CC by default (default = "cc" in locations)
     defaultSize: WidgetSize
     supportedSizes: WidgetSize[]
-    buildContent: (size: WidgetSize) => Gtk.Widget
+    // Widgets that don't size anything can keep a one-arg signature.
+    buildContent: (size: WidgetSize, budget: ContentBudget) => Gtk.Widget
     centerContent?: boolean             // center the WIDE (2×1) content instead of the
                                         // default left-anchored capsule layout (icon+label)
     buildBarContent?: () => Gtk.Widget                      // compact bar variant (icon only)

@@ -1,7 +1,7 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import BaseIsland from "./BaseIsland"
+import BaseIsland, { islandPadding } from "./BaseIsland"
 import ccLayout, { UNIT, GAP, GRID_COLS, GRID_ROWS, GRID_WIDTH, GRID_HEIGHT, SIZE_MAP } from "./CCLayoutManager"
 import { AtomicWidget } from "./Types"
 import status from "../../core/Status"
@@ -77,7 +77,10 @@ function makeIslandWidget(
     const width  = w * UNIT + (w - 1) * GAP
     const height = h * UNIT + (h - 1) * GAP
 
-    const content = def.buildContent(effectiveSize)
+    // ContentBudget: the tile span minus the island's padding — what the
+    // widget may size its content from (zero-layout contract).
+    const pad = islandPadding(effectiveSize)
+    const content = def.buildContent(effectiveSize, { width: width - 2 * pad, height: height - 2 * pad })
     const island  = BaseIsland({ name: def.id, child: content, width, height, size: effectiveSize, centerContent: def.centerContent })
 
     const overlay = new Gtk.Overlay()

@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import { PANEL_W } from "../common/widget-kit"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../control-center/Types"
@@ -128,7 +129,7 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
     const startBtn = new Gtk.Button({ label: t("widget.screenrecord.start"), css_classes: ["suggested-action"], hexpand: true })
     startBtn.connect("clicked", () => startRecording(selectedMode, withAudio, onClose))
 
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: 200 })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: PANEL_W.sm })
     box.append(modeRow)
     box.append(new Gtk.Separator())
     box.append(audioRow)
@@ -213,7 +214,7 @@ function buildBarExpanded(onClose: () => void): Gtk.Widget {
     const elapsed = makeElapsedLabel()
     const stopBtn = new Gtk.Button({ label: t("widget.screenrecord.stop"), css_classes: ["destructive-action"], hexpand: true })
     stopBtn.connect("clicked", () => stopRecording())
-    const recBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: 180 })
+    const recBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: PANEL_W.sm })
     recBox.append(elapsed)
     recBox.append(new Gtk.Separator())
     recBox.append(stopBtn)

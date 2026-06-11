@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import { PANEL_W } from "../common/widget-kit"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { makeHSlider, makeVerticalFillTile } from "../common/Slider"
@@ -159,7 +160,7 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
             })
             return () => { try { GLib.source_remove(id) } catch {} }
         },
-        width_request: 200,
+        width_request: PANEL_W.sm,
     })
 
     const row = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })

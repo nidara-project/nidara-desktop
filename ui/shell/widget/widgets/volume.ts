@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import { PANEL_W } from "../common/widget-kit"
 import AstalWp from "gi://AstalWp"
 import { makeVolumeSlider } from "../common/Slider"
 import { VolumeWidget } from "../control-center/Sliders"
@@ -36,7 +37,7 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
 
     const sliderWidget = makeVolumeSlider(speaker, {
         onValueChanged: (v) => { volLabel.label = `${Math.round(v)}%` },
-        width_request: 200,
+        width_request: PANEL_W.sm,
     })
 
     const muteImg = new Gtk.Image({ gicon: (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh, pixel_size: 16, css_classes: ["cs-icon"] })
@@ -202,7 +203,7 @@ const volumeWidget: AtomicWidget = {
     locations: ["bar", "cc"],
     defaultSize: WidgetSize.FULL_WIDTH,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.TALL, WidgetSize.FULL_WIDTH],
-    buildContent: (size) => VolumeWidget().buildContent(size),
+    buildContent: (size, budget) => VolumeWidget().buildContent(size, budget),
     buildBarContent,
     buildBarExpanded,
     buildCCDetail,
