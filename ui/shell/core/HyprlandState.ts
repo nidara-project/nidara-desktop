@@ -116,7 +116,14 @@ class HyprlandStateClass extends GObject.Object {
      *  with the Lua parser, unlike `keyword`). On-demand read — the first of the
      *  "effective config in HyprlandState" idea (gaps etc. could follow the same way). */
     getOptionInt(name: string): number {
-        try { return JSON.parse(exec(["hyprctl", "getoption", name, "-j"])).int ?? 0 }
+        try {
+            const opt = JSON.parse(exec(["hyprctl", "getoption", name, "-j"]))
+            if (typeof opt.int === "number") return opt.int
+            // css_gap-typed options (gaps_in/gaps_out) carry no .int — they
+            // report `css: "4 4 4 4"` (top right bottom left). Use the first.
+            if (typeof opt.css === "string") return parseInt(opt.css, 10) || 0
+            return 0
+        }
         catch (e) { console.error("[HyprlandState] getOptionInt", name, e); return 0 }
     }
 
