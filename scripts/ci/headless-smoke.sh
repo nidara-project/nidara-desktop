@@ -47,7 +47,7 @@ phase_deps() {
     # -Syu (never bare -Sy): same partial-upgrade rationale as install.sh.
     pacman -Syu --needed --noconfirm \
         base-devel git cmake meson ninja vala gobject-introspection glib2-devel \
-        gtk3 gtk4 gtk4-layer-shell libpeas-2 \
+        gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 \
         libpulse networkmanager bluez-libs upower libnotify \
         pipewire wireplumber \
         nodejs npm gjs go \
