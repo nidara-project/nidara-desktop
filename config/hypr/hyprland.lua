@@ -88,14 +88,25 @@ hl.config({
             border_locked_inactive = "rgba(59595933)",
         },
         groupbar = {
+            -- "Floating capsules": full-pill tabs deliberately DETACHED from
+            -- the window (gaps_out) so the window's rounded top stays whole —
+            -- a flush bar against a radius-24 window leaves a corner notch
+            -- that can't be fixed (no per-corner rounding; per-window
+            -- set_prop rounding was considered and REJECTED by the owner).
             enabled          = true,
             gradients        = true,
             render_titles    = true,
-            height           = 22,
-            font_size        = 11,
+            height           = 28,
+            font_size        = 12,
             indicator_height = 0,
-            gradient_rounding       = 8,
-            gradient_rounding_power = 4.0,   -- squircle, like the rest of the shell
+            indicator_gap    = 0,
+            gradient_rounding       = 14,
+            gradient_rounding_power = 2.0,   -- full pill, like the bar capsules
+            gaps_in          = 6,
+            gaps_out         = 8,
+            keep_upper_gap   = true,
+            rounding         = 1,
+            text_padding     = 14,
             text_color          = "rgba(ffffffee)",
             text_color_inactive = "rgba(ffffff99)",
             blur = false,
