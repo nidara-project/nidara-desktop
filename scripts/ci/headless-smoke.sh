@@ -178,8 +178,12 @@ phase_run() {
     export LANG=C.UTF-8
     mkdir -p "$HOME/.cache"              # Hyprland's crash-report dir lives under it
 
-    local hypr_log=/tmp/smoke/hyprland-stdout.log shell_log=/tmp/smoke/shell.log
-    local hypr_pid= shell_pid=
+    # NOT local: the EXIT trap below outlives this function on the success
+    # path (locals are gone by then, and set -u would abort the trap).
+    hypr_log=/tmp/smoke/hyprland-stdout.log
+    shell_log=/tmp/smoke/shell.log
+    hypr_pid=""
+    shell_pid=""
 
     # Always ship the logs + screenshots as artifacts, pass or fail.
     finish() {
