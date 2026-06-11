@@ -65,7 +65,7 @@ This is the table that decides almost every "which widget should I use?" questio
 | Dock, Bar, workspace dots, resource circles, schematic | **Pure GTK4 + Cairo** (`Gtk.DrawingArea` / `Gtk.Snapshot`) | Adwaita adds nothing here; painting direct = zero defensive CSS. |
 | Floating overlays (CC, NotifCenter, Prism/Spotlight, SystemMenu, Overview) | **`Gtk.Box` + gtk4-layer-shell + custom CSS** | Adwaita would only add chrome you'd have to undo. |
 | Toggles / switches / buttons inside overlays | **`Gtk.Switch`, `Gtk.Button`** (NOT `Adw.*Row`) | Base widgets style cleanly; `Adw.*Row` brings padding/focus-ring/separators that have to be killed one by one. |
-| Sliders (any) | **`makeSlider`** from `widget/common/Slider.ts` (NOT `Gtk.Scale`) | See "Sliders" below — one Cairo component for the whole shell. |
+| Sliders (any) | **`makeSlider`** from `common/Slider.ts` (NOT `Gtk.Scale`) | See "Sliders" below — one Cairo component for the whole shell. |
 | Settings window | **`ui/lib/crystal-ui`** (`CrystalSplitView`, `CrystalClamp`, `CrystalButton`, `CrystalSelect`) | Custom split view. **Do NOT use `Adw.OverlaySplitView`** — it breaks capsule margins. |
 | Modal dialogs | **`showCrystalAlert`** from `crystal-ui` | Clean, themeable. |
 
@@ -105,7 +105,7 @@ lock on a secured Wi-Fi row), pass it as `CrystalRow`'s `titleIcon` arg (threade
 
 ## Sliders — one component
 
-All sliders are **`makeSlider`** (Cairo) in `widget/common/Slider.ts` (`makeHSlider` is just a
+All sliders are **`makeSlider`** (Cairo) in `common/Slider.ts` (`makeHSlider` is just a
 horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — don't add them.
 
 - **Cairo-drawn**: fill + thumb are painted together so they never visually separate (the

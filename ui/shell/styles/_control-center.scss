@@ -177,7 +177,7 @@ window.notif-win {
     }
 }
 
-/* Shared round glass icon button (see widget/common/IconButton.ts). Single source of
+/* Shared round glass icon button (see common/IconButton.ts). Single source of
    truth for close/remove/collapse controls. Size is set inline per use; shape/icon/hover
    are identical everywhere. NB: named -circle- to avoid the existing .crystal-icon-btn
    in _settings.scss (the sidebar toggle), whose `button.` specificity would win. */

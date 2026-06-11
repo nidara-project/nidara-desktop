@@ -190,7 +190,9 @@ crystal-shell/
     ├── shell/                 # Main shell (TypeScript + AGS v3)
     │   ├── app.ts             # Entry point + IPC request handler
     │   ├── core/              # State (Status), theme engine (FluidCrystal), services
-    │   ├── widget/            # UI components (Bar, Dock, AppGrid, Control Center, Settings…)
+    │   ├── surfaces/          # Whole surfaces (Bar, Dock, AppGrid, Control Center, Settings…)
+    │   ├── widgets/           # Auto-registered atomic widgets (battery, wifi, media…)
+    │   ├── common/            # Shared UI pieces (Slider, SquircleContainer, fade…)
     │   ├── styles/            # Modular SCSS (tokens, glass mixin, per-component)
     │   ├── style.css          # Compiled CSS (committed for convenience)
     │   └── build/crystal-shell    # Standalone bundle (committed for releases)

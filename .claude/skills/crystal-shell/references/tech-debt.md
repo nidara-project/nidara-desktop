@@ -28,7 +28,7 @@ lightened) — they look intentional per-material, don't blind-unify without a v
 Sweep-verification recipe: compile `style.scss` before/after and diff — a pure refactor
 must produce an identical (or fully-accounted) CSS diff.
 **Systematic orphan purge done 2026-06-10:** a detector script (extract every `.class` from
-`styles/*.scss`, `grep -rF` each against `widget/ core/ app.ts ../lib`) found and removed
+`styles/*.scss`, `grep -rF` each against `surfaces/ widgets/ common/ core/ app.ts ../lib`) found and removed
 ~45 dead classes (−459 compiled lines, −13%) — remnants of the dock pre-DockCore, the
 pre-commandment-5 separate overlay windows, the old Tahoe sidebar, deleted Resources.tsx,
 and the pre-context-menu CC edit chrome. **False-positive traps for the next run:** classes
@@ -142,7 +142,7 @@ callback ever appended it (boot-time registration churn). Fix proposed upstream:
 **https://github.com/Aylur/astal/pull/451** (2026-06-09; verified locally — patched lib =
 0 CRITICALs across boots). Until it merges and the `ASTAL_REF` pin in `install.sh` advances
 past it, the once-per-boot CRITICAL remains expected noise. Don't chase this in shell code.
-The lazy tray-menu in `widget/bar/Tray.tsx` fixed a *different* (menu-parsing) instance —
+The lazy tray-menu in `surfaces/bar/Tray.tsx` fixed a *different* (menu-parsing) instance —
 this one is inside the library itself.
 **Testing a patched Astal lib gotcha:** the installed typelib embeds the **absolute** `.so`
 path, so `LD_LIBRARY_PATH` alone won't load your build. Point `GI_TYPELIB_PATH` at the
@@ -207,40 +207,20 @@ reproducer emerges, file it there. Don't try to "handle" output removal in locks
 the crash happens below us, during Wayland event dispatch.
 
 ### 14. Two more flat-menu row implementations could migrate to `MenuRow.ts`
-`widget/common/MenuRow.ts` (2026-06-11) is the shared builder for flat `crystal-menu-row`
+`common/MenuRow.ts` (2026-06-11) is the shared builder for flat `crystal-menu-row`
 lists; the CC context menu and the bar window menu use it. Two hand-rolled siblings remain:
 `CrystalMenu.ts` `makeRow` (renders Gio menu models — tray menus; different shape: model
 iteration, submenus flattened to headers) and `Bar.tsx` `buildOverflowList` rows. Migrate
 opportunistically if already editing those files; not worth a standalone pass.
 
-### 15. `widget/` is an inherited AGS naming convention — rename planned PRE-PUBLICATION
-`ui/shell/widget/` (singular) comes from AGS community templates, not from any framework
-requirement. The structure *inside* is sound (separation core/styles/widget is the valuable
-part — keep it); the problem is naming: the dir holds whole **surfaces** (bar, dock,
-control-center, settings, overview, prism, app-grid, about), and the nested
-`widget/widgets/` ("widget containing widgets") forces an explanation every time. Agreed
-target (owner decision 2026-06-11):
-
-```
-ui/shell/
-  core/        (unchanged)
-  styles/      (unchanged)
-  surfaces/    ← bar, dock, control-center, settings, overview, prism, app-grid, about
-  widgets/     ← the auto-registered atomics (moves up one level)
-  common/      ← shared pieces (Slider, SquircleContainer, fade, MenuRow…)
-```
-
-Mechanical, low-risk (typecheck + CI catch broken paths) but touches: all import paths,
-`scripts/gen-widget-index.mjs` (`WIDGETS_DIR`), tsconfig, the SCSS orphan-detector grep
-paths, BOTH skills (this one references `widget/` throughout), and `install.sh` if it
-copies by path. greeter/lockscreen `widget/` dirs may stay or follow for coherence (they
-don't have the widget/widgets problem). **Timing is the whole point: do it right before
-publishing the repo** — after publication every rename breaks open PRs, links, and
-contributor muscle memory. Don't do it as a side-effect of another change (rule 3 below).
-
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
+- **(was #15) `ui/shell/widget/` rename** done 2026-06-11: `surfaces/` (bar, dock,
+  control-center, settings, overview, prism, app-grid, about), `widgets/` (auto-registered
+  atomics) and `common/` (shared pieces) are now top-level siblings of `core/`/`styles/`.
+  greeter/lockscreen keep their own `widget/` dirs on purpose (no widget/widgets ambiguity
+  there). Docs/paths in skills + README updated; don't reintroduce a `widget/` dir.
 - **(was #13) Bluetooth pairing agent** is implemented: `org.bluez.Agent1` lives in
   `BluetoothService` (`registerPairingAgent`), the dialogs in the Bluetooth page. Real-device
   pairing (passkey/PIN flows) is still UNVERIFIED on hardware — D-Bus policy only lets root
@@ -255,7 +235,7 @@ These were paid down; the *rule* remains:
   `closeExclusive(...)`; don't touch the other setters.
 - **Repo weight** — history was rewritten (.git 342→95 MiB); old clones must re-clone. Don't
   commit binaries beyond the 3 release bundles; verify pngs / build artifacts stay git-ignored.
-- **Sliders** — one Cairo `makeSlider` (`widget/common/Slider.ts`); no native `Gtk.Scale`,
+- **Sliders** — one Cairo `makeSlider` (`common/Slider.ts`); no native `Gtk.Scale`,
   no `PillSlider`. See `design-system.md`.
 - **Monitor config** — applies via `hyprctl eval "hl.monitor({...})"`, NOT `hyprctl keyword`
   (rejected by the Lua parser). See `architecture.md`.
