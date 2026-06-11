@@ -10,8 +10,8 @@
     "build": "mkdir -p build && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ags bundle app.ts build/crystal-shell"
   },
   "dependencies": {
-    "ags": "*",
-    "gnim": "*",
+    "ags": "file:/usr/share/ags/js",
+    "gnim": "file:/usr/share/ags/js/node_modules/gnim",
     "sass": "^1.97.3"
   },
   "prettier": {

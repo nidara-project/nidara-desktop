@@ -75,9 +75,13 @@ crystal-shell-doctor                     # Markdown diagnostic report (bug/PR ev
 crystal-shell-mcp                        # all of the above as MCP tools over stdio (repo .mcp.json registers it)
 ```
 
-CI gates SCSS compile **and** typecheck. The typecheck job downloads a compressed `@girs/`
-snapshot from the repo's `ci-assets` release (`@girs/` itself stays git-ignored, ≈58 MB
-generated); when it goes stale a maintainer refreshes it — see `references/dev-workflow.md`.
+CI gates SCSS compile, typecheck, widget-registry freshness **and a headless boot smoke**:
+the smoke job builds the pinned Astal/AGS stack in an Arch container, bundles the shell,
+boots it on a real Hyprland over a virtual display (kernel vkms + llvmpipe) and fails on death, silent IPC,
+or JS errors; screenshots are uploaded as artifacts for human review. The typecheck job
+downloads a compressed `@girs/` snapshot from the repo's `ci-assets` release (`@girs/`
+itself stays git-ignored, ≈58 MB generated); when it goes stale a maintainer refreshes it —
+see `references/dev-workflow.md`.
 
 ## When in doubt
 

@@ -115,10 +115,11 @@ echo "[1/7] Installing system dependencies..."
 # longer matches already-installed packages (e.g. hyprtoolkit) → transaction fails.
 sudo pacman -Syu --needed --noconfirm \
     base-devel glib2-devel cmake meson ninja gobject-introspection vala \
-    gtk3 gtk4 gtk4-layer-shell libpeas-2 \
+    gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 \
     libpulse networkmanager bluez-libs upower libnotify \
     intltool scdoc brightnessctl pamixer hyprpicker \
     jq slurp grim wf-recorder wl-clipboard cliphist mesa pam \
+    pipewire wireplumber \
     git nodejs npm gjs go \
     accountsservice greetd pavucontrol rust cargo \
     hyprland hypridle hyprsunset uwsm power-profiles-daemon \
@@ -190,6 +191,7 @@ astal_pkgs=(
     "lib/notifd|libastal-notifd"
     "lib/bluetooth|libastal-bluetooth"
     "lib/tray|libastal-tray"
+    "lib/wireplumber|libastal-wireplumber"
     "lib/greet|libastal-greet"
     "lib/auth|libastal-auth"
     "lang/gjs|astal-gjs"

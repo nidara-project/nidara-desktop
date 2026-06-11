@@ -19,8 +19,14 @@
 #     fresh — regenerates it with scripts/gen-widget-index.mjs and fails if it
 #     differs. Pure node; also surfaces the codegen's own validation errors
 #     (stray non-widget file in widgets/, duplicate widget id).
-#
-# Not here: `ags bundle` — needs the `ags` binary + GTK4 libraries.
+#   - smoke: the REAL thing — load the kernel's vkms (virtual KMS) on the
+#     runner, then in a privileged Arch container build the pinned Astal/AGS
+#     stack (proves install.sh's source builds still work), `ags bundle` the
+#     shell, boot Hyprland on the virtual display (llvmpipe software GL), boot
+#     the bundle on it, and require: process stays alive, IPC answers
+#     (listActions/dumpState), no JS errors in the boot log. Screenshots are
+#     uploaded as artifacts for HUMAN review — deliberately not a pixel diff.
+#     All logic lives in scripts/ci/headless-smoke.sh.
 
 name: CI
 
@@ -65,6 +71,60 @@ jobs:
       - name: tsc --noEmit (must succeed)
         working-directory: ui/shell
         run: npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json
+
+  smoke:
+    name: Headless boot smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      # Hyprland cannot boot with zero DRM devices (aquamarine's allocator
+      # needs a node — see the header of headless-smoke.sh), so give the
+      # runner a VIRTUAL one: the kernel's vkms module. The Arch container
+      # then gets /dev/dri via --privileged.
+      - name: Load vkms (virtual KMS device)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq "linux-modules-extra-$(uname -r)"
+          sudo modprobe vkms
+          ls -l /dev/dri
+      # The built Astal/AGS/appmenu stack is cached as a tarball. Key parts:
+      #   - install.sh hash → covers the pinned refs (they live there)
+      #   - month stamp → archlinux:latest moves; a monthly rebuild bounds the
+      #     window for soname drift between cached binaries and fresh pacman libs
+      - name: Compute cache month stamp
+        id: stamp
+        run: echo "month=$(date +%Y-%m)" >> "$GITHUB_OUTPUT"
+      # restore/save split (not plain actions/cache): the combined action only
+      # saves in its post step when the JOB succeeds, so a red smoke run would
+      # rebuild the whole stack on every iteration — exactly when the cache is
+      # most valuable. save with if:always() persists it even on failure.
+      - name: Restore built dependency stack
+        id: deps-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: deps-cache/crystal-deps.tar.zst
+          key: smoke-deps-v2-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh') }}
+      - name: Build deps + bundle + headless boot (Arch container on vkms)
+        run: |
+          mkdir -p deps-cache
+          docker run --rm --privileged \
+            -v "$PWD:/repo" -v "$PWD/deps-cache:/depscache" \
+            -e DEPS_TARBALL=/depscache/crystal-deps.tar.zst \
+            archlinux:latest bash /repo/scripts/ci/headless-smoke.sh
+      - name: Save built dependency stack
+        if: always() && steps.deps-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: deps-cache/crystal-deps.tar.zst
+          key: smoke-deps-v2-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh') }}
+      - name: Upload screenshots + logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-artifacts
+          path: smoke-out/
+          if-no-files-found: ignore
 
   widgets-gen:
     name: Widget registry freshness

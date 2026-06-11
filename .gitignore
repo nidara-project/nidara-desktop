@@ -48,6 +48,11 @@ logs/
 
 # Node
 node_modules/
+# ui/shell depends on ags/gnim as file: links into /usr/share/ags/js; npm
+# records those in the lockfile as paths RELATIVE to the checkout depth, so a
+# committed lockfile only works for checkouts at the original machine's depth.
+# Don't version it — npm install regenerates it locally.
+package-lock.json
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
