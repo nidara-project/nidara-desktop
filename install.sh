@@ -458,6 +458,23 @@ for f in appearance.json widgets.json cc_layout.json; do
     fi
 done
 
+# .mcp.json — MCP manifest for the user's AI agent (Claude Code et al). Points at
+# the installed binary via PATH. Always (re)written: it's a runtime-managed pointer,
+# not user data. Opening an agent inside ~/.config/crystal-shell discovers it
+# automatically; any other agent can be pointed at it ("register the MCP server
+# described in ~/.config/crystal-shell/.mcp.json").
+cat > "$CONFIG_DIR/.mcp.json" <<'JSON'
+{
+  "mcpServers": {
+    "crystal-shell": {
+      "command": "crystal-shell-mcp"
+    }
+  }
+}
+JSON
+chown "$REAL_USER" "$CONFIG_DIR/.mcp.json"
+echo "  [Init] $CONFIG_DIR/.mcp.json (agent interface manifest)"
+
 # region.json — generated with detected timezone (not copied from defaults)
 if [ ! -f "$CONFIG_DIR/region.json" ]; then
     cat > "$CONFIG_DIR/region.json" <<JSON

@@ -72,7 +72,7 @@ ags request describeConfig               # agent-facing settings: schema + curre
 ags request setConfig <key> <value>      # change a setting officially (validated; gated by Settings → AI)
 ags request screenshot [path]            # capture the focused monitor → PNG path (visual verification; gated)
 crystal-shell-doctor                     # Markdown diagnostic report (bug/PR evidence)
-crystal-shell-mcp                        # all of the above as MCP tools over stdio (repo .mcp.json registers it)
+crystal-shell-mcp                        # all of the above as MCP tools over stdio (.mcp.json: repo root for dev; installer-managed copy in ~/.config/crystal-shell/ for users)
 ```
 
 CI gates SCSS compile, typecheck, widget-registry freshness **and a headless boot smoke**:

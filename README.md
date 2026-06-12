@@ -99,6 +99,21 @@ hl.config({ general = { gaps_out = 16 } })
 > `~/.config/uwsm/env` and `~/.config/uwsm/env-hyprland` (both created on first
 > install), not in the Hyprland config.
 
+### Using an AI agent with your desktop
+
+Crystal Shell ships an **MCP server** (`crystal-shell-mcp`, installed system-wide) that lets
+an AI agent see and control your running desktop through the official interface: discover and
+change settings, run shell actions, read state, take screenshots to verify its work. To
+connect an agent, just tell it:
+
+> *Register the MCP server described in `~/.config/crystal-shell/.mcp.json`*
+
+That manifest is installed for you (and kept up to date — it's the one file in the config dir
+the installer manages). Claude Code users who open a session inside `~/.config/crystal-shell/`
+get it auto-discovered. Everything an agent can do is governed by the consent toggles in
+**Settings → AI** — config writes, screenshots and the MCP server itself can each be switched
+off at any time, taking effect immediately.
+
 ---
 
 ## Keybindings

@@ -51,6 +51,12 @@ export default function AiPage() {
         staticLabel(""),
     ))
 
+    surfaceGroup.listBox.append(createRow(
+        t("settings.ai.connect-agent"),
+        t("settings.ai.connect-agent.desc"),
+        staticLabel("~/.config/crystal-shell/.mcp.json"),
+    ))
+
     page.append(surfaceGroup.box)
 
     return page

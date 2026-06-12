@@ -109,9 +109,14 @@ Rules:
 
 The whole surface above is also served over MCP by `bin/crystal-shell-mcp` (installed to
 `/usr/bin`), a standalone GJS script — same no-Node pattern as `crystal-portal` — speaking
-MCP over stdio. The repo's `.mcp.json` registers it, so an agent working in this repo gets
-the tools automatically; users register it in their client with
-`{"mcpServers": {"crystal-shell": {"command": "crystal-shell-mcp"}}}`.
+MCP over stdio. Two discovery paths, dev and user:
+- The repo's `.mcp.json` registers it for any agent working in this checkout.
+- `install.sh` always (re)writes `~/.config/crystal-shell/.mcp.json` — the one
+  installer-managed file in the config dir — pointing at the PATH binary. An agent opened
+  inside the config dir auto-discovers it; any other agent can be told to "register the MCP
+  server described in `~/.config/crystal-shell/.mcp.json`" (content:
+  `{"mcpServers": {"crystal-shell": {"command": "crystal-shell-mcp"}}}`). The Settings → AI
+  page shows this path to the user ("Connect Your Agent" row).
 
 It is a **thin adapter with no logic of its own**: every tool shells out to `ags request`
 (or `crystal-shell-doctor`), so the `IPC_COMMANDS` table stays the single source of truth —

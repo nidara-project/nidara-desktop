@@ -362,6 +362,8 @@ export default {
     "settings.ai.exposed-settings.desc": "Settings agents can discover and change — run `ags request describeConfig` to list them",
     "settings.ai.state-read": "State & Diagnostics",
     "settings.ai.state-read.desc": "`dumpState` and crystal-shell-doctor stay available regardless of the switch above",
+    "settings.ai.connect-agent": "Connect Your Agent",
+    "settings.ai.connect-agent.desc": "Tell your AI agent to register the MCP server described in this file — it works from any MCP client",
 
     "settings.bar.title": "Top Bar",
     "settings.bar.group.layout": "Layout",

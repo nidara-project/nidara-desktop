@@ -170,7 +170,7 @@ versions, hardware, `hyprctl monitors`, systemd unit state, `ags request dumpSta
 log errors. Run it FIRST when debugging a user's install, and attach its output as evidence
 on bug reports and hardware/compat PRs.
 
-**`crystal-shell-mcp`** (installed to `/usr/bin`; registered for this repo via `.mcp.json`)
+**`crystal-shell-mcp`** (installed to `/usr/bin`; registered for this repo via `.mcp.json`, and for installed users via the installer-managed `~/.config/crystal-shell/.mcp.json`)
 serves the agent surface — IPC actions, config, state, screenshots (inline images), doctor —
 as MCP tools over stdio. Plain GJS, no Node/npm at runtime; a thin adapter over
 `ags request`, so it needs no changes when IPC commands are added. Details and governance
