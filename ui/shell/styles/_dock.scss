@@ -81,7 +81,7 @@ window.crystal-dock-window,
 /* --- Launcher Icon Visibility --- */
 #cd-icon-box-launcher image {
     color: var(--crystal-text);
-    -gtk-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+    -gtk-icon-shadow: var(--crystal-icon-shadow);
 }
 /* ── Vertical Dock ───────────────────────────────────────────────────────── */
 window#crystal-dock-vertical {

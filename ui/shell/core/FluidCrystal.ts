@@ -133,12 +133,14 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
         md: "0 2px 8px rgba(0,0,0,0.28), 0 1px 2px rgba(0,0,0,0.18)",
         lg: "0 8px 24px rgba(0,0,0,0.40), 0 2px 6px rgba(0,0,0,0.24)",
         popover: "0 8px 24px rgba(0,0,0,0.22), 0 2px 6px rgba(0,0,0,0.14)",
+        icon: "0 2px 5px rgba(0,0,0,0.6)",
       }
     : {
         sm: "0 1px 2px rgba(0,0,0,0.06), 0 1px 1px rgba(0,0,0,0.04)",
         md: "0 2px 8px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05)",
         lg: "0 8px 24px rgba(0,0,0,0.12), 0 2px 6px rgba(0,0,0,0.06)",
         popover: "0 10px 32px rgba(0,0,0,0.18), 0 2px 8px rgba(0,0,0,0.08)",
+        icon: "0 2px 5px rgba(0,0,0,0.20)",
       }
   // Rim-of-light edge: faint white top hairline on glass.
   const edge = isDark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(255,255,255,0.50)"
@@ -188,6 +190,7 @@ function generateTokenHeader(config: FluidCrystalConfig, isDark: boolean): strin
     `  --crystal-shadow-md: ${sh.md};`,
     `  --crystal-shadow-lg: ${sh.lg};`,
     `  --crystal-shadow-popover: ${sh.popover};`,
+    `  --crystal-icon-shadow: ${sh.icon};`,
     `}`,
     isDark ? `` : `.cs-icon { -gtk-icon-filter: none; }`,
   )

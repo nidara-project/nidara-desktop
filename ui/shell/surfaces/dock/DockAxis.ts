@@ -199,7 +199,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 margin_bottom: dockSettings.screenGap,
                 can_focus: false,
             })
-            Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
+            // theme→redraw handled by DockCore (single, disconnected on destroy)
             da.set_draw_func((_, cr, w, _h) => {
                 if (w <= 0 || _h <= 0) return
                 const dockAlpha = Theme.dockOpacity
@@ -345,16 +345,23 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
         buildInputRegion(win: Gtk.Window, totalMain: number, st: RevealState) {
             const surface = win.get_native()?.get_surface()
             if (!surface) return
-            // Apply only when the region's shape changed (see verticalAxis note).
+            // Apply only when the region's shape changed (see verticalAxis note). This
+            // runs every frame during the autohide slide, so the region itself is only
+            // built when the key changes — the hot path is integer math + a compare.
             const apply = (key: string, set: () => void) => {
                 if (key === lastRegionKey) return
                 lastRegionKey = key
                 set()
             }
+            const setRect = (rect: { x: number, y: number, width: number, height: number } | null) => () => {
+                const region = new Cairo.Region()
+                // @ts-ignore
+                if (rect) region.unionRectangle(rect)
+                surface.set_input_region(region)
+            }
             if (st.appGridPanelOpen) { apply("null", () => surface.set_input_region(null)); return }
-            const region = new Cairo.Region()
             if (st.fullscreenMode && !st.appGridPanelOpen && !st.isRevealed) {
-                apply("empty", () => surface.set_input_region(region)); return
+                apply("empty", setRect(null)); return
             }
             if (dockSettings.autoHide && !st.isRevealed && st.slideTarget > 0
                     && st.slideCurrent >= this.hideDistance * 0.8) {
@@ -366,9 +373,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 const slideOff = Math.round(st.slideCurrent)
                 const triggerY = Math.max(0, WIN_H - slideOff - BAND)
                 const height = WIN_H - triggerY
-                // @ts-ignore
-                region.unionRectangle({ x: 0, y: triggerY, width: monMain, height })
-                apply(`trig:${triggerY},${height}`, () => surface.set_input_region(region)); return
+                apply(`trig:${triggerY},${height}`, setRect({ x: 0, y: triggerY, width: monMain, height })); return
             }
             if (st.menuOpenCount > 0) { apply("null", () => surface.set_input_region(null)); return }
             // Height tracks the dock's current silhouette (pill at rest, pill+bulge on hover)
@@ -380,10 +385,7 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             const x = Math.round((monMain - width) / 2)
             const y = Math.floor(WIN_H - h)
             const height = WIN_H - y
-            // @ts-ignore
-            region.unionRectangle({ x, y, width, height })
-            apply(`body:${x},${y},${width},${height}`,
-                () => surface.set_input_region(region))
+            apply(`body:${x},${y},${width},${height}`, setRect({ x, y, width, height }))
         },
 
         mainStart: (extent: number) => Math.max(0, (monMain - extent) / 2),
@@ -480,7 +482,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 halign: Gtk.Align.FILL,
                 can_focus: false,
             })
-            Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
+            // theme→redraw handled by DockCore (single, disconnected on destroy)
             da.set_draw_func((_, cr, _w, _h) => {
                 if (_w <= 0 || _h <= 0) return
                 if (_h !== realizedMain) {
@@ -691,15 +693,22 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             const surface = win.get_native()?.get_surface()
             if (!surface) return
             // Apply only when the region's shape changed (see lastRegionKey note above).
+            // Runs every frame during the autohide slide — the region is only built when
+            // the key changes, so the hot path is integer math + a string compare.
             const apply = (key: string, set: () => void) => {
                 if (key === lastRegionKey) return
                 lastRegionKey = key
                 set()
             }
+            const setRect = (rect: { x: number, y: number, width: number, height: number } | null) => () => {
+                const region = new Cairo.Region()
+                // @ts-ignore
+                if (rect) region.unionRectangle(rect)
+                surface.set_input_region(region)
+            }
             if (st.appGridPanelOpen) { apply("null", () => surface.set_input_region(null)); return }
-            const region = new Cairo.Region()
             if (st.fullscreenMode && !st.appGridPanelOpen && !st.isRevealed) {
-                apply("empty", () => surface.set_input_region(region)); return
+                apply("empty", setRect(null)); return
             }
             const slideOff = Math.round(st.slideCurrent)
             if (dockSettings.autoHide && !st.isRevealed && slideOff >= this.hideDistance * 0.8) {
@@ -713,9 +722,7 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 const BAND = 24
                 const edgeX = position === 'left' ? 0 : Math.max(0, WIN_W - slideOff - BAND)
                 const width = position === 'left' ? slideOff + BAND : WIN_W - edgeX
-                // @ts-ignore
-                region.unionRectangle({ x: edgeX, y: 0, width, height: realizedMain })
-                apply(`trig:${edgeX},${width},${realizedMain}`, () => surface.set_input_region(region)); return
+                apply(`trig:${edgeX},${width},${realizedMain}`, setRect({ x: edgeX, y: 0, width, height: realizedMain })); return
             }
             if (st.menuOpenCount > 0) { apply("null", () => surface.set_input_region(null)); return }
             // Width tracks the dock's current silhouette (pill at rest, pill+bulge on hover).
@@ -732,10 +739,8 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
             const PAD_MAIN = 250
             const top = Math.max(0, py - PAD_MAIN)
             const height = Math.min(realizedMain - top, ph + PAD_MAIN * 2)
-            // @ts-ignore
-            region.unionRectangle({ x: edgeX, y: top, width, height })
             apply(`body:${edgeX},${top},${width},${Math.round(height)}`,
-                () => surface.set_input_region(region))
+                setRect({ x: edgeX, y: top, width, height }))
         },
 
         mainStart: (extent: number) =>

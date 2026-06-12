@@ -4,7 +4,6 @@ import { writeFile, readFile } from "ags/file"
 import { execAsync } from "ags/process"
 import * as astal from "ags/gtk4/jsx-runtime"
 import GLib from "gi://GLib"
-import AstalHyprland from "gi://AstalHyprland"
 import AstalApps from "gi://AstalApps"
 import GObject from "gi://GObject"
 import Gio from "gi://Gio"
@@ -311,10 +310,8 @@ export function DockItem(
                 // Scale to fit available area (in the 0.90 scaled context, space is w,h)
                 const scaleX = w / iconW
                 const scaleY = h / iconH
-                // Contain strategy to guarantee it fits 
-                // V610: Apply the user's extra scale only to the internal graphic itself,
-                // so the fixed 90% clip mask will punch a perfect squircle.
-                const scale = Math.min(scaleX, scaleY) * (1.0 + (dockSettings.iconThemeScale / 100))
+                // Contain strategy to guarantee it fits
+                const scale = Math.min(scaleX, scaleY)
 
                 // Center in the widget area (w, h)
                 const drawW = iconW * scale
@@ -480,6 +477,11 @@ export function DockItem(
 
         if (!tooltip.visible && !tooltipTimeout) {
             tooltipTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+                // Refresh the title lazily, right before it becomes visible. Client.title
+                // is live (AstalHyprland tracks windowtitle events) — what we avoid is
+                // SUBSCRIBING to it (a dock redraw + blur pass per title tick); a one-shot
+                // read at popup time is free and always fresh.
+                updateLabel()
                 tooltip.popup(); tooltipTimeout = null; return GLib.SOURCE_REMOVE
             })
         }
@@ -662,6 +664,7 @@ export function DockItem(
     iconBox.add_controller(dragGesture)
 
     // CLICK (Focus/Launch)
+    let bounceTimerId: number | null = null
     const leftClick = new Gtk.GestureClick({ button: 1 })
     leftClick.connect("released", () => {
         if (gestureIsDragging) return  // Button release after a drag — not a click
@@ -686,7 +689,7 @@ export function DockItem(
                     sync() // Instantly turn on indicator when clicked
 
                     const animLoop = () => {
-                        if (!state.isBouncing) return GLib.SOURCE_REMOVE
+                        if (!state.isBouncing) { bounceTimerId = null; return GLib.SOURCE_REMOVE }
 
                         const elapsed = Date.now() - startTime
                         if (elapsed > duration) {
@@ -694,6 +697,7 @@ export function DockItem(
                             iconToDisplay.margin_bottom = originalMargin
                             child.queue_draw()
                             sync() // Re-evaluate indicator now that bounce is done
+                            bounceTimerId = null
                             return GLib.SOURCE_REMOVE
                         }
 
@@ -711,7 +715,8 @@ export function DockItem(
 
                         return GLib.SOURCE_CONTINUE
                     }
-                    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, animLoop)
+                    if (bounceTimerId !== null) GLib.source_remove(bounceTimerId)
+                    bounceTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, animLoop)
                 }
 
                 // V149: UNIVERSAL HOME ISOLATION (Left Click) 🛰️
@@ -779,6 +784,11 @@ export function DockItem(
     itemBox.connect("destroy", () => {
         try { hs.disconnect(hsChangedId) } catch (e) { }
         try { Theme.disconnect(themeChangedId) } catch (e) { }
+        // Pending timers would otherwise keep firing against destroyed widgets
+        // (the dock is rebuilt in-process on position/autoHide/geometry changes).
+        if (bounceTimerId !== null) { GLib.source_remove(bounceTimerId); bounceTimerId = null; state.isBouncing = false }
+        if (tooltipTimeout !== null) { GLib.source_remove(tooltipTimeout); tooltipTimeout = null }
+        if (longPressTimer !== null) { GLib.source_remove(longPressTimer); longPressTimer = null }
     })
     sync()
 

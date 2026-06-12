@@ -19,7 +19,7 @@ import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
 import { DockItem, Separator, dismissActiveDockMenu } from "./DockItem"
 import {
-    hypr, dragBus, pointerBus, savePinned, pinnedState, dockSettings, onDockSettingsChanged,
+    dragBus, pointerBus, savePinned, pinnedState, dockSettings, onDockSettingsChanged,
     menuState, onMenuCountChanged, dockSideState, onPinnedChanged,
 } from "./state"
 import status from "../../core/Status"
@@ -45,7 +45,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     // drag-lock origin. Identical math for both axes (slots accumulate the same).
     const calculateStableMain = (effectivePinned: string[]) => {
         const groupedClients: { [key: string]: any } = {}
-        hypr.clients.forEach(c => {
+        hs.clients.forEach(c => {
             if (!c.class) return
             if (c.class.toLowerCase().includes("ags")) return
             let key = c.class.toLowerCase()
@@ -188,7 +188,10 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     barDismissClick.connect("pressed", () => { dismissActiveDockMenu() })
     bar.add_controller(barDismissClick)
 
-    Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
+    // Single theme→redraw handler for the background drawing area (the axis does
+    // NOT connect its own; see DockAxis). Disconnected on destroy — the dock is
+    // rebuilt in-process on position/autoHide/monitor-geometry changes.
+    const themeConn = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
 
     shim.append(bar)
     layout.set_child(da)
@@ -485,7 +488,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
             needsUpdate = false
             const groupedClients: { [key: string]: { addresses: string[], displayClass: string, title: string } } = {}
-            const sortedClients = [...hypr.clients].sort((a, b) => a.address.localeCompare(b.address))
+            const sortedClients = [...hs.clients].sort((a, b) => a.address.localeCompare(b.address))
             sortedClients.forEach(c => {
                 const rawClass = c.class || ""
                 const key = appService.resolveHyprlandClass(rawClass)
@@ -984,11 +987,13 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     const pinnedConn = onPinnedChanged(throttledUpdate)
 
     const overlayRecovery = () => { if (!status.isAnyOverlayOpen && needsUpdate) throttledUpdate() }
-    status.connect("notify::cc-open", overlayRecovery)
-    status.connect("notify::nc-open", overlayRecovery)
-    status.connect("notify::prism-open", overlayRecovery)
-    status.connect("notify::system-menu-open", overlayRecovery)
-    status.connect("notify::overview-open", overlayRecovery)
+    const statusConns = [
+        status.connect("notify::cc-open", overlayRecovery),
+        status.connect("notify::nc-open", overlayRecovery),
+        status.connect("notify::prism-open", overlayRecovery),
+        status.connect("notify::system-menu-open", overlayRecovery),
+        status.connect("notify::overview-open", overlayRecovery),
+    ]
 
     const pConn = pointerBus.onButtonReleased(() => {
         isDndEnding = true
@@ -1011,8 +1016,27 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         }
     })
 
+    // Drag-end cleanup timers are tracked so a new drag started inside their
+    // window (200–400ms) can cancel them — otherwise a leftover timer flips
+    // dndActive/isDndEnding mid-drag ("drag sometimes doesn't magnify").
+    let pendingDragTimers: number[] = []
+    const addDragTimer = (priority: number, ms: number, fn: () => void) => {
+        const id = GLib.timeout_add(priority, ms, () => {
+            pendingDragTimers = pendingDragTimers.filter(t => t !== id)
+            fn()
+            return GLib.SOURCE_REMOVE
+        })
+        pendingDragTimers.push(id)
+    }
+    const clearPendingDragTimers = () => {
+        for (const id of pendingDragTimers) { try { GLib.source_remove(id) } catch (e) {} }
+        pendingDragTimers = []
+    }
+
     const dConn = dragBus.subscribe((draggingId) => {
         if (draggingId) {
+            clearPendingDragTimers()
+            isDndEnding = false
             dndActive = true
 
             const nsid = norm(draggingId)
@@ -1032,19 +1056,18 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                 previewIdx = -1
                 isDndEnding = true
                 update()
-                GLib.timeout_add(GLib.PRIORITY_HIGH, 400, () => { isDndEnding = false; return GLib.SOURCE_REMOVE })
+                addDragTimer(GLib.PRIORITY_HIGH, 400, () => { isDndEnding = false })
             }
 
-            GLib.timeout_add(GLib.PRIORITY_HIGH, 200, () => { dndActive = false; return GLib.SOURCE_REMOVE })
+            addDragTimer(GLib.PRIORITY_HIGH, 200, () => { dndActive = false })
 
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
+            addDragTimer(GLib.PRIORITY_DEFAULT, 300, () => {
                 if (!dragBus.draggingId) {
                     lastDraggingId = ""
                     previewIdx = -1
                     if (lastMousePos < 0) updateAllTargets(-1000)
                     update()
                 }
-                return GLib.SOURCE_REMOVE
             })
         }
     })
@@ -1086,7 +1109,10 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         if (tickId) { bar.remove_tick_callback(tickId); tickId = null }
         if (updateTimer) { GLib.source_remove(updateTimer); updateTimer = null }
         if (leaveTimeout) { GLib.source_remove(leaveTimeout); leaveTimeout = null }
+        clearPendingDragTimers()
         try { if (cConn) hs.disconnect(cConn) } catch (e) {}
+        try { Theme.disconnect(themeConn) } catch (e) {}
+        for (const id of statusConns) { try { status.disconnect(id) } catch (e) {} }
         try { if (aConn) aConn() } catch (e) {}
         try { if (pConn) pConn() } catch (e) {}
         try { if (dConn) dConn() } catch (e) {}

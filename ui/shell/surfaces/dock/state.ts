@@ -6,12 +6,8 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import { writeFile, readFile } from "ags/file"
 import GLib from "gi://GLib"
-import AstalHyprland from "gi://AstalHyprland"
 // --- PERSISTENCE ---
 const PINNED_FILE = GLib.get_user_config_dir() + "/dock_pinned.json"
-
-// Shared Hyprland service
-export const hypr = AstalHyprland.get_default()
 
 // --- DOCK CONFIGURATION ---
 export const DOCK_CONFIG = {
@@ -33,7 +29,6 @@ export interface DockSettings {
     maxIconSize: number     // 64–128, default 108
     showIndicators: boolean // default true
     screenGap: number       // 4–16, default 8
-    iconThemeScale: number  // 0.0 to 0.20, default 0.0
     autoHide: boolean       // hide dock when mouse leaves, default false
     hideDelay: number       // ms before hiding after mouse leaves, default 500
     position: DockPosition  // dock anchor position, default 'bottom'
@@ -45,7 +40,6 @@ const DOCK_DEFAULTS: DockSettings = {
     maxIconSize: 108,
     showIndicators: true,
     screenGap: 8,
-    iconThemeScale: 0.0,
     autoHide: false,
     hideDelay: 500,
     position: 'bottom',
@@ -110,12 +104,11 @@ export function onPinnedChanged(fn: () => void) {
 
 export const savePinned = () => {
     const list = pinnedState.list
-    console.log(`[DockAudit] COMMIT: saving ${list.length} items to ${PINNED_FILE}`);
     try {
         writeFile(PINNED_FILE, JSON.stringify(list, null, 2))
         _pinnedListeners.forEach(fn => fn())
     } catch (e) {
-        console.error(`[DockAudit] FAILURE:`, e);
+        console.error(`[Dock] Failed to persist pinned list:`, e);
     }
 }
 
