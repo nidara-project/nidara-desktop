@@ -6,6 +6,10 @@ import { SHELL_ROOT } from "./Paths"
 const DIR = `${SHELL_ROOT}/assets/icons/hicolor/scalable/actions`
 const f = (name: string) => Gio.FileIcon.new(Gio.File.new_for_path(`${DIR}/${name}.svg`))
 
+/** Absolute path of a shipped asset icon — for chains that fall back to our
+ *  own art only when the icon theme has nothing (see AppService.resolveIconChain). */
+export const iconAssetPath = (name: string) => `${DIR}/${name}.svg`
+
 const Icons = {
     app:          f("app-window"),
     mic:          f("mic"),

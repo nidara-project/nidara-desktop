@@ -188,6 +188,37 @@ class AppService {
     /** Resolves an icon name or path to what should be passed to Gtk.Image. Public for Settings UI. */
     getCanonicalIconName(n: string): string | null { return this.getCanonicalName(n) }
 
+    /**
+     * Resolve an ordered icon-name chain with THEME-FIRST semantics. Plain
+     * getIconName(array) exhausts the full fallback depth per name — including
+     * the "all other installed themes" last resort — before trying the next
+     * name, so an exotic early name (e.g. "finder" found in some non-active
+     * theme) beats a standard name the ACTIVE theme does have. Here a later
+     * name in the active theme always wins over an earlier name that only
+     * exists in deep fallbacks. Entries may be absolute paths: they act as the
+     * final custom fallback and are only reached in pass 2.
+     * Used by the dock's special items (Files / Launcher / Trash).
+     */
+    resolveIconChain(names: string[]): string | null {
+        const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
+        // Pass 1: explicit user overlay first (deliberate override), then the
+        // active icon theme (includes hicolor inherits).
+        for (const n of names) {
+            if (n.startsWith("/")) continue
+            const overlay = this.getIconOverridePath(this.iconOverlayKey(n))
+            if (overlay) return overlay
+            if (theme.has_icon(n)) return n
+        }
+        // Pass 2: full per-name fallback chain (deep search, other themes), and
+        // absolute-path entries as shipped-asset fallbacks.
+        for (const n of names) {
+            if (n.startsWith("/")) return GLib.file_test(n, GLib.FileTest.EXISTS) ? n : null
+            const res = this.getIconName(n)
+            if (res && res !== "image-missing") return res
+        }
+        return null
+    }
+
     /** Extracts the overlay key from an icon name or absolute path. E.g. "/usr/share/pixmaps/foo.png" → "foo" */
     private iconOverlayKey(n: string): string {
         if (!n.startsWith("/")) return n

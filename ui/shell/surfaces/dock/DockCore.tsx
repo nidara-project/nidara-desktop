@@ -28,6 +28,7 @@ import hs from "../../core/HyprlandState"
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
 import shellActions from "../../core/ShellActions"
+import { iconAssetPath } from "../../core/Icons"
 import AppGridPanel from "../app-grid/AppGrid"
 import type { AxisAdapter, RevealState } from "./DockAxis"
 
@@ -577,7 +578,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
             const homeItem = {
                 name: prettyName,
-                icon_name: ["finder", "system-file-manager", "user-home", "folder-home", "folder"],
+                // Theme-first (resolveIconChain): standard names the active theme
+                // ships win; "finder" is only an exotic last resort.
+                icon_name: ["system-file-manager", "user-home", "folder-home", "folder", "finder"],
                 launch: () => execAsync("xdg-open " + GLib.get_home_dir()).catch(e => { print(e) })
             }
             const homeAddrs = groupedClients["home-shortcut"]?.addresses || []
@@ -599,7 +602,11 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
             const launcherItem = {
                 name: t("dock.special.launcher.name"),
-                icon_name: ["crys-grid", "view-app-grid-symbolic", "view-app-grid", "org.gnome.Shell.Apps-symbolic"],
+                // Theme-first: full-color themed grid beats the flat symbolic;
+                // our shipped asset only when the theme has neither. ("crys-grid"
+                // was a dead name — no such icon exists anywhere.)
+                icon_name: ["view-app-grid", "org.gnome.Shell.Apps", "view-app-grid-symbolic",
+                    "org.gnome.Shell.Apps-symbolic", iconAssetPath("grid")],
                 launch: () => { shellActions.toggleAppGrid?.() }
             }
             configs.push({
@@ -745,9 +752,10 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                 name: t("dock.special.trash.name"),
                 // Initial chain only — once created, DockItem keeps the icon in sync
                 // with trash contents via TrashService (full ↔ empty, in place).
+                // Theme-first; our shipped asset only when the theme has no trash at all.
                 icon_name: trashService.isEmpty
-                    ? ["user-trash", "trashcan-empty", "trash"]
-                    : ["user-trash-full", "trashcan-full", "user-trash", "trash"],
+                    ? ["user-trash", "trashcan-empty", "trash", iconAssetPath("trash")]
+                    : ["user-trash-full", "trashcan-full", "user-trash", "trash", iconAssetPath("trash")],
                 launch: () => execAsync("nautilus trash:///").catch(print)
             }
             configs.push({

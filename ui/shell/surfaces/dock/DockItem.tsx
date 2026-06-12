@@ -15,6 +15,7 @@ import hs from "../../core/HyprlandState"
 
 import { dragBus, mouseBus, pointerBus, dockSettings, changeMenuCount, menuState } from "./state"
 import Theme from "../../core/ThemeManager"
+import { iconAssetPath } from "../../core/Icons"
 import { t } from "../../core/i18n"
 import shellActions from "../../core/ShellActions"
 
@@ -188,12 +189,10 @@ export function DockItem(
         let candidate: string | null = null
         try {
             if (Array.isArray(name)) {
-                for (const n of name) {
-                    const res = appService.getIconName(n)
-                    if (res && res !== "image-missing") {
-                        candidate = res; break;
-                    }
-                }
+                // Theme-first chain: a later name in the ACTIVE theme beats an
+                // earlier name that only exists in deep fallbacks (other themes,
+                // shipped assets). See AppService.resolveIconChain.
+                candidate = appService.resolveIconChain(name)
             } else {
                 candidate = appService.getIconName(name)
             }
@@ -360,8 +359,8 @@ export function DockItem(
     if (appId === "trash" || appId === "special:trash") {
         const applyTrashIcon = () => {
             ;(appItem as any).icon_name = trashService.isEmpty
-                ? ["user-trash", "trashcan-empty", "trash"]
-                : ["user-trash-full", "trashcan-full", "user-trash", "trash"]
+                ? ["user-trash", "trashcan-empty", "trash", iconAssetPath("trash")]
+                : ["user-trash-full", "trashcan-full", "user-trash", "trash", iconAssetPath("trash")]
             const r = getIcon()
             try {
                 let path = r.path || null
