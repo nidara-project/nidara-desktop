@@ -596,6 +596,13 @@ elif [ "$MODE" = "system" ]; then
         echo "$SRC_CANON" > "$SOURCE_FILE"
         chown "$REAL_USER" "$SOURCE_FILE"
     fi
+elif [ "$MODE" = "update-apply" ] && [ ! -f "$SOURCE_FILE" ]; then
+    # Self-heal pre-registration installs: their first manual `install.sh --update`
+    # ran from a working git checkout — record it so crystal-shell-update works
+    # from now on.
+    echo "$REPO_DIR" > "$SOURCE_FILE"
+    chown "$REAL_USER" "$SOURCE_FILE"
+    echo "  [Source] Registered: $REPO_DIR"
 fi
 
 # Default JSON configs (never overwrite user's existing files)
