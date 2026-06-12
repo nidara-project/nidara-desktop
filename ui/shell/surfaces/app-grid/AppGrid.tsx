@@ -315,7 +315,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     const createAppWidget = (app: any): Gtk.Button => {
         const id = normId(app.entry || "")
         const name = app.get_name ? app.get_name() : (app as any).name || ""
-        const iconName = app.icon_name || "image-missing"
+        const iconName = app.icon_name || "application-x-executable"
 
         const icon = new Gtk.Image({
             pixel_size: 72,
@@ -328,7 +328,9 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         if (resolved && resolved.startsWith("/")) {
             icon.gicon = Gio.FileIcon.new(Gio.File.new_for_path(resolved))
         } else {
-            icon.icon_name = resolved || iconName
+            // Unresolvable name → generic app icon from the active theme, never
+            // GTK's broken-image placeholder (looks like an error, not a gap).
+            icon.icon_name = resolved || "application-x-executable"
         }
         iconRefMap.set(id, { image: icon, originalIconName: iconName })
 
@@ -453,7 +455,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             if (resolved && resolved.startsWith("/")) {
                 image.gicon = Gio.FileIcon.new(Gio.File.new_for_path(resolved))
             } else {
-                image.icon_name = resolved || originalIconName
+                image.icon_name = resolved || "application-x-executable"
             }
         }
     }

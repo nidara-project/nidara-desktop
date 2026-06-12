@@ -156,12 +156,44 @@ class ThemeManager extends GObject.Object {
 
     getAvailableIconThemes(): string[] {
         const paths = ["/usr/share/icons", `${GLib.get_home_dir()}/.local/share/icons`, `${GLib.get_home_dir()}/.icons`]
-        return this.listDirs(paths).filter(t => {
+        // System plumbing, never user-selectable: "default" is the Xcursor pointer
+        // (we write it ourselves in writeXcursorDefault), "hicolor" is the freedesktop
+        // fallback every theme inherits, "crystal-shell" is our per-app icon overlay.
+        const reserved = ["default", "hicolor", "crystal-shell"]
+        const themes = this.listDirs(paths).filter(t => {
+            if (reserved.includes(t)) return false
             for (const p of paths) {
-                if (GLib.file_test(`${p}/${t}/index.theme`, GLib.FileTest.EXISTS)) return true
+                if (this.isRealIconTheme(`${p}/${t}/index.theme`)) return true
             }
             return false
         })
+        // Keep the configured theme selectable even if it no longer passes the
+        // filter (e.g. it was uninstalled or is Hidden) so the dropdown can
+        // still display the current value.
+        const current = this.state.iconTheme
+        if (current && !themes.includes(current)) themes.push(current)
+        return themes.sort()
+    }
+
+    /**
+     * A directory only counts as a selectable icon theme if its index.theme has an
+     * [Icon Theme] group with a Directories key (cursor pointers like "default" only
+     * carry Inherits=) and is not marked Hidden per the icon-theme spec.
+     */
+    private isRealIconTheme(indexPath: string): boolean {
+        if (!GLib.file_test(indexPath, GLib.FileTest.EXISTS)) return false
+        try {
+            const kf = new GLib.KeyFile()
+            kf.load_from_file(indexPath, GLib.KeyFileFlags.NONE)
+            if (!kf.has_group("Icon Theme")) return false
+            if (kf.get_string("Icon Theme", "Directories").trim() === "") return false
+            try {
+                if (kf.get_boolean("Icon Theme", "Hidden")) return false
+            } catch (e) { } // Hidden key absent → not hidden
+            return true
+        } catch (e) {
+            return false // unreadable or no Directories key → not a real icon theme
+        }
     }
 
     getAvailableCursorThemes(): string[] {

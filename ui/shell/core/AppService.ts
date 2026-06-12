@@ -190,13 +190,11 @@ class AppService {
 
     /**
      * Resolve an ordered icon-name chain with THEME-FIRST semantics. Plain
-     * getIconName(array) exhausts the full fallback depth per name — including
-     * the "all other installed themes" last resort — before trying the next
-     * name, so an exotic early name (e.g. "finder" found in some non-active
-     * theme) beats a standard name the ACTIVE theme does have. Here a later
-     * name in the active theme always wins over an earlier name that only
-     * exists in deep fallbacks. Entries may be absolute paths: they act as the
-     * final custom fallback and are only reached in pass 2.
+     * getIconName(array) exhausts the full fallback depth per name (hicolor,
+     * pixmaps) before trying the next name; here a later name in the active
+     * theme always wins over an earlier name that only exists in deep
+     * fallbacks. Entries may be absolute paths: they act as the final custom
+     * fallback and are only reached in pass 2.
      * Used by the dock's special items (Files / Launcher / Trash).
      */
     resolveIconChain(names: string[]): string | null {
@@ -209,7 +207,7 @@ class AppService {
             if (overlay) return overlay
             if (theme.has_icon(n)) return n
         }
-        // Pass 2: full per-name fallback chain (deep search, other themes), and
+        // Pass 2: full per-name fallback chain (hicolor, pixmaps), and
         // absolute-path entries as shipped-asset fallbacks.
         for (const n of names) {
             if (n.startsWith("/")) return GLib.file_test(n, GLib.FileTest.EXISTS) ? n : null
@@ -285,7 +283,10 @@ class AppService {
             return null
         }
 
-        // 1. Current theme + hicolor + pixmaps
+        // Current theme + hicolor + pixmaps. Deliberately NOT other installed
+        // themes: themes must never mix — an icon the active theme lacks falls
+        // back to the app's own hicolor icon, and the per-app override in
+        // Settings → Apps is the escape hatch beyond that.
         const primary = searchBases([
             `${GLib.get_home_dir()}/.local/share/icons/${themeName}`,
             `/usr/share/icons/${themeName}`,
@@ -293,21 +294,6 @@ class AppService {
             `/usr/share/pixmaps`
         ])
         if (primary) return primary
-
-        // 2. All other installed themes — last resort for icons not in the active theme
-        for (const iconsBase of [`${GLib.get_home_dir()}/.local/share/icons`, `/usr/share/icons`]) {
-            if (!GLib.file_test(iconsBase, GLib.FileTest.EXISTS)) continue
-            try {
-                const dir = Gio.File.new_for_path(iconsBase)
-                const enumerator = dir.enumerate_children("standard::name,standard::type", Gio.FileQueryInfoFlags.NONE, null)
-                let info
-                while ((info = enumerator.next_file(null))) {
-                    if (info.get_file_type() !== Gio.FileType.DIRECTORY) continue
-                    const result = searchBases([`${iconsBase}/${info.get_name()}`])
-                    if (result) return result
-                }
-            } catch (e) {}
-        }
 
         // Steam fallback: handles steam_icon_APPID (from .desktop Icon= field) and
         // steam_app_APPID (Hyprland window class when no .desktop file exists).

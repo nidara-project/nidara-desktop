@@ -190,7 +190,7 @@ export function DockItem(
         try {
             if (Array.isArray(name)) {
                 // Theme-first chain: a later name in the ACTIVE theme beats an
-                // earlier name that only exists in deep fallbacks (other themes,
+                // earlier name that only exists in deep fallbacks (hicolor,
                 // shipped assets). See AppService.resolveIconChain.
                 candidate = appService.resolveIconChain(name)
             } else {
