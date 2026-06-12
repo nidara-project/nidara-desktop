@@ -46,6 +46,10 @@ cd ~/crystal-shell-install
 ./install.sh
 ```
 
+The installer installs the **latest release** (if your clone's `main` is ahead of it, the
+installer jumps back to the release tag first — you always get the same tested version as
+everyone else; developers opt out with `--dev` or by checking out another branch).
+
 The installer needs no AUR helper — it builds the Astal/AGS libraries from pinned sources, packages
 them, and hands them to `pacman` so they stay trackable and upgradable. It:
 

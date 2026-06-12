@@ -132,6 +132,28 @@ if [ "$MODE" = "update" ]; then
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Release channel for fresh system installs: a normal `git clone` lands on main's
+# tip, which may be ahead of the latest release — installing it would hand the
+# user an unlabelled dev snapshot AND make their first crystal-shell-update a
+# silent downgrade to the newest tag. So: on a CLEAN main checkout with release
+# tags available, jump to the newest tag and re-exec the installer from there
+# (its pins may differ). Loop-safe: after checkout HEAD is detached, so this
+# block no-ops on the second pass. Deliberate opt-outs keep working: --dev
+# installs, dirty trees, and checkouts on any other branch/commit are untouched.
+# ─────────────────────────────────────────────────────────────────────────────
+if [ "$MODE" = "system" ] && [ -d "$REPO_DIR/.git" ] \
+   && [ "$(run_user git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null)" = "main" ] \
+   && [ -z "$(run_user git -C "$REPO_DIR" status --porcelain 2>/dev/null)" ]; then
+    release_tag="$(run_user git -C "$REPO_DIR" tag -l 'v*' --sort=-v:refname | head -1)"
+    if [ -n "$release_tag" ] \
+       && [ "$(run_user git -C "$REPO_DIR" rev-parse "$release_tag^{commit}")" != "$(run_user git -C "$REPO_DIR" rev-parse HEAD)" ]; then
+        echo "  Installing release $release_tag (main may be ahead of the release channel)"
+        run_user git -C "$REPO_DIR" checkout -q "$release_tag"
+        exec bash "$REPO_DIR/install.sh"
+    fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Update apply: decide whether the pinned dependency stack must be rebuilt.
 # The pins recorded at the last install live in $PINS_FILE; if they match this
 # script's pins, phases 1-4 are skipped (Crystal artifacts only).
