@@ -173,6 +173,9 @@ export default {
     "settings.about.unavailable": "Not available",
     "settings.about.graphics": "Graphics",
     "settings.about.close": "Close",
+    "settings.about.update": "Software Update",
+    "settings.about.update.up-to-date": "You're on the latest release",
+    "settings.about.update.available.desc": "Update by running `crystal-shell-update` in a terminal",
 
     // Appearance
     "settings.appearance.group.base-style": "Base Style",

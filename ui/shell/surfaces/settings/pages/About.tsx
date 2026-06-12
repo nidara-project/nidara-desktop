@@ -37,6 +37,18 @@ function readCpuInfo(): string {
 }
 
 /**
+ * True when `latest` is a strictly newer dotted version than `current`.
+ */
+function isNewerVersion(latest: string, current: string): boolean {
+    const a = latest.split(".").map(n => parseInt(n, 10) || 0)
+    const b = current.split(".").map(n => parseInt(n, 10) || 0)
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+        if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0)
+    }
+    return false
+}
+
+/**
  * Reads total RAM from /proc/meminfo.
  */
 function readTotalRam(): string {
@@ -62,6 +74,24 @@ export default function AboutPage() {
 
     shellList.append(createRow(t("settings.about.version"), "Crystal Shell", staticLabel(readShellVersion())))
     shellList.append(createRow(t("settings.about.shell"), t("settings.about.shell.desc"), staticLabel("Hyprland WM")))
+
+    // Update check — installed version vs the latest GitHub release. The row is
+    // appended only when the check resolves: on network failure or while no
+    // releases exist (pre-publication, private repo) About just stays quiet.
+    execAsync(["curl", "-fsS", "--max-time", "5",
+        "https://api.github.com/repos/fluid-crystal/crystal-shell/releases/latest",
+    ]).then(out => {
+        const tag = String(JSON.parse(out)?.tag_name ?? "")
+        const latest = tag.replace(/^v/, "")
+        if (!latest) return
+        if (isNewerVersion(latest, readShellVersion())) {
+            shellList.append(createRow(t("settings.about.update"),
+                t("settings.about.update.available.desc"), staticLabel(tag)))
+        } else {
+            shellList.append(createRow(t("settings.about.update"),
+                t("settings.about.update.up-to-date"), staticLabel("")))
+        }
+    }).catch(() => {})
 
     page.append(shellBox)
 

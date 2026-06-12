@@ -4,10 +4,11 @@ Read this when running the installer, debugging a reload that won't take, lookin
 
 ## Installer (`install.sh`)
 
-Arch-only provisioning. Two modes:
+Arch-only provisioning. Three modes:
 
-- **`--system` (default):** installs binaries into `/usr/bin/` and configs into `/usr/share/crystal-shell/`. Runs the production bundle.
-- **`--dev`:** installs system binaries **and** writes `~/.config/crystal-shell/.dev` pointing at the source tree. The UI launcher will then `ags run app.ts` from source instead of running the bundle.
+- **`--system` (default):** installs binaries into `/usr/bin/` and configs into `/usr/share/crystal-shell/`. Runs the production bundle. Also leaves a **managed canonical copy** of the repo at `~/.local/share/crystal-shell/src` (origin repointed at GitHub) and records it in `~/.config/crystal-shell/.source` — that's what updates pull, so the user's original download is disposable.
+- **`--dev`:** installs system binaries **and** writes `~/.config/crystal-shell/.dev` pointing at the source tree. The UI launcher will then `ags run app.ts` from source instead of running the bundle. Registers the developer's own clone in `.source` (no managed copy).
+- **`--update`** (what `/usr/bin/crystal-shell-update` runs): refuses on a dirty source tree, fetches, checks out the newest `v*` release tag (dev clones instead fast-forward their branch; so does everyone before the first release exists), then **re-execs the freshly pulled installer** (`--update-apply`) so update logic is always the new version's. The apply pass behaves like `--system` but (a) never touches `.dev`/`.source`, and (b) skips pacman + the Astal/AGS/appmenu rebuild when the pins recorded at the last install (`/usr/share/crystal-shell/pins`) match — so a routine update only rebuilds Crystal's own artifacts (~1 min). It restarts `crystal-shell.service` at the end. Settings → About checks the latest GitHub release and shows an update row (silent if the API is unreachable).
 
 ### Pinned upstreams
 

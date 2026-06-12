@@ -1,0 +1,27 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# crystal-shell-update — update an installed Crystal Shell.
+# Installed to /usr/bin/crystal-shell-update.
+#
+# Thin wrapper: all update logic lives in the repo's install.sh (--update), so
+# the updater itself updates with the repo. This just finds the registered
+# source (~/.config/crystal-shell/.source, written by install.sh) and hands over.
+# ─────────────────────────────────────────────────────────────────────────────
+set -e
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/crystal-shell"
+SRC_CANON="$HOME/.local/share/crystal-shell/src"
+
+SRC=""
+[ -f "$CONFIG_DIR/.source" ] && SRC="$(cat "$CONFIG_DIR/.source")"
+[ -z "$SRC" ] && [ -d "$SRC_CANON/.git" ] && SRC="$SRC_CANON"
+
+if [ -z "$SRC" ] || [ ! -f "$SRC/install.sh" ]; then
+    echo "crystal-shell-update: no registered source found." >&2
+    echo "Re-run the installer once from a git clone to register it:" >&2
+    echo "  git clone https://github.com/fluid-crystal/crystal-shell.git" >&2
+    echo "  cd crystal-shell && ./install.sh" >&2
+    exit 1
+fi
+
+exec bash "$SRC/install.sh" --update

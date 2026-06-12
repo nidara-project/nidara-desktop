@@ -61,6 +61,19 @@ them, and hands them to `pacman` so they stay trackable and upgradable. It:
 
 **To start:** reboot and select _Crystal Shell_ from the login screen.
 
+### Updating
+
+```bash
+crystal-shell-update
+```
+
+That's it — no git knowledge needed. The installer leaves a managed copy of the source at
+`~/.local/share/crystal-shell/src` (so the folder you originally cloned is disposable);
+the updater pulls the latest release there and reinstalls only what changed — the pinned
+dependency stack is rebuilt only when the pins actually moved, so updates take a minute,
+not an hour. Your config in `~/.config/crystal-shell/` is never touched, and the running
+shell reloads by itself. **Settings → About** also tells you when a new release is available.
+
 > **Status:** Crystal Shell installs onto an existing Arch system today. A fully automated path —
 > a minimal Arch install bundled with Crystal Shell via a Calamares installer — is planned but not
 > here yet.

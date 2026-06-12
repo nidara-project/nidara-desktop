@@ -4,6 +4,15 @@
 # Usage:
 #   ./install.sh            # System install (recommended for end users)
 #   ./install.sh --dev      # Developer install (run UI from source)
+#   ./install.sh --update   # Update an existing install (or use crystal-shell-update)
+#
+# Update model: a system install leaves a managed canonical copy of this repo at
+# ~/.local/share/crystal-shell/src and records it in ~/.config/crystal-shell/.source.
+# `crystal-shell-update` (thin wrapper in bin/) pulls that copy and re-runs this
+# script in update mode, which rebuilds/copies only Crystal's own artifacts and
+# rebuilds the pinned Astal/AGS dependency stack ONLY when the pins changed
+# (recorded in /usr/share/crystal-shell/pins). A --dev install registers the
+# developer's own clone instead and updates never switch it off its branch.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -14,12 +23,25 @@ REAL_USER="${SUDO_USER:-$USER}"
 REAL_HOME="$(getent passwd "$REAL_USER" | cut -d: -f6)"
 CONFIG_DIR="${REAL_HOME}/.config/crystal-shell"
 
+# Update plumbing (see header). SOURCE_FILE records where updates pull from;
+# SRC_CANON is the managed copy a system install leaves behind so the directory
+# the user originally downloaded becomes disposable.
+SRC_CANON="${REAL_HOME}/.local/share/crystal-shell/src"
+SOURCE_FILE="$CONFIG_DIR/.source"
+PINS_FILE="/usr/share/crystal-shell/pins"
+REPO_URL="https://github.com/fluid-crystal/crystal-shell.git"
+
 # ── Mode selection ────────────────────────────────────────────────────────────
+# update       = pull the registered source, then re-exec the NEW installer
+# update-apply = internal: like system, but skips unchanged deps and never
+#                touches the user's dev/source markers
 MODE="system"
 for arg in "$@"; do
     case "$arg" in
-        --dev)  MODE="dev" ;;
-        --help) echo "Usage: $0 [--system|--dev]"; exit 0 ;;
+        --dev)          MODE="dev" ;;
+        --update)       MODE="update" ;;
+        --update-apply) MODE="update-apply" ;;
+        --help) echo "Usage: $0 [--system|--dev|--update]"; exit 0 ;;
     esac
 done
 
@@ -68,6 +90,77 @@ echo "  Repo: $REPO_DIR"
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Update mode: refresh the registered source, then hand over to the NEW installer
+# (--update-apply) so the update always runs with the just-pulled logic.
+# ─────────────────────────────────────────────────────────────────────────────
+if [ "$MODE" = "update" ]; then
+    SRC=""
+    [ -f "$SOURCE_FILE" ] && SRC="$(cat "$SOURCE_FILE")"
+    if [ -z "$SRC" ] || [ ! -d "$SRC/.git" ]; then
+        # Pre-registration installs: fall back to the checkout we're running from.
+        if [ -d "$REPO_DIR/.git" ]; then
+            SRC="$REPO_DIR"
+        else
+            echo "  [ERR] No registered source and this directory is not a git checkout." >&2
+            echo "        Re-clone the repo and run ./install.sh once to (re)register it:" >&2
+            echo "          git clone $REPO_URL && cd crystal-shell && ./install.sh" >&2
+            exit 1
+        fi
+    fi
+
+    echo "  Updating source: $SRC"
+    if [ -n "$(run_user git -C "$SRC" status --porcelain)" ]; then
+        echo "  [ERR] $SRC has local changes — refusing to update over them." >&2
+        echo "        Commit/stash them (or update manually with git), then retry." >&2
+        exit 1
+    fi
+    run_user git -C "$SRC" fetch --tags origin
+
+    # Dev clones follow their branch; everyone else jumps to the newest release
+    # tag when releases exist (the stable channel), or fast-forwards main before
+    # the first release.
+    latest_tag="$(run_user git -C "$SRC" tag -l 'v*' --sort=-v:refname | head -1)"
+    if [ -f "$CONFIG_DIR/.dev" ] || [ -z "$latest_tag" ]; then
+        run_user git -C "$SRC" pull --ff-only origin "$(run_user git -C "$SRC" rev-parse --abbrev-ref HEAD)" \
+            || { echo "  [ERR] fast-forward pull failed (diverged history?) — update manually with git." >&2; exit 1; }
+    else
+        run_user git -C "$SRC" checkout -q "$latest_tag"
+        echo "  Source at release $latest_tag"
+    fi
+
+    exec bash "$SRC/install.sh" --update-apply
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Update apply: decide whether the pinned dependency stack must be rebuilt.
+# The pins recorded at the last install live in $PINS_FILE; if they match this
+# script's pins, phases 1-4 are skipped (Crystal artifacts only).
+# ─────────────────────────────────────────────────────────────────────────────
+REBUILD_DEPS="yes"
+OLD_VERSION="$(cat /usr/share/crystal-shell/VERSION 2>/dev/null || echo "?")"
+# An update of a dev-mode install must keep dev semantics (config symlinks into
+# the source tree) — otherwise the update would silently downgrade them to copies.
+DEV_LIKE="no"
+[ "$MODE" = "dev" ] && DEV_LIKE="yes"
+[ "$MODE" = "update-apply" ] && [ -f "$CONFIG_DIR/.dev" ] && DEV_LIKE="yes"
+if [ "$MODE" = "update-apply" ]; then
+    new_pins="$(printf 'ASTAL_REF=%s\nAGS_REF=%s\nAPPMENU_REF=%s\n' "$ASTAL_REF" "$AGS_REF" "$APPMENU_REF")"
+    if [ -f "$PINS_FILE" ] && [ "$new_pins" = "$(cat "$PINS_FILE")" ]; then
+        REBUILD_DEPS="no"
+        echo "  Dependency pins unchanged — skipping the Astal/AGS rebuild."
+    elif [ ! -f "$PINS_FILE" ]; then
+        # Installs that predate pin recording: assume the stack matches current
+        # pins (it was built from this same repo recently). Recorded from now on;
+        # if anything misbehaves, a plain ./install.sh rebuilds everything.
+        REBUILD_DEPS="no"
+        echo "  [WARN] No pin record found (pre-update-era install). Assuming the"
+        echo "         dependency stack is current; it will be recorded this time."
+    else
+        echo "  Dependency pins changed — full stack rebuild required."
+    fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 # System environment detection
 # Reads values the user already set during Arch installation — never asks.
 # ─────────────────────────────────────────────────────────────────────────────
@@ -109,6 +202,9 @@ echo ""
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. System dependencies
 # ─────────────────────────────────────────────────────────────────────────────
+if [ "$REBUILD_DEPS" = "no" ]; then
+echo "[1/7] System dependencies — skipped (pins unchanged)."
+else
 echo "[1/7] Installing system dependencies..."
 # -Syu, never bare -Sy: syncing the DBs without a full upgrade leaves a partial-upgrade
 # state, and the next --needed install pulls a new lib (e.g. aquamarine) whose soname no
@@ -128,11 +224,15 @@ sudo pacman -Syu --needed --noconfirm \
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland \
     ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji \
     hyprlauncher awww lz4
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2. Build & install Astal dependencies
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[2/7] Building & packaging Astal service libraries..."
+if [ "$REBUILD_DEPS" = "no" ]; then
+echo "  Skipped (pins unchanged)."
+else
 mkdir -p "$PKG_CACHE/src"
 chown -R "$REAL_USER" "$PKG_CACHE" 2>/dev/null || true
 
@@ -231,6 +331,7 @@ PKGB
     echo "  → $name ($subdir)"
     build_install_pkg "$pdir"
 done
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 3. Configure GObject Introspection
@@ -245,6 +346,9 @@ fi
 # 4. Build & install AGS CLI
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[4/7] Building & packaging AGS CLI..."
+if [ "$REBUILD_DEPS" = "no" ]; then
+echo "  Skipped (pins unchanged)."
+else
 ags_dir="$PKG_CACHE/aylurs-gtk-shell"
 mkdir -p "$ags_dir"
 cat > "$ags_dir/PKGBUILD" <<PKGB
@@ -275,6 +379,7 @@ package() {
 }
 PKGB
 build_install_pkg "$ags_dir"
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 5. Build the Crystal Shell UI bundle
@@ -292,7 +397,7 @@ if [ "$MODE" = "dev" ]; then
     [ -d @girs ] || ags types -d .
 fi
 
-if [ "$MODE" = "system" ]; then
+if [ "$MODE" != "dev" ]; then
     echo "  Bundling shell UI..."
     mkdir -p build
     ags bundle app.ts build/crystal-shell
@@ -304,7 +409,7 @@ echo "  Building greeter..."
 cd "$REPO_DIR/ui/shell"
 npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css
 cd "$REPO_DIR/ui/greeter"
-if [ "$MODE" = "system" ]; then
+if [ "$MODE" != "dev" ]; then
     mkdir -p build
     ags bundle app.ts build/crystal-greeter
     echo "  [OK] Greeter bundle: $REPO_DIR/ui/greeter/build/crystal-greeter"
@@ -312,7 +417,7 @@ fi
 
 echo "  Building lockscreen..."
 cd "$REPO_DIR/ui/lockscreen"
-if [ "$MODE" = "system" ]; then
+if [ "$MODE" != "dev" ]; then
     mkdir -p build
     ags bundle app.ts build/crystal-lock
     echo "  [OK] Lockscreen bundle: $REPO_DIR/ui/lockscreen/build/crystal-lock"
@@ -327,9 +432,14 @@ echo "[6/7] Installing system files..."
 sudo mkdir -p /usr/share/crystal-shell
 sudo cp "$REPO_DIR/VERSION" /usr/share/crystal-shell/VERSION
 
+# Record the dependency pins this install was built against — --update compares
+# them to decide whether the Astal/AGS stack needs rebuilding.
+printf 'ASTAL_REF=%s\nAGS_REF=%s\nAPPMENU_REF=%s\n' "$ASTAL_REF" "$AGS_REF" "$APPMENU_REF" \
+    | sudo tee "$PINS_FILE" > /dev/null
+
 # Hyprland config
 sudo mkdir -p /usr/share/crystal-shell/config/hypr
-if [ "$MODE" = "dev" ]; then
+if [ "$DEV_LIKE" = "yes" ]; then
     sudo ln -sf "$REPO_DIR/config/hypr/hyprland.lua" /usr/share/crystal-shell/config/hypr/hyprland.lua
     sudo cp "$REPO_DIR/config/hypr/hypridle.conf" /usr/share/crystal-shell/config/hypr/hypridle.conf
 else
@@ -345,7 +455,7 @@ fi
 # Migration: drop the pre-rename system tree (ui/ags-v3 → ui/shell, 2026-06)
 sudo rm -rf /usr/share/crystal-shell/ui/ags-v3
 sudo mkdir -p /usr/share/crystal-shell/ui/shell/build
-if [ "$MODE" = "system" ]; then
+if [ "$MODE" != "dev" ]; then
     sudo cp "$REPO_DIR/ui/shell/build/crystal-shell" /usr/share/crystal-shell/ui/shell/build/
 fi
 sudo cp "$REPO_DIR/ui/shell/style.css" /usr/share/crystal-shell/ui/shell/
@@ -355,14 +465,14 @@ sudo cp -r "$REPO_DIR/ui/shell/assets" /usr/share/crystal-shell/ui/shell/
 
 # Greeter bundle + style
 sudo mkdir -p /usr/share/crystal-shell/ui/greeter/build
-if [ "$MODE" = "system" ]; then
+if [ "$MODE" != "dev" ]; then
     sudo cp "$REPO_DIR/ui/greeter/build/crystal-greeter" /usr/share/crystal-shell/ui/greeter/build/
 fi
 sudo cp "$REPO_DIR/ui/greeter/style.css" /usr/share/crystal-shell/ui/greeter/
 
 # Lockscreen bundle (shares greeter's style.css)
 sudo mkdir -p /usr/share/crystal-shell/ui/lockscreen/build
-if [ "$MODE" = "system" ]; then
+if [ "$MODE" != "dev" ]; then
     sudo cp "$REPO_DIR/ui/lockscreen/build/crystal-lock" /usr/share/crystal-shell/ui/lockscreen/build/
 fi
 
@@ -377,7 +487,8 @@ sudo cp "$REPO_DIR/bin/crystal-game-mode" /usr/bin/crystal-game-mode
 sudo cp "$REPO_DIR/bin/crystal-shell-doctor" /usr/bin/crystal-shell-doctor
 sudo cp "$REPO_DIR/bin/crystal-portal"    /usr/bin/crystal-portal
 sudo cp "$REPO_DIR/bin/crystal-shell-mcp" /usr/bin/crystal-shell-mcp
-sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-before-sleep /usr/bin/crystal-after-sleep /usr/bin/crystal-game-mode /usr/bin/crystal-shell-doctor /usr/bin/crystal-portal /usr/bin/crystal-shell-mcp
+sudo cp "$REPO_DIR/bin/crystal-shell-update" /usr/bin/crystal-shell-update
+sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-before-sleep /usr/bin/crystal-after-sleep /usr/bin/crystal-game-mode /usr/bin/crystal-shell-doctor /usr/bin/crystal-portal /usr/bin/crystal-shell-mcp /usr/bin/crystal-shell-update
 
 # systemd user unit — the shell respawns on crash instead of leaving a bare
 # compositor (see bin/crystal-shell.service). NOT enabled by target: it's
@@ -440,13 +551,51 @@ echo "[7/7] Initializing user configuration..."
 mkdir -p "$CONFIG_DIR"
 chown "$REAL_USER" "$CONFIG_DIR"
 
-# Dev mode marker
+# Dev mode marker. An update never changes the install's mode: --update-apply
+# leaves the marker exactly as it found it.
 if [ "$MODE" = "dev" ]; then
     echo "$REPO_DIR" > "$CONFIG_DIR/.dev"
     chown "$REAL_USER" "$CONFIG_DIR/.dev"
     echo "  [Dev] crystal-shell-ui will run from: $REPO_DIR"
-else
+elif [ "$MODE" = "system" ]; then
     rm -f "$CONFIG_DIR/.dev"
+fi
+
+# ── Source registration (what crystal-shell-update pulls) ────────────────────
+# System installs leave a managed canonical copy at $SRC_CANON so the directory
+# the user downloaded becomes disposable; dev installs register the developer's
+# own clone. Updates (--update-apply) never re-register.
+if [ "$MODE" = "dev" ]; then
+    echo "$REPO_DIR" > "$SOURCE_FILE"
+    chown "$REAL_USER" "$SOURCE_FILE"
+elif [ "$MODE" = "system" ]; then
+    if [ "$REPO_DIR" = "$SRC_CANON" ]; then
+        :  # already running from the canonical copy
+    elif [ -d "$SRC_CANON/.git" ]; then
+        echo "  [Source] Canonical copy already present: $SRC_CANON"
+    elif [ -d "$REPO_DIR/.git" ]; then
+        run_user mkdir -p "$(dirname "$SRC_CANON")"
+        run_user git clone --quiet "$REPO_DIR" "$SRC_CANON"
+        # The local clone's origin points at $REPO_DIR (disposable) — repoint it
+        # at GitHub so future updates pull the real upstream.
+        run_user git -C "$SRC_CANON" remote set-url origin "$REPO_URL"
+        echo "  [Source] Canonical copy created: $SRC_CANON"
+    else
+        # Tarball/zip download without git metadata: try a fresh clone (needs
+        # network). Non-fatal — without it, updates just aren't available yet.
+        run_user mkdir -p "$(dirname "$SRC_CANON")"
+        if run_user git clone --quiet "$REPO_URL" "$SRC_CANON" 2>/dev/null; then
+            echo "  [Source] Canonical copy cloned from GitHub: $SRC_CANON"
+        else
+            echo "  [WARN] Could not create the canonical source copy (no git metadata,"
+            echo "         clone failed). crystal-shell-update will not work until you"
+            echo "         re-run ./install.sh from a git clone."
+        fi
+    fi
+    if [ -d "$SRC_CANON/.git" ]; then
+        echo "$SRC_CANON" > "$SOURCE_FILE"
+        chown "$REAL_USER" "$SOURCE_FILE"
+    fi
 fi
 
 # Default JSON configs (never overwrite user's existing files)
@@ -550,7 +699,7 @@ mkdir -p "${REAL_HOME}/.config/hypr"
 
 for daemon in hypridle; do
     LINK="${REAL_HOME}/.config/hypr/${daemon}.conf"
-    if [ "$MODE" = "dev" ]; then
+    if [ "$DEV_LIKE" = "yes" ]; then
         TARGET="$REPO_DIR/config/hypr/${daemon}.conf"
     else
         TARGET="$CONFIG_DIR/${daemon}.conf"
@@ -709,10 +858,26 @@ echo "  Enabling power-profiles-daemon..."
 sudo systemctl enable --now power-profiles-daemon 2>/dev/null || true
 
 echo ""
-echo "  ✓ Installation complete ($MODE mode)"
-if [ "$MODE" = "dev" ]; then
-    echo "  Dev: crystal-shell-ui will run from source at $REPO_DIR"
-    echo "  To exit dev mode: rm $CONFIG_DIR/.dev && install.sh"
+if [ "$MODE" = "update-apply" ]; then
+    NEW_VERSION="$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo "?")"
+    if [ "$OLD_VERSION" = "$NEW_VERSION" ]; then
+        echo "  ✓ Update complete (version $NEW_VERSION)"
+    else
+        echo "  ✓ Update complete: $OLD_VERSION → $NEW_VERSION"
+    fi
+    # Reload the running shell so the new bundle takes effect now; greeter and
+    # lockscreen pick theirs up on next use. Harmless if the session isn't ours.
+    if run_user systemctl --user is-active --quiet crystal-shell.service 2>/dev/null; then
+        run_user systemctl --user restart crystal-shell.service || true
+        echo "  Shell reloaded."
+    fi
+else
+    echo "  ✓ Installation complete ($MODE mode)"
+    if [ "$MODE" = "dev" ]; then
+        echo "  Dev: crystal-shell-ui will run from source at $REPO_DIR"
+        echo "  To exit dev mode: rm $CONFIG_DIR/.dev && install.sh"
+    fi
+    echo "  Select 'Crystal Shell' at the login screen."
+    echo "  Update later with: crystal-shell-update"
 fi
-echo "  Select 'Crystal Shell' at the login screen."
 echo ""
