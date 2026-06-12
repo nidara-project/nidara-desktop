@@ -17,6 +17,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import { DOCK_CONSTANTS, syncConstants, springStep, slideSpringStep } from "./DockPhysics"
 import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
+import trashService from "../../core/TrashService"
 import { DockItem, Separator, dismissActiveDockMenu } from "./DockItem"
 import {
     dragBus, pointerBus, savePinned, pinnedState, dockSettings, onDockSettingsChanged,
@@ -94,14 +95,10 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
     const getLaunch = (lid: string) => {
         return () => {
-            const info = appService.getAppInfo(lid)
-            let command: string
-            if (info) {
-                command = (info.get_commandline() || lid).replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
-            } else {
-                command = `gtk-launch ${GLib.shell_quote(lid)}`
-            }
-            execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && ${command}`]).catch(print)
+            // Origin-aware command (gtk-launch / flatpak run) — see AppService.getLaunchCommand.
+            const cmd = appService.getLaunchCommand(lid)
+            execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
+                .catch(() => { try { appService.getAppInfo(lid)?.launch?.([], null) } catch (_) {} })
         }
     }
 
@@ -746,7 +743,11 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
             const trash = {
                 name: t("dock.special.trash.name"),
-                icon_name: ["user-trash", "trashcan-empty", "trash"],
+                // Initial chain only — once created, DockItem keeps the icon in sync
+                // with trash contents via TrashService (full ↔ empty, in place).
+                icon_name: trashService.isEmpty
+                    ? ["user-trash", "trashcan-empty", "trash"]
+                    : ["user-trash-full", "trashcan-full", "user-trash", "trash"],
                 launch: () => execAsync("nautilus trash:///").catch(print)
             }
             configs.push({

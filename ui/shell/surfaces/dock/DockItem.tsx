@@ -9,6 +9,7 @@ import GObject from "gi://GObject"
 import Gio from "gi://Gio"
 import Cairo from "gi://cairo"
 import appService from "../../core/AppService"
+import trashService from "../../core/TrashService"
 import { DOCK_CONSTANTS } from "./DockPhysics"
 import hs from "../../core/HyprlandState"
 
@@ -352,6 +353,34 @@ export function DockItem(
     child.set_valign(Gtk.Align.CENTER)
     child.set_has_tooltip(false)
     child.set_size_request(DOCK_CONSTANTS.ICON_SIZE, DOCK_CONSTANTS.ICON_SIZE)
+
+    // Trash icon tracks trash contents (full ↔ empty) in place: swap the pixbuf the
+    // draw func reads from its closure and queue_draw — no widget rebuild, no flash.
+    let unsubTrash: (() => void) | null = null
+    if (appId === "trash" || appId === "special:trash") {
+        const applyTrashIcon = () => {
+            ;(appItem as any).icon_name = trashService.isEmpty
+                ? ["user-trash", "trashcan-empty", "trash"]
+                : ["user-trash-full", "trashcan-full", "user-trash", "trash"]
+            const r = getIcon()
+            try {
+                let path = r.path || null
+                if (!path && r.name) {
+                    const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default()!)
+                    const info = theme.lookup_icon(r.name, [], sourceSize, 1, Gtk.TextDirection.NONE, Gtk.IconLookupFlags.FORCE_REGULAR)
+                    path = info?.get_file()?.get_path() || null
+                }
+                if (path) {
+                    const next = (GdkPixbuf as any).Pixbuf.new_from_file_at_scale(path, sourceSize, sourceSize, true)
+                    if (next) pixbuf = next
+                }
+            } catch (e) { console.error("[Dock] trash icon swap failed:", e) }
+            if (child instanceof Gtk.Image) (child as Gtk.Image).set_from_icon_name(r.name || "user-trash")
+            else child.queue_draw()
+        }
+        applyTrashIcon() // initial state (trash may already hold items at boot)
+        unsubTrash = trashService.subscribe(applyTrashIcon)
+    }
 
     const state = {
         targetScale: 1.0, currentScale: 1.0, velocityScale: 0,
@@ -725,12 +754,12 @@ export function DockItem(
                 } else if (appId === "crystal-shell-settings") {
                     shellActions.toggleSettings?.()
                 } else {
-                    // gtk-launch DOES inherit the launcher's CWD (verified) — without the
-                    // cd, the app opens in the AGS process's dir (ui/shell) instead of
-                    // $HOME. Reset it explicitly, mirroring DockCore.getLaunch. `exec` so
-                    // gtk-launch replaces the shell (clean process tree under uwsm's scope).
-                    execAsync(["uwsm", "app", "--", "sh", "-c",
-                        `cd "$HOME" && exec gtk-launch ${GLib.shell_quote(appId)}`])
+                    // Origin-aware command (gtk-launch / flatpak run) — see AppService.
+                    // getLaunchCommand. cd $HOME because children inherit the launcher's
+                    // CWD (verified) and would open in the AGS process's dir (ui/shell).
+                    // `exec` so the command replaces the shell (clean tree under uwsm).
+                    const cmd = appService.getLaunchCommand(appId)
+                    execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
                         .catch(() => { try { appItem.launch() } catch (_) {} })
                 }
             } catch (fallbackError) {
@@ -789,6 +818,7 @@ export function DockItem(
         if (bounceTimerId !== null) { GLib.source_remove(bounceTimerId); bounceTimerId = null; state.isBouncing = false }
         if (tooltipTimeout !== null) { GLib.source_remove(tooltipTimeout); tooltipTimeout = null }
         if (longPressTimer !== null) { GLib.source_remove(longPressTimer); longPressTimer = null }
+        if (unsubTrash) { unsubTrash(); unsubTrash = null }
     })
     sync()
 

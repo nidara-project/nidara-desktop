@@ -88,6 +88,12 @@ class AppService {
     }
 
     private patchXdgDataDirs() {
+        // NOTE: this CANNOT make Gio.AppInfo in THIS process see Flatpak/Snap apps —
+        // GLib caches the data dirs on first use (GTK init runs before us), verified
+        // 2026-06-12. The real fix lives in bin/crystal-shell-ui, which exports
+        // XDG_DATA_DIRS before gjs starts. This patch still matters as a safety net
+        // for the env *inherited by launched children* (gtk-launch under `uwsm app`)
+        // when the shell was started some other way (e.g. `ags run` by hand).
         const home = GLib.get_home_dir()
         // The "share" roots whose applications/ and icons/ subdirs Flatpak/Snap export to
         const extraShares = [
@@ -524,6 +530,29 @@ class AppService {
         }
 
         return execMatch || fallbackMatch
+    }
+
+    /**
+     * Shell command that launches an app reliably regardless of install origin.
+     * Single source for every launch path (dock click, dock menu, app grid).
+     *
+     * - Flatpak (desktop entry has X-Flatpak): `flatpak run <id>`. gtk-launch is a
+     *   trap here — these entries are DBusActivatable and the session bus only
+     *   indexes flatpak's exported D-Bus .service files if it started with the
+     *   flatpak dirs in XDG_DATA_DIRS (false right after installing flatpak, and
+     *   login-order-fragile); the activation request then dies silently (exit 0,
+     *   no window). Verified live 2026-06-12.
+     * - Everything else: `gtk-launch <desktop-id>` (Gio handles field codes,
+     *   Terminal=, etc.). Never parse Exec= by hand.
+     */
+    getLaunchCommand(lid: string): string {
+        const info = this.getAppInfo(lid)
+        try {
+            const fpId = info?.get_string?.("X-Flatpak")
+            if (fpId) return `flatpak run ${GLib.shell_quote(fpId)}`
+        } catch (e) { /* not a keyfile-backed entry — fall through */ }
+        const entry = info?.get_id?.() || lid
+        return `gtk-launch ${GLib.shell_quote(entry)}`
     }
 
     /**

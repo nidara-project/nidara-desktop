@@ -23,6 +23,17 @@ export GDK_BACKEND=wayland
 export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
+# Flatpak/Snap app visibility. This MUST happen here, before gjs starts: GLib
+# caches the data dirs on first use (GTK init), so patching the env from inside
+# the shell (AppService.patchXdgDataDirs) is too late for Gio.AppInfo discovery.
+# Missing dirs are harmless — gio skips them — so add unconditionally; installing
+# flatpak later only needs a shell reload (Super+Shift+R), not an edit here.
+XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+for share in /var/lib/flatpak/exports/share "$HOME/.local/share/flatpak/exports/share" /var/lib/snapd/desktop; do
+    case ":$XDG_DATA_DIRS:" in *":$share:"*) ;; *) XDG_DATA_DIRS="$XDG_DATA_DIRS:$share" ;; esac
+done
+export XDG_DATA_DIRS
+
 # ── Dev mode ─────────────────────────────────────────────────────────────────
 # If ~/.config/crystal-shell/.dev exists and contains a source path, run from source.
 # This file is created by: install.sh --dev

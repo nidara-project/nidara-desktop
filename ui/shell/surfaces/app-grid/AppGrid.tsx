@@ -423,11 +423,12 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
                 return
             }
             try {
-                const realInfo = appService.getAppInfo(id || app.executable)
-                const rawCommand = realInfo?.get_commandline() || app.executable || ""
-                const command = rawCommand.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
-                if (!command) { app.launch(); return }
-                execAsync(["uwsm", "app", "--", "sh", "-c", command]).catch(() => app.launch())
+                // Origin-aware command (gtk-launch / flatpak run) — see AppService.
+                // getLaunchCommand. cd $HOME so the app doesn't inherit the shell
+                // process's CWD (ui/shell).
+                const cmd = appService.getLaunchCommand(id || (app as any).entry || app.executable)
+                execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
+                    .catch(() => app.launch())
             } catch (e) {
                 app.launch()
             }
