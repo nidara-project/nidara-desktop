@@ -144,11 +144,17 @@ callback ever appended it (boot-time registration churn). Fix proposed upstream:
 past it, the once-per-boot CRITICAL remains expected noise. Don't chase this in shell code.
 The lazy tray-menu in `surfaces/bar/Tray.tsx` fixed a *different* (menu-parsing) instance —
 this one is inside the library itself.
+2026-06-12: the maintainer (kotontrion) pushed a more robust fix onto the PR branch
+(`dad56a84`, pending-items pattern) — verified A/B/A on the reproducing machine (stock =
+1 CRITICAL/boot, patched = 0/8 boots, stock again = back). Awaiting merge.
 **Testing a patched Astal lib gotcha:** the installed typelib embeds the **absolute** `.so`
 path, so `LD_LIBRARY_PATH` alone won't load your build. Point `GI_TYPELIB_PATH` at the
 build dir's typelib — and if that one embeds a prefix you can't write to (`/usr/local/lib`),
 binary-patch a copy with a same-length `/tmp` path (python `bytes.replace`, assert equal
-lengths) and place the patched `.so` there.
+lengths) and place the patched `.so` there. **AND**: `/usr/bin/crystal-shell-ui` PREPENDS
+`/usr/lib:/usr/local/lib` to `GI_TYPELIB_PATH`, so a systemd `Environment=` drop-in never
+wins — override `ExecStart` in the drop-in (replicate the dev launch with your dir FIRST),
+and verify the loaded `.so` in `/proc/<gjs pid>/maps` before trusting any result.
 
 ### 11. Sometimes the main thread wakes at ~monitor refresh (~137/s) — UNREPRODUCED Heisenbug
 Idle baseline is **0 wakeups/s** (genuinely event-driven — keep it that way; measure with
