@@ -52,7 +52,7 @@ done
 #
 # MAINTAINERS: bump these and re-test a clean install before tagging a release.
 # Astal has no git tags, so it is pinned by commit SHA.
-ASTAL_REF="d8738f97ed01f4d87f668df35fa7bbad795c9e49"   # github.com/aylur/astal @ main
+ASTAL_REF="948805f6e8cf7f8c08eba06ab1db1eef0e75e3a0"   # github.com/aylur/astal @ main (includes tray unregister fix, PR #451)
 AGS_REF="v3.1.2"                                        # github.com/aylur/ags release tag
 APPMENU_REF="aea4ea398b7c75494f23f5e5bdb4f495d615059f"  # gitlab vala-panel-appmenu @ master
 

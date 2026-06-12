@@ -132,30 +132,6 @@ noise — harmless, not fixable from our side, don't burn time on it. It also me
 Adwaita stylesheet IS loaded in-process, which is why the anti-Adwaita resets (#2) are
 still needed despite the Adwaita removal.
 
-### 10. Known log noise: one boot-time `g_list_store_remove` CRITICAL (upstream astal-tray)
-`GLib-GIO-CRITICAL … g_list_store_remove: assertion '!g_sequence_iter_is_end (it)'` fires
-once ~0.5 s after every shell boot. **It is NOT our code** — captured backtrace (2026-06-09,
-via the recipe in `dev-workflow.md`) lands in `libastal-tray.so`: `Tray.on_item_unregister`
-in Astal's `lib/tray/src/tray.vala` ignores `_items_store.find()`'s boolean and calls
-`remove(pos)` with an undefined `pos` when a tray item unregisters before its `ready`
-callback ever appended it (boot-time registration churn). Fix proposed upstream:
-**https://github.com/Aylur/astal/pull/451** (2026-06-09; verified locally — patched lib =
-0 CRITICALs across boots). Until it merges and the `ASTAL_REF` pin in `install.sh` advances
-past it, the once-per-boot CRITICAL remains expected noise. Don't chase this in shell code.
-The lazy tray-menu in `surfaces/bar/Tray.tsx` fixed a *different* (menu-parsing) instance —
-this one is inside the library itself.
-2026-06-12: the maintainer (kotontrion) pushed a more robust fix onto the PR branch
-(`dad56a84`, pending-items pattern) — verified A/B/A on the reproducing machine (stock =
-1 CRITICAL/boot, patched = 0/8 boots, stock again = back). Awaiting merge.
-**Testing a patched Astal lib gotcha:** the installed typelib embeds the **absolute** `.so`
-path, so `LD_LIBRARY_PATH` alone won't load your build. Point `GI_TYPELIB_PATH` at the
-build dir's typelib — and if that one embeds a prefix you can't write to (`/usr/local/lib`),
-binary-patch a copy with a same-length `/tmp` path (python `bytes.replace`, assert equal
-lengths) and place the patched `.so` there. **AND**: `/usr/bin/crystal-shell-ui` PREPENDS
-`/usr/lib:/usr/local/lib` to `GI_TYPELIB_PATH`, so a systemd `Environment=` drop-in never
-wins — override `ExecStart` in the drop-in (replicate the dev launch with your dir FIRST),
-and verify the loaded `.so` in `/proc/<gjs pid>/maps` before trusting any result.
-
 ### 11. Sometimes the main thread wakes at ~monitor refresh (~137/s) — UNREPRODUCED Heisenbug
 Idle baseline is **0 wakeups/s** (genuinely event-driven — keep it that way; measure with
 `awk '/voluntary/{s+=$2} END{print s}' /proc/$PID/task/$PID/status` deltas, or
@@ -222,6 +198,20 @@ opportunistically if already editing those files; not worth a standalone pass.
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
+- **(was #10) Boot-time `g_list_store_remove` CRITICAL (astal-tray)** fixed upstream:
+  Aylur/astal#451 merged 2026-06-12 (kotontrion's pending-items pattern, verified A/B/A on
+  the reproducing machine: stock = 1 CRITICAL/boot, patched = 0/8 boots) and `ASTAL_REF` now
+  pins past it. A boot CRITICAL from `libastal-tray.so` reappearing means a stale Astal
+  build — re-run `install.sh` so the pin rebuild kicks in; don't chase it in shell code.
+  **Testing a patched Astal lib gotcha (reusable):** the installed typelib embeds the
+  **absolute** `.so` path, so `LD_LIBRARY_PATH` alone won't load your build. Point
+  `GI_TYPELIB_PATH` at the build dir's typelib — and if that one embeds a prefix you can't
+  write to (`/usr/local/lib`), binary-patch a copy with a same-length `/tmp` path (python
+  `bytes.replace`, assert equal lengths) and place the patched `.so` there. **AND**:
+  `/usr/bin/crystal-shell-ui` PREPENDS `/usr/lib:/usr/local/lib` to `GI_TYPELIB_PATH`, so a
+  systemd `Environment=` drop-in never wins — override `ExecStart` in the drop-in (replicate
+  the dev launch with your dir FIRST), and verify the loaded `.so` in
+  `/proc/<gjs pid>/maps` before trusting any result.
 - **(was #15) `ui/shell/widget/` rename** done 2026-06-11: `surfaces/` (bar, dock,
   control-center, settings, overview, prism, app-grid, about), `widgets/` (auto-registered
   atomics) and `common/` (shared pieces) are now top-level siblings of `core/`/`styles/`.
