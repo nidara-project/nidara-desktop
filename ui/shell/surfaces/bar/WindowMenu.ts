@@ -1,5 +1,4 @@
 import { Gtk } from "ags/gtk4"
-import AstalHyprland from "gi://AstalHyprland"
 import hs from "../../core/HyprlandState"
 import { t } from "../../core/i18n"
 import { getWordmark } from "../../utils"
@@ -26,7 +25,7 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
     if (client) {
         const addr = client.address
 
-        root.append(menuHeader(getWordmark(client, AstalHyprland.get_default()) || client.title || ""))
+        root.append(menuHeader(getWordmark(client, hs.focusedWorkspace) || client.title || ""))
 
         // The window section fills when the authoritative state read lands (~ms).
         // NEVER build checks from AstalHyprland.Client props: floating/fullscreen
@@ -37,13 +36,12 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
         // Group section (v2) — appended into the slot after the move-to strip,
         // filled by the SAME authoritative read (`grouped` lives in clients -j).
         const groupSection = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
-        const hypr = AstalHyprland.get_default()
         const norm = (a: string) => (a.startsWith("0x") ? a : "0x" + a)
         // Astal client lookup is for IDENTITY only (title/class for the tab
-        // label) — never for window state.
+        // label) — never for window state. Read from HyprlandState's cache.
         const labelFor = (memberAddr: string) => {
-            const c = hypr.get_clients().find(c => norm(c.address) === memberAddr)
-            return c ? (getWordmark(c, hypr) || c.title || c.class) : memberAddr
+            const c = hs.clients.find(c => norm(c.address) === memberAddr)
+            return c ? (getWordmark(c, hs.focusedWorkspace) || c.title || c.class) : memberAddr
         }
         hs.getClientJson(addr).then(json => {
             const floating = json ? !!json.floating : !!client.floating

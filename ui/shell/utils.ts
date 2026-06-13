@@ -53,9 +53,9 @@ export function calculateIconSize(
  * Wordmark Engine 🍎
  * Pretty names and sanitization for a premium look.
  */
-export function getWordmark(client: AstalHyprland.Client | null, hyprland: AstalHyprland.Hyprland): string {
+export function getWordmark(client: AstalHyprland.Client | null, focusedWorkspace: AstalHyprland.Workspace | null): string {
     if (!client) {
-        const ws = hyprland.focused_workspace
+        const ws = focusedWorkspace
         if (!ws) return "Workspace"
         const wsName: Record<string, string> = { gamespace: "Gaming" }
         return wsName[ws.name] ?? `Workspace ${ws.id}`

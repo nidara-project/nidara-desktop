@@ -311,7 +311,6 @@ export default {
 
     // Display
     "settings.display.error.no-monitors": "No monitors detected.",
-    "settings.display.error.no-hyprland": "Hyprland service not available",
     "settings.display.title": "Display",
     "settings.display.scale.desc": "Display scale factor",
     "settings.display.model.desc": "Monitor identifier",

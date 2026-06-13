@@ -285,7 +285,6 @@ export default {
     "settings.bluetooth.tooltip.forget": "Olvidar dispositivo",
     "settings.widgets.tooltip.no-space": "Sin espacio suficiente — quita un widget primero",
     "settings.display.error.no-monitors": "No se detectaron monitores.",
-    "settings.display.error.no-hyprland": "Servicio Hyprland no disponible",
     "settings.display.title": "Pantalla",
     "settings.display.scale.desc": "Factor de escala de la pantalla",
     "settings.display.model.desc": "Identificador del monitor",

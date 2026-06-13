@@ -34,7 +34,7 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): Gtk.Widget 
 
     const sync = () => {
       const client = hs.focusedClient
-      const label = getWordmark(client, AstalHyprland.get_default())
+      const label = getWordmark(client, hs.focusedWorkspace)
       if (label && label !== appName.label) appName.label = label
 
       // Only rewire notify::title when the focused client actually changed

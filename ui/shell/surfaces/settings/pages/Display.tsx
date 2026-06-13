@@ -1,5 +1,4 @@
 import { Gtk } from "ags/gtk4"
-import AstalHyprland from "gi://AstalHyprland"
 import { listGroup, createRow, pageBox, staticLabel } from "../SettingsHelpers"
 import { showCrystalAlert } from "../../../../lib/crystal-ui"
 import hs from "../../../core/HyprlandState"
@@ -273,7 +272,6 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
 
 export default function DisplayPage() {
     const page = pageBox("display-page")
-    const hypr = AstalHyprland.get_default()
 
     const placeholder = (label: string) =>
         page.append(new Gtk.Label({ label, css_classes: ["settings-placeholder"], margin_top: 40 }))
@@ -289,8 +287,9 @@ export default function DisplayPage() {
 
     const render = () => {
         clearPage()
-        if (!hypr) { placeholder(t("settings.display.error.no-hyprland")); return }
-        const monitors: any[] = hypr.get_monitors() ?? []
+        // Monitors come from HyprlandState's cache (the facade), not a direct
+        // AstalHyprland read. Empty also covers Hyprland being unavailable.
+        const monitors: any[] = hs.monitors
         if (monitors.length === 0) { placeholder(t("settings.display.error.no-monitors")); return }
 
         monitorConfig.init(monitors)
@@ -309,7 +308,7 @@ export default function DisplayPage() {
     // user-driven through these very dropdowns: rebuilding mid-interaction would
     // clobber the in-flight revert dialog's closure state.
     const topology = (): string =>
-        hypr ? (hypr.get_monitors() ?? []).map(m => m.name).sort().join("|") : "::no-hypr"
+        hs.monitors.map(m => m.name).sort().join("|")
 
     let lastTopology = topology()
     render()
