@@ -211,6 +211,27 @@ polish/optimization. If the hover growth ever truly must stop, it needs a struct
 (custom Cairo indicator or non-overlay reserved scrollbar with its own reflow tradeoff), not
 more specificity. Same root as #9 (the Adwaita stylesheet is loaded in-process).
 
+### 16. Settings = normal window: misnamed `toggleSettings` + dead `settings_open` flag
+Surfaced by `queryUI` on 2026-06-13. **Intended model (owner, 2026-06-13): Settings is a
+NORMAL window** — invoking opens/raises it; it closes ONLY via the close action, never by
+re-invoking. So `toggleSettings`'s show-only behaviour (lazy-create + `present()`, no hide
+branch, `app.ts`) is **correct for that model — do NOT "fix" it into a toggle-hide.** The debt
+is the mismatch *around* it:
+- **Misnomer.** The IPC command `toggleSettings` and its `listActions` desc "Show/hide the
+  Settings window" lie — it only shows/raises. Rename to open/raise semantics (and the
+  matching `ShellActions` key) or at least correct the desc, so agents don't expect it to close.
+- **Dead flag.** `status.settings_open` is declared and exposed in `dumpState` as
+  `overlays.settings`, but **no code ever writes it** (verified: only the Status.ts
+  getter/setter and the dumpState read exist) — it's permanently `false`, even while Settings
+  is visible. So `dumpState.overlays.settings` is untrustworthy; `queryUI` shows the real
+  state (a `crystal-settings-window` toplevel present = open). Fix: set it on the present/close
+  paths (or `notify::visible`), or drop it from dumpState.
+- **No IPC close.** Settings hides only via its in-window close button (`set_visible(false)`,
+  `Settings.tsx:405`); there is no IPC to close it. Fine for the normal-window model, but a
+  verification run can't close Settings over IPC — **restart the shell** to reset (Settings is
+  born hidden). Add a close/hide IPC only if the redesign calls for it.
+Owner to review/redesign this surface (flagged 2026-06-13).
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
