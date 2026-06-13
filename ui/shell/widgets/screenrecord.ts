@@ -122,7 +122,9 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
     const audioRow = new Gtk.Box({ spacing: 8 })
     const audioSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER })
     audioSwitch.connect("notify::active", () => { withAudio = audioSwitch.active })
-    const audioLabel = new Gtk.Label({ label: t("widget.screenrecord.audio"), hexpand: true, halign: Gtk.Align.START })
+    // crystal-row-title gives it the mode-aware text colour (a plain Gtk.Label
+    // inherits an unreliable default that rendered white in light mode too).
+    const audioLabel = new Gtk.Label({ label: t("widget.screenrecord.audio"), hexpand: true, halign: Gtk.Align.START, css_classes: ["crystal-row-title"] })
     audioRow.append(audioLabel)
     audioRow.append(audioSwitch)
 

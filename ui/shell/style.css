@@ -20,6 +20,8 @@
   --crystal-surface-hover: rgba(255, 255, 255, 0.12);
   --crystal-surface-active: rgba(255, 255, 255, 0.16);
   --crystal-surface-raised: rgba(255, 255, 255, 0.20); /* workspace dots, more visible elements */
+  /* Accent-tinted persistent selection (FluidCrystal overrides per mode). */
+  --crystal-state-selected: rgba(0, 136, 255, 0.22);
   /* --- Typography ---
      FluidCrystal.ts overrides these at runtime with dark/light-aware values.
      (#ffffff for dark, #000000 for light). These are just startup fallbacks. */
@@ -61,6 +63,11 @@
   --crystal-material-regular: rgba(36, 36, 36, 0.45);
   --crystal-material-thick: rgba(36, 36, 36, 0.65);
   --crystal-material-chrome: rgba(36, 36, 36, 0.85);
+  /* --- Popover surfaces ---
+     FluidCrystal floors the bg alpha (≥0.38) so compositor blur applies.
+     Fallbacks below are the DARK set. */
+  --crystal-popover-bg: rgba(36, 36, 36, 0.85);
+  --crystal-popover-border: rgba(255, 255, 255, 0.14);
   /* --- Component-specific --- */
   --crystal-thumb: #ffffff;
 }
@@ -560,31 +567,10 @@ switch:hover slider,
   box-shadow: var(--crystal-shadow-md);
 }
 
-/* --- Buttons (Premium Crystal) --- */
-button.crystal-btn {
-  background: var(--crystal-surface);
-  border: 1px solid var(--crystal-border);
-  border-radius: var(--crystal-radius-sm);
-  padding: 6px 16px;
-  font-weight: 600;
-  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-}
-button.crystal-btn:hover {
-  background: var(--crystal-surface-hover);
-  border-color: var(--crystal-border);
-}
-button.crystal-btn:active {
-  background: var(--crystal-surface-active);
-}
-button.crystal-btn.accent {
-  background: var(--crystal-accent);
-  color: var(--crystal-accent-fg);
-  border: none;
-}
-button.crystal-btn.accent:hover {
-  background: rgba(var(--crystal-accent-rgb), 0.85);
-}
-
+/* The crystal button system (single source of truth) lives further down under
+   "CRYSTAL BUTTON SYSTEM" — button.crystal-btn + --primary/--danger/--ghost/--pill.
+   The old "Premium Crystal" block with a `.accent` modifier was superseded by it
+   (the `.accent` modifier was unused) and has been removed. */
 /* --- CrystalPopover --- */
 /* Specificity (0,1,2) matches libadwaita's popover.background > contents,
    load priority 810 > ~600 ensures our rules win the cascade.
@@ -1137,14 +1123,7 @@ window#crystal-bar-zone {
   color: var(--crystal-text);
 }
 
-.bar-left {
-  /* margin-left: 8px; REMOVED - Handled in TSX */
-}
-
-.bar-right {
-  /* margin-right: 8px; REMOVED - Handled in TSX */
-}
-
+/* (.bar-left / .bar-right side margins are handled in TSX, not CSS.) */
 /* --- Global Bar Button Reset --- */
 .bar-left button,
 .bar-center button,
@@ -1308,7 +1287,7 @@ window#crystal-bar-zone {
 }
 
 .bar-rec-indicator {
-  border-radius: 999px;
+  border-radius: var(--crystal-radius-pill);
   background: var(--crystal-danger);
   animation: rec-pulse 1.4s ease-in-out infinite;
 }
@@ -1512,8 +1491,8 @@ window#crystal-bar-zone {
 
 .cc-media-play-btn {
   background-color: var(--crystal-accent);
-  border-radius: 999px;
-  color: white;
+  border-radius: var(--crystal-radius-pill);
+  color: var(--crystal-accent-fg);
 }
 
 .cc-media-time {
@@ -1537,14 +1516,14 @@ window#crystal-bar-zone {
   /* 1x1 Round Toggles */
 }
 .cc-island .cc-atomic-round-btn {
-  border-radius: 9999px;
+  border-radius: var(--crystal-radius-pill);
   color: var(--crystal-text);
 }
 
 /* 48x48 Circular Badge inside capsules (no override needed, is a box not a button) */
 .cc-atomic-icon-circle-bg {
   background-color: var(--crystal-surface);
-  border-radius: 9999px;
+  border-radius: var(--crystal-radius-pill);
   color: var(--crystal-text);
 }
 
@@ -1639,7 +1618,7 @@ window#crystal-bar-zone {
   /* Same fill as the count badge (nc-badge-header): simple, unified, no special tokens. */
   background: var(--crystal-surface-raised);
   border: none;
-  border-radius: 9999px;
+  border-radius: var(--crystal-radius-pill);
   transition: background-color 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .crystal-circle-btn image {
@@ -1659,8 +1638,8 @@ window#crystal-bar-zone {
 }
 
 .cc-slot-placeholder {
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 9999px;
+  background: var(--crystal-surface-strong);
+  border-radius: var(--crystal-radius-pill);
 }
 
 .cc-drag-source {
@@ -2051,24 +2030,6 @@ window#crystal-bar-zone {
   font-weight: 500;
   min-height: 24px;
   padding: 2px 8px;
-}
-.cc-detail-panel button.settings-icon-btn {
-  background: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  border-radius: var(--crystal-radius-sm);
-  padding: 4px;
-  color: var(--crystal-text-dim);
-  min-width: 28px;
-  min-height: 28px;
-}
-.cc-detail-panel button.settings-icon-btn:hover {
-  background: var(--crystal-accent-10);
-  color: var(--crystal-accent);
-}
-.cc-detail-panel button.settings-icon-btn:active {
-  background: rgba(var(--crystal-accent-rgb), 0.18);
 }
 .cc-detail-panel .linked > button {
   background: var(--crystal-surface-back);

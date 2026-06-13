@@ -247,32 +247,10 @@ switch,
     }
 }
 
-/* --- Buttons (Premium Crystal) --- */
-button.crystal-btn {
-    background: var(--crystal-surface);
-    border: 1px solid var(--crystal-border);
-    border-radius: $crystal-radius-sm;
-    padding: 6px 16px;
-    font-weight: $fw-semibold;
-    transition: background-color 0.25s #{$ease}, border-color 0.25s #{$ease};
-
-    &:hover {
-        background: var(--crystal-surface-hover);
-        border-color: var(--crystal-border);
-    }
-
-    &:active {
-        background: var(--crystal-surface-active);
-    }
-
-    &.accent {
-        background: $crystal-accent;
-        color: var(--crystal-accent-fg);
-        border: none;
-        
-        &:hover { background: rgba(var(--crystal-accent-rgb), 0.85); }
-    }
-}
+/* The crystal button system (single source of truth) lives further down under
+   "CRYSTAL BUTTON SYSTEM" — button.crystal-btn + --primary/--danger/--ghost/--pill.
+   The old "Premium Crystal" block with a `.accent` modifier was superseded by it
+   (the `.accent` modifier was unused) and has been removed. */
 
 /* --- CrystalPopover --- */
 /* Specificity (0,1,2) matches libadwaita's popover.background > contents,

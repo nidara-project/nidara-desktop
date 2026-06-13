@@ -58,13 +58,7 @@ window#crystal-bar-zone {
     }
 }
 
-.bar-left {
-    /* margin-left: 8px; REMOVED - Handled in TSX */
-}
-
-.bar-right {
-    /* margin-right: 8px; REMOVED - Handled in TSX */
-}
+/* (.bar-left / .bar-right side margins are handled in TSX, not CSS.) */
 
 /* --- Global Bar Button Reset --- */
 .bar-left button,
@@ -207,7 +201,7 @@ window#crystal-bar-zone {
 }
 
 .bar-rec-indicator {
-    border-radius: 999px;
+    border-radius: var(--crystal-radius-pill);
     background: var(--crystal-danger);
     animation: rec-pulse 1.4s ease-in-out infinite;
 }

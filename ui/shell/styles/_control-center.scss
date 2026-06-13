@@ -52,8 +52,8 @@
 
 .cc-media-play-btn {
     background-color: var(--crystal-accent);
-    border-radius: 999px;
-    color: white;
+    border-radius: var(--crystal-radius-pill);
+    color: var(--crystal-accent-fg);
 }
 
 .cc-media-time {
@@ -78,7 +78,7 @@
 
     /* 1x1 Round Toggles */
     .cc-atomic-round-btn {
-        border-radius: 9999px;
+        border-radius: var(--crystal-radius-pill);
         color: var(--crystal-text);
 
     }
@@ -87,7 +87,7 @@
 /* 48x48 Circular Badge inside capsules (no override needed, is a box not a button) */
 .cc-atomic-icon-circle-bg {
     background-color: var(--crystal-surface);
-    border-radius: 9999px;
+    border-radius: var(--crystal-radius-pill);
     color: var(--crystal-text);
 }
 
@@ -183,7 +183,7 @@
     /* Same fill as the count badge (nc-badge-header): simple, unified, no special tokens. */
     background: var(--crystal-surface-raised);
     border: none;
-    border-radius: 9999px;
+    border-radius: var(--crystal-radius-pill);
     transition: background-color 0.15s #{$ease};
 
     image { margin: 0; }
@@ -196,8 +196,8 @@
 }
 
 .cc-slot-placeholder {
-    background: rgba(255, 255, 255, 0.25);
-    border-radius: 9999px;
+    background: var(--crystal-surface-strong);
+    border-radius: var(--crystal-radius-pill);
 }
 
 .cc-drag-source {
@@ -556,21 +556,7 @@
         padding: 2px 8px;
     }
 
-    // Icon buttons (mute toggles)
-    button.settings-icon-btn {
-        background: transparent;
-        background-image: none;
-        border: none;
-        box-shadow: none;
-        border-radius: $crystal-radius-sm;
-        padding: 4px;
-        color: var(--crystal-text-dim);
-        min-width: 28px;
-        min-height: 28px;
-
-        &:hover  { background: var(--crystal-accent-10); color: var(--crystal-accent); }
-        &:active { background: rgba(var(--crystal-accent-rgb), 0.18); }
-    }
+    // Mute toggles use the global button.settings-icon-btn (_components.scss).
 
     // Linked mode-selector button groups (screenshot / screenrecord)
     .linked {

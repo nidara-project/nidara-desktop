@@ -22,6 +22,8 @@
     --crystal-surface-hover: rgba(255, 255, 255, 0.12);
     --crystal-surface-active: rgba(255, 255, 255, 0.16);
     --crystal-surface-raised: rgba(255, 255, 255, 0.20); /* workspace dots, more visible elements */
+    /* Accent-tinted persistent selection (FluidCrystal overrides per mode). */
+    --crystal-state-selected: rgba(0, 136, 255, 0.22);
 
     /* --- Typography ---
        FluidCrystal.ts overrides these at runtime with dark/light-aware values.
@@ -68,6 +70,12 @@
     --crystal-material-regular: rgba(36, 36, 36, 0.45);
     --crystal-material-thick: rgba(36, 36, 36, 0.65);
     --crystal-material-chrome: rgba(36, 36, 36, 0.85);
+
+    /* --- Popover surfaces ---
+       FluidCrystal floors the bg alpha (≥0.38) so compositor blur applies.
+       Fallbacks below are the DARK set. */
+    --crystal-popover-bg: rgba(36, 36, 36, 0.85);
+    --crystal-popover-border: rgba(255, 255, 255, 0.14);
 
     /* --- Component-specific --- */
     --crystal-thumb: #ffffff;
