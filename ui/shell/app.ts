@@ -102,7 +102,11 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: () => status.togglePrism(),
   },
   toggleAppGrid: { desc: "Toggle the fullscreen app grid", run: () => ipc.toggleAppGrid?.() },
-  toggleSettings: { desc: "Open/raise the Settings window (a normal window — it closes via its own close button, not by re-invoking)", run: () => ipc.toggleSettings?.() },
+  openSettings: {
+    desc: "Open/raise the Settings window (a normal window — it closes via its own close button, not by re-invoking)",
+    aliases: ["toggleSettings"],
+    run: () => ipc.openSettings?.(),
+  },
   settingsPage: {
     desc: "Open the Settings window on a specific page (e.g. `settingsPage bluetooth`)",
     run: args => ipc.openSettingsPage?.(args[0] ?? ""),
@@ -336,7 +340,9 @@ app.start({
         if (w.name === "crystal-dock") try { (w as any).toggleAppGridPanel?.() } catch (e) { console.error(e) }
       })
     }
-    const toggleSettings = () => {
+    // Open/raise Settings — a normal window (NOT a toggle: re-invoking just
+    // raises it; it closes via its own close button). IPC alias: toggleSettings.
+    const openSettings = () => {
       // Lazy init on first open
       if (settingsWindows.length === 0) {
         const display = Gdk.Display.get_default()
@@ -354,7 +360,7 @@ app.start({
     }
     const openSettingsPage = (id: string): string => {
       if (!id) return "usage: settingsPage <pageId> (e.g. bluetooth, network, appearance)"
-      if (settingsWindows.length === 0) toggleSettings()   // lazy-create + present
+      if (settingsWindows.length === 0) openSettings()   // lazy-create + present
       else settingsWindows.forEach(s => { try { s.present() } catch (e) { console.error(e) } })
       let found = false
       settingsWindows.forEach(s => {
@@ -398,7 +404,7 @@ app.start({
 
     // Register IPC handlers (used by requestHandler)
     ipc.toggleAppGrid = toggleAppGrid
-    ipc.toggleSettings = toggleSettings
+    ipc.openSettings = openSettings
     ipc.openSettingsPage = openSettingsPage as (...args: string[]) => string
     ipc.toggleOverview = toggleOverview
     ipc.toggleGameOverlay = toggleGameOverlay
@@ -407,7 +413,7 @@ app.start({
 
     // Typed shared registry used by Dock, DockItem, Bar, AppGrid widgets
     shellActions.toggleAppGrid = toggleAppGrid
-    shellActions.toggleSettings = toggleSettings
+    shellActions.openSettings = openSettings
     shellActions.openSettingsPage = openSettingsPage
     shellActions.toggleOverview = toggleOverview
     shellActions.toggleGameOverlay = toggleGameOverlay

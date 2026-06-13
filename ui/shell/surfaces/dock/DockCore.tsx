@@ -652,7 +652,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                         appItem.icon_name = originalId.replace(/-default$/i, "-Default")
                     }
                     if (lid === "crystal-shell-settings") {
-                        appItem.launch = () => { shellActions.toggleSettings?.() }
+                        appItem.launch = () => { shellActions.openSettings?.() }
                     } else {
                         appItem.launch = getLaunch(lid)
                     }
@@ -678,7 +678,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                         icon = icon.replace(/-default$/i, "-Default")
                     }
                     const ghostLaunch = lid === "crystal-shell-settings"
-                        ? () => { shellActions.toggleSettings?.() }
+                        ? () => { shellActions.openSettings?.() }
                         : getLaunch(lid)
                     const ghost = { name: displayName, icon_name: icon, launch: ghostLaunch } as any
                     configs.push({
@@ -719,7 +719,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                 if (!appItem) {
                     appItem = { name: group?.title || group?.displayClass || k, icon_name: lid, launch: getLaunch(lid) } as any
                 }
-                if (lid === "crystal-shell-settings") appItem.launch = () => { shellActions.toggleSettings?.() }
+                if (lid === "crystal-shell-settings") appItem.launch = () => { shellActions.openSettings?.() }
 
                 configs.push({
                     id: lid, width: DOCK_CONSTANTS.APP_SLOT,

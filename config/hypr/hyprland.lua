@@ -206,7 +206,7 @@ hl.bind(mainMod .. " + SHIFT + R", hl.dsp.exec_cmd("systemctl --user restart cry
 hl.bind(mainMod .. " + L",         hl.dsp.exec_cmd("crystal-lock"))
 
 -- ── Keybinds — App launchers ─────────────────────────────────────────────────
-hl.bind(mainMod .. " + S",   hl.dsp.exec_cmd("ags request toggleSettings"))
+hl.bind(mainMod .. " + S",   hl.dsp.exec_cmd("ags request openSettings"))
 hl.bind("SUPER + SUPER_L",   hl.dsp.exec_cmd("ags request toggleAppGrid"), { release = true })
 hl.bind(mainMod .. " + G",          hl.dsp.exec_cmd("ags request toggleGameOverlay"))
 hl.bind(mainMod .. " + SHIFT + G", hl.dsp.exec_cmd("crystal-game-mode toggle"))

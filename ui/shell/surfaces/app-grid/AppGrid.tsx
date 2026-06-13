@@ -421,7 +421,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         button.connect("clicked", () => {
             onClose()
             if (id === "crystal-shell-settings") {
-                shellActions.toggleSettings?.()
+                shellActions.openSettings?.()
                 return
             }
             try {

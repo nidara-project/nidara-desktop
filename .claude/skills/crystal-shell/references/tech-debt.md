@@ -211,26 +211,17 @@ polish/optimization. If the hover growth ever truly must stop, it needs a struct
 (custom Cairo indicator or non-overlay reserved scrollbar with its own reflow tradeoff), not
 more specificity. Same root as #9 (the Adwaita stylesheet is loaded in-process).
 
-### 16. Settings is a normal window — `toggleSettings` is a (deferred) misnomer
-**Model (owner, 2026-06-13): Settings is a NORMAL window** — invoking opens/raises it; it
-closes ONLY via its close button, never by re-invoking. So `toggleSettings`'s show-only
-behaviour (lazy-create + `present()`, no hide branch, `app.ts`) is **correct — do NOT turn it
-into a toggle-hide.**
-**Fixed 2026-06-13:** `status.settings_open` was a dead flag (never written → `dumpState`'s
-`overlays.settings` read permanently `false` even when open). It's now wired to the window's
-`notify::visible` in `Settings.tsx` (catches present / the close button's `set_visible(false)` /
-close-request in one place), so `dumpState` is honest — verified open=true / closed=false. The
-misleading "Show/hide" command desc was corrected to open/raise semantics.
-**Residual (deferred):** the command is still NAMED `toggleSettings` (plus its `ShellActions`
-key) though it only opens/raises — cosmetic, but a rename would break `hyprland.lua`/dock
-callers, so do it with a compat alias if ever. And there's still no IPC to CLOSE Settings (fine
-for the normal-window model; **restart the shell** to reset state in a verification run, or add
-a close hook if a redesign wants one). `queryUI` (a `crystal-settings-window` toplevel = open)
-is the ground truth either way.
-
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
+- **(was #16) Settings is a normal window.** `openSettings` opens/raises it — NOT a toggle
+  (re-invoking just raises; it closes only via its own close button). Don't turn it into a
+  toggle-hide. `toggleSettings` is kept as a **compat alias** (the `hyprland.lua` Super+S
+  keybind / user scripts) — don't drop it without updating those. `status.settings_open`
+  (→ `dumpState.overlays.settings`) is wired to the window's `notify::visible` in
+  `Settings.tsx` — keep it honest. There's deliberately **no IPC to CLOSE** Settings: restart
+  the shell to reset state in a verification run, and use `queryUI` (a `crystal-settings-window`
+  toplevel present = open) as the ground truth.
 - **(was #10) Boot-time `g_list_store_remove` CRITICAL (astal-tray)** fixed upstream:
   Aylur/astal#451 merged 2026-06-12 (kotontrion's pending-items pattern, verified A/B/A on
   the reproducing machine: stock = 1 CRITICAL/boot, patched = 0/8 boots) and `ASTAL_REF` now

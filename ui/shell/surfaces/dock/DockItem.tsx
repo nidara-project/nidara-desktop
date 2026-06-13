@@ -751,7 +751,7 @@ export function DockItem(
                 if (appId === "special:home" || appId === "home-shortcut") {
                     execAsync(["uwsm", "app", "--", "xdg-open", GLib.get_home_dir()]).catch(print)
                 } else if (appId === "crystal-shell-settings") {
-                    shellActions.toggleSettings?.()
+                    shellActions.openSettings?.()
                 } else {
                     // Origin-aware command (gtk-launch / flatpak run) — see AppService.
                     // getLaunchCommand. cd $HOME because children inherit the launcher's

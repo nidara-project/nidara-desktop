@@ -67,7 +67,7 @@ export function SystemMenuOverlay() {
   }))
   menuBox.append(sep())
   menuBox.append(makeRow(Icons.settings, t("bar.system-menu.settings"), false, () => {
-    status.system_menu_open = false; shellActions.toggleSettings?.()
+    status.system_menu_open = false; shellActions.openSettings?.()
   }))
   menuBox.append(sep())
   menuBox.append(makeRow(Icons.lock, t("bar.system-menu.lock"), false, () => {

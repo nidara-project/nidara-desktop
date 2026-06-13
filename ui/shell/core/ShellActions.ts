@@ -10,12 +10,13 @@
  *
  * Usage in widgets:
  *   import shellActions from "../core/ShellActions"
- *   shellActions.toggleSettings?.()
+ *   shellActions.openSettings?.()
  */
 
 export interface ShellActionsMap {
   toggleAppGrid?: () => void
-  toggleSettings?: () => void
+  /** Open/raise the Settings window (a normal window — not a toggle). */
+  openSettings?: () => void
   /** Open the Settings window directly on a page id (e.g. "bluetooth"). */
   openSettingsPage?: (id: string) => string
   toggleOverview?: () => void

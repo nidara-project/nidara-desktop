@@ -64,7 +64,7 @@ read source to discover it:
 
 Current commands (run `listActions` for the live list): `toggleCC|toggleControlCenter`,
 `toggleNC|toggleNotificationCenter`, `togglePrism|toggleSpotlight`, `toggleAppGrid`,
-`toggleSettings`, `settingsPage <pageId>`, `toggleOverview`, `toggleGameOverlay`,
+`openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `toggleGameOverlay`,
 `openWindowMenu`, `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`,
 `setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listActions`, `dumpState`.
 Aliases are intentional — Hyprland keybinds were renamed at one point and old names are kept.
