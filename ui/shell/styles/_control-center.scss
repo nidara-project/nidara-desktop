@@ -315,9 +315,11 @@
             border-color: transparent;
         }
         grid label.other-month { color: var(--crystal-text-disabled); }
-        // "Today" (when not selected): accent number
+        // "Today" (when not selected): faint accent-tinted cell, theme-coloured
+        // bold number (never accent on text).
         grid label.today:not(:selected) {
-            color: var(--crystal-accent);
+            background-color: var(--crystal-accent-10);
+            color: var(--crystal-text);
             font-weight: $fw-bold;
         }
         grid label:selected {
@@ -537,7 +539,7 @@
         background-image: none;
         border: none;
         box-shadow: none;
-        color: var(--crystal-accent);
+        color: var(--crystal-text);
         border-radius: $crystal-radius-sm;
         padding: 4px 10px;
         font-weight: $fw-medium;
@@ -590,7 +592,7 @@
                 background: rgba(var(--crystal-accent-rgb), 0.18);
                 background-image: none;
                 border-color: rgba(var(--crystal-accent-rgb), 0.45);
-                color: var(--crystal-accent);
+                color: var(--crystal-text);
                 font-weight: $fw-bold;
 
                 &:hover  { background: rgba(var(--crystal-accent-rgb), 0.26); }
@@ -607,7 +609,7 @@
 
     // Default speaker badge
     .accent-label {
-        color: var(--crystal-accent);
+        color: var(--crystal-text);
         background: rgba(var(--crystal-accent-rgb), 0.14);
         border-radius: $crystal-radius-pill;
         padding: 2px 8px;

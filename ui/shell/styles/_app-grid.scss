@@ -149,8 +149,10 @@ window#crystal-app-launcher {
     color: var(--crystal-text-dim);
     min-width: 110px;
 
+    // Active state shown by .ws-strip-item.active (accent bg + border); the
+    // label just brightens to full text colour (never accent on text).
     &.active {
-        color: var(--crystal-accent);
+        color: var(--crystal-text);
     }
 }
 

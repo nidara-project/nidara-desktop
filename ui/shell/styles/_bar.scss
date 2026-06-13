@@ -248,7 +248,10 @@ window#crystal-bar-zone {
     @include crystal-row-states;
 
     &.current {
-        color: var(--crystal-accent);   // persistent state = accent (design system)
+        // Current workspace: a faint accent-tinted pill marks the state — the
+        // number stays theme-coloured (never accent on text). Button is disabled.
+        background: var(--crystal-accent-10);
+        color: var(--crystal-text);
     }
 }
 
@@ -289,7 +292,7 @@ window#crystal-bar-zone {
         background-image: none;
         border: none;
         box-shadow: none;
-        color: var(--crystal-accent);
+        color: var(--crystal-text);
         border-radius: $crystal-radius-sm;
         padding: 6px 14px;
         font-size: $fs-small;

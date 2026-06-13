@@ -1364,7 +1364,8 @@ window#crystal-bar-zone {
   background-color: var(--crystal-state-selected);
 }
 .window-menu-ws-btn.current {
-  color: var(--crystal-accent);
+  background: var(--crystal-accent-10);
+  color: var(--crystal-text);
 }
 
 /* --- Bar inline expansion panel --- */
@@ -1418,7 +1419,7 @@ window#crystal-bar-zone {
   background-image: none;
   border: none;
   box-shadow: none;
-  color: var(--crystal-accent);
+  color: var(--crystal-text);
   border-radius: var(--crystal-radius-sm);
   padding: 6px 14px;
   font-size: 13px;
@@ -1771,7 +1772,8 @@ window#crystal-bar-zone {
   color: var(--crystal-text-disabled);
 }
 .nc-calendar-island calendar grid label.today:not(:selected) {
-  color: var(--crystal-accent);
+  background-color: var(--crystal-accent-10);
+  color: var(--crystal-text);
   font-weight: 700;
 }
 .nc-calendar-island calendar grid label:selected {
@@ -2033,7 +2035,7 @@ window#crystal-bar-zone {
   background-image: none;
   border: none;
   box-shadow: none;
-  color: var(--crystal-accent);
+  color: var(--crystal-text);
   border-radius: var(--crystal-radius-sm);
   padding: 4px 10px;
   font-weight: 500;
@@ -2086,7 +2088,7 @@ window#crystal-bar-zone {
   background: rgba(var(--crystal-accent-rgb), 0.18);
   background-image: none;
   border-color: rgba(var(--crystal-accent-rgb), 0.45);
-  color: var(--crystal-accent);
+  color: var(--crystal-text);
   font-weight: 700;
 }
 .cc-detail-panel .linked > button.suggested-action:hover {
@@ -2102,7 +2104,7 @@ window#crystal-bar-zone {
   background: var(--crystal-accent);
 }
 .cc-detail-panel .accent-label {
-  color: var(--crystal-accent);
+  color: var(--crystal-text);
   background: rgba(var(--crystal-accent-rgb), 0.14);
   border-radius: var(--crystal-radius-pill);
   padding: 2px 8px;
@@ -2289,7 +2291,7 @@ window#crystal-app-launcher {
   min-width: 110px;
 }
 .ws-strip-label.active {
-  color: var(--crystal-accent);
+  color: var(--crystal-text);
 }
 
 /* ── No results ── */
@@ -2346,7 +2348,7 @@ window#crystal-app-launcher {
   transition: color 0.2s ease;
 }
 .wo-label.active {
-  color: var(--crystal-accent);
+  color: var(--crystal-text);
 }
 
 .wo-count {
@@ -2713,7 +2715,7 @@ button.launcher-icon-btn:hover:not(.selected) {
 .search-result-chip {
   font-size: 0.86em;
   font-weight: 500;
-  color: var(--crystal-accent);
+  color: var(--crystal-text);
   background: var(--crystal-accent-10);
   border-radius: var(--crystal-radius-pill);
   padding: 2px 10px;
@@ -2783,7 +2785,7 @@ button.settings-action-row:hover, button.settings-action-row:active {
 .users-admin-badge {
   font-size: 0.86em;
   font-weight: 600;
-  color: var(--crystal-accent);
+  color: var(--crystal-text);
   background: var(--crystal-accent-10);
   border-radius: var(--crystal-radius-pill);
   padding: 2px 8px;
@@ -2937,7 +2939,8 @@ entry.crystal-alert-entry:focus, entry.crystal-alert-entry:focus-within {
   background: rgba(var(--crystal-danger-rgb), 0.1);
 }
 .crystal-alert-buttons button.crystal-alert-btn.crystal-alert-btn--suggested {
-  color: var(--crystal-accent);
+  color: var(--crystal-text);
+  font-weight: 600;
 }
 .crystal-alert-buttons button.crystal-alert-btn.crystal-alert-btn--suggested:hover {
   background: var(--crystal-accent-10);

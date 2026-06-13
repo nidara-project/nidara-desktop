@@ -6,7 +6,8 @@ Read this when editing any SCSS, adding a new visual component, changing tokens,
 
 - Glass capsules; blur ~40px (SCSS preview) or real blur from Hyprland (production).
 - 1px inner white border, soft outer shadow, top sheen.
-- **Accent color is for active/selected state only.** Never for borders, plain text, normal buttons.
+- **Accent color is for active/selected state only.** Never for normal borders or normal buttons.
+- **Accent is NEVER a text colour** — not even for the active/selected state. It doesn't contrast reliably on every background. Active/selected text reads in the mode-aware token (`--crystal-text`/`-secondary`/`-dim`, `#fff` dark / `#000` light); the accent conveys the state via **background fill, tinted background (`--crystal-accent-10`), or border** instead (e.g. active workspace number, calendar "today", selected segment, chips/badges, suggested alert button = bold not accent). The one exception is white text *on* an accent fill (`--crystal-accent-fg`). Symbolic **icons** may still tint to accent (not text).
 
 ## Radii (capsule-first)
 

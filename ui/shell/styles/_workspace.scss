@@ -46,8 +46,10 @@
 
     // NB: this file used Adwaita NAMED colors (@accent_bg_color) — they resolve
     // to Adwaita's blue, never the user's accent token. Migrated to --crystal-*.
+    // Active state is shown by .wo-item.active (accent bg + border) — the label
+    // stays theme-coloured for legibility (never accent on text).
     &.active {
-        color: var(--crystal-accent);
+        color: var(--crystal-text);
     }
 }
 
