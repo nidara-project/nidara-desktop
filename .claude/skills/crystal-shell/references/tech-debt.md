@@ -216,7 +216,13 @@ more specificity. Same root as #9 (the Adwaita stylesheet is loaded in-process).
 These were paid down; the *rule* remains:
 - **(was #16) Settings is a normal window.** `openSettings` opens/raises it — NOT a toggle
   (re-invoking just raises; it closes only via its own close button). Don't turn it into a
-  toggle-hide. `toggleSettings` is kept as a **compat alias** (the `hyprland.lua` Super+S
+  toggle-hide. **Raising across workspaces:** `gtk_window_present()` alone does NOT jump to the
+  window when it's on another workspace — its Wayland activation is ignored by Hyprland
+  (`misc:focus_on_activate=false`). So `raiseSettings()` (app.ts) present()s *and* dispatches an
+  explicit `hyprlandState.focusWindow(addr)` (found by class `io.Astal.ags` + title
+  `Crystal Shell Settings`), which switches to its workspace like clicking any running dock app.
+  Same pattern applies to any normal (non-layer-shell) window the shell wants to summon.
+  `toggleSettings` is kept as a **compat alias** (the `hyprland.lua` Super+S
   keybind / user scripts) — don't drop it without updating those. `status.settings_open`
   (→ `dumpState.overlays.settings`) is wired to the window's `notify::visible` in
   `Settings.tsx` — keep it honest. There's deliberately **no IPC to CLOSE** Settings: restart

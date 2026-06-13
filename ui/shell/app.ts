@@ -340,6 +340,18 @@ app.start({
         if (w.name === "crystal-dock") try { (w as any).toggleAppGridPanel?.() } catch (e) { console.error(e) }
       })
     }
+    // Show + raise Settings. present()'s Wayland activation is IGNORED by Hyprland
+    // when the window sits on another workspace (misc:focus_on_activate=false), so
+    // after presenting we dispatch an explicit focus to the window — that switches
+    // to its workspace, exactly like clicking any running app in the dock. The
+    // window is a normal Hyprland client (class io.Astal.ags, title set by
+    // CrystalWindow); match both to disambiguate from the About window.
+    const raiseSettings = () => {
+      settingsWindows.forEach(s => { try { s.present() } catch (e) { console.error(e) } })
+      const c = hyprlandState.clients.find(
+        (c: any) => c.class === "io.Astal.ags" && c.title === "Crystal Shell Settings")
+      if (c?.address) hyprlandState.focusWindow(c.address)
+    }
     // Open/raise Settings — a normal window (NOT a toggle: re-invoking just
     // raises it; it closes via its own close button). IPC alias: toggleSettings.
     const openSettings = () => {
@@ -353,15 +365,12 @@ app.start({
           }
         }
       }
-      // present() = show + focus, like a normal app window
-      settingsWindows.forEach(s => {
-          try { s.present() } catch (e) { console.error(e) }
-      })
+      raiseSettings()
     }
     const openSettingsPage = (id: string): string => {
       if (!id) return "usage: settingsPage <pageId> (e.g. bluetooth, network, appearance)"
-      if (settingsWindows.length === 0) openSettings()   // lazy-create + present
-      else settingsWindows.forEach(s => { try { s.present() } catch (e) { console.error(e) } })
+      if (settingsWindows.length === 0) openSettings()   // lazy-create + raise
+      else raiseSettings()
       let found = false
       settingsWindows.forEach(s => {
         if ((s as any).navigateToPage?.(id)) found = true
