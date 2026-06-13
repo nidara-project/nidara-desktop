@@ -155,7 +155,7 @@ This is commandment #5 in `SKILL.md` but it's worth restating here because it's 
 Overlays (CC, NC, Prism, SystemMenu, Overview) **live as children of the Bar's window** via `Gtk.Overlay`. They are NOT separate `gtk4-layer-shell` windows. Reasons:
 
 - Avoids Hyprland layer-rule conflicts (one Bar layer is easier to reason about than five).
-- Lets fades be GTK-side via `common/fade.ts` instead of fighting compositor animations.
+- Lets show/hide animations be GTK-side via `common/ScaleRevealer.ts` (grow+fade) instead of fighting compositor animations.
 - Simplifies input region management (one window's mask, not five).
 
 If you find yourself making a new overlay its own window, stop and ask why. The few exceptions (Settings, About) are full top-level windows for separate reasons and don't follow the overlay state machine.

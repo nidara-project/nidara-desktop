@@ -466,7 +466,11 @@ hl.window_rule({
 
 
 -- ── Layer rules ───────────────────────────────────────────────────────────────
-hl.layer_rule({ match = { namespace = "crystal-bar" },      blur = true, ignore_alpha = 0.05  })
+-- crystal-bar at 0.01 (was 0.05): during the overlays' close animation the glass
+-- alpha drops below the threshold and the backdrop blur pops off; at 0.01 that
+-- happens when the panel is already near-invisible. Verified no AA-edge halos
+-- at rest (notif-win has run at 0.001 with no issues).
+hl.layer_rule({ match = { namespace = "crystal-bar" },      blur = true, ignore_alpha = 0.01  })
 hl.layer_rule({ match = { namespace = "crystal-dock" },     blur = true, ignore_alpha = 0.04 })
 hl.layer_rule({ match = { namespace = "notif-win" },        blur = true, ignore_alpha = 0.001 })
 hl.layer_rule({ match = { namespace = "crystal-lock" },     blur = true, ignore_alpha = 0.3   })

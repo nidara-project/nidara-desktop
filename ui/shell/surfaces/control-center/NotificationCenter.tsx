@@ -254,7 +254,7 @@ export default function NotificationCenter() {
     // to host the scrollbar. The overlay scrollbar floats in that lane only when there's
     // overflow — so it never reflows the cards and never overlaps them, even inflated on hover.
     const LANE = 14
-    const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, visible: false, width_request: GRID_WIDTH + LANE, css_classes: ["nc-outer", "overlay-fade"] })
+    const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, width_request: GRID_WIDTH + LANE, css_classes: ["nc-outer"] })
 
     const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vscrollbar_policy: Gtk.PolicyType.AUTOMATIC, vexpand: true, hexpand: true, css_classes: ["nc-scroll", "nc-transparent-scroll"] })
     // The scroll forces its child to the full viewport width (GRID_WIDTH + LANE). A

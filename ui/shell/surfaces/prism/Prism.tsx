@@ -1,5 +1,5 @@
 import { Astal, Gtk, Gdk } from "ags/gtk4"
-import { makeFadeToggle } from "../../common/fade"
+import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
@@ -81,7 +81,7 @@ export default function Prism() {
     contentBox.append(searchContainer)
     contentBox.append(revealer)
 
-    const prismWrapper = SquircleContainer({ child: contentBox, radius: 32, n: 4.5, css_classes: ["prism-wrapper", "overlay-fade"], useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 } })
+    const prismWrapper = SquircleContainer({ child: contentBox, radius: 32, n: 4.5, css_classes: ["prism-wrapper"], useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.15 } })
 
     const clearList = () => {
         let child = resultsList.get_first_child()
@@ -195,18 +195,19 @@ export default function Prism() {
     })
     prismWrapper.add_controller(key)
 
-    const setPrismVisible = makeFadeToggle(prismWrapper)
+    // Visibility/animation is driven by the bar (popToggle on the returned
+    // ScaleRevealer); this handler only resets the search state. The focus grab
+    // is deferred one frame because the bar's notify handler (which makes the
+    // wrapper visible) connects AFTER this one and runs second.
     const sync = () => {
-        setPrismVisible(status.prism_open)
         if (status.prism_open) {
             entry.text = ""
             clearList()
             revealer.reveal_child = false
-            entry.grab_focus()
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => { if (status.prism_open) entry.grab_focus(); return GLib.SOURCE_REMOVE })
         }
     }
     status.connect("notify::prism-open", sync)
-    sync()
 
-    return prismWrapper
+    return new ScaleRevealer(prismWrapper, { ...OVERLAY_POP, pivot: "center" })
 }

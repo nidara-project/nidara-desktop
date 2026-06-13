@@ -120,6 +120,50 @@ horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — 
   (live, for the % label), `onExtChange(cb) → cleanup` for external value updates (ignored
   while the user drags).
 
+## Show/hide animations — `ScaleRevealer` (THE overlay animation)
+
+CSS `transform: scale` is banned on interactive widgets (see anti-pattern 6 below), but a
+**snapshot-time** scale is fine: **`ScaleRevealer`** (`common/ScaleRevealer.ts`) shows/hides
+its child with a grow/shrink + fade. It scales in `vfunc_snapshot` (paint only, ends at
+identity — hit-testing is correct at rest). API: `reveal(open, onDone?)`; the wrapper
+manages its own visibility (hides itself when the close finishes, *then* fires `onDone` —
+that's where the bar refreshes the layer-shell input region). There is **no CSS overlay
+fade anymore** (`.overlay-fade`/`common/fade.ts` were removed); every animated surface
+goes through this one component. Two modes:
+
+- **`animateLayout: true`** (default — notification banners): the *measured height* follows
+  the scale, so siblings reflow like a `Gtk.Revealer SLIDE_DOWN`. `scaleFrom` is dramatic
+  (0.25) and the pivot top-right: banners sprout from under the bar's clock capsule.
+- **`animateLayout: false`** (spread as the **`OVERLAY_POP`** preset: CC, NC, Prism, system
+  menu, overview, app grid, bar expansion panel): Gtk.Bin semantics — measure/allocation
+  pass through 1:1, so external `halign`/margins/`height_request` on the wrapper behave
+  exactly as on the child (in `Bar.tsx` the wrapper IS the `cc`/`nc`/... variable), and each
+  frame only repaints. Subtle macOS pop: 0.97→1, in 220ms, out 150ms. Pivot per surface,
+  toward its visual anchor (cc/nc `top-right`, system menu `top-left`, expansion panel
+  `top-center`, centered surfaces `center`).
+
+**Asymmetric easing, on purpose:** ease-OUT opening, ease-IN closing. A decelerating exit
+leaves a long low-opacity tail where only high-contrast content (icons, images, 1px Cairo
+borders) stays perceptible — that tail is what made the old CSS fade look "non-uniform"
+("icons disappear later"). Related compositor knob: the `crystal-bar` layer rule runs
+`ignore_alpha = 0.01` (hyprland.lua) so the backdrop blur doesn't pop off mid-close — at
+0.05 the glass crossed the threshold while still clearly visible.
+
+- **Teardown:** call `dismantle()` right after removing it from its parent. It deliberately
+  has no `vfunc_dispose` override — GJS blocks JS vfuncs during garbage collection, so a
+  dispose override never runs on GC finalization and the child leaks ("still has children
+  left" warnings). Long-lived wrappers (the overlays) never need it; per-notification
+  banners do.
+- **Typing gotcha:** the class merges `export interface ScaleRevealer extends Gtk.Widget`
+  because the ambient `ags/gtk4` typing exposes `Gtk` as `any` in value position — without
+  the merge, tsc can't see the inheritance. Don't add TS `private` members or members whose
+  name collides with a `Gtk.Widget` property (e.g. `scaleFactor`) — both break the merge.
+- **Banner sizing:** the popup column uses `GRID_WIDTH` (356px, from `CCLayoutManager`) so
+  banners match the NC cards exactly — one `NotificationCapsule`, one size. Wrapping labels
+  inside layer-shell windows need `max_width_chars`: a wrapping `Gtk.Label` requests the
+  full *unwrapped* text width as its natural width, and a layer window sizes to natural
+  (the NC's scroll clamps it, a popup window balloons).
+
 ## SCSS conventions and anti-patterns
 
 These are the patterns that bite. Most "the styles look wrong" bugs in this codebase are violations of one of these.
@@ -130,7 +174,7 @@ These are the patterns that bite. Most "the styles look wrong" bugs in this code
 3. **Avoid color literals.** Resolve against tokens (`--crystal-danger`, etc.). The legitimate exceptions are the accent swatches and the danger/success/warning seeds inside `FluidCrystal.ts`.
 4. **Use `@mixin glass($level)`** (surface / raised / floating) instead of repeating ~20 glass blocks. *Currently underused — only 2 call sites; migrating the rest is open work (see `tech-debt.md`).*
 5. **`background-clip: padding-box` + `border: Npx solid transparent`** for "visual thickness ≠ real thickness" (avoids negative margins that break `GtkGizmo`).
-6. **No `transform: scale` or `transform: translate` on interactive widgets.** GTK respects them but they break hit-testing. Use `margin`, or scale inside Cairo. *(Currently clean: 0 occurrences. Don't reintroduce them.)*
+6. **No `transform: scale` or `transform: translate` on interactive widgets.** GTK respects them but they break hit-testing. Use `margin`, scale inside Cairo, or — for transient show/hide animations — a snapshot-time transform that ends at identity (see `ScaleRevealer` above). *(CSS transforms currently clean: 0 occurrences. Don't reintroduce them.)*
 7. **All component CSS wrapped in `window#name { … }`** — never global unscoped.
 
 ## When you're tempted to invent a new pattern

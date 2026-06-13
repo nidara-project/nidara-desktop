@@ -10,7 +10,7 @@ import appService from "../../core/AppService"
 import { pinnedState, savePinned } from "../dock/state"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
-import { makeFadeToggle } from "../../common/fade"
+import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
 import SquircleContainer from "../../common/SquircleContainer"
 import Theme from "../../core/ThemeManager"
 import Cairo from "gi://cairo"
@@ -268,17 +268,17 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         inset: 2.0,
         hexpand: false,
         vexpand: false,
-        css_classes: ["overlay-fade"],
     })
-    // Shared overlay fade — same crossfade as CC/NC/Prism. The docks call
-    // setVisible() instead of toggling .visible directly so it fades.
-    const setVisible = makeFadeToggle(squirclePanel)
+    // Shared overlay pop — same grow+fade as CC/NC/Prism. The docks call
+    // setVisible() instead of toggling .visible directly so it animates.
+    const panelPop = new ScaleRevealer(squirclePanel, { ...OVERLAY_POP, pivot: "center" })
+    const setVisible = (open: boolean) => panelPop.reveal(open)
     contentBox.margin_top    = 28
     contentBox.margin_start  = 32
     contentBox.margin_end    = 32
     contentBox.margin_bottom = 4
-    squirclePanel.halign = Gtk.Align.CENTER
-    squirclePanel.valign = Gtk.Align.CENTER
+    panelPop.halign = Gtk.Align.CENTER
+    panelPop.valign = Gtk.Align.CENTER
 
     // ── Widget state ───────────────────────────────────────────────────────
     const widgetCache = new Map<string, Gtk.Button>()
@@ -575,7 +575,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     filterApps()
 
     return {
-        widget: squirclePanel,
+        widget: panelPop,
         setVisible,
 
         onShow() {

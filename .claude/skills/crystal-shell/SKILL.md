@@ -35,11 +35,11 @@ These are non-negotiable. Violating them produces bugs that are hard to debug be
 2. **Never write unscoped global CSS** — every widget's CSS goes inside `window#name { … }`.
 3. **Kill zombies before debugging.** A stuck terminal or "styles won't refresh" almost always means a zombie GJS is still drawing the dead UI. Run `killall gjs` before changing code in a loop.
 4. **`core/` never touches the UI.** All visibility changes flow through `Status.ts`. Widgets never flip each other directly.
-5. **Overlays live inside the Bar's window** via `Gtk.Overlay`, not in their own windows. This avoids Hyprland layer conflicts; that's why fades are GTK-side (`common/fade.ts`).
+5. **Overlays live inside the Bar's window** via `Gtk.Overlay`, not in their own windows. This avoids Hyprland layer conflicts; that's why show/hide animations are GTK-side (`common/ScaleRevealer.ts`).
 6. **IPC goes through `ags request` + `core/ShellActions`** — never reintroduce `globalThis` coupling.
 7. **The Settings window appears in Hyprland as class `io.Astal.ags`**, not `com.crystalshell.fluid`. The dock filters and remaps it to `crystal-shell-settings`. Don't "fix" this without understanding why.
 8. **`AboutWindow` is create+destroy, not hide** (Settings is the opposite — it hides on close).
-9. **No `transform: scale` or `transform: translate` on clickable widgets.** GTK respects them but they break hit-testing. Use `margin`, or scale in Cairo.
+9. **No CSS `transform: scale` or `transform: translate` on clickable widgets.** GTK respects them but they break hit-testing. Use `margin`, scale in Cairo, or `common/ScaleRevealer.ts` for transient show/hide grow animations (snapshot-time, ends at identity — see `references/design-system.md`).
 10. **No hardcoded colors. No emoji as iconography.** Resolve against `--crystal-*` tokens; use SVGs in `assets/fluid-crystal/assets/scalable/` or the `cs-*-symbolic` icon set.
 
 ## Quick orientation: where to start

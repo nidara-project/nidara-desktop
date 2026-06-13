@@ -3,7 +3,7 @@ import app from "ags/gtk4/app"
 import AstalNotifd from "gi://AstalNotifd"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
-import { makeFadeToggle, FADE_HIDE_MS } from "../../common/fade"
+import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
 import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
@@ -93,23 +93,25 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   let cachedMaxIcons: number | null = null
   const capsuleRefs = new Map<string, Gtk.Widget>()
   const expansionInner = new Gtk.Box({ margin_top: 10, margin_bottom: 10, margin_start: 14, margin_end: 14 })
-  const expansionCapsule = SquircleContainer({
+  // Pop animation (grow toward the anchor + fade) shared by every overlay —
+  // the wrapper is the variable, so all the existing alignment/margin/region
+  // code below operates on it transparently (animateLayout:false = Gtk.Bin).
+  const expansionCapsule = new ScaleRevealer(SquircleContainer({
       child: expansionInner, gloss: true, useShellOpacity: true,
       borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, radius: 20,
-      // overlay-fade → same opacity crossfade as CC/NC (toggled via overlay-open)
-      css_classes: ["bar-expansion-panel", "overlay-fade"],
-  })
+      css_classes: ["bar-expansion-panel"],
+  }), { ...OVERLAY_POP, pivot: "top-center" })   // grows down from its bar capsule
   expansionCapsule.valign = Gtk.Align.START
   expansionCapsule.halign = Gtk.Align.END
   // margin_top set below to PANEL_TOP so the gap matches CC/NC exactly.
   expansionCapsule.visible = false
 
-  const cc = ControlCenterWidget(gdkmonitor)
-  const nc = NotificationCenter()
+  const cc = new ScaleRevealer(ControlCenterWidget(gdkmonitor), { ...OVERLAY_POP, pivot: "top-right" })
+  const nc = new ScaleRevealer(NotificationCenter(), { ...OVERLAY_POP, pivot: "top-right" })
   const prism = Prism()
   const popups = NotificationPopupsWidget()
-  const systemMenu = SystemMenuOverlay()
-  const overview = WorkspaceOverview(gdkmonitor)
+  const systemMenu = new ScaleRevealer(SystemMenuOverlay(), { ...OVERLAY_POP, pivot: "top-left" })
+  const overview = new ScaleRevealer(WorkspaceOverview(gdkmonitor), { ...OVERLAY_POP, pivot: "center" })
   // Invisible full-screen button — dismisses any open overlay on outside click
   const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
   catcher.connect("clicked", () => {
@@ -128,6 +130,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   prism.valign = Gtk.Align.CENTER; prism.halign = Gtk.Align.CENTER
   popups.valign = Gtk.Align.START; popups.halign = Gtk.Align.END
   overview.valign = Gtk.Align.CENTER; overview.halign = Gtk.Align.CENTER
+  // The wrapper MUST be aligned (its root keeps top-left margins inside): an
+  // unaligned overlay child FILLs the whole window and, sitting above the
+  // catcher, swallows the outside-clicks that should dismiss the menu.
+  systemMenu.valign = Gtk.Align.START; systemMenu.halign = Gtk.Align.START
 
   // ── Panel geometry ──────────────────────────────────────────────────────
   // Derived from the bar height and the dock's actual footprint (dock size is
@@ -208,40 +214,24 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (surface.set_input_region) surface.set_input_region(region)
   }
 
-  // Unified overlay fade (opacity crossfade via .overlay-fade/.overlay-open CSS).
-  // makeFadeToggle lives in common/fade; pass updateInputRegion so the layer-shell
-  // input region is refreshed once each panel has actually faded out.
-  const setCCVisible = makeFadeToggle(cc, updateInputRegion)
-  const setNCVisible = makeFadeToggle(nc, updateInputRegion)
-  const setSystemMenuVisible = makeFadeToggle(systemMenu, updateInputRegion)
-
-  // V9.0: Animated Overview — CSS transition driven by class toggle
-  let overviewHideTimer: number | null = null
-  const setOverviewVisible = (open: boolean) => {
-      if (overviewHideTimer) { GLib.source_remove(overviewHideTimer); overviewHideTimer = null }
-      if (open) {
-          overview.set_visible(true)
-          GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => { overview.add_css_class("overview-open"); return GLib.SOURCE_REMOVE })
-      } else {
-          overview.remove_css_class("overview-open")
-          overviewHideTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 260, () => {
-              if (!status.overview_open) {
-                  overview.set_visible(false)
-                  updateInputRegion() // re-evaluate now that overview is actually gone
-              }
-              overviewHideTimer = null; return GLib.SOURCE_REMOVE
-          })
-      }
-  }
+  // Unified overlay pop (ScaleRevealer: subtle grow + fade, GTK-side). On close
+  // the wrapper hides itself when the animation completes and THEN refreshes the
+  // layer-shell input region, so the panel never keeps catching clicks.
+  const popToggle = (pop: ScaleRevealer) => (open: boolean) =>
+      pop.reveal(open, () => { if (!open) updateInputRegion() })
+  const setCCVisible = popToggle(cc)
+  const setNCVisible = popToggle(nc)
+  const setSystemMenuVisible = popToggle(systemMenu)
+  const setPrismVisible = popToggle(prism)
+  const setOverviewVisible = popToggle(overview)
 
   const syncOverlays = () => {
     catcher.set_visible(status.isAnyOverlayOpen && !status.cc_edit_mode)
-    setCCVisible(status.cc_open); setNCVisible(status.nc_open); prism.set_visible(status.prism_open); setSystemMenuVisible(status.system_menu_open)
+    setCCVisible(status.cc_open); setNCVisible(status.nc_open); setPrismVisible(status.prism_open); setSystemMenuVisible(status.system_menu_open)
     setOverviewVisible(status.overview_open)
-    // Update immediately — get_visible() is already correct after set_visible() above,
-    // so the region calculation is accurate without waiting for a layout pass.
-    // The overview is the exception: its input region is refreshed inside
-    // setOverviewVisible() after the fade-out animation completes (260ms).
+    // Update immediately — reveal() flips visibility synchronously on open, so
+    // the region calculation is accurate without waiting for a layout pass; the
+    // post-close refresh happens in each toggle's reveal callback.
     updateInputRegion()
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
@@ -264,9 +254,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       expansionCapsule.margin_end = Math.max(8, Math.round(monGeo.width - iconCenterX - panelW / 2))
   }
 
-  let expansionHideTimer: number | null = null
   const showExpansion = (id: string) => {
-      if (expansionHideTimer) { GLib.source_remove(expansionHideTimer); expansionHideTimer = null }
       const onClose = () => { status.bar_expanded_id = "" }
       let content: Gtk.Widget | undefined
       if (id === CUSTOM_ID) {
@@ -283,30 +271,24 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       let c = expansionInner.get_first_child()
       while (c) { const n = c.get_next_sibling(); expansionInner.remove(c); c = n }
       expansionInner.append(content)
-      // Mapped but still transparent (overlay-fade = opacity 0). Defer one frame so
-      // the panel is laid out, position it under the icon, THEN fade in — the panel
-      // never appears at the wrong spot first (no reposition jump).
+      // Mapped but still transparent (reveal progress 0 = opacity 0). Defer one
+      // frame so the panel is laid out, position it under the icon, THEN pop in —
+      // the panel never appears at the wrong spot first (no reposition jump).
       expansionCapsule.set_visible(true)
       GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
           positionExpansion(id)
-          expansionCapsule.add_css_class("overlay-open")   // no-op if already open (widget switch)
+          expansionCapsule.reveal(true)   // no-op if already open (widget switch)
           updateInputRegion()
           return GLib.SOURCE_REMOVE
       })
   }
   const hideExpansion = () => {
-      if (expansionHideTimer) { GLib.source_remove(expansionHideTimer); expansionHideTimer = null }
-      expansionCapsule.remove_css_class("overlay-open")
-      // Defer the actual hide until the fade-out finishes (matches CC/NC).
-      expansionHideTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, FADE_HIDE_MS, () => {
-          if (!expansionCapsule.has_css_class("overlay-open")) {
-              expansionCapsule.set_visible(false)
-              let c = expansionInner.get_first_child()
-              while (c) { const n = c.get_next_sibling(); expansionInner.remove(c); c = n }
-              updateInputRegion()
-          }
-          expansionHideTimer = null
-          return GLib.SOURCE_REMOVE
+      // The content is cleared in the close callback — a reopen mid-close starts
+      // a new reveal(true), so the pending callback never fires (no flash).
+      expansionCapsule.reveal(false, () => {
+          let c = expansionInner.get_first_child()
+          while (c) { const n = c.get_next_sibling(); expansionInner.remove(c); c = n }
+          updateInputRegion()
       })
   }
   // Open arbitrary content (e.g. a tray context menu) in the shared expansion

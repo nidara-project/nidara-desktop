@@ -207,18 +207,8 @@ selection {
     min-height: 1px;
 }
 
-/* --- Unified overlay entrance ---
-   The single animation for all in-bar-window panels (CC, NC, Prism, system
-   menu, overview): a pure opacity crossfade (no transform → no hit-testing
-   issues on interactive panels). Driven from TS by toggling .overlay-open
-   after the widget is mapped; the bar's makeFadeToggle defers set_visible(false)
-   so it doesn't catch clicks during fade-out. */
-.overlay-fade {
-    opacity: 0;
-    transition: opacity 240ms #{$ease-emphasized};
-
-    &.overlay-open { opacity: 1; }
-}
+/* The unified overlay entrance lives in common/ScaleRevealer.ts (GTK-side
+   grow+fade with asymmetric easing) — there is no CSS overlay fade anymore. */
 
 /* --- Toggles (Switches) --- */
 switch,

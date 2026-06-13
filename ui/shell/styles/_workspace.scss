@@ -6,15 +6,8 @@
 
 .cockpit-window-content {
     background: transparent;
-    // Pure opacity crossfade — same as the shared .overlay-fade used by CC/NC/
-    // Prism/system menu. (Dropped the scale/translate so all overlays match and
-    // to avoid transform on an interactive panel.)
-    opacity: 0;
-    transition: opacity 240ms #{$ease-emphasized};
-
-    &.overview-open {
-        opacity: 1;
-    }
+    // Show/hide animation comes from the bar's ScaleRevealer wrapper (GTK-side
+    // grow+fade, common/ScaleRevealer.ts) — no CSS opacity transition here.
 }
 
 /* --- Overview Panel --- */
