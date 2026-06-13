@@ -1,5 +1,6 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
+import status from "../../core/Status"
 import { CrystalClamp, CrystalSidebar, CrystalWindow } from "../../../lib/crystal-ui"
 
 // Page Imports
@@ -423,6 +424,15 @@ export default function Settings(monitor: Gdk.Monitor) {
         defaultHeight: 700,
     })
     const win = cw.window
+
+    // Keep status.settings_open honest — it's what dumpState reports as
+    // overlays.settings. notify::visible catches every show/hide path (present(),
+    // the close button's set_visible(false), and close-request), so the flag tracks
+    // the real window state instead of staying permanently false. (One window in
+    // practice; on a multi-monitor multi-window setup the last event wins, which is
+    // moot until that design is revisited — see tech-debt #16.)
+    status.settings_open = win.get_visible()
+    win.connect("notify::visible", () => { status.settings_open = win.get_visible() })
 
     cw.splitView.connectCollapsedChanged(() => {
         if (!sidebar.getSelectedId() && activePageId)

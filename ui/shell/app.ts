@@ -102,7 +102,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: () => status.togglePrism(),
   },
   toggleAppGrid: { desc: "Toggle the fullscreen app grid", run: () => ipc.toggleAppGrid?.() },
-  toggleSettings: { desc: "Show/hide the Settings window", run: () => ipc.toggleSettings?.() },
+  toggleSettings: { desc: "Open/raise the Settings window (a normal window — it closes via its own close button, not by re-invoking)", run: () => ipc.toggleSettings?.() },
   settingsPage: {
     desc: "Open the Settings window on a specific page (e.g. `settingsPage bluetooth`)",
     run: args => ipc.openSettingsPage?.(args[0] ?? ""),
