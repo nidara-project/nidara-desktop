@@ -49,11 +49,6 @@ export function calculateIconSize(
     return size;
 }
 
-// Deprecated: getIconSize replaced by calculateIconSize
-export function getIconSize(x: number, mouseRelX: number, baseSize: number, maxScale: number, sigma: number): number {
-    return calculateIconSize(mouseRelX, x, 0, baseSize, maxScale, sigma);
-}
-
 /**
  * Wordmark Engine 🍎
  * Pretty names and sanitization for a premium look.
