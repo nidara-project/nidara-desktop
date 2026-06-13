@@ -252,8 +252,10 @@ export default function NotificationCenter() {
 
     // The content keeps its full width (GRID_WIDTH); LANE is extra space ADDED on the right
     // to host the scrollbar. The overlay scrollbar floats in that lane only when there's
-    // overflow — so it never reflows the cards and never overlaps them, even inflated on hover.
-    const LANE = 14
+    // overflow — so it never reflows the cards. 8 (not 14) so the cards can sit flush at
+    // the 8px side gap (Bar pulls the panel right by LANE; must match NC_LANE in Bar.tsx
+    // and the .nc-content-box padding-right).
+    const LANE = 8
     const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, width_request: GRID_WIDTH + LANE, css_classes: ["nc-outer"] })
 
     const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vscrollbar_policy: Gtk.PolicyType.AUTOMATIC, vexpand: true, hexpand: true, css_classes: ["nc-scroll", "nc-transparent-scroll"] })

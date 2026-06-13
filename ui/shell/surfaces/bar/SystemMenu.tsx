@@ -150,11 +150,11 @@ export function SystemMenuOverlay() {
     css_classes: ["crystal-menu"],
   })
 
+  // Position (top/left margins, dock dodge) is owned by Bar.tsx — see
+  // syncPanelMargins, same as CC/NC.
   const outerBox = new Gtk.Box({
     valign: Gtk.Align.START,
     halign: Gtk.Align.START,
-    margin_top: 56,
-    margin_start: 16,
   })
   outerBox.append(squircleWrapper)
   return outerBox

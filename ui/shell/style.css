@@ -1466,24 +1466,6 @@ window#crystal-bar-zone {
    which only grants keyboard (ON_DEMAND) for prism_open, not cc_open — so the CC
    never receives keyboard focus and is mouse/touch-only by design. Adding
    :focus-visible rules here would be dead code. See [[project_design_tokens_macos]]. */
-/* --- Component Transparency --- */
-window.notif-win {
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-}
-window.notif-win decoration, window.notif-win contents {
-  background: none;
-  background-color: transparent;
-  background-image: none;
-  border: none;
-  box-shadow: none;
-  outline: none;
-}
-
 /* --- Island Body --- */
 .cc-island {
   background-color: transparent;
@@ -1846,28 +1828,50 @@ window.notif-win decoration, window.notif-win contents {
 /* --- NC Global Layout --- */
 .nc-content-box {
   padding: 0;
-  /* The scroll viewport is GRID_WIDTH + 14 (LANE). This padding keeps the cards at
-     GRID_WIDTH (no reflow/stretch) and frees the 14px lane on the right for the bar. */
-  padding-right: 14px;
+  /* The scroll viewport is GRID_WIDTH + 8 (LANE in NotificationCenter.tsx). This padding
+     keeps the cards at GRID_WIDTH (no reflow/stretch) and frees the lane on the right
+     for the overlay scrollbar. */
+  padding-right: 8px;
 }
 
-/* Overlay scrollbar that floats inside the reserved LANE on the right (added width, not
-   stolen from the cards). It only shows when there's overflow, and even inflated on hover
-   it stays within the lane, never over the content. */
-.nc-scroll > scrollbar {
+/* Overlay scrollbar floating inside the reserved LANE on the right (added width, not
+   stolen from the cards). The problem in the narrow 8px lane was that the expanded
+   slider overlapped the cards' close buttons. What actually fixes that here is the
+   `trough` reset (margin/padding 0) + the tight 1px slider side margin: together they
+   pin the scrollbar FLUSH to the right screen edge, so it grows toward the wall, not
+   left over the cards. NOTE: the slider DOES still widen on hover/drag — GTK adds
+   .hovering/.dragging by proximity and Adwaita's rule wins despite the explicit state
+   selectors below; the size-pin is not load-bearing. If the hover growth ever needs
+   to truly stop, it'll take a structural change, not more specificity. */
+.nc-scroll.nc-transparent-scroll scrollbar,
+.nc-scroll.nc-transparent-scroll scrollbar.overlay-indicator {
   min-width: 0;
   background: transparent;
   border: none;
 }
-.nc-scroll > scrollbar > slider {
-  min-width: 6px;
+.nc-scroll.nc-transparent-scroll scrollbar trough,
+.nc-scroll.nc-transparent-scroll scrollbar.overlay-indicator trough {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+.nc-scroll.nc-transparent-scroll scrollbar slider, .nc-scroll.nc-transparent-scroll scrollbar.hovering slider, .nc-scroll.nc-transparent-scroll scrollbar.dragging slider,
+.nc-scroll.nc-transparent-scroll scrollbar.overlay-indicator slider,
+.nc-scroll.nc-transparent-scroll scrollbar.overlay-indicator.hovering slider,
+.nc-scroll.nc-transparent-scroll scrollbar.overlay-indicator.dragging slider {
+  min-width: 5px;
   min-height: 28px;
-  margin: 4px 3px;
+  margin: 4px 1px; /* tight right margin keeps it flush to the edge */
   background: var(--crystal-surface-raised);
   border-radius: var(--crystal-radius-pill);
   transition: background 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.nc-scroll > scrollbar:hover > slider {
+.nc-scroll.nc-transparent-scroll scrollbar:hover slider, .nc-scroll.nc-transparent-scroll scrollbar.hovering slider, .nc-scroll.nc-transparent-scroll scrollbar.dragging slider,
+.nc-scroll.nc-transparent-scroll scrollbar.overlay-indicator:hover slider,
+.nc-scroll.nc-transparent-scroll scrollbar.overlay-indicator.hovering slider,
+.nc-scroll.nc-transparent-scroll scrollbar.overlay-indicator.dragging slider {
   background: var(--crystal-text-dim);
 }
 

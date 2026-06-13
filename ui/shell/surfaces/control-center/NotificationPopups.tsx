@@ -1,12 +1,9 @@
-import { Astal, Gtk, Gdk } from "ags/gtk4"
-import app from "ags/gtk4/app"
-import Gtk4LayerShell from "gi://Gtk4LayerShell"
+import { Gtk } from "ags/gtk4"
 import AstalNotifd from "gi://AstalNotifd"
 import GLib from "gi://GLib"
 import { NotificationCapsule } from "./NotificationCenter"
 import { GRID_WIDTH } from "./CCLayoutManager"
 import { ScaleRevealer } from "../../common/ScaleRevealer"
-import { dockSideState } from "../dock/state"
 import notifConfig from "../../core/NotifConfig"
 import status from "../../core/Status"
 
@@ -24,12 +21,9 @@ export function NotificationPopupsWidget() {
         valign: Gtk.Align.START,
         halign: Gtk.Align.END,
         // Same width as the NC cards (one NotificationCapsule, one size).
+        // Position (top margin, side gap, right-dock dodge) is owned by Bar.tsx
+        // (syncPanelMargins), same as CC/NC.
         width_request: GRID_WIDTH,
-        margin_end: dockSideState.position === 'right' ? dockSideState.width : 0,
-    })
-
-    dockSideState.subscribe(() => {
-        box.margin_end = dockSideState.position === 'right' ? dockSideState.width : 0
     })
 
     interface Entry { revealer: ScaleRevealer, capsule: Gtk.Widget, order: number }
@@ -127,28 +121,4 @@ export function NotificationPopupsWidget() {
     return box
 }
 
-export default function NotificationPopups(gdkmonitor: Gdk.Monitor) {
-    const box = NotificationPopupsWidget()
-    const win = new Gtk.Window({
-        name: "notif-win",
-        application: app,
-        css_classes: ["notif-win", "fc-ignore"],
-        child: box
-    })
-
-    try {
-        Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, "notif-win")
-        Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
-        Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
-        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, 54)
-        Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.RIGHT, 12)
-        Gtk4LayerShell.set_exclusive_zone(win, 0)
-        // @ts-ignore
-        win.gdkmonitor = gdkmonitor
-    } catch (e) { }
-
-    return win
-}
 

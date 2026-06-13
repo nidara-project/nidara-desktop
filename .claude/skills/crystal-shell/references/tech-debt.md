@@ -195,6 +195,22 @@ lists; the CC context menu and the bar window menu use it. Two hand-rolled sibli
 iteration, submenus flattened to headers) and `Bar.tsx` `buildOverflowList` rows. Migrate
 opportunistically if already editing those files; not worth a standalone pass.
 
+### 15. The NC overlay scrollbar still widens on hover — can't be defeated by CSS (don't chase it)
+The notification-center list uses a GTK overlay scrollbar in an **8px lane** to the right of
+the cards (so cards stay flush with the bar capsules — see `state-and-ipc.md`). GTK widens
+the overlay slider on pointer **proximity** (it adds `.hovering`/`.dragging` itself, NOT the
+CSS `:hover`), and **Adwaita's `scrollbar.overlay-indicator.hovering slider` rule wins
+despite higher-specificity overrides** in `_control-center.scss` — the size-pin there is NOT
+load-bearing (verified: the slider still grows). What largely keeps it off the cards' close
+buttons is **anchoring the scrollbar flush to the right edge** (`trough` margin/padding reset
++ a 1px slider side margin), so it grows toward the wall, not left over the cards. `set_can_target(false)`
+on the scrollbar does NOT help — proximity-expand is independent of event targeting.
+**Residual (accepted, low priority):** on hover the widened slider still steals a *few px* of
+input from the close button's right edge — nearly imperceptible in use, left as possible
+polish/optimization. If the hover growth ever truly must stop, it needs a structural change
+(custom Cairo indicator or non-overlay reserved scrollbar with its own reflow tradeoff), not
+more specificity. Same root as #9 (the Adwaita stylesheet is loaded in-process).
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

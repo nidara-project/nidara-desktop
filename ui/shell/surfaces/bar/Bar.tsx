@@ -139,7 +139,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Derived from the bar height and the dock's actual footprint (dock size is
   // user-configurable) instead of hardcoded magic numbers.
   const BAR_H = 40
-  const PANEL_TOP = BAR_H + 16   // gap below the bar
+  const PANEL_TOP = BAR_H + 8   // gap below the bar (8: same rhythm as the side gap)
   const SAFETY = 28
   const DOCK_VPAD = 20           // dock padding around its icons
 
@@ -150,22 +150,33 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       ? dockSettings.iconSize + dockSettings.screenGap + DOCK_VPAD
       : 0
 
+  // 8px side gap: panels sit flush with the bar capsules (which live 8px from
+  // the screen edge) instead of the old 16 — the capsule alignment is a stronger
+  // visual reference than the tiling gaps_out grid underneath.
+  const SIDE_GAP = 8
+  const NC_LANE = 8   // must match LANE in NotificationCenter.tsx
+
   cc.margin_top = PANEL_TOP
   nc.margin_top = PANEL_TOP
   expansionCapsule.margin_top = PANEL_TOP   // same gap below the bar as CC/NC
+  systemMenu.margin_top = PANEL_TOP         // Bar owns the menu geometry (see syncPanelMargins)
   const syncPanelMargins = () => {
-    const end = 16 + (dockSideState.position === 'right' ? dockSideState.width : 0)
+    const end = SIDE_GAP + (dockSideState.position === 'right' ? dockSideState.width : 0)
     cc.margin_end = end
-    // NC reserves a 14px scrollbar lane on its right (see LANE in NotificationCenter).
-    // Pull the panel right by that much so its CONTENT edge still aligns with the CC,
-    // with the lane living in the gap toward the screen edge/dock.
-    nc.margin_end = Math.max(2, end - 14)
+    popups.margin_end = end
+    // NC reserves a scrollbar lane on its right (LANE in NotificationCenter).
+    // Pull the panel right by that much so its CONTENT edge still aligns with the
+    // CC/clock capsule, with the lane living in the gap toward the screen edge.
+    nc.margin_end = Math.max(0, end - NC_LANE)
+    // Mirror on the left for the system menu: the dock window stacks ABOVE the
+    // bar window, so without this shift a left dock covers the menu.
+    systemMenu.margin_start = SIDE_GAP + (dockSideState.position === 'left' ? dockSideState.width : 0)
   }
   syncPanelMargins()
   dockSideState.subscribe(syncPanelMargins)
 
   prism.margin_top = 0
-  popups.margin_top = PANEL_TOP; popups.margin_end = 16
+  popups.margin_top = PANEL_TOP
 
   // NC fills the gap between bar and dock; CC is capped to the same budget so it
   // never overflows on short screens (was a fixed 800px). Reactive to dock size.
