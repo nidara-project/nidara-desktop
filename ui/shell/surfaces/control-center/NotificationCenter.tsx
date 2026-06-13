@@ -106,7 +106,10 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     const bodyLines = itemExpanded ? 4 : 2
     let bodyLabel: Gtk.Label | null = null
     if (cleanBody) {
-        bodyLabel = new Gtk.Label({ label: cleanBody, css_classes: ["nc-notif-body"], halign: Gtk.Align.FILL, ellipsize: 3, lines: bodyLines, wrap: true, xalign: 0, hexpand: true })
+        // max_width_chars caps the NATURAL width only (a wrapping label otherwise
+        // requests the full unwrapped text width — the NC scroll clamps it, but the
+        // popup's layer window sizes to natural and would balloon with long bodies).
+        bodyLabel = new Gtk.Label({ label: cleanBody, css_classes: ["nc-notif-body"], halign: Gtk.Align.FILL, ellipsize: 3, lines: bodyLines, wrap: true, xalign: 0, hexpand: true, max_width_chars: 30 })
         // Normal reserves its 2 lines (uniform height); expanded grows to content up to 4.
         if (!isPopup && !itemExpanded) bodyLabel.height_request = bodyLines * 17   // ~17px @ fs-caption 12
         textStack.append(bodyLabel)

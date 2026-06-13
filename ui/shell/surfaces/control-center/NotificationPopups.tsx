@@ -4,13 +4,15 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import AstalNotifd from "gi://AstalNotifd"
 import GLib from "gi://GLib"
 import { NotificationCapsule } from "./NotificationCenter"
+import { GRID_WIDTH } from "./CCLayoutManager"
+import { ScaleRevealer } from "../../common/ScaleRevealer"
 import { dockSideState } from "../dock/state"
 import notifConfig from "../../core/NotifConfig"
 import status from "../../core/Status"
 
 const MAX_VISIBLE = 4       // cap stacked banners; oldest gets retired first
 const SWIPE_THRESHOLD = 90  // px of horizontal drag to dismiss the banner
-const ANIM_MS = 300         // slide/fade in+out duration
+const ANIM_MS = 300         // grow/shrink in+out duration
 
 export function NotificationPopupsWidget() {
     const notifd = AstalNotifd.get_default()
@@ -21,7 +23,8 @@ export function NotificationPopupsWidget() {
         css_classes: ["notif-popup-container"],
         valign: Gtk.Align.START,
         halign: Gtk.Align.END,
-        width_request: 440,
+        // Same width as the NC cards (one NotificationCapsule, one size).
+        width_request: GRID_WIDTH,
         margin_end: dockSideState.position === 'right' ? dockSideState.width : 0,
     })
 
@@ -29,7 +32,7 @@ export function NotificationPopupsWidget() {
         box.margin_end = dockSideState.position === 'right' ? dockSideState.width : 0
     })
 
-    interface Entry { revealer: any, capsule: Gtk.Widget, order: number }
+    interface Entry { revealer: ScaleRevealer, capsule: Gtk.Widget, order: number }
     const entries = new Map<number, Entry>()
     const timerMap = new Map<number, number>()
     let orderSeq = 0
@@ -56,17 +59,17 @@ export function NotificationPopupsWidget() {
         const entry = entries.get(id)
         if (entry) {
             if (entry.revealer.get_parent() === box) box.remove(entry.revealer)
+            entry.revealer.dismantle()
             entries.delete(id)
         }
     }
 
-    // Animated dismiss: collapse the revealer, then hard-remove after the transition.
+    // Animated dismiss: shrink back under the clock capsule, then drop the widget.
     const animateOut = (id: number) => {
         clearTimer(id)
         const entry = entries.get(id)
         if (!entry) return
-        entry.revealer.reveal_child = false
-        GLib.timeout_add(GLib.PRIORITY_DEFAULT, ANIM_MS + 20, () => { hardRemove(id); return GLib.SOURCE_REMOVE })
+        entry.revealer.reveal(false, () => hardRemove(id))
     }
 
     const onNotified = (_: any, id: number) => {
@@ -77,12 +80,9 @@ export function NotificationPopupsWidget() {
 
         const capsule = NotificationCapsule({ n, isPopup: true, onClose: () => animateOut(id) })
 
-        const revealer = new (Gtk as any).Revealer({
-            child: capsule,
-            transition_type: (Gtk as any).RevealerTransitionType.SLIDE_DOWN,
-            transition_duration: ANIM_MS,
-            reveal_child: false,
-        })
+        // Grow-from-small entry pivoted top-right, i.e. from just below the
+        // bar's clock capsule (the window is anchored TOP+RIGHT under it).
+        const revealer = new ScaleRevealer(capsule, { duration: ANIM_MS })
 
         // Hover pauses the auto-dismiss; leaving restarts it.
         const motion = new Gtk.EventControllerMotion()
@@ -115,7 +115,7 @@ export function NotificationPopupsWidget() {
             for (let i = 0; i < sorted.length - MAX_VISIBLE; i++) animateOut(sorted[i][0])
         }
 
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { const e = entries.get(id); if (e) e.revealer.reveal_child = true; return GLib.SOURCE_REMOVE })
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { entries.get(id)?.revealer.reveal(true); return GLib.SOURCE_REMOVE })
         startTimer(id)
     }
 
