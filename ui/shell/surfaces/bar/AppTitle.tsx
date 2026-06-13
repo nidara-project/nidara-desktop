@@ -7,6 +7,7 @@ import SquircleContainer from "../../common/SquircleContainer"
 import { CAPSULE_BORDER } from "./capsule"
 import hs from "../../core/HyprlandState"
 import status from "../../core/Status"
+import shellActions from "../../core/ShellActions"
 import buildWindowMenu from "./WindowMenu"
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule,
@@ -58,10 +59,16 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): Gtk.Widget 
 
   if (openMenu) {
     let menuOpen = false
+    // The open path, shared by the click gesture and the IPC hook.
+    const openWindowMenu = () => {
+      if (status.cc_open) return   // same guard as the other bar capsules
+      menuOpen = true
+      openMenu(capsule, (onClose) => buildWindowMenu(() => { menuOpen = false; onClose() }))
+    }
     const gesture = new Gtk.GestureClick()
     gesture.set_button(0)   // 0 = any button: left and right click both open
     gesture.connect("released", () => {
-      if (status.cc_open) return   // same guard as the other bar capsules
+      if (status.cc_open) return
       // Light toggle: a second click while our menu is up closes it. "__custom"
       // is the bar's shared transient-expansion id; outside-click dismissal
       // resets it, so a stale menuOpen just falls through to re-open.
@@ -70,10 +77,13 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): Gtk.Widget 
         status.bar_expanded_id = ""
         return
       }
-      menuOpen = true
-      openMenu(capsule, (onClose) => buildWindowMenu(() => { menuOpen = false; onClose() }))
+      openWindowMenu()
     })
     capsule.add_controller(gesture)
+    // Deterministic interaction hook for verification/automation: open the menu
+    // without a synthetic click, then assert with `queryUI .crystal-menu-label`.
+    // Last bar wins on multi-monitor — fine, the menu is global (focused window).
+    shellActions.openWindowMenu = openWindowMenu
   }
 
   return capsule

@@ -65,9 +65,9 @@ read source to discover it:
 Current commands (run `listActions` for the live list): `toggleCC|toggleControlCenter`,
 `toggleNC|toggleNotificationCenter`, `togglePrism|toggleSpotlight`, `toggleAppGrid`,
 `toggleSettings`, `settingsPage <pageId>`, `toggleOverview`, `toggleGameOverlay`,
-`hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`, `setConfig <key> <value>`,
-`screenshot [path]`, `queryUI [selector]`, `listActions`, `dumpState`. Aliases are intentional —
-Hyprland keybinds were renamed at one point and old names are kept for compatibility.
+`openWindowMenu`, `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`,
+`setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listActions`, `dumpState`.
+Aliases are intentional — Hyprland keybinds were renamed at one point and old names are kept.
 
 `screenshot [path]` captures the focused monitor with grim and returns the PNG path
 (default `/tmp/crystal-shell-shot-<ts>.png`) — the visual-verification leg of the agent
@@ -91,7 +91,16 @@ Examples: `ags request queryUI .bar-app-name` (assert the focused-app wordmark t
 `queryUI .crystal-list-title@settings` (assert a Display monitor section rendered),
 `queryUI .crystal-menu-row` (a flat menu's rows). It pairs with the deterministic show
 actions (`settingsPage X`, `toggleCC`) — open, then `queryUI` to assert — and avoids
-synthesizing clicks. Tier 1 is structure+text; semantic per-widget state (slider value,
+synthesizing clicks. Some surfaces only open on a click, so they get a **deterministic
+interaction hook**: an IPC action that invokes the *same handler* the click would, no
+synthetic input. The first is `openWindowMenu` (the AppTitle capsule menu — `ags request
+openWindowMenu`, then `queryUI .crystal-menu-label` for its rows). The pattern: the
+widget that owns the menu registers a `shellActions.openWindowMenu`-style fn (it needs the
+widget's local anchor/builder/state), and a thin IPC command calls it — see `ShellActions.ts`
+and `AppTitle.tsx`. Add more the same way (e.g. a dock context menu) when a click-only
+surface needs verifying. NB: menu **row text** lives on the child `.crystal-menu-label`
+label, not the `.crystal-menu-row` button container (queryUI reports own text, not
+descendant text), so assert against the label class. Tier 1 is structure+text; semantic per-widget state (slider value,
 dock-item running/active) is a deferred opt-in tier the widgets would cooperate on, sharing
 the same node model a future AT-SPI2 backend would fill for third-party apps.
 

@@ -112,6 +112,15 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     desc: "Toggle game mode (bar promoted above fullscreen surfaces)",
     run: () => ipc.toggleGameOverlay?.(),
   },
+  openWindowMenu: {
+    desc: "Open the focused window's options menu (the AppTitle capsule menu) without a " +
+      "synthetic click — a deterministic interaction hook. Pair with `queryUI .crystal-menu-label` to read its rows.",
+    run: () => {
+      if (!shellActions.openWindowMenu) return "window menu unavailable (no app-title bar)"
+      shellActions.openWindowMenu()
+      return "ok"
+    },
+  },
   hideForLock: { desc: "Hide bar+dock while the lockscreen is up", run: () => ipc.lockScreen?.() },
   showAfterLock: { desc: "Restore bar+dock after unlock", run: () => ipc.unlockScreen?.() },
   describeConfig: {
