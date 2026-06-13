@@ -12,7 +12,7 @@ import buildWindowMenu from "./WindowMenu"
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule,
 // anchored under the given widget. Injected by Bar (same pattern as Tray).
-type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget) => void
+type OpenMenu = (anchor: Gtk.Widget, build: (onClose: () => void) => Gtk.Widget, align?: "center" | "start") => void
 
 // Bar-left capsule showing the focused window's app name (wordmark), kept in
 // sync with Hyprland's focused client and its title changes. Clicking it (any
@@ -63,7 +63,9 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): Gtk.Widget 
     const openWindowMenu = () => {
       if (status.cc_open) return   // same guard as the other bar capsules
       menuOpen = true
-      openMenu(capsule, (onClose) => buildWindowMenu(() => { menuOpen = false; onClose() }))
+      // Left-align the menu with the capsule's left edge: it sits near the left
+      // screen edge, so a centered panel would spill off the left.
+      openMenu(capsule, (onClose) => buildWindowMenu(() => { menuOpen = false; onClose() }), "start")
     }
     const gesture = new Gtk.GestureClick()
     gesture.set_button(0)   // 0 = any button: left and right click both open

@@ -88,6 +88,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const CUSTOM_ID = "__custom"
   let customContentBuilder: ((onClose: () => void) => Gtk.Widget) | null = null
   let customAnchor: Gtk.Widget | null = null
+  // Horizontal anchoring of a custom expansion: "center" under the anchor (tray,
+  // right side) vs "start" = panel's left edge flush with the anchor's left edge.
+  // Start-align is for left-side capsules (AppTitle) whose centered panel would
+  // otherwise overflow the left screen edge.
+  let customAlign: "center" | "start" = "center"
   let overflowContentBuilder: ((onClose: () => void) => Gtk.Widget) | null = null
   // Measurement cache — populated after first layout; used to cap visible icons
   let cachedMaxIcons: number | null = null
@@ -262,7 +267,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const iconCenterX = tx + iconAlloc.width / 2
       const panelAlloc = expansionCapsule.get_allocation()
       const panelW = panelAlloc.width > 1 ? panelAlloc.width : 260
-      expansionCapsule.margin_end = Math.max(8, Math.round(monGeo.width - iconCenterX - panelW / 2))
+      // Left edge of the panel: flush with the anchor (start-align) or centered
+      // under it. halign is END, so margin_end pins the panel's RIGHT edge.
+      const panelLeft = (id === CUSTOM_ID && customAlign === "start") ? tx : iconCenterX - panelW / 2
+      expansionCapsule.margin_end = Math.max(8, Math.round(monGeo.width - panelLeft - panelW))
   }
 
   const showExpansion = (id: string) => {
@@ -305,9 +313,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Open arbitrary content (e.g. a tray context menu) in the shared expansion
   // capsule, anchored under `anchor`. Same glass/fade/positioning/dismissal as
   // the widget popovers — so it's consistent and free of Gtk.Popover quirks.
-  const openCustomExpansion = (anchor: Gtk.Widget, builder: (onClose: () => void) => Gtk.Widget) => {
+  const openCustomExpansion = (anchor: Gtk.Widget, builder: (onClose: () => void) => Gtk.Widget, align: "center" | "start" = "center") => {
       customAnchor = anchor
       customContentBuilder = builder
+      customAlign = align
       if (status.bar_expanded_id === CUSTOM_ID) showExpansion(CUSTOM_ID)  // refresh anchor + content
       else status.bar_expanded_id = CUSTOM_ID
   }
