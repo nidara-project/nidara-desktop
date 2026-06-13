@@ -84,8 +84,44 @@ costs nothing; a noisy or taste-specific PR costs the maintainer review time and
   `references/dev-workflow.md`.
 - **MAKE-IT-A-SETTING** → add the knob (follow the widget-registry / Settings conventions),
   set the user's value through it, and treat the *new knob* as a GLOBAL change.
-- **GLOBAL** → make the change in repo code following all conventions (the ten commandments,
-  scoped CSS, `Status.ts`/`ShellActions`, no hardcoded colours…), then go to Step 3.
+- **GLOBAL** → if you already know this is headed upstream, do the **Step 2½** existing-PR
+  check *first* (it may already be done). Then make the change in repo code following all
+  conventions (the ten commandments, scoped CSS, `Status.ts`/`ShellActions`, no hardcoded
+  colours…), and go to Step 3.
+
+---
+
+## Step 2½ — Before you build it: check it isn't already proposed upstream
+
+Only when this GLOBAL change is **headed for a PR** — you and the user intend to contribute it
+back. For a GLOBAL fix the user only wants on their own machine, skip this (zero friction). Do
+it **before** investing in the full implementation: someone may already have done the work, and
+finding that out now is the difference between a five-minute check and a wasted afternoon.
+
+Best-effort and read-only. `gh` needs network → run sandbox-off. If `gh` is missing or
+unauthenticated, don't block: note it in one line and proceed to Step 3.
+
+```bash
+# is it already proposed?
+gh pr list --repo fluid-crystal/crystal-shell --state open \
+  --search "<keywords from the change>" --json number,title,url,updatedAt,isDraft
+# and glance at recently merged — a fix can be merged but not yet in a release
+# (the update channel is tag-based), in which case the user just needs to update:
+gh pr list --repo fluid-crystal/crystal-shell --state merged \
+  --search "<keywords>" --limit 5 --json number,title,url,mergedAt
+```
+
+What you find decides the move — and **the user always decides**; you never act on a match
+silently:
+- **An open PR already covers it** → stop coding. Show the user the PR and offer to 👍, comment,
+  or just track it. Don't open a competing duplicate.
+- **An open PR is partial or stalled** → the user's call: improve on it (a comment naming the
+  gap), or proceed with a cleaner one that *references* the prior PR so the maintainer can
+  consolidate rather than review two.
+- **A match is already merged but unreleased** → the fix exists; advise `crystal-shell-update`
+  (or waiting for the next tag) instead of re-implementing it.
+- **No match, or `gh` unavailable** → proceed to Step 3 normally; just note that you checked (or
+  couldn't).
 
 ---
 
@@ -97,6 +133,9 @@ informed consent.
 
 **Never** open a PR without explicit user confirmation in this session. **Never** assume
 auto-merge — every PR is human-reviewed.
+
+> If the intent to contribute only firmed up now and you skipped **Step 2½**, run that
+> existing-PR check before pushing — don't duplicate a PR that's already open.
 
 1. **Self-review FIRST.** Re-read the ten commandments (SKILL.md) and the relevant reference.
    Confirm the change violates none. If it touches the dock, edit `DockCore.tsx` / `DockAxis.ts`
