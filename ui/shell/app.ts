@@ -15,6 +15,7 @@ import agentConfig from "./core/AgentConfig"
 import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue } from "./core/ConfigRegistry"
 import { registerConfigEntries } from "./config-entries"
 import hyprlandState from "./core/HyprlandState"
+import queryUI from "./core/UITree"
 
 // @ts-ignore
 import type { Monitor } from "gi://Gdk?version=4.0"
@@ -204,6 +205,12 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
         2,
       )
     },
+  },
+  queryUI: {
+    desc: "Snapshot what the UI is rendering as JSON (read-only, like dumpState). " +
+      "Optional selector: `.cssClass`, `#id`, `Type`, or `selector@window` " +
+      "(e.g. `queryUI .bar-app-name`, `queryUI .crystal-menu-row@bar`)",
+    run: args => JSON.stringify(queryUI(args[0]), null, 2),
   },
 }
 

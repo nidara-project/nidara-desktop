@@ -141,6 +141,22 @@ const TOOLS = [
         handler: () => okResult(agsRequest(["dumpState"])),
     },
     {
+        name: "query_ui",
+        description:
+            "Snapshot what the shell is actually rendering as JSON — a flat list of on-screen widgets carrying signal (test-id, CSS class, visible text, or interactive role), each with its ancestor path. Read-only, like dump_state. Use it to ASSERT UI content (e.g. the bar app-title text, an open menu's rows, the Display page's monitor sections) instead of eyeballing a screenshot. Optional `selector`: `.cssClass`, `#id`, `Type`, or `selector@window`.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                selector: {
+                    type: "string",
+                    description: "Filter: `.bar-app-name`, `#display-page`, `GtkLabel`, or `.crystal-menu-row@bar`. Omit for every interesting node on screen.",
+                },
+            },
+            additionalProperties: false,
+        },
+        handler: ({ selector } = {}) => okResult(agsRequest(selector ? ["queryUI", selector] : ["queryUI"])),
+    },
+    {
         name: "describe_config",
         description:
             "Schema of every agent-exposed shell setting: description, type, enum/min/max, writability and current value. Call this before get_config/set_config — never guess keys.",

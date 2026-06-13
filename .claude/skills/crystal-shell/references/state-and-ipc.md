@@ -66,8 +66,8 @@ Current commands (run `listActions` for the live list): `toggleCC|toggleControlC
 `toggleNC|toggleNotificationCenter`, `togglePrism|toggleSpotlight`, `toggleAppGrid`,
 `toggleSettings`, `settingsPage <pageId>`, `toggleOverview`, `toggleGameOverlay`,
 `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`, `setConfig <key> <value>`,
-`screenshot [path]`, `listActions`, `dumpState`. Aliases are intentional — Hyprland keybinds
-were renamed at one point and old names are kept for compatibility.
+`screenshot [path]`, `queryUI [selector]`, `listActions`, `dumpState`. Aliases are intentional —
+Hyprland keybinds were renamed at one point and old names are kept for compatibility.
 
 `screenshot [path]` captures the focused monitor with grim and returns the PNG path
 (default `/tmp/crystal-shell-shot-<ts>.png`) — the visual-verification leg of the agent
@@ -76,6 +76,24 @@ image. Gated by Settings → AI (`allowScreenshot`), separately from config writ
 capturing the screen is privacy-sensitive. `dumpState` also reports the **effective**
 Hyprland config (gaps/rounding/border via `getoption` — includes `hyprland-user.lua`
 overrides) and the AI-governance flags.
+
+`queryUI [selector]` (`core/UITree.ts`) is the **assertion** leg — it turns "screenshot +
+eyeball" into a programmatic check. It walks every **mapped** toplevel and returns a FLAT
+JSON list of on-screen widgets carrying signal (a test-id, a CSS class, visible text, or an
+interactive GType), each with a `path` of ancestors and `bounds`. Read-only, **ungated** like
+`dumpState` (a diagnostic read), with one safeguard: text of password/masked entries is
+returned as `‹redacted›`. Selectors: `.cssClass`, `#id` (the widget's `set_name()`, not its
+GType), `Type` (substring, case-insensitive), optionally scoped `selector@window`.
+Two gotchas learned building it: (1) **overlays live under the `crystal-bar` window**
+(commandment 5), so scope the CC/NC/menus with `@bar`, *not* `@control`; (2) `pageBox(id)`
+sets the id as a **CSS class**, so a Settings page is `.display-page`, not `#display-page`.
+Examples: `ags request queryUI .bar-app-name` (assert the focused-app wordmark text),
+`queryUI .crystal-list-title@settings` (assert a Display monitor section rendered),
+`queryUI .crystal-menu-row` (a flat menu's rows). It pairs with the deterministic show
+actions (`settingsPage X`, `toggleCC`) — open, then `queryUI` to assert — and avoids
+synthesizing clicks. Tier 1 is structure+text; semantic per-widget state (slider value,
+dock-item running/active) is a deferred opt-in tier the widgets would cooperate on, sharing
+the same node model a future AT-SPI2 backend would fill for third-party apps.
 
 Commands receive arguments: `requestHandler` passes `argv.slice(1)` to the handler
 (`run(args)`). `ags request settingsPage bluetooth` opens the Settings window directly on
