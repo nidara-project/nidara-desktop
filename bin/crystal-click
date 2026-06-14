@@ -153,6 +153,11 @@ function main() {
     }
 
     // Map: window-relative (logical) → global → output-relative + logical extent.
+    // SAME convention as the overview minimap (ui/shell/common/WorkspaceSchematic.ts:
+    // logicalW = monitor.width / scale; tile = (client − monitor.origin) * k) — that
+    // in-shell code is the battle-tested reference for this mapping, fractional scale
+    // included. Kept in sync here because this helper is a separate process and can't
+    // import the shell's modules.
     const at = aw.at || [0, 0], monName = aw.monitor
     const mons = runJson("hyprctl monitors -j") || []
     // aw.monitor is an index; match by id, else fall back to the focused monitor.

@@ -251,9 +251,12 @@ no-a11y surfaces, list items/tabs that need a real click):
 - **Same gate + indicator + kill switch + focus verification** as the keyboard (clicking is
   position/stacking-dependent, so geometry is read FRESH right before injecting). First slice is
   single-monitor, left-click only.
-- **Coord-mapping caveat**: this is the fragile leg — fractional scale and a possible CSD/shadow
-  offset between AT-SPI's window origin and Hyprland's `at` can miss. **Measure** (screenshot,
-  compare) rather than trust the math (see [[feedback_debug_verify_before_theory]]).
+- **Coord mapping**: the **same logical-coordinate convention as the overview minimap**
+  (`common/WorkspaceSchematic.ts` — `logical = physical/scale`, position − monitor origin), which
+  is the in-shell, battle-tested reference incl. fractional scale (`crystal-click` mirrors it
+  because it's a separate process). Verified exact here (scale 1: measured via `hyprctl cursorpos`;
+  AT-SPI window bounds align 1:1 with Hyprland's `at`, no CSD offset). Still **measure** on
+  fractional-scale / multi-monitor before trusting (per [[feedback_debug_verify_before_theory]]).
 - **Deferred (not built)**: scroll/drag/right-click, and multi-monitor output targeting
   (`create_virtual_pointer_with_output`).
 - **Deferred (Phase 2b-ii, not built)**: the synthetic **pointer** — a compiled `crystal-input`
