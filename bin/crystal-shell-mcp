@@ -168,6 +168,30 @@ const TOOLS = [
         handler: ({ name, args = [] }) => okResult(agsRequest([name, ...args])),
     },
     {
+        name: "list_apps",
+        description:
+            "List the installed, launchable apps as JSON [{id, name, wmClass}] — the same index the dock and app grid use. Call this to discover an app's id before launch_app.",
+        inputSchema: { type: "object", properties: {}, additionalProperties: false },
+        handler: () => okResult(agsRequest(["listApps"])),
+    },
+    {
+        name: "launch_app",
+        description:
+            "Launch an installed app by its id (from list_apps), e.g. \"org.gnome.Nautilus\". Origin-aware (flatpak vs gtk-launch) and scoped exactly like a dock click. Opens the app; it does NOT drive it (use the computer-use tools for that).",
+        inputSchema: {
+            type: "object",
+            properties: {
+                id: { type: "string", description: "App id from list_apps (e.g. org.gnome.Nautilus)" },
+            },
+            required: ["id"],
+            additionalProperties: false,
+        },
+        handler: ({ id } = {}) => {
+            if (!id) return errResult("launch_app needs an app id (see list_apps)")
+            return okResult(agsRequest(["launchApp", id]))
+        },
+    },
+    {
         name: "dump_state",
         description:
             "Live shell state as JSON: version, locale, dark mode, monitors, open overlays, effective Hyprland config (gaps/rounding/border incl. user overrides) and AI-governance flags. Read state → act → re-read to verify.",

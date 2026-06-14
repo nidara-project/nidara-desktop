@@ -149,7 +149,8 @@ MCP over stdio. Two discovery paths, dev and user:
 It is a **thin adapter with mostly no logic of its own**: every shell-self-control tool shells
 out to `ags request` (or `crystal-shell-doctor`), so the `IPC_COMMANDS` table stays the single
 source of truth — a new IPC command is reachable through the `run_action` tool with zero MCP
-changes. Tools: `list_actions`, `run_action(name, args)`, `dump_state`, `query_ui(selector)`,
+changes. Tools: `list_actions`, `run_action(name, args)`, `list_apps`, `launch_app(id)`,
+`dump_state`, `query_ui(selector)`,
 `query_app(app)`, `do_app_action(app, node, action)`, `type_text(app, text)`,
 `press_key(app, key)`, `focus_window(app)`, `click_app(app, node, button?)`, `click_at(app, x, y, button?)`,
 `scroll_app(app, node, direction, amount?)`, `scroll_at(app, x, y, direction, amount?)`,
@@ -158,6 +159,13 @@ changes. Tools: `list_actions`, `run_action(name, args)`, `dump_state`, `query_u
 content** — the client sees it without a separate read), `doctor`.
 (Action verbs like `openWindowMenu` need no dedicated tool — they go through `run_action`; the
 dedicated tools are the read/introspection verbs and the computer-use verbs.)
+
+**App listing / launching** (`listApps` / `launchApp <id>` IPC, `list_apps` / `launch_app` MCP
+tools) is a first-class **shell capability**, not computer-use: it reuses `AppService`
+(`getAllApps()` for the list, `getLaunchCommand()` + the dock's `uwsm app -- sh -c 'cd "$HOME" &&
+exec …'` path for launch — origin-aware flatpak/gtk-launch). It only *opens* an installed app; it
+does not drive it (that's the gated computer-use layer). **Ungated** by design (parity with a dock
+click; bounded to the installed set) — opening a window is low-risk, unlike driving one.
 
 `query_app`, `do_app_action`, `type_text` and `press_key` are the exceptions to "delegates to the
 shell": they are the **computer-use** layer's perception, AT-SPI-action and synthetic-keyboard

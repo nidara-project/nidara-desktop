@@ -10,8 +10,9 @@ import status from "./core/Status"
 import shellActions from "./core/ShellActions"
 import { currentLocale } from "./core/i18n"
 import { readFile } from "ags/file"
-import { exec } from "ags/process"
+import { exec, execAsync } from "ags/process"
 import agentConfig from "./core/AgentConfig"
+import appService from "./core/AppService"
 import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue } from "./core/ConfigRegistry"
 import { registerConfigEntries } from "./config-entries"
 import hyprlandState from "./core/HyprlandState"
@@ -187,6 +188,28 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
         console.error("[IPC] screenshot failed:", e)
         return `screenshot failed: ${e}`
       }
+    },
+  },
+  listApps: {
+    desc: "List installed apps as JSON [{id, name, wmClass}] — the launchable set, the same index the dock and app grid use. Pair with launchApp.",
+    run: () =>
+      JSON.stringify(
+        appService.getAllApps().map(a => ({ id: a.id, name: a.name, wmClass: a.wmClass })),
+        null, 2,
+      ),
+  },
+  launchApp: {
+    desc: "Launch an installed app by id (`launchApp org.gnome.Nautilus`) — origin-aware (flatpak run / gtk-launch), exactly the dock-click path (uwsm-scoped, CWD=$HOME). Discover ids with listApps.",
+    run: args => {
+      const id = (args[0] ?? "").trim()
+      if (!id) return "usage: launchApp <app-id> (see listApps)"
+      if (!appService.hasApp(id)) return `no installed app with id "${id}" — see listApps`
+      const cmd = appService.getLaunchCommand(id)
+      // Same launch path as a dock click (DockItem.tsx): uwsm-scoped, cd $HOME so
+      // children don't inherit the shell's CWD. Fire-and-forget.
+      execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
+        .catch(e => console.error("[IPC] launchApp:", e))
+      return `launched ${id}`
     },
   },
   listActions: {
