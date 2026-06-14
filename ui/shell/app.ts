@@ -132,6 +132,24 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       return "computer-control disabled"
     },
   },
+  focusWindow: {
+    desc: "Raise and focus a third-party window by app/class (e.g. `focusWindow telegram`) — the precondition for synthetic keyboard (type_text/press_key need the target focused). Gated by Settings → AI → Allow Agents to Control Other Apps.",
+    run: args => {
+      if (!agentConfig.allowComputerControl || !agentConfig.allowComputerUse)
+        return "computer-control is disabled — enable it in Settings → AI"
+      const q = (args[0] ?? "").toLowerCase().trim()
+      if (!q) return "usage: focusWindow <app-or-class>"
+      const norm = (s?: string) => (s ?? "").toLowerCase()
+      const clients = hyprlandState.clients ?? []
+      const match =
+        clients.find(c => norm(c.class) === q) ??
+        clients.find(c => norm(c.class).includes(q)) ??
+        clients.find(c => norm(c.title).includes(q))
+      if (!match) return `no window matching "${q}"`
+      hyprlandState.focusWindow(match.address)
+      return `focused ${match.class}: ${match.title}`
+    },
+  },
   hideForLock: { desc: "Hide bar+dock while the lockscreen is up", run: () => ipc.lockScreen?.() },
   showAfterLock: { desc: "Restore bar+dock after unlock", run: () => ipc.unlockScreen?.() },
   describeConfig: {

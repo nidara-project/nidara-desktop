@@ -232,6 +232,69 @@ const TOOLS = [
         },
     },
     {
+        name: "type_text",
+        description:
+            "Type literal text into a THIRD-PARTY app via synthetic keyboard (wtype) — for fields AT-SPI can't fill. Focus the target first (do_app_action … SetFocus). SAFETY: `app` is required and must be the FOCUSED window, else it refuses (keystrokes only land where you aimed). Does NOT press Enter — use press_key for that. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                app: { type: "string", description: "Target app — must be the focused window" },
+                text: { type: "string", description: "Literal text to type" },
+            },
+            required: ["app", "text"],
+            additionalProperties: false,
+        },
+        handler: ({ app, text } = {}) => {
+            if (!computerControlEnabled())
+                return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
+            if (!app || text == null || text === "") return errResult("type_text needs app and text")
+            const t = findTool("crystal-type")
+            if (!t) return errResult("crystal-type not found — re-run install.sh")
+            const r = run([t, "text", app, String(text)])
+            return r.out ? okResult(r.out) : errResult(`type_text failed: ${r.err || "no output"}`)
+        },
+    },
+    {
+        name: "press_key",
+        description:
+            "Press a key or combo in a THIRD-PARTY app via synthetic keyboard (wtype) — e.g. \"Return\", \"Tab\", \"Escape\", \"ctrl+a\", \"ctrl+shift+t\". Activates a focused control (Enter/Space), navigates (Tab), etc. Focus the target first (do_app_action … SetFocus). SAFETY: `app` is required and must be the FOCUSED window, else it refuses. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                app: { type: "string", description: "Target app — must be the focused window" },
+                key: { type: "string", description: "Key or combo, e.g. Return, Tab, ctrl+a" },
+            },
+            required: ["app", "key"],
+            additionalProperties: false,
+        },
+        handler: ({ app, key } = {}) => {
+            if (!computerControlEnabled())
+                return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
+            if (!app || !key) return errResult("press_key needs app and key")
+            const t = findTool("crystal-type")
+            if (!t) return errResult("crystal-type not found — re-run install.sh")
+            const r = run([t, "key", app, String(key)])
+            return r.out ? okResult(r.out) : errResult(`press_key failed: ${r.err || "no output"}`)
+        },
+    },
+    {
+        name: "focus_window",
+        description:
+            "Raise and focus a third-party app's window by name/class (e.g. \"telegram\") — the PRECONDITION for synthetic keyboard: type_text/press_key require the target to be the focused window. Goes through the shell's Hyprland control (reuses the dock's focus path). Gated by Settings → AI → Allow Agents to Control Other Apps.",
+        inputSchema: {
+            type: "object",
+            properties: { app: { type: "string", description: "App name or window class to focus" } },
+            required: ["app"],
+            additionalProperties: false,
+        },
+        handler: ({ app } = {}) => {
+            if (!computerControlEnabled())
+                return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
+            if (!app) return errResult("focus_window needs app")
+            return okResult(agsRequest(["focusWindow", app]))
+        },
+    },
+    {
         name: "describe_config",
         description:
             "Schema of every agent-exposed shell setting: description, type, enum/min/max, writability and current value. Call this before get_config/set_config — never guess keys.",

@@ -239,7 +239,7 @@ sudo pacman -Syu --needed --noconfirm \
     jq slurp grim wf-recorder wl-clipboard cliphist mesa pam \
     pipewire wireplumber \
     git nodejs npm gjs go \
-    at-spi2-core \
+    at-spi2-core wtype \
     accountsservice greetd pavucontrol rust cargo \
     hyprland hypridle hyprsunset uwsm power-profiles-daemon \
     kitty nautilus \
@@ -512,8 +512,9 @@ sudo cp "$REPO_DIR/bin/crystal-portal"    /usr/bin/crystal-portal
 sudo cp "$REPO_DIR/bin/crystal-shell-mcp" /usr/bin/crystal-shell-mcp
 sudo cp "$REPO_DIR/bin/crystal-a11y"      /usr/bin/crystal-a11y
 sudo cp "$REPO_DIR/bin/crystal-act"       /usr/bin/crystal-act
+sudo cp "$REPO_DIR/bin/crystal-type"      /usr/bin/crystal-type
 sudo cp "$REPO_DIR/bin/crystal-shell-update" /usr/bin/crystal-shell-update
-sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-before-sleep /usr/bin/crystal-after-sleep /usr/bin/crystal-game-mode /usr/bin/crystal-shell-doctor /usr/bin/crystal-portal /usr/bin/crystal-shell-mcp /usr/bin/crystal-a11y /usr/bin/crystal-act /usr/bin/crystal-shell-update
+sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-before-sleep /usr/bin/crystal-after-sleep /usr/bin/crystal-game-mode /usr/bin/crystal-shell-doctor /usr/bin/crystal-portal /usr/bin/crystal-shell-mcp /usr/bin/crystal-a11y /usr/bin/crystal-act /usr/bin/crystal-type /usr/bin/crystal-shell-update
 
 # systemd user unit — the shell respawns on crash instead of leaving a bare
 # compositor (see bin/crystal-shell.service). NOT enabled by target: it's

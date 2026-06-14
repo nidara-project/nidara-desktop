@@ -73,9 +73,11 @@ ags request setConfig <key> <value>      # change a setting officially (validate
 ags request screenshot [path]            # capture the focused monitor → PNG path (visual verification; gated)
 crystal-a11y [app]                       # computer-use perception: a THIRD-PARTY app's UI via AT-SPI, same shape as queryUI (read-only; gated by allowComputerUse, default OFF)
 crystal-act <app> <node> <action>        # computer-use action: invoke a named AT-SPI action on a named control (deterministic, no synthetic input; gated by allowComputerControl, default OFF, requires perception)
+crystal-type text|key <app> <payload>    # computer-use synthetic keyboard via wtype (focus-verified: <app> must be the active window); same allowComputerControl gate. Pair with crystal-act … SetFocus
+ags request focusWindow <app>            # raise/focus a 3rd-party window by class (precondition for the keyboard; reuses the dock's HyprlandState.focusWindow); gated by allowComputerControl
 ags request disableComputerControl       # kill switch: revoke AI control instantly (also: click the bar indicator, or Super+Shift+Esc)
 crystal-shell-doctor                     # Markdown diagnostic report (bug/PR evidence)
-crystal-shell-mcp                        # all of the above as MCP tools over stdio (incl. query_app → crystal-a11y, do_app_action → crystal-act; .mcp.json: repo root for dev; installer-managed copy in ~/.config/crystal-shell/ for users)
+crystal-shell-mcp                        # all of the above as MCP tools over stdio (incl. query_app → crystal-a11y, do_app_action → crystal-act, type_text/press_key → crystal-type, focus_window → ags request focusWindow; .mcp.json: repo root for dev; installer-managed copy in ~/.config/crystal-shell/ for users)
 ```
 
 CI gates SCSS compile, typecheck, widget-registry freshness **and a headless boot smoke**:

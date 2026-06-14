@@ -150,25 +150,26 @@ It is a **thin adapter with mostly no logic of its own**: every shell-self-contr
 out to `ags request` (or `crystal-shell-doctor`), so the `IPC_COMMANDS` table stays the single
 source of truth — a new IPC command is reachable through the `run_action` tool with zero MCP
 changes. Tools: `list_actions`, `run_action(name, args)`, `dump_state`, `query_ui(selector)`,
-`query_app(app)`, `do_app_action(app, node, action)`, `describe_config`, `get_config`,
-`set_config`, `screenshot` (returns the PNG **inline as MCP image content** — the client sees it
-without a separate read), `doctor`. (Action verbs like `openWindowMenu` need no dedicated tool —
-they go through `run_action`; the dedicated tools are the read/introspection verbs and the two
-computer-use verbs.)
+`query_app(app)`, `do_app_action(app, node, action)`, `type_text(app, text)`,
+`press_key(app, key)`, `focus_window(app)`, `describe_config`, `get_config`, `set_config`,
+`screenshot` (returns the PNG **inline as MCP image content** — the client sees it without a
+separate read), `doctor`.
+(Action verbs like `openWindowMenu` need no dedicated tool — they go through `run_action`; the
+dedicated tools are the read/introspection verbs and the computer-use verbs.)
 
-`query_app` and `do_app_action` are the exceptions to "delegates to the shell": they are the
-**computer-use** layer's perception and action legs, and they run `crystal-a11y` / `crystal-act`
-directly (like `doctor` runs the doctor), **not** `ags request` — because reaching into a
-*third-party* app is not shell-self-control and must not live in the shell process. See "The
-computer-use layer" below.
+`query_app`, `do_app_action`, `type_text` and `press_key` are the exceptions to "delegates to the
+shell": they are the **computer-use** layer's perception, AT-SPI-action and synthetic-keyboard
+legs, and they run `crystal-a11y` / `crystal-act` / `crystal-type` directly (like `doctor` runs
+the doctor), **not** `ags request` — because reaching into a *third-party* app is not
+shell-self-control and must not live in the shell process. See "The computer-use layer" below.
 
 Governance: `ai.json.allowMcp` (Settings → AI → "Enable MCP Server") is re-read on **every**
 tool call, so the toggle applies live with no restarts; when off, every tool refuses with a
 pointer to the page. The finer gates (`allowConfigWrite`, `allowScreenshot`, `allowComputerUse`,
-`allowComputerControl`) are enforced downstream (by the shell, or by `crystal-a11y`/`crystal-act`
-for the computer-use tools) — never duplicate them in the MCP layer beyond the live re-read the
-tool already does. Like the rest of `ai.*`, `allowMcp` is visible via `describeConfig` but not
-writable via `setConfig`.
+`allowComputerControl`) are enforced downstream (by the shell, or by
+`crystal-a11y`/`crystal-act`/`crystal-type` for the computer-use tools) — never duplicate them in
+the MCP layer beyond the live re-read the tool already does. Like the rest of `ai.*`, `allowMcp`
+is visible via `describeConfig` but not writable via `setConfig`.
 
 ### The computer-use layer (third-party perception + action)
 
@@ -212,11 +213,34 @@ Phase 2a — **action, deterministic only (built)**:
   shows in the bar (mirrors the recording indicator; `Bar.tsx`). It IS the kill switch — clicking
   it, or the `Super+Shift+Esc` keybind (`config/hypr/hyprland.lua` → `ags request
   disableComputerControl`), revokes control instantly. The user is never unaware the agent may act.
-- **Deferred (Phase 2b+, not built)**: synthetic input for apps without activatable actions (Qt
-  buttons, Electron, canvas) — `wtype` (keyboard, no daemon) + a tiny Rust `crystal-input` helper
-  speaking `zwlr_virtual_pointer_v1` (no `ydotool`/uinput), coords mapped via Hyprland window
-  geometry; a per-action "acting now" activity flash; a per-app allowlist; the Prism assistant as
-  the perceive→act orchestration surface.
+Phase 2b-i — **synthetic keyboard (built)**, for controls AT-SPI can't reach (Qt text fields;
+Qt buttons that only expose `SetFocus` → focus then press Enter/Space):
+
+- **`bin/crystal-type`** (standalone GJS; wraps **`wtype`**, the Wayland-native
+  `zwp_virtual_keyboard`, no daemon; SEPARATE binary, synthetic input never lives in the perceive
+  or AT-SPI-action helpers). `crystal-type text <app> <string>` /
+  `crystal-type key <app> <keyspec>` (`Return`, `Tab`, `ctrl+a`, `ctrl+shift+t`; `super`→`logo`).
+  MCP: `type_text` / `press_key`. The loop: `query_app` → `do_app_action … SetFocus` →
+  `type_text`/`press_key`.
+- **Same gate as 2a** (`allowComputerControl` + the 2a indicator/kill switch) — no new toggle.
+- **SAFETY — focus-dependent**: `wtype` types into whatever window has focus (unlike `do_action`).
+  So `<app>` is **required** and `crystal-type` **verifies it is Hyprland's active window**
+  (`hyprctl activewindow`) before injecting, refusing otherwise — a keystroke can only land in the
+  named app while it is actually focused. This is the deliberate mitigation for the focus-race
+  class of bug.
+- **`focusWindow <app>` IPC + `focus_window` MCP tool** — raise/focus a third-party window by
+  class so it becomes the active window (the **precondition** for the keyboard). Unlike the other
+  computer-use tools, this is a **shell IPC command** (it reuses `HyprlandState.focusWindow`, the
+  same path the dock uses on a running-app click — `hl.dsp.focus({ window = 'address:…' })` via
+  `hyprctl dispatch`; the classic `hyprctl dispatch focuswindow class:X` is rejected by our Lua
+  config). Gated by `allowComputerControl`. The full autonomous loop:
+  `focus_window telegram` → `do_app_action telegram "<field>" SetFocus` → `type_text telegram "…"`.
+- **Deferred (Phase 2b-ii, not built)**: the synthetic **pointer** — a compiled `crystal-input`
+  helper (Rust, `zwlr_virtual_pointer_v1`, no `ydotool`/uinput) for click/move, AT-SPI
+  window-relative bounds mapped to output coords via Hyprland window geometry. Needs a new Rust
+  build path, so it waits for a case keyboard + `do_action` can't reach (canvas, no-a11y apps).
+  Also deferred: a per-action "acting now" flash; a per-app allowlist; the Prism assistant as the
+  perceive→act orchestration surface (Phase 3).
 
 ### Adding a new IPC command
 
