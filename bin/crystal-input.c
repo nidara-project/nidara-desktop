@@ -4,12 +4,15 @@
 // wlroots zwlr_virtual_pointer_v1 protocol (Hyprland supports it). No daemon,
 // no uinput, no root — the Wayland-native pointer path.
 //
-//   crystal-input move  <x> <y> <w> <h>
-//   crystal-input click <x> <y> <w> <h>
+//   crystal-input move       <x> <y> <w> <h>
+//   crystal-input click      <x> <y> <w> <h>          # left button
+//   crystal-input rightclick <x> <y> <w> <h>          # right button
+//   crystal-input scroll     <x> <y> <w> <h> <dx> <dy> # wheel notches at (x,y)
 //
 // (x,y) is the target position and (w,h) the output's extent, BOTH in the same
 // (logical) units — motion_absolute maps x/w → output fraction, so the caller
-// passes logical output-relative coords + the output's logical size. This is a
+// passes logical output-relative coords + the output's logical size. For scroll,
+// <dx>/<dy> are signed wheel-notch counts (dy>0 = down, dx>0 = right). This is a
 // DUMB injector: all gating, focus verification, AT-SPI node resolution and
 // geometry mapping live in the crystal-click GJS wrapper. Single-output for now
 // (default seat/output); multi-monitor output targeting is a follow-up.
@@ -48,16 +51,48 @@ static uint32_t now_ms(void) {
     return (uint32_t)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
 
+// Emit |notches| discrete wheel steps on `axis` (sign of notches = direction).
+// One frame per notch, mimicking a real mouse wheel: source + continuous value +
+// discrete step count. value is the continuous fallback (15 units/notch — the
+// wlroots wheel convention); `discrete` is the integer step apps use for line/
+// notch scrolling. axis is called before axis_discrete (the latter extends it).
+// No axis_stop — wheel sources have no kinetic end (unlike touchpad/finger).
+static void emit_scroll(struct zwlr_virtual_pointer_v1 *vp, uint32_t axis, int notches) {
+    if (notches == 0) return;
+    int step = notches > 0 ? 1 : -1;
+    int n = notches > 0 ? notches : -notches;
+    wl_fixed_t value = wl_fixed_from_double(15.0 * step);
+    for (int i = 0; i < n; i++) {
+        uint32_t t = now_ms();
+        zwlr_virtual_pointer_v1_axis_source(vp, WL_POINTER_AXIS_SOURCE_WHEEL);
+        zwlr_virtual_pointer_v1_axis(vp, t, axis, value);
+        zwlr_virtual_pointer_v1_axis_discrete(vp, t, axis, value, step);
+        zwlr_virtual_pointer_v1_frame(vp);
+    }
+}
+
 int main(int argc, char **argv) {
-    if (argc != 6 || (strcmp(argv[1], "move") && strcmp(argv[1], "click"))) {
-        fprintf(stderr, "usage: crystal-input move|click <x> <y> <w> <h>\n");
+    const char *verb = argc >= 2 ? argv[1] : "";
+    int is_move   = strcmp(verb, "move") == 0;
+    int is_click  = strcmp(verb, "click") == 0;
+    int is_right  = strcmp(verb, "rightclick") == 0;
+    int is_scroll = strcmp(verb, "scroll") == 0;
+    if ((!is_move && !is_click && !is_right && !is_scroll) ||
+        (is_scroll ? argc != 8 : argc != 6)) {
+        fprintf(stderr,
+            "usage: crystal-input move|click|rightclick <x> <y> <w> <h>\n"
+            "       crystal-input scroll <x> <y> <w> <h> <dx> <dy>\n");
         return 2;
     }
-    int click = strcmp(argv[1], "click") == 0;
     uint32_t x = (uint32_t)strtoul(argv[2], NULL, 10);
     uint32_t y = (uint32_t)strtoul(argv[3], NULL, 10);
     uint32_t w = (uint32_t)strtoul(argv[4], NULL, 10);
     uint32_t h = (uint32_t)strtoul(argv[5], NULL, 10);
+    int dx = 0, dy = 0;
+    if (is_scroll) {
+        dx = (int)strtol(argv[6], NULL, 10);
+        dy = (int)strtol(argv[7], NULL, 10);
+    }
 
     struct wl_display *dpy = wl_display_connect(NULL);
     if (!dpy) { fprintf(stderr, "crystal-input: cannot connect to Wayland display\n"); return 1; }
@@ -78,13 +113,17 @@ int main(int argc, char **argv) {
     zwlr_virtual_pointer_v1_motion_absolute(vp, t, x, y, w, h);
     zwlr_virtual_pointer_v1_frame(vp);
 
-    if (click) {
+    if (is_click || is_right) {
+        uint32_t btn = is_right ? BTN_RIGHT : BTN_LEFT;
         t = now_ms();
-        zwlr_virtual_pointer_v1_button(vp, t, BTN_LEFT, WL_POINTER_BUTTON_STATE_PRESSED);
+        zwlr_virtual_pointer_v1_button(vp, t, btn, WL_POINTER_BUTTON_STATE_PRESSED);
         zwlr_virtual_pointer_v1_frame(vp);
         t = now_ms();
-        zwlr_virtual_pointer_v1_button(vp, t, BTN_LEFT, WL_POINTER_BUTTON_STATE_RELEASED);
+        zwlr_virtual_pointer_v1_button(vp, t, btn, WL_POINTER_BUTTON_STATE_RELEASED);
         zwlr_virtual_pointer_v1_frame(vp);
+    } else if (is_scroll) {
+        emit_scroll(vp, WL_POINTER_AXIS_VERTICAL_SCROLL, dy);
+        emit_scroll(vp, WL_POINTER_AXIS_HORIZONTAL_SCROLL, dx);
     }
 
     // Flush + roundtrip so the events actually reach the compositor before exit.

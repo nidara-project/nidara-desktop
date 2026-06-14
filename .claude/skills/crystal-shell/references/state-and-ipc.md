@@ -151,7 +151,8 @@ out to `ags request` (or `crystal-shell-doctor`), so the `IPC_COMMANDS` table st
 source of truth — a new IPC command is reachable through the `run_action` tool with zero MCP
 changes. Tools: `list_actions`, `run_action(name, args)`, `dump_state`, `query_ui(selector)`,
 `query_app(app)`, `do_app_action(app, node, action)`, `type_text(app, text)`,
-`press_key(app, key)`, `focus_window(app)`, `click_app(app, node)`, `click_at(app, x, y)`,
+`press_key(app, key)`, `focus_window(app)`, `click_app(app, node, button?)`, `click_at(app, x, y, button?)`,
+`scroll_app(app, node, direction, amount?)`, `scroll_at(app, x, y, direction, amount?)`,
 `describe_config`, `get_config`, `set_config`, `screenshot` (returns the PNG **inline as MCP image
 content** — the client sees it without a separate read), `doctor`.
 (Action verbs like `openWindowMenu` need no dedicated tool — they go through `run_action`; the
@@ -179,10 +180,17 @@ to perceiving and driving **any** third-party app. Phase 1 — perception, read-
 - **`bin/crystal-a11y`** (standalone GJS, `gi://Atspi`; same no-Node pattern as
   `crystal-shell-mcp`/`crystal-portal`) reads an app's **AT-SPI2 accessibility tree** and prints
   it in the **same flat `UINode` shape as `queryUI`** (additive a11y fields: `role`, `states[]`,
-  `actions[]`). `crystal-a11y` (focused window, resolved via `hyprctl activewindow`) or
-  `crystal-a11y <app-name>`. Read-only: it lists available action *names* but invokes none.
-  Carries `UITree.ts`'s password redaction; caps nodes/depth + a soft deadline (AT-SPI calls are
-  sync D-Bus and can hang — that's why it's a separate process, never the shell's main loop).
+  `actions[]`, and `shortcuts[]` when present). `crystal-a11y` (focused window, resolved via
+  `hyprctl activewindow`) or `crystal-a11y <app-name>`. Read-only: it lists available action
+  *names* but invokes none. **`shortcuts[]`** = the AT-SPI key bindings (accelerators) of a
+  control's actions, e.g. `["Control+X"]` — often the *only* semantic handle on a label-less
+  control: **GTK4 popover-menu items expose no accessible name/text** (verified: `name`/`text`/
+  child node all empty), but they DO carry their accelerator, so `Control+X`⇒Cut, `F2`⇒Rename,
+  `Delete`⇒Move to Trash. Items with no accelerator (e.g. "Move to…") still need vision —
+  this is the **hybrid** at work (AT-SPI for structure + shortcuts + the `focused` state for
+  navigation tracking; screenshots read the labels AT-SPI hides). Carries `UITree.ts`'s password
+  redaction; caps nodes/depth + a soft deadline (AT-SPI calls are sync D-Bus and can hang — that's
+  why it's a separate process, never the shell's main loop).
 - **Gate: `ai.json.allowComputerUse`** (Settings → AI → "Allow Agents to See Other Apps"), the
   **only gate that defaults OFF** — it reaches outside the shell (privacy-sensitive, ≈ the
   screenshot gate). Enabling it (via `AgentConfig.setAllowComputerUse`) also turns on
@@ -236,35 +244,39 @@ Qt buttons that only expose `SetFocus` → focus then press Enter/Space):
   config). Gated by `allowComputerControl`. The full autonomous loop:
   `focus_window telegram` → `do_app_action telegram "<field>" SetFocus` → `type_text telegram "…"`.
 
-Phase 2b-ii — **synthetic pointer (click), built**, for what AT-SPI/keyboard can't reach (canvas,
-no-a11y surfaces, list items/tabs that need a real click):
+Phase 2b-ii — **synthetic pointer (click, right-click, scroll), built**, for what AT-SPI/keyboard
+can't reach (canvas, no-a11y surfaces, list items/tabs that need a real click, context menus,
+scrolling off-screen content):
 
 - **`bin/crystal-input`** — a tiny **C** Wayland client (`zwlr_virtual_pointer_v1`, no daemon/uinput)
   compiled by `install.sh` (`wayland-scanner` + `cc` on `wlr-protocols`' XML; only the `.c` is
-  committed, the binary is git-ignored). A **dumb injector**: `crystal-input click <x> <y> <w> <h>`
-  (output-relative logical position + the output's logical extent).
+  committed, the binary is git-ignored). A **dumb injector**, verbs:
+  `move|click|rightclick <x> <y> <w> <h>` and `scroll <x> <y> <w> <h> <dx> <dy>` (output-relative
+  logical position + the output's logical extent; `dx/dy` are signed wheel notches, `dy>0`=down,
+  `dx>0`=right — emitted as `axis_source(WHEEL)`+`axis`+`axis_discrete` frames, 15 units/notch, the
+  wlroots wheel convention). All the protocol verbs are available at manager **version 1** (what we
+  bind) — adding right-click/scroll needed **no install.sh / protocol-version change**.
 - **`bin/crystal-click`** (GJS, sibling of crystal-act/crystal-type) owns the smarts: gate +
   focus-verify, AT-SPI node resolution (centre) or a window-relative point, then the **coordinate
   mapping** — `global = window.at + rel` (AT-SPI window coords are logical, like Hyprland's `at`);
   `output_rel = global − monitor.xy`; `extent = monitor.{w,h} / monitor.scale` (hyprctl `w/h` are
-  physical). MCP: `click_app(app, node)` (control centre) / `click_at(app, x, y)` (window-relative).
-- **Same gate + indicator + kill switch + focus verification** as the keyboard (clicking is
-  position/stacking-dependent, so geometry is read FRESH right before injecting). First slice is
-  single-monitor, left-click only.
+  physical). Modes: `app`/`at` (left-click), `rclick-app`/`rclick-at` (right-click),
+  `scroll-app`/`scroll-at` (scroll, with `<dx> <dy>` notches). MCP: `click_app`/`click_at` take a
+  `button` (`"left"`/`"right"`); `scroll_app`/`scroll_at` take `direction` (up/down/left/right) +
+  `amount` (notches, default 3), mapped to dx/dy by the server.
+- **Same gate + indicator + kill switch + focus verification** as the keyboard (clicking/scrolling
+  is position/stacking-dependent, so geometry is read FRESH right before injecting). First slice is
+  single-monitor.
 - **Coord mapping**: the **same logical-coordinate convention as the overview minimap**
   (`common/WorkspaceSchematic.ts` — `logical = physical/scale`, position − monitor origin), which
   is the in-shell, battle-tested reference incl. fractional scale (`crystal-click` mirrors it
   because it's a separate process). Verified exact here (scale 1: measured via `hyprctl cursorpos`;
   AT-SPI window bounds align 1:1 with Hyprland's `at`, no CSD offset). Still **measure** on
   fractional-scale / multi-monitor before trusting (per [[feedback_debug_verify_before_theory]]).
-- **Deferred (not built)**: scroll/drag/right-click, and multi-monitor output targeting
-  (`create_virtual_pointer_with_output`).
-- **Deferred (Phase 2b-ii, not built)**: the synthetic **pointer** — a compiled `crystal-input`
-  helper (Rust, `zwlr_virtual_pointer_v1`, no `ydotool`/uinput) for click/move, AT-SPI
-  window-relative bounds mapped to output coords via Hyprland window geometry. Needs a new Rust
-  build path, so it waits for a case keyboard + `do_action` can't reach (canvas, no-a11y apps).
-  Also deferred: a per-action "acting now" flash; a per-app allowlist; the Prism assistant as the
-  perceive→act orchestration surface (Phase 3).
+- **Deferred (not built)**: drag (press→move→release; timing-sensitive, needs real-app
+  verification), and multi-monitor output targeting (`create_virtual_pointer_with_output`).
+- **Still deferred (beyond drag + multi-monitor above)**: a per-action "acting now" flash; a
+  per-app allowlist; the Prism assistant as the perceive→act orchestration surface (Phase 3).
 
 ### Adding a new IPC command
 

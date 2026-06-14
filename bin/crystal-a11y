@@ -133,6 +133,31 @@ function actionsOf(acc) {
     return out
 }
 
+const ACCEL_KEY = /^(F\d+|Enter|Return|Delete|Tab|Escape|Backspace|Space|Insert|Home|End|Page_Up|Page_Down|Up|Down|Left|Right)$/
+
+// Keyboard accelerators of a control's actions (AT-SPI key bindings) — e.g.
+// ["Control+X"]. Often the ONLY semantic handle on a label-less control: GTK4
+// popover-menu items expose no accessible name/text, but DO carry their
+// shortcut, so Ctrl+X ⇒ Cut, F2 ⇒ Rename, Delete ⇒ Move to Trash, etc.
+function shortcutsOf(acc) {
+    const iface = safe(() => acc.get_action_iface(), null)
+    if (!iface) return []
+    const n = safe(() => iface.get_n_actions(), 0)
+    const out = []
+    for (let i = 0; i < n; i++) {
+        // AtspiKeyBinding strings look like "T;;Control+X" (mnemonic;;accelerator).
+        const kb = safe(() => iface.get_key_binding(i), "") || ""
+        const segs = kb.split(";").map(s => s.trim()).filter(Boolean)
+        if (!segs.length) continue
+        // Prefer the real accelerator (has a modifier or is a named key) over the
+        // bare mnemonic letter.
+        const pick = segs.find(s => /(Control|Alt|Shift|Super|Meta)\+/.test(s)) ||
+            segs.find(s => ACCEL_KEY.test(s)) || segs[0]
+        if (pick && !out.includes(pick)) out.push(pick)
+    }
+    return out
+}
+
 function boundsOf(acc) {
     const iface = safe(() => acc.get_component_iface(), null)
     if (!iface) return { w: 0, h: 0 }
@@ -146,6 +171,7 @@ function nodeOf(acc, windowLabel, path) {
     const roleName = safe(() => acc.get_role_name(), "?")
     const name = safe(() => acc.get_name(), "") || null
     const actions = actionsOf(acc)
+    const shortcuts = shortcutsOf(acc)
     return {
         window: windowLabel,
         type: roleName,            // AT-SPI role name — analogous to UITree's GType
@@ -154,6 +180,8 @@ function nodeOf(acc, windowLabel, path) {
         text: textOf(acc, roleName),
         states: statesOf(acc),
         actions,
+        // Only when present — keeps the common (no-shortcut) node lean.
+        ...(shortcuts.length ? { shortcuts } : {}),
         visible: isShowing(acc),
         bounds: boundsOf(acc),
         path,

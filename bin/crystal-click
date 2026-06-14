@@ -6,11 +6,16 @@
 // output coordinates, and hands the final numbers to the dumb `crystal-input`
 // C injector. Sibling of crystal-act (AT-SPI) and crystal-type (keyboard).
 //
-//   crystal-click app <app> <node-name> [role] [occurrence]   # click a control's centre
-//   crystal-click at  <app> <x> <y>                           # click a window-relative point (canvas)
+//   crystal-click app        <app> <node> [role] [occurrence]        # left-click a control's centre
+//   crystal-click at         <app> <x> <y>                           # left-click a window-relative point (canvas)
+//   crystal-click rclick-app <app> <node> [role] [occurrence]        # right-click a control's centre
+//   crystal-click rclick-at  <app> <x> <y>                           # right-click a window-relative point
+//   crystal-click scroll-app <app> <node> <dx> <dy> [role] [occ]     # scroll at a control's centre
+//   crystal-click scroll-at  <app> <x> <y> <dx> <dy>                 # scroll at a window-relative point
+//   (<dx>/<dy> = signed wheel notches: dy>0 down, dx>0 right)
 //
 // Use this only when do_action / keyboard can't reach a control (canvas, no
-// activatable action, no a11y). Pair with focus_window first.
+// activatable action, no a11y), or for right-click / scroll. Pair with focus_window first.
 //
 // SAFETY — clicking is position/stacking-dependent (even more than typing). So
 // <app> is REQUIRED and verified to be Hyprland's active window, and the window
@@ -107,6 +112,18 @@ function findNodeCentres(appFilter, nodeName, roleFilter) {
     return exact.length ? exact : partial
 }
 
+// CLI mode → injector verb (`action`) + how the target position is resolved
+// (`target`): "app" = an AT-SPI node's centre, "at" = a window-relative point.
+// app/at stay exactly as the original left-click surface (backward compatible).
+const MODES = {
+    "app":        { action: "click",      target: "app" },
+    "at":         { action: "click",      target: "at" },
+    "rclick-app": { action: "rightclick", target: "app" },
+    "rclick-at":  { action: "rightclick", target: "at" },
+    "scroll-app": { action: "scroll",     target: "app" },
+    "scroll-at":  { action: "scroll",     target: "at" },
+}
+
 // ── main ─────────────────────────────────────────────────────────────────────
 function main() {
     if (!controlEnabled()) {
@@ -115,12 +132,14 @@ function main() {
     }
     const mode = (ARGV[0] ?? "").trim()
     const app = (ARGV[1] ?? "").trim()
-    if ((mode !== "app" && mode !== "at") || !app) {
-        emit({ error: "usage: crystal-click app <app> <node> [role] [occurrence] | at <app> <x> <y>" })
+    const spec = MODES[mode]
+    if (!spec || !app) {
+        emit({ error: "usage: crystal-click app|rclick-app <app> <node> [role] [occurrence] | at|rclick-at <app> <x> <y> | scroll-app <app> <node> <dx> <dy> [role] [occurrence] | scroll-at <app> <x> <y> <dx> <dy>" })
         return
     }
+    const isScroll = spec.action === "scroll"
 
-    // Fresh geometry + focus check, immediately before clicking.
+    // Fresh geometry + focus check, immediately before acting.
     const aw = runJson("hyprctl activewindow -j")
     const activeClass = (aw?.class ?? "").toLowerCase()
     const a = app.toLowerCase()
@@ -131,13 +150,22 @@ function main() {
         return
     }
 
-    // Window-relative target (relX, relY).
-    let relX, relY
-    if (mode === "app") {
+    // Resolve window-relative target (relX, relY) + scroll deltas (dx, dy notches).
+    let relX, relY, dx = 0, dy = 0
+    if (spec.target === "app") {
         const nodeName = (ARGV[2] ?? "").trim()
-        const role = (ARGV[3] ?? "").trim() || null
-        const occRaw = (ARGV[4] ?? "").trim()
-        if (!nodeName) { emit({ error: "app mode needs a node name" }); return }
+        if (!nodeName) { emit({ error: `${mode} needs a node name` }); return }
+        // scroll-app: <node> <dx> <dy> [role] [occurrence]; click: <node> [role] [occurrence]
+        let role, occRaw
+        if (isScroll) {
+            dx = parseInt(ARGV[3] ?? "", 10); dy = parseInt(ARGV[4] ?? "", 10)
+            if (isNaN(dx) || isNaN(dy)) { emit({ error: "scroll-app needs numeric <dx> <dy>" }); return }
+            role = (ARGV[5] ?? "").trim() || null
+            occRaw = (ARGV[6] ?? "").trim()
+        } else {
+            role = (ARGV[3] ?? "").trim() || null
+            occRaw = (ARGV[4] ?? "").trim()
+        }
         Atspi.init()
         const hits = findNodeCentres(a, nodeName, role)
         if (!hits.length) { emit({ error: `no showing node named "${nodeName}" in "${app}"` }); return }
@@ -149,7 +177,11 @@ function main() {
         relX = t.x; relY = t.y
     } else {
         relX = parseInt(ARGV[2] ?? "", 10); relY = parseInt(ARGV[3] ?? "", 10)
-        if (isNaN(relX) || isNaN(relY)) { emit({ error: "at mode needs numeric <x> <y>" }); return }
+        if (isNaN(relX) || isNaN(relY)) { emit({ error: `${mode} needs numeric <x> <y>` }); return }
+        if (isScroll) {
+            dx = parseInt(ARGV[4] ?? "", 10); dy = parseInt(ARGV[5] ?? "", 10)
+            if (isNaN(dx) || isNaN(dy)) { emit({ error: "scroll-at needs numeric <dx> <dy>" }); return }
+        }
     }
 
     // Map: window-relative (logical) → global → output-relative + logical extent.
@@ -171,13 +203,17 @@ function main() {
     const injector = findInjector()
     if (!injector) { emit({ error: "crystal-input not found — re-run install.sh (it compiles the pointer backend)" }); return }
 
-    const proc = Gio.Subprocess.new([injector, "click", String(outX), String(outY), String(extW), String(extH)],
-        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE)
+    // action maps 1:1 to the injector verb (click / rightclick / scroll); scroll
+    // appends the notch deltas.
+    const args = [injector, spec.action, String(outX), String(outY), String(extW), String(extH)]
+    if (isScroll) args.push(String(dx), String(dy))
+    const proc = Gio.Subprocess.new(args, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE)
     const [, , err] = proc.communicate_utf8(null, null)
     if (!proc.get_successful()) {
         emit({ ok: false, error: `crystal-input failed: ${(err || "").trim() || "no output"}` }); return
     }
-    emit({ ok: true, app, mode, target: { outX, outY, extW, extH }, window: { at, monitor: mon.name } })
+    emit({ ok: true, app, mode, target: { outX, outY, extW, extH },
+        ...(isScroll ? { scroll: { dx, dy } } : {}), window: { at, monitor: mon.name } })
 }
 
 main()

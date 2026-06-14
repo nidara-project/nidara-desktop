@@ -97,9 +97,13 @@ crystal-settings.lua
 crystal-monitor.lua
 hyprland-user.lua
 
-# Generated CSS (kept in repo as pre-compiled convenience for users)
-# ui/shell/style.css  ← intentionally NOT ignored
+# Generated CSS — compiled from style.scss by install.sh (every install AND
+# update), dev, build and CI, so the runtime never uses a committed copy.
+# Tracking it only caused silent drift, so it's no longer versioned.
+ui/shell/style.css
 ui/shell/style.css.map
+ui/greeter/style.css
+ui/greeter/style.css.map
 # User configs — generated at runtime, personal to each installation
 # (root-level only; defaults/ folder is intentionally tracked)
 theme_settings.json

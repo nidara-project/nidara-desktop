@@ -123,6 +123,19 @@ const text = (s) => [{ type: "text", text: s }]
 const okResult = (s) => ({ content: text(s) })
 const errResult = (s) => ({ content: text(s), isError: true })
 
+// Agent-friendly direction + notch count → the signed (dx, dy) wheel notches that
+// crystal-click/crystal-input expect (dy>0 = down, dx>0 = right).
+function scrollDeltas(direction, amount) {
+    const n = Number.isInteger(amount) && amount > 0 ? amount : 3
+    switch (direction) {
+        case "up":    return [0, -n]
+        case "down":  return [0, n]
+        case "left":  return [-n, 0]
+        case "right": return [n, 0]
+        default:      return [0, n]
+    }
+}
+
 // ── Tools ────────────────────────────────────────────────────────────────────
 // Descriptions are the agent-facing documentation — keep them honest and
 // aligned with the IPC descriptions served by `listActions`.
@@ -297,25 +310,26 @@ const TOOLS = [
     {
         name: "click_app",
         description:
-            "Click a control in a THIRD-PARTY app with a synthetic pointer (the control's accessibility-reported centre) — for controls that AT-SPI actions and the keyboard can't reach (no activatable action, not Enter/Space-reachable). Prefer do_app_action / press_key first; use this for list items, tabs, checkboxes, etc. that need a real click. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+            "Click a control in a THIRD-PARTY app with a synthetic pointer (the control's accessibility-reported centre) — for controls that AT-SPI actions and the keyboard can't reach (no activatable action, not Enter/Space-reachable). Prefer do_app_action / press_key first; use this for list items, tabs, checkboxes, etc. that need a real click. Set button:\"right\" for a context-menu (right) click. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
         inputSchema: {
             type: "object",
             properties: {
                 app: { type: "string", description: "Target app — must be the focused window" },
                 node: { type: "string", description: "Accessible name of the control to click" },
+                button: { type: "string", enum: ["left", "right"], description: "Mouse button (default left)" },
                 role: { type: "string", description: "Disambiguate by AT-SPI role" },
                 occurrence: { type: "integer", description: "Disambiguate by 0-based index among matches" },
             },
             required: ["app", "node"],
             additionalProperties: false,
         },
-        handler: ({ app, node, role, occurrence } = {}) => {
+        handler: ({ app, node, button, role, occurrence } = {}) => {
             if (!computerControlEnabled())
                 return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
             if (!app || !node) return errResult("click_app needs app and node")
             const c = findTool("crystal-click")
             if (!c) return errResult("crystal-click not found — re-run install.sh")
-            const argv = [c, "app", app, node]
+            const argv = [c, button === "right" ? "rclick-app" : "app", app, node]
             if (role || occurrence != null) argv.push(role || "")
             if (occurrence != null) argv.push(String(occurrence))
             const r = run(argv)
@@ -325,25 +339,84 @@ const TOOLS = [
     {
         name: "click_at",
         description:
-            "Click a WINDOW-RELATIVE point (x, y in pixels from the window's top-left) in a THIRD-PARTY app with a synthetic pointer — for canvas / custom-drawn / no-accessibility surfaces where there is no accessible to target. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+            "Click a WINDOW-RELATIVE point (x, y in pixels from the window's top-left) in a THIRD-PARTY app with a synthetic pointer — for canvas / custom-drawn / no-accessibility surfaces where there is no accessible to target. Set button:\"right\" for a context-menu (right) click. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
         inputSchema: {
             type: "object",
             properties: {
                 app: { type: "string", description: "Target app — must be the focused window" },
                 x: { type: "integer", description: "X offset from the window's top-left" },
                 y: { type: "integer", description: "Y offset from the window's top-left" },
+                button: { type: "string", enum: ["left", "right"], description: "Mouse button (default left)" },
             },
             required: ["app", "x", "y"],
             additionalProperties: false,
         },
-        handler: ({ app, x, y } = {}) => {
+        handler: ({ app, x, y, button } = {}) => {
             if (!computerControlEnabled())
                 return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
             if (!app || x == null || y == null) return errResult("click_at needs app, x and y")
             const c = findTool("crystal-click")
             if (!c) return errResult("crystal-click not found — re-run install.sh")
-            const r = run([c, "at", app, String(x), String(y)])
+            const r = run([c, button === "right" ? "rclick-at" : "at", app, String(x), String(y)])
             return r.out ? okResult(r.out) : errResult(`click_at failed: ${r.err || "no output"}`)
+        },
+    },
+    {
+        name: "scroll_at",
+        description:
+            "Scroll a THIRD-PARTY app with a synthetic mouse wheel, with the pointer over a WINDOW-RELATIVE point (x, y from the window's top-left) — use to reveal off-screen content in lists/views/canvases. The point decides WHICH scrollable region receives the wheel. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                app: { type: "string", description: "Target app — must be the focused window" },
+                x: { type: "integer", description: "X offset from the window's top-left" },
+                y: { type: "integer", description: "Y offset from the window's top-left" },
+                direction: { type: "string", enum: ["up", "down", "left", "right"], description: "Scroll direction" },
+                amount: { type: "integer", description: "Number of wheel notches (default 3)" },
+            },
+            required: ["app", "x", "y", "direction"],
+            additionalProperties: false,
+        },
+        handler: ({ app, x, y, direction, amount } = {}) => {
+            if (!computerControlEnabled())
+                return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
+            if (!app || x == null || y == null || !direction) return errResult("scroll_at needs app, x, y and direction")
+            const c = findTool("crystal-click")
+            if (!c) return errResult("crystal-click not found — re-run install.sh")
+            const [dx, dy] = scrollDeltas(direction, amount)
+            const r = run([c, "scroll-at", app, String(x), String(y), String(dx), String(dy)])
+            return r.out ? okResult(r.out) : errResult(`scroll_at failed: ${r.err || "no output"}`)
+        },
+    },
+    {
+        name: "scroll_app",
+        description:
+            "Scroll a THIRD-PARTY app with a synthetic mouse wheel, with the pointer over a named AT-SPI control's centre — like scroll_at but targets a control by accessible name instead of raw coordinates. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                app: { type: "string", description: "Target app — must be the focused window" },
+                node: { type: "string", description: "Accessible name of the control to scroll over" },
+                direction: { type: "string", enum: ["up", "down", "left", "right"], description: "Scroll direction" },
+                amount: { type: "integer", description: "Number of wheel notches (default 3)" },
+                role: { type: "string", description: "Disambiguate by AT-SPI role" },
+                occurrence: { type: "integer", description: "Disambiguate by 0-based index among matches" },
+            },
+            required: ["app", "node", "direction"],
+            additionalProperties: false,
+        },
+        handler: ({ app, node, direction, amount, role, occurrence } = {}) => {
+            if (!computerControlEnabled())
+                return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
+            if (!app || !node || !direction) return errResult("scroll_app needs app, node and direction")
+            const c = findTool("crystal-click")
+            if (!c) return errResult("crystal-click not found — re-run install.sh")
+            const [dx, dy] = scrollDeltas(direction, amount)
+            const argv = [c, "scroll-app", app, node, String(dx), String(dy)]
+            if (role || occurrence != null) argv.push(role || "")
+            if (occurrence != null) argv.push(String(occurrence))
+            const r = run(argv)
+            return r.out ? okResult(r.out) : errResult(`scroll_app failed: ${r.err || "no output"}`)
         },
     },
     {
