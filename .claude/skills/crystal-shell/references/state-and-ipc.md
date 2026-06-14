@@ -153,6 +153,7 @@ changes. Tools: `list_actions`, `run_action(name, args)`, `dump_state`, `query_u
 `query_app(app)`, `do_app_action(app, node, action)`, `type_text(app, text)`,
 `press_key(app, key)`, `focus_window(app)`, `click_app(app, node, button?)`, `click_at(app, x, y, button?)`,
 `scroll_app(app, node, direction, amount?)`, `scroll_at(app, x, y, direction, amount?)`,
+`drag_at(app, from_x, from_y, to_x, to_y)`,
 `describe_config`, `get_config`, `set_config`, `screenshot` (returns the PNG **inline as MCP image
 content** — the client sees it without a separate read), `doctor`.
 (Action verbs like `openWindowMenu` need no dedicated tool — they go through `run_action`; the
@@ -244,26 +245,32 @@ Qt buttons that only expose `SetFocus` → focus then press Enter/Space):
   config). Gated by `allowComputerControl`. The full autonomous loop:
   `focus_window telegram` → `do_app_action telegram "<field>" SetFocus` → `type_text telegram "…"`.
 
-Phase 2b-ii — **synthetic pointer (click, right-click, scroll), built**, for what AT-SPI/keyboard
+Phase 2b-ii — **synthetic pointer (click, right-click, scroll, drag), built**, for what AT-SPI/keyboard
 can't reach (canvas, no-a11y surfaces, list items/tabs that need a real click, context menus,
-scrolling off-screen content):
+scrolling off-screen content, drag-and-drop / rubber-band selection / sliders):
 
 - **`bin/crystal-input`** — a tiny **C** Wayland client (`zwlr_virtual_pointer_v1`, no daemon/uinput)
   compiled by `install.sh` (`wayland-scanner` + `cc` on `wlr-protocols`' XML; only the `.c` is
   committed, the binary is git-ignored). A **dumb injector**, verbs:
-  `move|click|rightclick <x> <y> <w> <h>` and `scroll <x> <y> <w> <h> <dx> <dy>` (output-relative
-  logical position + the output's logical extent; `dx/dy` are signed wheel notches, `dy>0`=down,
-  `dx>0`=right — emitted as `axis_source(WHEEL)`+`axis`+`axis_discrete` frames, 15 units/notch, the
-  wlroots wheel convention). All the protocol verbs are available at manager **version 1** (what we
-  bind) — adding right-click/scroll needed **no install.sh / protocol-version change**.
+  `move|click|rightclick <x> <y> <w> <h>`, `scroll <x> <y> <w> <h> <dx> <dy>` (signed wheel notches,
+  `dy>0`=down, `dx>0`=right — emitted as `axis_source(WHEEL)`+`axis`+`axis_discrete` frames, 15
+  units/notch, the wlroots wheel convention), and `drag <x> <y> <w> <h> <x2> <y2>` (press at (x,y),
+  glide to (x2,y2) over interpolated motion steps with small real-time gaps, release — the gradual
+  travel is what trips drag-threshold/DnD detection; a press→jump→release does NOT register). All
+  output-relative logical coords + the output's logical extent. All protocol verbs are available at
+  manager **version 1** (what we bind) — adding right-click/scroll/drag needed **no install.sh /
+  protocol-version change**.
 - **`bin/crystal-click`** (GJS, sibling of crystal-act/crystal-type) owns the smarts: gate +
   focus-verify, AT-SPI node resolution (centre) or a window-relative point, then the **coordinate
   mapping** — `global = window.at + rel` (AT-SPI window coords are logical, like Hyprland's `at`);
   `output_rel = global − monitor.xy`; `extent = monitor.{w,h} / monitor.scale` (hyprctl `w/h` are
   physical). Modes: `app`/`at` (left-click), `rclick-app`/`rclick-at` (right-click),
-  `scroll-app`/`scroll-at` (scroll, with `<dx> <dy>` notches). MCP: `click_app`/`click_at` take a
-  `button` (`"left"`/`"right"`); `scroll_app`/`scroll_at` take `direction` (up/down/left/right) +
-  `amount` (notches, default 3), mapped to dx/dy by the server.
+  `scroll-app`/`scroll-at` (scroll, with `<dx> <dy>` notches), `drag-at` (two window-relative
+  points). MCP: `click_app`/`click_at` take a `button` (`"left"`/`"right"`); `scroll_app`/`scroll_at`
+  take `direction` (up/down/left/right) + `amount` (notches, default 3), mapped to dx/dy by the
+  server; `drag_at(app, from_x, from_y, to_x, to_y)`. Drag is **point→point only** — to drag
+  from/to a named control, resolve its centre from `query_app` bounds and pass the coords (no
+  `drag-app`: a two-ended gesture doesn't map cleanly to the single-node `*-app` shape).
 - **Same gate + indicator + kill switch + focus verification** as the keyboard (clicking/scrolling
   is position/stacking-dependent, so geometry is read FRESH right before injecting). First slice is
   single-monitor.
@@ -273,8 +280,8 @@ scrolling off-screen content):
   because it's a separate process). Verified exact here (scale 1: measured via `hyprctl cursorpos`;
   AT-SPI window bounds align 1:1 with Hyprland's `at`, no CSD offset). Still **measure** on
   fractional-scale / multi-monitor before trusting (per [[feedback_debug_verify_before_theory]]).
-- **Deferred (not built)**: drag (press→move→release; timing-sensitive, needs real-app
-  verification), and multi-monitor output targeting (`create_virtual_pointer_with_output`).
+- **Deferred (not built)**: multi-monitor output targeting (`create_virtual_pointer_with_output`) —
+  needs a second display to verify the per-output coordinate mapping.
 - **Still deferred (beyond drag + multi-monitor above)**: a per-action "acting now" flash; a
   per-app allowlist; the Prism assistant as the perceive→act orchestration surface (Phase 3).
 

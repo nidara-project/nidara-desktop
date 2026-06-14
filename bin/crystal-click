@@ -12,10 +12,13 @@
 //   crystal-click rclick-at  <app> <x> <y>                           # right-click a window-relative point
 //   crystal-click scroll-app <app> <node> <dx> <dy> [role] [occ]     # scroll at a control's centre
 //   crystal-click scroll-at  <app> <x> <y> <dx> <dy>                 # scroll at a window-relative point
+//   crystal-click drag-at    <app> <x1> <y1> <x2> <y2>               # press at (x1,y1), drag to (x2,y2), release
 //   (<dx>/<dy> = signed wheel notches: dy>0 down, dx>0 right)
 //
 // Use this only when do_action / keyboard can't reach a control (canvas, no
-// activatable action, no a11y), or for right-click / scroll. Pair with focus_window first.
+// activatable action, no a11y), or for right-click / scroll / drag (DnD,
+// rubber-band selection). Drag from/to a CONTROL = resolve its centre via
+// query_app bounds, then drag-at those points. Pair with focus_window first.
 //
 // SAFETY — clicking is position/stacking-dependent (even more than typing). So
 // <app> is REQUIRED and verified to be Hyprland's active window, and the window
@@ -122,6 +125,7 @@ const MODES = {
     "rclick-at":  { action: "rightclick", target: "at" },
     "scroll-app": { action: "scroll",     target: "app" },
     "scroll-at":  { action: "scroll",     target: "at" },
+    "drag-at":    { action: "drag",       target: "at" },
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
@@ -134,10 +138,11 @@ function main() {
     const app = (ARGV[1] ?? "").trim()
     const spec = MODES[mode]
     if (!spec || !app) {
-        emit({ error: "usage: crystal-click app|rclick-app <app> <node> [role] [occurrence] | at|rclick-at <app> <x> <y> | scroll-app <app> <node> <dx> <dy> [role] [occurrence] | scroll-at <app> <x> <y> <dx> <dy>" })
+        emit({ error: "usage: crystal-click app|rclick-app <app> <node> [role] [occurrence] | at|rclick-at <app> <x> <y> | scroll-app <app> <node> <dx> <dy> [role] [occurrence] | scroll-at <app> <x> <y> <dx> <dy> | drag-at <app> <x1> <y1> <x2> <y2>" })
         return
     }
     const isScroll = spec.action === "scroll"
+    const isDrag = spec.action === "drag"
 
     // Fresh geometry + focus check, immediately before acting.
     const aw = runJson("hyprctl activewindow -j")
@@ -150,8 +155,9 @@ function main() {
         return
     }
 
-    // Resolve window-relative target (relX, relY) + scroll deltas (dx, dy notches).
-    let relX, relY, dx = 0, dy = 0
+    // Resolve window-relative target (relX, relY), scroll deltas (dx, dy notches),
+    // and drag drop point (relX2, relY2).
+    let relX, relY, relX2, relY2, dx = 0, dy = 0
     if (spec.target === "app") {
         const nodeName = (ARGV[2] ?? "").trim()
         if (!nodeName) { emit({ error: `${mode} needs a node name` }); return }
@@ -182,6 +188,10 @@ function main() {
             dx = parseInt(ARGV[4] ?? "", 10); dy = parseInt(ARGV[5] ?? "", 10)
             if (isNaN(dx) || isNaN(dy)) { emit({ error: "scroll-at needs numeric <dx> <dy>" }); return }
         }
+        if (isDrag) {
+            relX2 = parseInt(ARGV[4] ?? "", 10); relY2 = parseInt(ARGV[5] ?? "", 10)
+            if (isNaN(relX2) || isNaN(relY2)) { emit({ error: "drag-at needs numeric <x2> <y2>" }); return }
+        }
     }
 
     // Map: window-relative (logical) → global → output-relative + logical extent.
@@ -196,24 +206,30 @@ function main() {
     const mon = mons.find(m => m.id === monName) || mons.find(m => m.focused) || mons[0]
     if (!mon) { emit({ error: "could not resolve the active monitor geometry" }); return }
     const scale = mon.scale || 1
-    const globalX = at[0] + relX, globalY = at[1] + relY
-    const outX = Math.round(globalX - mon.x), outY = Math.round(globalY - mon.y)
+    const outX = Math.round((at[0] + relX) - mon.x), outY = Math.round((at[1] + relY) - mon.y)
     const extW = Math.round(mon.width / scale), extH = Math.round(mon.height / scale)
+    // Drag: map the drop point through the SAME monitor geometry as the start.
+    let outX2, outY2
+    if (isDrag) {
+        outX2 = Math.round((at[0] + relX2) - mon.x); outY2 = Math.round((at[1] + relY2) - mon.y)
+    }
 
     const injector = findInjector()
     if (!injector) { emit({ error: "crystal-input not found — re-run install.sh (it compiles the pointer backend)" }); return }
 
-    // action maps 1:1 to the injector verb (click / rightclick / scroll); scroll
-    // appends the notch deltas.
+    // action maps 1:1 to the injector verb (click / rightclick / scroll / drag);
+    // scroll appends the notch deltas, drag the drop point.
     const args = [injector, spec.action, String(outX), String(outY), String(extW), String(extH)]
     if (isScroll) args.push(String(dx), String(dy))
+    if (isDrag) args.push(String(outX2), String(outY2))
     const proc = Gio.Subprocess.new(args, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE)
     const [, , err] = proc.communicate_utf8(null, null)
     if (!proc.get_successful()) {
         emit({ ok: false, error: `crystal-input failed: ${(err || "").trim() || "no output"}` }); return
     }
     emit({ ok: true, app, mode, target: { outX, outY, extW, extH },
-        ...(isScroll ? { scroll: { dx, dy } } : {}), window: { at, monitor: mon.name } })
+        ...(isScroll ? { scroll: { dx, dy } } : {}),
+        ...(isDrag ? { drop: { outX2, outY2 } } : {}), window: { at, monitor: mon.name } })
 }
 
 main()

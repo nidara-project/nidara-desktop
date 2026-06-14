@@ -420,6 +420,33 @@ const TOOLS = [
         },
     },
     {
+        name: "drag_at",
+        description:
+            "Drag with a synthetic pointer from one WINDOW-RELATIVE point to another: press at (from_x, from_y), glide, release at (to_x, to_y) — for drag-and-drop, rubber-band selection, reordering, dragging a slider handle, or text selection that a click can't do. To drag from/to a named control, read its centre from query_app `bounds` and pass those coordinates. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                app: { type: "string", description: "Target app — must be the focused window" },
+                from_x: { type: "integer", description: "Start X offset from the window's top-left" },
+                from_y: { type: "integer", description: "Start Y offset from the window's top-left" },
+                to_x: { type: "integer", description: "Drop X offset from the window's top-left" },
+                to_y: { type: "integer", description: "Drop Y offset from the window's top-left" },
+            },
+            required: ["app", "from_x", "from_y", "to_x", "to_y"],
+            additionalProperties: false,
+        },
+        handler: ({ app, from_x, from_y, to_x, to_y } = {}) => {
+            if (!computerControlEnabled())
+                return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
+            if (!app || from_x == null || from_y == null || to_x == null || to_y == null)
+                return errResult("drag_at needs app, from_x, from_y, to_x and to_y")
+            const c = findTool("crystal-click")
+            if (!c) return errResult("crystal-click not found — re-run install.sh")
+            const r = run([c, "drag-at", app, String(from_x), String(from_y), String(to_x), String(to_y)])
+            return r.out ? okResult(r.out) : errResult(`drag_at failed: ${r.err || "no output"}`)
+        },
+    },
+    {
         name: "describe_config",
         description:
             "Schema of every agent-exposed shell setting: description, type, enum/min/max, writability and current value. Call this before get_config/set_config — never guess keys.",
