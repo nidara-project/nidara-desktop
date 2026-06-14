@@ -359,6 +359,8 @@ export default {
     "settings.ai.allow-screenshot.desc": "Lets agents take a screenshot to visually verify their changes (`ags request screenshot`)",
     "settings.ai.allow-mcp": "Enable MCP Server",
     "settings.ai.allow-mcp.desc": "Lets `crystal-shell-mcp` serve shell tools (actions, settings, state, screenshots, diagnostics) to MCP clients like Claude Code. Takes effect immediately.",
+    "settings.ai.allow-computer-use": "Allow Agents to See Other Apps",
+    "settings.ai.allow-computer-use.desc": "Lets agents read the accessibility tree of third-party apps (their on-screen controls and text) for the computer-use layer. Read-only. Off by default — this reaches outside the shell; enabling it also turns on system accessibility.",
     "settings.ai.group.surface": "Agent Interface",
     "settings.ai.exposed-settings": "Exposed Settings",
     "settings.ai.exposed-settings.desc": "Settings agents can discover and change — run `ags request describeConfig` to list them",

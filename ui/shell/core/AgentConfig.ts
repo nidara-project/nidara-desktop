@@ -9,15 +9,19 @@ import { readFile, writeFile } from "ags/file"
 const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/ai.json`
 
 interface AgentSettings {
-    allowConfigWrite: boolean // agents may change settings via setConfig, default true
-    allowScreenshot: boolean  // agents may capture the screen via the screenshot IPC, default true
-    allowMcp: boolean         // crystal-shell-mcp serves tools to MCP clients, default true
+    allowConfigWrite: boolean  // agents may change settings via setConfig, default true
+    allowScreenshot: boolean   // agents may capture the screen via the screenshot IPC, default true
+    allowMcp: boolean          // crystal-shell-mcp serves tools to MCP clients, default true
+    allowComputerUse: boolean  // agents may PERCEIVE third-party apps via AT-SPI (crystal-a11y),
+                               // default FALSE — reaches outside the shell's own surface
+                               // (privacy-sensitive, ≈ the screenshot gate)
 }
 
 const DEFAULTS: AgentSettings = {
     allowConfigWrite: true,
     allowScreenshot: true,
     allowMcp: true,
+    allowComputerUse: false,
 }
 
 let _settings: AgentSettings = { ...DEFAULTS }
@@ -45,6 +49,7 @@ export const agentConfig = {
     get allowConfigWrite() { return _settings.allowConfigWrite },
     get allowScreenshot() { return _settings.allowScreenshot },
     get allowMcp() { return _settings.allowMcp },
+    get allowComputerUse() { return _settings.allowComputerUse },
 
     setAllowConfigWrite(val: boolean) {
         _settings.allowConfigWrite = val
@@ -63,6 +68,26 @@ export const agentConfig = {
     setAllowMcp(val: boolean) {
         _settings.allowMcp = val
         save()
+        _listeners.forEach(fn => fn())
+    },
+
+    // Read live by the standalone crystal-a11y helper (re-reads ai.json per
+    // call). Enabling it also turns on toolkit-accessibility — the capability is
+    // useless while the a11y stack is globally off, and GTK4 apps only fully
+    // populate their AT-SPI tree when it's on. Best-effort; never flipped back
+    // off on disable (it may be wanted by other assistive tech).
+    setAllowComputerUse(val: boolean) {
+        _settings.allowComputerUse = val
+        save()
+        if (val) {
+            try {
+                GLib.spawn_command_line_async(
+                    "gsettings set org.gnome.desktop.interface toolkit-accessibility true",
+                )
+            } catch (e) {
+                console.error("[AgentConfig] enabling toolkit-accessibility failed:", e)
+            }
+        }
         _listeners.forEach(fn => fn())
     },
 

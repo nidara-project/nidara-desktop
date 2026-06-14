@@ -78,6 +78,16 @@ function mcpEnabled() {
     }
 }
 
+// Computer-use (third-party perception) defaults OFF — opposite of the others.
+function computerUseEnabled() {
+    try {
+        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return false
+        return JSON.parse(textFile(AI_JSON)).allowComputerUse === true
+    } catch {
+        return false
+    }
+}
+
 // Run a command synchronously, capturing stdout+stderr. The server handles
 // one request at a time, so blocking here is fine (and keeps ordering).
 function run(argv) {
@@ -155,6 +165,28 @@ const TOOLS = [
             additionalProperties: false,
         },
         handler: ({ selector } = {}) => okResult(agsRequest(selector ? ["queryUI", selector] : ["queryUI"])),
+    },
+    {
+        name: "query_app",
+        description:
+            "Snapshot a THIRD-PARTY application's UI via the accessibility tree (AT-SPI) — the same flat-node shape as query_ui (role/name/text/actions/bounds per node), but for a foreign window (a browser, file manager, editor) instead of the shell. Read-only, like query_ui. Default targets the focused window; pass `app` to target another by name (e.g. \"nautilus\", \"firefox\"). Gated by Settings → AI → Allow Agents to See Other Apps (off by default). Some toolkits expose little (Qt needs QT_ACCESSIBILITY=1, Chromium/Electron --force-renderer-accessibility) — fall back to the screenshot tool there.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                app: { type: "string", description: "App name substring to target; omit for the focused window" },
+            },
+            additionalProperties: false,
+        },
+        handler: ({ app } = {}) => {
+            if (!computerUseEnabled())
+                return errResult(
+                    "computer-use is disabled — enable 'Allow Agents to See Other Apps' in Settings → AI (or set allowComputerUse in ai.json)",
+                )
+            const a11y = findTool("crystal-a11y")
+            if (!a11y) return errResult("crystal-a11y not found — re-run install.sh")
+            const r = run(app ? [a11y, app] : [a11y])
+            return r.out ? okResult(r.out) : errResult(`query_app failed: ${r.err || "no output"}`)
+        },
     },
     {
         name: "describe_config",

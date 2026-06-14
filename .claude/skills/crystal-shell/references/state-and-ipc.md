@@ -102,7 +102,8 @@ surface needs verifying. NB: menu **row text** lives on the child `.crystal-menu
 label, not the `.crystal-menu-row` button container (queryUI reports own text, not
 descendant text), so assert against the label class. Tier 1 is structure+text; semantic per-widget state (slider value,
 dock-item running/active) is a deferred opt-in tier the widgets would cooperate on, sharing
-the same node model a future AT-SPI2 backend would fill for third-party apps.
+the same node model the AT-SPI2 backend now fills for third-party apps (see "computer-use"
+below — `queryUI` is the shell's own toplevels; `query_app` is the same shape via AT-SPI).
 
 Commands receive arguments: `requestHandler` passes `argv.slice(1)` to the handler
 (`run(args)`). `ags request settingsPage bluetooth` opens the Settings window directly on
@@ -145,20 +146,50 @@ MCP over stdio. Two discovery paths, dev and user:
   `{"mcpServers": {"crystal-shell": {"command": "crystal-shell-mcp"}}}`). The Settings → AI
   page shows this path to the user ("Connect Your Agent" row).
 
-It is a **thin adapter with no logic of its own**: every tool shells out to `ags request`
-(or `crystal-shell-doctor`), so the `IPC_COMMANDS` table stays the single source of truth —
-a new IPC command is reachable through the `run_action` tool with zero MCP changes. Tools:
-`list_actions`, `run_action(name, args)`, `dump_state`, `query_ui(selector)`, `describe_config`,
-`get_config`, `set_config`, `screenshot` (returns the PNG **inline as MCP image content** — the
-client sees it without a separate read), `doctor`. (Action verbs like `openWindowMenu` need no
-dedicated tool — they go through `run_action`; the dedicated tools are the read/introspection
-verbs.)
+It is a **thin adapter with mostly no logic of its own**: every shell-self-control tool shells
+out to `ags request` (or `crystal-shell-doctor`), so the `IPC_COMMANDS` table stays the single
+source of truth — a new IPC command is reachable through the `run_action` tool with zero MCP
+changes. Tools: `list_actions`, `run_action(name, args)`, `dump_state`, `query_ui(selector)`,
+`query_app(app)`, `describe_config`, `get_config`, `set_config`, `screenshot` (returns the PNG
+**inline as MCP image content** — the client sees it without a separate read), `doctor`. (Action
+verbs like `openWindowMenu` need no dedicated tool — they go through `run_action`; the dedicated
+tools are the read/introspection verbs.)
+
+`query_app` is the one exception to "delegates to the shell": it is the **computer-use**
+layer's perception leg, and it runs `crystal-a11y` directly (like `doctor` runs the doctor),
+**not** `ags request` — because reading a *third-party* app is not shell-self-control and must
+not live in the shell process. See "The computer-use layer" below.
 
 Governance: `ai.json.allowMcp` (Settings → AI → "Enable MCP Server") is re-read on **every**
 tool call, so the toggle applies live with no restarts; when off, every tool refuses with a
-pointer to the page. The finer gates (`allowConfigWrite`, `allowScreenshot`) are enforced
-downstream by the shell itself — never duplicate them in the MCP layer. Like the rest of
-`ai.*`, `allowMcp` is visible via `describeConfig` but not writable via `setConfig`.
+pointer to the page. The finer gates (`allowConfigWrite`, `allowScreenshot`, `allowComputerUse`)
+are enforced downstream (by the shell, or by `crystal-a11y` for `query_app`) — never duplicate
+them in the MCP layer beyond the live re-read the tool already does. Like the rest of `ai.*`,
+`allowMcp` is visible via `describeConfig` but not writable via `setConfig`.
+
+### The computer-use layer (third-party perception)
+
+The agent surface above is the shell controlling **itself**. The computer-use layer is the jump
+to perceiving (and later, driving) **any** third-party app. Phase 1 — built, read-only:
+
+- **`bin/crystal-a11y`** (standalone GJS, `gi://Atspi`; same no-Node pattern as
+  `crystal-shell-mcp`/`crystal-portal`) reads an app's **AT-SPI2 accessibility tree** and prints
+  it in the **same flat `UINode` shape as `queryUI`** (additive a11y fields: `role`, `states[]`,
+  `actions[]`). `crystal-a11y` (focused window, resolved via `hyprctl activewindow`) or
+  `crystal-a11y <app-name>`. Read-only: it lists available action *names* but invokes none.
+  Carries `UITree.ts`'s password redaction; caps nodes/depth + a soft deadline (AT-SPI calls are
+  sync D-Bus and can hang — that's why it's a separate process, never the shell's main loop).
+- **Gate: `ai.json.allowComputerUse`** (Settings → AI → "Allow Agents to See Other Apps"), the
+  **only gate that defaults OFF** — it reaches outside the shell (privacy-sensitive, ≈ the
+  screenshot gate). Enabling it (via `AgentConfig.setAllowComputerUse`) also turns on
+  `toolkit-accessibility`, since the capability is useless while a11y is globally off. Re-read
+  live by both `crystal-a11y` and the `query_app` MCP tool.
+- **Coverage caveat**: GTK4 exposes its tree on Wayland regardless; Qt needs `QT_ACCESSIBILITY=1`,
+  Chromium/Electron `--force-renderer-accessibility`; the rest fall back to `screenshot` (vision).
+  AT-SPI screen coords are unreliable on Wayland → bounds are **window-relative**.
+- **Deferred (Phase 2+, not built)**: action via AT-SPI `do_action` (deterministic, no coords)
+  with a Wayland-native synthetic-input fallback (Hyprland virtual pointer/keyboard, no
+  privileged daemon); a "driving" indicator; the Prism assistant as the orchestration surface.
 
 ### Adding a new IPC command
 
