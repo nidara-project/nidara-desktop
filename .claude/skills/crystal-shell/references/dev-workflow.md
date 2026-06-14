@@ -173,9 +173,12 @@ on bug reports and hardware/compat PRs.
 
 **`crystal-shell-mcp`** (installed to `/usr/bin`; registered for this repo via `.mcp.json`, and for installed users via the installer-managed `~/.config/crystal-shell/.mcp.json`)
 serves the agent surface — IPC actions, config, state, screenshots (inline images), doctor —
-as MCP tools over stdio. Plain GJS, no Node/npm at runtime; a thin adapter over
-`ags request`, so it needs no changes when IPC commands are added. Details and governance
-(`ai.json.allowMcp`, live-read per call) in `references/state-and-ipc.md`.
+plus `query_app` (computer-use: third-party app perception via AT-SPI) as MCP tools over
+stdio. Plain GJS, no Node/npm at runtime; mostly a thin adapter over `ags request` (so it
+needs no changes when IPC commands are added) — the one exception is `query_app`, which runs
+`crystal-a11y` directly because reading a foreign app is not shell-self-control. Details and
+governance (`ai.json.allowMcp` / `allowComputerUse`, live-read per call) in
+`references/state-and-ipc.md`.
 
 **Regenerating `@girs/` (and the trap it sets).** `@girs/` is git-ignored, so a fresh clone / a new
 environment has none. Regenerate with `cd ui/shell && ags types -d .` (offline — reads the system
