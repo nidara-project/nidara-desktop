@@ -12,9 +12,12 @@ interface AgentSettings {
     allowConfigWrite: boolean  // agents may change settings via setConfig, default true
     allowScreenshot: boolean   // agents may capture the screen via the screenshot IPC, default true
     allowMcp: boolean          // crystal-shell-mcp serves tools to MCP clients, default true
-    allowComputerUse: boolean  // agents may PERCEIVE third-party apps via AT-SPI (crystal-a11y),
-                               // default FALSE — reaches outside the shell's own surface
-                               // (privacy-sensitive, ≈ the screenshot gate)
+    allowComputerUse: boolean      // agents may PERCEIVE third-party apps via AT-SPI (crystal-a11y),
+                                   // default FALSE — reaches outside the shell's own surface
+                                   // (privacy-sensitive, ≈ the screenshot gate)
+    allowComputerControl: boolean  // agents may ACT on third-party apps via AT-SPI do_action
+                                   // (crystal-act), default FALSE — requires allowComputerUse;
+                                   // the shell shows an always-visible indicator + kill switch
 }
 
 const DEFAULTS: AgentSettings = {
@@ -22,6 +25,7 @@ const DEFAULTS: AgentSettings = {
     allowScreenshot: true,
     allowMcp: true,
     allowComputerUse: false,
+    allowComputerControl: false,
 }
 
 let _settings: AgentSettings = { ...DEFAULTS }
@@ -50,6 +54,7 @@ export const agentConfig = {
     get allowScreenshot() { return _settings.allowScreenshot },
     get allowMcp() { return _settings.allowMcp },
     get allowComputerUse() { return _settings.allowComputerUse },
+    get allowComputerControl() { return _settings.allowComputerControl },
 
     setAllowConfigWrite(val: boolean) {
         _settings.allowConfigWrite = val
@@ -88,6 +93,27 @@ export const agentConfig = {
                 console.error("[AgentConfig] enabling toolkit-accessibility failed:", e)
             }
         }
+        _listeners.forEach(fn => fn())
+    },
+
+    // Read live by the standalone crystal-act helper + the do_app_action MCP
+    // tool (both re-read ai.json per call). Control REQUIRES perception: enabling
+    // it implies allowComputerUse (which also flips on toolkit-accessibility) —
+    // you can't drive what you can't see. The shell renders a bar indicator +
+    // kill switch while this is on.
+    setAllowComputerControl(val: boolean) {
+        _settings.allowComputerControl = val
+        if (val && !_settings.allowComputerUse) {
+            _settings.allowComputerUse = true
+            try {
+                GLib.spawn_command_line_async(
+                    "gsettings set org.gnome.desktop.interface toolkit-accessibility true",
+                )
+            } catch (e) {
+                console.error("[AgentConfig] enabling toolkit-accessibility failed:", e)
+            }
+        }
+        save()
         _listeners.forEach(fn => fn())
     },
 

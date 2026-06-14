@@ -43,6 +43,14 @@ export default function AiPage() {
         (apply) => agentConfig.onChange(() => apply(agentConfig.allowComputerUse)),
     ))
 
+    accessGroup.listBox.append(toggleRow(
+        t("settings.ai.allow-computer-control"),
+        t("settings.ai.allow-computer-control.desc"),
+        agentConfig.allowComputerControl,
+        (v) => agentConfig.setAllowComputerControl(v),
+        (apply) => agentConfig.onChange(() => apply(agentConfig.allowComputerControl)),
+    ))
+
     page.append(accessGroup.box)
 
     const surfaceGroup = listGroup(t("settings.ai.group.surface"))

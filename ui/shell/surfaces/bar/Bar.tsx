@@ -12,6 +12,7 @@ import { CAPSULE_BORDER } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
+import agentConfig from "../../core/AgentConfig"
 import widgetConfig from "../../core/WidgetConfig"
 import regionConfig from "../../core/RegionConfig"
 import registry, { widgetAvailable, watchWidgetAvailability } from "../../widgets/index"
@@ -500,6 +501,31 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   }
   status.connect("notify::recording", syncRecIndicator)
   right.append(recCapsule)
+
+  // AI-control indicator + kill switch — visible only while the computer-control
+  // gate is granted (agents may act on third-party apps via crystal-act). The
+  // capsule IS the kill switch: clicking it (or Super+Shift+Esc, see
+  // config/hypr/hyprland.lua) revokes control instantly. Mirrors the recording
+  // indicator above so the user is never unaware the agent may act.
+  const cuaDot = new Gtk.Box({
+      css_classes: ["bar-cua-indicator"],
+      width_request: 8, height_request: 8,
+      valign: Gtk.Align.CENTER,
+  })
+  const cuaLabel = new Gtk.Label({ label: "AI CONTROL", css_classes: ["bar-cua-label"] })
+  const cuaBox = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER, margin_start: 8, margin_end: 8 })
+  cuaBox.append(cuaDot)
+  cuaBox.append(cuaLabel)
+  const cuaCapsule = SquircleContainer({ child: cuaBox, gloss: false, useShellOpacity: true, borderColor: { r: 0.9, g: 0.1, b: 0.1, a: 0.4 }, perfect: true, css_classes: ["bar-cua-capsule"] })
+  cuaCapsule.set_tooltip_text("AI may control apps — click to stop")
+  cuaCapsule.set_cursor(Gdk.Cursor.new_from_name("pointer", null))
+  const cuaClick = new Gtk.GestureClick()
+  cuaClick.connect("released", () => agentConfig.setAllowComputerControl(false))
+  cuaCapsule.add_controller(cuaClick)
+  const syncCuaIndicator = () => cuaCapsule.set_visible(agentConfig.allowComputerControl)
+  agentConfig.onChange(syncCuaIndicator)
+  syncCuaIndicator()
+  right.append(cuaCapsule)
 
   const trayInner = Tray(openCustomExpansion)
   const trayCapsule = SquircleContainer({ child: trayInner, gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })

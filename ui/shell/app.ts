@@ -125,6 +125,13 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       return "ok"
     },
   },
+  disableComputerControl: {
+    desc: "Kill switch: revoke agent computer-control instantly (same as clicking the bar indicator or Super+Shift+Esc). Leaves perception untouched.",
+    run: () => {
+      agentConfig.setAllowComputerControl(false)
+      return "computer-control disabled"
+    },
+  },
   hideForLock: { desc: "Hide bar+dock while the lockscreen is up", run: () => ipc.lockScreen?.() },
   showAfterLock: { desc: "Restore bar+dock after unlock", run: () => ipc.unlockScreen?.() },
   describeConfig: {
@@ -198,6 +205,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             allowScreenshot: agentConfig.allowScreenshot,
             allowMcp: agentConfig.allowMcp,
             allowComputerUse: agentConfig.allowComputerUse,
+            allowComputerControl: agentConfig.allowComputerControl,
           },
           overlays: {
             controlCenter: status.cc_open,

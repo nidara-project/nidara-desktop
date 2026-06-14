@@ -150,27 +150,30 @@ It is a **thin adapter with mostly no logic of its own**: every shell-self-contr
 out to `ags request` (or `crystal-shell-doctor`), so the `IPC_COMMANDS` table stays the single
 source of truth — a new IPC command is reachable through the `run_action` tool with zero MCP
 changes. Tools: `list_actions`, `run_action(name, args)`, `dump_state`, `query_ui(selector)`,
-`query_app(app)`, `describe_config`, `get_config`, `set_config`, `screenshot` (returns the PNG
-**inline as MCP image content** — the client sees it without a separate read), `doctor`. (Action
-verbs like `openWindowMenu` need no dedicated tool — they go through `run_action`; the dedicated
-tools are the read/introspection verbs.)
+`query_app(app)`, `do_app_action(app, node, action)`, `describe_config`, `get_config`,
+`set_config`, `screenshot` (returns the PNG **inline as MCP image content** — the client sees it
+without a separate read), `doctor`. (Action verbs like `openWindowMenu` need no dedicated tool —
+they go through `run_action`; the dedicated tools are the read/introspection verbs and the two
+computer-use verbs.)
 
-`query_app` is the one exception to "delegates to the shell": it is the **computer-use**
-layer's perception leg, and it runs `crystal-a11y` directly (like `doctor` runs the doctor),
-**not** `ags request` — because reading a *third-party* app is not shell-self-control and must
-not live in the shell process. See "The computer-use layer" below.
+`query_app` and `do_app_action` are the exceptions to "delegates to the shell": they are the
+**computer-use** layer's perception and action legs, and they run `crystal-a11y` / `crystal-act`
+directly (like `doctor` runs the doctor), **not** `ags request` — because reaching into a
+*third-party* app is not shell-self-control and must not live in the shell process. See "The
+computer-use layer" below.
 
 Governance: `ai.json.allowMcp` (Settings → AI → "Enable MCP Server") is re-read on **every**
 tool call, so the toggle applies live with no restarts; when off, every tool refuses with a
-pointer to the page. The finer gates (`allowConfigWrite`, `allowScreenshot`, `allowComputerUse`)
-are enforced downstream (by the shell, or by `crystal-a11y` for `query_app`) — never duplicate
-them in the MCP layer beyond the live re-read the tool already does. Like the rest of `ai.*`,
-`allowMcp` is visible via `describeConfig` but not writable via `setConfig`.
+pointer to the page. The finer gates (`allowConfigWrite`, `allowScreenshot`, `allowComputerUse`,
+`allowComputerControl`) are enforced downstream (by the shell, or by `crystal-a11y`/`crystal-act`
+for the computer-use tools) — never duplicate them in the MCP layer beyond the live re-read the
+tool already does. Like the rest of `ai.*`, `allowMcp` is visible via `describeConfig` but not
+writable via `setConfig`.
 
-### The computer-use layer (third-party perception)
+### The computer-use layer (third-party perception + action)
 
 The agent surface above is the shell controlling **itself**. The computer-use layer is the jump
-to perceiving (and later, driving) **any** third-party app. Phase 1 — built, read-only:
+to perceiving and driving **any** third-party app. Phase 1 — perception, read-only:
 
 - **`bin/crystal-a11y`** (standalone GJS, `gi://Atspi`; same no-Node pattern as
   `crystal-shell-mcp`/`crystal-portal`) reads an app's **AT-SPI2 accessibility tree** and prints
@@ -184,12 +187,36 @@ to perceiving (and later, driving) **any** third-party app. Phase 1 — built, r
   screenshot gate). Enabling it (via `AgentConfig.setAllowComputerUse`) also turns on
   `toolkit-accessibility`, since the capability is useless while a11y is globally off. Re-read
   live by both `crystal-a11y` and the `query_app` MCP tool.
-- **Coverage caveat**: GTK4 exposes its tree on Wayland regardless; Qt needs `QT_ACCESSIBILITY=1`,
-  Chromium/Electron `--force-renderer-accessibility`; the rest fall back to `screenshot` (vision).
-  AT-SPI screen coords are unreliable on Wayland → bounds are **window-relative**.
-- **Deferred (Phase 2+, not built)**: action via AT-SPI `do_action` (deterministic, no coords)
-  with a Wayland-native synthetic-input fallback (Hyprland virtual pointer/keyboard, no
-  privileged daemon); a "driving" indicator; the Prism assistant as the orchestration surface.
+- **Coverage caveat**: GTK4 exposes its tree on Wayland regardless; Qt needs `QT_ACCESSIBILITY=1`
+  (which `allowComputerUse` triggers via `toolkit-accessibility`, so Qt shows a "screen-reader
+  mode" banner); Chromium/Electron need `--force-renderer-accessibility`; the rest fall back to
+  `screenshot` (vision). AT-SPI screen coords are unreliable on Wayland → bounds are
+  **window-relative**.
+
+Phase 2a — **action, deterministic only (built)**:
+
+- **`bin/crystal-act`** (standalone GJS, `gi://Atspi`; SEPARATE binary from `crystal-a11y` so
+  perception stays read-only) invokes a **named AT-SPI action on a named accessible** via
+  `atspi_action_do_action(i)` — `crystal-act <app> <node-name> <action> [role] [occurrence]`.
+  **No coordinates, no synthetic input**: it targets the accessible directly, so it is auditable
+  and **not focus-dependent** (sidesteps the focus-race class of bug). The agent perceives a node
+  (name + `actions[]`) with `query_app`, then acts by name with `do_app_action`. GTK4 exposes
+  rich actions (incl. its GActions: `win.go-home`, `view.show-hidden-files`…); Qt often exposes
+  only `SetFocus` (focus yes, click no — clicking Qt waits for synthetic input, Phase 2b).
+- **Gate: `ai.json.allowComputerControl`** (Settings → AI → "Allow Agents to Control Other
+  Apps"), a **second** default-OFF gate distinct from perception. Enabling it (via
+  `AgentConfig.setAllowComputerControl`) also enables `allowComputerUse` — you can't drive what
+  you can't see. The effective check is `allowComputerControl && allowComputerUse`, re-read live
+  by `crystal-act` and the `do_app_action` MCP tool.
+- **Always-visible indicator + kill switch**: while control is granted, a red `bar-cua-capsule`
+  shows in the bar (mirrors the recording indicator; `Bar.tsx`). It IS the kill switch — clicking
+  it, or the `Super+Shift+Esc` keybind (`config/hypr/hyprland.lua` → `ags request
+  disableComputerControl`), revokes control instantly. The user is never unaware the agent may act.
+- **Deferred (Phase 2b+, not built)**: synthetic input for apps without activatable actions (Qt
+  buttons, Electron, canvas) — `wtype` (keyboard, no daemon) + a tiny Rust `crystal-input` helper
+  speaking `zwlr_virtual_pointer_v1` (no `ydotool`/uinput), coords mapped via Hyprland window
+  geometry; a per-action "acting now" activity flash; a per-app allowlist; the Prism assistant as
+  the perceive→act orchestration surface.
 
 ### Adding a new IPC command
 

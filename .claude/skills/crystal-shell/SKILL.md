@@ -71,9 +71,11 @@ ags request dumpState                    # live shell state as JSON (overlays, v
 ags request describeConfig               # agent-facing settings: schema + current values (JSON)
 ags request setConfig <key> <value>      # change a setting officially (validated; gated by Settings → AI)
 ags request screenshot [path]            # capture the focused monitor → PNG path (visual verification; gated)
-crystal-a11y [app]                       # computer-use perception: a THIRD-PARTY app's UI via AT-SPI, same shape as queryUI (read-only; gated by Settings → AI, default OFF)
+crystal-a11y [app]                       # computer-use perception: a THIRD-PARTY app's UI via AT-SPI, same shape as queryUI (read-only; gated by allowComputerUse, default OFF)
+crystal-act <app> <node> <action>        # computer-use action: invoke a named AT-SPI action on a named control (deterministic, no synthetic input; gated by allowComputerControl, default OFF, requires perception)
+ags request disableComputerControl       # kill switch: revoke AI control instantly (also: click the bar indicator, or Super+Shift+Esc)
 crystal-shell-doctor                     # Markdown diagnostic report (bug/PR evidence)
-crystal-shell-mcp                        # all of the above as MCP tools over stdio (incl. query_app → crystal-a11y; .mcp.json: repo root for dev; installer-managed copy in ~/.config/crystal-shell/ for users)
+crystal-shell-mcp                        # all of the above as MCP tools over stdio (incl. query_app → crystal-a11y, do_app_action → crystal-act; .mcp.json: repo root for dev; installer-managed copy in ~/.config/crystal-shell/ for users)
 ```
 
 CI gates SCSS compile, typecheck, widget-registry freshness **and a headless boot smoke**:

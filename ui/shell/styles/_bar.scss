@@ -213,6 +213,25 @@ window#crystal-bar-zone {
     letter-spacing: 0.05em;
 }
 
+// ── AI-control indicator + kill switch (mirrors the recording indicator) ───────
+
+.bar-cua-capsule {
+    background: rgba(var(--crystal-danger-rgb), 0.18);
+}
+
+.bar-cua-indicator {
+    border-radius: var(--crystal-radius-pill);
+    background: var(--crystal-danger);
+    animation: rec-pulse 1.4s ease-in-out infinite;
+}
+
+.bar-cua-label {
+    font-size: $fs-caption;
+    font-weight: $fw-bold;
+    color: var(--crystal-danger);
+    letter-spacing: 0.05em;
+}
+
 .bar-overflow-label {
     font-size: $fs-small;
     font-weight: $fw-bold;

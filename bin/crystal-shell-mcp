@@ -88,6 +88,17 @@ function computerUseEnabled() {
     }
 }
 
+// Computer-control (acting on third-party apps) defaults OFF and REQUIRES perception.
+function computerControlEnabled() {
+    try {
+        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return false
+        const cfg = JSON.parse(textFile(AI_JSON))
+        return cfg.allowComputerControl === true && cfg.allowComputerUse === true
+    } catch {
+        return false
+    }
+}
+
 // Run a command synchronously, capturing stdout+stderr. The server handles
 // one request at a time, so blocking here is fine (and keeps ordering).
 function run(argv) {
@@ -186,6 +197,38 @@ const TOOLS = [
             if (!a11y) return errResult("crystal-a11y not found — re-run install.sh")
             const r = run(app ? [a11y, app] : [a11y])
             return r.out ? okResult(r.out) : errResult(`query_app failed: ${r.err || "no output"}`)
+        },
+    },
+    {
+        name: "do_app_action",
+        description:
+            "Act on a THIRD-PARTY app by invoking a named accessibility action on a named control — deterministic, NO synthetic mouse/keyboard (the action the control exposes, e.g. \"activate\", \"SetFocus\", or a GTK action like \"view.show-hidden-files\"). Discover a node's name + available `actions` with query_app first, then act by name. GTK4 exposes rich actions; Qt often exposes only \"SetFocus\" (clicking such controls needs synthetic input, not yet available). Gated by Settings → AI → Allow Agents to Control Other Apps (off by default; requires perception). If multiple controls share the name, pass `role` and/or `occurrence` to disambiguate.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                app: { type: "string", description: "App name substring (required)" },
+                node: { type: "string", description: "Accessible name of the control to act on (required)" },
+                action: { type: "string", description: "Action name to invoke, from the node's `actions` (required)" },
+                role: { type: "string", description: "Disambiguate by AT-SPI role (e.g. \"button\")" },
+                occurrence: { type: "integer", description: "Disambiguate by 0-based index among matches" },
+            },
+            required: ["app", "node", "action"],
+            additionalProperties: false,
+        },
+        handler: ({ app, node, action, role, occurrence } = {}) => {
+            if (!computerControlEnabled())
+                return errResult(
+                    "computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)",
+                )
+            if (!app || !node || !action)
+                return errResult("do_app_action needs app, node, and action")
+            const act = findTool("crystal-act")
+            if (!act) return errResult("crystal-act not found — re-run install.sh")
+            const argv = [act, app, node, action]
+            if (role || occurrence != null) argv.push(role || "")
+            if (occurrence != null) argv.push(String(occurrence))
+            const r = run(argv)
+            return r.out ? okResult(r.out) : errResult(`do_app_action failed: ${r.err || "no output"}`)
         },
     },
     {

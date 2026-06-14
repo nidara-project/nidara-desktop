@@ -210,6 +210,7 @@ hl.bind(mainMod .. " + S",   hl.dsp.exec_cmd("ags request openSettings"))
 hl.bind("SUPER + SUPER_L",   hl.dsp.exec_cmd("ags request toggleAppGrid"), { release = true })
 hl.bind(mainMod .. " + G",          hl.dsp.exec_cmd("ags request toggleGameOverlay"))
 hl.bind(mainMod .. " + SHIFT + G", hl.dsp.exec_cmd("crystal-game-mode toggle"))
+hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd("ags request disableComputerControl")) -- kill switch: revoke AI computer-control instantly
 hl.bind(mainMod .. " + E",   hl.dsp.exec_cmd("uwsm app -- " .. fileManager))
 hl.bind(mainMod .. " + T",   hl.dsp.exec_cmd("uwsm app -- " .. terminal))
 hl.bind(mainMod .. " + Q",   hl.dsp.window.close())
