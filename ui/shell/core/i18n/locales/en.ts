@@ -362,7 +362,7 @@ export default {
     "settings.ai.allow-computer-use": "Allow Agents to See Other Apps",
     "settings.ai.allow-computer-use.desc": "Lets agents read the accessibility tree of third-party apps (their on-screen controls and text) for the computer-use layer. Read-only. Off by default — this reaches outside the shell; enabling it also turns on system accessibility.",
     "settings.ai.allow-computer-control": "Allow Agents to Control Other Apps",
-    "settings.ai.allow-computer-control.desc": "Lets agents act on third-party apps — invoking a control's own accessibility action (activate a button, toggle a checkbox) and typing via synthetic keyboard into the focused app (no mouse). Off by default and requires the setting above. While on, a red indicator stays in the bar; click it (or press Super+Shift+Esc) to stop control instantly.",
+    "settings.ai.allow-computer-control.desc": "Lets agents act on third-party apps — invoking a control's own accessibility action (activate a button, toggle a checkbox), and, into the focused app, typing with a synthetic keyboard and clicking with a synthetic pointer. Off by default and requires the setting above. While on, a red indicator stays in the bar; click it (or press Super+Shift+Esc) to stop control instantly.",
     "settings.ai.group.surface": "Agent Interface",
     "settings.ai.exposed-settings": "Exposed Settings",
     "settings.ai.exposed-settings.desc": "Settings agents can discover and change — run `ags request describeConfig` to list them",

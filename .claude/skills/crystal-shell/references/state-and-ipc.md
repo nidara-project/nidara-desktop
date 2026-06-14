@@ -151,9 +151,9 @@ out to `ags request` (or `crystal-shell-doctor`), so the `IPC_COMMANDS` table st
 source of truth — a new IPC command is reachable through the `run_action` tool with zero MCP
 changes. Tools: `list_actions`, `run_action(name, args)`, `dump_state`, `query_ui(selector)`,
 `query_app(app)`, `do_app_action(app, node, action)`, `type_text(app, text)`,
-`press_key(app, key)`, `focus_window(app)`, `describe_config`, `get_config`, `set_config`,
-`screenshot` (returns the PNG **inline as MCP image content** — the client sees it without a
-separate read), `doctor`.
+`press_key(app, key)`, `focus_window(app)`, `click_app(app, node)`, `click_at(app, x, y)`,
+`describe_config`, `get_config`, `set_config`, `screenshot` (returns the PNG **inline as MCP image
+content** — the client sees it without a separate read), `doctor`.
 (Action verbs like `openWindowMenu` need no dedicated tool — they go through `run_action`; the
 dedicated tools are the read/introspection verbs and the computer-use verbs.)
 
@@ -235,6 +235,27 @@ Qt buttons that only expose `SetFocus` → focus then press Enter/Space):
   `hyprctl dispatch`; the classic `hyprctl dispatch focuswindow class:X` is rejected by our Lua
   config). Gated by `allowComputerControl`. The full autonomous loop:
   `focus_window telegram` → `do_app_action telegram "<field>" SetFocus` → `type_text telegram "…"`.
+
+Phase 2b-ii — **synthetic pointer (click), built**, for what AT-SPI/keyboard can't reach (canvas,
+no-a11y surfaces, list items/tabs that need a real click):
+
+- **`bin/crystal-input`** — a tiny **C** Wayland client (`zwlr_virtual_pointer_v1`, no daemon/uinput)
+  compiled by `install.sh` (`wayland-scanner` + `cc` on `wlr-protocols`' XML; only the `.c` is
+  committed, the binary is git-ignored). A **dumb injector**: `crystal-input click <x> <y> <w> <h>`
+  (output-relative logical position + the output's logical extent).
+- **`bin/crystal-click`** (GJS, sibling of crystal-act/crystal-type) owns the smarts: gate +
+  focus-verify, AT-SPI node resolution (centre) or a window-relative point, then the **coordinate
+  mapping** — `global = window.at + rel` (AT-SPI window coords are logical, like Hyprland's `at`);
+  `output_rel = global − monitor.xy`; `extent = monitor.{w,h} / monitor.scale` (hyprctl `w/h` are
+  physical). MCP: `click_app(app, node)` (control centre) / `click_at(app, x, y)` (window-relative).
+- **Same gate + indicator + kill switch + focus verification** as the keyboard (clicking is
+  position/stacking-dependent, so geometry is read FRESH right before injecting). First slice is
+  single-monitor, left-click only.
+- **Coord-mapping caveat**: this is the fragile leg — fractional scale and a possible CSD/shadow
+  offset between AT-SPI's window origin and Hyprland's `at` can miss. **Measure** (screenshot,
+  compare) rather than trust the math (see [[feedback_debug_verify_before_theory]]).
+- **Deferred (not built)**: scroll/drag/right-click, and multi-monitor output targeting
+  (`create_virtual_pointer_with_output`).
 - **Deferred (Phase 2b-ii, not built)**: the synthetic **pointer** — a compiled `crystal-input`
   helper (Rust, `zwlr_virtual_pointer_v1`, no `ydotool`/uinput) for click/move, AT-SPI
   window-relative bounds mapped to output coords via Hyprland window geometry. Needs a new Rust

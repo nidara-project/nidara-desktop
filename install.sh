@@ -239,7 +239,7 @@ sudo pacman -Syu --needed --noconfirm \
     jq slurp grim wf-recorder wl-clipboard cliphist mesa pam \
     pipewire wireplumber \
     git nodejs npm gjs go \
-    at-spi2-core wtype \
+    at-spi2-core wtype wlr-protocols wayland \
     accountsservice greetd pavucontrol rust cargo \
     hyprland hypridle hyprsunset uwsm power-profiles-daemon \
     kitty nautilus \
@@ -513,8 +513,21 @@ sudo cp "$REPO_DIR/bin/crystal-shell-mcp" /usr/bin/crystal-shell-mcp
 sudo cp "$REPO_DIR/bin/crystal-a11y"      /usr/bin/crystal-a11y
 sudo cp "$REPO_DIR/bin/crystal-act"       /usr/bin/crystal-act
 sudo cp "$REPO_DIR/bin/crystal-type"      /usr/bin/crystal-type
+sudo cp "$REPO_DIR/bin/crystal-click"     /usr/bin/crystal-click
 sudo cp "$REPO_DIR/bin/crystal-shell-update" /usr/bin/crystal-shell-update
-sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-before-sleep /usr/bin/crystal-after-sleep /usr/bin/crystal-game-mode /usr/bin/crystal-shell-doctor /usr/bin/crystal-portal /usr/bin/crystal-shell-mcp /usr/bin/crystal-a11y /usr/bin/crystal-act /usr/bin/crystal-type /usr/bin/crystal-shell-update
+sudo chmod +x /usr/bin/crystal-shell /usr/bin/crystal-shell-ui /usr/bin/crystal-greeter /usr/bin/crystal-lock /usr/bin/crystal-before-sleep /usr/bin/crystal-after-sleep /usr/bin/crystal-game-mode /usr/bin/crystal-shell-doctor /usr/bin/crystal-portal /usr/bin/crystal-shell-mcp /usr/bin/crystal-a11y /usr/bin/crystal-act /usr/bin/crystal-type /usr/bin/crystal-click /usr/bin/crystal-shell-update
+
+# Compile the synthetic-pointer backend (crystal-input): a tiny zwlr_virtual_pointer_v1
+# Wayland client. wayland-scanner generates the protocol glue from wlr-protocols, then cc
+# links it against libwayland-client. No new build system — the toolchain is already a dep.
+VP_XML=/usr/share/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml
+VP_BUILD="$(mktemp -d)"
+wayland-scanner client-header "$VP_XML" "$VP_BUILD/wlr-virtual-pointer-unstable-v1-client-protocol.h"
+wayland-scanner private-code  "$VP_XML" "$VP_BUILD/wlr-virtual-pointer-unstable-v1-protocol.c"
+cc -O2 "$REPO_DIR/bin/crystal-input.c" "$VP_BUILD/wlr-virtual-pointer-unstable-v1-protocol.c" \
+    -I"$VP_BUILD" $(pkg-config --cflags --libs wayland-client) -o "$VP_BUILD/crystal-input"
+sudo install -m755 "$VP_BUILD/crystal-input" /usr/bin/crystal-input
+rm -rf "$VP_BUILD"
 
 # systemd user unit — the shell respawns on crash instead of leaving a bare
 # compositor (see bin/crystal-shell.service). NOT enabled by target: it's

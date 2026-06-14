@@ -295,6 +295,58 @@ const TOOLS = [
         },
     },
     {
+        name: "click_app",
+        description:
+            "Click a control in a THIRD-PARTY app with a synthetic pointer (the control's accessibility-reported centre) — for controls that AT-SPI actions and the keyboard can't reach (no activatable action, not Enter/Space-reachable). Prefer do_app_action / press_key first; use this for list items, tabs, checkboxes, etc. that need a real click. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                app: { type: "string", description: "Target app — must be the focused window" },
+                node: { type: "string", description: "Accessible name of the control to click" },
+                role: { type: "string", description: "Disambiguate by AT-SPI role" },
+                occurrence: { type: "integer", description: "Disambiguate by 0-based index among matches" },
+            },
+            required: ["app", "node"],
+            additionalProperties: false,
+        },
+        handler: ({ app, node, role, occurrence } = {}) => {
+            if (!computerControlEnabled())
+                return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
+            if (!app || !node) return errResult("click_app needs app and node")
+            const c = findTool("crystal-click")
+            if (!c) return errResult("crystal-click not found — re-run install.sh")
+            const argv = [c, "app", app, node]
+            if (role || occurrence != null) argv.push(role || "")
+            if (occurrence != null) argv.push(String(occurrence))
+            const r = run(argv)
+            return r.out ? okResult(r.out) : errResult(`click_app failed: ${r.err || "no output"}`)
+        },
+    },
+    {
+        name: "click_at",
+        description:
+            "Click a WINDOW-RELATIVE point (x, y in pixels from the window's top-left) in a THIRD-PARTY app with a synthetic pointer — for canvas / custom-drawn / no-accessibility surfaces where there is no accessible to target. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                app: { type: "string", description: "Target app — must be the focused window" },
+                x: { type: "integer", description: "X offset from the window's top-left" },
+                y: { type: "integer", description: "Y offset from the window's top-left" },
+            },
+            required: ["app", "x", "y"],
+            additionalProperties: false,
+        },
+        handler: ({ app, x, y } = {}) => {
+            if (!computerControlEnabled())
+                return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
+            if (!app || x == null || y == null) return errResult("click_at needs app, x and y")
+            const c = findTool("crystal-click")
+            if (!c) return errResult("crystal-click not found — re-run install.sh")
+            const r = run([c, "at", app, String(x), String(y)])
+            return r.out ? okResult(r.out) : errResult(`click_at failed: ${r.err || "no output"}`)
+        },
+    },
+    {
         name: "describe_config",
         description:
             "Schema of every agent-exposed shell setting: description, type, enum/min/max, writability and current value. Call this before get_config/set_config — never guess keys.",

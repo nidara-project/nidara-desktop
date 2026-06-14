@@ -26,6 +26,10 @@ target/
 # them only bloated git history (~4MB/commit) for no deploy benefit.
 ui/*/build/
 
+# Compiled synthetic-pointer backend — built from bin/crystal-input.c by
+# install.sh (and the dev cc one-liner); only the .c source is committed.
+/bin/crystal-input
+
 # Media & Recordings
 *.mkv
 *.mp4
