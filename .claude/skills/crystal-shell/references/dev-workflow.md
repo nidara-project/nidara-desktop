@@ -173,11 +173,14 @@ on bug reports and hardware/compat PRs.
 
 **`crystal-shell-mcp`** (installed to `/usr/bin`; registered for this repo via `.mcp.json`, and for installed users via the installer-managed `~/.config/crystal-shell/.mcp.json`)
 serves the agent surface — IPC actions, config, state, screenshots (inline images), doctor —
-plus `query_app` (computer-use: third-party app perception via AT-SPI) as MCP tools over
-stdio. Plain GJS, no Node/npm at runtime; mostly a thin adapter over `ags request` (so it
-needs no changes when IPC commands are added) — the one exception is `query_app`, which runs
-`crystal-a11y` directly because reading a foreign app is not shell-self-control. Details and
-governance (`ai.json.allowMcp` / `allowComputerUse`, live-read per call) in
+plus the **computer-use** tools (`query_app`, `do_app_action`, `type_text`, `press_key`,
+`focus_window`) as MCP tools over stdio. Plain GJS, no Node/npm at runtime; mostly a thin adapter
+over `ags request` (so it needs no changes when IPC commands are added) — the exceptions are the
+perception/action/keyboard tools, which run the standalone `crystal-a11y`/`crystal-act`/`crystal-type`
+helpers directly because reaching into a foreign app is not shell-self-control (`focus_window` is
+the exception-to-the-exception: it delegates back to the shell's `focusWindow`, which owns the
+Hyprland binding). Details and governance (`ai.json.allowMcp` / `allowComputerUse` /
+`allowComputerControl`, live-read per call) in
 `references/state-and-ipc.md`.
 
 **Regenerating `@girs/` (and the trap it sets).** `@girs/` is git-ignored, so a fresh clone / a new
