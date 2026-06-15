@@ -66,7 +66,13 @@ Current commands (run `listActions` for the live list): `toggleCC|toggleControlC
 `toggleNC|toggleNotificationCenter`, `togglePrism|toggleSpotlight`, `toggleAppGrid`,
 `openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `toggleGameOverlay`,
 `openWindowMenu`, `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`,
-`setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listActions`, `dumpState`.
+`setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listApps`, `launchApp <id>`,
+`disableComputerControl`, `listActions`, `dumpState`, plus the **window/workspace management**
+cluster (see below): `listWindows`, `listWorkspaces`, `focusWorkspace <id|±1|name>`,
+`focusDirection <l|r|u|d>`, `focusWindow <window>`,
+`closeWindow <window>`, `moveWindowToWorkspace <window> <wsId>`, `toggleFloat`/`toggleFullscreen`/
+`centerWindow`/`togglePin`/`togglePseudo` `<window>`, `toggleGroup [window]`,
+`moveWindowOutOfGroup <window>`, `sendWindowToSpecial [name] [window]`, `setLayout <dwindle|master>`.
 Aliases are intentional — Hyprland keybinds were renamed at one point and old names are kept.
 
 `screenshot [path]` captures the focused monitor with grim and returns the PNG path
@@ -110,6 +116,52 @@ Commands receive arguments: `requestHandler` passes `argv.slice(1)` to the handl
 that page (sidebar category ids; returns `unknown page: <id>` for bad ids) — the agent-
 friendly way to reach a Settings page without synthesizing clicks.
 
+### Window & workspace management (ungated, the shell driving its own compositor)
+
+Hyprland **is** Crystal Shell's compositor, so window-manager operations — switch
+workspace, focus/move/close a window, float/fullscreen/pin/group it, set the tiling layout —
+are a **first-class shell capability, not computer-use**. They are deterministic (they target
+the compositor by window address, no synthetic input, no focus race) and **ungated**, the same
+reasoning as `launchApp`: a WM op reaches into no third-party app's internals (the `allowComputerControl`
+gate stays on the things that DO — synthetic keyboard/pointer and AT-SPI actions). The MCP path
+still has its global `allowMcp` floor; local `ags request` is always available.
+
+- **Reads** (ungated, like `dumpState`): `listWindows` (authoritative, async — reads `hyprctl
+  clients -j` via `HyprlandState.getClientsJson`; carries `floating`/`fullscreen`/`pinned`/`grouped`,
+  which the cached `AstalHyprland.Client` props get wrong) and `listWorkspaces`
+  (`HyprlandState.getWorkspacesJson`; `active` = focused, plus the window count and special flag).
+- **Actions**: `focusWorkspace <id|±1|name>` (absolute id, relative `+1`/`-1` → the cycle-incl-empty
+  `e±1` the wheel binds use, or a Hyprland workspace string like `previous`/`name:foo`),
+  `focusDirection <left|right|up|down>` (move focus spatially — benign), `focusWindow <window>`,
+  `closeWindow`, `moveWindowToWorkspace <window> <wsId>`, `toggleFloat`, `toggleFullscreen`,
+  `centerWindow`, `togglePin`, `togglePseudo`, `toggleGroup [window]`, `moveWindowOutOfGroup`,
+  `sendWindowToSpecial [name] [window]`, `setLayout <dwindle|master>` — one thin IPC command per
+  **already-built, live-verified** `HyprlandState` dispatch method (the same ones the AppTitle
+  window menu / dock / overview / arrow-key + wheel binds call). All of `focusWorkspace`/
+  `focusDirection`/`focusWindow` ride Hyprland's **one unified `hl.dsp.focus` dispatcher**
+  (`{ workspace | direction | window }`).
+- **`<window>` is resolved by `resolveWindow(arg)` in `app.ts`** — accepts an exact address
+  (`0x…`, what `listWindows` reports — precise) **or** a class/title substring (`firefox`). Every
+  window-targeting command shares it, so they all take the same flexible argument.
+- **`focusWindow` is ungated** (it used to be gated as the synthetic-keyboard precondition).
+  Focusing a window is benign — exactly what a dock click or `launchApp` already does ungated —
+  and the gates that matter (`type_text`/`press_key`/`click_*` + AT-SPI `do_app_action`) still
+  apply and still focus-verify. So there is now **one** focus path, shared by WM use and the
+  computer-use keyboard loop.
+- **MCP**: the two reads get dedicated tools (`list_windows`, `list_workspaces`, parity with
+  `dump_state`/`query_ui`); the actions go through `run_action` (the established pattern — action
+  verbs need no dedicated tool, their `listActions` description is the documentation).
+- IPC `run` may now return a **Promise** (`requestHandler` awaits it) so `listWindows`/`listWorkspaces`
+  can read authoritative async compositor state.
+- **Deliberately NOT built — directional window-move (`movewindow l/r/u/d`) and resize
+  (`resizeactive`)**: both classic dispatchers act on the **active window only** (no window
+  selector), so they're inherently focus-dependent (the focus-race class — see
+  `feedback_no_focus_dependent_scripting`) AND their `hl.dsp.*` Lua names aren't in our config to
+  copy (guessing risks a silent-fail `.catch` no-op — the lesson behind the four broken methods).
+  Low agent value too (moveWindowToWorkspace/float/fullscreen/center already cover relocation).
+  If wanted later: verify the Lua dispatcher name first (don't guess), and consider that they only
+  make sense right after a deterministic `focusWindow`.
+
 ### The agent config surface: `describeConfig` / `getConfig` / `setConfig`
 
 Settings are exposed to agents through a typed registry (`core/ConfigRegistry.ts`; entries
@@ -150,9 +202,9 @@ It is a **thin adapter with mostly no logic of its own**: every shell-self-contr
 out to `ags request` (or `crystal-shell-doctor`), so the `IPC_COMMANDS` table stays the single
 source of truth — a new IPC command is reachable through the `run_action` tool with zero MCP
 changes. Tools: `list_actions`, `run_action(name, args)`, `list_apps`, `launch_app(id)`,
-`dump_state`, `query_ui(selector)`,
+`dump_state`, `query_ui(selector)`, `list_windows`, `list_workspaces`,
 `query_app(app)`, `do_app_action(app, node, action)`, `type_text(app, text)`,
-`press_key(app, key)`, `focus_window(app)`, `click_app(app, node, button?)`, `click_at(app, x, y, button?)`,
+`press_key(app, key)`, `focus_window(window)` (ungated — a WM op), `click_app(app, node, button?)`, `click_at(app, x, y, button?)`,
 `scroll_app(app, node, direction, amount?)`, `scroll_at(app, x, y, direction, amount?)`,
 `drag_at(app, from_x, from_y, to_x, to_y)`,
 `describe_config`, `get_config`, `set_config`, `screenshot` (returns the PNG **inline as MCP image
@@ -245,12 +297,14 @@ Qt buttons that only expose `SetFocus` → focus then press Enter/Space):
   (`hyprctl activewindow`) before injecting, refusing otherwise — a keystroke can only land in the
   named app while it is actually focused. This is the deliberate mitigation for the focus-race
   class of bug.
-- **`focusWindow <app>` IPC + `focus_window` MCP tool** — raise/focus a third-party window by
-  class so it becomes the active window (the **precondition** for the keyboard). Unlike the other
+- **`focusWindow <window>` IPC + `focus_window` MCP tool** — raise/focus a window (by address or
+  class) so it becomes the active window (the **precondition** for the keyboard). Unlike the other
   computer-use tools, this is a **shell IPC command** (it reuses `HyprlandState.focusWindow`, the
   same path the dock uses on a running-app click — `hl.dsp.focus({ window = 'address:…' })` via
   `hyprctl dispatch`; the classic `hyprctl dispatch focuswindow class:X` is rejected by our Lua
-  config). Gated by `allowComputerControl`. The full autonomous loop:
+  config). **Ungated** — it's a window-manager op (see "Window & workspace management" above), as
+  benign as a dock click; the keyboard/pointer tools it feeds stay gated and focus-verified. The
+  full autonomous loop:
   `focus_window telegram` → `do_app_action telegram "<field>" SetFocus` → `type_text telegram "…"`.
 
 Phase 2b-ii — **synthetic pointer (click, right-click, scroll, drag), built**, for what AT-SPI/keyboard

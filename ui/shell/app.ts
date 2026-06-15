@@ -83,7 +83,32 @@ const ipc: Record<string, ((...args: string[]) => string | void) | undefined> = 
 interface IpcCommand {
   desc: string
   aliases?: string[]
-  run: (args: string[]) => string | void
+  // May return a Promise — requestHandler awaits it before responding, so a
+  // command can read authoritative async state (e.g. `hyprctl clients -j`).
+  run: (args: string[]) => string | void | Promise<string | void>
+}
+
+// Resolve a window argument to a live client. Accepts an exact address (`0x…`,
+// what listWindows reports — precise) OR a class/title substring (convenient,
+// e.g. "firefox"). The single front door for every window-targeting IPC command
+// so they all accept the same flexible argument. Reads the cached client list
+// (refreshed on open/close/move events), so it's current without re-shelling.
+function resolveWindow(arg?: string): any | null {
+  const q = (arg ?? "").trim()
+  if (!q) return null
+  const clients = (hyprlandState.clients ?? []) as any[]
+  const norm = (s?: string) => (s ?? "").toLowerCase()
+  if (q.startsWith("0x")) {
+    // listWindows reports hyprctl addresses (with "0x"); AstalHyprland.Client.address
+    // sometimes lacks the prefix (why _winSel normalizes) — strip it on both sides.
+    const bare = (s?: string) => norm(s).replace(/^0x/, "")
+    const target = bare(q)
+    return clients.find(c => bare(c.address) === target) ?? null
+  }
+  return clients.find(c => norm(c.class) === norm(q))
+    ?? clients.find(c => norm(c.class).includes(norm(q)))
+    ?? clients.find(c => norm(c.title).includes(norm(q)))
+    ?? null
 }
 
 const IPC_COMMANDS: Record<string, IpcCommand> = {
@@ -133,22 +158,200 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       return "computer-control disabled"
     },
   },
-  focusWindow: {
-    desc: "Raise and focus a third-party window by app/class (e.g. `focusWindow telegram`) — the precondition for synthetic keyboard (type_text/press_key need the target focused). Gated by Settings → AI → Allow Agents to Control Other Apps.",
+  // ── Window & workspace management ────────────────────────────────────────
+  // The shell controlling its OWN compositor (Hyprland IS Crystal Shell), so —
+  // like launchApp — these are UNGATED: a window-manager op (focus/move/close a
+  // window, switch workspace) is not "reaching into a third-party app". The
+  // computer-use gate (allowComputerControl) stays on the things that DO reach
+  // in: synthetic keyboard/pointer and AT-SPI actions. Every window-targeting
+  // command takes a window via resolveWindow (address from listWindows, or a
+  // class/title substring). They delegate to HyprlandState (the only hyprctl door).
+  listWindows: {
+    desc: "List open windows as JSON [{address, class, title, workspace, at, size, floating, fullscreen, pinned, grouped, focused}] — authoritative compositor state. Use `address` as the target for the window actions below (or pass a class substring). Pair with listWorkspaces.",
+    run: async () => {
+      const focused = (hyprlandState.focusedClient as any)?.address ?? ""
+      const arr = await hyprlandState.getClientsJson()
+      return JSON.stringify(
+        arr.map((c: any) => ({
+          address: c.address,
+          class: c.class,
+          title: c.title,
+          workspace: c.workspace ? { id: c.workspace.id, name: c.workspace.name } : null,
+          at: c.at,
+          size: c.size,
+          floating: !!c.floating,
+          fullscreen: !!c.fullscreen,
+          pinned: !!c.pinned,
+          grouped: Array.isArray(c.grouped) ? c.grouped.length > 0 : false,
+          focused: c.address === focused,
+        })),
+        null,
+        2,
+      )
+    },
+  },
+  listWorkspaces: {
+    desc: "List workspaces as JSON [{id, name, monitor, windows, active, special}] — `active` is the focused one. Use `id` as the target for focusWorkspace / moveWindowToWorkspace.",
+    run: async () => {
+      const focusedId = hyprlandState.focusedWorkspaceId
+      const arr = await hyprlandState.getWorkspacesJson()
+      return JSON.stringify(
+        arr.map((w: any) => ({
+          id: w.id,
+          name: w.name,
+          monitor: w.monitor,
+          windows: w.windows,
+          active: w.id === focusedId,
+          special: String(w.name ?? "").startsWith("special:"),
+        })),
+        null,
+        2,
+      )
+    },
+  },
+  focusWorkspace: {
+    desc: "Switch workspace. Absolute id (`focusWorkspace 3`, see listWorkspaces), relative (`+1`/`-1` = next/prev incl. empty), or a Hyprland workspace string (`previous`, `e+1`, `name:foo`).",
     run: args => {
-      if (!agentConfig.allowComputerControl || !agentConfig.allowComputerUse)
-        return "computer-control is disabled — enable it in Settings → AI"
-      const q = (args[0] ?? "").toLowerCase().trim()
-      if (!q) return "usage: focusWindow <app-or-class>"
-      const norm = (s?: string) => (s ?? "").toLowerCase()
-      const clients = hyprlandState.clients ?? []
-      const match =
-        clients.find(c => norm(c.class) === q) ??
-        clients.find(c => norm(c.class).includes(q)) ??
-        clients.find(c => norm(c.title).includes(q))
-      if (!match) return `no window matching "${q}"`
-      hyprlandState.focusWindow(match.address)
-      return `focused ${match.class}: ${match.title}`
+      const a = (args[0] ?? "").trim()
+      if (!a) return "usage: focusWorkspace <id | +1 | -1 | previous | name:foo>"
+      if (/^\d+$/.test(a)) {
+        const id = parseInt(a, 10)
+        hyprlandState.focusWorkspace(id)
+        return `switched to workspace ${id}`
+      }
+      // Relative shorthand +N/-N → the cycle-incl-empty form the wheel binds use.
+      const rel = a.match(/^([+-])(\d+)$/)
+      const arg = rel ? `e${rel[1]}${rel[2]}` : a
+      hyprlandState.focusWorkspaceArg(arg)
+      return `switched workspace (${arg})`
+    },
+  },
+  focusDirection: {
+    desc: "Move keyboard focus in a direction: `focusDirection left|right|up|down` (l/r/u/d also accepted). Only moves focus — benign.",
+    run: args => {
+      const map: Record<string, "left" | "right" | "up" | "down"> = {
+        l: "left", left: "left", r: "right", right: "right",
+        u: "up", up: "up", d: "down", down: "down",
+      }
+      const dir = map[(args[0] ?? "").toLowerCase().trim()]
+      if (!dir) return "usage: focusDirection <left|right|up|down>"
+      hyprlandState.focusDirection(dir)
+      return `moved focus ${dir}`
+    },
+  },
+  focusWindow: {
+    desc: "Focus/raise a window by address (from listWindows) or class/title (`focusWindow firefox`). Also the precondition for the synthetic keyboard (type_text/press_key require the target to be the focused window).",
+    run: args => {
+      const w = resolveWindow(args[0])
+      if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
+      hyprlandState.focusWindow(w.address)
+      return `focused ${w.class}: ${w.title}`
+    },
+  },
+  closeWindow: {
+    desc: "Close a window by address (from listWindows) or class/title (`closeWindow 0x..`). Asks the window to close (may prompt to save) — not a kill.",
+    run: args => {
+      const w = resolveWindow(args[0])
+      if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
+      hyprlandState.closeWindow(w.address)
+      return `closed ${w.class}`
+    },
+  },
+  moveWindowToWorkspace: {
+    desc: "Move a window to a workspace (`moveWindowToWorkspace <window> <workspaceId>`). Window by address/class; workspace by id (see listWorkspaces).",
+    run: args => {
+      const w = resolveWindow(args[0])
+      if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
+      const id = parseInt(args[1] ?? "", 10)
+      if (isNaN(id)) return "usage: moveWindowToWorkspace <window> <workspaceId>"
+      hyprlandState.sendToWorkspace(w.address, id)
+      return `moved ${w.class} → workspace ${id}`
+    },
+  },
+  toggleFloat: {
+    desc: "Toggle floating/tiled on a window (`toggleFloat <window>`).",
+    run: args => {
+      const w = resolveWindow(args[0])
+      if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
+      hyprlandState.floatWindow(w.address)
+      return `toggled float on ${w.class}`
+    },
+  },
+  toggleFullscreen: {
+    desc: "Toggle fullscreen on a window (`toggleFullscreen <window>`).",
+    run: args => {
+      const w = resolveWindow(args[0])
+      if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
+      hyprlandState.toggleFullscreen(w.address)
+      return `toggled fullscreen on ${w.class}`
+    },
+  },
+  centerWindow: {
+    desc: "Center a floating window on screen (`centerWindow <window>`; no-op for tiled windows).",
+    run: args => {
+      const w = resolveWindow(args[0])
+      if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
+      hyprlandState.centerWindow(w.address)
+      return `centered ${w.class}`
+    },
+  },
+  togglePin: {
+    desc: "Toggle pin (visible on every workspace; floating windows only) on a window (`togglePin <window>`).",
+    run: args => {
+      const w = resolveWindow(args[0])
+      if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
+      hyprlandState.togglePin(w.address)
+      return `toggled pin on ${w.class}`
+    },
+  },
+  togglePseudo: {
+    desc: "Toggle pseudo-tiling on a window (`togglePseudo <window>`). NB: pseudo state is not readable, so you can't verify it afterwards.",
+    run: args => {
+      const w = resolveWindow(args[0])
+      if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
+      hyprlandState.togglePseudo(w.address)
+      return `toggled pseudo on ${w.class}`
+    },
+  },
+  toggleGroup: {
+    desc: "Toggle a tab-group on a window — creates a lone group or dissolves the whole group (`toggleGroup [window]`; omit the window to act on the focused one).",
+    run: args => {
+      if (!args[0]) {
+        hyprlandState.toggleGroup()
+        return "toggled group on the focused window"
+      }
+      const w = resolveWindow(args[0])
+      if (!w) return `no window matching "${args[0]}" — see listWindows`
+      hyprlandState.toggleGroup(w.address)
+      return `toggled group on ${w.class}`
+    },
+  },
+  moveWindowOutOfGroup: {
+    desc: "Pull a window out of its tab-group (`moveWindowOutOfGroup <window>`).",
+    run: args => {
+      const w = resolveWindow(args[0])
+      if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
+      hyprlandState.moveOutOfGroup(w.address)
+      return `pulled ${w.class} out of its group`
+    },
+  },
+  sendWindowToSpecial: {
+    desc: "Send a window to a special (scratchpad) workspace (`sendWindowToSpecial [name] [window]`; name defaults to 'magic', window defaults to the focused one).",
+    run: args => {
+      const name = (args[0] || "magic").replace(/^special:/, "")
+      const w = args[1] ? resolveWindow(args[1]) : null
+      if (args[1] && !w) return `no window matching "${args[1]}" — see listWindows`
+      hyprlandState.sendToSpecial(name, w?.address)
+      return `sent ${w ? w.class : "the focused window"} → special:${name}`
+    },
+  },
+  setLayout: {
+    desc: "Set the Hyprland tiling layout: `setLayout dwindle` or `setLayout master`.",
+    run: args => {
+      const l = (args[0] ?? "").trim()
+      if (l !== "dwindle" && l !== "master") return "usage: setLayout <dwindle|master>"
+      hyprlandState.setLayout(l)
+      return `layout → ${l}`
     },
   },
   hideForLock: { desc: "Hide bar+dock while the lockscreen is up", run: () => ipc.lockScreen?.() },
@@ -488,6 +691,13 @@ app.start({
       console.warn(`[Handler] Unknown command: ${cmd}`)
       return res("unknown command — try `ags request listActions`")
     }
-    res(entry.run(argv.slice(1)) ?? "ok")
+    const out = entry.run(argv.slice(1))
+    // Async commands (listWindows reads `hyprctl clients -j`) respond once the
+    // Promise settles; sync commands respond immediately.
+    if (out instanceof Promise) {
+      out.then(v => res(v ?? "ok")).catch(e => res(`error: ${e}`))
+      return
+    }
+    res(out ?? "ok")
   }
 })

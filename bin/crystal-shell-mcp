@@ -215,6 +215,20 @@ const TOOLS = [
         handler: ({ selector } = {}) => okResult(agsRequest(selector ? ["queryUI", selector] : ["queryUI"])),
     },
     {
+        name: "list_windows",
+        description:
+            "List open windows as JSON [{address, class, title, workspace, at, size, floating, fullscreen, pinned, grouped, focused}] — authoritative compositor state for THIS session (not third-party app internals). Read-only, like dump_state. Use a window's `address` as the target for window actions via run_action (focusWindow, closeWindow, moveWindowToWorkspace, toggleFloat/Fullscreen, …). Pair with list_workspaces.",
+        inputSchema: { type: "object", properties: {}, additionalProperties: false },
+        handler: () => okResult(agsRequest(["listWindows"])),
+    },
+    {
+        name: "list_workspaces",
+        description:
+            "List workspaces as JSON [{id, name, monitor, windows, active, special}] — `active` is the focused one. Read-only, like dump_state. Use an `id` as the target for run_action focusWorkspace / moveWindowToWorkspace.",
+        inputSchema: { type: "object", properties: {}, additionalProperties: false },
+        handler: () => okResult(agsRequest(["listWorkspaces"])),
+    },
+    {
         name: "query_app",
         description:
             "Snapshot a THIRD-PARTY application's UI via the accessibility tree (AT-SPI) — the same flat-node shape as query_ui (role/name/text/actions/bounds per node), but for a foreign window (a browser, file manager, editor) instead of the shell. Read-only, like query_ui. Default targets the focused window; pass `app` to target another by name (e.g. \"nautilus\", \"firefox\"). Gated by Settings → AI → Allow Agents to See Other Apps (off by default). Some toolkits expose little (Qt needs QT_ACCESSIBILITY=1, Chromium/Electron --force-renderer-accessibility) — fall back to the screenshot tool there.",
@@ -317,17 +331,15 @@ const TOOLS = [
     {
         name: "focus_window",
         description:
-            "Raise and focus a third-party app's window by name/class (e.g. \"telegram\") — the PRECONDITION for synthetic keyboard: type_text/press_key require the target to be the focused window. Goes through the shell's Hyprland control (reuses the dock's focus path). Gated by Settings → AI → Allow Agents to Control Other Apps.",
+            "Raise and focus a window by address (from list_windows) or class/title (e.g. \"telegram\") — a window-manager op on THIS session via the shell's Hyprland control (the dock's focus path). UNGATED, like launch_app: focusing a window reaches into no app. It is also the PRECONDITION for the synthetic keyboard — type_text/press_key require the target to be the focused window (those stay gated).",
         inputSchema: {
             type: "object",
-            properties: { app: { type: "string", description: "App name or window class to focus" } },
+            properties: { app: { type: "string", description: "Window address (0x…) from list_windows, or app name/class" } },
             required: ["app"],
             additionalProperties: false,
         },
         handler: ({ app } = {}) => {
-            if (!computerControlEnabled())
-                return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
-            if (!app) return errResult("focus_window needs app")
+            if (!app) return errResult("focus_window needs a window (address from list_windows, or a class)")
             return okResult(agsRequest(["focusWindow", app]))
         },
     },

@@ -275,6 +275,20 @@ class HyprlandStateClass extends GObject.Object {
         return this._dispatch(`hl.dsp.focus({ workspace = ${id} })`)
     }
 
+    /** Switch workspace by a Hyprland workspace STRING — relative ("e+1"/"e-1",
+     *  the cycle-incl-empty form the mouse-wheel binds use), "previous", "name:x",
+     *  etc. Quoted, unlike the numeric focusWorkspace. Same unified focus dispatcher. */
+    focusWorkspaceArg(arg: string) {
+        return this._dispatch(`hl.dsp.focus({ workspace = '${arg}' })`)
+    }
+
+    /** Move focus in a direction — `hl.dsp.focus({ direction })`, the same unified
+     *  focus dispatcher as focusWorkspace/focusWindow (verified live via the
+     *  arrow-key binds in hyprland.lua). Benign: it only moves focus. */
+    focusDirection(dir: "left" | "right" | "up" | "down") {
+        return this._dispatch(`hl.dsp.focus({ direction = '${dir}' })`)
+    }
+
     focusWindow(address: string) {
         return this._dispatch(`hl.dsp.focus({ ${this._winSel(address)} })`)
     }
@@ -336,8 +350,12 @@ class HyprlandStateClass extends GObject.Object {
         return this._dispatch(`hl.dsp.window.move({ out_of_group = true, ${this._winSel(address)} })`)
     }
 
-    sendToSpecial(name = "magic") {
-        return this._dispatch(`hl.dsp.window.move({ workspace = 'special:${name}' })`)
+    /** Send a window to a special (scratchpad) workspace. With no address it
+     *  moves the FOCUSED window (the classic keybind behaviour); pass an address
+     *  to target a specific window (the agent/IPC path needs determinism). */
+    sendToSpecial(name = "magic", address?: string) {
+        const sel = address ? `, ${this._winSel(address)}` : ""
+        return this._dispatch(`hl.dsp.window.move({ workspace = 'special:${name}'${sel} })`)
     }
 
     /** One-shot raw read of ALL clients from hyprctl. This is the authoritative
@@ -354,6 +372,14 @@ class HyprlandStateClass extends GObject.Object {
     async getClientJson(address: string): Promise<any | null> {
         const addr = address.startsWith("0x") ? address : "0x" + address
         return (await this.getClientsJson()).find((c: any) => c.address === addr) ?? null
+    }
+
+    /** One-shot raw read of ALL workspaces from hyprctl (authoritative: carries the
+     *  window count, monitor and fullscreen flag the cached AstalHyprland objects
+     *  don't reliably expose). On-demand only — not part of _refresh. [] on failure. */
+    async getWorkspacesJson(): Promise<any[]> {
+        try { return JSON.parse(await execAsync(["hyprctl", "workspaces", "-j"])) }
+        catch (e) { console.error("[HyprlandState] getWorkspacesJson:", e); return [] }
     }
 
     setLayout(layout: "dwindle" | "master") {
