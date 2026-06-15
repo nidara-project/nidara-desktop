@@ -112,7 +112,12 @@ export default function WorkspaceOverview(monitor: any) {
     }
 
 
-    const changedId = hs.connect("changed", syncAll)
+    // Only re-sync while the overview is actually open. syncAll churns per-window
+    // icon widgets and queue_draw()s every workspace schematic; running it on every
+    // HyprlandState "changed" while the overview is CLOSED needlessly repaints the bar
+    // window each event (a real cost when "changed" storms — see tech-debt #11). The
+    // overview is re-synced on open via notify::overview-open below.
+    const changedId = hs.connect("changed", () => { if (status.overview_open) syncAll() })
 
     status.connect("notify::overview-open", () => {
         if (status.overview_open) syncAll()

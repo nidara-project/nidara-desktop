@@ -20,7 +20,11 @@ function buildBarContent(): Gtk.Widget {
     const getIcon = () => (wifi as any)?.enabled === false ? Icons.wifiOff : Icons.wifi
     const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
     if (wifi) {
-        const sigId = (wifi as any).connect("notify", () => { image.gicon = getIcon() })
+        // notify::enabled ONLY — the icon depends solely on `enabled`. The generic
+        // "notify" fires on every property churn (strength/scanning) and re-set the
+        // gicon each time → gtk_image_clear → queue_draw → a full bar re-blur every
+        // frame for an icon that never visually changes. Guard the assignment too.
+        const sigId = (wifi as any).connect("notify::enabled", () => { const ic = getIcon(); if (image.gicon !== ic) image.gicon = ic })
         image.connect("unrealize", () => { try { (wifi as any).disconnect(sigId) } catch {} })
     }
     return image
@@ -45,7 +49,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
             css_classes: ["cs-icon"],
         })
         if (wifi) {
-            const sigId = (wifi as any).connect("notify", () => { icon.gicon = getIcon() })
+            const sigId = (wifi as any).connect("notify::enabled", () => { const ic = getIcon(); if (icon.gicon !== ic) icon.gicon = ic })
             box.connect("unrealize", () => { try { (wifi as any).disconnect(sigId) } catch {} })
         }
         box.append(icon)
@@ -55,8 +59,11 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     const inner = buildCapsuleInner(getIcon, () => t("cc.wifi.name"), getSub)
 
     if (wifi) {
-        const sigId = (wifi as any).connect("notify", inner.update)
-        inner.box.connect("unrealize", () => { try { (wifi as any).disconnect(sigId) } catch {} })
+        // Specific signals only — inner.update reads enabled (icon) + ssid (subtitle);
+        // the generic "notify" stormed a full re-blur on every strength/scan churn.
+        const sigIdE = (wifi as any).connect("notify::enabled", inner.update)
+        const sigIdS = (wifi as any).connect("notify::ssid", inner.update)
+        inner.box.connect("unrealize", () => { try { (wifi as any).disconnect(sigIdE); (wifi as any).disconnect(sigIdS) } catch {} })
     }
     return wrapCapsuleTile(inner.box)
 }

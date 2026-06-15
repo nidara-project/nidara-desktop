@@ -46,7 +46,12 @@ function buildBarContent(): Gtk.Widget {
     const update = () => {
         const p = player
         const playing = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING
-        playImg.gicon = playing ? Icons.pause : Icons.play
+        // AstalMpris polls position every 1s while PLAYING and emits notify::position,
+        // firing this generic "notify" handler 1×/s. Guard the gicon assignment so an
+        // unchanged play/pause icon never queues a draw → no 1 Hz bar re-blur while
+        // music plays. (label/sensitive/visible below are already GTK equality-guarded.)
+        const wantIcon = playing ? Icons.pause : Icons.play
+        if (playImg.gicon !== wantIcon) playImg.gicon = wantIcon
         prev.sensitive = p?.can_go_previous !== false
         next.sensitive = p?.can_go_next !== false
         const t = p?.title || ""

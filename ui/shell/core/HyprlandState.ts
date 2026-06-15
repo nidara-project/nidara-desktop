@@ -13,6 +13,9 @@ const TRACKED_EVENTS = [
     "monitor-added", "monitor-removed",
 ]
 
+// Minimum ms between refreshes — see _scheduleRefresh (caps the tech-debt #11 storm).
+const REFRESH_MIN_INTERVAL_MS = 60
+
 class HyprlandStateClass extends GObject.Object {
     static {
         GObject.registerClass({
@@ -28,6 +31,8 @@ class HyprlandStateClass extends GObject.Object {
 
     private readonly hl: AstalHyprland.Hyprland
     private _refreshPending = false
+    private _lastRefreshUs = 0
+    private _lastSig = ""
 
     // Cached raw arrays — one refresh per signal batch, shared by all consumers
     clients:    AstalHyprland.Client[]    = []
@@ -156,15 +161,27 @@ class HyprlandStateClass extends GObject.Object {
         } catch { return "" }
     }
 
-    // Coalesces multiple signals that fire in the same GLib iteration into one refresh.
+    // Coalesces multiple signals that fire in the same GLib iteration into one
+    // refresh, AND throttles to a minimum interval. AstalHyprland re-emits "event"
+    // spuriously while _refresh reads get_clients()/get_monitors(), which on some
+    // instances forms a SELF-SUSTAINING storm: event → refresh → _refresh → (re-emit)
+    // → event → … driving _refresh (and thus "changed" → bar+dock repaint) at
+    // monitor-refresh rate (tech-debt #11). Real Hyprland events are sparse, so a
+    // small floor is imperceptible but caps that loop. Throttling _refresh throttles
+    // the whole loop (the re-emit only fires when _refresh runs).
     private _scheduleRefresh() {
         if (this._refreshPending) return
         this._refreshPending = true
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+        const sinceMs = (GLib.get_monotonic_time() - this._lastRefreshUs) / 1000
+        const wait = Math.max(0, REFRESH_MIN_INTERVAL_MS - sinceMs)
+        const run = () => {
             this._refreshPending = false
+            this._lastRefreshUs = GLib.get_monotonic_time()
             this._refresh()
             return GLib.SOURCE_REMOVE
-        })
+        }
+        if (wait <= 0) GLib.idle_add(GLib.PRIORITY_DEFAULT, run)
+        else GLib.timeout_add(GLib.PRIORITY_DEFAULT, Math.ceil(wait), run)
     }
 
     private _refresh() {
@@ -200,10 +217,36 @@ class HyprlandStateClass extends GObject.Object {
                 this.clientsByWorkspace.get(wsId)!.push(c)
             }
 
-            this.emit("changed")
+            // Only notify when the STRUCTURAL state actually changed. AstalHyprland
+            // re-emits "event" spuriously (and a focused window's title can churn fast,
+            // e.g. a terminal spinner) — without this guard every such no-op refresh
+            // would emit "changed" → repaint the bar + dock (tech-debt #11).
+            const sig = this._stateSignature()
+            if (sig !== this._lastSig) {
+                this._lastSig = sig
+                this.emit("changed")
+            }
         } catch (e) {
             console.error("[HyprlandState] refresh failed:", e)
         }
+    }
+
+    // Cheap structural fingerprint of the state "changed" consumers react to (window
+    // geometry/class/workspace + focus + the workspace list). DELIBERATELY excludes
+    // window titles — AppTitle tracks those via its own notify::title — so a
+    // fast-updating title doesn't churn "changed".
+    private _stateSignature(): string {
+        let s = `${this.focusedWorkspaceId}|${(this.hl.focused_client as any)?.address ?? ""}`
+        for (const c of this.clients as any[]) {
+            if (!c) continue
+            s += `;${c.address},${c.class},${c.x},${c.y},${c.width},${c.height},${c.workspace?.id ?? ""}`
+        }
+        s += "#"
+        for (const ws of this.workspaces as any[]) {
+            if (!ws) continue
+            s += `${ws.id}:${ws.name},`
+        }
+        return s
     }
 
     // ── Dispatch API ─────────────────────────────────────────────────────────

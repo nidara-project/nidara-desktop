@@ -132,7 +132,94 @@ noise — harmless, not fixable from our side, don't burn time on it. It also me
 Adwaita stylesheet IS loaded in-process, which is why the anti-Adwaita resets (#2) are
 still needed despite the Adwaita removal.
 
-### 11. Sometimes the main thread wakes at ~monitor refresh (~137/s) — UNREPRODUCED Heisenbug
+### 11. Idle GPU spin on bar/dock — RESOLVED (two distinct causes)
+
+**(B) `crystal-bar-zone` configure storm — RESOLVED 2026-06-15 (this was the residual ~30–47% GPU drain).**
+The invisible exclusive-zone reservor (the "Zone reservor" block in `Bar.tsx`) was an EMPTY layer-shell
+surface that Hyprland reconfigured **~60/s** (gdb + libgtk-4 debuginfo/addr2line: `gdk_wayland_surface_configure`
+→ `gdk_surface_request_layout` 60/s on the 2560×1 zone surface), spinning its frame clock → continuous
+recomposite + reblur of bar/dock. Content-bearing surfaces (bar, dock) never storm even with an exclusive
+zone — only the empty spacer did. **FIX:** deleted `zoneWin`; the bar reserves its own top strip
+(`set_exclusive_zone(win, 40)` instead of `-1`; the fullscreen/overlay toggles now operate on `win`).
+Measured Hyprland gfx **47% → 4%**, `reserved [L,T,R,B]=[0,40,0,100]` intact, `crystal-bar-zone` layer gone.
+Universal (no empty spacer for any dock position). **Trade-off:** a SIDE dock now squishes the bar (it
+respects the dock's exclusive zone) instead of spanning full-width above it — acceptable / more correct.
+**Method notes (costly, don't repeat):** Hyprland readouts LIE (`getoption` reported blur OFF while ON) →
+trust per-process `drm-engine` in `/proc/*/fdinfo`, not readouts; transparency, concrete width, and
+TOP-only anchor were each disproven LIVE (GPU stayed 47%); **NEVER `call gjs_dumpstack()` from a gdb
+`Breakpoint.stop()`** — it core-dumped the shell (auto-restarted) — use the gdb frame API +
+safe pure getters (`gdk_surface_get_width/height`). STILL OPEN: occasional idle GPU blips 0→5–10% with
+nothing happening (intermittent damage → reblur; suspects: clock tick, wifi/battery widget churn via
+generic `notify`, cursor); blur is the cost multiplier (inherent).
+
+**(A) `HyprlandState "changed"` storm — FIXED 2026-06-14 (commit 6fcde4c).** On a live *armed* instance
+(~125/s main-thread wakeups) `gsk_renderer_render` now fires **~2/s** (was ~120/s) — a 98% cut
+in repaints, verified by gdb. The user-visible symptom (elevated GPU / continuous compositing)
+is resolved. **Residual (separate, low-priority):** ~40–60% of fresh instances still wake the
+main thread ~120/s from an **AstalHyprland busy IO-watch on socket2** (it re-emits `"event"`
+spuriously even though Hyprland sends ~4 real events/s). That's now HARMLESS — the fix makes
+those events produce no `"changed"`/repaint — costing only ~0.2% CPU and **zero GPU**. A real
+cure needs fixing/replacing AstalHyprland (already the #1 facade-replacement candidate, see
+[[project_astal_dependency]]); not worth it for 0.2% CPU.
+
+**The fix (3 parts, all in `core/HyprlandState.ts` + `surfaces/overview/WorkspaceOverview.tsx`):**
+- **Dirty-check** (the load-bearing one): `_refresh()` computes a structural `_stateSignature()`
+  (focus + per-client addr/class/geometry/workspace + workspace list; **excludes titles** —
+  AppTitle tracks those via its own `notify::title`) and only `emit("changed")` when it differs.
+  Spurious re-emits see identical state → no `"changed"` → no repaint.
+- **Throttle**: `_scheduleRefresh()` floors the interval between refreshes at
+  `REFRESH_MIN_INTERVAL_MS = 60` (real events are sparse, so imperceptible; caps the loop if it
+  ever self-feeds via the getters).
+- **Visibility gate**: `WorkspaceOverview` only runs `syncAll` (icon churn + schematic
+  `queue_draw`) while `status.overview_open` — not on every `"changed"` while closed.
+
+**Root cause (how it was found, gdb + `gjs_dumpstack()`):** the spinning surfaces are
+**`crystal-bar` AND `crystal-dock`** (both 2560×1440), NOT the `crystal-bar-zone` reservor
+(2560×**200**; ruled out via `gdk_surface_get_height` at a `gsk_renderer_render` breakpoint —
+the old "zone" attribution was WRONG). Chain: `gsk_renderer_render` ← `queue_draw` ←
+`WorkspaceOverview` schematic ← `syncAll` ← `HyprlandState` **"changed"** ← `_refresh()` running
+~120/s. Activity-independent: spin persisted with blur OFF, with a STATIC title, and regardless
+of focused window — so the earlier **blur and title leads were BOTH disproven** by live test.
+
+**Validation method (reusable):** count repaints with gdb, NOT wakeups — wakeups can't tell a
+fixed instance (cheap busy-loop handler) from a broken one. Recipe:
+`break gsk_renderer_render` + a 2 s gdb-python `continue` loop counting hits. Restarting to
+sample arming is rate-limited (`StartLimitBurst=5/30s`); a temp drop-in
+`StartLimitIntervalSec=0` (then `daemon-reload`, remove after) lets you restart freely.
+
+**Original full investigation trail (kept for the gdb/forensics recipes):** Found by attaching gdb
+to a live *armed* instance (ptrace + Arch debuginfod) and reading the JS stack via
+`gjs_dumpstack()`:
+- The spinning surfaces are **`crystal-bar` AND `crystal-dock`** (both 2560×1440), repainting
+  every frame — **NOT** the `crystal-bar-zone` reservor (its surface is 2560×**200**; verified
+  by `gdk_surface_get_height` at a `gsk_renderer_render` breakpoint). The old "zone" attribution
+  below was **WRONG**.
+- `gsk_renderer_render` fires ~120/s. Walking up: `gtk_widget_queue_draw` ← `WorkspaceOverview`'s
+  `ctx.schematic()` (`canvas.queue_draw()`) ← `syncAll` ← `HyprlandState` **"changed"**.
+- `HyprlandState._refresh()` runs ~120/s in a **self-feeding loop**: `_refresh()` reads
+  `hl.get_clients()/get_workspaces()/get_monitors()`, which makes **AstalHyprland re-emit
+  `"event"`** → the `connect("event")` handler calls `refresh()` → `_scheduleRefresh()` →
+  `idle_add` → `_refresh()` → … (15/15 idle-scheduler stacks were identical:
+  event-handler → refresh → _scheduleRefresh). Hyprland's own `socket2` is nearly silent
+  (~4 events/s — just the kitty title spinner), so this is NOT driven by real compositor events.
+  It's the same AstalHyprland re-emission class the code already dodges for `notify::clients`
+  (see `HyprlandState.ts:63-65`).
+- **Instance-random (~40–60% of fresh shells arm; the rest read 0/s)** = whether that
+  AstalHyprland re-emit race establishes at startup. Activity-independent: verified the spin
+  persists with blur OFF, with a STATIC focused-window title, and regardless of which window is
+  focused (so the earlier blur and title leads are BOTH disproven).
+
+**Tooling note:** `strace`/`perf`/`bpftrace`/`ltrace` are NOT installed; `gdb` IS, and Arch
+`debuginfod` (`DEBUGINFOD_URLS=https://debuginfod.archlinux.org`) gives symbols. `ptrace_scope`
+defaults to `1` (only descendants) → attaching to the systemd-spawned shell needs
+`sudo sysctl kernel.yama.ptrace_scope=0` (restore to 1 after; resets on reboot). Recipe that
+cracked this: break `gsk_renderer_render` → `gdk_surface_get_height((void*)gsk_renderer_get_surface((void*)$rdi))`
+to ID the surface; break `gtk_widget_queue_draw` / `g_idle_add_full` → `call (void)gjs_dumpstack()`
+(prints the JS stack to `/tmp/crystal-shell-ui.log`) to find the JS culprit; map bundle line
+numbers by reading `/run/user/$UID/ags.js`.
+
+Historical detail (SUPERSEDED — the "zone surface" claim is WRONG, see above):
+
 Idle baseline is **0 wakeups/s** (genuinely event-driven — keep it that way; measure with
 `awk '/voluntary/{s+=$2} END{print s}' /proc/$PID/task/$PID/status` deltas, or
 `crystal-shell-doctor` which now reports it). On 2026-06-09 several instances armed to a
@@ -167,6 +254,27 @@ dynamically (bars are per-monitor), and monitor config is rewritten wholesale by
 anchored surface gets squished by the vertical dock's side exclusive zone, and the visible
 bar (fullscreen overlay host, `exclusive_zone=-1`) must never be — the *mechanism* is
 sound; only its GTK implementation details are in question.
+
+**(C) Widget-level over-broad `notify` → bar re-blur — partially FIXED 2026-06-15.** Same
+storm class as (A) but at the *widget* layer, not the state layer: a widget subscribes to the
+generic `obj.connect("notify", …)` of an Astal object that churns properties on a timer, and the
+handler re-assigns a `Gtk.Image.gicon` unconditionally → `gtk_image_clear` → `queue_draw` → a
+full bar re-blur for an icon that never visually changed. **Fixed:** the always-visible bar
+widgets — `widgets/wifi.ts` (narrowed to `notify::enabled`/`notify::ssid`, AstalNetwork.Wifi
+churns `strength`/`scanning` on NM scans, commit dc42f44) and the bar **media** widget
+(`widgets/media.ts buildBarContent`, guarded the play/pause `gicon` — AstalMpris polls position
+every 1 s while PLAYING via `player.vala init_position_poll` → `notify::position`, so it re-blurred
+at **1 Hz** while music played, commit d1803e2). **Rule:** guarding the `gicon` assignment
+(`if (img.gicon !== want) img.gicon = want`; `Icons.*` are module-load cached refs so `===` holds)
+is enough and is *safer* than narrowing — the generic `notify` stays robust to all metadata
+changes, and with the only redraw-triggering setter guarded the 1 Hz wakeup queues no draw
+(repaints are the cost, not wakeups — same principle as (A)). `label`/`sensitive`/`visible` are
+already GTK equality-guarded. **Still deferred (all transient surfaces — only churn while open,
+lower priority):** the same generic `notify` in the CC wifi toggle (`Toggles.tsx:198`), battery
+(`battery.ts:112`, UPower is low-freq anyway), ethernet (`ethernet.ts:69`, low-freq); and the
+media **rich panel** (`media.ts buildBarExpanded` ~L216) + `MediaIsland.tsx:36`, which go further
+and **re-decode the cover-art PNG from disk every notify** (`GdkPixbuf.new_from_file_at_scale` +
+unconditional `artDa.queue_draw()`) — guard `loadArt` on a changed `cover_art` path when touched.
 
 ### 12. Sporadic double-disconnect CRITICALs — unreproduced, capture recipe ready
 Rare bursts (≈2 in 30 h) of `GLib-GObject-CRITICAL … instance has no handler with id` (3–4
