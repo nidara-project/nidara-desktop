@@ -169,7 +169,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
   listWindows: {
     desc: "List open windows as JSON [{address, class, title, workspace, at, size, floating, fullscreen, pinned, grouped, focused}] — authoritative compositor state. Use `address` as the target for the window actions below (or pass a class substring). Pair with listWorkspaces.",
     run: async () => {
-      const focused = (hyprlandState.focusedClient as any)?.address ?? ""
+      // AstalHyprland's focusedClient.address can lack the "0x" prefix that
+      // `hyprctl clients -j` reports — compare bare, like resolveWindow does.
+      const bare = (s?: string) => (s ?? "").toLowerCase().replace(/^0x/, "")
+      const focused = bare((hyprlandState.focusedClient as any)?.address)
       const arr = await hyprlandState.getClientsJson()
       return JSON.stringify(
         arr.map((c: any) => ({
@@ -183,7 +186,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
           fullscreen: !!c.fullscreen,
           pinned: !!c.pinned,
           grouped: Array.isArray(c.grouped) ? c.grouped.length > 0 : false,
-          focused: c.address === focused,
+          focused: bare(c.address) === focused && focused !== "",
         })),
         null,
         2,
