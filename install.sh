@@ -12,7 +12,10 @@
 # script in update mode, which rebuilds/copies only Crystal's own artifacts and
 # rebuilds the pinned Astal/AGS dependency stack ONLY when the pins changed
 # (recorded in /usr/share/crystal-shell/pins). A --dev install registers the
-# developer's own clone instead and updates never switch it off its branch.
+# developer's own clone instead and updates never switch it off its branch; it
+# also honours the same pin-skip, so re-running `./install.sh --dev` while
+# iterating on the shell does NOT recompile Astal unless the pins moved. A plain
+# `./install.sh` (system) always rebuilds the whole stack — the escape hatch.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -154,9 +157,20 @@ if [ "$MODE" = "system" ] && [ -d "$REPO_DIR/.git" ] \
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Update apply: decide whether the pinned dependency stack must be rebuilt.
-# The pins recorded at the last install live in $PINS_FILE; if they match this
-# script's pins, phases 1-4 are skipped (Crystal artifacts only).
+# Decide whether the pinned dependency stack (Astal libs + AGS + appmenu) must be
+# rebuilt. It's expensive to build from source, so it's skipped when the pins
+# recorded at the last install ($PINS_FILE) already match this script's pins —
+# then phases 1, 2 and 4 are skipped and only Crystal's own artifacts are rebuilt.
+#
+# Which modes consult the pins:
+#   update-apply : skip on a pin match; ALSO skip when no pins are recorded yet
+#                  (pre-pin-era install whose stack is assumed current).
+#   dev          : skip ONLY on a positive pin match. A missing pins file means
+#                  the stack was never built on this machine, so it must build —
+#                  this is what makes re-running `./install.sh --dev` while
+#                  iterating on the shell cheap (no Astal recompile).
+#   system       : never skipped. Plain `./install.sh` is the documented
+#                  "rebuild everything from scratch" escape hatch.
 # ─────────────────────────────────────────────────────────────────────────────
 REBUILD_DEPS="yes"
 OLD_VERSION="$(cat /usr/share/crystal-shell/VERSION 2>/dev/null || echo "?")"
@@ -165,18 +179,21 @@ OLD_VERSION="$(cat /usr/share/crystal-shell/VERSION 2>/dev/null || echo "?")"
 DEV_LIKE="no"
 [ "$MODE" = "dev" ] && DEV_LIKE="yes"
 [ "$MODE" = "update-apply" ] && [ -f "$CONFIG_DIR/.dev" ] && DEV_LIKE="yes"
-if [ "$MODE" = "update-apply" ]; then
+if [ "$MODE" = "update-apply" ] || [ "$MODE" = "dev" ]; then
     new_pins="$(printf 'ASTAL_REF=%s\nAGS_REF=%s\nAPPMENU_REF=%s\n' "$ASTAL_REF" "$AGS_REF" "$APPMENU_REF")"
     if [ -f "$PINS_FILE" ] && [ "$new_pins" = "$(cat "$PINS_FILE")" ]; then
         REBUILD_DEPS="no"
         echo "  Dependency pins unchanged — skipping the Astal/AGS rebuild."
-    elif [ ! -f "$PINS_FILE" ]; then
+    elif [ ! -f "$PINS_FILE" ] && [ "$MODE" = "update-apply" ]; then
         # Installs that predate pin recording: assume the stack matches current
         # pins (it was built from this same repo recently). Recorded from now on;
         # if anything misbehaves, a plain ./install.sh rebuilds everything.
         REBUILD_DEPS="no"
         echo "  [WARN] No pin record found (pre-update-era install). Assuming the"
         echo "         dependency stack is current; it will be recorded this time."
+    elif [ ! -f "$PINS_FILE" ]; then
+        # Fresh dev install: the stack was never built here, so build it.
+        echo "  No pin record found — building the Astal/AGS stack."
     else
         echo "  Dependency pins changed — full stack rebuild required."
     fi
