@@ -328,11 +328,19 @@ path/name in those templates changes: the **Nidara rename shipped a new `nidara-
 `/etc/greetd/hyprland-greeter.lua` calling the deleted `crystal-greeter`**, so the greeter died on boot
 (`greetd: greeter exited without creating a session` → start-limit-hit → error screen before login).
 Recovered by hand: `cp config/greetd/{hyprland-greeter.lua,config.toml} /etc/greetd/` +
-`systemctl reset-failed greetd` + `restart`. **Fix (deferred, ~1 line):** drop `greetd` from the
-`_detect_dm` list (greetd is *ours*, not a foreign DM), or guard with
-`[ "$ACTIVE_DM" = "none" ] || [ "$ACTIVE_DM" = "greetd" ]` — then updates always re-sync `/etc/greetd`
-and only a foreign DM (sddm/gdm/…) is left untouched. The block is already idempotent
-(`systemctl enable greetd` is a no-op if enabled). NB the kb-layout `sed` in that block is now a no-op too
+`systemctl reset-failed greetd` + `restart`. **Fix (deferred) — gate on a fingerprint, NOT on the bare
+`greetd` enabled-state.** The naive fixes (drop `greetd` from `_detect_dm`, or
+`[ "$ACTIVE_DM" = "none" ] || [ "$ACTIVE_DM" = "greetd" ]`) are WRONG: greetd is the go-to minimal DM for
+many Wayland WM users running a *different* greeter (tuigreet/gtkgreet/ReGreet), and both naive forms would
+**clobber that user's `/etc/greetd` on install/update** — greetd is not necessarily *ours*. Instead, re-sync
+`/etc/greetd` only when it is recognizably ours: `ACTIVE_DM = none` (fresh, no DM) **OR** the existing config
+is the Nidara one — our `config.toml` runs `HYPRLAND_CONFIG=/etc/greetd/hyprland-greeter.lua` and that `.lua`
+launches `nidara-greeter`, both unmistakable (`grep -q hyprland-greeter.lua /etc/greetd/config.toml` or
+`grep -q nidara-greeter /etc/greetd/hyprland-greeter.lua`). A foreign DM (sddm/gdm/…) **or a foreign greetd**
+is left untouched, same as today. Bonus: today a greetd+tuigreet box silently never gets the Nidara greeter
+installed (detected as active DM → block skipped); the fingerprint branch can warn instead ("greetd already
+set up with a different greeter — point it at /etc/greetd/hyprland-greeter.lua to use Nidara's"). The block is
+already idempotent (`systemctl enable greetd` is a no-op if enabled). NB the kb-layout `sed` in that block is now a no-op too
 (the template sets `kb_layout = readKbLayout()`, no literal `"us"` to match) — copying the template verbatim
 is correct. Related gotcha: greeter prefs live under the **HOME-relative** path baked into the `.lua`
 (`/var/lib/greeter/.config/nidara/greeter-prefs.json`); a rename of that subdir orphans the saved kb layout
