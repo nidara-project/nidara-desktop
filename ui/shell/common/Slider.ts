@@ -281,7 +281,7 @@ export function makeVerticalFillTile(icon: Gio.FileIcon, opts: SliderOpts): Gtk.
     valueLabel.set_can_target(false)
 
     const iconImg = new Gtk.Image({
-        gicon: icon, pixel_size: 18, css_classes: ["cs-icon", "slider-fill-icon"],
+        gicon: icon, pixel_size: 18, css_classes: ["nd-icon", "slider-fill-icon"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.END, margin_bottom: 14,
     })
     iconImg.set_can_target(false)

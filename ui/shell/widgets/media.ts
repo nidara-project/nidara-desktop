@@ -14,9 +14,9 @@ import Icons from "../core/Icons"
 function buildBarContent(): Gtk.Widget {
     const mpris = AstalMpris.get_default()
 
-    const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 16 , css_classes: ["cs-icon"] })
-    const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 16 , css_classes: ["cs-icon"] })
-    const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 16 , css_classes: ["cs-icon"] })
+    const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 16 , css_classes: ["nd-icon"] })
+    const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 16 , css_classes: ["nd-icon"] })
+    const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 16 , css_classes: ["nd-icon"] })
     const prev = new Gtk.Button({ child: prevImg, css_classes: ["bar-media-btn"] })
     const play = new Gtk.Button({ child: playImg, css_classes: ["bar-media-btn"] })
     const next = new Gtk.Button({ child: nextImg, css_classes: ["bar-media-btn"] })
@@ -142,9 +142,9 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
         halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 26,
     })
 
-    const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 16, css_classes: ["cs-icon"] })
-    const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 20, css_classes: ["cs-icon"] })
-    const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 16, css_classes: ["cs-icon"] })
+    const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 16, css_classes: ["nd-icon"] })
+    const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 20, css_classes: ["nd-icon"] })
+    const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 16, css_classes: ["nd-icon"] })
     const prev = new Gtk.Button({ child: prevImg, css_classes: ["cc-media-btn-atomic"], valign: Gtk.Align.CENTER })
     const play = new Gtk.Button({ child: playImg, css_classes: ["cc-media-btn-atomic", "cc-media-play-btn"], valign: Gtk.Align.CENTER })
     const next = new Gtk.Button({ child: nextImg, css_classes: ["cc-media-btn-atomic"], valign: Gtk.Align.CENTER })

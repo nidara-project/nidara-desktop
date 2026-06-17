@@ -265,7 +265,7 @@ export default function IslandGrid() {
 
         // Header: back button + title — lives inside the squircle for glass contrast
         const backBtnChild = new Gtk.Box({ spacing: 6, margin_start: 8, margin_end: 8, margin_top: 12, margin_bottom: 12 })
-        backBtnChild.append(new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["cs-icon"] }))
+        backBtnChild.append(new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["nd-icon"] }))
         backBtnChild.append(new Gtk.Label({ label: w.name, css_classes: ["cc-detail-title"], halign: Gtk.Align.START }))
         const backBtn = new Gtk.Button({ child: backBtnChild, css_classes: ["cc-detail-back-btn"], halign: Gtk.Align.START, margin_start: 4, margin_top: 4 })
         backBtn.connect("clicked", hideDetail)

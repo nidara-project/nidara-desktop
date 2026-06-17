@@ -9,13 +9,13 @@ import Clock from "./Clock"
 export default function Greeter(monitor: Gdk.Monitor) {
   const win = new Gtk.ApplicationWindow({
     application: app,
-    name: "crystal-greeter",
+    name: "nidara-greeter",
     css_classes: ["greeter-window"],
   })
 
   // Fully-transparent backdrop. The generic login wallpaper is painted by awww
   // in the compositor (see hyprland-greeter.lua); it shows through crisp because
-  // the crystal-greeter layer_rule uses ignore_alpha, so blur frosts only the
+  // the nidara-greeter layer_rule uses ignore_alpha, so blur frosts only the
   // semi-transparent widgets (card, password, buttons), never the background.
   const fill = new Gtk.Box({ hexpand: true, vexpand: true, css_classes: ["greeter-backdrop"] })
 
@@ -52,7 +52,7 @@ export default function Greeter(monitor: Gdk.Monitor) {
 
   try {
     Gtk4LayerShell.init_for_window(win)
-    Gtk4LayerShell.set_namespace(win, "crystal-greeter")
+    Gtk4LayerShell.set_namespace(win, "nidara-greeter")
     Gtk4LayerShell.set_monitor(win, monitor)
     Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)

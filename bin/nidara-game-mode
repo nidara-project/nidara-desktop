@@ -1,0 +1,39 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# nidara-game-mode — toggle performance power profile
+# Installed to /usr/bin/nidara-game-mode
+#
+# Usage:
+#   nidara-game-mode toggle      — activate / deactivate
+#   nidara-game-mode status      — print "active" or "inactive"
+#   nidara-game-mode on          — force activate
+#   nidara-game-mode off         — force deactivate
+# ─────────────────────────────────────────────────────────────────────────────
+
+STATE_FILE="/tmp/nidara-game-mode-${HYPRLAND_INSTANCE_SIGNATURE}.state"
+
+_is_active() { [[ -f "$STATE_FILE" ]]; }
+
+_activate() {
+    if _is_active; then return; fi
+    touch "$STATE_FILE"
+    powerprofilesctl set performance
+    notify-send -a "Nidara" -i applications-games \
+        "Game Mode" "Activado — perfil de alto rendimiento" -t 3000
+}
+
+_deactivate() {
+    if ! _is_active; then return; fi
+    rm -f "$STATE_FILE"
+    powerprofilesctl set balanced
+    notify-send -a "Nidara" -i applications-games \
+        "Game Mode" "Desactivado — perfil equilibrado restaurado" -t 3000
+}
+
+case "${1:-toggle}" in
+    toggle) _is_active && _deactivate || _activate ;;
+    on)     _activate ;;
+    off)    _deactivate ;;
+    status) _is_active && echo "active" || echo "inactive" ;;
+    *)      echo "Usage: nidara-game-mode {toggle|on|off|status}" >&2; exit 1 ;;
+esac

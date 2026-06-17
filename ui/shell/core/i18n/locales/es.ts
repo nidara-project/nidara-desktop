@@ -148,7 +148,7 @@ export default {
     "settings.users.other.pw.apply":      "Aplicar",
 
     // --- extracted by extract-i18n.mjs ---
-    "settings.about.group.crystal-shell": "Crystal Shell",
+    "settings.about.group.nidara": "Nidara",
     "settings.about.group.environment": "Entorno",
     "settings.about.group.system": "Sistema",
     "settings.about.title": "Acerca de",

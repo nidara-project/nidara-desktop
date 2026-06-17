@@ -6,7 +6,7 @@ import { listGroup, createRow, toggleRow, pageBox, staticLabel } from "../Settin
 import regionConfig, { TimeFormat, DateFormat } from "../../../core/RegionConfig"
 import inputConfig from "../../../core/InputConfig"
 import { t } from "../../../core/i18n"
-import { CrystalButton } from "../../../../lib/crystal-ui"
+import { NidaraButton } from "../../../../lib/nidara-kit"
 
 const TIME_FORMAT_LABELS = (): Record<TimeFormat, string> => ({
     "24h": t("settings.region.time.24h"),
@@ -42,7 +42,7 @@ export default function RegionPage() {
 
     const clockSubLabel = new Gtk.Label({
         label: t("settings.region.preview"),
-        css_classes: ["crystal-row-subtitle"],
+        css_classes: ["nidara-row-subtitle"],
         halign: Gtk.Align.CENTER,
     })
 
@@ -140,7 +140,7 @@ export default function RegionPage() {
 
     let tzStatusTimerId = 0
 
-    const tzApplyBtn = CrystalButton({
+    const tzApplyBtn = NidaraButton({
         label: t("settings.region.tz.apply"),
         variant: "primary",
         pill: true,
@@ -201,7 +201,7 @@ export default function RegionPage() {
     langCompletion.set_minimum_key_length(1)
     langEntry.set_completion(langCompletion)
 
-    const applyLangBtn = CrystalButton({ label: t("settings.region.tz.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
+    const applyLangBtn = NidaraButton({ label: t("settings.region.tz.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
     const langEntryRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
     langEntryRow.append(langEntry)
     langEntryRow.append(applyLangBtn)
@@ -220,7 +220,7 @@ export default function RegionPage() {
     kbCompletion.set_minimum_key_length(1)
     kbEntry.set_completion(kbCompletion)
 
-    const applyKbBtn = CrystalButton({ label: t("settings.region.tz.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
+    const applyKbBtn = NidaraButton({ label: t("settings.region.tz.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
     const kbEntryRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
     kbEntryRow.append(kbEntry)
     kbEntryRow.append(applyKbBtn)

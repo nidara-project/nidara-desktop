@@ -1,4 +1,4 @@
-# Code owners — Crystal Shell
+# Code owners — Nidara
 #
 # Once branch protection's "Require review from Code Owners" is enabled (at
 # publication, when the repo is public — same constraint as branch protection),
@@ -24,7 +24,7 @@
 /install.sh           @aalonx
 /scripts/             @aalonx
 
-# Installed binaries — bin/ ships the session launchers and crystal-shell-mcp,
+# Installed binaries — bin/ ships the session launchers and nidara-mcp,
 # the MCP server users' agent clients execute. A hostile edit here runs inside
 # every user's agent session.
 /bin/                 @aalonx

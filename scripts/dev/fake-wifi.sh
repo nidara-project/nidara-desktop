@@ -15,19 +15,19 @@
 # wlan0. The Network page therefore watches wlan0, so wlan0 must be the scanning
 # client and wlan1 the broadcaster.
 #
-# Usage:  sudo ./fake-wifi.sh start   # broadcast "CrystalTest" (WPA2)
+# Usage:  sudo ./fake-wifi.sh start   # broadcast "NidaraTest" (WPA2)
 #         sudo ./fake-wifi.sh stop    # tear down, give wlan0 back to NM
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
 AP_IFACE="wlan1"
-SSID="CrystalTest"
-PASSPHRASE="crystal123"
+SSID="NidaraTest"
+PASSPHRASE="nidara123"
 CHANNEL="6"
 COUNTRY="ES"   # world domain "00" forbids AP/beaconing on 2.4GHz (NO-IR); pick a real country
-CONF="/tmp/crystal-hostapd.conf"
-PIDFILE="/tmp/crystal-hostapd.pid"
-DNSMASQ_PID="/tmp/crystal-dnsmasq.pid"
+CONF="/tmp/nidara-hostapd.conf"
+PIDFILE="/tmp/nidara-hostapd.pid"
+DNSMASQ_PID="/tmp/nidara-dnsmasq.pid"
 GATEWAY="10.42.0.1"      # AP-side address; client gets DHCP from this subnet
 DHCP_LO="10.42.0.10"
 DHCP_HI="10.42.0.100"
@@ -88,7 +88,7 @@ EOF
     if [ -f "$DNSMASQ_PID" ]; then kill "$(cat "$DNSMASQ_PID")" 2>/dev/null || true; rm -f "$DNSMASQ_PID"; fi
     pkill -f "dnsmasq --interface=$AP_IFACE" 2>/dev/null || true
     if [ -f "$PIDFILE" ]; then kill "$(cat "$PIDFILE")" 2>/dev/null || true; rm -f "$PIDFILE"; fi
-    pkill -f "hostapd .*crystal-hostapd.conf" 2>/dev/null || true
+    pkill -f "hostapd .*nidara-hostapd.conf" 2>/dev/null || true
     rm -f "$CONF"
     ip addr flush dev "$AP_IFACE" 2>/dev/null || true
     nmcli device set "$AP_IFACE" managed yes || true

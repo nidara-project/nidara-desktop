@@ -1,0 +1,235 @@
+#!/usr/bin/env -S gjs -m
+// ─────────────────────────────────────────────────────────────────────────────
+// nidara-click — synthetic POINTER click on a third-party app (Phase 2b-ii).
+// The smart half of the pointer: it gates, verifies focus, resolves WHERE to
+// click (an AT-SPI node's centre, or a window-relative point), maps that to
+// output coordinates, and hands the final numbers to the dumb `nidara-input`
+// C injector. Sibling of nidara-act (AT-SPI) and nidara-type (keyboard).
+//
+//   nidara-click app        <app> <node> [role] [occurrence]        # left-click a control's centre
+//   nidara-click at         <app> <x> <y>                           # left-click a window-relative point (canvas)
+//   nidara-click rclick-app <app> <node> [role] [occurrence]        # right-click a control's centre
+//   nidara-click rclick-at  <app> <x> <y>                           # right-click a window-relative point
+//   nidara-click scroll-app <app> <node> <dx> <dy> [role] [occ]     # scroll at a control's centre
+//   nidara-click scroll-at  <app> <x> <y> <dx> <dy>                 # scroll at a window-relative point
+//   nidara-click drag-at    <app> <x1> <y1> <x2> <y2>               # press at (x1,y1), drag to (x2,y2), release
+//   (<dx>/<dy> = signed wheel notches: dy>0 down, dx>0 right)
+//
+// Use this only when do_action / keyboard can't reach a control (canvas, no
+// activatable action, no a11y), or for right-click / scroll / drag (DnD,
+// rubber-band selection). Drag from/to a CONTROL = resolve its centre via
+// query_app bounds, then drag-at those points. Pair with focus_window first.
+//
+// SAFETY — clicking is position/stacking-dependent (even more than typing). So
+// <app> is REQUIRED and verified to be Hyprland's active window, and the window
+// geometry is read FRESH immediately before injecting; otherwise it refuses.
+// Same gate as the rest of computer-control: allowComputerControl &&
+// allowComputerUse (both default OFF). Indicator + kill switch from 2a apply.
+//
+// COORDINATE MAPPING (the fragile part — measure, don't trust):
+//   global_logical = window.at + node_or_point (AT-SPI window coords are logical)
+//   output_rel     = global_logical − monitor.xy
+//   extent_logical = monitor.{w,h} / monitor.scale   (hyprctl w/h are physical)
+// ─────────────────────────────────────────────────────────────────────────────
+
+import Atspi from "gi://Atspi"
+import GLib from "gi://GLib"
+import Gio from "gi://Gio"
+
+const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
+const MAX_NODES = 4000
+const MAX_DEPTH = 40
+
+function emit(obj) { print(JSON.stringify(obj, null, 2)) }
+function safe(fn, fb) { try { const v = fn(); return v == null ? fb : v } catch { return fb } }
+
+function controlEnabled() {
+    try {
+        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return false
+        const [ok, b] = GLib.file_get_contents(AI_JSON)
+        if (!ok) return false
+        const c = JSON.parse(new TextDecoder().decode(b))
+        return c.allowComputerControl === true && c.allowComputerUse === true
+    } catch { return false }
+}
+
+function runJson(cmd) {
+    try {
+        const [ok, out] = GLib.spawn_command_line_sync(cmd)
+        if (!ok) return null
+        return JSON.parse(new TextDecoder().decode(out))
+    } catch { return null }
+}
+
+// nidara-input: PATH first, then a sibling of this script (dev checkout).
+function findInjector() {
+    const inPath = GLib.find_program_in_path("nidara-input")
+    if (inPath) return inPath
+    try {
+        const self = GLib.filename_from_uri(import.meta.url)[0]
+        const sib = `${GLib.path_get_dirname(self)}/nidara-input`
+        if (GLib.file_test(sib, GLib.FileTest.IS_EXECUTABLE)) return sib
+    } catch {}
+    return null
+}
+
+// ── AT-SPI node resolution (window-relative centre) ──────────────────────────
+function children(acc) {
+    const n = safe(() => acc.get_child_count(), 0), out = []
+    for (let i = 0; i < n; i++) { const c = safe(() => acc.get_child_at_index(i), null); if (c) out.push(c) }
+    return out
+}
+function isShowing(acc) {
+    const s = safe(() => acc.get_state_set(), null)
+    return !!s && safe(() => s.contains(Atspi.StateType.SHOWING), false)
+}
+function nameOf(acc) { return safe(() => acc.get_name(), "") || "" }
+function roleOf(acc) { return safe(() => acc.get_role_name(), "?") }
+function centreOf(acc) {
+    const c = safe(() => acc.get_component_iface(), null)
+    if (!c) return null
+    const r = safe(() => c.get_extents(Atspi.CoordType.WINDOW), null)
+    if (!r) return null
+    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), role: roleOf(acc) }
+}
+function findNodeCentres(appFilter, nodeName, roleFilter) {
+    const desktop = safe(() => Atspi.get_desktop(0), null)
+    if (!desktop) return []
+    const want = nodeName.toLowerCase(), exact = [], partial = []
+    let scanned = 0
+    const visit = (acc, depth) => {
+        if (scanned >= MAX_NODES || depth > MAX_DEPTH || !isShowing(acc)) return
+        scanned++
+        const nm = nameOf(acc)
+        if (nm && (!roleFilter || roleOf(acc) === roleFilter)) {
+            const low = nm.toLowerCase()
+            if (low === want) { const c = centreOf(acc); if (c) exact.push(c) }
+            else if (low.includes(want)) { const c = centreOf(acc); if (c) partial.push(c) }
+        }
+        for (const k of children(acc)) visit(k, depth + 1)
+    }
+    for (const app of children(desktop)) {
+        if (!nameOf(app).toLowerCase().includes(appFilter)) continue
+        for (const win of children(app)) visit(win, 0)
+    }
+    return exact.length ? exact : partial
+}
+
+// CLI mode → injector verb (`action`) + how the target position is resolved
+// (`target`): "app" = an AT-SPI node's centre, "at" = a window-relative point.
+// app/at stay exactly as the original left-click surface (backward compatible).
+const MODES = {
+    "app":        { action: "click",      target: "app" },
+    "at":         { action: "click",      target: "at" },
+    "rclick-app": { action: "rightclick", target: "app" },
+    "rclick-at":  { action: "rightclick", target: "at" },
+    "scroll-app": { action: "scroll",     target: "app" },
+    "scroll-at":  { action: "scroll",     target: "at" },
+    "drag-at":    { action: "drag",       target: "at" },
+}
+
+// ── main ─────────────────────────────────────────────────────────────────────
+function main() {
+    if (!controlEnabled()) {
+        emit({ error: "computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too; both default off)" })
+        return
+    }
+    const mode = (ARGV[0] ?? "").trim()
+    const app = (ARGV[1] ?? "").trim()
+    const spec = MODES[mode]
+    if (!spec || !app) {
+        emit({ error: "usage: nidara-click app|rclick-app <app> <node> [role] [occurrence] | at|rclick-at <app> <x> <y> | scroll-app <app> <node> <dx> <dy> [role] [occurrence] | scroll-at <app> <x> <y> <dx> <dy> | drag-at <app> <x1> <y1> <x2> <y2>" })
+        return
+    }
+    const isScroll = spec.action === "scroll"
+    const isDrag = spec.action === "drag"
+
+    // Fresh geometry + focus check, immediately before acting.
+    const aw = runJson("hyprctl activewindow -j")
+    const activeClass = (aw?.class ?? "").toLowerCase()
+    const a = app.toLowerCase()
+    const focused = activeClass && (activeClass.includes(a) || a.includes(activeClass) ||
+        (activeClass.split(".").pop() || "").includes(a))
+    if (!focused) {
+        emit({ error: `refused: "${app}" is not the focused window (active: ${activeClass || "unknown"}) — focus it first (focus_window)`, active: activeClass })
+        return
+    }
+
+    // Resolve window-relative target (relX, relY), scroll deltas (dx, dy notches),
+    // and drag drop point (relX2, relY2).
+    let relX, relY, relX2, relY2, dx = 0, dy = 0
+    if (spec.target === "app") {
+        const nodeName = (ARGV[2] ?? "").trim()
+        if (!nodeName) { emit({ error: `${mode} needs a node name` }); return }
+        // scroll-app: <node> <dx> <dy> [role] [occurrence]; click: <node> [role] [occurrence]
+        let role, occRaw
+        if (isScroll) {
+            dx = parseInt(ARGV[3] ?? "", 10); dy = parseInt(ARGV[4] ?? "", 10)
+            if (isNaN(dx) || isNaN(dy)) { emit({ error: "scroll-app needs numeric <dx> <dy>" }); return }
+            role = (ARGV[5] ?? "").trim() || null
+            occRaw = (ARGV[6] ?? "").trim()
+        } else {
+            role = (ARGV[3] ?? "").trim() || null
+            occRaw = (ARGV[4] ?? "").trim()
+        }
+        Atspi.init()
+        const hits = findNodeCentres(a, nodeName, role)
+        if (!hits.length) { emit({ error: `no showing node named "${nodeName}" in "${app}"` }); return }
+        if (hits.length > 1 && occRaw === "") {
+            emit({ error: `ambiguous: ${hits.length} nodes match "${nodeName}" — pass a role and/or occurrence`, candidates: hits.slice(0, 20) }); return
+        }
+        const t = occRaw === "" ? hits[0] : hits[parseInt(occRaw, 10)]
+        if (!t) { emit({ error: `occurrence out of range (${hits.length} matches)` }); return }
+        relX = t.x; relY = t.y
+    } else {
+        relX = parseInt(ARGV[2] ?? "", 10); relY = parseInt(ARGV[3] ?? "", 10)
+        if (isNaN(relX) || isNaN(relY)) { emit({ error: `${mode} needs numeric <x> <y>` }); return }
+        if (isScroll) {
+            dx = parseInt(ARGV[4] ?? "", 10); dy = parseInt(ARGV[5] ?? "", 10)
+            if (isNaN(dx) || isNaN(dy)) { emit({ error: "scroll-at needs numeric <dx> <dy>" }); return }
+        }
+        if (isDrag) {
+            relX2 = parseInt(ARGV[4] ?? "", 10); relY2 = parseInt(ARGV[5] ?? "", 10)
+            if (isNaN(relX2) || isNaN(relY2)) { emit({ error: "drag-at needs numeric <x2> <y2>" }); return }
+        }
+    }
+
+    // Map: window-relative (logical) → global → output-relative + logical extent.
+    // SAME convention as the overview minimap (ui/shell/common/WorkspaceSchematic.ts:
+    // logicalW = monitor.width / scale; tile = (client − monitor.origin) * k) — that
+    // in-shell code is the battle-tested reference for this mapping, fractional scale
+    // included. Kept in sync here because this helper is a separate process and can't
+    // import the shell's modules.
+    const at = aw.at || [0, 0], monName = aw.monitor
+    const mons = runJson("hyprctl monitors -j") || []
+    // aw.monitor is an index; match by id, else fall back to the focused monitor.
+    const mon = mons.find(m => m.id === monName) || mons.find(m => m.focused) || mons[0]
+    if (!mon) { emit({ error: "could not resolve the active monitor geometry" }); return }
+    const scale = mon.scale || 1
+    const outX = Math.round((at[0] + relX) - mon.x), outY = Math.round((at[1] + relY) - mon.y)
+    const extW = Math.round(mon.width / scale), extH = Math.round(mon.height / scale)
+    // Drag: map the drop point through the SAME monitor geometry as the start.
+    let outX2, outY2
+    if (isDrag) {
+        outX2 = Math.round((at[0] + relX2) - mon.x); outY2 = Math.round((at[1] + relY2) - mon.y)
+    }
+
+    const injector = findInjector()
+    if (!injector) { emit({ error: "nidara-input not found — re-run install.sh (it compiles the pointer backend)" }); return }
+
+    // action maps 1:1 to the injector verb (click / rightclick / scroll / drag);
+    // scroll appends the notch deltas, drag the drop point.
+    const args = [injector, spec.action, String(outX), String(outY), String(extW), String(extH)]
+    if (isScroll) args.push(String(dx), String(dy))
+    if (isDrag) args.push(String(outX2), String(outY2))
+    const proc = Gio.Subprocess.new(args, Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE)
+    const [, , err] = proc.communicate_utf8(null, null)
+    if (!proc.get_successful()) {
+        emit({ ok: false, error: `nidara-input failed: ${(err || "").trim() || "no output"}` }); return
+    }
+    emit({ ok: true, app, mode, target: { outX, outY, extW, extH },
+        ...(isScroll ? { scroll: { dx, dy } } : {}),
+        ...(isDrag ? { drop: { outX2, outY2 } } : {}), window: { at, monitor: mon.name } })
+}
+
+main()

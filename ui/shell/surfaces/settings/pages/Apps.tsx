@@ -18,7 +18,7 @@ function navRow(
 ): Gtk.ListBoxRow {
     const chevron = new Gtk.Image({
         gicon: Icons.chevronRight, pixel_size: 16,
-        opacity: 0.4, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"],
+        opacity: 0.4, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"],
     })
     const row = createRow(label, subtitle, chevron)
     row.set_cursor_from_name("pointer")

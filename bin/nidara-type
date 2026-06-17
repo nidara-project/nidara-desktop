@@ -1,0 +1,162 @@
+#!/usr/bin/env -S gjs -m
+// ─────────────────────────────────────────────────────────────────────────────
+// nidara-type — SYNTHETIC KEYBOARD for the computer-use layer (Phase 2b-i).
+// Installed to /usr/bin/nidara-type. Types text / presses keys into a
+// third-party app via `wtype` (Wayland-native zwp_virtual_keyboard, no daemon),
+// for controls that AT-SPI `do_action` can't reach — e.g. typing into a Qt
+// text field, or pressing Enter/Space to activate a Qt button (those expose
+// only SetFocus). Pair with `nidara-act <app> <node> SetFocus` to target a
+// control first, then type into it here.
+//
+//   nidara-type text <app> <string>     e.g. nidara-type text telegram "hola"
+//   nidara-type key  <app> <keyspec>    e.g. nidara-type key telegram Return
+//                                             nidara-type key nautilus ctrl+a
+//
+// SEPARATE binary from nidara-a11y (perceive) and nidara-act (AT-SPI action):
+// synthetic input is a distinct mechanism and the maintainer guardian rule keeps
+// it out of the other helpers.
+//
+// SAFETY — synthetic keyboard is FOCUS-DEPENDENT (wtype types into whatever
+// window has focus), unlike do_action. So <app> is REQUIRED and we verify it is
+// Hyprland's ACTIVE window before injecting; otherwise we refuse. A keystroke
+// can only land in the app the agent named, while it is actually focused.
+//
+// Governance: same gate as nidara-act — BOTH `allowComputerControl` AND
+// `allowComputerUse` must be true in ai.json (Settings → AI). The shell shows
+// the always-visible "AI CONTROL" indicator + kill switch while control is on.
+// Consent layer, not a security boundary (any local process can run wtype).
+// ─────────────────────────────────────────────────────────────────────────────
+
+import GLib from "gi://GLib"
+import Gio from "gi://Gio"
+
+const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
+
+function emit(obj) { print(JSON.stringify(obj, null, 2)) }
+
+// Both gates required; both default OFF (absent/garbled ai.json → disabled).
+function controlEnabled() {
+    try {
+        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return false
+        const [ok, bytes] = GLib.file_get_contents(AI_JSON)
+        if (!ok) return false
+        const cfg = JSON.parse(new TextDecoder().decode(bytes))
+        return cfg.allowComputerControl === true && cfg.allowComputerUse === true
+    } catch {
+        return false
+    }
+}
+
+function run(argv) {
+    const proc = Gio.Subprocess.new(
+        argv,
+        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
+    )
+    const [, out, err] = proc.communicate_utf8(null, null)
+    return { ok: proc.get_successful(), out: (out ?? "").trim(), err: (err ?? "").trim() }
+}
+
+// Hyprland's focused window class (lowercased), e.g. "telegramdesktop".
+function hyprActiveClass() {
+    try {
+        const [ok, out] = GLib.spawn_command_line_sync("hyprctl activewindow -j")
+        if (!ok) return null
+        const cls = (JSON.parse(new TextDecoder().decode(out)).class || "").toLowerCase()
+        return cls || null
+    } catch {
+        return null
+    }
+}
+
+// Tolerant match between the user's <app> filter and the active window class
+// ("telegram" vs "org.telegram.desktop"/"TelegramDesktop").
+function focusMatches(activeClass, app) {
+    app = (app || "").toLowerCase()
+    if (!activeClass || !app) return false
+    if (activeClass.includes(app) || app.includes(activeClass)) return true
+    const tail = activeClass.split(".").pop()
+    return !!tail && (tail.includes(app) || app.includes(tail))
+}
+
+// wtype modifier names (it speaks xkb): map common aliases.
+const MOD_MAP = {
+    ctrl: "ctrl", control: "ctrl", ctl: "ctrl",
+    alt: "alt", meta: "alt",
+    shift: "shift",
+    super: "logo", win: "logo", cmd: "logo", logo: "logo",
+}
+// Friendly key aliases → xkb keysym names (anything else is passed through).
+const KEY_ALIAS = {
+    enter: "Return", return: "Return", ret: "Return",
+    esc: "Escape", escape: "Escape",
+    tab: "Tab", space: "space", spc: "space",
+    backspace: "BackSpace", bksp: "BackSpace", del: "Delete", delete: "Delete",
+    up: "Up", down: "Down", left: "Left", right: "Right",
+    home: "Home", end: "End", pageup: "Prior", pagedown: "Next",
+}
+
+// "ctrl+shift+t" → { mods:["ctrl","shift"], key:"t" }; rejects unknown modifiers.
+function parseKeyspec(spec) {
+    const parts = spec.split("+").map(p => p.trim()).filter(Boolean)
+    if (!parts.length) return null
+    const rawKey = parts.pop()
+    const mods = []
+    for (const m of parts) {
+        const mod = MOD_MAP[m.toLowerCase()]
+        if (!mod) return { error: `unknown modifier "${m}" (use ctrl/alt/shift/super)` }
+        mods.push(mod)
+    }
+    const key = KEY_ALIAS[rawKey.toLowerCase()] ?? rawKey
+    return { mods, key }
+}
+
+function main() {
+    if (!controlEnabled()) {
+        emit({ error: "computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too; both default off)" })
+        return
+    }
+
+    const mode = (ARGV[0] ?? "").trim()
+    const app = (ARGV[1] ?? "").trim()
+    const payload = ARGV[2] ?? ""
+
+    if ((mode !== "text" && mode !== "key") || !app || payload === "") {
+        emit({ error: "usage: nidara-type text|key <app> <string|keyspec>" })
+        return
+    }
+
+    const wtype = GLib.find_program_in_path("wtype")
+    if (!wtype) {
+        emit({ error: "wtype not found — re-run install.sh (it is the Wayland keyboard backend)" })
+        return
+    }
+
+    // Focus gate: only inject into the named app while it is actually focused.
+    const active = hyprActiveClass()
+    if (!focusMatches(active, app)) {
+        emit({ error: `refused: "${app}" is not the focused window (active: ${active ?? "unknown"}) — focus it first (e.g. do_app_action … SetFocus)`, active })
+        return
+    }
+
+    let argv
+    if (mode === "text") {
+        argv = [wtype, "--", payload]
+    } else {
+        const parsed = parseKeyspec(payload)
+        if (!parsed) { emit({ error: `invalid keyspec "${payload}"` }); return }
+        if (parsed.error) { emit({ error: parsed.error }); return }
+        argv = [wtype]
+        for (const m of parsed.mods) argv.push("-M", m)
+        argv.push("-k", parsed.key)
+        for (const m of [...parsed.mods].reverse()) argv.push("-m", m)
+    }
+
+    const r = run(argv)
+    if (!r.ok) {
+        emit({ ok: false, app, mode, error: `wtype failed: ${r.err || "no output"}` })
+        return
+    }
+    emit({ ok: true, app, mode, active })
+}
+
+main()

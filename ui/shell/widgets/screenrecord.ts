@@ -104,8 +104,8 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
     let withAudio = false
 
     const modeRow = new Gtk.Box({ spacing: 4, homogeneous: true })
-    const screenBtn = new Gtk.Button({ label: t("widget.screenrecord.mode.screen"), css_classes: ["crystal-seg-btn", "suggested-action"] })
-    const regionBtn = new Gtk.Button({ label: t("widget.screenrecord.mode.region"), css_classes: ["crystal-seg-btn"] })
+    const screenBtn = new Gtk.Button({ label: t("widget.screenrecord.mode.screen"), css_classes: ["nidara-seg-btn", "suggested-action"] })
+    const regionBtn = new Gtk.Button({ label: t("widget.screenrecord.mode.region"), css_classes: ["nidara-seg-btn"] })
     screenBtn.connect("clicked", () => {
         selectedMode = "screen"
         screenBtn.add_css_class("suggested-action")
@@ -122,9 +122,9 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
     const audioRow = new Gtk.Box({ spacing: 8 })
     const audioSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER })
     audioSwitch.connect("notify::active", () => { withAudio = audioSwitch.active })
-    // crystal-row-title gives it the mode-aware text colour (a plain Gtk.Label
+    // nidara-row-title gives it the mode-aware text colour (a plain Gtk.Label
     // inherits an unreliable default that rendered white in light mode too).
-    const audioLabel = new Gtk.Label({ label: t("widget.screenrecord.audio"), hexpand: true, halign: Gtk.Align.START, css_classes: ["crystal-row-title"] })
+    const audioLabel = new Gtk.Label({ label: t("widget.screenrecord.audio"), hexpand: true, halign: Gtk.Align.START, css_classes: ["nidara-row-title"] })
     audioRow.append(audioLabel)
     audioRow.append(audioSwitch)
 
@@ -145,7 +145,7 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
         const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        const icon = new Gtk.Image({ gicon: status.recording ? Icons.recordStop : Icons.record, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] })
+        const icon = new Gtk.Image({ gicon: status.recording ? Icons.recordStop : Icons.record, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] })
         box.append(icon)
         const syncSingle = () => { icon.gicon = status.recording ? Icons.recordStop : Icons.record }
         const sigId = status.connect("notify::recording", syncSingle)
@@ -155,7 +155,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
     // ── Idle stack child ──
     const iconBoxIdle = new Gtk.Box({ css_classes: ["cc-atomic-icon-circle-bg"], halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, width_request: 48, height_request: 48 })
-    iconBoxIdle.append(new Gtk.Image({ gicon: Icons.record, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] }))
+    iconBoxIdle.append(new Gtk.Image({ gicon: Icons.record, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] }))
     const idleText = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
     idleText.append(new Gtk.Label({ label: t("widget.screenrecord.name"), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 }))
     idleText.append(new Gtk.Label({ label: t("widget.screenrecord.sub"), css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 }))
@@ -164,7 +164,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
     // ── Recording stack child ──
     const iconBoxRec = new Gtk.Box({ css_classes: ["cc-atomic-icon-circle-bg", "rec-active-bg"], halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, width_request: 48, height_request: 48 })
-    iconBoxRec.append(new Gtk.Image({ gicon: Icons.recordStop, pixel_size: 22, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon", "rec-stop-icon"] }))
+    iconBoxRec.append(new Gtk.Image({ gicon: Icons.recordStop, pixel_size: 22, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon", "rec-stop-icon"] }))
     const elapsed = makeElapsedLabel()
     const recText = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
     recText.append(new Gtk.Label({ label: t("widget.screenrecord.recording"), css_classes: ["cc-atomic-label-bold", "rec-label"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 }))
@@ -190,7 +190,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 // ── Bar icon (dynamic recording state indicator) ──────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    const image = new Gtk.Image({ gicon: Icons.record, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+    const image = new Gtk.Image({ gicon: Icons.record, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
     const syncState = () => {
         image.gicon = status.recording ? Icons.recordStop : Icons.record
         if (status.recording) image.add_css_class("rec-bar-active")

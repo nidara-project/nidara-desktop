@@ -53,10 +53,10 @@ export function getSessions(): Session[] {
     console.error("[Greeter] getSessions:", e)
   }
 
-  // Crystal Shell first, then alphabetical
+  // Nidara first, then alphabetical
   sessions.sort((a, b) => {
-    if (a.id === "crystal-shell") return -1
-    if (b.id === "crystal-shell") return 1
+    if (a.id === "nidara") return -1
+    if (b.id === "nidara") return 1
     return a.name.localeCompare(b.name)
   })
 

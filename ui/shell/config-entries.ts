@@ -10,7 +10,7 @@
 
 import { registerConfig } from "./core/ConfigRegistry"
 import Theme from "./core/ThemeManager"
-import { ACCENT_PALETTE, type AccentKey } from "./core/FluidCrystal"
+import { ACCENT_PALETTE, type AccentKey } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
 import notifConfig from "./core/NotifConfig"
 import Gaming, { type WallpaperMode } from "./core/GamingManager"
@@ -125,7 +125,7 @@ export function registerConfigEntries() {
         get: () => agentConfig.allowScreenshot,
     })
     registerConfig("ai.allowMcp", {
-        desc: "Whether crystal-shell-mcp serves tools to MCP clients. Toggle it in Settings → AI.",
+        desc: "Whether nidara-mcp serves tools to MCP clients. Toggle it in Settings → AI.",
         type: "boolean",
         writable: false,
         get: () => agentConfig.allowMcp,

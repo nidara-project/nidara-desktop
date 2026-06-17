@@ -47,7 +47,7 @@ function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh:
     const entriesBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2 })
     const emptyLabel = new Gtk.Label({
         label: t("widget.clipboard.empty"),
-        css_classes: ["crystal-row-subtitle"],
+        css_classes: ["nidara-row-subtitle"],
         margin_top: 16, margin_bottom: 16,
         halign: Gtk.Align.CENTER,
     })
@@ -64,10 +64,10 @@ function buildClipboardList(onClose: () => void): { widget: Gtk.Widget; refresh:
             for (const entry of entries) {
                 const lbl = new Gtk.Label({
                     label: entry.preview, halign: Gtk.Align.START, ellipsize: 3,
-                    max_width_chars: 36, css_classes: ["crystal-row-title"],
+                    max_width_chars: 36, css_classes: ["nidara-row-title"],
                 })
                 const btn = new Gtk.Button({
-                    css_classes: ["crystal-menu-row"],
+                    css_classes: ["nidara-menu-row"],
                     hexpand: true, halign: Gtk.Align.FILL,
                     child: lbl,
                 })
@@ -102,7 +102,7 @@ function buildClipboardContent(onClose: () => void): Gtk.Widget {
 // ── Bar content ───────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    return new Gtk.Image({ gicon: Icons.clipboard, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+    return new Gtk.Image({ gicon: Icons.clipboard, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 }
 
 function buildBarExpanded(onClose: () => void): Gtk.Widget {
@@ -118,7 +118,7 @@ function buildCCDetail(onClose: () => void): Gtk.Widget {
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
         const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        box.append(new Gtk.Image({ gicon: Icons.clipboard, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] }))
+        box.append(new Gtk.Image({ gicon: Icons.clipboard, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] }))
         return box
     }
 

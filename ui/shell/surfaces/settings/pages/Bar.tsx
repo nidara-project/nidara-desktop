@@ -6,7 +6,7 @@ import { barSettings, updateBarSettings } from "../../bar/barState"
 import { LAUNCHER_ICON_PRESETS } from "../../bar/Bar"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
-import { CrystalButton } from "../../../../lib/crystal-ui"
+import { NidaraButton } from "../../../../lib/nidara-kit"
 
 function resolveCurrentPath(key: string): string | null {
     if (LAUNCHER_ICON_PRESETS[key]) return LAUNCHER_ICON_PRESETS[key]
@@ -92,7 +92,7 @@ export default function BarPage() {
     }
     customEntry.connect("activate", applyCustom)
 
-    const applyBtn = CrystalButton({
+    const applyBtn = NidaraButton({
         label: t("settings.region.tz.apply"),
         variant: "primary",
         pill: true,

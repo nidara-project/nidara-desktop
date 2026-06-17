@@ -3,10 +3,10 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Theme from "../../../core/ThemeManager"
-import { CrystalButton, CrystalFontButton } from "../../../../lib/crystal-ui"
+import { NidaraButton, NidaraFontButton } from "../../../../lib/nidara-kit"
 import NightLight from "../../../core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
-import { ACCENT_PALETTE, type AccentKey } from "../../../core/FluidCrystal"
+import { ACCENT_PALETTE, type AccentKey } from "../../../core/NidaraTheme"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageBox } from "../SettingsHelpers"
@@ -49,7 +49,7 @@ export default function AppearancePage() {
     updatePreview(Wallpaper.current)
     Wallpaper.refreshFromDaemon()
 
-    const previewRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row", "wallpaper-preview-row"] })
+    const previewRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row", "wallpaper-preview-row"] })
     previewRow.set_child(preview)
     wallGroup.listBox.append(previewRow)
 
@@ -69,7 +69,7 @@ export default function AppearancePage() {
     wallGroup.listBox.append(transRow)
 
     // File picker row
-    const changeBtn = CrystalButton({
+    const changeBtn = NidaraButton({
         label: t("settings.appearance.browse"),
         variant: "secondary",
         pill: true,
@@ -115,8 +115,8 @@ export default function AppearancePage() {
     Wallpaper.connect("changed", () => updatePreview(Wallpaper.current))
     page.append(wallGroup.box)
 
-    // 3. Crystal Shell visual tokens
-    const fcGroup = listGroup("Crystal Shell")
+    // 3. Nidara visual tokens
+    const fcGroup = listGroup("Nidara")
 
     // Accent Color Picker
     const accentPicker = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
@@ -229,7 +229,7 @@ export default function AppearancePage() {
 
         const box = new Gtk.Box({ spacing: 4, valign: Gtk.Align.CENTER })
         box.append(hSpin)
-        box.append(new Gtk.Label({ label: ":", css_classes: ["crystal-row-subtitle"] }))
+        box.append(new Gtk.Label({ label: ":", css_classes: ["nidara-row-subtitle"] }))
         box.append(mSpin)
         return box
     }
@@ -237,11 +237,11 @@ export default function AppearancePage() {
     const schedTimeBox = new Gtk.Box({ spacing: 24, valign: Gtk.Align.CENTER })
 
     const fromBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
-    fromBox.append(new Gtk.Label({ label: t("settings.appearance.night-light-from"), halign: Gtk.Align.START, css_classes: ["crystal-row-subtitle"] }))
+    fromBox.append(new Gtk.Label({ label: t("settings.appearance.night-light-from"), halign: Gtk.Align.START, css_classes: ["nidara-row-subtitle"] }))
     fromBox.append(timePicker(NightLight.scheduleFrom, (v) => NightLight.setScheduleFrom(v)))
 
     const toBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
-    toBox.append(new Gtk.Label({ label: t("settings.appearance.night-light-to"), halign: Gtk.Align.START, css_classes: ["crystal-row-subtitle"] }))
+    toBox.append(new Gtk.Label({ label: t("settings.appearance.night-light-to"), halign: Gtk.Align.START, css_classes: ["nidara-row-subtitle"] }))
     toBox.append(timePicker(NightLight.scheduleTo, (v) => NightLight.setScheduleTo(v)))
 
     schedTimeBox.append(fromBox)
@@ -285,7 +285,7 @@ export default function AppearancePage() {
     // 6. Fonts
     const fontsGroup = listGroup(t("settings.appearance.group.fonts"))
 
-    const interfaceFontBtn = CrystalFontButton({
+    const interfaceFontBtn = NidaraFontButton({
         font: Theme.interfaceFont,
         title: t("settings.appearance.interface-font"),
         onFontSet: (f) => Theme.setFont(f),
@@ -296,7 +296,7 @@ export default function AppearancePage() {
         interfaceFontBtn,
     ))
 
-    const monoFontBtn = CrystalFontButton({
+    const monoFontBtn = NidaraFontButton({
         font: Theme.monoFont,
         title: t("settings.appearance.mono-font"),
         onFontSet: (f) => Theme.setMonoFont(f),

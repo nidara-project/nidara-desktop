@@ -19,7 +19,7 @@ const REFRESH_MIN_INTERVAL_MS = 60
 class HyprlandStateClass extends GObject.Object {
     static {
         GObject.registerClass({
-            GTypeName: "CrystalHyprlandState",
+            GTypeName: "NidaraHyprlandState",
             // "changed" = structural window/workspace state (fires often).
             // "config-reloaded" = Hyprland re-read its config (`hyprctl reload` or a
             //   hyprland-user.lua edit). Effective-config consumers (InputConfig,

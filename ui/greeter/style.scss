@@ -1,5 +1,5 @@
-/* Crystal Shell — Greeter / Lock stylesheet
-   GTK_THEME=crystal-shell loads a blank theme, so this is the ONLY CSS.
+/* Nidara — Greeter / Lock stylesheet
+   GTK_THEME=nidara loads a blank theme, so this is the ONLY CSS.
    No Adwaita to fight. No resets needed. Just define what we want.
    GTK4 CSS subset: no color-mix(), no rgba(var(), n), no filter. */
 
@@ -7,33 +7,33 @@
 * {
   font-family: "Inter", sans-serif;
 
-  --crystal-accent:         #0088FF;
+  --nidara-accent:         #0088FF;
   // Pre-computed alpha variants — GTK4 CSS has no rgba(var(), n).
   // Updated at runtime by loadAccentCss() when the user changes accent.
-  --crystal-accent-rgb:     0, 136, 255;
-  --crystal-accent-10:      rgba(0, 136, 255, 0.10);
-  --crystal-accent-15:      rgba(0, 136, 255, 0.15);
-  --crystal-accent-20:      rgba(0, 136, 255, 0.20);
-  --crystal-accent-30:      rgba(0, 136, 255, 0.30);
-  --crystal-focus-ring:     rgba(0, 136, 255, 0.35);
+  --nidara-accent-rgb:     0, 136, 255;
+  --nidara-accent-10:      rgba(0, 136, 255, 0.10);
+  --nidara-accent-15:      rgba(0, 136, 255, 0.15);
+  --nidara-accent-20:      rgba(0, 136, 255, 0.20);
+  --nidara-accent-30:      rgba(0, 136, 255, 0.30);
+  --nidara-focus-ring:     rgba(0, 136, 255, 0.35);
 
-  --crystal-text:           rgba(255, 255, 255, 0.95);
-  --crystal-text-secondary: rgba(255, 255, 255, 0.70);
-  --crystal-text-muted:     rgba(255, 255, 255, 0.45);
+  --nidara-text:           rgba(255, 255, 255, 0.95);
+  --nidara-text-secondary: rgba(255, 255, 255, 0.70);
+  --nidara-text-muted:     rgba(255, 255, 255, 0.45);
 
-  --crystal-glass:          rgba(18, 18, 28, 0.55);
-  --crystal-glass-light:    rgba(255, 255, 255, 0.38);
-  --crystal-glass-border:   rgba(255, 255, 255, 0.22);
-  --crystal-glass-border-sm:rgba(255, 255, 255, 0.14);
+  --nidara-glass:          rgba(18, 18, 28, 0.55);
+  --nidara-glass-light:    rgba(255, 255, 255, 0.38);
+  --nidara-glass-border:   rgba(255, 255, 255, 0.22);
+  --nidara-glass-border-sm:rgba(255, 255, 255, 0.14);
 
-  --crystal-danger:         #ff6b6b;
-  --crystal-warning:        #f3ba4b;
-  --crystal-popup-bg:       rgba(14, 14, 22, 0.97);
+  --nidara-danger:         #ff6b6b;
+  --nidara-warning:        #f3ba4b;
+  --nidara-popup-bg:       rgba(14, 14, 22, 0.97);
 
-  --crystal-radius-lg:      24px;
-  --crystal-radius-md:      16px;
-  --crystal-radius-sm:      10px;
-  --crystal-radius-pill:    9999px;
+  --nidara-radius-lg:      24px;
+  --nidara-radius-md:      16px;
+  --nidara-radius-sm:      10px;
+  --nidara-radius-pill:    9999px;
 }
 
 // ── Window ─────────────────────────────────────────────────────────────────
@@ -51,27 +51,27 @@ window > contents {
   font-weight: 500;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: var(--crystal-text);
+  color: var(--nidara-text);
 }
 
 .greeter-clock {
   font-size: 88px;
   font-weight: 200;
   letter-spacing: -4px;
-  color: var(--crystal-text);
+  color: var(--nidara-text);
 }
 
 // ── Avatar ──────────────────────────────────────────────────────────────────
 .greeter-avatar {
-  border-radius: var(--crystal-radius-pill);
-  border: 2px solid var(--crystal-glass-border);
+  border-radius: var(--nidara-radius-pill);
+  border: 2px solid var(--nidara-glass-border);
 }
 
 // ── Username ────────────────────────────────────────────────────────────────
 .greeter-username {
   font-size: 16px;
   font-weight: 500;
-  color: var(--crystal-text-secondary);
+  color: var(--nidara-text-secondary);
   letter-spacing: 0.2px;
 }
 
@@ -82,11 +82,11 @@ window > contents {
 // GTK4's built-in fallback CSS draws a focus ring via `outline` (blue default).
 // We suppress it with `outline: none` and draw our own ring via `box-shadow`.
 .greeter-password {
-  background: var(--crystal-glass);
-  border: 1px solid var(--crystal-glass-border-sm);
-  border-radius: var(--crystal-radius-pill);
-  color: var(--crystal-text);
-  caret-color: var(--crystal-text);
+  background: var(--nidara-glass);
+  border: 1px solid var(--nidara-glass-border-sm);
+  border-radius: var(--nidara-radius-pill);
+  color: var(--nidara-text);
+  caret-color: var(--nidara-text);
   padding: 10px 16px;
   min-height: 0;
   outline: none;
@@ -94,36 +94,36 @@ window > contents {
   &:focus,
   &:focus-within {
     outline: none;
-    border-color: var(--crystal-accent);
-    box-shadow: 0 0 0 2px var(--crystal-focus-ring);
+    border-color: var(--nidara-accent);
+    box-shadow: 0 0 0 2px var(--nidara-focus-ring);
   }
 
-  > text { color: var(--crystal-text); }
+  > text { color: var(--nidara-text); }
 
   > button {
     background: transparent;
     border: none;
     min-height: 0;
     padding: 4px 8px;
-    color: var(--crystal-text-muted);
-    &:hover { color: var(--crystal-text-secondary); }
+    color: var(--nidara-text-muted);
+    &:hover { color: var(--nidara-text-secondary); }
   }
 }
 
 // ── Login / Unlock button ───────────────────────────────────────────────────
 .greeter-login-btn {
-  background: var(--crystal-accent);
+  background: var(--nidara-accent);
   color: #fff;
-  border-radius: var(--crystal-radius-pill);
+  border-radius: var(--nidara-radius-pill);
   padding: 10px 24px;
   font-weight: 600;
   font-size: 14px;
   min-height: 0;
 
-  &:hover  { background: var(--crystal-accent); }
-  &:active { background: var(--crystal-accent); }
+  &:hover  { background: var(--nidara-accent); }
+  &:active { background: var(--nidara-accent); }
   &:disabled {
-    background: var(--crystal-accent-30);
+    background: var(--nidara-accent-30);
     color: rgba(255, 255, 255, 0.5);
   }
 
@@ -150,25 +150,25 @@ window > contents {
   box-shadow: none;
   padding: 2px;
   min-height: 0;
-  border-radius: var(--crystal-radius-pill);
+  border-radius: var(--nidara-radius-pill);
 
   &:hover { background: rgba(255, 255, 255, 0.08); }
 
   image {
-    border-radius: var(--crystal-radius-pill);
+    border-radius: var(--nidara-radius-pill);
     border: 2px solid transparent;
   }
-  &:checked image { border-color: var(--crystal-accent); }
+  &:checked image { border-color: var(--nidara-accent); }
 }
 
 // ── Error / Shake ────────────────────────────────────────────────────────────
 .greeter-error {
-  color: var(--crystal-danger);
+  color: var(--nidara-danger);
   font-size: 12px;
 }
 
 .greeter-caps {
-  color: var(--crystal-warning);
+  color: var(--nidara-warning);
   font-size: 12px;
   font-weight: 500;
   letter-spacing: 0.2px;
@@ -201,23 +201,23 @@ dropdown > button.combo {
 
 // Session selector — visible, medium weight
 dropdown.greeter-session-dropdown > button.combo {
-  color: var(--crystal-text-secondary);
+  color: var(--nidara-text-secondary);
   font-size: 12px;
   padding: 4px 10px;
-  border-radius: var(--crystal-radius-pill);
+  border-radius: var(--nidara-radius-pill);
 
-  &:hover  { background: rgba(255, 255, 255, 0.08); color: var(--crystal-text); }
+  &:hover  { background: rgba(255, 255, 255, 0.08); color: var(--nidara-text); }
   &:active { background: rgba(255, 255, 255, 0.06); }
 }
 
 // Keyboard selector — compact, dimmed
 dropdown.locale-bar-dropdown > button.combo {
-  color: var(--crystal-text-muted);
+  color: var(--nidara-text-muted);
   font-size: 12px;
   padding: 3px 8px;
-  border-radius: var(--crystal-radius-pill);
+  border-radius: var(--nidara-radius-pill);
 
-  &:hover  { background: rgba(255, 255, 255, 0.07); color: var(--crystal-text-secondary); }
+  &:hover  { background: rgba(255, 255, 255, 0.07); color: var(--nidara-text-secondary); }
   &:active { background: rgba(255, 255, 255, 0.05); }
 }
 
@@ -228,16 +228,16 @@ popover.combo {
   box-shadow: none;
 
   > contents {
-    background: var(--crystal-popup-bg);
-    border: 1px solid var(--crystal-glass-border-sm);
-    border-radius: var(--crystal-radius-sm);
+    background: var(--nidara-popup-bg);
+    border: 1px solid var(--nidara-glass-border-sm);
+    border-radius: var(--nidara-radius-sm);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.60);
     padding: 4px;
   }
 
   > arrow {
-    background: var(--crystal-popup-bg);
-    border-color: var(--crystal-glass-border-sm);
+    background: var(--nidara-popup-bg);
+    border-color: var(--nidara-glass-border-sm);
   }
 
   scrolledwindow, viewport {
@@ -253,30 +253,30 @@ popover.combo {
       border-radius: 6px;
       padding: 6px 12px;
       min-height: 0;
-      color: var(--crystal-text-secondary);
+      color: var(--nidara-text-secondary);
       font-size: 13px;
 
-      &:hover    { background: rgba(255, 255, 255, 0.08); color: var(--crystal-text); }
-      &:selected { background: var(--crystal-accent-15); color: var(--crystal-text); }
+      &:hover    { background: rgba(255, 255, 255, 0.08); color: var(--nidara-text); }
+      &:selected { background: var(--nidara-accent-15); color: var(--nidara-text); }
     }
   }
 }
 
 // ── Locale bar ───────────────────────────────────────────────────────────────
 .locale-bar {
-  background: var(--crystal-glass);
-  border: 1px solid var(--crystal-glass-border-sm);
-  border-radius: var(--crystal-radius-pill);
+  background: var(--nidara-glass);
+  border: 1px solid var(--nidara-glass-border-sm);
+  border-radius: var(--nidara-radius-pill);
   padding: 4px 10px;
 }
 
 .locale-bar-icon {
-  color: var(--crystal-text-muted);
+  color: var(--nidara-text-muted);
   margin-right: 2px;
 }
 
 .locale-bar-sep {
-  background: var(--crystal-glass-border-sm);
+  background: var(--nidara-glass-border-sm);
   min-width: 1px;
   min-height: 14px;
   margin: 4px 2px;
@@ -289,34 +289,34 @@ popover.combo {
 .locale-bar-lang-btn {
   background: transparent;
   border: none;
-  border-radius: var(--crystal-radius-pill);
-  color: var(--crystal-text-muted);
+  border-radius: var(--nidara-radius-pill);
+  color: var(--nidara-text-muted);
   font-size: 12px;
   font-weight: 500;
   padding: 3px 8px;
   min-height: 0;
 
-  &:hover   { background: rgba(255, 255, 255, 0.07); color: var(--crystal-text-secondary); }
-  &:checked { background: var(--crystal-accent-20); color: var(--crystal-accent); }
+  &:hover   { background: rgba(255, 255, 255, 0.07); color: var(--nidara-text-secondary); }
+  &:checked { background: var(--nidara-accent-20); color: var(--nidara-accent); }
 }
 
 // ── Power bar ────────────────────────────────────────────────────────────────
 .greeter-power-bar {
-  background: var(--crystal-glass);
-  border: 1px solid var(--crystal-glass-border-sm);
-  border-radius: var(--crystal-radius-pill);
+  background: var(--nidara-glass);
+  border: 1px solid var(--nidara-glass-border-sm);
+  border-radius: var(--nidara-radius-pill);
   padding: 4px 6px;
 }
 
 .greeter-power-btn {
-  background: var(--crystal-accent);
+  background: var(--nidara-accent);
   border: none;
-  border-radius: var(--crystal-radius-pill);
+  border-radius: var(--nidara-radius-pill);
   color: #fff;
   padding: 6px 16px;
   font-size: 13px;
   min-height: 0;
 
-  &:hover  { background: var(--crystal-accent); }
-  &:active { background: var(--crystal-accent); }
+  &:hover  { background: var(--nidara-accent); }
+  &:active { background: var(--nidara-accent); }
 }

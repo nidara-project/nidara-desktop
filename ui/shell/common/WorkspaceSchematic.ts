@@ -24,7 +24,7 @@ export function createSchematicMap(wsId: number, width: number): SchematicHandle
     const initialHeight = Math.round(width * (9 / 16))
 
     // Cairo canvas draws background + tile rectangles at exact pixel coords.
-    // CSS color: var(--crystal-surface) on this widget is read via get_color()
+    // CSS color: var(--nidara-surface) on this widget is read via get_color()
     // to get the actual surface color without hardcoding.
     const canvas = new Gtk.DrawingArea({
         css_classes: ["wo-schematic-canvas"],
@@ -66,7 +66,7 @@ export function createSchematicMap(wsId: number, width: number): SchematicHandle
         cr.rectangle(0, 0, areaW, areaH)
         cr.fill()
 
-        // Tile color: read from CSS 'color' property = var(--crystal-surface)
+        // Tile color: read from CSS 'color' property = var(--nidara-surface)
         const col = da.get_style_context().get_color()
         cr.setSourceRGBA(col.red, col.green, col.blue, col.alpha)
         for (const t of currentTiles) {

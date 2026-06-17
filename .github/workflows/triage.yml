@@ -15,7 +15,7 @@
 #      paths (skills / CI / CONTRIBUTING / install.sh / scripts / bin).
 #   3. Applies/removes `needs-evidence` when the PR template is incomplete. The
 #      `edited` trigger makes this self-healing: fixing the PR description clears it.
-#   4. Upserts ONE sticky summary comment (anchor: <!-- crystal-triage -->) —
+#   4. Upserts ONE sticky summary comment (anchor: <!-- nidara-triage -->) —
 #      updated in place on every run, never a second comment.
 #
 # Why `pull_request_target` (not `pull_request`): for PRs opened from a fork, the
@@ -150,7 +150,7 @@ jobs:
           # ---------------------------------------------------------------
           advisory=""
           if grep -qE '^ui/' <<< "$files" && \
-             ! grep -qE '^\.claude/skills/crystal-shell/references/' <<< "$files"; then
+             ! grep -qE '^\.claude/skills/nidara/references/' <<< "$files"; then
             advisory="Code changed under \`ui/\` without a skill-reference update. If this PR changes behaviour or conventions, the relevant \`references/\` doc must be updated in the same PR (see CONTRIBUTING.md); if it is a pure fix, ignore this line."
           fi
 
@@ -192,7 +192,7 @@ jobs:
             guardian_md+="  - …and $((total - shown)) more"$'\n'
           fi
 
-          comment="<!-- crystal-triage -->"$'\n'
+          comment="<!-- nidara-triage -->"$'\n'
           comment+="## Automated triage summary"$'\n\n'
           comment+="_Deterministic checks computed from PR metadata — no AI reads your PR here, and no code from this PR was executed._"$'\n\n'
 
@@ -228,7 +228,7 @@ jobs:
           comment+="_Maintainer: run the local AI triage before reviewing._"$'\n'
 
           cid=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
-            --jq '[.[] | select(.user.type == "Bot") | select(.body | startswith("<!-- crystal-triage -->"))][0].id // empty')
+            --jq '[.[] | select(.user.type == "Bot") | select(.body | startswith("<!-- nidara-triage -->"))][0].id // empty')
           if [ -n "$cid" ]; then
             gh api -X PATCH "repos/$REPO/issues/comments/$cid" -f body="$comment" > /dev/null
             echo "Updated sticky triage comment $cid on PR #$PR."

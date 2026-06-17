@@ -90,7 +90,7 @@ class AppService {
     private patchXdgDataDirs() {
         // NOTE: this CANNOT make Gio.AppInfo in THIS process see Flatpak/Snap apps —
         // GLib caches the data dirs on first use (GTK init runs before us), verified
-        // 2026-06-12. The real fix lives in bin/crystal-shell-ui, which exports
+        // 2026-06-12. The real fix lives in bin/nidara-ui, which exports
         // XDG_DATA_DIRS before gjs starts. This patch still matters as a safety net
         // for the env *inherited by launched children* (gtk-launch under `uwsm app`)
         // when the shell was started some other way (e.g. `ags run` by hand).
@@ -236,8 +236,8 @@ class AppService {
 
         const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
 
-        // Crystal Shell icon overlay — checked before system theme
-        const overlayBase = `${GLib.get_home_dir()}/.local/share/icons/crystal-shell`
+        // Nidara icon overlay — checked before system theme
+        const overlayBase = `${GLib.get_home_dir()}/.local/share/icons/nidara`
         const extensions = [".svg", ".png", ""]
         for (const ext of extensions) {
             const path = `${overlayBase}/scalable/apps/${n}${ext}`.replace("//", "/")
@@ -432,8 +432,8 @@ class AppService {
         if (rawClassLower.includes("ags") && rawClass !== "io.Astal.ags") return null
 
         let key = rawClassLower
-        if (key === "com.crystalshell.fluid" || key === "gjs" || key === "io.astal.ags") {
-            key = "crystal-shell-settings"
+        if (key === "org.nidara.desktop" || key === "gjs" || key === "io.astal.ags") {
+            key = "nidara-settings"
         }
 
         // File Manager Integration -> Map any detected file manager window to our Home/Finder shortcut
@@ -490,7 +490,7 @@ class AppService {
             }
         }
 
-        if (hit && hit.includes("crystal-shell")) {
+        if (hit && hit.includes("nidara")) {
             console.log(`[AppService] Resolved '${key}' -> overlay icon: ${hit}`)
         }
 
@@ -634,7 +634,7 @@ class AppService {
     // ── Icon Overlay (per-app overrides) ──────────────────────────────────────
 
     private get overlayAppsDir(): string {
-        return `${GLib.get_home_dir()}/.local/share/icons/crystal-shell/scalable/apps`
+        return `${GLib.get_home_dir()}/.local/share/icons/nidara/scalable/apps`
     }
 
     /** Returns the current override file path for the given icon name, or null if none. */

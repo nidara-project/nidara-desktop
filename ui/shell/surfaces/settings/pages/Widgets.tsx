@@ -22,7 +22,7 @@ function switchRow(label: string, active: boolean, sensitive: boolean, tooltip: 
 function configureRow(nav: SettingsNav, w: AtomicWidget): Gtk.ListBoxRow {
     const chevron = new Gtk.Image({
         gicon: Icons.chevronRight, pixel_size: 16,
-        opacity: 0.4, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"],
+        opacity: 0.4, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"],
     })
     const row = createRow(t("settings.widgets.configure"), "", chevron)
     row.set_cursor_from_name("pointer")
@@ -53,8 +53,8 @@ export default function WidgetsPage(nav: SettingsNav): Gtk.Widget {
         // Identity header (icon + name) — prepended ABOVE the listBox so it doesn't
         // pick up a clickable row's hover/press state (it isn't interactive).
         const header = new Gtk.Box({ spacing: 10, margin_start: 10, margin_bottom: 2, valign: Gtk.Align.CENTER })
-        header.append(new Gtk.Image({ gicon: w.icon ?? Icons.app, pixel_size: 18, css_classes: ["cs-icon"], opacity: available ? 1 : 0.5 }))
-        header.append(new Gtk.Label({ label: w.name, css_classes: ["crystal-row-title"], halign: Gtk.Align.START, opacity: available ? 1 : 0.5 }))
+        header.append(new Gtk.Image({ gicon: w.icon ?? Icons.app, pixel_size: 18, css_classes: ["nd-icon"], opacity: available ? 1 : 0.5 }))
+        header.append(new Gtk.Label({ label: w.name, css_classes: ["nidara-row-title"], halign: Gtk.Align.START, opacity: available ? 1 : 0.5 }))
         box.prepend(header)
 
         // Bar toggle — only for widgets that can actually render in the bar.
@@ -89,7 +89,7 @@ export default function WidgetsPage(nav: SettingsNav): Gtk.Widget {
     // Reordering lives in the CC's own Edit mode, not here.
     page.append(new Gtk.Label({
         label: t("settings.widgets.reorder-note"),
-        css_classes: ["crystal-row-subtitle"],
+        css_classes: ["nidara-row-subtitle"],
         wrap: true, halign: Gtk.Align.START, margin_start: 10, margin_top: 4,
     }))
 

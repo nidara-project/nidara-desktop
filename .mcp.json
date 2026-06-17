@@ -1,7 +1,7 @@
 {
   "mcpServers": {
-    "crystal-shell": {
-      "command": "./bin/crystal-shell-mcp"
+    "nidara": {
+      "command": "./bin/nidara-mcp"
     }
   }
 }

@@ -1,0 +1,29 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# nidara-update — update an installed Nidara.
+# Installed to /usr/bin/nidara-update.
+#
+# Thin wrapper: all update logic lives in the repo's install.sh (--update), so
+# the updater itself updates with the repo. This just finds the registered
+# source (~/.config/nidara/.source, written by install.sh) and hands over.
+# ─────────────────────────────────────────────────────────────────────────────
+set -e
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/nidara"
+SRC_CANON="$HOME/.local/share/nidara/src"
+
+SRC=""
+[ -f "$CONFIG_DIR/.source" ] && SRC="$(cat "$CONFIG_DIR/.source")"
+# Pre-registration fallbacks: a dev install's .dev marker, then the canonical path.
+[ -z "$SRC" ] && [ -f "$CONFIG_DIR/.dev" ] && SRC="$(cat "$CONFIG_DIR/.dev")"
+[ -z "$SRC" ] && [ -d "$SRC_CANON/.git" ] && SRC="$SRC_CANON"
+
+if [ -z "$SRC" ] || [ ! -f "$SRC/install.sh" ]; then
+    echo "nidara-update: no registered source found." >&2
+    echo "Re-run the installer once from a git clone to register it:" >&2
+    echo "  git clone https://github.com/nidara-project/nidara-desktop.git" >&2
+    echo "  cd nidara-desktop && ./install.sh" >&2
+    exit 1
+fi
+
+exec bash "$SRC/install.sh" --update

@@ -13,10 +13,10 @@
 # to stop bluetooth.service and to own org.bluez on the system bus.
 #
 # Scenario created by `start`:
-#   adapter hci0 "Crystal Test" (powered)
-#   • Crystal Keyboard — paired, disconnected   (My devices → Connect/Disconnect)
-#   • Crystal Mouse    — paired, disconnected   (My devices → Connect/Disconnect)
-#   • Crystal Phone    — unpaired               (Nearby → Pair)
+#   adapter hci0 "Nidara Test" (powered)
+#   • Nidara Keyboard — paired, disconnected   (My devices → Connect/Disconnect)
+#   • Nidara Mouse    — paired, disconnected   (My devices → Connect/Disconnect)
+#   • Nidara Phone    — unpaired               (Nearby → Pair)
 #
 # Usage:  sudo ./fake-bluetooth.sh start
 #         sudo ./fake-bluetooth.sh stop
@@ -26,7 +26,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-PIDFILE="/tmp/crystal-bluez-mock.pid"
+PIDFILE="/tmp/nidara-bluez-mock.pid"
 ADAPTER="hci0"
 MOCK="org.bluez.Mock"
 
@@ -41,9 +41,9 @@ MOCK="org.bluez.Mock"
 # so Connect → Disconnect via the buttons updates live. (Pairing uses the proper
 # UpdateProperties path, so Pair works either way.)
 dev=(
-  "AA:BB:CC:00:00:01|Crystal Keyboard|yes"
-  "AA:BB:CC:00:00:02|Crystal Mouse|yes"
-  "AA:BB:CC:00:00:03|Crystal Phone|no"
+  "AA:BB:CC:00:00:01|Nidara Keyboard|yes"
+  "AA:BB:CC:00:00:02|Nidara Mouse|yes"
+  "AA:BB:CC:00:00:03|Nidara Phone|no"
 )
 
 if [ "$(id -u)" -ne 0 ]; then echo "Run with sudo." >&2; exit 1; fi
@@ -59,7 +59,7 @@ case "${1:-}" in
     systemctl stop bluetooth.service 2>/dev/null || true
 
     echo "Starting bluez5 mock on the system bus…"
-    python3 -m dbusmock --system --template bluez5 >/tmp/crystal-bluez-mock.log 2>&1 &
+    python3 -m dbusmock --system --template bluez5 >/tmp/nidara-bluez-mock.log 2>&1 &
     echo $! > "$PIDFILE"
 
     # Wait for org.bluez to come up (mock owns the name + exposes /org/bluez).
@@ -68,9 +68,9 @@ case "${1:-}" in
       sleep 0.2
     done
     busctl --system introspect org.bluez /org/bluez >/dev/null 2>&1 \
-      || { echo "mock never claimed org.bluez — see /tmp/crystal-bluez-mock.log" >&2; exit 1; }
+      || { echo "mock never claimed org.bluez — see /tmp/nidara-bluez-mock.log" >&2; exit 1; }
 
-    mock_call AddAdapter ss "$ADAPTER" "Crystal Test"
+    mock_call AddAdapter ss "$ADAPTER" "Nidara Test"
     # Seed the DiscoveryFilter key: the bluez5 template's StartDiscovery reads
     # adapter.props[...]["DiscoveryFilter"] without initialising it, so a bare
     # Scan from the UI throws KeyError. Setting an (empty) filter creates the key.
@@ -92,7 +92,7 @@ case "${1:-}" in
   stop)
     if [ -f "$PIDFILE" ]; then kill "$(cat "$PIDFILE")" 2>/dev/null || true; rm -f "$PIDFILE"; fi
     pkill -f "dbusmock --system --template bluez5" 2>/dev/null || true
-    rm -f /tmp/crystal-bluez-mock.log
+    rm -f /tmp/nidara-bluez-mock.log
     systemctl start bluetooth.service 2>/dev/null || true
     echo "Mock torn down; bluetooth.service restored. Reload the shell to re-bind."
     ;;

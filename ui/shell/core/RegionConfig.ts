@@ -14,10 +14,10 @@ export interface RegionSettings {
     regionalLocale: string  // e.g. "es_ES.UTF-8"; "" = same as LANG
 }
 
-const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/region.json`
+const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/region.json`
 
-// Path where Crystal Shell writes user-level LC_* overrides, picked up by systemd/PAM on login
-const LOCALE_ENV_PATH = `${GLib.get_user_config_dir()}/environment.d/crystal-locale.conf`
+// Path where Nidara writes user-level LC_* overrides, picked up by systemd/PAM on login
+const LOCALE_ENV_PATH = `${GLib.get_user_config_dir()}/environment.d/nidara-locale.conf`
 
 // Variables that represent "regional format" (not UI language)
 const REGIONAL_LC_VARS = [
@@ -68,7 +68,7 @@ class RegionConfigManager extends GObject.Object {
 
     private save() {
         try {
-            const dir = `${GLib.get_user_config_dir()}/crystal-shell`
+            const dir = `${GLib.get_user_config_dir()}/nidara`
             if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
                 GLib.mkdir_with_parents(dir, 0o755)
             writeFile(CONFIG_PATH, JSON.stringify(this._settings, null, 2))
@@ -110,7 +110,7 @@ class RegionConfigManager extends GObject.Object {
     get regionalLocale(): string      { return this._settings.regionalLocale ?? "" }
 
     /**
-     * Writes all REGIONAL_LC_VARS to ~/.config/environment.d/crystal-locale.conf.
+     * Writes all REGIONAL_LC_VARS to ~/.config/environment.d/nidara-locale.conf.
      * Pass "" to remove the file (LC_* fall back to LANG).
      * Takes effect on next login (systemd/PAM reads environment.d).
      */

@@ -1,7 +1,7 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import status from "../../core/Status"
-import { CrystalClamp, CrystalSidebar, CrystalWindow } from "../../../lib/crystal-ui"
+import { NidaraClamp, NidaraSidebar, NidaraWindow } from "../../../lib/nidara-kit"
 
 // Page Imports
 import AppearancePage from "./pages/Appearance"
@@ -37,16 +37,16 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     // ── Navigation controls ───────────────────────────────────────────────────
     const backBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["cs-icon"] }),
-        css_classes: ["crystal-icon-btn", "nav-btn"],
+        child: new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["nd-icon"] }),
+        css_classes: ["nidara-icon-btn", "nav-btn"],
         tooltip_text: t("settings.nav.back"),
         sensitive: false,
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
     })
     const forwardBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, css_classes: ["cs-icon"] }),
-        css_classes: ["crystal-icon-btn", "nav-btn"],
+        child: new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, css_classes: ["nd-icon"] }),
+        css_classes: ["nidara-icon-btn", "nav-btn"],
         tooltip_text: t("settings.nav.forward"),
         sensitive: false,
         valign: Gtk.Align.CENTER,
@@ -63,11 +63,11 @@ export default function Settings(monitor: Gdk.Monitor) {
     navCapsule.append(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nav-separator"] }))
     navCapsule.append(forwardBtn)
 
-    // The glass window itself is assembled by CrystalWindow at the end (so its
+    // The glass window itself is assembled by NidaraWindow at the end (so its
     // header/toolbar can wire to the sidebar, search and nav built below).
 
     // ── Sidebar ───────────────────────────────────────────────────────────────
-    // The navigation list itself is the universal CrystalSidebar component; it's
+    // The navigation list itself is the universal NidaraSidebar component; it's
     // created after the pages are built (below) so its onSelect can call navigateTo.
     // Order = macOS-style thematic clusters with title-less dividers (groupStart):
     // 1) connectivity · 2) the bulk (look/shell/behaviour/apps) · 3) system & devices.
@@ -134,12 +134,12 @@ export default function Settings(monitor: Gdk.Monitor) {
             vexpand: true,
             css_classes: ["settings-page-scroll"],
         })
-        scroll.set_child(CrystalClamp(widget, 800, true))   // CrystalClamp replaces Adw.Clamp
+        scroll.set_child(NidaraClamp(widget, 800, true))   // NidaraClamp replaces Adw.Clamp
         return scroll
     }
 
     // ── Header breadcrumb (title, with a clickable parent for subpages) ─────────
-    const breadcrumb = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER, css_classes: ["crystal-window-breadcrumb"] })
+    const breadcrumb = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER, css_classes: ["nidara-window-breadcrumb"] })
     const updateBreadcrumb = (pageId: string) => {
         let c = breadcrumb.get_first_child()
         while (c) { breadcrumb.remove(c); c = breadcrumb.get_first_child() }
@@ -149,14 +149,14 @@ export default function Settings(monitor: Gdk.Monitor) {
             const parent = pageTitles.get(meta.parentId)
             const link = new Gtk.Button({
                 label: parent?.title ?? "",
-                css_classes: ["crystal-breadcrumb-link"],
+                css_classes: ["nidara-breadcrumb-link"],
                 valign: Gtk.Align.CENTER,
             })
             link.connect("clicked", () => navigateTo(meta.parentId!))
             breadcrumb.append(link)
-            breadcrumb.append(new Gtk.Label({ label: "›", css_classes: ["crystal-breadcrumb-sep"] }))
+            breadcrumb.append(new Gtk.Label({ label: "›", css_classes: ["nidara-breadcrumb-sep"] }))
         }
-        breadcrumb.append(new Gtk.Label({ label: meta.title, css_classes: ["crystal-window-title"], halign: Gtk.Align.START }))
+        breadcrumb.append(new Gtk.Label({ label: meta.title, css_classes: ["nidara-window-title"], halign: Gtk.Align.START }))
     }
 
     // Navigation handle handed to each page so it can push detail subpages. Its
@@ -195,15 +195,15 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     // navigateTo is defined further down; the onSelect closure only runs on a
     // user click, by which point it's assigned.
-    const sidebar = CrystalSidebar(
+    const sidebar = NidaraSidebar(
         categories.map(c => ({ id: c.id, label: c.label, icon: c.icon, groupStart: c.groupStart })),
         (id) => navigateTo(id),
     )
-    sidebar.widget.set_name("crystal-settings-sidebar-list")
+    sidebar.widget.set_name("nidara-settings-sidebar-list")
 
     // ── Search results page ───────────────────────────────────────────────────
     const searchResultsList = new Gtk.ListBox({
-        css_classes: ["crystal-list", "search-results-list"],
+        css_classes: ["nidara-list", "search-results-list"],
         selection_mode: Gtk.SelectionMode.NONE,
         activate_on_single_click: true,
     })
@@ -227,7 +227,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     searchResultsPage.append(searchResultsList)
     searchResultsPage.append(searchResultsEmpty)
 
-    const srClamp = CrystalClamp(searchResultsPage, 800, true)
+    const srClamp = NidaraClamp(searchResultsPage, 800, true)
     const srScroll = new Gtk.ScrolledWindow({
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
@@ -261,16 +261,16 @@ export default function Settings(monitor: Gdk.Monitor) {
             row.append(new Gtk.Image({
                 gicon: cat?.icon ?? Icons.settings,
                 pixel_size: 18,
-                css_classes: ["search-result-page-icon", "cs-icon"],
+                css_classes: ["search-result-page-icon", "nd-icon"],
                 opacity: 0.6,
             }))
 
             const text = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true })
-            text.append(new Gtk.Label({ label: item.label, css_classes: ["crystal-row-title"], halign: Gtk.Align.START }))
+            text.append(new Gtk.Label({ label: item.label, css_classes: ["nidara-row-title"], halign: Gtk.Align.START }))
             if (item.subtitle) {
                 text.append(new Gtk.Label({
                     label: item.subtitle,
-                    css_classes: ["crystal-row-subtitle"],
+                    css_classes: ["nidara-row-subtitle"],
                     halign: Gtk.Align.START,
                     ellipsize: 3,
                     max_width_chars: 50,
@@ -278,9 +278,9 @@ export default function Settings(monitor: Gdk.Monitor) {
             }
             row.append(text)
             row.append(new Gtk.Label({ label: item.pageLabel, css_classes: ["search-result-chip"] }))
-            row.append(new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, opacity: 0.4, css_classes: ["cs-icon"] }))
+            row.append(new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, opacity: 0.4, css_classes: ["nd-icon"] }))
 
-            const lbr = new Gtk.ListBoxRow({ css_classes: ["crystal-row", "search-result-row"] })
+            const lbr = new Gtk.ListBoxRow({ css_classes: ["nidara-row", "search-result-row"] })
             lbr.set_child(row)
             ;(lbr as any)._targetPageId = item.pageId
             searchResultsList.append(lbr)
@@ -326,7 +326,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         updateNavButtons()
     }
 
-    // Row activation (user click) is handled by CrystalSidebar's onSelect →
+    // Row activation (user click) is handled by NidaraSidebar's onSelect →
     // navigateTo. row-selected stays here for the defensive re-sync (e.g. GTK
     // clearing selection when the search page steals focus).
     sidebar.widget.connect("row-selected", () => {
@@ -343,7 +343,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     })
 
     // ── Search ────────────────────────────────────────────────────────────────
-    // Custom search box: our own cs-icon magnifier + Gtk.Text. Gtk.SearchEntry
+    // Custom search box: our own nd-icon magnifier + Gtk.Text. Gtk.SearchEntry
     // would force the icon theme's magnifier glyph; this matches the rest of the
     // shell (same pattern as Prism's search field).
     const searchInput = new Gtk.Text({
@@ -362,7 +362,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     searchEntry.append(new Gtk.Image({
         gicon: Icons.search,
         pixel_size: 15,
-        css_classes: ["cs-icon", "settings-search-icon"],
+        css_classes: ["nd-icon", "settings-search-icon"],
         valign: Gtk.Align.CENTER,
     }))
     searchEntry.append(searchInput)
@@ -395,7 +395,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     searchInput.add_controller(searchKeys)
 
     // ── Window shell ──────────────────────────────────────────────────────────
-    // The universal CrystalWindow assembles the glass window + split view + header.
+    // The universal NidaraWindow assembles the glass window + split view + header.
     // Settings supplies the sidebar, the content, the search box (sidebar top), the
     // nav capsule + breadcrumb title (header start) and the close button (header end).
     const closeBtn = IconButton({
@@ -406,11 +406,11 @@ export default function Settings(monitor: Gdk.Monitor) {
         onClick: () => cw.window.set_visible(false),
     })
 
-    const cw = CrystalWindow({
+    const cw = NidaraWindow({
         app,
-        title: "Crystal Shell Settings",
-        name: "crystal-settings-window",
-        cssClasses: ["fc-ignore", "crystal-settings-window"],
+        title: "Nidara Settings",
+        name: "nidara-settings-window",
+        cssClasses: ["nd-ignore", "nidara-settings-window"],
         sidebar: sidebar.widget,
         content: contentArea,
         toggleIcon: Icons.sidebar,

@@ -750,7 +750,7 @@ export function DockItem(
                 // V149: UNIVERSAL HOME ISOLATION (Left Click) 🛰️
                 if (appId === "special:home" || appId === "home-shortcut") {
                     execAsync(["uwsm", "app", "--", "xdg-open", GLib.get_home_dir()]).catch(print)
-                } else if (appId === "crystal-shell-settings") {
+                } else if (appId === "nidara-settings") {
                     shellActions.openSettings?.()
                 } else {
                     // Origin-aware command (gtk-launch / flatpak run) — see AppService.

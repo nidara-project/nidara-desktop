@@ -36,16 +36,16 @@ export function SystemMenuOverlay() {
 
   const makeRow = (ico: Gio.FileIcon, txt: string, _danger: boolean, cmd: () => void) => {
     const lbl = new Gtk.Label({ label: txt, halign: Gtk.Align.START, hexpand: true,
-      css_classes: ["crystal-menu-label"] })
-    const img = new Gtk.Image({ gicon: ico, pixel_size: 16, css_classes: ["cs-icon"] })
+      css_classes: ["nidara-menu-label"] })
+    const img = new Gtk.Image({ gicon: ico, pixel_size: 16, css_classes: ["nd-icon"] })
     const b = new Gtk.Box({ spacing: 12 })
     b.append(img); b.append(lbl)
-    const btn = new Gtk.Button({ child: b, css_classes: ["crystal-menu-row"], hexpand: true })
+    const btn = new Gtk.Button({ child: b, css_classes: ["nidara-menu-row"], hexpand: true })
     btn.connect("clicked", cmd)
     return btn
   }
 
-  const sep = () => new Gtk.Separator({ css_classes: ["crystal-menu-sep"], margin_top: 4, margin_bottom: 4 })
+  const sep = () => new Gtk.Separator({ css_classes: ["nidara-menu-sep"], margin_top: 4, margin_bottom: 4 })
 
   const showConfirm = (ico: Gio.FileIcon, question: string, actionLabel: string, danger: boolean, cmd: () => void) => {
     pendingCmd = cmd
@@ -72,7 +72,7 @@ export function SystemMenuOverlay() {
   menuBox.append(sep())
   menuBox.append(makeRow(Icons.lock, t("bar.system-menu.lock"), false, () => {
     status.system_menu_open = false
-    execAsync(["crystal-lock"]).catch(console.error)
+    execAsync(["nidara-lock"]).catch(console.error)
   }))
   menuBox.append(makeRow(Icons.moon, t("bar.system-menu.suspend"), false, () =>
     closeAndRun(["systemctl", "suspend"])
@@ -92,22 +92,22 @@ export function SystemMenuOverlay() {
   ))
 
   // ── Confirmation page ──────────────────────────────────────────────────
-  const confirmIcon = new Gtk.Image({ pixel_size: 28, halign: Gtk.Align.CENTER, css_classes: ["cs-icon"] })
+  const confirmIcon = new Gtk.Image({ pixel_size: 28, halign: Gtk.Align.CENTER, css_classes: ["nd-icon"] })
   const confirmQuestion = new Gtk.Label({
     halign: Gtk.Align.CENTER,
     justify: Gtk.Justification.CENTER,
-    css_classes: ["crystal-menu-label"],
+    css_classes: ["nidara-menu-label"],
     wrap: true,
     max_width_chars: 20,
   })
 
-  const confirmCancelBtn = new Gtk.Button({ label: t("bar.system-menu.confirm.cancel"), css_classes: ["crystal-menu-row", "system-confirm-secondary"], hexpand: true })
+  const confirmCancelBtn = new Gtk.Button({ label: t("bar.system-menu.confirm.cancel"), css_classes: ["nidara-menu-row", "system-confirm-secondary"], hexpand: true })
   confirmCancelBtn.connect("clicked", () => {
     pendingCmd = null
     showPage(menuBox)
   })
 
-  const confirmActionBtn = new Gtk.Button({ label: "", css_classes: ["crystal-menu-row", "system-confirm-primary"], hexpand: true })
+  const confirmActionBtn = new Gtk.Button({ label: "", css_classes: ["nidara-menu-row", "system-confirm-primary"], hexpand: true })
   confirmActionBtn.connect("clicked", () => {
     pendingCmd?.()
     pendingCmd = null
@@ -147,7 +147,7 @@ export function SystemMenuOverlay() {
     gloss: true,
     useShellOpacity: true,
     borderColor: { r: 1, g: 1, b: 1, a: 0.05 },
-    css_classes: ["crystal-menu"],
+    css_classes: ["nidara-menu"],
   })
 
   // Position (top/left margins, dock dodge) is owned by Bar.tsx — see

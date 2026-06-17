@@ -4,7 +4,7 @@ import { execAsync } from "ags/process"
 import { readFile, writeFile } from "ags/file"
 import { t } from "./i18n"
 
-const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/wallpaper`
+const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/wallpaper`
 
 export type TransitionType =
     | "simple" | "fade" | "random" | "center" | "grow"
@@ -57,7 +57,7 @@ class WallpaperManager extends GObject.Object {
     }
 
     private _save() {
-        const dir = `${GLib.get_user_config_dir()}/crystal-shell`
+        const dir = `${GLib.get_user_config_dir()}/nidara`
         if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
         // Only persist path as preview hint + transition preference.
         // awww's own cache handles restoration at login.

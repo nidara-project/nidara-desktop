@@ -22,14 +22,14 @@
 .wo-item {
     padding: 16px;
     border-radius: 24px;
-    background-color: var(--crystal-surface-back);
-    border: 1px solid var(--crystal-border);
+    background-color: var(--nidara-surface-back);
+    border: 1px solid var(--nidara-border);
     transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Cairo canvas reads 'color' to get the tile fill color */
 .wo-schematic-canvas {
-    color: var(--crystal-surface);
+    color: var(--nidara-surface);
 }
 
 /* Transparent overlay for icons only */
@@ -41,39 +41,39 @@
 .wo-label {
     font-size: $fs-subtitle;
     font-weight: $fw-semibold;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
     transition: color 0.2s ease;
 
     // NB: this file used Adwaita NAMED colors (@accent_bg_color) — they resolve
-    // to Adwaita's blue, never the user's accent token. Migrated to --crystal-*.
+    // to Adwaita's blue, never the user's accent token. Migrated to --nidara-*.
     // Active state is shown by .wo-item.active (accent bg + border) — the label
     // stays theme-coloured for legibility (never accent on text).
     &.active {
-        color: var(--crystal-text);
+        color: var(--nidara-text);
     }
 }
 
 .wo-count {
     font-size: $fs-caption;
     font-weight: $fw-medium;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
     margin-bottom: 8px;
 }
 
 .wo-schematic-win {
-    background-color: var(--crystal-surface);
+    background-color: var(--nidara-surface);
 }
 
 .wo-item.active {
-    background-color: rgba(var(--crystal-accent-rgb), 0.05);
-    border: 1px solid rgba(var(--crystal-accent-rgb), 0.6);
+    background-color: rgba(var(--nidara-accent-rgb), 0.05);
+    border: 1px solid rgba(var(--nidara-accent-rgb), 0.6);
 }
 
 /* (.bar-ws-dot deleted — orphaned; the live bar dots are .workspace-dot in _bar.scss) */
 
 /* --- Buttons --- */
 .wo-btn {
-    @include crystal-reset;
+    @include nidara-reset;
     padding: 0;
     border-radius: 24px;
 
@@ -85,12 +85,12 @@
     }
 
     &:hover .wo-item {
-        background-color: var(--crystal-surface-back);
-        border-color: var(--crystal-surface-hover);
+        background-color: var(--nidara-surface-back);
+        border-color: var(--nidara-surface-hover);
 
         &.active {
-            background-color: rgba(var(--crystal-accent-rgb), 0.08);
-            border-color: rgba(var(--crystal-accent-rgb), 0.8);
+            background-color: rgba(var(--nidara-accent-rgb), 0.08);
+            border-color: rgba(var(--nidara-accent-rgb), 0.8);
         }
     }
 }

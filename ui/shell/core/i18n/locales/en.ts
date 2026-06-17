@@ -148,7 +148,7 @@ export default {
     "settings.users.other.pw.apply":      "Apply",
 
     // About
-    "settings.about.group.crystal-shell": "Crystal Shell",
+    "settings.about.group.nidara": "Nidara",
     "settings.about.group.environment": "Environment",
     "settings.about.group.system": "System",
     "settings.about.title": "About",
@@ -175,7 +175,7 @@ export default {
     "settings.about.close": "Close",
     "settings.about.update": "Software Update",
     "settings.about.update.up-to-date": "You're on the latest release",
-    "settings.about.update.available.desc": "Update by running `crystal-shell-update` in a terminal",
+    "settings.about.update.available.desc": "Update by running `nidara-update` in a terminal",
 
     // Appearance
     "settings.appearance.group.base-style": "Base Style",
@@ -358,7 +358,7 @@ export default {
     "settings.ai.allow-screenshot": "Allow Agents to Capture the Screen",
     "settings.ai.allow-screenshot.desc": "Lets agents take a screenshot to visually verify their changes (`ags request screenshot`)",
     "settings.ai.allow-mcp": "Enable MCP Server",
-    "settings.ai.allow-mcp.desc": "Lets `crystal-shell-mcp` serve shell tools (actions, settings, state, screenshots, diagnostics) to MCP clients like Claude Code. Takes effect immediately.",
+    "settings.ai.allow-mcp.desc": "Lets `nidara-mcp` serve shell tools (actions, settings, state, screenshots, diagnostics) to MCP clients like Claude Code. Takes effect immediately.",
     "settings.ai.allow-computer-use": "Allow Agents to See Other Apps",
     "settings.ai.allow-computer-use.desc": "Lets agents read the accessibility tree of third-party apps (their on-screen controls and text) for the computer-use layer. Read-only. Off by default — this reaches outside the shell; enabling it also turns on system accessibility.",
     "settings.ai.allow-computer-control": "Allow Agents to Control Other Apps",
@@ -367,7 +367,7 @@ export default {
     "settings.ai.exposed-settings": "Exposed Settings",
     "settings.ai.exposed-settings.desc": "Settings agents can discover and change — run `ags request describeConfig` to list them",
     "settings.ai.state-read": "State & Diagnostics",
-    "settings.ai.state-read.desc": "`dumpState` and crystal-shell-doctor stay available regardless of the switch above",
+    "settings.ai.state-read.desc": "`dumpState` and nidara-doctor stay available regardless of the switch above",
     "settings.ai.connect-agent": "Connect Your Agent",
     "settings.ai.connect-agent.desc": "Tell your AI agent to register the MCP server described in this file — it works from any MCP client",
 

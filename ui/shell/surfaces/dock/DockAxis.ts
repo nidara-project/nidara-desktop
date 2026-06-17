@@ -1,5 +1,5 @@
 /**
- * Crystal Shell — Dock axis adapter.
+ * Nidara — Dock axis adapter.
  *
  * Captures everything that differs between the horizontal (bottom) and vertical
  * (left/right) dock so that the shared logic can live once in DockCore.tsx.

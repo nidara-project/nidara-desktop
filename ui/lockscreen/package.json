@@ -1,6 +1,6 @@
 {
   "scripts": {
-    "build": "mkdir -p build && cd ../shell && npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css && cd ../lockscreen && ags bundle app.ts build/crystal-lock"
+    "build": "mkdir -p build && cd ../shell && npx sass --no-charset ../greeter/style.scss ../greeter/style.css && sed -i '/@charset/d' ../greeter/style.css && cd ../lockscreen && ags bundle app.ts build/nidara-lock"
   },
   "prettier": {
     "semi": false,

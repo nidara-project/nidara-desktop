@@ -6,21 +6,21 @@ import { getDefaultUser } from "../lib/users"
 import { accentCssFor } from "../lib/accent"
 
 // Use our blank theme instead of Adwaita.
-// With an empty gtk.css at /usr/share/themes/crystal-shell/gtk-4.0/gtk.css,
+// With an empty gtk.css at /usr/share/themes/nidara/gtk-4.0/gtk.css,
 // GTK4 loads zero theme rules — our app CSS is the only CSS that applies.
-GLib.setenv("GTK_THEME", "crystal-shell", true)
+GLib.setenv("GTK_THEME", "nidara", true)
 
 const cssPath = GLib.file_test("./style.css", GLib.FileTest.EXISTS)
   ? "./style.css"
-  : "/usr/share/crystal-shell/ui/greeter/style.css"
+  : "/usr/share/nidara/ui/greeter/style.css"
 
 function readAppearanceJson(): Record<string, unknown> | null {
   // Try the user's home dir first (works if /home/<user> is not 700).
-  // Fall back to /var/tmp/crystal-shell/appearance.json — written by ThemeManager
+  // Fall back to /var/tmp/nidara/appearance.json — written by ThemeManager
   // as a world-readable mirror so the greeter (system user) can always read it.
   const candidates: string[] = [
-    `${getDefaultUser().homeDir}/.config/crystal-shell/appearance.json`,
-    "/var/tmp/crystal-shell/appearance.json",
+    `${getDefaultUser().homeDir}/.config/nidara/appearance.json`,
+    "/var/tmp/nidara/appearance.json",
   ]
   for (const path of candidates) {
     try {
@@ -42,7 +42,7 @@ function loadAccentCss(): string {
 }
 
 app.start({
-  instanceName: "crystal-greeter",
+  instanceName: "nidara-greeter",
   css: cssPath,
 
   main() {

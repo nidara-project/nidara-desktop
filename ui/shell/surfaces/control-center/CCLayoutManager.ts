@@ -69,7 +69,7 @@ class CCLayoutManager extends GObject.Object {
 
     private _pos: Record<string, Cell> = {}
     private _sizes: Record<string, WidgetSize> = {}
-    private configPath = `${GLib.get_user_config_dir()}/crystal-shell/cc_layout.json`
+    private configPath = `${GLib.get_user_config_dir()}/nidara/cc_layout.json`
 
     constructor() {
         super()
@@ -114,7 +114,7 @@ class CCLayoutManager extends GObject.Object {
 
     private save() {
         try {
-            const dir = `${GLib.get_user_config_dir()}/crystal-shell`
+            const dir = `${GLib.get_user_config_dir()}/nidara`
             if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
                 GLib.mkdir_with_parents(dir, 0o755)
             const data: SaveData = { positions: this._pos, sizes: this._sizes }

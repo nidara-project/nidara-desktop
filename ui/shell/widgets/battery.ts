@@ -18,7 +18,7 @@ const frac = () => (present() ? Math.max(0, Math.min(1, bat!.percentage)) : 0)
 const pctText = () => `${Math.round(frac() * 100)}%`
 
 // Semantic fills (NOT the theme accent — accent is reserved for selection). These
-// match the danger/success seeds in FluidCrystal.ts (#ED5F5D / #79B757).
+// match the danger/success seeds in NidaraTheme.ts (#ED5F5D / #79B757).
 const RED:   [number, number, number] = [0.93, 0.37, 0.36]
 const GREEN: [number, number, number] = [0.47, 0.72, 0.34]
 const LOW_THRESHOLD = 0.15
@@ -119,7 +119,7 @@ function notPresent(): Gtk.Widget {
     box.append(new Gtk.Image({
         gicon: Icons.battery, pixel_size: 28, opacity: 0.5,
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-        hexpand: true, vexpand: true, css_classes: ["cs-icon"],
+        hexpand: true, vexpand: true, css_classes: ["nd-icon"],
     }))
     return box
 }
@@ -249,7 +249,7 @@ function buildPanel(_onClose: () => void): Gtk.Widget {
 // ── Bar icon (live glyph reflecting charge / charging / low) ───────────────────
 function buildBarContent(): Gtk.Widget {
     if (!present()) {
-        return new Gtk.Image({ gicon: Icons.battery, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+        return new Gtk.Image({ gicon: Icons.battery, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
     }
     const glyph = makeGlyph(11)
     glyph.margin_start = 16

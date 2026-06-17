@@ -1,0 +1,22 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# nidara-greeter — Nidara greeter launcher
+# Installed to /usr/bin/nidara-greeter
+# Called by greetd via hyprland-greeter.conf exec-once
+# ─────────────────────────────────────────────────────────────────────────────
+
+BUNDLE="/usr/share/nidara/ui/greeter/build/nidara-greeter"
+LOG="/tmp/nidara-greeter.log"
+
+export GDK_BACKEND=wayland
+export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export GREETD_SOCK="${GREETD_SOCK}"
+
+if [ -x "$BUNDLE" ]; then
+    cd /usr/share/nidara/ui/greeter
+    exec "$BUNDLE" >> "$LOG" 2>&1
+fi
+
+echo "[$(date '+%H:%M:%S')] nidara-greeter: ERROR — bundle not found at $BUNDLE" | tee -a "$LOG"
+exit 1

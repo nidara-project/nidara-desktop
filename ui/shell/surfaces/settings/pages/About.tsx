@@ -69,17 +69,17 @@ function readTotalRam(): string {
 export default function AboutPage() {
     const page = pageBox("about-page")
 
-    // ── Crystal Shell ──────────────────────────────────────────────────────────
-    const { box: shellBox, listBox: shellList } = listGroup(t("settings.about.group.crystal-shell"))
+    // ── Nidara ──────────────────────────────────────────────────────────
+    const { box: shellBox, listBox: shellList } = listGroup(t("settings.about.group.nidara"))
 
-    shellList.append(createRow(t("settings.about.version"), "Crystal Shell", staticLabel(readShellVersion())))
+    shellList.append(createRow(t("settings.about.version"), "Nidara", staticLabel(readShellVersion())))
     shellList.append(createRow(t("settings.about.shell"), t("settings.about.shell.desc"), staticLabel("Hyprland WM")))
 
     // Update check — installed version vs the latest GitHub release. The row is
     // appended only when the check resolves: on network failure or while no
     // releases exist (pre-publication, private repo) About just stays quiet.
     execAsync(["curl", "-fsS", "--max-time", "5",
-        "https://api.github.com/repos/fluid-crystal/crystal-shell/releases/latest",
+        "https://api.github.com/repos/nidara-project/nidara-desktop/releases/latest",
     ]).then(out => {
         const tag = String(JSON.parse(out)?.tag_name ?? "")
         const latest = tag.replace(/^v/, "")

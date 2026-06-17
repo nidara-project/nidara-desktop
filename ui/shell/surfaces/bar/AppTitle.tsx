@@ -83,7 +83,7 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): Gtk.Widget 
     })
     capsule.add_controller(gesture)
     // Deterministic interaction hook for verification/automation: open the menu
-    // without a synthetic click, then assert with `queryUI .crystal-menu-label`.
+    // without a synthetic click, then assert with `queryUI .nidara-menu-label`.
     // Last bar wins on multi-monitor — fine, the menu is global (focused window).
     shellActions.openWindowMenu = openWindowMenu
   }

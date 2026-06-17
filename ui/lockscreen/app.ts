@@ -7,15 +7,15 @@ import { Lock, LockOverlay } from "./widget/Lock"
 import { accentCssFor } from "../lib/accent"
 
 // Use our blank theme instead of Adwaita.
-GLib.setenv("GTK_THEME", "crystal-shell", true)
+GLib.setenv("GTK_THEME", "nidara", true)
 
-const cssPath = GLib.file_test("/usr/share/crystal-shell/ui/greeter/style.css", GLib.FileTest.EXISTS)
-  ? "/usr/share/crystal-shell/ui/greeter/style.css"
+const cssPath = GLib.file_test("/usr/share/nidara/ui/greeter/style.css", GLib.FileTest.EXISTS)
+  ? "/usr/share/nidara/ui/greeter/style.css"
   : "../greeter/style.css"
 
 function loadAccentCss(): string {
   try {
-    const path = `${GLib.get_user_config_dir()}/crystal-shell/appearance.json`
+    const path = `${GLib.get_user_config_dir()}/nidara/appearance.json`
     const [ok, data] = GLib.file_get_contents(path)
     if (!ok) return ""
     const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
@@ -39,7 +39,7 @@ function startFallback(display: Gdk.Display) {
 }
 
 app.start({
-  instanceName: "crystal-lock",
+  instanceName: "nidara-lock",
   css: cssPath,
 
   main() {

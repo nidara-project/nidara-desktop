@@ -38,7 +38,7 @@ try {
   console.warn("[App] Initialization failed:", e)
 }
 
-// Register custom crystal-shell icon theme (cs-xxx-symbolic icons)
+// Register custom nidara icon theme (nd-xxx-symbolic icons)
 try {
   const display = Gdk.Display.get_default()
   if (display) {
@@ -144,7 +144,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
   },
   openWindowMenu: {
     desc: "Open the focused window's options menu (the AppTitle capsule menu) without a " +
-      "synthetic click — a deterministic interaction hook. Pair with `queryUI .crystal-menu-label` to read its rows.",
+      "synthetic click — a deterministic interaction hook. Pair with `queryUI .nidara-menu-label` to read its rows.",
     run: () => {
       if (!shellActions.openWindowMenu) return "window menu unavailable (no app-title bar)"
       shellActions.openWindowMenu()
@@ -159,7 +159,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     },
   },
   // ── Window & workspace management ────────────────────────────────────────
-  // The shell controlling its OWN compositor (Hyprland IS Crystal Shell), so —
+  // The shell controlling its OWN compositor (Hyprland IS Nidara), so —
   // like launchApp — these are UNGATED: a window-manager op (focus/move/close a
   // window, switch workspace) is not "reaching into a third-party app". The
   // computer-use gate (allowComputerControl) stays on the things that DO reach
@@ -385,7 +385,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: args => {
       if (!agentConfig.allowScreenshot)
         return "screenshots are disabled — enable them in Settings → AI (or ai.json)"
-      const path = args[0] || `/tmp/crystal-shell-shot-${Date.now()}.png`
+      const path = args[0] || `/tmp/nidara-shot-${Date.now()}.png`
       try {
         const mon = hyprlandState.focusedMonitor?.name
         exec(mon ? ["grim", "-o", mon, path] : ["grim", path])
@@ -478,7 +478,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
   queryUI: {
     desc: "Snapshot what the UI is rendering as JSON (read-only, like dumpState). " +
       "Optional selector: `.cssClass`, `#id`, `Type`, or `selector@window` " +
-      "(e.g. `queryUI .bar-app-name`, `queryUI .crystal-menu-row@bar`)",
+      "(e.g. `queryUI .bar-app-name`, `queryUI .nidara-menu-row@bar`)",
     run: args => JSON.stringify(queryUI(args[0]), null, 2),
   },
 }
@@ -489,7 +489,7 @@ for (const [name, { aliases }] of Object.entries(IPC_COMMANDS))
   for (const alias of aliases ?? []) IPC_ALIASES[alias] = name
 
 app.start({
-  applicationId: "com.crystalshell.fluid",
+  applicationId: "org.nidara.desktop",
     main() {
     // Apply notification DND default
     if (notifConfig.dndDefault) {
@@ -502,7 +502,7 @@ app.start({
     // Agent-facing config surface (describeConfig/getConfig/setConfig)
     registerConfigEntries()
 
-    // Note: the crystal-bar/dock blur layer rules live in hyprland.lua
+    // Note: the nidara-bar/dock blur layer rules live in hyprland.lua
     // (hl.layer_rule). They used to be re-applied here via `hyprctl keyword`,
     // which the Lua parser rejects ("Use eval.") — so those calls were dead
     // duplicates and have been removed.
@@ -537,7 +537,7 @@ app.start({
               // Collect old dock windows BEFORE creating the new one.
               const oldDocks: any[] = []
               windows.forEach(w => {
-                if (w.name === "crystal-dock" && (w as any).gdkmonitor === monitor) {
+                if (w.name === "nidara-dock" && (w as any).gdkmonitor === monitor) {
                   oldDocks.push(w)
                 }
               })
@@ -593,7 +593,7 @@ app.start({
     //  Toggles Logic
     const toggleAppGrid = () => {
       windows.forEach(w => {
-        if (w.name === "crystal-dock") try { (w as any).toggleAppGridPanel?.() } catch (e) { console.error(e) }
+        if (w.name === "nidara-dock") try { (w as any).toggleAppGridPanel?.() } catch (e) { console.error(e) }
       })
     }
     // Show + raise Settings. present()'s Wayland activation is IGNORED by Hyprland
@@ -601,11 +601,11 @@ app.start({
     // after presenting we dispatch an explicit focus to the window — that switches
     // to its workspace, exactly like clicking any running app in the dock. The
     // window is a normal Hyprland client (class io.Astal.ags, title set by
-    // CrystalWindow); match both to disambiguate from the About window.
+    // NidaraWindow); match both to disambiguate from the About window.
     const raiseSettings = () => {
       settingsWindows.forEach(s => { try { s.present() } catch (e) { console.error(e) } })
       const c = hyprlandState.clients.find(
-        (c: any) => c.class === "io.Astal.ags" && c.title === "Crystal Shell Settings")
+        (c: any) => c.class === "io.Astal.ags" && c.title === "Nidara Settings")
       if (c?.address) hyprlandState.focusWindow(c.address)
     }
     // Open/raise Settings — a normal window (NOT a toggle: re-invoking just
@@ -640,7 +640,7 @@ app.start({
       // Only promotes bar — dock and appgrid are unaffected.
       // Activation requires a fullscreen window; deactivation is always allowed.
       windows.forEach(w => {
-        if (w.name === "crystal-bar") {
+        if (w.name === "nidara-bar") {
           const isActive = (w as any).isGameOverlayActive?.() ?? false
           const isFullscreen = (w as any).isBarFullscreenMode?.() ?? false
           if (!isActive && !isFullscreen) return
@@ -654,14 +654,14 @@ app.start({
     })
     const lockScreen = () => {
       windows.forEach(w => {
-        if (w.name === "crystal-bar" || w.name === "crystal-dock") {
+        if (w.name === "nidara-bar" || w.name === "nidara-dock") {
           try { w.hide() } catch (e) {}
         }
       })
     }
     const unlockScreen = () => {
       windows.forEach(w => {
-        if (w.name === "crystal-bar" || w.name === "crystal-dock") {
+        if (w.name === "nidara-bar" || w.name === "nidara-dock") {
           try { w.present() } catch (e) {}
         }
       })

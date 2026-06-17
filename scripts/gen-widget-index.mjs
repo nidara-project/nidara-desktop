@@ -13,7 +13,7 @@
  *
  * Usage:  node scripts/gen-widget-index.mjs
  * Runs automatically via npm pre-hooks (build/dev/run) and, fail-soft, in
- * bin/crystal-shell-ui's dev branch. CI job "widgets-gen" fails if the
+ * bin/nidara-ui's dev branch. CI job "widgets-gen" fails if the
  * committed widgets.gen.ts is stale.
  */
 

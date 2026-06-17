@@ -1,5 +1,5 @@
 <!--
-Thanks for contributing to Crystal Shell! Please fill this in.
+Thanks for contributing to Nidara! Please fill this in.
 See CONTRIBUTING.md for the personal-vs-global heuristic and conventions.
 -->
 

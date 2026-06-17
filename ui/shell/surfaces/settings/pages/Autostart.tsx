@@ -4,7 +4,7 @@ import GLib from "gi://GLib"
 import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
-import { CrystalButton } from "../../../../lib/crystal-ui"
+import { NidaraButton } from "../../../../lib/nidara-kit"
 
 // ── Config path ───────────────────────────────────────────────────────────────
 const USER_CONF = `${GLib.get_home_dir()}/.config/hypr/hyprland-user.lua`
@@ -93,7 +93,7 @@ export default function AutostartPage() {
         while (child) { listBox.remove(child); child = listBox.get_first_child() }
 
         if (entries.length === 0) {
-            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
             emptyRow.set_child(new Gtk.Label({
                 label: t("settings.autostart.empty"),
                 css_classes: ["settings-placeholder"],
@@ -105,7 +105,7 @@ export default function AutostartPage() {
             entries.forEach((entry, idx) => {
                 const cmdLabel = new Gtk.Label({
                     label: entry.command,
-                    css_classes: ["crystal-row-title"],
+                    css_classes: ["nidara-row-title"],
                     halign: Gtk.Align.START,
                     hexpand: true,
                     ellipsize: 3,
@@ -120,8 +120,8 @@ export default function AutostartPage() {
                 })
 
                 const deleteBtn = new Gtk.Button({
-                    child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 16 , css_classes: ["cs-icon"] }),
-                    css_classes: ["crystal-btn", "crystal-btn--danger"],
+                    child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 16 , css_classes: ["nd-icon"] }),
+                    css_classes: ["nidara-btn", "nidara-btn--danger"],
                     valign: Gtk.Align.CENTER,
                     tooltip_text: t("settings.autostart.tooltip.remove"),
                 })
@@ -143,13 +143,13 @@ export default function AutostartPage() {
                     pixel_size: 18,
                     valign: Gtk.Align.CENTER,
                     opacity: entry.enabled ? 1.0 : 0.5,
-                    css_classes: ["cs-icon"],
+                    css_classes: ["nd-icon"],
                 }))
                 rowBox.append(cmdLabel)
                 rowBox.append(toggle)
                 rowBox.append(deleteBtn)
 
-                const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+                const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
                 row.set_child(rowBox)
                 listBox.append(row)
             })
@@ -168,7 +168,7 @@ export default function AutostartPage() {
             css_classes: ["settings-entry"],
         })
 
-        const addBtn = CrystalButton({
+        const addBtn = NidaraButton({
             label: t("settings.autostart.add"),
             variant: "primary",
             pill: true,
@@ -198,11 +198,11 @@ export default function AutostartPage() {
             margin_top: 12,
             margin_bottom: 12,
         })
-        rowBox.append(new Gtk.Image({ gicon: Icons.plus, pixel_size: 18, valign: Gtk.Align.CENTER, opacity: 0.6 , css_classes: ["cs-icon"] }))
+        rowBox.append(new Gtk.Image({ gicon: Icons.plus, pixel_size: 18, valign: Gtk.Align.CENTER, opacity: 0.6 , css_classes: ["nd-icon"] }))
         rowBox.append(entry)
         rowBox.append(addBtn)
 
-        const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+        const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
         row.set_child(rowBox)
         return row
     }
@@ -212,7 +212,7 @@ export default function AutostartPage() {
     // Info note
     const note = new Gtk.Label({
         label: t("settings.autostart.apply-note"),
-        css_classes: ["crystal-row-subtitle"],
+        css_classes: ["nidara-row-subtitle"],
         halign: Gtk.Align.START,
         margin_start: 10,
         margin_top: 4,

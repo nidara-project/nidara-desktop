@@ -1,35 +1,35 @@
 @use 'base' as *;
 
 /* ==========================================================================
-   CRYSTAL DESIGN SYSTEM - UNIFIED COMPONENTS
+   NIDARA DESIGN SYSTEM - UNIFIED COMPONENTS
    ========================================================================== */
 
 /* --- Base text input -------------------------------------------------------
-   Every plain Gtk.Entry (and anything with .crystal-input) gets the crystal
+   Every plain Gtk.Entry (and anything with .nidara-input) gets the nidara
    look out of the box — no per-widget CSS, no GTK default-theme blue. This is
    the single place text fields are themed. Custom inputs (the settings search
    box, Prism) are Gtk.Text under their own class and override this. Accent
    appears ONLY on focus + text selection, per the design system. */
 entry,
-.crystal-input {
-    background: var(--crystal-surface-back);
+.nidara-input {
+    background: var(--nidara-surface-back);
     // 2px border kept at constant width (transparent at rest → accent on focus)
     // with background-clip: padding-box so the visual thickness never changes the
     // real geometry — no layout shift, and no thin 1px line that reads badly on the
     // rounded corners / lighter backgrounds.
     background-clip: padding-box;
     border: 2px solid transparent;
-    border-radius: $crystal-radius-sm;
+    border-radius: $nidara-radius-sm;
     padding: 6px 10px;
     min-height: 0;
-    color: var(--crystal-text);
-    caret-color: var(--crystal-accent);
+    color: var(--nidara-text);
+    caret-color: var(--nidara-accent);
     box-shadow: none;
     outline: none;
     transition: border-color 0.15s ease;
 
     &:focus, &:focus-within {
-        border-color: var(--crystal-accent);
+        border-color: var(--nidara-accent);
         box-shadow: none;
         outline: none;
     }
@@ -37,21 +37,21 @@ entry,
 
     > text {
         background: transparent;
-        color: var(--crystal-text);
-        caret-color: var(--crystal-accent);
+        color: var(--nidara-text);
+        caret-color: var(--nidara-accent);
     }
 }
 
 /* Selected text — accent tint everywhere (entries and labels alike). */
 selection {
-    background-color: rgba(var(--crystal-accent-rgb), 0.30);
-    color: var(--crystal-text);
+    background-color: rgba(var(--nidara-accent-rgb), 0.30);
+    color: var(--nidara-text);
 }
 
 /* Small/large "A" endpoints for a text-size slider — real text (crisp at any
    size) instead of a tiny SVG glyph that loses detail. */
 .slider-text-endpoint {
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
     font-weight: $fw-medium;
     &.is-sm { font-size: 11px; }
     &.is-lg { font-size: 18px; }
@@ -60,71 +60,71 @@ selection {
 /* ════════════════════════════════════════════════════════════════════════════
    UNIVERSAL INTERACTIVE COMPONENTS
    Reusable building blocks for ANY surface (settings, CC, bar, future windows).
-   Add these classes from TSX (or via the lib/crystal-ui factories) — never
+   Add these classes from TSX (or via the lib/nidara-kit factories) — never
    reinvent a per-surface row/list/tile. Only geometry lives here; the interaction
-   model is the single source in _base.scss (crystal-row-states / -tile-states,
+   model is the single source in _base.scss (nidara-row-states / -tile-states,
    both mode-aware so the hover is visible on any wallpaper). See
    feedback_universal_components in memory.
    ════════════════════════════════════════════════════════════════════════════ */
 
 /* Clickable text row in a list/menu (settings rows, CC rows, menu items). */
-.crystal-row {
-    @include crystal-reset;
-    border-radius: $crystal-radius-sm;
+.nidara-row {
+    @include nidara-reset;
+    border-radius: $nidara-radius-sm;
     margin: 1px 0;
-    @include crystal-row-states;
+    @include nidara-row-states;
 }
 
 /* Floating icon tile/button over a translucent panel (bar/dock/app-grid widgets,
    CC icon tiles). Hover raises a glass capsule (mode-aware fill + inner edge). */
-.crystal-tile {
-    @include crystal-reset;
-    border-radius: $crystal-radius-md;
-    @include crystal-tile-states;
+.nidara-tile {
+    @include nidara-reset;
+    border-radius: $nidara-radius-md;
+    @include nidara-tile-states;
 }
 
 /* Title + label typography for the list/row components. */
-.crystal-list-title {
+.nidara-list-title {
     font-size: $fse-caption;
     font-weight: $fw-bold;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
     letter-spacing: 0.08em;
     margin-left: 4px;
     margin-bottom: 6px;
 }
-.crystal-row-title {
+.nidara-row-title {
     font-size: $fse-small;
     font-weight: $fw-medium;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
 }
-.crystal-row-subtitle {
+.nidara-row-subtitle {
     font-size: $fse-small;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
 }
 
-/* Boxed list container — dense frosted card holding .crystal-row children. */
-.crystal-list {
+/* Boxed list container — dense frosted card holding .nidara-row children. */
+.nidara-list {
     @include material-card;
     padding: 3px;
     box-shadow: none;
 }
 
 /* Navigation sidebar list (icon+label rows, single-select → accent). */
-.crystal-sidebar {
+.nidara-sidebar {
     background: transparent;
     padding: 6px;
 
     > row {
-        @include crystal-reset;
-        border-radius: $crystal-radius-sm;
+        @include nidara-reset;
+        border-radius: $nidara-radius-sm;
         margin: 1px 0;
         min-height: 36px;
-        @include crystal-row-states;
+        @include nidara-row-states;
 
         // The row content (icon+label) tints with the row state: dim at rest,
         // full text colour on hover/selected.
         &:hover, &:selected, &:active {
-            .crystal-sidebar-item { color: var(--crystal-text); }
+            .nidara-sidebar-item { color: var(--nidara-text); }
         }
     }
 
@@ -140,48 +140,48 @@ selection {
 
         .sidebar-divider-line {
             min-height: 1px;
-            background: var(--crystal-border);
+            background: var(--nidara-border);
         }
     }
 }
 
 /* Sidebar row content — a single CSS color drives both the label and the
    symbolic icon tint (no hardcoded opacity on the icon widget). */
-.crystal-sidebar-item {
-    color: var(--crystal-text-dim);
+.nidara-sidebar-item {
+    color: var(--nidara-text-dim);
     transition: color 0.15s ease;
 }
 
-/* ── Window shell (CrystalWindow) ──────────────────────────────────────────────
+/* ── Window shell (NidaraWindow) ──────────────────────────────────────────────
    Chrome for a settings-style window. The sidebar capsule / collapsed popover /
    icon-btn live with the rest of the window CSS for now. */
-.crystal-window-glass {
+.nidara-window-glass {
     @include glass(floating);
 }
-.crystal-window-header {
+.nidara-window-header {
     background: transparent;
-    border-bottom: 1px solid var(--crystal-border);
+    border-bottom: 1px solid var(--nidara-border);
     padding: 0 12px 8px 8px;
     min-height: 50px;
 }
-.crystal-window-tools {
+.nidara-window-tools {
     // Header start group: sidebar toggle + nav capsule + title/breadcrumb.
     min-height: 50px;
     padding: 0 6px;
 }
-.crystal-window-sidebar-scroll {
+.nidara-window-sidebar-scroll {
     // Gap between the search slot at the capsule top and the list below it.
     margin-top: 4px;
 }
 
 /* Menu — shared by the tray menu (renderMenuModel), the bar system menu and the
-   CC context menu. A flat list of .crystal-menu-row buttons, not a Gtk.Popover. */
-.crystal-menu {
-    @include crystal-reset;
-    color: var(--crystal-text);
+   CC context menu. A flat list of .nidara-menu-row buttons, not a Gtk.Popover. */
+.nidara-menu {
+    @include nidara-reset;
+    color: var(--nidara-text);
     -gtk-icon-palette: success white, warning white, error white;
 }
-.crystal-menu-row {
+.nidara-menu-row {
     background: transparent;
     border: none;
     box-shadow: none;
@@ -190,20 +190,20 @@ selection {
     // the hover reads roomy, and radius-sm so the rounded hover sits comfortably
     // inside the menu's squircle instead of fighting its corner.
     padding: 7px 12px;
-    border-radius: $crystal-radius-sm;
-    @include crystal-row-states;
+    border-radius: $nidara-radius-sm;
+    @include nidara-row-states;
 }
-.crystal-menu-label {
+.nidara-menu-label {
     font-size: $fs-small;
     font-weight: $fw-medium;
 }
-.crystal-menu-header {        // dim section/submenu header inside a menu
+.nidara-menu-header {        // dim section/submenu header inside a menu
     font-size: $fs-caption;
     font-weight: $fw-regular;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
 }
-.crystal-menu-sep {
-    background: var(--crystal-surface);
+.nidara-menu-sep {
+    background: var(--nidara-surface);
     min-height: 1px;
 }
 
@@ -212,152 +212,152 @@ selection {
 
 /* --- Toggles (Switches) --- */
 switch,
-.crystal-switch {
-    border-radius: $crystal-radius-pill;
+.nidara-switch {
+    border-radius: $nidara-radius-pill;
     min-width: 44px;
     min-height: 24px;
     padding: 0;
     margin: 0;
-    border: 1px solid var(--crystal-border);
-    background-color: var(--crystal-surface);
+    border: 1px solid var(--nidara-border);
+    background-color: var(--nidara-surface);
     background-image: none;
     box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
     transition: background-color 0.3s #{$ease}, border-color 0.3s #{$ease}, box-shadow 0.3s #{$ease};
 
     &:checked {
-        background-color: $crystal-accent;
+        background-color: $nidara-accent;
         border-color: rgba(0, 0, 0, 0.1);
-        box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.1), 0 0 12px rgba(var(--crystal-accent-rgb), 0.3);
+        box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.1), 0 0 12px rgba(var(--nidara-accent-rgb), 0.3);
     }
 
     slider {
         margin: 3px;
         min-width: 18px;
         min-height: 18px;
-        background-color: var(--crystal-thumb);
+        background-color: var(--nidara-thumb);
         background-image: none;
         border: none;
-        border-radius: $crystal-radius-pill;
-        box-shadow: var(--crystal-shadow-sm);
+        border-radius: $nidara-radius-pill;
+        box-shadow: var(--nidara-shadow-sm);
         transition: box-shadow 0.25s #{$ease};
     }
 
     &:hover slider {
-        box-shadow: var(--crystal-shadow-md);
+        box-shadow: var(--nidara-shadow-md);
     }
 }
 
-/* The crystal button system (single source of truth) lives further down under
-   "CRYSTAL BUTTON SYSTEM" — button.crystal-btn + --primary/--danger/--ghost/--pill.
-   The old "Premium Crystal" block with a `.accent` modifier was superseded by it
+/* The nidara button system (single source of truth) lives further down under
+   "NIDARA BUTTON SYSTEM" — button.nidara-btn + --primary/--danger/--ghost/--pill.
+   The old "Premium Nidara" block with a `.accent` modifier was superseded by it
    (the `.accent` modifier was unused) and has been removed. */
 
-/* --- CrystalPopover --- */
+/* --- NidaraPopover --- */
 /* Specificity (0,1,2) matches libadwaita's popover.background > contents,
    load priority 810 > ~600 ensures our rules win the cascade.
-   CSS vars (--crystal-popover-*) are used instead of @define-color to stay
+   CSS vars (--nidara-popover-*) are used instead of @define-color to stay
    SCSS-compilable — @name syntax in property values is not valid SCSS. */
-popover.crystal-popover {
-    @include crystal-reset;
+popover.nidara-popover {
+    @include nidara-reset;
 
     > contents {
-        /* Fallback ensures visible background even before --crystal-popover-bg token is set */
-        background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.82));
+        /* Fallback ensures visible background even before --nidara-popover-bg token is set */
+        background-color: var(--nidara-popover-bg, rgba(36, 36, 36, 0.82));
         border-radius: 14px;
-        border: 1px solid var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
-        box-shadow: var(--crystal-shadow-popover);
+        border: 1px solid var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
+        box-shadow: var(--nidara-shadow-popover);
         padding: 0;
     }
 
     > arrow {
-        background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.82));
-        border-color: var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
+        background-color: var(--nidara-popover-bg, rgba(36, 36, 36, 0.82));
+        border-color: var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
     }
 }
 
 button.settings-action-row {
-    @include crystal-reset;
+    @include nidara-reset;
     border-radius: 0;
     padding: 0;
     transition: background 0.15s ease;
 
-    &:hover  { background: var(--crystal-surface-hover); }
-    &:active { background: var(--crystal-surface-active); }
+    &:hover  { background: var(--nidara-surface-hover); }
+    &:active { background: var(--nidara-surface-active); }
 }
 
-/* Hover/active for non-accent buttons inside any crystal popover */
-popover.crystal-popover button:not(.suggested-action):not(.destructive-action):not(.settings-action-row) {
-    &:hover  { background: var(--crystal-surface-hover);   transition: background 0.15s ease; }
-    &:active { background: var(--crystal-surface-active); transition: background 0.05s ease; }
+/* Hover/active for non-accent buttons inside any nidara popover */
+popover.nidara-popover button:not(.suggested-action):not(.destructive-action):not(.settings-action-row) {
+    &:hover  { background: var(--nidara-surface-hover);   transition: background 0.15s ease; }
+    &:active { background: var(--nidara-surface-active); transition: background 0.05s ease; }
 }
 
-/* Accent (selected/primary) buttons inside crystal popovers */
-popover.crystal-popover button.suggested-action {
-    background: $crystal-accent;
-    color: var(--crystal-accent-fg);
+/* Accent (selected/primary) buttons inside nidara popovers */
+popover.nidara-popover button.suggested-action {
+    background: $nidara-accent;
+    color: var(--nidara-accent-fg);
     border: none;
-    border-radius: $crystal-radius-xs;
+    border-radius: $nidara-radius-xs;
     transition: background 0.15s ease;
 
-    &:hover  { background: rgba(var(--crystal-accent-rgb), 0.85); }
-    &:active { background: rgba(var(--crystal-accent-rgb), 0.65); }
+    &:hover  { background: rgba(var(--nidara-accent-rgb), 0.85); }
+    &:active { background: rgba(var(--nidara-accent-rgb), 0.65); }
 }
 
 /* --- Segmented mode buttons (screenshot / screenrecord) --- */
 /* Unselected state; selected is handled by panel-level .suggested-action rules */
-button.crystal-seg-btn {
-    background: var(--crystal-surface);
+button.nidara-seg-btn {
+    background: var(--nidara-surface);
     background-image: none;
     border: none;
     box-shadow: none;
-    border-radius: $crystal-radius-xs;
+    border-radius: $nidara-radius-xs;
     padding: 5px 10px;
     font-size: $fs-small;
     font-weight: $fw-medium;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
     transition: background 0.15s ease, color 0.15s ease;
 
-    &:hover  { background: var(--crystal-surface-hover); color: var(--crystal-text); }
-    &:active { background: var(--crystal-surface-active); }
+    &:hover  { background: var(--nidara-surface-hover); color: var(--nidara-text); }
+    &:active { background: var(--nidara-surface-active); }
 
     &.suggested-action {
-        @include crystal-reset;
-        background: var(--crystal-accent);
-        color: var(--crystal-accent-fg);
+        @include nidara-reset;
+        background: var(--nidara-accent);
+        color: var(--nidara-accent-fg);
 
-        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.82); color: var(--crystal-accent-fg); }
-        &:active { background: rgba(var(--crystal-accent-rgb), 0.65); }
+        &:hover  { background: rgba(var(--nidara-accent-rgb), 0.82); color: var(--nidara-accent-fg); }
+        &:active { background: rgba(var(--nidara-accent-rgb), 0.65); }
     }
 }
 
 .bar-popover-key {
     font-size: $fs-small;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
 }
 
 .bar-popover-val {
     font-size: $fs-small;
     font-weight: $fw-medium;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
 }
 
 // =============================================================================
-// CRYSTAL BUTTON SYSTEM
+// NIDARA BUTTON SYSTEM
 // =============================================================================
-// Single source of truth for all CrystalButton variants.
-// Use the CrystalButton() function from crystal-ui — never Adwaita classes
+// Single source of truth for all NidaraButton variants.
+// Use the NidaraButton() function from nidara-kit — never Adwaita classes
 // (suggested-action, destructive-action, pill, flat) directly in page code.
 //
-// Variants (crystal-btn--<variant>):
+// Variants (nidara-btn--<variant>):
 //   secondary  default  surface + border
 //   primary             accent fill
 //   danger              danger tint + danger text/border
 //   ghost               transparent, dim text
 //
 // Modifier:
-//   crystal-btn--pill   fully rounded, slightly wider padding
+//   nidara-btn--pill   fully rounded, slightly wider padding
 
-button.crystal-btn {
+button.nidara-btn {
     // Wipe Adwaita/GTK defaults completely
     background-image: none;
     box-shadow: none;
@@ -365,61 +365,61 @@ button.crystal-btn {
 
     // Geometry
     padding: 5px 14px;
-    // Shared content min-height so EVERY crystal-btn is the same height regardless of
+    // Shared content min-height so EVERY nidara-btn is the same height regardless of
     // content — a labelled button (13px text, ~18px line) and an icon-only one (16px
     // glyph) end up identical, so icon buttons (details/forget) don't render shorter
     // than the Connect button next to them.
     min-height: 20px;
-    border-radius: $crystal-radius-sm;
+    border-radius: $nidara-radius-sm;
     font-size: $fs-small;
     font-weight: $fw-medium;
     transition: background 0.15s ease;
 
     // ── secondary (default) ───────────────────────────────────────────────────
-    background-color: var(--crystal-surface);
-    border: 1px solid var(--crystal-border);
-    color: var(--crystal-text);
+    background-color: var(--nidara-surface);
+    border: 1px solid var(--nidara-border);
+    color: var(--nidara-text);
 
-    &:hover   { background-color: var(--crystal-surface-hover);   background-image: none; box-shadow: none; }
-    &:active  { background-color: var(--crystal-surface-active); background-image: none; box-shadow: none; }
+    &:hover   { background-color: var(--nidara-surface-hover);   background-image: none; box-shadow: none; }
+    &:active  { background-color: var(--nidara-surface-active); background-image: none; box-shadow: none; }
     &:disabled { opacity: 0.45; }
-    &:focus-visible { @include crystal-focus-ring; }
+    &:focus-visible { @include nidara-focus-ring; }
 
     // ── primary ───────────────────────────────────────────────────────────────
-    &.crystal-btn--primary {
-        background-color: var(--crystal-accent);
+    &.nidara-btn--primary {
+        background-color: var(--nidara-accent);
         border-color: transparent;
-        color: var(--crystal-accent-fg);
+        color: var(--nidara-accent-fg);
 
-        &:hover  { background-color: color-mix(in srgb, var(--crystal-accent) 85%, white 15%); background-image: none; box-shadow: none; }
-        &:active { background-color: color-mix(in srgb, var(--crystal-accent) 70%, black 30%); background-image: none; }
-        &:focus-visible { outline-color: var(--crystal-accent); }
+        &:hover  { background-color: color-mix(in srgb, var(--nidara-accent) 85%, white 15%); background-image: none; box-shadow: none; }
+        &:active { background-color: color-mix(in srgb, var(--nidara-accent) 70%, black 30%); background-image: none; }
+        &:focus-visible { outline-color: var(--nidara-accent); }
     }
 
     // ── danger ────────────────────────────────────────────────────────────────
-    &.crystal-btn--danger {
-        background-color: rgba(var(--crystal-danger-rgb), 0.10);
-        border-color:     rgba(var(--crystal-danger-rgb), 0.25);
-        color: var(--crystal-danger);
+    &.nidara-btn--danger {
+        background-color: rgba(var(--nidara-danger-rgb), 0.10);
+        border-color:     rgba(var(--nidara-danger-rgb), 0.25);
+        color: var(--nidara-danger);
 
-        &:hover  { background-color: rgba(var(--crystal-danger-rgb), 0.20); background-image: none; box-shadow: none; }
-        &:active { background-color: rgba(var(--crystal-danger-rgb), 0.30); background-image: none; }
-        &:focus-visible { outline-color: var(--crystal-danger); }
+        &:hover  { background-color: rgba(var(--nidara-danger-rgb), 0.20); background-image: none; box-shadow: none; }
+        &:active { background-color: rgba(var(--nidara-danger-rgb), 0.30); background-image: none; }
+        &:focus-visible { outline-color: var(--nidara-danger); }
     }
 
     // ── ghost ─────────────────────────────────────────────────────────────────
-    &.crystal-btn--ghost {
+    &.nidara-btn--ghost {
         background-color: transparent;
         border-color: transparent;
-        color: var(--crystal-text-dim);
+        color: var(--nidara-text-dim);
 
-        &:hover  { background-color: var(--crystal-surface-hover); background-image: none; box-shadow: none; color: var(--crystal-text); }
-        &:active { background-color: var(--crystal-surface-active); background-image: none; }
+        &:hover  { background-color: var(--nidara-surface-hover); background-image: none; box-shadow: none; color: var(--nidara-text); }
+        &:active { background-color: var(--nidara-surface-active); background-image: none; }
     }
 
     // ── pill shape modifier ───────────────────────────────────────────────────
-    &.crystal-btn--pill {
-        border-radius: $crystal-radius-pill;
+    &.nidara-btn--pill {
+        border-radius: $nidara-radius-pill;
         padding: 5px 18px;
     }
 
@@ -427,37 +427,37 @@ button.crystal-btn {
     // Compact, uniform square-ish footprint so an icon button matches the height
     // of a labelled one in a cluster (e.g. details/forget next to Connect).
     // Defined after --pill so its tighter horizontal padding wins.
-    &.crystal-btn--icon {
+    &.nidara-btn--icon {
         padding: 5px 8px;
         min-width: 0;
     }
 }
 
 // Accent-coloured symbolic icon — replaces Adwaita suggested-action on Gtk.Image
-image.accent-icon { color: var(--crystal-accent); }
+image.accent-icon { color: var(--nidara-accent); }
 
 // ── Gtk.DropDown ─────────────────────────────────────────────────────────────
 // GTK4 native dropdown — auto-positions above/below based on available space.
-// No CrystalOverlayManager needed; no off-screen bug.
+// No NidaraOverlayManager needed; no off-screen bug.
 
 // Trigger button
-// Trigger button styled like the base text input (.crystal-input): surface-back
+// Trigger button styled like the base text input (.nidara-input): surface-back
 // fill + constant 2px border (transparent at rest → accent on focus, via
 // background-clip: padding-box so there's no jump).
 dropdown > button {
-    @include crystal-reset;
-    background: var(--crystal-surface-back);
+    @include nidara-reset;
+    background: var(--nidara-surface-back);
     background-clip: padding-box;
     border: 2px solid transparent;
-    border-radius: $crystal-radius-sm;
-    // Match the CrystalButton box height: a button is 5px padding + 1px border;
+    border-radius: $nidara-radius-sm;
+    // Match the NidaraButton box height: a button is 5px padding + 1px border;
     // this trigger carries a 2px border (input look), so 4px padding lands at the
     // same outer height instead of reading 2px shorter and cramped. Horizontal
     // 14px gives the same breathing room as a secondary button.
     padding: 4px 14px;
     min-height: 0;
     transition: border-color 0.15s ease, background 0.15s ease;
-    // Same text as CrystalButton (size + weight). Set on the button — NOT the inner
+    // Same text as NidaraButton (size + weight). Set on the button — NOT the inner
     // label — so the Settings-only `$fse-*` em re-anchor (in _settings.scss, which
     // targets `dropdown > button`) is inherited by the label. A font-size on the
     // label itself would out-specify that override and pin the text to fixed px.
@@ -469,17 +469,17 @@ dropdown > button {
     > box > label { margin-left: 6px; }
 
     label {
-        color: var(--crystal-text);
+        color: var(--nidara-text);
     }
     image {
-        color: var(--crystal-text-dim);
+        color: var(--nidara-text-dim);
     }
 
-    &:hover  { background-color: var(--crystal-surface-hover); background-image: none; box-shadow: none; }
-    &:active { background-color: var(--crystal-surface-active); background-image: none; }
+    &:hover  { background-color: var(--nidara-surface-hover); background-image: none; box-shadow: none; }
+    &:active { background-color: var(--nidara-surface-active); background-image: none; }
     // Accent only on KEYBOARD focus — :focus alone flashes the accent border on
     // every mouse click and when the popover closes (focus returns to the button).
-    &:focus-visible { border-color: var(--crystal-accent); box-shadow: none; outline: none; }
+    &:focus-visible { border-color: var(--nidara-accent); box-shadow: none; outline: none; }
     &:disabled { opacity: 0.45; }
 }
 
@@ -489,44 +489,44 @@ dropdown > button {
 // list fell back to GTK4's opaque default popover. Match it structurally instead.
 popover.combo,
 dropdown popover {
-    @include crystal-reset;
+    @include nidara-reset;
 
-    // --crystal-popover-bg now shares the WINDOW tone (FluidCrystal: popoverBg=baseBg)
+    // --nidara-popover-bg now shares the WINDOW tone (NidaraTheme: popoverBg=baseBg)
     // and floors its alpha so compositor blur applies (popups_ignorealpha=0.30) — a
     // frosted glass that follows the opacity slider down to that floor, instead of a
     // lighter always-opaque block. (`dropdown popover` is REQUIRED: GTK4 puts `.combo`
     // on the dropdown's button but NOT its popover, so popover.combo never matched.)
     > contents {
-        background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.85));
-        border: 1px solid var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
-        border-radius: $crystal-radius-md;
-        box-shadow: var(--crystal-shadow-popover);
+        background-color: var(--nidara-popover-bg, rgba(36, 36, 36, 0.85));
+        border: 1px solid var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
+        border-radius: $nidara-radius-md;
+        box-shadow: var(--nidara-shadow-popover);
         padding: 4px;
         // overflow: hidden not supported in GTK4 CSS — clipping is handled by border-radius
     }
 
     > arrow {
-        background-color: var(--crystal-popover-bg, rgba(36, 36, 36, 0.85));
-        border-color: var(--crystal-popover-border, rgba(255, 255, 255, 0.14));
+        background-color: var(--nidara-popover-bg, rgba(36, 36, 36, 0.85));
+        border-color: var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
     }
 
-    scrolledwindow { @include crystal-reset; }
-    viewport       { @include crystal-reset; }
+    scrolledwindow { @include nidara-reset; }
+    viewport       { @include nidara-reset; }
 
     listview {
-        @include crystal-reset;
+        @include nidara-reset;
 
         > row {
-            border-radius: $crystal-radius-sm;
+            border-radius: $nidara-radius-sm;
             padding: 6px 10px;
             min-height: 0;
-            color: var(--crystal-text);
+            color: var(--nidara-text);
             font-size: $fs-small;
-            @include crystal-row-states;
+            @include nidara-row-states;
             // GTK highlights the pointed item via :selected (hover-select), and the
             // trigger already shows the current value — so deepen it like a hover
             // instead of drawing the accent (accent is for PERSISTENT selection).
-            &:selected { background-color: var(--crystal-surface-hover); }
+            &:selected { background-color: var(--nidara-surface-hover); }
         }
     }
 }
@@ -541,19 +541,19 @@ button.settings-icon-btn {
     background-image: none;
     border: none;
     box-shadow: none;
-    border-radius: $crystal-radius-sm;
+    border-radius: $nidara-radius-sm;
     padding: 4px;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
     min-width: 28px;
     min-height: 28px;
 
-    &:hover  { background: var(--crystal-accent-10); color: var(--crystal-accent); background-image: none; }
-    &:active { background: rgba(var(--crystal-accent-rgb), 0.18); background-image: none; }
+    &:hover  { background: var(--nidara-accent-10); color: var(--nidara-accent); background-image: none; }
+    &:active { background: rgba(var(--nidara-accent-rgb), 0.18); background-image: none; }
 
     // Danger tint variant — for destructive inline actions (remove/delete)
     &.settings-icon-btn--danger {
-        color: var(--crystal-danger);
-        &:hover  { background: rgba(var(--crystal-danger-rgb), 0.12); color: var(--crystal-danger); }
-        &:active { background: rgba(var(--crystal-danger-rgb), 0.22); }
+        color: var(--nidara-danger);
+        &:hover  { background: rgba(var(--nidara-danger-rgb), 0.12); color: var(--nidara-danger); }
+        &:active { background: rgba(var(--nidara-danger-rgb), 0.22); }
     }
 }

@@ -28,7 +28,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-PIDFILE="/tmp/crystal-upower-mock.pid"
+PIDFILE="/tmp/nidara-upower-mock.pid"
 BUS="org.freedesktop.UPower"
 OBJ="/org/freedesktop/UPower"
 DEV="/org/freedesktop/UPower/devices/DisplayDevice"
@@ -75,14 +75,14 @@ case "${1:-}" in
       # Free the name so the mock can own it, then launch on the system bus.
       systemctl stop upower.service 2>/dev/null || true
       echo "Starting upower mock on the system bus…"
-      python3 -m dbusmock --system --template upower >/tmp/crystal-upower-mock.log 2>&1 &
+      python3 -m dbusmock --system --template upower >/tmp/nidara-upower-mock.log 2>&1 &
       echo $! > "$PIDFILE"
       for _ in $(seq 1 50); do
         busctl --system introspect "$BUS" "$OBJ" >/dev/null 2>&1 && break
         sleep 0.2
       done
       busctl --system introspect "$BUS" "$OBJ" >/dev/null 2>&1 \
-        || { echo "mock never claimed $BUS — see /tmp/crystal-upower-mock.log" >&2; exit 1; }
+        || { echo "mock never claimed $BUS — see /tmp/nidara-upower-mock.log" >&2; exit 1; }
     fi
 
     seed "$pct" "$mode"
@@ -93,7 +93,7 @@ case "${1:-}" in
   stop)
     if [ -f "$PIDFILE" ]; then kill "$(cat "$PIDFILE")" 2>/dev/null || true; rm -f "$PIDFILE"; fi
     pkill -f "dbusmock --system --template upower" 2>/dev/null || true
-    rm -f /tmp/crystal-upower-mock.log
+    rm -f /tmp/nidara-upower-mock.log
     systemctl start upower.service 2>/dev/null || true
     echo "Mock torn down; upower.service restored. Reload the shell to re-bind."
     ;;

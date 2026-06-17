@@ -1,15 +1,15 @@
 @use 'base' as *;
 
 /* --- Window Transparency Logic --- */
-window.crystal-dock-window,
-#crystal-dock {
-    @include crystal-reset;
+window.nidara-dock-window,
+#nidara-dock {
+    @include nidara-reset;
     margin: 0;
     padding: 0;
 
     decoration,
     &>box {
-        @include crystal-reset;
+        @include nidara-reset;
     }
 }
 
@@ -21,7 +21,7 @@ window.crystal-dock-window,
 }
 
 .cd-item {
-    @include crystal-reset;
+    @include nidara-reset;
     margin: 0;
     padding: 0;
     transform-origin: bottom;
@@ -33,7 +33,7 @@ window.crystal-dock-window,
     }
 
     &:hover {
-        @include crystal-reset;
+        @include nidara-reset;
     }
 
     // Kill internal GTK nodes (ripples, highlights, etc.)
@@ -42,7 +42,7 @@ window.crystal-dock-window,
     &>outline,
     &>focus-ring,
     &>decoration {
-        @include crystal-reset;
+        @include nidara-reset;
         opacity: 0;
     }
 }
@@ -62,16 +62,16 @@ window.crystal-dock-window,
 }
 
 /* --- Separator - macOS Tahoe: dark hairline --- */
-#crystal-dock .cd-separator {
+#nidara-dock .cd-separator {
     min-width: 1px;
-    background-color: var(--crystal-text-disabled);
+    background-color: var(--nidara-text-disabled);
     margin: 0;
     box-shadow: none;
     border-radius: 0px;
 }
 
 /* --- Hover Shadow Killer --- */
-#crystal-dock .cd-item:hover {
+#nidara-dock .cd-item:hover {
     box-shadow: none;
     -gtk-icon-shadow: none;
 }
@@ -80,17 +80,17 @@ window.crystal-dock-window,
 
 /* --- Launcher Icon Visibility --- */
 #cd-icon-box-launcher image {
-    color: var(--crystal-text);
-    -gtk-icon-shadow: var(--crystal-icon-shadow);
+    color: var(--nidara-text);
+    -gtk-icon-shadow: var(--nidara-icon-shadow);
 }
 /* ── Vertical Dock ───────────────────────────────────────────────────────── */
-window#crystal-dock-vertical {
+window#nidara-dock-vertical {
     background: transparent;
 }
 
 .dock-menu {
     transition: none;
-    modelbutton { color: var(--crystal-text); }
+    modelbutton { color: var(--nidara-text); }
 }
 
 .dock-tooltip {
@@ -103,6 +103,6 @@ window#crystal-dock-vertical {
 
     > arrow { box-shadow: none; }
 
-    .dock-tooltip-label { color: var(--crystal-text); }
+    .dock-tooltip-label { color: var(--nidara-text); }
 }
 

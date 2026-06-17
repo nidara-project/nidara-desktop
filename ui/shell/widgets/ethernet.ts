@@ -16,7 +16,7 @@ function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; upda
 }
 
 function buildBarContent(): Gtk.Widget {
-    return new Gtk.Image({ gicon: Icons.ethernet, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+    return new Gtk.Image({ gicon: Icons.ethernet, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 }
 
 function buildContent(size: WidgetSize): Gtk.Widget {
@@ -33,7 +33,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
             gicon: Icons.ethernet, pixel_size: 28,
             halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
             hexpand: true, vexpand: true,
-            css_classes: ["cs-icon"],
+            css_classes: ["nd-icon"],
         }))
         return box
     }

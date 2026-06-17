@@ -26,9 +26,9 @@ target/
 # them only bloated git history (~4MB/commit) for no deploy benefit.
 ui/*/build/
 
-# Compiled synthetic-pointer backend — built from bin/crystal-input.c by
+# Compiled synthetic-pointer backend — built from bin/nidara-input.c by
 # install.sh (and the dev cc one-liner); only the .c source is committed.
-/bin/crystal-input
+/bin/nidara-input
 
 # Media & Recordings
 *.mkv
@@ -90,11 +90,11 @@ settings_addr.txt
 
 # User config files — generated at runtime, may appear in repo root
 # if install.sh was previously run in legacy symlink dev mode
-crystal-settings.conf
-crystal-monitor.conf
+nidara-settings.conf
+nidara-monitor.conf
 hyprland-user.conf
-crystal-settings.lua
-crystal-monitor.lua
+nidara-settings.lua
+nidara-monitor.lua
 hyprland-user.lua
 
 # Generated CSS — compiled from style.scss by install.sh (every install AND
@@ -107,7 +107,7 @@ ui/greeter/style.css.map
 # User configs — generated at runtime, personal to each installation
 # (root-level only; defaults/ folder is intentionally tracked)
 theme_settings.json
-fluid-crystal.json
+nidara.json
 /appearance.json
 /region.json
 /cc_layout.json
@@ -148,7 +148,7 @@ plugins/
 astal-local/
 
 restore_history.sh
-CRYSTAL_SHELL_ARCHITECTURE.md
+NIDARA_SHELL_ARCHITECTURE.md
 
 # Internal docs — for us, not shipped with the project
 docs/

@@ -103,20 +103,20 @@ jobs:
         id: deps-cache
         uses: actions/cache/restore@v4
         with:
-          path: deps-cache/crystal-deps.tar.zst
+          path: deps-cache/nidara-deps.tar.zst
           key: smoke-deps-v2-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh') }}
       - name: Build deps + bundle + headless boot (Arch container on vkms)
         run: |
           mkdir -p deps-cache
           docker run --rm --privileged \
             -v "$PWD:/repo" -v "$PWD/deps-cache:/depscache" \
-            -e DEPS_TARBALL=/depscache/crystal-deps.tar.zst \
+            -e DEPS_TARBALL=/depscache/nidara-deps.tar.zst \
             archlinux:latest bash /repo/scripts/ci/headless-smoke.sh
       - name: Save built dependency stack
         if: always() && steps.deps-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
         with:
-          path: deps-cache/crystal-deps.tar.zst
+          path: deps-cache/nidara-deps.tar.zst
           key: smoke-deps-v2-${{ steps.stamp.outputs.month }}-${{ hashFiles('install.sh') }}
       - name: Upload screenshots + logs
         if: always()

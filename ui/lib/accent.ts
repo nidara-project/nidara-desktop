@@ -1,11 +1,11 @@
 /**
- * Crystal Shell — accent palette (single source of truth)
+ * Nidara — accent palette (single source of truth)
  *
  * The 9 canonical accent colors, shared by all three bundles (shell, greeter,
- * lockscreen). The shell's FluidCrystal token engine builds its ACCENT_PALETTE
+ * lockscreen). The shell's NidaraTheme token engine builds its ACCENT_PALETTE
  * from ACCENT_HEX; the greeter and lockscreen build their accent CSS via
  * accentCssFor(). SCSS swatches read the runtime --accent-<key> tokens that
- * FluidCrystal emits, so nothing hardcodes these hex values anywhere else.
+ * NidaraTheme emits, so nothing hardcodes these hex values anywhere else.
  */
 
 export const ACCENT_HEX = {
@@ -43,7 +43,7 @@ export function hexToRgb(hex: string): string {
 }
 
 /**
- * CSS block defining the --crystal-accent* custom properties for a given accent
+ * CSS block defining the --nidara-accent* custom properties for a given accent
  * key. Used by the greeter and lockscreen (which read the accent from
  * appearance.json and apply this via app.apply_css). Unknown/empty keys → "".
  */
@@ -53,13 +53,13 @@ export function accentCssFor(accent: string | null | undefined): string {
   const rgb = hexToRgb(color)
   return [
     `* {`,
-    `  --crystal-accent:     ${color};`,
-    `  --crystal-accent-rgb: ${rgb};`,
-    `  --crystal-accent-10:  rgba(${rgb}, 0.10);`,
-    `  --crystal-accent-15:  rgba(${rgb}, 0.15);`,
-    `  --crystal-accent-20:  rgba(${rgb}, 0.20);`,
-    `  --crystal-accent-30:  rgba(${rgb}, 0.30);`,
-    `  --crystal-focus-ring: rgba(${rgb}, 0.35);`,
+    `  --nidara-accent:     ${color};`,
+    `  --nidara-accent-rgb: ${rgb};`,
+    `  --nidara-accent-10:  rgba(${rgb}, 0.10);`,
+    `  --nidara-accent-15:  rgba(${rgb}, 0.15);`,
+    `  --nidara-accent-20:  rgba(${rgb}, 0.20);`,
+    `  --nidara-accent-30:  rgba(${rgb}, 0.30);`,
+    `  --nidara-focus-ring: rgba(${rgb}, 0.35);`,
     `}`,
   ].join("\n")
 }

@@ -5,24 +5,24 @@ import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as Net from "../../../core/NetworkService"
 import type { VpnProfile } from "../../../core/NetworkService"
-import { CrystalButton } from "../../../../lib/crystal-ui"
+import { NidaraButton } from "../../../../lib/nidara-kit"
 
 function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow {
     let active = profile.active
 
-    const btn = CrystalButton({ pill: true })
+    const btn = NidaraButton({ pill: true })
 
     function setState(state: "connect" | "disconnect" | "loading" | "error") {
         switch (state) {
             case "connect":
                 btn.label = t("settings.network.vpn.btn.connect")
-                btn.add_css_class("crystal-btn--primary")
+                btn.add_css_class("nidara-btn--primary")
                 btn.sensitive = true; break
             case "disconnect":
                 // Disconnect is reversible → neutral (secondary). Danger is reserved
-                // for destructive actions (forget). See CrystalButton convention.
+                // for destructive actions (forget). See NidaraButton convention.
                 btn.label = t("settings.network.vpn.btn.disconnect")
-                btn.remove_css_class("crystal-btn--primary")
+                btn.remove_css_class("nidara-btn--primary")
                 btn.sensitive = true; break
             case "loading":
                 btn.label = t("settings.network.vpn.btn.connecting")
@@ -74,13 +74,13 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
 
     // Lock badge next to the network name when the AP is secured.
     const lockIcon = secured
-        ? new Gtk.Image({ gicon: Icons.lock, pixel_size: 13, opacity: 0.5, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"] })
+        ? new Gtk.Image({ gicon: Icons.lock, pixel_size: 13, opacity: 0.5, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] })
         : undefined
 
     // Network details subpage (security, band, channel, BSSID, IP when connected).
     if (onDetails) {
-        const infoBtn = CrystalButton({ variant: "secondary", pill: true, icon: true, tooltip_text: t("settings.network.ap.details") })
-        infoBtn.set_child(new Gtk.Image({ gicon: Icons.wifiCog, pixel_size: 16, css_classes: ["cs-icon"] }))
+        const infoBtn = NidaraButton({ variant: "secondary", pill: true, icon: true, tooltip_text: t("settings.network.ap.details") })
+        infoBtn.set_child(new Gtk.Image({ gicon: Icons.wifiCog, pixel_size: 16, css_classes: ["nd-icon"] }))
         infoBtn.connect("clicked", onDetails)
         rightBox.append(infoBtn)
     }
@@ -88,13 +88,13 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
     // Forget — only for saved, currently-disconnected networks (you disconnect
     // first, then forget). The row is rebuilt on connect/disconnect so this tracks.
     if (isSaved && !active) {
-        const forgetBtn = CrystalButton({
+        const forgetBtn = NidaraButton({
             variant: "danger",
             pill: true,
             icon: true,
             tooltip_text: t("settings.network.ap.forget"),
         })
-        forgetBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["cs-icon"] }))
+        forgetBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["nd-icon"] }))
         forgetBtn.connect("clicked", async () => {
             forgetBtn.sensitive = false
             try { await Net.forgetProfile(ssid) }
@@ -104,20 +104,20 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
         rightBox.append(forgetBtn)
     }
 
-    const btn = CrystalButton({ pill: true })
+    const btn = NidaraButton({ pill: true })
     rightBox.append(btn)
 
     function setState(state: "connect" | "disconnect" | "loading" | "error") {
         switch (state) {
             case "connect":
                 btn.label = t("settings.network.ap.connect")
-                btn.add_css_class("crystal-btn--primary")
+                btn.add_css_class("nidara-btn--primary")
                 btn.sensitive = true
                 break
             case "disconnect":
                 // Reversible → neutral (secondary); danger is reserved for forget.
                 btn.label = t("settings.network.ap.disconnect")
-                btn.remove_css_class("crystal-btn--primary")
+                btn.remove_css_class("nidara-btn--primary")
                 btn.sensitive = true
                 break
             case "loading":
@@ -147,7 +147,7 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
             hexpand: true,
         })
 
-        const confirmBtn = CrystalButton({
+        const confirmBtn = NidaraButton({
             label: t("settings.network.ap.connect"),
             variant: "primary",
             pill: true,
@@ -156,7 +156,7 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
 
         const titleLabel = new Gtk.Label({
             label: `${t("settings.network.ap.password-for")} ${ssid}`,
-            css_classes: ["crystal-row-title"],
+            css_classes: ["nidara-row-title"],
             halign: Gtk.Align.START,
             ellipsize: 3, // PANGO_ELLIPSIZE_END
             max_width_chars: 26,
@@ -385,7 +385,7 @@ export default function NetworkPage(nav?: SettingsNav) {
         const iface = String(network.wifi.device?.interface || "")
         const { box: apBox, listBox: apList } = listGroup(t("settings.network.group.access-points"))
 
-        const scanBtn = CrystalButton({
+        const scanBtn = NidaraButton({
             label: t("settings.network.ap.scan"),
             variant: "secondary",
             pill: true,
@@ -396,7 +396,7 @@ export default function NetworkPage(nav?: SettingsNav) {
         const headerBox = new Gtk.Box({ spacing: 0, hexpand: true })
         const groupTitleLabel = new Gtk.Label({
             label: t("settings.network.group.access-points").toUpperCase(),
-            css_classes: ["crystal-list-title"],
+            css_classes: ["nidara-list-title"],
             halign: Gtk.Align.START,
             hexpand: true,
             margin_start: 10,
@@ -458,10 +458,10 @@ export default function NetworkPage(nav?: SettingsNav) {
             // visible whenever Wi-Fi is on — otherwise there's no way to scan for
             // the first network. Show an empty placeholder when nothing is found.
             if (aps.length === 0) {
-                const emptyRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+                const emptyRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
                 emptyRow.set_child(new Gtk.Label({
                     label: t("settings.network.ap.empty"),
-                    css_classes: ["crystal-row-subtitle"],
+                    css_classes: ["nidara-row-subtitle"],
                     margin_top: 12, margin_bottom: 12, margin_start: 16,
                     halign: Gtk.Align.START,
                 }))
@@ -502,7 +502,7 @@ export default function NetworkPage(nav?: SettingsNav) {
 
     const emptyVpn = new Gtk.Label({
         label: t("settings.network.vpn.no-profiles"),
-        css_classes: ["crystal-row-subtitle"],
+        css_classes: ["nidara-row-subtitle"],
         margin_top: 12, margin_bottom: 12, margin_start: 16,
         halign: Gtk.Align.START,
     })
@@ -513,7 +513,7 @@ export default function NetworkPage(nav?: SettingsNav) {
 
         Net.listVpnProfiles().then(profiles => {
             if (profiles.length === 0) {
-                const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+                const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
                 row.set_child(emptyVpn)
                 vpnList.append(row)
             } else {

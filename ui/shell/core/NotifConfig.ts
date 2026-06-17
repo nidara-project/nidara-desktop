@@ -1,7 +1,7 @@
 import GLib from "gi://GLib"
 import { readFile, writeFile } from "ags/file"
 
-const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/notif-config.json`
+const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/notif-config.json`
 
 interface NotifSettings {
     popupTimeout: number  // seconds, default 6
@@ -23,7 +23,7 @@ try {
 
 function save() {
     try {
-        const dir = `${GLib.get_user_config_dir()}/crystal-shell`
+        const dir = `${GLib.get_user_config_dir()}/nidara`
         if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
             GLib.mkdir_with_parents(dir, 0o755)
         writeFile(CONFIG_PATH, JSON.stringify(_settings, null, 2))

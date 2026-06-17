@@ -4,7 +4,7 @@
  * Primary path: gvfs `trash:///`, which aggregates EVERY trash location
  * (home + per-volume .Trash-1000) and supports both monitoring and the
  * `trash::item-count` attribute. gvfs ships with nautilus, which is part
- * of the Crystal stack, so this is the normal path.
+ * of the Nidara stack, so this is the normal path.
  *
  * Fallback (no gvfs): a plain FileMonitor on ~/.local/share/Trash/files
  * with a child-count enumeration — home trash only.

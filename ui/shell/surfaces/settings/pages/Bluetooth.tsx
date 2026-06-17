@@ -5,7 +5,7 @@ import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as BT from "../../../core/BluetoothService"
-import { CrystalButton, showCrystalAlert, type AlertHandle } from "../../../../lib/crystal-ui"
+import { NidaraButton, showNidaraAlert, type AlertHandle } from "../../../../lib/nidara-kit"
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -33,7 +33,7 @@ export default function BluetoothPage() {
     page.append(content)
 
     // ── Pairing agent ─────────────────────────────────────────────────────────
-    // While this page exists, Crystal Shell is the BlueZ pairing agent: passkey
+    // While this page exists, Nidara is the BlueZ pairing agent: passkey
     // confirmations, PIN prompts, and authorization requests surface as alert
     // dialogs. One request at a time (BlueZ serializes them); a new prompt or a
     // BlueZ Cancel() closes whatever is open.
@@ -72,7 +72,7 @@ export default function BluetoothPage() {
             }
 
             const root = page.get_root()
-            activeDialog = showCrystalAlert({
+            activeDialog = showNidaraAlert({
                 parent: root instanceof Gtk.Window && root.visible ? root : null,
                 heading: p.deviceName,
                 body,
@@ -133,7 +133,7 @@ export default function BluetoothPage() {
 
     // ── Scan ─────────────────────────────────────────────────────────────────
     const scanGroup = listGroup(t("settings.bluetooth.group.search"))
-    const scanBtn = CrystalButton({
+    const scanBtn = NidaraButton({
         label: t("settings.bluetooth.search-now"),
         variant: "secondary",
         pill: true,
@@ -194,7 +194,7 @@ export default function BluetoothPage() {
                 margin_top: 12,
                 margin_bottom: 12,
             })
-            const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+            const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
             row.set_child(empty)
             listBox.append(row)
             return
@@ -203,14 +203,14 @@ export default function BluetoothPage() {
         devices.forEach(dev => {
             const nameLabel = new Gtk.Label({
                 label: BT.deviceName(dev),
-                css_classes: ["crystal-row-title"],
+                css_classes: ["nidara-row-title"],
                 halign: Gtk.Align.START,
                 hexpand: true,
                 ellipsize: 3,
             })
             const addrLabel = new Gtk.Label({
                 label: dev.address,
-                css_classes: ["crystal-row-subtitle"],
+                css_classes: ["nidara-row-subtitle"],
                 halign: Gtk.Align.START,
             })
             const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, hexpand: true })
@@ -224,7 +224,7 @@ export default function BluetoothPage() {
                 margin_top: 12,
                 margin_bottom: 12,
             })
-            const devImg = new Gtk.Image({ pixel_size: 20, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"] })
+            const devImg = new Gtk.Image({ pixel_size: 20, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] })
             if (dev.icon) devImg.icon_name = dev.icon; else devImg.gicon = Icons.bluetooth
             rowBox.append(devImg)
             rowBox.append(textBox)
@@ -232,13 +232,13 @@ export default function BluetoothPage() {
             if (allowActions) {
                 // Forget — destructive → danger, matching Network's forget button.
                 // Sits to the LEFT of the connect/disconnect action, like the Wi-Fi row.
-                const removeBtn = CrystalButton({
+                const removeBtn = NidaraButton({
                     variant: "danger",
                     pill: true,
                     icon: true,
                     tooltip_text: t("settings.bluetooth.tooltip.forget"),
                 })
-                removeBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["cs-icon"] }))
+                removeBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["nd-icon"] }))
                 removeBtn.connect("clicked", () => {
                     BT.removeDevice(dev)
                 })
@@ -246,7 +246,7 @@ export default function BluetoothPage() {
 
                 if (dev.connected) {
                     // Disconnect is reversible → neutral (secondary).
-                    const disconnectBtn = CrystalButton({
+                    const disconnectBtn = NidaraButton({
                         label: t("settings.bluetooth.disconnect"),
                         pill: true,
                     })
@@ -255,7 +255,7 @@ export default function BluetoothPage() {
                     })
                     rowBox.append(disconnectBtn)
                 } else {
-                    const connectBtn = CrystalButton({
+                    const connectBtn = NidaraButton({
                         label: t("settings.bluetooth.connect"),
                         variant: "primary",
                         pill: true,
@@ -266,7 +266,7 @@ export default function BluetoothPage() {
                     rowBox.append(connectBtn)
                 }
             } else {
-                const pairBtn = CrystalButton({
+                const pairBtn = NidaraButton({
                     label: t("settings.bluetooth.pair"),
                     variant: "primary",
                     pill: true,
@@ -277,7 +277,7 @@ export default function BluetoothPage() {
                 rowBox.append(pairBtn)
             }
 
-            const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+            const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
             row.set_child(rowBox)
             listBox.append(row)
         })

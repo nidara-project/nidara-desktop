@@ -14,7 +14,7 @@ function buildBarContent(): Gtk.Widget {
     const speaker = AstalWp.get_default()?.audio?.default_speaker
     const getIcon = () => speaker ? AudioSvc.targetVolumeIcon(speaker) : Icons.volumeMuted
 
-    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 
     if (speaker) {
         const dispose = AudioSvc.watchVolume(speaker, () => { image.gicon = getIcon() })
@@ -40,7 +40,7 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
         width_request: PANEL_W.sm,
     })
 
-    const muteImg = new Gtk.Image({ gicon: (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh, pixel_size: 16, css_classes: ["cs-icon"] })
+    const muteImg = new Gtk.Image({ gicon: (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh, pixel_size: 16, css_classes: ["nd-icon"] })
     const muteBtn = new Gtk.Button({ child: muteImg, css_classes: ["bar-popover-icon-btn"], valign: Gtk.Align.CENTER })
     muteBtn.connect("clicked", () => {
         if (speaker) (speaker as any).mute = !((speaker as any).mute ?? false)
@@ -71,7 +71,7 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
     header.append(new Gtk.Label({
         label: ep.description || ep.name || t("settings.audio.device"),
         halign: Gtk.Align.START, hexpand: true,
-        css_classes: ["crystal-row-title"], ellipsize: 3, max_width_chars: 18,
+        css_classes: ["nidara-row-title"], ellipsize: 3, max_width_chars: 18,
     }))
     if (isDefault) {
         header.append(new Gtk.Label({
@@ -83,7 +83,7 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
         setBtn.connect("clicked", () => AudioSvc.setDefault(ep))
         header.append(setBtn)
     }
-    const muteImg = new Gtk.Image({ gicon: AudioSvc.targetVolumeIcon(ep), pixel_size: 16, css_classes: ["cs-icon"] })
+    const muteImg = new Gtk.Image({ gicon: AudioSvc.targetVolumeIcon(ep), pixel_size: 16, css_classes: ["nd-icon"] })
     const muteBtn = new Gtk.Button({ child: muteImg, css_classes: ["settings-icon-btn"], valign: Gtk.Align.CENTER })
     muteBtn.connect("clicked", () => { AudioSvc.toggleMute(ep) })
     ep.connect("notify::mute", () => { muteImg.gicon = AudioSvc.targetVolumeIcon(ep) })
@@ -96,13 +96,13 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
         onExternal: () => { muteImg.gicon = AudioSvc.targetVolumeIcon(ep) },
     })
     const sliderRow = new Gtk.Box({ spacing: 8 })
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
+    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     sliderRow.append(scale)
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
+    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     sliderRow.append(valLabel)
     box.append(sliderRow)
 
-    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
     row.set_child(box)
     return row
 }
@@ -112,16 +112,16 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
     const iconName = AudioSvc.streamIconName(stream)
 
     const box = new Gtk.Box({ spacing: 10, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10, valign: Gtk.Align.CENTER })
-    const muteImg = new Gtk.Image({ gicon: AudioSvc.targetVolumeIcon(stream), pixel_size: 16, css_classes: ["cs-icon"] })
+    const muteImg = new Gtk.Image({ gicon: AudioSvc.targetVolumeIcon(stream), pixel_size: 16, css_classes: ["nd-icon"] })
     const muteBtn = new Gtk.Button({ child: muteImg, css_classes: ["settings-icon-btn", "flat"], valign: Gtk.Align.CENTER })
     muteBtn.connect("clicked", () => { AudioSvc.toggleMute(stream) })
     stream.connect("notify::mute", () => { muteImg.gicon = AudioSvc.targetVolumeIcon(stream) })
-    box.append(new Gtk.Image({ icon_name: iconName, pixel_size: 16, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER }))
+    box.append(new Gtk.Image({ icon_name: iconName, pixel_size: 16, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
     box.append(muteBtn)
     box.append(new Gtk.Label({
         label: appName,
         halign: Gtk.Align.START, hexpand: true,
-        css_classes: ["crystal-row-title"], ellipsize: 3, max_width_chars: 16,
+        css_classes: ["nidara-row-title"], ellipsize: 3, max_width_chars: 16,
     }))
     const valLabel = new Gtk.Label({ label: `${Math.round(stream.volume * 100)}%`, css_classes: ["slider-value-label"], width_chars: 5, xalign: 1.0 })
     const scale = makeVolumeSlider(stream, {
@@ -130,7 +130,7 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
     })
     box.append(scale)
     box.append(valLabel)
-    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
     row.set_child(box)
     return row
 }
@@ -142,7 +142,7 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
     if (!audio) {
         box.append(new Gtk.Label({
             label: t("settings.audio.error.no-service"),
-            css_classes: ["crystal-row-subtitle"],
+            css_classes: ["nidara-row-subtitle"],
             margin_top: 12, margin_start: 14, halign: Gtk.Align.START,
         }))
         return box
@@ -153,11 +153,11 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
         halign: Gtk.Align.START, margin_start: 14, margin_top: 4,
     })
 
-    const speakersList = new Gtk.ListBox({ css_classes: ["crystal-list"], selection_mode: Gtk.SelectionMode.NONE })
-    const streamsList  = new Gtk.ListBox({ css_classes: ["crystal-list"], selection_mode: Gtk.SelectionMode.NONE })
+    const speakersList = new Gtk.ListBox({ css_classes: ["nidara-list"], selection_mode: Gtk.SelectionMode.NONE })
+    const streamsList  = new Gtk.ListBox({ css_classes: ["nidara-list"], selection_mode: Gtk.SelectionMode.NONE })
     const emptyStreams  = new Gtk.Label({
         label: t("settings.audio.no-apps"),
-        css_classes: ["crystal-row-subtitle"],
+        css_classes: ["nidara-row-subtitle"],
         margin_top: 8, margin_bottom: 8, margin_start: 14, halign: Gtk.Align.START,
     })
 

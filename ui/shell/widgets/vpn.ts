@@ -37,7 +37,7 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
     const listBox = new Gtk.ListBox({ css_classes: ["boxed-list"], selection_mode: Gtk.SelectionMode.NONE })
     const emptyLabel = new Gtk.Label({
         label: t("settings.network.vpn.no-profiles"),
-        css_classes: ["crystal-row-subtitle"],
+        css_classes: ["nidara-row-subtitle"],
         margin_top: 10, margin_bottom: 10, margin_start: 14, margin_end: 14,
     })
     const spinner = new Gtk.Spinner({ spinning: true, margin_top: 10, margin_bottom: 10 })
@@ -75,13 +75,13 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
                         } catch (e) { console.error("[VPN widget]", e) }
                         onClose()
                     })
-                    const typeTag = new Gtk.Label({ label: p.type === "wireguard" ? "WireGuard" : "VPN", css_classes: ["crystal-row-subtitle"], valign: Gtk.Align.CENTER })
+                    const typeTag = new Gtk.Label({ label: p.type === "wireguard" ? "WireGuard" : "VPN", css_classes: ["nidara-row-subtitle"], valign: Gtk.Align.CENTER })
                     const right = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
                     right.append(typeTag); right.append(btn)
                     const inner = new Gtk.Box({ spacing: 8, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10 })
-                    const nameLabel = new Gtk.Label({ label: p.name, hexpand: true, halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 16, css_classes: ["crystal-row-title"] })
+                    const nameLabel = new Gtk.Label({ label: p.name, hexpand: true, halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 16, css_classes: ["nidara-row-title"] })
                     inner.append(nameLabel); inner.append(right)
-                    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+                    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
                     row.set_child(inner); listBox.append(row)
                 })
                 stack.set_visible_child_name("list")
@@ -98,7 +98,7 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
         const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        const icon = new Gtk.Image({ gicon: Icons.shieldOff, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] })
+        const icon = new Gtk.Image({ gicon: Icons.shieldOff, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] })
         box.append(icon)
         activeVpnName().then(name => { icon.gicon = name ? Icons.shield : Icons.shieldOff })
         return box
@@ -130,7 +130,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 // ── Bar icon ──────────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    const image = new Gtk.Image({ gicon: Icons.shieldOff, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+    const image = new Gtk.Image({ gicon: Icons.shieldOff, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
     activeVpnName().then(name => { image.gicon = name ? Icons.shield : Icons.shieldOff })
     return image
 }

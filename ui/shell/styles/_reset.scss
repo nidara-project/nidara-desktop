@@ -1,23 +1,23 @@
 @use 'base' as *;
 
 /* ==========================================================================
-   CRYSTAL DESIGN SYSTEM - NEUTRALIZATION LAYER
+   NIDARA DESIGN SYSTEM - NEUTRALIZATION LAYER
    ========================================================================== */
 
 /* Lucide SVGs: black stroke, inverted to white in dark mode via filter.
-   Light mode disables the filter (injected by FluidCrystal.ts). */
-.cs-icon { -gtk-icon-filter: invert(1); }
+   Light mode disables the filter (injected by NidaraTheme.ts). */
+.nd-icon { -gtk-icon-filter: invert(1); }
 
 /*
-   Targets explicit namespaced crystal components to ensure a clean slate
+   Targets explicit namespaced nidara components to ensure a clean slate
    without breaking global GTK apps.
 */
 
-#crystal-dock,
-#crystal-bar,
-#crystal-app-launcher,
-.crystal-dock-window,
-.crystal-bar-window {
+#nidara-dock,
+#nidara-bar,
+#nidara-app-launcher,
+.nidara-dock-window,
+.nidara-bar-window {
     /* Deterministic type base: macOS-style 14px body. The whole ramp ($fs-*)
        is anchored to this so em-less elements default to body, independent of
        the GNOME font size (which only governs family via ThemeManager). */
@@ -28,7 +28,7 @@
     outline: none;
 
     /* Ensure symbolic icons inherit the correct foreground color */
-    image { color: var(--crystal-text); }
+    image { color: var(--nidara-text); }
 
     /* Neutralize intrusive GTK internal nodes */
     & ripple,
@@ -60,13 +60,13 @@
     }
 }
 
-/* ── Crystal scrollbar — scoped to shell components only ────────────────────── */
-#crystal-dock,
-#crystal-bar,
-#crystal-app-launcher,
-.crystal-dock-window,
-.crystal-bar-window,
-.crystal-settings-window {
+/* ── Nidara scrollbar — scoped to shell components only ────────────────────── */
+#nidara-dock,
+#nidara-bar,
+#nidara-app-launcher,
+.nidara-dock-window,
+.nidara-bar-window,
+.nidara-settings-window {
     & scrollbar {
         background: transparent;
         border: none;
@@ -74,24 +74,24 @@
         trough { background: transparent; border: none; }
 
         slider {
-            background: var(--crystal-surface-raised);
-            border-radius: var(--crystal-radius-pill);
+            background: var(--nidara-surface-raised);
+            border-radius: var(--nidara-radius-pill);
             min-width: 4px;
             min-height: 20px;
             margin: 2px;
             transition: background 0.2s ease;
 
-            &:hover { background: var(--crystal-text-dim); }
+            &:hover { background: var(--nidara-text-dim); }
         }
 
         button { opacity: 0; min-width: 0; min-height: 0; padding: 0; }
     }
 }
 
-/* Reset for Crystal Settings window (Gtk.Window, decorated: false) */
-window.crystal-settings-window {
+/* Reset for Nidara Settings window (Gtk.Window, decorated: false) */
+window.nidara-settings-window {
     background: transparent;
     box-shadow: none;
     border: none;
-    // Glass surface + border-radius live on .crystal-window-glass (its direct child)
+    // Glass surface + border-radius live on .nidara-window-glass (its direct child)
 }

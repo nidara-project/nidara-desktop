@@ -1,4 +1,4 @@
-// CRYSTAL UI - gi module declarations
+// NIDARA UI - gi module declarations
 // These satisfy imports like "gi://..."
 
 declare module "gi://AstalHyprland" { const v: any; export default v; }

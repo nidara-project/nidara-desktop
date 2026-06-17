@@ -85,9 +85,9 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
     header.append(artDa); header.append(title); header.append(artist)
 
     const controls = new Gtk.Box({ halign: Gtk.Align.CENTER, spacing: 18, margin_top: 4 })
-    const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 18 , css_classes: ["cs-icon"] })
-    const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 18 , css_classes: ["cs-icon"] })
-    const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 18 , css_classes: ["cs-icon"] })
+    const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 18 , css_classes: ["nd-icon"] })
+    const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 18 , css_classes: ["nd-icon"] })
+    const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 18 , css_classes: ["nd-icon"] })
     const prev = new Gtk.Button({ child: prevImg, css_classes: ["cc-media-btn-atomic"] })
     const play = new Gtk.Button({ child: playImg, css_classes: ["cc-media-btn-atomic"] })
     const next = new Gtk.Button({ child: nextImg, css_classes: ["cc-media-btn-atomic"] })
@@ -162,7 +162,7 @@ function buildWideContent(state: MediaState): Gtk.Widget {
     const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
     textBox.append(title); textBox.append(artist)
 
-    const widePlayImg = new Gtk.Image({ gicon: Icons.play, pixel_size: 18 , css_classes: ["cs-icon"] })
+    const widePlayImg = new Gtk.Image({ gicon: Icons.play, pixel_size: 18 , css_classes: ["nd-icon"] })
     const play = new Gtk.Button({ child: widePlayImg, css_classes: ["cc-media-btn-atomic"], valign: Gtk.Align.CENTER })
     play.set_size_request(32, 32)
 
@@ -217,7 +217,7 @@ function buildSingleContent(state: MediaState): Gtk.Widget {
     })
 
     const fallback = new Gtk.Image({
-        gicon: Icons.play, pixel_size: 22, css_classes: ["cs-icon"],
+        gicon: Icons.play, pixel_size: 22, css_classes: ["nd-icon"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
     })
 

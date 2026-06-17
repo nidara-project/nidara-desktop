@@ -6,14 +6,14 @@ import app from "ags/gtk4/app"
 import { execAsync } from "ags/process"
 import { readFile, writeFile } from "ags/file"
 import {
-    type FluidCrystalConfig,
+    type NidaraThemeConfig,
     type AccentKey,
     type TintPanels,
     DEFAULT_CONFIG,
     ACCENT_PALETTE,
     generateTokensCss,
     generateTintCss,
-} from "./FluidCrystal"
+} from "./NidaraTheme"
 import { SHELL_ROOT } from "./Paths"
 import hs from "./HyprlandState"
 
@@ -64,8 +64,8 @@ interface ThemeState {
 }
 
 /**
- * ThemeManager — GTK theme, dark mode, and Fluid Crystal token management
- * Orchestrates GTK theming, Fluid Crystal token engine, and GSettings.
+ * ThemeManager — GTK theme, dark mode, and Nidara token management
+ * Orchestrates GTK theming, Nidara token engine, and GSettings.
  */
 class ThemeManager extends GObject.Object {
     static {
@@ -85,8 +85,8 @@ class ThemeManager extends GObject.Object {
         isDark: true
     }
 
-    private fcConfig: FluidCrystalConfig = { ...DEFAULT_CONFIG }
-    private configPath = `${GLib.get_user_config_dir()}/crystal-shell/appearance.json`
+    private fcConfig: NidaraThemeConfig = { ...DEFAULT_CONFIG }
+    private configPath = `${GLib.get_user_config_dir()}/nidara/appearance.json`
     private _lastTokensCss: string = ""
     private _lastTintCss: string = ""
 
@@ -158,8 +158,8 @@ class ThemeManager extends GObject.Object {
         const paths = ["/usr/share/icons", `${GLib.get_home_dir()}/.local/share/icons`, `${GLib.get_home_dir()}/.icons`]
         // System plumbing, never user-selectable: "default" is the Xcursor pointer
         // (we write it ourselves in writeXcursorDefault), "hicolor" is the freedesktop
-        // fallback every theme inherits, "crystal-shell" is our per-app icon overlay.
-        const reserved = ["default", "hicolor", "crystal-shell"]
+        // fallback every theme inherits, "nidara" is our per-app icon overlay.
+        const reserved = ["default", "hicolor", "nidara"]
         const themes = this.listDirs(paths).filter(t => {
             if (reserved.includes(t)) return false
             for (const p of paths) {
@@ -442,7 +442,7 @@ class ThemeManager extends GObject.Object {
         }
     }
 
-    /** Regenerate + apply the Fluid Crystal token CSS (accent / opacities), deduped. */
+    /** Regenerate + apply the Nidara token CSS (accent / opacities), deduped. */
     private applyTokens() {
         this.ensureProvidersLinked()
         const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
@@ -520,7 +520,7 @@ class ThemeManager extends GObject.Object {
     }
 
     private saveSettings() {
-        const dir = `${GLib.get_user_config_dir()}/crystal-shell`
+        const dir = `${GLib.get_user_config_dir()}/nidara`
         if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
         const merged = {
             ...this.state,
@@ -537,7 +537,7 @@ class ThemeManager extends GObject.Object {
         // Mirror to /var/tmp so the greeter (which runs as a system user without
         // access to the user home dir) can read the accent on next login screen.
         try {
-            const sharedDir = "/var/tmp/crystal-shell"
+            const sharedDir = "/var/tmp/nidara"
             if (!GLib.file_test(sharedDir, GLib.FileTest.EXISTS))
                 GLib.mkdir_with_parents(sharedDir, 0o755)
             writeFile(`${sharedDir}/appearance.json`, json)
@@ -554,8 +554,8 @@ class ThemeManager extends GObject.Object {
                 data = JSON.parse(readFile(this.configPath))
             } else {
                 // Migrate from old split files if they exist
-                const oldFcPath = `${GLib.get_user_config_dir()}/crystal-shell/fluid-crystal.json`
-                const oldThemePath = `${GLib.get_user_config_dir()}/crystal-shell/theme_settings.json`
+                const oldFcPath = `${GLib.get_user_config_dir()}/nidara/nidara.json`
+                const oldThemePath = `${GLib.get_user_config_dir()}/nidara/theme_settings.json`
                 if (GLib.file_test(oldFcPath, GLib.FileTest.EXISTS))
                     data = { ...data, ...JSON.parse(readFile(oldFcPath)) }
                 if (GLib.file_test(oldThemePath, GLib.FileTest.EXISTS))

@@ -39,7 +39,7 @@ export default function ManagedWindow({
 
     try {
         Gtk4LayerShell.init_for_window(win)
-        Gtk4LayerShell.set_namespace(win, layout.namespace ?? "crystal-overlay") 
+        Gtk4LayerShell.set_namespace(win, layout.namespace ?? "nidara-overlay") 
         Gtk4LayerShell.set_monitor(win, monitor)
         Gtk4LayerShell.set_layer(win, layout.layer ?? Gtk4LayerShell.Layer.TOP)
         

@@ -1,98 +1,98 @@
 /* ==========================================================================
-   CRYSTAL DESIGN SYSTEM - BASE TOKENS (V3000)
+   NIDARA DESIGN SYSTEM - BASE TOKENS (V3000)
    ========================================================================== */
 
 * {
     /* --- Brand Colors (Dynamic) --- */
-    /* Real values are injected by FluidCrystal.ts generateTokensCss (mode-aware).
+    /* Real values are injected by NidaraTheme.ts generateTokensCss (mode-aware).
        Fallbacks below are safe defaults for startup/non-fluid mode. */
-    --crystal-accent: #0088FF;
-    --crystal-accent-fg: #ffffff;
-    --crystal-accent-rgb: 0, 136, 255;
-    --crystal-accent-60: rgba(0, 136, 255, 0.6);
-    --crystal-accent-30: rgba(0, 136, 255, 0.3);
-    --crystal-accent-10: rgba(0, 136, 255, 0.1);
-    --crystal-accent-08: rgba(0, 136, 255, 0.08);
+    --nidara-accent: #0088FF;
+    --nidara-accent-fg: #ffffff;
+    --nidara-accent-rgb: 0, 136, 255;
+    --nidara-accent-60: rgba(0, 136, 255, 0.6);
+    --nidara-accent-30: rgba(0, 136, 255, 0.3);
+    --nidara-accent-10: rgba(0, 136, 255, 0.1);
+    --nidara-accent-08: rgba(0, 136, 255, 0.08);
 
     /* --- Surface & Backgrounds --- */
-    --crystal-bg: rgba(30, 30, 30, 0.5);
-    --crystal-bg-backdrop: rgba(30, 30, 30, 0.4);
-    --crystal-surface-back: rgba(255, 255, 255, 0.04);   /* very subtle bg */
-    --crystal-surface: rgba(255, 255, 255, 0.08);
-    --crystal-surface-hover: rgba(255, 255, 255, 0.12);
-    --crystal-surface-active: rgba(255, 255, 255, 0.16);
-    --crystal-surface-raised: rgba(255, 255, 255, 0.20); /* workspace dots, more visible elements */
-    /* Accent-tinted persistent selection (FluidCrystal overrides per mode). */
-    --crystal-state-selected: rgba(0, 136, 255, 0.22);
+    --nidara-bg: rgba(30, 30, 30, 0.5);
+    --nidara-bg-backdrop: rgba(30, 30, 30, 0.4);
+    --nidara-surface-back: rgba(255, 255, 255, 0.04);   /* very subtle bg */
+    --nidara-surface: rgba(255, 255, 255, 0.08);
+    --nidara-surface-hover: rgba(255, 255, 255, 0.12);
+    --nidara-surface-active: rgba(255, 255, 255, 0.16);
+    --nidara-surface-raised: rgba(255, 255, 255, 0.20); /* workspace dots, more visible elements */
+    /* Accent-tinted persistent selection (NidaraTheme overrides per mode). */
+    --nidara-state-selected: rgba(0, 136, 255, 0.22);
 
     /* --- Typography ---
-       FluidCrystal.ts overrides these at runtime with dark/light-aware values.
+       NidaraTheme.ts overrides these at runtime with dark/light-aware values.
        (#ffffff for dark, #000000 for light). These are just startup fallbacks. */
-    --crystal-text: rgba(255, 255, 255, 0.95);
-    --crystal-text-secondary: rgba(255, 255, 255, 0.8);
-    --crystal-text-dim: rgba(255, 255, 255, 0.55);
-    --crystal-text-disabled: rgba(255, 255, 255, 0.3);
-    --crystal-surface-strong: rgba(255, 255, 255, 0.3);
+    --nidara-text: rgba(255, 255, 255, 0.95);
+    --nidara-text-secondary: rgba(255, 255, 255, 0.8);
+    --nidara-text-dim: rgba(255, 255, 255, 0.55);
+    --nidara-text-disabled: rgba(255, 255, 255, 0.3);
+    --nidara-surface-strong: rgba(255, 255, 255, 0.3);
 
     /* --- Geometry --- */
-    --crystal-radius-lg: 24px;
-    --crystal-radius-md: 16px;
-    --crystal-radius-sm: 10px;
-    --crystal-radius-xs: 6px;
-    --crystal-radius-pill: 9999px;
-    --crystal-radius-squircle: 28%;
+    --nidara-radius-lg: 24px;
+    --nidara-radius-md: 16px;
+    --nidara-radius-sm: 10px;
+    --nidara-radius-xs: 6px;
+    --nidara-radius-pill: 9999px;
+    --nidara-radius-squircle: 28%;
 
     /* --- Semantic Colors --- */
-    --crystal-danger: #ff3b30;
-    --crystal-danger-rgb: 255, 59, 48;
-    --crystal-success: #30d158;
-    --crystal-warning: #f3ba4b;
-    --crystal-warning-rgb: 243, 186, 75;
+    --nidara-danger: #ff3b30;
+    --nidara-danger-rgb: 255, 59, 48;
+    --nidara-success: #30d158;
+    --nidara-warning: #f3ba4b;
+    --nidara-warning-rgb: 243, 186, 75;
 
     /* --- Borders & Shadows ---
        Recalibrated to the macOS "whisper" range (small blur, low alpha).
-       FluidCrystal.ts overrides these per mode at runtime (dark = heavier).
+       NidaraTheme.ts overrides these per mode at runtime (dark = heavier).
        Fallbacks below are the DARK set (startup default). */
-    --crystal-border: rgba(127, 127, 127, 0.15);
+    --nidara-border: rgba(127, 127, 127, 0.15);
     /* Rim-of-light edge for glass surfaces (white top hairline). Mode-aware. */
-    --crystal-edge: 1px solid rgba(255, 255, 255, 0.14);
-    --crystal-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.20), 0 1px 1px rgba(0, 0, 0, 0.16);
-    --crystal-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.18);
-    --crystal-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.24);
-    --crystal-shadow-popover: 0 10px 32px rgba(0, 0, 0, 0.50), 0 2px 8px rgba(0, 0, 0, 0.30);
-    --crystal-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+    --nidara-edge: 1px solid rgba(255, 255, 255, 0.14);
+    --nidara-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.20), 0 1px 1px rgba(0, 0, 0, 0.16);
+    --nidara-shadow-md: 0 2px 8px rgba(0, 0, 0, 0.28), 0 1px 2px rgba(0, 0, 0, 0.18);
+    --nidara-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.40), 0 2px 6px rgba(0, 0, 0, 0.24);
+    --nidara-shadow-popover: 0 10px 32px rgba(0, 0, 0, 0.50), 0 2px 8px rgba(0, 0, 0, 0.30);
+    --nidara-icon-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
 
     /* --- Materials (vibrancy ladder, z-stack aware) ---
-       Relative to the user's transparency choice — generated by FluidCrystal.
+       Relative to the user's transparency choice — generated by NidaraTheme.
        lower in z → thicker (less blur bleeds); higher → thinner.
        Fallbacks below are the DARK set. */
-    --crystal-material-thin: rgba(36, 36, 36, 0.30);
-    --crystal-material-regular: rgba(36, 36, 36, 0.45);
-    --crystal-material-thick: rgba(36, 36, 36, 0.65);
-    --crystal-material-chrome: rgba(36, 36, 36, 0.85);
+    --nidara-material-thin: rgba(36, 36, 36, 0.30);
+    --nidara-material-regular: rgba(36, 36, 36, 0.45);
+    --nidara-material-thick: rgba(36, 36, 36, 0.65);
+    --nidara-material-chrome: rgba(36, 36, 36, 0.85);
 
     /* --- Popover surfaces ---
-       FluidCrystal floors the bg alpha (≥0.38) so compositor blur applies.
+       NidaraTheme floors the bg alpha (≥0.38) so compositor blur applies.
        Fallbacks below are the DARK set. */
-    --crystal-popover-bg: rgba(36, 36, 36, 0.85);
-    --crystal-popover-border: rgba(255, 255, 255, 0.14);
+    --nidara-popover-bg: rgba(36, 36, 36, 0.85);
+    --nidara-popover-border: rgba(255, 255, 255, 0.14);
 
     /* --- Component-specific --- */
-    --crystal-thumb: #ffffff;
+    --nidara-thumb: #ffffff;
 }
 
 /* SCSS Variable Aliases for easier use in component files */
-$crystal-accent: var(--crystal-accent);
-$crystal-accent-fg: var(--crystal-accent-fg);
-$crystal-bg: var(--crystal-bg);
-$crystal-surface: var(--crystal-surface);
-$crystal-text: var(--crystal-text);
-$crystal-text-dim: var(--crystal-text-dim);
-$crystal-radius-lg: var(--crystal-radius-lg);
-$crystal-radius-md: var(--crystal-radius-md);
-$crystal-radius-sm: var(--crystal-radius-sm);
-$crystal-radius-xs: var(--crystal-radius-xs);
-$crystal-radius-pill: var(--crystal-radius-pill);
+$nidara-accent: var(--nidara-accent);
+$nidara-accent-fg: var(--nidara-accent-fg);
+$nidara-bg: var(--nidara-bg);
+$nidara-surface: var(--nidara-surface);
+$nidara-text: var(--nidara-text);
+$nidara-text-dim: var(--nidara-text-dim);
+$nidara-radius-lg: var(--nidara-radius-lg);
+$nidara-radius-md: var(--nidara-radius-md);
+$nidara-radius-sm: var(--nidara-radius-sm);
+$nidara-radius-xs: var(--nidara-radius-xs);
+$nidara-radius-pill: var(--nidara-radius-pill);
 
 /* ==========================================================================
    TYPOGRAPHY RAMP — one scale, no freestyle sizes (macOS-aligned)
@@ -153,7 +153,7 @@ $dur-slow: 260ms;  // popover/sheet open
 
 // Wipes the GTK/Adwaita defaults that we fight everywhere.
 // Use inside any scoped selector before declaring custom appearance.
-@mixin crystal-reset {
+@mixin nidara-reset {
     background: none;
     background-color: transparent;
     background-image: none;
@@ -166,19 +166,19 @@ $dur-slow: 260ms;  // popover/sheet open
 // $level: surface | raised | floating
 @mixin glass($level: surface) {
     @if $level == surface {
-        background-color: var(--crystal-surface);
-        border: 1px solid var(--crystal-border);
-        border-radius: var(--crystal-radius-md);
+        background-color: var(--nidara-surface);
+        border: 1px solid var(--nidara-border);
+        border-radius: var(--nidara-radius-md);
     } @else if $level == raised {
-        background-color: var(--crystal-surface-raised);
-        border: 1px solid var(--crystal-border);
-        border-radius: var(--crystal-radius-md);
-        box-shadow: var(--crystal-shadow-md);
+        background-color: var(--nidara-surface-raised);
+        border: 1px solid var(--nidara-border);
+        border-radius: var(--nidara-radius-md);
+        box-shadow: var(--nidara-shadow-md);
     } @else if $level == floating {
-        background-color: var(--crystal-bg);
-        border: var(--crystal-edge);
-        border-radius: var(--crystal-radius-lg);
-        box-shadow: var(--crystal-shadow-lg);
+        background-color: var(--nidara-bg);
+        border: var(--nidara-edge);
+        border-radius: var(--nidara-radius-lg);
+        box-shadow: var(--nidara-shadow-lg);
     }
 }
 
@@ -186,65 +186,65 @@ $dur-slow: 260ms;  // popover/sheet open
 //    @mixin material($level) silently mis-emitted branches here). Pick a material;
 //    never hand-write background/border. Glass = thin border + subtle frost. ──────
 @mixin material-card {            // settings groups, sidebar: border + subtle frost
-    background-color: var(--crystal-surface-back);
-    border: 1px solid var(--crystal-border);
-    border-radius: $crystal-radius-md;
+    background-color: var(--nidara-surface-back);
+    border: 1px solid var(--nidara-border);
+    border-radius: $nidara-radius-md;
 }
 @mixin material-control {         // inputs / dropdown triggers (accent on focus)
-    background: var(--crystal-surface-back);
+    background: var(--nidara-surface-back);
     background-clip: padding-box;
     border: 2px solid transparent;
-    border-radius: $crystal-radius-sm;
+    border-radius: $nidara-radius-sm;
 }
 @mixin material-popover {         // floating surfaces (floored alpha for blur)
-    background-color: var(--crystal-popover-bg);
-    border: 1px solid var(--crystal-popover-border);
-    border-radius: $crystal-radius-md;
-    box-shadow: var(--crystal-shadow-popover);
+    background-color: var(--nidara-popover-bg);
+    border: 1px solid var(--nidara-popover-border);
+    border-radius: $nidara-radius-md;
+    box-shadow: var(--nidara-shadow-popover);
 }
 
 // ── Interaction states for ANY row / list-item / menu-item ─────────────────────
 // THE single source of truth for hover/pressed/selected. Powers the universal
-// `.crystal-row` component (and `.crystal-tile` shares the same model). Mode-aware:
-// hover/pressed use `--crystal-surface-hover/-active` (rgba(fg,…)) so they lighten
+// `.nidara-row` component (and `.nidara-tile` shares the same model). Mode-aware:
+// hover/pressed use `--nidara-surface-hover/-active` (rgba(fg,…)) so they lighten
 // in dark / darken in light — always toward the mode's contrast, visible on ANY
 // background (a fixed dark deepen overlay vanished on a translucent panel over a
 // dark wallpaper). Works with `:selected` (GTK) and `.is-selected` (our widgets).
 // Accent enters ONLY for persistent selection.
-@mixin crystal-row-states {
+@mixin nidara-row-states {
     transition: background-color 0.12s ease;
-    &:hover                 { background-color: var(--crystal-surface-hover); }
-    &:active                { background-color: var(--crystal-surface-active); }
-    &:selected, &.is-selected { background-color: var(--crystal-state-selected); }
+    &:hover                 { background-color: var(--nidara-surface-hover); }
+    &:active                { background-color: var(--nidara-surface-active); }
+    &:selected, &.is-selected { background-color: var(--nidara-state-selected); }
 }
 
 // ── Interaction states for floating ICON TILES over the wallpaper ──────────────
 // Use on bar/dock/app-grid widgets and CC icon tiles — anything that sits on a
 // TRANSLUCENT panel showing the wallpaper through it. A dark deepen overlay
-// (crystal-row-states) is nearly invisible there when the wallpaper is dark and
+// (nidara-row-states) is nearly invisible there when the wallpaper is dark and
 // opacity is maxed. Instead RAISE a glass capsule: a mode-aware frost fill
-// (`--crystal-surface-hover` = rgba(fg,…) → lightens in dark / darkens in light,
+// (`--nidara-surface-hover` = rgba(fg,…) → lightens in dark / darkens in light,
 // always toward the mode's contrast) + a 1px inner edge drawn with an inset
 // box-shadow (no geometry shift, no GtkGizmo break) so the tile reads on ANY
 // wallpaper. Reserve this for icon tiles; text rows on dense material use
-// crystal-row-states (deepen) so the text never washes out. Accent = selection.
-@mixin crystal-tile-states {
+// nidara-row-states (deepen) so the text never washes out. Accent = selection.
+@mixin nidara-tile-states {
     &:hover {
-        background-color: var(--crystal-surface-hover);
-        box-shadow: inset 0 0 0 1px var(--crystal-border);
+        background-color: var(--nidara-surface-hover);
+        box-shadow: inset 0 0 0 1px var(--nidara-border);
     }
     &:active {
-        background-color: var(--crystal-surface-active);
-        box-shadow: inset 0 0 0 1px var(--crystal-border);
+        background-color: var(--nidara-surface-active);
+        box-shadow: inset 0 0 0 1px var(--nidara-border);
     }
-    &:selected, &.is-selected { background-color: var(--crystal-state-selected); }
+    &:selected, &.is-selected { background-color: var(--nidara-state-selected); }
 }
 
 // macOS-style keyboard focus ring. Apply on :focus-visible (keyboard nav only,
 // not mouse click). Single source of truth — don't hand-roll outlines.
 // $offset: 2px outset (default) or negative for inset cases (rows inside lists).
-@mixin crystal-focus-ring($offset: 2px) {
-    outline: 2px solid var(--crystal-accent);
+@mixin nidara-focus-ring($offset: 2px) {
+    outline: 2px solid var(--nidara-accent);
     outline-offset: $offset;
 }
 
@@ -254,13 +254,13 @@ $dur-slow: 260ms;  // popover/sheet open
 // $level: thin (OSDs) | regular (bars/sidebars) | thick (modals/launchers) | chrome (focused panels)
 @mixin material($level: regular) {
     @if $level == thin {
-        background-color: var(--crystal-material-thin);
+        background-color: var(--nidara-material-thin);
     } @else if $level == regular {
-        background-color: var(--crystal-material-regular);
+        background-color: var(--nidara-material-regular);
     } @else if $level == thick {
-        background-color: var(--crystal-material-thick);
+        background-color: var(--nidara-material-thick);
     } @else if $level == chrome {
-        background-color: var(--crystal-material-chrome);
+        background-color: var(--nidara-material-chrome);
     }
-    border: var(--crystal-edge);
+    border: var(--nidara-edge);
 }

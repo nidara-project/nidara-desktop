@@ -1,5 +1,5 @@
 /**
- * Crystal Shell Dock - Shared Types and State
+ * Nidara Dock - Shared Types and State
  * V106: Extracted for modular architecture
  */
 

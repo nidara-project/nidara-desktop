@@ -1,6 +1,6 @@
 {
-  "settings.about.group.crystal-shell": {
-    "value": "Crystal Shell",
+  "settings.about.group.nidara": {
+    "value": "Nidara",
     "file": "about",
     "ctx": "group"
   },
@@ -15,7 +15,7 @@
     "ctx": "group"
   },
   "settings.about.page.subtitle.informacion-del-sistema-y-version-de-cry": {
-    "value": "Información del sistema y versión de Crystal Shell",
+    "value": "Información del sistema y versión de Nidara",
     "file": "about",
     "ctx": "page.subtitle"
   },
@@ -135,7 +135,7 @@
     "ctx": "label"
   },
   "settings.appearance.page.subtitle.personaliza-el-alma-visual-de-tu-sistema": {
-    "value": "Personaliza el alma visual de tu sistema Crystal Shell",
+    "value": "Personaliza el alma visual de tu sistema Nidara",
     "file": "appearance",
     "ctx": "page.subtitle"
   },

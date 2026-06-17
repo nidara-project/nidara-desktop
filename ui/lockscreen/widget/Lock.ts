@@ -10,7 +10,7 @@ import { getDefaultUser } from "../../lib/users"
 function readWallpaperPath(): string | null {
   try {
     const user = getDefaultUser()
-    const path = `${user.homeDir}/.config/crystal-shell/wallpaper`
+    const path = `${user.homeDir}/.config/nidara/wallpaper`
     const [ok, data] = GLib.file_get_contents(path)
     if (!ok) return null
     const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
@@ -72,7 +72,7 @@ export function LockOverlay(monitor: Gdk.Monitor) {
 
   try {
     Gtk4LayerShell.init_for_window(win)
-    Gtk4LayerShell.set_namespace(win, "crystal-lock")
+    Gtk4LayerShell.set_namespace(win, "nidara-lock")
     Gtk4LayerShell.set_monitor(win, monitor)
     Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)

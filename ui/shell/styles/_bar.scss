@@ -1,7 +1,7 @@
 @use 'base' as *;
 
 /* ==========================================================================
-   CRYSTAL BAR - STITCH FIDELITY (Pills, Dots and Cairo Circles)
+   NIDARA BAR - STITCH FIDELITY (Pills, Dots and Cairo Circles)
    ========================================================================== */
 
 /* --- Focus Kill --- */
@@ -15,16 +15,16 @@
 
 /* --- Distro icon: color follows theme via currentColor in the SVG --- */
 .bar-distro-icon {
-    color: var(--crystal-text);
+    color: var(--nidara-text);
 }
 
 /* --- Tray icons: symbolic names used explicitly in code; color applies for recoloring --- */
 .bar-tray-icon {
-    color: var(--crystal-text);
+    color: var(--nidara-text);
 }
 
-#crystal-bar,
-.crystal-bar-window {
+#nidara-bar,
+.nidara-bar-window {
     background: transparent;
     padding: 0;
     margin: 0;
@@ -33,7 +33,7 @@
 /* The invisible exclusive-zone reservor (see Bar.tsx "Zone reservor"). Transparent
    via CSS, NOT gtk_widget_set_opacity(0) — toplevel opacity goes through the
    compositing pipeline and is the suspect for tech-debt #11's frame-clock spin. */
-window#crystal-bar-zone {
+window#nidara-bar-zone {
     background: transparent;
 }
 
@@ -48,13 +48,13 @@ window#crystal-bar-zone {
 .bar-left,
 .bar-center,
 .bar-right {
-    @include crystal-reset;
+    @include nidara-reset;
     padding: 0;
     margin: 0;
 
     label,
     image {
-        color: var(--crystal-text);
+        color: var(--nidara-text);
     }
 }
 
@@ -65,7 +65,7 @@ window#crystal-bar-zone {
 .bar-center button,
 .bar-right button,
 .bar-tray-btn {
-    @include crystal-reset;
+    @include nidara-reset;
     padding: 0;
     margin: 0;
     min-width: 0;
@@ -76,32 +76,32 @@ window#crystal-bar-zone {
     min-width: 6px;
     min-height: 6px;
     border-radius: 50%;
-    background-color: var(--crystal-surface-raised);
-    box-shadow: var(--crystal-shadow-sm);
+    background-color: var(--nidara-surface-raised);
+    box-shadow: var(--nidara-shadow-sm);
     transition: background-color 0.3s #{$ease}, box-shadow 0.3s #{$ease};
     margin: 0;
     padding: 0;
 }
 
 .workspace-dot.occupied {
-    background-color: var(--crystal-accent-60);
+    background-color: var(--nidara-accent-60);
 }
 
 .workspace-dot.active {
     min-width: 18px;
     border-radius: 4px;
-    background-color: $crystal-accent;
+    background-color: $nidara-accent;
 }
 
 .workspace-dot.empty {
-    background-color: var(--crystal-surface-hover);
+    background-color: var(--nidara-surface-hover);
 }
 
 /* --- Resource ring icon (bar cpu-memory arcs) --- */
 .resource-icon {
     font-size: $fs-mini;
     font-weight: $fw-bold;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
     margin-bottom: 0px;
 }
 
@@ -110,7 +110,7 @@ window#crystal-bar-zone {
 .bar-left image,
 .bar-center image {
     -gtk-icon-palette: success white, warning white, error white;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
 }
 
 /* Specific styling for the Control Center pill icon */
@@ -120,23 +120,23 @@ window#crystal-bar-zone {
 }
 
 .overlay-catcher {
-    @include crystal-reset;
+    @include nidara-reset;
 }
 
-/* The system menu uses the universal .crystal-menu component (_components.scss). */
+/* The system menu uses the universal .nidara-menu component (_components.scss). */
 
 // ── Inline confirmation view ──────────────────────────────────────────────────
-// Confirm view buttons = crystal-menu-row (geometry + hover) + an emphasis tone.
+// Confirm view buttons = nidara-menu-row (geometry + hover) + an emphasis tone.
 .system-confirm-secondary {
-    background: var(--crystal-surface-back);
-    color: var(--crystal-text-dim);
+    background: var(--nidara-surface-back);
+    color: var(--nidara-text-dim);
     font-size: $fs-caption;
-    &:hover { color: var(--crystal-text); }
+    &:hover { color: var(--nidara-text); }
 }
 
 .system-confirm-primary {
-    background: var(--crystal-surface);
-    color: var(--crystal-text);
+    background: var(--nidara-surface);
+    color: var(--nidara-text);
     font-size: $fs-caption;
     font-weight: $fw-semibold;
 }
@@ -179,63 +179,63 @@ window#crystal-bar-zone {
 }
 
 .about-sep {
-    background: var(--crystal-surface);
+    background: var(--nidara-surface);
     min-height: 1px;
 }
 
 .about-close-btn {
-    @include crystal-reset;
+    @include nidara-reset;
     border-radius: 6px;
     padding: 4px;
     opacity: 0.5;
     transition: opacity 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
 
-    @include crystal-tile-states;
+    @include nidara-tile-states;
     &:hover { opacity: 1; }
 }
 
 // ── Recording indicator ───────────────────────────────────────────────────────
 
 .bar-rec-capsule {
-    background: rgba(var(--crystal-danger-rgb), 0.18);
+    background: rgba(var(--nidara-danger-rgb), 0.18);
 }
 
 .bar-rec-indicator {
-    border-radius: var(--crystal-radius-pill);
-    background: var(--crystal-danger);
+    border-radius: var(--nidara-radius-pill);
+    background: var(--nidara-danger);
     animation: rec-pulse 1.4s ease-in-out infinite;
 }
 
 .bar-rec-label {
     font-size: $fs-caption;
     font-weight: $fw-bold;
-    color: var(--crystal-danger);
+    color: var(--nidara-danger);
     letter-spacing: 0.05em;
 }
 
 // ── AI-control indicator + kill switch (mirrors the recording indicator) ───────
 
 .bar-cua-capsule {
-    background: rgba(var(--crystal-danger-rgb), 0.18);
+    background: rgba(var(--nidara-danger-rgb), 0.18);
 }
 
 .bar-cua-indicator {
-    border-radius: var(--crystal-radius-pill);
-    background: var(--crystal-danger);
+    border-radius: var(--nidara-radius-pill);
+    background: var(--nidara-danger);
     animation: rec-pulse 1.4s ease-in-out infinite;
 }
 
 .bar-cua-label {
     font-size: $fs-caption;
     font-weight: $fw-bold;
-    color: var(--crystal-danger);
+    color: var(--nidara-danger);
     letter-spacing: 0.05em;
 }
 
 .bar-overflow-label {
     font-size: $fs-small;
     font-weight: $fw-bold;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
     letter-spacing: 0.04em;
 }
 
@@ -245,26 +245,26 @@ window#crystal-bar-zone {
 }
 /* --- Window menu (AppTitle expansion) --- */
 // Inline move-to-workspace strip: flat numbered buttons, current one accented
-// and disabled. Rows/headers/separators come from the shared crystal-menu-*
+// and disabled. Rows/headers/separators come from the shared nidara-menu-*
 // classes (MenuRow.ts) — only the strip needs its own style.
 .window-menu-ws-btn {
-    @include crystal-reset;
+    @include nidara-reset;
     background: transparent;
     border: none;
     box-shadow: none;
     min-width: 28px;
     min-height: 28px;
     padding: 0;
-    border-radius: $crystal-radius-sm;
+    border-radius: $nidara-radius-sm;
     font-size: $fs-small;
     font-weight: $fw-medium;
-    @include crystal-row-states;
+    @include nidara-row-states;
 
     &.current {
         // Current workspace: a faint accent-tinted pill marks the state — the
         // number stays theme-coloured (never accent on text). Button is disabled.
-        background: var(--crystal-accent-10);
-        color: var(--crystal-text);
+        background: var(--nidara-accent-10);
+        color: var(--nidara-text);
     }
 }
 
@@ -273,31 +273,31 @@ window#crystal-bar-zone {
     /* Vertical gap set from TSX (PANEL_TOP) so it stays in sync with CC/NC. */
 
     button.suggested-action {
-        @include crystal-reset;
-        background: var(--crystal-accent);
-        color: var(--crystal-accent-fg);
-        border-radius: $crystal-radius-sm;
+        @include nidara-reset;
+        background: var(--nidara-accent);
+        color: var(--nidara-accent-fg);
+        border-radius: $nidara-radius-sm;
         padding: 6px 14px;
         font-size: $fs-small;
         font-weight: $fw-semibold;
 
-        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.82); }
-        &:active { background: rgba(var(--crystal-accent-rgb), 0.65); }
+        &:hover  { background: rgba(var(--nidara-accent-rgb), 0.82); }
+        &:active { background: rgba(var(--nidara-accent-rgb), 0.65); }
     }
 
     button.destructive-action {
-        @include crystal-reset;
-        background: var(--crystal-danger);
-        color: var(--crystal-accent-fg);
+        @include nidara-reset;
+        background: var(--nidara-danger);
+        color: var(--nidara-accent-fg);
         border: none;
         box-shadow: none;
-        border-radius: $crystal-radius-sm;
+        border-radius: $nidara-radius-sm;
         padding: 6px 14px;
         font-size: $fs-small;
         font-weight: $fw-semibold;
 
-        &:hover  { background: rgba(var(--crystal-danger-rgb), 0.82); }
-        &:active { background: rgba(var(--crystal-danger-rgb), 0.65); }
+        &:hover  { background: rgba(var(--nidara-danger-rgb), 0.82); }
+        &:active { background: rgba(var(--nidara-danger-rgb), 0.65); }
     }
 
     button.flat {
@@ -305,23 +305,23 @@ window#crystal-bar-zone {
         background-image: none;
         border: none;
         box-shadow: none;
-        color: var(--crystal-text);
-        border-radius: $crystal-radius-sm;
+        color: var(--nidara-text);
+        border-radius: $nidara-radius-sm;
         padding: 6px 14px;
         font-size: $fs-small;
         font-weight: $fw-medium;
 
-        &:hover  { background: var(--crystal-accent-10); }
-        &:active { background: rgba(var(--crystal-accent-rgb), 0.18); }
+        &:hover  { background: var(--nidara-accent-10); }
+        &:active { background: rgba(var(--nidara-accent-rgb), 0.18); }
     }
 }
 
-// Clipboard history + bar overflow lists use the universal .crystal-menu-row.
+// Clipboard history + bar overflow lists use the universal .nidara-menu-row.
 
 .bar-popover-value {
     font-size: $fs-small;
     font-weight: $fw-medium;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
     min-width: 38px;
 }
 
@@ -331,8 +331,8 @@ window#crystal-bar-zone {
     border: none;
     box-shadow: none;
     padding: 4px;
-    border-radius: $crystal-radius-xs;
+    border-radius: $nidara-radius-xs;
     transition: background-color 0.15s ease, box-shadow 0.15s ease;
 
-    @include crystal-tile-states;
+    @include nidara-tile-states;
 }

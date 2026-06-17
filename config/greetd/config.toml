@@ -1,4 +1,4 @@
-# greetd configuration for Crystal Shell
+# greetd configuration for Nidara
 # Installed to /etc/greetd/config.toml
 
 [terminal]

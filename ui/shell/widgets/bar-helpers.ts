@@ -23,7 +23,7 @@ export function makeExpandable(opts: {
     const { getIcon, getText, onAction, autoHideMs = AUTO_HIDE_MS } = opts
 
     // Identical to fixed bar pill structure — Gtk.Image as anchor
-    const icon = new Gtk.Image({ pixel_size: 16, margin_start: 16, css_classes: ["cs-icon"] })
+    const icon = new Gtk.Image({ pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
     setIcon(icon, getIcon())
 
     const label = new Gtk.Label({
@@ -96,7 +96,7 @@ export function makeIconAction(opts: {
 }): Gtk.Widget {
     const { getIcon, onAction, activeClass, getActive, subscribe } = opts
 
-    const image = new Gtk.Image({ pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+    const image = new Gtk.Image({ pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
     setIcon(image, getIcon())
 
     const syncState = () => {

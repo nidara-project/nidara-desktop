@@ -36,8 +36,8 @@ export default function IconButton(props: IconButtonProps): Gtk.Button {
     const variant = props.variant ?? "danger"
 
     const btn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: props.icon, pixel_size: iconSize, css_classes: ["cs-icon"] }),
-        css_classes: ["crystal-circle-btn", `is-${variant}`, ...(props.cssClasses ?? [])],
+        child: new Gtk.Image({ gicon: props.icon, pixel_size: iconSize, css_classes: ["nd-icon"] }),
+        css_classes: ["nidara-circle-btn", `is-${variant}`, ...(props.cssClasses ?? [])],
         halign: props.halign ?? Gtk.Align.CENTER,
         valign: props.valign ?? Gtk.Align.CENTER,
         tooltip_text: props.tooltip ?? "",

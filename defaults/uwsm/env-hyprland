@@ -1,4 +1,4 @@
-# Crystal Shell — uwsm environment variables (Hyprland-specific)
+# Nidara — uwsm environment variables (Hyprland-specific)
 # Only loaded when the Hyprland session starts.
 # Use this for HYPR* and AQ_* variables.
 # Reference: https://wiki.hyprland.org/Configuring/Environment-variables/

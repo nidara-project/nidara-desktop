@@ -53,7 +53,7 @@ export function buildCapsuleInner(
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         width_request: 48, height_request: 48,
     })
-    const icon = new Gtk.Image({ pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] })
+    const icon = new Gtk.Image({ pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] })
     setIcon(icon, getIcon())
     iconBox.append(icon)
 
@@ -143,7 +143,7 @@ function buildRoundContent(
         hexpand: true, vexpand: true,
         width_request: 48, height_request: 48,
     })
-    const icon = new Gtk.Image({ pixel_size: 28, css_classes: ["cs-icon"] })
+    const icon = new Gtk.Image({ pixel_size: 28, css_classes: ["nd-icon"] })
     setIcon(icon, getIcon())
     btn.set_child(icon)
     btn.connect("clicked", () => { onClick(); syncClasses() })

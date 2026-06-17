@@ -1,7 +1,7 @@
-# Contributing to Crystal Shell
+# Contributing to Nidara
 
-Crystal Shell is **AI-native by design**. It ships an agent skill inside the repo
-(`.claude/skills/crystal-shell/`) so that anyone running [Claude Code](https://claude.com/claude-code)
+Nidara is **AI-native by design**. It ships an agent skill inside the repo
+(`.claude/skills/nidara/`) so that anyone running [Claude Code](https://claude.com/claude-code)
 — or a similar coding agent — can extend, customize, and fix their own desktop, and propose
 globally-useful improvements back upstream. You don't need to be a git expert: your agent
 can handle the mechanics, with your consent.
@@ -14,7 +14,7 @@ Before contributing, classify the change:
 
 - 🟦 **Personal** — your taste, hardware, or workflow (accent colour, pinned apps, dock size,
   keybinds, wallpaper, keyboard layout, monitor setup). **This stays on your machine.** It
-  lives in the user config layer (`~/.config/crystal-shell/`, `hyprland-user.lua`, or the
+  lives in the user config layer (`~/.config/nidara/`, `hyprland-user.lua`, or the
   Settings UI) — never in a PR.
 - 🟩 **Make it a setting** — you want a specific value, but other users would want a different
   one. Don't hardcode it: add the knob to Settings. Your value stays personal; the **new
@@ -27,7 +27,7 @@ Before contributing, classify the change:
 When unsure, ask yourself: *would another user reasonably want this different?* If yes, it's
 personal (or a setting). If no, it's global.
 
-The full heuristic, with examples, lives in `.claude/skills/crystal-shell/references/agent-contribution.md`.
+The full heuristic, with examples, lives in `.claude/skills/nidara/references/agent-contribution.md`.
 
 ## Contributing with an agent
 
@@ -51,8 +51,8 @@ automatically — a maintainer always reviews.
 1. Fork the repo to your account, then clone your fork. (If you already cloned this repo
    directly, you don't need to re-clone — `gh pr create` will offer to create the fork and push
    your branch to it when you open the PR.) Run `./install.sh --dev` for a source-running dev setup.
-2. Read `.claude/skills/crystal-shell/SKILL.md` and the relevant reference under
-   `.claude/skills/crystal-shell/references/`. The conventions there are strict and easy to
+2. Read `.claude/skills/nidara/SKILL.md` and the relevant reference under
+   `.claude/skills/nidara/references/`. The conventions there are strict and easy to
    violate without context (no `Adw.OverlaySplitView` in Settings, scoped CSS only, no
    hardcoded colours, IPC via `ShellActions`, …).
 3. Make your change on a topic branch (it lives on your fork — you can't push branches to this

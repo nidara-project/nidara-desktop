@@ -18,7 +18,7 @@ function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; upda
 function buildBarContent(): Gtk.Widget {
     const wifi = AstalNetwork.get_default()?.wifi
     const getIcon = () => (wifi as any)?.enabled === false ? Icons.wifiOff : Icons.wifi
-    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+    const image = new Gtk.Image({ gicon: getIcon(), pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
     if (wifi) {
         // notify::enabled ONLY — the icon depends solely on `enabled`. The generic
         // "notify" fires on every property churn (strength/scanning) and re-set the
@@ -46,7 +46,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
             gicon: getIcon(), pixel_size: 28,
             halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
             hexpand: true, vexpand: true,
-            css_classes: ["cs-icon"],
+            css_classes: ["nd-icon"],
         })
         if (wifi) {
             const sigId = (wifi as any).connect("notify::enabled", () => { const ic = getIcon(); if (icon.gicon !== ic) icon.gicon = ic })

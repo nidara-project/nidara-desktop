@@ -20,7 +20,7 @@ class WidgetConfigManager extends GObject.Object {
     }
 
     private _config: Record<string, WidgetPlacement> = {}
-    private configPath = `${GLib.get_user_config_dir()}/crystal-shell/widgets.json`
+    private configPath = `${GLib.get_user_config_dir()}/nidara/widgets.json`
 
     constructor() {
         super()
@@ -39,7 +39,7 @@ class WidgetConfigManager extends GObject.Object {
 
     private save() {
         try {
-            const dir = `${GLib.get_user_config_dir()}/crystal-shell`
+            const dir = `${GLib.get_user_config_dir()}/nidara`
             if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
                 GLib.mkdir_with_parents(dir, 0o755)
             writeFile(this.configPath, JSON.stringify(this._config, null, 2))

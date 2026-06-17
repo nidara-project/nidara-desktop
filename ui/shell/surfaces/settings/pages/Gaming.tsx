@@ -6,7 +6,7 @@ import Gaming, { type WallpaperMode } from "../../../core/GamingManager"
 import { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
 import { t } from "../../../core/i18n"
 import { listGroup, createRow, toggleRow, dropdownRow, pageBox } from "../SettingsHelpers"
-import { CrystalButton } from "../../../../lib/crystal-ui"
+import { NidaraButton } from "../../../../lib/nidara-kit"
 
 export default function GamingPage() {
     const page = pageBox("gaming-page")
@@ -69,11 +69,11 @@ export default function GamingPage() {
     }
     updatePreview(Gaming.customWallpaper)
 
-    const previewRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row", "wallpaper-preview-row"] })
+    const previewRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row", "wallpaper-preview-row"] })
     previewRow.set_child(preview)
     wallGroup.listBox.append(previewRow)
 
-    const pickBtn = CrystalButton({
+    const pickBtn = NidaraButton({
         label: t("settings.appearance.browse"),
         variant: "secondary",
         pill: true,

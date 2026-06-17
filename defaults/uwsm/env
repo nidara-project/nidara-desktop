@@ -1,4 +1,4 @@
-# Crystal Shell — uwsm environment variables
+# Nidara — uwsm environment variables
 # Loaded by uwsm before any session service starts.
 # Format: export KEY=VALUE
 # Reference: https://wiki.hyprland.org/Configuring/Environment-variables/
@@ -17,7 +17,7 @@ export OZONE_PLATFORM=wayland
 export ELECTRON_OZONE_PLATFORM_HINT=wayland
 
 # Qt theming — Qt 6.5+ reads the freedesktop color-scheme (dark/light) straight from
-# the portal, so no qt6ct/Kvantum config is needed. Must match bin/crystal-shell;
+# the portal, so no qt6ct/Kvantum config is needed. Must match bin/nidara;
 # since uwsm sources this file AFTER the launcher's exports, this value is the one that
 # actually wins.
 export QT_QPA_PLATFORMTHEME=xdgdesktopportal

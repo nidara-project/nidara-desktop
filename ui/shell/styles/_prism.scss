@@ -6,20 +6,20 @@
 }
 
 .prism-search-box {
-    background-color: var(--crystal-surface-raised);
+    background-color: var(--nidara-surface-raised);
     border-radius: 12px;
     padding: 8px 16px;
-    border: 1px solid var(--crystal-border);
+    border: 1px solid var(--nidara-border);
 
     // Keyboard focus: the search field is the primary input of the palette.
-    &:focus-within { @include crystal-focus-ring(2px); }
+    &:focus-within { @include nidara-focus-ring(2px); }
 }
 
 .prism-search-entry {
     background: none;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
     font-size: $fs-title-3;
-    caret-color: var(--crystal-text);
+    caret-color: var(--nidara-text);
 
     // The accent ring lives on .prism-search-box (:focus-within). Suppress the
     // Gtk.Text's own default GTK focus outline so we don't get a second blue ring.
@@ -41,11 +41,11 @@
 /* Hover = neutral; Selected (keyboard arrow nav) = accent, so the cursor is
    clearly visible as you move through results. */
 .prism-result-row:hover {
-    background-color: var(--crystal-surface-hover);
+    background-color: var(--nidara-surface-hover);
 }
 
 .prism-result-row:selected {
-    background-color: var(--crystal-accent-10);
+    background-color: var(--nidara-accent-10);
 }
 
 /* Kill GTK's default focus rectangle on the list rows (it's the blue ring that
@@ -63,13 +63,13 @@
 }
 
 .prism-result-title {
-    color: var(--crystal-text);
+    color: var(--nidara-text);
     font-weight: $fw-medium;
     font-size: $fs-subtitle;
 }
 
 .prism-result-description {
-    color: var(--crystal-text-disabled);
+    color: var(--nidara-text-disabled);
     font-size: $fs-small;
 }
 
@@ -79,7 +79,7 @@
 }
 
 .prism-section-label {
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
     font-size: $fs-caption;
     font-weight: $fw-semibold;
     letter-spacing: 0.06em;

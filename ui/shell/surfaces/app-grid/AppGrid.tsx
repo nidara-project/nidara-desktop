@@ -47,7 +47,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         spacing: 10,
         hexpand: true,
     })
-    searchBox.append(new Gtk.Image({ gicon: Icons.search, pixel_size: 18, css_classes: ["app-grid-search-icon", "cs-icon"] }))
+    searchBox.append(new Gtk.Image({ gicon: Icons.search, pixel_size: 18, css_classes: ["app-grid-search-icon", "nd-icon"] }))
     searchBox.append(searchEntry)
 
     const searchBoxClick = new Gtk.GestureClick()
@@ -184,7 +184,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     const noResultsIcon = new Gtk.Image({
         gicon: Icons.search,
         pixel_size: 48,
-        css_classes: ["app-grid-no-results-icon", "cs-icon"],
+        css_classes: ["app-grid-no-results-icon", "nd-icon"],
     })
     const noResultsLabel = new Gtk.Label({
         label: t("app-grid.no-results"),
@@ -420,7 +420,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         // ── Launch ─────────────────────────────────────────────────────────
         button.connect("clicked", () => {
             onClose()
-            if (id === "crystal-shell-settings") {
+            if (id === "nidara-settings") {
                 shellActions.openSettings?.()
                 return
             }

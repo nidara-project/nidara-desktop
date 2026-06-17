@@ -2,9 +2,9 @@ import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import Icons from "../core/Icons"
 
-// Shared menu-row builders for flat crystal menus (.crystal-menu-row lists in a
-// SquircleContainer, never Gtk.Popover — see project_crystal_ui). Used by the
-// CC context menu and the bar window menu; CrystalMenu.ts (Gio model renderer)
+// Shared menu-row builders for flat nidara menus (.nidara-menu-row lists in a
+// SquircleContainer, never Gtk.Popover — see project_nidara_ui). Used by the
+// CC context menu and the bar window menu; NidaraMenu.ts (Gio model renderer)
 // and the bar overflow list keep their own shapes.
 
 export interface MenuRowOpts {
@@ -21,18 +21,18 @@ export interface MenuRowOpts {
     onClick: () => void
 }
 
-const CHECK_KEY = "__crystalMenuCheck"
+const CHECK_KEY = "__nidaraMenuCheck"
 
 export function menuRow(opts: MenuRowOpts): Gtk.Button {
     const inner = new Gtk.Box({ spacing: 10 })
     if (opts.icon) {
-        inner.append(new Gtk.Image({ gicon: opts.icon, pixel_size: 15, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER }))
+        inner.append(new Gtk.Image({ gicon: opts.icon, pixel_size: 15, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
     }
-    inner.append(new Gtk.Label({ label: opts.label, halign: Gtk.Align.START, hexpand: true, css_classes: ["crystal-menu-label"] }))
+    inner.append(new Gtk.Label({ label: opts.label, halign: Gtk.Align.START, hexpand: true, css_classes: ["nidara-menu-label"] }))
     if (opts.trailing) inner.append(opts.trailing)
     const check = new Gtk.Image({
         gicon: Icons.check, pixel_size: 15,
-        css_classes: ["cs-icon", "accent-label"],
+        css_classes: ["nd-icon", "accent-label"],
         valign: Gtk.Align.CENTER,
         visible: !!opts.checked,
     })
@@ -40,7 +40,7 @@ export function menuRow(opts: MenuRowOpts): Gtk.Button {
 
     const btn = new Gtk.Button({
         child: inner,
-        css_classes: ["crystal-menu-row", ...(opts.danger ? ["danger-action"] : [])],
+        css_classes: ["nidara-menu-row", ...(opts.danger ? ["danger-action"] : [])],
         hexpand: true,
         sensitive: opts.sensitive ?? true,
     })
@@ -56,14 +56,14 @@ export function setRowChecked(row: Gtk.Button, checked: boolean) {
 }
 
 export function menuSeparator(): Gtk.Separator {
-    return new Gtk.Separator({ css_classes: ["crystal-menu-sep"], margin_top: 4, margin_bottom: 4 })
+    return new Gtk.Separator({ css_classes: ["nidara-menu-sep"], margin_top: 4, margin_bottom: 4 })
 }
 
 export function menuHeader(label: string): Gtk.Label {
     return new Gtk.Label({
         label,
         halign: Gtk.Align.START,
-        css_classes: ["crystal-menu-header"],
+        css_classes: ["nidara-menu-header"],
         margin_start: 12, margin_top: 4, margin_bottom: 2,
     })
 }

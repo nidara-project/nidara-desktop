@@ -168,7 +168,7 @@ export function watchDevices(cb: () => void): Dispose {
 // registered the agent is not on the bus at all, preserving the pre-agent
 // behavior outside the page.
 
-const AGENT_PATH = "/com/crystalshell/bluetooth/agent"
+const AGENT_PATH = "/org/nidara/bluetooth/agent"
 
 const AGENT_IFACE = `<node>
   <interface name="org.bluez.Agent1">

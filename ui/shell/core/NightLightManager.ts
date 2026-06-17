@@ -3,7 +3,7 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { readFile, writeFile } from "ags/file"
 
-const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/night-light.json`
+const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/night-light.json`
 const DEFAULT_TEMP = 4000
 
 class NightLightManager extends GObject.Object {
@@ -144,7 +144,7 @@ class NightLightManager extends GObject.Object {
     }
 
     private _save() {
-        const dir = `${GLib.get_user_config_dir()}/crystal-shell`
+        const dir = `${GLib.get_user_config_dir()}/nidara`
         if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
             GLib.mkdir_with_parents(dir, 0o755)
         writeFile(CONFIG_PATH, JSON.stringify({

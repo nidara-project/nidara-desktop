@@ -1,4 +1,4 @@
--- Hyprland Lua configuration for the Crystal Shell greeter (greetd session)
+-- Hyprland Lua configuration for the Nidara greeter (greetd session)
 -- Installed to /etc/greetd/hyprland-greeter.lua
 -- This is a minimal, locked-down config — not user-editable.
 
@@ -12,16 +12,16 @@ hl.env("XDG_CONFIG_HOME","/var/lib/greeter/.config")
 -- ── Startup ───────────────────────────────────────────────────────────────────
 hl.on("hyprland.start", function()
     hl.exec_cmd("awww-daemon")
-    hl.exec_cmd("sleep 1 && awww img /usr/share/crystal-shell/wallpaper.png --transition-type fade --transition-duration 1")
+    hl.exec_cmd("sleep 1 && awww img /usr/share/nidara/wallpaper.png --transition-type fade --transition-duration 1")
     -- Launch greeter; exit Hyprland when it closes
     -- (Lua parser: the legacy `hyprctl dispatch exit` errors out and the
     -- greeter compositor would never exit)
-    hl.exec_cmd("crystal-greeter; hyprctl dispatch 'hl.dsp.exit()'")
+    hl.exec_cmd("nidara-greeter; hyprctl dispatch 'hl.dsp.exit()'")
 end)
 
 -- ── Keyboard layout: read saved greeter pref, fall back to "us" ──────────────
 local function readKbLayout()
-    local f = io.open("/var/lib/greeter/.config/crystal-shell/greeter-prefs.json", "r")
+    local f = io.open("/var/lib/greeter/.config/nidara/greeter-prefs.json", "r")
     if not f then return "us" end
     local content = f:read("*a")
     f:close()
@@ -74,4 +74,4 @@ hl.config({
 })
 
 -- ── Layer rules ───────────────────────────────────────────────────────────────
-hl.layer_rule({ match = { namespace = "crystal-greeter" }, blur = true, ignore_alpha = 0.3 })
+hl.layer_rule({ match = { namespace = "nidara-greeter" }, blur = true, ignore_alpha = 0.3 })

@@ -10,7 +10,7 @@ type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
 
 function readRegionConfig(): { timeFormat: "24h" | "12h"; showSeconds: boolean; dateFormat: DateFormat } {
   try {
-    const path = `${GLib.get_user_config_dir()}/crystal-shell/region.json`
+    const path = `${GLib.get_user_config_dir()}/nidara/region.json`
     const [ok, data] = GLib.file_get_contents(path)
     if (!ok) return { timeFormat: "24h", showSeconds: false, dateFormat: "long" }
     const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))

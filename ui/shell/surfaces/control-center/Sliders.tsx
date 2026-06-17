@@ -36,9 +36,9 @@ function buildHorizontalSlider(
         onExtChange: (cb) => onExtChange((v) => cb(Math.round(v * 100))),
     })
 
-    box.append(new Gtk.Image({ gicon: iconNameLow,  pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"] }))
+    box.append(new Gtk.Image({ gicon: iconNameLow,  pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] }))
     box.append(sliderWidget)
-    box.append(new Gtk.Image({ gicon: iconNameHigh, pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"] }))
+    box.append(new Gtk.Image({ gicon: iconNameHigh, pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] }))
     box.append(valueLabel)
 
     return box
@@ -62,7 +62,7 @@ function buildVerticalSlider(
 // Small (1×1) variant: round mute-toggle icon, mirroring the bar icon.
 function buildVolumeIcon(speaker: any): Gtk.Widget {
     const getIcon = () => speaker ? AudioSvc.targetVolumeIcon(speaker) : Icons.volumeMuted
-    const icon = new Gtk.Image({ gicon: getIcon(), pixel_size: 28, css_classes: ["cs-icon"] })
+    const icon = new Gtk.Image({ gicon: getIcon(), pixel_size: 28, css_classes: ["nd-icon"] })
     const btn = new Gtk.Button({
         css_classes: ["cc-atomic-round-btn"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,

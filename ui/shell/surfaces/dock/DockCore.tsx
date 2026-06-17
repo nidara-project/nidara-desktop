@@ -1,5 +1,5 @@
 /**
- * Crystal Shell — shared dock core.
+ * Nidara — shared dock core.
  *
  * Holds all the dock logic that is identical between the horizontal (bottom) and
  * vertical (left/right) docks: pinned/running grouping, reorder & drag, the
@@ -165,8 +165,8 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     const WIN_H = axis.WIN_H
 
     const win = new Gtk.Window({
-        name: "crystal-dock",
-        css_classes: ["crystal-dock-window", "fc-ignore"],
+        name: "nidara-dock",
+        css_classes: ["nidara-dock-window", "nd-ignore"],
         application: app,
         focusable: false,
         can_focus: false,
@@ -651,7 +651,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                         // @ts-ignore
                         appItem.icon_name = originalId.replace(/-default$/i, "-Default")
                     }
-                    if (lid === "crystal-shell-settings") {
+                    if (lid === "nidara-settings") {
                         appItem.launch = () => { shellActions.openSettings?.() }
                     } else {
                         appItem.launch = getLaunch(lid)
@@ -677,7 +677,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                     if (lid.startsWith("chrome-") && lid.endsWith("-default") && typeof icon === "string") {
                         icon = icon.replace(/-default$/i, "-Default")
                     }
-                    const ghostLaunch = lid === "crystal-shell-settings"
+                    const ghostLaunch = lid === "nidara-settings"
                         ? () => { shellActions.openSettings?.() }
                         : getLaunch(lid)
                     const ghost = { name: displayName, icon_name: icon, launch: ghostLaunch } as any
@@ -719,7 +719,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
                 if (!appItem) {
                     appItem = { name: group?.title || group?.displayClass || k, icon_name: lid, launch: getLaunch(lid) } as any
                 }
-                if (lid === "crystal-shell-settings") appItem.launch = () => { shellActions.openSettings?.() }
+                if (lid === "nidara-settings") appItem.launch = () => { shellActions.openSettings?.() }
 
                 configs.push({
                     id: lid, width: DOCK_CONSTANTS.APP_SLOT,
@@ -924,7 +924,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
     if (layerInit) {
         try {
-            Gtk4LayerShell.set_namespace(win, "crystal-dock")
+            Gtk4LayerShell.set_namespace(win, "nidara-dock")
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
             Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
 
@@ -976,7 +976,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         })
     }
 
-    const DOCK_PERMANENT_IDS = new Set(["home-shortcut", "launcher", "trash", "crystal-shell-settings"])
+    const DOCK_PERMANENT_IDS = new Set(["home-shortcut", "launcher", "trash", "nidara-settings"])
 
     const pruneOrphanedPins = () => {
         const before = pinnedState.list.length

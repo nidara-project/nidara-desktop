@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import { makeHSlider } from "../../common/Slider"
-import { CrystalRow, CrystalList } from "../../../lib/crystal-ui"
+import { NidaraRow, NidaraList } from "../../../lib/nidara-kit"
 
 /**
  * Shared UI helpers for Settings pages.
@@ -45,17 +45,17 @@ export const clearSearchIndex = () => { _searchIndex = []; _pageCtx = { id: "", 
 export const getSearchIndex = (): SearchItem[] => [..._searchIndex]
 
 // ── Boxed List Group ──────────────────────────────────────────────────────────
-// Thin wrapper over the universal CrystalList component. Settings-specific code
+// Thin wrapper over the universal NidaraList component. Settings-specific code
 // keeps its own entry point, but the actual list is the shared component.
-export const listGroup = (title: string) => CrystalList(title)
+export const listGroup = (title: string) => NidaraList(title)
 
 // ── Generic Row ───────────────────────────────────────────────────────────────
-// Universal CrystalRow + the settings-only side effect (search-index registration).
+// Universal NidaraRow + the settings-only side effect (search-index registration).
 export const createRow = (label: string, subtitle: string, widget: Gtk.Widget, titleIcon?: Gtk.Widget) => {
     if (_pageCtx.id) {
         _searchIndex.push({ pageId: _pageCtx.id, pageLabel: _pageCtx.label, label, subtitle })
     }
-    return CrystalRow(label, subtitle, widget, [], titleIcon)
+    return NidaraRow(label, subtitle, widget, [], titleIcon)
 }
 
 // ── Toggle Row ────────────────────────────────────────────────────────────────
@@ -175,9 +175,9 @@ export const sliderRow = (
 
     // Endpoints flanking the slider: arbitrary widgets via `endpoints` (e.g. small/
     // large "A" labels, which stay crisp where a tiny SVG icon would not), else a
-    // pair of cs-icon images via `icons`.
+    // pair of nd-icon images via `icons`.
     const mkIcon = (i: number) =>
-        new Gtk.Image({ gicon: icons![i], pixel_size: iconSizes[i], opacity: 0.5, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER })
+        new Gtk.Image({ gicon: icons![i], pixel_size: iconSizes[i], opacity: 0.5, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER })
     const leftEnd  = endpoints?.[0] ?? (icons ? mkIcon(0) : null)
     const rightEnd = endpoints?.[1] ?? (icons ? mkIcon(1) : null)
 
@@ -209,12 +209,12 @@ export const presetRow = (
         const btn = new Gtk.Button({
             label: `${val}${unit}`,
             css_classes: val === init
-                ? ["settings-preset-btn", "crystal-btn--primary"]
+                ? ["settings-preset-btn", "nidara-btn--primary"]
                 : ["settings-preset-btn"],
         })
         btn.connect("clicked", () => {
-            buttons.forEach(b => b.remove_css_class("crystal-btn--primary"))
-            btn.add_css_class("crystal-btn--primary")
+            buttons.forEach(b => b.remove_css_class("nidara-btn--primary"))
+            btn.add_css_class("nidara-btn--primary")
             cb(val)
         })
         buttons.push(btn)

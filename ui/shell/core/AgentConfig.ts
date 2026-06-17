@@ -5,18 +5,18 @@ import { readFile, writeFile } from "ags/file"
 // OFFICIAL door (`ags request setConfig`, future MCP server) — it is a consent
 // layer, not a security boundary: any local process can still edit config
 // files directly, same as the user. Reading state (dumpState/getConfig) is
-// always allowed; it powers crystal-shell-doctor and diagnostics.
-const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/ai.json`
+// always allowed; it powers nidara-doctor and diagnostics.
+const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/ai.json`
 
 interface AgentSettings {
     allowConfigWrite: boolean  // agents may change settings via setConfig, default true
     allowScreenshot: boolean   // agents may capture the screen via the screenshot IPC, default true
-    allowMcp: boolean          // crystal-shell-mcp serves tools to MCP clients, default true
-    allowComputerUse: boolean      // agents may PERCEIVE third-party apps via AT-SPI (crystal-a11y),
+    allowMcp: boolean          // nidara-mcp serves tools to MCP clients, default true
+    allowComputerUse: boolean      // agents may PERCEIVE third-party apps via AT-SPI (nidara-a11y),
                                    // default FALSE — reaches outside the shell's own surface
                                    // (privacy-sensitive, ≈ the screenshot gate)
     allowComputerControl: boolean  // agents may ACT on third-party apps via AT-SPI do_action
-                                   // (crystal-act), default FALSE — requires allowComputerUse;
+                                   // (nidara-act), default FALSE — requires allowComputerUse;
                                    // the shell shows an always-visible indicator + kill switch
 }
 
@@ -38,7 +38,7 @@ try {
 
 function save() {
     try {
-        const dir = `${GLib.get_user_config_dir()}/crystal-shell`
+        const dir = `${GLib.get_user_config_dir()}/nidara`
         if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
             GLib.mkdir_with_parents(dir, 0o755)
         writeFile(CONFIG_PATH, JSON.stringify(_settings, null, 2))
@@ -68,7 +68,7 @@ export const agentConfig = {
         _listeners.forEach(fn => fn())
     },
 
-    // Read live by the standalone crystal-shell-mcp process (it re-reads
+    // Read live by the standalone nidara-mcp process (it re-reads
     // ai.json on every tool call), so flipping this needs no restarts.
     setAllowMcp(val: boolean) {
         _settings.allowMcp = val
@@ -76,7 +76,7 @@ export const agentConfig = {
         _listeners.forEach(fn => fn())
     },
 
-    // Read live by the standalone crystal-a11y helper (re-reads ai.json per
+    // Read live by the standalone nidara-a11y helper (re-reads ai.json per
     // call). Enabling it also turns on toolkit-accessibility — the capability is
     // useless while the a11y stack is globally off, and GTK4 apps only fully
     // populate their AT-SPI tree when it's on. Best-effort; never flipped back
@@ -96,7 +96,7 @@ export const agentConfig = {
         _listeners.forEach(fn => fn())
     },
 
-    // Read live by the standalone crystal-act helper + the do_app_action MCP
+    // Read live by the standalone nidara-act helper + the do_app_action MCP
     // tool (both re-read ai.json per call). Control REQUIRES perception: enabling
     // it implies allowComputerUse (which also flips on toolkit-accessibility) —
     // you can't drive what you can't see. The shell renders a bar indicator +

@@ -6,7 +6,7 @@ import appService, { type AppData } from "../../../core/AppService"
 import { pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
-import { CrystalButton } from "../../../../lib/crystal-ui"
+import { NidaraButton } from "../../../../lib/nidara-kit"
 
 // ── Icon preview helpers ──────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
         default_width: 420,
         modal: true,
         resizable: false,
-        css_classes: ["background", "glass", "crystal-settings-window"],
+        css_classes: ["background", "glass", "nidara-settings-window"],
         transient_for: parent ?? undefined,
     })
 
@@ -69,7 +69,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
 
     const previewStatus = new Gtk.Label({
         label: "",
-        css_classes: ["crystal-row-subtitle"],
+        css_classes: ["nidara-row-subtitle"],
         halign: Gtk.Align.CENTER,
     })
     previewBox.append(previewStatus)
@@ -78,7 +78,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
     // Current icon name hint
     box.append(new Gtk.Label({
         label: t("settings.apps.theme-icon-name"),
-        css_classes: ["crystal-list-title"],
+        css_classes: ["nidara-list-title"],
         halign: Gtk.Align.START,
         margin_bottom: 6,
     }))
@@ -116,7 +116,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
     entry.connect("changed", () => updatePreview(entry.text))
 
     // File picker button
-    const fileBtn = CrystalButton({
+    const fileBtn = NidaraButton({
         label: t("settings.apps.from-file"),
         variant: "secondary",
         pill: true,
@@ -150,7 +150,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END })
 
     const hasOverride = !!appService.getIconOverridePath(originalIcon)
-    const resetBtn = CrystalButton({
+    const resetBtn = NidaraButton({
         label: t("settings.apps.restore"),
         variant: "secondary",
         pill: true,
@@ -168,10 +168,10 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
         dialog.close()
     })
 
-    const cancelBtn = CrystalButton({ label: t("settings.apps.cancel"), variant: "secondary", pill: true })
+    const cancelBtn = NidaraButton({ label: t("settings.apps.cancel"), variant: "secondary", pill: true })
     cancelBtn.connect("clicked", () => dialog.close())
 
-    const applyBtn = CrystalButton({ label: t("settings.apps.apply"), variant: "primary", pill: true })
+    const applyBtn = NidaraButton({ label: t("settings.apps.apply"), variant: "primary", pill: true })
     applyBtn.connect("clicked", () => {
         const val = entry.text.trim()
         if (!val) { dialog.close(); return }
@@ -200,7 +200,7 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
 // ── App row ───────────────────────────────────────────────────────────────────
 
 function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBoxRow {
-    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
     const box = new Gtk.Box({
         spacing: 14,
         margin_start: 14,
@@ -213,12 +213,12 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
     const rowIcon = makeIconImage(canonical, 32)
 
     const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
-    textBox.append(new Gtk.Label({ label: app.name, halign: Gtk.Align.START, css_classes: ["crystal-row-title"] }))
+    textBox.append(new Gtk.Label({ label: app.name, halign: Gtk.Align.START, css_classes: ["nidara-row-title"] }))
 
     const iconLabel = new Gtk.Label({
         label: canonical ?? (app.icon ?? t("settings.apps.no-icon")),
         halign: Gtk.Align.START,
-        css_classes: ["crystal-row-subtitle"],
+        css_classes: ["nidara-row-subtitle"],
         ellipsize: 3, // PANGO_ELLIPSIZE_END
     })
     textBox.append(iconLabel)
@@ -227,14 +227,14 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
     const hasOverride = !!appService.getIconOverridePath(app.icon ?? "")
     const badge = new Gtk.Label({
         label: t("settings.apps.badge.override"),
-        css_classes: ["crystal-row-subtitle", "app-override-badge"],
+        css_classes: ["nidara-row-subtitle", "app-override-badge"],
         visible: hasOverride,
         valign: Gtk.Align.CENTER,
     })
 
     const editBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.filePen, pixel_size: 14 , css_classes: ["cs-icon"] }),
-        css_classes: ["crystal-icon-btn"],
+        child: new Gtk.Image({ gicon: Icons.filePen, pixel_size: 14 , css_classes: ["nd-icon"] }),
+        css_classes: ["nidara-icon-btn"],
         valign: Gtk.Align.CENTER,
         tooltip_text: t("settings.apps.tooltip.change-icon"),
     })
@@ -271,16 +271,16 @@ export default function AppIconsPage() {
     page.append(searchEntry)
 
     // App list — build the group manually so we can wrap the ListBox in a ScrolledWindow
-    const groupBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["crystal-list-group"] })
+    const groupBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["nidara-list-group"] })
     groupBox.append(new Gtk.Label({
         label: t("settings.apps.installed"),
-        css_classes: ["crystal-list-title"],
+        css_classes: ["nidara-list-title"],
         halign: Gtk.Align.START,
         margin_start: 10,
     }))
 
     const appList = new Gtk.ListBox({
-        css_classes: ["crystal-list", "boxed-list"],
+        css_classes: ["nidara-list", "boxed-list"],
         selection_mode: Gtk.SelectionMode.NONE,
     })
 

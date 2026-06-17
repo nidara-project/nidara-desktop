@@ -5,7 +5,7 @@ export type Locale = "en" | "es"
 function detectLocale(): Locale {
   // Prefer saved greeter preference over LANG env
   try {
-    const [ok, data] = GLib.file_get_contents("/var/lib/greeter/.config/crystal-shell/greeter-prefs.json")
+    const [ok, data] = GLib.file_get_contents("/var/lib/greeter/.config/nidara/greeter-prefs.json")
     if (ok) {
       const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
       if (cfg.locale === "es") return "es"

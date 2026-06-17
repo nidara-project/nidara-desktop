@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import { listGroup, createRow, pageBox, staticLabel } from "../SettingsHelpers"
-import { showCrystalAlert } from "../../../../lib/crystal-ui"
+import { showNidaraAlert } from "../../../../lib/nidara-kit"
 import hs from "../../../core/HyprlandState"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
@@ -132,7 +132,7 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
             const newMode = `${r.w}x${r.h}@${hz}`
             if (newMode === prevMode) return
             monitorConfig.applyMode(name, newMode)
-            showCrystalAlert({
+            showNidaraAlert({
                 parent: box.get_root() as Gtk.Window,
                 heading: t("settings.display.confirm.title"),
                 countdown: {
@@ -214,7 +214,7 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
         const newT = TRANSFORM_MAP[ROTATIONS[rotDrp.selected]] ?? 0
         if (newT === prevTransform) return
         monitorConfig.applyTransform(name, newT)
-        showCrystalAlert({
+        showNidaraAlert({
             parent: box.get_root() as Gtk.Window,
             heading: t("settings.display.confirm.title"),
             countdown: {

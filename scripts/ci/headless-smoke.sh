@@ -1,6 +1,6 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# headless-smoke.sh — CI boot smoke test for the Crystal Shell UI.
+# headless-smoke.sh — CI boot smoke test for the Nidara UI.
 #
 # What this proves on every PR, with no GPU and no display:
 #   1. The pinned dependency stack (Astal libs + AGS + appmenu) still BUILDS
@@ -33,8 +33,8 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 OUT="${OUT:-${GITHUB_WORKSPACE:-$REPO}/smoke-out}"   # uploaded as artifact (always())
-DEPS_TARBALL="${DEPS_TARBALL:-/opt/crystal-deps.tar.zst}"
-STAGE="/opt/crystal-deps-stage"              # DESTDIR staging → tarball content
+DEPS_TARBALL="${DEPS_TARBALL:-/opt/nidara-deps.tar.zst}"
+STAGE="/opt/nidara-deps-stage"              # DESTDIR staging → tarball content
 
 # Single source of truth for the pinned revisions: install.sh.
 ASTAL_REF="$(grep -m1 '^ASTAL_REF='   "$REPO/install.sh" | cut -d'"' -f2)"
@@ -129,8 +129,8 @@ phase_bundle() {
     npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
     log "ags bundle…"
     mkdir -p build
-    ags bundle app.ts build/crystal-shell
-    log "bundle OK: $(du -h build/crystal-shell | cut -f1)"
+    ags bundle app.ts build/nidara
+    log "bundle OK: $(du -h build/nidara | cut -f1)"
 }
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -248,11 +248,11 @@ phase_run() {
     export WAYLAND_DISPLAY="$wl"
 
     # ── 3. The shell bundle, exactly as production runs it ────────────────────
-    log "booting crystal-shell bundle…"
+    log "booting nidara bundle…"
     export GDK_BACKEND=wayland
-    export CRYSTAL_SHELL_ROOT="$REPO/ui/shell"
+    export NIDARA_SHELL_ROOT="$REPO/ui/shell"
     cd "$REPO/ui/shell"
-    ./build/crystal-shell >"$shell_log" 2>&1 &
+    ./build/nidara >"$shell_log" 2>&1 &
     shell_pid=$!
 
     # ── 4. Gate: stays alive + IPC answers ────────────────────────────────────

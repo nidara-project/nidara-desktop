@@ -73,7 +73,7 @@ function buildControls(onClose: () => void): Gtk.Widget {
     const modeRow = new Gtk.Box({ spacing: 4, homogeneous: true })
     const modeBtns: Gtk.Button[] = []
     for (const mode of modes) {
-        const btn = new Gtk.Button({ label: mode.label, css_classes: ["crystal-seg-btn"] })
+        const btn = new Gtk.Button({ label: mode.label, css_classes: ["nidara-seg-btn"] })
         btn.connect("clicked", () => {
             selectedMode = mode.id
             modeBtns.forEach((b, i) => {
@@ -106,7 +106,7 @@ function buildControls(onClose: () => void): Gtk.Widget {
 // ── Bar icon ──────────────────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    return new Gtk.Image({ gicon: Icons.camera, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+    return new Gtk.Image({ gicon: Icons.camera, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 }
 
 function buildBarExpanded(onClose: () => void): Gtk.Widget {
@@ -118,7 +118,7 @@ function buildBarExpanded(onClose: () => void): Gtk.Widget {
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE) {
         const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        box.append(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["cs-icon"] }))
+        box.append(new Gtk.Image({ gicon: Icons.camera, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] }))
         return box
     }
 

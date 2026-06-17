@@ -91,7 +91,7 @@ export default function AboutWindow(): Gtk.Window | null {
     // ── Header ────────────────────────────────────────────────────────────────
     const headerBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, halign: Gtk.Align.CENTER, margin_bottom: 16 })
     headerBox.append(new Gtk.Image({ icon_name: `distributor-logo-${osId}`, pixel_size: 72, css_classes: ["about-logo"], halign: Gtk.Align.CENTER }))
-    headerBox.append(new Gtk.Label({ label: "Crystal Shell", css_classes: ["about-shell-name"], halign: Gtk.Align.CENTER }))
+    headerBox.append(new Gtk.Label({ label: "Nidara", css_classes: ["about-shell-name"], halign: Gtk.Align.CENTER }))
     headerBox.append(new Gtk.Label({ label: osName, css_classes: ["about-os-name"], halign: Gtk.Align.CENTER }))
 
     // ── Specs ─────────────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ export default function AboutWindow(): Gtk.Window | null {
 
     // ── Close button ──────────────────────────────────────────────────────────
     const closeBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14 , css_classes: ["cs-icon"] }),
+        child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14 , css_classes: ["nd-icon"] }),
         css_classes: ["about-close-btn"],
         halign: Gtk.Align.END,
         tooltip_text: t("settings.about.close"),
@@ -130,9 +130,9 @@ export default function AboutWindow(): Gtk.Window | null {
 
     // ── Window ────────────────────────────────────────────────────────────────
     const win = new Gtk.Window({
-        name: "crystal-about",
+        name: "nidara-about",
         application: app,
-        title: "About Crystal Shell",
+        title: "About Nidara",
         css_classes: ["about-floating-window"],
         decorated: false,
         resizable: false,
@@ -141,7 +141,7 @@ export default function AboutWindow(): Gtk.Window | null {
     _instance = win
 
     // Float + center come from a static window rule in hyprland.lua (matched by the
-    // "About Crystal Shell" title). The old `hyprctl keyword windowrulev2` calls here
+    // "About Nidara" title). The old `hyprctl keyword windowrulev2` calls here
     // were rejected by the Lua parser ("Use eval.") and have been removed.
 
     // Escape key

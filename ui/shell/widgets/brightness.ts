@@ -49,7 +49,7 @@ function buildBrightnessIcon(): Gtk.Widget {
         gicon: Icons.sun, pixel_size: 28,
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         hexpand: true, vexpand: true,
-        css_classes: ["cs-icon"],
+        css_classes: ["nd-icon"],
     })
 }
 
@@ -115,9 +115,9 @@ function buildHorizontal(): Gtk.Widget {
         },
     })
 
-    box.append(new Gtk.Image({ gicon: Icons.moon, pixel_size: 14, opacity: 0.5, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"] }))
+    box.append(new Gtk.Image({ gicon: Icons.moon, pixel_size: 14, opacity: 0.5, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] }))
     box.append(slider)
-    box.append(new Gtk.Image({ gicon: Icons.sun,  pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER, css_classes: ["cs-icon"] }))
+    box.append(new Gtk.Image({ gicon: Icons.sun,  pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] }))
     box.append(valueLabel)
 
     fetchBrightness().then(v => { sliderSync?.(v) })
@@ -128,7 +128,7 @@ function buildHorizontal(): Gtk.Widget {
 // ── Bar widget (icon only) ────────────────────────────────────────────────────
 
 function buildBarContent(): Gtk.Widget {
-    return new Gtk.Image({ gicon: Icons.sun, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["cs-icon"] })
+    return new Gtk.Image({ gicon: Icons.sun, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
 }
 
 // ── Bar expansion panel content ───────────────────────────────────────────────
@@ -164,7 +164,7 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
     })
 
     const row = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
-    row.append(new Gtk.Image({ gicon: Icons.moon, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
+    row.append(new Gtk.Image({ gicon: Icons.moon, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     row.append(slider)
     row.append(valueLabel)
 

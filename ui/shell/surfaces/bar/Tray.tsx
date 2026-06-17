@@ -2,7 +2,7 @@ import { Gtk, Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import AstalTray from "gi://AstalTray"
 import { getServiceSafe } from "../../utils"
-import { renderMenuModel } from "../../common/CrystalMenu"
+import { renderMenuModel } from "../../common/NidaraMenu"
 import status from "../../core/Status"
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule, anchored

@@ -8,7 +8,7 @@ import { t } from "../../../core/i18n"
 
 // ── hypridle config ───────────────────────────────────────────────────────────
 // The symlink at ~/.config/hypr/hypridle.conf resolves to the correct writable
-// target in both dev mode (repo file) and system mode (~/.config/crystal-shell/).
+// target in both dev mode (repo file) and system mode (~/.config/nidara/).
 const HYPRIDLE_CONF = `${GLib.get_home_dir()}/.config/hypr/hypridle.conf`
 
 interface IdleConfig { screenOff: number; lock: number; suspend: number }
@@ -32,7 +32,7 @@ const parseHypridle = (): IdleConfig => {
         }
         return {
             screenOff: blocks.find(b => /dpms.*(off|disable)/.test(b.onTimeout))?.timeout ?? 0,
-            lock:      blocks.find(b => b.onTimeout.includes("crystal-lock") || b.onTimeout.includes("lock-session"))?.timeout ?? 0,
+            lock:      blocks.find(b => b.onTimeout.includes("nidara-lock") || b.onTimeout.includes("lock-session"))?.timeout ?? 0,
             suspend:   blocks.find(b => b.onTimeout.includes("suspend"))?.timeout ?? 0,
         }
     } catch {
@@ -42,13 +42,13 @@ const parseHypridle = (): IdleConfig => {
 
 const writeHypridle = ({ screenOff, lock, suspend }: IdleConfig) => {
     const lines = [
-        "# --- HYPRIDLE - Crystal Shell Idle Management ---",
-        "# Managed by Crystal Shell Settings → Power → Idle & Lock",
+        "# --- HYPRIDLE - Nidara Idle Management ---",
+        "# Managed by Nidara Settings → Power → Idle & Lock",
         "",
         "general {",
-        "    lock_cmd = crystal-lock",
-        "    before_sleep_cmd = crystal-before-sleep",
-        "    after_sleep_cmd = crystal-after-sleep",
+        "    lock_cmd = nidara-lock",
+        "    before_sleep_cmd = nidara-before-sleep",
+        "    after_sleep_cmd = nidara-after-sleep",
         "    ignore_dbus_inhibit = false",
         "}",
         "",
@@ -57,7 +57,7 @@ const writeHypridle = ({ screenOff, lock, suspend }: IdleConfig) => {
         "listener {",
         `    timeout = ${screenOff}`,
         // Lua-parser syntax — the legacy `hyprctl dispatch dpms off` is a Lua
-        // error on Crystal's Hyprland and leaves the screen unrecoverable on wake
+        // error on Nidara's Hyprland and leaves the screen unrecoverable on wake
         `    on-timeout = hyprctl dispatch 'hl.dsp.dpms({ action = "disable" })'`,
         `    on-resume  = hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })'`,
         "}", ""
@@ -65,7 +65,7 @@ const writeHypridle = ({ screenOff, lock, suspend }: IdleConfig) => {
     if (lock > 0) lines.push(
         "listener {",
         `    timeout = ${lock}`,
-        "    on-timeout = crystal-lock",
+        "    on-timeout = nidara-lock",
         "}", ""
     )
     if (suspend > 0) lines.push(
@@ -151,12 +151,12 @@ export default function PowerPage() {
 
     profiles.forEach(p => {
         const rowContent = new Gtk.Box({ spacing: 16, margin_start: 16, margin_end: 16, margin_top: 14, margin_bottom: 14 })
-        rowContent.append(new Gtk.Image({ gicon: p.icon, pixel_size: 20, css_classes: ["sidebar-icon", "cs-icon"] }))
-        rowContent.append(new Gtk.Label({ label: p.label, hexpand: true, halign: Gtk.Align.START, css_classes: ["crystal-row-title"] }))
-        const checkIcon = new Gtk.Image({ gicon: Icons.check, css_classes: ["profile-check", "accent-icon", "cs-icon"], pixel_size: 16, visible: false })
+        rowContent.append(new Gtk.Image({ gicon: p.icon, pixel_size: 20, css_classes: ["sidebar-icon", "nd-icon"] }))
+        rowContent.append(new Gtk.Label({ label: p.label, hexpand: true, halign: Gtk.Align.START, css_classes: ["nidara-row-title"] }))
+        const checkIcon = new Gtk.Image({ gicon: Icons.check, css_classes: ["profile-check", "accent-icon", "nd-icon"], pixel_size: 16, visible: false })
         rowContent.append(checkIcon)
         checkIcons.set(p.id, checkIcon)
-        const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+        const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
         row.set_child(rowContent); row.set_name(p.id)
         profileGroup.listBox.append(row)
     })
@@ -236,7 +236,7 @@ export default function PowerPage() {
     // Info note: lock must fire before suspend
     const note = new Gtk.Label({
         label: t("settings.power.lock-note"),
-        css_classes: ["crystal-row-subtitle"],
+        css_classes: ["nidara-row-subtitle"],
         halign: Gtk.Align.START,
         margin_start: 10,
         margin_top: 4,

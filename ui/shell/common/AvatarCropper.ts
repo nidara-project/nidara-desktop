@@ -1,7 +1,7 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Cairo from "gi://cairo"
-import { CrystalButton } from "../../lib/crystal-ui"
+import { NidaraButton } from "../../lib/nidara-kit"
 import { makeHSlider } from "./Slider"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -111,19 +111,19 @@ export function showAvatarCropper(
 
     box.append(new Gtk.Label({
         label: t("settings.users.avatar.crop.hint"),
-        css_classes: ["crystal-row-subtitle"],
+        css_classes: ["nidara-row-subtitle"],
         halign: Gtk.Align.CENTER,
     }))
 
     const zoomRow = new Gtk.Box({ spacing: 10, hexpand: true })
-    zoomRow.append(new Gtk.Image({ gicon: Icons.zoomOut, pixel_size: 20, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER }))
+    zoomRow.append(new Gtk.Image({ gicon: Icons.zoomOut, pixel_size: 20, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
     zoomRow.append(zoomSlider)
-    zoomRow.append(new Gtk.Image({ gicon: Icons.zoomIn, pixel_size: 20, css_classes: ["cs-icon"], valign: Gtk.Align.CENTER }))
+    zoomRow.append(new Gtk.Image({ gicon: Icons.zoomIn, pixel_size: 20, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
     box.append(zoomRow)
 
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
-    const cancelBtn = CrystalButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
-    const useBtn = CrystalButton({ label: t("settings.users.avatar.crop.use"), variant: "primary", pill: true })
+    const cancelBtn = NidaraButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
+    const useBtn = NidaraButton({ label: t("settings.users.avatar.crop.use"), variant: "primary", pill: true })
     cancelBtn.connect("clicked", () => dialog.close())
     useBtn.connect("clicked", () => {
         // Crop the SOURCE (full quality) to the framed square, then scale to SAVE.

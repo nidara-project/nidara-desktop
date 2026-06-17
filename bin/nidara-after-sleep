@@ -1,0 +1,18 @@
+#!/bin/bash
+# ─────────────────────────────────────────────────────────────────────────────
+# nidara-after-sleep — hypridle after_sleep_cmd
+# Installed to /usr/bin/nidara-after-sleep
+# Re-enables the displays after wake (DPMS) and restores the saved volume.
+# ─────────────────────────────────────────────────────────────────────────────
+
+sleep 0.5
+# Lua-parser syntax: the legacy `hyprctl dispatch dpms on` is a Lua error on
+# Nidara's Hyprland. If this line breaks, the screen stays black after every
+# wake with no recovery path beyond a blind TTY login — treat it as critical.
+hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })'
+
+# Restore volume once PipeWire is back up
+sleep 1.5
+v=$(cat /tmp/.nidara-vol 2>/dev/null)
+[ -n "$v" ] && wpctl set-volume @DEFAULT_SINK@ "$v" 2>/dev/null
+exit 0

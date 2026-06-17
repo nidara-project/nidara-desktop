@@ -30,7 +30,7 @@ export default function LoginCard(): Gtk.Widget {
   const fallback: User = { username: "user", displayName: "User", avatarPath: null, homeDir: "" }
   let activeUser: User = users[0] ?? fallback
 
-  let sessionIdx = Math.max(0, sessions.findIndex(s => s.id === "crystal-shell"))
+  let sessionIdx = Math.max(0, sessions.findIndex(s => s.id === "nidara"))
   let isAuthenticating = false
 
   const avatar = avatarImage(activeUser, 80)

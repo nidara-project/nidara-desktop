@@ -156,7 +156,7 @@ export function Schematic(wsId: number, hyprland: any, width = BASE_WIDTH) {
                     valign: Gtk.Align.CENTER,
                     hexpand: true,
                     vexpand: true
-                , css_classes: ["cs-icon"] })
+                , css_classes: ["nd-icon"] })
                 const box = new Gtk.Box({
                     css_classes: ["wo-schematic-win"],
                     halign: Gtk.Align.FILL,

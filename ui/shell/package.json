@@ -7,7 +7,7 @@
     "pretypecheck": "[ -d @girs ] || ags types -d .",
     "typecheck": "npx --yes -p typescript@5.7.3 tsc --noEmit -p tsconfig.json",
     "prebuild": "node ../../scripts/gen-widget-index.mjs",
-    "build": "mkdir -p build && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ags bundle app.ts build/crystal-shell"
+    "build": "mkdir -p build && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css && ags bundle app.ts build/nidara"
   },
   "dependencies": {
     "ags": "file:/usr/share/ags/js",

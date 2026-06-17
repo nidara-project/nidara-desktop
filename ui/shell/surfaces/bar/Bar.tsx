@@ -70,9 +70,9 @@ function SystemMenuIcon(): Gtk.Widget {
 export default function Bar(gdkmonitor: Gdk.Monitor) {
   const monGeo = gdkmonitor.get_geometry()
   const win = new Gtk.Window({
-    name: "crystal-bar",
+    name: "nidara-bar",
     application: app,
-    css_classes: ["crystal-bar-window"],
+    css_classes: ["nidara-bar-window"],
     default_width: monGeo.width,
     default_height: monGeo.height, // Stay full height for CC/NC
     visible: false
@@ -367,7 +367,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   timeLabel.connect("unrealize", () => { try { GLib.source_remove(clockTimer) } catch {} })
   regionConfig.connect("changed", updateClock)
   updateClock()
-  const bellIcon = new Gtk.Image({ gicon: Icons.bell, pixel_size: 16, visible: false , css_classes: ["cs-icon"] })
+  const bellIcon = new Gtk.Image({ gicon: Icons.bell, pixel_size: 16, visible: false , css_classes: ["nd-icon"] })
   try {
     const notifd = AstalNotifd.get_default()
     const syncBell = () => { bellIcon.set_visible(notifd.notifications.length > 0) }
@@ -390,9 +390,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const hasExpand = !!w.buildBarExpanded
       const hasCCDetail = !!w.buildCCDetail
       const row = new Gtk.Box({ spacing: 10 })
-      row.append(new Gtk.Image({ gicon: w.icon, pixel_size: 16, css_classes: ["cs-icon"] }))
+      row.append(new Gtk.Image({ gicon: w.icon, pixel_size: 16, css_classes: ["nd-icon"] }))
       row.append(new Gtk.Label({ label: w.name, halign: Gtk.Align.START, hexpand: true }))
-      const btn = new Gtk.Button({ child: row, css_classes: ["crystal-menu-row"], hexpand: true })
+      const btn = new Gtk.Button({ child: row, css_classes: ["nidara-menu-row"], hexpand: true })
       btn.connect("clicked", () => {
         if (hasExpand) {
           status.bar_expanded_id = id
@@ -503,7 +503,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   right.append(recCapsule)
 
   // AI-control indicator + kill switch — visible only while the computer-control
-  // gate is granted (agents may act on third-party apps via crystal-act). The
+  // gate is granted (agents may act on third-party apps via nidara-act). The
   // capsule IS the kill switch: clicking it (or Super+Shift+Esc, see
   // config/hypr/hyprland.lua) revokes control instantly. Mirrors the recording
   // indicator above so the user is never unaware the agent may act.
@@ -532,9 +532,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   trayInner.connect("notify::visible", () => trayCapsule.set_visible(trayInner.get_visible()))
   trayCapsule.set_visible(trayInner.get_visible())
   right.append(trayCapsule)
-  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(searchCapsule)
-  const ccBtn = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.settings2, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["cs-icon"] }), onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const ccBtn = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.settings2, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(ccBtn)
   const timeCapsule = SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(timeCapsule)
@@ -551,7 +551,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   // ── Top zone reservation ──────────────────────────────────────────────────
   // The bar reserves its own 40 px top strip via exclusive_zone (set on `win`
-  // below). The previous design used a SEPARATE invisible "crystal-bar-zone"
+  // below). The previous design used a SEPARATE invisible "nidara-bar-zone"
   // layer surface (exclusive_zone=40) plus exclusive_zone=-1 on the bar, so a
   // side dock's exclusive zone couldn't squish the bar's width. But that empty
   // spacer surface triggered a Wayland `configure` storm: Hyprland reconfigured
@@ -565,14 +565,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   try {
     Gtk4LayerShell.init_for_window(win)
-    Gtk4LayerShell.set_namespace(win, "crystal-bar")
+    Gtk4LayerShell.set_namespace(win, "nidara-bar")
     Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.TOP, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.LEFT, true)
     Gtk4LayerShell.set_anchor(win, Gtk4LayerShell.Edge.RIGHT, true)
     // No bottom anchor — required for the exclusive zone to reserve only the top strip.
     Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
-    // Reserve the 40 px top strip for tiled windows (replaces the old crystal-bar-zone
+    // Reserve the 40 px top strip for tiled windows (replaces the old nidara-bar-zone
     // spacer surface — see "Top zone reservation" above). Independent of the surface's
     // own height; the bar surface stays full-height for the CC/NC overlays.
     Gtk4LayerShell.set_exclusive_zone(win, 40)

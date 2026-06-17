@@ -1,4 +1,4 @@
-// CRYSTAL UI - Global Ambient Types
+// NIDARA UI - Global Ambient Types
 // No imports or exports here to maintain global script status.
 
 namespace AstalHyprland {

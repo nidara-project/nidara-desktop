@@ -14,7 +14,7 @@
     background-color: transparent;
 
     // Reset Adwaita button defaults inside CC islands
-    button { @include crystal-reset; }
+    button { @include nidara-reset; }
 }
 
 .cc-atomic-slider-box-horizontal {
@@ -29,17 +29,17 @@
 .cc-media-title-atomic {
     font-size: $fs-small;
     font-weight: $fw-bold;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
 }
 
 .cc-media-artist-atomic {
     font-size: $fs-caption;
     font-weight: $fw-regular;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
 }
 
 .cc-media-btn-atomic {
-    color: var(--crystal-text);
+    color: var(--nidara-text);
     background: transparent;
     border: none;
     // The theme inflates buttons well past the icon, leaving dead space above/below
@@ -51,15 +51,15 @@
 }
 
 .cc-media-play-btn {
-    background-color: var(--crystal-accent);
-    border-radius: var(--crystal-radius-pill);
-    color: var(--crystal-accent-fg);
+    background-color: var(--nidara-accent);
+    border-radius: var(--nidara-radius-pill);
+    color: var(--nidara-accent-fg);
 }
 
 .cc-media-time {
     font-size: $fs-caption;
     font-weight: $fw-medium;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
     opacity: 0.7;
 }
 
@@ -71,31 +71,31 @@
     /* Wrapper button for 2x1 capsules */
     .cc-capsule-btn {
         background-color: transparent;
-        border-radius: var(--crystal-radius-lg);
-        color: var(--crystal-text);
+        border-radius: var(--nidara-radius-lg);
+        color: var(--nidara-text);
         padding: 0;
     }
 
     /* 1x1 Round Toggles */
     .cc-atomic-round-btn {
-        border-radius: var(--crystal-radius-pill);
-        color: var(--crystal-text);
+        border-radius: var(--nidara-radius-pill);
+        color: var(--nidara-text);
 
     }
 }
 
 /* 48x48 Circular Badge inside capsules (no override needed, is a box not a button) */
 .cc-atomic-icon-circle-bg {
-    background-color: var(--crystal-surface);
-    border-radius: var(--crystal-radius-pill);
-    color: var(--crystal-text);
+    background-color: var(--nidara-surface);
+    border-radius: var(--nidara-radius-pill);
+    color: var(--nidara-text);
 }
 
 /* --- Typographical Utilities for Toggles --- */
 .cc-atomic-label-bold {
     font-size: $fs-small;
     font-weight: $fw-bold;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
 }
 
 .cc-atomic-label-dim {
@@ -104,21 +104,21 @@
     // wrapped in a cc-capsule-btn (bt, focus, dark_mode, night_light) rendered the
     // subtitle heavier than the plain-box tiles (wifi, ethernet, …). 400 everywhere.
     font-weight: $fw-regular;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
 }
 
 /* CPU/Memory metric: % inside the ring + CPU/RAM caption below */
 .resource-value {
     font-size: $fs-small;
     font-weight: $fw-bold;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
 }
 
 .resource-caption {
     font-size: $fs-caption;
     font-weight: $fw-semibold;
     letter-spacing: 0.04em;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
 }
 
 /* 1×2 capsule slider (volume/brightness): % overlaid on top, icon at the bottom.
@@ -127,28 +127,28 @@
     font-size: $fs-small;
     font-weight: $fw-bold;
     font-variant-numeric: tabular-nums;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
 }
 
 // VPN widget active state
 .vpn-active-bg {
-    background-color: rgba(var(--crystal-accent-rgb), 0.25);
+    background-color: rgba(var(--nidara-accent-rgb), 0.25);
 }
 
 // Recording widget states
 .rec-active-bg {
-    background-color: rgba(var(--crystal-danger-rgb), 0.25);
+    background-color: rgba(var(--nidara-danger-rgb), 0.25);
     animation: rec-pulse-cc 1.4s ease-in-out infinite;
 }
 
-.rec-stop-icon { color: var(--crystal-danger); }
+.rec-stop-icon { color: var(--nidara-danger); }
 
-.rec-label { color: var(--crystal-danger); }
+.rec-label { color: var(--nidara-danger); }
 
 .rec-elapsed {
     font-size: $fs-caption;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
     font-variant-numeric: tabular-nums;
 }
 
@@ -162,42 +162,42 @@
     label {
         font-size: $fs-small;
         font-weight: $fw-bold;
-        color: var(--crystal-text-dim);
+        color: var(--nidara-text-dim);
     }
 
     &:hover label {
-        color: var(--crystal-text);
+        color: var(--nidara-text);
     }
 }
 
 /* Shared round glass icon button (see common/IconButton.ts). Single source of
    truth for close/remove/collapse controls. Size is set inline per use; shape/icon/hover
-   are identical everywhere. NB: named -circle- to avoid the existing .crystal-icon-btn
+   are identical everywhere. NB: named -circle- to avoid the existing .nidara-icon-btn
    in _settings.scss (the sidebar toggle), whose `button.` specificity would win. */
-.crystal-circle-btn {
+.nidara-circle-btn {
     /* Padding (not set_size_request) sizes the button to its glyph — crisp icon, circle
        centred on it (same approach as the Settings close button). */
     padding: 4px;
     min-width: 0;
     min-height: 0;
     /* Same fill as the count badge (nc-badge-header): simple, unified, no special tokens. */
-    background: var(--crystal-surface-raised);
+    background: var(--nidara-surface-raised);
     border: none;
-    border-radius: var(--crystal-radius-pill);
+    border-radius: var(--nidara-radius-pill);
     transition: background-color 0.15s #{$ease};
 
     image { margin: 0; }
 
     /* Neutral hover (e.g. the collapse chevron): brighter fill — no border (it left corner dots). */
-    &:hover { background: var(--crystal-surface-strong); }
+    &:hover { background: var(--nidara-surface-strong); }
 
     /* Destructive (close/remove): red on hover */
-    &.is-danger:hover { background: var(--crystal-danger); }
+    &.is-danger:hover { background: var(--nidara-danger); }
 }
 
 .cc-slot-placeholder {
-    background: var(--crystal-surface-strong);
-    border-radius: var(--crystal-radius-pill);
+    background: var(--nidara-surface-strong);
+    border-radius: var(--nidara-radius-pill);
 }
 
 .cc-drag-source {
@@ -206,15 +206,15 @@
 }
 
 .cc-drop-ghost {
-    background: rgba(var(--crystal-accent-rgb), 0.12);
-    border: 2px dashed rgba(var(--crystal-accent-rgb), 0.6);
-    border-radius: var(--crystal-radius-lg);
+    background: rgba(var(--nidara-accent-rgb), 0.12);
+    border: 2px dashed rgba(var(--nidara-accent-rgb), 0.6);
+    border-radius: var(--nidara-radius-lg);
     transition: background-color 0.1s ease, border-color 0.1s ease;
 
     /* No valid drop here (off-grid, or a displaced tile wouldn't fit). */
     &.cc-drop-ghost-invalid {
-        background: rgba(var(--crystal-danger-rgb), 0.12);
-        border-color: rgba(var(--crystal-danger-rgb), 0.6);
+        background: rgba(var(--nidara-danger-rgb), 0.12);
+        border-color: rgba(var(--nidara-danger-rgb), 0.6);
     }
 }
 
@@ -240,8 +240,8 @@
 }
 
 .nc-badge-header {
-    background: var(--crystal-surface-raised);
-    color: var(--crystal-text);
+    background: var(--nidara-surface-raised);
+    color: var(--nidara-text);
     font-size: $fs-mini;
     font-weight: $fw-bold;
     padding: 1px 6px;
@@ -254,7 +254,7 @@
 .nc-notif-body {
     font-size: $fs-caption;
     font-weight: $fw-regular;
-    color: var(--crystal-text-secondary);
+    color: var(--nidara-text-secondary);
 }
 
 .nc-group-ctrl-header {
@@ -269,7 +269,7 @@
 .nc-group-header-name {
     font-size: $fs-caption;
     font-weight: $fw-bold;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
 }
 
 /* Calendar Cleanup */
@@ -286,11 +286,11 @@
             border: none;
         }
 
-        // Day cells: Crystal accent on selection + today (GtkCalendar paints these
+        // Day cells: Nidara accent on selection + today (GtkCalendar paints these
         // with Adwaita's default blue otherwise). Column headers (.day-name) and week
         // numbers (.week-number) are left to the normal text tokens.
         grid label.day-name {
-            color: var(--crystal-text-dim);
+            color: var(--nidara-text-dim);
             font-weight: $fw-semibold;
         }
         // Kill Adwaita's blue focus ring on every day cell. GTK4 has NO `outline`
@@ -314,18 +314,18 @@
             box-shadow: none;
             border-color: transparent;
         }
-        grid label.other-month { color: var(--crystal-text-disabled); }
+        grid label.other-month { color: var(--nidara-text-disabled); }
         // "Today" (when not selected): faint accent-tinted cell, theme-coloured
         // bold number (never accent on text).
         grid label.today:not(:selected) {
-            background-color: var(--crystal-accent-10);
-            color: var(--crystal-text);
+            background-color: var(--nidara-accent-10);
+            color: var(--nidara-text);
             font-weight: $fw-bold;
         }
         grid label:selected {
-            background-color: var(--crystal-accent);
+            background-color: var(--nidara-accent);
             background-image: none;
-            color: var(--crystal-accent-fg);
+            color: var(--nidara-accent-fg);
             font-weight: $fw-bold;
         }
     }
@@ -334,7 +334,7 @@
 .nc-item-time {
     font-size: $fs-caption;
     font-weight: $fw-semibold;
-    color: var(--crystal-text-secondary);
+    color: var(--nidara-text-secondary);
 }
 
 .nc-action-row {
@@ -357,9 +357,9 @@
     min-width: 0;
     background: transparent;
     border: none;
-    border-radius: var(--crystal-radius-xs);
+    border-radius: var(--nidara-radius-xs);
     /* Solid text instead of accent — accent on glass reads poorly with some palettes. */
-    color: var(--crystal-text);
+    color: var(--nidara-text);
     font-size: $fs-caption;
     font-weight: $fw-semibold;
     transition: background-color 0.15s #{$ease}, color 0.15s #{$ease};
@@ -367,11 +367,11 @@
     label { padding: 0; margin: 0; }
 
     &:hover {
-        background: var(--crystal-accent-10);
+        background: var(--nidara-accent-10);
     }
 
     &:active {
-        background: var(--crystal-accent-30);
+        background: var(--nidara-accent-30);
     }
 }
 
@@ -407,31 +407,31 @@
         min-width: 5px;
         min-height: 28px;
         margin: 4px 1px;          /* tight right margin keeps it flush to the edge */
-        background: var(--crystal-surface-raised);
-        border-radius: var(--crystal-radius-pill);
+        background: var(--nidara-surface-raised);
+        border-radius: var(--nidara-radius-pill);
         transition: background 0.2s #{$ease};
     }
 
     &:hover slider,
     &.hovering slider,
-    &.dragging slider { background: var(--crystal-text-dim); }
+    &.dragging slider { background: var(--nidara-text-dim); }
 }
 
 .nc-empty {
     font-size: $fs-subtitle;
     font-weight: $fw-medium;
     /* No background behind it (sits straight on the glass), so 0.3 looked washed out. */
-    color: var(--crystal-text-secondary);
+    color: var(--nidara-text-secondary);
 }
 
 .nc-clear-all-pill {
     label {
         font-size: $fs-small;
         font-weight: $fw-bold;
-        color: var(--crystal-text-dim);
+        color: var(--nidara-text-dim);
     }
 
-    &:hover label { color: var(--crystal-text); }
+    &:hover label { color: var(--nidara-text); }
 }
 
 
@@ -441,15 +441,15 @@
     background-image: none;
     border: none;
     box-shadow: none;
-    border-radius: $crystal-radius-sm;
-    color: var(--crystal-text);
+    border-radius: $nidara-radius-sm;
+    color: var(--nidara-text);
     transition: background-color 0.15s ease, box-shadow 0.15s ease;
 
-    @include crystal-tile-states;
+    @include nidara-tile-states;
 }
 
 .cc-detail-sep {
-    background: var(--crystal-border);
+    background: var(--nidara-border);
     min-height: 1px;
     margin-left: 12px;
     margin-right: 12px;
@@ -458,14 +458,14 @@
 .cc-detail-title {
     font-size: $fs-small;
     font-weight: $fw-bold;
-    color: var(--crystal-text);
+    color: var(--nidara-text);
     letter-spacing: 0.04em;
 }
 
 .cc-detail-section-label {
     font-size: $fs-caption;
     font-weight: $fw-bold;
-    color: var(--crystal-text-dim);
+    color: var(--nidara-text-dim);
     letter-spacing: 0.06em;
     text-transform: uppercase;
     opacity: 0.7;
@@ -474,9 +474,9 @@
 /* --- CC Detail Panel — styles for content inside the squircle island --------- */
 .cc-detail-panel {
 
-    // Strip the boxed-card look: inside the detail panel a crystal-list sits flat
+    // Strip the boxed-card look: inside the detail panel a nidara-list sits flat
     // on the island, not as a frosted card.
-    list.crystal-list,
+    list.nidara-list,
     list.boxed-list {
         background: transparent;
         background-image: none;
@@ -486,51 +486,51 @@
         padding: 0;
 
         row {
-            @include crystal-reset;
-            border-radius: $crystal-radius-sm;
+            @include nidara-reset;
+            border-radius: $nidara-radius-sm;
             margin: 1px 0;
-            @include crystal-row-states;
+            @include nidara-row-states;
             &:selected { background: transparent; }   // list rows aren't selectable
         }
     }
 
     // Full-row click buttons (clipboard items)
     button.settings-action-row {
-        @include crystal-reset;
-        border-radius: $crystal-radius-sm;
-        @include crystal-row-states;
+        @include nidara-reset;
+        border-radius: $nidara-radius-sm;
+        @include nidara-row-states;
     }
 
     // Primary action (VPN connect, screenshot save, start recording)
     button.suggested-action {
-        background: var(--crystal-accent);
+        background: var(--nidara-accent);
         background-image: none;
-        color: var(--crystal-accent-fg);
+        color: var(--nidara-accent-fg);
         border: none;
         box-shadow: none;
-        border-radius: $crystal-radius-sm;
+        border-radius: $nidara-radius-sm;
         padding: 6px 14px;
         font-size: $fs-small;
         font-weight: $fw-semibold;
 
-        &:hover  { background: rgba(var(--crystal-accent-rgb), 0.82); }
-        &:active { background: rgba(var(--crystal-accent-rgb), 0.65); }
+        &:hover  { background: rgba(var(--nidara-accent-rgb), 0.82); }
+        &:active { background: rgba(var(--nidara-accent-rgb), 0.65); }
     }
 
     // Destructive action (VPN disconnect, stop recording)
     button.destructive-action {
-        background: var(--crystal-danger);
+        background: var(--nidara-danger);
         background-image: none;
-        color: var(--crystal-accent-fg);
+        color: var(--nidara-accent-fg);
         border: none;
         box-shadow: none;
-        border-radius: $crystal-radius-sm;
+        border-radius: $nidara-radius-sm;
         padding: 6px 14px;
         font-size: $fs-small;
         font-weight: $fw-semibold;
 
-        &:hover  { background: rgba(var(--crystal-danger-rgb), 0.82); }
-        &:active { background: rgba(var(--crystal-danger-rgb), 0.65); }
+        &:hover  { background: rgba(var(--nidara-danger-rgb), 0.82); }
+        &:active { background: rgba(var(--nidara-danger-rgb), 0.65); }
     }
 
     // Flat button (screenshot copy, set-default text link)
@@ -539,13 +539,13 @@
         background-image: none;
         border: none;
         box-shadow: none;
-        color: var(--crystal-text);
-        border-radius: $crystal-radius-sm;
+        color: var(--nidara-text);
+        border-radius: $nidara-radius-sm;
         padding: 4px 10px;
         font-weight: $fw-medium;
 
-        &:hover  { background: var(--crystal-accent-10); }
-        &:active { background: rgba(var(--crystal-accent-rgb), 0.18); }
+        &:hover  { background: var(--nidara-accent-10); }
+        &:active { background: rgba(var(--nidara-accent-rgb), 0.18); }
     }
 
     // Compact text button (set-default, inside audio device rows)
@@ -561,51 +561,51 @@
     // Linked mode-selector button groups (screenshot / screenrecord)
     .linked {
         > button {
-            background: var(--crystal-surface-back);
+            background: var(--nidara-surface-back);
             background-image: none;
-            border: 1px solid var(--crystal-border);
-            border-radius: $crystal-radius-sm;
+            border: 1px solid var(--nidara-border);
+            border-radius: $nidara-radius-sm;
             box-shadow: none;
-            color: var(--crystal-text-dim);
+            color: var(--nidara-text-dim);
             font-size: $fs-small;
             padding: 6px 0;
 
             // Unselected: deepen neutrally on hover; accent stays for the selected
             // (.suggested-action) segment only.
-            &:hover { background: var(--crystal-surface-hover); color: var(--crystal-text); }
+            &:hover { background: var(--nidara-surface-hover); color: var(--nidara-text); }
 
             &.suggested-action {
-                background: rgba(var(--crystal-accent-rgb), 0.18);
+                background: rgba(var(--nidara-accent-rgb), 0.18);
                 background-image: none;
-                border-color: rgba(var(--crystal-accent-rgb), 0.45);
-                color: var(--crystal-text);
+                border-color: rgba(var(--nidara-accent-rgb), 0.45);
+                color: var(--nidara-text);
                 font-weight: $fw-bold;
 
-                &:hover  { background: rgba(var(--crystal-accent-rgb), 0.26); }
-                &:active { background: rgba(var(--crystal-accent-rgb), 0.35); }
+                &:hover  { background: rgba(var(--nidara-accent-rgb), 0.26); }
+                &:active { background: rgba(var(--nidara-accent-rgb), 0.35); }
             }
         }
     }
 
     // Audio enable switch
     switch {
-        &:checked slider { background: var(--crystal-thumb); }
-        &:checked       { background: var(--crystal-accent); }
+        &:checked slider { background: var(--nidara-thumb); }
+        &:checked       { background: var(--nidara-accent); }
     }
 
     // Default speaker badge
     .accent-label {
-        color: var(--crystal-text);
-        background: rgba(var(--crystal-accent-rgb), 0.14);
-        border-radius: $crystal-radius-pill;
+        color: var(--nidara-text);
+        background: rgba(var(--nidara-accent-rgb), 0.14);
+        border-radius: $nidara-radius-pill;
         padding: 2px 8px;
         font-size: $fs-caption;
         font-weight: $fw-semibold;
     }
 
-    .crystal-row-title    { font-size: $fs-small; color: var(--crystal-text); }
-    .crystal-row-subtitle { font-size: $fs-small; color: var(--crystal-text-dim); }
-    .slider-value-label   { color: var(--crystal-text-dim); font-size: $fs-small; font-variant-numeric: tabular-nums; }
+    .nidara-row-title    { font-size: $fs-small; color: var(--nidara-text); }
+    .nidara-row-subtitle { font-size: $fs-small; color: var(--nidara-text-dim); }
+    .slider-value-label   { color: var(--nidara-text-dim); font-size: $fs-small; font-variant-numeric: tabular-nums; }
 
-    separator { background: var(--crystal-border); margin: 4px 0; min-height: 1px; }
+    separator { background: var(--nidara-border); margin: 4px 0; min-height: 1px; }
 }

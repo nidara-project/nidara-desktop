@@ -1,6 +1,6 @@
-# Packaging — Crystal Shell's source-built dependencies
+# Packaging — Nidara's source-built dependencies
 
-Crystal Shell depends on three things that are **not in the official Arch repos** and
+Nidara depends on three things that are **not in the official Arch repos** and
 that we pin to a known-good revision rather than track upstream HEAD:
 
 | What | Pinned by | Why we build it |
@@ -41,13 +41,13 @@ and removal is clean.
   `install.sh` §1's `pacman -S`, and empty deps keep this first packaging pass from
   failing on transient resolution.
 
-## Where this is heading (crystal-repo)
+## Where this is heading (nidara-repo)
 
 This is the local/dev form. The intended end state for the distributable DE:
 
 1. Lift these generated PKGBUILDs into **committed** PKGBUILDs built by CI into real
-   `.pkg.tar.zst` artifacts hosted in **`crystal-repo`**.
-2. `install.sh` / Calamares then just add `crystal-repo` to `pacman.conf` and
+   `.pkg.tar.zst` artifacts hosted in **`nidara-repo`**.
+2. `install.sh` / Calamares then just add `nidara-repo` to `pacman.conf` and
    `pacman -S` — **no build toolchain on the user's machine**, identical pinned binaries
    for everyone, and dep bumps propagate via `pacman -Syu`.
 3. At that point tighten `depends=()` to real runtime deps and add `provides`/`conflicts`

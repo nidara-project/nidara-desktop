@@ -5,7 +5,7 @@ import { TransitionType } from "./WallpaperManager"
 
 export type WallpaperMode = "artwork" | "custom" | "none"
 
-const CONFIG_PATH = `${GLib.get_user_config_dir()}/crystal-shell/gaming.json`
+const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/gaming.json`
 
 class GamingManager extends GObject.Object {
     static {
@@ -43,7 +43,7 @@ class GamingManager extends GObject.Object {
     }
 
     private _save() {
-        const dir = `${GLib.get_user_config_dir()}/crystal-shell`
+        const dir = `${GLib.get_user_config_dir()}/nidara`
         if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
         writeFile(CONFIG_PATH, JSON.stringify({
             wallpaperMode:      this._wallpaperMode,

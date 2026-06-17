@@ -3,7 +3,7 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
-import { showCrystalAlert, CrystalButton } from "../../../../lib/crystal-ui"
+import { showNidaraAlert, NidaraButton } from "../../../../lib/nidara-kit"
 import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { showAvatarCropper } from "../../../common/AvatarCropper"
 import { t } from "../../../core/i18n"
@@ -157,7 +157,7 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
 
     const field = (label: string, widget: Gtk.Widget) => {
         const vbox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
-        vbox.append(new Gtk.Label({ label, halign: Gtk.Align.START, css_classes: ["crystal-row-title"] }))
+        vbox.append(new Gtk.Label({ label, halign: Gtk.Align.START, css_classes: ["nidara-row-title"] }))
         vbox.append(widget)
         return vbox
     }
@@ -174,11 +174,11 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
     const adminSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER })
     adminRow.append(adminSwitch)
 
-    const statusLabel = new Gtk.Label({ label: "", css_classes: ["crystal-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
+    const statusLabel = new Gtk.Label({ label: "", css_classes: ["nidara-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
 
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
-    const cancelBtn = CrystalButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
-    const createBtn = CrystalButton({ label: t("settings.users.other.create"), variant: "primary", pill: true, sensitive: false })
+    const cancelBtn = NidaraButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
+    const createBtn = NidaraButton({ label: t("settings.users.other.create"), variant: "primary", pill: true, sensitive: false })
     btnRow.append(cancelBtn)
     btnRow.append(createBtn)
 
@@ -258,7 +258,7 @@ function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null
 
     const field = (label: string, widget: Gtk.Widget) => {
         const vbox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4 })
-        vbox.append(new Gtk.Label({ label, halign: Gtk.Align.START, css_classes: ["crystal-row-title"] }))
+        vbox.append(new Gtk.Label({ label, halign: Gtk.Align.START, css_classes: ["nidara-row-title"] }))
         vbox.append(widget)
         return vbox
     }
@@ -266,11 +266,11 @@ function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null
     const pwEntry  = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true })
     const pw2Entry = new Gtk.PasswordEntry({ show_peek_icon: true, hexpand: true })
 
-    const statusLabel = new Gtk.Label({ label: "", css_classes: ["crystal-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
+    const statusLabel = new Gtk.Label({ label: "", css_classes: ["nidara-row-subtitle"], halign: Gtk.Align.START, visible: false, wrap: true })
 
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END, margin_top: 4 })
-    const cancelBtn = CrystalButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
-    const applyBtn  = CrystalButton({ label: t("settings.users.other.pw.apply"), variant: "primary", pill: true, sensitive: false })
+    const cancelBtn = NidaraButton({ label: t("settings.users.other.cancel"), variant: "secondary", pill: true })
+    const applyBtn  = NidaraButton({ label: t("settings.users.other.pw.apply"), variant: "primary", pill: true, sensitive: false })
     btnRow.append(cancelBtn)
     btnRow.append(applyBtn)
 
@@ -322,8 +322,8 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
     else avatarImg.gicon = Icons.userRound
 
     const nameBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
-    nameBox.append(new Gtk.Label({ label: user.displayName, css_classes: ["crystal-row-title"], halign: Gtk.Align.START }))
-    nameBox.append(new Gtk.Label({ label: user.username, css_classes: ["crystal-row-subtitle"], halign: Gtk.Align.START }))
+    nameBox.append(new Gtk.Label({ label: user.displayName, css_classes: ["nidara-row-title"], halign: Gtk.Align.START }))
+    nameBox.append(new Gtk.Label({ label: user.username, css_classes: ["nidara-row-subtitle"], halign: Gtk.Align.START }))
 
     const adminBadge = new Gtk.Label({
         label: t("settings.users.other.admin-badge"),
@@ -347,21 +347,21 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
     })
 
     const pwBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.key, pixel_size: 14 , css_classes: ["cs-icon"] }),
-        css_classes: ["crystal-icon-btn"],
+        child: new Gtk.Image({ gicon: Icons.key, pixel_size: 14 , css_classes: ["nd-icon"] }),
+        css_classes: ["nidara-icon-btn"],
         valign: Gtk.Align.CENTER,
         tooltip_text: t("settings.users.other.pw.change"),
     })
     pwBtn.connect("clicked", () => showChangePasswordDialog(user, parentWin))
 
     const deleteBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 14 , css_classes: ["cs-icon"] }),
-        css_classes: ["crystal-icon-btn"],
+        child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 14 , css_classes: ["nd-icon"] }),
+        css_classes: ["nidara-icon-btn"],
         valign: Gtk.Align.CENTER,
         tooltip_text: t("settings.users.other.delete"),
     })
     deleteBtn.connect("clicked", () => {
-        showCrystalAlert({
+        showNidaraAlert({
             parent: parentWin,
             heading: t("settings.users.other.delete.confirm.title"),
             body: `${t("settings.users.other.delete.confirm.body")} "${user.displayName}" (${user.username})?`,
@@ -386,7 +386,7 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
     inner.append(pwBtn)
     inner.append(deleteBtn)
 
-    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
     row.set_child(inner)
     return row
 }
@@ -434,7 +434,7 @@ export default function UsersPage() {
         width_request: AVATAR_SIZE,
         height_request: AVATAR_SIZE,
         halign: Gtk.Align.CENTER,
-        css_classes: ["cs-icon", "users-avatar", "users-avatar-fallback"],
+        css_classes: ["nd-icon", "users-avatar", "users-avatar-fallback"],
     })
 
     // The avatar lives DIRECTLY as a ListBoxRow child, exactly like the wallpaper
@@ -464,7 +464,7 @@ export default function UsersPage() {
     }
     setAvatar(avatarPath)
 
-    const changeAvatarBtn = CrystalButton({ label: t("settings.users.avatar.change"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER })
+    const changeAvatarBtn = NidaraButton({ label: t("settings.users.avatar.change"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER })
     changeAvatarBtn.connect("clicked", () => {
         const dialog = new Gtk.FileDialog({ title: t("settings.users.avatar.pick"), modal: true })
         const filter = new Gtk.FileFilter()
@@ -497,7 +497,7 @@ export default function UsersPage() {
     profileGroup.listBox.append(changeRow)
 
     const nameEntry = new Gtk.Entry({ text: displayName, placeholder_text: username, width_chars: 22, valign: Gtk.Align.CENTER })
-    const nameApplyBtn = CrystalButton({ label: t("settings.users.name.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
+    const nameApplyBtn = NidaraButton({ label: t("settings.users.name.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
     const applyName = () => {
         const n = nameEntry.text.trim(); if (!n) return
         nameApplyBtn.sensitive = false
@@ -510,13 +510,13 @@ export default function UsersPage() {
     profileGroup.listBox.append(createRow(t("settings.users.name"), t("settings.users.name.desc"), nameRow))
     profileGroup.listBox.append(createRow(
         t("settings.users.username"), "",
-        new Gtk.Label({ label: username, css_classes: ["crystal-row-subtitle"], valign: Gtk.Align.CENTER }),
+        new Gtk.Label({ label: username, css_classes: ["nidara-row-subtitle"], valign: Gtk.Align.CENTER }),
     ))
     page.append(profileGroup.box)
 
     // ── Security ──────────────────────────────────────────────────────────────
     const secGroup = listGroup(t("settings.users.group.security"))
-    const pwBtn = CrystalButton({ label: t("settings.users.password.change"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER })
+    const pwBtn = NidaraButton({ label: t("settings.users.password.change"), variant: "secondary", pill: true, valign: Gtk.Align.CENTER })
     pwBtn.connect("clicked", () => spawnTerminalWithCommand(`passwd; read -p "${t("settings.users.password.done")}"`) )
     secGroup.listBox.append(createRow(t("settings.users.password"), t("settings.users.password.desc"), pwBtn))
     page.append(secGroup.box)
@@ -537,10 +537,10 @@ export default function UsersPage() {
 
         const others = parseUsers().filter(u => u.username !== username)
         if (others.length === 0) {
-            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+            const emptyRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
             emptyRow.set_child(new Gtk.Label({
                 label: t("settings.users.other.empty"),
-                css_classes: ["crystal-row-subtitle"],
+                css_classes: ["nidara-row-subtitle"],
                 margin_start: 16, margin_top: 12, margin_bottom: 12,
                 halign: Gtk.Align.START,
             }))
@@ -555,11 +555,11 @@ export default function UsersPage() {
             hexpand: true,
         })
         const addInner = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
-        addInner.append(new Gtk.Image({ gicon: Icons.userRoundPlus, pixel_size: 20, opacity: 0.7 , css_classes: ["cs-icon"] }))
-        addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["crystal-row-title"], halign: Gtk.Align.START }))
+        addInner.append(new Gtk.Image({ gicon: Icons.userRoundPlus, pixel_size: 20, opacity: 0.7 , css_classes: ["nd-icon"] }))
+        addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["nidara-row-title"], halign: Gtk.Align.START }))
         addBtn.set_child(addInner)
         addBtn.connect("clicked", () => showAddUserDialog(parentWin, rebuildOtherUsers))
-        const addRow = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+        const addRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
         addRow.set_child(addBtn)
         otherList.append(addRow)
     }

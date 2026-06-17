@@ -4,7 +4,7 @@ import { listGroup, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as AudioSvc from "../../../core/AudioService"
-import { CrystalButton } from "../../../../lib/crystal-ui"
+import { NidaraButton } from "../../../../lib/nidara-kit"
 import { makeVolumeSlider } from "../../../common/Slider"
 
 // ── Device row (speakers / mics) ──────────────────────────────────────────────
@@ -27,12 +27,12 @@ function createDeviceRow(
 
     header.append(new Gtk.Image({
         gicon: isMic ? Icons.mic : Icons.speaker,
-        pixel_size: 18, css_classes: ["cs-icon"],
+        pixel_size: 18, css_classes: ["nd-icon"],
     }))
     header.append(new Gtk.Label({
         label: endpoint.description || endpoint.name || t("settings.audio.device"),
         halign: Gtk.Align.START, hexpand: true,
-        css_classes: ["crystal-row-title"],
+        css_classes: ["nidara-row-title"],
         ellipsize: 3, max_width_chars: 26,
     }))
 
@@ -44,7 +44,7 @@ function createDeviceRow(
             valign: Gtk.Align.CENTER,
         }))
     } else {
-        const setBtn = CrystalButton({
+        const setBtn = NidaraButton({
             label: t("settings.audio.btn.set-default"),
             variant: "ghost",
             valign: Gtk.Align.CENTER,
@@ -56,7 +56,7 @@ function createDeviceRow(
     // Mute button
     const muteImg = new Gtk.Image({
         gicon: AudioSvc.targetVolumeIcon(endpoint),
-        pixel_size: 18, css_classes: ["cs-icon"],
+        pixel_size: 18, css_classes: ["nd-icon"],
     })
     const muteBtn = new Gtk.Button({
         child: muteImg, css_classes: ["settings-icon-btn"],
@@ -82,13 +82,13 @@ function createDeviceRow(
     })
 
     const sliderRow = new Gtk.Box({ spacing: 8 })
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
+    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     sliderRow.append(scale)
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
+    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     sliderRow.append(valLabel)
     box.append(sliderRow)
 
-    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
     row.set_child(box)
     return row
 }
@@ -110,19 +110,19 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
 
     // ── Header ────────────────────────────────────────────────────────────────
     const header = new Gtk.Box({ spacing: 10 })
-    // Real app icon — NO cs-icon: that class recolours/inverts monochrome UI glyphs,
+    // Real app icon — NO nd-icon: that class recolours/inverts monochrome UI glyphs,
     // which mangles a full-colour app icon. Sized to match the device leading icon.
     header.append(new Gtk.Image({ icon_name: iconName, pixel_size: 24, valign: Gtk.Align.CENTER }))
     header.append(new Gtk.Label({
         label: appName,
         halign: Gtk.Align.START, hexpand: true,
-        css_classes: ["crystal-row-title"],
+        css_classes: ["nidara-row-title"],
         ellipsize: 3, max_width_chars: 26,
     }))
 
     const muteImg = new Gtk.Image({
         gicon: AudioSvc.targetVolumeIcon(stream),
-        pixel_size: 18, css_classes: ["cs-icon"],
+        pixel_size: 18, css_classes: ["nd-icon"],
     })
     const muteBtn = new Gtk.Button({
         child: muteImg, css_classes: ["settings-icon-btn"],
@@ -148,13 +148,13 @@ function createStreamRow(stream: any): Gtk.ListBoxRow {
     })
 
     const sliderRow = new Gtk.Box({ spacing: 8 })
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
+    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     sliderRow.append(scale)
-    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["cs-icon"] }))
+    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
     sliderRow.append(valLabel)
     box.append(sliderRow)
 
-    const row = new Gtk.ListBoxRow({ css_classes: ["crystal-row"] })
+    const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
     row.set_child(box)
     return row
 }
@@ -174,7 +174,7 @@ export default function AudioPage() {
 
     const emptyStreams = new Gtk.Label({
         label: t("settings.audio.no-apps"),
-        css_classes: ["crystal-row-subtitle"],
+        css_classes: ["nidara-row-subtitle"],
         margin_top: 12, margin_bottom: 12, margin_start: 16,
         halign: Gtk.Align.START,
     })
