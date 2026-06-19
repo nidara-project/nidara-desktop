@@ -279,16 +279,17 @@ Phase 2a — **action, deterministic only (built)**:
   `AgentConfig.setAllowComputerControl`) also enables `allowComputerUse` — you can't drive what
   you can't see. The effective check is `allowComputerControl && allowComputerUse`, re-read live
   by `nidara-act` and the `do_app_action` MCP tool.
-- **Bar indicator + kill switch (two-state)**: while control is granted, a kill-switch capsule
-  shows in the bar's status-indicator zone (`surfaces/bar/StatusIndicators.tsx` — a declarative
-  subsystem shared with the recording indicator; the old hardcoded `bar-cua-capsule`/`bar-rec-capsule`
-  blocks in `Bar.tsx` are gone). Two states: **armed** (subtle dot) while permitted-but-idle, and
-  **active** (bright `AI Control` pulse) for ~`ACTING_DECAY_MS` after a real action fires. The action
-  tools (`nidara-act`/`nidara-type`/`nidara-click`) ping `ags request notifyComputerAction` on success
-  → `AgentConfig.pulseComputerAction()` flips the transient `computerActing` flag (auto-decays). The
-  capsule IS the kill switch in EITHER state — clicking it, or `Super+Shift+Esc`
-  (`config/hypr/hyprland.lua` → `ags request disableComputerControl`), revokes control instantly.
-  Staying visible while armed means the user is never unaware the agent may act.
+- **CC badge + banner (macOS pattern)**: the model + both consumers live in
+  `surfaces/bar/StatusIndicators.tsx` (`ccBadge`, `ccStatusBanner`), shared with the recording
+  indicator. While control is granted, a small **badge** on the bar's Control-Center button signals
+  it — **subtle** when armed (granted, idle), **pulsing** when active (recording, or for
+  ~`ACTING_DECAY_MS` after a real action). The action tools (`nidara-act`/`nidara-type`/`nidara-click`)
+  ping `ags request notifyComputerAction` on success → `AgentConfig.pulseComputerAction()` flips the
+  transient `computerActing` flag (auto-decays). Opening the CC shows a **status banner above the
+  widgets** (`ControlCenter.tsx`) with a row per active indicator + a **Stop** button — **that is the
+  kill switch**. Mouse-revoke is **2 clicks** (open CC → Stop) by design; the one-key kill switch is
+  `Super+Shift+Esc` (`config/hypr/hyprland.lua` → `ags request disableComputerControl`). The badge
+  staying visible while armed means the user is never unaware the agent may act.
 Phase 2b-i — **synthetic keyboard (built)**, for controls AT-SPI can't reach (Qt text fields;
 Qt buttons that only expose `SetFocus` → focus then press Enter/Space):
 

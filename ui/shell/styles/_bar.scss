@@ -194,36 +194,20 @@ window#nidara-bar-zone {
     &:hover { opacity: 1; }
 }
 
-// ── Status indicators (recording, AI control, …) ──────────────────────────────
-// One look for the whole subsystem (surfaces/bar/StatusIndicators.tsx). The capsule
-// carries a state class: default = active, .is-armed = present-but-idle.
-//   active — bright danger capsule, label shown, dot pulses.
-//   armed  — dimmed, dot only, no pulse (still the clickable kill switch).
-
-.bar-indicator-capsule {
-    background: rgba(var(--nidara-danger-rgb), 0.18);
-
-    &.is-armed {
-        background: rgba(var(--nidara-danger-rgb), 0.08);
-        opacity: 0.55;
-    }
-}
-
-.bar-indicator-dot {
+// ── Status-indicator badge (recording, AI control, …) ─────────────────────────
+// A small dot inside the Control-Center capsule, right of its icon — the
+// always-visible signal; detail + Stop live in the CC banner (.cc-status-*).
+//   armed  — present but idle (AI granted, not acting): subtle, no pulse.
+//   active — happening now (recording / agent acting): full, pulsing.
+.bar-cc-badge {
     border-radius: var(--nidara-radius-pill);
     background: var(--nidara-danger);
-}
+    opacity: 0.6;
 
-// Pulse only while actively happening, never while merely armed.
-.bar-indicator-capsule.is-active .bar-indicator-dot {
-    animation: rec-pulse 1.4s ease-in-out infinite;
-}
-
-.bar-indicator-label {
-    font-size: $fs-caption;
-    font-weight: $fw-bold;
-    color: var(--nidara-danger);
-    letter-spacing: 0.05em;
+    &.is-active {
+        opacity: 1;
+        animation: rec-pulse 1.4s ease-in-out infinite;
+    }
 }
 
 .bar-overflow-label {

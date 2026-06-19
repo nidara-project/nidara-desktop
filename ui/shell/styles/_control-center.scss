@@ -9,6 +9,27 @@
    never receives keyboard focus and is mouse/touch-only by design. Adding
    :focus-visible rules here would be dead code. See [[project_design_tokens_macos]]. */
 
+/* --- Status banner (recording / AI control) above the widgets --- */
+/* A danger-tinted card; one .cc-status-row per active indicator (dot + text +
+   Stop). Collapsed to nothing by the widget when no indicator is active. */
+.cc-status-banner {
+    @include material-card;
+    background-color: rgba(var(--nidara-danger-rgb), 0.10);
+    border-color: rgba(var(--nidara-danger-rgb), 0.32);
+    padding: 8px 10px;
+    margin-bottom: 10px;
+}
+.cc-status-dot {
+    border-radius: var(--nidara-radius-pill);
+    background: var(--nidara-danger);
+    opacity: 0.7;
+
+    &.is-active {
+        opacity: 1;
+        animation: rec-pulse 1.4s ease-in-out infinite;
+    }
+}
+
 /* --- Island Body --- */
 .cc-island {
     background-color: transparent;

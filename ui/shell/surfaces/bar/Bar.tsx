@@ -19,7 +19,7 @@ import Tray from "./Tray"
 import { SystemMenuOverlay } from "./SystemMenu"
 import { AppTitle } from "./AppTitle"
 import { Workspaces } from "./Workspaces"
-import StatusIndicatorBar from "./StatusIndicators"
+import { ccBadge } from "./StatusIndicators"
 
 // Overlay panels mounted on the bar window (avoids separate layer-shell surfaces)
 import { ControlCenterWidget } from "../control-center/ControlCenter"
@@ -482,12 +482,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   right.append(optWidgets)
 
-  // Status indicators (recording, AI control) — condition-driven, non-toggleable.
-  // The whole subsystem lives in surfaces/bar/StatusIndicators.tsx; it sits between
-  // the optional widgets and the tray, and each indicator owns its own state + click.
-  const statusIndicators = StatusIndicatorBar()
-  right.append(statusIndicators)
-
   const trayInner = Tray(openCustomExpansion)
   const trayCapsule = SquircleContainer({ child: trayInner, gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   trayInner.connect("notify::visible", () => trayCapsule.set_visible(trayInner.get_visible()))
@@ -495,7 +489,28 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   right.append(trayCapsule)
   const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(searchCapsule)
-  const ccBtn = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.settings2, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  // CC capsule layout: [16px left pad][gear 16px][16px right-gap] = 48px (matches the
+  // search capsule). The status-indicator dot (recording / AI control) sits in that right
+  // gap WITHOUT widening the capsule, centred between the icon's right edge and the capsule's
+  // right edge. We overlay the dot on the whole content and centre it within a region that
+  // starts `margin_start` from the left, so its centre lands at (margin_start / 2) + 24.
+  //   Centre in the DRAWN geometry, not GTK's allocation: both the squircle and the glyph draw
+  //   ~3px INSIDE their boxes (measured). So the capsule's visible right edge ≈ alloc-x 45 (not
+  //   48) and the icon's visible right edge ≈ 29 (not its box edge 32). Visible gap = [29, 45]
+  //   → centre (29 + 45) / 2 = 37 → margin_start = 26 (verified: 5px air each side of the dot).
+  //   (Centring on the allocation boxes gives 40, which looks pegged-right because both draw narrower.)
+  // The gap is a plain 16px spacer that just reserves the width (no shift when the dot shows/hides).
+  // Detail + Stop/kill-switch live in the CC banner. Badge can_target:false → clicks hit the capsule.
+  const ccGear = new Gtk.Image({ gicon: Icons.settings2, pixel_size: 16, margin_start: 16, css_classes: ["nd-icon"] })
+  const ccInner = new Gtk.Box({ valign: Gtk.Align.CENTER })
+  ccInner.append(ccGear)
+  ccInner.append(new Gtk.Box({ width_request: 16 }))   // reserve the right gap → capsule stays 48px
+  const ccDot = ccBadge()
+  ccDot.set_margin_start(26)                            // dot centre = 37px — centred between the icon's and capsule's VISIBLE (drawn) right edges (5px air each side)
+  const ccOverlay = new Gtk.Overlay()
+  ccOverlay.set_child(ccInner)
+  ccOverlay.add_overlay(ccDot)
+  const ccBtn = SquircleContainer({ child: ccOverlay, onClick: () => status.toggleCC(), gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(ccBtn)
   const timeCapsule = SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(timeCapsule)
@@ -567,7 +582,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (iconWidths.length === 0) return
 
       const spacing = 8
-      const fixedCapsules: Gtk.Widget[] = [statusIndicators, trayCapsule, searchCapsule, ccBtn, timeCapsule]
+      const fixedCapsules: Gtk.Widget[] = [trayCapsule, searchCapsule, ccBtn, timeCapsule]
       const fixedW = fixedCapsules.reduce((s, w) => s + (w.get_visible() ? natW(w) + spacing : 0), 0)
       // Budget = space available to optWidgets before the right side would overlap the
       // workspace capsule. The workspace is centered, so each side gets at most:

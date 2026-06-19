@@ -504,9 +504,12 @@ export default {
     "settings.widgets.category.system": "System",
     "settings.widgets.category.utilities": "Utilities",
     "settings.widgets.category.media": "Media",
-    "bar.indicator.recording": "REC",
-    "bar.indicator.ai-control": "AI Control",
-    "bar.indicator.ai-control.tooltip": "AI may control apps — click to stop",
+    "cc.status.stop": "Stop",
+    "cc.status.recording.label": "Screen Recording",
+    "cc.status.recording.detail": "Capturing the screen",
+    "cc.status.ai.label": "AI Control",
+    "cc.status.ai.armed": "Allowed to control your apps",
+    "cc.status.ai.active": "Controlling apps right now",
 
     // Dock item context menu
     "settings.dock.dockitem.apps": "Apps",
