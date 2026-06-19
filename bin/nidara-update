@@ -1,29 +1,64 @@
 #!/bin/bash
 # ─────────────────────────────────────────────────────────────────────────────
-# nidara-update — update an installed Nidara.
-# Installed to /usr/bin/nidara-update.
+# nidara-update — update an installed Nidara. Installed to /usr/bin/nidara-update.
 #
-# Thin wrapper: all update logic lives in the repo's install.sh (--update), so
-# the updater itself updates with the repo. This just finds the registered
-# source (~/.config/nidara/.source, written by install.sh) and hands over.
+# Two paths:
+#   DEV    — if a dev install registered its own clone (~/.config/nidara/.dev,
+#            written by `install.sh --dev`), update from THERE, following the dev
+#            branch. Hands over to that clone's install.sh so the updater itself
+#            updates with the repo.
+#   STABLE — STATELESS: there is NO persistent source copy on disk. Resolve the
+#            newest release tag on the remote, shallow-clone just that tag into a
+#            throwaway temp dir, build+install from there, and delete it. The
+#            source of truth is the git remote + what's installed in /usr/share.
+#            (The runtime is system-wide; the old per-user ~/.local/share/nidara/src
+#            diverged between users while everyone shared one bundle — gone now.)
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
 
+REPO_URL="https://github.com/nidara-project/nidara-desktop.git"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/nidara"
-SRC_CANON="$HOME/.local/share/nidara/src"
 
-SRC=""
-[ -f "$CONFIG_DIR/.source" ] && SRC="$(cat "$CONFIG_DIR/.source")"
-# Pre-registration fallbacks: a dev install's .dev marker, then the canonical path.
-[ -z "$SRC" ] && [ -f "$CONFIG_DIR/.dev" ] && SRC="$(cat "$CONFIG_DIR/.dev")"
-[ -z "$SRC" ] && [ -d "$SRC_CANON/.git" ] && SRC="$SRC_CANON"
-
-if [ -z "$SRC" ] || [ ! -f "$SRC/install.sh" ]; then
-    echo "nidara-update: no registered source found." >&2
-    echo "Re-run the installer once from a git clone to register it:" >&2
-    echo "  git clone https://github.com/nidara-project/nidara-desktop.git" >&2
-    echo "  cd nidara-desktop && ./install.sh" >&2
+# ── DEV path: update from the developer's own registered clone ─────────────────
+if [ -f "$CONFIG_DIR/.dev" ]; then
+    DEV_SRC="$(cat "$CONFIG_DIR/.dev" 2>/dev/null)"
+    if [ -n "$DEV_SRC" ] && [ -f "$DEV_SRC/install.sh" ]; then
+        exec bash "$DEV_SRC/install.sh" --update
+    fi
+    echo "nidara-update: dev marker present but '$DEV_SRC' has no install.sh." >&2
+    echo "Re-run ./install.sh --dev from your clone to re-register it." >&2
     exit 1
 fi
 
-exec bash "$SRC/install.sh" --update
+# ── STABLE path: stateless update from the remote ─────────────────────────────
+command -v git >/dev/null || { echo "nidara-update: git is required." >&2; exit 1; }
+
+# Migrate away from the legacy per-user source copy this model replaces. Safe on
+# the stable channel: it keeps no persistent source.
+rm -rf "$HOME/.local/share/nidara/src" 2>/dev/null || true
+rm -f "$CONFIG_DIR/.source" 2>/dev/null || true
+
+# Newest release tag (the stable channel), resolved without cloning. Empty before
+# the first release exists → fall back to the default-branch tip.
+latest_tag="$(git ls-remote --tags --refs "$REPO_URL" 'v*' 2>/dev/null \
+    | sed 's#.*/##' | sort -V | tail -1)"
+
+# Throwaway checkout on disk (NOT /tmp: a shallow clone + npm build on tmpfs would
+# hammer RAM). Removed on exit, success or failure.
+mkdir -p "${XDG_CACHE_HOME:-$HOME/.cache}/nidara"
+work="$(mktemp -d "${XDG_CACHE_HOME:-$HOME/.cache}/nidara/update.XXXXXX")"
+trap 'rm -rf "$work"' EXIT
+
+if [ -n "$latest_tag" ]; then
+    echo "nidara-update: fetching release $latest_tag …"
+    git clone --quiet --depth 1 --branch "$latest_tag" "$REPO_URL" "$work"
+else
+    echo "nidara-update: no release tags yet — fetching the latest commit …"
+    git clone --quiet --depth 1 "$REPO_URL" "$work"
+fi
+
+# Build + install from the throwaway clone. --update-apply behaves like a system
+# install but skips the Astal/AGS rebuild when the pins are unchanged and writes
+# NO source marker; install.sh elevates with sudo internally. No exec — let the
+# EXIT trap clean up the temp dir afterwards.
+bash "$work/install.sh" --update-apply

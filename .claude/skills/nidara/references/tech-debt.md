@@ -364,6 +364,15 @@ layout in `StatusIndicators.tsx`; don't touch the state machine.
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
+- **Stable updates are STATELESS (2026-06-19).** There is NO per-user source clone. The old
+  model kept a managed `~/.local/share/nidara/src` per user while `/usr/share` was shared →
+  divergent src, "last sudoer-updater wins" globally. `nidara-update` now shallow-clones the
+  newest release tag (default branch pre-release) to a throwaway temp, builds, installs,
+  discards (~6 MB clone, negligible). **Rule:** never reintroduce a persistent per-user source
+  copy as the update source; the runtime is system-wide, so the source of truth is the git
+  remote + `/usr/share`. Dev installs are the one exception (they update from the developer's
+  own registered clone via `.dev`/`.source`). `install.sh` system mode migrates away any
+  legacy `src`/`.source`.
 - **(was #16) Settings is a normal window.** `openSettings` opens/raises it — NOT a toggle
   (re-invoking just raises; it closes only via its own close button). Don't turn it into a
   toggle-hide. **Raising across workspaces:** `gtk_window_present()` alone does NOT jump to the

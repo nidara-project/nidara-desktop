@@ -6,16 +6,16 @@
 #   ./install.sh --dev      # Developer install (run UI from source)
 #   ./install.sh --update   # Update an existing install (or use nidara-update)
 #
-# Update model: a system install leaves a managed canonical copy of this repo at
-# ~/.local/share/nidara/src and records it in ~/.config/nidara/.source.
-# `nidara-update` (thin wrapper in bin/) pulls that copy and re-runs this
-# script in update mode, which rebuilds/copies only Nidara's own artifacts and
-# rebuilds the pinned Astal/AGS dependency stack ONLY when the pins changed
-# (recorded in /usr/share/nidara/pins). A --dev install registers the
-# developer's own clone instead and updates never switch it off its branch; it
-# also honours the same pin-skip, so re-running `./install.sh --dev` while
-# iterating on the shell does NOT recompile Astal unless the pins moved. A plain
-# `./install.sh` (system) always rebuilds the whole stack — the escape hatch.
+# Update model: STABLE updates are STATELESS — `nidara-update` (bin/) shallow-clones
+# the newest release tag from the remote into a throwaway temp dir, builds/installs
+# from there, and discards it. No per-user source copy: the source of truth is the
+# git remote + what's installed in /usr/share. (The runtime is system-wide, so a
+# per-user clone made no sense and diverged between users.) The pinned Astal/AGS/
+# appmenu stack is still rebuilt ONLY when the pins changed (/usr/share/nidara/pins).
+# A --dev install registers the developer's own clone (~/.config/nidara/.dev +
+# .source) and updates from there, following its branch (same pin-skip). A plain
+# `./install.sh` (system) always rebuilds the whole stack — the escape hatch — and
+# migrates away any legacy ~/.local/share/nidara/src.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -26,9 +26,9 @@ REAL_USER="${SUDO_USER:-$USER}"
 REAL_HOME="$(getent passwd "$REAL_USER" | cut -d: -f6)"
 CONFIG_DIR="${REAL_HOME}/.config/nidara"
 
-# Update plumbing (see header). SOURCE_FILE records where updates pull from;
-# SRC_CANON is the managed copy a system install leaves behind so the directory
-# the user originally downloaded becomes disposable.
+# Update plumbing (see header). SOURCE_FILE records a DEV install's source clone.
+# SRC_CANON is the LEGACY per-user source copy: no longer created (stable updates
+# are stateless) — kept here only so a system install can migrate it away.
 SRC_CANON="${REAL_HOME}/.local/share/nidara/src"
 SOURCE_FILE="$CONFIG_DIR/.source"
 PINS_FILE="/usr/share/nidara/pins"
@@ -617,48 +617,22 @@ elif [ "$MODE" = "system" ]; then
     rm -f "$CONFIG_DIR/.dev"
 fi
 
-# ── Source registration (what nidara-update pulls) ────────────────────
-# System installs leave a managed canonical copy at $SRC_CANON so the directory
-# the user downloaded becomes disposable; dev installs register the developer's
-# own clone. Updates (--update-apply) never re-register.
+# ── Source registration / migration ──────────────────────────────────
+# Stable updates are STATELESS (nidara-update re-clones the remote to a temp dir),
+# so a system install keeps NO persistent source copy and writes no .source — it
+# just migrates away the legacy per-user canonical clone. Dev installs DO register
+# their own clone (that's what `nidara-update`'s dev path follows). update-apply
+# never registers or migrates (the stable wrapper already migrated).
 if [ "$MODE" = "dev" ]; then
     echo "$REPO_DIR" > "$SOURCE_FILE"
     chown "$REAL_USER" "$SOURCE_FILE"
 elif [ "$MODE" = "system" ]; then
-    if [ "$REPO_DIR" = "$SRC_CANON" ]; then
-        :  # already running from the canonical copy
-    elif [ -d "$SRC_CANON/.git" ]; then
-        echo "  [Source] Canonical copy already present: $SRC_CANON"
-    elif [ -d "$REPO_DIR/.git" ]; then
-        run_user mkdir -p "$(dirname "$SRC_CANON")"
-        run_user git clone --quiet "$REPO_DIR" "$SRC_CANON"
-        # The local clone's origin points at $REPO_DIR (disposable) — repoint it
-        # at GitHub so future updates pull the real upstream.
-        run_user git -C "$SRC_CANON" remote set-url origin "$REPO_URL"
-        echo "  [Source] Canonical copy created: $SRC_CANON"
-    else
-        # Tarball/zip download without git metadata: try a fresh clone (needs
-        # network). Non-fatal — without it, updates just aren't available yet.
-        run_user mkdir -p "$(dirname "$SRC_CANON")"
-        if run_user git clone --quiet "$REPO_URL" "$SRC_CANON" 2>/dev/null; then
-            echo "  [Source] Canonical copy cloned from GitHub: $SRC_CANON"
-        else
-            echo "  [WARN] Could not create the canonical source copy (no git metadata,"
-            echo "         clone failed). nidara-update will not work until you"
-            echo "         re-run ./install.sh from a git clone."
-        fi
+    if [ -e "$SRC_CANON" ]; then
+        rm -rf "$SRC_CANON"
+        echo "  [Source] Removed legacy per-user source copy: $SRC_CANON"
     fi
-    if [ -d "$SRC_CANON/.git" ]; then
-        echo "$SRC_CANON" > "$SOURCE_FILE"
-        chown "$REAL_USER" "$SOURCE_FILE"
-    fi
-elif [ "$MODE" = "update-apply" ] && [ ! -f "$SOURCE_FILE" ]; then
-    # Self-heal pre-registration installs: their first manual `install.sh --update`
-    # ran from a working git checkout — record it so nidara-update works
-    # from now on.
-    echo "$REPO_DIR" > "$SOURCE_FILE"
-    chown "$REAL_USER" "$SOURCE_FILE"
-    echo "  [Source] Registered: $REPO_DIR"
+    rm -f "$SOURCE_FILE"
+    echo "  [Source] Stateless updates — nidara-update re-clones the remote each time."
 fi
 
 # Default JSON configs (never overwrite user's existing files)
