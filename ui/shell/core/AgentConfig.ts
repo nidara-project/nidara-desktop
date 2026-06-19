@@ -17,7 +17,9 @@ interface AgentSettings {
                                    // (privacy-sensitive, ≈ the screenshot gate)
     allowComputerControl: boolean  // agents may ACT on third-party apps via AT-SPI do_action
                                    // (nidara-act), default FALSE — requires allowComputerUse;
-                                   // the shell shows an always-visible indicator + kill switch
+                                   // while granted the bar shows a kill-switch indicator: subtle
+                                   // "armed" when idle, a bright "active" pulse while acting
+                                   // (see computerActing / pulseComputerAction)
 }
 
 const DEFAULTS: AgentSettings = {
@@ -49,12 +51,38 @@ function save() {
 
 const _listeners = new Set<() => void>()
 
+// Transient computer-use ACTIVITY — distinct from allowComputerControl (the
+// persistent PERMISSION). Lit by pulseComputerAction() when a real action lands
+// (the standalone tools ping `ags request notifyComputerAction`), then decays.
+// The bar indicator reads both: "armed" = permitted-but-idle, "active" = acting.
+let _acting = false
+let _actingTimer = 0
+const ACTING_DECAY_MS = 4000
+
 export const agentConfig = {
     get allowConfigWrite() { return _settings.allowConfigWrite },
     get allowScreenshot() { return _settings.allowScreenshot },
     get allowMcp() { return _settings.allowMcp },
     get allowComputerUse() { return _settings.allowComputerUse },
     get allowComputerControl() { return _settings.allowComputerControl },
+
+    // True for ACTING_DECAY_MS after the most recent computer-use action fired.
+    get computerActing() { return _acting },
+
+    // Called when a real action lands (via the notifyComputerAction IPC). Lights
+    // the active state and (re)arms the decay timer so a burst of actions keeps it
+    // lit; the indicator falls back to "armed" once actions stop. Notifies listeners.
+    pulseComputerAction() {
+        _acting = true
+        if (_actingTimer) GLib.source_remove(_actingTimer)
+        _actingTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ACTING_DECAY_MS, () => {
+            _acting = false
+            _actingTimer = 0
+            _listeners.forEach(fn => fn())
+            return GLib.SOURCE_REMOVE
+        })
+        _listeners.forEach(fn => fn())
+    },
 
     setAllowConfigWrite(val: boolean) {
         _settings.allowConfigWrite = val

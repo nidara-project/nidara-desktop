@@ -129,6 +129,8 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
 const screenshotWidget: AtomicWidget = {
     id: "screenshot",
+    category: "utilities",
+    barOrder: 50,
     name: t("widget.screenshot.name"),
     icon: Icons.camera,
     locations: ["bar", "cc"],

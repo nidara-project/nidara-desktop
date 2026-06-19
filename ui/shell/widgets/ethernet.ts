@@ -84,6 +84,8 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
 
 const ethernetWidget: AtomicWidget = {
     id: "ethernet",
+    category: "system",
+    barOrder: 70,
     name: t("cc.ethernet.name"),
     icon: Icons.ethernet,
     locations: ["bar", "cc"],

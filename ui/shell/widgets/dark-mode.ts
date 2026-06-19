@@ -20,6 +20,8 @@ function buildBarContent() {
 
 const darkModeWidget: AtomicWidget = {
     id: "dark_mode",
+    category: "system",
+    barOrder: 10,
     name: t("widget.dark-mode.name"),
     icon: Icons.moon,
     locations: ["bar", "cc"],

@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import AstalNetwork from "gi://AstalNetwork"
 import AstalNotifd from "gi://AstalNotifd"
-import { AtomicWidget, WidgetSize } from "./Types"
+import { CCWidgetSpec, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Gio from "gi://Gio"
 import Icons from "../../core/Icons"
@@ -154,7 +154,7 @@ function buildRoundContent(
     return btn
 }
 
-export function EthernetWidget(): AtomicWidget {
+export function EthernetWidget(): CCWidgetSpec {
     const network = AstalNetwork.get_default()
     const wired   = network?.wired
 
@@ -183,7 +183,7 @@ export function EthernetWidget(): AtomicWidget {
     return { id: "ethernet", name: t("cc.ethernet.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE], buildContent }
 }
 
-export function WifiWidget(): AtomicWidget {
+export function WifiWidget(): CCWidgetSpec {
     const wifi   = AstalNetwork.get_default()?.wifi
     const toggle = () => Net.toggleWifi()
 
@@ -208,7 +208,7 @@ export function WifiWidget(): AtomicWidget {
     return { id: "wifi", name: t("cc.wifi.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE], buildContent }
 }
 
-export function FocusWidget(): AtomicWidget {
+export function FocusWidget(): CCWidgetSpec {
     const notifd  = AstalNotifd.get_default()
     const toggle  = () => { if (notifd) notifd.dont_disturb = !notifd.dont_disturb }
     const getIcon = () => notifd?.dont_disturb ? Icons.bellOff : Icons.bell
@@ -241,7 +241,7 @@ export function RoundToggle(
     onClick: () => void,
     wideSubtitle?: () => string,
     subscribe?: SubscribeFn,
-): AtomicWidget {
+): CCWidgetSpec {
     const getActive = typeof active === "function" ? active : () => active
     const getIcon   = typeof iconName === "function" ? iconName : () => iconName
     const getSub    = wideSubtitle ?? (() => "")

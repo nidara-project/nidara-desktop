@@ -1,5 +1,5 @@
 import Gio from "gi://Gio"
-import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
+import { AtomicWidget, WidgetSize, WidgetCategory } from "../surfaces/control-center/Types"
 // Auto-registration: ALL_WIDGETS comes from the generated widgets.gen.ts —
 // dropping a file in widgets/ that default-exports an AtomicWidget is ALL it
 // takes to register a widget (see scripts/gen-widget-index.mjs).
@@ -66,26 +66,23 @@ export const DEFAULT_PLACEMENT: Record<string, { bar: boolean; cc: boolean }> = 
     }])
 )
 
-// Curated bar pill order (system/connectivity widgets rightmost, nearest the tray).
-// Any registered bar-capable widget not listed here falls to the end (see WidgetConfig).
-export const BAR_ORDER: string[] = [
-    "media",
-    "cpu_memory",
-    "battery",
-    "brightness",
-    "dark_mode",
-    "focus",
-    "night_light",
-    "calculator",
-    "clipboard",
-    "screenshot",
-    "screenrecord",
-    "vpn",
-    "bt",
-    "ethernet",
-    "wifi",
-    "volume",
-]
+// Category order, left → right across the bar: optional/content on the left,
+// system/connectivity on the right (nearest the tray), macOS-style. Also the
+// section order in Settings → Widgets.
+export const CATEGORY_ORDER: WidgetCategory[] = ["media", "utilities", "system"]
+
+// Curated bar pill order, DERIVED from each widget's declared category + barOrder —
+// no hand-maintained list. Adding a widget places it in its category automatically.
+// Sort: category index, then barOrder (lower = further left), then registration
+// order as a stable tie-break. Any bar-capable widget is included.
+export const BAR_ORDER: string[] = ALL_WIDGETS
+    .filter(w => w.locations?.includes("bar"))
+    .map((w, i) => ({ w, i }))
+    .sort((a, b) =>
+        (CATEGORY_ORDER.indexOf(a.w.category) - CATEGORY_ORDER.indexOf(b.w.category)) ||
+        ((a.w.barOrder ?? 0) - (b.w.barOrder ?? 0)) ||
+        (a.i - b.i))
+    .map(({ w }) => w.id)
 
 // CC initial seed order. Widgets enabled by default but not listed here are
 // appended by IslandGrid's reconciliation pass (syncCCLayout).

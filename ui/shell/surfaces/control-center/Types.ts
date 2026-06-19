@@ -3,6 +3,12 @@ import Gio from "gi://Gio"
 
 export type WidgetLocation = "bar" | "cc"
 
+// Coarse grouping that drives BOTH the curated bar order (system rightmost, nearest
+// the tray — macOS-style) and the Settings → Widgets section grouping. Single source
+// of truth: each widget declares its category; BAR_ORDER and the Settings sections are
+// derived from it (see widgets/index.ts CATEGORY_ORDER), never hand-maintained.
+export type WidgetCategory = "system" | "utilities" | "media"
+
 export enum WidgetSize {
     SINGLE = "1x1",
     WIDE = "2x1",
@@ -24,6 +30,8 @@ export interface AtomicWidget {
     id: string
     name: string
     icon?: Gio.FileIcon                 // icon for Settings UI
+    category: WidgetCategory            // drives bar order + Settings grouping (see WidgetCategory)
+    barOrder?: number                   // optional intra-category fine-tune (lower = further left). Default 0.
     locations?: WidgetLocation[]        // where this widget can appear
     defaultInBar?: boolean              // shown in the bar by default (default false)
     defaultInCc?: boolean               // seeded into the CC by default (default = "cc" in locations)
@@ -51,3 +59,10 @@ export interface AtomicWidget {
     // BT adapter plugged/removed). Subscriptions are shell-lifetime — no dispose.
     watchAvailable?: (cb: () => void) => void
 }
+
+// The content-building subset of a widget, produced by the CC factories in
+// Toggles/Sliders/MediaIsland. The registry widgets (widgets/*.ts) own the
+// metadata (category, sizes, placement) and delegate only buildContent to these
+// factories, so a spec carries no category — keeping `category` mandatory on real
+// widgets without forcing the factories to fake one.
+export type CCWidgetSpec = Omit<AtomicWidget, "category">

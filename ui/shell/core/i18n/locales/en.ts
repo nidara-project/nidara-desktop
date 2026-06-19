@@ -501,6 +501,12 @@ export default {
     "settings.widgets.configure": "Configure",
     "settings.widgets.reorder-note": "To reorder widgets in the Control Center, use the panel's Edit mode.",
     "settings.widgets.title": "Widgets",
+    "settings.widgets.category.system": "System",
+    "settings.widgets.category.utilities": "Utilities",
+    "settings.widgets.category.media": "Media",
+    "bar.indicator.recording": "REC",
+    "bar.indicator.ai-control": "AI Control",
+    "bar.indicator.ai-control.tooltip": "AI may control apps — click to stop",
 
     // Dock item context menu
     "settings.dock.dockitem.apps": "Apps",

@@ -188,6 +188,8 @@ function hasBacklight(): boolean {
 
 const brightnessWidget: AtomicWidget = {
     id: "brightness",
+    category: "system",
+    barOrder: 30,
     name: t("widget.brightness.name"),
     icon: Icons.sun,
     locations: ["bar", "cc"],

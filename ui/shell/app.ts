@@ -158,6 +158,13 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       return "computer-control disabled"
     },
   },
+  notifyComputerAction: {
+    desc: "Signal that a computer-use action just fired (called by nidara-act/type/click). Lights the bar's AI-control indicator's 'active' state for a few seconds, then it decays back to 'armed'. Fire-and-forget; no effect unless control is granted.",
+    run: () => {
+      agentConfig.pulseComputerAction()
+      return "ok"
+    },
+  },
   // ── Window & workspace management ────────────────────────────────────────
   // The shell controlling its OWN compositor (Hyprland IS Nidara), so —
   // like launchApp — these are UNGATED: a window-manager op (focus/move/close a

@@ -39,6 +39,13 @@ const MAX_DEPTH = 40
 
 function emit(obj) { print(JSON.stringify(obj, null, 2)) }
 
+// Fire-and-forget: tell the shell an action just landed so the bar's AI-control
+// indicator shows its "active" pulse (decays back to "armed" after a few seconds).
+// Never blocks or fails the action if the shell isn't reachable.
+function pingShell() {
+    try { GLib.spawn_command_line_async("ags request notifyComputerAction") } catch {}
+}
+
 function safe(fn, fallback) {
     try { const v = fn(); return v == null ? fallback : v } catch { return fallback }
 }
@@ -192,6 +199,7 @@ function main() {
     // object as the Accessible, so call the Action interface method explicitly
     // (same lesson as get_text colliding with Atspi.Accessible.get_text).
     const result = safe(() => Atspi.Action.prototype.do_action.call(iface, idx), false)
+    if (result === true) pingShell()
 
     emit({ ok: result === true, app, node: describe(target), action, result })
 }

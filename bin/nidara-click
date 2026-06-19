@@ -41,6 +41,13 @@ const MAX_NODES = 4000
 const MAX_DEPTH = 40
 
 function emit(obj) { print(JSON.stringify(obj, null, 2)) }
+
+// Fire-and-forget: tell the shell an action just landed so the bar's AI-control
+// indicator shows its "active" pulse (decays back to "armed" after a few seconds).
+// Never blocks or fails the action if the shell isn't reachable.
+function pingShell() {
+    try { GLib.spawn_command_line_async("ags request notifyComputerAction") } catch {}
+}
 function safe(fn, fb) { try { const v = fn(); return v == null ? fb : v } catch { return fb } }
 
 function controlEnabled() {
@@ -227,6 +234,7 @@ function main() {
     if (!proc.get_successful()) {
         emit({ ok: false, error: `nidara-input failed: ${(err || "").trim() || "no output"}` }); return
     }
+    pingShell()
     emit({ ok: true, app, mode, target: { outX, outY, extW, extH },
         ...(isScroll ? { scroll: { dx, dy } } : {}),
         ...(isDrag ? { drop: { outX2, outY2 } } : {}), window: { at, monitor: mon.name } })

@@ -16,6 +16,8 @@ function buildBarContent() {
 
 const btWidget: AtomicWidget = {
     id: "bt",
+    category: "system",
+    barOrder: 60,
     name: t("widget.bluetooth.name"),
     icon: Icons.bluetooth,
     locations: ["bar", "cc"],

@@ -127,6 +127,8 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
 
 const wifiWidget: AtomicWidget = {
     id: "wifi",
+    category: "system",
+    barOrder: 80,
     name: t("cc.wifi.name"),
     icon: Icons.wifi,
     locations: ["bar", "cc"],

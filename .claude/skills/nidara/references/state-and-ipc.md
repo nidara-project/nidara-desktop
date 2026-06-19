@@ -67,7 +67,8 @@ Current commands (run `listActions` for the live list): `toggleCC|toggleControlC
 `openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `toggleGameOverlay`,
 `openWindowMenu`, `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`,
 `setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listApps`, `launchApp <id>`,
-`disableComputerControl`, `listActions`, `dumpState`, plus the **window/workspace management**
+`disableComputerControl`, `notifyComputerAction` (computer-use tools ping it so the bar's AI-control
+indicator pulses "active"), `listActions`, `dumpState`, plus the **window/workspace management**
 cluster (see below): `listWindows`, `listWorkspaces`, `focusWorkspace <id|±1|name>`,
 `focusDirection <l|r|u|d>`, `focusWindow <window>`,
 `closeWindow <window>`, `moveWindowToWorkspace <window> <wsId>`, `toggleFloat`/`toggleFullscreen`/
@@ -278,10 +279,16 @@ Phase 2a — **action, deterministic only (built)**:
   `AgentConfig.setAllowComputerControl`) also enables `allowComputerUse` — you can't drive what
   you can't see. The effective check is `allowComputerControl && allowComputerUse`, re-read live
   by `nidara-act` and the `do_app_action` MCP tool.
-- **Always-visible indicator + kill switch**: while control is granted, a red `bar-cua-capsule`
-  shows in the bar (mirrors the recording indicator; `Bar.tsx`). It IS the kill switch — clicking
-  it, or the `Super+Shift+Esc` keybind (`config/hypr/hyprland.lua` → `ags request
-  disableComputerControl`), revokes control instantly. The user is never unaware the agent may act.
+- **Bar indicator + kill switch (two-state)**: while control is granted, a kill-switch capsule
+  shows in the bar's status-indicator zone (`surfaces/bar/StatusIndicators.tsx` — a declarative
+  subsystem shared with the recording indicator; the old hardcoded `bar-cua-capsule`/`bar-rec-capsule`
+  blocks in `Bar.tsx` are gone). Two states: **armed** (subtle dot) while permitted-but-idle, and
+  **active** (bright `AI Control` pulse) for ~`ACTING_DECAY_MS` after a real action fires. The action
+  tools (`nidara-act`/`nidara-type`/`nidara-click`) ping `ags request notifyComputerAction` on success
+  → `AgentConfig.pulseComputerAction()` flips the transient `computerActing` flag (auto-decays). The
+  capsule IS the kill switch in EITHER state — clicking it, or `Super+Shift+Esc`
+  (`config/hypr/hyprland.lua` → `ags request disableComputerControl`), revokes control instantly.
+  Staying visible while armed means the user is never unaware the agent may act.
 Phase 2b-i — **synthetic keyboard (built)**, for controls AT-SPI can't reach (Qt text fields;
 Qt buttons that only expose `SetFocus` → focus then press Enter/Space):
 

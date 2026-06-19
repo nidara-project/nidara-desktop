@@ -346,6 +346,21 @@ is correct. Related gotcha: greeter prefs live under the **HOME-relative** path 
 (`/var/lib/greeter/.config/nidara/greeter-prefs.json`); a rename of that subdir orphans the saved kb layout
 (falls back to `"us"`), cosmetic.
 
+### 17. Status-indicator subsystem: extension points deliberately not wired (2026-06-19)
+`surfaces/bar/StatusIndicators.tsx` is a declarative registry (`INDICATORS`) with three states
+(hidden/armed/active) — it currently hosts only recording + AI-control, but is the intended home for
+macOS-style **privacy/activity indicators** (mic in use, camera, screen-share, location). Those are
+**not wired** (no source detection exists yet); adding one = a new `INDICATORS` entry with a `state()`
++ `subscribe()`. Also deferred by product decision: **drag-reorder of bar widgets** (the bar order is
+category-derived + curated via `barOrder`, not user-draggable; the CC has its own Edit-mode reorder).
+The AI "active" signal depends on the tools pinging `notifyComputerAction` — an MCP/agent acting via a
+path that bypasses `nidara-act/type/click` would not light "active" (it would still show "armed"); fine
+today since those are the only action tools, but re-check if a new action path is added.
+**Open follow-up (flagged 2026-06-19):** the REC + AI-control capsule **visual design** is
+considered wrong by the user and needs a rework pass — behaviour/states are right, the look
+isn't (specifics TBD with the user). Restyle in `_bar.scss` (`.bar-indicator-*`) + the inner
+layout in `StatusIndicators.tsx`; don't touch the state machine.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

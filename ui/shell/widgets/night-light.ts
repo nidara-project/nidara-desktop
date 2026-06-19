@@ -22,6 +22,8 @@ function buildBarContent() {
 
 const nightLightWidget: AtomicWidget = {
     id: "night_light",
+    category: "system",
+    barOrder: 20,
     name: t("widget.night-light.name"),
     icon: Icons.sunset,
     locations: ["bar", "cc"],

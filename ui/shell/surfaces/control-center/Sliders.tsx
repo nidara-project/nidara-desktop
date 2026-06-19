@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import AstalWp from "gi://AstalWp"
 import { makeHSlider, makeVerticalFillTile } from "../../common/Slider"
-import { AtomicWidget, WidgetSize } from "./Types"
+import { CCWidgetSpec, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import * as AudioSvc from "../../core/AudioService"
@@ -81,7 +81,7 @@ function buildVolumeIcon(speaker: any): Gtk.Widget {
     return btn
 }
 
-export function VolumeWidget(): AtomicWidget {
+export function VolumeWidget(): CCWidgetSpec {
     const speaker = AstalWp.get_default()?.audio?.default_speaker
 
     const getValue = () => speaker ? Math.round(speaker.volume * 100) / 100 : 0.5

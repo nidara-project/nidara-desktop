@@ -4,7 +4,7 @@ import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Pango from "gi://Pango"
 import { createSquirclePath } from "../../common/DrawingUtils"
-import { AtomicWidget, WidgetSize } from "./Types"
+import { CCWidgetSpec, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 
@@ -239,7 +239,7 @@ function buildSingleContent(state: MediaState): Gtk.Widget {
     return overlay
 }
 
-export function MediaIslandContent(): AtomicWidget {
+export function MediaIslandContent(): CCWidgetSpec {
     const state = makeMediaState()
 
     return {

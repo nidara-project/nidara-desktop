@@ -277,6 +277,7 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
 
 const mediaWidget: AtomicWidget = {
     id: "media",
+    category: "media",
     name: t("cc.media.name"),
     icon: Icons.play,
     locations: ["bar", "cc"],

@@ -129,6 +129,8 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
 const clipboardWidget: AtomicWidget = {
     id: "clipboard",
+    category: "utilities",
+    barOrder: 40,
     name: t("widget.clipboard.name"),
     icon: Icons.clipboard,
     locations: ["bar", "cc"],

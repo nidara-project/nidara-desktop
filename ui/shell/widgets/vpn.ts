@@ -145,6 +145,8 @@ function buildBarExpanded(onClose: () => void): Gtk.Widget {
 
 const vpnWidget: AtomicWidget = {
     id: "vpn",
+    category: "system",
+    barOrder: 50,
     name: t("widget.vpn.name"),
     icon: Icons.shield,
     locations: ["bar", "cc"],

@@ -85,8 +85,10 @@ node scripts/gen-widget-index.mjs        # regenerates widgets/widgets.gen.ts
 
 Commit `widgets.gen.ts` **together with** the new widget file — the CI job
 `widgets-gen` fails the PR if the committed file is stale. No registry edit is
-needed; optionally add the id to the curated `BAR_ORDER` / `CC_DEFAULT_ORDER`
-in `widgets/index.ts` (unlisted ids fall to the end). The codegen hard-errors
+needed beyond the widget's required `category` (`"media"`|`"utilities"`|`"system"`,
+which auto-places it in the bar) + optional `barOrder` (intra-category fine-tune);
+`CC_DEFAULT_ORDER` in `widgets/index.ts` stays editorial (unlisted ids fall to the
+end). The codegen hard-errors
 on non-widget files in `widgets/` (helpers go in `common/`) and on
 duplicate ids — fix what it says and re-run.
 

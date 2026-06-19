@@ -59,8 +59,13 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     Rules: widgets-only directory (anything else is a codegen hard-error; new
     helpers go in `common/` — `bar-helpers.ts` is grandfathered in EXCLUDE);
     unique `id`; no module-scope dependency on another widget (import order is
-    alphabetical). Curated `BAR_ORDER`/`CC_DEFAULT_ORDER` stay editorial in
-    `widgets/index.ts` — unlisted widgets fall to the end, listing is optional.
+    alphabetical). Each widget declares a required `category` (`"media"` |
+    `"utilities"` | `"system"`) + optional `barOrder`; `BAR_ORDER` is **derived**
+    from those in `widgets/index.ts` (category order `[media, utilities, system]` =
+    left→right, system nearest the tray, macOS-style — no hand-maintained list).
+    `CC_DEFAULT_ORDER` stays editorial. The CC factories in `Toggles`/`Sliders`/
+    `MediaIsland` return `CCWidgetSpec` (= `Omit<AtomicWidget,"category">`): they
+    build content, not registry metadata, so they carry no category.
     **Zero-layout contract (2026-06-11)**: a widget never does host-geometry math.
     `buildContent(size, budget)` receives a `ContentBudget` (inner px the host
     guarantees: tile span − island padding, computed in `IslandGrid` from

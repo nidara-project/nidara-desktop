@@ -198,6 +198,8 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
 
 const cpuMemoryWidget: AtomicWidget = {
     id: "cpu_memory",
+    category: "utilities",
+    barOrder: 10,
     name: t("widget.cpu-memory.name"),
     icon: Icons.cpu,
     locations: ["bar", "cc"],

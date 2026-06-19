@@ -61,7 +61,7 @@ async function startRecording(mode: RecordMode, withAudio: boolean, onClose: () 
     }
 }
 
-async function stopRecording() {
+export async function stopRecording() {
     await execAsync(["pkill", "-SIGINT", "wf-recorder"]).catch(() => {})
 }
 
@@ -235,6 +235,8 @@ function buildBarExpanded(onClose: () => void): Gtk.Widget {
 
 const screenrecordWidget: AtomicWidget = {
     id: "screenrecord",
+    category: "utilities",
+    barOrder: 60,
     name: t("widget.screenrecord.name"),
     icon: Icons.record,
     locations: ["bar", "cc"],

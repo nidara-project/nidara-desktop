@@ -34,6 +34,13 @@ const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
 
 function emit(obj) { print(JSON.stringify(obj, null, 2)) }
 
+// Fire-and-forget: tell the shell an action just landed so the bar's AI-control
+// indicator shows its "active" pulse (decays back to "armed" after a few seconds).
+// Never blocks or fails the action if the shell isn't reachable.
+function pingShell() {
+    try { GLib.spawn_command_line_async("ags request notifyComputerAction") } catch {}
+}
+
 // Both gates required; both default OFF (absent/garbled ai.json → disabled).
 function controlEnabled() {
     try {
@@ -156,6 +163,7 @@ function main() {
         emit({ ok: false, app, mode, error: `wtype failed: ${r.err || "no output"}` })
         return
     }
+    pingShell()
     emit({ ok: true, app, mode, active })
 }
 

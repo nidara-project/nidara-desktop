@@ -260,6 +260,8 @@ function buildBarContent(): Gtk.Widget {
 
 const batteryWidget: AtomicWidget = {
     id: "battery",
+    category: "system",
+    barOrder: 40,
     name: t("widget.battery.name"),
     icon: Icons.battery,
     locations: ["bar", "cc"],

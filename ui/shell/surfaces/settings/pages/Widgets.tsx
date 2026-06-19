@@ -1,8 +1,8 @@
 import { Gtk } from "ags/gtk4"
 import widgetConfig from "../../../core/WidgetConfig"
 import ccLayout from "../../control-center/CCLayoutManager"
-import registry, { widgetAvailable } from "../../../widgets/index"
-import { AtomicWidget } from "../../control-center/Types"
+import registry, { widgetAvailable, CATEGORY_ORDER } from "../../../widgets/index"
+import { AtomicWidget, WidgetCategory } from "../../control-center/Types"
 import { pageBox, listGroup, createRow, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
@@ -35,55 +35,85 @@ function configureRow(nav: SettingsNav, w: AtomicWidget): Gtk.ListBoxRow {
 }
 
 // One card per widget: an icon+name header over a boxed list of its toggles
-// (Bar / Control Center) plus an optional Configure link. Replaces the old flat
-// one-row-per-widget list so each widget reads as its own module (macOS-style)
-// and has room to grow its own options.
+// (Bar / Control Center) plus an optional Configure link. Each widget reads as its
+// own module (macOS-style) and has room to grow its own options.
+function buildWidgetCard(nav: SettingsNav, w: AtomicWidget): Gtk.Widget {
+    const placement = widgetConfig.get(w.id)
+    // Hardware gate: card stays visible (so the user sees WHY it's off) but
+    // both toggles render off + disabled with a hint. Placement config is
+    // untouched — the saved state comes back with the hardware.
+    const available = widgetAvailable(w)
+    const noHw = t("settings.widgets.tooltip.no-hardware")
+    const { box, listBox } = listGroup("")
+
+    // Identity header (icon + name) — prepended ABOVE the listBox so it doesn't
+    // pick up a clickable row's hover/press state (it isn't interactive).
+    const header = new Gtk.Box({ spacing: 10, margin_start: 10, margin_bottom: 2, valign: Gtk.Align.CENTER })
+    header.append(new Gtk.Image({ gicon: w.icon ?? Icons.app, pixel_size: 18, css_classes: ["nd-icon"], opacity: available ? 1 : 0.5 }))
+    header.append(new Gtk.Label({ label: w.name, css_classes: ["nidara-row-title"], halign: Gtk.Align.START, opacity: available ? 1 : 0.5 }))
+    box.prepend(header)
+
+    // Bar toggle — only for widgets that can actually render in the bar.
+    if (w.locations?.includes("bar") && w.buildBarContent != null) {
+        listBox.append(switchRow(
+            t("settings.widgets.show-in-bar"), available && placement.bar, available,
+            available ? "" : noHw,
+            (v) => widgetConfig.setBar(w.id, v),
+        ))
+    }
+
+    // Control Center toggle — disabled (with a tooltip) when the hardware is
+    // missing, or when the grid is full and the widget isn't already in it.
+    if (w.locations?.includes("cc")) {
+        const ccFits = placement.cc || ccLayout.canAdd(w.id)
+        listBox.append(switchRow(
+            t("settings.widgets.show-in-cc"), available && placement.cc, available && ccFits,
+            !available ? noHw : ccFits ? "" : t("settings.widgets.tooltip.no-space"),
+            (v) => {
+                widgetConfig.setCC(w.id, v)
+                if (v) ccLayout.add(w.id)
+                else ccLayout.remove(w.id)
+            },
+        ))
+    }
+
+    if (w.buildSettings && available) listBox.append(configureRow(nav, w))
+
+    return box
+}
+
+// Section header above each category cluster — same look as the listGroup titles
+// used elsewhere in Settings (uppercase, dim).
+function categoryHeader(label: string, first: boolean): Gtk.Widget {
+    return new Gtk.Label({
+        label: label.toUpperCase(),
+        css_classes: ["nidara-list-title"],
+        halign: Gtk.Align.START,
+        margin_top: first ? 0 : 10,
+    })
+}
+
+// Widgets are grouped by category (Media / Utilities / System) in the SAME order
+// they appear across the bar — so Settings and the bar tell the same story. The
+// flat one-card-per-widget list is preserved within each group.
 export default function WidgetsPage(nav: SettingsNav): Gtk.Widget {
     const page = pageBox("widgets-page")
 
-    for (const w of registry.all()) {
-        const placement = widgetConfig.get(w.id)
-        // Hardware gate: card stays visible (so the user sees WHY it's off) but
-        // both toggles render off + disabled with a hint. Placement config is
-        // untouched — the saved state comes back with the hardware.
-        const available = widgetAvailable(w)
-        const noHw = t("settings.widgets.tooltip.no-hardware")
-        const { box, listBox } = listGroup("")
+    const catLabel: Record<WidgetCategory, string> = {
+        system: t("settings.widgets.category.system"),
+        utilities: t("settings.widgets.category.utilities"),
+        media: t("settings.widgets.category.media"),
+    }
 
-        // Identity header (icon + name) — prepended ABOVE the listBox so it doesn't
-        // pick up a clickable row's hover/press state (it isn't interactive).
-        const header = new Gtk.Box({ spacing: 10, margin_start: 10, margin_bottom: 2, valign: Gtk.Align.CENTER })
-        header.append(new Gtk.Image({ gicon: w.icon ?? Icons.app, pixel_size: 18, css_classes: ["nd-icon"], opacity: available ? 1 : 0.5 }))
-        header.append(new Gtk.Label({ label: w.name, css_classes: ["nidara-row-title"], halign: Gtk.Align.START, opacity: available ? 1 : 0.5 }))
-        box.prepend(header)
-
-        // Bar toggle — only for widgets that can actually render in the bar.
-        if (w.locations?.includes("bar") && w.buildBarContent != null) {
-            listBox.append(switchRow(
-                t("settings.widgets.show-in-bar"), available && placement.bar, available,
-                available ? "" : noHw,
-                (v) => widgetConfig.setBar(w.id, v),
-            ))
-        }
-
-        // Control Center toggle — disabled (with a tooltip) when the hardware is
-        // missing, or when the grid is full and the widget isn't already in it.
-        if (w.locations?.includes("cc")) {
-            const ccFits = placement.cc || ccLayout.canAdd(w.id)
-            listBox.append(switchRow(
-                t("settings.widgets.show-in-cc"), available && placement.cc, available && ccFits,
-                !available ? noHw : ccFits ? "" : t("settings.widgets.tooltip.no-space"),
-                (v) => {
-                    widgetConfig.setCC(w.id, v)
-                    if (v) ccLayout.add(w.id)
-                    else ccLayout.remove(w.id)
-                },
-            ))
-        }
-
-        if (w.buildSettings && available) listBox.append(configureRow(nav, w))
-
-        page.append(box)
+    let first = true
+    for (const cat of CATEGORY_ORDER) {
+        const widgets = registry.all()
+            .filter(w => w.category === cat)
+            .sort((a, b) => (a.barOrder ?? 0) - (b.barOrder ?? 0))
+        if (widgets.length === 0) continue
+        page.append(categoryHeader(catLabel[cat], first))
+        first = false
+        for (const w of widgets) page.append(buildWidgetCard(nav, w))
     }
 
     // Reordering lives in the CC's own Edit mode, not here.

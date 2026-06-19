@@ -198,6 +198,8 @@ function buildCCDetail(_onClose: () => void): Gtk.Widget {
 
 const volumeWidget: AtomicWidget = {
     id: "volume",
+    category: "system",
+    barOrder: 90,
     name: t("cc.volume.name"),
     icon: Icons.volumeHigh,
     locations: ["bar", "cc"],

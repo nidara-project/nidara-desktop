@@ -17,6 +17,8 @@ function buildBarContent() {
 
 const focusWidget: AtomicWidget = {
     id: "focus",
+    category: "utilities",
+    barOrder: 20,
     name: t("widget.focus.name"),
     icon: Icons.bellOff,
     locations: ["bar", "cc"],

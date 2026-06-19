@@ -16,6 +16,8 @@ function buildBarContent() {
 
 const calculatorWidget: AtomicWidget = {
     id: "calculator",
+    category: "utilities",
+    barOrder: 30,
     name: t("widget.calculator.name"),
     icon: Icons.calculator,
     locations: ["bar", "cc"],

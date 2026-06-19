@@ -12,7 +12,6 @@ import { CAPSULE_BORDER } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
-import agentConfig from "../../core/AgentConfig"
 import widgetConfig from "../../core/WidgetConfig"
 import regionConfig from "../../core/RegionConfig"
 import registry, { widgetAvailable, watchWidgetAvailability } from "../../widgets/index"
@@ -20,6 +19,7 @@ import Tray from "./Tray"
 import { SystemMenuOverlay } from "./SystemMenu"
 import { AppTitle } from "./AppTitle"
 import { Workspaces } from "./Workspaces"
+import StatusIndicatorBar from "./StatusIndicators"
 
 // Overlay panels mounted on the bar window (avoids separate layer-shell surfaces)
 import { ControlCenterWidget } from "../control-center/ControlCenter"
@@ -482,50 +482,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   right.append(optWidgets)
 
-  // Recording indicator — always in DOM, visible only while recording
-  const recDot = new Gtk.Box({
-      css_classes: ["bar-rec-indicator"],
-      width_request: 8, height_request: 8,
-      valign: Gtk.Align.CENTER,
-      visible: false,
-  })
-  const recLabel = new Gtk.Label({ label: "REC", css_classes: ["bar-rec-label"] })
-  const recBox = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER, margin_start: 8, margin_end: 8 })
-  recBox.append(recDot)
-  recBox.append(recLabel)
-  const recCapsule = SquircleContainer({ child: recBox, gloss: false, useShellOpacity: true, borderColor: { r: 0.9, g: 0.1, b: 0.1, a: 0.4 }, perfect: true, css_classes: ["bar-rec-capsule"] })
-  recCapsule.set_visible(false)
-  const syncRecIndicator = () => {
-      recCapsule.set_visible(status.recording)
-      recDot.set_visible(status.recording)
-  }
-  status.connect("notify::recording", syncRecIndicator)
-  right.append(recCapsule)
-
-  // AI-control indicator + kill switch — visible only while the computer-control
-  // gate is granted (agents may act on third-party apps via nidara-act). The
-  // capsule IS the kill switch: clicking it (or Super+Shift+Esc, see
-  // config/hypr/hyprland.lua) revokes control instantly. Mirrors the recording
-  // indicator above so the user is never unaware the agent may act.
-  const cuaDot = new Gtk.Box({
-      css_classes: ["bar-cua-indicator"],
-      width_request: 8, height_request: 8,
-      valign: Gtk.Align.CENTER,
-  })
-  const cuaLabel = new Gtk.Label({ label: "AI CONTROL", css_classes: ["bar-cua-label"] })
-  const cuaBox = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER, margin_start: 8, margin_end: 8 })
-  cuaBox.append(cuaDot)
-  cuaBox.append(cuaLabel)
-  const cuaCapsule = SquircleContainer({ child: cuaBox, gloss: false, useShellOpacity: true, borderColor: { r: 0.9, g: 0.1, b: 0.1, a: 0.4 }, perfect: true, css_classes: ["bar-cua-capsule"] })
-  cuaCapsule.set_tooltip_text("AI may control apps — click to stop")
-  cuaCapsule.set_cursor(Gdk.Cursor.new_from_name("pointer", null))
-  const cuaClick = new Gtk.GestureClick()
-  cuaClick.connect("released", () => agentConfig.setAllowComputerControl(false))
-  cuaCapsule.add_controller(cuaClick)
-  const syncCuaIndicator = () => cuaCapsule.set_visible(agentConfig.allowComputerControl)
-  agentConfig.onChange(syncCuaIndicator)
-  syncCuaIndicator()
-  right.append(cuaCapsule)
+  // Status indicators (recording, AI control) — condition-driven, non-toggleable.
+  // The whole subsystem lives in surfaces/bar/StatusIndicators.tsx; it sits between
+  // the optional widgets and the tray, and each indicator owns its own state + click.
+  const statusIndicators = StatusIndicatorBar()
+  right.append(statusIndicators)
 
   const trayInner = Tray(openCustomExpansion)
   const trayCapsule = SquircleContainer({ child: trayInner, gloss: true, useShellOpacity: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
@@ -606,7 +567,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (iconWidths.length === 0) return
 
       const spacing = 8
-      const fixedCapsules: Gtk.Widget[] = [recCapsule, trayCapsule, searchCapsule, ccBtn, timeCapsule]
+      const fixedCapsules: Gtk.Widget[] = [statusIndicators, trayCapsule, searchCapsule, ccBtn, timeCapsule]
       const fixedW = fixedCapsules.reduce((s, w) => s + (w.get_visible() ? natW(w) + spacing : 0), 0)
       // Budget = space available to optWidgets before the right side would overlap the
       // workspace capsule. The workspace is centered, so each side gets at most:

@@ -194,38 +194,32 @@ window#nidara-bar-zone {
     &:hover { opacity: 1; }
 }
 
-// ── Recording indicator ───────────────────────────────────────────────────────
+// ── Status indicators (recording, AI control, …) ──────────────────────────────
+// One look for the whole subsystem (surfaces/bar/StatusIndicators.tsx). The capsule
+// carries a state class: default = active, .is-armed = present-but-idle.
+//   active — bright danger capsule, label shown, dot pulses.
+//   armed  — dimmed, dot only, no pulse (still the clickable kill switch).
 
-.bar-rec-capsule {
+.bar-indicator-capsule {
     background: rgba(var(--nidara-danger-rgb), 0.18);
+
+    &.is-armed {
+        background: rgba(var(--nidara-danger-rgb), 0.08);
+        opacity: 0.55;
+    }
 }
 
-.bar-rec-indicator {
+.bar-indicator-dot {
     border-radius: var(--nidara-radius-pill);
     background: var(--nidara-danger);
+}
+
+// Pulse only while actively happening, never while merely armed.
+.bar-indicator-capsule.is-active .bar-indicator-dot {
     animation: rec-pulse 1.4s ease-in-out infinite;
 }
 
-.bar-rec-label {
-    font-size: $fs-caption;
-    font-weight: $fw-bold;
-    color: var(--nidara-danger);
-    letter-spacing: 0.05em;
-}
-
-// ── AI-control indicator + kill switch (mirrors the recording indicator) ───────
-
-.bar-cua-capsule {
-    background: rgba(var(--nidara-danger-rgb), 0.18);
-}
-
-.bar-cua-indicator {
-    border-radius: var(--nidara-radius-pill);
-    background: var(--nidara-danger);
-    animation: rec-pulse 1.4s ease-in-out infinite;
-}
-
-.bar-cua-label {
+.bar-indicator-label {
     font-size: $fs-caption;
     font-weight: $fw-bold;
     color: var(--nidara-danger);
