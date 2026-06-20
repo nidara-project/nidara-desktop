@@ -1,10 +1,10 @@
 {
   "themeFamily": "Adwaita",
-  "iconTheme": "Colloid",
+  "iconTheme": "Papirus",
   "cursorTheme": "Adwaita",
   "isDark": true,
-  "accent": "green",
-  "transparency": 0.49230769230769234,
+  "accent": "blue",
+  "transparency": 0.5,
   "tintStrength": 0,
   "tintPanels": {
     "controlCenter": false,

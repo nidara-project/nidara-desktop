@@ -263,6 +263,7 @@ sudo pacman -Syu --needed --noconfirm \
     polkit-gnome \
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland \
     ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji \
+    papirus-icon-theme adwaita-icon-theme xdg-utils \
     hyprlauncher awww lz4
 fi
 
@@ -643,6 +644,15 @@ for f in appearance.json widgets.json cc_layout.json; do
         echo "  [Init] $CONFIG_DIR/$f"
     fi
 done
+
+# Default file manager: a fresh Arch has no inode/directory association, so
+# `xdg-open <folder>` (the dock's Files item, apps' "open containing folder", …)
+# launches the wrong app. Seed nautilus as the default — only when the user has no
+# association yet, so updates never override their choice.
+if [ -z "$(run_user xdg-mime query default inode/directory 2>/dev/null)" ]; then
+    run_user xdg-mime default org.gnome.Nautilus.desktop inode/directory \
+        && echo "  [Init] Default file manager → nautilus (inode/directory)"
+fi
 
 # .mcp.json — MCP manifest for the user's AI agent (Claude Code et al). Points at
 # the installed binary via PATH. Always (re)written: it's a runtime-managed pointer,

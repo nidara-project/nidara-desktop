@@ -189,6 +189,11 @@ hl.on("hyprland.start", function()
     -- app slice: systemd deprioritizes them under CPU/IO/memory pressure and the OOM
     -- killer targets them before real apps — correct for wallpaper/idle/clipboard helpers.
     hl.exec_cmd("uwsm app -s b -- awww-daemon")
+    -- First-run wallpaper: awww-daemon restores its own cached image, but on a fresh
+    -- install the cache is empty — so the desktop would be blank. Wait for the daemon,
+    -- then apply the shipped default ONLY if nothing is being displayed (so a restored
+    -- image or a user's choice is never clobbered).
+    hl.exec_cmd("sh -c 'for i in 1 2 3 4 5; do awww query >/dev/null 2>&1 && break; sleep 0.5; done; awww query 2>/dev/null | grep -q image: || awww img /usr/share/nidara/wallpaper.png --transition-type none'")
     hl.exec_cmd("uwsm app -s b -- /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1")
     hl.exec_cmd("uwsm app -s b -- hypridle")
     hl.exec_cmd("uwsm app -s b -- wl-paste --watch cliphist store")
