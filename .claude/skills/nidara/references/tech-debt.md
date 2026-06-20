@@ -276,7 +276,7 @@ media **rich panel** (`media.ts buildBarExpanded` ~L216) + `MediaIsland.tsx:36`,
 and **re-decode the cover-art PNG from disk every notify** (`GdkPixbuf.new_from_file_at_scale` +
 unconditional `artDa.queue_draw()`) — guard `loadArt` on a changed `cover_art` path when touched.
 
-### 12. Sporadic double-disconnect CRITICALs — unreproduced, capture recipe ready
+### 12. Sporadic double-disconnect CRITICALs — NOW REPRODUCIBLE (rapid overlay/Settings churn)
 Rare bursts (≈2 in 30 h) of `GLib-GObject-CRITICAL … instance has no handler with id` (3–4
 ids at once, 2 instances) and `GLib-CRITICAL … Source ID not found when attempting to
 remove it`. Some cleanup path disconnects handlers / removes sources twice. Ruled out by
@@ -284,6 +284,13 @@ direct exercise (no critical emitted): all five overlay toggles, window open/clo
 notifications (incl. `-r` replacement + NC open), DPMS off/on. Next occurrence: don't
 theorize — run the shell once under `G_DEBUG=fatal-criticals` while reproducing the user's
 action of that moment and read the coredump backtrace (recipe in `dev-workflow.md`).
+**REPRODUCED 2026-06-20 (clean-VM first-run sweep).** The trigger is *rapid churn*, not a single
+action: a script cycling every overlay on/off in a loop AND navigating every Settings page
+back-to-back (`settingsPage <id>` for all pages, then `closeWindow`) emits the `has no handler with
+id` bursts reliably (15+ at once). The earlier "ruled out by direct exercise" was too gentle — single,
+spaced toggles don't trip it; quick successive Settings page build/destroy (and/or overlay
+ScaleRevealer teardown) does. Next: run that sweep under `G_DEBUG=fatal-criticals` for the coredump
+backtrace to pinpoint the double-disconnecting cleanup path.
 
 ### 13. Lockscreen GTK4 segfault when a wl_output vanishes — upstream, mitigated by watchdog
 On wake-from-suspend the DP link re-trains and the wl_output disappears for ~1 s; GTK
@@ -385,6 +392,17 @@ bar vs the CC) **and `defaults/cc_layout.json`** (the CC tile positions/sizes) �
 inherits the maintainer's personal arrangement. Needs a deliberate default CC/widget layout (a design
 call). NB `defaults/region.json` is NOT seeded from the repo (install.sh derives it from the system
 locale), so it's not part of this.
+
+### 20. AstalHyprland boot CRITICAL on empty-workspace login (dependency, not our code)
+On a clean boot into an empty workspace, `libastal-hyprland` logs at startup `Json-CRITICAL …
+json_node_get_string: assertion 'JSON_NODE_IS_VALID (node)' failed` + `astal_hyprland_hyprland_get_client:
+assertion 'address != NULL' failed` (clean-VM first-run sweep, 2026-06-20). It's inside AstalHyprland —
+an event parsed with a missing/empty address when nothing is focused. Harmless (assertion, shell
+continues) but boot noise; reinforces AstalHyprland as the #1 facade-replacement candidate
+([[project_astal_dependency]]). Don't chase it in shell code; if it must be silenced before the facade
+swap, guard the focused-client read path. **NB — same log, NOT Nidara:** a `ModuleNotFoundError: No
+module named 'gi.repository'` is a *third-party* app launched from the App Grid (e.g. an Avahi/GTK
+Python tool) needing `python-gobject`, absent on a minimal install — not a shell defect.
 
 ## Resolved — rules that still apply
 
