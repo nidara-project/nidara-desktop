@@ -373,6 +373,19 @@ as-is by owner decision — low impact, and forcing exclusion would fight the do
 `isAppGridOpen` accessor populated in `main()`), instead of mirroring in Status. Agents can now see
 whether the launcher is open while the architectural special-case stays intact.
 
+### 19. Shipped default config was a personal snapshot — widgets/CC layout still uncurated
+The seeded `defaults/*.json` were a dump of the maintainer's personal config, not curated
+defaults (caught by the clean-VM first-run test, 2026-06-20). **PR #27 curated `appearance.json`**
+(accent → blue, iconTheme → Papirus, transparency → a deliberate 0.5 — was a slider-derived float)
+and added the packaging that made it resolve: `papirus-icon-theme`/`adwaita-icon-theme`/`xdg-utils`,
+the default file-manager association (`xdg-mime` `inode/directory` → nautilus, else the dock's Files
+item `xdg-open`ed a terminal), and a wallpaper-on-first-run fallback in `hyprland.lua` (awww-daemon's
+cache is empty on a fresh box). **Still uncurated: `defaults/widgets.json`** (which widgets sit in the
+bar vs the CC) **and `defaults/cc_layout.json`** (the CC tile positions/sizes) — a new user still
+inherits the maintainer's personal arrangement. Needs a deliberate default CC/widget layout (a design
+call). NB `defaults/region.json` is NOT seeded from the repo (install.sh derives it from the system
+locale), so it's not part of this.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
