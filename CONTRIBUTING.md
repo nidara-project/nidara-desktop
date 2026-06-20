@@ -84,8 +84,27 @@ updates in place whenever you edit the PR description or push commits:
 Complete the template honestly: never tick a box that isn't true. The triage comment is
 metadata for the human reviewer, not a gate you need to argue with.
 
-## License
+## License & sign-off (DCO)
 
-By contributing you agree your contributions are licensed under the project's
-**GPL-3.0** license. Commits made with an agent should keep the agent's `Co-Authored-By`
-trailer.
+By contributing, you agree your contributions are licensed under the project's
+**GPL-3.0** license (inbound = outbound). You keep the copyright to what you wrote — you're
+licensing it to the project and its users under the GPL.
+
+Every commit must carry a **`Signed-off-by`** line certifying the
+[Developer Certificate of Origin](https://developercertificate.org/) (DCO 1.1; full text in
+the [`DCO`](DCO) file). In short, it states that **you have the right to submit the code**
+under the GPL. Add it automatically with the `-s` flag:
+
+```bash
+git commit -s -m "your message"
+```
+
+That appends a trailer like `Signed-off-by: Your Name <you@example.com>` — it must match your
+commit author identity. A maintainer will not merge commits that aren't signed off (an
+automated DCO check can be enabled to flag this on each PR).
+
+**For agent-assisted / AI-generated contributions:** the sign-off is **you, the human, taking
+responsibility** that the contribution is yours to submit and is GPL-licensed — this matters
+because copyright in purely AI-generated code is legally unsettled. Keep the agent's
+`Co-Authored-By` trailer **in addition to** your `Signed-off-by` (your agent can add both for
+you, with your consent).

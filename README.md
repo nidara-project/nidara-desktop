@@ -272,9 +272,24 @@ correctness, hardware compatibility, performance, accessibility).
 Nidara is released under the **GNU General Public License v3.0** (GPL-3.0).
 See [`LICENSE`](LICENSE) for the full text.
 
+Copyright (C) 2026 The Nidara Authors.
+
 This is the same license used by AGS, and is compatible with the LGPL-2.1
 libraries it builds on (GTK4, Astal). You're free to use, study, modify, and
 redistribute it — derivative works must remain open under the same terms.
+
+## Trademarks
+
+The GPL covers Nidara's **source code**. It does **not** grant rights to the
+**"Nidara" name or logo**, which are trademarks of the Nidara project.
+
+You are welcome to fork and redistribute the code under the GPL — but a fork or
+redistribution that is not the official project **must use a different name and
+logo**, and must not present itself in a way that implies endorsement by, or
+affiliation with, the Nidara project. (Same model as Firefox, GNOME and many
+other open-source projects: the code is free, the brand identifies the project.)
+
+See [`NOTICE`](NOTICE) for attribution details.
 
 ---
 

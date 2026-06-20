@@ -76,6 +76,11 @@ interface ShellWindow {
 // populated here after main() runs, avoiding circular imports with app.ts.
 const ipc: Record<string, ((...args: string[]) => string | void) | undefined> = {}
 
+// Whether the fullscreen app grid is open. Unlike the other overlays it lives
+// inside the dock window (not Status.ts), so dumpState reads its real state from
+// the dock via this accessor. Populated by main(); false until the dock exists.
+let isAppGridOpen: () => boolean = () => false
+
 // Declarative IPC surface — the single source of truth for `ags request`.
 // `listActions` introspects this table, so adding a command here is ALL it takes
 // for scripts and agents to discover it; never grow a parallel switch elsewhere.
@@ -465,6 +470,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             controlCenter: status.cc_open,
             notificationCenter: status.nc_open,
             prism: status.prism_open,
+            appGrid: isAppGridOpen(),
             systemMenu: status.system_menu_open,
             overview: status.overview_open,
             settings: status.settings_open,
@@ -602,6 +608,15 @@ app.start({
       windows.forEach(w => {
         if (w.name === "nidara-dock") try { (w as any).toggleAppGridPanel?.() } catch (e) { console.error(e) }
       })
+    }
+    // Expose the app grid's real open-state to dumpState (it lives in the dock,
+    // not Status.ts). OR across docks = open on any monitor.
+    isAppGridOpen = () => {
+      let open = false
+      windows.forEach(w => {
+        if (w.name === "nidara-dock") try { if ((w as any).isAppGridPanelOpen?.()) open = true } catch (e) { console.error(e) }
+      })
+      return open
     }
     // Show + raise Settings. present()'s Wayland activation is IGNORED by Hyprland
     // when the window sits on another workspace (misc:focus_on_activate=false), so

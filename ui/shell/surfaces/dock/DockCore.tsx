@@ -1217,6 +1217,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         if (appGridPanelOpen) closeAppGridPanel()
         else openAppGridPanel()
     }
+    // Read-only mirror of the panel state for dumpState (the app grid lives in the
+    // dock, not Status.ts, so this is how IPC observes whether it's open).
+    ;(win as any).isAppGridPanelOpen = () => appGridPanelOpen
 
     const bgClickGesture = new Gtk.GestureClick()
     bgClickGesture.set_propagation_phase(Gtk.PropagationPhase.BUBBLE)

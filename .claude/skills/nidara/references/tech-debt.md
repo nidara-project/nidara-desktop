@@ -358,6 +358,21 @@ Also deferred by product decision: **drag-reorder of bar widgets** (bar order is
 `notifyComputerAction` — an action path that bypasses `nidara-act/type/click` would stay "armed", not
 "active"; fine today (those are the only action tools), re-check if a new path is added.
 
+### 18. App grid lives in the dock BY DESIGN (Super-launch reveals the dock) — not a Status overlay
+The fullscreen app grid is implemented **inside the dock window** (`DockCore.tsx` — closure var
+`appGridPanelOpen`, exposed on the window as `toggleAppGridPanel` / `isAppGridPanelOpen`), **not**
+as a `Status.ts` overlay like CC/NC/Prism/Overview. This is **deliberate** (owner, 2026-06-20):
+launching the grid (Super) also **reveals the dock**, so the user can reach the dock when it's
+hidden (autohide) or out of the way (games / fullscreen). **Don't "fix" this by moving the app grid
+into Status** — you'd break the dock-reveal coupling.
+**Accepted consequence:** the app grid is **outside Status's mutual exclusion**, so it can be open
+at the same time as another overlay (verified live: app grid + Control Center both `true`). Left
+as-is by owner decision — low impact, and forcing exclusion would fight the dock coupling.
+**Observability fixed (2026-06-20):** `dumpState.overlays.appGrid` now reports its real state —
+`app.ts` reads it from the dock via the window's `isAppGridPanelOpen()` (through a module-level
+`isAppGridOpen` accessor populated in `main()`), instead of mirroring in Status. Agents can now see
+whether the launcher is open while the architectural special-case stays intact.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

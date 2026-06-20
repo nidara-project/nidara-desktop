@@ -1,0 +1,30 @@
+Nidara — a Wayland desktop environment for Arch Linux
+Copyright (C) 2026 The Nidara Authors
+
+This program is free software: you can redistribute it and/or modify it under
+the terms of the GNU General Public License as published by the Free Software
+Foundation, either version 3 of the License, or (at your option) any later
+version. See the LICENSE file for the full text.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY
+WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+----------------------------------------------------------------------
+Trademarks
+----------------------------------------------------------------------
+
+"Nidara" and the Nidara logo are trademarks of the Nidara project.
+
+The GPL applies to the source code only; it does not grant permission to use
+the Nidara name or logo. Forks and redistributions that are not the official
+project must adopt a different name and logo, and must not imply endorsement by
+or affiliation with the Nidara project.
+
+----------------------------------------------------------------------
+Third-party components
+----------------------------------------------------------------------
+
+Nidara builds on and integrates third-party software, including Hyprland, AGS
+(Aylur's GTK Shell), the Astal libraries, GTK4 and GJS. Those components are
+distributed under their own licenses by their respective authors.
