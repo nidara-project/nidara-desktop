@@ -435,7 +435,11 @@ repo name `nidara`, unsigned → `SigLevel = Optional TrustAll`). **`install.sh`
 (validated E2E in a clean VM 2026-06-21): §1 registers `[nidara]` + `pacman -S`'s the 18 explicitly
 (the `libastal-*` declare `depends=()`, so they must be listed — resolution won't pull them), §2/§4
 skip the source build when `DEPS_FROM_REPO=yes`; **the from-source build stays as the fallback** on any
-repo failure (installer still succeeds, slower). Because of that fallback (and the update pin-skip
+repo failure (installer still succeeds, slower). A **lockstep guard** after `pacman -S` verifies the
+installed versions encode this script's pins (pkgver carries `r<sha7>`/the tag) and only then sets
+`DEPS_FROM_REPO=yes` — otherwise a repo lagging a pin bump would `pacman -S` "successfully" with stale
+versions and the fallback would never fire (both branches VM-validated 2026-06-22). Because of that
+fallback (and the update pin-skip
 record), `install.sh` keeps its own `*_REF` pins → **pins still live in two places** (`install.sh`
 `*_REF` + `nidara-repo/pins.env`) and must be bumped **in lockstep**. This is now *permanent*, not
 transitional — the earlier "Phase 3 collapses to one SoT" plan does **not** apply (the fallback needs

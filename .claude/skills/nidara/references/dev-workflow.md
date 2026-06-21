@@ -37,12 +37,17 @@ Nidara's own code (which is why it can be public while `nidara-desktop` stays pr
 **Status (validated E2E in a clean VM, 2026-06-21):** `install.sh` §1 registers `[nidara]`
 in `/etc/pacman.conf` (idempotent) and `pacman -S`'s the 18 packages **explicitly** —
 `aylurs-gtk-shell` only depends on `astal-gjs`+`gjs` and every `libastal-*` declares
-`depends=()`, so dep resolution alone won't pull the stack. On success it sets
-`DEPS_FROM_REPO=yes` and §2 (Astal) + §4 (AGS) skip their from-source build. **Any repo
-failure** (down, missing package, version skew) leaves `DEPS_FROM_REPO=no` and falls through
-to the source build — the installer still succeeds, just slower. That fallback is exactly why
-install.sh keeps its own `*_REF` pins (also recorded to `PINS_FILE` for the update pin-skip).
-See tech-debt #21 and `packaging/README.md`.
+`depends=()`, so dep resolution alone won't pull the stack. After `pacman -S` a
+**lockstep guard** verifies the installed versions actually encode this script's pins
+(Astal/appmenu pkgver = `r<sha7>`, ags = the tag) — because a repo that lags a pin bump
+makes `pacman -S` "succeed" with STALE versions, which the source fallback would never
+catch on its own. Only on a clean match does it set `DEPS_FROM_REPO=yes` so §2 (Astal) +
+§4 (AGS) skip their from-source build. **Any repo miss** (down, missing package, or the
+version guard failing) leaves `DEPS_FROM_REPO=no` and falls through to the source build —
+the installer still succeeds, just slower. That fallback is exactly why install.sh keeps
+its own `*_REF` pins (also recorded to `PINS_FILE` for the update pin-skip). Both branches
+validated E2E in a clean VM (repo current → "pins verified" skip; pin bump the repo hadn't
+caught up to → guard WARN → source build). See tech-debt #21 and `packaging/README.md`.
 
 ### Install steps (in order)
 

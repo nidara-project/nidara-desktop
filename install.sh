@@ -298,8 +298,27 @@ if sudo pacman -S --needed --noconfirm \
     libastal-hyprland libastal-mpris libastal-network libastal-battery \
     libastal-notifd libastal-bluetooth libastal-tray libastal-wireplumber \
     libastal-greet libastal-auth; then
-    DEPS_FROM_REPO="yes"
-    echo "  [OK] Astal/AGS stack installed from nidara-repo — skipping source builds."
+    # Lockstep guard: `pacman -S` can "succeed" with STALE versions when nidara-repo
+    # hasn't been rebuilt for a pin bump yet (its packages still predate the new
+    # *_REF). That would silently install outdated deps AND let §6 record the new
+    # pins as if they matched — a mismatch the source fallback would never catch on
+    # its own. The package versions encode the pins (Astal/appmenu = r<sha7>, ags =
+    # the tag), so verify the installed versions match THIS script's pins; if any
+    # don't, treat it as a repo miss and fall through to the from-source build below
+    # (which always builds the exact pinned revision).
+    _astal_v="$(pacman -Q libastal-io 2>/dev/null | awk '{print $2}')"
+    _ags_v="$(pacman -Q aylurs-gtk-shell 2>/dev/null | awk '{print $2}')"
+    _appmenu_v="$(pacman -Q appmenu-glib-translator 2>/dev/null | awk '{print $2}')"
+    if [[ "$_astal_v" == *"r${ASTAL_REF:0:7}"* ]] \
+    && [[ "$_ags_v" == "${AGS_REF#v}-"* ]] \
+    && [[ "$_appmenu_v" == *"r${APPMENU_REF:0:7}"* ]]; then
+        DEPS_FROM_REPO="yes"
+        echo "  [OK] Astal/AGS stack installed from nidara-repo (pins verified) — skipping source builds."
+    else
+        echo "  [WARN] nidara-repo versions don't match the current pins — the repo was"
+        echo "         likely not rebuilt for this bump yet (astal=$_astal_v ags=$_ags_v appmenu=$_appmenu_v)."
+        echo "         Falling back to building the Astal/AGS stack from source."
+    fi
 else
     echo "  [WARN] nidara-repo unavailable or incomplete — falling back to building"
     echo "         the Astal/AGS stack from source (this is slower)."
