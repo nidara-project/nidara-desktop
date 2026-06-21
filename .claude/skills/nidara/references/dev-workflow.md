@@ -393,7 +393,7 @@ logs it as `[cfg] Config is either explicit or special`, NOT the literal phrase
 
 `~/.config/nidara/` must be a **real directory** holding only runtime config
 (the `.json` files + the three `.lua` + `wallpaper` + `.dev`). It is **separate** from
-the repo at `~/Dev/Distroia`. Historically it was once a manual symlink → the repo,
+the repo checkout (e.g. `~/Dev/nidara`). Historically it was once a manual symlink → the repo,
 which fused the config dir and the git tree and caused a delete incident (an
 "organize the config dir" sweep wiped the live checkout). If you ever find it's a
 symlink, that's the bug — make it a real dir.
