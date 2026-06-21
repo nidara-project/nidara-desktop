@@ -476,7 +476,8 @@ These were paid down; the *rule* remains:
 - **`Status.ts` exclusion** — add a new overlay's `_field → notify` to `EXCLUSIVE` and call
   `closeExclusive(...)`; don't touch the other setters.
 - **Repo weight** — history was rewritten (.git 342→95 MiB); old clones must re-clone. Don't
-  commit binaries beyond the 3 release bundles; verify pngs / build artifacts stay git-ignored.
+  commit binaries: the app bundles (`ui/*/build/*`) and every `style.css` are gitignored too —
+  `install.sh` rebuilds them from source on the target. Verify pngs / build artifacts stay git-ignored.
 - **Sliders** — one Cairo `makeSlider` (`common/Slider.ts`); no native `Gtk.Scale`,
   no `PillSlider`. See `design-system.md`.
 - **Monitor config** — applies via `hyprctl eval "hl.monitor({...})"`, NOT `hyprctl keyword`
