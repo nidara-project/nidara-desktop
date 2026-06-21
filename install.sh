@@ -258,7 +258,7 @@ sudo pacman -Syu --needed --noconfirm \
     git nodejs npm gjs go \
     at-spi2-core wtype wlr-protocols wayland \
     accountsservice greetd pavucontrol rust cargo \
-    hyprland hypridle hyprsunset uwsm power-profiles-daemon \
+    hyprland hypridle hyprsunset uwsm power-profiles-daemon python-gobject \
     kitty nautilus \
     polkit-gnome \
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland \
