@@ -7,6 +7,7 @@ import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as AudioSvc from "../core/AudioService"
+import { safeDisconnect } from "../core/signals"
 
 // ── Bar icon (dynamic, reflects mute/volume level) ────────────────────────────
 
@@ -51,7 +52,7 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
         const id = (speaker as any).connect?.("notify::mute", () => {
             muteImg.gicon = (speaker as any)?.mute ? Icons.volumeMuted : Icons.volumeHigh
         }) ?? 0
-        muteBtn.connect("unrealize", () => { if (id) try { speaker.disconnect(id) } catch {} })
+        muteBtn.connect("unrealize", () => safeDisconnect(speaker, id))
     }
 
     const row = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })

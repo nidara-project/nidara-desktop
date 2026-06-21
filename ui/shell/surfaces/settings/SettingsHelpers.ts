@@ -81,7 +81,10 @@ export const toggleRow = (
             if (sw.active === v) return
             syncing = true; sw.active = v; syncing = false
         })
-        sw.connect("unrealize", cleanup)
+        // unrealize fires on every realize/unrealize cycle; guard so the page-provided
+        // cleanup (often a signal disconnect) runs at most once. See tech-debt #12.
+        let cleaned = false
+        sw.connect("unrealize", () => { if (!cleaned) { cleaned = true; cleanup() } })
     }
     return createRow(label, subtitle, sw)
 }
@@ -115,7 +118,9 @@ export const dropdownRow = (
             if (idx < 0 || idx === drp.selected) return
             syncing = true; drp.selected = idx; syncing = false
         })
-        drp.connect("unrealize", cleanup)
+        // See toggleRow — guard the page-provided cleanup against repeated unrealize.
+        let cleaned = false
+        drp.connect("unrealize", () => { if (!cleaned) { cleaned = true; cleanup() } })
     }
     return createRow(label, subtitle, drp)
 }

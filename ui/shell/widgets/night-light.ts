@@ -4,10 +4,11 @@ import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
+import { safeDisconnect } from "../core/signals"
 
 const subscribe = (sync: () => void) => {
     const id = nightLight.connect("changed", sync)
-    return () => { try { nightLight.disconnect(id) } catch {} }
+    return () => safeDisconnect(nightLight, id)
 }
 
 function buildBarContent() {

@@ -6,6 +6,7 @@ import { CCWidgetSpec, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import * as AudioSvc from "../../core/AudioService"
+import { safeDisconnect } from "../../core/signals"
 
 function buildHorizontalSlider(
     iconNameLow: Gio.FileIcon,
@@ -76,7 +77,7 @@ function buildVolumeIcon(speaker: any): Gtk.Widget {
             speaker.connect("notify::volume", () => { icon.gicon = getIcon() }),
             speaker.connect?.("notify::mute", () => { icon.gicon = getIcon() }) ?? 0,
         ]
-        btn.connect("unrealize", () => ids.forEach((id: number) => { if (id) try { speaker.disconnect(id) } catch {} }))
+        btn.connect("unrealize", () => ids.forEach((id: number) => safeDisconnect(speaker, id)))
     }
     return btn
 }
@@ -89,7 +90,7 @@ export function VolumeWidget(): CCWidgetSpec {
     const onExtChange = (cb: (v: number) => void): (() => void) => {
         if (!speaker) return () => {}
         const id = speaker.connect("notify::volume", () => cb(speaker.volume))
-        return () => { try { speaker.disconnect(id) } catch {} }
+        return () => safeDisconnect(speaker, id)
     }
 
     const buildContent = (size: WidgetSize): Gtk.Widget => {

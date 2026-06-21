@@ -276,7 +276,7 @@ media **rich panel** (`media.ts buildBarExpanded` ~L216) + `MediaIsland.tsx:36`,
 and **re-decode the cover-art PNG from disk every notify** (`GdkPixbuf.new_from_file_at_scale` +
 unconditional `artDa.queue_draw()`) — guard `loadArt` on a changed `cover_art` path when touched.
 
-### 12. Sporadic double-disconnect CRITICALs — NOW REPRODUCIBLE (rapid overlay/Settings churn)
+### 12. Sporadic double-disconnect CRITICALs — FIXED (helper + reproducing cluster); rest opportunistic
 Rare bursts (≈2 in 30 h) of `GLib-GObject-CRITICAL … instance has no handler with id` (3–4
 ids at once, 2 instances) and `GLib-CRITICAL … Source ID not found when attempting to
 remove it`. Some cleanup path disconnects handlers / removes sources twice. Ruled out by
@@ -289,8 +289,22 @@ action: a script cycling every overlay on/off in a loop AND navigating every Set
 back-to-back (`settingsPage <id>` for all pages, then `closeWindow`) emits the `has no handler with
 id` bursts reliably (15+ at once). The earlier "ruled out by direct exercise" was too gentle — single,
 spaced toggles don't trip it; quick successive Settings page build/destroy (and/or overlay
-ScaleRevealer teardown) does. Next: run that sweep under `G_DEBUG=fatal-criticals` for the coredump
-backtrace to pinpoint the double-disconnecting cleanup path.
+ScaleRevealer teardown) does.
+
+**Root cause + fix (2026-06-21).** `obj.disconnect(staleId)` emits a `GLib-GObject-CRITICAL` at the
+C level that a JS `try/catch` does NOT catch (it's a logged critical, not a thrown error) — so the
+ubiquitous `try { obj.disconnect(id) } catch {}` was useless. Cleanups wired to `unrealize` run on
+every realize/unrealize cycle (an overlay toggled open/closed, a Settings page rebuilt), so the
+second run disconnects an already-stale id. Fix = `core/signals.ts` → `safeDisconnect(obj, id)`,
+which guards with `GObject.signal_handler_is_connected` (idempotent). Migrated the reproducing
+cluster — the CC/overlay/Settings widgets that recycle: `Sliders.tsx`, `MediaIsland.tsx`,
+`widgets/{volume,battery,media,screenrecord,ethernet,night-light,dark-mode}.ts`, plus
+`common/Slider.ts` and once-guarded the `onExt` cleanup in `SettingsHelpers.ts` toggleRow/dropdownRow.
+**Remaining ~25 bare `try{disconnect}catch{}` sites migrate opportunistically** (when already editing
+the file): `core/{NetworkService,AudioService,BluetoothService}.ts`, `surfaces/control-center/Toggles.tsx`,
+`widgets/wifi.ts`, and several `surfaces/settings/pages/*.tsx` (Appearance, Display, Region, Input,
+Network, Bluetooth). Use `safeDisconnect` for all new disconnect-in-cleanup code — never bare
+`try{disconnect}catch{}`.
 
 ### 13. Lockscreen GTK4 segfault when a wl_output vanishes — upstream, mitigated by watchdog
 On wake-from-suspend the DP link re-trains and the wl_output disappears for ~1 s; GTK

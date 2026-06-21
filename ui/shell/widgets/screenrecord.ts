@@ -6,6 +6,7 @@ import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
+import { safeDisconnect } from "../core/signals"
 import status from "../core/Status"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -90,7 +91,7 @@ function makeElapsedLabel(): Gtk.Label {
 
     const sigId = status.connect("notify::recording", onRecordingChanged)
     label.connect("unrealize", () => {
-        try { status.disconnect(sigId) } catch {}
+        safeDisconnect(status, sigId)
         if (timerId) { GLib.source_remove(timerId); timerId = 0 }
     })
 
@@ -149,7 +150,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         box.append(icon)
         const syncSingle = () => { icon.gicon = status.recording ? Icons.recordStop : Icons.record }
         const sigId = status.connect("notify::recording", syncSingle)
-        box.connect("unrealize", () => { try { status.disconnect(sigId) } catch {} })
+        box.connect("unrealize", () => { safeDisconnect(status, sigId) })
         return box
     }
 
@@ -181,7 +182,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
     const syncState = () => stack.set_visible_child_name(status.recording ? "recording" : "idle")
     const sigId = status.connect("notify::recording", syncState)
-    outer.connect("unrealize", () => { try { status.disconnect(sigId) } catch {} })
+    outer.connect("unrealize", () => { safeDisconnect(status, sigId) })
     syncState()
 
     return outer
@@ -197,7 +198,7 @@ function buildBarContent(): Gtk.Widget {
         else image.remove_css_class("rec-bar-active")
     }
     const sigId = status.connect("notify::recording", syncState)
-    image.connect("unrealize", () => { try { status.disconnect(sigId) } catch {} })
+    image.connect("unrealize", () => { safeDisconnect(status, sigId) })
     syncState()
     return image
 }
@@ -225,7 +226,7 @@ function buildBarExpanded(onClose: () => void): Gtk.Widget {
     // Keep stack in sync with recording state
     const syncStack = () => stack.set_visible_child_name(status.recording ? "recording" : "idle")
     const sigId = status.connect("notify::recording", syncStack)
-    stack.connect("unrealize", () => { try { status.disconnect(sigId) } catch {} })
+    stack.connect("unrealize", () => { safeDisconnect(status, sigId) })
     syncStack()
 
     return stack

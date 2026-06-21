@@ -5,6 +5,7 @@ import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/T
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as Net from "../core/NetworkService"
+import { safeDisconnect } from "../core/signals"
 
 function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; update: () => void } {
     const key = new Gtk.Label({ label, css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
@@ -42,7 +43,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
     if (wired) {
         const wiredId = (wired as any).connect("notify::internet", inner.update)
-        inner.box.connect("unrealize", () => { try { (wired as any).disconnect(wiredId) } catch {} })
+        inner.box.connect("unrealize", () => safeDisconnect(wired as any, wiredId))
     }
     return wrapCapsuleTile(inner.box)
 }
@@ -70,8 +71,8 @@ function buildInfoPanel(): Gtk.Widget {
         const device  = (wired as any)?.device
         const devId   = device ? device.connect("notify::speed", updateAll) : 0
         box.connect("unrealize", () => {
-            try { (wired as any).disconnect(wiredId) } catch {}
-            if (devId) try { device.disconnect(devId) } catch {}
+            safeDisconnect(wired as any, wiredId)
+            safeDisconnect(device, devId)
         })
     }
 

@@ -7,6 +7,7 @@ import { createSquirclePath } from "../../common/DrawingUtils"
 import { CCWidgetSpec, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
+import { safeDisconnect } from "../../core/signals"
 
 interface MediaState {
     artPixbuf: any
@@ -28,7 +29,7 @@ function makeMediaState(): MediaState {
 
     const updatePlayer = () => {
         if (state.currentPlayer && playerSignalId !== null) {
-            try { state.currentPlayer.disconnect(playerSignalId) } catch {}
+            safeDisconnect(state.currentPlayer, playerSignalId)
             playerSignalId = null
         }
         state.currentPlayer = mpris?.get_players()[0] ?? null

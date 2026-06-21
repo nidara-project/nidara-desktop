@@ -6,6 +6,7 @@ import { wrapCapsuleTile } from "../surfaces/control-center/Toggles"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import Theme from "../core/ThemeManager"
+import { safeDisconnect } from "../core/signals"
 
 const bat = AstalBattery.get_default()
 
@@ -110,7 +111,7 @@ function bindSync(root: Gtk.Widget, sync: () => void) {
     sync()
     if (!bat) return
     const id = bat.connect("notify", sync)
-    root.connect("unrealize", () => { try { bat.disconnect(id) } catch {} })
+    root.connect("unrealize", () => safeDisconnect(bat, id))
 }
 
 // Desktops / no battery: a plain dim icon, same footprint as any other tile.

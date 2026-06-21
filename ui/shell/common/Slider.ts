@@ -4,6 +4,7 @@ import Gio from "gi://Gio"
 
 // Palette tokens are CSS variables; for Cairo we read the accent from ThemeManager
 import Theme from "../core/ThemeManager"
+import { safeDisconnect } from "../core/signals"
 
 const TRACK_H  = 6   // px — track thickness
 const THUMB_R  = 9   // px — thumb radius (visual)
@@ -249,7 +250,7 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
 
     // Theme accent change → redraw.
     const themeSignalId = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
-    da.connect("unrealize", () => { try { Theme.disconnect(themeSignalId) } catch {} })
+    da.connect("unrealize", () => safeDisconnect(Theme, themeSignalId))
 
     // External value updates (ignored while the user is dragging).
     if (onExtChange) {
@@ -333,7 +334,7 @@ export function makeVolumeSlider(target: any, opts: {
         onExtChange: (cb) => {
             if (!target?.connect) return () => {}
             const id = target.connect("notify::volume", () => { cb((target.volume ?? 0) * 100); opts.onExternal?.() })
-            return () => { try { target.disconnect(id) } catch {} }
+            return () => safeDisconnect(target, id)
         },
         debounce: 24,
         cssClasses: opts.cssClasses,

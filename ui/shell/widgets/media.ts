@@ -10,6 +10,7 @@ import { makeHSlider } from "../common/Slider"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
+import { safeDisconnect } from "../core/signals"
 
 function buildBarContent(): Gtk.Widget {
     const mpris = AstalMpris.get_default()
@@ -60,10 +61,8 @@ function buildBarContent(): Gtk.Widget {
     }
 
     const updatePlayer = () => {
-        if (player && playerSigId !== null) {
-            try { player.disconnect(playerSigId) } catch {}
-            playerSigId = null
-        }
+        safeDisconnect(player, playerSigId)
+        playerSigId = null
         player = mpris?.get_players()[0] ?? null
         if (player) playerSigId = player.connect("notify", update)
         update()
@@ -72,8 +71,8 @@ function buildBarContent(): Gtk.Widget {
     if (mpris) {
         const mprisId = mpris.connect("notify::players", updatePlayer)
         box.connect("unrealize", () => {
-            try { mpris.disconnect(mprisId) } catch {}
-            if (playerSigId !== null && player) try { player.disconnect(playerSigId) } catch {}
+            safeDisconnect(mpris, mprisId)
+            safeDisconnect(player, playerSigId)
         })
     }
 
@@ -243,7 +242,7 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
     root.connect("map", () => { if (player) { syncProgress(); startTimer() } })
 
     const updatePlayer = () => {
-        if (player && playerSigId !== null) { try { player.disconnect(playerSigId) } catch {} ; playerSigId = null }
+        safeDisconnect(player, playerSigId); playerSigId = null
         player = mpris?.get_players()[0] ?? null
         if (player) { playerSigId = player.connect("notify", update); startTimer() }
         update()
@@ -256,8 +255,8 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
     if (mpris) {
         const mprisId = mpris.connect("notify::players", updatePlayer)
         root.connect("unrealize", () => {
-            try { mpris.disconnect(mprisId) } catch {}
-            if (playerSigId !== null && player) try { player.disconnect(playerSigId) } catch {}
+            safeDisconnect(mpris, mprisId)
+            safeDisconnect(player, playerSigId)
             if (progressTimer !== null) { try { GLib.source_remove(progressTimer) } catch {} ; progressTimer = null }
         })
     }

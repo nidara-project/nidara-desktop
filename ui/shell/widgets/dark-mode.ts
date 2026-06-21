@@ -4,10 +4,11 @@ import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
+import { safeDisconnect } from "../core/signals"
 
 const themeSubscribe = (sync: () => void) => {
     const id = Theme.connect("changed", sync)
-    return () => { try { Theme.disconnect(id) } catch {} }
+    return () => safeDisconnect(Theme, id)
 }
 
 function buildBarContent() {
