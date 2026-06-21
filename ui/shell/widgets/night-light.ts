@@ -28,6 +28,7 @@ const nightLightWidget: AtomicWidget = {
     name: t("widget.night-light.name"),
     icon: Icons.sunset,
     locations: ["bar", "cc"],
+    defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.SINGLE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent: (size, budget) => RoundToggle(

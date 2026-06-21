@@ -134,6 +134,7 @@ const clipboardWidget: AtomicWidget = {
     name: t("widget.clipboard.name"),
     icon: Icons.clipboard,
     locations: ["bar", "cc"],
+    defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,

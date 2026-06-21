@@ -132,6 +132,7 @@ const wifiWidget: AtomicWidget = {
     name: t("cc.wifi.name"),
     icon: Icons.wifi,
     locations: ["bar", "cc"],
+    defaultInBar: true,
     isAvailable: () => !!AstalNetwork.get_default()?.wifi,
     watchAvailable: (cb) => { AstalNetwork.get_default()?.connect("notify::wifi", cb) },
     defaultSize: WidgetSize.WIDE,

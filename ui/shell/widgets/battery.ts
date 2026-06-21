@@ -266,7 +266,8 @@ const batteryWidget: AtomicWidget = {
     name: t("widget.battery.name"),
     icon: Icons.battery,
     locations: ["bar", "cc"],
-    defaultInCc: false,   // situational (laptops only) — available to add, but not seeded by default
+    defaultInBar: true,   // laptops only — hardware gate (isAvailable: present) hides it on desktops
+    defaultInCc: false,   // situational — lives in the bar by default, available to add to the CC
     isAvailable: present,
     watchAvailable: (cb) => { bat?.connect("notify::is-present", cb) },
     defaultSize: WidgetSize.SINGLE,

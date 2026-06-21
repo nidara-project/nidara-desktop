@@ -84,15 +84,17 @@ export const BAR_ORDER: string[] = ALL_WIDGETS
         (a.i - b.i))
     .map(({ w }) => w.id)
 
-// CC initial seed order. Widgets enabled by default but not listed here are
-// appended by IslandGrid's reconciliation pass (syncCCLayout).
+// CC initial seed order — UNIVERSAL widgets only (always available, no hardware gate).
+// Hardware-gated default widgets (wifi, bt, brightness — defaultInCc true but isAvailable
+// hardware-dependent) are deliberately NOT seeded here: IslandGrid's syncCCLayout adds them
+// to a free cell only when their hardware is present. This is load-bearing — seeding a
+// hardware-gated tile here would have it removed on hardware-less machines (e.g. a desktop
+// without a backlight), and CCLayoutManager.remove() does NOT reflow, so it would leave a
+// hole. Keep this list to widgets that are always available; let the adaptive ones append.
 export const CC_DEFAULT_ORDER: string[] = [
     "media",
-    "wifi",
-    "ethernet",
-    "focus",
     "dark_mode",
-    "bt",
+    "focus",
     "volume",
     "cpu_memory",
     "calculator",

@@ -204,6 +204,7 @@ const volumeWidget: AtomicWidget = {
     name: t("cc.volume.name"),
     icon: Icons.volumeHigh,
     locations: ["bar", "cc"],
+    defaultInBar: true,
     defaultSize: WidgetSize.FULL_WIDTH,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.TALL, WidgetSize.FULL_WIDTH],
     buildContent: (size, budget) => VolumeWidget().buildContent(size, budget),

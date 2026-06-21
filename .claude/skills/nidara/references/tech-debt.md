@@ -394,18 +394,30 @@ as-is by owner decision — low impact, and forcing exclusion would fight the do
 `isAppGridOpen` accessor populated in `main()`), instead of mirroring in Status. Agents can now see
 whether the launcher is open while the architectural special-case stays intact.
 
-### 19. Shipped default config was a personal snapshot — widgets/CC layout still uncurated
+### 19. Shipped default config was a personal snapshot — RESOLVED
 The seeded `defaults/*.json` were a dump of the maintainer's personal config, not curated
 defaults (caught by the clean-VM first-run test, 2026-06-20). **PR #27 curated `appearance.json`**
 (accent → blue, iconTheme → Papirus, transparency → a deliberate 0.5 — was a slider-derived float)
 and added the packaging that made it resolve: `papirus-icon-theme`/`adwaita-icon-theme`/`xdg-utils`,
 the default file-manager association (`xdg-mime` `inode/directory` → nautilus, else the dock's Files
 item `xdg-open`ed a terminal), and a wallpaper-on-first-run fallback in `hyprland.lua` (awww-daemon's
-cache is empty on a fresh box). **Still uncurated: `defaults/widgets.json`** (which widgets sit in the
-bar vs the CC) **and `defaults/cc_layout.json`** (the CC tile positions/sizes) — a new user still
-inherits the maintainer's personal arrangement. Needs a deliberate default CC/widget layout (a design
-call). NB `defaults/region.json` is NOT seeded from the repo (install.sh derives it from the system
-locale), so it's not part of this.
+cache is empty on a fresh box).
+**Now fully resolved (bar/CC placement):** `defaults/widgets.json` and `defaults/cc_layout.json` were
+**deleted** — bar/CC placement no longer ships as a personal dump. It comes from the shell's **code
+defaults** (`DEFAULT_PLACEMENT` from each widget's `defaultInBar`/`defaultInCc`, + `CC_DEFAULT_ORDER`,
+both in `widgets/index.ts`), which are version-controlled, reviewable and **hardware-adaptive**:
+- **Bar status cluster** = `defaultInBar: true` on `wifi`, `battery`, `volume`; the bar's hardware
+  gate (`widgetAvailable`) prunes absent ones (desktop → no battery, etc.).
+- **CC default** = universal tiles seeded in `CC_DEFAULT_ORDER` (media, dark_mode, focus, volume,
+  cpu_memory, calculator) + hardware-adaptive tiles (`wifi`, `bt`, `brightness`: `defaultInCc` true
+  but **not** in the seed) that `syncCCLayout` appends to a free cell **only when the hardware is
+  present**. The load-bearing rule: never seed a hardware-gated tile, because `CCLayoutManager.remove()`
+  does NOT reflow, so a tile removed on a hardware-less box would leave a hole (see the comment on
+  `CC_DEFAULT_ORDER`). Off-by-default-but-addable (`defaultInCc: false`): ethernet, vpn, clipboard,
+  screenshot, screenrecord, night-light.
+The runtime `~/.config/nidara/{widgets,cc_layout}.json` are still written by the managers once the user
+customizes; only the shipped seeds are gone. NB `defaults/region.json` is NOT seeded from the repo
+(install.sh derives it from the system locale), so it was never part of this.
 
 ### 20. AstalHyprland boot CRITICAL on empty-workspace login (dependency, not our code)
 On a clean boot into an empty workspace, `libastal-hyprland` logs at startup `Json-CRITICAL …

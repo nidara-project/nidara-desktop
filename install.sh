@@ -636,8 +636,12 @@ elif [ "$MODE" = "system" ]; then
     echo "  [Source] Stateless updates — nidara-update re-clones the remote each time."
 fi
 
-# Default JSON configs (never overwrite user's existing files)
-for f in appearance.json widgets.json cc_layout.json; do
+# Default JSON configs (never overwrite user's existing files).
+# Bar/CC widget placement + CC tile layout are NOT seeded here: they come from the
+# shell's code defaults (DEFAULT_PLACEMENT + CC_DEFAULT_ORDER in widgets/index.ts),
+# which are hardware-adaptive. The runtime widgets.json/cc_layout.json are written into
+# the config dir only once the user customizes them.
+for f in appearance.json; do
     if [ -f "$REPO_DIR/defaults/$f" ] && [ ! -f "$CONFIG_DIR/$f" ]; then
         cp "$REPO_DIR/defaults/$f" "$CONFIG_DIR/$f"
         chown "$REAL_USER" "$CONFIG_DIR/$f"

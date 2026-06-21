@@ -150,6 +150,7 @@ const vpnWidget: AtomicWidget = {
     name: t("widget.vpn.name"),
     icon: Icons.shield,
     locations: ["bar", "cc"],
+    defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,

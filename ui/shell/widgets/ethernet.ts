@@ -90,6 +90,7 @@ const ethernetWidget: AtomicWidget = {
     name: t("cc.ethernet.name"),
     icon: Icons.ethernet,
     locations: ["bar", "cc"],
+    defaultInCc: false,   // off by default — Wi-Fi covers the common case; available to add
     isAvailable: () => !!AstalNetwork.get_default()?.wired,
     watchAvailable: (cb) => { AstalNetwork.get_default()?.connect("notify::wired", cb) },
     defaultSize: WidgetSize.WIDE,

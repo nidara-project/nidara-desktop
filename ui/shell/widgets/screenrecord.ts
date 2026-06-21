@@ -241,6 +241,7 @@ const screenrecordWidget: AtomicWidget = {
     name: t("widget.screenrecord.name"),
     icon: Icons.record,
     locations: ["bar", "cc"],
+    defaultInCc: false,   // off by default — optional/power feature; available to add
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent,

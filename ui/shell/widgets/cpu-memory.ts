@@ -203,7 +203,6 @@ const cpuMemoryWidget: AtomicWidget = {
     name: t("widget.cpu-memory.name"),
     icon: Icons.cpu,
     locations: ["bar", "cc"],
-    defaultInBar: true,
     defaultSize: WidgetSize.WIDE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     centerContent: true,
