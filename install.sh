@@ -173,6 +173,11 @@ fi
 #                  "rebuild everything from scratch" escape hatch.
 # ─────────────────────────────────────────────────────────────────────────────
 REBUILD_DEPS="yes"
+# Set to "yes" once the Astal/AGS/appmenu stack is installed as prebuilt packages
+# from nidara-repo (the binary pacman repo). When yes, the from-source build steps
+# (§2, §4) are skipped — they remain only as the fallback when the repo is
+# unreachable or incomplete.
+DEPS_FROM_REPO="no"
 OLD_VERSION="$(cat /usr/share/nidara/VERSION 2>/dev/null || echo "?")"
 # An update of a dev-mode install must keep dev semantics (config symlinks into
 # the source tree) — otherwise the update would silently downgrade them to copies.
@@ -245,6 +250,17 @@ if [ "$REBUILD_DEPS" = "no" ]; then
 echo "[1/7] System dependencies — skipped (pins unchanged)."
 else
 echo "[1/7] Installing system dependencies..."
+# Register nidara-repo — the binary pacman repo (GitHub Pages) that ships the
+# Astal/AGS/appmenu stack prebuilt, so installs/updates don't recompile it from
+# source every time. Unsigned v0 → `SigLevel = Optional TrustAll`; trust rests on
+# HTTPS + GitHub + the auditable CI build (GPG signing is planned pre-ISO).
+# Idempotent: only appended if not already present. `$arch` stays literal — pacman
+# expands it (single-quoted printf format keeps the shell from touching it).
+if ! grep -q '^\[nidara\]' /etc/pacman.conf 2>/dev/null; then
+    echo "  Registering nidara-repo in /etc/pacman.conf..."
+    printf '\n[nidara]\nSigLevel = Optional TrustAll\nServer = https://nidara-project.github.io/nidara-repo/$arch\n' \
+        | sudo tee -a /etc/pacman.conf > /dev/null
+fi
 # -Syu, never bare -Sy: syncing the DBs without a full upgrade leaves a partial-upgrade
 # state, and the next --needed install pulls a new lib (e.g. aquamarine) whose soname no
 # longer matches already-installed packages (e.g. hyprtoolkit) → transaction fails.
@@ -265,6 +281,29 @@ sudo pacman -Syu --needed --noconfirm \
     ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji \
     papirus-icon-theme adwaita-icon-theme xdg-utils \
     hyprlauncher awww lz4
+
+# Install the Astal/AGS/appmenu stack from nidara-repo (prebuilt binaries) instead
+# of compiling it. aylurs-gtk-shell only depends on astal-gjs + gjs, and every
+# libastal-* package declares depends=() (its real runtime deps came from the
+# pacman -S above), so the whole stack must be listed explicitly — dep resolution
+# alone would not pull the libastal-* libs. On ANY failure (repo down, package
+# missing, version skew) we leave DEPS_FROM_REPO=no and fall through to the
+# from-source build in §2/§4 — the installer still succeeds, just slower.
+# NOTE (lockstep): this package list mirrors nidara-repo (built from its pins.env);
+# keep it in sync with §2's astal_pkgs + §4's ags + the appmenu package name.
+echo "  Installing the Astal/AGS stack from nidara-repo (prebuilt)..."
+if sudo pacman -S --needed --noconfirm \
+    aylurs-gtk-shell appmenu-glib-translator \
+    libastal-io astal-quarrel libastal-gtk3 libastal-gtk4 libastal-apps \
+    libastal-hyprland libastal-mpris libastal-network libastal-battery \
+    libastal-notifd libastal-bluetooth libastal-tray libastal-wireplumber \
+    libastal-greet libastal-auth; then
+    DEPS_FROM_REPO="yes"
+    echo "  [OK] Astal/AGS stack installed from nidara-repo — skipping source builds."
+else
+    echo "  [WARN] nidara-repo unavailable or incomplete — falling back to building"
+    echo "         the Astal/AGS stack from source (this is slower)."
+fi
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -273,6 +312,8 @@ fi
 echo "[2/7] Building & packaging Astal service libraries..."
 if [ "$REBUILD_DEPS" = "no" ]; then
 echo "  Skipped (pins unchanged)."
+elif [ "$DEPS_FROM_REPO" = "yes" ]; then
+echo "  Skipped (installed from nidara-repo)."
 else
 mkdir -p "$PKG_CACHE/src"
 chown -R "$REAL_USER" "$PKG_CACHE" 2>/dev/null || true
@@ -389,6 +430,8 @@ fi
 echo "[4/7] Building & packaging AGS CLI..."
 if [ "$REBUILD_DEPS" = "no" ]; then
 echo "  Skipped (pins unchanged)."
+elif [ "$DEPS_FROM_REPO" = "yes" ]; then
+echo "  Skipped (installed from nidara-repo)."
 else
 ags_dir="$PKG_CACHE/aylurs-gtk-shell"
 mkdir -p "$ags_dir"

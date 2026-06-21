@@ -18,31 +18,37 @@ These are bumped + clean-install-tested before tagging:
 - `AGS_REF` — tag (e.g. `v3.1.2`)
 - `APPMENU_REF` — commit
 
-**Pins now live in TWO places (lockstep, temporary):** the same three refs also live in
-`nidara-project/nidara-repo`'s `pins.env`. Bump **both** together until install.sh consumes
-the binary repo (see below) — then `pins.env` becomes the only source of truth.
+**Pins live in TWO places (permanent lockstep):** the same three refs also live in
+`nidara-project/nidara-repo`'s `pins.env`. Bump **both** together. This does **not** go away
+now that install.sh consumes the repo (below): install.sh keeps its `*_REF` for the
+from-source fallback and the update pin-skip record, so the two must stay in sync.
 
-### Binary repo (`nidara-repo`) — exists, NOT yet consumed by install.sh
+### Binary repo (`nidara-repo`) — consumed by install.sh (source build = fallback)
 
 `github.com/nidara-project/nidara-repo` (public) is a **pacman binary repository** that
-ships pre-built copies of exactly the 18 packages `install.sh` builds from source today
-(appmenu + 16 Astal libs + ags). CI builds them in an Arch container and publishes to
+ships pre-built copies of exactly the 18 packages `install.sh` would otherwise build from
+source (appmenu + 16 Astal libs + ags). CI builds them in an Arch container and publishes to
 GitHub Pages: `https://nidara-project.github.io/nidara-repo/$arch` (pacman repo name
 `nidara`, **unsigned for now** → clients use `SigLevel = Optional TrustAll`). The committed
 PKGBUILDs there are generated from `pins.env` by `scripts/gen-pkgbuilds.sh` and are lifted
 verbatim from `install.sh`'s §2/§4 generators. It contains **only third-party deps**, never
 Nidara's own code (which is why it can be public while `nidara-desktop` stays private).
 
-**Status:** the repo is stood up and serving. `install.sh` does **not** consume it yet — it
-still builds from source. Wiring `install.sh` §1/§2/§4 to add the repo + `pacman -S` (with
-the source build kept as a fallback) is a separate, VM-revalidated change because it touches
-the validated clean-install path. See tech-debt and `packaging/README.md`.
+**Status (validated E2E in a clean VM, 2026-06-21):** `install.sh` §1 registers `[nidara]`
+in `/etc/pacman.conf` (idempotent) and `pacman -S`'s the 18 packages **explicitly** —
+`aylurs-gtk-shell` only depends on `astal-gjs`+`gjs` and every `libastal-*` declares
+`depends=()`, so dep resolution alone won't pull the stack. On success it sets
+`DEPS_FROM_REPO=yes` and §2 (Astal) + §4 (AGS) skip their from-source build. **Any repo
+failure** (down, missing package, version skew) leaves `DEPS_FROM_REPO=no` and falls through
+to the source build — the installer still succeeds, just slower. That fallback is exactly why
+install.sh keeps its own `*_REF` pins (also recorded to `PINS_FILE` for the update pin-skip).
+See tech-debt #21 and `packaging/README.md`.
 
 ### Install steps (in order)
 
-1. `pacman` deps.
-2. Build Astal libs from source: `io`, `gtk3`, `gtk4`, `apps`, `hyprland`, `mpris`, `network`, `battery`, `notifd`, `bluetooth`, `tray`, `greet`, `auth`, `lang/gjs` + `appmenu-glib-translator`.
-3. Build the `ags` CLI.
+1. `pacman` deps (also registers `[nidara]` in `pacman.conf`).
+2. Install the Astal stack + `appmenu-glib-translator` from `nidara-repo` (prebuilt). **Fallback** (repo down/incomplete) builds from source: `io`, `gtk3`, `gtk4`, `apps`, `hyprland`, `mpris`, `network`, `battery`, `notifd`, `bluetooth`, `tray`, `greet`, `auth`, `lang/gjs` + `appmenu-glib-translator`.
+3. The `ags` CLI (`aylurs-gtk-shell`) — same: from `nidara-repo`, else source.
 4. `npm install` + SCSS compile + `ags bundle` × 3 (shell, greeter, lockscreen).
 5. Install binaries / configs / session entry / XDG portals.
 6. Seed `~/.config/nidara/` — **never overwrites existing user config.**
