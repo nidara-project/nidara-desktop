@@ -264,6 +264,7 @@ export default {
     "settings.audio.group.output": "Output Devices",
     "settings.audio.group.input": "Input Devices",
     "settings.audio.error.no-service": "Audio service not available",
+    "settings.audio.error.no-hardware": "No sound hardware detected",
     "settings.audio.title": "Sound",
     "settings.audio.device": "Device",
     "settings.audio.default": "Default",

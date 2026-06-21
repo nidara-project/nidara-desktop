@@ -168,6 +168,19 @@ export default function AudioPage() {
 
     const page = pageBox("audio-page")
 
+    // Settings caches every page for the window's lifetime, so audio-hardware
+    // presence can't be a build-time check — a USB DAC/headset may appear later (or
+    // PipeWire may expose no devices at all, as in a VM). Show a placeholder when
+    // there are neither outputs nor inputs, mirroring the Bluetooth/Network pages;
+    // applyHardware() (wired into the device watch) switches it live.
+    const banner = new Gtk.Label({
+        label: t("settings.audio.error.no-hardware"),
+        css_classes: ["settings-placeholder"],
+        margin_top: 24,
+        halign: Gtk.Align.CENTER,
+    })
+    page.append(banner)
+
     const speakerGroup = listGroup(t("settings.audio.group.output"))
     const micGroup     = listGroup(t("settings.audio.group.input"))
     const streamGroup  = listGroup(t("settings.audio.group.apps"))
@@ -197,6 +210,14 @@ export default function AudioPage() {
             const isDef = defaultMic && ep.id === defaultMic.id
             micGroup.listBox.append(createDeviceRow(ep, true, isDef, () => AudioSvc.setDefault(ep)))
         })
+
+        // No outputs and no inputs = no sound hardware → show the placeholder and
+        // hide the (empty) device/app groups, instead of three bare headers.
+        const hasHardware = AudioSvc.speakers(audio).length > 0 || AudioSvc.microphones(audio).length > 0
+        banner.visible = !hasHardware
+        speakerGroup.box.visible = hasHardware
+        micGroup.box.visible = hasHardware
+        streamGroup.box.visible = hasHardware
     }
 
     // ── Streams ───────────────────────────────────────────────────────────────
