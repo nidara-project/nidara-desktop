@@ -45,12 +45,22 @@ and removal is clean.
 
 This is the local/dev form. The intended end state for the distributable DE:
 
-1. Lift these generated PKGBUILDs into **committed** PKGBUILDs built by CI into real
-   `.pkg.tar.zst` artifacts hosted in **`nidara-repo`**.
-2. `install.sh` / Calamares then just add `nidara-repo` to `pacman.conf` and
-   `pacman -S` — **no build toolchain on the user's machine**, identical pinned binaries
-   for everyone, and dep bumps propagate via `pacman -Syu`.
+1. ✅ **DONE (2026-06-21)** — these generated PKGBUILDs are now **committed** in
+   [`nidara-project/nidara-repo`](https://github.com/nidara-project/nidara-repo) and built by
+   CI into real `.pkg.tar.zst` artifacts, published to a pacman repo on GitHub Pages:
+   `https://nidara-project.github.io/nidara-repo/$arch` (pacman repo name `nidara`, unsigned
+   for now → `SigLevel = Optional TrustAll`).
+2. ⏳ **NEXT (Phase 3, deferred)** — `install.sh` / Calamares then just add `nidara-repo` to
+   `pacman.conf` and `pacman -S` — **no build toolchain on the user's machine**, identical
+   pinned binaries for everyone, and dep bumps propagate via `pacman -Syu`. This rewires §1/§2/§4
+   (the validated clean-install path), so it lands as its own change re-validated in the VM,
+   keeping the source build as a fallback.
 3. At that point tighten `depends=()` to real runtime deps and add `provides`/`conflicts`
    so the packages coexist cleanly with any future AUR/official Astal packages.
 
 `install.sh --dev` keeps building from source locally for development either way.
+
+> **Lockstep pins (temporary, until Phase 3):** the pinned revisions now live in **two**
+> places — `install.sh`'s `ASTAL_REF`/`AGS_REF`/`APPMENU_REF` (source-build path) and
+> `nidara-repo/pins.env` (the repo build). Bump **both** together until install.sh consumes the
+> repo, at which point `pins.env` becomes the only source of truth.

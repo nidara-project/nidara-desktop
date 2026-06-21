@@ -18,6 +18,26 @@ These are bumped + clean-install-tested before tagging:
 - `AGS_REF` — tag (e.g. `v3.1.2`)
 - `APPMENU_REF` — commit
 
+**Pins now live in TWO places (lockstep, temporary):** the same three refs also live in
+`nidara-project/nidara-repo`'s `pins.env`. Bump **both** together until install.sh consumes
+the binary repo (see below) — then `pins.env` becomes the only source of truth.
+
+### Binary repo (`nidara-repo`) — exists, NOT yet consumed by install.sh
+
+`github.com/nidara-project/nidara-repo` (public) is a **pacman binary repository** that
+ships pre-built copies of exactly the 18 packages `install.sh` builds from source today
+(appmenu + 16 Astal libs + ags). CI builds them in an Arch container and publishes to
+GitHub Pages: `https://nidara-project.github.io/nidara-repo/$arch` (pacman repo name
+`nidara`, **unsigned for now** → clients use `SigLevel = Optional TrustAll`). The committed
+PKGBUILDs there are generated from `pins.env` by `scripts/gen-pkgbuilds.sh` and are lifted
+verbatim from `install.sh`'s §2/§4 generators. It contains **only third-party deps**, never
+Nidara's own code (which is why it can be public while `nidara-desktop` stays private).
+
+**Status:** the repo is stood up and serving. `install.sh` does **not** consume it yet — it
+still builds from source. Wiring `install.sh` §1/§2/§4 to add the repo + `pacman -S` (with
+the source build kept as a fallback) is a separate, VM-revalidated change because it touches
+the validated clean-install path. See tech-debt and `packaging/README.md`.
+
 ### Install steps (in order)
 
 1. `pacman` deps.

@@ -426,9 +426,21 @@ assertion 'address != NULL' failed` (clean-VM first-run sweep, 2026-06-20). It's
 an event parsed with a missing/empty address when nothing is focused. Harmless (assertion, shell
 continues) but boot noise; reinforces AstalHyprland as the #1 facade-replacement candidate
 ([[project_astal_dependency]]). Don't chase it in shell code; if it must be silenced before the facade
-swap, guard the focused-client read path. **NB — same log, NOT Nidara:** a `ModuleNotFoundError: No
-module named 'gi.repository'` is a *third-party* app launched from the App Grid (e.g. an Avahi/GTK
-Python tool) needing `python-gobject`, absent on a minimal install — not a shell defect.
+swap, guard the focused-client read path.
+
+### 21. `nidara-repo` exists but `install.sh` doesn't consume it yet (+ pins in two places)
+`github.com/nidara-project/nidara-repo` (public, 2026-06-21) is a pacman binary repo serving the 18
+deps `install.sh` builds from source (appmenu + 16 Astal + ags), published to GitHub Pages
+(`https://nidara-project.github.io/nidara-repo/$arch`, repo name `nidara`, unsigned →
+`SigLevel = Optional TrustAll`). **Not yet consumed:** `install.sh` still source-builds; wiring it to
+add the repo + `pacman -S` (source build kept as fallback) is deferred because it touches the
+validated clean-install path and needs its own VM re-validation. **Consequence meanwhile:** the pinned
+revisions live in TWO places — `install.sh`'s `*_REF` and `nidara-repo/pins.env` — and must be bumped
+**in lockstep**. Phase 3 (install.sh consumes the repo) collapses this to one SoT. Also deferred at the
+repo: GPG signing (a `nidara-keyring` package, `SigLevel = Required`) before any wide/ISO distribution,
+and tightening `depends=()` + `provides`/`conflicts`. See `packaging/README.md` and
+`references/dev-workflow.md`. Next link of the distribution track: `nidara-repo → archiso → Calamares`
+([[project_installer]]).
 
 ## Resolved — rules that still apply
 
