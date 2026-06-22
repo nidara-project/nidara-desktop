@@ -491,7 +491,13 @@ class ThemeManager extends GObject.Object {
                 + `gtk-cursor-theme-size=${cursorSize}\n`
         }
         for (const d of ["gtk-3.0", "gtk-4.0"]) {
-            writeFile(`${GLib.get_user_config_dir()}/${d}/settings.ini`, ini)
+            // On a clean install these dirs don't exist yet (no GTK app created them),
+            // and writeFile would throw — swallowed by the caller's catch, leaving
+            // settings.ini unwritten AND skipping setPreferDark. So GTK apps rendered
+            // light Adwaita with no Papirus icons (clean-install bug, VM 06-22).
+            const dir = `${GLib.get_user_config_dir()}/${d}`
+            if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
+            writeFile(`${dir}/settings.ini`, ini)
         }
     }
 
