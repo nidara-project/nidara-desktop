@@ -413,7 +413,7 @@ export default {
     "settings.network.title": "Network",
     "settings.network.access-point.desc": "Current wireless network assignment",
     "settings.network.hw-status.desc": "Current status of the physical interface",
-    "settings.network.enable-wifi.desc": "Enable wireless spectrum synchronization",
+    "settings.network.enable-wifi.desc": "Turn Wi-Fi on or off",
     "settings.network.ip.desc": "Unique identifier on local network",
     "settings.network.no-adapter.desc": "No compatible adapter found",
     "settings.network.wireless-interface.desc": "Wireless adapter name",

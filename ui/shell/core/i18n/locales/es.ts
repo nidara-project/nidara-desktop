@@ -404,7 +404,7 @@ export default {
     "settings.network.title": "Red",
     "settings.network.access-point.desc": "Asignación actual de la red inalámbrica",
     "settings.network.hw-status.desc": "Estado actual de la interfaz física",
-    "settings.network.enable-wifi.desc": "Habilita la sincronización del espectro inalámbrico",
+    "settings.network.enable-wifi.desc": "Activa o desactiva la Wi-Fi",
     "settings.network.ip.desc": "Identificador único en la red local",
     "settings.network.no-adapter.desc": "No se encontró ningún adaptador compatible",
     "settings.network.wireless-interface.desc": "Nombre del adaptador inalámbrico",
