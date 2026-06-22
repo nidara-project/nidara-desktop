@@ -7,7 +7,20 @@ import { Gtk, Gdk } from "ags/gtk4"
 import { writeFile, readFile } from "ags/file"
 import GLib from "gi://GLib"
 // --- PERSISTENCE ---
-const PINNED_FILE = GLib.get_user_config_dir() + "/dock_pinned.json"
+// All Nidara config lives under ~/.config/nidara/ (matches ThemeManager,
+// WidgetConfig, RegionConfig, CCLayoutManager, …). These two dock files used to
+// be written to the bare ~/.config/ root; loadPinned() and the settings loader
+// below migrate them from there on first run and remove the strays.
+const CONFIG_DIR = GLib.get_user_config_dir() + "/nidara"
+const PINNED_FILE = CONFIG_DIR + "/dock_pinned.json"
+const SETTINGS_FILE = CONFIG_DIR + "/dock_settings.json"
+const LEGACY_PINNED_FILE = GLib.get_user_config_dir() + "/dock_pinned.json"
+const LEGACY_SETTINGS_FILE = GLib.get_user_config_dir() + "/dock_settings.json"
+
+const ensureConfigDir = () => {
+    if (!GLib.file_test(CONFIG_DIR, GLib.FileTest.EXISTS))
+        GLib.mkdir_with_parents(CONFIG_DIR, 0o755)
+}
 
 // --- DOCK CONFIGURATION ---
 export const DOCK_CONFIG = {
@@ -19,7 +32,6 @@ export const DOCK_CONFIG = {
 }
 
 // --- DOCK SETTINGS (Reactive, Persisted) ---
-const SETTINGS_FILE = GLib.get_user_config_dir() + "/dock_settings.json"
 
 export type DockPosition = 'bottom' | 'left' | 'right'
 
@@ -45,13 +57,22 @@ const DOCK_DEFAULTS: DockSettings = {
     position: 'bottom',
 }
 
-// Load persisted settings or use defaults
+// Load persisted settings; if absent, migrate the legacy ~/.config/dock_settings.json,
+// else fall back to defaults (persisted on first change).
 let _dockSettings: DockSettings = { ...DOCK_DEFAULTS }
 try {
     const raw = JSON.parse(readFile(SETTINGS_FILE)) as Partial<DockSettings>
     _dockSettings = { ...DOCK_DEFAULTS, ...raw }
 } catch {
-    // First run — will persist on first change
+    try {
+        const legacy = JSON.parse(readFile(LEGACY_SETTINGS_FILE)) as Partial<DockSettings>
+        _dockSettings = { ...DOCK_DEFAULTS, ...legacy }
+        ensureConfigDir()
+        writeFile(SETTINGS_FILE, JSON.stringify(_dockSettings, null, 2))
+        try { GLib.unlink(LEGACY_SETTINGS_FILE) } catch {}
+    } catch {
+        // First run — will persist on first change
+    }
 }
 
 export const dockSettings: DockSettings = _dockSettings
@@ -68,6 +89,7 @@ export function updateDockSettings(partial: Partial<DockSettings>) {
     Object.assign(dockSettings, partial)
     // Persist
     try {
+        ensureConfigDir()
         writeFile(SETTINGS_FILE, JSON.stringify(dockSettings, null, 2))
     } catch (e) {
         console.error("[DockSettings] Failed to persist:", e)
@@ -81,19 +103,44 @@ export const pinnedState = {
     list: [] as string[]
 }
 
-try {
-    const raw = JSON.parse(readFile(PINNED_FILE)) as string[]
-    const oldLen = raw.length
-    pinnedState.list = [...new Set(raw)]
+// Default pins for a FRESH install (no file yet). The dock already shows the
+// Files/Home shortcut, the launcher and Trash as fixed items, so this is
+// *additional*, and the array order IS the dock order (left→right, right of the
+// launcher): Settings first, then the terminal. List only apps install.sh
+// guarantees; the dock skips any id that doesn't resolve to an installed app, so
+// an optional app shipped only by the ISO (e.g. a browser) is safe to add here
+// too. Applied in memory only — persisted the first time the user pins/unpins,
+// after which it stops applying.
+const DEFAULT_PINNED = ["nidara-settings", "kitty"]
+
+const sanitizePinned = (raw: string[]) =>
+    [...new Set(raw)]
         .filter(id => id && !id.startsWith("/"))
         .map(id => id.replace(/^pinned-/, "").replace(/^pinned-ghost-/, "").replace(/^running-/, ""))
 
-    if (pinnedState.list.length !== oldLen) {
-        writeFile(PINNED_FILE, JSON.stringify(pinnedState.list, null, 2))
-    }
-} catch {
-    pinnedState.list = []
+function loadPinned(): string[] {
+    // 1. Current location.
+    try {
+        const raw = JSON.parse(readFile(PINNED_FILE)) as string[]
+        const clean = sanitizePinned(raw)
+        if (clean.length !== raw.length) {
+            ensureConfigDir()
+            writeFile(PINNED_FILE, JSON.stringify(clean, null, 2))
+        }
+        return clean
+    } catch { /* not at the current path */ }
+    // 2. Legacy ~/.config/dock_pinned.json → migrate to the nidara/ path.
+    try {
+        const clean = sanitizePinned(JSON.parse(readFile(LEGACY_PINNED_FILE)) as string[])
+        ensureConfigDir()
+        writeFile(PINNED_FILE, JSON.stringify(clean, null, 2))
+        try { GLib.unlink(LEGACY_PINNED_FILE) } catch {}
+        return clean
+    } catch { /* no legacy file */ }
+    // 3. Truly fresh install → seed defaults (persisted on first pin change).
+    return [...DEFAULT_PINNED]
 }
+pinnedState.list = loadPinned()
 
 const _pinnedListeners = new Set<() => void>()
 
@@ -105,6 +152,7 @@ export function onPinnedChanged(fn: () => void) {
 export const savePinned = () => {
     const list = pinnedState.list
     try {
+        ensureConfigDir()
         writeFile(PINNED_FILE, JSON.stringify(list, null, 2))
         _pinnedListeners.forEach(fn => fn())
     } catch (e) {
