@@ -448,6 +448,17 @@ before any wide/ISO distribution, and tightening `depends=()` + `provides`/`conf
 `packaging/README.md` and `references/dev-workflow.md`. Next link of the distribution track:
 `nidara-repo → archiso → Calamares` ([[project_installer]]).
 
+### 22. Settings → Network doesn't hot-detect a Wi-Fi adapter added after boot (low impact)
+Found in the clean-VM nivel-3 sweep (2026-06-22, fake-wifi.sh with `mac80211_hwsim`): if the shell
+starts with **no** Wi-Fi device and one appears later, the Network page stays on the "No compatible
+adapter found / Wi-Fi hardware not detected" empty state until the shell is reloaded — then it binds
+correctly (detect → scan → connect, and the detail row updates reactively on connect, all verified).
+Cause is almost certainly init-time device binding in `libastal-network`/`core/NetworkService` rather
+than a `device-added` subscription. **Not a first-boot bug**: real Wi-Fi adapters exist at boot, so the
+common case works; the only gap is a **USB Wi-Fi dongle hot-plugged after login** (reload the shell to
+pick it up). Low priority; if fixed, watch NM's device list reactively in NetworkService, not just at
+construction. Same shape would apply to Bluetooth controllers hot-added after boot.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
