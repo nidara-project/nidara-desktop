@@ -668,7 +668,14 @@ EOF
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[7/7] Initializing user configuration..."
 mkdir -p "$CONFIG_DIR"
-chown "$REAL_USER" "$CONFIG_DIR"
+# Running under sudo, `mkdir -p` creates ~/.config ITSELF as root when it doesn't
+# exist yet. A root-owned ~/.config silently breaks the whole user session: the
+# shell (running as $REAL_USER) then can't create ~/.config/gtk-{3,4}.0 (icon theme
+# + dark never reach GTK apps), dconf can't create ~/.config/dconf (gsettings writes
+# vanish → libadwaita apps stay light), and xdg-user-dirs-update can't write
+# ~/.config/user-dirs.dirs (nautilus "No Home Directory") — clean-install bugs 1/2/4,
+# VM 06-22. Own the parent too, not just our dir.
+chown "$REAL_USER" "${REAL_HOME}/.config" "$CONFIG_DIR"
 
 # Dev mode marker. An update never changes the install's mode: --update-apply
 # leaves the marker exactly as it found it.
@@ -812,6 +819,7 @@ fi
 # Dev mode:    symlink directly to repo so edits take effect immediately
 # System mode: copy to $CONFIG_DIR once (never overwritten), symlink from there
 mkdir -p "${REAL_HOME}/.config/hypr"
+chown "$REAL_USER" "${REAL_HOME}/.config/hypr"   # created under sudo; keep it user-owned
 
 for daemon in hypridle; do
     LINK="${REAL_HOME}/.config/hypr/${daemon}.conf"
