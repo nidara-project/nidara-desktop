@@ -268,19 +268,19 @@ sudo pacman -Syu --needed --noconfirm \
     base-devel glib2-devel cmake meson ninja gobject-introspection vala \
     gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 \
     libpulse networkmanager bluez-libs upower libnotify \
-    intltool scdoc brightnessctl pamixer hyprpicker \
-    jq slurp grim wf-recorder wl-clipboard cliphist mesa pam \
+    intltool scdoc brightnessctl pamixer \
+    jq curl slurp grim wf-recorder wl-clipboard cliphist mesa pam \
     pipewire wireplumber \
     git nodejs npm gjs go \
     at-spi2-core wtype wlr-protocols wayland \
     accountsservice greetd pavucontrol rust cargo \
     hyprland hypridle hyprsunset uwsm power-profiles-daemon python-gobject \
-    kitty nautilus \
+    kitty nautilus gnome-calculator \
     polkit-gnome \
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland \
     ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji \
-    papirus-icon-theme adwaita-icon-theme xdg-utils \
-    hyprlauncher awww lz4
+    papirus-icon-theme adwaita-icon-theme xdg-utils gsettings-desktop-schemas \
+    awww lz4
 
 # Install the Astal/AGS/appmenu stack from nidara-repo (prebuilt binaries) instead
 # of compiling it. aylurs-gtk-shell only depends on astal-gjs + gjs, and every
