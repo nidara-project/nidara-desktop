@@ -153,10 +153,13 @@ auto-merge — every PR is human-reviewed.
 5. **Branch, fork, PR.** The user almost certainly cloned the upstream repo directly and has
    **no push access and no fork** — so you cannot push a branch to `nidara-project/nidara-desktop`.
    Create the branch locally, then fork explicitly (don't rely on `gh pr create`'s interactive
-   fork prompt — it hangs a non-interactive agent), push to the fork, and open a cross-repo PR:
+   fork prompt — it hangs a non-interactive agent), push to the fork, and open a cross-repo PR.
+   **Every commit must be DCO-signed (`git commit -s`)** — the `Signed-off-by` is the *human
+   user* taking responsibility that the contribution is theirs to submit under the GPL (required;
+   a maintainer won't merge unsigned commits — see `CONTRIBUTING.md`):
    ```bash
    git checkout -b fix/nvidia-cursor-glitch
-   git commit ...                              # end body with the project's Co-Authored-By trailer
+   git commit -s ...                           # -s = DCO Signed-off-by (REQUIRED, the user's identity); end the body with the Co-Authored-By trailer
    gh repo fork --remote --remote-name fork    # creates the user's fork + adds it as remote 'fork'
    git push -u fork HEAD
    GH_USER=$(gh api user --jq .login)
