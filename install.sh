@@ -267,7 +267,7 @@ fi
 sudo pacman -Syu --needed --noconfirm \
     base-devel glib2-devel cmake meson ninja gobject-introspection vala \
     gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 \
-    libpulse networkmanager bluez-libs upower libnotify \
+    libpulse networkmanager bluez bluez-libs bluez-utils upower libnotify \
     intltool scdoc brightnessctl pamixer \
     jq curl slurp grim wf-recorder wl-clipboard cliphist mesa pam \
     pipewire wireplumber \
@@ -980,6 +980,14 @@ systemctl --user enable --now wireplumber pipewire pipewire-pulse 2>/dev/null ||
 # Game mode toggles performance/balanced via powerprofilesctl (hyprland.lua).
 echo "  Enabling power-profiles-daemon..."
 sudo systemctl enable --now power-profiles-daemon 2>/dev/null || true
+
+# ── Bluetooth ─────────────────────────────────────────────────────────────────
+# AstalBluetooth talks to BlueZ (org.bluez) over the system bus; the bluez daemon
+# provides that name. bluez-libs alone (the client library) is not enough — without
+# the daemon enabled there's no org.bluez, so the Bluetooth page reports "no adapter"
+# even on machines that DO have Bluetooth. Idle and harmless where there's no adapter.
+echo "  Enabling bluetooth..."
+sudo systemctl enable --now bluetooth.service 2>/dev/null || true
 
 echo ""
 if [ "$MODE" = "update-apply" ]; then
