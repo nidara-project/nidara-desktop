@@ -39,8 +39,10 @@ import { SHELL_ROOT } from "../../core/Paths"
 const ASSETS_DIR = SHELL_ROOT
 
 export const LAUNCHER_ICON_PRESETS: Record<string, string> = {
-  "arch": `${ASSETS_DIR}/assets/logos/arch-symbolic.svg`,
+  "nidara": `${ASSETS_DIR}/assets/nidara/assets/nidara-symbolic.svg`,
 }
+
+export const DEFAULT_LAUNCHER_ICON = "nidara"
 
 function resolveIconPath(key: string): string | null {
   if (LAUNCHER_ICON_PRESETS[key]) return LAUNCHER_ICON_PRESETS[key]
@@ -52,13 +54,11 @@ function SystemMenuIcon(): Gtk.Widget {
   const img = new Gtk.Image({ pixel_size: 18, css_classes: ["bar-distro-icon"], margin_start: 14, margin_end: 14 })
 
   const applyIcon = () => {
-    const path = resolveIconPath(barSettings.launcherIcon || "arch")
-    if (path) {
-      img.gicon = Gio.FileIcon.new(Gio.File.new_for_path(path))
-    } else {
-      img.gicon = null
-      img.gicon = Icons.grid
-    }
+    // Fall back to the built-in mark for unknown presets (e.g. a stale "arch"
+    // from before the rebrand) or a custom path that no longer exists.
+    const path = resolveIconPath(barSettings.launcherIcon || DEFAULT_LAUNCHER_ICON)
+      ?? LAUNCHER_ICON_PRESETS[DEFAULT_LAUNCHER_ICON]
+    img.gicon = Gio.FileIcon.new(Gio.File.new_for_path(path))
   }
 
   applyIcon()

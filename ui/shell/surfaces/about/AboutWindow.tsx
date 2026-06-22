@@ -1,12 +1,14 @@
 import app from "ags/gtk4/app"
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
+import Gio from "gi://Gio"
 import { execAsync } from "ags/process"
 import SquircleContainer from "../../common/SquircleContainer"
 import status from "../../core/Status"
 import hs from "../../core/HyprlandState"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
+import { SHELL_ROOT } from "../../core/Paths"
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -84,13 +86,18 @@ export default function AboutWindow(): Gtk.Window | null {
     }
 
     const osName = readOsRelease("PRETTY_NAME")
-    const osId   = readOsRelease("ID")
     const cpu    = readCpu()
     const ram    = readRam()
 
     // ── Header ────────────────────────────────────────────────────────────────
+    // The Nidara mark, not a `distributor-logo-<id>` theme icon: that depends on
+    // whatever icon pack is installed and renders broken on a clean machine (e.g.
+    // the VM has no Arch distributor logo). Our own mark always resolves and is
+    // mode-aware (recoloured to --nidara-text via .about-logo). 72px is a big
+    // surface so the flattened-but-faithful symbolic mark looks identical to the goo.
+    const markPath = `${SHELL_ROOT}/assets/nidara/assets/nidara-symbolic.svg`
     const headerBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, halign: Gtk.Align.CENTER, margin_bottom: 16 })
-    headerBox.append(new Gtk.Image({ icon_name: `distributor-logo-${osId}`, pixel_size: 72, css_classes: ["about-logo"], halign: Gtk.Align.CENTER }))
+    headerBox.append(new Gtk.Image({ gicon: Gio.FileIcon.new(Gio.File.new_for_path(markPath)), pixel_size: 72, css_classes: ["about-logo"], halign: Gtk.Align.CENTER }))
     headerBox.append(new Gtk.Label({ label: "Nidara", css_classes: ["about-shell-name"], halign: Gtk.Align.CENTER }))
     headerBox.append(new Gtk.Label({ label: osName, css_classes: ["about-os-name"], halign: Gtk.Align.CENTER }))
 

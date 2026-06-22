@@ -3,9 +3,8 @@ import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { listGroup, pageBox, toggleRow, createRow } from "../SettingsHelpers"
 import { barSettings, updateBarSettings } from "../../bar/barState"
-import { LAUNCHER_ICON_PRESETS } from "../../bar/Bar"
+import { LAUNCHER_ICON_PRESETS, DEFAULT_LAUNCHER_ICON } from "../../bar/Bar"
 import { t } from "../../../core/i18n"
-import Icons from "../../../core/Icons"
 import { NidaraButton } from "../../../../lib/nidara-kit"
 
 function resolveCurrentPath(key: string): string | null {
@@ -48,18 +47,18 @@ export default function BarPage() {
     const preview = new Gtk.Image({ pixel_size: 24, valign: Gtk.Align.CENTER })
     const refreshPreview = () => {
         const path = resolveCurrentPath(barSettings.launcherIcon)
-        if (path) preview.gicon = Gio.FileIcon.new(Gio.File.new_for_path(path))
-        else { preview.gicon = null; preview.gicon = Icons.grid }
+            ?? LAUNCHER_ICON_PRESETS[DEFAULT_LAUNCHER_ICON]
+        preview.gicon = Gio.FileIcon.new(Gio.File.new_for_path(path))
     }
     refreshPreview()
 
     const resetBtn = new Gtk.Button({
-        label: "Arch",
-        css_classes: ["launcher-icon-btn", ...(barSettings.launcherIcon === "arch" ? ["selected"] : [])],
+        label: "Nidara",
+        css_classes: ["launcher-icon-btn", ...(barSettings.launcherIcon === DEFAULT_LAUNCHER_ICON ? ["selected"] : [])],
         valign: Gtk.Align.CENTER,
     })
     resetBtn.connect("clicked", () => {
-        updateBarSettings({ launcherIcon: "arch" })
+        updateBarSettings({ launcherIcon: DEFAULT_LAUNCHER_ICON })
         customEntry.text = ""
         resetBtn.add_css_class("selected")
         refreshPreview()

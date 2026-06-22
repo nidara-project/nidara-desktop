@@ -382,7 +382,7 @@ export default {
     "settings.bar.workspaces.desc": "Show the workspace switcher in the center",
     "settings.bar.group.icon": "Menu Button Icon",
     "settings.bar.icon-preset": "Default",
-    "settings.bar.icon-preset.desc": "Reset to the built-in Arch Linux logo",
+    "settings.bar.icon-preset.desc": "Reset to the built-in Nidara logo",
     "settings.bar.icon-custom": "Custom Icon",
     "settings.bar.icon-custom.desc": "Absolute path to an SVG or PNG file",
 

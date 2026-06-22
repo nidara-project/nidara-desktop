@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 300" width="16" height="16">
+    <title>Nidara</title>
+    <!--
+      Nidara brand mark. Single filled path = the flattened silhouette of the goo
+      "N" in nidara-logo.svg (traced from a high res render). It does NOT use the
+      goo filter on purpose: GTK symbolic recolour drops SVG filters, so a filtered
+      mark renders with square terminals at small sizes. Baking the metaball outline
+      into geometry keeps the round terminals and concave fillets at any size.
+      Named with the symbolic suffix and fill currentColor so GTK recolours it to the
+      widget colour (the bar distro icon / about logo token), adapting to dark/light.
+      Never hardcode a colour here (commandment 10). Avoid the css var double dash and
+      double hyphens generally: they are illegal inside an XML comment.
+    -->
+    <path fill="currentColor" d="M61.0 44.0 L82.0 49.0 L104.0 62.0 L177.0 134.0 L192.0 144.0 L200.0 143.0 L205.0 136.0 L207.0 124.0 L207.0 77.0 L210.0 64.0 L216.0 54.0 L222.0 49.0 L231.0 45.0 L244.0 45.0 L253.0 49.0 L261.0 57.0 L266.0 68.0 L268.0 80.0 L268.0 219.0 L265.0 234.0 L261.0 242.0 L253.0 250.0 L244.0 254.0 L229.0 254.0 L215.0 249.0 L199.0 240.0 L190.0 233.0 L121.0 164.0 L107.0 155.0 L99.0 156.0 L94.0 163.0 L92.0 175.0 L92.0 222.0 L89.0 235.0 L83.0 245.0 L77.0 250.0 L68.0 254.0 L55.0 254.0 L46.0 250.0 L38.0 242.0 L33.0 231.0 L31.0 219.0 L31.0 80.0 L33.0 68.0 L38.0 57.0 L46.0 49.0 Z"/>
+</svg>

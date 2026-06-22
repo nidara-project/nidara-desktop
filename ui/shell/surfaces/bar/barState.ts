@@ -14,7 +14,7 @@ const DEFAULTS: BarSettings = {
     showAppTitle: true,
     showWorkspaces: true,
     showSystemMenu: true,
-    launcherIcon: "arch",
+    launcherIcon: "nidara",
 }
 
 let _settings: BarSettings = { ...DEFAULTS }

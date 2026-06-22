@@ -104,6 +104,32 @@ For an icon that belongs **next to a row's title** rather than as a trailing con
 lock on a secured Wi-Fi row), pass it as `NidaraRow`'s `titleIcon` arg (threaded through
 `createRow(label, subtitle, widget, titleIcon)`) — don't park it in the trailing control box.
 
+## The bar launcher mark — flattened path, no SVG filter
+
+The bar launcher (system-menu) icon is the **Nidara mark**, `assets/nidara/assets/nidara-symbolic.svg`,
+loaded as a `Gio.FileIcon`. It adapts to dark/light because (a) the filename ends in `-symbolic`,
+so GTK4 recolours it, and (b) `.bar-distro-icon { color: var(--nidara-text) }` drives that colour.
+The SVG must use `fill="currentColor"` — **never a hardcoded colour** (commandment #10), or it
+goes invisible on the opposite theme.
+
+Non-obvious gotcha (cost a wrong first attempt, verified live): **GTK's symbolic recolour does NOT
+render SVG `<filter>`s.** The brand "N" in `nidara-logo.svg` gets its soft round terminals from a
+goo/metaball `feGaussianBlur`; loaded as a symbolic icon that filter is dropped, so only the bare
+rounded rects render and at 18px their tiny `rx` reads as **square terminals**. So the mark must be
+a **single filled path with the metaball outline baked into geometry** (no filter) — that's what
+`nidara-symbolic.svg` is (traced from a high-res render of the goo). Don't "simplify" it back to the
+filtered SVG. The same `nidara-symbolic.svg` is reused at **72px** in the About window header
+(`AboutWindow.tsx`, recoloured via `.about-logo`) — it replaced a `distributor-logo-<os-id>` theme
+icon that rendered **broken on a clean machine** (no distro logo in the icon pack); our own mark
+always resolves and is mode-aware. `nidara-logo.svg` (the filtered version) is the design **source**
+/ for any always-dark surface that doesn't need recolour. (Two SVG hygiene gotchas, both real: a `--`
+anywhere in an XML comment — e.g. writing a `var(--token)` name — makes strict librsvg reject the
+file even though GTK tolerates it; and `fill="currentColor"` is mandatory, never a hardcoded colour,
+commandment #10.) The bar icon is configurable (`barSettings.launcherIcon`: preset key or absolute
+path); unknown/stale keys fall back to `DEFAULT_LAUNCHER_ICON`. Arch's logo is deliberately **not
+bundled** (trademark — restricted, not under the OS's free licence; we ship our own mark and let users
+point `launcherIcon` at any file).
+
 ## Sliders — one component
 
 All sliders are **`makeSlider`** (Cairo) in `common/Slider.ts` (`makeHSlider` is just a
