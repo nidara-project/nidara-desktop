@@ -711,13 +711,16 @@ for f in appearance.json; do
     fi
 done
 
-# Default file manager: a fresh Arch has no inode/directory association, so
-# `xdg-open <folder>` (the dock's Files item, apps' "open containing folder", …)
-# launches the wrong app. Seed nautilus as the default — only when the user has no
-# association yet, so updates never override their choice.
-if [ -z "$(run_user xdg-mime query default inode/directory 2>/dev/null)" ]; then
+# Default file manager: `xdg-open <folder>` (the dock's Files item, apps' "open
+# containing folder", …) needs inode/directory to point at nautilus. A fresh Arch
+# has no association — BUT kitty ships `kitty-open.desktop`, which auto-claims
+# inode/directory, so the Files item would open the TERMINAL (clean-install bug,
+# VM 06-22). Seed nautilus when there's no association yet OR when it's that kitty
+# default; never override a real user choice.
+_fm_default="$(run_user xdg-mime query default inode/directory 2>/dev/null)"
+if [ -z "$_fm_default" ] || [ "$_fm_default" = "kitty-open.desktop" ]; then
     run_user xdg-mime default org.gnome.Nautilus.desktop inode/directory \
-        && echo "  [Init] Default file manager → nautilus (inode/directory)"
+        && echo "  [Init] Default file manager → nautilus (inode/directory, was: ${_fm_default:-none})"
 fi
 
 # .mcp.json — MCP manifest for the user's AI agent (Claude Code et al). Points at
