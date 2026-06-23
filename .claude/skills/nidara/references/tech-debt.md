@@ -481,7 +481,7 @@ toplevels), and `SquircleContainer` defaults `chrome:true` (= shell skin). The o
 excluded" caveat is gone — the expansion panel + system menu live in the bar window, so they follow the pin
 now. No opacity floor (WYSIWYG). See `design-system.md` → "Shell-skin appearance & opacity".
 
-### 24. Unified surface-appearance + opacity coherence — MOSTLY RESOLVED (2026-06-23); legibility remains
+### 24. Unified surface-appearance + opacity coherence — RESOLVED (2026-06-23)
 The coherence redesign landed and was verified live. **Done:**
 - **Appearance pin → whole shell** (see #23): the user chose to KEEP the pin (shell skin independent of app
   mode) over the simpler "shell = app mode"; it now covers all shell surfaces except Settings/About.
@@ -494,15 +494,17 @@ The coherence redesign landed and was verified live. **Done:**
 - **Adwaita colour leak fixed** (#9): `button, calendar { color: var(--nidara-text) }` in `_reset.scss`.
 - **Dead code removed** (#25): tint subsystem + orphan tokens.
 
-**Still open (Phase 3 — legibility polish, deferred by the user):**
-- **Washed-out light-mode text.** `--nidara-text-secondary` (rgba(fg,0.8)) / `-dim` (0.6) over translucent
-  light glass reads low-contrast (reported on the system-menu). Recommended fix: bump the light-mode ramp in
-  `nidaraVars` (e.g. secondary→0.85, dim→0.72 when `!isDark`), NOT a full surface-aware model.
-- **Slider track still reads `Theme.isDark`** (`common/Slider.ts`) rather than the shell skin — the slider is
-  shared with Settings (app mode), so the fix needs a per-window resolve (e.g. a `Theme.surfaceIsDark(widget)`
-  keyed on the root window name). Minor (the neutral track is barely visible).
+**Phase 3 (legibility polish) — DONE 2026-06-23 (built + typecheck/build green; live-verify pending the user's reload):**
+- **Washed-out light-mode text — FIXED.** `nidaraVars` now ramps `--nidara-text-secondary`/`-dim` to
+  `rgba(fg, 0.85/0.72)` in light (was a flat 0.8/0.6); dark keeps 0.8/0.6. Propagates to the pinned shell
+  skin automatically because `generateChromeTokenScope` reuses `nidaraVars(chromeIsDark)`.
+- **Slider track now follows the surface skin — FIXED.** New `Theme.surfaceIsDark(widget)` (ThemeManager)
+  resolves dark/light by the widget's root window name (`nidara-bar`/`nidara-dock` → `chromeIsDark`, else
+  `isDark`); `common/Slider.ts` track uses it. Redraws on `Theme "changed"` (slider already subscribes).
+
+**Residual (NOT Phase 3 — product decision / cosmetic, left as-is):**
 - **Tray icon coherence (partly unsolvable).** Symbolic tray icons follow the theme/pin; pixmap-only ones
-  can't (inherent to SNI). A uniform policy is a product decision, not a bug — left as-is.
+  can't (inherent to SNI). A uniform policy is a product decision, not a bug.
 - Minor drift: `_base.scss` static `--nidara-bg: rgba(30,30,30,…)` vs the engine `rgba(36,36,36,…)` (only the
   instant before tokens load).
 

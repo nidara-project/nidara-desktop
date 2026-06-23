@@ -173,8 +173,12 @@ function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[] {
     `  --nidara-dock-surface: rgba(${fg}, ${dBase});`,
     `  --nidara-dock-surface-raised: rgba(${fg}, ${dRaised});`,
     `  --nidara-text: ${whiteOrBlack};`,
-    `  --nidara-text-secondary: rgba(${fg}, 0.8);`,
-    `  --nidara-text-dim: rgba(${fg}, 0.6);`,
+    // Secondary/dim are nudged UP in light mode: black ink over translucent light
+    // glass (which sits on an arbitrary wallpaper) reads washed-out at the dark-mode
+    // alphas, so the light ramp gets more ink. White on dark needs less (more
+    // perceptual punch), so dark keeps 0.8/0.6.
+    `  --nidara-text-secondary: rgba(${fg}, ${isDark ? "0.8" : "0.85"});`,
+    `  --nidara-text-dim: rgba(${fg}, ${isDark ? "0.6" : "0.72"});`,
     `  --nidara-text-disabled: rgba(${fg}, 0.3);`,
     `  --nidara-danger: #ff3b30;`,
     `  --nidara-danger-rgb: 255, 59, 48;`,

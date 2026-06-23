@@ -130,8 +130,11 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
 
         // Track (skipped when track:false — the host widget's background shows through)
         if (drawTrack) {
-            const base = Theme.isDark ? 1 : 0
-            cr.setSourceRGBA(base, base, base, Theme.isDark ? 0.18 : 0.14)
+            // Follow the surface skin, not the global mode: a slider in a light-pinned
+            // CC/system-menu over a dark system needs a dark track, not a white one.
+            const dark = Theme.surfaceIsDark(da)
+            const base = dark ? 1 : 0
+            cr.setSourceRGBA(base, base, base, dark ? 0.18 : 0.14)
             capsuleMain(cr, pad, L - pad, cc, trackH, horiz); cr.fill()
         }
 

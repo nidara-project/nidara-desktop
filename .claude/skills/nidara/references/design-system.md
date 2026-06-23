@@ -64,6 +64,13 @@ How the flip works:
   `SquircleContainer` (**`chrome` defaults to `true`** = shell skin; pass `chrome: false` ONLY
   for app-mode windows like About), the dock (`DockAxis`/`DockItem`), the bar CPU/RAM ring +
   battery glyph, and the CC/NC/app-grid Cairo. Non-shell (Settings/About) keep `Theme.isDark`.
+  - **Shared Cairo widget drawn into BOTH** (the slider, in CC/system-menu AND Settings) can't
+    pick a global flag — it calls **`Theme.surfaceIsDark(widget)`**, which resolves by the
+    widget's ROOT window name (`nidara-bar`/`nidara-dock` → `chromeIsDark`, else → `isDark`).
+    `common/Slider.ts` uses it for the neutral track colour. Use this for any future shared painter.
+- **Light-mode text ramp is nudged up:** `--nidara-text-secondary`/`-dim` are `rgba(fg, 0.85/0.72)`
+  in light vs `0.8/0.6` in dark (`nidaraVars`). Black ink over translucent light glass (on an
+  arbitrary wallpaper) reads washed-out at the dark-mode alphas; white-on-dark needs less ink.
 
 **Adwaita colour leak (tech-debt #9):** libadwaita is force-loaded in-process and colours
 `button` / `calendar` labels by the PROCESS mode — wrong for a pinned shell. Fixed ONCE in

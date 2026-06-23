@@ -250,6 +250,21 @@ class ThemeManager extends GObject.Object {
         const a = this.fcConfig.shellAppearance
         return a === "dark" ? true : a === "light" ? false : this.state.isDark
     }
+
+    /** Effective dark/light for the SURFACE a widget is painted on. Cairo widgets
+     *  shared between the shell skin and app-mode windows (the slider, drawn into
+     *  both the CC/system-menu AND Settings) can't use one global flag: a slider in
+     *  a shell overlay must follow the shell pin (chromeIsDark), while the same
+     *  component in Settings/About follows the app/system mode (isDark). Resolved by
+     *  the widget's ROOT window name — overlays are children of `nidara-bar`, the
+     *  app grid of `nidara-dock`; anything else (Settings/About/unrealized) → isDark. */
+    surfaceIsDark(widget: Gtk.Widget): boolean {
+        try {
+            const name = (widget.get_root() as Gtk.Window | null)?.get_name?.() ?? ""
+            if (name === "nidara-bar" || name === "nidara-dock") return this.chromeIsDark
+        } catch (_) { /* not realized yet → fall through to the app/system mode */ }
+        return this.state.isDark
+    }
     get accentPalette() { return ACCENT_PALETTE }
     get interfaceFont(): string {
         try { return this.interfaceSettings.get_string("font-name") } catch (_) { return "Sans 11" }
