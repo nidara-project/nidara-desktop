@@ -55,7 +55,7 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): Gtk.Widget 
     return GLib.SOURCE_REMOVE
   })
 
-  const capsule = SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, chrome: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
+  const capsule = SquircleContainer({ child: appName, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
 
   if (openMenu) {
     let menuOpen = false

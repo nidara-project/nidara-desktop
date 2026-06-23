@@ -216,7 +216,7 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
     const da = new Gtk.DrawingArea({ height_request: stripH })
     da.set_draw_func((_da: any, cr: any, w: number, _h: number) => {
         if (w <= 0 || _h <= 0) return
-        const color = Theme.isDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
+        const color = Theme.chromeIsDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }   // shell skin — follows appearance pin
         for (let i = layers - 1; i >= 0; i--) {
             // Inset >= the card's corner radius so each ghost's straight top edge sits under the
             // STRAIGHT part of the card's bottom (clear of the rounded corners) — no corner gap.
@@ -232,7 +232,7 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
             cr.clip()
             cr.translate(inset, bottomY - CARD_H)
             // inset 0 so the squircle's bottom edge lands exactly at bottomY (no gap between bands).
-            drawSquircle(cr, w - inset * 2, CARD_H, undefined, Theme.shellOpacity * depth, false, color, RADIUS, false, { r: 1, g: 1, b: 1, a: 0.07 * depth }, 3.2, 1.0, 0)
+            drawSquircle(cr, w - inset * 2, CARD_H, undefined, Theme.overlayOpacity * depth, false, color, RADIUS, false, { r: 1, g: 1, b: 1, a: 0.07 * depth }, 3.2, 1.0, 0)
             cr.restore()
         }
     })

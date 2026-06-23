@@ -296,6 +296,8 @@
 /* Calendar Cleanup */
 .nc-calendar-island {
     calendar {
+        // color binds to --nidara-text via the global `calendar` neutralization in
+        // _reset.scss → day numbers AND the month/year header follow the pin.
         background: none;
         background-color: transparent;
         border: none;

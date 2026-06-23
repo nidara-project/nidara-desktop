@@ -182,6 +182,8 @@ selection {
     -gtk-icon-palette: success white, warning white, error white;
 }
 .nidara-menu-row {
+    // Text colour follows --nidara-text via the global button neutralization in
+    // _reset.scss (no per-row override needed).
     background: transparent;
     border: none;
     box-shadow: none;

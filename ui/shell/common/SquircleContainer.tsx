@@ -33,10 +33,16 @@ interface SquircleContainerProps {
     inset?: number
     padding?: number
     useShellOpacity?: boolean
-    /** This capsule is bar/dock chrome: its glass tint + (floored) opacity follow
-     *  Theme.chromeIsDark / effectiveShellOpacity (pinned by appearance.shellAppearance,
-     *  legible over any wallpaper) instead of the system mode. Bar capsules only. */
+    /** This capsule belongs to the shell skin: its glass tint follows
+     *  Theme.chromeIsDark (pinned by appearance.shellAppearance, legible over any
+     *  wallpaper) instead of the system mode. DEFAULT true — every bar/dock/overlay
+     *  capsule is shell skin. Pass `chrome: false` ONLY for app-mode windows
+     *  (About) that should follow the system mode like a third-party app. */
     chrome?: boolean
+    /** Which opacity this capsule's glass tracks when useShellOpacity is set:
+     *  "bar" → Theme.barOpacity, "overlay" (default) → Theme.overlayOpacity.
+     *  (The dock paints from Theme.dockOpacity directly in DockAxis.) */
+    opacityRole?: "bar" | "overlay"
 }
 
 export default function SquircleContainer({
@@ -61,7 +67,8 @@ export default function SquircleContainer({
     inset,
     padding,
     useShellOpacity = false,
-    chrome = false,
+    chrome = true,
+    opacityRole = "overlay",
 }: SquircleContainerProps) {
     const container = new Gtk.Grid({
         css_classes,
@@ -83,15 +90,15 @@ export default function SquircleContainer({
 
     da.set_draw_func((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
-        // Chrome capsules (bar) follow the pinned chrome appearance; everything
-        // else follows the system mode.
+        // Shell-skin capsules (default) follow the pinned shell appearance;
+        // app-mode surfaces (chrome:false, e.g. About) follow the system mode.
         const dark = chrome ? Theme.chromeIsDark : Theme.isDark
         const themeColor = dark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
         const baseColor = color || (useShellOpacity ? themeColor : { r: 1, g: 1, b: 1 })
         // Explicit alpha always wins (even with useShellOpacity, so a surface can
         // stay theme-coloured + redraw-on-toggle yet be near-opaque — e.g. the CC
         // context menu, which floats over content with no real internal blur).
-        const baseAlpha = alpha !== undefined ? alpha : (useShellOpacity ? Theme.shellOpacity : 0.05)
+        const baseAlpha = alpha !== undefined ? alpha : (useShellOpacity ? (opacityRole === "bar" ? Theme.barOpacity : Theme.overlayOpacity) : 0.05)
         let shareColor = baseColor
         let shareAlpha = baseAlpha
         let shareBorder = borderColor

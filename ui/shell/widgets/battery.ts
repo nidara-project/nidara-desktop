@@ -68,7 +68,7 @@ function makeGlyph(gh: number, fill = false): Gtk.DrawingArea {
         if (w <= 0 || h <= 0) return
         const f = frac()
         const charging = present() && bat!.charging
-        const c = Theme.isDark ? 1 : 0
+        const c = Theme.chromeIsDark ? 1 : 0   // shell skin (bar + CC) — follows appearance pin
         const stroke = gh >= 24 ? 1.6 : 1.2
         const r = gh * 0.28
 

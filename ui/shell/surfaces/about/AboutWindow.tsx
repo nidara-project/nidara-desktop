@@ -133,7 +133,7 @@ export default function AboutWindow(): Gtk.Window | null {
     card.append(new Gtk.Separator({ css_classes: ["about-sep"], margin_top: 8, margin_bottom: 8 }))
     card.append(verBox)
 
-    const squircle = SquircleContainer({ child: card, radius: 24, gloss: true, alpha: 0.18, borderColor: { r: 1, g: 1, b: 1, a: 0.08 }, css_classes: ["about-window-card"] })
+    const squircle = SquircleContainer({ child: card, radius: 24, gloss: true, alpha: 0.18, chrome: false, borderColor: { r: 1, g: 1, b: 1, a: 0.08 }, css_classes: ["about-window-card"] })
 
     // ── Window ────────────────────────────────────────────────────────────────
     const win = new Gtk.Window({

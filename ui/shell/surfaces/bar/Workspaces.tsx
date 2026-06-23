@@ -19,7 +19,7 @@ export function Workspaces(): Gtk.Widget {
     update()
     box.append(dot)
   }
-  return SquircleContainer({ child: box, gloss: true, useShellOpacity: true, chrome: true, borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleOverview() })
+  return SquircleContainer({ child: box, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleOverview() })
 }
 
 export default Workspaces

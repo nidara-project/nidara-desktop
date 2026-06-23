@@ -131,6 +131,19 @@ legitimately write so third-party plain-GTK4 apps follow dark mode). That one is
 noise — harmless, not fixable from our side, don't burn time on it. It also means the
 Adwaita stylesheet IS loaded in-process, which is why the anti-Adwaita resets (#2) are
 still needed despite the Adwaita removal.
+**Concrete gotcha (cost a debugging pass, 2026-06-23):** Adwaita's in-process `button { color }`
+(and `calendar` label colour) beat an *inherited* `color` by specificity — so a menu row that is a
+`Gtk.Button` (`.nidara-menu-row`, `.window-menu-ws-btn`) or GtkCalendar day labels show **Adwaita's
+button colour (white in a dark-prefer process), NOT the inherited `--nidara-text`**, even when an
+ancestor (`.nidara-menu`) sets `color: var(--nidara-text)`. Symptom: white menu/calendar text on a
+light-pinned shell skin (the `shellAppearance` scope only redefines the `--nidara-*` custom props; it
+can't fix a real `color` Adwaita set on the element). **Fixed systematically (not per-element):**
+`_reset.scss` binds `button, calendar { color: var(--nidara-text) }` in the neutralization layer — LOW
+specificity but HIGH provider priority, so it beats Adwaita's element rule yet LOSES to our own classes
+(`.nidara-btn--primary`, `.today`, `.nidara-text-secondary`, …) which keep their colours. So new shell
+buttons/menus/calendar text follow the pin automatically; **don't** add per-element `color` overrides for
+this. (Provider priority is the outer sort key in GTK — our USER-priority providers beat Adwaita's
+THEME-priority sheet regardless of selector specificity; specificity only decides within our own sheet.)
 
 ### 11. Idle GPU spin on bar/dock — RESOLVED (two distinct causes)
 
@@ -459,61 +472,53 @@ common case works; the only gap is a **USB Wi-Fi dongle hot-plugged after login*
 pick it up). Low priority; if fixed, watch NM's device list reactively in NetworkService, not just at
 construction. Same shape would apply to Bluetooth controllers hot-added after boot.
 
-### 23. `appearance.shellAppearance` covers the bar + dock only — by design (2026-06-23)
-The chrome-appearance pin (see `design-system.md` → "Bar/dock chrome appearance") deliberately applies to
-the **always-on chrome over the wallpaper**: the bar's own content (`.bar-centerbox` capsules) and the
-dock. Glass opacity is WYSIWYG with the slider — **no automatic legibility floor** (an earlier 0.40 floor
-was removed: pinning painted opacity above the slider value was incoherent; legibility is the user's call
-via the slider or by pinning to dark). **Intentionally excluded** (don't "fix" without a reason):
-- **Floating overlays** (CC, NC, Prism, system menu, overview) follow the **system** mode. They're opened
-  deliberately and dismissed fast.
-- **Transient bar surfaces** — the inline expansion panel (`bar-expansion-panel`) and the system-menu
-  overlay — are NOT marked `chrome` and are NOT in the scoped selector, so when the chrome is *pinned*
-  opposite to the system they keep the system glass/text. Minor visual mismatch with a pinned bar; left
-  as-is because their content is arbitrary (tray menus) and they're momentary. If this ever bothers,
-  add them to the `generateChromeTokenScope` selector AND pass `chrome: true` to their SquircleContainers
-  (do both, or text and glass desync).
+### 23. `appearance.shellAppearance` covers the WHOLE shell skin — RESOLVED (2026-06-23)
+The pin now applies to **bar + dock + every overlay** (CC/NC/Prism/system menu/overview/app grid), not just
+bar/dock. App-mode windows (Settings `nidara-settings-window`, About `nidara-about`) are **excluded** — they
+follow the system/app mode like any app. Mechanism: `generateChromeTokenScope` scopes
+`window#nidara-bar *, window#nidara-dock *` (overlays live inside those windows; Settings/About are separate
+toplevels), and `SquircleContainer` defaults `chrome:true` (= shell skin). The old "transient bar surfaces
+excluded" caveat is gone — the expansion panel + system menu live in the bar window, so they follow the pin
+now. No opacity floor (WYSIWYG). See `design-system.md` → "Shell-skin appearance & opacity".
 
-### 24. Unified surface-appearance + text-contrast coherence — DEFERRED (the hard part) (2026-06-23)
-`appearance.shellAppearance` (#23) shipped as a first step, but the user's verdict after testing: it is an
-advance, **not** a coherent whole, and the real work is **total coherence across every surface** — that's
-the hard, still-undefined part. Park it here; revisit as a dedicated design pass, don't bolt on more
-per-surface special cases in the meantime. Concrete open problems found:
-- **Washed-out text in light mode.** Secondary/dim text over translucent glass reads as a low-contrast
-  "lavado" grey — reported specifically on the **system-menu** in light mode (poor legibility). The
-  `--nidara-text-secondary` (rgba(fg,0.8)) / `--nidara-text-dim` (0.6) ramp was tuned against opaque-ish
-  surfaces; over light translucent glass it doesn't hold contrast. Needs a deliberate text-opacity /
-  contrast model, probably surface-aware (translucent vs solid), not a single global ramp.
-- **The architecture is inconsistent by construction.** The bar/dock can be *pinned* (shellAppearance)
-  while CC/NC/Prism/overlays *follow the system*. The user explicitly dislikes "el bar se fija de una
-  forma pero el CC siga el sistema". A coherent model has to decide the **whole matrix**: does the pin
-  cover overlays too? one global "shell appearance" vs per-surface? how do transient bar surfaces
-  (expansion panel, system-menu popup — currently system-following, see #23) fit? Enumerate ALL the
-  possibilities first, then make them consistent — that's the deliverable.
-- **Tray icon coherence (partly unsolvable).** Tray icons recolour ONLY when the active icon theme has a
-  `-symbolic` variant of the app's icon (`Tray.tsx` prefers `name-symbolic` → CSS `color`/`-gtk-icon-style`;
-  else falls back to the app's raw `gicon` pixmap, which can't recolour). So on one bar some tray icons
-  follow the theme/chrome (e.g. Telegram, whose symbolic exists) and others stay full-colour — inherently
-  mixed because SNI apps provide what they provide. The coherent model must pick a **policy** (force
-  symbolic-only? a uniform treatment? leave as-is?), it's not a pure bug. (Mechanism now documented in
-  `design-system.md`.)
-- Likely touchpoints when resumed: the token engine (`nidaraVars`/`generateChromeTokenScope` already
-  factor the per-appearance block, so extending the scope to more surfaces is mechanical), the
-  text-opacity tokens, and the Settings UX for whatever the chosen model is.
-- **Precede the coherence pass with a read-only audit of the whole theming subsystem.** User's standing
-  concern (2026-06-23): after many changes there's dead code and bits whose implementation isn't clear.
-  Sweep tokens → tint → chrome → tray → dark/light, list what's dead and what's undocumented, THEN design.
-  First confirmed dead instance is #25.
+### 24. Unified surface-appearance + opacity coherence — MOSTLY RESOLVED (2026-06-23); legibility remains
+The coherence redesign landed and was verified live. **Done:**
+- **Appearance pin → whole shell** (see #23): the user chose to KEEP the pin (shell skin independent of app
+  mode) over the simpler "shell = app mode"; it now covers all shell surfaces except Settings/About.
+- **Opacity model rebuilt.** The three confusing sliders (`transparency`/`shellOpacity`/`dockOpacity`, one
+  inverted, plus a surviving 0.40 light-mode floor) → **one "Glass" master + an "Advanced" disclosure** over
+  four plain-opacity surfaces `barOpacity`/`overlayOpacity`/`dockOpacity`/`windowOpacity` (range [0.05,0.80],
+  **floor removed entirely** — WYSIWYG). `windowOpacity` = the Settings/About CSS token path (`--nidara-bg`/
+  materials/popovers in `nidaraVars`); the Cairo surfaces use the other three via
+  `SquircleContainer({ opacityRole })` / `DockAxis`. `setGlassOpacity` is the master. See `design-system.md`.
+- **Adwaita colour leak fixed** (#9): `button, calendar { color: var(--nidara-text) }` in `_reset.scss`.
+- **Dead code removed** (#25): tint subsystem + orphan tokens.
 
-### 25. Accent-tint subsystem is dead code — remove or resurrect (2026-06-23)
-The "tint" feature (wash CC / app-grid panels with the accent colour) is wired **end to end but has zero
-entry points**: config fields (`tintStrength`, `tintPanels`), `generateTintCss()`, a dedicated
-`tintProvider` CssProvider, `PANEL_SELECTORS`, the `TintPanels` type, getters (`tintStrength`/`tintPanels`),
-setters (`setTintStrength`/`setTintPanel`), persistence + load — but **nothing calls the setters**: no
-Settings UI, not in `config-entries.ts` (agents can't reach it), no IPC. Defaults `0`/`false`, so
-`generateTintCss` always returns `/* No tint */`. Dead since it was pulled from the UI. Decision pending:
-**delete the whole subsystem** (clean removal across `NidaraTheme.ts` + `ThemeManager.ts`, drop the persisted
-keys) OR resurrect it as a real Setting. Low risk to remove (reversible via git, emits nothing today).
+**Still open (Phase 3 — legibility polish, deferred by the user):**
+- **Washed-out light-mode text.** `--nidara-text-secondary` (rgba(fg,0.8)) / `-dim` (0.6) over translucent
+  light glass reads low-contrast (reported on the system-menu). Recommended fix: bump the light-mode ramp in
+  `nidaraVars` (e.g. secondary→0.85, dim→0.72 when `!isDark`), NOT a full surface-aware model.
+- **Slider track still reads `Theme.isDark`** (`common/Slider.ts`) rather than the shell skin — the slider is
+  shared with Settings (app mode), so the fix needs a per-window resolve (e.g. a `Theme.surfaceIsDark(widget)`
+  keyed on the root window name). Minor (the neutral track is barely visible).
+- **Tray icon coherence (partly unsolvable).** Symbolic tray icons follow the theme/pin; pixmap-only ones
+  can't (inherent to SNI). A uniform policy is a product decision, not a bug — left as-is.
+- Minor drift: `_base.scss` static `--nidara-bg: rgba(30,30,30,…)` vs the engine `rgba(36,36,36,…)` (only the
+  instant before tokens load).
+
+### 25. Accent-tint subsystem is dead code — RESOLVED (deleted 2026-06-23)
+The "tint" feature (wash CC / app-grid panels with the accent colour) was wired end to end but had **zero
+entry points** (no Settings UI, not in `config-entries.ts`, no IPC; defaults `0`/`false` → `generateTintCss`
+always returned `/* No tint */`). **Deleted** in the theming-audit cleanup: `TintPanels`, `tintStrength`,
+`tintPanels`, `PANEL_SELECTORS`, `generateTintCss` (NidaraTheme.ts) + `tintProvider`, `_lastTintCss`,
+`refreshTintCss`, `setTintStrength`/`setTintPanel`, the getters, the imports, and the persisted keys in
+save/load (ThemeManager.ts). Same pass removed other emitted-but-unconsumed tokens (verified 0 consumers
+tree-wide): the `@define-color fc_*`/`sidebar_*` named colours and the `--nd-accent`/`--nd-transparency`/
+`--accent-color`/`-bg-color`/`-fg-color` custom props (the `--accent-<key>` swatch palette and the libadwaita
+`accent_*` bridge were KEPT — both have live consumers). Typecheck + build green. **Rule:** don't reintroduce
+an accent-panel tint (or any token) without a real entry point — a Setting/`config-entries`/IPC — wired at the
+same time. Side effect: the duplicate alpha/popover computation in `generateTokenHeader` is gone, so the
+light-mode opacity floor now lives in exactly ONE place (`nidaraVars`) — see #24.
 
 ## Resolved — rules that still apply
 

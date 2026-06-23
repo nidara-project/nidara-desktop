@@ -33,48 +33,60 @@ Tokens live in `styles/_base.scss`. Dark/light values are injected at runtime by
 
 The only legitimate hex literals are the accent swatches and the danger/success/warning seeds defined inside `NidaraTheme.ts`.
 
-## Bar/dock chrome appearance (`appearance.shellAppearance`)
+## Shell-skin appearance & opacity (`appearance.shellAppearance` + the glass sliders)
 
-Text colour is mode-bound (`--nidara-text` = `#fff` dark / `#000` light) but the bar and
-dock glass is translucent over the wallpaper. In dark mode white text forgives almost any
-wallpaper; in **light mode black text fails on a dark wallpaper** when the glass is too
-transparent to lighten it.
+### Appearance pin — the WHOLE shell skin, not just bar/dock
 
-The fix is **not** an automatic opacity floor (tried and removed — pinning the painted
-opacity above the slider value is incoherent: the slider says 20% but the bar shows 40%).
-Glass opacity stays **WYSIWYG with the slider**; legibility is the user's call (raise the
-slider, or pin the chrome). The control:
+Text colour is mode-bound (`--nidara-text` = `#fff` dark / `#000` light) but shell glass is
+translucent over the wallpaper. In dark mode white text forgives almost any wallpaper; in
+**light mode black text fails on a dark wallpaper** when the glass is too transparent. The fix
+is the appearance pin (NOT an opacity floor — see below).
 
-**`appearance.shellAppearance`** (`system | dark | light`, default `system`) pins the
-**bar + dock only** (overlays CC/NC/Prism always follow the system mode) to dark/light
-independent of the global mode — keep the most-forgiving (dark) chrome over any wallpaper
-while apps stay light. It flips the **whole token family** (text AND its
-surfaces/edges/shadows), never just `--nidara-text` (that would desync). `Theme.chromeIsDark`
-resolves it.
+**`appearance.shellAppearance`** (`system | dark | light`, default `system`) pins the **entire
+shell skin** — bar, dock, AND every overlay (CC/NC/Prism/system menu/overview/app grid) — to
+dark/light independent of the app/global mode, so the shell stays legible over any wallpaper
+while apps follow their own mode. **App-mode windows are EXCLUDED**: Settings
+(`nidara-settings-window`) and About (`nidara-about`) follow the system mode like any app. It
+flips the **whole token family** (text AND surfaces/edges/shadows), never just `--nidara-text`.
+`Theme.chromeIsDark` resolves it ("chrome" now means the whole shell skin).
 
 How the flip works:
-- **CSS side:** `NidaraTheme.generateChromeTokenScope()` re-emits the full `--nidara-*`
-  block (factored into `nidaraVars()`) under a scoped selector when the chrome differs from
-  the system; `ThemeManager.applyTokens()` appends it to the token provider.
-  - **Scope is `.bar-centerbox`, NOT `window#nidara-bar`** — the bar window's `Gtk.Overlay`
-    also hosts CC/NC/Prism, which must keep the system mode.
-  - **GOTCHA (cost a wrong first attempt):** the selector must hit every **descendant**
-    directly — `.bar-centerbox, .bar-centerbox *, window#nidara-dock, window#nidara-dock *`.
-    GTK4 custom properties don't inherit reliably, and the global `* { --nidara-* }` block
-    matches every node directly, so a bare `.bar-centerbox { --nidara-* }` only overrides
-    the container — children keep the global value (symptom: chrome **glass** flipped via
-    Cairo but **text** stayed the system colour). A class-qualified universal beats `*` on
-    specificity.
-  - It also mirrors the `.nd-icon` `-gtk-icon-filter` (invert in dark / none in light).
-- **Cairo side:** chrome painters read `Theme.chromeIsDark` (not `Theme.isDark`):
-  `SquircleContainer({ chrome: true })` (every bar capsule — launcher, app-title,
-  workspaces, tray, search, CC, time, overflow), the dock plates (`DockAxis`), the dock
-  running-dot (`DockItem`), and the bar CPU/RAM ring (`widgets/cpu-memory.ts makeArc`,
-  bar-only). `SquircleContainer`'s `chrome` flag switches only the glass **tint** (the
-  alpha is the raw slider value). Non-chrome surfaces keep `Theme.isDark`.
+- **CSS side:** `NidaraTheme.generateChromeTokenScope()` re-emits the full `--nidara-*` block
+  (factored into `nidaraVars()`) under a scoped selector when the shell differs from the system.
+  - **Scope = `window#nidara-bar *, window#nidara-dock *`** (both windows + descendants). The
+    bar window's `Gtk.Overlay` hosts ALL the overlays, so scoping the whole window covers them;
+    Settings/About are separate toplevels, so they're excluded automatically.
+  - **GOTCHA:** the selector must hit every **descendant** directly — GTK4 custom properties
+    don't inherit reliably and the global `* { --nidara-* }` matches every node directly, so a
+    bare `window#nidara-bar { --nidara-* }` only overrides the container. An id-qualified
+    universal beats `*` on specificity. It mirrors the `.nd-icon` `-gtk-icon-filter` too.
+- **Cairo side:** shell painters read `Theme.chromeIsDark` (not `Theme.isDark`):
+  `SquircleContainer` (**`chrome` defaults to `true`** = shell skin; pass `chrome: false` ONLY
+  for app-mode windows like About), the dock (`DockAxis`/`DockItem`), the bar CPU/RAM ring +
+  battery glyph, and the CC/NC/app-grid Cairo. Non-shell (Settings/About) keep `Theme.isDark`.
 
-When adding a new **bar** capsule, pass `chrome: true`; a new always-on Cairo bar/dock
-element should read `Theme.chromeIsDark`, not `Theme.isDark`.
+**Adwaita colour leak (tech-debt #9):** libadwaita is force-loaded in-process and colours
+`button` / `calendar` labels by the PROCESS mode — wrong for a pinned shell. Fixed ONCE in
+`_reset.scss`: `button, calendar { color: var(--nidara-text); }` (low specificity, high provider
+priority → beats Adwaita, loses to our classes). **Don't** patch `color` per menu/button — new
+shell text follows the pin automatically.
+
+### Opacity — one master + Advanced, four surfaces, WYSIWYG
+
+There is **no opacity floor** (an old light-mode 0.40 floor was removed — pinning painted opacity
+above the slider value is incoherent). Glass opacity is **WYSIWYG with the slider**; legibility is
+the user's call (raise it, or pin the shell to dark). Four independent opacities, all plain
+"opacity" (higher = more opaque), one range `[0.05, 0.80]`:
+- `barOpacity` → bar capsules (Cairo) — `SquircleContainer({ opacityRole: "bar" })`.
+- `overlayOpacity` → overlays CC/NC/Prism/app-grid (Cairo) — `opacityRole: "overlay"` (default).
+- `dockOpacity` → dock (Cairo, `DockAxis`).
+- `windowOpacity` → Settings/About windows = the **CSS token path** (`--nidara-bg`/materials/
+  popovers in `nidaraVars`). Those windows are CSS-painted, not Cairo — hence a separate axis.
+
+`Theme.setGlassOpacity()` is the **master** (sets all four); per-surface setters drive "Advanced".
+The Settings UI (`pages/Appearance.tsx`) = one "Glass" master slider + a `Gtk.Revealer` "Advanced"
+disclosure (Bar/Overlays/Dock/Window). When adding a shell capsule, `SquircleContainer` already
+defaults to shell skin — pass `opacityRole: "bar"` if it's a bar capsule (else it tracks overlay).
 
 ### Tray icons recolour conditionally (not "never", not "always")
 

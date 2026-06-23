@@ -33,7 +33,7 @@ export function registerConfigEntries() {
         set: v => void Theme.setAccentColor(v as AccentKey),
     })
     registerConfig("appearance.shellAppearance", {
-        desc: "Bar & dock appearance, independent of the system mode: 'system' follows dark/light, 'dark'/'light' pin the chrome so its text/icons stay legible over any wallpaper.",
+        desc: "Whole shell-skin appearance (bar, dock, and overlays), independent of the system/app mode: 'system' follows dark/light, 'dark'/'light' pin the shell so its text/icons stay legible over any wallpaper. Settings & About are excluded (they follow the app mode).",
         type: "enum",
         enum: ["system", "dark", "light"],
         get: () => Theme.shellAppearance,

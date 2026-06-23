@@ -21,93 +21,56 @@ export type { AccentKey }
 
 // ── TYPES & INTERFACES ──────────────────────────────────────────────
 
-export interface TintPanels {
-  controlCenter: boolean
-  appGrid: boolean
-}
-
 /**
- * Bar + dock appearance, independent of the system dark/light mode.
- * - "system": chrome follows the global mode (default).
- * - "dark" / "light": chrome is pinned, so text + glass stay legible over any
+ * Shell-skin appearance, independent of the system dark/light (app) mode.
+ * - "system": the shell follows the global app mode (default).
+ * - "dark" / "light": the shell is pinned, so text + glass stay legible over any
  *   wallpaper regardless of the rest of the desktop's mode.
- * Affects ONLY the bar and the dock — overlays (CC/NC/Prism) follow the system.
+ * Covers the WHOLE shell skin — bar, dock, AND the overlays (CC/NC/Prism/system
+ * menu/overview/app grid). App-mode windows (Settings, About) are excluded: they
+ * follow the system mode like any third-party app.
  */
 export type ShellAppearance = "system" | "dark" | "light"
 
 export interface NidaraThemeConfig {
   accent: AccentKey
-  transparency: number   // Settings window opacity — range [0.10, 0.90]
-  shellOpacity: number   // Bar + CC + NC opacity   — range [0.06, 0.75]
-  dockOpacity: number    // Dock opacity            — range [0.05, 0.60]
-  shellAppearance: ShellAppearance  // Bar+dock dark/light, independent of system mode
-  tintStrength: number
-  tintPanels: TintPanels
+  // Glass opacity per surface (higher = more opaque). The "Glass" master slider in
+  // Settings moves all four together; "Advanced" exposes them individually.
+  barOpacity: number      // Bar capsules (Cairo)                     — range [0.05, 0.80]
+  overlayOpacity: number  // Overlays CC/NC/Prism/… (Cairo)           — range [0.05, 0.80]
+  dockOpacity: number     // Dock (Cairo)                             — range [0.05, 0.80]
+  windowOpacity: number   // Settings + About windows (CSS tokens)    — range [0.05, 0.80]
+  shellAppearance: ShellAppearance  // Whole shell-skin dark/light, independent of app mode
 }
 
 export const DEFAULT_CONFIG: NidaraThemeConfig = {
   accent: "blue",
-  transparency: 0.75,
-  shellOpacity: 0.20,
+  barOpacity: 0.20,
+  overlayOpacity: 0.20,
   dockOpacity: 0.20,
+  windowOpacity: 0.20,
   shellAppearance: "system",
-  tintStrength: 0.0,
-  tintPanels: {
-    controlCenter: false,
-    appGrid: false,
-  },
-}
-
-// ── CSS TEMPLATES ────────────────────────────────────────────────────
-// Glass effects are applied via scoped SCSS per component (e.g. _settings.scss).
-// We do NOT use generic GTK selectors to avoid leaking into external apps.
-
-const PANEL_SELECTORS: Record<keyof TintPanels, string[]> = {
-  controlCenter: [".cc-panel-structure"],
-  appGrid: [".app-grid-content"],
 }
 
 // ── LOGIC ────────────────────────────────────────────────────────────
 
 function generateTokenHeader(config: NidaraThemeConfig, isDark: boolean): string {
   const accent = ACCENT_PALETTE[config.accent].color
-  const t = config.transparency
-  const baseAlpha = (1.0 - t).toFixed(2)
-  // Light mode floor: dark text needs at least 0.40 white opacity to pass WCAG AAA
-  // even on a pure black wallpaper (worst case), including inner surface-raised overlays.
-  const bgAlpha = (!isDark && parseFloat(baseAlpha) < 0.40) ? "0.40" : baseAlpha
-
-  const baseBg = isDark ? "#242424" : "#fafafa"
-  // Popovers share the window's base tone (not a lighter shade) so a frosted
-  // dropdown reads as the same glass as the window, just floored in alpha enough
-  // for compositor blur (see popoverAlpha).
-  const popoverBg = baseBg
-  // Popovers need alpha ≥ 0.32 so Hyprland's popups_ignorealpha=0.30 applies blur.
-  const popoverAlpha = Math.max(parseFloat(bgAlpha), 0.38).toFixed(2)
-  const popoverBorder = isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.10)"
 
   const lines = [
     `/* Nidara Token Engine */`,
+    // libadwaita named-colour bridge: AGS force-loads libadwaita in-process (it
+    // calls Adw.init), so keep its accent named colours pointed at ours.
     `@define-color accent_bg_color ${accent};`,
     `@define-color accent_fg_color #ffffff;`,
     `@define-color accent_color ${accent};`,
-    `@define-color fc_window_bg alpha(${baseBg}, ${bgAlpha});`,
-    `@define-color fc_window_bg_backdrop alpha(${baseBg}, ${bgAlpha});`,
-    `@define-color fc_popover_bg alpha(${popoverBg}, ${popoverAlpha});`,
-    `@define-color fc_popover_border ${popoverBorder};`,
-    `@define-color sidebar_bg_color transparent;`,
-    `@define-color sidebar_backdrop_color transparent;`,
     `* {`,
-    `  --nd-transparency: ${t.toFixed(2)};`,
-    `  --nd-accent: ${accent};`,
   ]
 
+  // Accent swatch palette — consumed by the picker swatches (.accent-<key> in _settings.scss).
   for (const [key, { color }] of Object.entries(ACCENT_PALETTE)) {
     lines.push(`  --accent-${key}: ${color};`)
   }
-  lines.push(`  --accent-color: ${accent};`)
-  lines.push(`  --accent-bg-color: ${accent};`)
-  lines.push(`  --accent-fg-color: #ffffff;`)
 
   lines.push(
     ...nidaraVars(config, isDark),
@@ -126,9 +89,11 @@ function generateTokenHeader(config: NidaraThemeConfig, isDark: boolean): string
  */
 function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[] {
   const accent = ACCENT_PALETTE[config.accent].color
-  const baseAlpha = 1.0 - config.transparency
-  // Same WCAG light-mode floor as the @define-color glass above.
-  const bgAlphaNum = (!isDark && baseAlpha < 0.40) ? 0.40 : baseAlpha
+  // Token glass (--nidara-bg, materials, popovers) tracks the WINDOW opacity — it
+  // styles the CSS-painted Settings/About windows (`.nidara-window-glass` etc.).
+  // The Cairo overlays use overlayOpacity directly. WYSIWYG — no legibility floor
+  // (removed by design; for contrast raise the slider or pin the shell skin).
+  const bgAlphaNum = config.windowOpacity
   const bgAlpha = bgAlphaNum.toFixed(2)
 
   const popoverBg = isDark ? "#242424" : "#fafafa"
@@ -152,8 +117,8 @@ function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[] {
 
   // Material vibrancy ladder. Anchored to the macOS-skill values for our blur
   // profile (size=2, passes=2, vibrancy=0.4 → "subtle" row: thin .30 / regular
-  // .45 / thick .65 / chrome .85), then OFFSET by the transparency slider so the
-  // ladder still responds to user opacity. delta = 0 at default transparency.
+  // .45 / thick .65 / chrome .85), then OFFSET by the overlay opacity so the
+  // ladder still responds to user opacity.
   // lower z → thicker; higher z → thinner. Clamped to keep blur visible + legible.
   const ba = bgAlphaNum
   const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
@@ -236,51 +201,36 @@ export function generateTokensCss(config: NidaraThemeConfig, isDark: boolean): s
 }
 
 /**
- * Scoped token override that pins the bar + dock chrome to `chromeIsDark`,
+ * Scoped token override that pins the WHOLE shell skin to `chromeIsDark`,
  * independent of the system mode (appearance.shellAppearance). Returns empty
- * when the chrome already matches the system (the global `* {}` block covers it).
+ * when it already matches the system (the global `* {}` block covers it).
  *
- * Scoped to `.bar-centerbox` (the bar's own content — NOT the bar window, whose
- * Gtk.Overlay also hosts CC/NC/Prism, which must keep the system mode) and the
- * dock window. The `.nd-icon` filter is mirrored too: symbolic icons invert in
- * dark and not in light (see _reset.scss / the global `.nd-icon` rule).
+ * Scope = the entire bar window AND the entire dock window — `window#nidara-bar`
+ * hosts the bar content AND every floating overlay (CC/NC/Prism/system menu/
+ * overview/expansion panel, all children of the bar's Gtk.Overlay), and
+ * `window#nidara-dock` hosts the dock + the app grid. So the pin covers the full
+ * shell skin. App-mode windows — Settings (`nidara-settings-window`) and About
+ * (`nidara-about`) — are SEPARATE toplevels, deliberately NOT in the scope, so
+ * they keep the system mode like any third-party app. The `.nd-icon` filter is
+ * mirrored too: symbolic icons invert in dark and not in light.
  *
- * The selector must hit every DESCENDANT directly (`.bar-centerbox *`), not just
- * the container: GTK4 custom properties don't inherit reliably, and the global
- * `* { --nidara-* }` block matches every node directly — so a bare
- * `.bar-centerbox { --nidara-* }` only overrides the container itself and the
- * children keep the global value (chrome glass flipped but text stayed). Matching
- * descendants with a class-qualified universal beats `*` on specificity.
+ * The selector must hit every DESCENDANT directly (`window#nidara-bar *`), not
+ * just the container: GTK4 custom properties don't inherit reliably, and the
+ * global `* { --nidara-* }` block matches every node directly — so a bare
+ * `window#nidara-bar { --nidara-* }` only overrides the container itself and the
+ * children keep the global value (glass flipped but text stayed). An id-qualified
+ * universal beats `*` on specificity.
  */
 export function generateChromeTokenScope(
   config: NidaraThemeConfig,
   chromeIsDark: boolean,
   systemIsDark: boolean,
 ): string {
-  if (chromeIsDark === systemIsDark) return "/* chrome follows system mode */"
-  const sel = ".bar-centerbox, .bar-centerbox *, window#nidara-dock, window#nidara-dock *"
+  if (chromeIsDark === systemIsDark) return "/* shell skin follows system mode */"
+  const sel = "window#nidara-bar, window#nidara-bar *, window#nidara-dock, window#nidara-dock *"
   const body = nidaraVars(config, chromeIsDark).join("\n")
   const iconFilter = chromeIsDark ? "invert(1)" : "none"
   return `${sel} {\n${body}\n}\n`
-    + `.bar-centerbox .nd-icon, window#nidara-dock .nd-icon { -gtk-icon-filter: ${iconFilter}; }`
-}
-
-
-export function generateTintCss(config: NidaraThemeConfig): string {
-  const accent = ACCENT_PALETTE[config.accent].color
-  const strength = config.tintStrength
-  if (strength <= 0) return "/* No tint */"
-  const r = parseInt(accent.slice(1, 3), 16)
-  const g = parseInt(accent.slice(3, 5), 16)
-  const b = parseInt(accent.slice(5, 7), 16)
-  const alpha = (strength * 0.3).toFixed(3)
-  let css = `/* Tint */\n`
-  for (const [panel, selectors] of Object.entries(PANEL_SELECTORS)) {
-    if (!config.tintPanels[panel as keyof TintPanels]) continue
-    for (const sel of selectors) {
-      css += `${sel} { background-color: rgba(${r}, ${g}, ${b}, ${alpha}); }\n`
-    }
-  }
-  return css
+    + `window#nidara-bar .nd-icon, window#nidara-dock .nd-icon { -gtk-icon-filter: ${iconFilter}; }`
 }
 

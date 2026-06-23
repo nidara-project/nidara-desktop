@@ -8,6 +8,18 @@
    Light mode disables the filter (injected by NidaraTheme.ts). */
 .nd-icon { -gtk-icon-filter: invert(1); }
 
+/* Adwaita is force-loaded in-process (AGS calls Adw.init(); we can't unload it —
+   tech-debt #9) and colours <button> and <calendar> labels by ELEMENT selector,
+   following the PROCESS dark/light (= app mode). When the shell skin is pinned to
+   the opposite mode (appearance.shellAppearance) those defaults are wrong (e.g.
+   white menu/calendar text on a light-pinned shell). Bind them to our token here,
+   ONCE: low specificity + our high provider priority means this beats Adwaita's
+   element rule but LOSES to our own classes (.nidara-btn--primary, .today,
+   .nidara-text-secondary, …), so variants/hierarchy keep their colours. This is
+   why we don't patch `color` per menu/button — add new shell text confidently. */
+button,
+calendar { color: var(--nidara-text); }
+
 /*
    Targets explicit namespaced nidara components to ensure a clean slate
    without breaking global GTK apps.

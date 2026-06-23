@@ -218,8 +218,8 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         const val   = adj.get_value()
         const upper = adj.get_upper()
         const page  = adj.get_page_size()
-        const [r, g, b] = Theme.isDark ? [0, 0, 0] : [1, 1, 1]
-        const a = Theme.shellOpacity
+        const [r, g, b] = Theme.chromeIsDark ? [0, 0, 0] : [1, 1, 1]   // shell skin — follows appearance pin
+        const a = Theme.overlayOpacity
         cr.setOperator(2)
         if (val > 0.5) {
             const g1 = new Cairo.LinearGradient(0, 0, 0, FADE)

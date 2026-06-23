@@ -8,13 +8,11 @@ import { readFile, writeFile } from "ags/file"
 import {
     type NidaraThemeConfig,
     type AccentKey,
-    type TintPanels,
     type ShellAppearance,
     DEFAULT_CONFIG,
     ACCENT_PALETTE,
     generateTokensCss,
     generateChromeTokenScope,
-    generateTintCss,
 } from "./NidaraTheme"
 import { SHELL_ROOT } from "./Paths"
 import hs from "./HyprlandState"
@@ -90,12 +88,10 @@ class ThemeManager extends GObject.Object {
     private fcConfig: NidaraThemeConfig = { ...DEFAULT_CONFIG }
     private configPath = `${GLib.get_user_config_dir()}/nidara/appearance.json`
     private _lastTokensCss: string = ""
-    private _lastTintCss: string = ""
 
     private mainProvider = new Gtk.CssProvider()
     private fontProvider = new Gtk.CssProvider()
     private themeProvider = new Gtk.CssProvider()
-    private tintProvider = new Gtk.CssProvider()
     private providersLinked = false
 
     private interfaceSettings = new Gio.Settings({ schema_id: "org.gnome.desktop.interface" })
@@ -239,22 +235,21 @@ class ThemeManager extends GObject.Object {
     get cursorSize(): number { return this.interfaceSettings.get_int("cursor-size") || 24 }
     get isDark() { return this.state.isDark }
     get accentColor(): AccentKey { return this.fcConfig.accent }
-    get transparency() { return this.fcConfig.transparency }
-    get shellOpacity() { return this.fcConfig.shellOpacity }
-    get dockOpacity()  { return this.fcConfig.dockOpacity }
+    get barOpacity()     { return this.fcConfig.barOpacity }
+    get overlayOpacity() { return this.fcConfig.overlayOpacity }
+    get dockOpacity()    { return this.fcConfig.dockOpacity }
+    get windowOpacity()  { return this.fcConfig.windowOpacity }
     get shellAppearance(): ShellAppearance { return this.fcConfig.shellAppearance }
 
-    /** Effective dark/light for the bar + dock chrome, honouring shellAppearance
-     *  ("system" = the global mode). Painters (SquircleContainer chrome capsules,
-     *  the dock Cairo) read this instead of `isDark` so a pinned chrome flips
-     *  text AND glass together. Opacity itself stays WYSIWYG with the slider — no
-     *  floor; legibility is the user's call (raise the slider, or pin to dark). */
+    /** Effective dark/light for the WHOLE shell skin (bar, dock, overlays),
+     *  honouring shellAppearance ("system" = the app/global mode). Shell painters
+     *  (SquircleContainer, dock + CC + NC + app-grid Cairo) read this instead of
+     *  `isDark` so a pinned shell flips text AND glass together. App-mode windows
+     *  (Settings, About) keep `isDark`. Opacity stays WYSIWYG with the slider. */
     get chromeIsDark(): boolean {
         const a = this.fcConfig.shellAppearance
         return a === "dark" ? true : a === "light" ? false : this.state.isDark
     }
-    get tintStrength() { return this.fcConfig.tintStrength }
-    get tintPanels() { return this.fcConfig.tintPanels }
     get accentPalette() { return ACCENT_PALETTE }
     get interfaceFont(): string {
         try { return this.interfaceSettings.get_string("font-name") } catch (_) { return "Sans 11" }
@@ -383,22 +378,44 @@ class ThemeManager extends GObject.Object {
         hs.evalLua(`hl.config({ group = { groupbar = { col = { active = '${col}', locked_active = '${col}' } } } })`)
     }
 
-    async setTransparency(value: number) {
-        this.fcConfig.transparency = Math.max(0.10, Math.min(0.90, value))
+    // One opacity range for every shell surface (WYSIWYG, no floor).
+    private clampOpacity(v: number) { return Math.max(0.05, Math.min(0.80, v)) }
+
+    async setBarOpacity(value: number) {
+        this.fcConfig.barOpacity = this.clampOpacity(value)
         this.applyTokens()
         this.schedulePersistence()
         this.emit("changed")
     }
 
-    async setShellOpacity(value: number) {
-        this.fcConfig.shellOpacity = Math.max(0.06, Math.min(0.75, value))
+    async setOverlayOpacity(value: number) {
+        this.fcConfig.overlayOpacity = this.clampOpacity(value)
         this.applyTokens()
         this.schedulePersistence()
         this.emit("changed")
     }
 
     async setDockOpacity(value: number) {
-        this.fcConfig.dockOpacity = Math.max(0.05, Math.min(0.60, value))
+        this.fcConfig.dockOpacity = this.clampOpacity(value)
+        this.applyTokens()
+        this.schedulePersistence()
+        this.emit("changed")
+    }
+
+    async setWindowOpacity(value: number) {
+        this.fcConfig.windowOpacity = this.clampOpacity(value)
+        this.applyTokens()
+        this.schedulePersistence()
+        this.emit("changed")
+    }
+
+    /** Master "Glass" control: set every surface (bar + overlays + dock + window). */
+    async setGlassOpacity(value: number) {
+        const v = this.clampOpacity(value)
+        this.fcConfig.barOpacity = v
+        this.fcConfig.overlayOpacity = v
+        this.fcConfig.dockOpacity = v
+        this.fcConfig.windowOpacity = v
         this.applyTokens()
         this.schedulePersistence()
         this.emit("changed")
@@ -410,20 +427,6 @@ class ThemeManager extends GObject.Object {
         // Cairo (capsule glass + dock plates + running dots read chromeIsDark live).
         this.applyTokens()
         this.schedulePersistence()
-        this.emit("changed")
-    }
-
-    async setTintStrength(value: number) {
-        this.fcConfig.tintStrength = Math.max(0, Math.min(1, value))
-        this.refreshTintCss()
-        this.saveSettings()
-        this.emit("changed")
-    }
-
-    async setTintPanel(panel: keyof TintPanels, enabled: boolean) {
-        this.fcConfig.tintPanels[panel] = enabled
-        this.refreshTintCss()
-        this.saveSettings()
         this.emit("changed")
     }
 
@@ -441,8 +444,7 @@ class ThemeManager extends GObject.Object {
                 Gtk.StyleContext.add_provider_for_display(display, this.mainProvider, highPriority)
                 Gtk.StyleContext.add_provider_for_display(display, this.fontProvider, highPriority)
                 Gtk.StyleContext.add_provider_for_display(display, this.themeProvider, tokenPriority)
-                Gtk.StyleContext.add_provider_for_display(display, this.tintProvider, priority)
-                
+
                 // style.css resolves against SHELL_ROOT (source tree in dev,
                 // /usr/share in prod). install.sh ships style.css into both.
                 const stylePath = `${SHELL_ROOT}/style.css`
@@ -453,15 +455,6 @@ class ThemeManager extends GObject.Object {
                 this.providersLinked = true
             }
         } catch (e) { console.error(e) }
-    }
-
-    private refreshTintCss() {
-        this.ensureProvidersLinked()
-        const tintCss = generateTintCss(this.fcConfig)
-        if (this._lastTintCss !== tintCss) {
-            this.tintProvider.load_from_string(tintCss)
-            this._lastTintCss = tintCss
-        }
     }
 
     /** Regenerate + apply the Nidara token CSS (accent / opacities), deduped. */
@@ -479,7 +472,6 @@ class ThemeManager extends GObject.Object {
         const theme = this.state.themeFamily
 
         this.applyTokens()
-        this.refreshTintCss()
         GLib.unsetenv("GTK_THEME")
 
         try {
@@ -554,12 +546,11 @@ class ThemeManager extends GObject.Object {
         const merged = {
             ...this.state,
             accent: this.fcConfig.accent,
-            transparency: this.fcConfig.transparency,
-            shellOpacity: this.fcConfig.shellOpacity,
+            barOpacity: this.fcConfig.barOpacity,
+            overlayOpacity: this.fcConfig.overlayOpacity,
             dockOpacity: this.fcConfig.dockOpacity,
+            windowOpacity: this.fcConfig.windowOpacity,
             shellAppearance: this.fcConfig.shellAppearance,
-            tintStrength: this.fcConfig.tintStrength,
-            tintPanels: this.fcConfig.tintPanels,
         }
         const json = JSON.stringify(merged, null, 2)
         writeFile(this.configPath, json)
@@ -601,12 +592,13 @@ class ThemeManager extends GObject.Object {
             }
             this.fcConfig = {
                 accent:       (data.accent as AccentKey)                  ?? DEFAULT_CONFIG.accent,
-                transparency: (data.transparency as number)              ?? DEFAULT_CONFIG.transparency,
-                shellOpacity: (data.shellOpacity as number)              ?? DEFAULT_CONFIG.shellOpacity,
-                dockOpacity:  (data.dockOpacity as number)               ?? DEFAULT_CONFIG.dockOpacity,
+                // Migrate: the old single `shellOpacity` seeds both bar + overlays.
+                barOpacity:     (data.barOpacity as number)     ?? (data.shellOpacity as number) ?? DEFAULT_CONFIG.barOpacity,
+                overlayOpacity: (data.overlayOpacity as number) ?? (data.shellOpacity as number) ?? DEFAULT_CONFIG.overlayOpacity,
+                dockOpacity:    (data.dockOpacity as number)    ?? DEFAULT_CONFIG.dockOpacity,
+                // Migrate the old `transparency` (transparency sense) → window OPACITY (1 − t).
+                windowOpacity:  (data.windowOpacity as number)  ?? (typeof data.transparency === "number" ? 1 - (data.transparency as number) : DEFAULT_CONFIG.windowOpacity),
                 shellAppearance: (data.shellAppearance as ShellAppearance) ?? DEFAULT_CONFIG.shellAppearance,
-                tintStrength: (data.tintStrength as number)              ?? DEFAULT_CONFIG.tintStrength,
-                tintPanels:   (data.tintPanels as typeof DEFAULT_CONFIG.tintPanels) ?? DEFAULT_CONFIG.tintPanels,
             }
         } catch (e) {
             this.syncFromSystem()
