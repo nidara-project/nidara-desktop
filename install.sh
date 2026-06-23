@@ -573,6 +573,14 @@ if [ "$MODE" != "dev" ]; then
 fi
 sudo cp "$REPO_DIR/ui/greeter/style.css" /usr/share/nidara/ui/greeter/
 
+# Greeter's blank GTK4 theme. The greeter starts with GTK_THEME=nidara so GTK4
+# loads ZERO theme rules (no Adwaita) and only the greeter's own CSS applies —
+# that only works if this empty theme exists at the matching name. (app.ts).
+sudo mkdir -p /usr/share/themes/nidara/gtk-4.0
+sudo cp "$REPO_DIR/ui/greeter/theme/gtk.css" /usr/share/themes/nidara/gtk-4.0/gtk.css
+# Remove the pre-rename orphan (was crystal-shell) so it doesn't linger.
+sudo rm -rf /usr/share/themes/crystal-shell
+
 # Lockscreen bundle (shares greeter's style.css)
 sudo mkdir -p /usr/share/nidara/ui/lockscreen/build
 if [ "$MODE" != "dev" ]; then
