@@ -551,11 +551,4 @@ button.settings-icon-btn {
 
     &:hover  { background: var(--nidara-accent-10); color: var(--nidara-accent); background-image: none; }
     &:active { background: rgba(var(--nidara-accent-rgb), 0.18); background-image: none; }
-
-    // Danger tint variant — for destructive inline actions (remove/delete)
-    &.settings-icon-btn--danger {
-        color: var(--nidara-danger);
-        &:hover  { background: rgba(var(--nidara-danger-rgb), 0.12); color: var(--nidara-danger); }
-        &:active { background: rgba(var(--nidara-danger-rgb), 0.22); }
-    }
 }

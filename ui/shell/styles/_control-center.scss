@@ -211,9 +211,6 @@
 
     /* Neutral hover (e.g. the collapse chevron): brighter fill — no border (it left corner dots). */
     &:hover { background: var(--nidara-surface-strong); }
-
-    /* Destructive (close/remove): red on hover */
-    &.is-danger:hover { background: var(--nidara-danger); }
 }
 
 .cc-slot-placeholder {

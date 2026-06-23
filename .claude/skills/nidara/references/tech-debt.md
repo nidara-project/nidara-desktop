@@ -36,8 +36,20 @@ built dynamically (`accent-${key}` in Appearance.tsx, `nidara-btn--${variant}` i
 nidara-kit/button.ts), GTK-internal node classes (`day-name`/`other-month`/`week-number` =
 Gtk.Calendar, `combo`), and live names that look stale (`notif-win`). Deliberately KEPT
 with zero direct consumers: the `entry, .nidara-input` / `switch, .nidara-switch` API
-aliases and `.nidara-tile` (canonical tile recipe, referenced by the
-`nidara-tile-states` docs).
+aliases, `.nidara-tile` (canonical tile recipe, referenced by the
+`nidara-tile-states` docs), and `.is-selected` (paired with the live `:selected` GTK
+pseudo in `_base.scss` — an opt-in alias for our own widgets, same policy as the input/switch aliases).
+**Re-run 2026-06-23 (271 classes):** removed 2 newly-confirmed dead blocks —
+`.settings-icon-btn--danger` (`_components.scss`, a never-wired "danger tint" modifier; the base
+`.settings-icon-btn` is only ever added plain/`+flat`) and `.is-danger` (`_control-center.scss`, the
+only live `is-*` toggle is `.is-active` in `StatusIndicators.tsx`). The other 24 candidates are all
+accounted-for traps: the 9 dynamic `.accent-*` swatches, `.nidara-btn--ghost` (variant `"ghost"` IS
+used, Audio.tsx), the 4 GTK-internal nodes (`combo`/`day-name`/`other-month`/`week-number`), the 2 GTK
+overlay-scrollbar nodes (`hovering`/`overlay-indicator`, #15), the 4 kept aliases above, and 4
+tombstone *comments* the extractor matches inside `/* … */` (`bar-ws-dot`/`cc-resize-btn`/
+`cc-media-progress`/`settings-page-title` — the CSS is already gone, the comment documents why the
+live class is named differently). **Next-run trap:** the extractor matches `.name` inside comments, so
+a tombstone comment reads as an orphan — check whether the only hit is a comment before acting.
 
 ### 2. Anti-Adwaita resets still dense in two files
 `_control-center.scss` (~33 reset rules) and `_settings.scss` (~24). High reset counts signal
