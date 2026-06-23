@@ -70,6 +70,7 @@ The installer detects from the existing Arch install:
 
 - `/usr/bin/{nidara, nidara-ui, nidara-greeter, nidara-lock, nidara-game-mode}`
 - `/usr/share/nidara/` — configs, bundles, `VERSION`, wallpaper
+- `/usr/share/themes/nidara/gtk-4.0/gtk.css` — the greeter's **blank** GTK4 theme (zero rules). The greeter starts with `GTK_THEME=nidara` so only its own app CSS applies; **GTK silently falls back to Adwaita if this theme isn't on disk** (a real bite — the install step was missing post-rename). The step also `rm -rf`s the pre-rename `crystal-shell` orphan. Source: `ui/greeter/theme/gtk.css`.
 - `/usr/share/wayland-sessions/nidara.desktop`
 - `/usr/share/applications/`
 - XDG portal config
