@@ -490,9 +490,30 @@ per-surface special cases in the meantime. Concrete open problems found:
   cover overlays too? one global "shell appearance" vs per-surface? how do transient bar surfaces
   (expansion panel, system-menu popup — currently system-following, see #23) fit? Enumerate ALL the
   possibilities first, then make them consistent — that's the deliverable.
+- **Tray icon coherence (partly unsolvable).** Tray icons recolour ONLY when the active icon theme has a
+  `-symbolic` variant of the app's icon (`Tray.tsx` prefers `name-symbolic` → CSS `color`/`-gtk-icon-style`;
+  else falls back to the app's raw `gicon` pixmap, which can't recolour). So on one bar some tray icons
+  follow the theme/chrome (e.g. Telegram, whose symbolic exists) and others stay full-colour — inherently
+  mixed because SNI apps provide what they provide. The coherent model must pick a **policy** (force
+  symbolic-only? a uniform treatment? leave as-is?), it's not a pure bug. (Mechanism now documented in
+  `design-system.md`.)
 - Likely touchpoints when resumed: the token engine (`nidaraVars`/`generateChromeTokenScope` already
   factor the per-appearance block, so extending the scope to more surfaces is mechanical), the
   text-opacity tokens, and the Settings UX for whatever the chosen model is.
+- **Precede the coherence pass with a read-only audit of the whole theming subsystem.** User's standing
+  concern (2026-06-23): after many changes there's dead code and bits whose implementation isn't clear.
+  Sweep tokens → tint → chrome → tray → dark/light, list what's dead and what's undocumented, THEN design.
+  First confirmed dead instance is #25.
+
+### 25. Accent-tint subsystem is dead code — remove or resurrect (2026-06-23)
+The "tint" feature (wash CC / app-grid panels with the accent colour) is wired **end to end but has zero
+entry points**: config fields (`tintStrength`, `tintPanels`), `generateTintCss()`, a dedicated
+`tintProvider` CssProvider, `PANEL_SELECTORS`, the `TintPanels` type, getters (`tintStrength`/`tintPanels`),
+setters (`setTintStrength`/`setTintPanel`), persistence + load — but **nothing calls the setters**: no
+Settings UI, not in `config-entries.ts` (agents can't reach it), no IPC. Defaults `0`/`false`, so
+`generateTintCss` always returns `/* No tint */`. Dead since it was pulled from the UI. Decision pending:
+**delete the whole subsystem** (clean removal across `NidaraTheme.ts` + `ThemeManager.ts`, drop the persisted
+keys) OR resurrect it as a real Setting. Low risk to remove (reversible via git, emits nothing today).
 
 ## Resolved — rules that still apply
 

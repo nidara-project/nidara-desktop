@@ -76,6 +76,21 @@ How the flip works:
 When adding a new **bar** capsule, pass `chrome: true`; a new always-on Cairo bar/dock
 element should read `Theme.chromeIsDark`, not `Theme.isDark`.
 
+### Tray icons recolour conditionally (not "never", not "always")
+
+A common misconception (it bit a past explanation): system-tray icons are NOT uniformly
+"app pixmaps that can't recolour". `Tray.tsx` resolves each item like this:
+- If the app exposes its icon by **name** AND the active icon theme has a **`-symbolic`**
+  variant of it → load the symbolic icon; CSS `-gtk-icon-style: symbolic` + `.bar-tray-icon
+  { color: var(--nidara-text) }` recolour it, so it **follows the theme and the chrome pin**
+  (this is why e.g. Telegram's tray icon flips — its symbolic exists in the icon theme, no
+  app-specific code).
+- Otherwise → fall back to the app's composited `gicon` **pixmap**, which **can't** recolour.
+
+Consequence: a single bar can show some tray icons themed and others full-colour, depending
+purely on what the icon theme provides. That's inherent to SNI (apps supply what they
+supply); making it coherent is a policy decision, deferred — see tech-debt #24.
+
 ## Accent palette (9 colors)
 
 | Name | Hex |
