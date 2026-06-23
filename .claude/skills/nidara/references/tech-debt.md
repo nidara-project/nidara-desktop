@@ -289,7 +289,7 @@ media **rich panel** (`media.ts buildBarExpanded` ~L216) + `MediaIsland.tsx:36`,
 and **re-decode the cover-art PNG from disk every notify** (`GdkPixbuf.new_from_file_at_scale` +
 unconditional `artDa.queue_draw()`) — guard `loadArt` on a changed `cover_art` path when touched.
 
-### 12. Sporadic double-disconnect CRITICALs — FIXED (helper + reproducing cluster); rest opportunistic
+### 12. Sporadic double-disconnect CRITICALs — RESOLVED (helper + full sweep 2026-06-23)
 Rare bursts (≈2 in 30 h) of `GLib-GObject-CRITICAL … instance has no handler with id` (3–4
 ids at once, 2 instances) and `GLib-CRITICAL … Source ID not found when attempting to
 remove it`. Some cleanup path disconnects handlers / removes sources twice. Ruled out by
@@ -313,11 +313,19 @@ which guards with `GObject.signal_handler_is_connected` (idempotent). Migrated t
 cluster — the CC/overlay/Settings widgets that recycle: `Sliders.tsx`, `MediaIsland.tsx`,
 `widgets/{volume,battery,media,screenrecord,ethernet,night-light,dark-mode}.ts`, plus
 `common/Slider.ts` and once-guarded the `onExt` cleanup in `SettingsHelpers.ts` toggleRow/dropdownRow.
-**Remaining ~25 bare `try{disconnect}catch{}` sites migrate opportunistically** (when already editing
-the file): `core/{NetworkService,AudioService,BluetoothService}.ts`, `surfaces/control-center/Toggles.tsx`,
-`widgets/wifi.ts`, and several `surfaces/settings/pages/*.tsx` (Appearance, Display, Region, Input,
-Network, Bluetooth). Use `safeDisconnect` for all new disconnect-in-cleanup code — never bare
-`try{disconnect}catch{}`.
+**Full sweep done 2026-06-23.** Every remaining disconnect-in-cleanup site now goes through
+`safeDisconnect` — both the useless `try{disconnect}catch{}` guards AND the bare unguarded
+`obj.disconnect(id)` calls on `unrealize`/`destroy` (which were the actual repro pattern: `unrealize`
+fires on every realize/unrealize cycle, so the second run disconnected a stale id). Migrated 21 files:
+`core/{NetworkService,AudioService,BluetoothService}.ts`, `surfaces/bar/{Bar,AppTitle,Tray}.tsx`,
+`surfaces/control-center/{Toggles,NotificationCenter}.tsx`, `surfaces/dock/{DockCore,DockItem}.tsx`,
+`surfaces/overview/{WorkspaceOverview,WorkspacePreview}.tsx`, `surfaces/app-grid/AppGrid.tsx`,
+`surfaces/about/AboutWindow.tsx`, `widgets/wifi.ts`, and the Settings pages
+(Appearance, Display, Region, Input, Network, Bluetooth). Verified: zero `try{…disconnect…}catch`
+left tree-wide, the only `.disconnect(` call is inside `safeDisconnect` itself; typecheck + build green.
+**Rule still stands:** use `safeDisconnect` for ALL disconnect-in-cleanup code — never bare
+`try{disconnect}catch{}` (it doesn't catch the C-level critical) and never a bare `obj.disconnect(id)`
+in an `unrealize`/`destroy` handler.
 
 ### 13. Lockscreen GTK4 segfault when a wl_output vanishes — upstream, mitigated by watchdog
 On wake-from-suspend the DP link re-trains and the wl_output disappears for ~1 s; GTK

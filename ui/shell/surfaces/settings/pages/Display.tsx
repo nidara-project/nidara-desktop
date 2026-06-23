@@ -5,6 +5,7 @@ import hs from "../../../core/HyprlandState"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import monitorConfig from "../../../core/MonitorConfig"
+import { safeDisconnect } from "../../../core/signals"
 
 function monitorLabel(name: string): string {
     if (name.startsWith("eDP")) return `${name} (${t("settings.display.label.builtin")})`
@@ -319,7 +320,7 @@ export default function DisplayPage() {
         lastTopology = next
         render()
     })
-    page.connect("unrealize", () => { try { hs.disconnect(sigId) } catch {} })
+    page.connect("unrealize", () => safeDisconnect(hs, sigId))
 
     return page
 }

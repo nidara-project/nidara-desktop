@@ -9,6 +9,7 @@ import hs from "../../core/HyprlandState"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import { SHELL_ROOT } from "../../core/Paths"
+import { safeDisconnect } from "../../core/signals"
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -169,7 +170,7 @@ export default function AboutWindow(): Gtk.Window | null {
     // If status is set to false externally, destroy the window
     const sigId = status.connect("notify::about-open", () => {
         if (!status.about_open && _instance === win) {
-            status.disconnect(sigId)
+            safeDisconnect(status, sigId)
             _instance = null
             win.destroy()
         }

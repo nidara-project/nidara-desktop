@@ -15,6 +15,7 @@ import { dockSideState } from "../dock/state"
 import { UNIT, GAP, GRID_WIDTH } from "./CCLayoutManager"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
+import { safeDisconnect } from "../../core/signals"
 
 export function createIconWidget(n: AstalNotifd.Notification, size: number) {
     const entry = n.desktop_entry || n.app_name || ""
@@ -237,7 +238,7 @@ function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
         }
     })
     const themeConn = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
-    da.connect("destroy", () => Theme.disconnect(themeConn))
+    da.connect("destroy", () => safeDisconnect(Theme, themeConn))
     wrapper.append(da)
 
     return wrapper

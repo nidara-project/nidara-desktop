@@ -5,6 +5,7 @@ import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/T
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as Net from "../core/NetworkService"
+import { safeDisconnect } from "../core/signals"
 
 function infoRow(label: string, getValue: () => string): { row: Gtk.Widget; update: () => void } {
     const key = new Gtk.Label({ label, css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })
@@ -25,7 +26,7 @@ function buildBarContent(): Gtk.Widget {
         // gicon each time → gtk_image_clear → queue_draw → a full bar re-blur every
         // frame for an icon that never visually changes. Guard the assignment too.
         const sigId = (wifi as any).connect("notify::enabled", () => { const ic = getIcon(); if (image.gicon !== ic) image.gicon = ic })
-        image.connect("unrealize", () => { try { (wifi as any).disconnect(sigId) } catch {} })
+        image.connect("unrealize", () => safeDisconnect(wifi, sigId))
     }
     return image
 }
@@ -50,7 +51,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         })
         if (wifi) {
             const sigId = (wifi as any).connect("notify::enabled", () => { const ic = getIcon(); if (icon.gicon !== ic) icon.gicon = ic })
-            box.connect("unrealize", () => { try { (wifi as any).disconnect(sigId) } catch {} })
+            box.connect("unrealize", () => safeDisconnect(wifi, sigId))
         }
         box.append(icon)
         return box
@@ -63,7 +64,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         // the generic "notify" stormed a full re-blur on every strength/scan churn.
         const sigIdE = (wifi as any).connect("notify::enabled", inner.update)
         const sigIdS = (wifi as any).connect("notify::ssid", inner.update)
-        inner.box.connect("unrealize", () => { try { (wifi as any).disconnect(sigIdE); (wifi as any).disconnect(sigIdS) } catch {} })
+        inner.box.connect("unrealize", () => { safeDisconnect(wifi, sigIdE); safeDisconnect(wifi, sigIdS) })
     }
     return wrapCapsuleTile(inner.box)
 }
@@ -88,7 +89,7 @@ function buildInfoPanel(): Gtk.Widget {
 
     if (wifi) {
         const sigId = (wifi as any).connect("notify", updateAll)
-        box.connect("unrealize", () => { try { (wifi as any).disconnect(sigId) } catch {} })
+        box.connect("unrealize", () => safeDisconnect(wifi, sigId))
     }
 
     return box
@@ -104,7 +105,7 @@ function buildDetailPanel(_onClose: () => void): Gtk.Widget {
     })
     if (wifi) {
         const sigId = (wifi as any).connect("notify::enabled", () => { sw.active = (wifi as any)?.enabled !== false })
-        sw.connect("unrealize", () => { try { (wifi as any).disconnect(sigId) } catch {} })
+        sw.connect("unrealize", () => safeDisconnect(wifi, sigId))
     }
 
     const switchLabel = new Gtk.Label({ label: t("cc.wifi.name"), css_classes: ["bar-popover-key"], halign: Gtk.Align.START, hexpand: true })

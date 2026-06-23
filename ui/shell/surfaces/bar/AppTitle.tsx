@@ -7,6 +7,7 @@ import SquircleContainer from "../../common/SquircleContainer"
 import { CAPSULE_BORDER } from "./capsule"
 import hs from "../../core/HyprlandState"
 import status from "../../core/Status"
+import { safeDisconnect } from "../../core/signals"
 import shellActions from "../../core/ShellActions"
 import buildWindowMenu from "./WindowMenu"
 
@@ -41,7 +42,7 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): Gtk.Widget 
       // Only rewire notify::title when the focused client actually changed
       if (client === trackedClient) return
       if (trackedClient && titleHandlerId) {
-        trackedClient.disconnect(titleHandlerId)
+        safeDisconnect(trackedClient, titleHandlerId)
         titleHandlerId = 0
       }
       trackedClient = client

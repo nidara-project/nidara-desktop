@@ -6,6 +6,7 @@ import Icons from "../../../core/Icons"
 import * as Net from "../../../core/NetworkService"
 import type { VpnProfile } from "../../../core/NetworkService"
 import { NidaraButton } from "../../../../lib/nidara-kit"
+import { safeDisconnect } from "../../../core/signals"
 
 function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow {
     let active = profile.active
@@ -304,7 +305,7 @@ function buildApDetailPage(ap: any, network: any): Gtk.Widget {
     const apStrengthId = ap.connect?.("notify::strength", update) ?? 0
     const disposeWifi  = Net.watchWifi(update)
     page.connect("unrealize", () => {
-        try { if (apStrengthId) ap.disconnect(apStrengthId) } catch {}
+        if (apStrengthId) safeDisconnect(ap, apStrengthId)
         disposeWifi()
     })
     update()

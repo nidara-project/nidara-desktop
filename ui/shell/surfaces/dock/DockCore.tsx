@@ -30,6 +30,7 @@ import { t } from "../../core/i18n"
 import shellActions from "../../core/ShellActions"
 import { iconAssetPath } from "../../core/Icons"
 import AppGridPanel from "../app-grid/AppGrid"
+import { safeDisconnect } from "../../core/signals"
 import type { AxisAdapter, RevealState } from "./DockAxis"
 
 export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
@@ -1119,9 +1120,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         if (updateTimer) { GLib.source_remove(updateTimer); updateTimer = null }
         if (leaveTimeout) { GLib.source_remove(leaveTimeout); leaveTimeout = null }
         clearPendingDragTimers()
-        try { if (cConn) hs.disconnect(cConn) } catch (e) {}
-        try { Theme.disconnect(themeConn) } catch (e) {}
-        for (const id of statusConns) { try { status.disconnect(id) } catch (e) {} }
+        if (cConn) safeDisconnect(hs, cConn)
+        safeDisconnect(Theme, themeConn)
+        for (const id of statusConns) safeDisconnect(status, id)
         try { if (aConn) aConn() } catch (e) {}
         try { if (pConn) pConn() } catch (e) {}
         try { if (dConn) dConn() } catch (e) {}
@@ -1263,7 +1264,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         const client = hs.focusedClient ?? null
         if (client !== trackedClient) {
             if (trackedClient && trackedClientConn !== null) {
-                try { trackedClient.disconnect(trackedClientConn) } catch (_) {}
+                safeDisconnect(trackedClient, trackedClientConn)
                 trackedClientConn = null
             }
             trackedClient = client

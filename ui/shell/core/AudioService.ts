@@ -14,6 +14,7 @@
 import { execAsync } from "ags/process"
 import AstalWp from "gi://AstalWp"
 import Icons from "./Icons"
+import { safeDisconnect } from "./signals"
 
 export function wp(): AstalWp.Wp | null {
     return AstalWp.get_default()
@@ -78,7 +79,7 @@ function wire(obj: any, sigs: string[], cb: () => void): Dispose {
     if (!obj?.connect) return () => {}
     const ids: number[] = []
     for (const s of sigs) { try { ids.push(obj.connect(s, cb)) } catch {} }
-    return () => ids.forEach(id => { try { obj.disconnect(id) } catch {} })
+    return () => ids.forEach(id => safeDisconnect(obj, id))
 }
 
 /** Fires when the speaker/mic set or the default endpoint changes. */

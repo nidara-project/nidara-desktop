@@ -1,6 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import { createSchematicMap } from "../../common/WorkspaceSchematic"
 import hs from "../../core/HyprlandState"
+import { safeDisconnect } from "../../core/signals"
 
 export default function WorkspacePreview(wsId: number) {
     const { wrapper, sync: schematicSync } = createSchematicMap(wsId, 200)
@@ -31,7 +32,7 @@ export default function WorkspacePreview(wsId: number) {
     })
 
     popover.connect("notify::visible", () => { if (popover.get_visible()) schematicSync() })
-    popover.connect("unrealize", () => hs.disconnect(changedId))
+    popover.connect("unrealize", () => safeDisconnect(hs, changedId))
 
     return popover
 }

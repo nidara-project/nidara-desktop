@@ -16,6 +16,7 @@ import Theme from "../../core/ThemeManager"
 import Cairo from "gi://cairo"
 import shellActions from "../../core/ShellActions"
 import { createSchematicMap } from "../../common/WorkspaceSchematic"
+import { safeDisconnect } from "../../core/signals"
 
 // Extract just the desktop basename, stripping path and .desktop extension
 const normId = (s: string) => {
@@ -148,7 +149,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         if (wsNav > 0) wsNav = hs.focusedWorkspaceId || 1
         syncWsStrip()
     })
-    wsStrip.connect("unrealize", () => hs.disconnect(stripChangedId))
+    wsStrip.connect("unrealize", () => safeDisconnect(hs, stripChangedId))
     // hs emits "changed" in its constructor before AppGrid connects — do an
     // initial sync on the next idle tick so schematics are populated immediately.
     GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { syncWsStrip(); return GLib.SOURCE_REMOVE })

@@ -308,7 +308,7 @@ export default function AppearancePage() {
         schedSwitch.active = NightLight.scheduleEnabled
         schedTimeRow.visible = NightLight.scheduleEnabled
     })
-    page.connect("unrealize", () => { try { NightLight.disconnect(nlChangedId) } catch {} })
+    page.connect("unrealize", () => safeDisconnect(NightLight, nlChangedId))
 
     page.append(nlGroup.box)
 

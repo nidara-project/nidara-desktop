@@ -6,6 +6,7 @@ import { listGroup, createRow, toggleRow, pageBox, staticLabel } from "../Settin
 import regionConfig, { TimeFormat, DateFormat } from "../../../core/RegionConfig"
 import inputConfig from "../../../core/InputConfig"
 import { t } from "../../../core/i18n"
+import { safeDisconnect } from "../../../core/signals"
 import { NidaraButton } from "../../../../lib/nidara-kit"
 
 const TIME_FORMAT_LABELS = (): Record<TimeFormat, string> => ({
@@ -321,7 +322,7 @@ export default function RegionPage() {
     page.connect("unrealize", () => {
         GLib.source_remove(clockTimerId)
         if (tzStatusTimerId) GLib.source_remove(tzStatusTimerId)
-        try { regionConfig.disconnect(regionSigId) } catch {}
+        safeDisconnect(regionConfig, regionSigId)
     })
 
     return page

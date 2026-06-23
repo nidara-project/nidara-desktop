@@ -6,6 +6,7 @@ import { t } from "../../core/i18n"
 import Gio from "gi://Gio"
 import Icons from "../../core/Icons"
 import * as Net from "../../core/NetworkService"
+import { safeDisconnect } from "../../core/signals"
 
 function setIcon(img: Gtk.Image, icon: Gio.FileIcon) {
     img.gicon = icon
@@ -171,7 +172,7 @@ export function EthernetWidget(): CCWidgetSpec {
             (wired as any).connect("notify::internet",    sync),
             (wired as any).connect("notify::ip4-address", sync),
         ]
-        return () => ids.forEach(id => { try { (wired as any).disconnect(id) } catch {} })
+        return () => ids.forEach(id => safeDisconnect(wired, id))
     }
 
     const buildContent = (size: WidgetSize): Gtk.Widget => {
@@ -196,7 +197,7 @@ export function WifiWidget(): CCWidgetSpec {
     const subscribe: SubscribeFn = (sync) => {
         if (!wifi) return () => {}
         const id = (wifi as any).connect("notify", sync)
-        return () => { try { (wifi as any).disconnect(id) } catch {} }
+        return () => safeDisconnect(wifi, id)
     }
 
     const buildContent = (size: WidgetSize): Gtk.Widget => {
@@ -216,7 +217,7 @@ export function FocusWidget(): CCWidgetSpec {
     const subscribe: SubscribeFn = (sync) => {
         if (!notifd) return () => {}
         const id = (notifd as any).connect("notify", sync)
-        return () => { try { (notifd as any).disconnect(id) } catch {} }
+        return () => safeDisconnect(notifd, id)
     }
 
     const buildContent = (size: WidgetSize): Gtk.Widget => {

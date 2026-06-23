@@ -5,6 +5,7 @@ import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as BT from "../../../core/BluetoothService"
+import { safeDisconnect } from "../../../core/signals"
 import { NidaraButton, showNidaraAlert, type AlertHandle } from "../../../../lib/nidara-kit"
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -95,7 +96,7 @@ export default function BluetoothPage() {
             if (p.kind === "display" && p.device) {
                 const dev: any = p.device
                 const wid = dev.connect("notify::paired", () => { if (dev.paired) closeActiveDialog() })
-                activeDevWatch = () => { try { dev.disconnect(wid) } catch {} }
+                activeDevWatch = () => safeDisconnect(dev, wid)
             }
         })
 

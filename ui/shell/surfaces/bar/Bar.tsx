@@ -34,6 +34,7 @@ import { dockSideState, dockSettings, onDockSettingsChanged } from "../dock/stat
 import Icons from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
 import hs from "../../core/HyprlandState"
+import { safeDisconnect } from "../../core/signals"
 import { SHELL_ROOT } from "../../core/Paths"
 
 const ASSETS_DIR = SHELL_ROOT
@@ -645,7 +646,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // Skip rewire if focused client object hasn't changed
       if (client !== trackedBarClient) {
           if (trackedBarClient && trackedBarClientConn !== null) {
-              try { trackedBarClient.disconnect(trackedBarClientConn) } catch (_) {}
+              safeDisconnect(trackedBarClient, trackedBarClientConn)
               trackedBarClientConn = null
           }
           trackedBarClient = client

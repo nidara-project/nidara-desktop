@@ -12,6 +12,7 @@
 import { execAsync } from "ags/process"
 import AstalNetwork from "gi://AstalNetwork"
 import { t } from "./i18n"
+import { safeDisconnect } from "./signals"
 
 /** The AstalNetwork singleton, or null if the service isn't available. */
 export function net(): AstalNetwork.Network | null {
@@ -187,7 +188,7 @@ export function watchWifi(cb: () => void): Dispose {
     on(dev, "notify::bitrate")
     on(dev, "notify::state")
 
-    return () => ids.forEach(([obj, id]) => { try { obj.disconnect(id) } catch {} })
+    return () => ids.forEach(([obj, id]) => safeDisconnect(obj, id))
 }
 
 export function watchWired(cb: () => void): Dispose {
@@ -200,5 +201,5 @@ export function watchWired(cb: () => void): Dispose {
     on(wired, "notify::ip4-address")
     on(wired.device, "notify::speed")
 
-    return () => ids.forEach(([obj, id]) => { try { obj.disconnect(id) } catch {} })
+    return () => ids.forEach(([obj, id]) => safeDisconnect(obj, id))
 }

@@ -4,6 +4,7 @@ import AstalTray from "gi://AstalTray"
 import { getServiceSafe } from "../../utils"
 import { renderMenuModel } from "../../common/NidaraMenu"
 import status from "../../core/Status"
+import { safeDisconnect } from "../../core/signals"
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule, anchored
 // under the given widget (same system as the bar widget popovers). Injected by Bar.
@@ -138,8 +139,8 @@ export default function Tray(openMenu?: OpenMenu) {
         }
 
         cleanups.set(id, () => {
-            for (const hid of handlerIds) { try { item.disconnect(hid) } catch (e) { } }
-            if (menuChangedId) { try { item.menu_model?.disconnect(menuChangedId) } catch (e) { } }
+            for (const hid of handlerIds) safeDisconnect(item, hid)
+            if (menuChangedId) safeDisconnect(item.menu_model, menuChangedId)
         })
         items.set(id, btn)
         box.append(btn)

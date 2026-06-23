@@ -5,6 +5,7 @@ import SquircleContainer, { Shape } from "../../common/SquircleContainer"
 import { t } from "../../core/i18n"
 import { createSchematicMap } from "../../common/WorkspaceSchematic"
 import hs from "../../core/HyprlandState"
+import { safeDisconnect } from "../../core/signals"
 
 const WO_PREVIEW_WIDTH = 300
 
@@ -124,7 +125,7 @@ export default function WorkspaceOverview(monitor: any) {
     })
 
     windowContent.connect("unrealize", () => {
-        hs.disconnect(changedId)
+        safeDisconnect(hs, changedId)
     })
 
     overview.append(list)

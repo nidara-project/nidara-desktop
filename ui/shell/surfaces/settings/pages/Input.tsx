@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import { listGroup, pageBox, toggleRow, sliderRow, dropdownRow } from "../SettingsHelpers"
 import Icons from "../../../core/Icons"
 import inputConfig from "../../../core/InputConfig"
+import { safeDisconnect } from "../../../core/signals"
 import { t } from "../../../core/i18n"
 
 export default function InputPage() {
@@ -14,7 +15,7 @@ export default function InputPage() {
     // disconnects on unrealize. Closes the old no-op "changed" stub.
     const onCfg = <T,>(read: () => T) => (apply: (v: T) => void) => {
         const id = inputConfig.connect("changed", () => apply(read()))
-        return () => { try { inputConfig.disconnect(id) } catch {} }
+        return () => safeDisconnect(inputConfig, id)
     }
 
     // ── Mouse ─────────────────────────────────────────────────────────────────

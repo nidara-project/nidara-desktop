@@ -18,6 +18,7 @@ import Theme from "../../core/ThemeManager"
 import { iconAssetPath } from "../../core/Icons"
 import { t } from "../../core/i18n"
 import shellActions from "../../core/ShellActions"
+import { safeDisconnect } from "../../core/signals"
 
 // hypr kept as alias for hs to minimise diff surface in this file
 const hypr = hs
@@ -810,8 +811,8 @@ export function DockItem(
     // structural changes (focus, workspace, open/close) which is sufficient.
 
     itemBox.connect("destroy", () => {
-        try { hs.disconnect(hsChangedId) } catch (e) { }
-        try { Theme.disconnect(themeChangedId) } catch (e) { }
+        safeDisconnect(hs, hsChangedId)
+        safeDisconnect(Theme, themeChangedId)
         // Pending timers would otherwise keep firing against destroyed widgets
         // (the dock is rebuilt in-process on position/autoHide/geometry changes).
         if (bounceTimerId !== null) { GLib.source_remove(bounceTimerId); bounceTimerId = null; state.isBouncing = false }

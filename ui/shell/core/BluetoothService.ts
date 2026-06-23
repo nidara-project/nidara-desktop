@@ -10,6 +10,7 @@
 import AstalBluetooth from "gi://AstalBluetooth"
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
+import { safeDisconnect } from "./signals"
 
 /** The AstalBluetooth singleton, or null if unavailable. */
 export function bt(): AstalBluetooth.Bluetooth | null {
@@ -82,7 +83,7 @@ export function pairDevice(dev: any): void {
             const id = dev.connect("notify::paired", () => {
                 if (!dev.paired) return
                 try { dev.trusted = true } catch {}
-                try { dev.disconnect(id) } catch {}
+                safeDisconnect(dev, id)
             })
         }
         dev.pair()
@@ -113,7 +114,7 @@ export function watchPower(cb: () => void): Dispose {
     const b = bt() as any
     if (!b) return () => {}
     const id = b.connect("notify::is-powered", cb)
-    return () => { try { b.disconnect(id) } catch {} }
+    return () => safeDisconnect(b, id)
 }
 
 // Fires when adapter presence may have changed (bluetoothd start/stop, USB dongle
@@ -124,7 +125,7 @@ export function watchAdapter(cb: () => void): Dispose {
     const b = bt() as any
     if (!b) return () => {}
     const id = b.connect("notify::adapters", cb)
-    return () => { try { b.disconnect(id) } catch {} }
+    return () => safeDisconnect(b, id)
 }
 
 // Fires when the device set changes AND when any existing device's pairing /
@@ -138,7 +139,7 @@ export function watchDevices(cb: () => void): Dispose {
 
     let devIds: Array<[any, number]> = []
     const wireDevices = () => {
-        devIds.forEach(([d, id]) => { try { d.disconnect(id) } catch {} })
+        devIds.forEach(([d, id]) => safeDisconnect(d, id))
         devIds = []
         for (const d of (b.devices ?? [])) {
             for (const sig of ["notify::paired", "notify::connected", "notify::name"]) {
@@ -151,8 +152,8 @@ export function watchDevices(cb: () => void): Dispose {
     wireDevices()
 
     return () => {
-        try { b.disconnect(listId) } catch {}
-        devIds.forEach(([d, id]) => { try { d.disconnect(id) } catch {} })
+        safeDisconnect(b, listId)
+        devIds.forEach(([d, id]) => safeDisconnect(d, id))
         devIds = []
     }
 }
