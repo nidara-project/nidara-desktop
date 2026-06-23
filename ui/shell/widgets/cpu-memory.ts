@@ -50,7 +50,7 @@ function makeArc(
         if (w <= 0 || h <= 0) return
         const r = Math.min(w, h) / 2 - 2
         const xc = w / 2, yc = h / 2
-        const c = Theme.isDark ? 1 : 0
+        const c = Theme.chromeIsDark ? 1 : 0   // bar chrome — follows the pinned appearance
         cr.setSourceRGBA(c, c, c, 0.12)
         cr.setLineWidth(size > 28 ? 3 : 2)
         cr.arc(xc, yc, r, 0, 2 * Math.PI)
@@ -77,6 +77,9 @@ function makeArc(
     overlay.add_overlay(icon)
 
     pollWhileMapped(overlay, interval, () => poll(v => { if (v !== pct) { pct = v; canvas.queue_draw() } }))
+    // Repaint on dark/light or shell-appearance change (the poll only redraws on a
+    // value change, so without this the ring colour lagged a theme toggle).
+    Theme.connect("changed", () => { if (canvas.get_mapped()) canvas.queue_draw() })
 
     return overlay
 }

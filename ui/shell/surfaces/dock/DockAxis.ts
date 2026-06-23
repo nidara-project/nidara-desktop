@@ -202,9 +202,10 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
             // theme→redraw handled by DockCore (single, disconnected on destroy)
             da.set_draw_func((_, cr, w, _h) => {
                 if (w <= 0 || _h <= 0) return
+                const dark = Theme.chromeIsDark   // dock = chrome → follows appearance.shellAppearance
                 const dockAlpha = Theme.dockOpacity
-                const dockColor = Theme.isDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
-                const borderCol = Theme.isDark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
+                const dockColor = dark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
+                const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
                 drawSquircle(cr, w, _h, undefined, dockAlpha, true, dockColor, undefined, false, borderCol, 3.2, 1.0, 0)
             })
 
@@ -497,9 +498,10 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                         shim.margin_top = shimTop
                     }
                 }
+                const dark = Theme.chromeIsDark   // dock = chrome → follows appearance.shellAppearance
                 const dockAlpha = Theme.dockOpacity
-                const dockColor = Theme.isDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
-                const borderCol = Theme.isDark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
+                const dockColor = dark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
+                const borderCol = dark ? { r: 1, g: 1, b: 1, a: 0.12 } : { r: 0, g: 0, b: 0, a: 0.08 }
                 const pw = DOCK_CONSTANTS.PILL_HEIGHT
                 const ph = smoothedBarMain + DOCK_CONSTANTS.BASE_MARGIN * 2
                 const py = Math.max(0, Math.round(getGtkCenter(_h) - ph / 2))

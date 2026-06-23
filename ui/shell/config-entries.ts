@@ -10,7 +10,7 @@
 
 import { registerConfig } from "./core/ConfigRegistry"
 import Theme from "./core/ThemeManager"
-import { ACCENT_PALETTE, type AccentKey } from "./core/NidaraTheme"
+import { ACCENT_PALETTE, type AccentKey, type ShellAppearance } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
 import notifConfig from "./core/NotifConfig"
 import Gaming, { type WallpaperMode } from "./core/GamingManager"
@@ -31,6 +31,13 @@ export function registerConfigEntries() {
         enum: Object.keys(ACCENT_PALETTE),
         get: () => Theme.accentColor,
         set: v => void Theme.setAccentColor(v as AccentKey),
+    })
+    registerConfig("appearance.shellAppearance", {
+        desc: "Bar & dock appearance, independent of the system mode: 'system' follows dark/light, 'dark'/'light' pin the chrome so its text/icons stay legible over any wallpaper.",
+        type: "enum",
+        enum: ["system", "dark", "light"],
+        get: () => Theme.shellAppearance,
+        set: v => void Theme.setShellAppearance(v as ShellAppearance),
     })
 
     // ── Dock ──────────────────────────────────────────────────────────────

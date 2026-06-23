@@ -26,11 +26,21 @@ export interface TintPanels {
   appGrid: boolean
 }
 
+/**
+ * Bar + dock appearance, independent of the system dark/light mode.
+ * - "system": chrome follows the global mode (default).
+ * - "dark" / "light": chrome is pinned, so text + glass stay legible over any
+ *   wallpaper regardless of the rest of the desktop's mode.
+ * Affects ONLY the bar and the dock — overlays (CC/NC/Prism) follow the system.
+ */
+export type ShellAppearance = "system" | "dark" | "light"
+
 export interface NidaraThemeConfig {
   accent: AccentKey
   transparency: number   // Settings window opacity — range [0.10, 0.90]
   shellOpacity: number   // Bar + CC + NC opacity   — range [0.06, 0.75]
   dockOpacity: number    // Dock opacity            — range [0.05, 0.60]
+  shellAppearance: ShellAppearance  // Bar+dock dark/light, independent of system mode
   tintStrength: number
   tintPanels: TintPanels
 }
@@ -40,6 +50,7 @@ export const DEFAULT_CONFIG: NidaraThemeConfig = {
   transparency: 0.75,
   shellOpacity: 0.20,
   dockOpacity: 0.20,
+  shellAppearance: "system",
   tintStrength: 0.0,
   tintPanels: {
     controlCenter: false,
@@ -98,6 +109,32 @@ function generateTokenHeader(config: NidaraThemeConfig, isDark: boolean): string
   lines.push(`  --accent-bg-color: ${accent};`)
   lines.push(`  --accent-fg-color: #ffffff;`)
 
+  lines.push(
+    ...nidaraVars(config, isDark),
+    `}`,
+    isDark ? `` : `.nd-icon { -gtk-icon-filter: none; }`,
+  )
+  return lines.join("\n")
+}
+
+/**
+ * The mode-dependent `--nidara-*` custom properties (everything between `* {`
+ * and `}`). Extracted so the same block can be re-emitted under a scoped
+ * selector for the bar/dock chrome override (see generateChromeTokenScope) —
+ * the chrome must carry the FULL token family, not just `--nidara-text`, or its
+ * surfaces/edges/shadows would desync from its text colour.
+ */
+function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[] {
+  const accent = ACCENT_PALETTE[config.accent].color
+  const baseAlpha = 1.0 - config.transparency
+  // Same WCAG light-mode floor as the @define-color glass above.
+  const bgAlphaNum = (!isDark && baseAlpha < 0.40) ? 0.40 : baseAlpha
+  const bgAlpha = bgAlphaNum.toFixed(2)
+
+  const popoverBg = isDark ? "#242424" : "#fafafa"
+  const popoverAlpha = Math.max(bgAlphaNum, 0.38).toFixed(2)
+  const popoverBorder = isDark ? "rgba(255,255,255,0.14)" : "rgba(0,0,0,0.10)"
+
   const whiteOrBlack = isDark ? "#ffffff" : "#000000"
   const r = parseInt(accent.slice(1, 3), 16)
   const g = parseInt(accent.slice(3, 5), 16)
@@ -118,7 +155,7 @@ function generateTokenHeader(config: NidaraThemeConfig, isDark: boolean): string
   // .45 / thick .65 / chrome .85), then OFFSET by the transparency slider so the
   // ladder still responds to user opacity. delta = 0 at default transparency.
   // lower z → thicker; higher z → thinner. Clamped to keep blur visible + legible.
-  const ba = parseFloat(bgAlpha)
+  const ba = bgAlphaNum
   const clamp = (v: number, lo: number, hi: number) => Math.min(Math.max(v, lo), hi)
   const delta = ba - 0.25
   const matThin    = clamp(0.30 + delta, 0.18, 0.50).toFixed(3)
@@ -145,7 +182,7 @@ function generateTokenHeader(config: NidaraThemeConfig, isDark: boolean): string
   // Rim-of-light edge: faint white top hairline on glass.
   const edge = isDark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(255,255,255,0.50)"
 
-  lines.push(
+  return [
     `  --nidara-accent: ${accent};`,
     `  --nidara-accent-rgb: ${r}, ${g}, ${b};`,
     `  --nidara-accent-fg: #ffffff;`,
@@ -191,14 +228,41 @@ function generateTokenHeader(config: NidaraThemeConfig, isDark: boolean): string
     `  --nidara-shadow-lg: ${sh.lg};`,
     `  --nidara-shadow-popover: ${sh.popover};`,
     `  --nidara-icon-shadow: ${sh.icon};`,
-    `}`,
-    isDark ? `` : `.nd-icon { -gtk-icon-filter: none; }`,
-  )
-  return lines.join("\n")
+  ]
 }
 
 export function generateTokensCss(config: NidaraThemeConfig, isDark: boolean): string {
   return generateTokenHeader(config, isDark)
+}
+
+/**
+ * Scoped token override that pins the bar + dock chrome to `chromeIsDark`,
+ * independent of the system mode (appearance.shellAppearance). Returns empty
+ * when the chrome already matches the system (the global `* {}` block covers it).
+ *
+ * Scoped to `.bar-centerbox` (the bar's own content — NOT the bar window, whose
+ * Gtk.Overlay also hosts CC/NC/Prism, which must keep the system mode) and the
+ * dock window. The `.nd-icon` filter is mirrored too: symbolic icons invert in
+ * dark and not in light (see _reset.scss / the global `.nd-icon` rule).
+ *
+ * The selector must hit every DESCENDANT directly (`.bar-centerbox *`), not just
+ * the container: GTK4 custom properties don't inherit reliably, and the global
+ * `* { --nidara-* }` block matches every node directly — so a bare
+ * `.bar-centerbox { --nidara-* }` only overrides the container itself and the
+ * children keep the global value (chrome glass flipped but text stayed). Matching
+ * descendants with a class-qualified universal beats `*` on specificity.
+ */
+export function generateChromeTokenScope(
+  config: NidaraThemeConfig,
+  chromeIsDark: boolean,
+  systemIsDark: boolean,
+): string {
+  if (chromeIsDark === systemIsDark) return "/* chrome follows system mode */"
+  const sel = ".bar-centerbox, .bar-centerbox *, window#nidara-dock, window#nidara-dock *"
+  const body = nidaraVars(config, chromeIsDark).join("\n")
+  const iconFilter = chromeIsDark ? "invert(1)" : "none"
+  return `${sel} {\n${body}\n}\n`
+    + `.bar-centerbox .nd-icon, window#nidara-dock .nd-icon { -gtk-icon-filter: ${iconFilter}; }`
 }
 
 

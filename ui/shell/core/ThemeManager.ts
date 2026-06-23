@@ -9,9 +9,11 @@ import {
     type NidaraThemeConfig,
     type AccentKey,
     type TintPanels,
+    type ShellAppearance,
     DEFAULT_CONFIG,
     ACCENT_PALETTE,
     generateTokensCss,
+    generateChromeTokenScope,
     generateTintCss,
 } from "./NidaraTheme"
 import { SHELL_ROOT } from "./Paths"
@@ -240,6 +242,17 @@ class ThemeManager extends GObject.Object {
     get transparency() { return this.fcConfig.transparency }
     get shellOpacity() { return this.fcConfig.shellOpacity }
     get dockOpacity()  { return this.fcConfig.dockOpacity }
+    get shellAppearance(): ShellAppearance { return this.fcConfig.shellAppearance }
+
+    /** Effective dark/light for the bar + dock chrome, honouring shellAppearance
+     *  ("system" = the global mode). Painters (SquircleContainer chrome capsules,
+     *  the dock Cairo) read this instead of `isDark` so a pinned chrome flips
+     *  text AND glass together. Opacity itself stays WYSIWYG with the slider — no
+     *  floor; legibility is the user's call (raise the slider, or pin to dark). */
+    get chromeIsDark(): boolean {
+        const a = this.fcConfig.shellAppearance
+        return a === "dark" ? true : a === "light" ? false : this.state.isDark
+    }
     get tintStrength() { return this.fcConfig.tintStrength }
     get tintPanels() { return this.fcConfig.tintPanels }
     get accentPalette() { return ACCENT_PALETTE }
@@ -391,6 +404,15 @@ class ThemeManager extends GObject.Object {
         this.emit("changed")
     }
 
+    async setShellAppearance(value: ShellAppearance) {
+        this.fcConfig.shellAppearance = value
+        // Regenerates the scoped chrome override; "changed" repaints the bar/dock
+        // Cairo (capsule glass + dock plates + running dots read chromeIsDark live).
+        this.applyTokens()
+        this.schedulePersistence()
+        this.emit("changed")
+    }
+
     async setTintStrength(value: number) {
         this.fcConfig.tintStrength = Math.max(0, Math.min(1, value))
         this.refreshTintCss()
@@ -446,6 +468,7 @@ class ThemeManager extends GObject.Object {
     private applyTokens() {
         this.ensureProvidersLinked()
         const tokens = generateTokensCss(this.fcConfig, this.state.isDark)
+            + "\n" + generateChromeTokenScope(this.fcConfig, this.chromeIsDark, this.state.isDark)
         if (this._lastTokensCss !== tokens) {
             this.themeProvider.load_from_string(tokens)
             this._lastTokensCss = tokens
@@ -534,6 +557,7 @@ class ThemeManager extends GObject.Object {
             transparency: this.fcConfig.transparency,
             shellOpacity: this.fcConfig.shellOpacity,
             dockOpacity: this.fcConfig.dockOpacity,
+            shellAppearance: this.fcConfig.shellAppearance,
             tintStrength: this.fcConfig.tintStrength,
             tintPanels: this.fcConfig.tintPanels,
         }
@@ -580,6 +604,7 @@ class ThemeManager extends GObject.Object {
                 transparency: (data.transparency as number)              ?? DEFAULT_CONFIG.transparency,
                 shellOpacity: (data.shellOpacity as number)              ?? DEFAULT_CONFIG.shellOpacity,
                 dockOpacity:  (data.dockOpacity as number)               ?? DEFAULT_CONFIG.dockOpacity,
+                shellAppearance: (data.shellAppearance as ShellAppearance) ?? DEFAULT_CONFIG.shellAppearance,
                 tintStrength: (data.tintStrength as number)              ?? DEFAULT_CONFIG.tintStrength,
                 tintPanels:   (data.tintPanels as typeof DEFAULT_CONFIG.tintPanels) ?? DEFAULT_CONFIG.tintPanels,
             }

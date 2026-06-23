@@ -6,7 +6,7 @@ import Theme from "../../../core/ThemeManager"
 import { NidaraButton, NidaraFontButton } from "../../../../lib/nidara-kit"
 import NightLight from "../../../core/NightLightManager"
 import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core/WallpaperManager"
-import { ACCENT_PALETTE, type AccentKey } from "../../../core/NidaraTheme"
+import { ACCENT_PALETTE, type AccentKey, type ShellAppearance } from "../../../core/NidaraTheme"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageBox } from "../SettingsHelpers"
@@ -22,6 +22,22 @@ export default function AppearancePage() {
         t("settings.appearance.dark-mode"),
         t("settings.appearance.dark-mode.desc"),
         darkSwitch,
+    ))
+
+    // Bar + dock appearance, independent of the system mode — pin to dark/light so
+    // chrome text stays legible over any wallpaper (light text reads on most; dark
+    // text needs a brighter glass, hence the floor + this escape hatch).
+    const SHELL_APPEARANCES: ShellAppearance[] = ["system", "dark", "light"]
+    const apprLabel = (k: ShellAppearance) => t(`settings.appearance.shell-appearance.${k}`)
+    styleGroup.listBox.append(dropdownRow(
+        t("settings.appearance.shell-appearance"),
+        t("settings.appearance.shell-appearance.desc"),
+        apprLabel(Theme.shellAppearance),
+        SHELL_APPEARANCES.map(apprLabel),
+        (label) => {
+            const key = SHELL_APPEARANCES.find(k => apprLabel(k) === label)
+            if (key) Theme.setShellAppearance(key)
+        },
     ))
     page.append(styleGroup.box)
 

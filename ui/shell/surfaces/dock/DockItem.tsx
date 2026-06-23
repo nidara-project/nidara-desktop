@@ -427,7 +427,7 @@ export function DockItem(
         if (w <= 0 || h <= 0) return
         const r = Math.min(w, h) / 2
         cr.arc(w / 2, h / 2, r, 0, 2 * Math.PI)
-        const c = Theme.isDark ? 1 : 0
+        const c = Theme.chromeIsDark ? 1 : 0   // dock running-dot — follows the pinned chrome appearance
         cr.setSourceRGBA(c, c, c, 0.9)
         cr.fill()
     })

@@ -33,6 +33,10 @@ interface SquircleContainerProps {
     inset?: number
     padding?: number
     useShellOpacity?: boolean
+    /** This capsule is bar/dock chrome: its glass tint + (floored) opacity follow
+     *  Theme.chromeIsDark / effectiveShellOpacity (pinned by appearance.shellAppearance,
+     *  legible over any wallpaper) instead of the system mode. Bar capsules only. */
+    chrome?: boolean
 }
 
 export default function SquircleContainer({
@@ -57,6 +61,7 @@ export default function SquircleContainer({
     inset,
     padding,
     useShellOpacity = false,
+    chrome = false,
 }: SquircleContainerProps) {
     const container = new Gtk.Grid({
         css_classes,
@@ -72,13 +77,16 @@ export default function SquircleContainer({
     let isHovered = false
     const techInset = inset !== undefined ? inset : 2.0
 
-    if (useShellOpacity) {
+    if (useShellOpacity || chrome) {
         Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
     }
 
     da.set_draw_func((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
-        const themeColor = Theme.isDark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
+        // Chrome capsules (bar) follow the pinned chrome appearance; everything
+        // else follows the system mode.
+        const dark = chrome ? Theme.chromeIsDark : Theme.isDark
+        const themeColor = dark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
         const baseColor = color || (useShellOpacity ? themeColor : { r: 1, g: 1, b: 1 })
         // Explicit alpha always wins (even with useShellOpacity, so a surface can
         // stay theme-coloured + redraw-on-toggle yet be near-opaque — e.g. the CC

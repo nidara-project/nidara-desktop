@@ -459,6 +459,41 @@ common case works; the only gap is a **USB Wi-Fi dongle hot-plugged after login*
 pick it up). Low priority; if fixed, watch NM's device list reactively in NetworkService, not just at
 construction. Same shape would apply to Bluetooth controllers hot-added after boot.
 
+### 23. `appearance.shellAppearance` covers the bar + dock only — by design (2026-06-23)
+The chrome-appearance pin (see `design-system.md` → "Bar/dock chrome appearance") deliberately applies to
+the **always-on chrome over the wallpaper**: the bar's own content (`.bar-centerbox` capsules) and the
+dock. Glass opacity is WYSIWYG with the slider — **no automatic legibility floor** (an earlier 0.40 floor
+was removed: pinning painted opacity above the slider value was incoherent; legibility is the user's call
+via the slider or by pinning to dark). **Intentionally excluded** (don't "fix" without a reason):
+- **Floating overlays** (CC, NC, Prism, system menu, overview) follow the **system** mode. They're opened
+  deliberately and dismissed fast.
+- **Transient bar surfaces** — the inline expansion panel (`bar-expansion-panel`) and the system-menu
+  overlay — are NOT marked `chrome` and are NOT in the scoped selector, so when the chrome is *pinned*
+  opposite to the system they keep the system glass/text. Minor visual mismatch with a pinned bar; left
+  as-is because their content is arbitrary (tray menus) and they're momentary. If this ever bothers,
+  add them to the `generateChromeTokenScope` selector AND pass `chrome: true` to their SquircleContainers
+  (do both, or text and glass desync).
+
+### 24. Unified surface-appearance + text-contrast coherence — DEFERRED (the hard part) (2026-06-23)
+`appearance.shellAppearance` (#23) shipped as a first step, but the user's verdict after testing: it is an
+advance, **not** a coherent whole, and the real work is **total coherence across every surface** — that's
+the hard, still-undefined part. Park it here; revisit as a dedicated design pass, don't bolt on more
+per-surface special cases in the meantime. Concrete open problems found:
+- **Washed-out text in light mode.** Secondary/dim text over translucent glass reads as a low-contrast
+  "lavado" grey — reported specifically on the **system-menu** in light mode (poor legibility). The
+  `--nidara-text-secondary` (rgba(fg,0.8)) / `--nidara-text-dim` (0.6) ramp was tuned against opaque-ish
+  surfaces; over light translucent glass it doesn't hold contrast. Needs a deliberate text-opacity /
+  contrast model, probably surface-aware (translucent vs solid), not a single global ramp.
+- **The architecture is inconsistent by construction.** The bar/dock can be *pinned* (shellAppearance)
+  while CC/NC/Prism/overlays *follow the system*. The user explicitly dislikes "el bar se fija de una
+  forma pero el CC siga el sistema". A coherent model has to decide the **whole matrix**: does the pin
+  cover overlays too? one global "shell appearance" vs per-surface? how do transient bar surfaces
+  (expansion panel, system-menu popup — currently system-following, see #23) fit? Enumerate ALL the
+  possibilities first, then make them consistent — that's the deliverable.
+- Likely touchpoints when resumed: the token engine (`nidaraVars`/`generateChromeTokenScope` already
+  factor the per-appearance block, so extending the scope to more surfaces is mechanical), the
+  text-opacity tokens, and the Settings UX for whatever the chosen model is.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

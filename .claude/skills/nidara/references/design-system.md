@@ -33,6 +33,49 @@ Tokens live in `styles/_base.scss`. Dark/light values are injected at runtime by
 
 The only legitimate hex literals are the accent swatches and the danger/success/warning seeds defined inside `NidaraTheme.ts`.
 
+## Bar/dock chrome appearance (`appearance.shellAppearance`)
+
+Text colour is mode-bound (`--nidara-text` = `#fff` dark / `#000` light) but the bar and
+dock glass is translucent over the wallpaper. In dark mode white text forgives almost any
+wallpaper; in **light mode black text fails on a dark wallpaper** when the glass is too
+transparent to lighten it.
+
+The fix is **not** an automatic opacity floor (tried and removed — pinning the painted
+opacity above the slider value is incoherent: the slider says 20% but the bar shows 40%).
+Glass opacity stays **WYSIWYG with the slider**; legibility is the user's call (raise the
+slider, or pin the chrome). The control:
+
+**`appearance.shellAppearance`** (`system | dark | light`, default `system`) pins the
+**bar + dock only** (overlays CC/NC/Prism always follow the system mode) to dark/light
+independent of the global mode — keep the most-forgiving (dark) chrome over any wallpaper
+while apps stay light. It flips the **whole token family** (text AND its
+surfaces/edges/shadows), never just `--nidara-text` (that would desync). `Theme.chromeIsDark`
+resolves it.
+
+How the flip works:
+- **CSS side:** `NidaraTheme.generateChromeTokenScope()` re-emits the full `--nidara-*`
+  block (factored into `nidaraVars()`) under a scoped selector when the chrome differs from
+  the system; `ThemeManager.applyTokens()` appends it to the token provider.
+  - **Scope is `.bar-centerbox`, NOT `window#nidara-bar`** — the bar window's `Gtk.Overlay`
+    also hosts CC/NC/Prism, which must keep the system mode.
+  - **GOTCHA (cost a wrong first attempt):** the selector must hit every **descendant**
+    directly — `.bar-centerbox, .bar-centerbox *, window#nidara-dock, window#nidara-dock *`.
+    GTK4 custom properties don't inherit reliably, and the global `* { --nidara-* }` block
+    matches every node directly, so a bare `.bar-centerbox { --nidara-* }` only overrides
+    the container — children keep the global value (symptom: chrome **glass** flipped via
+    Cairo but **text** stayed the system colour). A class-qualified universal beats `*` on
+    specificity.
+  - It also mirrors the `.nd-icon` `-gtk-icon-filter` (invert in dark / none in light).
+- **Cairo side:** chrome painters read `Theme.chromeIsDark` (not `Theme.isDark`):
+  `SquircleContainer({ chrome: true })` (every bar capsule — launcher, app-title,
+  workspaces, tray, search, CC, time, overflow), the dock plates (`DockAxis`), the dock
+  running-dot (`DockItem`), and the bar CPU/RAM ring (`widgets/cpu-memory.ts makeArc`,
+  bar-only). `SquircleContainer`'s `chrome` flag switches only the glass **tint** (the
+  alpha is the raw slider value). Non-chrome surfaces keep `Theme.isDark`.
+
+When adding a new **bar** capsule, pass `chrome: true`; a new always-on Cairo bar/dock
+element should read `Theme.chromeIsDark`, not `Theme.isDark`.
+
 ## Accent palette (9 colors)
 
 | Name | Hex |
