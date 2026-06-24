@@ -128,6 +128,19 @@ supply); making it coherent is a policy decision, deferred — see tech-debt #24
 
 GTK has no true `backdrop-filter`. CSS only sets the translucent background, sheen, and border. The `backdrop-filter: blur()` you see in SCSS is **web-preview only** and is ignored by AGS at runtime. Real blur comes from Hyprland `layerrule blur, <namespace>`. Don't try to "fix" the absent blur from inside CSS — it's not a CSS problem.
 
+## Glass capsule edge = AA, NOT none (don't flip it back)
+
+`drawSquircle` fills the glass body with **antialias GRAY (AA)** so the capsule
+curves are smooth. It was **NONE** (hard 1-bit edge) until 2026-06-24 to dodge a
+feared "halo": Hyprland blurs any pixel with alpha > `ignore_alpha` (0.01), so AA
+edge pixels (alpha = glass × coverage) show the blurred backdrop and were thought
+to glow at the curved ends. **Re-measured** with offline renders + live grim
+captures over a real *light* wallpaper through Hyprland's actual blur: the halo is
+**negligible** (the soft edge just blends into its surroundings), while NONE's
+stair-stepped curves were clearly visible. So AA wins. The border/rim strokes
+(steps 2-3) still clip to the path so their inner AA can't spill outward. **Don't
+"fix" this back to NONE** thinking AA causes a halo — it was checked on real pixels.
+
 ## Cairo vs CSS
 
 - **CSS** for anything with states (hover/active/focus/drag).

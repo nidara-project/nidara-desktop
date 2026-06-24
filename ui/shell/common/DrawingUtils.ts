@@ -116,17 +116,16 @@ export const drawSquircle = (
     let r = cornerRadius ?? (minDim * 0.5)
     if (r > minDim * 0.5) r = minDim * 0.5
 
-    // Hyprland blurs any pixel with alpha > ~0.04. AA (GRAY/SUBPIXEL) produces edge
-    // pixels with alpha = glass_alpha × coverage (e.g. 0.05 at a 50%-covered pixel),
-    // which show proportionally MORE blurred background than the glass interior —
-    // visible as a blurry arc at the curved ends. NONE antialias eliminates this:
-    // each pixel is either full glass_alpha or 0, no in-between. The border and rim
-    // strokes are drawn inside per-section NONE clips so their own GRAY AA pixels
-    // cannot escape onto the transparent region outside the glass body.
-
-    // 1. MAIN GLASS BODY — NONE fill, hard boundary pixels
+    // 1. MAIN GLASS BODY — AA (GRAY) fill, smooth silhouette.
+    // Was NONE (hard 1-bit edge) to dodge a feared "halo": Hyprland blurs any pixel
+    // with alpha > ignore_alpha (0.01), so AA edge pixels (alpha = glass_alpha ×
+    // coverage) show the blurred backdrop and were thought to glow at the curve.
+    // Re-evaluated 2026-06-24 on real + worst-case LIGHT wallpapers: the halo is
+    // negligible (the soft edge just blends into its surroundings) while NONE's
+    // stair-stepped curves are clearly visible. AA chosen. Steps 2-3 still clip to
+    // the path so their inner GRAY AA can't spill onto the transparent region.
     cr.save()
-    cr.setAntialias(1) // NONE
+    cr.setAntialias(2) // GRAY (AA)
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
     cr.setSourceRGBA(color.r, color.g, color.b, alpha)
     cr.fill()
