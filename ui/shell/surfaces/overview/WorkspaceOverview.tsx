@@ -30,7 +30,7 @@ export default function WorkspaceOverview(monitor: any) {
     const overviewSquircle = SquircleContainer({
         child: overview,
         n: 3.2,
-        radius: 36,
+        radius: 64,
         useShellOpacity: true,
         gloss: true,
         borderColor: { r: 1, g: 1, b: 1, a: 0.1 }
