@@ -237,6 +237,47 @@ horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — 
   (live, for the % label), `onExtChange(cb) → cleanup` for external value updates (ignored
   while the user drags).
 
+## Tooltips — one component
+
+All shell tooltips go through **`attachTooltip(widget, text, opts?)`** from `common/Tooltip.ts`.
+**Don't use GTK's `tooltip_text` / `tooltip_markup` on shell surfaces** — the native tooltip renders
+in its own `GtkTooltipWindow`, out of reach of our scoped CSS, so it can never be themed (this is why
+the dock "looked like default GTK"). It's a hover-delayed `Gtk.Popover` (`has_arrow: false`); the
+bubble — rounded body **plus the pointer** — is painted in **Cairo as ONE continuous shape**: a
+single glass fill and a single 1px inner-edge stroke that wraps body and arrow together.
+
+- **Why Cairo, not a GTK popover arrow:** GTK always strokes the arrow's *base* where it meets the
+  body. With an opaque popover the body fill hides that seam; our glass is translucent, so it shows
+  through as a line at the junction. There's no CSS way to border only the arrow's slanted sides
+  (the triangle is made by clipping, not by per-side borders). Painting the whole silhouette
+  ourselves is the only way to get a continuous rim on translucent glass — and it's the Nidara way
+  (all custom shapes are Cairo). The popover is still its own surface, so it keeps Hyprland's blur.
+- **Lives in `common/`, not `lib/nidara-kit`** — it reads `Theme` (chrome pin + opacity), like the
+  other shared Cairo widgets (`SquircleContainer`, `Slider`, `ScaleRevealer`). `nidara-kit` stays
+  Theme-free / portable, so a Theme-coupled widget can't live there.
+- **Glass:** fill tint follows `Theme.chromeIsDark` (shell skin) and alpha is `Math.max(Theme.overlayOpacity, 0.38)`.
+  **The 0.38 floor is load-bearing:** a tooltip is a *popup*, and Hyprland blurs popups with
+  `popups_ignorealpha = 0.30` (NOT the bar/dock layer's `ignore_alpha` 0.01/0.04). Track the raw
+  overlay slider and at a low setting the bubble drops below 0.30 and **stops blurring** (reads flat).
+  This is the same reason `NidaraTheme` floors `--nidara-popover-bg` at `Math.max(bgAlpha, 0.38)` — any
+  popup glass must clear the popup threshold. `chrome:false` (About) is a normal window with no blur →
+  near-opaque fill. Rim is white on dark glass, a subtle dark line on light. Repaints on `Theme "changed"`.
+  Geometry consts (`ARROW_W/H`, `PAD_*`, radius clamp so the arrow base fits the straight edge) are at the top.
+- **Text** is `string | (() => string)`. A getter is resolved **lazily, right before show** — so
+  live values (a window title) stay fresh WITHOUT subscribing (a subscription forces a dock redraw +
+  blur pass per title tick; see `DockItem.computeTitle`).
+- **Opts:** `position` (default TOP — the Cairo arrow is painted on the *requested* side, so pick one
+  with room or GTK auto-flips and the arrow points the wrong way; a top-bar item passes `BOTTOM`),
+  `delay` (500ms), `markup` (Pango — tray uses it), `chrome`, `suppress: () => boolean` (skip while a
+  context menu is open — the dock passes `() => menu.visible`).
+- **Lifecycle:** self-cleans on the host widget's `destroy` (drops the Theme handler, unparents);
+  returns `{ popover, setText, destroy }`.
+- **Adopted:** dock (replaced the bespoke `dock-tooltip` popover), bar tray (position BOTTOM), app
+  grid, About close (`chrome:false`). `.nidara-tooltip` CSS in `_components.scss` only resets the
+  popover chrome to transparent (the bubble is Cairo) + sets the label colour/size.
+  **Settings deliberately keeps native GTK tooltips** — an ordinary in-window app surface where the
+  native tooltip is expected and reads fine; the one intentional residual, not debt to "fix".
+
 ## Show/hide animations — `ScaleRevealer` (THE overlay animation)
 
 CSS `transform: scale` is banned on interactive widgets (see anti-pattern 6 below), but a

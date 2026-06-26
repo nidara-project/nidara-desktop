@@ -10,6 +10,7 @@ import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import { SHELL_ROOT } from "../../core/Paths"
 import { safeDisconnect } from "../../core/signals"
+import { attachTooltip } from "../../common/Tooltip"
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -122,8 +123,8 @@ export default function AboutWindow(): Gtk.Window | null {
         child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14 , css_classes: ["nd-icon"] }),
         css_classes: ["about-close-btn"],
         halign: Gtk.Align.END,
-        tooltip_text: t("settings.about.close"),
     })
+    attachTooltip(closeBtn, t("settings.about.close"), { chrome: false }) // About follows the system mode like an app
     closeBtn.connect("clicked", () => { status.about_open = false })
 
     // ── Card ──────────────────────────────────────────────────────────────────

@@ -552,3 +552,29 @@ button.settings-icon-btn {
     &:hover  { background: var(--nidara-accent-10); color: var(--nidara-accent); background-image: none; }
     &:active { background: rgba(var(--nidara-accent-rgb), 0.18); background-image: none; }
 }
+
+
+// ── Tooltip (common/Tooltip.ts — attachTooltip) ───────────────────────────────
+// The one glass tooltip, used everywhere (dock, tray, app-grid, About) in place
+// of GTK's default system tooltip — which renders in its own surface, out of
+// reach of scoped CSS, so it can't be themed. The bubble (rounded body + pointer)
+// is painted in Cairo as a SINGLE continuous shape (one glass fill + one 1px
+// inner-edge stroke wrapping body AND arrow): a GTK popover arrow can't do that
+// on translucent glass — its base seam shows through. So here CSS only strips the
+// popover's own chrome to TRANSPARENT and lets the DrawingArea do the painting.
+// Being a separate surface, the popover still gets Hyprland's blur → real glass.
+.nidara-tooltip {
+    @include nidara-reset;          // strip the default popover chrome on the root
+
+    > contents {
+        @include nidara-reset;      // fully transparent — the bubble is Cairo-painted
+        padding: 0;
+        min-width: 0;
+        min-height: 0;
+    }
+
+    .nidara-tooltip-label {
+        color: var(--nidara-text);
+        font-size: $fs-small;       // fixed px ramp — chrome must NOT reflow with the font picker
+    }
+}

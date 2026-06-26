@@ -542,6 +542,19 @@ an accent-panel tint (or any token) without a real entry point — a Setting/`co
 same time. Side effect: the duplicate alpha/popover computation in `generateTokenHeader` is gone, so the
 light-mode opacity floor now lives in exactly ONE place (`nidaraVars`) — see #24.
 
+### 26. Glass tooltip popup not blurred on dock/bar — OPEN (suspected `blurpopups`)
+The Cairo glass tooltip (`common/Tooltip.ts`, see design-system) renders but shows **no
+compositor blur** on the dock/bar, even with the alpha floored to 0.38 (above
+`popups_ignorealpha = 0.30`). Confirmed it IS a `Gtk.Popover` (separate surface). Leading
+hypothesis (user's, looks right): Hyprland's `decoration:blur:popups = true` blurs popups of
+**windows**, but popups of a **layer-shell** surface need a separate **`blurpopups`** layerrule —
+and `hyprland.lua` (lines 479-481) sets `blur = true` on the `nidara-bar`/`nidara-dock` namespaces
+but **not `blurpopups`**. Next step: add `blurpopups = true` to those two `hl.layer_rule` calls (check
+the Lua wrapper actually forwards that key for the pinned Hyprland — see `reference_hyprland_lua_parser`
+gotchas) and reload Hyprland to verify. If the wrapper/version doesn't support it, fall back to a raw
+`layerrule = blurpopups, nidara-{bar,dock}` line. NOT YET DONE — paused mid-session; the tooltip
+redesign (continuous border, unified component) shipped; only the blur is outstanding.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

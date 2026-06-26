@@ -7,7 +7,7 @@
  * Usage: import { NidaraSelect, NidaraOverlayManager } from "../../lib/nidara-kit"
  */
 
-// Overlay manager — for future floating UI (tooltips, context menus, etc.)
+// Overlay manager — for future floating UI (context menus, etc.)
 export { NidaraOverlayManager } from "./overlay-manager"
 
 // NidaraSelect — dropdown, no manager needed (uses Gtk.Popover)

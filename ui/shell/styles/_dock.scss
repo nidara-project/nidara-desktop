@@ -93,16 +93,4 @@ window#nidara-dock-vertical {
     modelbutton { color: var(--nidara-text); }
 }
 
-.dock-tooltip {
-    box-shadow: none;
-
-    > contents {
-        box-shadow: none;
-        padding: 4px 10px;
-    }
-
-    > arrow { box-shadow: none; }
-
-    .dock-tooltip-label { color: var(--nidara-text); }
-}
 

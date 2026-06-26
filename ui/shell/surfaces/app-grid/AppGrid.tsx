@@ -17,6 +17,7 @@ import Cairo from "gi://cairo"
 import shellActions from "../../core/ShellActions"
 import { createSchematicMap } from "../../common/WorkspaceSchematic"
 import { safeDisconnect } from "../../core/signals"
+import { attachTooltip } from "../../common/Tooltip"
 
 // Extract just the desktop basename, stripping path and .desktop extension
 const normId = (s: string) => {
@@ -368,8 +369,8 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
 
         const button = new Gtk.Button({
             css_classes: ["app-grid-button"],
-            tooltip_text: name,
         })
+        attachTooltip(button, name) // glass tooltip with the full app name (the visible label may truncate)
         button.set_child(item)
         ;(button as any)._appId = id
         ;(button as any)._appName = name.toLowerCase()

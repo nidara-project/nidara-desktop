@@ -5,6 +5,7 @@ import { getServiceSafe } from "../../utils"
 import { renderMenuModel } from "../../common/NidaraMenu"
 import status from "../../core/Status"
 import { safeDisconnect } from "../../core/signals"
+import { attachTooltip } from "../../common/Tooltip"
 
 // openMenu: opens arbitrary content in the bar's shared expansion capsule, anchored
 // under the given widget (same system as the bar widget popovers). Injected by Bar.
@@ -85,9 +86,13 @@ export default function Tray(openMenu?: OpenMenu) {
 
         const btn = new Gtk.Button({
             css_classes: ["bar-tray-btn"],
-            tooltip_markup: item.tooltip_markup || item.title || id,
             child: img
         })
+        // Glass tooltip (markup — SNI items expose tooltip_markup); read lazily so
+        // it tracks the item's live title/tooltip without a subscription. Position
+        // BOTTOM: the tray sits in the top bar, so the bubble drops below and its
+        // pointer aims up at the icon (and GTK won't auto-flip it).
+        attachTooltip(btn, () => item.tooltip_markup || item.title || id, { markup: true, position: Gtk.PositionType.BOTTOM })
 
         btn.connect("clicked", () => {
             try { item.activate(0, 0) } catch (e) { }

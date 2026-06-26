@@ -19,6 +19,7 @@ import { iconAssetPath } from "../../core/Icons"
 import { t } from "../../core/i18n"
 import shellActions from "../../core/ShellActions"
 import { safeDisconnect } from "../../core/signals"
+import { attachTooltip } from "../../common/Tooltip"
 
 // hypr kept as alias for hs to minimise diff surface in this file
 const hypr = hs
@@ -467,59 +468,36 @@ export function DockItem(
         itemBox.append(dotZone)
     }
 
-    // TOOLTIP
-    // Re-implemented Popover for anchored positioning with GTK theme styling
+    // TOOLTIP — the shared Nidara glass tooltip (lib/nidara-kit/tooltip.ts),
+    // anchored to the icon and pointing away from the dock edge.
     const tooltipPosition = isVertical
         ? (dockSettings.position === 'right' ? Gtk.PositionType.LEFT : Gtk.PositionType.RIGHT)
         : Gtk.PositionType.TOP
-    const tooltip = new Gtk.Popover({ position: tooltipPosition, autohide: false, has_arrow: true, css_classes: ["dock-tooltip"] })
-    const label = new Gtk.Label({ css_classes: ["dock-tooltip-label"] })
-    const content = new Gtk.Box()
-    content.append(label)
-    tooltip.set_child(content)
 
-    const updateLabel = () => {
-        let targetClient = null
-        if (addresses.length > 0) {
-            const focused = hypr.focusedClient
-            if (focused && addresses.includes(focused.address)) {
-                targetClient = focused
-            } else {
-                targetClient = hypr.clients.find(c => c.address === addresses[0])
-            }
+    // The dock item's display title: localized special-item names, else the live
+    // window title (focused, else first client), else the app name. Single source
+    // of truth — read lazily by the tooltip the instant before it shows, so it's
+    // always fresh WITHOUT subscribing to title ticks (a subscription would force
+    // a dock redraw + blur pass; Client.title is live anyway).
+    const computeTitle = () => {
+        const focused = hypr.focusedClient
+        let title = appItem.name || "App"
+        if (appId === "launcher" || appId === "special:launcher") title = t("settings.dock.dockitem.apps")
+        if (appId === "home-shortcut" || appId === "special:home") title = t("dock.special.home.label")
+        if (appId === "trash" || appId === "special:trash") title = t("dock.special.trash.name")
+        if (focused && addresses.includes(focused.address)) {
+            title = focused.title
+        } else if (addresses.length > 0) {
+            const c = hypr.clients.find(c => c.address === addresses[0])
+            if (c) title = c.title
         }
-        let text = appItem.name || "App"
-        if (targetClient && targetClient.title) text = targetClient.title
-        else if (clientTitle) text = clientTitle
-        label.set_label(text)
+        return title || appItem.name || "App"
     }
-    updateLabel()
-    tooltip.set_parent(iconBox)
 
-    let tooltipTimeout: number | null = null
-    const motion = new Gtk.EventControllerMotion()
-    motion.connect("enter", () => {
-        if (tooltipTimeout) GLib.source_remove(tooltipTimeout)
+    const tip = attachTooltip(iconBox, computeTitle, {
+        position: tooltipPosition,
+        suppress: () => !!(popover && popover.visible), // never while the context menu is open
     })
-    motion.connect("motion", (_controller, _x, _y) => {
-        if (popover && popover.visible) return // Don't show tooltip if menu is open
-
-        if (!tooltip.visible && !tooltipTimeout) {
-            tooltipTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
-                // Refresh the title lazily, right before it becomes visible. Client.title
-                // is live (AstalHyprland tracks windowtitle events) — what we avoid is
-                // SUBSCRIBING to it (a dock redraw + blur pass per title tick); a one-shot
-                // read at popup time is free and always fresh.
-                updateLabel()
-                tooltip.popup(); tooltipTimeout = null; return GLib.SOURCE_REMOVE
-            })
-        }
-    })
-    motion.connect("leave", () => {
-        if (tooltipTimeout) { GLib.source_remove(tooltipTimeout); tooltipTimeout = null }
-        tooltip.popdown()
-    })
-    iconBox.add_controller(motion)
 
     // MENU
     // Dock context menu — created once, model updated before each show
@@ -787,19 +765,9 @@ export function DockItem(
             dot.remove_css_class("open")
             dot.remove_css_class("focused")
         }
-        let targetTitle = appItem.name || "App"
-        if (appId === "launcher" || appId === "special:launcher") targetTitle = t("settings.dock.dockitem.apps")
-        if (appId === "home-shortcut" || appId === "special:home") targetTitle = t("dock.special.home.label")
-        if (appId === "trash" || appId === "special:trash") targetTitle = t("dock.special.trash.name")
-        if (focused && addresses.includes(focused.address)) {
-            targetTitle = focused.title
-        } else if (addresses.length > 0) {
-            const c = hypr.clients.find(c => c.address === addresses[0])
-            if (c) targetTitle = c.title
-        }
-        // Guard: avoid surface commit when title hasn't changed
-        const next = targetTitle || ""
-        if (label.label !== next) label.set_label(next)
+        // The tooltip title is no longer pushed here — attachTooltip reads
+        // computeTitle() lazily right before it shows (always fresh, and zero
+        // surface commits on every sync).
     }
 
     const hsChangedId = hs.connect("changed", sync)
@@ -816,7 +784,7 @@ export function DockItem(
         // Pending timers would otherwise keep firing against destroyed widgets
         // (the dock is rebuilt in-process on position/autoHide/geometry changes).
         if (bounceTimerId !== null) { GLib.source_remove(bounceTimerId); bounceTimerId = null; state.isBouncing = false }
-        if (tooltipTimeout !== null) { GLib.source_remove(tooltipTimeout); tooltipTimeout = null }
+        tip.destroy()
         if (longPressTimer !== null) { GLib.source_remove(longPressTimer); longPressTimer = null }
         if (unsubTrash) { unsubTrash(); unsubTrash = null }
     })
