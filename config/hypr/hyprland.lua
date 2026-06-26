@@ -476,8 +476,14 @@ hl.window_rule({
 -- alpha drops below the threshold and the backdrop blur pops off; at 0.01 that
 -- happens when the panel is already near-invisible. Verified no AA-edge halos
 -- at rest.
-hl.layer_rule({ match = { namespace = "nidara-bar" },      blur = true, ignore_alpha = 0.01  })
-hl.layer_rule({ match = { namespace = "nidara-dock" },     blur = true, ignore_alpha = 0.04 })
+-- blur_popups: the `blur` rule only blurs the layer SURFACE (and the Gtk.Overlay
+-- children drawn on it — CC/NC/system menu/overview). Popups of the layer (a
+-- Gtk.Popover: the glass tooltip, the dock context menu) are SEPARATE surfaces,
+-- blurred by this rule — NOT by `decoration:blur:popups`, which only covers
+-- popups of WINDOWS. Their content must clear `popups_ignorealpha` (0.30); the
+-- tooltip floors its glass at 0.38 for exactly that. See tech-debt #26.
+hl.layer_rule({ match = { namespace = "nidara-bar" },      blur = true, blur_popups = true, ignore_alpha = 0.01  })
+hl.layer_rule({ match = { namespace = "nidara-dock" },     blur = true, blur_popups = true, ignore_alpha = 0.04 })
 hl.layer_rule({ match = { namespace = "nidara-lock" },     blur = true, ignore_alpha = 0.3   })
 
 
