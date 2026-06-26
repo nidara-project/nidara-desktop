@@ -542,22 +542,17 @@ an accent-panel tint (or any token) without a real entry point — a Setting/`co
 same time. Side effect: the duplicate alpha/popover computation in `generateTokenHeader` is gone, so the
 light-mode opacity floor now lives in exactly ONE place (`nidaraVars`) — see #24.
 
-### 26. Glass tooltip popup blur — FIX APPLIED via `blur_popups`, pending live verify
-The Cairo glass tooltip (`common/Tooltip.ts`) renders but showed **no compositor blur** on the
-dock/bar. Root cause: it IS a `Gtk.Popover` (separate surface) = a *popup of a layer*. Hyprland's
-`blur` layerrule only blurs the layer SURFACE itself (and its `Gtk.Overlay` children — CC/NC/system
-menu/overview, which is why those blur and aren't popovers). Popups of a layer need a SEPARATE
-**`blur_popups`** layerrule; `decoration:blur:popups = true` only covers popups of **windows** (that's
-why Settings' native dropdown blurs — Settings is a window). **Fix:** added `blur_popups = true` to the
-`nidara-bar` + `nidara-dock` `hl.layer_rule` calls in `hyprland.lua` (the key is official — `HL.LayerRuleSpec`
-in `/usr/share/hypr/stubs/hl.meta.lua` lists `blur_popups? boolean`; maps to Hyprland `blurpopups`). The
-tooltip's 0.38 alpha floor still matters: popup content must clear `popups_ignorealpha` (0.30) to blur.
-**Pending:** it's a Hyprland *config* change, so it needs a Hyprland config reload (`hyprctl reload` /
-relog), NOT the shell's Super+Shift+R — verify the tooltip + dock context menu actually blur after reload.
-
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
+- **Layer popups blur via `blur_popups`, NOT the layer's `blur` (verified 2026-06-26).** A `Gtk.Popover`
+  on the dock/bar (the glass tooltip, the dock context menu) is a SEPARATE surface = a *popup of a layer*.
+  The `blur` layerrule only blurs the layer surface itself + its `Gtk.Overlay` children (CC/NC/system
+  menu/overview — that's why those blur and aren't popovers). Layer popups need a SEPARATE `blur_popups`
+  layerrule (added to `nidara-bar`/`nidara-dock` in `hyprland.lua`); `decoration:blur:popups` only covers
+  popups of WINDOWS (Settings' native dropdown). And the popup's content must clear `popups_ignorealpha`
+  (0.30) — `common/Tooltip.ts` floors its glass at 0.38 for exactly that. It's a Hyprland *config* change
+  → needs a Hyprland reload, not Super+Shift+R.
 - **Stable updates are STATELESS (2026-06-19).** There is NO per-user source clone. The old
   model kept a managed `~/.local/share/nidara/src` per user while `/usr/share` was shared →
   divergent src, "last sudoer-updater wins" globally. `nidara-update` now shallow-clones the
