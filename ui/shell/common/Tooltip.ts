@@ -1,9 +1,9 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Theme from "../core/ThemeManager"
+import { ARROW_H, BUF, sideFor, paintGlassBubble } from "./GlassBubble"
 
 export type NidaraTooltipText = string | (() => string)
-type ArrowSide = "top" | "bottom" | "left" | "right"
 
 export interface NidaraTooltipOpts {
     /** Where the bubble sits relative to the widget (default: TOP). NOTE: pick a
@@ -30,101 +30,11 @@ export interface NidaraTooltipHandle {
     destroy(): void
 }
 
-// Geometry. The body is a near-pill squircle; the pointer is spliced into the
-// centre of the arrow side so the silhouette is one continuous shape.
-const ARROW_W = 14   // base width of the pointer
-const ARROW_H = 7    // how far it protrudes from the body
+// Text padding inside the body. The glass bubble silhouette + pointer + the 0.38
+// popup-blur floor all live in the shared `common/GlassBubble.ts` (the dock context
+// menu paints the same bubble). Only the label's interior padding is tooltip-specific.
 const PAD_X = 11     // text padding inside the body (horizontal)
 const PAD_Y = 6      // text padding inside the body (vertical)
-const BUF = 2        // AA buffer so the silhouette never clips the DrawingArea edge
-const BORDER_W = 1   // inner edge width
-
-const sideFor = (pos: Gtk.PositionType): ArrowSide => {
-    switch (pos) {
-        case Gtk.PositionType.BOTTOM: return "top"
-        case Gtk.PositionType.LEFT:   return "right"
-        case Gtk.PositionType.RIGHT:  return "left"
-        default:                      return "bottom" // TOP
-    }
-}
-
-// ONE continuous path: a rounded rect (perfect arcs) with a triangular pointer
-// spliced into the centre of `side`. Fill it for the glass body; stroke it
-// (clipped to itself) for the 1px inner edge — the rim then wraps body AND arrow
-// as a single outline, which is the whole reason this is Cairo and not a GTK
-// popover arrow (whose base seam shows through translucent glass).
-const bubblePath = (cr: any, x: number, y: number, w: number, h: number, r: number, side: ArrowSide) => {
-    const x2 = x + w, y2 = y + h
-    const cx = x + w / 2, cy = y + h / 2
-    const HALF = Math.PI / 2
-    cr.moveTo(x + r, y)
-    if (side === "top")    { cr.lineTo(cx - ARROW_W / 2, y);  cr.lineTo(cx, y - ARROW_H);   cr.lineTo(cx + ARROW_W / 2, y) }
-    cr.lineTo(x2 - r, y)
-    cr.arc(x2 - r, y + r, r, -HALF, 0)                        // top-right
-    if (side === "right")  { cr.lineTo(x2, cy - ARROW_W / 2); cr.lineTo(x2 + ARROW_H, cy); cr.lineTo(x2, cy + ARROW_W / 2) }
-    cr.lineTo(x2, y2 - r)
-    cr.arc(x2 - r, y2 - r, r, 0, HALF)                        // bottom-right
-    if (side === "bottom") { cr.lineTo(cx + ARROW_W / 2, y2); cr.lineTo(cx, y2 + ARROW_H);  cr.lineTo(cx - ARROW_W / 2, y2) }
-    cr.lineTo(x + r, y2)
-    cr.arc(x + r, y2 - r, r, HALF, Math.PI)                   // bottom-left
-    if (side === "left")   { cr.lineTo(x, cy + ARROW_W / 2);  cr.lineTo(x - ARROW_H, cy);  cr.lineTo(x, cy - ARROW_W / 2) }
-    cr.lineTo(x, y + r)
-    cr.arc(x + r, y + r, r, Math.PI, 3 * HALF)                // top-left
-    cr.closePath()
-}
-
-const paintBubble = (cr: any, w: number, h: number, side: ArrowSide, chrome: boolean) => {
-    if (w <= 0 || h <= 0) return
-    // Shell skin follows the pinned appearance; app-mode (About) follows the system mode.
-    const dark = chrome ? Theme.chromeIsDark : Theme.isDark
-    const tint = dark ? { r: 0, g: 0, b: 0 } : { r: 1, g: 1, b: 1 }
-    // Glass alpha tracks the overlay slider, but FLOORED at 0.38. This is a popup,
-    // and Hyprland blurs popups with `popups_ignorealpha = 0.30` (NOT the bar/dock
-    // layer's 0.01/0.04 — see hyprland.lua). Below that the bubble stops blurring
-    // and reads flat (the bug at low overlay opacity). 0.38 mirrors NidaraTheme's
-    // popover-bg floor `Math.max(bgAlpha, 0.38)` for exactly the same reason.
-    // App-mode (About) is a normal window with no blur → keep it near-opaque.
-    const alpha = chrome ? Math.max(Theme.overlayOpacity, 0.38) : 0.9
-
-    // Body rect: inset by BUF all round, plus ARROW_H on the arrow side (the
-    // pointer protrudes into that reserved strip).
-    const bx = BUF + (side === "left" ? ARROW_H : 0)
-    const by = BUF + (side === "top" ? ARROW_H : 0)
-    const bw = w - 2 * BUF - ((side === "left" || side === "right") ? ARROW_H : 0)
-    const bh = h - 2 * BUF - ((side === "top" || side === "bottom") ? ARROW_H : 0)
-    if (bw <= 0 || bh <= 0) return
-
-    // Near-pill radius, but clamped so the arrow base fits in the straight segment.
-    let r = Math.min(bh, bw) / 2
-    r = Math.min(r, 13)
-    const edgeLen = (side === "top" || side === "bottom") ? bw : bh
-    r = Math.min(r, (edgeLen - ARROW_W) / 2 - 2)
-    r = Math.max(r, 4)
-
-    cr.setOperator(2) // OVER
-
-    // 1) Glass fill — AA (smooth silhouette).
-    cr.save()
-    cr.setAntialias(2)
-    bubblePath(cr, bx, by, bw, bh, r, side)
-    cr.setSourceRGBA(tint.r, tint.g, tint.b, alpha)
-    cr.fill()
-    cr.restore()
-
-    // 2) Inner edge — clip to the silhouette, then stroke it at double width so
-    //    only the inner ~1px survives the clip (no outer AA spilling onto glass).
-    cr.save()
-    cr.setAntialias(1) // NONE for a crisp clip
-    bubblePath(cr, bx, by, bw, bh, r, side)
-    cr.clip()
-    cr.setAntialias(2) // AA for a smooth stroke
-    bubblePath(cr, bx, by, bw, bh, r, side)
-    cr.setLineWidth(BORDER_W * 2)
-    if (dark) cr.setSourceRGBA(1, 1, 1, 0.16)   // 1px inner white edge on dark glass
-    else      cr.setSourceRGBA(0, 0, 0, 0.12)   // subtle dark rim for definition on light glass
-    cr.stroke()
-    cr.restore()
-}
 
 /**
  * attachTooltip — the one Nidara tooltip.
@@ -171,7 +81,7 @@ export function attachTooltip(
         hexpand: true, vexpand: true,
         halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
     })
-    da.set_draw_func((_da, cr, w, h) => paintBubble(cr, w, h, side, chrome))
+    da.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, side, { chrome }))
     grid.attach(da, 0, 0, 1, 1)
 
     const label = new Gtk.Label({ css_classes: ["nidara-tooltip-label"] })

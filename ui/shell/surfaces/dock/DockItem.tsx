@@ -20,12 +20,14 @@ import { t } from "../../core/i18n"
 import shellActions from "../../core/ShellActions"
 import { safeDisconnect } from "../../core/signals"
 import { attachTooltip } from "../../common/Tooltip"
+import { renderMenuModel } from "../../common/NidaraMenu"
+import { sideFor, paintGlassBubble, ARROW_H, BUF } from "../../common/GlassBubble"
 
 // hypr kept as alias for hs to minimise diff surface in this file
 const hypr = hs
 
 // Module-level tracker so Dock.tsx can dismiss the active popover when clicking dock background
-let _activeDockMenu: Gtk.PopoverMenu | null = null
+let _activeDockMenu: Gtk.Popover | null = null
 export function dismissActiveDockMenu() {
     if (_activeDockMenu?.visible) _activeDockMenu.popdown()
 }
@@ -500,18 +502,51 @@ export function DockItem(
     })
 
     // MENU
-    // Dock context menu — created once, model updated before each show
-    let popover: Gtk.PopoverMenu | null = null
+    // Dock context menu — a plain Gtk.Popover (NOT Gtk.PopoverMenu, whose native
+    // modelbutton chrome can't be themed to glass). The body is the SAME Cairo glass
+    // bubble as the tooltip (common/GlassBubble) — a rounded capsule with a pointer
+    // aimed back at the dock item — and the rows are the unified nidara menu
+    // (renderMenuModel, same component as the bar tray menu). It's its own surface,
+    // so it picks up Hyprland's dock-layer popup blur (the painter floors at 0.38).
+    let popover: Gtk.Popover | null = null
+    let menuRows: Gtk.Box | null = null   // stable host; rows are rebuilt per show
+    let menuThemeId = 0                    // glass repaint on appearance/opacity change
     let popupIdleId: number | null = null
 
     const toSentenceCase = (str: string) => str ? str.charAt(0).toUpperCase() + str.slice(1).toLowerCase() : ""
 
     const ensurePopover = () => {
         if (popover) return
-        popover = Gtk.PopoverMenu.new_from_model(new Gio.Menu()) as unknown as Gtk.PopoverMenu
-        popover.add_css_class("dock-menu")
-        popover.set_has_tooltip(false)
+        const side = sideFor(tooltipPosition)
+        popover = new Gtk.Popover({
+            autohide: true,             // grabs focus; dismiss on outside click
+            has_arrow: false,           // we paint our own pointer in Cairo
+            css_classes: ["dock-menu"],
+        })
         ;(popover as any).position = tooltipPosition
+        popover.set_has_tooltip(false)
+
+        // Glass bubble painted behind the rows; rows rebuilt per show into the stable
+        // menuRows box (one Theme subscription, not one per show). Same arrow as the
+        // tooltip (GlassBubble's shared default) — reserve its protrusion in the margins.
+        const grid = new Gtk.Grid()
+        const da = new Gtk.DrawingArea({
+            hexpand: true, vexpand: true,
+            halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
+        })
+        da.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, side, { radiusMax: 16 }))
+        grid.attach(da, 0, 0, 1, 1)
+
+        menuRows = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nidara-menu"] })
+        const PAD = 5   // interior padding between the glass edge and the rows
+        menuRows.margin_top    = BUF + PAD + (side === "top"    ? ARROW_H : 0)
+        menuRows.margin_bottom = BUF + PAD + (side === "bottom" ? ARROW_H : 0)
+        menuRows.margin_start  = BUF + PAD + (side === "left"   ? ARROW_H : 0)
+        menuRows.margin_end    = BUF + PAD + (side === "right"  ? ARROW_H : 0)
+        grid.attach(menuRows, 0, 0, 1, 1)
+
+        menuThemeId = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })
+        popover.set_child(grid)
         popover.set_parent(iconBox)
         popover.connect("notify::visible", () => {
             if (popover?.visible) {
@@ -613,8 +648,15 @@ export function DockItem(
             )
         }
 
-        iconBox.insert_action_group("dock", actionGroup)
-        ;(popover as any).set_menu_model(menuModel)
+        // Render the model into the unified nidara menu rows. renderMenuModel
+        // activates actions on the passed group directly (stripping the "dock."
+        // prefix), so no widget action group is needed. The returned box closes
+        // over actionGroup, keeping it alive as long as the rows live.
+        if (menuRows) {
+            let c = menuRows.get_first_child()
+            while (c) { const next = c.get_next_sibling(); menuRows.remove(c); c = next }
+            menuRows.append(renderMenuModel(menuModel, actionGroup, () => popover?.popdown()))
+        }
     }
 
     const rightClick = new Gtk.GestureClick({ button: 3 })
@@ -786,6 +828,11 @@ export function DockItem(
         if (bounceTimerId !== null) { GLib.source_remove(bounceTimerId); bounceTimerId = null; state.isBouncing = false }
         tip.destroy()
         if (longPressTimer !== null) { GLib.source_remove(longPressTimer); longPressTimer = null }
+        if (popupIdleId !== null) { GLib.source_remove(popupIdleId); popupIdleId = null }
+        // Unparent the context menu + drop its glass repaint subscription when the
+        // dock is rebuilt on layout changes.
+        if (menuThemeId) { safeDisconnect(Theme, menuThemeId); menuThemeId = 0 }
+        if (popover) { popover.popdown(); popover.unparent(); popover = null; menuRows = null }
         if (unsubTrash) { unsubTrash(); unsubTrash = null }
     })
     sync()

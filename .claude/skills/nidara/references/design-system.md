@@ -244,7 +244,9 @@ All shell tooltips go through **`attachTooltip(widget, text, opts?)`** from `com
 in its own `GtkTooltipWindow`, out of reach of our scoped CSS, so it can never be themed (this is why
 the dock "looked like default GTK"). It's a hover-delayed `Gtk.Popover` (`has_arrow: false`); the
 bubble — rounded body **plus the pointer** — is painted in **Cairo as ONE continuous shape**: a
-single glass fill and a single 1px inner-edge stroke that wraps body and arrow together.
+single glass fill and a single 1px inner-edge stroke that wraps body and arrow together. **That
+bubble painter is shared** — it lives in `common/GlassBubble.ts` (`paintGlassBubble`) and the dock
+context menu paints the same shape (see "The glass bubble" below); the tooltip only adds the label.
 
 - **Why Cairo, not a GTK popover arrow:** GTK always strokes the arrow's *base* where it meets the
   body. With an opaque popover the body fill hides that seam; our glass is translucent, so it shows
@@ -277,6 +279,60 @@ single glass fill and a single 1px inner-edge stroke that wraps body and arrow t
   popover chrome to transparent (the bubble is Cairo) + sets the label colour/size.
   **Settings deliberately keeps native GTK tooltips** — an ordinary in-window app surface where the
   native tooltip is expected and reads fine; the one intentional residual, not debt to "fix".
+
+## The glass bubble — `common/GlassBubble.ts` (tooltip + context menus)
+
+The Cairo glass bubble — a rounded capsule with a **pointer spliced into one side as one continuous
+silhouette** (single fill, single 1px inner edge wrapping body AND arrow, no seam) — lives in
+`common/GlassBubble.ts` and is **shared by the tooltip and the dock context menu** so both speak the
+same glass language. Don't re-implement it; both consumers paint via `paintGlassBubble`.
+
+- **The pointer is a downward TRIANGLE with ONLY the tip filleted** — a TRUE circular arc tangent to
+  both diagonal sides, so the sides stay perfectly straight (no kink, no bowing). **The arc must stay
+  SMALL relative to the triangle** (`TIP_R` ≪ side length): a big arc eats the straight sides and the
+  whole thing reads as a *bell*, not a triangle — that's the failure mode to avoid. The `arrowTip`
+  helper caps the fillet so it can't reach the base, and `paintGlassBubble` **clamps the base width**
+  to the edge's straight portion so a short bubble's arrow never overruns its corners.
+- **ONE size for tooltip AND menu** (consts `ARROW_W`/`ARROW_H`/`TIP_R`). Keep `ARROW_H` modest — a
+  tall pointer separates the body too far from its anchor (and on the menu looks detached). Both
+  surfaces reserve `ARROW_H` in their content margins (`Tooltip.ts` label margins, `DockItem.tsx`
+  `menuRows` margins). Don't reintroduce per-surface arrow sizes — they were tried and looked
+  inconsistent.
+
+- **`paintGlassBubble(cr, w, h, side, { chrome?, radiusMax? })`** — fills the bubble + strokes the
+  inner rim. `chrome` (default true) = shell skin (`Theme.chromeIsDark`) vs app-mode; `radiusMax`
+  (default 13) caps the corner radius (tooltip 13, the roomier menu passes 16). **Alpha is floored at
+  0.38 inside the painter** — a popover is a *popup*, blurred by Hyprland's `popups_ignorealpha`
+  (0.30), NOT the dock/bar layer's `ignore_alpha`; below 0.38 it stops blurring and reads flat (the
+  same load-bearing floor as `--nidara-popover-bg`). The dock/bar layerrules carry `blur_popups = true`,
+  so the popover blurs on its own surface.
+- **`sideFor(position)`** maps a `Gtk.PositionType` to the side the pointer is painted on (it points
+  *back* at the anchor: a popover ABOVE the item → arrow on its bottom). **`bubbleContentMargin(side,
+  padX, padY)`** gives the margins a content child needs to clear the arrow strip + AA buffer.
+- **Structure** (both tooltip and menu): a `Gtk.Grid` overlaying a `Gtk.DrawingArea` (paints the
+  bubble, `halign/valign FILL`) and the content (label / rows box) with the arrow-aware margins.
+  Repaint on `Theme "changed"`; disconnect that handler on `destroy` (the menu is rebuilt per dock
+  layout change, so a leaked handler accumulates).
+
+### Context menus — glass popover, NOT `Gtk.PopoverMenu`
+
+A right-click context menu on a shell surface must be a **plain `Gtk.Popover`** whose body is the
+glass bubble above, **never `Gtk.PopoverMenu`**. `PopoverMenu` renders GTK's native `modelbutton`
+chrome, which (like the native tooltip) can't be themed to glass — exactly why "the dock menu looked
+like default GTK". The pattern (see `surfaces/dock/DockItem.tsx`, `ensurePopover`/`updateMenuModel`):
+
+- **`new Gtk.Popover({ autohide: true, has_arrow: false, css_classes: ["dock-menu"] })`** — autohide
+  so it grabs focus and dismisses on outside click; no GTK arrow (we paint our own pointer, aimed at
+  the dock item, via `paintGlassBubble`).
+- **Rows = `renderMenuModel(model, actionGroup, onClose)`** from `common/NidaraMenu.ts` — the SAME
+  component as the bar tray menu, so dock and tray menus are identical glass rows (`.nidara-menu-row`,
+  separators, dim section/submenu headers — section labels now render as headers too). It activates
+  actions on the passed group directly. The bubble DrawingArea + rows box are built ONCE (stable host,
+  rows rebuilt per show) so the Theme subscription isn't leaked per show.
+- **CSS** (`.dock-menu` in `_dock.scss`) only resets the popover chrome to transparent (`@include
+  nidara-reset` on root + `> contents`), exactly like `.nidara-tooltip` — the glass is all Cairo.
+- **Still native (tracked, tech-debt #14):** the app-grid right-click menu (`AppGrid.tsx`) is the last
+  `Gtk.PopoverMenu` in the shell — migrate it to this pattern when next in that file.
 
 ## Show/hide animations — `ScaleRevealer` (THE overlay animation)
 

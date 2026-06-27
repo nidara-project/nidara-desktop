@@ -353,9 +353,20 @@ the crash happens below us, during Wayland event dispatch.
 ### 14. Two more flat-menu row implementations could migrate to `MenuRow.ts`
 `common/MenuRow.ts` (2026-06-11) is the shared builder for flat `nidara-menu-row`
 lists; the CC context menu and the bar window menu use it. Two hand-rolled siblings remain:
-`NidaraMenu.ts` `makeRow` (renders Gio menu models — tray menus; different shape: model
-iteration, submenus flattened to headers) and `Bar.tsx` `buildOverflowList` rows. Migrate
-opportunistically if already editing those files; not worth a standalone pass.
+`NidaraMenu.ts` `makeRow` (renders Gio menu models — tray **and now the dock context menu**;
+different shape: model iteration, submenus flattened to headers, section labels → headers) and
+`Bar.tsx` `buildOverflowList` rows. Migrate opportunistically if already editing those files;
+not worth a standalone pass.
+
+**The dock context menu was migrated off native `Gtk.PopoverMenu` (2026-06-27):** it's now a
+plain `Gtk.Popover` whose body is the shared Cairo glass bubble (`common/GlassBubble.ts`,
+`paintGlassBubble` — same painter as the tooltip, **with a pointer aimed at the dock item**) +
+`renderMenuModel` rows, so it's themed glass that blurs on the dock layer like the tooltip — no
+more raw GTK chrome. The tooltip's bubble painter was extracted into `GlassBubble.ts` in the same
+change so there's ONE silhouette/arrow/0.38-floor implementation.
+**Last native-chrome menu left:** `AppGrid.tsx:~406` still uses `Gtk.PopoverMenu.new_from_model`
+for the app-grid right-click menu. Same migration applies (it already lives inside a layer
+surface that blurs); do it when next in that file or as a deliberate consistency pass.
 
 ### 15. The NC overlay scrollbar still widens on hover — can't be defeated by CSS (don't chase it)
 The notification-center list uses a GTK overlay scrollbar in an **8px lane** to the right of
@@ -551,8 +562,10 @@ These were paid down; the *rule* remains:
   menu/overview — that's why those blur and aren't popovers). Layer popups need a SEPARATE `blur_popups`
   layerrule (added to `nidara-bar`/`nidara-dock` in `hyprland.lua`); `decoration:blur:popups` only covers
   popups of WINDOWS (Settings' native dropdown). And the popup's content must clear `popups_ignorealpha`
-  (0.30) — `common/Tooltip.ts` floors its glass at 0.38 for exactly that. It's a Hyprland *config* change
-  → needs a Hyprland reload, not Super+Shift+R.
+  (0.30) — the shared `common/GlassBubble.ts` painter floors its glass at 0.38, used by BOTH the
+  tooltip and the **dock context menu** (a `Gtk.Popover` + glass bubble + the unified `renderMenuModel`
+  rows — no longer a `Gtk.PopoverMenu`). It's a Hyprland *config* change → needs a Hyprland reload,
+  not Super+Shift+R.
 - **Stable updates are STATELESS (2026-06-19).** There is NO per-user source clone. The old
   model kept a managed `~/.local/share/nidara/src` per user while `/usr/share` was shared →
   divergent src, "last sudoer-updater wins" globally. `nidara-update` now shallow-clones the

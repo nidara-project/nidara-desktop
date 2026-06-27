@@ -84,6 +84,10 @@ export function renderMenuModel(
                 const section = safeLink(m, i, LINK_SECTION)
                 if (section) {
                     if (box.get_first_child()) box.append(separator())
+                    // A section can carry a label (g_menu_append_section(label, …)) —
+                    // render it as a dim header (e.g. the dock menu's app-name title).
+                    const secLabel = (variantStr(safeAttr(m, i, "label")) || "").replace(/_/g, "").trim()
+                    if (secLabel) box.append(dimHeader(secLabel))
                     buildInto(box, section, depth + 1)
                     continue
                 }
