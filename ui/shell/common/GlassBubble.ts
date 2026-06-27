@@ -17,11 +17,12 @@ export type ArrowSide = "top" | "bottom" | "left" | "right"
 // straight sides and the whole thing reads as a bell, not a triangle. The straight
 // sides run tangent into the arc, so there's no kink. Don't make it tall enough to
 // separate the body far from the anchor.
-export const ARROW_W = 30   // base width of the pointer
-export const ARROW_H = 20   // how far it protrudes (= the separation from the anchor)
+export const ARROW_W = 24   // base width of the pointer
+export const ARROW_H = 16   // how far it protrudes (= the separation from the anchor)
 export const BUF = 2        // AA buffer so the silhouette never clips the DrawingArea edge
 const BORDER_W = 1          // inner edge width
 const TIP_R = 8             // tip arc radius (= how round the point is) — independent of ARROW_H
+const BASE_R = 8            // radius of the curved join where the pointer meets the body edge
 
 // Map a popover position to the side the pointer is painted on (it points back at
 // the anchor): a popover ABOVE the widget (TOP) needs the arrow on its BOTTOM, etc.
@@ -34,60 +35,77 @@ export const sideFor = (pos: Gtk.PositionType): ArrowSide => {
     }
 }
 
-// The pointer: two STRAIGHT sides from the base corners meeting a TRUE circular-arc
-// fillet at the apex — only the very point is curved, the diagonals stay dead
-// straight (the macOS look). (ax,ay)=base-left, (px,py)=apex, (bx,by)=base-right;
-// `rt` = tip radius. The arc is tangent to both sides, so there's no kink at the join.
-const arrowTip = (
-    cr: any, ax: number, ay: number, px: number, py: number, bx: number, by: number, rt: number,
+// Round ONE corner of the pointer: vertex V between its neighbours `prev` and `next`,
+// with a true circular arc of radius `rc` tangent to both edges (no kink). Emits
+// lineTo(tangent-in) + the arc to tangent-out — so chaining these draws the whole
+// pointer (base join → tip → base join), every corner a clean arc. Used for both the
+// tip (sharp apex) and the two base joins where the pointer meets the body edge.
+const corner = (
+    cr: any, px: number, py: number, vx: number, vy: number, nx: number, ny: number, rc: number,
 ) => {
-    // Unit directions from the apex back toward each base corner.
-    let u1x = ax - px, u1y = ay - py; const l1 = Math.hypot(u1x, u1y) || 1; u1x /= l1; u1y /= l1
-    let u2x = bx - px, u2y = by - py; const l2 = Math.hypot(u2x, u2y) || 1; u2x /= l2; u2y /= l2
-    // Half the apex angle → tangent distance `d` along each side and effective radius.
-    let dot = u1x * u2x + u1y * u2y; dot = Math.max(-1, Math.min(1, dot))
+    // Unit directions from V toward each neighbour.
+    let i1x = px - vx, i1y = py - vy; const l1 = Math.hypot(i1x, i1y) || 1; i1x /= l1; i1y /= l1
+    let o1x = nx - vx, o1y = ny - vy; const l2 = Math.hypot(o1x, o1y) || 1; o1x /= l2; o1y /= l2
+    let dot = i1x * o1x + i1y * o1y; dot = Math.max(-1, Math.min(1, dot))
     const half = Math.acos(dot) / 2, sinH = Math.sin(half) || 1e-3, tanH = Math.tan(half) || 1e-3
-    const d = Math.min(rt / tanH, l1 - 1, l2 - 1)   // cap so the fillet never reaches the base
+    // Tangent distance along each edge; cap to ~half each so neighbouring corners on a
+    // shared edge can't overrun each other.
+    const d = Math.min(rc / tanH, l1 * 0.5, l2 * 0.5)
     const reff = d * tanH
-    const t1x = px + u1x * d, t1y = py + u1y * d     // tangent point on the left side
-    const t2x = px + u2x * d, t2y = py + u2y * d     // tangent point on the right side
-    let bvx = u1x + u2x, bvy = u1y + u2y; const bl = Math.hypot(bvx, bvy) || 1; bvx /= bl; bvy /= bl
-    const cx = px + bvx * (reff / sinH), cy = py + bvy * (reff / sinH)   // fillet centre (on the bisector)
-    const a1 = Math.atan2(t1y - cy, t1x - cx), a2 = Math.atan2(t2y - cy, t2x - cx)
-    // Pick the sweep whose midpoint bulges toward the apex (works on any side).
+    const tix = vx + i1x * d, tiy = vy + i1y * d     // tangent-in (toward prev)
+    const tox = vx + o1x * d, toy = vy + o1y * d     // tangent-out (toward next)
+    let bvx = i1x + o1x, bvy = i1y + o1y; const bl = Math.hypot(bvx, bvy) || 1; bvx /= bl; bvy /= bl
+    const ccx = vx + bvx * (reff / sinH), ccy = vy + bvy * (reff / sinH)   // arc centre on the bisector
+    const a1 = Math.atan2(tiy - ccy, tix - ccx), a2 = Math.atan2(toy - ccy, tox - ccx)
+    // Pick the sweep that bulges toward V (the proper rounded corner), on any side.
     const mid = (a1 + (a2 < a1 ? a2 + 2 * Math.PI : a2)) / 2
-    const toApex = Math.hypot(cx + reff * Math.cos(mid) - px, cy + reff * Math.sin(mid) - py)
-    const toAway = Math.hypot(cx + reff * Math.cos(mid + Math.PI) - px, cy + reff * Math.sin(mid + Math.PI) - py)
-    cr.lineTo(ax, ay)
-    cr.lineTo(t1x, t1y)
-    if (toApex <= toAway) cr.arc(cx, cy, reff, a1, a2)
-    else                  cr.arcNegative(cx, cy, reff, a1, a2)
-    cr.lineTo(bx, by)
+    const dV = Math.hypot(ccx + reff * Math.cos(mid) - vx, ccy + reff * Math.sin(mid) - vy)
+    const dVo = Math.hypot(ccx + reff * Math.cos(mid + Math.PI) - vx, ccy + reff * Math.sin(mid + Math.PI) - vy)
+    cr.lineTo(tix, tiy)
+    if (dV <= dVo) cr.arc(ccx, ccy, reff, a1, a2)
+    else           cr.arcNegative(ccx, ccy, reff, a1, a2)
 }
 
-// ONE continuous path: a rounded rect (perfect arcs) with a straight-sided,
-// round-tipped pointer spliced into the centre of `side`. `aw`/`ah` are the
-// pointer's base width / protrusion (clamped by the caller to fit small bubbles);
-// `rt` is the tip fillet radius. Fill it for the glass body; stroke it (clipped to
-// itself) for the 1px inner edge — the rim then wraps body AND arrow as one outline.
+// ONE continuous path: a rounded rect (perfect arcs) with a pointer spliced into the
+// centre of `side`. The pointer is a triangle whose THREE corners are all circular
+// arcs — the tip (radius `tipR`) and the two base joins where it meets the body edge
+// (radius `baseR`) — with straight diagonals between. `aw`/`ah` are the pointer's base
+// width / protrusion. Fill it for the glass body; stroke it (clipped to itself) for
+// the 1px inner edge — the rim then wraps body AND pointer as one outline.
 export const bubblePath = (
     cr: any, x: number, y: number, w: number, h: number, r: number, side: ArrowSide,
-    aw: number = ARROW_W, ah: number = ARROW_H, rt: number = 0,
+    aw: number = ARROW_W, ah: number = ARROW_H, tipR: number = TIP_R, baseR: number = BASE_R,
 ) => {
     const x2 = x + w, y2 = y + h
     const cx = x + w / 2, cy = y + h / 2
     const HALF = Math.PI / 2
     cr.moveTo(x + r, y)
-    if (side === "top")    arrowTip(cr, cx - aw / 2, y, cx, y - ah, cx + aw / 2, y, rt)
+    if (side === "top") {
+        corner(cr, x + r, y,        cx - aw / 2, y,      cx, y - ah,        baseR)
+        corner(cr, cx - aw / 2, y,  cx, y - ah,          cx + aw / 2, y,    tipR)
+        corner(cr, cx, y - ah,      cx + aw / 2, y,      x2 - r, y,         baseR)
+    }
     cr.lineTo(x2 - r, y)
     cr.arc(x2 - r, y + r, r, -HALF, 0)                        // top-right
-    if (side === "right")  arrowTip(cr, x2, cy - aw / 2, x2 + ah, cy, x2, cy + aw / 2, rt)
+    if (side === "right") {
+        corner(cr, x2, y + r,       x2, cy - aw / 2,     x2 + ah, cy,       baseR)
+        corner(cr, x2, cy - aw / 2, x2 + ah, cy,         x2, cy + aw / 2,   tipR)
+        corner(cr, x2 + ah, cy,     x2, cy + aw / 2,     x2, y2 - r,        baseR)
+    }
     cr.lineTo(x2, y2 - r)
     cr.arc(x2 - r, y2 - r, r, 0, HALF)                        // bottom-right
-    if (side === "bottom") arrowTip(cr, cx + aw / 2, y2, cx, y2 + ah, cx - aw / 2, y2, rt)
+    if (side === "bottom") {
+        corner(cr, x2 - r, y2,      cx + aw / 2, y2,     cx, y2 + ah,       baseR)
+        corner(cr, cx + aw / 2, y2, cx, y2 + ah,         cx - aw / 2, y2,   tipR)
+        corner(cr, cx, y2 + ah,     cx - aw / 2, y2,     x + r, y2,         baseR)
+    }
     cr.lineTo(x + r, y2)
     cr.arc(x + r, y2 - r, r, HALF, Math.PI)                   // bottom-left
-    if (side === "left")   arrowTip(cr, x, cy + aw / 2, x - ah, cy, x, cy - aw / 2, rt)
+    if (side === "left") {
+        corner(cr, x, y2 - r,       x, cy + aw / 2,      x - ah, cy,        baseR)
+        corner(cr, x, cy + aw / 2,  x - ah, cy,          x, cy - aw / 2,    tipR)
+        corner(cr, x - ah, cy,      x, cy - aw / 2,      x, y + r,          baseR)
+    }
     cr.lineTo(x, y + r)
     cr.arc(x + r, y + r, r, Math.PI, 3 * HALF)                // top-left
     cr.closePath()
