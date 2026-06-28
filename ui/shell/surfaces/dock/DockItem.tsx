@@ -521,7 +521,7 @@ export function DockItem(
         popover = new Gtk.Popover({
             autohide: true,             // grabs focus; dismiss on outside click
             has_arrow: false,           // we paint our own pointer in Cairo
-            css_classes: ["dock-menu"],
+            css_classes: ["nidara-menu-popover"],
         })
         ;(popover as any).position = tooltipPosition
         popover.set_has_tooltip(false)

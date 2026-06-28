@@ -18,6 +18,8 @@ import shellActions from "../../core/ShellActions"
 import { createSchematicMap } from "../../common/WorkspaceSchematic"
 import { safeDisconnect } from "../../core/signals"
 import { attachTooltip } from "../../common/Tooltip"
+import { renderMenuModel } from "../../common/NidaraMenu"
+import { sideFor, paintGlassBubble, ARROW_H, BUF, type ArrowSide } from "../../common/GlassBubble"
 
 // Extract just the desktop basename, stripping path and .desktop extension
 const normId = (s: string) => {
@@ -375,17 +377,59 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
         ;(button as any)._appId = id
         ;(button as any)._appName = name.toLowerCase()
 
-        // ── Context menu (pin/unpin) ───────────────────────────────────────
-        let contextPopover: Gtk.Popover | null = null
-        const buildContextMenu = () => {
-            if (contextPopover?.visible) return
-            contextPopover?.unparent()
-            contextPopover = null
+        // ── Context menu (pin/unpin) — nidara glass ─────────────────────────
+        // A plain Gtk.Popover (NOT Gtk.PopoverMenu, whose native chrome can't be
+        // themed to glass) whose body is the SAME Cairo glass bubble as the dock
+        // menu and the tooltip (common/GlassBubble) plus the unified .nidara-menu
+        // rows (renderMenuModel). It's its own surface, so it blurs on the dock's
+        // OVERLAY layer (blur_popups). The pointer is painted by us, so we choose
+        // the open direction ourselves (the item can sit anywhere in the grid) and
+        // aim the arrow back at it — GTK's own flip would desync a fixed Cairo arrow.
+        let menuPopover: Gtk.Popover | null = null
+        let menuRows: Gtk.Box | null = null
+        let menuDraw: Gtk.DrawingArea | null = null
+        let menuSide: ArrowSide = "top"
 
+        const ensureMenu = () => {
+            if (menuPopover) return
+            menuPopover = new Gtk.Popover({
+                autohide: true,        // grabs focus; dismiss on outside click
+                has_arrow: false,      // we paint our own pointer in Cairo
+                css_classes: ["nidara-menu-popover"],
+            })
+            menuPopover.set_has_tooltip(false)
+
+            const grid = new Gtk.Grid()
+            menuDraw = new Gtk.DrawingArea({
+                hexpand: true, vexpand: true,
+                halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
+            })
+            menuDraw.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, menuSide, { radiusMax: 16 }))
+            grid.attach(menuDraw, 0, 0, 1, 1)
+
+            menuRows = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nidara-menu"] })
+            grid.attach(menuRows, 0, 0, 1, 1)
+
+            const themeId = Theme.connect("changed", () => { if (menuDraw?.get_mapped()) menuDraw.queue_draw() })
+            menuPopover.connect("destroy", () => safeDisconnect(Theme, themeId))
+            menuPopover.set_child(grid)
+            menuPopover.set_parent(item)
+            menuPopover.connect("closed", () => { _cbExclusive?.() })
+        }
+
+        const layoutMenu = () => {
+            if (!menuRows) return
+            const PAD = 5  // interior padding between the glass edge and the rows
+            menuRows.margin_top    = BUF + PAD + (menuSide === "top"    ? ARROW_H : 0)
+            menuRows.margin_bottom = BUF + PAD + (menuSide === "bottom" ? ARROW_H : 0)
+            menuRows.margin_start  = BUF + PAD + (menuSide === "left"   ? ARROW_H : 0)
+            menuRows.margin_end    = BUF + PAD + (menuSide === "right"  ? ARROW_H : 0)
+        }
+
+        const updateMenu = () => {
             const isPinned = pinnedState.list.some(p => normId(p) === normId(id))
-            const actionGroup = new Gio.SimpleActionGroup()
             const menuModel = new Gio.Menu()
-
+            const actionGroup = new Gio.SimpleActionGroup()
             const pinAction = new Gio.SimpleAction({ name: "pin" })
             pinAction.connect("activate", () => {
                 if (isPinned) {
@@ -394,26 +438,39 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
                     pinnedState.list.push(normId(id))
                 }
                 savePinned()
-                contextPopover?.popdown()
             })
             actionGroup.add_action(pinAction)
-            menuModel.append(
-                isPinned ? t("settings.dock.dockitem.unpin") : t("app-grid.menu.pin"),
-                "context.pin"
-            )
+            menuModel.append(isPinned ? t("settings.dock.dockitem.unpin") : t("app-grid.menu.pin"), "pin")
 
-            item.insert_action_group("context", actionGroup)
-            contextPopover = Gtk.PopoverMenu.new_from_model(menuModel) as unknown as Gtk.Popover
-            contextPopover.set_parent(item)
+            if (menuRows) {
+                let c = menuRows.get_first_child()
+                while (c) { const next = c.get_next_sibling(); menuRows.remove(c); c = next }
+                menuRows.append(renderMenuModel(menuModel, actionGroup, () => menuPopover?.popdown()))
+            }
         }
 
         const rightClick = new Gtk.GestureClick({ button: 3 })
         rightClick.connect("released", () => {
-            buildContextMenu()
+            if (menuPopover?.visible) { menuPopover.popdown(); return }
+            ensureMenu()
+            // Open downward by default; flip up for items low in the launcher so the
+            // menu stays on screen and the arrow still points back at the item.
+            let pos = Gtk.PositionType.BOTTOM
+            const root = item.get_root() as Gtk.Widget | null
+            if (root) {
+                const [ok, bounds] = (item as any).compute_bounds(root)
+                if (ok && bounds && root.get_height() > 0 && (bounds.origin.y + bounds.size.height / 2) > root.get_height() * 0.65) {
+                    pos = Gtk.PositionType.TOP
+                }
+            }
+            menuPopover!.set_position(pos)
+            menuSide = sideFor(pos)
+            layoutMenu()
+            menuDraw?.queue_draw()
+            updateMenu()
             _cbDemand?.()
             GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
-                contextPopover?.popup()
-                contextPopover?.connect("closed", () => { _cbExclusive?.() })
+                menuPopover?.popup()
                 return GLib.SOURCE_REMOVE
             })
         })

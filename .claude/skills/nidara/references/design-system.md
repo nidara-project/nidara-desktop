@@ -284,8 +284,8 @@ context menu paints the same shape (see "The glass bubble" below); the tooltip o
 
 The Cairo glass bubble — a rounded capsule with a **pointer spliced into one side as one continuous
 silhouette** (single fill, single 1px inner edge wrapping body AND arrow, no seam) — lives in
-`common/GlassBubble.ts` and is **shared by the tooltip and the dock context menu** so both speak the
-same glass language. Don't re-implement it; both consumers paint via `paintGlassBubble`.
+`common/GlassBubble.ts` and is **shared by the tooltip and BOTH context menus (dock + app-grid)** so
+they all speak the same glass language. Don't re-implement it; every consumer paints via `paintGlassBubble`.
 
 - **The pointer is a downward TRIANGLE with ONLY the tip filleted** — a TRUE circular arc tangent to
   both diagonal sides, so the sides stay perfectly straight (no kink, no bowing). **The arc must stay
@@ -307,8 +307,9 @@ same glass language. Don't re-implement it; both consumers paint via `paintGlass
   same load-bearing floor as `--nidara-popover-bg`). The dock/bar layerrules carry `blur_popups = true`,
   so the popover blurs on its own surface.
 - **`sideFor(position)`** maps a `Gtk.PositionType` to the side the pointer is painted on (it points
-  *back* at the anchor: a popover ABOVE the item → arrow on its bottom). **`bubbleContentMargin(side,
-  padX, padY)`** gives the margins a content child needs to clear the arrow strip + AA buffer.
+  *back* at the anchor: a popover ABOVE the item → arrow on its bottom). The content child clears the
+  arrow strip + AA buffer with margins computed inline from the exported `BUF`/`ARROW_H` consts
+  (`BUF + PAD + (side === thatSide ? ARROW_H : 0)` per edge — see `layoutMenu` in `AppGrid.tsx`).
 - **Structure** (both tooltip and menu): a `Gtk.Grid` overlaying a `Gtk.DrawingArea` (paints the
   bubble, `halign/valign FILL`) and the content (label / rows box) with the arrow-aware margins.
   Repaint on `Theme "changed"`; disconnect that handler on `destroy` (the menu is rebuilt per dock
@@ -319,20 +320,25 @@ same glass language. Don't re-implement it; both consumers paint via `paintGlass
 A right-click context menu on a shell surface must be a **plain `Gtk.Popover`** whose body is the
 glass bubble above, **never `Gtk.PopoverMenu`**. `PopoverMenu` renders GTK's native `modelbutton`
 chrome, which (like the native tooltip) can't be themed to glass — exactly why "the dock menu looked
-like default GTK". The pattern (see `surfaces/dock/DockItem.tsx`, `ensurePopover`/`updateMenuModel`):
+like default GTK". Two consumers today, same pattern (see `surfaces/dock/DockItem.tsx`
+`ensurePopover`/`updateMenuModel`, and `surfaces/app-grid/AppGrid.tsx` `ensureMenu`/`updateMenu`):
 
-- **`new Gtk.Popover({ autohide: true, has_arrow: false, css_classes: ["dock-menu"] })`** — autohide
-  so it grabs focus and dismisses on outside click; no GTK arrow (we paint our own pointer, aimed at
-  the dock item, via `paintGlassBubble`).
+- **`new Gtk.Popover({ autohide: true, has_arrow: false, css_classes: ["nidara-menu-popover"] })`** —
+  autohide so it grabs focus and dismisses on outside click; no GTK arrow (we paint our own pointer,
+  aimed back at the item, via `paintGlassBubble`).
 - **Rows = `renderMenuModel(model, actionGroup, onClose)`** from `common/NidaraMenu.ts` — the SAME
-  component as the bar tray menu, so dock and tray menus are identical glass rows (`.nidara-menu-row`,
-  separators, dim section/submenu headers — section labels now render as headers too). It activates
+  component as the bar tray menu, so every menu is identical glass rows (`.nidara-menu-row`,
+  separators, dim section/submenu headers — section labels render as headers too). It activates
   actions on the passed group directly. The bubble DrawingArea + rows box are built ONCE (stable host,
   rows rebuilt per show) so the Theme subscription isn't leaked per show.
-- **CSS** (`.dock-menu` in `_dock.scss`) only resets the popover chrome to transparent (`@include
-  nidara-reset` on root + `> contents`), exactly like `.nidara-tooltip` — the glass is all Cairo.
-- **Still native (tracked, tech-debt #14):** the app-grid right-click menu (`AppGrid.tsx`) is the last
-  `Gtk.PopoverMenu` in the shell — migrate it to this pattern when next in that file.
+- **CSS** is the shared **`.nidara-menu-popover`** (`_components.scss`) — it only resets the popover
+  chrome to transparent (`@include nidara-reset` on root + `> contents`), exactly like
+  `.nidara-tooltip`; the glass is all Cairo. (The old per-surface `.dock-menu` rule is gone.)
+- **Open direction:** the dock is edge-anchored, so its menu always opens inward (fixed `position`).
+  The app-grid item can sit anywhere, so its handler **picks the direction per right-click** — flips
+  the menu up for items low in the launcher (`compute_bounds` vs root height, 0.65 threshold), then
+  sets `menuSide = sideFor(position)` and repaints, so the fixed Cairo arrow stays aimed at the item
+  (GTK's own auto-flip would desync a painted arrow). **No native `Gtk.PopoverMenu` remains in the shell.**
 
 ## Show/hide animations — `ScaleRevealer` (THE overlay animation)
 

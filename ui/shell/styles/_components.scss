@@ -209,6 +209,23 @@ selection {
     min-height: 1px;
 }
 
+/* Glass menu popover — the Gtk.Popover surface that hosts a Cairo glass bubble
+   (common/GlassBubble) + the .nidara-menu rows above. Shared by the dock context
+   menu and the app-grid context menu so every glass menu speaks one language.
+   Reset the native popover chrome to transparent (exactly like .nidara-tooltip) so
+   only our glass shows; the popover is its own surface and blurs on its layer
+   (blur_popups). */
+.nidara-menu-popover {
+    @include nidara-reset;
+
+    > contents {
+        @include nidara-reset;
+        padding: 0;
+        min-width: 0;
+        min-height: 0;
+    }
+}
+
 /* The unified overlay entrance lives in common/ScaleRevealer.ts (GTK-side
    grow+fade with asymmetric easing) — there is no CSS overlay fade anymore. */
 

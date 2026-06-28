@@ -358,15 +358,18 @@ different shape: model iteration, submenus flattened to headers, section labels 
 `Bar.tsx` `buildOverflowList` rows. Migrate opportunistically if already editing those files;
 not worth a standalone pass.
 
-**The dock context menu was migrated off native `Gtk.PopoverMenu` (2026-06-27):** it's now a
-plain `Gtk.Popover` whose body is the shared Cairo glass bubble (`common/GlassBubble.ts`,
-`paintGlassBubble` — same painter as the tooltip, **with a pointer aimed at the dock item**) +
-`renderMenuModel` rows, so it's themed glass that blurs on the dock layer like the tooltip — no
-more raw GTK chrome. The tooltip's bubble painter was extracted into `GlassBubble.ts` in the same
-change so there's ONE silhouette/arrow/0.38-floor implementation.
-**Last native-chrome menu left:** `AppGrid.tsx:~406` still uses `Gtk.PopoverMenu.new_from_model`
-for the app-grid right-click menu. Same migration applies (it already lives inside a layer
-surface that blurs); do it when next in that file or as a deliberate consistency pass.
+**The dock AND app-grid context menus were migrated off native `Gtk.PopoverMenu`
+(dock 2026-06-27, app-grid 2026-06-28):** both are now plain `Gtk.Popover`s whose body is the
+shared Cairo glass bubble (`common/GlassBubble.ts`, `paintGlassBubble` — same painter as the
+tooltip, **with a pointer aimed back at the item**) + `renderMenuModel` rows, so they're themed
+glass that blurs on the layer like the tooltip — no more raw GTK chrome. The tooltip's bubble
+painter was extracted into `GlassBubble.ts` so there's ONE silhouette/arrow/0.38-floor
+implementation, and the popover-chrome reset is the shared `.nidara-menu-popover` class
+(`_components.scss`), used by both menus (the old per-surface `.dock-menu` rule is gone).
+The app-grid menu, unlike the dock (edge-anchored, fixed direction), **chooses its own open
+direction** per right-click — items low in the launcher flip the menu up so it stays on screen
+and the fixed Cairo arrow still points at the item (`compute_bounds` vs root height, 0.65
+threshold). **There are no more native `Gtk.PopoverMenu`s in the shell.**
 
 ### 15. The NC overlay scrollbar still widens on hover — can't be defeated by CSS (don't chase it)
 The notification-center list uses a GTK overlay scrollbar in an **8px lane** to the right of

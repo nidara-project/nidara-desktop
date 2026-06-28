@@ -88,20 +88,7 @@ window#nidara-dock-vertical {
     background: transparent;
 }
 
-/* Dock context menu — a plain Gtk.Popover whose body is the Cairo glass capsule
-   (SquircleContainer) + the unified .nidara-menu rows (_components.scss). Reset
-   the native popover chrome to transparent, exactly like .nidara-tooltip, so only
-   our glass shows through; the popover is its own surface and blurs on the dock
-   layer (blur_popups). */
-.dock-menu {
-    @include nidara-reset;
-
-    > contents {
-        @include nidara-reset;
-        padding: 0;
-        min-width: 0;
-        min-height: 0;
-    }
-}
+/* The dock context menu popover reuses the shared .nidara-menu-popover reset
+   (_components.scss) — same glass-bubble surface as the app-grid context menu. */
 
 
