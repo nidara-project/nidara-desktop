@@ -59,11 +59,16 @@ export function menuSeparator(): Gtk.Separator {
     return new Gtk.Separator({ css_classes: ["nidara-menu-sep"], margin_top: 4, margin_bottom: 4 })
 }
 
-export function menuHeader(label: string): Gtk.Label {
+export function menuHeader(label: string, ellipsize = false): Gtk.Label {
     return new Gtk.Label({
         label,
-        halign: Gtk.Align.START,
+        halign: ellipsize ? Gtk.Align.FILL : Gtk.Align.START,
         css_classes: ["nidara-menu-header"],
         margin_start: 12, margin_top: 4, margin_bottom: 2,
+        // A long window title must not widen the menu (which would stretch the
+        // move-to-workspace strip below it). max_width_chars caps the NATURAL
+        // width so the title can never push the menu past its fixed width;
+        // hexpand fills that width and xalign keeps the text left-aligned.
+        ...(ellipsize ? { hexpand: true, xalign: 0, margin_end: 12, ellipsize: 3, max_width_chars: 1 } : {}),
     })
 }

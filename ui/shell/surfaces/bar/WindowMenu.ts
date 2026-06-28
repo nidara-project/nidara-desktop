@@ -25,7 +25,7 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
     if (client) {
         const addr = client.address
 
-        root.append(menuHeader(getWordmark(client, hs.focusedWorkspace) || client.title || ""))
+        root.append(menuHeader(getWordmark(client, hs.focusedWorkspace) || client.title || "", true))
 
         // The window section fills when the authoritative state read lands (~ms).
         // NEVER build checks from AstalHyprland.Client props: floating/fullscreen
