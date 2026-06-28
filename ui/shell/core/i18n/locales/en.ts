@@ -525,7 +525,6 @@ export default {
     "cc.status.ai.active": "Controlling apps right now",
 
     // Dock item context menu
-    "settings.dock.dockitem.apps": "Apps",
     "settings.dock.dockitem.empty-trash": "Empty Trash",
     "settings.dock.dockitem.close-all": "Close all",
     "settings.dock.dockitem.quit": "Quit",
@@ -558,7 +557,7 @@ export default {
     "app-grid.menu.pin": "Pin to Dock",
 
     // Dock special item names and menu
-    "dock.special.launcher.name": "Launcher",
+    "dock.special.launcher.name": "Applications",
     "dock.special.trash.name": "Trash",
     "dock.special.home.label": "Files",
     "dock.menu.open": "Open",

@@ -364,7 +364,6 @@ export default {
     "settings.dock.icon-size.desc": "Tamaño base en reposo",
 
     // Dock item menu labels
-    "settings.dock.dockitem.apps": "Aplicaciones",
     "settings.dock.dockitem.empty-trash": "Vaciar Papelera",
     "settings.dock.dockitem.close-all": "Cerrar todas",
     "settings.dock.dockitem.quit": "Salir",
@@ -397,7 +396,7 @@ export default {
     "app-grid.menu.pin": "Anclar en Dock",
 
     // Dock special item names and menu
-    "dock.special.launcher.name": "Lanzador",
+    "dock.special.launcher.name": "Aplicaciones",
     "dock.special.trash.name": "Papelera",
     "dock.special.home.label": "Archivos",
     "dock.menu.open": "Abrir",

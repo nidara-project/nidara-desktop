@@ -484,7 +484,6 @@ export function DockItem(
     const computeTitle = () => {
         const focused = hypr.focusedClient
         let title = appItem.name || "App"
-        if (appId === "launcher" || appId === "special:launcher") title = t("settings.dock.dockitem.apps")
         if (appId === "home-shortcut" || appId === "special:home") title = t("dock.special.home.label")
         if (appId === "trash" || appId === "special:trash") title = t("dock.special.trash.name")
         if (focused && addresses.includes(focused.address)) {
@@ -582,7 +581,6 @@ export function DockItem(
         }
 
         let mainTitle = appItem.name || "App"
-        if (appId === "launcher" || appId === "special:launcher") mainTitle = t("settings.dock.dockitem.apps")
         if (appId === "home-shortcut" || appId === "special:home") mainTitle = t("dock.special.home.label")
         if (appId === "trash" || appId === "special:trash") mainTitle = t("dock.special.trash.name")
         const mainSection = addSection(mainTitle)

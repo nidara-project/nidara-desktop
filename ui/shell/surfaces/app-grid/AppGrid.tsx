@@ -354,7 +354,13 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             justify: Gtk.Justification.CENTER,
             max_width_chars: 13,
             wrap: true,
-            wrap_mode: (Pango as any).WrapMode.WORD_CHAR,
+            // WORD (not WORD_CHAR): a single-word app name ("Files", "Firefox") must
+            // never split mid-word. WORD_CHAR lets the wrapping label report a ~1-char
+            // minimum width, so under width pressure (smaller screen / fallback font in
+            // a fresh VM) the container squeezes it to a sliver and it wraps to fill both
+            // lines. WORD floors the minimum at the widest word, so short names stay on
+            // one line; only multi-word names wrap, and over-long single words ellipsize.
+            wrap_mode: (Pango as any).WrapMode.WORD,
             lines: 2,
             ellipsize: (Pango as any).EllipsizeMode.END,
         })
