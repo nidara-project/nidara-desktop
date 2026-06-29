@@ -193,6 +193,37 @@ to this in 2026-06):
 For an icon that belongs **next to a row's title** rather than as a trailing control (e.g. a
 lock on a secured Wi-Fi row), pass it as `NidaraRow`'s `titleIcon` arg (threaded through
 `createRow(label, subtitle, widget, titleIcon)`) — don't park it in the trailing control box.
+For an icon that **leads the row** (an identity icon before the title, e.g. each widget's icon
+in Settings → Widgets, or an app icon), pass `NidaraRow`'s `leadingIcon` arg (also threaded
+through `createRow(label, subtitle, widget, titleIcon, leadingIcon)`) — it sits as the row's
+first child, before the title column.
+
+## CC capsule tiles: stateful vs action (no fake status line)
+
+The 2×1 (WIDE) CC tile built by `buildCapsuleInner(getIcon, getTitle, getSubTitle)` (in
+`surfaces/control-center/Toggles.tsx`) adapts to whether the widget has a **status**:
+- **Stateful** (wifi, bluetooth, focus, ethernet, vpn, battery): `getSubTitle()` returns the
+  live state ("Connected", "Off", an SSID, "Do not disturb"…) → single-line title + dim
+  subtitle.
+- **Action / stateless** (screenshot, screen recording, clipboard — they *do* something, they
+  aren't *on/off*): `getSubTitle()` returns `""`. The sub line is hidden and the title is
+  allowed to **wrap to two lines, vertically centred**, so the name reads in full ("Screen
+  Recording") instead of being padded with a redundant descriptor ("Screen Record / Record
+  screen"). The shape is **derived from the subtitle being empty**, so a dynamic widget (focus
+  *off* → empty sub) gets it for free. When adding a CC widget: return a real state subtitle or
+  return `""` — never invent a description-as-subtitle. (`applySub()` runs at build time too, so
+  plain detail-opening tiles that never call `update()` still hide the empty line.)
+
+**Wrap the capsule box with `wrapCapsuleTile(inner.box)` (or use the button path
+`buildCapsuleContent`) — never a bespoke wrapper.** A WIDE tile is left-anchored by BaseIsland
+(`child.halign = START, hexpand = false`), and `wrapCapsuleTile` adds the exact nesting level
+that survives `SquircleContainer`'s padding so the icon/text land on the same grid as every
+other tile. A tile that built its own wrapper — screen recording once put an idle/recording
+`Gtk.Stack` inside a hand-rolled `outer` box — insets the content a few px off from the column
+(visible once you line the tiles up). If a tile has multiple visual states (e.g. record ⇄
+stop), drive ONE `buildCapsuleInner` via getters + `inner.update()` on a `notify::` (and toggle
+state classes on `inner.iconBox`/`inner.icon`/`inner.label`/`inner.subLabel`) — the same
+dynamic-capsule pattern as wifi/focus — instead of swapping whole subtrees in a stack.
 
 ## The bar launcher mark — flattened path, no SVG filter
 

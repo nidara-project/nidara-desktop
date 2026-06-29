@@ -51,11 +51,11 @@ export const listGroup = (title: string) => NidaraList(title)
 
 // ── Generic Row ───────────────────────────────────────────────────────────────
 // Universal NidaraRow + the settings-only side effect (search-index registration).
-export const createRow = (label: string, subtitle: string, widget: Gtk.Widget, titleIcon?: Gtk.Widget) => {
+export const createRow = (label: string, subtitle: string, widget: Gtk.Widget, titleIcon?: Gtk.Widget, leadingIcon?: Gtk.Widget) => {
     if (_pageCtx.id) {
         _searchIndex.push({ pageId: _pageCtx.id, pageLabel: _pageCtx.label, label, subtitle })
     }
-    return NidaraRow(label, subtitle, widget, [], titleIcon)
+    return NidaraRow(label, subtitle, widget, [], titleIcon, leadingIcon)
 }
 
 // ── Toggle Row ────────────────────────────────────────────────────────────────

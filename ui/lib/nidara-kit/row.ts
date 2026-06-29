@@ -26,10 +26,14 @@ export function NidaraRow(
     extraClasses: string[] = [],
     /** Small icon shown right after the title (e.g. a lock on a secured Wi-Fi row). */
     titleIcon?: Gtk.Widget,
+    /** Icon shown BEFORE the title, leading the row (e.g. a widget/app identity icon). */
+    leadingIcon?: Gtk.Widget,
 ): Gtk.ListBoxRow {
     const box = new Gtk.Box({
         spacing: 16, margin_start: 16, margin_end: 16, margin_top: 14, margin_bottom: 14,
     })
+
+    if (leadingIcon) box.append(leadingIcon)
 
     const text = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL, spacing: 2,

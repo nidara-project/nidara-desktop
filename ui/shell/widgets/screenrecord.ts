@@ -3,6 +3,7 @@ import { PANEL_W } from "../common/widget-kit"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
+import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
 
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -154,38 +155,49 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         return box
     }
 
-    // ── Idle stack child ──
-    const iconBoxIdle = new Gtk.Box({ css_classes: ["cc-atomic-icon-circle-bg"], halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, width_request: 48, height_request: 48 })
-    iconBoxIdle.append(new Gtk.Image({ gicon: Icons.record, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] }))
-    const idleText = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
-    idleText.append(new Gtk.Label({ label: t("widget.screenrecord.name"), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 }))
-    idleText.append(new Gtk.Label({ label: t("widget.screenrecord.sub"), css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 }))
-    const idleInner = new Gtk.Box({ spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true })
-    idleInner.append(iconBoxIdle); idleInner.append(idleText)
+    // WIDE: a single capsule whose state (idle ⇄ recording) is driven by
+    // status.recording — the SAME dynamic-capsule path as every other tile
+    // (buildCapsuleInner + update via getters). The old idle/recording Gtk.Stack
+    // inset this tile's content a few px off from the rest of the column; routing it
+    // through buildCapsuleInner + wrapCapsuleTile (like screenshot/clipboard) lands
+    // the icon/text on the exact same grid. Idle = action tile (name, no sub);
+    // recording = "Recording…" + a live elapsed timer in the subtitle slot.
+    const pad2 = (n: number) => String(n).padStart(2, "0")
+    let recStart = 0
+    const elapsedStr = () => {
+        const s = Math.max(0, Math.floor((Date.now() - recStart) / 1000))
+        return `${Math.floor(s / 60)}:${pad2(s % 60)}`
+    }
+    const getIcon  = () => status.recording ? Icons.recordStop : Icons.record
+    const getTitle = () => status.recording ? t("widget.screenrecord.recording") : t("widget.screenrecord.name")
+    const getSub   = () => status.recording ? elapsedStr() : ""
 
-    // ── Recording stack child ──
-    const iconBoxRec = new Gtk.Box({ css_classes: ["cc-atomic-icon-circle-bg", "rec-active-bg"], halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, width_request: 48, height_request: 48 })
-    iconBoxRec.append(new Gtk.Image({ gicon: Icons.recordStop, pixel_size: 22, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon", "rec-stop-icon"] }))
-    const elapsed = makeElapsedLabel()
-    const recText = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
-    recText.append(new Gtk.Label({ label: t("widget.screenrecord.recording"), css_classes: ["cc-atomic-label-bold", "rec-label"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 }))
-    recText.append(elapsed)
-    const recInner = new Gtk.Box({ spacing: 12, halign: Gtk.Align.FILL, valign: Gtk.Align.CENTER, margin_start: 4, hexpand: true })
-    recInner.append(iconBoxRec); recInner.append(recText)
+    const inner = buildCapsuleInner(getIcon, getTitle, getSub)
 
-    const stack = new Gtk.Stack({ transition_type: Gtk.StackTransitionType.CROSSFADE, transition_duration: 150, hexpand: true, hhomogeneous: true })
-    stack.add_named(idleInner, "idle")
-    stack.add_named(recInner, "recording")
+    const setClass = (w: Gtk.Widget, cls: string, on: boolean) => {
+        if (on) w.add_css_class(cls); else w.remove_css_class(cls)
+    }
+    let tickId = 0
+    const stopTick = () => { if (tickId) { GLib.source_remove(tickId); tickId = 0 } }
+    const syncRec = () => {
+        const rec = status.recording
+        if (rec) recStart = Date.now()
+        inner.update()                               // re-reads icon/title/sub
+        setClass(inner.iconBox,  "rec-active-bg", rec)
+        setClass(inner.icon,     "rec-stop-icon", rec)
+        setClass(inner.label,    "rec-label",     rec)
+        setClass(inner.subLabel, "rec-elapsed",   rec)
+        stopTick()
+        if (rec) tickId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+            inner.subLabel.label = getSub()
+            return GLib.SOURCE_CONTINUE
+        })
+    }
+    const sigId = status.connect("notify::recording", syncRec)
+    inner.box.connect("unrealize", () => { safeDisconnect(status, sigId); stopTick() })
+    syncRec()
 
-    const outer = new Gtk.Box({ hexpand: true, vexpand: true, halign: Gtk.Align.FILL, valign: Gtk.Align.FILL })
-    outer.append(stack)
-
-    const syncState = () => stack.set_visible_child_name(status.recording ? "recording" : "idle")
-    const sigId = status.connect("notify::recording", syncState)
-    outer.connect("unrealize", () => { safeDisconnect(status, sigId) })
-    syncState()
-
-    return outer
+    return wrapCapsuleTile(inner.box)
 }
 
 // ── Bar icon (dynamic recording state indicator) ──────────────────────────────

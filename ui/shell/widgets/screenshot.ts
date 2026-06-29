@@ -122,7 +122,8 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         return box
     }
 
-    return wrapCapsuleTile(buildCapsuleInner(() => Icons.camera, () => t("widget.screenshot.name"), () => t("widget.screenshot.sub")).box)
+    // Action tile (no on/off state) → no status subtitle; just the name.
+    return wrapCapsuleTile(buildCapsuleInner(() => Icons.camera, () => t("widget.screenshot.name"), () => "").box)
 }
 
 // ── Widget registration ───────────────────────────────────────────────────────

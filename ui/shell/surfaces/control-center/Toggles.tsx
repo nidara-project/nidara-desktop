@@ -59,20 +59,34 @@ export function buildCapsuleInner(
     iconBox.append(icon)
 
     const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
-    const label = new Gtk.Label({ label: getTitle(), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
-    const subLabel = new Gtk.Label({ label: getSubTitle(), css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
+    const label = new Gtk.Label({ label: getTitle(), css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 14 })
+    const subLabel = new Gtk.Label({ css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.START, xalign: 0, ellipsize: 3, max_width_chars: 14 })
+
+    // Stateful vs stateless tile. A widget with an on/off-style status (wifi,
+    // bluetooth, focus…) shows a single-line title + its state subtitle. An action
+    // widget with no such state (screenshot, screen recording, clipboard) returns an
+    // empty subtitle: we hide the sub line and let the title use both lines, kept
+    // vertically centred — so the name reads in full ("Screen Recording") instead of
+    // padding it out with a fake status line. Derived from the subtitle so dynamic
+    // widgets (focus off → no sub) get the right shape too.
+    const applySub = (sub: string) => {
+        const hasSub = sub.length > 0
+        subLabel.label = sub
+        subLabel.visible = hasSub
+        label.wrap = !hasSub        // lines only takes effect while wrapping
+        label.lines = hasSub ? 1 : 2
+    }
 
     textStack.append(label)
     textStack.append(subLabel)
     box.append(iconBox)
     box.append(textStack)
+    applySub(getSubTitle())          // also fixes plain tiles that never call update()
 
     const update = () => {
         setIcon(icon, getIcon())
         label.label = getTitle()
-        const sub = getSubTitle()
-        subLabel.label = sub
-        subLabel.visible = sub.length > 0
+        applySub(getSubTitle())
     }
     return { box, iconBox, icon, label, subLabel, update }
 }

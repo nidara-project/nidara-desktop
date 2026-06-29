@@ -7,67 +7,54 @@ import { pageBox, listGroup, createRow, type SettingsNav } from "../SettingsHelp
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 
-// A toggle row whose switch can be disabled (with a tooltip) — the generic
-// toggleRow helper always builds a sensitive switch, but the CC toggle has to
-// block when the grid is full (fixed-grid model — see CCLayoutManager.canAdd).
-function switchRow(label: string, active: boolean, sensitive: boolean, tooltip: string, cb: (v: boolean) => void): Gtk.ListBoxRow {
+// A compact labelled switch ("Bar" / "Center" + a Gtk.Switch), the unit the
+// widget row places to its right. The tooltip rides the (always-sensitive) group
+// box, not the switch — an insensitive switch receives no pointer events, so a
+// tooltip set on it would never show the "no hardware / no space" reason.
+function controlGroup(label: string, active: boolean, sensitive: boolean, tooltip: string, cb: (v: boolean) => void): Gtk.Box {
+    const group = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+    if (tooltip) group.tooltip_text = tooltip
+    group.append(new Gtk.Label({ label, css_classes: ["nidara-row-subtitle"], valign: Gtk.Align.CENTER }))
     const sw = new Gtk.Switch({ active, sensitive, valign: Gtk.Align.CENTER })
-    if (tooltip) sw.tooltip_text = tooltip
-    sw.connect("notify::active", () => cb(sw.get_active()))   // connected AFTER the initial active → no spurious fire
-    return createRow(label, "", sw)
+    sw.connect("notify::active", () => cb(sw.get_active()))   // connected AFTER initial active → no spurious fire
+    group.append(sw)
+    return group
 }
 
-// "Configure" row — only added for widgets that declare buildSettings. Pushes the
-// widget's own settings page as a subpage (breadcrumb parent = the Widgets page).
-function configureRow(nav: SettingsNav, w: AtomicWidget): Gtk.ListBoxRow {
-    const chevron = new Gtk.Image({
-        gicon: Icons.chevronRight, pixel_size: 16,
-        opacity: 0.4, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"],
-    })
-    const row = createRow(t("settings.widgets.configure"), "", chevron)
-    row.set_cursor_from_name("pointer")
-    const click = new Gtk.GestureClick()
-    click.connect("released", () => nav.pushSubpage({
-        id: `widgets/${w.id}`, title: w.name, parentId: "widgets", build: w.buildSettings!,
-    }))
-    row.add_controller(click)
-    return row
-}
-
-// One card per widget: an icon+name header over a boxed list of its toggles
-// (Bar / Control Center) plus an optional Configure link. Each widget reads as its
-// own module (macOS-style) and has room to grow its own options.
-function buildWidgetCard(nav: SettingsNav, w: AtomicWidget): Gtk.Widget {
+// One row per widget: leading identity icon + name, then the Bar / Control Center
+// switches on the right. A widget that declares buildSettings also gets a chevron
+// that pushes its own settings subpage (none ship today, but the hook stays wired).
+function buildWidgetRow(nav: SettingsNav, w: AtomicWidget): Gtk.ListBoxRow {
     const placement = widgetConfig.get(w.id)
-    // Hardware gate: card stays visible (so the user sees WHY it's off) but
-    // both toggles render off + disabled with a hint. Placement config is
-    // untouched — the saved state comes back with the hardware.
+    // Hardware gate: the row stays visible (so the user sees WHY it's off) but the
+    // switches render off + disabled with a hint, and the icon dims. Placement
+    // config is untouched — the saved state comes back with the hardware.
     const available = widgetAvailable(w)
     const noHw = t("settings.widgets.tooltip.no-hardware")
-    const { box, listBox } = listGroup("")
 
-    // Identity header (icon + name) — prepended ABOVE the listBox so it doesn't
-    // pick up a clickable row's hover/press state (it isn't interactive).
-    const header = new Gtk.Box({ spacing: 10, margin_start: 10, margin_bottom: 2, valign: Gtk.Align.CENTER })
-    header.append(new Gtk.Image({ gicon: w.icon ?? Icons.app, pixel_size: 18, css_classes: ["nd-icon"], opacity: available ? 1 : 0.5 }))
-    header.append(new Gtk.Label({ label: w.name, css_classes: ["nidara-row-title"], halign: Gtk.Align.START, opacity: available ? 1 : 0.5 }))
-    box.prepend(header)
+    const leadingIcon = new Gtk.Image({
+        gicon: w.icon ?? Icons.app, pixel_size: 18,
+        css_classes: ["nd-icon"], valign: Gtk.Align.CENTER,
+        opacity: available ? 1 : 0.5,
+    })
 
-    // Bar toggle — only for widgets that can actually render in the bar.
+    const controls = new Gtk.Box({ spacing: 20, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
+
+    // Bar switch — only for widgets that can actually render in the bar.
     if (w.locations?.includes("bar") && w.buildBarContent != null) {
-        listBox.append(switchRow(
-            t("settings.widgets.show-in-bar"), available && placement.bar, available,
+        controls.append(controlGroup(
+            t("settings.widgets.col.bar"), available && placement.bar, available,
             available ? "" : noHw,
             (v) => widgetConfig.setBar(w.id, v),
         ))
     }
 
-    // Control Center toggle — disabled (with a tooltip) when the hardware is
+    // Control Center switch — disabled (with a tooltip) when the hardware is
     // missing, or when the grid is full and the widget isn't already in it.
     if (w.locations?.includes("cc")) {
         const ccFits = placement.cc || ccLayout.canAdd(w.id)
-        listBox.append(switchRow(
-            t("settings.widgets.show-in-cc"), available && placement.cc, available && ccFits,
+        controls.append(controlGroup(
+            t("settings.widgets.col.cc"), available && placement.cc, available && ccFits,
             !available ? noHw : ccFits ? "" : t("settings.widgets.tooltip.no-space"),
             (v) => {
                 widgetConfig.setCC(w.id, v)
@@ -77,25 +64,26 @@ function buildWidgetCard(nav: SettingsNav, w: AtomicWidget): Gtk.Widget {
         ))
     }
 
-    if (w.buildSettings && available) listBox.append(configureRow(nav, w))
+    // Per-widget "Configure" → pushes the widget's own settings as a subpage.
+    if (w.buildSettings && available) {
+        const chevron = new Gtk.Button({
+            child: new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 16, css_classes: ["nd-icon"], opacity: 0.4 }),
+            css_classes: ["settings-icon-btn", "flat"], valign: Gtk.Align.CENTER,
+            tooltip_text: t("settings.widgets.configure"),
+        })
+        chevron.connect("clicked", () => nav.pushSubpage({
+            id: `widgets/${w.id}`, title: w.name, parentId: "widgets", build: w.buildSettings!,
+        }))
+        controls.append(chevron)
+    }
 
-    return box
-}
-
-// Section header above each category cluster — same look as the listGroup titles
-// used elsewhere in Settings (uppercase, dim).
-function categoryHeader(label: string, first: boolean): Gtk.Widget {
-    return new Gtk.Label({
-        label: label.toUpperCase(),
-        css_classes: ["nidara-list-title"],
-        halign: Gtk.Align.START,
-        margin_top: first ? 0 : 10,
-    })
+    return createRow(w.name, "", controls, undefined, leadingIcon)
 }
 
 // Widgets are grouped by category (Media / Utilities / System) in the SAME order
-// they appear across the bar — so Settings and the bar tell the same story. The
-// flat one-card-per-widget list is preserved within each group.
+// they appear across the bar — so Settings and the bar tell the same story. Each
+// category is one inset list (NidaraList renders its uppercase title), one row per
+// widget inside it.
 export default function WidgetsPage(nav: SettingsNav): Gtk.Widget {
     const page = pageBox("widgets-page")
 
@@ -105,22 +93,21 @@ export default function WidgetsPage(nav: SettingsNav): Gtk.Widget {
         media: t("settings.widgets.category.media"),
     }
 
-    let first = true
     for (const cat of CATEGORY_ORDER) {
         const widgets = registry.all()
             .filter(w => w.category === cat)
             .sort((a, b) => (a.barOrder ?? 0) - (b.barOrder ?? 0))
         if (widgets.length === 0) continue
-        page.append(categoryHeader(catLabel[cat], first))
-        first = false
-        for (const w of widgets) page.append(buildWidgetCard(nav, w))
+        const { box, listBox } = listGroup(catLabel[cat])
+        for (const w of widgets) listBox.append(buildWidgetRow(nav, w))
+        page.append(box)
     }
 
     // Reordering lives in the CC's own Edit mode, not here.
     page.append(new Gtk.Label({
         label: t("settings.widgets.reorder-note"),
         css_classes: ["nidara-row-subtitle"],
-        wrap: true, halign: Gtk.Align.START, margin_start: 10, margin_top: 4,
+        wrap: true, halign: Gtk.Align.START, margin_start: 10,
     }))
 
     return page
