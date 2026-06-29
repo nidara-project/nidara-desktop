@@ -17,6 +17,13 @@ export enum WidgetSize {
     FULL_WIDTH = "4x1"
 }
 
+// CC grid geometry — one grid cell is UNIT px, cells separated by GAP px. Defined
+// here (a leaf module) rather than in CCLayoutManager so widgets can read them
+// without importing the layout manager, which pulls in the widget registry and
+// would form an import cycle. CCLayoutManager re-exports these for its consumers.
+export const UNIT = 80
+export const GAP = 12
+
 // Inner space the host guarantees to a tile's content at a given size — the
 // cell span minus the island's own padding. Computed by the host (IslandGrid)
 // from its layout constants; widgets size their content from THIS, never from

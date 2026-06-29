@@ -1,11 +1,10 @@
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import { readFile, writeFile } from "ags/file"
-import { WidgetSize } from "./Types"
+import { WidgetSize, UNIT, GAP } from "./Types"
 import { WIDGET_META, CC_DEFAULT_ORDER } from "../../widgets/index"
 
-export const UNIT = 80
-export const GAP = 12
+export { UNIT, GAP }   // re-exported (defined in the leaf Types) so existing importers are unchanged
 export const GRID_COLS = 4
 export const GRID_ROWS = 8
 export const GRID_WIDTH  = GRID_COLS * UNIT + (GRID_COLS - 1) * GAP // 356

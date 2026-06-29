@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import Theme from "../core/ThemeManager"
-import { AtomicWidget, WidgetSize, ContentBudget } from "../surfaces/control-center/Types"
+import { AtomicWidget, WidgetSize, ContentBudget, UNIT, GAP } from "../surfaces/control-center/Types"
 import { pollWhileMapped } from "../common/poll"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -186,8 +186,14 @@ function buildContent(size: WidgetSize, budget: ContentBudget): Gtk.Widget {
     const gap  = large ? 5 : 2
     const CAPTION_H = 20   // the metric's own caption line under the ring
     const ring = Math.min(56, budget.height - CAPTION_H - gap)
+    // Space the two metrics one grid cell apart (UNIT + GAP) so each ring lands on
+    // its grid-cell centre — i.e. exactly where a 1×1 widget's icon sits — instead of
+    // bunched in the middle of the tile. The ring is the widest part of each metric
+    // column (caption "CPU"/"RAM" is narrower), so column width ≈ ring and a spacing
+    // of (pitch − ring) puts the ring centres one pitch apart. The CenterBox keeps the
+    // pair centred in the tile, which (being symmetric) lands them on both cell centres.
     const inner = new Gtk.Box({
-        spacing: large ? 28 : 20,
+        spacing: (UNIT + GAP) - ring,
         halign: Gtk.Align.CENTER,
         valign: Gtk.Align.CENTER,
     })
