@@ -225,6 +225,16 @@ stop), drive ONE `buildCapsuleInner` via getters + `inner.update()` on a `notify
 state classes on `inner.iconBox`/`inner.icon`/`inner.label`/`inner.subLabel`) — the same
 dynamic-capsule pattern as wifi/focus — instead of swapping whole subtrees in a stack.
 
+**Multi-cell `centerContent` tiles align their items to the grid-cell centres.** A 2×1 tile
+spans two grid cells; its content (e.g. cpu_memory's two metric rings) should sit one grid
+**pitch** (`UNIT + GAP`) apart, centred — so each item lands on its cell centre, exactly where a
+1×1 widget's icon centres and where a 2×1 tile's leading icon sits (the icon inset ≈ `UNIT/2`).
+Spacing the items by their natural gap instead bunches them toward the middle, a few px inside
+the icon columns. `cpu_memory` does this with `spacing: (UNIT + GAP) − ring` in a `CenterBox`.
+`UNIT`/`GAP` are defined in `control-center/Types.ts` (a leaf) and re-exported by
+`CCLayoutManager` — read them from `Types` in a widget; importing `CCLayoutManager` from a widget
+pulls in the widget registry and forms a boot-crashing import cycle.
+
 ## The bar launcher mark — flattened path, no SVG filter
 
 The bar launcher (system-menu) icon is the **Nidara mark**, `assets/nidara/assets/nidara-symbolic.svg`,
