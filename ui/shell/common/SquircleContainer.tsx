@@ -45,6 +45,24 @@ interface SquircleContainerProps {
     opacityRole?: "bar" | "overlay"
 }
 
+/** Resolves a shape's actual paint params for an allocated size. CIRCLE/CAPSULE
+ *  always collapse to a perfect arc sized to the smaller dimension (the curve
+ *  must follow the shape's own footprint, not a caller's guessed radius);
+ *  DOCK_PILL/SQUIRCLE use the requested radius/n as-is. Exported so anything
+ *  painting a squircle outside this component (e.g. the CC drag ghost) stays in
+ *  lockstep with how a real tile renders instead of re-deriving the mapping. */
+export function resolveDrawParams(
+    shape: Shape, radius: number, n: number, perfect: boolean, w: number, h: number,
+): { radius: number; n: number; perfect: boolean } {
+    if (shape === Shape.CIRCLE || shape === Shape.CAPSULE) {
+        return { radius: Math.min(w, h) / 2, n: 2.0, perfect: true }
+    }
+    if (shape === Shape.DOCK_PILL) {
+        return { radius: radius || 24, n: 3.2, perfect }
+    }
+    return { radius, n, perfect }
+}
+
 export default function SquircleContainer({
     child,
     radius = 24,
@@ -122,18 +140,7 @@ export default function SquircleContainer({
         // Gtk4 provides a clean surface; OVER is the standard blending mode.
         cr.setOperator(2) // OVER
 
-        let drawRadius = radius
-        let drawN = n
-        let drawPerfect = perfect
-
-        if (shape === Shape.CIRCLE || shape === Shape.CAPSULE) {
-            drawRadius = Math.min(w, h) / 2
-            drawN = 2.0
-            drawPerfect = true
-        } else if (shape === Shape.DOCK_PILL) {
-            drawRadius = radius || 24
-            drawN = 3.2
-        }
+        const { radius: drawRadius, n: drawN, perfect: drawPerfect } = resolveDrawParams(shape, radius, n, perfect, w, h)
 
         drawSquircle(
             cr, w, h, undefined,

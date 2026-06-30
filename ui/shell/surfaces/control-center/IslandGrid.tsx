@@ -1,20 +1,55 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
-import BaseIsland, { islandPadding } from "./BaseIsland"
+import BaseIsland, { islandPadding, resolveIslandShape } from "./BaseIsland"
 import ccLayout, { UNIT, GAP, GRID_COLS, GRID_ROWS, GRID_WIDTH, GRID_HEIGHT, SIZE_MAP } from "./CCLayoutManager"
-import { AtomicWidget } from "./Types"
+import { AtomicWidget, WidgetSize } from "./Types"
 import status from "../../core/Status"
 import widgetConfig from "../../core/WidgetConfig"
 import registry, { widgetAvailable, watchWidgetAvailability } from "../../widgets/index"
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
-import SquircleContainer, { Shape } from "../../common/SquircleContainer"
+import SquircleContainer, { Shape, resolveDrawParams } from "../../common/SquircleContainer"
+import { drawSquircle } from "../../common/DrawingUtils"
+import Theme from "../../core/ThemeManager"
 import IconButton from "../../common/IconButton"
 import { createCCContextMenu } from "./CCContextMenu"
 
 const pixelX = (gx: number) => gx * (UNIT + GAP)
 const pixelY = (gy: number) => gy * (UNIT + GAP)
+
+// Drag-ghost: a Cairo-painted placeholder shaped like the dragged widget's
+// actual BaseIsland silhouette (circle/capsule/squircle/dock-pill) instead of a
+// generic rounded box, so the landing indicator previews the real tile. Returns
+// a setter for the "can't drop here" tint since the colors are baked into the
+// draw call, not CSS-driven like a normal tile.
+const GHOST_DANGER = { r: 1, g: 59 / 255, b: 48 / 255 }
+
+function makeDropGhost(size: WidgetSize, w: number, h: number): { widget: Gtk.DrawingArea; setInvalid: (v: boolean) => void } {
+    const { shape, radius } = resolveIslandShape(size, w, h)
+    let invalid = false
+    const da = new Gtk.DrawingArea({ width_request: w, height_request: h })
+    da.set_can_target(false)
+    da.set_draw_func((_widget: Gtk.DrawingArea, cr: any, dw: number, dh: number) => {
+        const { radius: r, n, perfect } = resolveDrawParams(shape, radius, 3.2, false, dw, dh)
+        let accent: { r: number; g: number; b: number }
+        if (invalid) {
+            accent = GHOST_DANGER
+        } else {
+            const hex = Theme.accentPalette[Theme.accentColor].color
+            accent = {
+                r: parseInt(hex.slice(1, 3), 16) / 255,
+                g: parseInt(hex.slice(3, 5), 16) / 255,
+                b: parseInt(hex.slice(5, 7), 16) / 255,
+            }
+        }
+        drawSquircle(cr, dw, dh, undefined, 0.12, false, accent, r, perfect, { ...accent, a: 0.6 }, n, 2, 2.0, [4, 3])
+    })
+    return {
+        widget: da,
+        setInvalid: (v: boolean) => { if (v !== invalid) { invalid = v; da.queue_draw() } },
+    }
+}
 
 // Compute the pixel height needed to show all placed widgets (no extra padding)
 function computeContentHeight(): number {
@@ -400,8 +435,10 @@ export default function IslandGrid() {
     // the opening gap instead of snapping ahead of the parting tiles.
     const GHOST_KEY = "\u0000drop-ghost"
     let dropGhost: Gtk.Widget | null = null
+    let dropGhostSetInvalid: ((v: boolean) => void) | null = null
     const removeGhost = () => {
         if (dropGhost) { try { fixed.remove(dropGhost) } catch {} ; dropGhost = null }
+        dropGhostSetInvalid = null
         widgetRefs.delete(GHOST_KEY)
     }
 
@@ -430,12 +467,14 @@ export default function IslandGrid() {
 
         // Spawn the landing-slot ghost at the dragged tile's footprint; it rides the
         // tween into the opening gap so the displacement reads clearly.
-        const { w, h } = SIZE_MAP[ccLayout.effectiveSize(dragWidgetId)]
+        const dragSize = ccLayout.effectiveSize(dragWidgetId)
+        const { w, h } = SIZE_MAP[dragSize]
         const gw = w * UNIT + (w - 1) * GAP
         const gh = h * UNIT + (h - 1) * GAP
         removeGhost()
-        dropGhost = new Gtk.Box({ css_classes: ["cc-drop-ghost"], width_request: gw, height_request: gh })
-        dropGhost.set_can_target(false)
+        const ghost = makeDropGhost(dragSize, gw, gh)
+        dropGhost = ghost.widget
+        dropGhostSetInvalid = ghost.setInvalid
         const src = dragOrigSnapshot.get(dragWidgetId)
         const sx = src ? pixelX(src.x) : 0, sy = src ? pixelY(src.y) : 0
         fixed.put(dropGhost, sx, sy)
@@ -465,11 +504,11 @@ export default function IslandGrid() {
         if (!preview) {
             // Can't drop here (off-grid or a displaced tile wouldn't fit anywhere):
             // mark the ghost invalid and hold the other tiles where they are.
-            if (dropGhost) dropGhost.add_css_class("cc-drop-ghost-invalid")
+            dropGhostSetInvalid?.(true)
             animateTo(new Map([[GHOST_KEY, { x: pixelX(cell.x), y: pixelY(cell.y) }]]))
             return 0 as any
         }
-        if (dropGhost) dropGhost.remove_css_class("cc-drop-ghost-invalid")
+        dropGhostSetInvalid?.(false)
 
         // Drop where pointed; only overlapped tiles slide aside (downward-biased).
         const targets = new Map<string, { x: number; y: number }>()
@@ -512,6 +551,7 @@ export default function IslandGrid() {
         dragSourceWidget = null
         stopAnim()
         dropGhost = null   // cleared by the child-removal loop below
+        dropGhostSetInvalid = null
         ctxMenu.close()
 
         let child = fixed.get_first_child()

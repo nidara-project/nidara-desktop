@@ -19,6 +19,29 @@ export function islandPadding(size: WidgetSize): number {
     return size === WidgetSize.TALL ? 4 : 12
 }
 
+// Per-size shape identity — SINGLE: full circle, WIDE/TALL: perfect capsule,
+// FULL_WIDTH: dock-profile pill, SQUARE: squircle. Exported so anything that
+// needs to preview a tile's silhouette outside BaseIsland itself (the CC drag
+// ghost) stays a single source of truth with what actually renders.
+export function resolveIslandShape(size: WidgetSize, width: number, height: number): { shape: Shape; radius: number } {
+    if (size === WidgetSize.SINGLE) {
+        return { shape: Shape.CIRCLE, radius: width / 2 }
+    } else if (size === WidgetSize.WIDE) {
+        // 🔒 2x1: CAPSULAS PERFECTAS (Semicircles)
+        return { shape: Shape.CAPSULE, radius: height / 2 }
+    } else if (size === WidgetSize.TALL) {
+        // 1x2: vertical capsule — the slider fills it edge-to-edge (CAPSULE auto-
+        // computes radius = min(w,h)/2, so the pill is rounded on the short axis).
+        return { shape: Shape.CAPSULE, radius: width / 2 }
+    } else if (size === WidgetSize.FULL_WIDTH) {
+        // 4x1: Sync with Dock profile
+        return { shape: Shape.DOCK_PILL, radius: height / 2 }
+    } else {
+        // 2x2: Squircle with Dock profile
+        return { shape: Shape.SQUIRCLE, radius: 32 }
+    }
+}
+
 interface BaseIslandProps {
     name: string
     child: Gtk.Widget
@@ -41,32 +64,9 @@ export default function BaseIsland({
     centerContent = false
 }: BaseIslandProps): Gtk.Widget {
 
-    //  GEOMETRIC RULES:
-    let shape = Shape.SQUIRCLE
-    let radius = 28
-    let n = 3.2 // Tahoe Standard
-
-    if (size === WidgetSize.SINGLE) {
-        shape = Shape.CIRCLE
-        radius = width / 2
-    } else if (size === WidgetSize.WIDE) {
-        // 🔒 2x1: CAPSULAS PERFECTAS (Semicircles)
-        shape = Shape.CAPSULE
-        radius = height / 2
-    } else if (size === WidgetSize.TALL) {
-        // 1x2: vertical capsule — the slider fills it edge-to-edge (CAPSULE auto-
-        // computes radius = min(w,h)/2, so the pill is rounded on the short axis).
-        shape = Shape.CAPSULE
-        radius = width / 2
-    } else if (size === WidgetSize.FULL_WIDTH) {
-        // 4x1: Sync with Dock profile
-        shape = Shape.DOCK_PILL
-        radius = height / 2
-    } else {
-        // 2x2: Squircle with Dock profile
-        shape = Shape.SQUIRCLE
-        radius = 32
-    }
+    //  GEOMETRIC RULES:
+    const { shape, radius } = resolveIslandShape(size, width, height)
+    const n = 3.2 // Tahoe Standard
 
     // WIDE capsules: pin content to the LEFT. halign FILL doesn't stretch a
     // shrink-wrapping box — GTK centres it instead, so the icon x drifts with the

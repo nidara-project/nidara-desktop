@@ -235,18 +235,8 @@
     transition: opacity 0.15s ease;
 }
 
-.cc-drop-ghost {
-    background: rgba(var(--nidara-accent-rgb), 0.12);
-    border: 2px dashed rgba(var(--nidara-accent-rgb), 0.6);
-    border-radius: var(--nidara-radius-lg);
-    transition: background-color 0.1s ease, border-color 0.1s ease;
-
-    /* No valid drop here (off-grid, or a displaced tile wouldn't fit). */
-    &.cc-drop-ghost-invalid {
-        background: rgba(var(--nidara-danger-rgb), 0.12);
-        border-color: rgba(var(--nidara-danger-rgb), 0.6);
-    }
-}
+/* (.cc-drop-ghost deleted — the drag-ghost is now Cairo-painted in IslandGrid.tsx's
+   makeDropGhost, shaped per-widget via resolveIslandShape, not a generic CSS box.) */
 
 /* (.cc-resize-btn deleted — dead CSS from the pre-context-menu resize approach;
    tile resizing lives in CCContextMenu.tsx since the 3-tier menu landed.) */

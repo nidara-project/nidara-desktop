@@ -248,6 +248,21 @@ the icon columns. `cpu_memory` does this with `spacing: (UNIT + GAP) − ring` i
 `CCLayoutManager` — read them from `Types` in a widget; importing `CCLayoutManager` from a widget
 pulls in the widget registry and forms a boot-crashing import cycle.
 
+**The CC edit-mode drag ghost previews the dragged tile's real silhouette, not a generic rounded
+box.** `BaseIsland.tsx` exports `resolveIslandShape(size, width, height)` — the per-`WidgetSize`
+shape/radius decision (SINGLE→circle, WIDE/TALL→perfect capsule, FULL_WIDTH→dock-pill,
+SQUARE→squircle) that used to live only inline in `BaseIsland()`. `SquircleContainer.tsx` exports
+`resolveDrawParams(shape, radius, n, perfect, w, h)` — the second-stage resolution (CIRCLE/CAPSULE
+always collapse to a perfect arc sized to `min(w,h)/2`, ignoring the requested radius) that used to
+live only inline in its `draw_func`. `IslandGrid.tsx`'s `makeDropGhost` calls both directly and
+paints with `drawSquircle` on a bare `Gtk.DrawingArea` (bypassing `SquircleContainer` itself,
+because the ghost's invalid/valid tint must be driven by a mutable flag + `queue_draw()`, not a CSS
+class — the fill/border colors are baked into the draw call). The result: drag a 1×1 widget → a
+circular ghost; a 2×1 → a perfect capsule; a 2×2 → a squircle — always whatever the *real* tile
+would render, because both draw from the same two resolvers BaseIsland itself uses. `drawSquircle`
+also grew an optional trailing `dash?: number[]` param (only the ghost passes it) so the border
+keeps its dashed "phantom" look without a CSS-only dashed-stroke escape hatch.
+
 ## The bar launcher mark — flattened path, no SVG filter
 
 The bar launcher (system-menu) icon is the **Nidara mark**, `assets/nidara/assets/nidara-symbolic.svg`,

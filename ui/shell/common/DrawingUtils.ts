@@ -98,7 +98,8 @@ export const drawSquircle = (
     borderColor?: { r: number, g: number, b: number, a: number }, // New: Custom Border
     n: number = 3.2, // Superellipse factor
     borderWidth: number = 1.0, // Isolated border width
-    inset: number = 2.5 // Configurable buffer to avoid edge clipping
+    inset: number = 2.5, // Configurable buffer to avoid edge clipping
+    dash?: number[], // Optional dash pattern for the border stroke only (CC drag-ghost; real tiles never pass this)
 ) => {
     if (width <= 0 || height <= 0) return
 
@@ -145,6 +146,7 @@ export const drawSquircle = (
     const baseG = borderColor ? borderColor.g : 1
     const baseB = borderColor ? borderColor.b : 1
     cr.setSourceRGBA(baseR, baseG, baseB, baseAlpha)
+    if (dash) cr.setDash(dash, 0)
     cr.stroke()
     cr.restore()
 
