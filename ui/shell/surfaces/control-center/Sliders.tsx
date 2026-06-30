@@ -46,18 +46,19 @@ function buildHorizontalSlider(
 }
 
 function buildVerticalSlider(
-    iconName: Gio.FileIcon,
+    getIcon: () => Gio.FileIcon,
     getValue: () => number,
     onChange: (v: number) => void,
     onExtChange: (cb: (v: number) => void) => (() => void),
+    iconSubscribe?: (sync: () => void) => (() => void),
 ): Gtk.Widget {
     // Capsule-filling vertical slider: fill rises edge-to-edge, % overlaid on top,
     // icon at the bottom (shared with brightness).
-    return makeVerticalFillTile(iconName, {
+    return makeVerticalFillTile(getIcon, {
         value: getValue(),
         onChange: (v) => onChange(v / 100),
         onExtChange: (cb) => onExtChange((v) => cb(Math.round(v * 100))),
-    })
+    }, iconSubscribe)
 }
 
 // Small (1×1) variant: round mute-toggle icon, mirroring the bar icon.
@@ -99,7 +100,11 @@ export function VolumeWidget(): CCWidgetSpec {
             return buildVolumeIcon(speaker)
         }
         if (size === WidgetSize.TALL) {
-            return buildVerticalSlider(Icons.volumeHigh, () => current * 100, onChange, onExtChange)
+            return buildVerticalSlider(
+                () => speaker ? AudioSvc.targetVolumeIcon(speaker) : Icons.volumeMuted,
+                () => current * 100, onChange, onExtChange,
+                (sync) => speaker ? AudioSvc.watchVolume(speaker, sync) : () => {},
+            )
         }
         return buildHorizontalSlider(Icons.volumeLow, Icons.volumeHigh, () => current * 100, onChange, onExtChange)
     }

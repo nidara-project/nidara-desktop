@@ -276,8 +276,21 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
  * capsule (fill rises from the bottom); the percentage is overlaid at the top and the
  * icon at the bottom. Shared by volume + brightness. The host (BaseIsland TALL) draws
  * the CAPSULE with no padding, so `trackH` is sized to nearly span the cell width.
+ *
+ * The bottom icon is sized/placed to land exactly where a 1×1 tile's icon would —
+ * same 28px glyph, centred UNIT/2 (40px) above the tile's true bottom edge — so a
+ * TALL tile reads as "a 1×1 icon with a slider grown on top", not a smaller one of
+ * its own. margin_bottom math: 40 (UNIT/2) − 4 (BaseIsland TALL padding, the gap
+ * between this overlay and the tile's real edge) − 14 (half the 28px glyph) = 22.
+ * `icon` accepts a getter + subscribe so a level-dependent icon (volume) stays live.
  */
-export function makeVerticalFillTile(icon: Gio.FileIcon, opts: SliderOpts): Gtk.Widget {
+export function makeVerticalFillTile(
+    icon: Gio.FileIcon | (() => Gio.FileIcon),
+    opts: SliderOpts,
+    iconSubscribe?: (sync: () => void) => (() => void),
+): Gtk.Widget {
+    const getIcon = typeof icon === "function" ? icon : () => icon
+
     const valueLabel = new Gtk.Label({
         css_classes: ["slider-fill-value"],
         halign: Gtk.Align.CENTER, valign: Gtk.Align.START, margin_top: 12,
@@ -285,10 +298,14 @@ export function makeVerticalFillTile(icon: Gio.FileIcon, opts: SliderOpts): Gtk.
     valueLabel.set_can_target(false)
 
     const iconImg = new Gtk.Image({
-        gicon: icon, pixel_size: 18, css_classes: ["nd-icon", "slider-fill-icon"],
-        halign: Gtk.Align.CENTER, valign: Gtk.Align.END, margin_bottom: 14,
+        gicon: getIcon(), pixel_size: 28, css_classes: ["nd-icon", "slider-fill-icon"],
+        halign: Gtk.Align.CENTER, valign: Gtk.Align.END, margin_bottom: 22,
     })
     iconImg.set_can_target(false)
+    if (iconSubscribe) {
+        const cleanup = iconSubscribe(() => { iconImg.gicon = getIcon() })
+        iconImg.connect("unrealize", cleanup)
+    }
 
     const slider = makeSlider({
         ...opts,

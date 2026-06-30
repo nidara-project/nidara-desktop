@@ -314,6 +314,20 @@ horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — 
 - **Wiring:** `onChange` (committed, optional `debounce` / `commitOnRelease`), `onValueChanged`
   (live, for the % label), `onExtChange(cb) → cleanup` for external value updates (ignored
   while the user drags).
+- **`makeVerticalFillTile`'s bottom icon is sized/placed to match a 1×1 tile's icon exactly** —
+  28px glyph, vertical centre `UNIT/2` (40px) above the TALL tile's true bottom edge, not an
+  arbitrary smaller icon of its own. Derivation: `40 − 4 (BaseIsland's TALL padding,
+  `islandPadding()`) − 14 (half the 28px glyph) = margin_bottom: 22`. This works because a
+  SINGLE tile's icon (button `width_request:48` + CENTER align) always resolves to the dead
+  centre of its 80×80 cell regardless of padding magnitude, so `UNIT/2` from either edge is the
+  correct target for both. If `UNIT`/`islandPadding`/the glyph size ever change, recompute this
+  margin too — it's a hand-derived constant (matching the existing `trackH: 72` comment right
+  above it in `common/Slider.ts`), not something that re-derives itself.
+- **`makeVerticalFillTile`'s `icon` param accepts a getter** (`Gio.FileIcon | (() =>
+  Gio.FileIcon)`) plus an optional `iconSubscribe?: (sync) => cleanup`, so a level-dependent icon
+  (volume's mute/low/medium/high ladder, via `AudioSvc.targetVolumeIcon`/`watchVolume`) stays
+  live on the TALL tile — the same canonical helper the bar icon and the SINGLE icon already
+  used. Pass a plain `Gio.FileIcon` (no subscribe) for a static icon like brightness's `Icons.sun`.
 
 ## Tooltips — one component
 
