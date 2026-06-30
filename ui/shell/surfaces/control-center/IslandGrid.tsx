@@ -146,6 +146,17 @@ function makeIslandWidget(
     }
 
     // ── edit mode: × remove (kept alongside the context menu's Remove) + drag ──
+    // Tile content must not be a pointer target while editing: a slider's own
+    // GestureDrag claims the sequence ON PRESS (see Slider.ts — deliberate, so a
+    // normal-mode slider drag doesn't also open the tile's detail), which beats
+    // `dragSrc` below to every press since GTK delivers bubble-phase events
+    // target-first. With content untargetable, `pick()` resolves the press
+    // straight to `overlay`, so the tile-move drag always wins — and nothing
+    // inside a tile should be independently actionable while rearranging anyway
+    // (only the × badge below and the drag itself are live, matching jiggle-mode
+    // elsewhere).
+    content.set_can_target(false)
+
     // Clear the placement flag too (not just the layout), or syncCCLayout re-adds
     // the widget on next load — cc_layout.json and widgetConfig must agree.
     const removeBtn = IconButton({

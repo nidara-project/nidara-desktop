@@ -299,6 +299,15 @@ horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — 
 - **Custom input** (a `GestureDrag` + scroll + arrow keys, *not* a `Gtk.Scale`): clicking the
   track jumps to that position; grabbing the thumb never warps it; `drag-begin` claims the
   sequence so a slider inside a clickable tile (e.g. a CC widget) doesn't trigger the tile.
+  **Gotcha:** that same eager claim-on-press also wins against the CC's edit-mode
+  tile-move `DragSource` on `overlay` — GTK4 delivers bubble-phase events to the deepest
+  widget under the pointer first, so the slider (a descendant) claims before the ancestor
+  `DragSource` ever gets a look, and a slider tile becomes undraggable in edit mode.
+  Fixed in `IslandGrid.tsx`'s `makeIslandWidget`: when `editMode`, `content.set_can_target(false)`
+  — the same "pointer-transparent" idiom already used for `cc-slot-placeholder`/the drag ghost —
+  so `pick()` resolves the press straight to `overlay` and the move-drag always wins. Applies to
+  every tile's content, not just sliders: nothing inside a tile should be independently
+  actionable while rearranging (only the × remove badge and the drag itself stay live).
 - **Options:** `orientation: "horizontal" | "vertical"`, `thumb` (default true). `thumb: false`
   + a wide `trackH` = the macOS-style vertical capsule (fill rises, clipped to the capsule so
   the end follows the rounded cap). Thumb goes translucent while pressed.
