@@ -225,6 +225,19 @@ stop), drive ONE `buildCapsuleInner` via getters + `inner.update()` on a `notify
 state classes on `inner.iconBox`/`inner.icon`/`inner.label`/`inner.subLabel`) — the same
 dynamic-capsule pattern as wifi/focus — instead of swapping whole subtrees in a stack.
 
+**A widget that needs BOTH a one-tap toggle AND a `buildCCDetail` subpage uses
+`buildSplitCapsuleContent`, not `buildCapsuleContent`.** `buildCapsuleContent` wraps the *entire*
+capsule in one `Gtk.Button` — fine for toggle-only widgets (dark_mode, night_light, focus), but it
+swallows the tile-level click IslandGrid wires up for `buildCCDetail` widgets, so a toggle widget
+that grows a subpage (bluetooth → device list) has no way to open it. `buildSplitCapsuleContent`
+makes *only the icon badge* a button (the toggle); the title/subtitle stay plain so the unclaimed
+click area falls through to IslandGrid's detail handler — the same mechanism the plain
+detail-opening tiles (wifi, ethernet) already rely on, just carved out of a smaller region instead
+of the whole tile. CSS gotcha: the icon button's own class (`.cc-split-icon-btn`) must outrank the
+blanket `.cc-island button { reset }` — a single-class selector loses that fight on specificity
+regardless of source order, so it's written as a two-class descendant
+(`.cc-island .cc-split-icon-btn`), which always wins.
+
 **Multi-cell `centerContent` tiles align their items to the grid-cell centres.** A 2×1 tile
 spans two grid cells; its content (e.g. cpu_memory's two metric rings) should sit one grid
 **pitch** (`UNIT + GAP`) apart, centred — so each item lands on its cell centre, exactly where a

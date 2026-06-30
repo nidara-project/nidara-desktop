@@ -103,6 +103,18 @@
         color: var(--nidara-text);
 
     }
+
+    /* Icon-only toggle nested inside a split capsule (see buildSplitCapsuleContent):
+       the surrounding .cc-atomic-icon-circle-bg box still paints the resting badge;
+       this button only needs the round clip + hover/press feedback so the icon
+       reads as its own tap target, distinct from the rest of the capsule (which
+       opens the detail panel). Two classes outrank the `.cc-island button` reset
+       above regardless of source order. */
+    .cc-split-icon-btn {
+        border-radius: var(--nidara-radius-pill);
+        color: var(--nidara-text);
+        @include nidara-tile-states;
+    }
 }
 
 /* 48x48 Circular Badge inside capsules (no override needed, is a box not a button) */

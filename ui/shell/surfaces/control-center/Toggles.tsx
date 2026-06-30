@@ -107,6 +107,34 @@ export function wrapCapsuleTile(box: Gtk.Box): Gtk.Box {
     return outer
 }
 
+// Split-target capsule: the icon badge is the ONLY click target (quick toggle),
+// the title/subtitle stay plain. For a widget that has both a one-tap action
+// AND a buildCCDetail, a capsule-wide button (buildCapsuleContent) would swallow
+// the tile-level click IslandGrid wires up for showDetail — this leaves that
+// area free so the rest of the capsule opens the detail panel, the same way the
+// plain detail tiles (wifi, ethernet, …) do.
+export function buildSplitCapsuleContent(
+    getIcon: () => Gio.FileIcon,
+    getTitle: () => string,
+    getSubTitle: () => string,
+    onToggle: () => void,
+    subscribe?: SubscribeFn,
+): Gtk.Widget {
+    const inner = buildCapsuleInner(getIcon, getTitle, getSubTitle)
+
+    inner.iconBox.remove(inner.icon)
+    const iconBtn = new Gtk.Button({ css_classes: ["cc-split-icon-btn"], hexpand: true, vexpand: true })
+    iconBtn.set_child(inner.icon)
+    inner.iconBox.append(iconBtn)
+
+    iconBtn.connect("clicked", () => { onToggle(); inner.update() })
+    if (subscribe) {
+        const cleanup = subscribe(inner.update)
+        inner.box.connect("unrealize", cleanup)
+    }
+    return wrapCapsuleTile(inner.box)
+}
+
 function buildCapsuleContent(
     getIcon: () => Gio.FileIcon,
     getTitle: () => string,
