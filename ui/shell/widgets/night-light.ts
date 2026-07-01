@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import nightLight from "../core/NightLightManager"
 import { makeHSlider } from "../common/Slider"
-import { buildSplitCapsuleContent } from "../surfaces/control-center/Toggles"
+import { buildRoundContent, buildSplitCapsuleContent } from "../surfaces/control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
@@ -28,22 +28,16 @@ const getSub = () => nightLight.enabled
     ? `${nightLight.temperature}K`
     : t("widget.night-light.sub.off")
 
-// Mirrors bt's split-target shape: SINGLE has no toggle of its own (a real
-// button there would swallow the tile-level tap IslandGrid uses to open
-// buildCCDetail), WIDE/SQUARE toggle via the icon badge only, the rest of the
-// capsule opens the detail panel — see [[project_cc_capsule_alignment]].
+// SINGLE keeps the toggle (every platform's compact quick-toggle stays a
+// toggle — "open detail" is always a separate affordance, never a fallback on
+// the same tap target, and there's no room for a second hit-region at 1×1).
+// WIDE/SQUARE split: icon badge toggles, the rest of the capsule opens the
+// detail panel — see [[project_cc_capsule_alignment]].
 function buildContent(size: WidgetSize): Gtk.Widget {
-    if (size === WidgetSize.SINGLE) {
-        const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        box.append(new Gtk.Image({
-            gicon: getIcon(), pixel_size: 28,
-            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-            hexpand: true, vexpand: true,
-            css_classes: ["nd-icon"],
-        }))
-        return box
-    }
-    return buildSplitCapsuleContent(getIcon, () => t("widget.night-light.name"), getSub, () => nightLight.setEnabled(!nightLight.enabled), subscribe)
+    const toggle = () => nightLight.setEnabled(!nightLight.enabled)
+    if (size === WidgetSize.SINGLE)
+        return buildRoundContent(getIcon, () => nightLight.enabled, toggle, subscribe)
+    return buildSplitCapsuleContent(getIcon, () => t("widget.night-light.name"), getSub, toggle, subscribe)
 }
 
 // ── CC detail panel: on/off switch + temperature slider + schedule ────────────

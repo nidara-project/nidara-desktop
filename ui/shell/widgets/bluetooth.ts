@@ -1,5 +1,5 @@
 import { Gtk } from "ags/gtk4"
-import { buildSplitCapsuleContent } from "../surfaces/control-center/Toggles"
+import { buildRoundContent, buildSplitCapsuleContent } from "../surfaces/control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
@@ -19,21 +19,13 @@ const getIcon = () => BT.isPowered() ? Icons.bluetooth : Icons.bluetoothOff
 const getSub = () => BT.isPowered() ? t("widget.bluetooth.sub.active") : t("widget.bluetooth.sub.inactive")
 
 function buildContent(size: WidgetSize): Gtk.Widget {
-    if (size === WidgetSize.SINGLE) {
-        // Matches the plain detail-opening tiles (wifi, ethernet, …): no button at
-        // this size, the whole 1×1 tile opens the detail panel.
-        const box = new Gtk.Box({ hexpand: true, vexpand: true })
-        const icon = new Gtk.Image({
-            gicon: getIcon(), pixel_size: 28,
-            halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
-            hexpand: true, vexpand: true,
-            css_classes: ["nd-icon"],
-        })
-        box.append(icon)
-        const dispose = BT.watchPower(() => { icon.gicon = getIcon() })
-        box.connect("unrealize", dispose)
-        return box
-    }
+    if (size === WidgetSize.SINGLE)
+        // Every platform (macOS/GNOME/Windows) keeps the toggle live even at the
+        // most compact representation — "open detail" is always a SEPARATE
+        // affordance (a chevron, a wider row), never a fallback on the same tap
+        // target. There's no room for a second hit-region at 1×1, so the detail
+        // panel simply isn't reachable from here — only from WIDE/SQUARE below.
+        return buildRoundContent(getIcon, () => BT.isPowered(), BT.togglePower, BT.watchPower)
 
     return buildSplitCapsuleContent(getIcon, () => t("widget.bluetooth.name"), getSub, BT.togglePower, BT.watchPower)
 }

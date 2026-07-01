@@ -1,6 +1,5 @@
 import { Gtk } from "ags/gtk4"
 import AstalNetwork from "gi://AstalNetwork"
-import AstalNotifd from "gi://AstalNotifd"
 import { CCWidgetSpec, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Gio from "gi://Gio"
@@ -170,7 +169,7 @@ function buildCapsuleContent(
 }
 
 // Single (1×1) round button
-function buildRoundContent(
+export function buildRoundContent(
     getIcon: () => Gio.FileIcon,
     getActive: () => boolean,
     onClick: () => void,
@@ -249,31 +248,6 @@ export function WifiWidget(): CCWidgetSpec {
     }
 
     return { id: "wifi", name: t("cc.wifi.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE], buildContent }
-}
-
-export function FocusWidget(): CCWidgetSpec {
-    const notifd  = AstalNotifd.get_default()
-    const toggle  = () => { if (notifd) notifd.dont_disturb = !notifd.dont_disturb }
-    const getIcon = () => notifd?.dont_disturb ? Icons.bellOff : Icons.bell
-    const getActive = () => !!notifd?.dont_disturb
-    const subscribe: SubscribeFn = (sync) => {
-        if (!notifd) return () => {}
-        const id = (notifd as any).connect("notify", sync)
-        return () => safeDisconnect(notifd, id)
-    }
-
-    const buildContent = (size: WidgetSize): Gtk.Widget => {
-        if (size === WidgetSize.SINGLE)
-            return buildRoundContent(getIcon, getActive, toggle, subscribe)
-        return buildCapsuleContent(
-            getIcon,
-            () => notifd?.dont_disturb ? t("cc.focus.title.on") : t("cc.focus.title.off"),
-            () => notifd?.dont_disturb ? t("cc.focus.sub.on") : "",
-            toggle, getActive, subscribe,
-        )
-    }
-
-    return { id: "focus", name: t("cc.focus.name"), defaultSize: WidgetSize.WIDE, supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE], buildContent }
 }
 
 export function RoundToggle(
