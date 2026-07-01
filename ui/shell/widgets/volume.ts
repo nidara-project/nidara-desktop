@@ -212,6 +212,15 @@ const volumeWidget: AtomicWidget = {
     buildBarExpanded,
     buildCCDetail,
     ccDetailRows: 4,
+    // Gauge fill for the TALL tile only — SINGLE (icon) and FULL_WIDTH (its own
+    // inline slider row) aren't a whole-island gauge, so they get 0 (no fill).
+    getFill: (size) => size === WidgetSize.TALL ? (AstalWp.get_default()?.audio?.default_speaker?.volume ?? 0) : 0,
+    watchActive: (cb) => {
+        const speaker = AstalWp.get_default()?.audio?.default_speaker
+        if (!speaker) return () => {}
+        const id = speaker.connect("notify::volume", cb)
+        return () => safeDisconnect(speaker, id)
+    },
 }
 
 export default volumeWidget

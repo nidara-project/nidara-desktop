@@ -71,6 +71,13 @@ export interface AtomicWidget {
     // for widgets with no persistent on/off state (screenshot, clipboard, media…).
     getActive?: () => boolean
     watchActive?: (cb: () => void) => (() => void)
+    // Fractional variant of getActive for gauge-style tiles (CC sliders: volume,
+    // brightness) — fills that fraction (0..1) of the island from the bottom with
+    // accent, same single shape/border as getActive. Size-aware (receives the
+    // widget's current WidgetSize) because a slider widget's OTHER sizes (its 1×1
+    // icon, its 4×1 horizontal bar) aren't gauges and must return 0 for those, or
+    // the whole island fills unexpectedly at that size too. Shares watchActive.
+    getFill?: (size: WidgetSize) => number
 }
 
 // The content-building subset of a widget, produced by the CC factories in

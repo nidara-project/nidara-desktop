@@ -53,6 +53,7 @@ interface BaseIslandProps {
     centerContent?: boolean
     getActive?: () => boolean
     watchActive?: (cb: () => void) => (() => void)
+    getFill?: () => number
 }
 
 export default function BaseIsland({
@@ -66,6 +67,7 @@ export default function BaseIsland({
     centerContent = false,
     getActive,
     watchActive,
+    getFill,
 }: BaseIslandProps): Gtk.Widget {
 
     //  GEOMETRIC RULES:
@@ -105,6 +107,7 @@ export default function BaseIsland({
         padding: islandPadding(size),
         getActive,
         watchActive,
+        getFill,
     })
 
     island.set_size_request(width, height)

@@ -200,6 +200,16 @@ const brightnessWidget: AtomicWidget = {
     buildContent,
     buildBarContent,
     buildBarExpanded,
+    // Gauge fill for the TALL tile only (see volume.ts for the same split).
+    // Brightness has no change signal — same "poll and redraw" reality the
+    // buildVertical/buildHorizontal panels already live with — so watchActive
+    // just re-queues a draw every 2s; _cachedPct itself is kept fresh by
+    // whichever poller (bar/CC/detail) is currently live.
+    getFill: (size) => size === WidgetSize.TALL ? _cachedPct / 100 : 0,
+    watchActive: (cb) => {
+        const id = GLib.timeout_add(GLib.PRIORITY_LOW, 2000, () => { cb(); return GLib.SOURCE_CONTINUE })
+        return () => { try { GLib.source_remove(id) } catch {} }
+    },
 }
 
 export default brightnessWidget

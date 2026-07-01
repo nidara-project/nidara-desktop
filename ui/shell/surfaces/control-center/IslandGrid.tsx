@@ -119,6 +119,7 @@ function makeIslandWidget(
     const island  = BaseIsland({
         name: def.id, child: content, width, height, size: effectiveSize, centerContent: def.centerContent,
         getActive: def.getActive, watchActive: def.watchActive,
+        getFill: def.getFill ? () => def.getFill!(effectiveSize) : undefined,
     })
 
     const overlay = new Gtk.Overlay()

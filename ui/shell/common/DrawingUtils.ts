@@ -100,6 +100,12 @@ export const drawSquircle = (
     borderWidth: number = 1.0, // Isolated border width
     inset: number = 2.5, // Configurable buffer to avoid edge clipping
     dash?: number[], // Optional dash pattern for the border stroke only (CC drag-ghost; real tiles never pass this)
+    fillFrac?: number, // Gauge fill: bottom `fillFrac` (0..1) of the shape gets `color`/`alpha`,
+                        // the rest gets `emptyColor`/`emptyAlpha` — ONE path, so the border/gloss
+                        // below wrap both portions as a single continuous shape (CC slider tiles).
+                        // undefined/omitted = fully filled with `color`, i.e. today's behavior.
+    emptyColor?: { r: number, g: number, b: number },
+    emptyAlpha?: number,
 ) => {
     if (width <= 0 || height <= 0) return
 
@@ -128,8 +134,20 @@ export const drawSquircle = (
     cr.save()
     cr.setAntialias(2) // GRAY (AA)
     createSquirclePath(cr, x, y, drawW, drawH, r, n, perfect, 0)
-    cr.setSourceRGBA(color.r, color.g, color.b, alpha)
-    cr.fill()
+    if (fillFrac !== undefined && fillFrac < 1) {
+        cr.clip()
+        const f = Math.max(0, Math.min(1, fillFrac))
+        const fillH = drawH * f
+        cr.setSourceRGBA(emptyColor?.r ?? color.r, emptyColor?.g ?? color.g, emptyColor?.b ?? color.b, emptyAlpha ?? alpha)
+        cr.rectangle(x, y, drawW, drawH - fillH)
+        cr.fill()
+        cr.setSourceRGBA(color.r, color.g, color.b, alpha)
+        cr.rectangle(x, y + (drawH - fillH), drawW, fillH)
+        cr.fill()
+    } else {
+        cr.setSourceRGBA(color.r, color.g, color.b, alpha)
+        cr.fill()
+    }
     cr.restore()
 
     // 2. BASE BORDER — GRAY stroke inside a NONE hard clip

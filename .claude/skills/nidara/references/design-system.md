@@ -272,6 +272,29 @@ poller + listener `Set` in `vpn.ts` (`watchVpnActive`), lazily started on first 
 of a `GLib.timeout_add` per built tile instance — cheaper and it's what let the 1×1 icon and the
 capsule badge both go live for free, which they weren't before.
 
+**The CC gauge tiles (volume/brightness's TALL slider) fill fractionally, through the SAME
+mechanism — `getFill?: (size) => number` (0..1), not a separately-drawn inner layer.** The
+original TALL implementation had `makeVerticalFillTile` paint its own accent fill in a nested
+inner `DrawingArea`, inset within `BaseIsland`'s own padding — visually a capsule-inside-a-capsule
+(the island's own border, THEN a gap, THEN the slider's own smaller pill with no border of its
+own). User called it out: it didn't read as the same "material" as an active toggle's fill.
+Fixed by extending `drawSquircle` itself with `fillFrac`/`emptyColor`/`emptyAlpha`: ONE path/clip
+paints the empty (top) portion with the base glass and the filled (bottom) portion with accent,
+so the border + gloss steps right after wrap BOTH portions as one continuous shape — structurally
+identical to how `getActive` fills the whole thing, just clipped to a fraction.
+`SquircleContainer`'s `getFill` takes priority over `getActive` when given (`frac >= 1` collapses
+to the exact same single-fill path `getActive` uses, `frac === 0` is pure glass, no behaviour
+change for anything that only passes `getActive`). `getFill` is **size-aware**
+(`(size: WidgetSize) => number`) because a slider widget's OTHER sizes aren't gauges — volume's
+SINGLE (1×1 icon) and FULL_WIDTH (its own inline thumbed slider row, unrelated to island fill)
+both return `0` there, only `WidgetSize.TALL` returns the real fraction. `makeSlider` grew a
+matching `paintFill?: boolean` (default true) so `makeVerticalFillTile` can opt OUT of drawing its
+own fill (`paintFill: false`) and become a pure interactive hit-region (drag/scroll/click-to-jump)
+over whatever BaseIsland paints — nothing else calls `paintFill:false` today, so every other
+slider (bar popovers, Settings pages) is unaffected. Brightness has no change signal, so its
+`watchActive` is just a 2s redraw poll (reusing the polling reality `buildVertical`/
+`buildHorizontal` already live with) reading the SAME shared `_cachedPct` those keep fresh.
+
 **Multi-cell `centerContent` tiles align their items to the grid-cell centres.** A 2×1 tile
 spans two grid cells; its content (e.g. cpu_memory's two metric rings) should sit one grid
 **pitch** (`UNIT + GAP`) apart, centred — so each item lands on its cell centre, exactly where a
@@ -344,7 +367,10 @@ horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — 
   actionable while rearranging (only the × remove badge and the drag itself stay live).
 - **Options:** `orientation: "horizontal" | "vertical"`, `thumb` (default true). `thumb: false`
   + a wide `trackH` = the macOS-style vertical capsule (fill rises, clipped to the capsule so
-  the end follows the rounded cap). Thumb goes translucent while pressed.
+  the end follows the rounded cap). Thumb goes translucent while pressed. `paintFill` (default
+  true) = false makes this `DrawingArea` paint NOTHING, a pure interactive hit-region — used by
+  `makeVerticalFillTile` (see the CC gauge tiles entry above), whose fill now lives one level up
+  in `BaseIsland`, not here. Every other caller leaves `paintFill` alone and is unaffected.
 - **Wiring:** `onChange` (committed, optional `debounce` / `commitOnRelease`), `onValueChanged`
   (live, for the % label), `onExtChange(cb) → cleanup` for external value updates (ignored
   while the user drags).

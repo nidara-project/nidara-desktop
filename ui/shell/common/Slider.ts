@@ -1,6 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import Cairo from "gi://cairo"
 
 // Palette tokens are CSS variables; for Cairo we read the accent from ThemeManager
 import Theme from "../core/ThemeManager"
@@ -54,6 +55,12 @@ export interface SliderOpts {
     /** Draw the track background behind the fill (default true). false = fill only,
      *  letting the host widget's own background show through the unfilled part. */
     track?: boolean
+    /** Paint the accent fill in this DrawingArea (default true). false = draw
+     *  nothing at all here — purely an interactive hit-region (drag/scroll/click)
+     *  — because a host that owns its own background paints the fill itself (the
+     *  CC gauge tiles: BaseIsland's getFill, one continuous shape/border instead
+     *  of a separate inner fill layer — see makeVerticalFillTile). */
+    paintFill?: boolean
     onChange: (v: number) => void
     onValueChanged?: (v: number) => void   // every change (for label sync)
     onExtChange?: (cb: (v: number) => void) => (() => void)
@@ -81,6 +88,7 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
     const horiz = (opts.orientation ?? "horizontal") !== "vertical"
     const thumb = opts.thumb ?? true
     const drawTrack = opts.track ?? true
+    const paintFill = opts.paintFill ?? true
     const trackH = opts.trackH ?? TRACK_H
     const thumbR = opts.thumbR ?? THUMB_R
     const step = opts.step ?? (max - min) / 20
@@ -138,25 +146,55 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
             capsuleMain(cr, pad, L - pad, cc, trackH, horiz); cr.fill()
         }
 
-        // Fill (accent)
-        const [ar, ag, ab] = PALETTE[Theme.accentColor] ?? PALETTE.blue
-        cr.setSourceRGBA(ar, ag, ab, 0.9)
-        if (thumb) {
-            // Capsule whose rounded end meets the thumb.
-            if (horiz) capsuleMain(cr, pad, tMain, cc, trackH, true)
-            else       capsuleMain(cr, tMain, L - pad, cc, trackH, false)
-            cr.fill()
-        } else {
-            // Thumbless capsule: clip to the track shape and fill a rect so the fill's
-            // far end follows the capsule's rounded cap (instead of going flat when short).
-            cr.save()
-            capsuleMain(cr, pad, L - pad, cc, trackH, horiz)
-            cr.clip()
-            const r = trackH / 2
-            if (horiz) cr.rectangle(pad, cc - r, tMain - pad, trackH)
-            else       cr.rectangle(cc - r, tMain, trackH, (L - pad) - tMain)
-            cr.fill()
-            cr.restore()
+        // Fill (accent) — skipped when a host paints it instead (paintFill:false;
+        // see makeVerticalFillTile, whose gauge fill now lives in BaseIsland).
+        if (paintFill) {
+            const [ar, ag, ab] = PALETTE[Theme.accentColor] ?? PALETTE.blue
+            cr.setSourceRGBA(ar, ag, ab, 0.9)
+            if (thumb) {
+                // Capsule whose rounded end meets the thumb.
+                if (horiz) capsuleMain(cr, pad, tMain, cc, trackH, true)
+                else       capsuleMain(cr, tMain, L - pad, cc, trackH, false)
+                cr.fill()
+            } else {
+                // Thumbless capsule: clip to the track shape and fill a rect so the fill's
+                // far end follows the capsule's rounded cap (instead of going flat when short).
+                // Only reachable when paintFill isn't turned off — makeVerticalFillTile, the
+                // sole thumb:false caller, always sets paintFill:false (its gauge fill now
+                // lives in BaseIsland instead, see getFill), so this path — gloss included —
+                // is currently dormant, kept for any future thumbless caller that DOES want
+                // this DrawingArea to own its own fill.
+                cr.save()
+                capsuleMain(cr, pad, L - pad, cc, trackH, horiz)
+                cr.clip()
+                const r = trackH / 2
+                const fx = horiz ? pad          : cc - r
+                const fy = horiz ? cc - r       : tMain
+                const fw = horiz ? tMain - pad  : trackH
+                const fh = horiz ? trackH       : (L - pad) - tMain
+                cr.rectangle(fx, fy, fw, fh)
+                cr.fill()
+
+                // Specular sheen on the fill's own surface — same "glass catches light"
+                // language as drawSquircle's gloss (bright top rim, faint bottom rim), just
+                // as a soft wash over the visible fill rect instead of a stroke along a
+                // curve, since the fill's top edge is the value line, not a fixed curve.
+                const rimTop = new Cairo.LinearGradient(0, fy, 0, fy + fh * 0.5)
+                rimTop.addColorStopRGBA(0, 1, 1, 1, 0.30)
+                rimTop.addColorStopRGBA(1, 1, 1, 1, 0.0)
+                cr.setSource(rimTop)
+                cr.rectangle(fx, fy, fw, fh * 0.5)
+                cr.fill()
+
+                const rimBot = new Cairo.LinearGradient(0, fy + fh, 0, fy + fh * 0.85)
+                rimBot.addColorStopRGBA(0, 1, 1, 1, 0.12)
+                rimBot.addColorStopRGBA(1, 1, 1, 1, 0.0)
+                cr.setSource(rimBot)
+                cr.rectangle(fx, fy + fh * 0.85, fw, fh * 0.15)
+                cr.fill()
+
+                cr.restore()
+            }
         }
 
         // Thumb
@@ -272,10 +310,15 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
 }
 
 /**
- * makeVerticalFillTile — the 1×2 (TALL) CC slider tile. The slider fills the whole
- * capsule (fill rises from the bottom); the percentage is overlaid at the top and the
- * icon at the bottom. Shared by volume + brightness. The host (BaseIsland TALL) draws
- * the CAPSULE with no padding, so `trackH` is sized to nearly span the cell width.
+ * makeVerticalFillTile — the 1×2 (TALL) CC slider tile. The gauge fill itself is
+ * painted by the HOST island (BaseIsland's getFill, see the widget's AtomicWidget —
+ * Sliders.tsx/brightness.ts), not by this component: one continuous shape/border for
+ * both the empty (glass) and filled (accent) portions, matching how an "on" toggle
+ * tile's whole capsule fills — instead of a separately-drawn inner fill sitting inside
+ * the island's own border with a visible seam between the two. This function now just
+ * supplies the interactive surface (drag/scroll/click-to-jump, `paintFill:false`) plus
+ * the percentage label overlaid at the top and the icon at the bottom. Shared by
+ * volume + brightness.
  *
  * The bottom icon is sized/placed to land exactly where a 1×1 tile's icon would —
  * same 28px glyph, centred UNIT/2 (40px) above the tile's true bottom edge — so a
@@ -312,9 +355,14 @@ export function makeVerticalFillTile(
         orientation: "vertical",
         thumb: false,
         track: false,            // no dark track — the tile's glass shows through
+        paintFill: false,        // the host BaseIsland paints the gauge fill (getFill) as
+                                  // ONE shape/border with the rest of the tile — see the
+                                  // widget's AtomicWidget.getFill (Sliders.tsx/brightness.ts).
+                                  // This DrawingArea is now purely the interactive hit-region.
 
-        // Inner width of the 1×2 cell: UNIT(80) − 2× BaseIsland's TALL padding(4).
-        // Keep in sync with BaseIsland so the fill sits flush inside the border.
+        // Inner width of the 1×2 cell: UNIT(80) − 2× BaseIsland's TALL padding(4). Still
+        // sizes the hit-region's width (crossMin/width_request) even with nothing painted,
+        // so drag/click-to-jump spans the visible capsule, not a thin sliver.
         trackH: opts.trackH ?? 72,
         onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%`; opts.onValueChanged?.(v) },
     })

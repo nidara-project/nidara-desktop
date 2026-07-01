@@ -54,6 +54,13 @@ interface SquircleContainerProps {
      *  container has no way to know on its own — it's driven by the caller's own
      *  domain signal, e.g. BluetoothService.watchPower). */
     watchActive?: (cb: () => void) => (() => void)
+    /** Fractional variant of getActive — 0..1, fills that fraction of the shape
+     *  from the BOTTOM with the live accent (a "gauge": CC slider tiles), the rest
+     *  with the base glass, as ONE continuous shape/border (see drawSquircle's
+     *  fillFrac) instead of a separately-drawn inner fill layer. Takes priority
+     *  over getActive when both are given (in practice, never both). Read live
+     *  inside the draw call and re-queued via watchActive, same as getActive. */
+    getFill?: () => number
 }
 
 /** Resolves a shape's actual paint params for an allocated size. CIRCLE/CAPSULE
@@ -101,6 +108,7 @@ export default function SquircleContainer({
     getActive,
     activeAlpha = 0.85,
     watchActive,
+    getFill,
 }: SquircleContainerProps) {
     const container = new Gtk.Grid({
         css_classes,
@@ -134,15 +142,26 @@ export default function SquircleContainer({
         let shareColor = baseColor
         let shareAlpha = baseAlpha
         let shareBorder = borderColor
+        let fillFrac: number | undefined = undefined
 
-        if (getActive?.()) {
-            const hex = Theme.accentPalette[Theme.accentColor].color
-            shareColor = {
-                r: parseInt(hex.slice(1, 3), 16) / 255,
-                g: parseInt(hex.slice(3, 5), 16) / 255,
-                b: parseInt(hex.slice(5, 7), 16) / 255,
+        if (getFill || getActive) {
+            const frac = getFill ? Math.max(0, Math.min(1, getFill())) : (getActive!() ? 1 : 0)
+            if (frac > 0) {
+                const hex = Theme.accentPalette[Theme.accentColor].color
+                const accent = {
+                    r: parseInt(hex.slice(1, 3), 16) / 255,
+                    g: parseInt(hex.slice(3, 5), 16) / 255,
+                    b: parseInt(hex.slice(5, 7), 16) / 255,
+                }
+                if (frac >= 1) {
+                    shareColor = accent
+                    shareAlpha = activeAlpha
+                } else {
+                    fillFrac = frac
+                    shareColor = accent       // the FILLED (bottom) portion
+                    shareAlpha = activeAlpha  // baseColor/baseAlpha (still held above) become the empty portion
+                }
             }
-            shareAlpha = activeAlpha
         }
 
         if (isHovered) {
@@ -170,7 +189,8 @@ export default function SquircleContainer({
             cr, w, h, undefined,
             shareAlpha, gloss, shareColor,
             drawRadius, drawPerfect, shareBorder,
-            drawN, borderWidth, techInset
+            drawN, borderWidth, techInset,
+            undefined, fillFrac, baseColor, baseAlpha,
         )
     })
 
