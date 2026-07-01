@@ -78,6 +78,15 @@ export interface AtomicWidget {
     // icon, its 4×1 horizontal bar) aren't gauges and must return 0 for those, or
     // the whole island fills unexpectedly at that size too. Shares watchActive.
     getFill?: (size: WidgetSize) => number
+    // Override which colour getActive/getFill fills with — a hex string, live
+    // theme accent if omitted. Set for a FIXED semantic colour that must not move
+    // with the user's accent choice (screenrecord: DANGER_HEX, same red as every
+    // other "needs attention" indicator — see lib/status-colors.ts).
+    activeColorHex?: string
+    // Static alpha, or a getter for a live-varying one (a pulsing indicator reads
+    // it every redraw — pair with a watchActive that ticks a redraw timer while
+    // active, e.g. screenrecord). Default 0.85 if omitted.
+    activeAlpha?: number | (() => number)
 }
 
 // The content-building subset of a widget, produced by the CC factories in

@@ -167,25 +167,19 @@
 // (.vpn-active-bg deleted — VPN's connected state now fills the whole capsule via
 // BaseIsland's getActive/watchActive, same as dark_mode/night_light/focus/bt.)
 
-// Recording widget states
-.rec-active-bg {
-    background-color: rgba(var(--nidara-danger-rgb), 0.25);
-    animation: rec-pulse-cc 1.4s ease-in-out infinite;
-}
+// (.rec-active-bg/.rec-stop-icon/.rec-label/@keyframes rec-pulse-cc deleted —
+// recording's pulsing danger-red fill now paints the WHOLE capsule via
+// BaseIsland's getActive/activeColorHex/activeAlpha, same mechanism as
+// dark_mode/night_light/focus/bt/vpn. .rec-stop-icon was dead CSS anyway —
+// `color` never recolors a Gtk.Image icon, see design-system.md.)
 
-.rec-stop-icon { color: var(--nidara-danger); }
-
-.rec-label { color: var(--nidara-danger); }
-
+// Elapsed-timer subtitle while recording — tabular-nums so the digits don't
+// jitter as they tick up. (color is redundant with the label's own default dim,
+// kept explicit for clarity.)
 .rec-elapsed {
     font-size: $fs-caption;
     color: var(--nidara-text-dim);
     font-variant-numeric: tabular-nums;
-}
-
-@keyframes rec-pulse-cc {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0.5; }
 }
 
 /* --- Edit Mode Controls --- */

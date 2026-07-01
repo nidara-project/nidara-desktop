@@ -54,6 +54,8 @@ interface BaseIslandProps {
     getActive?: () => boolean
     watchActive?: (cb: () => void) => (() => void)
     getFill?: () => number
+    activeColorHex?: string
+    activeAlpha?: number | (() => number)
 }
 
 export default function BaseIsland({
@@ -68,6 +70,8 @@ export default function BaseIsland({
     getActive,
     watchActive,
     getFill,
+    activeColorHex,
+    activeAlpha,
 }: BaseIslandProps): Gtk.Widget {
 
     //  GEOMETRIC RULES:
@@ -108,6 +112,8 @@ export default function BaseIsland({
         getActive,
         watchActive,
         getFill,
+        activeColorHex,
+        activeAlpha,
     })
 
     island.set_size_request(width, height)

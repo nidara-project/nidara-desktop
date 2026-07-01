@@ -49,7 +49,16 @@ interface SquircleContainerProps {
      *  just its icon). Read live inside the draw call, so an accent change repaints
      *  for free via the Theme "changed" redraw below — no separate wiring needed. */
     getActive?: () => boolean
-    activeAlpha?: number
+    /** Static alpha (default 0.85), or a getter for a live-varying one — a
+     *  recording indicator pulsing between two alphas reads it every redraw, so
+     *  `watchActive` just needs to tick a redraw timer for the pulse to animate. */
+    activeAlpha?: number | (() => number)
+    /** Override which colour "active" fills with — a hex string, resolved through
+     *  `hexToFloatRgb`. Omit to use the live theme accent (every toggle tile:
+     *  dark_mode, bt, vpn, …). Set for a FIXED semantic colour that must NOT move
+     *  with the user's accent choice — e.g. screen recording uses `DANGER_HEX`,
+     *  same red as every other "this needs attention" indicator. */
+    activeColorHex?: string
     /** Notifies this container to redraw when the active state flips (the
      *  container has no way to know on its own — it's driven by the caller's own
      *  domain signal, e.g. BluetoothService.watchPower). */
@@ -107,6 +116,7 @@ export default function SquircleContainer({
     opacityRole = "overlay",
     getActive,
     activeAlpha = 0.85,
+    activeColorHex,
     watchActive,
     getFill,
 }: SquircleContainerProps) {
@@ -147,14 +157,15 @@ export default function SquircleContainer({
         if (getFill || getActive) {
             const frac = getFill ? Math.max(0, Math.min(1, getFill())) : (getActive!() ? 1 : 0)
             if (frac > 0) {
-                const accent = hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color)
+                const activeColor = hexToFloatRgb(activeColorHex ?? Theme.accentPalette[Theme.accentColor].color)
+                const resolvedAlpha = typeof activeAlpha === "function" ? activeAlpha() : activeAlpha
                 if (frac >= 1) {
-                    shareColor = accent
-                    shareAlpha = activeAlpha
+                    shareColor = activeColor
+                    shareAlpha = resolvedAlpha
                 } else {
                     fillFrac = frac
-                    shareColor = accent       // the FILLED (bottom) portion
-                    shareAlpha = activeAlpha  // baseColor/baseAlpha (still held above) become the empty portion
+                    shareColor = activeColor  // the FILLED (bottom) portion
+                    shareAlpha = resolvedAlpha  // baseColor/baseAlpha (still held above) become the empty portion
                 }
             }
         }

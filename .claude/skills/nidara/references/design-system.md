@@ -293,6 +293,27 @@ poller + listener `Set` in `vpn.ts` (`watchVpnActive`), lazily started on first 
 of a `GLib.timeout_add` per built tile instance — cheaper and it's what let the 1×1 icon and the
 capsule badge both go live for free, which they weren't before.
 
+**A FIXED (non-accent) fill colour, and a PULSING one, are both the same mechanism with two more
+optional props — `activeColorHex`/`activeAlpha`, threaded the same way as `getActive`/`getFill`.**
+`screenrecord` is the reference: the recording indicator must read as urgent regardless of which
+accent the user picked, so `activeColorHex: DANGER_HEX` (`lib/status-colors.ts`) overrides the
+live-accent lookup `getActive`/`getFill` use by default. `activeAlpha` accepts `number | (() =>
+number)` — screenrecord passes a getter, `0.75 + 0.25 * Math.sin(Date.now() * (2π/1400))`,
+replacing the old CSS `@keyframes rec-pulse-cc` (1.4s, opacity 1↔0.5) now that the fill is
+Cairo-painted, not CSS. The getter is only ever CALLED while `frac > 0` (i.e. only while
+recording), so it doesn't need its own "am I active" guard. Pulsing needs `watchActive` to do more
+than relay one domain signal: it must ALSO tick a ~15fps redraw timer *while active* so the
+sine wave visibly advances, started/stopped on `notify::recording` (no timer at all while idle —
+same "no session-long timers for hidden work" discipline as `poll.ts`). Migrating `screenrecord`
+also retired its OWN one-off CSS states (`.rec-active-bg` icon-badge tint + keyframe, same
+badge-only-not-whole-capsule pattern VPN had before), and deleted `.rec-stop-icon { color: danger
+}` outright — dead CSS on a `Gtk.Image`, the exact bug class documented in the icon-tinting entry
+above, just not caught until this pass. The label/subtitle no longer get a manual danger-red
+override either: once the WHOLE capsule fills, `--nidara-text`'s default white/black already reads
+fine on top (same reasoning as the split-target badge, same as every other filled toggle tile) —
+tinting the text AGAIN on top of a filled background is how the Power.tsx checkmark bug happened
+in the first place.
+
 **The CC gauge tiles (volume/brightness's TALL slider) fill fractionally, through the SAME
 mechanism — `getFill?: (size) => number` (0..1), not a separately-drawn inner layer.** The
 original TALL implementation had `makeVerticalFillTile` paint its own accent fill in a nested

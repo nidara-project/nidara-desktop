@@ -9,6 +9,7 @@ import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
 import status from "../core/Status"
+import { DANGER_HEX } from "../../lib/status-colors"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -161,7 +162,13 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     // inset this tile's content a few px off from the rest of the column; routing it
     // through buildCapsuleInner + wrapCapsuleTile (like screenshot/clipboard) lands
     // the icon/text on the exact same grid. Idle = action tile (name, no sub);
-    // recording = "Recording…" + a live elapsed timer in the subtitle slot.
+    // recording = "Recording…" + a live elapsed timer in the subtitle slot. The
+    // pulsing danger-red fill itself is BaseIsland's getActive/activeColorHex (see
+    // the widget registration below) — this content only owns icon/text, not any
+    // background tint anymore (the old .rec-active-bg icon-badge tint and
+    // .rec-stop-icon/.rec-label colour overrides are gone: the WHOLE capsule fills
+    // now, and .rec-stop-icon was dead CSS anyway — colour never applies to a
+    // Gtk.Image, only -gtk-icon-filter does, see design-system.md).
     const pad2 = (n: number) => String(n).padStart(2, "0")
     let recStart = 0
     const elapsedStr = () => {
@@ -174,19 +181,14 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
     const inner = buildCapsuleInner(getIcon, getTitle, getSub)
 
-    const setClass = (w: Gtk.Widget, cls: string, on: boolean) => {
-        if (on) w.add_css_class(cls); else w.remove_css_class(cls)
-    }
     let tickId = 0
     const stopTick = () => { if (tickId) { GLib.source_remove(tickId); tickId = 0 } }
     const syncRec = () => {
         const rec = status.recording
         if (rec) recStart = Date.now()
         inner.update()                               // re-reads icon/title/sub
-        setClass(inner.iconBox,  "rec-active-bg", rec)
-        setClass(inner.icon,     "rec-stop-icon", rec)
-        setClass(inner.label,    "rec-label",     rec)
-        setClass(inner.subLabel, "rec-elapsed",   rec)
+        if (rec) inner.subLabel.add_css_class("rec-elapsed")
+        else inner.subLabel.remove_css_class("rec-elapsed")
         stopTick()
         if (rec) tickId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
             inner.subLabel.label = getSub()
@@ -261,6 +263,33 @@ const screenrecordWidget: AtomicWidget = {
     buildBarExpanded,
     buildCCDetail: buildBarExpanded,
     ccDetailRows: 2,
+    // Whole-capsule danger-red fill while recording, pulsing — same getActive/
+    // getFill mechanism as the other toggle tiles, but with a FIXED colour
+    // (activeColorHex) since "recording" must read as urgent regardless of the
+    // user's accent, and a live-varying activeAlpha for the pulse (1.4s period,
+    // matching the old CSS rec-pulse-cc keyframe it replaces). watchActive ticks a
+    // ~15fps redraw only while actually recording — no timer at all otherwise.
+    getActive: () => status.recording,
+    activeColorHex: DANGER_HEX,
+    activeAlpha: () => 0.75 + 0.25 * Math.sin(Date.now() * (2 * Math.PI / 1400)),
+    watchActive: (cb) => {
+        let tickId = 0
+        const stopTick = () => { if (tickId) { GLib.source_remove(tickId); tickId = 0 } }
+        const startTick = () => {
+            if (tickId) return
+            tickId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 66, () => {
+                if (!status.recording) { tickId = 0; return GLib.SOURCE_REMOVE }
+                cb()
+                return GLib.SOURCE_CONTINUE
+            })
+        }
+        const sigId = status.connect("notify::recording", () => {
+            cb()
+            if (status.recording) startTick(); else stopTick()
+        })
+        if (status.recording) startTick()
+        return () => { safeDisconnect(status, sigId); stopTick() }
+    },
 }
 
 export default screenrecordWidget
