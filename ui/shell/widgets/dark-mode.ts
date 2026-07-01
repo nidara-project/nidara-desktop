@@ -37,6 +37,8 @@ const darkModeWidget: AtomicWidget = {
         themeSubscribe,
     ).buildContent(size, budget),
     buildBarContent,
+    getActive: () => Theme.isDark,
+    watchActive: themeSubscribe,
 }
 
 export default darkModeWidget

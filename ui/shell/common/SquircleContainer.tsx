@@ -43,6 +43,17 @@ interface SquircleContainerProps {
      *  "bar" → Theme.barOpacity, "overlay" (default) → Theme.overlayOpacity.
      *  (The dock paints from Theme.dockOpacity directly in DockAxis.) */
     opacityRole?: "bar" | "overlay"
+    /** Active/"on" fill — while this returns true, the WHOLE capsule paints with
+     *  the live accent colour instead of the base glass (macOS/GNOME/Windows
+     *  quick-settings convention: a toggle's on-state fills its entire tile, not
+     *  just its icon). Read live inside the draw call, so an accent change repaints
+     *  for free via the Theme "changed" redraw below — no separate wiring needed. */
+    getActive?: () => boolean
+    activeAlpha?: number
+    /** Notifies this container to redraw when the active state flips (the
+     *  container has no way to know on its own — it's driven by the caller's own
+     *  domain signal, e.g. BluetoothService.watchPower). */
+    watchActive?: (cb: () => void) => (() => void)
 }
 
 /** Resolves a shape's actual paint params for an allocated size. CIRCLE/CAPSULE
@@ -87,6 +98,9 @@ export default function SquircleContainer({
     useShellOpacity = false,
     chrome = true,
     opacityRole = "overlay",
+    getActive,
+    activeAlpha = 0.85,
+    watchActive,
 }: SquircleContainerProps) {
     const container = new Gtk.Grid({
         css_classes,
@@ -120,6 +134,16 @@ export default function SquircleContainer({
         let shareColor = baseColor
         let shareAlpha = baseAlpha
         let shareBorder = borderColor
+
+        if (getActive?.()) {
+            const hex = Theme.accentPalette[Theme.accentColor].color
+            shareColor = {
+                r: parseInt(hex.slice(1, 3), 16) / 255,
+                g: parseInt(hex.slice(3, 5), 16) / 255,
+                b: parseInt(hex.slice(5, 7), 16) / 255,
+            }
+            shareAlpha = activeAlpha
+        }
 
         if (isHovered) {
             if (hoverColor) shareColor = hoverColor
@@ -184,6 +208,11 @@ export default function SquircleContainer({
         const click = new Gtk.GestureClick()
         click.connect("pressed", () => onClick())
         grid.add_controller(click)
+    }
+
+    if (watchActive) {
+        const cleanup = watchActive(() => { if (da.get_mapped()) da.queue_draw() })
+        grid.connect("unrealize", cleanup)
     }
 
     return grid

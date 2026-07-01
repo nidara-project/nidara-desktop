@@ -139,6 +139,8 @@ const btWidget: AtomicWidget = {
     buildBarContent,
     buildCCDetail: buildDetailPanel,
     ccDetailRows: 4,
+    getActive: () => BT.isPowered(),
+    watchActive: BT.watchPower,
 }
 
 export default btWidget

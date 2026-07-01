@@ -31,6 +31,33 @@ async function activeVpnName(): Promise<string | null> {
     return profiles.find(p => p.active)?.name ?? null
 }
 
+// ── Shared connection state ──────────────────────────────────────────────────
+// NetworkManager's VPN connections have no simple D-Bus signal to hook here
+// (unlike wifi/bt's reactive Astal objects), so this is polled — but ONE shared
+// poller for the whole widget (every CC tile size + BaseIsland's getActive), not
+// one per built instance. `watchVpnActive` lazily starts it on first subscriber.
+let vpnActiveName: string | null = null
+const vpnListeners = new Set<() => void>()
+let vpnPollerStarted = false
+
+function refreshVpnState() {
+    activeVpnName().then(name => {
+        if (name === vpnActiveName) return
+        vpnActiveName = name
+        vpnListeners.forEach(cb => cb())
+    })
+}
+
+function watchVpnActive(cb: () => void): () => void {
+    if (!vpnPollerStarted) {
+        vpnPollerStarted = true
+        refreshVpnState()
+        GLib.timeout_add(GLib.PRIORITY_LOW, 10000, () => { refreshVpnState(); return GLib.SOURCE_CONTINUE })
+    }
+    vpnListeners.add(cb)
+    return () => { vpnListeners.delete(cb) }
+}
+
 // ── VPN controls (shared by bar expansion + CC popover) ──────────────────────
 
 function buildVpnContent(onClose: () => void): Gtk.Widget {
@@ -100,29 +127,31 @@ function buildContent(size: WidgetSize): Gtk.Widget {
         const box = new Gtk.Box({ hexpand: true, vexpand: true })
         const icon = new Gtk.Image({ gicon: Icons.shieldOff, pixel_size: 28, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER, hexpand: true, vexpand: true, css_classes: ["nd-icon"] })
         box.append(icon)
-        activeVpnName().then(name => { icon.gicon = name ? Icons.shield : Icons.shieldOff })
+        const sync = () => { icon.gicon = vpnActiveName ? Icons.shield : Icons.shieldOff }
+        const cleanup = watchVpnActive(sync)
+        sync()
+        box.connect("unrealize", cleanup)
         return box
     }
 
+    // Icon/subtitle only — the whole capsule fill for the "connected" state comes
+    // from BaseIsland's getActive/watchActive (see vpnWidget below), same as
+    // dark_mode/night_light/focus/bt. No per-widget badge tint here anymore.
     const inner = buildCapsuleInner(() => Icons.shieldOff, () => t("widget.vpn.name"), () => t("widget.vpn.sub.disconnected"))
 
-    const syncState = (activeName: string | null) => {
-        if (activeName) {
+    const syncState = () => {
+        if (vpnActiveName) {
             inner.icon.gicon = Icons.shield
-            inner.iconBox.add_css_class("vpn-active-bg")
-            inner.subLabel.label = activeName
+            inner.subLabel.label = vpnActiveName
         } else {
             inner.icon.gicon = Icons.shieldOff
-            inner.iconBox.remove_css_class("vpn-active-bg")
             inner.subLabel.label = t("widget.vpn.sub.disconnected")
         }
     }
 
-    const refresh = () => activeVpnName().then(syncState)
-
-    refresh()
-    const timerId = GLib.timeout_add(GLib.PRIORITY_LOW, 10000, () => { refresh(); return GLib.SOURCE_CONTINUE })
-    inner.box.connect("unrealize", () => { try { GLib.source_remove(timerId) } catch {} })
+    const cleanup = watchVpnActive(syncState)
+    syncState()
+    inner.box.connect("unrealize", cleanup)
 
     return wrapCapsuleTile(inner.box)
 }
@@ -158,6 +187,8 @@ const vpnWidget: AtomicWidget = {
     buildBarExpanded,
     buildCCDetail: buildBarExpanded,
     ccDetailRows: 3,
+    getActive: () => !!vpnActiveName,
+    watchActive: watchVpnActive,
 }
 
 export default vpnWidget

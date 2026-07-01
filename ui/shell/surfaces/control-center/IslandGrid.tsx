@@ -116,7 +116,10 @@ function makeIslandWidget(
     // widget may size its content from (zero-layout contract).
     const pad = islandPadding(effectiveSize)
     const content = def.buildContent(effectiveSize, { width: width - 2 * pad, height: height - 2 * pad })
-    const island  = BaseIsland({ name: def.id, child: content, width, height, size: effectiveSize, centerContent: def.centerContent })
+    const island  = BaseIsland({
+        name: def.id, child: content, width, height, size: effectiveSize, centerContent: def.centerContent,
+        getActive: def.getActive, watchActive: def.watchActive,
+    })
 
     const overlay = new Gtk.Overlay()
     overlay.set_child(island)

@@ -4,6 +4,14 @@ import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { makeIconAction } from "./bar-helpers"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
+import { safeDisconnect } from "../core/signals"
+
+const watchDnd = (sync: () => void) => {
+    const notifd = AstalNotifd.get_default()
+    if (!notifd) return () => {}
+    const id = notifd.connect("notify", sync)
+    return () => safeDisconnect(notifd, id)
+}
 
 function buildBarContent() {
     const notifd = AstalNotifd.get_default()
@@ -26,6 +34,8 @@ const focusWidget: AtomicWidget = {
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent: (size, budget) => FocusWidget().buildContent(size, budget),
     buildBarContent,
+    getActive: () => AstalNotifd.get_default()?.dont_disturb ?? false,
+    watchActive: watchDnd,
 }
 
 export default focusWidget

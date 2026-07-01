@@ -452,8 +452,9 @@ button.nidara-btn {
     }
 }
 
-// Accent-coloured symbolic icon — replaces Adwaita suggested-action on Gtk.Image
-image.accent-icon { color: var(--nidara-accent); }
+// (image.accent-icon deleted — dead: `color` has no effect on our icons, which are
+// Gio.FileIcon → raw SVG outside GTK's symbolic-icon recolor pipeline. Its one
+// consumer, Settings → Power's profile checkmark, now draws in Cairo instead.)
 
 // ── Gtk.DropDown ─────────────────────────────────────────────────────────────
 // GTK4 native dropdown — auto-positions above/below based on available space.

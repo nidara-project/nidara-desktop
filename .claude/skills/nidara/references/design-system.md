@@ -146,6 +146,17 @@ stair-stepped curves were clearly visible. So AA wins. The border/rim strokes
 - **CSS** for anything with states (hover/active/focus/drag).
 - **Cairo** for complex static shapes (squircles, dots with halo, ring charts).
 - **Important:** if Cairo paints a node's background, CSS must **not** also declare `background-color`. You'll get double-paint artifacts.
+- **Most icon glyphs cannot be CSS-recolored to an arbitrary colour — verify before assuming
+  `color:` works on one.** GTK4 only recolours a `Gio.FileIcon` if its filename ends in
+  `-symbolic` (see "The bar launcher mark" below) — that's the WHOLE mechanism, filename-gated,
+  nothing to do with the SVG's own `fill="currentColor"`. Our general icon set (`core/Icons.ts`,
+  Lucide-derived — `wifi.svg`, `check.svg`, etc.) doesn't use that suffix, so `color: var(--nidara-accent)`
+  on a `Gtk.Image` showing one of them silently does nothing; the only real lever is `.nd-icon`'s
+  `-gtk-icon-filter: invert(1)`, a fixed black/white toggle for dark/light, not a recolor. Found
+  this dead on Settings → Power's profile checkmark (`accent-icon`, deleted 2026-07-01) — verify
+  empirically (screenshot + crop, don't trust the CSS alone) before relying on `color:` on any of
+  these icons. Anything that genuinely needs a live-accent glyph draws in Cairo instead —
+  `buildAccentCheck` in `Power.tsx` (a 3-point path matching Lucide's "check") is the reference.
 
 ## Adwaita vs pure GTK4 — the central rule
 
@@ -237,6 +248,23 @@ of the whole tile. CSS gotcha: the icon button's own class (`.cc-split-icon-btn`
 blanket `.cc-island button { reset }` — a single-class selector loses that fight on specificity
 regardless of source order, so it's written as a two-class descendant
 (`.cc-island .cc-split-icon-btn`), which always wins.
+
+**A "stateful" tile's on-state fills the WHOLE capsule with the live accent colour** (macOS/GNOME/
+Windows quick-settings convention), not just the icon. Wired via `AtomicWidget.getActive`/
+`watchActive` (`Types.ts`) → `BaseIsland` → `SquircleContainer`'s `getActive`/`activeAlpha`/
+`watchActive` props: `getActive()` is read live *inside the Cairo draw call*, so it paints through
+the exact same `resolveDrawParams`/`drawSquircle` path a real tile already uses — no separate CSS
+shape to keep in sync, no mismatched corners. `watchActive(cb)` only exists because the container
+can't know the state changed on its own (it's driven by the widget's own domain signal — BT
+power, `notifd`'s `dont_disturb`, `Theme` changed, an nmcli poll); it just calls `cb` to trigger
+`da.queue_draw()`. Live on **dark_mode, night_light, focus, bt, vpn** — action/stateless widgets
+(screenshot, clipboard) have nothing to fill and omit both props. `wifi`/`ethernet` don't have this
+either: their WIDE tile has no toggle button at all (see `buildSplitCapsuleContent` above), so
+there's no "this tile is a toggle" moment to fill — only their `buildCCDetail` switch reflects
+state today. VPN is the template for a **polled** (non-signal) state: one shared module-level
+poller + listener `Set` in `vpn.ts` (`watchVpnActive`), lazily started on first subscriber, instead
+of a `GLib.timeout_add` per built tile instance — cheaper and it's what let the 1×1 icon and the
+capsule badge both go live for free, which they weren't before.
 
 **Multi-cell `centerContent` tiles align their items to the grid-cell centres.** A 2×1 tile
 spans two grid cells; its content (e.g. cpu_memory's two metric rings) should sit one grid

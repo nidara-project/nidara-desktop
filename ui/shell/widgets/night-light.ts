@@ -43,6 +43,8 @@ const nightLightWidget: AtomicWidget = {
         subscribe,
     ).buildContent(size, budget),
     buildBarContent,
+    getActive: () => nightLight.enabled,
+    watchActive: subscribe,
 }
 
 export default nightLightWidget

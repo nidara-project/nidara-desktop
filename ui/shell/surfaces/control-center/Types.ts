@@ -65,6 +65,12 @@ export interface AtomicWidget {
     // Optional companion: invoke cb whenever availability may have changed (e.g.
     // BT adapter plugged/removed). Subscriptions are shell-lifetime — no dispose.
     watchAvailable?: (cb: () => void) => void
+    // On/off state for CC tiles: while true, the WHOLE island fills with the live
+    // accent colour (macOS/GNOME/Windows quick-settings convention) instead of the
+    // base glass — see BaseIsland/SquircleContainer's getActive/watchActive. Omit
+    // for widgets with no persistent on/off state (screenshot, clipboard, media…).
+    getActive?: () => boolean
+    watchActive?: (cb: () => void) => (() => void)
 }
 
 // The content-building subset of a widget, produced by the CC factories in
