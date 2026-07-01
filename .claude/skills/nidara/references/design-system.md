@@ -155,8 +155,14 @@ stair-stepped curves were clearly visible. So AA wins. The border/rim strokes
   `-gtk-icon-filter: invert(1)`, a fixed black/white toggle for dark/light, not a recolor. Found
   this dead on Settings → Power's profile checkmark (`accent-icon`, deleted 2026-07-01) — verify
   empirically (screenshot + crop, don't trust the CSS alone) before relying on `color:` on any of
-  these icons. Anything that genuinely needs a live-accent glyph draws in Cairo instead —
-  `buildAccentCheck` in `Power.tsx` (a 3-point path matching Lucide's "check") is the reference.
+  these icons. Anything that genuinely needs a live-coloured glyph draws in Cairo instead —
+  `buildSelectionCheck` in `Power.tsx` (a 3-point path matching Lucide's "check") is the reference.
+  **Don't reach for accent by default, though:** that checkmark sits on a `.nidara-row:selected`
+  row, whose background is *already* an accent tint (`--nidara-state-selected`, itself derived
+  from the live accent) — an accent-coloured check on an accent-tinted row nearly disappears
+  (found live, corrected same day). Cairo-drawing a glyph means picking its colour is now on you;
+  default to mode-aware white/black (`Theme.isDark`) like `--nidara-text`, and only reach for
+  live accent when the glyph sits on the shell's own neutral glass, not on another accent fill.
 
 ## Adwaita vs pure GTK4 — the central rule
 

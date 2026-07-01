@@ -136,26 +136,28 @@ const closestLabel = (opts: { label: string; s: number }[], seconds: number) => 
     return best.label
 }
 
-// Accent-coloured checkmark, Cairo-drawn. `accent-icon` (color: var(--nidara-accent))
-// on a Gtk.Image has NO effect here: our icons are Gio.FileIcon → raw SVG files with
-// `stroke="currentColor"`, rendered outside GTK's symbolic-icon pipeline (the only
-// lever we have on them is `-gtk-icon-filter: invert(1)`, a fixed black/white toggle,
-// not a real recolor). Anything that needs a genuinely live-accent glyph goes through
-// Cairo instead (same reasoning as the battery glyph) — path matches Lucide's "check"
-// (`M20 6 9 17l-5-5` in a 24×24 viewBox), scaled to the widget's own size.
-function buildAccentCheck(size = 16): Gtk.Widget {
+// Selection checkmark, Cairo-drawn. `accent-icon` (color: var(--nidara-accent)) on a
+// Gtk.Image has NO effect here: our icons are Gio.FileIcon → raw SVG files, rendered
+// outside GTK's symbolic-icon recolor pipeline (the only lever we have on them is
+// `-gtk-icon-filter: invert(1)`, a fixed black/white toggle, not a real recolor) —
+// anything that needs a genuinely live-coloured glyph goes through Cairo instead
+// (same reasoning as the battery glyph). NOT accent-coloured on purpose: the row
+// itself already carries the accent (`.nidara-row:selected` → `--nidara-state-selected`,
+// which tracks the live accent too), so an accent check on an accent-tinted row has
+// almost no contrast. Plain mode-aware white/black — the same "readable on whatever's
+// under it" role `--nidara-text` plays everywhere else — reads clearly regardless of
+// which accent is picked. Path matches Lucide's "check" (`M20 6 9 17l-5-5` in a 24×24
+// viewBox), scaled to the widget's own size.
+function buildSelectionCheck(size = 16): Gtk.Widget {
     const da = new Gtk.DrawingArea({ width_request: size, height_request: size, valign: Gtk.Align.CENTER })
     da.set_can_target(false)
     da.set_draw_func((_w: Gtk.DrawingArea, cr: any, w: number, h: number) => {
-        const hex = Theme.accentPalette[Theme.accentColor].color
-        const r = parseInt(hex.slice(1, 3), 16) / 255
-        const g = parseInt(hex.slice(3, 5), 16) / 255
-        const b = parseInt(hex.slice(5, 7), 16) / 255
+        const v = Theme.isDark ? 1 : 0
         const s = Math.min(w, h) / 24
         cr.setLineWidth(2 * s)
         cr.setLineCap(1)   // ROUND
         cr.setLineJoin(1)  // ROUND
-        cr.setSourceRGBA(r, g, b, 1)
+        cr.setSourceRGBA(v, v, v, 1)
         cr.moveTo(4 * s, 12 * s)
         cr.lineTo(9 * s, 17 * s)
         cr.lineTo(20 * s, 6 * s)
@@ -185,7 +187,7 @@ export default function PowerPage() {
         const rowContent = new Gtk.Box({ spacing: 16, margin_start: 16, margin_end: 16, margin_top: 14, margin_bottom: 14 })
         rowContent.append(new Gtk.Image({ gicon: p.icon, pixel_size: 20, css_classes: ["sidebar-icon", "nd-icon"] }))
         rowContent.append(new Gtk.Label({ label: p.label, hexpand: true, halign: Gtk.Align.START, css_classes: ["nidara-row-title"] }))
-        const checkIcon = buildAccentCheck(16)
+        const checkIcon = buildSelectionCheck(16)
         checkIcon.visible = false
         rowContent.append(checkIcon)
         checkIcons.set(p.id, checkIcon)
