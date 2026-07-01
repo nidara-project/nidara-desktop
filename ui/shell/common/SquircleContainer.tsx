@@ -1,5 +1,5 @@
 import { Gtk } from "ags/gtk4"
-import { drawSquircle } from "./DrawingUtils"
+import { drawSquircle, hexToFloatRgb } from "./DrawingUtils"
 import Theme from "../core/ThemeManager"
 
 export enum Shape {
@@ -147,12 +147,7 @@ export default function SquircleContainer({
         if (getFill || getActive) {
             const frac = getFill ? Math.max(0, Math.min(1, getFill())) : (getActive!() ? 1 : 0)
             if (frac > 0) {
-                const hex = Theme.accentPalette[Theme.accentColor].color
-                const accent = {
-                    r: parseInt(hex.slice(1, 3), 16) / 255,
-                    g: parseInt(hex.slice(3, 5), 16) / 255,
-                    b: parseInt(hex.slice(5, 7), 16) / 255,
-                }
+                const accent = hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color)
                 if (frac >= 1) {
                     shareColor = accent
                     shareAlpha = activeAlpha
@@ -170,13 +165,7 @@ export default function SquircleContainer({
             if (hoverBorderColor) shareBorder = hoverBorderColor
             if (hoverBorderAccent) {
                 // Read the accent live so the outline tracks accent changes.
-                const hex = Theme.accentPalette[Theme.accentColor].color
-                shareBorder = {
-                    r: parseInt(hex.slice(1, 3), 16) / 255,
-                    g: parseInt(hex.slice(3, 5), 16) / 255,
-                    b: parseInt(hex.slice(5, 7), 16) / 255,
-                    a: 1,
-                }
+                shareBorder = { ...hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color), a: 1 }
             }
         }
 

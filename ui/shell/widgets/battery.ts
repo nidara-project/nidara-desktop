@@ -7,6 +7,8 @@ import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import Theme from "../core/ThemeManager"
 import { safeDisconnect } from "../core/signals"
+import { hexToFloatRgb } from "../common/DrawingUtils"
+import { DANGER_HEX, SUCCESS_HEX } from "../../lib/status-colors"
 
 const bat = AstalBattery.get_default()
 
@@ -18,10 +20,13 @@ const present = () => !!bat && bat.is_present
 const frac = () => (present() ? Math.max(0, Math.min(1, bat!.percentage)) : 0)
 const pctText = () => `${Math.round(frac() * 100)}%`
 
-// Semantic fills (NOT the theme accent — accent is reserved for selection). These
-// match the danger/success seeds in NidaraTheme.ts (#ED5F5D / #79B757).
-const RED:   [number, number, number] = [0.93, 0.37, 0.36]
-const GREEN: [number, number, number] = [0.47, 0.72, 0.34]
+// Semantic fills (NOT the theme accent — accent is reserved for selection): the
+// same fixed danger/success used for every other status indicator (recording,
+// etc.), so "battery critical" reads the same red regardless of which accent the
+// user picked. (Was hand-copied floats that had actually drifted onto the accent
+// palette's red/green swatches instead — corrected 2026-07-01.)
+const RED   = hexToFloatRgb(DANGER_HEX)
+const GREEN = hexToFloatRgb(SUCCESS_HEX)
 const LOW_THRESHOLD = 0.15
 
 function formatTime(seconds: number): string {
@@ -96,8 +101,8 @@ function makeGlyph(gh: number, fill = false): Gtk.DrawingArea {
         const fillW = Math.max(0, innerW * f)
         if (fillW > 0.5) {
             let fr = c, fg = c, fb = c, fa = 0.85
-            if (charging)          { [fr, fg, fb] = GREEN; fa = 0.95 }
-            else if (f <= LOW_THRESHOLD) { [fr, fg, fb] = RED; fa = 0.95 }
+            if (charging)          { ({ r: fr, g: fg, b: fb } = GREEN); fa = 0.95 }
+            else if (f <= LOW_THRESHOLD) { ({ r: fr, g: fg, b: fb } = RED); fa = 0.95 }
             roundRect(cr, x0 + pad, y0 + pad, fillW, gh - 2 * pad, Math.max(0.5, r - pad))
             cr.setSourceRGBA(fr, fg, fb, fa)
             cr.fill()

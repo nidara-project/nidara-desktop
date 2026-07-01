@@ -1,5 +1,21 @@
 import Cairo from "gi://cairo"
 
+/** "#rrggbb" → { r, g, b } as 0..1 floats, what Cairo's setSourceRGBA wants. The
+ *  single conversion point for any Cairo draw call that needs a color defined as
+ *  a hex string elsewhere (the live accent, a semantic status color). Before
+ *  this, several call sites (SquircleContainer, the CC drag ghost, Power.tsx's
+ *  checkmark, Slider.ts, battery.ts) each hand-rolled the same parseInt/255
+ *  three-liner, and two of them (Slider.ts, battery.ts) had drifted into
+ *  hardcoding their OWN float copies of a color instead of parsing the real hex
+ *  live — always go through this, never re-derive r/g/b by hand. */
+export function hexToFloatRgb(hex: string): { r: number, g: number, b: number } {
+    return {
+        r: parseInt(hex.slice(1, 3), 16) / 255,
+        g: parseInt(hex.slice(3, 5), 16) / 255,
+        b: parseInt(hex.slice(5, 7), 16) / 255,
+    }
+}
+
 // Reusable path generator for clipping or drawing
 export const createSquirclePath = (
     cr: any,

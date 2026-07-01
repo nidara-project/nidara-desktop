@@ -163,6 +163,27 @@ stair-stepped curves were clearly visible. So AA wins. The border/rim strokes
   (found live, corrected same day). Cairo-drawing a glyph means picking its colour is now on you;
   default to mode-aware white/black (`Theme.isDark`) like `--nidara-text`, and only reach for
   live accent when the glyph sits on the shell's own neutral glass, not on another accent fill.
+- **Any Cairo draw call that needs a colour defined as a hex string elsewhere goes through
+  `hexToFloatRgb(hex)`** (`common/DrawingUtils.ts`) — `"#rrggbb"` → `{r,g,b}` as 0..1 floats,
+  never a hand-rolled `parseInt(hex.slice(...), 16) / 255` triplet. Before this existed, that
+  three-liner was independently copy-pasted into `SquircleContainer` (×2), the CC drag ghost,
+  and — worse — `common/Slider.ts` and `widgets/battery.ts` had drifted into hardcoding their
+  OWN *pre-computed float copies* of a color instead of parsing the real hex live. Found because
+  the slider's fill and battery's low/charging colors turned out to be silently duplicating (and
+  in battery's case, duplicating the WRONG source — see below), not just visually similar by
+  coincidence. **Two canonical hex sources, both plain string constants, no Gtk/Cairo import:**
+  `lib/accent.ts`'s `ACCENT_HEX` (9 user-selectable accent colors — decorative, changes with
+  Settings → Appearance) and `lib/status-colors.ts`'s `DANGER_HEX`/`SUCCESS_HEX` (fixed
+  "needs attention"/"good" colors — used by the recording indicator, battery critical/charging;
+  must NOT move with the user's accent choice, since accent has its own selectable "red"/"green"
+  entries that mean something different). `battery.ts`'s old `RED`/`GREEN` were a comment lying
+  to itself: it claimed to match the danger/success seeds but the actual float values matched
+  `ACCENT_HEX.red`/`.green` instead — battery would have quietly wrestled the user's accent
+  palette's arbitrary "red" swatch in a semantic slot for the wrong reason. Corrected to
+  `hexToFloatRgb(DANGER_HEX)`/`hexToFloatRgb(SUCCESS_HEX)`. For the *live* accent specifically
+  (not a fixed status color), read it off `Theme.accentPalette[Theme.accentColor].color` first,
+  same as everywhere else, then pass that hex through `hexToFloatRgb` — don't read `ACCENT_HEX`
+  directly for anything that should track live theme state.
 
 ## Adwaita vs pure GTK4 — the central rule
 

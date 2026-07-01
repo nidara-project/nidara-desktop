@@ -10,8 +10,9 @@ import registry, { widgetAvailable, watchWidgetAvailability } from "../../widget
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
 import SquircleContainer, { Shape, resolveDrawParams } from "../../common/SquircleContainer"
-import { drawSquircle } from "../../common/DrawingUtils"
+import { drawSquircle, hexToFloatRgb } from "../../common/DrawingUtils"
 import Theme from "../../core/ThemeManager"
+import { DANGER_HEX } from "../../../lib/status-colors"
 import IconButton from "../../common/IconButton"
 import { createCCContextMenu } from "./CCContextMenu"
 
@@ -23,7 +24,7 @@ const pixelY = (gy: number) => gy * (UNIT + GAP)
 // generic rounded box, so the landing indicator previews the real tile. Returns
 // a setter for the "can't drop here" tint since the colors are baked into the
 // draw call, not CSS-driven like a normal tile.
-const GHOST_DANGER = { r: 1, g: 59 / 255, b: 48 / 255 }
+const GHOST_DANGER = hexToFloatRgb(DANGER_HEX)
 
 function makeDropGhost(size: WidgetSize, w: number, h: number): { widget: Gtk.DrawingArea; setInvalid: (v: boolean) => void } {
     const { shape, radius } = resolveIslandShape(size, w, h)
@@ -32,17 +33,7 @@ function makeDropGhost(size: WidgetSize, w: number, h: number): { widget: Gtk.Dr
     da.set_can_target(false)
     da.set_draw_func((_widget: Gtk.DrawingArea, cr: any, dw: number, dh: number) => {
         const { radius: r, n, perfect } = resolveDrawParams(shape, radius, 3.2, false, dw, dh)
-        let accent: { r: number; g: number; b: number }
-        if (invalid) {
-            accent = GHOST_DANGER
-        } else {
-            const hex = Theme.accentPalette[Theme.accentColor].color
-            accent = {
-                r: parseInt(hex.slice(1, 3), 16) / 255,
-                g: parseInt(hex.slice(3, 5), 16) / 255,
-                b: parseInt(hex.slice(5, 7), 16) / 255,
-            }
-        }
+        const accent = invalid ? GHOST_DANGER : hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color)
         drawSquircle(cr, dw, dh, undefined, 0.12, false, accent, r, perfect, { ...accent, a: 0.6 }, n, 2, 2.0, [4, 3])
     })
     return {

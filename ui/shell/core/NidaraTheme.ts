@@ -7,7 +7,8 @@
 import Gio from "gi://Gio"
 import GLib from "gi://GLib"
 import { readFile, writeFile } from "ags/file"
-import { ACCENT_HEX, ACCENT_NAMES, type AccentKey } from "../../lib/accent"
+import { ACCENT_HEX, ACCENT_NAMES, hexToRgb, type AccentKey } from "../../lib/accent"
+import { DANGER_HEX, SUCCESS_HEX } from "../../lib/status-colors"
 
 // -- COLOR PALETTES ---------------------------------------------------
 // The accent palette is the single source of truth in ui/lib/accent.ts.
@@ -180,9 +181,9 @@ function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[] {
     `  --nidara-text-secondary: rgba(${fg}, ${isDark ? "0.8" : "0.85"});`,
     `  --nidara-text-dim: rgba(${fg}, ${isDark ? "0.6" : "0.72"});`,
     `  --nidara-text-disabled: rgba(${fg}, 0.3);`,
-    `  --nidara-danger: #ff3b30;`,
-    `  --nidara-danger-rgb: 255, 59, 48;`,
-    `  --nidara-success: #30d158;`,
+    `  --nidara-danger: ${DANGER_HEX};`,
+    `  --nidara-danger-rgb: ${hexToRgb(DANGER_HEX)};`,
+    `  --nidara-success: ${SUCCESS_HEX};`,
     `  --nidara-warning: #f3ba4b;`,
     `  --nidara-warning-rgb: 243, 186, 75;`,
     `  --nidara-popover-bg: rgba(${pbR}, ${pbG}, ${pbB}, ${popoverAlpha});`,

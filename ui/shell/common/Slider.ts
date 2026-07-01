@@ -6,21 +6,10 @@ import Cairo from "gi://cairo"
 // Palette tokens are CSS variables; for Cairo we read the accent from ThemeManager
 import Theme from "../core/ThemeManager"
 import { safeDisconnect } from "../core/signals"
+import { hexToFloatRgb } from "./DrawingUtils"
 
 const TRACK_H  = 6   // px — track thickness
 const THUMB_R  = 9   // px — thumb radius (visual)
-
-const PALETTE: Record<string, [number, number, number]> = {
-    blue:   [0.00, 0.53, 1.00],
-    teal:   [0.13, 0.56, 0.64],
-    green:  [0.47, 0.72, 0.34],
-    yellow: [0.95, 0.73, 0.29],
-    orange: [0.91, 0.53, 0.23],
-    red:    [0.93, 0.37, 0.36],
-    pink:   [0.90, 0.37, 0.61],
-    purple: [0.60, 0.34, 0.64],
-    slate:  [0.44, 0.51, 0.59],
-}
 
 // Rounded-rectangle (capsule) path.
 function roundRectPath(cr: any, x: number, y: number, w: number, h: number, r: number) {
@@ -149,7 +138,7 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
         // Fill (accent) — skipped when a host paints it instead (paintFill:false;
         // see makeVerticalFillTile, whose gauge fill now lives in BaseIsland).
         if (paintFill) {
-            const [ar, ag, ab] = PALETTE[Theme.accentColor] ?? PALETTE.blue
+            const { r: ar, g: ag, b: ab } = hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color)
             cr.setSourceRGBA(ar, ag, ab, 0.9)
             if (thumb) {
                 // Capsule whose rounded end meets the thumb.
