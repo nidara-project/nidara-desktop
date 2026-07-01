@@ -158,7 +158,7 @@ function buildWideContent(state: MediaState): Gtk.Widget {
         }
     })
 
-    const title  = new Gtk.Label({ label: "No media", css_classes: ["cc-media-title-atomic"],  halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
+    const title  = new Gtk.Label({ label: t("cc.media.no-media"), css_classes: ["cc-media-title-atomic"],  halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
     const artist = new Gtk.Label({ label: "",         css_classes: ["cc-media-artist-atomic"], halign: Gtk.Align.START, ellipsize: 3, max_width_chars: 14 })
     const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
     textBox.append(title); textBox.append(artist)
