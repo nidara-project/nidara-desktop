@@ -3,6 +3,7 @@ import { PANEL_W } from "../common/widget-kit"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { makeHSlider, makeVerticalFillTile } from "../common/Slider"
+import { pollWhileMapped } from "../common/poll"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
@@ -10,17 +11,16 @@ import Icons from "../core/Icons"
 // ── brightnessctl helpers ─────────────────────────────────────────────────────
 
 let _cachedPct = 100
+let _cachedMax = 0   // the device max never changes — fetch it once, not per poll
 
 async function fetchBrightness(): Promise<number> {
     try {
-        const [curStr, maxStr] = await Promise.all([
-            execAsync(["brightnessctl", "g"]),
-            execAsync(["brightnessctl", "m"]),
-        ])
-        const cur = parseInt(curStr.trim())
-        const max = parseInt(maxStr.trim())
-        if (!max) return 100
-        _cachedPct = Math.round(cur / max * 100)
+        if (!_cachedMax) {
+            _cachedMax = parseInt((await execAsync(["brightnessctl", "m"])).trim()) || 0
+            if (!_cachedMax) return _cachedPct
+        }
+        const cur = parseInt((await execAsync(["brightnessctl", "g"])).trim())
+        _cachedPct = Math.round(cur / _cachedMax * 100)
         return _cachedPct
     } catch {
         return _cachedPct
@@ -56,22 +56,22 @@ function buildBrightnessIcon(): Gtk.Widget {
 // Medium (1×2): capsule-filling vertical slider (fill rises edge-to-edge, % on top,
 // sun icon at the bottom — shared layout with volume via makeVerticalFillTile).
 function buildVertical(): Gtk.Widget {
-    // Brightness has no change signal — poll every 2s. Skip polling briefly after a
-    // user change so the in-flight brightnessctl result doesn't snap the slider back.
+    // Brightness has no change signal — poll every 2s, but ONLY while the tile is
+    // mapped (CC tiles are built once and hidden, never destroyed, so an unmapped
+    // timer would spawn brightnessctl for the whole session). Skip polling briefly
+    // after a user change so the in-flight result doesn't snap the slider back.
     let ignoreUntil = 0
-    return makeVerticalFillTile(Icons.sun, {
+    let sync: ((v: number) => void) | undefined
+    const tile = makeVerticalFillTile(Icons.sun, {
         value: _cachedPct,
         onChange: (v) => { ignoreUntil = GLib.get_monotonic_time() + 800_000; setBrightness(v) },
-        onExtChange: (cb) => {
-            fetchBrightness().then(v => cb(v))   // initial
-            const id = GLib.timeout_add(GLib.PRIORITY_LOW, 2000, () => {
-                if (GLib.get_monotonic_time() < ignoreUntil) return GLib.SOURCE_CONTINUE
-                fetchBrightness().then(v => cb(v))
-                return GLib.SOURCE_CONTINUE
-            })
-            return () => { try { GLib.source_remove(id) } catch {} }
-        },
+        onExtChange: (cb) => { sync = cb; return () => { sync = undefined } },
     })
+    pollWhileMapped(tile, 2000, () => {
+        if (GLib.get_monotonic_time() < ignoreUntil) return
+        fetchBrightness().then(v => sync?.(v))
+    })
+    return tile
 }
 
 // Large (4×1): horizontal slider.
@@ -101,18 +101,7 @@ function buildHorizontal(): Gtk.Widget {
             setBrightness(v)
         },
         onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%` },
-        onExtChange: (cb) => {
-            sliderSync = cb
-            const id = GLib.timeout_add(GLib.PRIORITY_LOW, 2000, () => {
-                if (GLib.get_monotonic_time() < ignoreUntil) return GLib.SOURCE_CONTINUE
-                const prev = _cachedPct
-                fetchBrightness().then(v => {
-                    if (Math.abs(v - prev) > 1) cb(v)
-                })
-                return GLib.SOURCE_CONTINUE
-            })
-            return () => { try { GLib.source_remove(id) } catch {} }
-        },
+        onExtChange: (cb) => { sliderSync = cb; return () => { sliderSync = undefined } },
     })
 
     box.append(new Gtk.Image({ gicon: Icons.moon, pixel_size: 14, opacity: 0.5, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] }))
@@ -120,7 +109,11 @@ function buildHorizontal(): Gtk.Widget {
     box.append(new Gtk.Image({ gicon: Icons.sun,  pixel_size: 16, opacity: 0.6, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"] }))
     box.append(valueLabel)
 
-    fetchBrightness().then(v => { sliderSync?.(v) })
+    // Poll only while visible (see buildVertical); the map-tick doubles as the initial fetch.
+    pollWhileMapped(box, 2000, () => {
+        if (GLib.get_monotonic_time() < ignoreUntil) return
+        fetchBrightness().then(v => sliderSync?.(v))
+    })
 
     return box
 }
@@ -150,16 +143,7 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
             setBrightness(v)
         },
         onValueChanged: (v) => { valueLabel.label = `${Math.round(v)}%` },
-        onExtChange: (cb) => {
-            sliderSync = cb
-            const id = GLib.timeout_add(GLib.PRIORITY_LOW, 2000, () => {
-                if (GLib.get_monotonic_time() < ignoreUntil) return GLib.SOURCE_CONTINUE
-                const prev = _cachedPct
-                fetchBrightness().then(v => { if (Math.abs(v - prev) > 1) cb(v) })
-                return GLib.SOURCE_CONTINUE
-            })
-            return () => { try { GLib.source_remove(id) } catch {} }
-        },
+        onExtChange: (cb) => { sliderSync = cb; return () => { sliderSync = undefined } },
         width_request: PANEL_W.sm,
     })
 
@@ -168,7 +152,11 @@ function buildBarExpanded(_onClose: () => void): Gtk.Widget {
     row.append(slider)
     row.append(valueLabel)
 
-    fetchBrightness().then(v => { sliderSync?.(v) })
+    // Poll only while visible (see buildVertical); the map-tick doubles as the initial fetch.
+    pollWhileMapped(row, 2000, () => {
+        if (GLib.get_monotonic_time() < ignoreUntil) return
+        fetchBrightness().then(v => sliderSync?.(v))
+    })
 
     return row
 }

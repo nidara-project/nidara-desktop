@@ -208,10 +208,17 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
         totalLabel.label = len > 0 ? fmt(len) : "--:--"
     }
 
+    // Decode + redraw only when the art PATH changes — player "notify" fires at
+    // 1 Hz while playing (position poll), so an unguarded decode here re-read the
+    // PNG every second for the whole session (tech-debt #11C).
+    let loadedArt: string | null = null
     const loadArt = () => {
         const art = player?.cover_art
-        if (art && GLib.file_test(art, GLib.FileTest.EXISTS)) {
-            try { artPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(art, ART_SIZE, ART_SIZE, false) }
+        const path = art && GLib.file_test(art, GLib.FileTest.EXISTS) ? art : null
+        if (path === loadedArt) return
+        loadedArt = path
+        if (path) {
+            try { artPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, ART_SIZE, ART_SIZE, false) }
             catch { artPixbuf = null }
         } else { artPixbuf = null }
         artDa.queue_draw()
@@ -221,7 +228,9 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
         const p = player
         titleLabel.label  = p?.title  || t("cc.media.no-media")
         artistLabel.label = p?.artist || ""
-        playImg.gicon = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
+        // gicon assignment is NOT equality-guarded by GTK — same-icon reassign forces a redraw
+        const wantPlay = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
+        if (playImg.gicon !== wantPlay) playImg.gicon = wantPlay
         prev.sensitive = p?.can_go_previous !== false
         next.sensitive = p?.can_go_next    !== false
         loadArt()

@@ -8,7 +8,12 @@ import * as Net from "../../core/NetworkService"
 import { safeDisconnect } from "../../core/signals"
 
 function setIcon(img: Gtk.Image, icon: Gio.FileIcon) {
-    img.gicon = icon
+    // gicon assignment is NOT equality-guarded by GTK: reassigning the same icon
+    // clears + redraws the image (tech-debt #11C). Every CC toggle sync funnels
+    // through here, so this one guard keeps generic-notify churn (wifi scans,
+    // NM property noise) from queueing draws for icons that never changed —
+    // Icons.* are module-load cached refs, so identity compare holds.
+    if (img.gicon !== icon) img.gicon = icon
 }
 
 // Shared capsule layout: icon circle + title/subtitle text stack

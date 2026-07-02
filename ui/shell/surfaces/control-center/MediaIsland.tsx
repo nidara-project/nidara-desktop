@@ -11,6 +11,9 @@ import { safeDisconnect } from "../../core/signals"
 
 interface MediaState {
     artPixbuf: any
+    // Bumped only when the artwork actually changes — tiles compare it to skip
+    // queue_draw on the 1 Hz notify::position churn AstalMpris emits while playing.
+    artVersion: number
     currentPlayer: any
     listeners: Array<() => void>
     notify: () => void
@@ -19,6 +22,7 @@ interface MediaState {
 function makeMediaState(): MediaState {
     const state: MediaState = {
         artPixbuf: null,
+        artVersion: 0,
         currentPlayer: null,
         listeners: [],
         notify: () => state.listeners.forEach(fn => fn()),
@@ -43,12 +47,19 @@ function makeMediaState(): MediaState {
         state.notify()
     }
 
+    // Decode only when the art PATH changes — player "notify" fires at 1 Hz while
+    // playing (position poll), and re-decoding the PNG every second is pure churn.
+    let loadedArt: string | null = null
     const loadArt = () => {
         const art = state.currentPlayer?.cover_art
-        if (art && GLib.file_test(art, GLib.FileTest.EXISTS)) {
-            try { state.artPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(art, 64, 64, false) }
+        const path = art && GLib.file_test(art, GLib.FileTest.EXISTS) ? art : null
+        if (path === loadedArt) return
+        loadedArt = path
+        if (path) {
+            try { state.artPixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 64, 64, false) }
             catch { state.artPixbuf = null }
         } else { state.artPixbuf = null }
+        state.artVersion++
     }
 
     if (mpris) mpris.connect("notify::players", updatePlayer)
@@ -117,14 +128,19 @@ function buildSquareContent(state: MediaState): Gtk.Widget {
         }
     })
 
+    // Labels/sensitive are equality-guarded by GTK; gicon is NOT (reassigning the
+    // same icon forces a redraw — tech-debt #11C), and queue_draw is gated on the
+    // art version so the 1 Hz position notify does zero work.
+    let drawnArt = -1
     const update = () => {
         const p = state.currentPlayer
         title.label  = p?.title || t("cc.media.no-media")
         artist.label = p?.artist || ""
-        playImg.gicon = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
+        const wantPlay = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
+        if (playImg.gicon !== wantPlay) playImg.gicon = wantPlay
         prev.sensitive = p?.can_go_previous !== false
         next.sensitive = p?.can_go_next !== false
-        artDa.queue_draw()
+        if (drawnArt !== state.artVersion) { drawnArt = state.artVersion; artDa.queue_draw() }
     }
 
     prev.connect("clicked", () => { try { state.currentPlayer?.previous()   } catch {} })
@@ -175,12 +191,14 @@ function buildWideContent(state: MediaState): Gtk.Widget {
     })
     row.append(artDa); row.append(textBox); row.append(play)
 
+    let drawnArt = -1
     const update = () => {
         const p = state.currentPlayer
         title.label  = p?.title || t("cc.media.no-media")
         artist.label = p?.artist || ""
-        widePlayImg.gicon = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
-        artDa.queue_draw()
+        const wantPlay = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING ? Icons.pause : Icons.play
+        if (widePlayImg.gicon !== wantPlay) widePlayImg.gicon = wantPlay
+        if (drawnArt !== state.artVersion) { drawnArt = state.artVersion; artDa.queue_draw() }
     }
 
     play.connect("clicked", () => { try { state.currentPlayer?.play_pause() } catch {} })
@@ -226,9 +244,10 @@ function buildSingleContent(state: MediaState): Gtk.Widget {
     overlay.set_child(artDa)
     overlay.add_overlay(fallback)
 
+    let drawnArt = -1
     const update = () => {
         fallback.visible = !state.artPixbuf
-        artDa.queue_draw()
+        if (drawnArt !== state.artVersion) { drawnArt = state.artVersion; artDa.queue_draw() }
     }
 
     state.listeners.push(update)

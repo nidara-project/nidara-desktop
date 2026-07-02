@@ -63,7 +63,8 @@ export default function GamingPage() {
     const updatePreview = (path: string) => {
         if (!path || !GLib.file_test(path, GLib.FileTest.EXISTS)) return
         try {
-            const pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
+            // 2× the preview box, not full size — see Appearance.tsx updatePreview
+            const pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 640, 360, true)
             if (pixbuf) preview.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
         } catch (_) { preview.set_filename(path) }
     }

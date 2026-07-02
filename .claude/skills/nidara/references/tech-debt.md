@@ -294,12 +294,30 @@ at **1 Hz** while music played, commit d1803e2). **Rule:** guarding the `gicon` 
 is enough and is *safer* than narrowing — the generic `notify` stays robust to all metadata
 changes, and with the only redraw-triggering setter guarded the 1 Hz wakeup queues no draw
 (repaints are the cost, not wakeups — same principle as (A)). `label`/`sensitive`/`visible` are
-already GTK equality-guarded. **Still deferred (all transient surfaces — only churn while open,
-lower priority):** the same generic `notify` in the CC wifi toggle (`Toggles.tsx:198`), battery
-(`battery.ts:112`, UPower is low-freq anyway), ethernet (`ethernet.ts:69`, low-freq); and the
-media **rich panel** (`media.ts buildBarExpanded` ~L216) + `MediaIsland.tsx:36`, which go further
-and **re-decode the cover-art PNG from disk every notify** (`GdkPixbuf.new_from_file_at_scale` +
-unconditional `artDa.queue_draw()`) — guard `loadArt` on a changed `cover_art` path when touched.
+already GTK equality-guarded. **Deferred items CLOSED in the 2026-07-02 optimization pass:**
+- **Cover-art decode churn fixed** (`media.ts` rich panel + `MediaIsland.tsx`): `loadArt` now
+  guards on the `cover_art` PATH (decode only when it changes), `MediaState` carries an
+  `artVersion` and every tile's `update()` gates `queue_draw` on it, and the play/pause `gicon`
+  reassigns are identity-guarded. Before: 1 decode + full redraw per second while music played
+  (AstalMpris position poll), even with nothing visible — the media tile ships in the CC default.
+- **CC toggle icons guarded at the funnel**: all Toggles.tsx icon writes go through `setIcon`,
+  which now identity-guards (`if (img.gicon !== icon)`) — covers wifi/every capsule sync. If a
+  `getIcon()` returns fresh instances the guard just falls through to assignment (no regression).
+- **battery/ethernet re-checked**: no unguarded `gicon` reassign left (labels are GTK
+  equality-guarded; battery paints via Cairo on low-freq UPower notifies). Nothing to do.
+- **Same pass, same class (always-on pollers in built-once-hidden surfaces):** `brightness.ts`
+  sliders used to spawn 2×`brightnessctl` every 2 s FOREVER once built (CC tiles hide, never
+  unrealize, so `onExtChange`-cleanup-on-unrealize never fired). Now they poll via
+  `pollWhileMapped` (zero spawns while hidden; map-tick doubles as the initial fetch) and
+  `brightnessctl m` (max, immutable) is fetched once. **Rule:** a poller inside CC tile / bar
+  expansion content must be `pollWhileMapped` (`common/poll.ts`), never a bare repeating
+  `timeout_add` — cleanup wired to `unrealize` does NOT stop it, those widgets never unrealize.
+  Known accepted residual: `widgets/vpn.ts` keeps ONE shared 10 s `nmcli` poll for the whole
+  widget once first built (off-by-default tile; gate it on mapped if it ever matters), and
+  brightness `watchActive` keeps a 2 s no-spawn wakeup for the TALL gauge.
+- **Settings wallpaper previews** (`Appearance.tsx`/`Gaming.tsx`) now decode at 2× the 320×180
+  preview box (`new_from_file_at_scale(path, 640, 360, true)`) instead of the full wallpaper
+  (~17 MB decoded, retained forever because Settings hides instead of destroying).
 
 ### 12. Sporadic double-disconnect CRITICALs — RESOLVED (helper + full sweep 2026-06-23)
 Rare bursts (≈2 in 30 h) of `GLib-GObject-CRITICAL … instance has no handler with id` (3–4

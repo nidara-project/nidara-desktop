@@ -56,8 +56,10 @@ export default function AppearancePage() {
     const updatePreview = (path: string) => {
         if (!path || !GLib.file_test(path, GLib.FileTest.EXISTS)) return
         try {
-            // GdkPixbuf handles GIFs (first frame) and all common formats uniformly
-            const pixbuf = GdkPixbuf.Pixbuf.new_from_file(path)
+            // GdkPixbuf handles GIFs (first frame) and all common formats uniformly.
+            // Decode at 2× the preview box, NOT full size — a full wallpaper is ~17 MB
+            // decoded and Settings hides (never destroys), so it would stay resident.
+            const pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, 640, 360, true)
             if (pixbuf) preview.set_paintable(Gdk.Texture.new_for_pixbuf(pixbuf))
         } catch (_) {
             preview.set_filename(path) // fallback
