@@ -173,6 +173,29 @@ fi
 #                  "rebuild everything from scratch" escape hatch.
 # ─────────────────────────────────────────────────────────────────────────────
 REBUILD_DEPS="yes"
+# Phase 1 (pacman) has its own fingerprint, separate from the source-build pins:
+# a pin match skips the expensive Astal/AGS rebuild, but a CHANGED package list
+# (e.g. a new runtime tool like playerctl) must still sync packages — otherwise
+# updated installs silently miss dependencies that fresh installs get.
+PACMAN_SHA_FILE="/usr/share/nidara/pins-pacman"
+SYNC_PACMAN="yes"
+PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
+    gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2
+    libpulse networkmanager bluez bluez-libs bluez-utils upower libnotify
+    intltool scdoc brightnessctl pamixer playerctl
+    jq curl slurp grim wf-recorder wl-clipboard cliphist mesa pam
+    pipewire wireplumber
+    git nodejs npm gjs go
+    at-spi2-core wtype wlr-protocols wayland
+    accountsservice greetd pavucontrol rust cargo
+    hyprland hypridle hyprsunset uwsm power-profiles-daemon python-gobject
+    kitty nautilus gnome-calculator
+    polkit-gnome
+    xdg-desktop-portal-gtk xdg-desktop-portal-hyprland
+    ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji
+    papirus-icon-theme adwaita-icon-theme xdg-utils gsettings-desktop-schemas
+    awww lz4"
+DEPS_LIST_SHA="$(printf '%s' "$PACMAN_DEPS" | sha256sum | awk '{print $1}')"
 # Set to "yes" once the Astal/AGS/appmenu stack is installed as prebuilt packages
 # from nidara-repo (the binary pacman repo). When yes, the from-source build steps
 # (§2, §4) are skipped — they remain only as the fallback when the repo is
@@ -201,6 +224,16 @@ if [ "$MODE" = "update-apply" ] || [ "$MODE" = "dev" ]; then
         echo "  No pin record found — building the Astal/AGS stack."
     else
         echo "  Dependency pins changed — full stack rebuild required."
+    fi
+    # Even on a pin match, run phase 1 if the pacman list changed since the
+    # last install. A missing record = pre-fingerprint install → sync once
+    # (converges any dep added while this record didn't exist) and record.
+    if [ "$REBUILD_DEPS" = "no" ]; then
+        if [ -f "$PACMAN_SHA_FILE" ] && [ "$DEPS_LIST_SHA" = "$(cat "$PACMAN_SHA_FILE")" ]; then
+            SYNC_PACMAN="no"
+        else
+            echo "  Package list changed (or not yet recorded) — phase 1 will run."
+        fi
     fi
 fi
 
@@ -246,8 +279,8 @@ echo ""
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. System dependencies
 # ─────────────────────────────────────────────────────────────────────────────
-if [ "$REBUILD_DEPS" = "no" ]; then
-echo "[1/7] System dependencies — skipped (pins unchanged)."
+if [ "$REBUILD_DEPS" = "no" ] && [ "$SYNC_PACMAN" = "no" ]; then
+echo "[1/7] System dependencies — skipped (pins and package list unchanged)."
 else
 echo "[1/7] Installing system dependencies..."
 # Register nidara-repo — the binary pacman repo (GitHub Pages) that ships the
@@ -264,23 +297,9 @@ fi
 # -Syu, never bare -Sy: syncing the DBs without a full upgrade leaves a partial-upgrade
 # state, and the next --needed install pulls a new lib (e.g. aquamarine) whose soname no
 # longer matches already-installed packages (e.g. hyprtoolkit) → transaction fails.
-sudo pacman -Syu --needed --noconfirm \
-    base-devel glib2-devel cmake meson ninja gobject-introspection vala \
-    gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 \
-    libpulse networkmanager bluez bluez-libs bluez-utils upower libnotify \
-    intltool scdoc brightnessctl pamixer playerctl \
-    jq curl slurp grim wf-recorder wl-clipboard cliphist mesa pam \
-    pipewire wireplumber \
-    git nodejs npm gjs go \
-    at-spi2-core wtype wlr-protocols wayland \
-    accountsservice greetd pavucontrol rust cargo \
-    hyprland hypridle hyprsunset uwsm power-profiles-daemon python-gobject \
-    kitty nautilus gnome-calculator \
-    polkit-gnome \
-    xdg-desktop-portal-gtk xdg-desktop-portal-hyprland \
-    ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji \
-    papirus-icon-theme adwaita-icon-theme xdg-utils gsettings-desktop-schemas \
-    awww lz4
+# The list itself lives in PACMAN_DEPS (top of the script) so its fingerprint
+# can be compared on updates. Unquoted on purpose: word-splitting wanted.
+sudo pacman -Syu --needed --noconfirm $PACMAN_DEPS
 
 # Install the Astal/AGS/appmenu stack from nidara-repo (prebuilt binaries) instead
 # of compiling it. aylurs-gtk-shell only depends on astal-gjs + gjs, and every
@@ -539,6 +558,9 @@ sudo cp "$REPO_DIR/VERSION" /usr/share/nidara/VERSION
 # them to decide whether the Astal/AGS stack needs rebuilding.
 printf 'ASTAL_REF=%s\nAGS_REF=%s\nAPPMENU_REF=%s\n' "$ASTAL_REF" "$AGS_REF" "$APPMENU_REF" \
     | sudo tee "$PINS_FILE" > /dev/null
+# And the pacman list fingerprint — --update compares it to decide whether
+# phase 1 (package sync) can be skipped.
+printf '%s\n' "$DEPS_LIST_SHA" | sudo tee "$PACMAN_SHA_FILE" > /dev/null
 
 # Hyprland config
 sudo mkdir -p /usr/share/nidara/config/hypr
@@ -549,12 +571,13 @@ else
     sudo cp -r "$REPO_DIR/config/hypr/." /usr/share/nidara/config/hypr/
 fi
 
-# Default wallpaper (jpg since 2026-07). Do NOT delete the stale wallpaper.png
-# on updates yet: --update never refreshes /etc/greetd (tech-debt #16), so an
-# updated box's greeter .lua still points at the .png — removing it would boot
-# the greeter on a black backdrop. Fold the cleanup into the #16 fix.
+# Default wallpaper (jpg since 2026-07). The stale wallpaper.png can go now:
+# the DM block re-syncs a Nidara-owned /etc/greetd in this same run (tech-debt
+# #16 fix), so the greeter .lua points at wallpaper.jpg again; a foreign
+# DM/greeter never referenced our wallpaper in the first place.
 if [ -f "$REPO_DIR/defaults/wallpaper/wallpaper.jpg" ]; then
     sudo cp "$REPO_DIR/defaults/wallpaper/wallpaper.jpg" /usr/share/nidara/wallpaper.jpg
+    sudo rm -f /usr/share/nidara/wallpaper.png
 fi
 
 # Shell UI bundle + style
@@ -946,8 +969,25 @@ _detect_dm() {
 }
 
 ACTIVE_DM=$(_detect_dm)
-if [ "$ACTIVE_DM" = "none" ]; then
-    echo "  No display manager detected — installing greetd..."
+# /etc/greetd is (re)written only when it is recognizably OURS, or when there is
+# no DM at all. A bare "greetd is enabled" is NOT enough: greetd is the go-to
+# minimal DM for Wayland users running a different greeter (tuigreet/gtkgreet/
+# ReGreet), and clobbering their config would break their login. But never
+# refreshing it is how tech-debt #16 happened: a renamed greeter binary left
+# /etc/greetd pointing at a deleted executable and the greeter died on boot.
+# Fingerprints (both unmistakably Nidara's): our config.toml points greetd at
+# hyprland-greeter.lua; our greeter .lua launches nidara-greeter.
+_greetd_is_ours() {
+    grep -q 'hyprland-greeter.lua' /etc/greetd/config.toml 2>/dev/null && return 0
+    grep -q 'nidara-greeter' /etc/greetd/hyprland-greeter.lua 2>/dev/null && return 0
+    return 1
+}
+if [ "$ACTIVE_DM" = "none" ] || { [ "$ACTIVE_DM" = "greetd" ] && _greetd_is_ours; }; then
+    if [ "$ACTIVE_DM" = "none" ]; then
+        echo "  No display manager detected — installing greetd..."
+    else
+        echo "  greetd (Nidara) detected — refreshing /etc/greetd..."
+    fi
 
     # Install greetd config files (inject detected keyboard layout)
     sudo mkdir -p /etc/greetd
@@ -969,6 +1009,10 @@ if [ "$ACTIVE_DM" = "none" ]; then
 
     sudo systemctl enable greetd
     echo "  [OK] greetd enabled."
+elif [ "$ACTIVE_DM" = "greetd" ]; then
+    echo "  greetd is enabled but set up with a different greeter — leaving it untouched."
+    echo "  To use Nidara's greeter, point /etc/greetd/config.toml at the files in"
+    echo "  $REPO_DIR/config/greetd/ and re-run the installer."
 else
     echo "  Display manager '$ACTIVE_DM' already enabled — skipping greetd setup."
 fi
