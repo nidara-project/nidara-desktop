@@ -405,38 +405,6 @@ polish/optimization. If the hover growth ever truly must stop, it needs a struct
 (custom Cairo indicator or non-overlay reserved scrollbar with its own reflow tradeoff), not
 more specificity. Same root as #9 (the Adwaita stylesheet is loaded in-process).
 
-### 16. `install.sh` never refreshes `/etc/greetd` on update (greetd-is-our-own-DM blind spot)
-`_detect_dm()` (install.sh, the DM block) iterates `sddm gdm lightdm lxdm xdm slim ly greetd` and
-**includes `greetd`**. Because the installer itself enables greetd, every later `--update`/reinstall
-detects `ACTIVE_DM=greetd`, so `if [ "$ACTIVE_DM" = "none" ]` is false and the **entire `/etc/greetd`
-block is skipped** — `config.toml` and `hyprland-greeter.lua` are never re-copied. This is silent until a
-path/name in those templates changes: the **Nidara rename shipped a new `nidara-greeter` binary but left
-`/etc/greetd/hyprland-greeter.lua` calling the deleted `crystal-greeter`**, so the greeter died on boot
-(`greetd: greeter exited without creating a session` → start-limit-hit → error screen before login).
-Recovered by hand: `cp config/greetd/{hyprland-greeter.lua,config.toml} /etc/greetd/` +
-`systemctl reset-failed greetd` + `restart`. **Fix (deferred) — gate on a fingerprint, NOT on the bare
-`greetd` enabled-state.** The naive fixes (drop `greetd` from `_detect_dm`, or
-`[ "$ACTIVE_DM" = "none" ] || [ "$ACTIVE_DM" = "greetd" ]`) are WRONG: greetd is the go-to minimal DM for
-many Wayland WM users running a *different* greeter (tuigreet/gtkgreet/ReGreet), and both naive forms would
-**clobber that user's `/etc/greetd` on install/update** — greetd is not necessarily *ours*. Instead, re-sync
-`/etc/greetd` only when it is recognizably ours: `ACTIVE_DM = none` (fresh, no DM) **OR** the existing config
-is the Nidara one — our `config.toml` runs `HYPRLAND_CONFIG=/etc/greetd/hyprland-greeter.lua` and that `.lua`
-launches `nidara-greeter`, both unmistakable (`grep -q hyprland-greeter.lua /etc/greetd/config.toml` or
-`grep -q nidara-greeter /etc/greetd/hyprland-greeter.lua`). A foreign DM (sddm/gdm/…) **or a foreign greetd**
-is left untouched, same as today. Bonus: today a greetd+tuigreet box silently never gets the Nidara greeter
-installed (detected as active DM → block skipped); the fingerprint branch can warn instead ("greetd already
-set up with a different greeter — point it at /etc/greetd/hyprland-greeter.lua to use Nidara's"). The block is
-already idempotent (`systemctl enable greetd` is a no-op if enabled). NB the kb-layout `sed` in that block is now a no-op too
-(the template sets `kb_layout = readKbLayout()`, no literal `"us"` to match) — copying the template verbatim
-is correct. Related gotcha: greeter prefs live under the **HOME-relative** path baked into the `.lua`
-(`/var/lib/greeter/.config/nidara/greeter-prefs.json`); a rename of that subdir orphans the saved kb layout
-(falls back to `"us"`), cosmetic.
-**Fold into this fix (2026-07-02):** the default wallpaper moved `wallpaper.png` → `wallpaper.jpg`;
-install.sh deliberately does NOT delete the stale `/usr/share/nidara/wallpaper.png` on update because
-an un-refreshed `/etc/greetd/hyprland-greeter.lua` still points at it (black greeter backdrop otherwise).
-When #16 lands (fingerprint-gated `/etc/greetd` re-sync), add `sudo rm -f /usr/share/nidara/wallpaper.png`
-to the wallpaper block.
-
 ### 17. Status-indicator subsystem: extension points deliberately not wired (2026-06-19)
 `surfaces/bar/StatusIndicators.tsx` is a declarative registry (`INDICATORS`, three states
 hidden/armed/active) rendered the **macOS way**: a small **badge on the bar's Control-Center button**
@@ -601,6 +569,17 @@ These were paid down; the *rule* remains:
   remote + `/usr/share`. Dev installs are the one exception (they update from the developer's
   own registered clone via `.dev`/`.source`). `install.sh` system mode migrates away any
   legacy `src`/`.source`.
+- **(was #16, resolved 2026-07-02) `install.sh` re-syncs a Nidara-owned `/etc/greetd` on update.**
+  Fingerprint-gated, NOT bare enabled-state: the block runs when `ACTIVE_DM=none` OR greetd is
+  enabled AND `/etc/greetd` is recognizably ours (`config.toml` → `hyprland-greeter.lua`, or the
+  `.lua` launching `nidara-greeter`). A foreign greetd (tuigreet/gtkgreet/ReGreet) or foreign DM is
+  left untouched, with a hint printed. Folded into the same fix: the stale
+  `/usr/share/nidara/wallpaper.png` is removed (the refreshed greeter `.lua` points at
+  `wallpaper.jpg`), and the pacman dep list got its own fingerprint (`/usr/share/nidara/pins-pacman`)
+  so a changed list runs phase 1 on update (new deps like playerctl now reach updated installs)
+  while unchanged-list updates keep skipping it. Validated E2E in the VM 2026-07-02: update from
+  the 06-22 snapshot refreshed `/etc/greetd`, installed playerctl, removed the stale png, greeter
+  booted; the immediate re-update took the fast path ("pins and package list unchanged").
 - **(was #16) Settings is a normal window.** `openSettings` opens/raises it — NOT a toggle
   (re-invoking just raises; it closes only via its own close button). Don't turn it into a
   toggle-hide. **Raising across workspaces:** `gtk_window_present()` alone does NOT jump to the
