@@ -62,16 +62,25 @@ window > contents {
 }
 
 // ── Avatar ──────────────────────────────────────────────────────────────────
+// Photo rendering lives in ui/lib/avatar.ts (Gtk.Picture + pre-cropped square
+// pixbuf); the pill radius here is what clips it into the circle.
 .greeter-avatar {
   border-radius: var(--nidara-radius-pill);
   border: 2px solid var(--nidara-glass-border);
 }
 
+// Generic-glyph fallback (no photo, or a file the greeter user can't read):
+// give the circle a visible surface so the outline isn't empty.
+.greeter-avatar-fallback {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--nidara-text-secondary);
+}
+
 // ── Username ────────────────────────────────────────────────────────────────
 .greeter-username {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--nidara-text-secondary);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--nidara-text);
   letter-spacing: 0.2px;
 }
 
@@ -154,11 +163,13 @@ window > contents {
 
   &:hover { background: rgba(255, 255, 255, 0.08); }
 
-  image {
+  // Both the Gtk.Picture (photo) and the Gtk.Image (glyph fallback) carry this
+  // class — the chip draws its own selection ring instead of the glass border.
+  .greeter-chip-avatar {
     border-radius: var(--nidara-radius-pill);
     border: 2px solid transparent;
   }
-  &:checked image { border-color: var(--nidara-accent); }
+  &:checked .greeter-chip-avatar { border-color: var(--nidara-accent); }
 }
 
 // ── Error / Shake ────────────────────────────────────────────────────────────
@@ -197,6 +208,9 @@ dropdown > button.combo {
 
   label { color: inherit; font-size: inherit; }
   image { color: inherit; -gtk-icon-size: 10px; margin-start: 4px; }
+  // GtkDropDown's chevron is an `arrow` node, not `image` — uncapped it renders
+  // at 16px and makes the combo visibly taller than its sibling buttons.
+  arrow { color: inherit; -gtk-icon-size: 10px; margin-start: 4px; }
 }
 
 // Session selector — visible, medium weight

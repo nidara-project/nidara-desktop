@@ -3,16 +3,15 @@ import GLib from "gi://GLib"
 // @ts-ignore
 import AstalAuth from "gi://AstalAuth"
 import { getDefaultUser } from "../../lib/users"
+import { makeAvatar } from "../../lib/avatar"
 import { t } from "../lib/i18n"
 
 export default function LockCard(onUnlock: () => void): Gtk.Widget {
   const user = getDefaultUser()
   let isAuthenticating = false
 
-  const avatar = user.avatarPath
-    ? new Gtk.Image({ file: user.avatarPath, pixel_size: 80, css_classes: ["greeter-avatar"] })
-    : new Gtk.Image({ icon_name: "avatar-default-symbolic", pixel_size: 80, css_classes: ["greeter-avatar"] })
-  avatar.halign = Gtk.Align.CENTER
+  const avatar = makeAvatar(80)
+  avatar.setSource(user.avatarPath)
 
   const usernameLabel = new Gtk.Label({
     label: user.displayName,
@@ -101,15 +100,22 @@ export default function LockCard(onUnlock: () => void): Gtk.Widget {
     orientation: Gtk.Orientation.VERTICAL,
     halign: Gtk.Align.CENTER,
     valign: Gtk.Align.CENTER,
+    // Same entrance fade as the greeter card (class pair defined in style.scss).
+    css_classes: ["greeter-card"],
   })
 
-  col.append(avatar)
+  col.append(avatar.widget)
   col.append(usernameLabel)
   col.append(passwordEntry)
   col.append(unlockBtn)
   col.append(errorLabel)
 
   col.connect("map", () => {
+    // Trigger the entrance fade on the next frame so the transition runs.
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
+      col.add_css_class("greeter-card-shown")
+      return GLib.SOURCE_REMOVE
+    })
     GLib.timeout_add(GLib.PRIORITY_DEFAULT, 100, () => {
       passwordEntry.grab_focus()
       return GLib.SOURCE_REMOVE

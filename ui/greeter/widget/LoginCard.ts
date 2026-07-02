@@ -5,6 +5,7 @@ import GLib from "gi://GLib"
 import AstalGreet from "gi://AstalGreet"
 import { getSessions } from "../lib/sessions"
 import { getUsers, type User } from "../../lib/users"
+import { makeAvatar } from "../../lib/avatar"
 import { t, onLocaleChange } from "../lib/i18n"
 
 function greetLogin(username: string, password: string, cmd: string): Promise<void> {
@@ -18,12 +19,6 @@ function greetLogin(username: string, password: string, cmd: string): Promise<vo
   })
 }
 
-function avatarImage(u: User, size: number): Gtk.Image {
-  return u.avatarPath
-    ? new Gtk.Image({ file: u.avatarPath, pixel_size: size })
-    : new Gtk.Image({ icon_name: "avatar-default-symbolic", pixel_size: size })
-}
-
 export default function LoginCard(): Gtk.Widget {
   const sessions = getSessions()
   const users = getUsers()
@@ -33,9 +28,8 @@ export default function LoginCard(): Gtk.Widget {
   let sessionIdx = Math.max(0, sessions.findIndex(s => s.id === "nidara"))
   let isAuthenticating = false
 
-  const avatar = avatarImage(activeUser, 80)
-  avatar.add_css_class("greeter-avatar")
-  avatar.halign = Gtk.Align.CENTER
+  const avatar = makeAvatar(80)
+  avatar.setSource(activeUser.avatarPath)
 
   const usernameLabel = new Gtk.Label({
     label: activeUser.displayName,
@@ -128,8 +122,7 @@ export default function LoginCard(): Gtk.Widget {
   const setActiveUser = (u: User) => {
     if (u === activeUser) return
     activeUser = u
-    if (u.avatarPath) avatar.set_from_file(u.avatarPath)
-    else avatar.set_from_icon_name("avatar-default-symbolic")
+    avatar.setSource(u.avatarPath)
     usernameLabel.label = u.displayName
     passwordEntry.set_text("")
     errorLabel.visible = false
@@ -170,7 +163,7 @@ export default function LoginCard(): Gtk.Widget {
     css_classes: ["greeter-card"],
   })
 
-  col.append(avatar)
+  col.append(avatar.widget)
   col.append(usernameLabel)
   col.append(passwordEntry)
   col.append(capsLabel)
@@ -191,8 +184,10 @@ export default function LoginCard(): Gtk.Widget {
     })
     const chips: Gtk.ToggleButton[] = []
     for (const u of users) {
+      const chipAvatar = makeAvatar(36, ["greeter-chip-avatar"])
+      chipAvatar.setSource(u.avatarPath)
       const chip = new Gtk.ToggleButton({
-        child: avatarImage(u, 36),
+        child: chipAvatar.widget,
         active: u === activeUser,
         tooltip_text: u.displayName,
         css_classes: ["greeter-user-chip"],
