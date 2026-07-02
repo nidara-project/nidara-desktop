@@ -138,6 +138,47 @@ When a reload seems to do nothing or styles refuse to refresh, the cause is almo
 2. `killall gjs` — then `Super+Shift+R` once it's gone.
 3. `tail -f /tmp/nidara-ui.log` and re-trigger; look for stack traces.
 
+### Testing in a QEMU VM (installer / greeter / lockscreen)
+
+The paths CI cannot cover — `install.sh` on a virgin Arch, the greetd→greeter→login
+chain, the lockscreen — are tested in a QEMU VM. Working invocation (verified 2026-07-03;
+`<disk>` = your Arch qcow2, UEFI via OVMF):
+
+```bash
+qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -m 4096 -smp 4 \
+  -drive if=pflash,format=raw,readonly=on,file=/usr/share/edk2/x64/OVMF_CODE.4m.fd \
+  -drive if=pflash,format=raw,file=<ovmf-vars-copy>.fd \
+  -drive file=<disk>.qcow2,if=virtio \
+  -vga none -device virtio-vga-gl -display egl-headless \
+  -nic user,model=virtio-net-pci,hostfwd=tcp::2222-:22 \
+  -usb -device usb-tablet
+```
+
+Gotchas that cost real debugging time:
+- **`-vga none` is mandatory** with `-device virtio-gpu-gl`/`virtio-vga-gl`: without it QEMU
+  adds a default bochs VGA, the guest gets TWO DRM cards, Hyprland picks the 3D-less bochs
+  one and dies instantly ("start-hyprland error" at the greeter, greetd hits start-limit).
+- `-display egl-headless` renders guest GL offscreen — verify via `grim` over SSH
+  (`hostfwd` → port 2222), no window needed. (`gtk,gl=on` / `sdl,gl=on` may fail to create
+  a GL context depending on the launching environment; egl-headless is the reliable one.)
+- **Offline qcow2 snapshots** (`qemu-img snapshot -c/-a <tag>`, VM OFF) are the iteration
+  workflow — restore a clean state between installer runs. Applying one rolls back
+  EVERYTHING, including the guest's `~/.ssh/authorized_keys` — snapshot AFTER installing
+  your SSH key.
+- **Screenshotting the greeter**: it runs as the `greeter` system user, whose Hyprland does
+  not inherit `WAYLAND_DISPLAY` — find it with `sock=$(sudo ls /run/user/<greeter-uid>/ |
+  grep -x 'wayland-[0-9]')`, then
+  `sudo env XDG_RUNTIME_DIR=/run/user/<greeter-uid> WAYLAND_DISPLAY=$sock grim /tmp/shot.png`.
+- **Getting a seat session without typing a password** (needed for lockscreen tests over
+  SSH): append `[initial_session] command = "/usr/bin/nidara" user = "<user>"` to
+  `/etc/greetd/config.toml` and restart greetd — but greetd honors it only once per boot,
+  tracked by `/run/greetd.run`, so `sudo rm /run/greetd.run` before the restart. Revert the
+  config byte-exact afterwards so the Nidara-owned `/etc/greetd` fingerprint keeps matching
+  (`install.sh --update` re-syncs only fingerprint-matching configs).
+- Fast deploy iteration without a full `install.sh --update`: `scp` the rebuilt bundle +
+  compiled `style.css` over the installed copies under `/usr/share/nidara/` (+ wrappers
+  under `/usr/bin/`) and restart greetd / re-lock.
+
 CI gates **SCSS compile + typecheck + widgets-gen freshness + headless boot smoke**.
 
 The **smoke job** (`scripts/ci/headless-smoke.sh`, `smoke` in ci.yml) is the only gate that

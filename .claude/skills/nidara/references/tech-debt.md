@@ -547,6 +547,19 @@ an accent-panel tint (or any token) without a real entry point — a Setting/`co
 same time. Side effect: the duplicate alpha/popover computation in `generateTokenHeader` is gone, so the
 light-mode opacity floor now lives in exactly ONE place (`nidaraVars`) — see #24.
 
+### 26. `bin/*` logs are single-user (`/tmp/nidara-*.log`) — collides on multi-user systems
+All launcher wrappers log to fixed `/tmp` paths (`nidara-ui.log`, `nidara-greeter.log`,
+`nidara-lock.log`). On a machine with two human users, the second user cannot append to the
+first user's file — and because bash aborts a command whose redirect fails, the wrapped
+binary **never launches** for that user. This exact mechanism already bit once (2026-07-03):
+`nidara-lock` logged to `/var/log/nidara-lock.log`, unwritable for ANY regular user, so the
+lockscreen silently never launched via the wrapper on every install — fixed by moving it to
+`/tmp` like the others. Proper fix when multi-user becomes a target:
+`${XDG_RUNTIME_DIR:-/tmp}/nidara-*.log` across all wrappers (per-user, always writable, and
+`install.sh` needs no changes). Low urgency — single-user is the current support scope —
+but any future wrapper MUST NOT introduce a root-only log path, and redirects into logs
+should never gate the exec (`>> "$LOG" 2>&1 || true` on the setup lines, or pre-`touch`).
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
