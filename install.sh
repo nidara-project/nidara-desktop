@@ -549,9 +549,10 @@ else
     sudo cp -r "$REPO_DIR/config/hypr/." /usr/share/nidara/config/hypr/
 fi
 
-# Default wallpaper
-if [ -f "$REPO_DIR/defaults/wallpaper/wallpaper.png" ]; then
-    sudo cp "$REPO_DIR/defaults/wallpaper/wallpaper.png" /usr/share/nidara/wallpaper.png
+# Default wallpaper (jpg since 2026-07; drop the stale png on updates)
+if [ -f "$REPO_DIR/defaults/wallpaper/wallpaper.jpg" ]; then
+    sudo cp "$REPO_DIR/defaults/wallpaper/wallpaper.jpg" /usr/share/nidara/wallpaper.jpg
+    sudo rm -f /usr/share/nidara/wallpaper.png
 fi
 
 # Shell UI bundle + style

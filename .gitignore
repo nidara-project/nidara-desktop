@@ -154,4 +154,4 @@ docs/
 
 # wallpaper directory is tracked (default asset shipped with the project)
 !defaults/wallpaper/
-!defaults/wallpaper/*.png
+!defaults/wallpaper/*.jpg
