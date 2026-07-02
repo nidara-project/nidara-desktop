@@ -198,7 +198,12 @@ window > contents {
 // ── Gtk.DropDown — session and keyboard layout selectors ─────────────────────
 // Base trigger: same ghost style for all dropdowns in the greeter.
 // GTK4 blank theme means zero defaults — define everything explicitly.
-dropdown > button.combo {
+// `dropdown > button` WITHOUT `.combo`: on current GTK4 the internal button
+// does NOT carry the .combo class, so every `button.combo` selector is dead
+// (verified empirically in the VM — the button rendered with Adwaita defaults,
+// visibly taller than its siblings). Same lesson as the popover below and as
+// the shell's _components.scss.
+dropdown > button {
   background: transparent;
   border: none;
   box-shadow: none;
@@ -214,7 +219,7 @@ dropdown > button.combo {
 }
 
 // Session selector — visible, medium weight
-dropdown.greeter-session-dropdown > button.combo {
+dropdown.greeter-session-dropdown > button {
   color: var(--nidara-text-secondary);
   font-size: 12px;
   padding: 4px 10px;
@@ -225,7 +230,7 @@ dropdown.greeter-session-dropdown > button.combo {
 }
 
 // Keyboard selector — compact, dimmed
-dropdown.locale-bar-dropdown > button.combo {
+dropdown.locale-bar-dropdown > button {
   color: var(--nidara-text-muted);
   font-size: 12px;
   padding: 3px 8px;
@@ -235,8 +240,10 @@ dropdown.locale-bar-dropdown > button.combo {
   &:active { background: rgba(255, 255, 255, 0.05); }
 }
 
-// Popover list — shared for both (auto-positions: above when near bottom)
-popover.combo {
+// Popover list — shared for both (auto-positions: above when near bottom).
+// `dropdown popover`, not `popover.combo`: GTK4 never puts .combo on the
+// popover (same finding as the shell's _components.scss).
+dropdown popover {
   background: transparent;
   border: none;
   box-shadow: none;
