@@ -29,6 +29,8 @@ built on Hyprland and AGS v3 (Aylur's GTK Shell), registering as a proper login 
   (`nidara-lock`, on `ext-session-lock-v1`), both sharing the Nidara look; no regreet,
   no hyprlock.
 - **Idle management** — hypridle with configurable screen-off, lock, and suspend timers.
+- **Hardware & media keys** — volume, mic mute, brightness (floored above black), and
+  MPRIS transport (`XF86*`) bound out of the box, working on the lock screen too.
 
 ### Settings
 

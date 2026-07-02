@@ -268,7 +268,7 @@ sudo pacman -Syu --needed --noconfirm \
     base-devel glib2-devel cmake meson ninja gobject-introspection vala \
     gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 \
     libpulse networkmanager bluez bluez-libs bluez-utils upower libnotify \
-    intltool scdoc brightnessctl pamixer \
+    intltool scdoc brightnessctl pamixer playerctl \
     jq curl slurp grim wf-recorder wl-clipboard cliphist mesa pam \
     pipewire wireplumber \
     git nodejs npm gjs go \

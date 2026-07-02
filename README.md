@@ -176,6 +176,11 @@ off at any time, taking effect immediately.
 | `Print` | Region screenshot → clipboard |
 | `Shift + Print` | Region screenshot → `~/Pictures/` |
 
+### Media & hardware keys
+
+Volume, microphone mute, brightness and media-transport keys (`XF86*`) work out of
+the box — including on the lock screen. Brightness never steps down to fully black.
+
 ---
 
 ## Developer Guide
