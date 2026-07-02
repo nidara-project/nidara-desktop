@@ -161,7 +161,10 @@ selection {
 .nidara-window-header {
     background: transparent;
     border-bottom: 1px solid var(--nidara-border);
-    padding: 0 12px 8px 8px;
+    // padding-right 22 makes the headerEnd close button's gap to the window's
+    // right edge equal its gap to the top edge (24px measured, incl. glass
+    // chrome): the 22px circle ends up centred on the corner diagonal.
+    padding: 0 22px 8px 8px;
     min-height: 50px;
 }
 .nidara-window-tools {
