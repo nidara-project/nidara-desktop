@@ -609,7 +609,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Measure after first layout pass (bar realized but still invisible)
   GLib.timeout_add(GLib.PRIORITY_DEFAULT, 220, () => { measureOverflow(); return GLib.SOURCE_REMOVE })
   let barFullscreenMode = false
-  let gameOverlayActive = false
+  let barOverlayActive = false
 
   // Show only after measurement+rebuild have had time to take effect
   // Skip if fullscreen is already detected by then (checkBarFullscreen runs in idle_add)
@@ -626,13 +626,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (barFullscreenMode === active) return
       barFullscreenMode = active
       try {
-          if (active && !gameOverlayActive) {
+          if (active && !barOverlayActive) {
               Gtk4LayerShell.set_exclusive_zone(win, 0) // release top reservation
               win.set_opacity(0)
           } else if (!active) {
-              if (gameOverlayActive) {
+              if (barOverlayActive) {
                   // Exit overlay mode when fullscreen ends
-                  gameOverlayActive = false
+                  barOverlayActive = false
                   Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
               }
               Gtk4LayerShell.set_exclusive_zone(win, 40) // restore top reservation
@@ -661,9 +661,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   hs.connect("changed", checkBarFullscreen)
   GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { checkBarFullscreen(); return GLib.SOURCE_REMOVE })
 
-  ;(win as any).setGameOverlayMode = (active: boolean) => {
+  ;(win as any).setBarOverlayMode = (active: boolean) => {
       try {
-          gameOverlayActive = active
+          barOverlayActive = active
           if (active) {
               Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY)
               Gtk4LayerShell.set_exclusive_zone(win, 0) // release top reservation
@@ -678,9 +678,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
                   Gtk4LayerShell.set_exclusive_zone(win, 40) // restore top reservation
               }
           }
-      } catch (e) { console.error("[Bar] setGameOverlayMode failed:", e) }
+      } catch (e) { console.error("[Bar] setBarOverlayMode failed:", e) }
   }
-  ;(win as any).isGameOverlayActive = () => gameOverlayActive
+  ;(win as any).isBarOverlayActive = () => barOverlayActive
   ;(win as any).isBarFullscreenMode = () => barFullscreenMode
 
   return win

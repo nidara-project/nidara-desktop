@@ -446,12 +446,12 @@ symlink, that's the bug — make it a real dir.
 | `Super+T` | Kitty |
 | `Super+E` | Nautilus |
 | `Super+L` | Lock |
-| `Super+G` | Game overlay |
+| `Super+B` | Bar overlay (bar above fullscreen) |
 | `Super+Shift+G` | Game mode |
-| `Super+M` | Exit session |
 | `Super+Shift+R` | Reload UI |
 | `Super+Q` | Close window |
 | `Super+F` | Float |
+| `Super+Shift+F` | Fullscreen |
 | `Super+P` | Pseudo |
 | `Super+1–5` | Switch workspace |
 | `Super+Shift+1–5` | Move to workspace |

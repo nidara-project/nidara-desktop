@@ -213,13 +213,14 @@ hl.bind(mainMod .. " + L",         hl.dsp.exec_cmd("nidara-lock"))
 -- ── Keybinds — App launchers ─────────────────────────────────────────────────
 hl.bind(mainMod .. " + S",   hl.dsp.exec_cmd("ags request openSettings"))
 hl.bind("SUPER + SUPER_L",   hl.dsp.exec_cmd("ags request toggleAppGrid"), { release = true })
-hl.bind(mainMod .. " + G",          hl.dsp.exec_cmd("ags request toggleGameOverlay"))
+hl.bind(mainMod .. " + B",          hl.dsp.exec_cmd("ags request toggleBarOverlay"))
 hl.bind(mainMod .. " + SHIFT + G", hl.dsp.exec_cmd("nidara-game-mode toggle"))
 hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd("ags request disableComputerControl")) -- kill switch: revoke AI computer-control instantly
 hl.bind(mainMod .. " + E",   hl.dsp.exec_cmd("uwsm app -- " .. fileManager))
 hl.bind(mainMod .. " + T",   hl.dsp.exec_cmd("uwsm app -- " .. terminal))
 hl.bind(mainMod .. " + Q",   hl.dsp.window.close())
-hl.bind(mainMod .. " + M",   hl.dsp.exit())
+-- No exit-session bind on purpose (upstream's SUPER+M): one accidental chord
+-- must never kill the whole session. Log out via the System Menu instead.
 
 -- ── Keybinds — Focus ─────────────────────────────────────────────────────────
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
@@ -248,6 +249,7 @@ hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
 -- ── Keybinds — Window modes ──────────────────────────────────────────────────
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 hl.bind(mainMod .. " + F", hl.dsp.window.float({ action = "toggle" }))
+hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen())
 
 -- ── Keybinds — Screenshots ───────────────────────────────────────────────────
 hl.bind("Print", hl.dsp.exec_cmd('grim -g "$(slurp -d)" - | wl-copy'))

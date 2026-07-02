@@ -143,9 +143,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: args => ipc.openSettingsPage?.(args[0] ?? ""),
   },
   toggleOverview: { desc: "Toggle the workspaces overview", run: () => ipc.toggleOverview?.() },
-  toggleGameOverlay: {
-    desc: "Toggle game mode (bar promoted above fullscreen surfaces)",
-    run: () => ipc.toggleGameOverlay?.(),
+  toggleBarOverlay: {
+    desc: "Toggle the bar overlay (bar promoted above fullscreen surfaces)",
+    aliases: ["toggleGameOverlay"],
+    run: () => ipc.toggleBarOverlay?.(),
   },
   openWindowMenu: {
     desc: "Open the focused window's options menu (the AppTitle capsule menu) without a " +
@@ -658,15 +659,15 @@ app.start({
     const toggleOverview = () => {
       status.toggleOverview()
     }
-    const toggleGameOverlay = () => {
+    const toggleBarOverlay = () => {
       // Only promotes bar — dock and appgrid are unaffected.
       // Activation requires a fullscreen window; deactivation is always allowed.
       windows.forEach(w => {
         if (w.name === "nidara-bar") {
-          const isActive = (w as any).isGameOverlayActive?.() ?? false
+          const isActive = (w as any).isBarOverlayActive?.() ?? false
           const isFullscreen = (w as any).isBarFullscreenMode?.() ?? false
           if (!isActive && !isFullscreen) return
-          ;(w as any).setGameOverlayMode?.(!isActive)
+          ;(w as any).setBarOverlayMode?.(!isActive)
         }
       })
     }
@@ -694,7 +695,7 @@ app.start({
     ipc.openSettings = openSettings
     ipc.openSettingsPage = openSettingsPage as (...args: string[]) => string
     ipc.toggleOverview = toggleOverview
-    ipc.toggleGameOverlay = toggleGameOverlay
+    ipc.toggleBarOverlay = toggleBarOverlay
     ipc.lockScreen = lockScreen
     ipc.unlockScreen = unlockScreen
 
@@ -703,7 +704,7 @@ app.start({
     shellActions.openSettings = openSettings
     shellActions.openSettingsPage = openSettingsPage
     shellActions.toggleOverview = toggleOverview
-    shellActions.toggleGameOverlay = toggleGameOverlay
+    shellActions.toggleBarOverlay = toggleBarOverlay
     shellActions.lockScreen = lockScreen
     shellActions.unlockScreen = unlockScreen
 

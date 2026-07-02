@@ -20,7 +20,8 @@ export interface ShellActionsMap {
   /** Open the Settings window directly on a page id (e.g. "bluetooth"). */
   openSettingsPage?: (id: string) => string
   toggleOverview?: () => void
-  toggleGameOverlay?: () => void
+  /** Promote the bar to the OVERLAY layer above a fullscreen window (toggle). */
+  toggleBarOverlay?: () => void
   lockScreen?: () => void
   unlockScreen?: () => void
   /** Widget-owned: AppTitle registers this to open the focused window's options
