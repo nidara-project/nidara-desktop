@@ -230,10 +230,13 @@ dropdown.greeter-session-dropdown > button {
 }
 
 // Keyboard selector — compact, dimmed
+// min-height 18px + 3px vertical padding keep the three bottom-pill buttons
+// (this, .locale-bar-lang-btn, .greeter-power-btn) the exact same height.
 dropdown.locale-bar-dropdown > button {
   color: var(--nidara-text-muted);
   font-size: 12px;
   padding: 3px 8px;
+  min-height: 18px;
   border-radius: var(--nidara-radius-pill);
 
   &:hover  { background: rgba(255, 255, 255, 0.07); color: var(--nidara-text-secondary); }
@@ -315,7 +318,7 @@ dropdown popover {
   font-size: 12px;
   font-weight: 500;
   padding: 3px 8px;
-  min-height: 0;
+  min-height: 18px; // lockstep with .greeter-power-btn / locale-bar-dropdown
 
   &:hover   { background: rgba(255, 255, 255, 0.07); color: var(--nidara-text-secondary); }
   &:checked { background: var(--nidara-accent-20); color: var(--nidara-accent); }
@@ -334,9 +337,9 @@ dropdown popover {
   border: none;
   border-radius: var(--nidara-radius-pill);
   color: #fff;
-  padding: 6px 16px;
+  padding: 3px 16px;
   font-size: 13px;
-  min-height: 0;
+  min-height: 18px; // lockstep with the locale-bar buttons next to it
 
   &:hover  { background: var(--nidara-accent); }
   &:active { background: var(--nidara-accent); }

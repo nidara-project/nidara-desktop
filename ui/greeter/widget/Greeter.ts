@@ -38,9 +38,8 @@ export default function Greeter(monitor: Gdk.Monitor) {
   localeBar.margin_bottom = 40
 
   const powerBar = PowerBar()
-  powerBar.halign = Gtk.Align.END
+  powerBar.halign = Gtk.Align.CENTER
   powerBar.valign = Gtk.Align.END
-  powerBar.margin_end = 40
   powerBar.margin_bottom = 40
 
   overlay.add_overlay(clockWidget)

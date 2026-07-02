@@ -64,10 +64,12 @@ export default function LoginCard(): Gtk.Widget {
   // Session selector — Gtk.DropDown auto-positions its popover (no off-screen bug)
   const sessionNames = sessions.map(s => s.name)
   const sessionModel = new Gtk.StringList({ strings: sessionNames })
+  // Compact centered pill (natural width) — a set-once control, kept visually
+  // subordinate to the password field (decided 2026-07-02; prior art: GDM/SDDM
+  // hide it in a corner, macOS/Windows have none).
   const sessionDrp = new Gtk.DropDown({
     model: sessionModel,
     halign: Gtk.Align.CENTER,
-    width_request: 280,
     margin_top: 14,
     css_classes: ["greeter-session-dropdown"],
   })
