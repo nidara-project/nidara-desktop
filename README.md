@@ -24,9 +24,48 @@ It is not a theme or a set of scripts — it registers as a proper Wayland sessi
 
 ---
 
+## Hardware & platform support
+
+Nidara is young. This is what it has actually been tested on — not what we hope works.
+
+**✅ Supported** — tested by the maintainer; bugs here are treated as priority.
+
+- Vanilla **Arch Linux** (x86_64), from a minimal base install
+- **EndeavourOS** — the maintainer's daily driver (it uses Arch's own repos unmodified)
+- **AMD and Intel GPUs** (Mesa)
+- Single-monitor desktops
+- **QEMU/KVM** VMs with `virtio-gpu-gl` (for trying it out)
+
+**🧪 Experimental** — wired up and expected to work, but not validated on real hardware
+yet. Reports (and fixes) are the most valuable contribution you can make right now.
+
+- **NVIDIA GPUs** (proprietary driver or open kernel modules): the installer auto-detects
+  your card and driver and configures the environment for you, but upstream Hyprland has
+  no official NVIDIA support and we haven't tested on real NVIDIA hardware. Nouveau is
+  untested.
+- **Multi-monitor**: the bar and dock spawn on every display and per-monitor
+  scale/mode/VRR live in Settings → Display, but hotplugging a display currently needs a
+  UI reload (`Super + Shift + R`).
+- **Laptops**: battery, brightness keys and idle/suspend timers work; lid-switch
+  behaviour and suspend/resume cycles are untested.
+- Other Arch derivatives that track Arch's repos closely.
+
+**❌ Not supported**
+
+- Derivatives with delayed or held-back packages (e.g. **Manjaro**) — Nidara pins
+  Hyprland ≥ 0.55 and builds its UI stack against current Arch libraries
+- **VirtualBox** (no usable 3D acceleration for Wayland compositors)
+- X11 (Wayland-only by design), ARM
+
+Hardware-compatibility fixes are explicitly a "global" contribution — see
+[Contributing](#contributing).
+
+---
+
 ## Installation
 
-Nidara targets **Arch Linux** (and Arch-based distros such as EndeavourOS). The intended
+Nidara targets **Arch Linux** (see [Hardware & platform support](#hardware--platform-support)
+for what's tested, including which Arch derivatives qualify). The intended
 path is the simplest one: install a **minimal Arch base with no desktop environment**, log in at
 the TTY, and run the installer — it pulls everything else in. It also works on top of an existing
 Arch desktop: if a display manager is already enabled it's left untouched and Nidara is just
