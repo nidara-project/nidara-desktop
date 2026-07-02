@@ -15,9 +15,9 @@ It is not a theme or a set of scripts — it registers as a proper Wayland sessi
 - **App Launcher**: Full-screen grid with instant fuzzy search.
 - **Control Center**: Volume (WirePlumber), brightness, Wi-Fi, Bluetooth, battery, MPRIS media.
 - **Notification Center**: Grouped notifications with inline actions.
-- **Settings**: Multi-page panel — Appearance, Display, Audio, Network, Input, Bluetooth, Language & Region, Applications, Dock & Panel, Widgets, Autostart, Power, and About.
+- **Settings**: Multi-page panel — Appearance, Display, Audio, Network, Input, Bluetooth, Language & Region, Applications, Dock & Panel, Control Center, Autostart, Power, and About.
 - **Nidara Design System**: Dynamic accent colors, glassmorphism tokens, dark/light mode.
-- **Game Mode**: Steam games auto-move to a dedicated `gamespace` workspace (no blur/shadow/animations, `immediate` mode), optional library-art wallpaper and performance power profile; `Super + G` floats the bar above fullscreen games.
+- **Game Mode**: Steam games auto-move to a dedicated `gamespace` workspace (no blur/shadow/animations, `immediate` mode), optional library-art wallpaper and performance power profile; `Super + B` floats the bar above any fullscreen window.
 - **Login & Lock**: Custom AGS apps — a greetd-based greeter (`nidara-greeter`) and a lock screen (`nidara-lock`) built on `ext-session-lock-v1`, both sharing the Nidara look. The greeter is launched directly by greetd (no regreet); the lock screen uses no hyprlock.
 - **Idle management**: hypridle — configurable screen-off, lock, and suspend timers.
 - **Internationalization**: All UI strings via `t()`; English + Spanish included.
@@ -141,6 +141,7 @@ off at any time, taking effect immediately.
 | :--- | :--- |
 | `Super + Q` | Close active window |
 | `Super + F` | Toggle floating |
+| `Super + Shift + F` | Toggle fullscreen |
 | `Super + P` | Toggle pseudo-tiling (dwindle) |
 | `Super + Left / Right / Up / Down` | Move focus |
 | `Super + Shift + Arrow` | Resize active window |
@@ -163,9 +164,8 @@ off at any time, taking effect immediately.
 | `Super + T` | Terminal (Kitty) |
 | `Super + E` | Files (Nautilus) |
 | `Super + L` | Lock screen |
-| `Super + G` | Game overlay (bar above fullscreen games) |
+| `Super + B` | Bar overlay (bar above fullscreen windows) |
 | `Super + Shift + G` | Toggle game mode |
-| `Super + M` | Exit session (log out) |
 | `Super + Shift + R` | Reload Nidara UI |
 | `Super` (tap) | Toggle App Launcher |
 

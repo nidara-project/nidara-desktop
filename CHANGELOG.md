@@ -34,7 +34,7 @@ built on Hyprland and AGS v3 (Aylur's GTK Shell), registering as a proper login 
 
 - Multi-page settings panel: Appearance, Display, Audio, Network, Input, Bluetooth,
   Language & Region, Applications (default apps + per-app icon overrides), Dock & Panel,
-  Widgets, Notifications, Autostart, Power, Accessibility, Gaming, Users, AI, and About.
+  Control Center (controls placement), Notifications, Autostart, Power, Accessibility, Gaming, Users, AI, and About.
 - Live Wi-Fi (connect/forget/detail), Bluetooth (pairing agent with passkey/PIN dialogs),
   and audio device management.
 
@@ -48,7 +48,7 @@ built on Hyprland and AGS v3 (Aylur's GTK Shell), registering as a proper login 
 
 - Game mode: Steam games auto-move to a dedicated `gamespace` workspace (no
   blur/shadow/animations, `immediate` mode), with optional library-art wallpaper and a
-  performance power profile. `Super + G` floats the bar above fullscreen games.
+  performance power profile. `Super + B` floats the bar above any fullscreen window.
 
 ### AI-native tooling
 
