@@ -219,14 +219,20 @@ hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd("ags request disableComp
 hl.bind(mainMod .. " + E",   hl.dsp.exec_cmd("uwsm app -- " .. fileManager))
 hl.bind(mainMod .. " + T",   hl.dsp.exec_cmd("uwsm app -- " .. terminal))
 hl.bind(mainMod .. " + Q",   hl.dsp.window.close())
--- No exit-session bind on purpose (upstream's SUPER+M): one accidental chord
--- must never kill the whole session. Log out via the System Menu instead.
+hl.bind(mainMod .. " + SPACE", hl.dsp.exec_cmd("ags request togglePrism"))
+-- No exit-session bind on purpose (upstream ships SUPER+M = exit): one accidental
+-- chord must never kill the whole session. Log out via the System Menu instead.
+-- Our SUPER+M is maximize (Window modes below) — never rebind it to exit.
 
 -- ── Keybinds — Focus ─────────────────────────────────────────────────────────
 hl.bind(mainMod .. " + left",  hl.dsp.focus({ direction = "left" }))
 hl.bind(mainMod .. " + right", hl.dsp.focus({ direction = "right" }))
 hl.bind(mainMod .. " + up",    hl.dsp.focus({ direction = "up" }))
 hl.bind(mainMod .. " + down",  hl.dsp.focus({ direction = "down" }))
+-- Alt+Tab cycles windows on the current workspace (the universal convention);
+-- cycle_next({ next = false }) is the documented "previous" form (v0.55 Lua API).
+hl.bind("ALT + TAB",         hl.dsp.window.cycle_next())
+hl.bind("ALT + SHIFT + TAB", hl.dsp.window.cycle_next({ next = false }))
 
 -- ── Keybinds — Mouse drag & resize ───────────────────────────────────────────
 hl.bind(mainMod .. " + mouse:272", hl.dsp.window.drag(),   { mouse = true })
@@ -245,11 +251,17 @@ for i = 1, 5 do
 end
 hl.bind(mainMod .. " + mouse_down", hl.dsp.focus({ workspace = "e+1" }))
 hl.bind(mainMod .. " + mouse_up",   hl.dsp.focus({ workspace = "e-1" }))
+hl.bind(mainMod .. " + CTRL + right", hl.dsp.focus({ workspace = "e+1" }))
+hl.bind(mainMod .. " + CTRL + left",  hl.dsp.focus({ workspace = "e-1" }))
+hl.bind(mainMod .. " + CTRL + SHIFT + right", hl.dsp.window.move({ workspace = "e+1" }))
+hl.bind(mainMod .. " + CTRL + SHIFT + left",  hl.dsp.window.move({ workspace = "e-1" }))
 
 -- ── Keybinds — Window modes ──────────────────────────────────────────────────
 hl.bind(mainMod .. " + P", hl.dsp.window.pseudo())
 hl.bind(mainMod .. " + F", hl.dsp.window.float({ action = "toggle" }))
 hl.bind(mainMod .. " + SHIFT + F", hl.dsp.window.fullscreen())
+-- Maximize = full working area WITHOUT covering the bar (fullscreen mode 1).
+hl.bind(mainMod .. " + M", hl.dsp.window.fullscreen({ mode = "maximized" }))
 
 -- ── Keybinds — Screenshots ───────────────────────────────────────────────────
 hl.bind("Print", hl.dsp.exec_cmd('grim -g "$(slurp -d)" - | wl-copy'))

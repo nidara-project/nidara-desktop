@@ -141,9 +141,11 @@ off at any time, taking effect immediately.
 | :--- | :--- |
 | `Super + Q` | Close active window |
 | `Super + F` | Toggle floating |
+| `Super + M` | Toggle maximize (keeps the bar visible) |
 | `Super + Shift + F` | Toggle fullscreen |
 | `Super + P` | Toggle pseudo-tiling (dwindle) |
 | `Super + Left / Right / Up / Down` | Move focus |
+| `Alt + Tab` / `Alt + Shift + Tab` | Cycle windows on the workspace |
 | `Super + Shift + Arrow` | Resize active window |
 | `Super + Mouse drag (left button)` | Move window |
 | `Super + Mouse drag (right button)` | Resize window |
@@ -155,12 +157,15 @@ off at any time, taking effect immediately.
 | `Super + 1–5` | Switch to workspace |
 | `Super + Shift + 1–5` | Move window to workspace |
 | `Super + Scroll` | Cycle workspaces |
+| `Super + Ctrl + ← / →` | Previous / next workspace |
+| `Super + Ctrl + Shift + ← / →` | Move window to previous / next workspace |
 
 ### Apps & Shell
 
 | Shortcut | Action |
 | :--- | :--- |
 | `Super + S` | Open Settings |
+| `Super + Space` | Prism (Spotlight-style search) |
 | `Super + T` | Terminal (Kitty) |
 | `Super + E` | Files (Nautilus) |
 | `Super + L` | Lock screen |

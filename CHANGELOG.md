@@ -31,6 +31,9 @@ built on Hyprland and AGS v3 (Aylur's GTK Shell), registering as a proper login 
 - **Idle management** — hypridle with configurable screen-off, lock, and suspend timers.
 - **Hardware & media keys** — volume, mic mute, brightness (floored above black), and
   MPRIS transport (`XF86*`) bound out of the box, working on the lock screen too.
+- **Familiar shortcuts** — `Alt + Tab` window cycling, `Super + M` maximize,
+  `Super + Space` Prism search, `Super + Ctrl (+ Shift) + ←/→` workspace navigation,
+  alongside the tiling basics (focus, resize, float, fullscreen, pseudo-tile).
 
 ### Settings
 
