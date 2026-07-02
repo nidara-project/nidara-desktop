@@ -137,6 +137,17 @@ function makeIslandWidget(
             click.set_button(Gdk.BUTTON_PRIMARY)
             click.connect("released", () => showDetail(id))
             overlay.add_controller(click)
+
+            // Press-and-hold reaches the same detail (iOS-controls parity; on 1×1
+            // the round toggle swallows every tap, so hold is the only on-tile
+            // path there). CLAIMED at trigger time cancels the inner button's
+            // sequence, so releasing does NOT also fire the toggle.
+            const hold = new Gtk.GestureLongPress()
+            hold.connect("pressed", () => {
+                hold.set_state(Gtk.EventSequenceState.CLAIMED)
+                showDetail(id)
+            })
+            overlay.add_controller(hold)
         }
         return overlay
     }
@@ -249,7 +260,12 @@ export default function IslandGrid() {
     // Context menu (size picker + remove) floats in an overlay over the grid so
     // it isn't clipped by tiles; its coordinates match the Fixed's space — see
     // the anchor math in makeIslandWidget.
-    const ctxMenu = createCCContextMenu()
+    const ctxMenu = createCCContextMenu({
+        // Arrow closures: showDetail/editMode are defined below in this scope and
+        // only dereferenced when a menu row is clicked, well after setup.
+        onShowDetail: id => showDetail(id),
+        detailEnabled: () => !editMode,
+    })
     const openMenu = (id: string, anchorX: number, anchorY: number) =>
         ctxMenu.open(id, anchorX, anchorY, fixed.height_request)
 

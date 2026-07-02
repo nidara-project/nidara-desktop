@@ -46,7 +46,16 @@ export interface CCContextMenu {
     isOpen: () => boolean
 }
 
-export function createCCContextMenu(): CCContextMenu {
+export interface CCContextMenuOpts {
+    // "Show details" row action — opens the tile's detail panel. The row only
+    // renders for widgets that declare buildCCDetail AND while detailEnabled()
+    // holds (the grid passes `() => !editMode`; a detail opened mid-rearrange
+    // would fight the edit overlay).
+    onShowDetail?: (id: string) => void
+    detailEnabled?: () => boolean
+}
+
+export function createCCContextMenu(opts: CCContextMenuOpts = {}): CCContextMenu {
     let open = false
 
     const rows = new Gtk.Box({
@@ -99,10 +108,24 @@ export function createCCContextMenu(): CCContextMenu {
         clearRows()
     }
 
+    // Whether this open would include the "Show details" row (also feeds doOpen's
+    // height estimate so the menu doesn't get clamped short of its last row).
+    const hasDetailRow = (id: string): boolean =>
+        !!(registry.get(id)?.buildCCDetail && opts.onShowDetail && (opts.detailEnabled?.() ?? true))
+
     const populate = (id: string) => {
         clearRows()
         const cur = ccLayout.effectiveSize(id)
         const tiers = tierSizes(id)
+
+        // "Show details" first — the primary action; sizing/removal are management.
+        if (hasDetailRow(id)) {
+            rows.append(menuRow({
+                label: t("cc.menu.details"),
+                onClick: () => { close(); opts.onShowDetail!(id) },
+            }))
+            rows.append(menuSeparator())
+        }
 
         // Only offer sizes when there's an actual choice (>1 tier). A single-size
         // widget shows just Remove — no lone disabled row.
@@ -135,9 +158,9 @@ export function createCCContextMenu(): CCContextMenu {
 
     const doOpen = (id: string, anchorX: number, anchorY: number, gridHeight: number) => {
         populate(id)
-        // Estimate height to clamp inside the grid (size rows when >1 + remove + padding).
+        // Estimate height to clamp inside the grid (details + size rows when >1 + remove + padding).
         const nTiers = tierSizes(id).length
-        const nRows = (nTiers > 1 ? nTiers : 0) + 1
+        const nRows = (hasDetailRow(id) ? 1 : 0) + (nTiers > 1 ? nTiers : 0) + 1
         const estH = nRows * ROW_H + 28
         const x = Math.max(0, Math.min(anchorX, GRID_WIDTH - MENU_W))
         const y = Math.max(0, Math.min(anchorY, Math.max(0, gridHeight - estH)))

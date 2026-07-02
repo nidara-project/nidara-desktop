@@ -319,7 +319,7 @@ export default {
     "settings.bluetooth.pairing.authorize": "This device wants to connect to this computer.",
 
     // Control Center
-    "settings.widgets.tooltip.no-space": "Not enough space — remove a widget first",
+    "settings.widgets.tooltip.no-space": "Not enough space — remove a control first",
     "settings.widgets.tooltip.no-hardware": "No compatible hardware detected on this device",
 
     // Display
@@ -365,7 +365,9 @@ export default {
     "settings.notif.dnd-default.desc": "Start each session with Do Not Disturb active",
 
     "settings.ai.title": "AI",
-    "settings.ai.group.access": "Agent Access",
+    "settings.ai.group.access": "Desktop Access",
+    "settings.ai.group.other-apps": "Other Apps",
+    "settings.ai.group.mcp": "MCP Server",
     "settings.ai.allow-config-write": "Allow Agents to Change Settings",
     "settings.ai.allow-config-write.desc": "Local agents and scripts can modify shell settings through the official interface. Reading state is always available.",
     "settings.ai.allow-screenshot": "Allow Agents to Capture the Screen",
@@ -380,7 +382,7 @@ export default {
     "settings.ai.exposed-settings": "Exposed Settings",
     "settings.ai.exposed-settings.desc": "Settings agents can discover and change — run `ags request describeConfig` to list them",
     "settings.ai.state-read": "State & Diagnostics",
-    "settings.ai.state-read.desc": "`dumpState` and nidara-doctor stay available regardless of the switch above",
+    "settings.ai.state-read.desc": "`dumpState` and nidara-doctor stay available regardless of the toggles above",
     "settings.ai.connect-agent": "Connect Your Agent",
     "settings.ai.connect-agent.desc": "Tell your AI agent to register the MCP server described in this file — it works from any MCP client",
 
@@ -514,8 +516,8 @@ export default {
     "settings.widgets.col.bar": "Bar",
     "settings.widgets.col.cc": "Center",
     "settings.widgets.configure": "Configure",
-    "settings.widgets.reorder-note": "To reorder widgets in the Control Center, use the panel's Edit mode.",
-    "settings.widgets.title": "Widgets",
+    "settings.widgets.reorder-note": "To reorder controls in the Control Center, use the panel's Edit mode.",
+    "settings.widgets.title": "Control Center",
     "settings.widgets.category.system": "System",
     "settings.widgets.category.utilities": "Utilities",
     "settings.widgets.category.media": "Media",
@@ -671,6 +673,7 @@ export default {
     "cc.grid.edit": "Edit",
     "cc.menu.size.medium": "Medium",
     "cc.menu.size.large": "Large",
+    "cc.menu.details": "Show details",
     "cc.menu.remove": "Remove",
     "cc.menu.size-full": "Grid is full",
 

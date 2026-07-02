@@ -81,7 +81,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "audio",        label: t("settings.audio.title"),       icon: Icons.speaker,       component: AudioPage        },
         { id: "bar",          label: t("settings.bar.title"),         icon: Icons.panelTop,      component: BarPage          },
         { id: "dock",         label: t("settings.dock.title"),        icon: Icons.dock,          component: DockPage         },
-        { id: "widgets",      label: t("settings.widgets.title"),     icon: Icons.puzzle,        component: WidgetsPage      },
+        { id: "widgets",      label: t("settings.widgets.title"),     icon: Icons.settings2,     component: WidgetsPage      },
         { id: "gaming",       label: t("settings.gaming.title"),      icon: Icons.gamepad,       component: GamingPage       },
         { id: "notifications",label: t("settings.notif.title"),       icon: Icons.bell,          component: NotificationsPage },
         { id: "accessibility",label: t("settings.accessibility.title"),icon: Icons.accessibility,component: AccessibilityPage },

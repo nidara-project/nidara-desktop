@@ -231,8 +231,8 @@ to this in 2026-06):
 For an icon that belongs **next to a row's title** rather than as a trailing control (e.g. a
 lock on a secured Wi-Fi row), pass it as `NidaraRow`'s `titleIcon` arg (threaded through
 `createRow(label, subtitle, widget, titleIcon)`) — don't park it in the trailing control box.
-For an icon that **leads the row** (an identity icon before the title, e.g. each widget's icon
-in Settings → Widgets, or an app icon), pass `NidaraRow`'s `leadingIcon` arg (also threaded
+For an icon that **leads the row** (an identity icon before the title, e.g. each control's icon
+in Settings → Control Center, or an app icon), pass `NidaraRow`'s `leadingIcon` arg (also threaded
 through `createRow(label, subtitle, widget, titleIcon, leadingIcon)`) — it sits as the row's
 first child, before the title column.
 
@@ -275,6 +275,16 @@ of the whole tile. CSS gotcha: the icon button's own class (`.cc-split-icon-btn`
 blanket `.cc-island button { reset }` — a single-class selector loses that fight on specificity
 regardless of source order, so it's written as a two-class descendant
 (`.cc-island .cc-split-icon-btn`), which always wins.
+
+**Every `buildCCDetail` tile has THREE routes to its detail panel** (2026-07): (1) primary tap on
+the unclaimed capsule area (the split-capsule M/L story above); (2) the right-click context menu's
+"Show details" row — `CCContextMenu` renders it whenever the widget declares `buildCCDetail`
+(hidden in edit mode via its `detailEnabled` option); (3) press-and-hold anywhere on the tile —
+`Gtk.GestureLongPress` in `IslandGrid.makeIslandWidget` (non-edit only) that CLAIMS the sequence
+at trigger time so the inner toggle's release doesn't also fire. On a 1×1 tile, hold and the
+context menu are the only routes: the round toggle button swallows plain taps by design — a
+compact quick-toggle stays a toggle on every platform (macOS/GNOME/Windows), "open detail" is
+never a fallback on tap.
 
 **A "stateful" tile's on-state fills the WHOLE capsule with the live accent colour** (macOS/GNOME/
 Windows quick-settings convention), not just the icon. Wired via `AtomicWidget.getActive`/
