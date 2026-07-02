@@ -431,6 +431,11 @@ already idempotent (`systemctl enable greetd` is a no-op if enabled). NB the kb-
 is correct. Related gotcha: greeter prefs live under the **HOME-relative** path baked into the `.lua`
 (`/var/lib/greeter/.config/nidara/greeter-prefs.json`); a rename of that subdir orphans the saved kb layout
 (falls back to `"us"`), cosmetic.
+**Fold into this fix (2026-07-02):** the default wallpaper moved `wallpaper.png` → `wallpaper.jpg`;
+install.sh deliberately does NOT delete the stale `/usr/share/nidara/wallpaper.png` on update because
+an un-refreshed `/etc/greetd/hyprland-greeter.lua` still points at it (black greeter backdrop otherwise).
+When #16 lands (fingerprint-gated `/etc/greetd` re-sync), add `sudo rm -f /usr/share/nidara/wallpaper.png`
+to the wallpaper block.
 
 ### 17. Status-indicator subsystem: extension points deliberately not wired (2026-06-19)
 `surfaces/bar/StatusIndicators.tsx` is a declarative registry (`INDICATORS`, three states

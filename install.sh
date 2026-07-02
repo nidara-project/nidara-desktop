@@ -549,10 +549,12 @@ else
     sudo cp -r "$REPO_DIR/config/hypr/." /usr/share/nidara/config/hypr/
 fi
 
-# Default wallpaper (jpg since 2026-07; drop the stale png on updates)
+# Default wallpaper (jpg since 2026-07). Do NOT delete the stale wallpaper.png
+# on updates yet: --update never refreshes /etc/greetd (tech-debt #16), so an
+# updated box's greeter .lua still points at the .png — removing it would boot
+# the greeter on a black backdrop. Fold the cleanup into the #16 fix.
 if [ -f "$REPO_DIR/defaults/wallpaper/wallpaper.jpg" ]; then
     sudo cp "$REPO_DIR/defaults/wallpaper/wallpaper.jpg" /usr/share/nidara/wallpaper.jpg
-    sudo rm -f /usr/share/nidara/wallpaper.png
 fi
 
 # Shell UI bundle + style
