@@ -4,13 +4,13 @@ import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import { execAsync } from "ags/process"
 import SquircleContainer from "../../common/SquircleContainer"
+import IconButton from "../../common/IconButton"
 import status from "../../core/Status"
 import hs from "../../core/HyprlandState"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import { SHELL_ROOT } from "../../core/Paths"
 import { safeDisconnect } from "../../core/signals"
-import { attachTooltip } from "../../common/Tooltip"
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -104,7 +104,10 @@ export default function AboutWindow(): Gtk.Window | null {
     headerBox.append(new Gtk.Label({ label: osName, css_classes: ["about-os-name"], halign: Gtk.Align.CENTER }))
 
     // ── Specs ─────────────────────────────────────────────────────────────────
+    // Device (hostname) first, like GNOME/Windows About — it disambiguates the
+    // machine's name from "Nidara" in the header (which is the OS, not the box).
     const specsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, margin_top: 8, margin_bottom: 8, margin_start: 16, margin_end: 16 })
+    specsBox.append(specRow(t("settings.about.device"), GLib.get_host_name()))
     specsBox.append(specRow(t("settings.about.cpu"), cpu))
     specsBox.append(specRow(t("settings.about.ram"), ram))
     specsBox.append(asyncSpecRow(t("settings.about.graphics"), ["bash", "-c",
@@ -119,13 +122,18 @@ export default function AboutWindow(): Gtk.Window | null {
     verBox.append(specRow("AGS", "v3 (GJS + GTK4)"))
 
     // ── Close button ──────────────────────────────────────────────────────────
-    const closeBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.close, pixel_size: 14 , css_classes: ["nd-icon"] }),
-        css_classes: ["about-close-btn"],
+    // Same kit IconButton as the Settings header close. margin_top 12 + the
+    // card's margin_top 12 = 24px top gap, equal to the card's 24px end margin
+    // (the corner-diagonal rule the Settings close follows too).
+    const closeBtn = IconButton({
+        icon: Icons.close,
+        iconSize: 14,
+        variant: "danger",
+        tooltip: t("settings.about.close"),
         halign: Gtk.Align.END,
+        onClick: () => { status.about_open = false },
     })
-    attachTooltip(closeBtn, t("settings.about.close"), { chrome: false }) // About follows the system mode like an app
-    closeBtn.connect("clicked", () => { status.about_open = false })
+    closeBtn.margin_top = 12
 
     // ── Card ──────────────────────────────────────────────────────────────────
     const card = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, margin_top: 12, margin_bottom: 24, margin_start: 24, margin_end: 24, width_request: 380 })
@@ -135,7 +143,11 @@ export default function AboutWindow(): Gtk.Window | null {
     card.append(new Gtk.Separator({ css_classes: ["about-sep"], margin_top: 8, margin_bottom: 8 }))
     card.append(verBox)
 
-    const squircle = SquircleContainer({ child: card, radius: 24, gloss: true, alpha: 0.18, chrome: false, borderColor: { r: 1, g: 1, b: 1, a: 0.08 }, css_classes: ["about-window-card"] })
+    // borderColor alpha 0: About is a real window, so Hyprland already draws the
+    // 1px window border + 24px rounding around it — a Cairo stroke on top reads
+    // as a double border. (drawSquircle falls back to a visible default stroke
+    // when borderColor is omitted, so the "off" must be explicit.)
+    const squircle = SquircleContainer({ child: card, radius: 24, gloss: true, alpha: 0.18, chrome: false, borderColor: { r: 1, g: 1, b: 1, a: 0 }, css_classes: ["about-window-card"] })
 
     // ── Window ────────────────────────────────────────────────────────────────
     const win = new Gtk.Window({

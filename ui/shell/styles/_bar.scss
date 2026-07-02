@@ -184,17 +184,6 @@ window#nidara-bar-zone {
     min-height: 1px;
 }
 
-.about-close-btn {
-    @include nidara-reset;
-    border-radius: 6px;
-    padding: 4px;
-    opacity: 0.5;
-    transition: opacity 0.15s ease, background-color 0.15s ease, box-shadow 0.15s ease;
-
-    @include nidara-tile-states;
-    &:hover { opacity: 1; }
-}
-
 // ── Status-indicator badge (recording, AI control, …) ─────────────────────────
 // A small dot inside the Control-Center capsule, right of its icon — the
 // always-visible signal; detail + Stop live in the CC banner (.cc-status-*).

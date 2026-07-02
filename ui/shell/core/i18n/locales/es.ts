@@ -168,6 +168,7 @@ export default {
     "settings.about.graphics-protocol": "Protocolo gráfico",
     "settings.about.shell": "Shell",
     "settings.about.os": "Sistema Operativo",
+    "settings.about.device": "Equipo",
     "settings.about.uptime": "Tiempo activo",
     "settings.about.version": "Versión",
     "settings.about.unavailable": "No disponible",
