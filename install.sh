@@ -184,7 +184,7 @@ PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
     libpulse networkmanager bluez bluez-libs bluez-utils upower libnotify
     intltool scdoc brightnessctl pamixer playerctl
     jq curl slurp grim wf-recorder wl-clipboard cliphist mesa pam
-    pipewire wireplumber
+    pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber
     git nodejs npm gjs go
     at-spi2-core wtype wlr-protocols wayland
     accountsservice greetd pavucontrol rust cargo
