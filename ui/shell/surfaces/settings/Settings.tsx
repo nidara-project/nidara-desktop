@@ -27,6 +27,7 @@ import { beginPage, endPage, clearSearchIndex, getSearchIndex, type SettingsNav 
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import IconButton from "../../common/IconButton"
+import { attachTooltip } from "../../common/Tooltip"
 
 /**
  * Settings - System Configuration Panel
@@ -39,7 +40,6 @@ export default function Settings(monitor: Gdk.Monitor) {
     const backBtn = new Gtk.Button({
         child: new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["nd-icon"] }),
         css_classes: ["nidara-icon-btn", "nav-btn"],
-        tooltip_text: t("settings.nav.back"),
         sensitive: false,
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
@@ -47,11 +47,13 @@ export default function Settings(monitor: Gdk.Monitor) {
     const forwardBtn = new Gtk.Button({
         child: new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 14, css_classes: ["nd-icon"] }),
         css_classes: ["nidara-icon-btn", "nav-btn"],
-        tooltip_text: t("settings.nav.forward"),
         sensitive: false,
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
     })
+    // Glass tooltips, app-mode skin (chrome:false → follow the system mode).
+    attachTooltip(backBtn, t("settings.nav.back"), { chrome: false })
+    attachTooltip(forwardBtn, t("settings.nav.forward"), { chrome: false })
 
     // Navigation capsule (pill shape via CSS)
     const navCapsule = new Gtk.Box({
@@ -403,6 +405,7 @@ export default function Settings(monitor: Gdk.Monitor) {
         iconSize: 14,
         variant: "danger",
         tooltip: t("settings.window.close"),
+        tooltipChrome: false,   // app-mode window: tooltip follows the system mode
         onClick: () => cw.window.set_visible(false),
     })
 
@@ -414,7 +417,6 @@ export default function Settings(monitor: Gdk.Monitor) {
         sidebar: sidebar.widget,
         content: contentArea,
         toggleIcon: Icons.sidebar,
-        toggleTooltip: t("settings.nav.menu"),
         sidebarTop: searchEntry,
         headerTitle: breadcrumb,
         headerEnd: closeBtn,
@@ -424,6 +426,9 @@ export default function Settings(monitor: Gdk.Monitor) {
         defaultHeight: 700,
     })
     const win = cw.window
+    // Glass tooltip instead of the kit's native toggleTooltip (nidara-kit can't
+    // import shell common/, so the caller attaches it to the exposed handle).
+    attachTooltip(cw.sidebarToggle, t("settings.nav.menu"), { chrome: false })
 
     // Keep status.settings_open honest — it's what dumpState reports as
     // overlays.settings. notify::visible catches every show/hide path (present(),

@@ -31,7 +31,8 @@ export interface NidaraWindowOpts {
     cssClasses?: string[]
     /** Gtk.Window name (for #id CSS / Hyprland matching). */
     name?: string
-    toggleTooltip?: string
+    // No tooltip opt for the toggle ON PURPOSE — native GTK tooltips are
+    // unthemeable. Attach the glass tooltip to the returned `sidebarToggle`.
 }
 
 export interface NidaraWindowResult {
@@ -58,7 +59,7 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         app, title, sidebar, content, toggleIcon,
         headerCenter, headerTitle, headerEnd, sidebarTop, toolbarExtra,
         sidebarWidth = 250, defaultWidth = 1000, defaultHeight = 700,
-        cssClasses = [], name, toggleTooltip,
+        cssClasses = [], name,
     } = opts
 
     // decorated:false + Gtk.WindowHandle on the header = custom CSD, no Adwaita.
@@ -102,7 +103,6 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         valign: Gtk.Align.CENTER,
         halign: Gtk.Align.CENTER,
     })
-    if (toggleTooltip) sidebarToggle.tooltip_text = toggleTooltip
 
     // ── Header over the content (draggable) ───────────────────────────────────
     // Toggle + nav capsule + title live here permanently (no reparenting): the

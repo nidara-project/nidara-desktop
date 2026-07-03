@@ -6,6 +6,7 @@ import Icons from "../../../core/Icons"
 import * as Net from "../../../core/NetworkService"
 import type { VpnProfile } from "../../../core/NetworkService"
 import { NidaraButton } from "../../../../lib/nidara-kit"
+import { attachTooltip } from "../../../common/Tooltip"
 import { safeDisconnect } from "../../../core/signals"
 
 function buildVpnRow(profile: VpnProfile, onRefresh: () => void): Gtk.ListBoxRow {
@@ -80,7 +81,8 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
 
     // Network details subpage (security, band, channel, BSSID, IP when connected).
     if (onDetails) {
-        const infoBtn = NidaraButton({ variant: "secondary", pill: true, icon: true, tooltip_text: t("settings.network.ap.details") })
+        const infoBtn = NidaraButton({ variant: "secondary", pill: true, icon: true })
+        attachTooltip(infoBtn, t("settings.network.ap.details"), { chrome: false })
         infoBtn.set_child(new Gtk.Image({ gicon: Icons.wifiCog, pixel_size: 16, css_classes: ["nd-icon"] }))
         infoBtn.connect("clicked", onDetails)
         rightBox.append(infoBtn)
@@ -93,8 +95,8 @@ function buildApRow(ap: any, iface: string, isActive: boolean, isSaved: boolean,
             variant: "danger",
             pill: true,
             icon: true,
-            tooltip_text: t("settings.network.ap.forget"),
         })
+        attachTooltip(forgetBtn, t("settings.network.ap.forget"), { chrome: false })
         forgetBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["nd-icon"] }))
         forgetBtn.connect("clicked", async () => {
             forgetBtn.sensitive = false

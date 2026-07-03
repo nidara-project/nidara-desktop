@@ -10,6 +10,7 @@ import { ACCENT_PALETTE, type AccentKey, type ShellAppearance } from "../../../c
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageBox } from "../SettingsHelpers"
+import { attachTooltip } from "../../../common/Tooltip"
 import { safeDisconnect } from "../../../core/signals"
 
 export default function AppearancePage() {
@@ -144,11 +145,11 @@ export default function AppearancePage() {
     Object.keys(ACCENT_PALETTE).forEach(key => {
         const { name } = ACCENT_PALETTE[key as AccentKey]
         const btn = new Gtk.Button({
-            tooltip_text: name,
             css_classes: [`accent-${key}`, "accent-circle-btn"],
             width_request: 28,
             height_request: 28,
         })
+        attachTooltip(btn, name, { chrome: false })
         if (Theme.accentColor === key) btn.add_css_class("selected")
         btn.connect("clicked", () => Theme.setAccentColor(key as AccentKey))
         accentPicker.append(btn)

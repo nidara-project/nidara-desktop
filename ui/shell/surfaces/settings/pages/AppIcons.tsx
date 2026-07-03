@@ -7,6 +7,7 @@ import { pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { NidaraButton } from "../../../../lib/nidara-kit"
+import { attachTooltip } from "../../../common/Tooltip"
 
 // ── Icon preview helpers ──────────────────────────────────────────────────────
 
@@ -155,8 +156,8 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
         variant: "secondary",
         pill: true,
         sensitive: hasOverride,
-        tooltip_text: t("settings.apps.tooltip.remove-override"),
     })
+    attachTooltip(resetBtn, t("settings.apps.tooltip.remove-override"), { chrome: false })
     resetBtn.connect("clicked", () => {
         appService.removeIconOverride(originalIcon)
         // Refresh row
@@ -236,8 +237,8 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
         child: new Gtk.Image({ gicon: Icons.filePen, pixel_size: 14 , css_classes: ["nd-icon"] }),
         css_classes: ["nidara-icon-btn"],
         valign: Gtk.Align.CENTER,
-        tooltip_text: t("settings.apps.tooltip.change-icon"),
     })
+    attachTooltip(editBtn, t("settings.apps.tooltip.change-icon"), { chrome: false })
     editBtn.connect("clicked", () => {
         const win = row.get_root() as Gtk.Window | null
         openIconPicker(app, rowIcon, iconLabel, win)

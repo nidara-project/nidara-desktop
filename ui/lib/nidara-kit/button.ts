@@ -14,7 +14,10 @@ export interface NidaraButtonOpts {
     sensitive?: boolean
     valign?: Gtk.Align
     halign?: Gtk.Align
-    tooltip_text?: string
+    // No tooltip prop ON PURPOSE: GTK's native tooltip renders in its own
+    // GtkTooltipWindow, unreachable by scoped CSS → never themeable. Callers
+    // attach the shell's glass tooltip instead (common/Tooltip.attachTooltip;
+    // the kit can't do it itself — it stays free of the shell's ThemeManager).
 }
 
 /**
@@ -42,7 +45,6 @@ export function NidaraButton(opts: NidaraButtonOpts = {}): Gtk.Button {
     })
 
     if (opts.label      !== undefined) btn.set_label(opts.label)
-    if (opts.tooltip_text !== undefined) btn.tooltip_text = opts.tooltip_text
     if (opts.halign     !== undefined) btn.halign = opts.halign
 
     return btn

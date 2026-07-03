@@ -5,6 +5,7 @@ import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { NidaraButton } from "../../../../lib/nidara-kit"
+import { attachTooltip } from "../../../common/Tooltip"
 
 // ── Config path ───────────────────────────────────────────────────────────────
 const USER_CONF = `${GLib.get_home_dir()}/.config/hypr/hyprland-user.lua`
@@ -123,8 +124,8 @@ export default function AutostartPage() {
                     child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 16 , css_classes: ["nd-icon"] }),
                     css_classes: ["nidara-btn", "nidara-btn--danger"],
                     valign: Gtk.Align.CENTER,
-                    tooltip_text: t("settings.autostart.tooltip.remove"),
                 })
+                attachTooltip(deleteBtn, t("settings.autostart.tooltip.remove"), { chrome: false })
                 deleteBtn.connect("clicked", () => {
                     entries.splice(idx, 1)
                     writeEntries(entries)

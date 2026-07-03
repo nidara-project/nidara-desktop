@@ -6,6 +6,7 @@ import { AtomicWidget, WidgetCategory } from "../../control-center/Types"
 import { pageBox, listGroup, createRow, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
+import { attachTooltip } from "../../../common/Tooltip"
 
 // A compact labelled switch ("Bar" / "Center" + a Gtk.Switch), the unit the
 // widget row places to its right. The tooltip rides the (always-sensitive) group
@@ -13,7 +14,7 @@ import Icons from "../../../core/Icons"
 // tooltip set on it would never show the "no hardware / no space" reason.
 function controlGroup(label: string, active: boolean, sensitive: boolean, tooltip: string, cb: (v: boolean) => void): Gtk.Box {
     const group = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
-    if (tooltip) group.tooltip_text = tooltip
+    if (tooltip) attachTooltip(group, tooltip, { chrome: false })
     group.append(new Gtk.Label({ label, css_classes: ["nidara-row-subtitle"], valign: Gtk.Align.CENTER }))
     const sw = new Gtk.Switch({ active, sensitive, valign: Gtk.Align.CENTER })
     sw.connect("notify::active", () => cb(sw.get_active()))   // connected AFTER initial active → no spurious fire
@@ -69,8 +70,8 @@ function buildWidgetRow(nav: SettingsNav, w: AtomicWidget): Gtk.ListBoxRow {
         const chevron = new Gtk.Button({
             child: new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 16, css_classes: ["nd-icon"], opacity: 0.4 }),
             css_classes: ["settings-icon-btn", "flat"], valign: Gtk.Align.CENTER,
-            tooltip_text: t("settings.widgets.configure"),
         })
+        attachTooltip(chevron, t("settings.widgets.configure"), { chrome: false })
         chevron.connect("clicked", () => nav.pushSubpage({
             id: `widgets/${w.id}`, title: w.name, parentId: "widgets", build: w.buildSettings!,
         }))

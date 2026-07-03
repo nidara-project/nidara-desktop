@@ -444,6 +444,9 @@ horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — 
 ## Tooltips — one component
 
 All shell tooltips go through **`attachTooltip(widget, text, opts?)`** from `common/Tooltip.ts`.
+`IconButton`'s `tooltip` prop already routes through it (with `tooltipChrome` mapping to the
+`chrome` opt — pass `tooltipChrome: false` from app-mode windows like Settings/About), so
+buttons built with the kit get the glass tooltip for free.
 **Don't use GTK's `tooltip_text` / `tooltip_markup` on shell surfaces** — the native tooltip renders
 in its own `GtkTooltipWindow`, out of reach of our scoped CSS, so it can never be themed (this is why
 the dock "looked like default GTK"). It's a hover-delayed `Gtk.Popover` (`has_arrow: false`); the
@@ -472,17 +475,31 @@ context menu paints the same shape (see "The glass bubble" below); the tooltip o
 - **Text** is `string | (() => string)`. A getter is resolved **lazily, right before show** — so
   live values (a window title) stay fresh WITHOUT subscribing (a subscription forces a dock redraw +
   blur pass per title tick; see `DockItem.computeTitle`).
-- **Opts:** `position` (default TOP — the Cairo arrow is painted on the *requested* side, so pick one
-  with room or GTK auto-flips and the arrow points the wrong way; a top-bar item passes `BOTTOM`),
-  `delay` (500ms), `markup` (Pango — tray uses it), `chrome`, `suppress: () => boolean` (skip while a
-  context menu is open — the dock passes `() => menu.visible`).
+- **Opts:** `position` (default TOP — just a *preference*, see placement sync below), `delay` (500ms),
+  `markup` (Pango — tray uses it), `chrome`, `suppress: () => boolean` (skip while a context menu is
+  open — the dock passes `() => menu.visible`).
+- **Placement sync (flip + slide):** on Wayland the COMPOSITOR has the final say on where a popup
+  lands (`xdg_positioner`): it FLIPS to the opposite side when the requested one has no room (a tiled
+  window's close button at the screen's top edge) and SLIDES along the edge when the bubble would
+  overflow the monitor. A native popover repositions its arrow after that; ours is Cairo, so
+  `attachTooltip` does it itself — it reads where the popup surface actually went (`GdkPopup`
+  position, parent-surface-relative, re-checked on the surface's `layout` signal) and repaints the
+  arrow on the side facing the widget with its base shifted (`arrowOffset`) to keep aiming at it.
+  Swapping the two `ARROW_H` margins keeps the popover size identical → no repositioning feedback
+  loop. So callers just pick the side they'd *like*; wrong-side arrows can't happen.
+- **Insensitive widgets get no motion events, so a tooltip attached to one never shows** (unlike the
+  native mechanism, which picks insensitive widgets too). If the tooltip must explain WHY a control
+  is disabled, attach it to an always-sensitive parent — see `controlGroup` in
+  `settings/pages/Widgets.tsx`.
 - **Lifecycle:** self-cleans on the host widget's `destroy` (drops the Theme handler, unparents);
   returns `{ popover, setText, destroy }`.
-- **Adopted:** dock (replaced the bespoke `dock-tooltip` popover), bar tray (position BOTTOM), app
-  grid, About close (`chrome:false`). `.nidara-tooltip` CSS in `_components.scss` only resets the
-  popover chrome to transparent (the bubble is Cairo) + sets the label colour/size.
-  **Settings deliberately keeps native GTK tooltips** — an ordinary in-window app surface where the
-  native tooltip is expected and reads fine; the one intentional residual, not debt to "fix".
+- **Adopted everywhere — there are ZERO native `tooltip_text` on shell surfaces** (2026-07-03 sweep):
+  dock (replaced the bespoke `dock-tooltip` popover), bar tray (position BOTTOM), app grid, and ALL
+  of Settings + About (`chrome:false` — app-mode windows). `nidara-kit` deliberately has **no tooltip
+  props** (`NidaraButton` / `NidaraWindow`): the kit is Theme-free so it can't paint the glass bubble;
+  callers attach the tooltip to the returned widget instead. `.nidara-tooltip` CSS in
+  `_components.scss` only resets the popover chrome to transparent (the bubble is Cairo) + sets the
+  label colour/size.
 
 ## The glass bubble — `common/GlassBubble.ts` (tooltip + context menus)
 

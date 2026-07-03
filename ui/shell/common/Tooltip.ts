@@ -1,14 +1,15 @@
-import { Gtk } from "ags/gtk4"
+import { Gtk, Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Theme from "../core/ThemeManager"
-import { ARROW_H, BUF, sideFor, paintGlassBubble } from "./GlassBubble"
+import { ARROW_H, BUF, sideFor, paintGlassBubble, type ArrowSide } from "./GlassBubble"
 
 export type NidaraTooltipText = string | (() => string)
 
 export interface NidaraTooltipOpts {
-    /** Where the bubble sits relative to the widget (default: TOP). NOTE: pick a
-     *  side with room so GTK doesn't auto-flip — the Cairo arrow is painted on the
-     *  requested side (e.g. a top-bar item should pass BOTTOM). */
+    /** Where the bubble sits relative to the widget (default: TOP). Just a
+     *  preference: if the compositor flips/slides the popup for lack of room
+     *  (tiled window at a screen edge), the Cairo arrow follows the ACTUAL
+     *  placement automatically. */
     position?: Gtk.PositionType
     /** Hover dwell before it appears, ms (default: 500 — GTK's default feel). */
     delay?: number
@@ -65,7 +66,9 @@ export function attachTooltip(
     opts: NidaraTooltipOpts = {},
 ): NidaraTooltipHandle {
     const { position = Gtk.PositionType.TOP, delay = 500, markup = false, suppress, chrome = true } = opts
-    const side = sideFor(position)
+    const requestedSide = sideFor(position)
+    let side: ArrowSide = requestedSide
+    let arrowOffset = 0
 
     let textSource = text
 
@@ -81,18 +84,77 @@ export function attachTooltip(
         hexpand: true, vexpand: true,
         halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
     })
-    da.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, side, { chrome }))
+    da.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, side, { chrome, arrowOffset }))
     grid.attach(da, 0, 0, 1, 1)
 
     const label = new Gtk.Label({ css_classes: ["nidara-tooltip-label"] })
-    label.margin_top    = BUF + PAD_Y + (side === "top"    ? ARROW_H : 0)
-    label.margin_bottom = BUF + PAD_Y + (side === "bottom" ? ARROW_H : 0)
-    label.margin_start  = BUF + PAD_X + (side === "left"   ? ARROW_H : 0)
-    label.margin_end    = BUF + PAD_X + (side === "right"  ? ARROW_H : 0)
+    const applyMargins = () => {
+        label.margin_top    = BUF + PAD_Y + (side === "top"    ? ARROW_H : 0)
+        label.margin_bottom = BUF + PAD_Y + (side === "bottom" ? ARROW_H : 0)
+        label.margin_start  = BUF + PAD_X + (side === "left"   ? ARROW_H : 0)
+        label.margin_end    = BUF + PAD_X + (side === "right"  ? ARROW_H : 0)
+    }
+    applyMargins()
     grid.attach(label, 0, 0, 1, 1)
 
     popover.set_child(grid)
     popover.set_parent(widget)
+
+    // ── Follow the ACTUAL popup placement ─────────────────────────────────────
+    // On Wayland the compositor, not GTK, has the final say on where a popup
+    // lands (xdg_positioner): it FLIPS to the opposite side when the requested
+    // one has no room (a tiled window's close button at the screen's top edge)
+    // and SLIDES along the edge when the bubble would overflow the monitor. A
+    // native popover repositions its arrow after that; our arrow is Cairo, so we
+    // must do it ourselves: read where the popup surface actually went (GdkPopup
+    // position is parent-surface-relative), then repaint the arrow on the side
+    // facing the widget with the base shifted to keep aiming at it. Swapping the
+    // two ARROW_H margins keeps the popover size identical, so the correction
+    // never re-triggers positioning (no feedback loop).
+    const syncPlacement = () => {
+        const root = widget.get_root()
+        const surface = popover.get_surface()
+        if (!root || !surface || !(surface instanceof Gdk.Popup)) return
+        const [ok, b] = widget.compute_bounds(root as unknown as Gtk.Widget)
+        if (!ok) return
+        // Widget centre in parent-surface coordinates (root widget coords + the
+        // root's surface transform, i.e. its client-side shadow inset).
+        const [nx, ny] = (root as unknown as Gtk.Native).get_surface_transform()
+        const wcx = b.get_x() + nx + b.get_width() / 2
+        const wcy = b.get_y() + ny + b.get_height() / 2
+        const pcx = surface.get_position_x() + surface.get_width() / 2
+        const pcy = surface.get_position_y() + surface.get_height() / 2
+        let newSide: ArrowSide
+        let newOffset: number
+        if (requestedSide === "top" || requestedSide === "bottom") {
+            newSide = pcy > wcy ? "top" : "bottom"    // bubble below widget → arrow up
+            newOffset = wcx - pcx
+        } else {
+            newSide = pcx > wcx ? "left" : "right"
+            newOffset = wcy - pcy
+        }
+        if (newSide === side && Math.abs(newOffset - arrowOffset) < 0.5) return
+        side = newSide
+        arrowOffset = newOffset
+        applyMargins()
+        da.queue_draw()
+    }
+    let layoutSurface: Gdk.Surface | null = null
+    let layoutId: number | null = null
+    popover.connect("map", () => {
+        const s = popover.get_surface()
+        if (s) {
+            layoutSurface = s
+            // "layout" fires whenever the compositor (re)positions the popup —
+            // including the initial configure, before the first frame is drawn.
+            layoutId = s.connect("layout", () => syncPlacement())
+        }
+        syncPlacement()
+    })
+    popover.connect("unmap", () => {
+        if (layoutSurface && layoutId !== null) layoutSurface.disconnect(layoutId)
+        layoutSurface = null; layoutId = null
+    })
 
     // Repaint the glass when the appearance/opacity changes (mode toggle, slider).
     const themeId = Theme.connect("changed", () => { if (da.get_mapped()) da.queue_draw() })

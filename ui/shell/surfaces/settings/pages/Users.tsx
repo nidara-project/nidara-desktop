@@ -6,6 +6,7 @@ import { execAsync } from "ags/process"
 import { showNidaraAlert, NidaraButton } from "../../../../lib/nidara-kit"
 import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { showAvatarCropper } from "../../../common/AvatarCropper"
+import { attachTooltip } from "../../../common/Tooltip"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 
@@ -332,7 +333,8 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
         visible: admin,
     })
 
-    const adminToggle = new Gtk.Switch({ active: admin, valign: Gtk.Align.CENTER, tooltip_text: t("settings.users.other.admin.tip") })
+    const adminToggle = new Gtk.Switch({ active: admin, valign: Gtk.Align.CENTER })
+    attachTooltip(adminToggle, t("settings.users.other.admin.tip"), { chrome: false })
     adminToggle.connect("state-set", (_: any, state: boolean) => {
         const cmd = state
             ? ["pkexec", "usermod", "-aG", "wheel", user.username]
@@ -350,16 +352,16 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
         child: new Gtk.Image({ gicon: Icons.key, pixel_size: 14 , css_classes: ["nd-icon"] }),
         css_classes: ["nidara-icon-btn"],
         valign: Gtk.Align.CENTER,
-        tooltip_text: t("settings.users.other.pw.change"),
     })
+    attachTooltip(pwBtn, t("settings.users.other.pw.change"), { chrome: false })
     pwBtn.connect("clicked", () => showChangePasswordDialog(user, parentWin))
 
     const deleteBtn = new Gtk.Button({
         child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 14 , css_classes: ["nd-icon"] }),
         css_classes: ["nidara-icon-btn"],
         valign: Gtk.Align.CENTER,
-        tooltip_text: t("settings.users.other.delete"),
     })
+    attachTooltip(deleteBtn, t("settings.users.other.delete"), { chrome: false })
     deleteBtn.connect("clicked", () => {
         showNidaraAlert({
             parent: parentWin,

@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import { attachTooltip } from "./Tooltip"
 
 export type IconBtnVariant = "danger" | "neutral"
 
@@ -14,7 +15,14 @@ export interface IconButtonProps {
     /** Hover color: "danger" → red, "neutral" → grey. Default "danger". */
     variant?: IconBtnVariant
     onClick?: () => void
+    /** Shown as the Nidara glass tooltip (attachTooltip), NOT GTK's native one —
+     *  same bubble as the dock/tray/app-grid. */
     tooltip?: string
+    /** Tooltip skin: true (default) = shell chrome (pinned appearance — bar/dock/
+     *  overlay contexts); false = app-mode (follows the system mode — pass this
+     *  from real windows like Settings/About). Same convention as
+     *  SquircleContainer's `chrome`. */
+    tooltipChrome?: boolean
     cssClasses?: string[]
     halign?: Gtk.Align
     valign?: Gtk.Align
@@ -40,8 +48,13 @@ export default function IconButton(props: IconButtonProps): Gtk.Button {
         css_classes: ["nidara-circle-btn", `is-${variant}`, ...(props.cssClasses ?? [])],
         halign: props.halign ?? Gtk.Align.CENTER,
         valign: props.valign ?? Gtk.Align.CENTER,
-        tooltip_text: props.tooltip ?? "",
     })
+
+    // The one Nidara tooltip (glass bubble), never GTK's native tooltip_text —
+    // native tooltips render Adwaita chrome that ignores the design system.
+    // attachTooltip auto-cleans on the button's destroy.
+    if (props.tooltip)
+        attachTooltip(btn, props.tooltip, { chrome: props.tooltipChrome ?? true })
 
     if (props.onClick) {
         if (props.captureClick) {

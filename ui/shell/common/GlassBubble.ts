@@ -66,18 +66,20 @@ const corner = (
     else           cr.arcNegative(ccx, ccy, reff, a1, a2)
 }
 
-// ONE continuous path: a rounded rect (perfect arcs) with a pointer spliced into the
-// centre of `side`. The pointer is a triangle whose THREE corners are all circular
-// arcs — the tip (radius `tipR`) and the two base joins where it meets the body edge
-// (radius `baseR`) — with straight diagonals between. `aw`/`ah` are the pointer's base
-// width / protrusion. Fill it for the glass body; stroke it (clipped to itself) for
-// the 1px inner edge — the rim then wraps body AND pointer as one outline.
+// ONE continuous path: a rounded rect (perfect arcs) with a pointer spliced into
+// `side`, centred on the edge plus `off` (the slide correction — see paintGlassBubble).
+// The pointer is a triangle whose THREE corners are all circular arcs — the tip
+// (radius `tipR`) and the two base joins where it meets the body edge (radius `baseR`)
+// — with straight diagonals between. `aw`/`ah` are the pointer's base width /
+// protrusion. Fill it for the glass body; stroke it (clipped to itself) for the 1px
+// inner edge — the rim then wraps body AND pointer as one outline.
 export const bubblePath = (
     cr: any, x: number, y: number, w: number, h: number, r: number, side: ArrowSide,
+    off: number = 0,
     aw: number = ARROW_W, ah: number = ARROW_H, tipR: number = TIP_R, baseR: number = BASE_R,
 ) => {
     const x2 = x + w, y2 = y + h
-    const cx = x + w / 2, cy = y + h / 2
+    const cx = x + w / 2 + off, cy = y + h / 2 + off
     const HALF = Math.PI / 2
     cr.moveTo(x + r, y)
     if (side === "top") {
@@ -118,6 +120,10 @@ export interface GlassBubbleOpts {
     /** Max corner radius (clamped further so the arrow base fits the straight edge).
      *  Tooltip ≈ 13; a roomier menu can pass more. Default 13. */
     radiusMax?: number
+    /** Shift the pointer along its edge (px, ± from the centre) so it keeps aiming
+     *  at the anchor when the compositor SLID the popup along a screen edge
+     *  (Tooltip.ts measures this). Clamped so the base never eats the corner arcs. */
+    arrowOffset?: number
 }
 
 export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide, opts: GlassBubbleOpts = {}) => {
@@ -153,12 +159,17 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
     // narrower than arrowW on a short tooltip; never let the base eat the corners).
     const aw = Math.min(arrowW, Math.max(edgeLen - 2 * r - 4, 6))
 
+    // Slide correction: clamp the requested pointer shift so the base joins stay
+    // on the straight segment between the corner arcs.
+    const maxOff = Math.max(0, (edgeLen - aw) / 2 - r - 2)
+    const off = Math.max(-maxOff, Math.min(maxOff, opts.arrowOffset ?? 0))
+
     cr.setOperator(2) // OVER
 
     // 1) Glass fill — AA (smooth silhouette).
     cr.save()
     cr.setAntialias(2)
-    bubblePath(cr, bx, by, bw, bh, r, side, aw, arrowH, tipR)
+    bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR)
     cr.setSourceRGBA(tint.r, tint.g, tint.b, alpha)
     cr.fill()
     cr.restore()
@@ -167,10 +178,10 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
     //    only the inner ~1px survives the clip (no outer AA spilling onto glass).
     cr.save()
     cr.setAntialias(1) // NONE for a crisp clip
-    bubblePath(cr, bx, by, bw, bh, r, side, aw, arrowH, tipR)
+    bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR)
     cr.clip()
     cr.setAntialias(2) // AA for a smooth stroke
-    bubblePath(cr, bx, by, bw, bh, r, side, aw, arrowH, tipR)
+    bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR)
     cr.setLineWidth(BORDER_W * 2)
     if (dark) cr.setSourceRGBA(1, 1, 1, 0.16)   // 1px inner white edge on dark glass
     else      cr.setSourceRGBA(0, 0, 0, 0.12)   // subtle dark rim for definition on light glass

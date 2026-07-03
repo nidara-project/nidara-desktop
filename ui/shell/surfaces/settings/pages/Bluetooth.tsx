@@ -7,6 +7,7 @@ import Icons from "../../../core/Icons"
 import * as BT from "../../../core/BluetoothService"
 import { safeDisconnect } from "../../../core/signals"
 import { NidaraButton, showNidaraAlert, type AlertHandle } from "../../../../lib/nidara-kit"
+import { attachTooltip } from "../../../common/Tooltip"
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
@@ -237,8 +238,8 @@ export default function BluetoothPage() {
                     variant: "danger",
                     pill: true,
                     icon: true,
-                    tooltip_text: t("settings.bluetooth.tooltip.forget"),
                 })
+                attachTooltip(removeBtn, t("settings.bluetooth.tooltip.forget"), { chrome: false })
                 removeBtn.set_child(new Gtk.Image({ gicon: Icons.trash, pixel_size: 16, css_classes: ["nd-icon"] }))
                 removeBtn.connect("clicked", () => {
                     BT.removeDevice(dev)
