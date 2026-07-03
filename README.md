@@ -30,7 +30,7 @@ so every clone is ready to be worked on by an agent out of the box.
 - **Shell**: AGS v3 (TypeScript/TSX) — reactive, modular UI.
 - **Bar**: Live clock, workspaces, system tray, resource indicators, system menu with inline power actions.
 - **Dock**: Hover magnification with spring physics. Supports bottom, left, and right positions.
-- **App Launcher**: Full-screen grid with instant fuzzy search.
+- **App Launcher**: App grid with instant fuzzy search.
 - **Search**: Type-to-find overlay for apps and recent files (`Super + Space`).
 - **Control Center**: Volume (WirePlumber), brightness, Wi-Fi, Bluetooth, battery, MPRIS media.
 - **Notification Center**: Grouped notifications with inline actions.
