@@ -19,7 +19,7 @@ built on Hyprland and AGS v3 (Aylur's GTK Shell), registering as a proper login 
   (`~/.config/nidara/hyprland-user.lua`).
 - **Bar** — live clock, workspaces, system tray, resource indicators, and a system
   menu with inline power actions.
-- **Dock** — macOS-style with spring magnification physics; bottom, left, and right
+- **Dock** — hover magnification with spring physics; bottom, left, and right
   positions.
 - **App Launcher** — full-screen grid with instant fuzzy search.
 - **Control Center** — volume (WirePlumber), brightness, Wi-Fi, Bluetooth, battery,

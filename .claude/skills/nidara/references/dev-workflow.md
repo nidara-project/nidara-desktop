@@ -489,7 +489,8 @@ symlink, that's the bug — make it a real dir.
 | Keys | Action |
 |---|---|
 | `Super+S` | Settings |
-| `Super` (tap) | App launcher (Prism) |
+| `Super` (tap) | App launcher (grid) |
+| `Super+Space` | Search (Prism) |
 | `Super+T` | Kitty |
 | `Super+E` | Nautilus |
 | `Super+L` | Lock |

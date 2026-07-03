@@ -200,7 +200,7 @@ This is the table that decides almost every "which widget should I use?" questio
 | Surface | Use | Why |
 |---|---|---|
 | Dock, Bar, workspace dots, resource circles, schematic | **Pure GTK4 + Cairo** (`Gtk.DrawingArea` / `Gtk.Snapshot`) | Adwaita adds nothing here; painting direct = zero defensive CSS. |
-| Floating overlays (CC, NotifCenter, Prism/Spotlight, SystemMenu, Overview) | **`Gtk.Box` + gtk4-layer-shell + custom CSS** | Adwaita would only add chrome you'd have to undo. |
+| Floating overlays (CC, NotifCenter, Prism (search), SystemMenu, Overview) | **`Gtk.Box` + gtk4-layer-shell + custom CSS** | Adwaita would only add chrome you'd have to undo. |
 | Toggles / switches / buttons inside overlays | **`Gtk.Switch`, `Gtk.Button`** (NOT `Adw.*Row`) | Base widgets style cleanly; `Adw.*Row` brings padding/focus-ring/separators that have to be killed one by one. |
 | Sliders (any) | **`makeSlider`** from `common/Slider.ts` (NOT `Gtk.Scale`) | See "Sliders" below — one Cairo component for the whole shell. |
 | Settings window | **`ui/lib/nidara-kit`** (`NidaraSplitView`, `NidaraClamp`, `NidaraButton`, `NidaraSelect`) | Custom split view. **Do NOT use `Adw.OverlaySplitView`** — it breaks capsule margins. |
@@ -291,11 +291,11 @@ the unclaimed capsule area (the split-capsule M/L story above); (2) the right-cl
 `Gtk.GestureLongPress` in `IslandGrid.makeIslandWidget` (non-edit only) that CLAIMS the sequence
 at trigger time so the inner toggle's release doesn't also fire. On a 1×1 tile, hold and the
 context menu are the only routes: the round toggle button swallows plain taps by design — a
-compact quick-toggle stays a toggle on every platform (macOS/GNOME/Windows), "open detail" is
+compact quick-toggle stays a toggle on every platform, "open detail" is
 never a fallback on tap.
 
-**A "stateful" tile's on-state fills the WHOLE capsule with the live accent colour** (macOS/GNOME/
-Windows quick-settings convention), not just the icon. Wired via `AtomicWidget.getActive`/
+**A "stateful" tile's on-state fills the WHOLE capsule with the live accent colour** (standard
+quick-settings convention), not just the icon. Wired via `AtomicWidget.getActive`/
 `watchActive` (`Types.ts`) → `BaseIsland` → `SquircleContainer`'s `getActive`/`activeAlpha`/
 `watchActive` props: `getActive()` is read live *inside the Cairo draw call*, so it paints through
 the exact same `resolveDrawParams`/`drawSquircle` path a real tile already uses — no separate CSS
@@ -426,7 +426,7 @@ horizontal wrapper). There is **no native `Gtk.Scale`** and no `PillSlider` — 
   every tile's content, not just sliders: nothing inside a tile should be independently
   actionable while rearranging (only the × remove badge and the drag itself stay live).
 - **Options:** `orientation: "horizontal" | "vertical"`, `thumb` (default true). `thumb: false`
-  + a wide `trackH` = the macOS-style vertical capsule (fill rises, clipped to the capsule so
+  + a wide `trackH` = the vertical capsule (fill rises, clipped to the capsule so
   the end follows the rounded cap). Thumb goes translucent while pressed. `paintFill` (default
   true) = false makes this `DrawingArea` paint NOTHING, a pure interactive hit-region — used by
   `makeVerticalFillTile` (see the CC gauge tiles entry above), whose fill now lives one level up
@@ -587,7 +587,7 @@ goes through this one component. Two modes:
   menu, overview, app grid, bar expansion panel): Gtk.Bin semantics — measure/allocation
   pass through 1:1, so external `halign`/margins/`height_request` on the wrapper behave
   exactly as on the child (in `Bar.tsx` the wrapper IS the `cc`/`nc`/... variable), and each
-  frame only repaints. Subtle macOS pop: 0.97→1, in 220ms, out 150ms. Pivot per surface,
+  frame only repaints. Subtle pop: 0.97→1, in 220ms, out 150ms. Pivot per surface,
   toward its visual anchor (cc/nc `top-right`, system menu `top-left`, expansion panel
   `top-center`, centered surfaces `center`).
 

@@ -62,7 +62,7 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     alphabetical). Each widget declares a required `category` (`"media"` |
     `"utilities"` | `"system"`) + optional `barOrder`; `BAR_ORDER` is **derived**
     from those in `widgets/index.ts` (category order `[media, utilities, system]` =
-    left→right, system nearest the tray, macOS-style — no hand-maintained list).
+    left→right, system nearest the tray — no hand-maintained list).
     `CC_DEFAULT_ORDER` stays editorial. The CC factories in `Toggles`/`Sliders`/
     `MediaIsland` return `CCWidgetSpec` (= `Omit<AtomicWidget,"category">`): they
     build content, not registry metadata, so they carry no category.
@@ -199,7 +199,7 @@ Pure-GTK4 primitives + Nidara tokens, **no Adwaita, no resets**. Consumed only b
 - `NidaraClamp` — replaces `Adw.Clamp`
 - `NidaraButton` — suggested/destructive/pill variants
 - `NidaraSelect` — dropdown
-- `NidaraSidebar` — single-select nav list; items take an optional `groupStart` to draw a thin **title-less divider** before them (macOS-style thematic clusters, no group labels). The Settings sidebar uses this for its 3 clusters (connectivity · look/shell/behaviour · system & devices).
+- `NidaraSidebar` — single-select nav list; items take an optional `groupStart` to draw a thin **title-less divider** before them (thematic clusters, no group labels). The Settings sidebar uses this for its 3 clusters (connectivity · look/shell/behaviour · system & devices).
 - `showNidaraAlert` — replaces `Adw.AlertDialog`; optional `entry` (single-line input, `digitsOnly`/`maxLength`, text reaches `onResponse` as 2nd arg, Enter fires the suggested response) and returns an `AlertHandle` whose `close(id?)` responds programmatically (used by the BlueZ pairing agent to honor `Cancel()`)
 - `NidaraOverlayManager` — for future floating UI
 
@@ -208,8 +208,8 @@ Pure-GTK4 primitives + Nidara tokens, **no Adwaita, no resets**. Consumed only b
 The Settings sidebar (`Settings.tsx` `categories[]`) is **ordered into 3 unlabelled clusters** via `NidaraSidebar`'s `groupStart` dividers; the array order *is* the IA, so reorder there. The window opens on **Appearance** by default (not the first item). The **AI page** (`pages/Ai.tsx`, third cluster) governs the agent surface — its rule: every row must gate or report something REAL (no placeholder toggles); it grows with the AI-native roadmap (assistant model picker…). Its IA (2026-07) is four groups, one concept each: **Desktop Access** (shell-scoped capabilities, default on) · **Other Apps** (computer-use perception/control, escalating, default off) · **MCP Server** (the CHANNEL: enable toggle + `.mcp.json` connect row — a transport, not a permission; capability toggles gate `ags request` and MCP alike) · **Agent Interface** (read-only facts). Don't fold the MCP toggle back among the capability toggles. Pages that contain sub-screens use the **parent-page + `pushSubpage` pattern**: e.g. **Apps** is a landing (`pages/Apps.tsx`) with two navigable rows that push **Default Apps** (`pages/DefaultApps.tsx`) and **App Icons** (`pages/AppIcons.tsx`). Caveat: subpage rows aren't in the search index (subpages build lazily), so a parent's landing rows should carry searchable labels.
 
 Naming note (2026-07): the page with id `widgets` (`pages/Widgets.tsx`) is titled **"Control
-Center"** in the UI and its copy says "controls" — macOS terminology, since it manages bar + CC
-placement exactly like macOS's Control Center settings page. `AtomicWidget`, the `widgets/` dir
+Center"** in the UI and its copy says "controls", since it manages bar + CC
+placement in a single Settings page. `AtomicWidget`, the `widgets/` dir
 and all ids/keys keep the internal name; only user-facing strings changed.
 
 This is the right place for new shared, Adwaita-free primitives.

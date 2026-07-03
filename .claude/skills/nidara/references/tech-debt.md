@@ -30,7 +30,7 @@ must produce an identical (or fully-accounted) CSS diff.
 **Systematic orphan purge done 2026-06-10:** a detector script (extract every `.class` from
 `styles/*.scss`, `grep -rF` each against `surfaces/ widgets/ common/ core/ app.ts ../lib`) found and removed
 ~45 dead classes (−459 compiled lines, −13%) — remnants of the dock pre-DockCore, the
-pre-commandment-5 separate overlay windows, the old Tahoe sidebar, deleted Resources.tsx,
+pre-commandment-5 separate overlay windows, the old sidebar variant, deleted Resources.tsx,
 and the pre-context-menu CC edit chrome. **False-positive traps for the next run:** classes
 built dynamically (`accent-${key}` in Appearance.tsx, `nidara-btn--${variant}` in
 nidara-kit/button.ts), GTK-internal node classes (`day-name`/`other-month`/`week-number` =
@@ -407,7 +407,7 @@ more specificity. Same root as #9 (the Adwaita stylesheet is loaded in-process).
 
 ### 17. Status-indicator subsystem: extension points deliberately not wired (2026-06-19)
 `surfaces/bar/StatusIndicators.tsx` is a declarative registry (`INDICATORS`, three states
-hidden/armed/active) rendered the **macOS way**: a small **badge on the bar's Control-Center button**
+hidden/armed/active) rendered as a small **badge on the bar's Control-Center button**
 (`ccBadge`) + a **status banner inside the CC** above the widgets (`ccStatusBanner`, where the
 Stop/kill-switch lives). It currently hosts only recording + AI-control but is the intended home for
 **privacy/activity indicators** (mic, camera, screen-share, location). Those are **not wired** (no

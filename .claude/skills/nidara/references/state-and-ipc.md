@@ -279,7 +279,7 @@ Phase 2a — **action, deterministic only (built)**:
   `AgentConfig.setAllowComputerControl`) also enables `allowComputerUse` — you can't drive what
   you can't see. The effective check is `allowComputerControl && allowComputerUse`, re-read live
   by `nidara-act` and the `do_app_action` MCP tool.
-- **CC badge + banner (macOS pattern)**: the model + both consumers live in
+- **CC badge + banner**: the model + both consumers live in
   `surfaces/bar/StatusIndicators.tsx` (`ccBadge`, `ccStatusBanner`), shared with the recording
   indicator. While control is granted, a small **badge** on the bar's Control-Center button signals
   it — **subtle** when armed (granted, idle), **pulsing** when active (recording, or for
