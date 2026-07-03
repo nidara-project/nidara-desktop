@@ -560,6 +560,18 @@ lockscreen silently never launched via the wrapper on every install — fixed by
 but any future wrapper MUST NOT introduce a root-only log path, and redirects into logs
 should never gate the exec (`>> "$LOG" 2>&1 || true` on the setup lines, or pre-`touch`).
 
+### 27. Media widget/tile artwork only renders `file://` art URLs
+Observed 2026-07-03 while staging README screenshots in the VM: with mpv + mpv-mpris the
+MPRIS `mpris:artUrl` is a `data:image/jpeg;base64,…` URI and the Control Center media tile
+shows an empty dark square; switching playback to VLC (which caches art and exposes
+`file:///home/…/.cache/vlc/art/….jpg`) renders the cover correctly. The art path handling
+(cached-path + artVersion optimization from the 07-02 perf pass) evidently expects a local
+file path. Unverified: `https://` art URLs — which is what **Spotify** and browser MPRIS
+players publish — may be equally broken, and that's a mainstream user path. To do: check
+the art loading in the media widget/tile, add `data:` decoding and (async, cached) `http(s)`
+download, or explicitly document local-file-only. Repro recipe lives in the
+`shots-studio-07-03` VM snapshot (VLC vs mpv on the same MP3).
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

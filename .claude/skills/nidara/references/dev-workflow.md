@@ -150,11 +150,17 @@ qemu-system-x86_64 -enable-kvm -machine q35 -cpu host -m 4096 -smp 4 \
   -drive if=pflash,format=raw,file=<ovmf-vars-copy>.fd \
   -drive file=<disk>.qcow2,if=virtio \
   -vga none -device virtio-vga-gl -display egl-headless \
+  -audiodev none,id=snd0 -device intel-hda -device hda-output,audiodev=snd0 \
   -nic user,model=virtio-net-pci,hostfwd=tcp::2222-:22 \
   -usb -device usb-tablet
 ```
 
 Gotchas that cost real debugging time:
+- **Always emulate a sound card** (the `-audiodev`/`intel-hda` lines): without one, PipeWire
+  has no sink, the bar volume icon shows muted, and audio bugs are invisible — the missing
+  `pipewire-audio`/`pipewire-pulse` packages (audio dead on every clean install) went
+  undetected for weeks because test VMs had no audio device. `-audiodev none` needs no host
+  audio; the guest still gets a working sink.
 - **`-vga none` is mandatory** with `-device virtio-gpu-gl`/`virtio-vga-gl`: without it QEMU
   adds a default bochs VGA, the guest gets TWO DRM cards, Hyprland picks the 3D-less bochs
   one and dies instantly ("start-hyprland error" at the greeter, greetd hits start-limit).
