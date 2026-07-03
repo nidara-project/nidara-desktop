@@ -128,8 +128,8 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: () => status.toggleNC(),
   },
   togglePrism: {
-    desc: "Toggle Prism (spotlight-style search)",
-    aliases: ["toggleSpotlight"],
+    desc: "Toggle search (apps and recent files)",
+    aliases: ["toggleSearch"],
     run: () => status.togglePrism(),
   },
   toggleAppGrid: { desc: "Toggle the fullscreen app grid", run: () => ipc.toggleAppGrid?.() },

@@ -63,7 +63,7 @@ read source to discover it:
   its diagnostic report.)
 
 Current commands (run `listActions` for the live list): `toggleCC|toggleControlCenter`,
-`toggleNC|toggleNotificationCenter`, `togglePrism|toggleSpotlight`, `toggleAppGrid`,
+`toggleNC|toggleNotificationCenter`, `togglePrism|toggleSearch`, `toggleAppGrid`,
 `openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `toggleBarOverlay` (alias `toggleGameOverlay`),
 `openWindowMenu`, `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`,
 `setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listApps`, `launchApp <id>`,
