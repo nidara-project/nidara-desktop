@@ -2,7 +2,12 @@
 
 Nidara is a full **Wayland desktop environment** built on **Hyprland** and **AGS v3 (Aylur's GTK Shell)**, designed to be fast, visually premium, and tightly optimized for **Arch Linux**.
 
-It is not a theme or a set of scripts — it registers as a proper Wayland session (like GNOME or KDE) and is launched by the display manager.
+It is also **AI-native** — not as a bolt-on, but in how it is built and maintained. Nidara is
+developed with AI coding agents, ships a first-class interface for an agent to *see and operate*
+the running desktop, and is designed to keep improving through AI-authored contributions: point a
+coding agent at your own install, have it fix or extend something, and send that improvement back
+upstream as a pull request. The agent knowledge and the contribution rules live **inside the repo**,
+so every clone is ready to be worked on by an agent out of the box.
 
 ![Nidara desktop — Files and Settings over the default wallpaper](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/hero.webp)
 
@@ -10,8 +15,8 @@ It is not a theme or a set of scripts — it registers as a proper Wayland sessi
 |:---:|:---:|
 | ![Control Center](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/cc.webp) | ![App launcher](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/appgrid.webp) |
 | Control Center | App launcher |
-| ![Dock magnification](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/dock.webp) | ![Prism search](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/prism.webp) |
-| Dock with magnification | Prism (spotlight search) |
+| ![Dock magnification](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/dock.webp) | ![Search overlay](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/prism.webp) |
+| Dock with magnification | Search |
 | ![Workspace overview](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/overview.webp) | ![Greeter](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/greeter.webp) |
 | Workspace overview | Login greeter |
 
@@ -24,12 +29,13 @@ It is not a theme or a set of scripts — it registers as a proper Wayland sessi
 - **Compositor**: Hyprland (Wayland) — smooth animations, tiling + floating window management.
 - **Shell**: AGS v3 (TypeScript/TSX) — reactive, modular UI.
 - **Bar**: Live clock, workspaces, system tray, resource indicators, system menu with inline power actions.
-- **Dock**: macOS-style with spring magnification physics. Supports bottom, left, and right positions.
+- **Dock**: Hover magnification with spring physics. Supports bottom, left, and right positions.
 - **App Launcher**: Full-screen grid with instant fuzzy search.
 - **Control Center**: Volume (WirePlumber), brightness, Wi-Fi, Bluetooth, battery, MPRIS media.
 - **Notification Center**: Grouped notifications with inline actions.
-- **Settings**: Multi-page panel — Appearance, Display, Audio, Network, Input, Bluetooth, Language & Region, Applications, Dock & Panel, Control Center, Autostart, Power, and About.
+- **Settings**: Multi-page panel — Network, Bluetooth, Appearance, Display, Audio, Top Bar, Dock, Control Center, Gaming, Notifications, Accessibility, Apps, Devices, Power, Language & Region, Autostart, Users, AI, and About.
 - **Nidara Design System**: Dynamic accent colors, glassmorphism tokens, dark/light mode.
+- **AI-native**: An MCP server (`nidara-mcp`) lets a coding agent perceive and drive the live desktop; an in-repo agent skill and a PR-based contribution model are built for AI-authored improvements. Built with AI, operable by AI, improved by AI — see [Using an AI agent](#using-an-ai-agent-with-your-desktop) and [Contributing](#contributing).
 - **Game Mode**: Steam games auto-move to a dedicated `gamespace` workspace (no blur/shadow/animations, `immediate` mode), optional library-art wallpaper and performance power profile; `Super + B` floats the bar above any fullscreen window.
 - **Login & Lock**: Custom AGS apps — a greetd-based greeter (`nidara-greeter`) and a lock screen (`nidara-lock`) built on `ext-session-lock-v1`, both sharing the Nidara look. The greeter is launched directly by greetd (no regreet); the lock screen uses no hyprlock.
 - **Idle management**: hypridle — configurable screen-off, lock, and suspend timers.
@@ -123,11 +129,11 @@ them, and hands them to `pacman` so they stay trackable and upgradable. It:
 nidara-update
 ```
 
-That's it — no git knowledge needed. The installer leaves a managed copy of the source at
-`~/.local/share/nidara/src` (so the folder you originally cloned is disposable);
-the updater pulls the latest release there and reinstalls only what changed — the pinned
-dependency stack is rebuilt only when the pins actually moved, so updates take a minute,
-not an hour. Your config in `~/.config/nidara/` is never touched, and the running
+That's it — no git knowledge needed. The updater is stateless: it fetches the latest release
+into a throwaway directory, rebuilds and reinstalls only what changed, then cleans up after
+itself — no source copy is kept on disk, so the folder you originally cloned is disposable.
+The pinned dependency stack is rebuilt only when the pins actually moved, so updates take a
+minute, not an hour. Your config in `~/.config/nidara/` is never touched, and the running
 shell reloads by itself. **Settings → About** also tells you when a new release is available.
 
 > **Status:** Nidara installs onto an existing Arch system today. A fully automated path —
@@ -217,12 +223,13 @@ off at any time, taking effect immediately.
 | Shortcut | Action |
 | :--- | :--- |
 | `Super + S` | Open Settings |
-| `Super + Space` | Prism (Spotlight-style search) |
+| `Super + Space` | Search (apps & recent files) |
 | `Super + T` | Terminal (Kitty) |
 | `Super + E` | Files (Nautilus) |
 | `Super + L` | Lock screen |
 | `Super + B` | Bar overlay (bar above fullscreen windows) |
 | `Super + Shift + G` | Toggle game mode |
+| `Super + Shift + Escape` | Revoke AI computer-control instantly (kill switch) |
 | `Super + Shift + R` | Reload Nidara UI |
 | `Super` (tap) | Toggle App Launcher |
 
@@ -352,7 +359,3 @@ affiliation with, the Nidara project. (Same model as Firefox, GNOME and many
 other open-source projects: the code is free, the brand identifies the project.)
 
 See [`NOTICE`](NOTICE) for attribution details.
-
----
-
-**Nidara** — *Performance, Aesthetics, Intelligence.*
