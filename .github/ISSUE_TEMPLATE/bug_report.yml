@@ -1,0 +1,96 @@
+name: Bug report
+description: Something in Nidara is broken or behaves wrong on a supported/experimental setup.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for testing Nidara — bug reports are the most valuable thing you can send right now.
+
+        Before filing, a couple of quick things that make a report actionable:
+        - Check the [hardware & platform support](https://github.com/nidara-project/nidara-desktop#hardware--platform-support) tiers so we both know what's expected.
+        - The single most useful field below is the **diagnostic report** — one command gathers versions, hardware, monitor layout, live shell state and recent log errors.
+        - For questions, ideas, or "is this expected?", use [Discussions](https://github.com/nidara-project/nidara-desktop/discussions) instead — this form is for confirmed bugs.
+
+  - type: dropdown
+    id: tier
+    attributes:
+      label: Which support tier is your setup?
+      description: See the README's support section. This helps us triage, not gatekeep — experimental reports are welcome.
+      options:
+        - "✅ Supported (vanilla Arch / EndeavourOS, AMD or Intel, single monitor, QEMU)"
+        - "🧪 Experimental (NVIDIA, multi-monitor, laptop, other Arch derivative)"
+        - "❌ Not supported (Manjaro, VirtualBox, X11, ARM) — filing anyway"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install
+    attributes:
+      label: How did you install Nidara?
+      options:
+        - "Fresh install.sh on a clean Arch base"
+        - "install.sh on EndeavourOS or another Arch derivative"
+        - "nidara-update on an existing install"
+        - "QEMU/KVM virtual machine"
+        - "Other / not sure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the actual behaviour. Include any error text you saw.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The exact sequence that triggers it. "I don't know how to reproduce it" is a valid answer — say so.
+      placeholder: |
+        1. Open Control Center
+        2. Toggle dark mode
+        3. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Diagnostic report (`nidara-doctor`)
+      description: |
+        Run `nidara-doctor` in a terminal and paste the whole output here (it's Markdown — it renders on its own, no need to wrap it).
+        If the shell won't start, run it anyway: every section degrades to `n/a` instead of failing, so the report is still useful on a half-broken setup.
+        It skips personal values beyond file names, but give it a glance before posting.
+      placeholder: "$ nidara-doctor\n# Nidara — diagnostic report (…)\n…"
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or extra context
+      description: Optional. A screenshot/recording, or anything else that helps.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Before submitting
+      options:
+        - label: I ran `nidara-doctor` and pasted its output above (or explained why I couldn't).
+          required: true
+        - label: I searched existing issues and this isn't already reported.
+          required: true

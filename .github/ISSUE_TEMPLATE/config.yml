@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions, ideas & feedback
+    url: https://github.com/nidara-project/nidara-desktop/discussions
+    about: >-
+      Anything that isn't a confirmed bug — questions, feature ideas,
+      "is this expected?", or general feedback while trying Nidara out.
+      Confirmed bugs go through the bug report form.
