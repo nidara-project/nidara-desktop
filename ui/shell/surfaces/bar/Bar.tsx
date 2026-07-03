@@ -328,9 +328,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       catcher.set_visible(status.isAnyOverlayOpen && !status.cc_edit_mode)
       updateInputRegion()
   })
-  status.connect("notify::prism-open", () => { 
+  status.connect("notify::prism-open", () => {
     syncOverlays() // Call syncOverlays to update visibility and input region
-    Gtk4LayerShell.set_keyboard_mode(win, status.prism_open ? Gtk4LayerShell.KeyboardMode.ON_DEMAND : Gtk4LayerShell.KeyboardMode.NONE)
+    // EXCLUSIVE (not ON_DEMAND) so the compositor grants keyboard focus to the
+    // layer surface immediately on open — with ON_DEMAND Hyprland withholds focus
+    // until the pointer enters/clicks, so the search caret wouldn't blink (and you
+    // couldn't type) until you moved the mouse. Same choice as the app grid, which
+    // only drops to ON_DEMAND when a Gtk.Popover context menu needs focus; Prism
+    // has no popover, so it stays EXCLUSIVE the whole time it's open.
+    Gtk4LayerShell.set_keyboard_mode(win, status.prism_open ? Gtk4LayerShell.KeyboardMode.EXCLUSIVE : Gtk4LayerShell.KeyboardMode.NONE)
   })
   
   syncOverlays()

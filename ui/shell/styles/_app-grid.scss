@@ -14,8 +14,10 @@ window#nidara-app-launcher {
     background: var(--nidara-surface-raised);
     border: 1px solid var(--nidara-border);
     border-radius: var(--nidara-radius-pill);
-    padding: 10px 18px;
-    min-height: 44px;
+    // Compact pill: the icon+text are small, so 44px felt like an oversized
+    // touch-target. ~36px reads tight and macOS-Launchpad-like.
+    padding: 7px 16px;
+    min-height: 36px;
     transition: background 0.15s ease, border-color 0.15s ease;
 
     &:focus-within,
