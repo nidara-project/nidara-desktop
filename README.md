@@ -31,6 +31,7 @@ so every clone is ready to be worked on by an agent out of the box.
 - **Bar**: Live clock, workspaces, system tray, resource indicators, system menu with inline power actions.
 - **Dock**: Hover magnification with spring physics. Supports bottom, left, and right positions.
 - **App Launcher**: Full-screen grid with instant fuzzy search.
+- **Search**: Type-to-find overlay for apps and recent files (`Super + Space`).
 - **Control Center**: Volume (WirePlumber), brightness, Wi-Fi, Bluetooth, battery, MPRIS media.
 - **Notification Center**: Grouped notifications with inline actions.
 - **Settings**: Multi-page panel — Network, Bluetooth, Appearance, Display, Audio, Top Bar, Dock, Control Center, Gaming, Notifications, Accessibility, Apps, Devices, Power, Language & Region, Autostart, Users, AI, and About.
@@ -59,9 +60,9 @@ Nidara is young. This is what it has actually been tested on — not what we hop
 yet. Reports (and fixes) are the most valuable contribution you can make right now.
 
 - **NVIDIA GPUs** (proprietary driver or open kernel modules): the installer auto-detects
-  your card and driver and configures the environment for you, but upstream Hyprland has
-  no official NVIDIA support and we haven't tested on real NVIDIA hardware. Nouveau is
-  untested.
+  your card and driver and configures the environment for you, but upstream NVIDIA support
+  is newer and less battle-tested than AMD/Intel, and we haven't verified it on real NVIDIA
+  hardware. Nouveau is untested.
 - **Multi-monitor**: the bar and dock spawn on every display and per-monitor
   scale/mode/VRR live in Settings → Display, but hotplugging a display currently needs a
   UI reload (`Super + Shift + R`).
@@ -295,8 +296,8 @@ nidara/
     │   ├── widgets/           # Auto-registered atomic widgets (battery, wifi, media…)
     │   ├── common/            # Shared UI pieces (Slider, SquircleContainer, fade…)
     │   ├── styles/            # Modular SCSS (tokens, glass mixin, per-component)
-    │   ├── style.css          # Compiled CSS (committed for convenience)
-    │   └── build/nidara    # Standalone bundle (committed for releases)
+    │   ├── style.css          # Compiled CSS — generated from styles/ (gitignored)
+    │   └── build/nidara    # Bundle output from `ags bundle` (gitignored)
     ├── greeter/               # Login screen (greetd + AstalGreet)
     ├── lockscreen/            # Lock screen (ext-session-lock-v1, shares greeter CSS)
     └── lib/nidara-kit/        # GTK4 primitive widgets (no Adwaita): SplitView, Select, Button…
