@@ -7,7 +7,7 @@
 /* NOTE: no keyboard focus rings here on purpose. The CC lives in the bar window
    which only grants keyboard (ON_DEMAND) for prism_open, not cc_open — so the CC
    never receives keyboard focus and is mouse/touch-only by design. Adding
-   :focus-visible rules here would be dead code. See [[project_design_tokens_macos]]. */
+   :focus-visible rules here would be dead code. See the design-tokens rationale. */
 
 /* --- Status banner (recording / AI control) above the widgets --- */
 /* A danger-tinted card; one .cc-status-row per active indicator (dot + text +

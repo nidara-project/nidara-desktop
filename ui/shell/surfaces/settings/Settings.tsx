@@ -71,7 +71,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     // ── Sidebar ───────────────────────────────────────────────────────────────
     // The navigation list itself is the universal NidaraSidebar component; it's
     // created after the pages are built (below) so its onSelect can call navigateTo.
-    // Order = macOS-style thematic clusters with title-less dividers (groupStart):
+    // Order = thematic clusters with title-less dividers (groupStart):
     // 1) connectivity · 2) the bulk (look/shell/behaviour/apps) · 3) system & devices.
     const categories = [
         // ── Connectivity ────────────────────────────────────────────────────────

@@ -76,7 +76,7 @@ export default function BaseIsland({
 
     //  GEOMETRIC RULES:
     const { shape, radius } = resolveIslandShape(size, width, height)
-    const n = 3.2 // Tahoe Standard
+    const n = 3.2 // squircle superellipse exponent
 
     // WIDE capsules: pin content to the LEFT. halign FILL doesn't stretch a
     // shrink-wrapping box — GTK centres it instead, so the icon x drifts with the

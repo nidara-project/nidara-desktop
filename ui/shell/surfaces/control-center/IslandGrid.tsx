@@ -274,7 +274,7 @@ export default function IslandGrid() {
     gridOverlay.add_overlay(ctxMenu.scrim)
     gridOverlay.add_overlay(ctxMenu.menu)
 
-    // ── Detail page (full-panel, macOS Tahoe style) ───────────────────────────
+    // ── Detail page (full-panel) ──────────────────────────────────────────────
     const mainStack = new Gtk.Stack({
         transition_type: Gtk.StackTransitionType.CROSSFADE,
         transition_duration: 200,

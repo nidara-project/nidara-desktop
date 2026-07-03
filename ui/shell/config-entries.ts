@@ -57,7 +57,7 @@ export function registerConfigEntries() {
         set: v => updateDockSettings({ iconSize: Math.round(v as number) }),
     })
     registerConfig("dock.magnification", {
-        desc: "macOS-style icon magnification on hover.",
+        desc: "Icon magnification on hover.",
         type: "boolean",
         get: () => dockSettings.magnification,
         set: v => updateDockSettings({ magnification: v as boolean }),

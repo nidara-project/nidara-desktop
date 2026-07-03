@@ -7,7 +7,7 @@ import { t } from "../../core/i18n"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Status indicators — condition-driven, NOT user-toggleable signals (recording,
-// the agent acting…). macOS pattern: a small ALWAYS-VISIBLE badge on the bar's
+// the agent acting…). Pattern: a small ALWAYS-VISIBLE badge on the bar's
 // Control-Center button, with the detail + control surfaced INSIDE the Control
 // Center (a banner above the widgets). This is Nidara's home for activity/privacy
 // indicators (future: mic/camera/screen-share); adding one is a new INDICATORS entry.

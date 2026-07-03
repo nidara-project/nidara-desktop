@@ -116,7 +116,7 @@ function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[] {
   const dBase   = (d * 0.50).toFixed(3)
   const dRaised = d.toFixed(3)
 
-  // Material vibrancy ladder. Anchored to the macOS-skill values for our blur
+  // Material vibrancy ladder. Anchored to our reference values for our blur
   // profile (size=2, passes=2, vibrancy=0.4 → "subtle" row: thin .30 / regular
   // .45 / thick .65 / chrome .85), then OFFSET by the overlay opacity so the
   // ladder still responds to user opacity.

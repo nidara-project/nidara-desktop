@@ -301,7 +301,7 @@ export function DockItem(
 
             ; (child as any).set_draw_func((area: any, cr: any, w: number, h: number) => {
                 if (w <= 0 || h <= 0) return
-                // macOS HIG: The actual icon shape only occupies ~82% of the total canvas.
+                // The actual icon shape only occupies ~82% of the total canvas.
                 // V610: The global clipping and plate scale is locked at exactly 90%
                 // V700: No artificial SAFE_RATIO. Use full canvas area.
                 const cx = w / 2

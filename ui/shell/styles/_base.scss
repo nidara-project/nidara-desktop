@@ -50,7 +50,7 @@
     --nidara-warning-rgb: 243, 186, 75;
 
     /* --- Borders & Shadows ---
-       Recalibrated to the macOS "whisper" range (small blur, low alpha).
+       Recalibrated to a subtle "whisper" range (small blur, low alpha).
        NidaraTheme.ts overrides these per mode at runtime (dark = heavier).
        Fallbacks below are the DARK set (startup default). */
     --nidara-border: rgba(127, 127, 127, 0.15);
@@ -95,7 +95,7 @@ $nidara-radius-xs: var(--nidara-radius-xs);
 $nidara-radius-pill: var(--nidara-radius-pill);
 
 /* ==========================================================================
-   TYPOGRAPHY RAMP — one scale, no freestyle sizes (macOS-aligned)
+   TYPOGRAPHY RAMP — one scale, no freestyle sizes
    Static (never changes at runtime) → SCSS vars, compile to literals.
    ========================================================================== */
 
@@ -117,7 +117,7 @@ $fw-bold:     700;
 $lh-tight: 1.2;  // titles
 $lh-body:  1.3;  // body
 
-/* Settings-only RELATIVE ramp (em). Same macOS ratios as $fs-* but anchored to
+/* Settings-only RELATIVE ramp (em). Same ratios as $fs-* but anchored to
    the toolkit base font, so the Settings font-SIZE picker scales the whole
    Settings window uniformly. Use these in _settings.scss; the chrome uses the
    fixed $fs-* px ramp (chrome must NOT reflow — fixed dimensions). Ratios vs 14px base. */
@@ -240,7 +240,7 @@ $dur-slow: 260ms;  // popover/sheet open
     &:selected, &.is-selected { background-color: var(--nidara-state-selected); }
 }
 
-// macOS-style keyboard focus ring. Apply on :focus-visible (keyboard nav only,
+// Keyboard focus ring. Apply on :focus-visible (keyboard nav only,
 // not mouse click). Single source of truth — don't hand-roll outlines.
 // $offset: 2px outset (default) or negative for inset cases (rows inside lists).
 @mixin nidara-focus-ring($offset: 2px) {

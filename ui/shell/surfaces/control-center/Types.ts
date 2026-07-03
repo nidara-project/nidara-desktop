@@ -4,7 +4,7 @@ import Gio from "gi://Gio"
 export type WidgetLocation = "bar" | "cc"
 
 // Coarse grouping that drives BOTH the curated bar order (system rightmost, nearest
-// the tray — macOS-style) and the Settings → Widgets section grouping. Single source
+// the tray) and the Settings → Widgets section grouping. Single source
 // of truth: each widget declares its category; BAR_ORDER and the Settings sections are
 // derived from it (see widgets/index.ts CATEGORY_ORDER), never hand-maintained.
 export type WidgetCategory = "system" | "utilities" | "media"
@@ -66,7 +66,7 @@ export interface AtomicWidget {
     // BT adapter plugged/removed). Subscriptions are shell-lifetime — no dispose.
     watchAvailable?: (cb: () => void) => void
     // On/off state for CC tiles: while true, the WHOLE island fills with the live
-    // accent colour (macOS/GNOME/Windows quick-settings convention) instead of the
+    // accent colour (standard quick-settings convention) instead of the
     // base glass — see BaseIsland/SquircleContainer's getActive/watchActive. Omit
     // for widgets with no persistent on/off state (screenshot, clipboard, media…).
     getActive?: () => boolean

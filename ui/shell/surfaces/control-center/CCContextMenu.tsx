@@ -8,7 +8,7 @@ import { t } from "../../core/i18n"
 import SquircleContainer from "../../common/SquircleContainer"
 import { menuRow, menuSeparator } from "../../common/MenuRow"
 
-// Right-click context menu for CC tiles — macOS-style.
+// Right-click context menu for CC tiles.
 // Replaces the old cycling "1×1 → 2×1" pill with a standardized size picker
 // (Small / Medium / Large) plus Remove. Built as a floating Gtk.Box hosted in
 // the grid overlay (NOT a Gtk.Popover — see project_nidara_ui: the GTK binary's

@@ -704,7 +704,7 @@ class AppService {
     }
 
     /**
-     * Searches apps by name or ID. Used by Prism (spotlight search).
+     * Searches apps by name or ID. Used by the search overlay (Prism).
      */
     search(query: string): AppData[] {
         if (!query) return []

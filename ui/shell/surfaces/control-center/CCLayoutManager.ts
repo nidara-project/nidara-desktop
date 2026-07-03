@@ -18,7 +18,7 @@ export const SIZE_MAP: Record<WidgetSize, { w: number; h: number }> = {
     [WidgetSize.FULL_WIDTH]: { w: 4, h: 1 },
 }
 
-// Standardized 3-tier scale (macOS-style). Every footprint maps to one of three
+// Standardized 3-tier scale. Every footprint maps to one of three
 // semantic tiers so the context menu always speaks the same vocabulary
 // (Small / Medium / Large) regardless of a widget's concrete geometry:
 //   · standard widgets:  1×1 → 2×1 → 2×2

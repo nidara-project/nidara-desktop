@@ -66,7 +66,7 @@ export default function LoginCard(): Gtk.Widget {
   const sessionModel = new Gtk.StringList({ strings: sessionNames })
   // Compact centered pill (natural width) — a set-once control, kept visually
   // subordinate to the password field (decided 2026-07-02; prior art: GDM/SDDM
-  // hide it in a corner, macOS/Windows have none).
+  // hide it in a corner, others have none).
   const sessionDrp = new Gtk.DropDown({
     model: sessionModel,
     halign: Gtk.Align.CENTER,

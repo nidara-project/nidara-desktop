@@ -25,7 +25,7 @@ export async function getServiceSafe<T>(getter: () => T, name: string): Promise<
 }
 
 /**
- * Parabolic Magnification Utils - Apple Signature Precision
+ * Parabolic magnification utils — smooth gaussian falloff around the cursor.
  */
 
 export function calculateIconSize(
@@ -34,14 +34,14 @@ export function calculateIconSize(
     itemWidth: number,   // Ancho base del item
     baseSize: number,    // Tamaño base (ej. 64)
     maxScale: number = 1.45, // Cuanto crece
-    sigma: number = 220     // Radio de efecto (Ampliado para V27 - Apple Signature)
+    sigma: number = 220     // Radio de efecto (ampliado en V27)
 ): number {
     if (mouseX < 0) return baseSize;
 
     const distance = Math.abs(mouseX - itemX);
     if (distance > sigma) return baseSize;
 
-    // Curva Gaussiana Pura (Calculo de precision Apple)
+    // Curva Gaussiana pura (cálculo de alta precisión)
     // El factor 0.45 proporciona una transicion mas organica y menos brusca
     const factor = Math.exp(-(distance * distance) / (2 * (sigma * 0.45) ** 2));
     const size = baseSize + (baseSize * (maxScale - 1) * factor);

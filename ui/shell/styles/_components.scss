@@ -128,7 +128,7 @@ selection {
         }
     }
 
-    // Thematic divider (macOS-style): a thin title-less line between groups.
+    // Thematic divider: a thin title-less line between groups.
     // Override the row interaction model — it must be inert.
     > row.sidebar-divider {
         min-height: 0;

@@ -41,7 +41,7 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 }
 
 // ── CC detail panel: just the switch. Matches GNOME's Do Not Disturb quick
-// toggle exactly — macOS's duration presets (1h / until evening / custom) were
+// toggle exactly — timed duration presets (1h / until evening / custom) were
 // considered and deliberately left out: they need a new backend (a persisted
 // "until" timestamp + auto re-enable timer), a bigger feature than a detail
 // page, revisit only if the plain toggle turns out to not be enough. ──

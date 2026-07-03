@@ -14,8 +14,8 @@ import Graphene from "gi://Graphene"
 //   overview, app grid, bar expansion panel): behaves like a Gtk.Bin — measure
 //   and allocation pass through 1:1 so external halign/margins/height_request
 //   on the wrapper work exactly as they did on the child, and each frame only
-//   repaints (queue_draw, no re-layout). scaleFrom is subtle (~0.97, macOS
-//   style) and the scaling is paint-only.
+//   repaints (queue_draw, no re-layout). scaleFrom is subtle (~0.97)
+//   and the scaling is paint-only.
 //
 // The scaling is a *snapshot-time* transform (vfunc_snapshot), NOT a CSS
 // transform. Commandment 9 ("no transform:scale on clickables") bans CSS
@@ -31,7 +31,7 @@ import Graphene from "gi://Graphene"
 export type ScalePivot = "top-right" | "top-left" | "top-center" | "center"
 
 // Shared preset for the big overlay panels (CC, NC, Prism, system menu,
-// overview, app grid, bar expansion): subtle macOS-style pop, fast accelerating
+// overview, app grid, bar expansion): subtle pop, fast accelerating
 // exit, no layout animation. Pivot is per-surface (toward its visual anchor).
 export const OVERLAY_POP = {
     scaleFrom: 0.97, durationIn: 220, durationOut: 150, animateLayout: false,

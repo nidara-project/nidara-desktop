@@ -105,7 +105,7 @@ export function makeSlider(opts: SliderOpts): Gtk.Widget {
 
     // ── Geometry helpers (use current allocation) ───────────────────────────────
     // With a thumb, inset the track by the thumb radius so the thumb stays inside the
-    // widget at the ends. Thumbless (macOS-style capsule), the bar spans the full
+    // widget at the ends. Thumbless (capsule), the bar spans the full
     // length with rounded caps.
     const pad = thumb ? thumbR : 0
     const mainLen = () => horiz ? da.get_width() : da.get_height()

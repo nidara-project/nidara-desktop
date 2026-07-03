@@ -44,7 +44,7 @@ interface SquircleContainerProps {
      *  (The dock paints from Theme.dockOpacity directly in DockAxis.) */
     opacityRole?: "bar" | "overlay"
     /** Active/"on" fill — while this returns true, the WHOLE capsule paints with
-     *  the live accent colour instead of the base glass (macOS/GNOME/Windows
+     *  the live accent colour instead of the base glass (standard
      *  quick-settings convention: a toggle's on-state fills its entire tile, not
      *  just its icon). Read live inside the draw call, so an accent change repaints
      *  for free via the Theme "changed" redraw below — no separate wiring needed. */

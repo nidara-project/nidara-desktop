@@ -6,7 +6,7 @@ export interface NidaraSidebarItem {
     label: string
     /** Symbolic gicon shown before the label (tinted via .nd-icon). */
     icon?: Gio.FileIcon
-    /** Draw a thin, title-less divider before this item (macOS-style thematic
+    /** Draw a thin, title-less divider before this item (thematic
      *  clustering). Ignored on the first item. Non-selectable, non-activatable. */
     groupStart?: boolean
 }

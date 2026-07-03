@@ -67,7 +67,7 @@ export const DEFAULT_PLACEMENT: Record<string, { bar: boolean; cc: boolean }> = 
 )
 
 // Category order, left → right across the bar: optional/content on the left,
-// system/connectivity on the right (nearest the tray), macOS-style. Also the
+// system/connectivity on the right (nearest the tray). Also the
 // section order in Settings → Widgets.
 export const CATEGORY_ORDER: WidgetCategory[] = ["media", "utilities", "system"]
 

@@ -20,7 +20,7 @@ const getSub = () => BT.isPowered() ? t("widget.bluetooth.sub.active") : t("widg
 
 function buildContent(size: WidgetSize): Gtk.Widget {
     if (size === WidgetSize.SINGLE)
-        // Every platform (macOS/GNOME/Windows) keeps the toggle live even at the
+        // Every major platform keeps the toggle live even at the
         // most compact representation — "open detail" is always a SEPARATE
         // affordance (a chevron, a wider row), never a fallback on the same tap
         // target. There's no room for a second hit-region at 1×1, so the detail
