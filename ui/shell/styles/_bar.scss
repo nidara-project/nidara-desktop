@@ -143,8 +143,10 @@ window#nidara-bar-zone {
 
 /* ── About Window ──────────────────────────────────────────────────────────── */
 
-.about-floating-window,
-.about-floating-window > * {
+// Window node transparent; the glass surface lives on its direct child
+// (.nidara-window-glass, same chrome as Settings). Do NOT re-add a `> *`
+// transparent reset here — it would override the glass background.
+.about-floating-window {
     background: transparent;
     background-color: transparent;
 }

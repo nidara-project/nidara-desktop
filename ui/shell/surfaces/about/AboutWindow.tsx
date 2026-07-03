@@ -3,7 +3,6 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import { execAsync } from "ags/process"
-import SquircleContainer from "../../common/SquircleContainer"
 import IconButton from "../../common/IconButton"
 import status from "../../core/Status"
 import hs from "../../core/HyprlandState"
@@ -130,6 +129,7 @@ export default function AboutWindow(): Gtk.Window | null {
         iconSize: 14,
         variant: "danger",
         tooltip: t("settings.about.close"),
+        tooltipChrome: false,   // app-mode window: tooltip follows the system mode
         halign: Gtk.Align.END,
         onClick: () => { status.about_open = false },
     })
@@ -143,11 +143,15 @@ export default function AboutWindow(): Gtk.Window | null {
     card.append(new Gtk.Separator({ css_classes: ["about-sep"], margin_top: 8, margin_bottom: 8 }))
     card.append(verBox)
 
-    // borderColor alpha 0: About is a real window, so Hyprland already draws the
-    // 1px window border + 24px rounding around it — a Cairo stroke on top reads
-    // as a double border. (drawSquircle falls back to a visible default stroke
-    // when borderColor is omitted, so the "off" must be explicit.)
-    const squircle = SquircleContainer({ child: card, radius: 24, gloss: true, alpha: 0.18, chrome: false, borderColor: { r: 1, g: 1, b: 1, a: 0 }, css_classes: ["about-window-card"] })
+    // Window chrome = the SAME CSS glass as Settings (.nidara-window-glass →
+    // glass(floating)), NOT a Cairo SquircleContainer. A real window already gets
+    // Hyprland's 1px border + rounding at its rect; the Cairo card was drawn 2px
+    // inside that rect (drawSquircle techInset) and gloss paints its own 1px
+    // specular rims regardless of borderColor — together they read as a double
+    // border no borderColor tweak can turn off. The CSS route also makes the
+    // About follow the user's window-opacity token instead of a hardcoded alpha.
+    const glass = new Gtk.Box({ css_classes: ["nidara-window-glass", "about-window-card"] })
+    glass.append(card)
 
     // ── Window ────────────────────────────────────────────────────────────────
     const win = new Gtk.Window({
@@ -158,7 +162,7 @@ export default function AboutWindow(): Gtk.Window | null {
         decorated: false,
         resizable: false,
     })
-    win.set_child(squircle)
+    win.set_child(glass)
     _instance = win
 
     // Float + center come from a static window rule in hyprland.lua (matched by the

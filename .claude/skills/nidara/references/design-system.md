@@ -146,6 +146,14 @@ stair-stepped curves were clearly visible. So AA wins. The border/rim strokes
 - **CSS** for anything with states (hover/active/focus/drag).
 - **Cairo** for complex static shapes (squircles, dots with halo, ring charts).
 - **Important:** if Cairo paints a node's background, CSS must **not** also declare `background-color`. You'll get double-paint artifacts.
+- **A real window's chrome is CSS, never a Cairo `SquircleContainer`.** Hyprland already
+  draws the 1px window border + `rounding` (squircle, `rounding_power 3.2`) at the window
+  rect; the CSS route (`.nidara-window-glass` → `glass(floating)`: `--nidara-bg` fill +
+  `--nidara-edge` + `radius-lg`) lines up with it and follows the window-opacity token.
+  A Cairo card inside the window CANNOT line up: `drawSquircle` insets the shape ~2px from
+  the rect (gap ring against the compositor border) and `gloss` paints its own 1px specular
+  rims regardless of `borderColor` — it reads as a double border no parameter can turn off
+  (this bit the About window twice). Settings and About both use the CSS chrome.
 - **Most icon glyphs cannot be CSS-recolored to an arbitrary colour — verify before assuming
   `color:` works on one.** GTK4 only recolours a `Gio.FileIcon` if its filename ends in
   `-symbolic` (see "The bar launcher mark" below) — that's the WHOLE mechanism, filename-gated,
