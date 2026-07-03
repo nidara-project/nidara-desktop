@@ -4,6 +4,19 @@ Nidara is a full **Wayland desktop environment** built on **Hyprland** and **AGS
 
 It is not a theme or a set of scripts — it registers as a proper Wayland session (like GNOME or KDE) and is launched by the display manager.
 
+![Nidara desktop — Files and Settings over the default wallpaper](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/hero.webp)
+
+| | |
+|:---:|:---:|
+| ![Control Center](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/cc.webp) | ![App launcher](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/appgrid.webp) |
+| Control Center | App launcher |
+| ![Dock magnification](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/dock.webp) | ![Prism search](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/prism.webp) |
+| Dock with magnification | Prism (spotlight search) |
+| ![Workspace overview](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/overview.webp) | ![Greeter](https://raw.githubusercontent.com/nidara-project/nidara-desktop/assets/screenshots/greeter.webp) |
+| Workspace overview | Login greeter |
+
+*Screenshots live on the [`assets`](https://github.com/nidara-project/nidara-desktop/tree/assets) branch to keep code clones lean.*
+
 ---
 
 ## Features
