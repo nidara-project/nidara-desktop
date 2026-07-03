@@ -68,11 +68,17 @@ export default function Prism() {
         valign: Gtk.Align.CENTER,
     })
     const resultsList = new Gtk.ListBox({ css_classes: ["prism-results-list"], selection_mode: Gtk.SelectionMode.SINGLE, activate_on_single_click: true })
+    // A hairline divider precedes the list so it's part of the revealed content:
+    // in the empty state the panel is just the search field on the glass (no rule),
+    // and the divider slides in together with the results.
+    const resultsWrap = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+    resultsWrap.append(new Gtk.Box({ css_classes: ["prism-divider"] }))
+    resultsWrap.append(resultsList)
     const revealer = new (Gtk as any).Revealer({
         transition_type: (Gtk as any).RevealerTransitionType.SLIDE_DOWN,
         transition_duration: 180,
         reveal_child: false,
-        child: resultsList,
+        child: resultsWrap,
     })
     const contentBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, css_classes: ["prism-box"], width_request: 650, halign: Gtk.Align.CENTER })
     const searchContainer = new Gtk.Box({ css_classes: ["prism-search-box"], spacing: 12 })
@@ -95,17 +101,18 @@ export default function Prism() {
         }
         const data = (row as any).appData as AppData
         if (data) {
-            const appInfo = appService.getAppInfo(data.id)
-            let cmd = appInfo?.get_commandline() || data.exec
-            if (cmd) {
-                cmd = cmd.replace(/\s*["']?%[a-zA-Z]["']?/g, "").trim()
-                execAsync(["uwsm", "app", "--", "sh", "-c", cmd]).catch(console.error)
-            }
+            try {
+                // Single launch path for the whole shell — origin-aware (flatpak
+                // run / gtk-launch) and cd $HOME so the app doesn't inherit the
+                // shell's CWD (ui/shell). Never hand-parse Exec=. See AppService.
+                const cmd = appService.getLaunchCommand(data.id)
+                execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`]).catch(console.error)
+            } catch (e) { console.error("[Prism] launch failed:", e) }
         }
     }
 
     resultsList.connect("row-activated", (_, row) => {
-        if (row && !(row as any).classList?.contains("prism-section-row")) {
+        if (row && (row as Gtk.ListBoxRow).selectable !== false) {
             launchResult(row)
             status.prism_open = false
         }

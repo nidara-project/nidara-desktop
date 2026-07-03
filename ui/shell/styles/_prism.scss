@@ -2,33 +2,41 @@
 
 .prism-box {
     background: transparent;
-    padding: 12px;
+    // Single-panel Spotlight/Raycast layout: no outer padding — each section
+    // (search row, divider, results) manages its own so the divider is full-bleed.
+    padding: 0;
 }
 
 .prism-search-box {
-    background-color: var(--nidara-surface-raised);
-    border-radius: 12px;
-    padding: 8px 16px;
-    border: 1px solid var(--nidara-border);
-
-    // Keyboard focus: the search field is the primary input of the palette.
-    &:focus-within { @include nidara-focus-ring(2px); }
+    // Seamless: the field sits directly on the glass panel (Spotlight/Raycast).
+    // No inner box, no border, no focus ring — the whole glass panel IS the
+    // focus surface, so there's no rounded rect to mismatch the Cairo squircle.
+    background: none;
+    border: none;
+    padding: 16px 22px;
 }
 
 .prism-search-entry {
     background: none;
     color: var(--nidara-text);
     font-size: $fs-title-3;
-    caret-color: var(--nidara-text);
+    caret-color: var(--nidara-accent);
 
-    // The accent ring lives on .prism-search-box (:focus-within). Suppress the
-    // Gtk.Text's own default GTK focus outline so we don't get a second blue ring.
+    // Suppress the Gtk.Text's own default GTK focus outline — there is no ring
+    // in this design (the panel is the focus surface).
     &:focus, &:focus-visible, &:focus-within { outline: none; box-shadow: none; }
+}
+
+// Hairline between the search field and the results — only present when results
+// are revealed (it lives inside the revealer). Full-bleed, like macOS/Raycast.
+.prism-divider {
+    min-height: 1px;
+    background: var(--nidara-border);
 }
 
 .prism-results-list {
     background: transparent;
-    margin-top: 8px;
+    padding: 6px 10px 10px;
 }
 
 .prism-result-row {
