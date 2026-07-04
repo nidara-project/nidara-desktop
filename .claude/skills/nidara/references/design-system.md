@@ -9,6 +9,46 @@ Read this when editing any SCSS, adding a new visual component, changing tokens,
 - **Accent color is for active/selected state only.** Never for normal borders or normal buttons.
 - **Accent is NEVER a text colour** — not even for the active/selected state. It doesn't contrast reliably on every background. Active/selected text reads in the mode-aware token (`--nidara-text`/`-secondary`/`-dim`, `#fff` dark / `#000` light); the accent conveys the state via **background fill, tinted background (`--nidara-accent-10`), or border** instead (e.g. active workspace number, calendar "today", selected segment, chips/badges, suggested alert button = bold not accent). The one exception is white text *on* an accent fill (`--nidara-accent-fg`). Symbolic **icons** may still tint to accent (not text).
 
+## Section headers bind DOWN, not symmetric
+
+A settings group is a `NidaraList(title)` (`lib/nidara-kit/list.ts`): an uppercase
+`.nidara-list-title` label above a `.nidara-list` card, wrapped in a `nidara-list-group` box.
+The **gap below the title (title→its card) is deliberately tight and the gap above it
+(previous group→title) is large** — the header must read as belonging to the card it labels,
+not floating halfway between two cards (macOS System Settings / Adwaita `AdwPreferencesGroup`
+convention). Concretely: the group box is **`spacing: 0`**, the title→card gap is owned entirely
+by `.nidara-list-title`'s **`margin-bottom` (8px, the single source)**, and the group↔group gap
+is the page-level **`settings-page` `spacing: 24`**. Don't "balance" these into a symmetric gap —
+it was symmetric once (`spacing:12` + `margin-bottom:6` ≈ page `24`, visually ~equal) and read as
+the title detached from its content.
+
+Consequence for **footnotes appended after a card** (a `.nidara-row-subtitle` caption added with
+`group.box.append(note)` — Power/Dock/Autostart do this): because the box is now `spacing:0`, give
+the note an explicit **`margin_top: 8`** so it binds up to the card it annotates (the same 8px
+attachment gap; don't rely on the old box spacing, which is gone). A page that hand-rolls its own
+group instead of `NidaraList` (AppIcons wraps the ListBox in a ScrolledWindow) must likewise use
+`spacing: 0` on its `nidara-list-group` box, not `12`.
+
+## Scrollable boxed list — card on the ScrolledWindow, not the list
+
+When a boxed list must scroll INSIDE a fixed card (App Icons' installed-apps list), the card
+chrome (`@include material-card` — bg/border/radius) goes on the **`ScrolledWindow`**, not on the
+`ListBox`. If `.nidara-list` sits on the scrolling `ListBox`, its own rounded top/bottom + border
+scroll out of the viewport → you see a **cut-off rectangle** (bug fixed 2026-07-04). Pattern:
+`scrolledwindow.<foo>-scroll { @include material-card; padding: 3px; > viewport, list { @include
+nidara-reset; background: transparent; } }` and a transparent `ListBox`. Also set
+**`overlay_scrolling: false`** so the scrollbar takes its own gutter instead of floating over the
+rows' trailing controls (buttons). The shell scrollbar is already themed (`_reset.scss`, scoped to
+`.nidara-settings-window` etc.) as a thin pill.
+
+## Search field — `.settings-search` box, never `Gtk.SearchEntry`
+
+A search input on a shell/Settings surface is a **`Gtk.Box.settings-search`** holding an
+`Icons.search` (`nd-icon`) + a `Gtk.Text` — NOT a `Gtk.SearchEntry`, which forces the icon theme's
+magnifier glyph (off-brand, wrong on the opposite mode). Wire filtering off the `Gtk.Text`'s
+`changed`. The Settings sidebar search (`Settings.tsx`) is the reference; App Icons repeated the
+`SearchEntry` mistake and was corrected (2026-07-04).
+
 ## Radii (capsule-first)
 
 - pill — `9999`

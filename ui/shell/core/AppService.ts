@@ -637,10 +637,18 @@ class AppService {
         return `${GLib.get_home_dir()}/.local/share/icons/nidara/scalable/apps`
     }
 
-    /** Returns the current override file path for the given icon name, or null if none. */
+    /**
+     * Returns the current override file path for the given icon name, or null if none.
+     * Normalizes via iconOverlayKey first: callers may pass a themed name, a raw
+     * desktop-file icon, OR an already-canonicalized absolute path (AppData.icon is
+     * canonicalized to the override path once one exists), and overrides are always
+     * stored under the basename key. iconOverlayKey is idempotent on keys, so internal
+     * callers that already pass a key are unaffected.
+     */
     getIconOverridePath(iconName: string): string | null {
+        const key = this.iconOverlayKey(iconName)
         for (const ext of [".svg", ".png"]) {
-            const p = `${this.overlayAppsDir}/${iconName}${ext}`
+            const p = `${this.overlayAppsDir}/${key}${ext}`
             if (GLib.file_test(p, GLib.FileTest.EXISTS)) return p
         }
         return null
@@ -689,9 +697,13 @@ class AppService {
 
     /** Removes the per-app icon override for the given icon name. */
     removeIconOverride(iconName: string): boolean {
+        // Same normalization as getIconOverridePath / setIconOverride: a caller may
+        // pass a canonicalized absolute path (AppData.icon), but the file is stored
+        // under the basename key. Without this, Restore silently no-ops on path icons.
+        const key = this.iconOverlayKey(iconName)
         let removed = false
         for (const ext of [".svg", ".png"]) {
-            const p = `${this.overlayAppsDir}/${iconName}${ext}`
+            const p = `${this.overlayAppsDir}/${key}${ext}`
             if (GLib.file_test(p, GLib.FileTest.EXISTS)) {
                 try { Gio.File.new_for_path(p).delete(null); removed = true } catch {}
             }

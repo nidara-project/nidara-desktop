@@ -321,6 +321,24 @@ button.launcher-icon-btn {
     }
 }
 
+// ── App Icons — scrollable boxed list ─────────────────────────────────────────
+// The list scrolls INSIDE the card, so the card chrome (bg/border/radius) lives
+// on the fixed ScrolledWindow and clips the rows at its rounded corners. If
+// .nidara-list sat on the ListBox instead, its own rounded top/bottom would
+// scroll out of the viewport, showing a cut-off rectangle (the bug this fixes).
+scrolledwindow.apps-list-scroll {
+    @include material-card;
+    padding: 3px;
+
+    // GtkListBox is scrollable → no GtkViewport; the list is a direct child.
+    // Reset it (and a viewport defensively) so the card is the only painted
+    // surface and the rows scroll transparently over it.
+    > viewport, list.apps-list {
+        @include nidara-reset;
+        background: transparent;
+    }
+}
+
 // ── Search results ────────────────────────────────────────────────────────────
 .search-result-chip {
     font-size: $fse-caption;

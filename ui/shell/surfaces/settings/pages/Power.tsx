@@ -274,7 +274,9 @@ export default function PowerPage() {
         css_classes: ["nidara-row-subtitle"],
         halign: Gtk.Align.START,
         margin_start: 10,
-        margin_top: 4,
+        // Footnote binds to the card ABOVE it (NidaraList box is now spacing:0);
+        // 8px matches the title→card attachment gap. See design-system.md.
+        margin_top: 8,
         wrap: true,
         max_width_chars: 55,
     })

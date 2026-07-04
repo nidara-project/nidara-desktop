@@ -21,8 +21,13 @@ export interface NidaraListResult {
  *   page.append(box)
  */
 export function NidaraList(title: string = "", extraClasses: string[] = []): NidaraListResult {
+    // spacing:0 — the title→card gap is owned entirely by .nidara-list-title's
+    // margin-bottom (design-system.md), so the header binds to the card BELOW it.
+    // Group↔group separation is the page-level spacing (settings-page, 24px); the
+    // header must sit clearly closer to its own card than to the previous group
+    // (macOS/Adwaita section-header convention), not float halfway between them.
     const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL, spacing: 12,
+        orientation: Gtk.Orientation.VERTICAL, spacing: 0,
         css_classes: ["nidara-list-group"],
     })
 
