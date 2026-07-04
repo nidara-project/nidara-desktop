@@ -46,10 +46,13 @@ export interface NidaraThemeConfig {
 
 export const DEFAULT_CONFIG: NidaraThemeConfig = {
   accent: "blue",
-  barOpacity: 0.20,
-  overlayOpacity: 0.20,
-  dockOpacity: 0.20,
-  windowOpacity: 0.20,
+  // Default to the glassiest end of the range (5% = the [0.05, 0.80] minimum). All
+  // four surfaces share it so a fresh boot is uniform — the master "Glass" slider
+  // reads a clean 5%, not the "—" mixed state.
+  barOpacity: 0.05,
+  overlayOpacity: 0.05,
+  dockOpacity: 0.05,
+  windowOpacity: 0.05,
   shellAppearance: "system",
 }
 

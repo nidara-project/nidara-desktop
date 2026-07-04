@@ -180,6 +180,7 @@ export default {
 
     // Appearance
     "settings.appearance.group.base-style": "Base Style",
+    "settings.appearance.group.theme": "Theme",
     "settings.appearance.group.wallpaper": "Wallpaper",
     "settings.appearance.group.fonts": "Fonts",
     "settings.appearance.group.night-light": "Night Light",
@@ -210,7 +211,7 @@ export default {
     "settings.appearance.image": "Image",
     "settings.appearance.dark-mode": "Dark Mode",
     "settings.appearance.shell-appearance": "Bar & Dock Appearance",
-    "settings.appearance.shell-appearance.desc": "Follow the system theme, or pin the bar and dock to dark/light so their text stays readable over any wallpaper",
+    "settings.appearance.shell-appearance.desc": "Follow the system theme, or pin the bar and dock to dark or light",
     "settings.appearance.shell-appearance.system": "Follow system",
     "settings.appearance.shell-appearance.dark": "Always dark",
     "settings.appearance.shell-appearance.light": "Always light",
@@ -221,7 +222,7 @@ export default {
     "settings.appearance.dock-opacity": "Dock Glass",
     "settings.appearance.dock-opacity.desc": "Opacity of the dock surface",
     "settings.appearance.glass": "Glass",
-    "settings.appearance.glass.desc": "Overall transparency of the bar, dock, overlays and windows",
+    "settings.appearance.glass.desc": "Overall opacity of the bar, dock, overlays and windows",
     "settings.appearance.advanced": "Advanced",
     "settings.appearance.bar-opacity": "Bar Glass",
     "settings.appearance.bar-opacity.desc": "Opacity of the bar capsules",

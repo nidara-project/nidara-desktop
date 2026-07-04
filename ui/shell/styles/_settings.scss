@@ -400,6 +400,19 @@ button.settings-action-row {
     &:hover, &:active { background: transparent; }
 }
 
+// The per-surface "Advanced" glass sliders reveal as a continuation of the Nidara
+// card. Their wrapper is passive scaffolding (holds the Gtk.Revealer that slides the
+// sliders down inside the card), so it must add no chrome of its own — the .nidara-row
+// sliders inside are the real rows.
+row.settings-adv-revealer-row {
+    padding: 0;
+    min-height: 0;
+    background: transparent;
+    box-shadow: none;
+
+    &:hover, &:active, &:selected { background: transparent; box-shadow: none; }
+}
+
 .users-admin-badge {
     font-size: $fse-caption;
     font-weight: $fw-semibold;
