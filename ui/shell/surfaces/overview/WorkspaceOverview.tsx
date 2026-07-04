@@ -47,6 +47,13 @@ export default function WorkspaceOverview(monitor: any) {
 
     const slots = new Map<number, { wrapperBtn: Gtk.Button, itemBox: Gtk.Box, schematic: (() => void) | null, headerBox: Gtk.Box }>()
 
+    // Keyboard-focused slot (1..5), -1 = keyboard nav idle. Set on open to the
+    // active workspace; moved by ←/→; committed by Enter. Purely a visual cursor
+    // (the `keyboard-focus` class) — we never grab GTK focus, so the bar's
+    // CAPTURE-phase key controller owns navigation the same way Prism does.
+    let navIdx = -1
+    const WS_COUNT = 5
+
     for (let i = 1; i <= 5; i++) {
         const schematic = createSchematicMap(i, WO_PREVIEW_WIDTH)
         const label = new Gtk.Label({ label: `${t("overview.workspace")} ${i}`, css_classes: ["wo-label"] })
@@ -98,7 +105,7 @@ export default function WorkspaceOverview(monitor: any) {
                 const count = ctx.headerBox.get_last_child() as Gtk.Label
 
                 if (ctx.itemBox && ctx.itemBox.set_css_classes) {
-                    ctx.itemBox.set_css_classes(["wo-item", isActive ? "active" : ""])
+                    ctx.itemBox.set_css_classes(["wo-item", isActive ? "active" : "", navIdx === i ? "keyboard-focus" : ""])
                 }
                 label.set_css_classes(["wo-label", isActive ? "active" : ""])
 
@@ -129,6 +136,32 @@ export default function WorkspaceOverview(monitor: any) {
     })
 
     overview.append(list)
+
+    // Lightweight repaint for arrow-key moves: only toggles the cursor class, no
+    // schematic rebuild (unlike syncAll). add/remove so it never wipes `active`.
+    const refreshKbFocus = () => {
+        slots.forEach((ctx, i) => {
+            if (navIdx === i) ctx.itemBox.add_css_class("keyboard-focus")
+            else ctx.itemBox.remove_css_class("keyboard-focus")
+        })
+    }
+
+    // Nav API consumed by the bar's key controller (see Bar.tsx). onOpen seeds the
+    // cursor on the active workspace each time the overview is shown.
+    ;(windowContent as any).onOpen = () => {
+        navIdx = hs.focusedWorkspace?.id || 1
+        refreshKbFocus()
+    }
+    ;(windowContent as any).handleKey = (keyval: number): boolean => {
+        if (keyval === Gdk.KEY_Escape) { status.overview_open = false; return true }
+        if (keyval === Gdk.KEY_Left)  { if (navIdx > 1)        { navIdx--; refreshKbFocus() } return true }
+        if (keyval === Gdk.KEY_Right) { if (navIdx < WS_COUNT) { navIdx++; refreshKbFocus() } return true }
+        if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
+            if (navIdx >= 1) { hs.focusWorkspace(navIdx); status.overview_open = false }
+            return true
+        }
+        return false
+    }
 
     GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
         syncAll()

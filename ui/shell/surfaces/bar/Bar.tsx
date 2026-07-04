@@ -118,7 +118,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const prism = Prism()
   const popups = NotificationPopupsWidget()
   const systemMenu = new ScaleRevealer(SystemMenuOverlay(), { ...OVERLAY_POP, pivot: "top-left" })
-  const overview = new ScaleRevealer(WorkspaceOverview(gdkmonitor), { ...OVERLAY_POP, pivot: "center" })
+  const overviewWidget = WorkspaceOverview(gdkmonitor)
+  const overview = new ScaleRevealer(overviewWidget, { ...OVERLAY_POP, pivot: "center" })
   // Invisible full-screen button — dismisses any open overlay on outside click
   const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
   catcher.connect("clicked", () => {
@@ -253,8 +254,35 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     updateInputRegion()
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
-  status.connect("notify::overview-open", syncOverlays)
   status.connect("notify::cc-edit-mode", syncOverlays)
+
+  // The bar grabs the keyboard EXCLUSIVE while a keyboard-driven overlay (Prism
+  // or the Workspace Overview) is open, so the compositor grants focus to the
+  // layer surface immediately — see the notify::prism-open note below for why
+  // ON_DEMAND is wrong here. Only called from notify handlers (post layer-shell
+  // init); never from the construction-time syncOverlays().
+  const syncKeyboardMode = () => {
+    Gtk4LayerShell.set_keyboard_mode(win, (status.prism_open || status.overview_open)
+      ? Gtk4LayerShell.KeyboardMode.EXCLUSIVE
+      : Gtk4LayerShell.KeyboardMode.NONE)
+  }
+
+  status.connect("notify::overview-open", () => {
+    syncOverlays()
+    syncKeyboardMode()
+    if (status.overview_open) (overviewWidget as any).onOpen?.()
+  })
+
+  // Route keys to the overview while it's open (←/→ move the cursor, Enter
+  // switches + closes, Esc closes). CAPTURE phase so it fires before any focused
+  // child — mirrors the app grid's key controller on the dock window.
+  const overviewKeyCtrl = new Gtk.EventControllerKey()
+  overviewKeyCtrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+  overviewKeyCtrl.connect("key-pressed", (_c: any, keyval: number) => {
+    if (!status.overview_open) return false
+    return (overviewWidget as any).handleKey?.(keyval) ?? false
+  })
+  win.add_controller(overviewKeyCtrl)
 
   // ── Bar expansion show/hide ────────────────────────────────────────────────
   // Centers the panel horizontally under the clicked bar capsule (hidden widgets
@@ -336,7 +364,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     // couldn't type) until you moved the mouse. Same choice as the app grid, which
     // only drops to ON_DEMAND when a Gtk.Popover context menu needs focus; Prism
     // has no popover, so it stays EXCLUSIVE the whole time it's open.
-    Gtk4LayerShell.set_keyboard_mode(win, status.prism_open ? Gtk4LayerShell.KeyboardMode.EXCLUSIVE : Gtk4LayerShell.KeyboardMode.NONE)
+    syncKeyboardMode()
   })
   
   syncOverlays()

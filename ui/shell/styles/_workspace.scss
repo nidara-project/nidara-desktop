@@ -69,6 +69,16 @@
     border: 1px solid rgba(var(--nidara-accent-rgb), 0.6);
 }
 
+/* Keyboard cursor (←/→ navigation): stronger accent tint + solid accent border,
+   matching the app grid's .ws-strip-item.keyboard-focus language (no box-shadow
+   ring) so both overviews signal the keyboard cursor the same way. Layers over
+   .active (source-order wins at equal specificity) → the current ws reads as the
+   stronger, focused variant. */
+.wo-item.keyboard-focus {
+    background-color: rgba(var(--nidara-accent-rgb), 0.15);
+    border-color: var(--nidara-accent);
+}
+
 /* (.bar-ws-dot deleted — orphaned; the live bar dots are .workspace-dot in _bar.scss) */
 
 /* --- Buttons --- */
