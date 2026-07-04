@@ -535,6 +535,15 @@ class ThemeManager extends GObject.Object {
     get isReady() { return this._isReady }
 
     private async applyAll() {
+        // Seed Nidara's default interface font on first boot. Unlike icon-theme/accent,
+        // the font isn't part of appearance.json — it's delegated to the GNOME gsetting,
+        // whose schema default on GTK ≥4.22 is "Adwaita Sans 11". Seed Inter ONLY when the
+        // user hasn't picked one (get_user_value === null distinguishes the factory default
+        // from an explicit choice), so a deliberate pick is never clobbered on later boots.
+        // Runs before syncGtkTheme so the settings.ini it writes also gets Inter.
+        if (this.interfaceSettings.get_user_value("font-name") === null)
+            this.interfaceSettings.set_string("font-name", "Inter 11")
+
         await this.syncGtkTheme()
         const settings = this.interfaceSettings
         if (settings.get_string("icon-theme") !== this.state.iconTheme) execAsync(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", this.state.iconTheme])
