@@ -45,7 +45,10 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
         }
         hs.getClientJson(addr).then(json => {
             const floating = json ? !!json.floating : !!client.floating
-            const fullscreen = json ? !!json.fullscreen : !!(client.fullscreen as any)
+            // `fullscreen` in clients -j is the FSMODE int (0 none / 1 maximized /
+            // 2 fullscreen); the row's toggle acts on REAL fullscreen, so only
+            // mode 2 checks it — maximize (Super+M) must not read as fullscreen.
+            const fullscreen = json ? json.fullscreen === 2 : hs.isRealFullscreen(client)
 
             windowSection.append(menuRow({
                 label: t("bar.window-menu.float"),

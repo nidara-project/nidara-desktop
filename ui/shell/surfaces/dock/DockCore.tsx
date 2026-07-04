@@ -1270,10 +1270,10 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
             trackedClient = client
             if (client) {
                 trackedClientConn = client.connect("notify::fullscreen", () =>
-                    setFullscreenMode(client.fullscreen ?? false))
+                    setFullscreenMode(hs.isRealFullscreen(client)))
             }
         }
-        setFullscreenMode(client ? (client.fullscreen ?? false) : false)
+        setFullscreenMode(hs.isRealFullscreen(client))
     }
 
     hs.connect("changed", checkFullscreen)
