@@ -29,7 +29,9 @@ export default function DockPage() {
         css_classes: ["nidara-row-subtitle"],
         halign: Gtk.Align.START,
         margin_start: 10,
-        margin_top: 2,
+        // Footnote binds to the card above (NidaraList box is spacing:0); 8px = the
+        // title→card attachment gap. See design-system.md.
+        margin_top: 8,
         margin_bottom: 6,
         wrap: true,
         visible: dockSettings.position === 'left' || dockSettings.position === 'right',

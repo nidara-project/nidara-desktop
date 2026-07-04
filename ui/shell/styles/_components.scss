@@ -90,7 +90,10 @@ selection {
     color: var(--nidara-text-dim);
     letter-spacing: 0.08em;
     margin-left: 4px;
-    margin-bottom: 6px;
+    // The ONLY gap between a section header and its card (NidaraList box is
+    // spacing:0). Deliberately tight so the header binds to the card below it;
+    // the larger group↔group gap is the page spacing (settings-page, 24px).
+    margin-bottom: 8px;
 }
 .nidara-row-title {
     font-size: $fse-small;

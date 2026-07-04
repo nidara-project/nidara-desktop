@@ -1,5 +1,4 @@
 import { Gtk, Gdk } from "ags/gtk4"
-import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
 import appService, { type AppData } from "../../../core/AppService"
@@ -36,7 +35,7 @@ function makeIconImage(iconName: string | null, size: number): Gtk.Image {
 
 // ── Icon picker dialog ────────────────────────────────────────────────────────
 
-function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Label, parent: Gtk.Window | null) {
+function openIconPicker(app: AppData, onChanged: () => void, parent: Gtk.Window | null) {
     const originalIcon = app.icon ?? ""
 
     const dialog = new Gtk.Window({
@@ -57,75 +56,56 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
         margin_bottom: 20,
     })
 
-    // Preview area
+    // Preview of the current (or newly chosen) icon.
     const previewBox = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 8,
         halign: Gtk.Align.CENTER,
-        margin_bottom: 20,
+        margin_bottom: 18,
     })
     const previewImg = makeIconImage(appService.getCanonicalIconName(originalIcon), 72)
     previewImg.pixel_size = 72
     previewBox.append(previewImg)
 
-    const previewStatus = new Gtk.Label({
-        label: "",
+    // The user picks an IMAGE FILE — never an icon-theme name. So we show the path
+    // of the current override (or the newly chosen file), the only meaningful
+    // identifier here. The old free-text "theme icon name" field was a power-user
+    // trap (map an app to another themed icon by name) that just read as confusing.
+    const currentOverride = appService.getIconOverridePath(originalIcon)
+    const pathLabel = new Gtk.Label({
+        label: currentOverride ?? "",
         css_classes: ["nidara-row-subtitle"],
         halign: Gtk.Align.CENTER,
+        ellipsize: 3, // PANGO_ELLIPSIZE_END
+        max_width_chars: 42,
+        visible: !!currentOverride,
     })
-    previewBox.append(previewStatus)
+    previewBox.append(pathLabel)
     box.append(previewBox)
 
-    // Current icon name hint
-    box.append(new Gtk.Label({
-        label: t("settings.apps.theme-icon-name"),
-        css_classes: ["nidara-list-title"],
-        halign: Gtk.Align.START,
-        margin_bottom: 6,
-    }))
-
-    // Icon name entry
-    const entry = new Gtk.Entry({
-        placeholder_text: originalIcon || t("settings.apps.entry.icon-name"),
-        hexpand: true,
+    // Apply is declared first so the file picker's callback can enable it.
+    let selectedPath: string | null = null
+    const applyBtn = NidaraButton({
+        label: t("settings.apps.apply"),
+        variant: "primary",
+        pill: true,
+        sensitive: false, // enabled once an image is chosen
     })
-    if (originalIcon) entry.text = originalIcon
-    box.append(entry)
+    applyBtn.connect("clicked", () => {
+        if (!selectedPath) { dialog.close(); return }
+        const ok = appService.setIconOverride(originalIcon, selectedPath)
+        if (ok) { onChanged(); dialog.close() }
+        else { pathLabel.label = t("settings.apps.status.apply-failed"); pathLabel.visible = true }
+    })
 
-    // Live preview on entry change
-    let previewTimeout = 0
-    const updatePreview = (iconInput: string) => {
-        if (previewTimeout) { GLib.source_remove(previewTimeout); previewTimeout = 0 }
-        previewTimeout = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 300, () => {
-            previewTimeout = 0
-            if (!iconInput.trim()) { previewStatus.label = ""; return GLib.SOURCE_REMOVE }
-            const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
-            const isFile = iconInput.startsWith("/") && GLib.file_test(iconInput, GLib.FileTest.EXISTS)
-            const isThemed = theme.has_icon(iconInput)
-            if (isFile || isThemed) {
-                const pb = loadPixbuf(iconInput.startsWith("/") ? iconInput : iconInput, 72)
-                if (pb) previewImg.set_from_pixbuf(pb)
-                previewStatus.label = isFile ? t("settings.apps.status.custom-file") : t("settings.apps.status.in-theme")
-                entry.remove_css_class("error")
-            } else {
-                previewStatus.label = t("settings.apps.status.not-in-theme")
-                entry.add_css_class("error")
-            }
-            return GLib.SOURCE_REMOVE
-        })
-    }
-    entry.connect("changed", () => updatePreview(entry.text))
-
-    // File picker button
-    const fileBtn = NidaraButton({
-        label: t("settings.apps.from-file"),
+    // Choose image — the single, primary way to set an icon.
+    const chooseBtn = NidaraButton({
+        label: t("settings.apps.choose-image"),
         variant: "secondary",
         pill: true,
-        halign: Gtk.Align.START,
+        halign: Gtk.Align.CENTER,
     })
-    fileBtn.margin_top = 10
-    fileBtn.margin_bottom = 4
-    fileBtn.connect("clicked", () => {
+    chooseBtn.connect("clicked", () => {
         const fd = new Gtk.FileDialog({ title: t("settings.apps.dialog.select-icon"), modal: true })
         const filter = new Gtk.FileFilter()
         filter.add_mime_type("image/svg+xml")
@@ -134,60 +114,43 @@ function openIconPicker(app: AppData, rowIcon: Gtk.Image, rowIconLabel: Gtk.Labe
         const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
         filters.append(filter)
         fd.set_filters(filters)
-        // Parent to the Settings window so it floats/centers over it (not tiled).
-        fd.open(fileBtn.get_root() as Gtk.Window, null, (_: any, res: any) => {
+        fd.open(dialog, null, (_: any, res: any) => {
             try {
                 const path = fd.open_finish(res)?.get_path()
-                if (path) { entry.text = path; updatePreview(path) }
+                if (path) {
+                    selectedPath = path
+                    const pb = loadPixbuf(path, 72)
+                    if (pb) previewImg.set_from_pixbuf(pb)
+                    pathLabel.label = path
+                    pathLabel.visible = true
+                    applyBtn.sensitive = true
+                }
             } catch {}
         })
     })
-    box.append(fileBtn)
+    box.append(chooseBtn)
 
     // Separator
     box.append(new Gtk.Separator({ margin_top: 16, margin_bottom: 16 }))
 
-    // Buttons row
+    // Action row: Restore (left) · Cancel · Apply (right).
     const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END })
 
-    const hasOverride = !!appService.getIconOverridePath(originalIcon)
     const resetBtn = NidaraButton({
         label: t("settings.apps.restore"),
         variant: "secondary",
         pill: true,
-        sensitive: hasOverride,
+        sensitive: !!currentOverride,
     })
     attachTooltip(resetBtn, t("settings.apps.tooltip.remove-override"), { chrome: false })
     resetBtn.connect("clicked", () => {
         appService.removeIconOverride(originalIcon)
-        // Refresh row
-        const canonical = appService.getCanonicalIconName(originalIcon)
-        const pb = loadPixbuf(canonical, 32)
-        if (pb) rowIcon.set_from_pixbuf(pb)
-        else rowIcon.icon_name = canonical ?? "application-x-executable"
-        rowIconLabel.label = canonical ?? originalIcon
+        onChanged()
         dialog.close()
     })
 
     const cancelBtn = NidaraButton({ label: t("settings.apps.cancel"), variant: "secondary", pill: true })
     cancelBtn.connect("clicked", () => dialog.close())
-
-    const applyBtn = NidaraButton({ label: t("settings.apps.apply"), variant: "primary", pill: true })
-    applyBtn.connect("clicked", () => {
-        const val = entry.text.trim()
-        if (!val) { dialog.close(); return }
-        const ok = appService.setIconOverride(originalIcon, val)
-        if (ok) {
-            const canonical = appService.getCanonicalIconName(originalIcon)
-            const pb = loadPixbuf(canonical, 32)
-            if (pb) rowIcon.set_from_pixbuf(pb)
-            else rowIcon.icon_name = canonical ?? "application-x-executable"
-            rowIconLabel.label = canonical ?? originalIcon
-            dialog.close()
-        } else {
-            previewStatus.label = t("settings.apps.status.apply-failed")
-        }
-    })
 
     btnRow.append(resetBtn)
     btnRow.append(cancelBtn)
@@ -225,23 +188,40 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
     textBox.append(iconLabel)
 
     // Override badge
-    const hasOverride = !!appService.getIconOverridePath(app.icon ?? "")
     const badge = new Gtk.Label({
         label: t("settings.apps.badge.override"),
         css_classes: ["nidara-row-subtitle", "app-override-badge"],
-        visible: hasOverride,
+        visible: !!appService.getIconOverridePath(app.icon ?? ""),
         valign: Gtk.Align.CENTER,
     })
 
-    const editBtn = new Gtk.Button({
-        child: new Gtk.Image({ gicon: Icons.filePen, pixel_size: 14 , css_classes: ["nd-icon"] }),
-        css_classes: ["nidara-icon-btn"],
+    // Re-reads fresh state (setIconOverride/removeIconOverride call reload()
+    // synchronously) and re-syncs the whole row: icon, subtitle and badge. Passed
+    // to the picker so apply/restore reflect immediately — the row's own app.icon
+    // is a stale canonical snapshot (an override path, deleted on restore), so we
+    // re-fetch the freshly re-canonicalized icon from the service by id.
+    const syncRow = () => {
+        const iconRef = appService.getAppData(app.id)?.icon ?? appService.getCanonicalIconName(app.icon ?? "")
+        // Sync the closure's app.icon with the freshly re-canonicalized value, so
+        // RE-OPENING the picker resolves a live icon rather than a now-deleted
+        // override path (which would render as a broken "not found" glyph).
+        app.icon = iconRef
+        const pb = loadPixbuf(iconRef, 32)
+        if (pb) rowIcon.set_from_pixbuf(pb)
+        else rowIcon.icon_name = iconRef ?? "application-x-executable"
+        iconLabel.label = iconRef ?? t("settings.apps.no-icon")
+        badge.visible = !!appService.getIconOverridePath(iconRef ?? "")
+    }
+
+    const editBtn = NidaraButton({
+        label: t("settings.apps.change"),
+        variant: "secondary",
+        pill: true,
         valign: Gtk.Align.CENTER,
     })
-    attachTooltip(editBtn, t("settings.apps.tooltip.change-icon"), { chrome: false })
     editBtn.connect("clicked", () => {
         const win = row.get_root() as Gtk.Window | null
-        openIconPicker(app, rowIcon, iconLabel, win)
+        openIconPicker(app, syncRow, win)
     })
 
     box.append(rowIcon)
@@ -262,17 +242,36 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
 export default function AppIconsPage() {
     const page = pageBox("apps-page")
 
-    // Search
-    const searchEntry = new Gtk.SearchEntry({
+    // Search — custom box with our nd-icon magnifier + Gtk.Text. Gtk.SearchEntry
+    // would force the icon theme's magnifier glyph; this matches the Settings
+    // sidebar search (Settings.tsx) and the rest of the shell.
+    const searchInput = new Gtk.Text({
         placeholder_text: t("settings.apps.entry.search"),
+        css_classes: ["settings-search-text"],
         hexpand: true,
+        valign: Gtk.Align.CENTER,
+    })
+    const searchEntry = new Gtk.Box({
+        css_classes: ["settings-search"],
+        spacing: 8,
+        hexpand: true,
+        valign: Gtk.Align.CENTER,
         margin_bottom: 4,
     })
+    searchEntry.append(new Gtk.Image({
+        gicon: Icons.search,
+        pixel_size: 15,
+        css_classes: ["nd-icon", "settings-search-icon"],
+        valign: Gtk.Align.CENTER,
+    }))
+    searchEntry.append(searchInput)
 
     page.append(searchEntry)
 
-    // App list — build the group manually so we can wrap the ListBox in a ScrolledWindow
-    const groupBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["nidara-list-group"] })
+    // App list — build the group manually so we can wrap the ListBox in a ScrolledWindow.
+    // spacing:0 to match NidaraList: the title→card gap is owned by .nidara-list-title's
+    // margin-bottom, so the header binds to its card (see design-system.md).
+    const groupBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, css_classes: ["nidara-list-group"] })
     groupBox.append(new Gtk.Label({
         label: t("settings.apps.installed"),
         css_classes: ["nidara-list-title"],
@@ -280,9 +279,13 @@ export default function AppIconsPage() {
         margin_start: 10,
     }))
 
+    // No card chrome on the ListBox itself — it SCROLLS, so its rounded top/bottom
+    // would scroll out of the viewport (the "cut-off background" bug). The card
+    // lives on the fixed ScrolledWindow below (.apps-list-scroll); the list is
+    // transparent and just scrolls inside it.
     const appList = new Gtk.ListBox({
-        css_classes: ["nidara-list", "boxed-list"],
         selection_mode: Gtk.SelectionMode.NONE,
+        css_classes: ["apps-list"],
     })
 
     const apps = appService.getAllApps()
@@ -290,17 +293,21 @@ export default function AppIconsPage() {
 
     // Filter
     appList.set_filter_func((row: Gtk.ListBoxRow) => {
-        const q = searchEntry.text.trim().toLowerCase()
+        const q = searchInput.text.trim().toLowerCase()
         if (!q) return true
         const r = row as any
         return r._appName?.includes(q) || r._appId?.includes(q)
     })
-    searchEntry.connect("search-changed", () => appList.invalidate_filter())
+    searchInput.connect("changed", () => appList.invalidate_filter())
 
     const scroll = new Gtk.ScrolledWindow({
         vexpand: true,
         min_content_height: 400,
         hscrollbar_policy: Gtk.PolicyType.NEVER,
+        // Non-overlay: the scrollbar takes its own gutter instead of floating over
+        // the rows' right edge (where the "Change icon" button sits) and covering it.
+        overlay_scrolling: false,
+        css_classes: ["apps-list-scroll"],
     })
     scroll.set_child(appList)
     groupBox.append(scroll)

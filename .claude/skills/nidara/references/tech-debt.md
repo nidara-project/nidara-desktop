@@ -572,6 +572,17 @@ the art loading in the media widget/tile, add `data:` decoding and (async, cache
 download, or explicitly document local-file-only. Repro recipe lives in the
 `shots-studio-07-03` VM snapshot (VLC vs mpv on the same MP3).
 
+### 28. Settings → App Icons row is cramped — planned per-app subpage (2026-07-04)
+The installed-app row packs identity (icon + name + resolved path/name subtitle) + an "override"
+badge + a "Change icon" button into one line — it works but doesn't scale, and it's the only
+per-app config we expose. **Planned redesign:** each app drills into its **own subpage** (via
+`nav.pushSubpage`, the pattern the Apps landing already uses to reach Default Apps / App Icons),
+giving room for the icon override AND a natural home for **future per-app settings** (window
+rules, default workspace, gaming performance profile, autostart, permissions…). Also the intended
+stable surface for an agent to write per-app overrides. Deferred until per-app config is tackled
+for real; today's page is functional (search, scrollable card, choose-image dialog, working
+Restore). See memory `project_settings_apps_page`.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
