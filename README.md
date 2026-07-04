@@ -215,6 +215,7 @@ off at any time, taking effect immediately.
 | :--- | :--- |
 | `Super + 1–5` | Switch to workspace |
 | `Super + Shift + 1–5` | Move window to workspace |
+| `Super + W` | Workspace overview (`← / →` to navigate, `Enter` to switch) |
 | `Super + Scroll` | Cycle workspaces |
 | `Super + Ctrl + ← / →` | Previous / next workspace |
 | `Super + Ctrl + Shift + ← / →` | Move window to previous / next workspace |

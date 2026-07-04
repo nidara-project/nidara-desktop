@@ -491,6 +491,7 @@ symlink, that's the bug — make it a real dir.
 | `Super+S` | Settings |
 | `Super` (tap) | App launcher (grid) |
 | `Super+Space` | Search (Prism) |
+| `Super+W` | Workspace Overview (keyboard-navigable: ←/→ move, Enter switch, Esc close) |
 | `Super+T` | Kitty |
 | `Super+E` | Nautilus |
 | `Super+L` | Lock |
