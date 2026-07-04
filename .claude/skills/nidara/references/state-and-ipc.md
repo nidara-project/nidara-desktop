@@ -163,6 +163,19 @@ still has its global `allowMcp` floor; local `ags request` is always available.
   If wanted later: verify the Lua dispatcher name first (don't guess), and consider that they only
   make sense right after a deterministic `focusWindow`.
 
+### `Client.fullscreen` is an enum, not a boolean (maximize ≠ fullscreen)
+
+`AstalHyprland.Client.fullscreen` is the `Fullscreen` **enum** (`NONE`/`MAXIMIZED`/`FULLSCREEN`),
+NOT a boolean — a plain `!!client.fullscreen` is truthy for **maximize** (`Super+M`, FSMODE 1)
+too, not just real fullscreen (FSMODE 2). That mismatch used to make maximizing a window hide the
+dock, blank the bar and release its top reservation, because the bar/dock chrome-hiding watchers
+rode that truthy check. Chrome-hiding now keys off **`HyprlandState.isRealFullscreen(client)`**
+(true only for `FULLSCREEN`), so **maximize deliberately keeps all chrome visible + clickable**
+(fill-the-workspace, the Windows/GNOME maximize convention). Only real fullscreen hides the bar,
+and `Super+B` / `toggleBarOverlay` still promotes it to the OVERLAY layer above the fullscreen
+window. When you need the authoritative int instead of the cached enum, read `HyprlandState.
+getClientJson(addr).fullscreen` (`hyprctl clients -j`: `0` none / `1` maximized / `2` fullscreen).
+
 ### The agent config surface: `describeConfig` / `getConfig` / `setConfig`
 
 Settings are exposed to agents through a typed registry (`core/ConfigRegistry.ts`; entries

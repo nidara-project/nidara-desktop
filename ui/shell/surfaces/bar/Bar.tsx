@@ -658,10 +658,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           trackedBarClient = client
           if (client) {
               trackedBarClientConn = client.connect("notify::fullscreen", () =>
-                  setBarFullscreenMode(client.fullscreen ?? false))
+                  setBarFullscreenMode(hs.isRealFullscreen(client)))
           }
       }
-      setBarFullscreenMode(client ? (client.fullscreen ?? false) : false)
+      setBarFullscreenMode(hs.isRealFullscreen(client))
   }
 
   hs.connect("changed", checkBarFullscreen)

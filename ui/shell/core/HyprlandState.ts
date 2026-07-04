@@ -59,6 +59,16 @@ class HyprlandStateClass extends GObject.Object {
     get focusedClient()    { return this.hl.focused_client }
     get focusedMonitor()   { return this.hl.focused_monitor }
 
+    /** True ONLY for real fullscreen (Hyprland FSMODE 2), not "maximized" (FSMODE 1)
+     *  or none. AstalHyprland exposes Client.fullscreen as the Fullscreen ENUM, not a
+     *  boolean — a plain `!!client.fullscreen` is truthy for MAXIMIZED too, which is
+     *  why maximize used to hide the bar/dock. Chrome-hiding (bar opacity, dock
+     *  auto-hide) keys off THIS; maximize deliberately keeps all chrome visible and
+     *  clickable (fill-the-workspace, like the Windows/GNOME maximize convention). */
+    isRealFullscreen(client: AstalHyprland.Client | null | undefined): boolean {
+        return !!client && client.fullscreen === AstalHyprland.Fullscreen.FULLSCREEN
+    }
+
     constructor() {
         super()
         this.hl = AstalHyprland.get_default()
