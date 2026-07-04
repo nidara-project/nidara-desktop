@@ -90,10 +90,22 @@ the user's call (raise it, or pin the shell to dark). Four independent opacities
 - `windowOpacity` → Settings/About windows = the **CSS token path** (`--nidara-bg`/materials/
   popovers in `nidaraVars`). Those windows are CSS-painted, not Cairo — hence a separate axis.
 
-`Theme.setGlassOpacity()` is the **master** (sets all four); per-surface setters drive "Advanced".
-The Settings UI (`pages/Appearance.tsx`) = one "Glass" master slider + a `Gtk.Revealer` "Advanced"
-disclosure (Bar/Overlays/Dock/Window). When adding a shell capsule, `SquircleContainer` already
-defaults to shell skin — pass `opacityRole: "bar"` if it's a bar capsule (else it tracks overlay).
+All four **default to `0.05`** (the range minimum, the glassiest end) — uniform, so a fresh boot
+reads a clean 5% on the master rather than the mixed state below.
+
+`Theme.setGlassOpacity()` is the **master** — it *writes* all four, so it must also *read* all four.
+The master slider in `pages/Appearance.tsx` is therefore an **indeterminate control** (Figma "Mixed"
+/ macOS dash): when the four agree it shows that %; when they diverge it reads **"—"** and mutes, and
+dragging it re-unifies them. It's built **inline with `makeHSlider`** (not `sliderRow`) for that
+mixed-aware label — don't "simplify" it back to a `sliderRow` bound to one axis (that let *only* the
+overlay slider move the master; a mean would be a number nobody set that also implies uniformity).
+The **"Advanced"** disclosure (Bar/Overlays/Dock/Window, per-surface setters) lives **inside the same
+"Theme" card** as rows of the shared `Gtk.ListBox`: the toggle is a `nidara-row`, and the four
+sliders reveal via a `Gtk.Revealer` wrapped in a passive row (`.settings-adv-revealer-row`), driven
+by the ListBox's `row-activated` — not a detached block below the card. (The Settings section itself
+is titled **"Theme"** — `settings.appearance.group.theme` — not "Nidara".) When adding a shell
+capsule, `SquircleContainer` already defaults to shell skin — pass `opacityRole: "bar"` if it's a bar
+capsule (else it tracks overlay).
 
 ### Tray icons recolour conditionally (not "never", not "always")
 

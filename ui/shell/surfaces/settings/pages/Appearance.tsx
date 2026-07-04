@@ -10,6 +10,7 @@ import { ACCENT_PALETTE, type AccentKey, type ShellAppearance } from "../../../c
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageBox } from "../SettingsHelpers"
+import { makeHSlider } from "../../../common/Slider"
 import { attachTooltip } from "../../../common/Tooltip"
 import { safeDisconnect } from "../../../core/signals"
 
@@ -135,8 +136,8 @@ export default function AppearancePage() {
     Wallpaper.connect("changed", () => updatePreview(Wallpaper.current))
     page.append(wallGroup.box)
 
-    // 3. Nidara visual tokens
-    const fcGroup = listGroup("Nidara")
+    // 3. Theme — accent + glass opacity
+    const fcGroup = listGroup(t("settings.appearance.group.theme"))
 
     // Accent Color Picker
     const accentPicker = new Gtk.Box({ spacing: 6, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
@@ -158,9 +159,9 @@ export default function AppearancePage() {
 
     fcGroup.listBox.append(createRow(t("settings.appearance.accent"), t("settings.appearance.accent.desc"), accentPicker))
 
-    // Opacity model: ONE master "Glass" slider sets bar + overlays + dock together;
-    // an "Advanced" disclosure (below) breaks them apart. All are plain opacities
-    // (higher = more opaque), one [0.05, 0.80] range, WYSIWYG — no legibility floor.
+    // Opacity model: ONE master "Glass" slider governs bar + overlays + dock + window
+    // together; an "Advanced" disclosure (below) breaks them apart. All are plain
+    // opacities (higher = more opaque), one [0.05, 0.80] range, WYSIWYG — no floor.
     const OPACITY_OPTS = { pct: true, icons: [Icons.minus, Icons.plus] as [Gio.FileIcon, Gio.FileIcon] }
     // Live external-sync so the master and the advanced sliders stay consistent when
     // either changes the underlying value (guarded against the cb→set→changed→cb loop
@@ -169,51 +170,88 @@ export default function AppearancePage() {
         const id = Theme.connect("changed", () => cb(read()))
         return () => safeDisconnect(Theme, id)
     }
-    fcGroup.listBox.append(sliderRow(
-        t("settings.appearance.glass"),
-        t("settings.appearance.glass.desc"),
-        Theme.overlayOpacity, 0.05, 0.80,
-        (v) => Theme.setGlassOpacity(v),
-        { ...OPACITY_OPTS, onExtChange: extOpacity(() => Theme.overlayOpacity) },
-    ))
-    page.append(fcGroup.box)
+    // The master governs the SAME four surfaces it writes (setGlassOpacity), so it must
+    // read all four — proxying one axis let *only* the overlay slider move it, and a mean
+    // is a number nobody set that also implies the surfaces are uniform when they aren't.
+    // Instead it's an INDETERMINATE control (Figma "Mixed" / macOS dash): when the four
+    // agree it shows that %, when they diverge it reads "—" and mutes, and dragging it
+    // re-unifies them. Built inline (not sliderRow) for that custom, mixed-aware label.
+    const glassSurfaces = () => [Theme.barOpacity, Theme.overlayOpacity, Theme.dockOpacity, Theme.windowOpacity]
+    const glassUniform = () => { const s = glassSurfaces(); return s.every(v => Math.abs(v - s[0]) < 0.005) }
+    const glassRepr = () => Math.max(...glassSurfaces())   // thumb at the peak while mixed
 
-    // Advanced — per-surface glass, collapsed by default.
-    const advList = listGroup("")
-    advList.listBox.append(sliderRow(
+    const masterValue = new Gtk.Label({ css_classes: ["slider-value-label"], width_chars: 5, xalign: 1.0 })
+    const masterSlider = makeHSlider({
+        min: 0.05, max: 0.80, value: glassRepr(),
+        onChange: (v) => Theme.setGlassOpacity(v),
+        onValueChanged: (v) => { masterValue.label = `${Math.round(v * 100)}%` }, // drag unifies → show %
+        onExtChange: extOpacity(glassRepr),
+        debounce: 32,
+        cssClasses: ["cc-atomic-scale-native"],
+        width_request: 140,
+    })
+    // Runs AFTER makeSlider's own %-label sync (connected earlier, during construction),
+    // so the "—" / mute wins whenever the surfaces disagree.
+    const syncMaster = () => {
+        const uni = glassUniform()
+        masterValue.label = uni ? `${Math.round(glassRepr() * 100)}%` : "—"
+        masterSlider.opacity = uni ? 1 : 0.55
+    }
+    const masterSyncId = Theme.connect("changed", syncMaster)
+    masterSlider.connect("unrealize", () => safeDisconnect(Theme, masterSyncId))
+    syncMaster()
+
+    const masterBox = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, hexpand: false })
+    const mkGlassEnd = (icon: Gio.FileIcon) => new Gtk.Image({ gicon: icon, pixel_size: 16, opacity: 0.5, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER })
+    masterBox.append(mkGlassEnd(Icons.minus))
+    masterBox.append(masterSlider)
+    masterBox.append(mkGlassEnd(Icons.plus))
+    masterBox.append(masterValue)
+    fcGroup.listBox.append(createRow(t("settings.appearance.glass"), t("settings.appearance.glass.desc"), masterBox))
+
+    // Advanced — per-surface glass. It belongs INSIDE the same "Theme" card, not as a
+    // detached block below it: the toggle is a plain nidara-row (with a disclosure
+    // chevron) and the four sliders reveal as further rows of the very card whose master
+    // they refine. The revealer rides in a passive wrapper row so the slide-down happens
+    // within the card; row-activated on the shared ListBox drives the toggle.
+    const advChevron = new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 16, css_classes: ["nd-icon"] })
+    const advToggleRow = createRow(t("settings.appearance.advanced"), "", advChevron)
+    fcGroup.listBox.append(advToggleRow)
+
+    const advInner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
+    advInner.append(sliderRow(
         t("settings.appearance.bar-opacity"), t("settings.appearance.bar-opacity.desc"),
         Theme.barOpacity, 0.05, 0.80, (v) => Theme.setBarOpacity(v),
         { ...OPACITY_OPTS, onExtChange: extOpacity(() => Theme.barOpacity) },
     ))
-    advList.listBox.append(sliderRow(
+    advInner.append(sliderRow(
         t("settings.appearance.overlay-opacity"), t("settings.appearance.overlay-opacity.desc"),
         Theme.overlayOpacity, 0.05, 0.80, (v) => Theme.setOverlayOpacity(v),
         { ...OPACITY_OPTS, onExtChange: extOpacity(() => Theme.overlayOpacity) },
     ))
-    advList.listBox.append(sliderRow(
+    advInner.append(sliderRow(
         t("settings.appearance.dock-opacity"), t("settings.appearance.dock-opacity.desc"),
         Theme.dockOpacity, 0.05, 0.80, (v) => Theme.setDockOpacity(v),
         { ...OPACITY_OPTS, onExtChange: extOpacity(() => Theme.dockOpacity) },
     ))
-    advList.listBox.append(sliderRow(
+    advInner.append(sliderRow(
         t("settings.appearance.window-glass"), t("settings.appearance.window-glass.desc"),
         Theme.windowOpacity, 0.05, 0.80, (v) => Theme.setWindowOpacity(v),
         { ...OPACITY_OPTS, onExtChange: extOpacity(() => Theme.windowOpacity) },
     ))
     const advRevealer = new Gtk.Revealer({ transition_type: Gtk.RevealerTransitionType.SLIDE_DOWN, reveal_child: false })
-    advRevealer.set_child(advList.box)
-    const advChevron = new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 16, css_classes: ["nd-icon"] })
-    const advHeaderBox = new Gtk.Box({ spacing: 8 })
-    advHeaderBox.append(new Gtk.Label({ label: t("settings.appearance.advanced"), hexpand: true, xalign: 0 }))
-    advHeaderBox.append(advChevron)
-    const advHeader = new Gtk.Button({ child: advHeaderBox, css_classes: ["nidara-menu-row", "settings-advanced-toggle"] })
-    advHeader.connect("clicked", () => {
+    advRevealer.set_child(advInner)
+    const advRevealerRow = new Gtk.ListBoxRow({ activatable: false, selectable: false, css_classes: ["settings-adv-revealer-row"] })
+    advRevealerRow.set_child(advRevealer)
+    fcGroup.listBox.append(advRevealerRow)
+
+    fcGroup.listBox.connect("row-activated", (_: Gtk.ListBox, row: Gtk.ListBoxRow) => {
+        if (row !== advToggleRow) return
         const open = !advRevealer.reveal_child
         advRevealer.reveal_child = open
         advChevron.gicon = open ? Icons.chevronDown : Icons.chevronRight
     })
-    page.append(advHeader)
-    page.append(advRevealer)
+    page.append(fcGroup.box)
 
     // 4. Night Light
     const nlGroup = listGroup(t("settings.appearance.group.night-light"))
