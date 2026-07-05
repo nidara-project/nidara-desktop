@@ -5,9 +5,7 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.1.0] — Initial release
-
-_Date set at tag time._
+## [0.1.0] — 2026-07-05
 
 First public release. Nidara is a full Wayland desktop environment for Arch Linux,
 built on Hyprland and AGS v3 (Aylur's GTK Shell), registering as a proper login session.
@@ -32,7 +30,7 @@ built on Hyprland and AGS v3 (Aylur's GTK Shell), registering as a proper login 
 - **Hardware & media keys** — volume, mic mute, brightness (floored above black), and
   MPRIS transport (`XF86*`) bound out of the box, working on the lock screen too.
 - **Familiar shortcuts** — `Alt + Tab` window cycling, `Super + M` maximize,
-  `Super + Space` Prism search, `Super + Ctrl (+ Shift) + ←/→` workspace navigation,
+  `Super + Space` Search, `Super + Ctrl (+ Shift) + ←/→` workspace navigation,
   alongside the tiling basics (focus, resize, float, fullscreen, pseudo-tile).
 
 ### Settings
