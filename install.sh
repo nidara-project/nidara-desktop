@@ -277,23 +277,46 @@ echo "  Detected: layout=$SYS_KB_LAYOUT  timezone=$SYS_TIMEZONE  locale=$SYS_LOC
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
+# nidara-repo trust & registration
+# The binary pacman repo (GitHub Pages) ships the Astal/AGS/appmenu stack
+# prebuilt. Its CI GPG-signs every package and the repo db (since 2026-07-05);
+# the public key travels with this repo (packaging/nidara-repo.gpg) so a fresh
+# install needs no extra network fetch to establish trust.
+#
+# This block runs UNCONDITIONALLY (deliberately outside §1's pin-skip):
+# installs registered in the unsigned era carry `SigLevel = Optional TrustAll`
+# in pacman.conf and must be tightened even when phase 1 is skipped. Every step
+# is an idempotent no-op after the first run.
+# ─────────────────────────────────────────────────────────────────────────────
+NIDARA_REPO_KEY="80B0AC8C36A43611A8619959B06B716279F755A9"
+if ! pacman-key --list-keys "$NIDARA_REPO_KEY" &>/dev/null; then
+    echo "  Importing the nidara-repo signing key into pacman's keyring..."
+    sudo pacman-key --add "$REPO_DIR/packaging/nidara-repo.gpg"
+    # lsign = local trust; without it pacman ignores signatures from this key.
+    sudo pacman-key --lsign-key "$NIDARA_REPO_KEY"
+fi
+if ! grep -q '^\[nidara\]' /etc/pacman.conf 2>/dev/null; then
+    echo "  Registering nidara-repo in /etc/pacman.conf..."
+    # `$arch` stays literal — pacman expands it (single-quoted printf format
+    # keeps the shell from touching it).
+    printf '\n[nidara]\nSigLevel = Required DatabaseOptional\nServer = https://nidara-project.github.io/nidara-repo/$arch\n' \
+        | sudo tee -a /etc/pacman.conf > /dev/null
+elif grep -A2 '^\[nidara\]' /etc/pacman.conf | grep -q '^SigLevel = Optional TrustAll$'; then
+    # Unsigned-era registration: flip it to signature verification. The sed
+    # range keeps the substitution inside the [nidara] section only.
+    echo "  Migrating nidara-repo to GPG signature verification..."
+    sudo sed -i '/^\[nidara\]/,/^\[/ s/^SigLevel = Optional TrustAll$/SigLevel = Required DatabaseOptional/' /etc/pacman.conf
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 # 1. System dependencies
 # ─────────────────────────────────────────────────────────────────────────────
 if [ "$REBUILD_DEPS" = "no" ] && [ "$SYNC_PACMAN" = "no" ]; then
 echo "[1/7] System dependencies — skipped (pins and package list unchanged)."
 else
 echo "[1/7] Installing system dependencies..."
-# Register nidara-repo — the binary pacman repo (GitHub Pages) that ships the
-# Astal/AGS/appmenu stack prebuilt, so installs/updates don't recompile it from
-# source every time. Unsigned v0 → `SigLevel = Optional TrustAll`; trust rests on
-# HTTPS + GitHub + the auditable CI build (GPG signing is planned pre-ISO).
-# Idempotent: only appended if not already present. `$arch` stays literal — pacman
-# expands it (single-quoted printf format keeps the shell from touching it).
-if ! grep -q '^\[nidara\]' /etc/pacman.conf 2>/dev/null; then
-    echo "  Registering nidara-repo in /etc/pacman.conf..."
-    printf '\n[nidara]\nSigLevel = Optional TrustAll\nServer = https://nidara-project.github.io/nidara-repo/$arch\n' \
-        | sudo tee -a /etc/pacman.conf > /dev/null
-fi
+# nidara-repo registration + signing key live in the unconditional block above
+# (they must also run when this phase is pin-skipped, to migrate old installs).
 # -Syu, never bare -Sy: syncing the DBs without a full upgrade leaves a partial-upgrade
 # state, and the next --needed install pulls a new lib (e.g. aquamarine) whose soname no
 # longer matches already-installed packages (e.g. hyprtoolkit) → transaction fails.
