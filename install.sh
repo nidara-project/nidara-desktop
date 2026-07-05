@@ -16,6 +16,11 @@
 # .source) and updates from there, following its branch (same pin-skip). A plain
 # `./install.sh` (system) always rebuilds the whole stack — the escape hatch — and
 # migrates away any legacy ~/.local/share/nidara/src.
+# Agent-carried local patches (clone path recorded in ~/.config/nidara/.patches —
+# see the in-repo nidara skill, "Carrying a GLOBAL fix locally") make nidara-update
+# refuse the blind stateless path: the agent rebases the patch branch onto the new
+# release and re-runs --update-apply instead. --update likewise refuses to checkout
+# a release over local-only commits rather than silently dropping them.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -114,7 +119,9 @@ if [ "$MODE" = "update" ]; then
     echo "  Updating source: $SRC"
     if [ -n "$(run_user git -C "$SRC" status --porcelain)" ]; then
         echo "  [ERR] $SRC has local changes — refusing to update over them." >&2
-        echo "        Commit/stash them (or update manually with git), then retry." >&2
+        echo "        Commit/stash them (or update manually with git), then retry. Local" >&2
+        echo "        fixes meant to survive updates belong committed on a local/patches" >&2
+        echo "        branch — see the nidara skill, 'Carrying a GLOBAL fix locally'." >&2
         exit 1
     fi
     # Fetch ONLY release tags (v*), never --tags: the repo also carries MOVING
@@ -132,6 +139,17 @@ if [ "$MODE" = "update" ]; then
         run_user git -C "$SRC" pull --ff-only origin "$(run_user git -C "$SRC" rev-parse --abbrev-ref HEAD)" \
             || { echo "  [ERR] fast-forward pull failed (diverged history?) — update manually with git." >&2; exit 1; }
     else
+        # Local commits the release doesn't include (agent-carried patches — see the
+        # nidara skill, "Carrying a GLOBAL fix locally") would be silently dropped by
+        # the checkout below. Refuse loudly; the carry flow rebases + --update-apply.
+        local_commits="$(run_user git -C "$SRC" rev-list --count "$latest_tag..HEAD" --not --remotes=origin 2>/dev/null || echo 0)"
+        if [ "${local_commits:-0}" -gt 0 ]; then
+            echo "  [ERR] $SRC carries $local_commits local commit(s) that $latest_tag doesn't include —" >&2
+            echo "        updating would silently stop applying them. Ask your agent to update:" >&2
+            echo "        it rebases the patches onto $latest_tag and re-runs the apply pass" >&2
+            echo "        (git rebase $latest_tag && ./install.sh --update-apply)." >&2
+            exit 1
+        fi
         run_user git -C "$SRC" checkout -q "$latest_tag"
         echo "  Source at release $latest_tag"
     fi

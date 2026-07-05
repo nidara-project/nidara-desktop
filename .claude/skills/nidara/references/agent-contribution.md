@@ -87,7 +87,9 @@ costs nothing; a noisy or taste-specific PR costs the maintainer review time and
 - **GLOBAL** → if you already know this is headed upstream, do the **Step 2½** existing-PR
   check *first* (it may already be done). Then make the change in repo code following all
   conventions (the ten commandments, scoped CSS, `Status.ts`/`ShellActions`, no hardcoded
-  colours…), and go to Step 3.
+  colours…), and go to Step 3. If the fix stays on this machine instead (user declines the
+  PR, or it's pending review), see **Carrying a GLOBAL fix locally** below — repo edits do
+  not survive updates unless you carry them.
 
 ---
 
@@ -186,6 +188,40 @@ auto-merge — every PR is human-reviewed.
    layout — anything PERSONAL — from the diff. A global PR contains only the global change.
 7. **Hand back the link.** Give the user the PR URL and tell them a maintainer will review;
    it is not merged automatically.
+
+---
+
+## Carrying a GLOBAL fix locally (not contributed — yet)
+
+Sometimes a GLOBAL-bucket change stays on this machine: the user declines the PR, it's
+still under review, or it was rejected. Repo-code edits do NOT survive updates on their
+own — the stable channel is stateless (`nidara-update` reinstalls pure upstream from a
+fresh clone), so an uncarried local fix silently vanishes on the next update. If it stays
+local, YOU carry it:
+
+1. **Commit it — never leave it loose.** In a kept clone of the repo, commit the fix on a
+   branch named **`local/patches`**, created from the currently installed release tag
+   (`git checkout -b local/patches vX.Y.Z`). One commit per fix, clear message. Never
+   leave repo edits uncommitted, and never commit them to `main`.
+2. **Register the carry.** Write the clone's absolute path to `~/.config/nidara/.patches`.
+   That marker makes `nidara-update` refuse a blind update instead of silently dropping
+   the patches — and lets a future agent session (maybe not you) find the clone.
+3. **Updating a patched install** (the procedure `nidara-update`'s refusal points at):
+   ```bash
+   cd "$(cat ~/.config/nidara/.patches)"
+   git fetch origin 'refs/tags/v*:refs/tags/v*'   # release tags only — never --tags
+   git rebase "$(git tag -l 'v*' --sort=-v:refname | head -1)" local/patches
+   ./install.sh --update-apply
+   ```
+   A conflict means the fix needs rework for the new release — resolve it with the user.
+   A patch that was merged upstream in the meantime is dropped by the rebase
+   automatically: the stack shrinks to zero as fixes land.
+4. **When the stack empties** (all merged upstream or discarded), or the user deliberately
+   reinstalls pure upstream: delete `~/.config/nidara/.patches` so plain `nidara-update`
+   works again.
+
+Contributing (Step 3) stays the default: a carried patch is a standing cost the user pays
+on every update; a merged one is free forever.
 
 ---
 
