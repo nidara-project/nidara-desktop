@@ -5,6 +5,32 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] — 2026-07-06
+
+### Fixed
+
+- With a surface open (Control Center, Notification Center, system menu, or a widget
+  pill), clicking another bar capsule now switches to it in a single click — the first
+  click no longer just dismisses. Clicking anywhere below the bar still dismisses.
+- The widget expansion panel no longer flashes at the previous pill's position when
+  jumping directly from one pill to another.
+- Updates no longer abort on the repository's moving `ci-assets` tag — `nidara-update`
+  fetches only release tags (`v*`).
+- Updates no longer silently drop agent-carried local fixes: when a patch stack is
+  registered (`~/.config/nidara/.patches`), `nidara-update` and `install.sh --update`
+  refuse the blind reinstall and point at the carry flow (rebase onto the new release,
+  then `install.sh --update-apply`).
+
+## [0.1.1] — 2026-07-05
+
+### Security
+
+- The prebuilt dependency repo ([nidara-repo](https://github.com/nidara-project/nidara-repo))
+  is now GPG-signed end-to-end: CI signs every package and the repo database, and
+  `install.sh` imports the project key and enforces signature verification
+  (`SigLevel = Required DatabaseOptional`). Existing installs are migrated automatically
+  on their next update. No changes to the desktop itself.
+
 ## [0.1.0] — 2026-07-05
 
 First public release. Nidara is a full Wayland desktop environment for Arch Linux,
@@ -79,4 +105,6 @@ built on Hyprland and AGS v3 (Aylur's GTK Shell), registering as a proper login 
 
 - All UI strings routed through `t()`; English and Spanish included.
 
+[0.1.2]: https://github.com/nidara-project/nidara-desktop/releases/tag/v0.1.2
+[0.1.1]: https://github.com/nidara-project/nidara-desktop/releases/tag/v0.1.1
 [0.1.0]: https://github.com/nidara-project/nidara-desktop/releases/tag/v0.1.0
