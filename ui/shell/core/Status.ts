@@ -124,7 +124,7 @@ export class UIStatus extends GObject.Object {
     public set system_menu_open(v: boolean) {
         if (this._system_menu_open === v) return
         this._system_menu_open = v
-        if (v) this.closeExclusive("_system_menu_open")
+        if (v) this.closeExclusive("_system_menu_open", { barExpanded: true })
         this.notify("system-menu-open")
     }
 
@@ -132,7 +132,7 @@ export class UIStatus extends GObject.Object {
     public set overview_open(v: boolean) {
         if (this._overview_open === v) return
         this._overview_open = v
-        if (v) this.closeExclusive("_overview_open")
+        if (v) this.closeExclusive("_overview_open", { barExpanded: true })
         this.notify("overview-open")
     }
 
@@ -160,6 +160,9 @@ export class UIStatus extends GObject.Object {
     public set bar_expanded_id(v: string) {
         if (this._bar_expanded_id === v) return
         this._bar_expanded_id = v
+        // A pill expansion is exclusive with the big overlays too — reachable
+        // since the bar strip stays clickable while an overlay is open.
+        if (v !== "") this.closeExclusive("")
         this.notify("bar-expanded-id")
     }
 

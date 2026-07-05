@@ -62,7 +62,7 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): Gtk.Widget 
     let menuOpen = false
     // The open path, shared by the click gesture and the IPC hook.
     const openWindowMenu = () => {
-      if (status.cc_open) return   // same guard as the other bar capsules
+      if (status.cc_edit_mode) return   // same guard as the other bar capsules
       menuOpen = true
       // Left-align the menu with the capsule's left edge: it sits near the left
       // screen edge, so a centered panel would spill off the left.
@@ -71,7 +71,7 @@ export function AppTitle(monitorWidth: number, openMenu?: OpenMenu): Gtk.Widget 
     const gesture = new Gtk.GestureClick()
     gesture.set_button(0)   // 0 = any button: left and right click both open
     gesture.connect("released", () => {
-      if (status.cc_open) return
+      if (status.cc_edit_mode) return
       // Light toggle: a second click while our menu is up closes it. "__custom"
       // is the bar's shared transient-expansion id; outside-click dismissal
       // resets it, so a stale menuOpen just falls through to re-open.

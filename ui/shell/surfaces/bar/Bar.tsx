@@ -120,7 +120,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const systemMenu = new ScaleRevealer(SystemMenuOverlay(), { ...OVERLAY_POP, pivot: "top-left" })
   const overviewWidget = WorkspaceOverview(gdkmonitor)
   const overview = new ScaleRevealer(overviewWidget, { ...OVERLAY_POP, pivot: "center" })
-  // Invisible full-screen button — dismisses any open overlay on outside click
+  // Invisible below-bar button — dismisses any open overlay on outside click.
+  // It deliberately does NOT cover the bar strip (margin_top set with the panel
+  // geometry below): capsule clicks must reach the capsules so switching
+  // surfaces is ONE click — Status's mutual exclusion closes whatever was open.
   const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
   catcher.connect("clicked", () => {
     if (status.cc_edit_mode) return   // don't close CC while in edit mode
@@ -147,6 +150,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Derived from the bar height and the dock's actual footprint (dock size is
   // user-configurable) instead of hardcoded magic numbers.
   const BAR_H = 40
+  catcher.margin_top = BAR_H    // keep the bar strip live while an overlay is open
   const PANEL_TOP = BAR_H + 8   // gap below the bar (8: same rhythm as the side gap)
   const SAFETY = 28
   const DOCK_VPAD = 20           // dock padding around its icons
@@ -467,10 +471,13 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (!w?.buildBarContent) continue
       const hasExpand = !!w.buildBarExpanded
       const hasCCDetail = !!w.buildCCDetail
+      // cc_edit_mode (not cc_open): while editing the CC the pills stay inert;
+      // with the CC merely open, a pill click switches to its surface directly
+      // (the bar_expanded_id setter closes the exclusive overlays).
       const onRelease = hasExpand
-          ? () => { if (status.cc_open) return; status.bar_expanded_id = status.bar_expanded_id === id ? "" : id }
+          ? () => { if (status.cc_edit_mode) return; status.bar_expanded_id = status.bar_expanded_id === id ? "" : id }
           : hasCCDetail
-              ? () => { if (status.cc_open) return; status.cc_open = true; status.cc_detail_id = id }
+              ? () => { if (status.cc_edit_mode) return; status.cc_open = true; status.cc_detail_id = id }
               : undefined
       const capsule = SquircleContainer({
           child: w.buildBarContent(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar",
@@ -496,7 +503,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       })
       const g = new Gtk.GestureClick()
       g.connect("released", () => {
-          if (status.cc_open) return
+          if (status.cc_edit_mode) return
           status.bar_expanded_id = status.bar_expanded_id === OVERFLOW_ID ? "" : OVERFLOW_ID
       })
       overflowCapsule.add_controller(g)
