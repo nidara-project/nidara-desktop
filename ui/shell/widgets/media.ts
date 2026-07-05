@@ -11,10 +11,13 @@ import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
+import * as media from "../core/MediaService"
+import Theme from "../core/ThemeManager"
+import { attachTooltip } from "../common/Tooltip"
+import { menuRow, menuSeparator } from "../common/MenuRow"
+import { sideFor, paintGlassBubble, ARROW_H, BUF, type ArrowSide } from "../common/GlassBubble"
 
 function buildBarContent(): Gtk.Widget {
-    const mpris = AstalMpris.get_default()
-
     const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 16 , css_classes: ["nd-icon"] })
     const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 16 , css_classes: ["nd-icon"] })
     const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 16 , css_classes: ["nd-icon"] })
@@ -63,18 +66,16 @@ function buildBarContent(): Gtk.Widget {
     const updatePlayer = () => {
         safeDisconnect(player, playerSigId)
         playerSigId = null
-        player = mpris?.get_players()[0] ?? null
+        player = media.selectedPlayer()
         if (player) playerSigId = player.connect("notify", update)
         update()
     }
 
-    if (mpris) {
-        const mprisId = mpris.connect("notify::players", updatePlayer)
-        box.connect("unrealize", () => {
-            safeDisconnect(mpris, mprisId)
-            safeDisconnect(player, playerSigId)
-        })
-    }
+    const unsubscribe = media.subscribe(updatePlayer)
+    box.connect("unrealize", () => {
+        unsubscribe()
+        safeDisconnect(player, playerSigId)
+    })
 
     prev.connect("clicked", () => { try { player?.previous() } catch {} })
     play.connect("clicked", () => { try { player?.play_pause() } catch {} })
@@ -98,7 +99,6 @@ function fmt(secs: number): string {
 // Shared rich player panel used by both bar expanded and CC detail.
 // Progress is expressed as 0-100% so makeHSlider's range never needs to change.
 function buildDetailPanel(widthRequest: number): Gtk.Widget {
-    const mpris = AstalMpris.get_default()
     let player: any = null
     let playerSigId: number | null = null
     let progressTimer: number | null = null
@@ -156,9 +156,106 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
     textBox.append(titleLabel)
     textBox.append(artistLabel)
 
+    // SOURCE SELECTOR — the current player's app icon + a chevron, top-right of
+    // the panel. Opens a glass menu (same Gtk.Popover + GlassBubble + menuRow
+    // pattern as the dock/app-grid context menus) listing every MPRIS player:
+    // "Automatic" follows MediaService's heuristic; picking an app pins it.
+    const srcAppImg  = new Gtk.Image({ gicon: Icons.play, pixel_size: 16, css_classes: ["nd-icon"] })
+    const srcChevron = new Gtk.Image({ gicon: Icons.chevronDown, pixel_size: 10, css_classes: ["nd-icon"], opacity: 0.6 })
+    const srcInner = new Gtk.Box({ spacing: 2 })
+    srcInner.append(srcAppImg); srcInner.append(srcChevron)
+    const sourceBtn = new Gtk.Button({
+        child: srcInner, css_classes: ["cc-media-btn-atomic"],
+        halign: Gtk.Align.END, valign: Gtk.Align.START, visible: false,
+    })
+    attachTooltip(sourceBtn, () => t("cc.media.source"))
+
+    let srcPopover: Gtk.Popover | null = null
+    let srcRows: Gtk.Box | null = null
+    let srcDraw: Gtk.DrawingArea | null = null
+    let srcSide: ArrowSide = "top"
+    let srcThemeId = 0
+
+    const ensureSourceMenu = () => {
+        if (srcPopover) return
+        srcPopover = new Gtk.Popover({
+            autohide: true,        // grabs focus; dismiss on outside click
+            has_arrow: false,      // we paint our own pointer in Cairo
+            css_classes: ["nidara-menu-popover"],
+        })
+        srcPopover.set_has_tooltip(false)
+        const grid = new Gtk.Grid()
+        srcDraw = new Gtk.DrawingArea({ hexpand: true, vexpand: true, halign: Gtk.Align.FILL, valign: Gtk.Align.FILL })
+        srcDraw.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, srcSide, { radiusMax: 16 }))
+        grid.attach(srcDraw, 0, 0, 1, 1)
+        srcRows = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nidara-menu"] })
+        grid.attach(srcRows, 0, 0, 1, 1)
+        srcThemeId = Theme.connect("changed", () => { if (srcDraw?.get_mapped()) srcDraw.queue_draw() })
+        srcPopover.set_child(grid)
+        srcPopover.set_parent(sourceBtn)
+    }
+
+    const layoutSourceMenu = () => {
+        if (!srcRows) return
+        const PAD = 5   // interior padding between the glass edge and the rows
+        srcRows.margin_top    = BUF + PAD + (srcSide === "top"    ? ARROW_H : 0)
+        srcRows.margin_bottom = BUF + PAD + (srcSide === "bottom" ? ARROW_H : 0)
+        srcRows.margin_start  = BUF + PAD + (srcSide === "left"   ? ARROW_H : 0)
+        srcRows.margin_end    = BUF + PAD + (srcSide === "right"  ? ARROW_H : 0)
+    }
+
+    const rebuildSourceRows = () => {
+        if (!srcRows) return
+        let c = srcRows.get_first_child()
+        while (c) { const next = c.get_next_sibling(); srcRows.remove(c); c = next }
+        srcRows.append(menuRow({
+            label: t("cc.media.source.auto"),
+            checked: media.pinnedBus() === null,
+            onClick: () => { media.pinPlayer(null); srcPopover?.popdown() },
+        }))
+        const list = media.players()
+        if (list.length > 0) srcRows.append(menuSeparator())
+        for (const pl of list) {
+            // Dim current-title hint so two windows of the same app stay tellable apart
+            const hint = new Gtk.Label({
+                label: pl.title || "", css_classes: ["nidara-menu-label"],
+                opacity: 0.55, ellipsize: 3, max_width_chars: 14, visible: !!pl.title,
+            })
+            srcRows.append(menuRow({
+                label: media.playerLabel(pl),
+                icon: media.playerAppIcon(pl) ?? Icons.play,
+                checked: media.pinnedBus() === pl.bus_name,
+                trailing: hint,
+                onClick: () => { media.pinPlayer(pl.bus_name); srcPopover?.popdown() },
+            }))
+        }
+    }
+
+    sourceBtn.connect("clicked", () => {
+        if (srcPopover?.visible) { srcPopover.popdown(); return }
+        ensureSourceMenu()
+        // Open downward by default; flip up when the button sits low on screen so
+        // the menu stays visible and the fixed Cairo arrow still points at it.
+        let pos = Gtk.PositionType.BOTTOM
+        const rootW = sourceBtn.get_root() as Gtk.Widget | null
+        if (rootW) {
+            const [ok, bounds] = (sourceBtn as any).compute_bounds(rootW)
+            if (ok && bounds && rootW.get_height() > 0
+                && (bounds.origin.y + bounds.size.height / 2) > rootW.get_height() * 0.65) {
+                pos = Gtk.PositionType.TOP
+            }
+        }
+        srcSide = sideFor(pos)
+        ;(srcPopover as any).position = pos
+        layoutSourceMenu()
+        rebuildSourceRows()
+        srcPopover!.popup()
+    })
+
     const topRow = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER })
     topRow.append(artDa)
     topRow.append(textBox)
+    topRow.append(sourceBtn)
 
     const elapsedLabel = new Gtk.Label({ label: "0:00", css_classes: ["cc-media-time"], halign: Gtk.Align.START })
     const totalLabel   = new Gtk.Label({ label: "--:--", css_classes: ["cc-media-time"], halign: Gtk.Align.END, hexpand: true })
@@ -213,8 +310,7 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
     // PNG every second for the whole session (tech-debt #11C).
     let loadedArt: string | null = null
     const loadArt = () => {
-        const art = player?.cover_art
-        const path = art && GLib.file_test(art, GLib.FileTest.EXISTS) ? art : null
+        const path = media.resolveCoverArt(player)
         if (path === loadedArt) return
         loadedArt = path
         if (path) {
@@ -224,6 +320,9 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
         artDa.queue_draw()
     }
 
+    // The app icon only changes with the PLAYER, not per notify — resolving a
+    // fresh GIcon each tick would defeat the identity guard (tech-debt #11C).
+    let srcIconBus: string | null = null
     const update = () => {
         const p = player
         titleLabel.label  = p?.title  || t("cc.media.no-media")
@@ -233,6 +332,12 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
         if (playImg.gicon !== wantPlay) playImg.gicon = wantPlay
         prev.sensitive = p?.can_go_previous !== false
         next.sensitive = p?.can_go_next    !== false
+        sourceBtn.visible = !!p
+        const bus = p?.bus_name ?? null
+        if (bus !== srcIconBus) {
+            srcIconBus = bus
+            srcAppImg.gicon = media.playerAppIcon(p) ?? Icons.play
+        }
         loadArt()
         syncProgress()
     }
@@ -252,7 +357,7 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
 
     const updatePlayer = () => {
         safeDisconnect(player, playerSigId); playerSigId = null
-        player = mpris?.get_players()[0] ?? null
+        player = media.selectedPlayer()
         if (player) { playerSigId = player.connect("notify", update); startTimer() }
         update()
     }
@@ -261,14 +366,16 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
     play.connect("clicked", () => { try { player?.play_pause() } catch {} })
     next.connect("clicked", () => { try { player?.next()       } catch {} })
 
-    if (mpris) {
-        const mprisId = mpris.connect("notify::players", updatePlayer)
-        root.connect("unrealize", () => {
-            safeDisconnect(mpris, mprisId)
-            safeDisconnect(player, playerSigId)
-            if (progressTimer !== null) { try { GLib.source_remove(progressTimer) } catch {} ; progressTimer = null }
-        })
-    }
+    const unsubscribe = media.subscribe(updatePlayer)
+    root.connect("unrealize", () => {
+        unsubscribe()
+        safeDisconnect(player, playerSigId)
+        if (progressTimer !== null) { try { GLib.source_remove(progressTimer) } catch {} ; progressTimer = null }
+        // The popover is parented to sourceBtn, not a child of root — release it
+        // explicitly or GTK warns on dispose. Nulled so a re-realize would rebuild.
+        safeDisconnect(Theme, srcThemeId); srcThemeId = 0
+        if (srcPopover) { try { srcPopover.unparent() } catch {} ; srcPopover = null; srcRows = null; srcDraw = null }
+    })
 
     updatePlayer()
     return root

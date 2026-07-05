@@ -560,18 +560,6 @@ lockscreen silently never launched via the wrapper on every install — fixed by
 but any future wrapper MUST NOT introduce a root-only log path, and redirects into logs
 should never gate the exec (`>> "$LOG" 2>&1 || true` on the setup lines, or pre-`touch`).
 
-### 27. Media widget/tile artwork only renders `file://` art URLs
-Observed 2026-07-03 while staging README screenshots in the VM: with mpv + mpv-mpris the
-MPRIS `mpris:artUrl` is a `data:image/jpeg;base64,…` URI and the Control Center media tile
-shows an empty dark square; switching playback to VLC (which caches art and exposes
-`file:///home/…/.cache/vlc/art/….jpg`) renders the cover correctly. The art path handling
-(cached-path + artVersion optimization from the 07-02 perf pass) evidently expects a local
-file path. Unverified: `https://` art URLs — which is what **Spotify** and browser MPRIS
-players publish — may be equally broken, and that's a mainstream user path. To do: check
-the art loading in the media widget/tile, add `data:` decoding and (async, cached) `http(s)`
-download, or explicitly document local-file-only. Repro recipe lives in the
-`shots-studio-07-03` VM snapshot (VLC vs mpv on the same MP3).
-
 ### 28. Settings → App Icons row is cramped — planned per-app subpage (2026-07-04)
 The installed-app row packs identity (icon + name + resolved path/name subtitle) + an "override"
 badge + a "Change icon" button into one line — it works but doesn't scale, and it's the only
@@ -586,6 +574,20 @@ Restore). See memory `project_settings_apps_page`.
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
+- **(was #27, resolved 2026-07-05) Media player selection + cover art live in `core/MediaService.ts`.**
+  Widgets must NEVER go back to `get_players()[0]` — the facade owns WHICH player the shell
+  shows: auto heuristic (a PLAYING player beats paused ones; ties go to the most recent
+  playback-status change) plus a manual pin (source-selector glass menu in the media detail
+  panel, `pinPlayer(busName|null)`; session-scoped, auto-resumes when the pinned player leaves
+  the bus). Cover art goes through `resolveCoverArt` — chain: `cover_art` (AstalMpris's cache)
+  → `file://` → `data:` (decoded once into `~/.cache/nidara/media-art/`) → `http(s)` (async
+  curl into the same cache, negative-cached on failure so a dead URL isn't retried at the 1 Hz
+  position poll). Known upstream noise: AstalMpris logs 2× `player.vala … Failed to cache
+  cover art … not supported` per `data:` track before our fallback renders it (GIO has no
+  `data:` support) — harmless, don't chase. `MediaIslandContent` shares ONE `MediaState`
+  singleton across tile rebuilds (a per-build state leaked its player subscription). Test with
+  `scripts/dev/fake-mpris.js` (see `dev-workflow.md`) — heuristic + both art paths were
+  verified live with it (2026-07-05).
 - **Layer popups blur via `blur_popups`, NOT the layer's `blur` (verified 2026-06-26).** A `Gtk.Popover`
   on the dock/bar (the glass tooltip, the dock context menu) is a SEPARATE surface = a *popup of a layer*.
   The `blur` layerrule only blurs the layer surface itself + its `Gtk.Overlay` children (CC/NC/system

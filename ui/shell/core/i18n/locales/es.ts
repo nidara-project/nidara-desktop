@@ -653,6 +653,8 @@ export default {
     // Control Center — Media widget
     "cc.media.name": "Multimedia",
     "cc.media.no-media": "Sin reproducción",
+    "cc.media.source": "Origen del audio",
+    "cc.media.source.auto": "Automático",
 
     // Control Center — status banner (REC / AI indicators)
     "cc.status.stop": "Detener",

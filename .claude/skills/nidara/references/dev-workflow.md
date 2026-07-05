@@ -361,6 +361,25 @@ This setup surfaced a real latent bug, fixed in `BluetoothService.setPowered`:
 so the old `bt.is_powered = state` toggle flipped the switch visually but never powered the
 radio. Drive `bt.adapter.powered` instead.
 
+### Testing media players (MPRIS) without making a sound
+
+`scripts/dev/fake-mpris.js` registers a minimal `org.mpris.MediaPlayer2.<name>` player on
+the session bus (plain GJS, no deps, no audio). Use it to exercise `core/MediaService`'s
+selection heuristic, the source-selector pin menu, and the cover-art chain:
+
+```bash
+gjs scripts/dev/fake-mpris.js fakeA "Aurora" "Red track" "Artist A" "<data:-URI>" Playing kitty
+gjs scripts/dev/fake-mpris.js fakeB "Boreal" "Blue track" "Artist B" "https://github.com/nidara-project.png" Playing
+playerctl -p fakeB pause      # drive status flips (Playing beats Paused in the heuristic)
+```
+
+Recipes for generating the `data:` art URI are in the script header. Expected noise: each
+`data:` track logs 2× `player.vala … Failed to cache cover art … not supported` from
+AstalMpris (GIO can't open `data:` URIs) before the shell's own decode fallback renders it —
+upstream, harmless, don't chase. On GVfs-equipped systems the `https` art is cached by
+AstalMpris itself (`~/.cache/astal/mpris/`); the shell's curl fallback
+(`~/.cache/nidara/media-art/`) covers GVfs-less installs.
+
 ### Testing the battery widget on a desktop (no battery)
 
 `AstalBattery` reads UPower's composite **DisplayDevice over the system D-Bus**, so on a

@@ -679,6 +679,8 @@ export default {
     // Control Center — Media widget
     "cc.media.name": "Media",
     "cc.media.no-media": "No media",
+    "cc.media.source": "Audio source",
+    "cc.media.source.auto": "Automatic",
 
     // Notification Center
     "nc.time.now": "now",

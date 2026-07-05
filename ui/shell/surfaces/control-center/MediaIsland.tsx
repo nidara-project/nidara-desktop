@@ -1,6 +1,5 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import AstalMpris from "gi://AstalMpris"
-import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import Pango from "gi://Pango"
 import { createSquirclePath } from "../../common/DrawingUtils"
@@ -8,6 +7,7 @@ import { CCWidgetSpec, WidgetSize } from "./Types"
 import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import { safeDisconnect } from "../../core/signals"
+import * as media from "../../core/MediaService"
 
 interface MediaState {
     artPixbuf: any
@@ -28,7 +28,6 @@ function makeMediaState(): MediaState {
         notify: () => state.listeners.forEach(fn => fn()),
     }
 
-    const mpris = AstalMpris.get_default()
     let playerSignalId: number | null = null
 
     const updatePlayer = () => {
@@ -36,7 +35,7 @@ function makeMediaState(): MediaState {
             safeDisconnect(state.currentPlayer, playerSignalId)
             playerSignalId = null
         }
-        state.currentPlayer = mpris?.get_players()[0] ?? null
+        state.currentPlayer = media.selectedPlayer()
         if (state.currentPlayer) {
             playerSignalId = state.currentPlayer.connect("notify", () => {
                 loadArt()
@@ -51,8 +50,7 @@ function makeMediaState(): MediaState {
     // playing (position poll), and re-decoding the PNG every second is pure churn.
     let loadedArt: string | null = null
     const loadArt = () => {
-        const art = state.currentPlayer?.cover_art
-        const path = art && GLib.file_test(art, GLib.FileTest.EXISTS) ? art : null
+        const path = media.resolveCoverArt(state.currentPlayer)
         if (path === loadedArt) return
         loadedArt = path
         if (path) {
@@ -62,7 +60,9 @@ function makeMediaState(): MediaState {
         state.artVersion++
     }
 
-    if (mpris) mpris.connect("notify::players", updatePlayer)
+    // MediaService fires on selection changes AND async art arrivals (module
+    // lifetime — the shared state below is a singleton, so no unsubscribe path).
+    media.subscribe(updatePlayer)
     updatePlayer()
 
     return state
@@ -259,8 +259,14 @@ function buildSingleContent(state: MediaState): Gtk.Widget {
     return overlay
 }
 
+// ONE shared state for every media tile instance: buildContent re-runs on each
+// CC layout/size rebuild, and a per-call state leaked its player subscription
+// (and re-decoded the artwork) every time. The per-widget update listeners
+// still detach themselves on unrealize.
+let sharedState: MediaState | null = null
+
 export function MediaIslandContent(): CCWidgetSpec {
-    const state = makeMediaState()
+    const state = (sharedState ??= makeMediaState())
 
     return {
         id: "media",
