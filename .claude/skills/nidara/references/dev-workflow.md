@@ -29,7 +29,11 @@ from-source fallback and the update pin-skip record, so the two must stay in syn
 ships pre-built copies of exactly the 18 packages `install.sh` would otherwise build from
 source (appmenu + 16 Astal libs + ags). CI builds them in an Arch container and publishes to
 GitHub Pages: `https://nidara-project.github.io/nidara-repo/$arch` (pacman repo name
-`nidara`, **unsigned for now** → clients use `SigLevel = Optional TrustAll`). The committed
+`nidara`, **GPG-signed since 2026-07-05**: every package + the repo db are signed in CI;
+clients use `SigLevel = Required DatabaseOptional`, and `install.sh` imports + lsigns the
+public key bundled at `packaging/nidara-repo.gpg` — it also migrates unsigned-era installs
+away from `Optional TrustAll`, in an unconditional block that runs even when phase 1 is
+pin-skipped). The committed
 PKGBUILDs there are generated from `pins.env` by `scripts/gen-pkgbuilds.sh` and are lifted
 verbatim from `install.sh`'s §2/§4 generators. It contains **only third-party deps**, never
 Nidara's own code (which is why it can be public while `nidara-desktop` stays private).

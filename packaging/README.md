@@ -48,13 +48,15 @@ This is the local/dev form. The intended end state for the distributable DE:
 1. ✅ **DONE (2026-06-21)** — these generated PKGBUILDs are now **committed** in
    [`nidara-project/nidara-repo`](https://github.com/nidara-project/nidara-repo) and built by
    CI into real `.pkg.tar.zst` artifacts, published to a pacman repo on GitHub Pages:
-   `https://nidara-project.github.io/nidara-repo/$arch` (pacman repo name `nidara`, unsigned
-   for now → `SigLevel = Optional TrustAll`).
-2. ⏳ **NEXT (Phase 3, deferred)** — `install.sh` / Calamares then just add `nidara-repo` to
-   `pacman.conf` and `pacman -S` — **no build toolchain on the user's machine**, identical
-   pinned binaries for everyone, and dep bumps propagate via `pacman -Syu`. This rewires §1/§2/§4
-   (the validated clean-install path), so it lands as its own change re-validated in the VM,
-   keeping the source build as a fallback.
+   `https://nidara-project.github.io/nidara-repo/$arch` (pacman repo name `nidara`;
+   **GPG-signed since 2026-07-05** — packages + db signed by CI, clients use
+   `SigLevel = Required DatabaseOptional`, public key bundled here as
+   [`nidara-repo.gpg`](nidara-repo.gpg) and imported by `install.sh`).
+2. ✅ **DONE (2026-06-21, Phase 3)** — `install.sh` consumes `nidara-repo`: it registers the
+   repo in `pacman.conf` and `pacman -S`'s the stack — **no build toolchain on the user's
+   machine**, identical pinned binaries for everyone, dep bumps propagate via `pacman -Syu`.
+   The from-source build (§2/§4) remains as the automatic fallback when the repo is
+   unreachable or lags the pins (lockstep guard).
 3. At that point tighten `depends=()` to real runtime deps and add `provides`/`conflicts`
    so the packages coexist cleanly with any future AUR/official Astal packages.
 

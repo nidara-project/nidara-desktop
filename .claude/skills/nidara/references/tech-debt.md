@@ -466,10 +466,12 @@ continues) but boot noise; reinforces AstalHyprland as the #1 facade-replacement
 ([[project_astal_dependency]]). Don't chase it in shell code; if it must be silenced before the facade
 swap, guard the focused-client read path.
 
-### 21. `nidara-repo` — install.sh consumes it (DONE); residual = signing + permanent pin lockstep
+### 21. `nidara-repo` — install.sh consumes it (DONE); signed (DONE); residual = permanent pin lockstep
 `github.com/nidara-project/nidara-repo` (public, 2026-06-21) is a pacman binary repo serving the 18
 deps (appmenu + 16 Astal + ags), GitHub Pages (`https://nidara-project.github.io/nidara-repo/$arch`,
-repo name `nidara`, unsigned → `SigLevel = Optional TrustAll`). **`install.sh` now consumes it**
+repo name `nidara`, **GPG-signed since 2026-07-05**: CI signs packages + db, clients use
+`SigLevel = Required DatabaseOptional`, key bundled at `packaging/nidara-repo.gpg`, imported/lsigned
+by install.sh which also migrates unsigned-era `Optional TrustAll` entries). **`install.sh` now consumes it**
 (validated E2E in a clean VM 2026-06-21): §1 registers `[nidara]` + `pacman -S`'s the 18 explicitly
 (the `libastal-*` declare `depends=()`, so they must be listed — resolution won't pull them), §2/§4
 skip the source build when `DEPS_FROM_REPO=yes`; **the from-source build stays as the fallback** on any
@@ -481,8 +483,9 @@ fallback (and the update pin-skip
 record), `install.sh` keeps its own `*_REF` pins → **pins still live in two places** (`install.sh`
 `*_REF` + `nidara-repo/pins.env`) and must be bumped **in lockstep**. This is now *permanent*, not
 transitional — the earlier "Phase 3 collapses to one SoT" plan does **not** apply (the fallback needs
-the refs). **Still deferred at the repo:** GPG signing (a `nidara-keyring` package, `SigLevel = Required`)
-before any wide/ISO distribution, and tightening `depends=()` + `provides`/`conflicts`. See
+the refs). **Still deferred at the repo:** tightening `depends=()` + `provides`/`conflicts` (a
+`nidara-keyring` package could later replace the bundled-key import, but the current
+`pacman-key --add` path works and ships). See
 `packaging/README.md` and `references/dev-workflow.md`. Next link of the distribution track:
 `nidara-repo → archiso → Calamares` ([[project_installer]]).
 
