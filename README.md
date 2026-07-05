@@ -109,8 +109,11 @@ The installer installs the **latest release** (if your clone's `main` is ahead o
 installer jumps back to the release tag first — you always get the same tested version as
 everyone else; developers opt out with `--dev` or by checking out another branch).
 
-The installer needs no AUR helper — it builds the Astal/AGS libraries from pinned sources, packages
-them, and hands them to `pacman` so they stay trackable and upgradable. It:
+The installer needs no AUR helper — the Astal/AGS stack installs **prebuilt from the project's
+signed pacman repo** ([nidara-repo](https://github.com/nidara-project/nidara-repo)): every package
+and the repo database are GPG-signed by CI, and the installer imports the signing key and requires
+valid signatures. If the repo is ever unreachable it falls back to building the same pinned
+sources locally — either way everything is a real pacman package, trackable and upgradable. It:
 
 1. Installs system dependencies (Hyprland, GTK4, GJS, the Astal libraries + AGS CLI, audio/network/bluetooth stacks, fonts).
 2. Builds the shell, greeter, and lock-screen bundles (`ags bundle`).
