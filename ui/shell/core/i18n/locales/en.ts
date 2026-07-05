@@ -393,9 +393,8 @@ export default {
     "settings.bar.workspaces.desc": "Show the workspace switcher in the center",
     "settings.bar.group.icon": "Menu Button Icon",
     "settings.bar.icon-preset": "Default",
-    "settings.bar.icon-preset.desc": "Reset to the built-in Nidara logo",
     "settings.bar.icon-custom": "Custom Icon",
-    "settings.bar.icon-custom.desc": "Absolute path to an SVG or PNG file",
+    "settings.bar.icon-custom.desc": "Choose an SVG or PNG image, or reset to the Nidara logo",
 
     "settings.dock.title": "Dock",
     "settings.dock.bottom-margin.desc": "Distance to screen edge",

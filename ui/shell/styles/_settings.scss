@@ -301,26 +301,6 @@ button.accent-circle-btn {
     &.accent-slate  { background-color: var(--accent-slate); }
 }
 
-// ── Launcher icon preset buttons ──────────────────────────────────────────────
-button.launcher-icon-btn {
-    background: var(--nidara-surface-back);
-    background-image: none;
-    border: 2px solid transparent;
-    border-radius: $nidara-radius-sm;
-    padding: 8px 10px;
-    min-width: 52px;
-    transition: background-color 0.15s ease, border-color 0.15s ease;
-
-    &.selected {
-        border-color: var(--nidara-accent);
-        background: var(--nidara-accent-10);
-    }
-    &:hover:not(.selected) {
-        background: var(--nidara-surface-hover);
-        border-color: var(--nidara-border);
-    }
-}
-
 // ── App Icons — scrollable boxed list ─────────────────────────────────────────
 // The list scrolls INSIDE the card, so the card chrome (bg/border/radius) lives
 // on the fixed ScrolledWindow and clips the rows at its rounded corners. If
