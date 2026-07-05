@@ -117,7 +117,12 @@ if [ "$MODE" = "update" ]; then
         echo "        Commit/stash them (or update manually with git), then retry." >&2
         exit 1
     fi
-    run_user git -C "$SRC" fetch --tags origin
+    # Fetch ONLY release tags (v*), never --tags: the repo also carries MOVING
+    # utility tags (ci-assets, re-pointed on every typings republish) and git
+    # refuses to clobber a changed local tag, aborting the whole update. Release
+    # tags are immutable so the plain (non-forced) refspec is safe; the branch
+    # itself is fetched by the pull below.
+    run_user git -C "$SRC" fetch origin 'refs/tags/v*:refs/tags/v*'
 
     # Dev clones follow their branch; everyone else jumps to the newest release
     # tag when releases exist (the stable channel), or fast-forwards main before
