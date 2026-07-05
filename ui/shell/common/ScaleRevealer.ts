@@ -156,6 +156,18 @@ export class ScaleRevealer extends Gtk.Widget {
         snapshot.restore()
     }
 
+    // Jump straight to the hidden end-state, no animation: cancel any running
+    // transition and leave exactly what reveal(false) leaves behind. For when
+    // an open panel must be re-anchored somewhere else (the bar expansion
+    // switching pills in one click): snap hidden → swap content → reposition →
+    // fresh reveal(true), so the new content never paints at the old spot.
+    snapClosed() {
+        if (this.tickId !== null) { this.remove_tick_callback(this.tickId); this.tickId = null }
+        this.progress = 0
+        this.opacity = 0
+        this.set_visible(false)
+    }
+
     // Explicit teardown — call right after removing this widget from its parent.
     // Deliberately NOT a vfunc_dispose override: GJS blocks JS vfuncs that run
     // during garbage collection, so a dispose override never fires when the

@@ -321,6 +321,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           if (!w?.buildBarExpanded) return
           content = w.buildBarExpanded(onClose)
       }
+      // Direct pill→pill switch (one click, no dismissal in between): the
+      // capsule is still fully revealed at the PREVIOUS anchor's position, so
+      // snap it to the hidden state first — otherwise the new content paints
+      // at the old spot for the layout frame below, then visibly jumps.
+      if (expansionCapsule.get_visible()) expansionCapsule.snapClosed()
       let c = expansionInner.get_first_child()
       while (c) { const n = c.get_next_sibling(); expansionInner.remove(c); c = n }
       expansionInner.append(content)
@@ -330,7 +335,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       expansionCapsule.set_visible(true)
       GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => {
           positionExpansion(id)
-          expansionCapsule.reveal(true)   // no-op if already open (widget switch)
+          expansionCapsule.reveal(true)   // fresh pop (snapClosed above on a switch)
           updateInputRegion()
           return GLib.SOURCE_REMOVE
       })
