@@ -43,7 +43,15 @@ export default function BarPage() {
     // ── Launcher icon group ───────────────────────────────────────────────────
     const iconGroup = listGroup(t("settings.bar.group.icon"))
 
-    // Preview + reset-to-default chip
+    // A launcherIcon is "custom" only when it points at an image file that still
+    // exists. A preset key ("nidara") — or a stale value from before the rebrand
+    // ("arch") — is treated as the default: the bar falls back to the built-in
+    // mark, so the page must show the same, not the raw string. (This is why the
+    // old free-text entry showed a literal "arch": it echoed the raw value.)
+    const isCustomIcon = (key: string) =>
+        key.startsWith("/") && GLib.file_test(key, GLib.FileTest.EXISTS)
+
+    // Live preview of whatever the bar is actually showing.
     const preview = new Gtk.Image({ pixel_size: 24, valign: Gtk.Align.CENTER })
     const refreshPreview = () => {
         const path = resolveCurrentPath(barSettings.launcherIcon)
@@ -52,61 +60,59 @@ export default function BarPage() {
     }
     refreshPreview()
 
-    const resetBtn = new Gtk.Button({
-        label: "Nidara",
-        css_classes: ["launcher-icon-btn", ...(barSettings.launcherIcon === DEFAULT_LAUNCHER_ICON ? ["selected"] : [])],
+    // "Default" restores the built-in Nidara mark; disabled while already on it.
+    const resetBtn = NidaraButton({
+        label: t("settings.bar.icon-preset"),
+        variant: "secondary",
+        pill: true,
         valign: Gtk.Align.CENTER,
+        sensitive: isCustomIcon(barSettings.launcherIcon),
     })
     resetBtn.connect("clicked", () => {
         updateBarSettings({ launcherIcon: DEFAULT_LAUNCHER_ICON })
-        customEntry.text = ""
-        resetBtn.add_css_class("selected")
+        resetBtn.sensitive = false
         refreshPreview()
     })
 
-    const previewBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
-    previewBox.append(preview)
-    previewBox.append(resetBtn)
-
-    iconGroup.listBox.append(createRow(
-        t("settings.bar.icon-preset"),
-        t("settings.bar.icon-preset.desc"),
-        previewBox,
-    ))
-
-    // Custom path row
-    const customEntry = new Gtk.Entry({
-        placeholder_text: "/path/to/icon.svg",
-        text: LAUNCHER_ICON_PRESETS[barSettings.launcherIcon] ? "" : (barSettings.launcherIcon || ""),
-        width_chars: 28,
-        valign: Gtk.Align.CENTER,
-    })
-
-    const applyCustom = () => {
-        const v = customEntry.text.trim()
-        if (!v) return
-        updateBarSettings({ launcherIcon: v })
-        resetBtn.remove_css_class("selected")
-        refreshPreview()
-    }
-    customEntry.connect("activate", applyCustom)
-
-    const applyBtn = NidaraButton({
-        label: t("settings.region.tz.apply"),
+    // "Choose image…" opens a native file dialog (SVG/PNG), mirroring
+    // Settings → Apps → App Icons. No free-text path — you pick a file.
+    const chooseBtn = NidaraButton({
+        label: t("settings.apps.choose-image"),
         variant: "primary",
         pill: true,
         valign: Gtk.Align.CENTER,
     })
-    applyBtn.connect("clicked", applyCustom)
+    chooseBtn.connect("clicked", () => {
+        const fd = new Gtk.FileDialog({ title: t("settings.apps.dialog.select-icon"), modal: true })
+        const filter = new Gtk.FileFilter()
+        filter.add_mime_type("image/svg+xml")
+        filter.add_mime_type("image/png")
+        filter.set_name(t("settings.apps.filter.images"))
+        const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
+        filters.append(filter)
+        fd.set_filters(filters)
+        const win = chooseBtn.get_root() as Gtk.Window | null
+        fd.open(win, null, (_: any, res: any) => {
+            try {
+                const path = fd.open_finish(res)?.get_path()
+                if (path) {
+                    updateBarSettings({ launcherIcon: path })
+                    resetBtn.sensitive = true
+                    refreshPreview()
+                }
+            } catch {}
+        })
+    })
 
-    const customBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
-    customBox.append(customEntry)
-    customBox.append(applyBtn)
+    const controlBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+    controlBox.append(preview)
+    controlBox.append(chooseBtn)
+    controlBox.append(resetBtn)
 
     iconGroup.listBox.append(createRow(
         t("settings.bar.icon-custom"),
         t("settings.bar.icon-custom.desc"),
-        customBox,
+        controlBox,
     ))
 
     page.append(iconGroup.box)

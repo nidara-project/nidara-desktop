@@ -354,9 +354,8 @@ export default {
     "settings.bar.workspaces.desc": "Mostrar el selector de escritorios en el centro",
     "settings.bar.group.icon": "Icono del Botón del Menú",
     "settings.bar.icon-preset": "Por defecto",
-    "settings.bar.icon-preset.desc": "Restaurar el logo de Nidara integrado",
     "settings.bar.icon-custom": "Icono personalizado",
-    "settings.bar.icon-custom.desc": "Ruta absoluta a un archivo SVG o PNG",
+    "settings.bar.icon-custom.desc": "Elige una imagen SVG o PNG, o restaura el logo de Nidara",
 
     "settings.dock.title": "Dock",
     "settings.dock.bottom-margin.desc": "Distancia al borde de la pantalla",
