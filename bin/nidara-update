@@ -30,6 +30,23 @@ if [ -f "$CONFIG_DIR/.dev" ]; then
     exit 1
 fi
 
+# ── Carried local patches: refuse to blindly reinstall over them ──────────────
+# An agent that keeps a local (not-contributed) repo fix for this user records
+# the clone carrying it in .patches — see the in-repo nidara skill,
+# references/agent-contribution.md ("Carrying a GLOBAL fix locally"). The
+# stateless update below installs pure upstream, which would silently stop
+# applying those patches.
+if [ -f "$CONFIG_DIR/.patches" ]; then
+    PATCH_SRC="$(cat "$CONFIG_DIR/.patches" 2>/dev/null)"
+    echo "nidara-update: this install carries local patches (clone: ${PATCH_SRC:-unknown})." >&2
+    echo "A plain update would reinstall pure upstream and silently drop them." >&2
+    echo "Ask your agent to update instead — it rebases the patches onto the new release" >&2
+    echo "and reinstalls (procedure in the repo's nidara skill). To discard the patches" >&2
+    echo "and return to pure upstream:" >&2
+    echo "    rm ~/.config/nidara/.patches && nidara-update" >&2
+    exit 1
+fi
+
 # ── STABLE path: stateless update from the remote ─────────────────────────────
 command -v git >/dev/null || { echo "nidara-update: git is required." >&2; exit 1; }
 
