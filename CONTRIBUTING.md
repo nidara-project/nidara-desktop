@@ -8,6 +8,9 @@ can handle the mechanics, with your consent.
 
 You can of course also contribute the traditional way. Both paths are welcome.
 
+All participation in the project — issues, PRs, discussions — is governed by our
+[Code of Conduct](CODE_OF_CONDUCT.md).
+
 ## The one question that decides everything: is your change personal or global?
 
 Before contributing, classify the change:

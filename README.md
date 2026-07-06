@@ -339,6 +339,8 @@ Start with [`CONTRIBUTING.md`](CONTRIBUTING.md). The key idea: classify each cha
 (stays in your config), **a setting** (add the knob, not a hardcode), or **global** (worth a PR —
 correctness, hardware compatibility, performance, accessibility).
 
+All participation is governed by our [Code of Conduct](CODE_OF_CONDUCT.md).
+
 ---
 
 ## License
