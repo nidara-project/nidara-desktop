@@ -62,9 +62,13 @@ sha256sums=('SKIP')
 build() {
   cd "$srcdir/nidara-desktop-$pkgver"
 
-  # Shell: SCSS → CSS, TSX → GJS bundle (mirrors install.sh §5)
+  # Shell: SCSS → CSS, TSX → GJS bundle (mirrors install.sh §5).
+  # `npm install`, not `npm ci`: the lockfile is deliberately NOT committed —
+  # it records the ags/gnim file: deps as checkout-depth-relative paths (see
+  # the repo's .gitignore). Only sass + lucide-static resolve from the
+  # registry, both build-time-only.
   cd ui/shell
-  npm ci
+  npm install
   npx sass --no-charset style.scss style.css
   sed -i '/@charset/d' style.css
   mkdir -p build
