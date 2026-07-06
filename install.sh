@@ -696,16 +696,10 @@ rm -rf "$VP_BUILD"
 sudo mkdir -p /usr/lib/systemd/user
 sudo cp "$REPO_DIR/bin/nidara.service" /usr/lib/systemd/user/nidara.service
 
-# Wayland session entry
+# Wayland session entry (shared file: config/wayland-sessions/, also shipped by
+# the nidara pacman package — keep ONE source, don't reintroduce a heredoc here)
 sudo mkdir -p /usr/share/wayland-sessions
-cat <<'EOF' | sudo tee /usr/share/wayland-sessions/nidara.desktop > /dev/null
-[Desktop Entry]
-Name=Nidara
-Comment=A fluid, glassmorphic desktop environment based on Hyprland & AGS
-Exec=/usr/bin/nidara
-Type=Application
-DesktopNames=Hyprland
-EOF
+sudo cp "$REPO_DIR/config/wayland-sessions/nidara.desktop" /usr/share/wayland-sessions/nidara.desktop
 
 # Application entries
 sudo mkdir -p /usr/share/applications
@@ -723,25 +717,13 @@ sudo update-desktop-database /usr/share/applications/ 2>/dev/null || true
 #   one is OWNED BY THE HYPRLAND PACKAGE — never overwrite it). NOTE: the
 #   portals/ subdir is for .portal files ONLY — a .conf there is dead (we
 #   shipped one there by mistake once; remove it on upgrade).
+# (Shared files: config/portal/, also shipped by the nidara pacman package —
+# keep ONE source, don't reintroduce heredocs here.)
 sudo mkdir -p /usr/share/xdg-desktop-portal/portals /usr/share/dbus-1/services /etc/xdg-desktop-portal
 sudo rm -f /usr/share/xdg-desktop-portal/portals/nidara.conf  # misplaced legacy
-cat <<'EOF' | sudo tee /usr/share/xdg-desktop-portal/portals/nidara.portal > /dev/null
-[portal]
-DBusName=org.freedesktop.impl.portal.desktop.nidara
-Interfaces=org.freedesktop.impl.portal.Settings
-EOF
-cat <<'EOF' | sudo tee /usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.nidara.service > /dev/null
-[D-BUS Service]
-Name=org.freedesktop.impl.portal.desktop.nidara
-Exec=/usr/bin/nidara-portal
-EOF
-cat <<'EOF' | sudo tee /etc/xdg-desktop-portal/hyprland-portals.conf > /dev/null
-[preferred]
-default=hyprland;gtk
-org.freedesktop.impl.portal.ScreenCast=hyprland
-org.freedesktop.impl.portal.Screenshot=hyprland
-org.freedesktop.impl.portal.Settings=nidara;gtk
-EOF
+sudo cp "$REPO_DIR/config/portal/nidara.portal" /usr/share/xdg-desktop-portal/portals/nidara.portal
+sudo cp "$REPO_DIR/config/portal/org.freedesktop.impl.portal.desktop.nidara.service" /usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.nidara.service
+sudo cp "$REPO_DIR/config/portal/hyprland-portals.conf" /etc/xdg-desktop-portal/hyprland-portals.conf
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 7. Initialize user configuration (first run only, never overwrites)

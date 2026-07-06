@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Nidara
+Comment=A fluid, glassmorphic desktop environment based on Hyprland & AGS
+Exec=/usr/bin/nidara
+Type=Application
+DesktopNames=Hyprland

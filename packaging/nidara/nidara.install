@@ -1,0 +1,22 @@
+# pacman install hooks for the nidara package.
+# Keep these messages short: most installs go through install.sh (or the future
+# Calamares installer), which runs the first-time setup itself.
+
+post_install() {
+  cat <<'EOF'
+  Nidara is installed, but a login session needs first-time setup
+  (greeter, services, per-user config). Run the installer once:
+
+      git clone https://github.com/nidara-project/nidara-desktop.git
+      cd nidara-desktop && ./install.sh
+
+  Then pick "Nidara" at the login screen.
+EOF
+}
+
+post_upgrade() {
+  cat <<'EOF'
+  Nidara upgraded. If a Nidara session is running, reload the shell
+  with Super+Shift+R (greeter and lockscreen update on next use).
+EOF
+}
