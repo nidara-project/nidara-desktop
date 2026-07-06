@@ -20,7 +20,7 @@ The exclusion is implemented by the private `closeExclusive(keep, opts)` helper 
 
 ### Other tracked props
 
-- `about_open` — opened via `status.about_open`, not via a `toggleAbout` because `AboutWindow` is create+destroy, not hide.
+- `about_open` — `AboutWindow` is create+destroy, not hide: `app.ts` listens on `notify::about-open` and creates/destroys the window. Flipped by `status.toggleAbout()` (the system-menu item, and the `toggleAbout` IPC action).
 - `settings_open` — Settings hides on close instead.
 - `recording`
 - `cc_edit_mode`
