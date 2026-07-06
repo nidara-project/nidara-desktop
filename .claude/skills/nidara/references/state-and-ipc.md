@@ -64,7 +64,7 @@ read source to discover it:
 
 Current commands (run `listActions` for the live list): `toggleCC|toggleControlCenter`,
 `toggleNC|toggleNotificationCenter`, `togglePrism|toggleSearch`, `toggleAppGrid`,
-`openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `toggleBarOverlay` (alias `toggleGameOverlay`),
+`openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `toggleAbout`, `toggleBarOverlay` (alias `toggleGameOverlay`),
 `openWindowMenu`, `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`,
 `setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listApps`, `launchApp <id>`,
 `disableComputerControl`, `notifyComputerAction` (computer-use tools ping it so the bar's AI-control
@@ -104,8 +104,12 @@ synthetic input. The first is `openWindowMenu` (the AppTitle capsule menu — `a
 openWindowMenu`, then `queryUI .nidara-menu-label` for its rows). The pattern: the
 widget that owns the menu registers a `shellActions.openWindowMenu`-style fn (it needs the
 widget's local anchor/builder/state), and a thin IPC command calls it — see `ShellActions.ts`
-and `AppTitle.tsx`. Add more the same way (e.g. a dock context menu) when a click-only
-surface needs verifying. NB: menu **row text** lives on the child `.nidara-menu-label`
+and `AppTitle.tsx`. The second is `toggleAbout` (the About window used to be reachable only
+by clicking the system-menu item): it flips `status.toggleAbout()` and the existing
+`notify::about-open` listener in `app.ts` creates/destroys the window — so About is openable,
+readable and closable agent-side (`toggleAbout`, then `queryUI .about-spec-val@about` — the
+window's name is `nidara-about` — or check `dumpState` → `overlays.about`). Add more the same
+way (e.g. a dock context menu) when a click-only surface needs verifying. NB: menu **row text** lives on the child `.nidara-menu-label`
 label, not the `.nidara-menu-row` button container (queryUI reports own text, not
 descendant text), so assert against the label class. Tier 1 is structure+text; semantic per-widget state (slider value,
 dock-item running/active) is a deferred opt-in tier the widgets would cooperate on, sharing
