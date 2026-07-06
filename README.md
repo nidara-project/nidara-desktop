@@ -343,6 +343,25 @@ All participation is governed by our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
+## Credits
+
+Nidara stands on the work of some excellent open-source projects:
+
+- **[Aylur](https://github.com/Aylur)** — [AGS](https://github.com/Aylur/ags) and the
+  [Astal](https://github.com/Aylur/astal) libraries: the framework the entire Nidara UI is built on.
+- **[Hyprland](https://hyprland.org)** — the Wayland compositor at Nidara's core, along with
+  hypridle, hyprsunset, and xdg-desktop-portal-hyprland from the same ecosystem.
+- **[GNOME](https://www.gnome.org)** — GTK4 and GJS, the toolkit and runtime under every Nidara surface.
+- **[Arch Linux](https://archlinux.org)** — the distribution Nidara is built for.
+- **[Lucide](https://lucide.dev)** — the icon set used throughout the shell
+  (ISC license; see [`NOTICE`](NOTICE)).
+
+…and the wider stack Nidara relies on every day: [greetd](https://git.sr.ht/~kennylevinsen/greetd),
+[PipeWire](https://pipewire.org) & WirePlumber, [uwsm](https://github.com/Vladimir-csp/uwsm),
+and many more. Thank you.
+
+---
+
 ## License
 
 Nidara is released under the **GNU General Public License v3.0** (GPL-3.0).

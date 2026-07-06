@@ -28,3 +28,8 @@ Third-party components
 Nidara builds on and integrates third-party software, including Hyprland, AGS
 (Aylur's GTK Shell), the Astal libraries, GTK4 and GJS. Those components are
 distributed under their own licenses by their respective authors.
+
+Nidara bundles icons from Lucide (https://lucide.dev), used under the ISC
+License. Copyright (c) for portions of Lucide are held by Cole Bemis 2013-2022
+as part of Feather (MIT); all other copyright (c) for Lucide are held by Lucide
+Contributors 2022.
