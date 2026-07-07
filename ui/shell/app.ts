@@ -143,6 +143,11 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: args => ipc.openSettingsPage?.(args[0] ?? ""),
   },
   toggleOverview: { desc: "Toggle the workspaces overview", run: () => ipc.toggleOverview?.() },
+  toggleAbout: {
+    desc: "Toggle the About window (system info card, window `nidara-about`) — the deterministic hook " +
+      "for the system-menu item. Pair with `queryUI .about-spec-val@about` or dumpState `overlays.about` to verify.",
+    run: () => status.toggleAbout(),
+  },
   toggleBarOverlay: {
     desc: "Toggle the bar overlay (bar promoted above fullscreen surfaces)",
     aliases: ["toggleGameOverlay"],
