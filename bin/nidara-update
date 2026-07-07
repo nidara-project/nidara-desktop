@@ -74,6 +74,14 @@ if pacman -Qq nidara >/dev/null 2>&1; then
             systemctl --user restart nidara.service || true
             echo "nidara-update: shell reloaded."
         fi
+        # The upgrade replaced /usr/share/nidara/config/hypr/hyprland.lua under
+        # the live compositor: Hyprland's config watch fires mid-extract, errors
+        # "cannot open … hyprland.lua", and the banner sticks — the watch died
+        # with the old inode, so it never sees the new file land. Reload now
+        # that it's in place. No-op outside a Hyprland session.
+        if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
+            hyprctl reload >/dev/null 2>&1 || true
+        fi
     fi
     exit 0
 fi

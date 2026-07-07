@@ -653,6 +653,16 @@ fi
 sudo rm -rf /usr/share/nidara/ui/ags-v3 /usr/share/themes/crystal-shell
 sudo rm -f /usr/share/nidara/wallpaper.png /usr/share/xdg-desktop-portal/portals/nidara.conf
 
+# Installing the package replaced /usr/share/nidara/config/hypr/hyprland.lua.
+# If a Nidara session is live right now (update-apply, script→package handoff,
+# escape-hatch rerun from a terminal), Hyprland's config watch fired mid-extract,
+# errored "cannot open … hyprland.lua", and the banner sticks — the watch died
+# with the old inode. Reload now that the new file is in place; no-op outside a
+# session (clean installs from TTY/SSH, or when sudo stripped the session env).
+if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
+    run_user hyprctl reload >/dev/null 2>&1 || true
+fi
+
 else
 # ── Dev installs copy source files straight into /usr ────────────────────────
 # If the nidara PACKAGE is installed, pacman owns those paths and the next
