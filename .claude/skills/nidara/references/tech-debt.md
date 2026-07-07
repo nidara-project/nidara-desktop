@@ -485,7 +485,11 @@ record), `install.sh` keeps its own `*_REF` pins → **pins still live in two pl
 transitional — the earlier "Phase 3 collapses to one SoT" plan does **not** apply (the fallback needs
 the refs). **Still deferred at the repo:** tightening `depends=()` + `provides`/`conflicts` (a
 `nidara-keyring` package could later replace the bundled-key import, but the current
-`pacman-key --add` path works and ships). See
+`pacman-key --add` path works and ships). **Since the packaging switch (2026-07) the repo also
+ships `nidara` itself**: built LAST by `build-repo.sh` from the `NIDARA_REF` tag in `pins.env`,
+with the PKGBUILD found INSIDE the tag (`packaging/nidara/`); `install.sh --system` consumes it
+(prebuilt or local makepkg fallback) and `nidara-update` goes through `pacman -Syu` +
+`nidara-setup` on package installs. See
 `packaging/README.md` and `references/dev-workflow.md`. Next link of the distribution track:
 `nidara-repo → archiso → Calamares` ([[project_installer]]).
 
