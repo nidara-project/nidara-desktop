@@ -2,17 +2,22 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # nidara-update — update an installed Nidara. Installed to /usr/bin/nidara-update.
 #
-# Two paths:
-#   DEV    — if a dev install registered its own clone (~/.config/nidara/.dev,
-#            written by `install.sh --dev`), update from THERE, following the dev
-#            branch. Hands over to that clone's install.sh so the updater itself
-#            updates with the repo.
-#   STABLE — STATELESS: there is NO persistent source copy on disk. Resolve the
-#            newest release tag on the remote, shallow-clone just that tag into a
-#            throwaway temp dir, build+install from there, and delete it. The
-#            source of truth is the git remote + what's installed in /usr/share.
-#            (The runtime is system-wide; the old per-user ~/.local/share/nidara/src
-#            diverged between users while everyone shared one bundle — gone now.)
+# Three paths:
+#   DEV     — if a dev install registered its own clone (~/.config/nidara/.dev,
+#             written by `install.sh --dev`), update from THERE, following the dev
+#             branch. Hands over to that clone's install.sh so the updater itself
+#             updates with the repo.
+#   PACKAGE — nidara is installed as the pacman package (system installs since
+#             the packaging switch): new releases arrive through the [nidara]
+#             repo on a plain full upgrade, pacman owns files and deps, no git
+#             involved. nidara-setup then re-applies the idempotent system/user
+#             setup (new config seeds, greetd refresh, new services).
+#   STABLE (script-era) — STATELESS: there is NO persistent source copy on disk.
+#             Resolve the newest release tag on the remote, shallow-clone just
+#             that tag into a throwaway temp dir, install from there, delete it.
+#             Running this once on a pre-package install MIGRATES it to the
+#             package: the clone's install.sh installs nidara as a package (§6),
+#             so the next update takes the PACKAGE path above.
 # ─────────────────────────────────────────────────────────────────────────────
 set -e
 
@@ -45,6 +50,32 @@ if [ -f "$CONFIG_DIR/.patches" ]; then
     echo "and return to pure upstream:" >&2
     echo "    rm ~/.config/nidara/.patches && nidara-update" >&2
     exit 1
+fi
+
+# ── PACKAGE path: installed via pacman → update via pacman ───────────────────
+# NOTE this must stay AFTER the .patches guard: a patched install is a locally
+# built package, and a blind -Syu would replace it with pure upstream the
+# moment the repo serves a newer release — silently dropping the patches.
+if pacman -Qq nidara >/dev/null 2>&1; then
+    old_v="$(pacman -Q nidara | awk '{print $2}')"
+    echo "nidara-update: nidara is pacman-managed ($old_v) — running a full system upgrade…"
+    # Interactive on purpose (no --noconfirm): this is a FULL system upgrade,
+    # the user should see what it pulls in. Declining aborts the update.
+    sudo pacman -Syu
+    new_v="$(pacman -Q nidara | awk '{print $2}')"
+    nidara-setup
+    if [ "$old_v" = "$new_v" ]; then
+        echo "nidara-update: nidara already up to date ($new_v)."
+    else
+        echo "nidara-update: nidara $old_v → $new_v."
+        # Reload the running shell so the new bundle takes effect now; greeter
+        # and lockscreen pick theirs up on next use.
+        if systemctl --user is-active --quiet nidara.service 2>/dev/null; then
+            systemctl --user restart nidara.service || true
+            echo "nidara-update: shell reloaded."
+        fi
+    fi
+    exit 0
 fi
 
 # ── STABLE path: stateless update from the remote ─────────────────────────────
