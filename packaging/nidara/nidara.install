@@ -4,11 +4,10 @@
 
 post_install() {
   cat <<'EOF'
-  Nidara is installed, but a login session needs first-time setup
-  (greeter, services, per-user config). Run the installer once:
+  Nidara is installed, but a login session needs one-time setup
+  (greeter, services, per-user config). Run, as your normal user:
 
-      git clone https://github.com/nidara-project/nidara-desktop.git
-      cd nidara-desktop && ./install.sh
+      nidara-setup
 
   Then pick "Nidara" at the login screen.
 EOF

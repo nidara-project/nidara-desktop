@@ -105,7 +105,7 @@ package() {
   for b in nidara nidara-ui nidara-greeter nidara-lock nidara-before-sleep \
            nidara-after-sleep nidara-game-mode nidara-doctor nidara-portal \
            nidara-mcp nidara-a11y nidara-act nidara-type nidara-click \
-           nidara-update; do
+           nidara-update nidara-setup; do
     install -Dm755 "bin/$b" "$pkgdir/usr/bin/$b"
   done
   install -Dm755 build/nidara-input "$pkgdir/usr/bin/nidara-input"

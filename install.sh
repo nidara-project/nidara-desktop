@@ -260,44 +260,9 @@ if [ "$MODE" = "update-apply" ] || [ "$MODE" = "dev" ]; then
     fi
 fi
 
-# ─────────────────────────────────────────────────────────────────────────────
-# System environment detection
-# Reads values the user already set during Arch installation — never asks.
-# ─────────────────────────────────────────────────────────────────────────────
-
-# Keyboard layout ─────────────────────────────────────────────────────────────
-# vconsole keymaps mostly match X11/Wayland names, but a few differ.
-_vconsole_to_xkb() {
-    case "$1" in
-        uk)          echo "gb"    ;;  # British: vconsole=uk, XKB=gb
-        us-acentos)  echo "us"    ;;  # Latin US variant → plain us
-        br-abnt2)    echo "br"    ;;
-        *)           echo "$1"    ;;  # All others match directly
-    esac
-}
-
-SYS_KB_LAYOUT="us"
-if [ -f /etc/vconsole.conf ]; then
-    _keymap=$(grep -E "^KEYMAP=" /etc/vconsole.conf | head -1 | cut -d= -f2 | tr -d '"' | tr -d "'")
-    [ -n "$_keymap" ] && SYS_KB_LAYOUT=$(_vconsole_to_xkb "$_keymap")
-fi
-
-# Timezone ────────────────────────────────────────────────────────────────────
-SYS_TIMEZONE="UTC"
-if [ -L /etc/localtime ]; then
-    _tz=$(readlink /etc/localtime | sed 's|.*/zoneinfo/||')
-    [ -n "$_tz" ] && SYS_TIMEZONE="$_tz"
-fi
-
-# Locale ──────────────────────────────────────────────────────────────────────
-SYS_LOCALE="en_US"
-if [ -f /etc/locale.conf ]; then
-    _lang=$(grep -E "^LANG=" /etc/locale.conf | head -1 | cut -d= -f2 | cut -d. -f1 | tr -d '"' | tr -d "'")
-    [ -n "$_lang" ] && SYS_LOCALE="$_lang"
-fi
-
-echo "  Detected: layout=$SYS_KB_LAYOUT  timezone=$SYS_TIMEZONE  locale=$SYS_LOCALE"
-echo ""
+# (System environment detection — keyboard layout / timezone / locale — lives
+# in bin/nidara-setup now, next to its only consumers: the per-user config
+# seeds and the greetd template.)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # nidara-repo trust & registration
@@ -504,9 +469,7 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[3/7] Configuring GObject Introspection..."
 sudo ldconfig
-if ! grep -q "GI_TYPELIB_PATH" /etc/environment 2>/dev/null; then
-    echo 'GI_TYPELIB_PATH="/usr/lib/girepository-1.0"' | sudo tee -a /etc/environment
-fi
+# (GI_TYPELIB_PATH in /etc/environment is applied by nidara-setup, called in §7.)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 4. Build & install AGS CLI
@@ -617,6 +580,15 @@ else
     sudo cp -r "$REPO_DIR/config/hypr/." /usr/share/nidara/config/hypr/
 fi
 
+# Setup payloads consumed by nidara-setup (greetd templates, per-user seeds) —
+# the same layout the nidara pacman package ships, so nidara-setup reads ONE
+# place regardless of how Nidara was installed. defaults/wallpaper is excluded:
+# the wallpaper already ships at its canonical /usr/share/nidara/wallpaper.jpg.
+sudo rm -rf /usr/share/nidara/defaults /usr/share/nidara/config/greetd
+sudo cp -r "$REPO_DIR/defaults" /usr/share/nidara/defaults
+sudo rm -rf /usr/share/nidara/defaults/wallpaper
+sudo cp -r "$REPO_DIR/config/greetd" /usr/share/nidara/config/greetd
+
 # Default wallpaper (jpg since 2026-07). The stale wallpaper.png can go now:
 # the DM block re-syncs a Nidara-owned /etc/greetd in this same run (tech-debt
 # #16 fix), so the greeter .lua points at wallpaper.jpg again; a foreign
@@ -675,7 +647,8 @@ sudo cp "$REPO_DIR/bin/nidara-act"       /usr/bin/nidara-act
 sudo cp "$REPO_DIR/bin/nidara-type"      /usr/bin/nidara-type
 sudo cp "$REPO_DIR/bin/nidara-click"     /usr/bin/nidara-click
 sudo cp "$REPO_DIR/bin/nidara-update" /usr/bin/nidara-update
-sudo chmod +x /usr/bin/nidara /usr/bin/nidara-ui /usr/bin/nidara-greeter /usr/bin/nidara-lock /usr/bin/nidara-before-sleep /usr/bin/nidara-after-sleep /usr/bin/nidara-game-mode /usr/bin/nidara-doctor /usr/bin/nidara-portal /usr/bin/nidara-mcp /usr/bin/nidara-a11y /usr/bin/nidara-act /usr/bin/nidara-type /usr/bin/nidara-click /usr/bin/nidara-update
+sudo cp "$REPO_DIR/bin/nidara-setup" /usr/bin/nidara-setup
+sudo chmod +x /usr/bin/nidara /usr/bin/nidara-ui /usr/bin/nidara-greeter /usr/bin/nidara-lock /usr/bin/nidara-before-sleep /usr/bin/nidara-after-sleep /usr/bin/nidara-game-mode /usr/bin/nidara-doctor /usr/bin/nidara-portal /usr/bin/nidara-mcp /usr/bin/nidara-a11y /usr/bin/nidara-act /usr/bin/nidara-type /usr/bin/nidara-click /usr/bin/nidara-update /usr/bin/nidara-setup
 
 # Compile the synthetic-pointer backend (nidara-input): a tiny zwlr_virtual_pointer_v1
 # Wayland client. wayland-scanner generates the protocol glue from wlr-protocols, then cc
@@ -726,17 +699,13 @@ sudo cp "$REPO_DIR/config/portal/org.freedesktop.impl.portal.desktop.nidara.serv
 sudo cp "$REPO_DIR/config/portal/hyprland-portals.conf" /etc/xdg-desktop-portal/hyprland-portals.conf
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 7. Initialize user configuration (first run only, never overwrites)
+# 7. First-time setup — install-mode markers here; everything else is delegated
+#    to nidara-setup (ONE implementation, shared with the pacman-package path).
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[7/7] Initializing user configuration..."
 mkdir -p "$CONFIG_DIR"
-# Running under sudo, `mkdir -p` creates ~/.config ITSELF as root when it doesn't
-# exist yet. A root-owned ~/.config silently breaks the whole user session: the
-# shell (running as $REAL_USER) then can't create ~/.config/gtk-{3,4}.0 (icon theme
-# + dark never reach GTK apps), dconf can't create ~/.config/dconf (gsettings writes
-# vanish → libadwaita apps stay light), and xdg-user-dirs-update can't write
-# ~/.config/user-dirs.dirs (nautilus "No Home Directory") — clean-install bugs 1/2/4,
-# VM 06-22. Own the parent too, not just our dir.
+# Own the parent too: under sudo, `mkdir -p` can create ~/.config itself as
+# root, which silently breaks the whole session (rationale in bin/nidara-setup).
 chown "$REAL_USER" "${REAL_HOME}/.config" "$CONFIG_DIR"
 
 # Dev mode marker. An update never changes the install's mode: --update-apply
@@ -767,310 +736,17 @@ elif [ "$MODE" = "system" ]; then
     echo "  [Source] Stateless updates — nidara-update re-clones the remote each time."
 fi
 
-# Default JSON configs (never overwrite user's existing files).
-# Bar/CC widget placement + CC tile layout are NOT seeded here: they come from the
-# shell's code defaults (DEFAULT_PLACEMENT + CC_DEFAULT_ORDER in widgets/index.ts),
-# which are hardware-adaptive. The runtime widgets.json/cc_layout.json are written into
-# the config dir only once the user customizes them.
-for f in appearance.json; do
-    if [ -f "$REPO_DIR/defaults/$f" ] && [ ! -f "$CONFIG_DIR/$f" ]; then
-        cp "$REPO_DIR/defaults/$f" "$CONFIG_DIR/$f"
-        chown "$REAL_USER" "$CONFIG_DIR/$f"
-        echo "  [Init] $CONFIG_DIR/$f"
-    fi
-done
-
-# Default file manager: `xdg-open <folder>` (the dock's Files item, apps' "open
-# containing folder", …) needs inode/directory to point at nautilus. A fresh Arch
-# has no association — BUT kitty ships `kitty-open.desktop`, which auto-claims
-# inode/directory, so the Files item would open the TERMINAL (clean-install bug,
-# VM 06-22). Seed nautilus when there's no association yet OR when it's that kitty
-# default; never override a real user choice.
-_fm_default="$(run_user xdg-mime query default inode/directory 2>/dev/null)"
-if [ -z "$_fm_default" ] || [ "$_fm_default" = "kitty-open.desktop" ]; then
-    run_user xdg-mime default org.gnome.Nautilus.desktop inode/directory \
-        && echo "  [Init] Default file manager → nautilus (inode/directory, was: ${_fm_default:-none})"
-fi
-
-# .mcp.json — MCP manifest for the user's AI agent (Claude Code et al). Points at
-# the installed binary via PATH. Always (re)written: it's a runtime-managed pointer,
-# not user data. Opening an agent inside ~/.config/nidara discovers it
-# automatically; any other agent can be pointed at it ("register the MCP server
-# described in ~/.config/nidara/.mcp.json").
-cat > "$CONFIG_DIR/.mcp.json" <<'JSON'
-{
-  "mcpServers": {
-    "nidara": {
-      "command": "nidara-mcp"
-    }
-  }
-}
-JSON
-chown "$REAL_USER" "$CONFIG_DIR/.mcp.json"
-echo "  [Init] $CONFIG_DIR/.mcp.json (agent interface manifest)"
-
-# region.json — generated with detected timezone (not copied from defaults)
-if [ ! -f "$CONFIG_DIR/region.json" ]; then
-    cat > "$CONFIG_DIR/region.json" <<JSON
-{
-  "timeFormat": "24h",
-  "dateFormat": "long",
-  "timezone": "$SYS_TIMEZONE",
-  "showSeconds": false
-}
-JSON
-    chown "$REAL_USER" "$CONFIG_DIR/region.json"
-    echo "  [Init] $CONFIG_DIR/region.json (timezone=$SYS_TIMEZONE)"
-fi
-
-# Hyprland user overrides (created once, never overwritten)
-if [ ! -f "$CONFIG_DIR/hyprland-user.lua" ]; then
-    cat > "$CONFIG_DIR/hyprland-user.lua" <<LUA
--- ── hyprland-user.lua ────────────────────────────────────────────────────────
--- Your personal Hyprland overrides. Nidara updates will never touch this.
--- Add monitor setup, startup apps, custom keybinds, etc.
---
--- Note: environment variables go in ~/.config/uwsm/env (toolkit/NVIDIA)
--- or ~/.config/uwsm/env-hyprland (HYPR* / AQ_* variables) — not here.
--- ─────────────────────────────────────────────────────────────────────────────
-
--- @autostart start
-hl.on("hyprland.start", function()
-end)
--- @autostart end
-LUA
-    chown "$REAL_USER" "$CONFIG_DIR/hyprland-user.lua"
-    echo "  [Init] $CONFIG_DIR/hyprland-user.lua"
-fi
-
-# Nidara generated config (Hyprland settings from UI)
-# Seeded with the detected system keyboard layout on first install.
-if [ ! -f "$CONFIG_DIR/nidara-settings.lua" ]; then
-    cat > "$CONFIG_DIR/nidara-settings.lua" <<LUA
--- NIDARA SHELL SETTINGS
--- Auto-generated by the Nidara Settings UI. Do not edit manually.
-hl.config({
-    input = {
-        sensitivity        = 0.00,
-        accel_profile      = "adaptive",
-        natural_scroll     = false,
-        numlock_by_default = false,
-        kb_layout          = "$SYS_KB_LAYOUT",
-        kb_variant         = "",
-        repeat_delay       = 600,
-        repeat_rate        = 25,
-        touchpad = {
-            natural_scroll = false,
-            tap_to_click   = true,
-        },
-    },
-})
-LUA
-    chown "$REAL_USER" "$CONFIG_DIR/nidara-settings.lua"
-    echo "  [Init] $CONFIG_DIR/nidara-settings.lua (kb_layout=$SYS_KB_LAYOUT)"
-fi
-
-# Monitor config — generated by Display settings page
-if [ ! -f "$CONFIG_DIR/nidara-monitor.lua" ]; then
-    touch "$CONFIG_DIR/nidara-monitor.lua"
-    chown "$REAL_USER" "$CONFIG_DIR/nidara-monitor.lua"
-    echo "  [Init] $CONFIG_DIR/nidara-monitor.lua"
-fi
-
-# Hypridle config
-# Dev mode:    symlink directly to repo so edits take effect immediately
-# System mode: copy to $CONFIG_DIR once (never overwritten), symlink from there
-mkdir -p "${REAL_HOME}/.config/hypr"
-chown "$REAL_USER" "${REAL_HOME}/.config/hypr"   # created under sudo; keep it user-owned
-
-for daemon in hypridle; do
-    LINK="${REAL_HOME}/.config/hypr/${daemon}.conf"
-    if [ "$DEV_LIKE" = "yes" ]; then
-        TARGET="$REPO_DIR/config/hypr/${daemon}.conf"
-    else
-        TARGET="$CONFIG_DIR/${daemon}.conf"
-        if [ ! -f "$TARGET" ]; then
-            cp "$REPO_DIR/config/hypr/${daemon}.conf" "$TARGET"
-            chown "$REAL_USER" "$TARGET"
-            echo "  [Init] $TARGET"
-        fi
-    fi
-    # Always (re)create the symlink so it points to the right target for the current mode
-    ln -sf "$TARGET" "$LINK"
-    echo "  [Symlink] $LINK -> $TARGET"
-done
-
-# hyprland-user.lua — symlink into ~/.config/hypr/ so Autostart settings page
-# can read/write it from a predictable location regardless of install mode
-USERCONF_LINK="${REAL_HOME}/.config/hypr/hyprland-user.lua"
-USERCONF_TARGET="$CONFIG_DIR/hyprland-user.lua"
-ln -sf "$USERCONF_TARGET" "$USERCONF_LINK"
-echo "  [Symlink] $USERCONF_LINK -> $USERCONF_TARGET"
-
-# uwsm environment files (created once, never overwritten)
-UWSM_DIR="${REAL_HOME}/.config/uwsm"
-mkdir -p "$UWSM_DIR"
-chown "$REAL_USER" "$UWSM_DIR"
-for f in env env-hyprland; do
-    if [ ! -f "$UWSM_DIR/$f" ]; then
-        cp "$REPO_DIR/defaults/uwsm/$f" "$UWSM_DIR/$f"
-        chown "$REAL_USER" "$UWSM_DIR/$f"
-        echo "  [Init] $UWSM_DIR/$f"
-    fi
-done
-
-ENVFILE="$UWSM_DIR/env"
-
-# Migrate two objectively-broken shipped defaults in pre-0.1 env files. These match
-# the exact bad lines only, so a user's own edits are never touched. uwsm SOURCES
-# this file as shell:
-#   - QT_QPA_PLATFORM=wayland;xcb  → the bare ';' ran 'xcb' as a command, truncating
-#     the var to just 'wayland'. Quote it.
-#   - QT_QPA_PLATFORMTHEME=qt6ct   → contradicts the portal-based Qt theming the
-#     launcher sets; since the env file is sourced AFTER the launcher it wins, so the
-#     stale qt6ct value was actually overriding xdgdesktopportal.
-# sed -i recreates the file as root when we run under sudo, so chown it back after.
-sed -i \
-    -e 's|^export QT_QPA_PLATFORM=wayland;xcb$|export QT_QPA_PLATFORM="wayland;xcb"|' \
-    -e 's|^export QT_QPA_PLATFORMTHEME=qt6ct$|export QT_QPA_PLATFORMTHEME=xdgdesktopportal|' \
-    "$ENVFILE"
-chown "$REAL_USER" "$ENVFILE"
-
-# ── NVIDIA GPU autodetection ──────────────────────────────────────────────────
-# A fresh NVIDIA user otherwise gets a black screen / glitches until they manually
-# uncomment the GPU vars. Detect the hardware AND the active driver: the nvidia-drm
-# GBM backend vars apply ONLY to the proprietary/open driver — under nouveau they
-# break the session (nouveau uses the standard mesa GBM path). Idempotent: only flips
-# the commented hint lines to active, so it's safe to re-run (e.g. after installing
-# the driver later).
-if command -v lspci >/dev/null 2>&1 \
-   && lspci -nn 2>/dev/null | grep -iE 'VGA|3D|Display' | grep -qi nvidia; then
-    echo "  [GPU] NVIDIA hardware detected."
-    if lsmod 2>/dev/null | grep -q '^nouveau'; then
-        echo "  [GPU] nouveau driver in use — leaving NVIDIA env vars commented (nouveau uses mesa/GBM)."
-    elif ! lsmod 2>/dev/null | grep -q '^nvidia'; then
-        echo "  [GPU] NVIDIA card present but no nvidia kernel module loaded."
-        echo "        Install nvidia-dkms (or nvidia-open-dkms) + nvidia-utils + egl-wayland, then re-run."
-    else
-        echo "  [GPU] Proprietary/open driver active — enabling Wayland GPU env vars in $ENVFILE."
-        sed -i \
-            -e 's|^# *export LIBVA_DRIVER_NAME=nvidia|export LIBVA_DRIVER_NAME=nvidia|' \
-            -e 's|^# *export GBM_BACKEND=nvidia-drm|export GBM_BACKEND=nvidia-drm|' \
-            -e 's|^# *export __GLX_VENDOR_LIBRARY_NAME=nvidia|export __GLX_VENDOR_LIBRARY_NAME=nvidia|' \
-            "$ENVFILE"
-        if pacman -Qq libva-nvidia-driver >/dev/null 2>&1; then
-            sed -i 's|^# *export NVD_BACKEND=direct|export NVD_BACKEND=direct|' "$ENVFILE"
-            echo "  [GPU] libva-nvidia-driver found — enabled NVD_BACKEND=direct (VA-API)."
-        else
-            echo "  [GPU] (optional) install libva-nvidia-driver for hardware video acceleration."
-        fi
-        chown "$REAL_USER" "$ENVFILE"
-
-        # DRM modeset must be ON for Wayland. Arch enables it by default; only warn.
-        # Never edit /etc/modprobe.d or rebuild initramfs silently — that touches boot.
-        if [ -r /sys/module/nvidia_drm/parameters/modeset ] \
-           && [ "$(cat /sys/module/nvidia_drm/parameters/modeset)" != "Y" ]; then
-            echo "  [GPU] WARNING: nvidia_drm modeset is OFF — Wayland needs it ON."
-            echo "        Add 'options nvidia_drm modeset=1' to /etc/modprobe.d/nvidia.conf,"
-            echo "        then run 'sudo mkinitcpio -P' and reboot."
-        fi
-
-        # Hybrid graphics (iGPU + NVIDIA dGPU): don't guess the card — just inform.
-        if lspci -nn 2>/dev/null | grep -iE 'VGA|3D|Display' | grep -qiE 'intel|amd|radeon|ati'; then
-            echo "  [GPU] Hybrid graphics detected (iGPU + NVIDIA)."
-            echo "        If displays on the NVIDIA GPU misbehave, set AQ_DRM_DEVICES in"
-            echo "        ~/.config/uwsm/env-hyprland (see the commented hint there)."
-        fi
-    fi
-fi
-
-# ── Display manager ───────────────────────────────────────────────────────────
-# Only install and enable greetd if no other display manager is already active.
-# If the user already has sddm/gdm/lightdm/etc. enabled we leave it untouched.
-_detect_dm() {
-    for dm in sddm gdm lightdm lxdm xdm slim ly greetd; do
-        if systemctl is-enabled "$dm" 2>/dev/null | grep -qE "^enabled"; then
-            echo "$dm"; return 0
-        fi
-    done
-    echo "none"
-}
-
-ACTIVE_DM=$(_detect_dm)
-# /etc/greetd is (re)written only when it is recognizably OURS, or when there is
-# no DM at all. A bare "greetd is enabled" is NOT enough: greetd is the go-to
-# minimal DM for Wayland users running a different greeter (tuigreet/gtkgreet/
-# ReGreet), and clobbering their config would break their login. But never
-# refreshing it is how tech-debt #16 happened: a renamed greeter binary left
-# /etc/greetd pointing at a deleted executable and the greeter died on boot.
-# Fingerprints (both unmistakably Nidara's): our config.toml points greetd at
-# hyprland-greeter.lua; our greeter .lua launches nidara-greeter.
-_greetd_is_ours() {
-    grep -q 'hyprland-greeter.lua' /etc/greetd/config.toml 2>/dev/null && return 0
-    grep -q 'nidara-greeter' /etc/greetd/hyprland-greeter.lua 2>/dev/null && return 0
-    return 1
-}
-if [ "$ACTIVE_DM" = "none" ] || { [ "$ACTIVE_DM" = "greetd" ] && _greetd_is_ours; }; then
-    if [ "$ACTIVE_DM" = "none" ]; then
-        echo "  No display manager detected — installing greetd..."
-    else
-        echo "  greetd (Nidara) detected — refreshing /etc/greetd..."
-    fi
-
-    # Install greetd config files (inject detected keyboard layout)
-    sudo mkdir -p /etc/greetd
-    sudo cp "$REPO_DIR/config/greetd/config.toml" /etc/greetd/config.toml
-    sudo sed 's/kb_layout = "us"/kb_layout = "'"$SYS_KB_LAYOUT"'"/' \
-        "$REPO_DIR/config/greetd/hyprland-greeter.lua" \
-        | sudo tee /etc/greetd/hyprland-greeter.lua > /dev/null
-    sudo chmod 644 /etc/greetd/config.toml /etc/greetd/hyprland-greeter.lua
-
-    # Symlink greeter Hyprland config to the greeter user's default location
-    # (HYPRLAND_CONFIG in config.toml already points here; symlink is a fallback)
-    GREETER_HOME=$(getent passwd greeter | cut -d: -f6)
-    if [ -n "$GREETER_HOME" ]; then
-        sudo mkdir -p "$GREETER_HOME/.config/hypr"
-        sudo ln -sf /etc/greetd/hyprland-greeter.lua "$GREETER_HOME/.config/hypr/hyprland.lua"
-        sudo chown -R greeter:greeter "$GREETER_HOME/.config"
-        echo "  [OK] Greeter Hyprland config symlinked to $GREETER_HOME/.config/hypr/hyprland.lua"
-    fi
-
-    sudo systemctl enable greetd
-    echo "  [OK] greetd enabled."
-elif [ "$ACTIVE_DM" = "greetd" ]; then
-    echo "  greetd is enabled but set up with a different greeter — leaving it untouched."
-    echo "  To use Nidara's greeter, point /etc/greetd/config.toml at the files in"
-    echo "  $REPO_DIR/config/greetd/ and re-run the installer."
+# Everything else a first login needs — per-user config seeding, uwsm env +
+# NVIDIA autodetect, greetd/DM setup, service enablement — lives in
+# bin/nidara-setup: ONE idempotent implementation, shared with the package
+# path (`pacman -S nidara && nidara-setup`) and with nidara-update. §6 just
+# refreshed /usr/bin/nidara-setup and its /usr/share/nidara payloads, so run
+# the installed copy. Dev installs point live-editable configs at the repo.
+if [ "$DEV_LIKE" = "yes" ]; then
+    bash /usr/bin/nidara-setup --dev-repo "$REPO_DIR"
 else
-    echo "  Display manager '$ACTIVE_DM' already enabled — skipping greetd setup."
+    bash /usr/bin/nidara-setup
 fi
-
-# ── Nidara unit ────────────────────────────────────────────────────────
-# Deliberately NOT enabled via graphical-session.target — that would start the
-# Nidara UI in every uwsm-managed Hyprland session, not just ours. The Nidara
-# Hyprland config starts it (config/hypr/hyprland.lua → systemctl --user start),
-# which only loads in the Nidara session. Restart=on-failure still respawns it
-# on crash. Migration: disable any enablement left by older installs.
-echo "  Refreshing nidara.service (started by the Nidara session, not enabled)..."
-systemctl --user daemon-reload 2>/dev/null || true
-systemctl --user disable nidara.service 2>/dev/null || true
-
-# ── Audio services ────────────────────────────────────────────────────────────
-echo "  Enabling audio services..."
-systemctl --user enable --now wireplumber pipewire pipewire-pulse 2>/dev/null || true
-
-# ── Power profiles ────────────────────────────────────────────────────────────
-# Game mode toggles performance/balanced via powerprofilesctl (hyprland.lua).
-echo "  Enabling power-profiles-daemon..."
-sudo systemctl enable --now power-profiles-daemon 2>/dev/null || true
-
-# ── Bluetooth ─────────────────────────────────────────────────────────────────
-# AstalBluetooth talks to BlueZ (org.bluez) over the system bus; the bluez daemon
-# provides that name. bluez-libs alone (the client library) is not enough — without
-# the daemon enabled there's no org.bluez, so the Bluetooth page reports "no adapter"
-# even on machines that DO have Bluetooth. Idle and harmless where there's no adapter.
-echo "  Enabling bluetooth..."
-sudo systemctl enable --now bluetooth.service 2>/dev/null || true
 
 echo ""
 if [ "$MODE" = "update-apply" ]; then
