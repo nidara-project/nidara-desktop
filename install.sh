@@ -21,6 +21,12 @@
 # refuse the blind stateless path: the agent rebases the patch branch onto the new
 # release and re-runs --update-apply instead. --update likewise refuses to checkout
 # a release over local-only commits rather than silently dropping them.
+#
+# Packaging model: system installs get Nidara itself as a pacman PACKAGE —
+# prebuilt from the [nidara] repo when it serves this release, else built
+# locally from packaging/nidara/PKGBUILD (§6) — so pacman owns every installed
+# file. Dev installs keep copying source files into /usr directly (and remove
+# the package first so pacman can't clobber the copies on -Syu).
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -89,6 +95,36 @@ build_install_pkg() {
     pkgfile="$(ls -t "$dir"/*.pkg.tar.* 2>/dev/null | head -1)"
     [ -n "$pkgfile" ] || { echo "  [ERR] makepkg produced no package in $dir" >&2; exit 1; }
     sudo pacman -U --noconfirm --overwrite '*' "$pkgfile"
+}
+
+# Build the nidara package itself from THIS tree and install it (§6). Uses the
+# same PKGBUILD releases ship (packaging/nidara/): makepkg finds a source file
+# of the expected name in the build dir and skips the download, so we pack the
+# working tree — as-is, uncommitted changes included: this is the escape-hatch/
+# non-release path and must install what's here — under the tarball name and
+# prefix the PKGBUILD expects. Build artifacts and node_modules are excluded
+# because build() regenerates them. The SH transform flags keep symlink/hardlink
+# TARGETS untouched (assets contain relative symlinks).
+build_local_nidara_pkg() {
+    local pdir="$PKG_CACHE/nidara" pkgver
+    pkgver="$(grep '^pkgver=' "$REPO_DIR/packaging/nidara/PKGBUILD" | head -1 | cut -d= -f2)"
+    if [ "$pkgver" != "$(cat "$REPO_DIR/VERSION")" ]; then
+        echo "  [WARN] packaging/nidara/PKGBUILD pkgver=$pkgver ≠ VERSION=$(cat "$REPO_DIR/VERSION") —"
+        echo "         these are bumped together in release commits; packaging this tree as $pkgver."
+    fi
+    rm -rf "$pdir"
+    mkdir -p "$pdir"
+    cp "$REPO_DIR/packaging/nidara/PKGBUILD" "$REPO_DIR/packaging/nidara/nidara.install" "$pdir/"
+    tar -C "$REPO_DIR" -czf "$pdir/nidara-desktop-$pkgver.tar.gz" \
+        --exclude='./.git' \
+        --exclude='./ui/shell/node_modules' --exclude='./ui/shell/@girs' \
+        --exclude='./ui/shell/build' --exclude='./ui/greeter/build' \
+        --exclude='./ui/greeter/node_modules' --exclude='./ui/lockscreen/build' \
+        --exclude='./ui/lockscreen/node_modules' \
+        --exclude='./packaging/nidara/src' --exclude='./packaging/nidara/pkg' \
+        --exclude='./packaging/nidara/*.tar.*' \
+        --transform "s|^\.|nidara-desktop-$pkgver|SH" .
+    build_install_pkg "$pdir"
 }
 
 echo ""
@@ -516,6 +552,10 @@ fi
 # 5. Build the Nidara UI bundle
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[5/7] Building Nidara UI..."
+if [ "$DEV_LIKE" = "no" ]; then
+echo "  Skipped — system installs get Nidara as a pacman package (prebuilt from"
+echo "  nidara-repo, or built from this tree by makepkg in step 6)."
+else
 cd "$REPO_DIR/ui/shell"
 npm install
 npx sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css
@@ -553,32 +593,84 @@ if [ "$MODE" != "dev" ]; then
     ags bundle app.ts build/nidara-lock
     echo "  [OK] Lockscreen bundle: $REPO_DIR/ui/lockscreen/build/nidara-lock"
 fi
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 6. Install system files
 # ─────────────────────────────────────────────────────────────────────────────
 echo "[6/7] Installing system files..."
 
+if [ "$DEV_LIKE" = "no" ]; then
+# ── System installs consume the nidara PACKAGE ───────────────────────────────
+# Prebuilt from nidara-repo when it serves this release, else built locally
+# from packaging/nidara/PKGBUILD. Either way pacman owns every installed file:
+# clean upgrades (pacman -Syu), clean removal, no untracked drift. --overwrite
+# hands over files that script-era installs wrote untracked into /usr (same
+# transition build_install_pkg documents for the Astal libs).
+_ver="$(cat "$REPO_DIR/VERSION")"
+NIDARA_FROM_REPO="no"
+
+# The PREBUILT package is only a faithful install of this tree when the tree IS
+# the release it was built from: a git-less release tarball, or a clean checkout
+# of the v$_ver tag (nidara-update temp clones; release-channel installs). Any
+# other tree (branches, local commits, dirty escape-hatch runs) builds locally —
+# installing the repo's binaries would silently ignore the user's changes.
+_tree_is_release="no"
+if [ ! -d "$REPO_DIR/.git" ]; then
+    _tree_is_release="yes"
+elif [ -z "$(run_user git -C "$REPO_DIR" status --porcelain 2>/dev/null)" ] \
+  && [ "$(run_user git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null)" = "$(run_user git -C "$REPO_DIR" rev-parse "v$_ver^{commit}" 2>/dev/null)" ]; then
+    _tree_is_release="yes"
+fi
+
+if [ "$_tree_is_release" = "yes" ]; then
+    echo "  Installing nidara from nidara-repo (prebuilt)..."
+    if sudo pacman -S --needed --noconfirm --overwrite '*' nidara; then
+        # Lockstep guard, same rationale as the Astal stack in §1: a repo that
+        # lags the release "succeeds" with the PREVIOUS version — build locally
+        # instead of silently keeping stale binaries.
+        _nidara_v="$(pacman -Q nidara 2>/dev/null | awk '{print $2}')"
+        if [ "${_nidara_v%%-*}" = "$_ver" ]; then
+            NIDARA_FROM_REPO="yes"
+            echo "  [OK] nidara $_nidara_v installed from nidara-repo."
+        else
+            echo "  [WARN] nidara-repo serves $_nidara_v but this release is $_ver — the repo"
+            echo "         likely wasn't rebuilt for this release yet. Building locally."
+        fi
+    else
+        echo "  [WARN] nidara unavailable from nidara-repo — building the package locally."
+    fi
+else
+    echo "  Tree is not exactly release v$_ver — building the nidara package from this tree."
+fi
+
+if [ "$NIDARA_FROM_REPO" = "no" ]; then
+    build_local_nidara_pkg
+fi
+
+# Orphans that script-era installs left as untracked files (the package
+# handover only covers paths the package OWNS; these old paths aren't in it):
+sudo rm -rf /usr/share/nidara/ui/ags-v3 /usr/share/themes/crystal-shell
+sudo rm -f /usr/share/nidara/wallpaper.png /usr/share/xdg-desktop-portal/portals/nidara.conf
+
+else
+# ── Dev installs copy source files straight into /usr ────────────────────────
+# If the nidara PACKAGE is installed, pacman owns those paths and the next
+# -Syu would clobber the dev copies — remove it first (files re-copied below).
+if pacman -Qq nidara >/dev/null 2>&1; then
+    echo "  Removing the nidara package (dev installs manage /usr files directly)..."
+    sudo pacman -R --noconfirm nidara
+fi
+
 # Version file
 sudo mkdir -p /usr/share/nidara
 sudo cp "$REPO_DIR/VERSION" /usr/share/nidara/VERSION
 
-# Record the dependency pins this install was built against — --update compares
-# them to decide whether the Astal/AGS stack needs rebuilding.
-printf 'ASTAL_REF=%s\nAGS_REF=%s\nAPPMENU_REF=%s\n' "$ASTAL_REF" "$AGS_REF" "$APPMENU_REF" \
-    | sudo tee "$PINS_FILE" > /dev/null
-# And the pacman list fingerprint — --update compares it to decide whether
-# phase 1 (package sync) can be skipped.
-printf '%s\n' "$DEPS_LIST_SHA" | sudo tee "$PACMAN_SHA_FILE" > /dev/null
-
-# Hyprland config
+# Hyprland config (dev: symlink hyprland.lua to the repo so edits apply live;
+# system installs get a real copy from the package instead)
 sudo mkdir -p /usr/share/nidara/config/hypr
-if [ "$DEV_LIKE" = "yes" ]; then
-    sudo ln -sf "$REPO_DIR/config/hypr/hyprland.lua" /usr/share/nidara/config/hypr/hyprland.lua
-    sudo cp "$REPO_DIR/config/hypr/hypridle.conf" /usr/share/nidara/config/hypr/hypridle.conf
-else
-    sudo cp -r "$REPO_DIR/config/hypr/." /usr/share/nidara/config/hypr/
-fi
+sudo ln -sf "$REPO_DIR/config/hypr/hyprland.lua" /usr/share/nidara/config/hypr/hyprland.lua
+sudo cp "$REPO_DIR/config/hypr/hypridle.conf" /usr/share/nidara/config/hypr/hypridle.conf
 
 # Setup payloads consumed by nidara-setup (greetd templates, per-user seeds) —
 # the same layout the nidara pacman package ships, so nidara-setup reads ONE
@@ -697,6 +789,17 @@ sudo rm -f /usr/share/xdg-desktop-portal/portals/nidara.conf  # misplaced legacy
 sudo cp "$REPO_DIR/config/portal/nidara.portal" /usr/share/xdg-desktop-portal/portals/nidara.portal
 sudo cp "$REPO_DIR/config/portal/org.freedesktop.impl.portal.desktop.nidara.service" /usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.nidara.service
 sudo cp "$REPO_DIR/config/portal/hyprland-portals.conf" /etc/xdg-desktop-portal/hyprland-portals.conf
+fi
+
+# Record the dependency pins this install was built against — --update compares
+# them to decide whether the Astal/AGS stack needs rebuilding. Both install
+# paths: these live UNTRACKED next to the package's files in /usr/share/nidara
+# (installer bookkeeping, deliberately not owned by the package).
+printf 'ASTAL_REF=%s\nAGS_REF=%s\nAPPMENU_REF=%s\n' "$ASTAL_REF" "$AGS_REF" "$APPMENU_REF" \
+    | sudo tee "$PINS_FILE" > /dev/null
+# And the pacman list fingerprint — --update compares it to decide whether
+# phase 1 (package sync) can be skipped.
+printf '%s\n' "$DEPS_LIST_SHA" | sudo tee "$PACMAN_SHA_FILE" > /dev/null
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 7. First-time setup — install-mode markers here; everything else is delegated
