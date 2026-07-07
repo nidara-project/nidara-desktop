@@ -5,6 +5,35 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] — 2026-07-07
+
+### Changed
+
+- **Nidara now installs as a real pacman package (`nidara`).** System installs consume it
+  prebuilt from the project's signed repo (or build it on the spot from the same in-repo
+  recipe when the repo doesn't serve the release yet) — pacman owns every installed file,
+  so Nidara upgrades with the rest of the system (`pacman -Syu`) and removes cleanly
+  (`pacman -R nidara`). Existing installs migrate automatically on their next
+  `nidara-update`; user config is untouched.
+- `nidara-update` on package installs is now a full system upgrade plus the idempotent
+  setup pass, reloading the running session only when the version actually changed.
+- New `nidara-setup` binary carries the first-time setup packaging can't do (greeter,
+  services, per-user config seeding) — with the repo configured,
+  `sudo pacman -S nidara && nidara-setup` is a complete install.
+
+### Added
+
+- `toggleAbout` IPC action — the About window can now be opened, verified and closed
+  deterministically (agent tooling parity with the other surfaces).
+- Community docs: Code of Conduct (Contributor Covenant 2.1) and a Credits section.
+
+### Fixed
+
+- Upgrading or reinstalling under a live session no longer leaves a stuck Hyprland
+  "cannot open … hyprland.lua" error banner — replacing the packaged config file killed
+  the compositor's config watch; both update paths now reload it once the new file is
+  in place.
+
 ## [0.1.2] — 2026-07-06
 
 ### Fixed
