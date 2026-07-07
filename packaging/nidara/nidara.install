@@ -1,0 +1,23 @@
+# pacman install hooks for the nidara package.
+# Keep these messages short: most installs go through install.sh (or the future
+# Calamares installer), which runs the first-time setup itself.
+
+post_install() {
+  cat <<'EOF'
+  Nidara is installed, but a login session needs one-time setup
+  (greeter, services, per-user config). Run, as your normal user:
+
+      nidara-setup
+
+  Then pick "Nidara" at the login screen.
+EOF
+}
+
+post_upgrade() {
+  cat <<'EOF'
+  Nidara upgraded. If a Nidara session is running, reload the shell
+  with Super+Shift+R and run `hyprctl reload` to clear the compositor's
+  config banner (nidara-update does both for you; greeter and lockscreen
+  update on next use).
+EOF
+}

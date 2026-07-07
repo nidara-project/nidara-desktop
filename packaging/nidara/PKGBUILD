@@ -1,0 +1,151 @@
+# Maintainer: Nidara Project <https://github.com/nidara-project>
+#
+# Nidara's own pacman package. This PKGBUILD travels INSIDE the release tag it
+# builds (packaging/nidara/PKGBUILD), so the file layout below can never drift
+# from the tree it packages — nidara-repo's CI fetches the tag's tarball and
+# builds with the PKGBUILD found in it; install.sh uses the same recipe as its
+# local fallback when the published repo lags a release.
+#
+# pkgver MUST equal the repo's VERSION file (bumped together in the release
+# commit; CI enforces the match). The build mirrors install.sh §5 (npm + sass +
+# `ags bundle` × 3) and the nidara-input compile from §6; package() mirrors
+# §6's file layout. First-time system/user setup (greetd, services, per-user
+# config seeding) is NOT packaging's job — see install.sh / nidara-setup.
+pkgname=nidara
+pkgver=0.1.2
+pkgrel=1
+pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + AGS/GTK4)"
+arch=(x86_64)
+url="https://github.com/nidara-project/nidara-desktop"
+license=(GPL-3.0-only)
+install=nidara.install
+
+# Runtime deps: PACMAN_DEPS from install.sh minus the build toolchain, plus the
+# pinned Astal/AGS stack from [nidara]. The libastal-* packages still declare
+# depends=() (see packaging/README.md), so their real runtime deps must be
+# listed HERE for a bare `pacman -S nidara` to pull a working system.
+depends=(
+  # compositor + session plumbing
+  hyprland hypridle hyprsunset uwsm greetd power-profiles-daemon polkit-gnome
+  # GTK/GJS runtime
+  gjs gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 wayland
+  # pinned Astal/AGS stack (served by the [nidara] repo)
+  aylurs-gtk-shell astal-gjs appmenu-glib-translator
+  libastal-io astal-quarrel libastal-gtk3 libastal-gtk4 libastal-apps
+  libastal-hyprland libastal-mpris libastal-network libastal-battery
+  libastal-notifd libastal-bluetooth libastal-tray libastal-wireplumber
+  libastal-greet libastal-auth
+  # services the shell talks to
+  networkmanager bluez bluez-libs bluez-utils upower accountsservice
+  pipewire pipewire-audio pipewire-alsa pipewire-pulse wireplumber libpulse
+  xdg-desktop-portal-gtk xdg-desktop-portal-hyprland
+  # tools the shell/keybinds shell out to
+  brightnessctl pamixer playerctl jq curl slurp grim wf-recorder
+  wl-clipboard cliphist wtype at-spi2-core python-gobject libnotify
+  xdg-utils gsettings-desktop-schemas awww lz4 mesa pam
+  # default apps wired into the UI (Super+T, Files item, calculator widget…)
+  kitty nautilus gnome-calculator pavucontrol
+  # fonts + icon fallbacks the design system assumes
+  ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji
+  papirus-icon-theme adwaita-icon-theme
+)
+makedepends=(nodejs npm wlr-protocols pkgconf)
+backup=(etc/xdg-desktop-portal/hyprland-portals.conf)
+options=(!debug)
+
+source=("nidara-desktop-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+# The tarball is fetched over TLS from the release tag and the RESULTING package
+# + repo db are GPG-signed by nidara-repo's CI — same trust model as the other
+# [nidara] packages (their git sources also pin by ref with SKIP sums).
+sha256sums=('SKIP')
+
+build() {
+  cd "$srcdir/nidara-desktop-$pkgver"
+
+  # Shell: SCSS → CSS, TSX → GJS bundle (mirrors install.sh §5).
+  # `npm install`, not `npm ci`: the lockfile is deliberately NOT committed —
+  # it records the ags/gnim file: deps as checkout-depth-relative paths (see
+  # the repo's .gitignore). Only sass + lucide-static resolve from the
+  # registry, both build-time-only.
+  cd ui/shell
+  npm install
+  npx sass --no-charset style.scss style.css
+  sed -i '/@charset/d' style.css
+  mkdir -p build
+  ags bundle app.ts build/nidara
+
+  # Greeter (reuses the shell's sass install; no npm tree of its own)
+  npx sass --no-charset ../greeter/style.scss ../greeter/style.css
+  sed -i '/@charset/d' ../greeter/style.css
+  cd ../greeter
+  mkdir -p build
+  ags bundle app.ts build/nidara-greeter
+
+  # Lockscreen (shares the greeter's style.css)
+  cd ../lockscreen
+  mkdir -p build
+  ags bundle app.ts build/nidara-lock
+
+  # nidara-input: zwlr_virtual_pointer_v1 client for the computer-use pointer
+  # (mirrors install.sh §6 — wayland-scanner generates the protocol glue)
+  cd "$srcdir/nidara-desktop-$pkgver"
+  local xml=/usr/share/wlr-protocols/unstable/wlr-virtual-pointer-unstable-v1.xml
+  mkdir -p build
+  wayland-scanner client-header "$xml" build/wlr-virtual-pointer-unstable-v1-client-protocol.h
+  wayland-scanner private-code  "$xml" build/wlr-virtual-pointer-unstable-v1-protocol.c
+  cc -O2 bin/nidara-input.c build/wlr-virtual-pointer-unstable-v1-protocol.c \
+     -Ibuild $(pkg-config --cflags --libs wayland-client) -o build/nidara-input
+}
+
+package() {
+  cd "$srcdir/nidara-desktop-$pkgver"
+
+  # /usr/bin — session launchers, helpers, agent toolkit (install.sh §6 list)
+  local b
+  for b in nidara nidara-ui nidara-greeter nidara-lock nidara-before-sleep \
+           nidara-after-sleep nidara-game-mode nidara-doctor nidara-portal \
+           nidara-mcp nidara-a11y nidara-act nidara-type nidara-click \
+           nidara-update nidara-setup; do
+    install -Dm755 "bin/$b" "$pkgdir/usr/bin/$b"
+  done
+  install -Dm755 build/nidara-input "$pkgdir/usr/bin/nidara-input"
+
+  # /usr/share/nidara — bundles, styles, assets, shared config
+  install -Dm644 VERSION "$pkgdir/usr/share/nidara/VERSION"
+  install -Dm644 defaults/wallpaper/wallpaper.jpg "$pkgdir/usr/share/nidara/wallpaper.jpg"
+  install -Dm755 ui/shell/build/nidara "$pkgdir/usr/share/nidara/ui/shell/build/nidara"
+  install -Dm644 ui/shell/style.css "$pkgdir/usr/share/nidara/ui/shell/style.css"
+  cp -r ui/shell/assets "$pkgdir/usr/share/nidara/ui/shell/assets"
+  install -Dm755 ui/greeter/build/nidara-greeter "$pkgdir/usr/share/nidara/ui/greeter/build/nidara-greeter"
+  install -Dm644 ui/greeter/style.css "$pkgdir/usr/share/nidara/ui/greeter/style.css"
+  install -Dm755 ui/lockscreen/build/nidara-lock "$pkgdir/usr/share/nidara/ui/lockscreen/build/nidara-lock"
+
+  # Shared Hyprland config (the session loads it via -c, see bin/nidara)
+  mkdir -p "$pkgdir/usr/share/nidara/config"
+  cp -r config/hypr "$pkgdir/usr/share/nidara/config/hypr"
+
+  # Payloads consumed by first-time setup (greetd templates, per-user seeds).
+  # The wallpaper already ships at its canonical path above — don't duplicate it.
+  cp -r config/greetd "$pkgdir/usr/share/nidara/config/greetd"
+  cp -r defaults "$pkgdir/usr/share/nidara/defaults"
+  rm -rf "$pkgdir/usr/share/nidara/defaults/wallpaper"
+
+  # Greeter's blank GTK4 theme (GTK_THEME=nidara → zero theme rules; GTK falls
+  # back to Adwaita silently if this file is missing — a real past bite)
+  install -Dm644 ui/greeter/theme/gtk.css "$pkgdir/usr/share/themes/nidara/gtk-4.0/gtk.css"
+
+  # Session entry + app entries
+  install -Dm644 config/wayland-sessions/nidara.desktop "$pkgdir/usr/share/wayland-sessions/nidara.desktop"
+  mkdir -p "$pkgdir/usr/share/applications"
+  install -m644 config/applications/*.desktop "$pkgdir/usr/share/applications/"
+
+  # systemd user unit (started by the Nidara Hyprland config, never enabled —
+  # see the unit's NOTE)
+  install -Dm644 bin/nidara.service "$pkgdir/usr/lib/systemd/user/nidara.service"
+
+  # XDG portal: Nidara's Settings backend (accent-color) + portal preferences
+  install -Dm644 config/portal/nidara.portal "$pkgdir/usr/share/xdg-desktop-portal/portals/nidara.portal"
+  install -Dm644 config/portal/org.freedesktop.impl.portal.desktop.nidara.service \
+    "$pkgdir/usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.nidara.service"
+  install -Dm644 config/portal/hyprland-portals.conf "$pkgdir/etc/xdg-desktop-portal/hyprland-portals.conf"
+}

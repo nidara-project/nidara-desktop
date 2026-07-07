@@ -1,4 +1,37 @@
-# Packaging — Nidara's source-built dependencies
+# Packaging
+
+## The `nidara` package (`packaging/nidara/`)
+
+Nidara itself ships as a **pacman package**. The PKGBUILD lives **in this repo**
+— it travels inside every release tag — so the recipe can never drift from the
+tree it packages, and each release is self-describing. Three consumers, one
+recipe:
+
+1. **`nidara-repo` CI** builds the *published* package: it fetches the tag
+   tarball pinned by `NIDARA_REF` in `nidara-repo/pins.env` and builds with the
+   PKGBUILD found inside it, refusing to publish if the tag, the tree's
+   `VERSION` and the PKGBUILD's `pkgver` disagree. Release runbook: tag first,
+   then bump `NIDARA_REF` (one line) — CI republishes.
+2. **`install.sh --system`** installs the prebuilt package when the tree is
+   exactly that release (clean `v$VERSION` checkout or git-less release
+   tarball), with a version==VERSION lockstep guard.
+3. **`install.sh`'s local fallback** builds the same PKGBUILD from the working
+   tree (repo down / lagging / non-release tree): the tree is packed as the
+   tarball makepkg expects, uncommitted changes included — the escape hatch
+   installs what's here.
+
+`pkgver` **must equal the repo's `VERSION`** — bump both in the release commit
+(nidara-repo's lockstep gate enforces it at publish time).
+
+Packaging deliberately ships **files only**. Everything a first login needs —
+per-user config seeding, uwsm env + NVIDIA autodetect, greetd/DM, service
+enablement — lives in `bin/nidara-setup` (idempotent, shared by every install
+path): `sudo pacman -S nidara && nidara-setup` is a complete install.
+`nidara-update` on a package install is just `pacman -Syu` + `nidara-setup`.
+Dev installs (`install.sh --dev`) keep copying source files into /usr directly
+and **remove the package first** so `pacman -Syu` can't clobber the copies.
+
+## The source-built dependencies
 
 Nidara depends on three things that are **not in the official Arch repos** and
 that we pin to a known-good revision rather than track upstream HEAD:
@@ -62,7 +95,8 @@ This is the local/dev form. The intended end state for the distributable DE:
 
 `install.sh --dev` keeps building from source locally for development either way.
 
-> **Lockstep pins (temporary, until Phase 3):** the pinned revisions now live in **two**
-> places — `install.sh`'s `ASTAL_REF`/`AGS_REF`/`APPMENU_REF` (source-build path) and
-> `nidara-repo/pins.env` (the repo build). Bump **both** together until install.sh consumes the
-> repo, at which point `pins.env` becomes the only source of truth.
+> **Lockstep pins (permanent):** the pinned revisions live in **two** places —
+> `install.sh`'s `ASTAL_REF`/`AGS_REF`/`APPMENU_REF` (kept for the from-source fallback and
+> the update pin-skip record) and `nidara-repo/pins.env` (the repo build). Bump **both**
+> together, always. `pins.env` additionally carries `NIDARA_REF` — the nidara-desktop release
+> tag the published `nidara` package is built from (see the top of this file).

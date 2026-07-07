@@ -109,23 +109,30 @@ The installer installs the **latest release** (if your clone's `main` is ahead o
 installer jumps back to the release tag first — you always get the same tested version as
 everyone else; developers opt out with `--dev` or by checking out another branch).
 
-The installer needs no AUR helper — the Astal/AGS stack installs **prebuilt from the project's
-signed pacman repo** ([nidara-repo](https://github.com/nidara-project/nidara-repo)): every package
-and the repo database are GPG-signed by CI, and the installer imports the signing key and requires
-valid signatures. If the repo is ever unreachable it falls back to building the same pinned
-sources locally — either way everything is a real pacman package, trackable and upgradable. It:
+The installer needs no AUR helper — everything lands as **real pacman packages, prebuilt from
+the project's signed repo** ([nidara-repo](https://github.com/nidara-project/nidara-repo)): every
+package and the repo database are GPG-signed by CI, and the installer imports the signing key and
+requires valid signatures. That includes **Nidara itself**: the desktop ships as a `nidara`
+package, so pacman owns every installed file — clean upgrades with the rest of the system, clean
+removal with `pacman -R nidara`, no untracked drift. If the repo is ever unreachable, or it
+doesn't serve your exact release yet, the installer builds the same pinned sources locally with
+the very recipe the repo uses. It:
 
 1. Installs system dependencies (Hyprland, GTK4, GJS, the Astal libraries + AGS CLI, audio/network/bluetooth stacks, fonts).
-2. Builds the shell, greeter, and lock-screen bundles (`ags bundle`).
-3. Installs system files:
-   - `/usr/bin/nidara` — Wayland session entry point
-   - `/usr/bin/nidara-ui` — UI launcher (auto-detects dev/system mode)
-   - `/usr/share/nidara/` — configs, bundles, version file
-   - `/usr/share/wayland-sessions/nidara.desktop` — session entry
-4. Creates `~/.config/nidara/` with default configs (never overwritten on updates), seeding keyboard layout, timezone and locale from your existing Arch setup — it never prompts.
-5. Enables `pipewire`, `wireplumber`, `power-profiles-daemon`, and (only if no display manager is already enabled) `greetd` with the Nidara greeter.
+2. Installs the `nidara` package — the session entry point (`/usr/bin/nidara`), helper binaries,
+   the shell/greeter/lock-screen bundles and shared configs under `/usr/share/nidara/`, and the
+   `/usr/share/wayland-sessions/nidara.desktop` session entry. Prebuilt when the repo serves this
+   release, otherwise built on the spot from the same `packaging/nidara/PKGBUILD`.
+3. Runs `nidara-setup` — the idempotent first-time setup: creates `~/.config/nidara/` with default
+   configs (never overwritten on updates), seeding keyboard layout, timezone and locale from your
+   existing Arch setup — it never prompts — and enables `pipewire`, `wireplumber`,
+   `power-profiles-daemon`, `bluetooth`, and (only if no display manager is already enabled)
+   `greetd` with the Nidara greeter.
 
 **To start:** reboot and select _Nidara_ from the login screen.
+
+With the `[nidara]` repo configured (the installer sets it up), Nidara is just a package from
+then on: `sudo pacman -S nidara && nidara-setup` is a complete install.
 
 ### Updating
 
@@ -133,12 +140,19 @@ sources locally — either way everything is a real pacman package, trackable an
 nidara-update
 ```
 
-That's it — no git knowledge needed. The updater is stateless: it fetches the latest release
-into a throwaway directory, rebuilds and reinstalls only what changed, then cleans up after
-itself — no source copy is kept on disk, so the folder you originally cloned is disposable.
-The pinned dependency stack is rebuilt only when the pins actually moved, so updates take a
-minute, not an hour. Your config in `~/.config/nidara/` is never touched, and the running
-shell reloads by itself. **Settings → About** also tells you when a new release is available.
+That's it — no git knowledge needed. New releases arrive through the signed pacman repo like
+any other package: `nidara-update` runs a full system upgrade (`pacman -Syu`), re-applies the
+idempotent setup, and reloads the running session — the last two only when the version actually
+changed. A plain `pacman -Syu` delivers the same release (it's just a package); `nidara-update`
+is the wrapper that also handles setup and the live reload. Updates take a minute, not an hour:
+prebuilt packages, no local builds.
+
+Installs that predate the package model migrate by themselves: their first `nidara-update`
+fetches the latest release into a throwaway directory and installs it as the `nidara` package —
+pacman takes ownership of the files, and every later update takes the package path above. No
+source copy is kept on disk, so the folder you originally cloned stays disposable. Your config
+in `~/.config/nidara/` is never touched. **Settings → About** also tells you when a new release
+is available.
 
 > **Status:** Nidara installs onto an existing Arch system today. A fully automated path —
 > a minimal Arch install bundled with Nidara via a Calamares installer — is planned but not
