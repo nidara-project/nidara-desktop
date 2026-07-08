@@ -45,7 +45,7 @@ export default function AppsPage(nav: SettingsNav) {
         nav,
         t("settings.apps.title"),
         t("settings.apps.subtitle"),
-        { id: "apps/icons", build: () => AppIconsPage() },
+        { id: "apps/icons", build: () => AppIconsPage(nav) },
     ))
 
     page.append(box)

@@ -567,16 +567,29 @@ lockscreen silently never launched via the wrapper on every install — fixed by
 but any future wrapper MUST NOT introduce a root-only log path, and redirects into logs
 should never gate the exec (`>> "$LOG" 2>&1 || true` on the setup lines, or pre-`touch`).
 
-### 28. Settings → App Icons row is cramped — planned per-app subpage (2026-07-04)
-The installed-app row packs identity (icon + name + resolved path/name subtitle) + an "override"
-badge + a "Change icon" button into one line — it works but doesn't scale, and it's the only
-per-app config we expose. **Planned redesign:** each app drills into its **own subpage** (via
-`nav.pushSubpage`, the pattern the Apps landing already uses to reach Default Apps / App Icons),
-giving room for the icon override AND a natural home for **future per-app settings** (window
-rules, default workspace, gaming performance profile, autostart, permissions…). Also the intended
-stable surface for an agent to write per-app overrides. Deferred until per-app config is tackled
-for real; today's page is functional (search, scrollable card, choose-image dialog, working
-Restore). See memory `project_settings_apps_page`.
+### 28. Settings → App Icons row is cramped — RESOLVED (2026-07-09)
+Each row in Settings → Apps → **Installed Apps** (renamed from "App Icons") now drills into its
+own subpage via `nav.pushSubpage` (`apps/icons/{id}` → `buildAppIconDetailPage`), replacing the
+old modal dialog. The detail page applies instantly (choose image / restore, no Apply/Cancel),
+mirroring the pattern already used for the Bar page's launcher icon. It's also the intended stable
+surface for **future per-app settings** (window rules, default workspace, gaming profile,
+autostart, permissions…) and for an agent to write per-app overrides — add another `listGroup` to
+`buildAppIconDetailPage` when the next one lands. Row subtitle changed from the resolved icon
+name/path to `app.id` — meaningful for a general app list, and the icon internals don't belong
+there anymore now the page isn't icon-only. See memory `project_settings_apps_page`.
+
+### 29. Settings → Apps list: stale glyph fragments after filtering (unresolved, GTK renderer)
+Type a query into Installed Apps' search box (or any `Gtk.ListBox` using `set_filter_func` +
+`invalidate_filter()` the same way) and rows that get hidden sometimes leave faint leftover
+fragments behind — specifically the **descenders** of letters (g/j/y/p/q), roughly at the old
+row's subtitle baseline; the rest of the glyph is gone. Looks like a GTK4 (4.22.4, default
+renderer, Wayland) damage-region bug where hiding a `Gtk.ListBoxRow` under-invalidates the last
+few scanlines of its previous allocation. **Tried and did NOT fix it:** calling
+`appList.queue_draw()` right after `invalidate_filter()` in the `changed` handler — the stale
+strip survives an explicit redraw request, so it's not a simple "we forgot to invalidate"
+app-level bug. Not yet tried: forcing a full `Gtk.ScrolledWindow`/window `queue_draw()`, toggling
+`GSK_RENDERER` (cairo vs ngl/vulkan) to bisect the renderer, or filing upstream. Cosmetic only, no
+functional impact. Deferred to the 0.1.4 cycle. See memory `project_settings_apps_page`.
 
 ## Resolved — rules that still apply
 
