@@ -243,6 +243,17 @@ if [ ! -f "$CONFIG_DIR/nidara-monitor.lua" ]; then
     echo "  [Init] $CONFIG_DIR/nidara-monitor.lua"
 fi
 
+# Pre-rename installs seeded the .lua files above with "Crystal Shell" headers,
+# and they are created-once (never overwritten), so the old branding sticks
+# until someone rewrites it. Migrate comment lines only — user content in
+# hyprland-user.lua is never touched.
+for f in "$CONFIG_DIR/nidara-settings.lua" "$CONFIG_DIR/nidara-monitor.lua" "$CONFIG_DIR/hyprland-user.lua"; do
+    if [ -f "$f" ] && grep -qi "crystal shell" "$f"; then
+        sed -i '/^[[:space:]]*--/ { s/CRYSTAL SHELL/NIDARA SHELL/g; s/the Crystal Shell Settings UI/the Nidara Settings UI/g; s/Crystal Shell Settings UI/Nidara Settings UI/g; s/Crystal Shell/Nidara/g; }' "$f"
+        echo "  [Migrate] ${f##*/}: Crystal Shell headers → Nidara"
+    fi
+done
+
 # Hypridle config
 # Dev repo:    symlink directly to the source tree so edits apply immediately
 # Otherwise:   copy to $CONFIG_DIR once (never overwritten), symlink from there
