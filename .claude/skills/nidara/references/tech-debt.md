@@ -578,6 +578,23 @@ stable surface for an agent to write per-app overrides. Deferred until per-app c
 for real; today's page is functional (search, scrollable card, choose-image dialog, working
 Restore). See memory `project_settings_apps_page`.
 
+### 29. Ghost descenders on filter — line-height workaround is PROVISIONAL (2026-07-09)
+App Icons is the only Settings list that filters in place; on `invalidate_filter` GTK4 (4.22.4,
+default renderer, Wayland) leaves the descender ink of `y/g/j/p` behind hidden rows (ghost) and
+clips it on the visible ones — a GskGL damage/re-raster bug (hover row-state re-render and window
+resize both clear it). **This is the same bug the `settings-apps-per-app-subpage` branch tracked as
+an UNRESOLVED #29** — reconcile the two entries on merge, keeping THIS one (it carries the fix).
+Current fix: `.apps-list .nidara-row-subtitle { line-height: 1.35 }` (grows the line box so the ink
+is inside it → drawn full AND repainted on filter). It **works but is provisional**: scoped to App
+Icons, so its subtitles are slightly looser than the shared `.nidara-row-subtitle` elsewhere — a
+design-system inconsistency the user flagged and chose to live with for now, to revisit. A proper
+fix is either (a) apply the metric globally (changes every list's density — needs a visual pass), or
+(b) a geometry-neutral fix of the actual GTK repaint (every attempt failed or clipped: queue_draw at
+any scope, swaps, rebuild-fresh-rows, opacity toggle, padding→clips; see design-system.md "Ghost
+descenders"), or (c) bisect `GSK_RENDERER` (cairo vs ngl/vulkan) and file upstream. **Also:
+screenshot/agent-driven verification is masked here** (interaction re-renders and hides it) — verify
+with a human. Same latent bug in `AppGrid.tsx`.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

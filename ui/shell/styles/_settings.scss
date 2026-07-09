@@ -317,6 +317,13 @@ scrolledwindow.apps-list-scroll {
         @include nidara-reset;
         background: transparent;
     }
+
+    // Ghost-descender fix. The subtitle's descender ink (y/g/j/p) overflows Pango's
+    // logical line box; on filter re-layout GTK leaves that overflow behind (ghost)
+    // — and padding "fixed" it only by CLIPPING the tail (cutting it). line-height
+    // grows the LINE BOX itself so the tail lives inside the label's text node: drawn
+    // in full (no cut) AND inside the region GTK repaints on filter (no ghost).
+    .nidara-row-subtitle { line-height: 1.35; }
 }
 
 // ── Search results ────────────────────────────────────────────────────────────
