@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
-import { getDefaultUser } from "../../lib/users"
+import { getPreferredUser } from "../lib/greeter-prefs"
 
 type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
 
@@ -11,11 +11,11 @@ const MONTHS_LONG  = ['', 'January', 'February', 'March', 'April', 'May', 'June'
 
 function readRegionConfig(): { timeFormat: "24h" | "12h"; showSeconds: boolean; dateFormat: DateFormat } {
   const fallback = { timeFormat: "24h" as const, showSeconds: false, dateFormat: "long" as DateFormat }
-  // Try the user's home first (works if /home/<user> is not 700), then the
-  // world-readable mirror RegionConfig writes to /var/tmp/nidara — same
-  // pattern as the greeter's appearance.json read in app.ts.
+  // Try the last-logged-in user's home first (works if /home/<user> is not
+  // 700), then the world-readable mirror RegionConfig writes to
+  // /var/tmp/nidara — same pattern as the greeter's appearance.json read in app.ts.
   const candidates = [
-    `${getDefaultUser().homeDir}/.config/nidara/region.json`,
+    `${getPreferredUser().homeDir}/.config/nidara/region.json`,
     "/var/tmp/nidara/region.json",
   ]
   for (const path of candidates) {

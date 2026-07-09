@@ -682,7 +682,8 @@ These were paid down; the *rule* remains:
 - **Dock H/V** is deduplicated — fix dock logic in `DockCore.tsx` / `DockAxis.ts`, never the
   7-line wrappers.
 - **Accent colors** live only in `ui/lib/accent.ts` — add/change them there.
-- **Greeter ↔ lockscreen** share `ui/lib/accent.ts` + `ui/lib/users.ts` + `ui/lib/wallpaper.ts`;
+- **Greeter ↔ lockscreen ↔ shell** share `ui/lib/accent.ts` + `ui/lib/users.ts` + `ui/lib/wallpaper.ts`
+  (Settings → Users consumes `users.ts` too — don't reintroduce a per-surface passwd parser);
   `lib/i18n.ts` stays separate per bundle on purpose (different config paths / superset).
 - **Wallpaper resolution is centralized** in `ui/lib/wallpaper.ts` (`resolveWallpaper(surface)`:
   per-surface override → global `path` → `/usr/share/nidara/wallpaper.jpg`, each step
@@ -694,7 +695,12 @@ These were paid down; the *rule* remains:
 - **`getDefaultUser()` is greeter-ONLY** (pre-login, no session). The lockscreen runs as the
   locked session's owner and must use `getCurrentUser()` / its own config dir — using
   `getDefaultUser()` there once pointed PAM at the first /etc/passwd user, locking every
-  other user out of their own session. For user config the greeter can't read (700 homes),
+  other user out of their own session. Inside the greeter prefer `getPreferredUser()`
+  (`ui/greeter/lib/greeter-prefs.ts`): the last user who logged in from this greeter
+  (persisted as `lastUser` in `greeter-prefs.json` on successful auth), falling back to
+  `getDefaultUser()`. LoginCard preselects it (matching against its own `users` array —
+  the switcher chips compare by object identity) and app.ts/Clock.ts read that user's
+  appearance/region config. For user config the greeter can't read (700 homes),
   the shell mirrors world-readable copies to `/var/tmp/nidara/` (`appearance.json` from
   ThemeManager, `region.json` from RegionConfig); greeter readers try home → mirror.
 - **Greeter home = `/var/lib/greeter`, enforced by nidara-setup.** Arch greetd's sysusers

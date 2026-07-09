@@ -2,7 +2,7 @@ import app from "ags/gtk4/app"
 import { Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Greeter from "./widget/Greeter"
-import { getDefaultUser } from "../lib/users"
+import { getPreferredUser } from "./lib/greeter-prefs"
 import { accentCssFor } from "../lib/accent"
 
 // Use our blank theme instead of Adwaita.
@@ -15,11 +15,11 @@ const cssPath = GLib.file_test("./style.css", GLib.FileTest.EXISTS)
   : "/usr/share/nidara/ui/greeter/style.css"
 
 function readAppearanceJson(): Record<string, unknown> | null {
-  // Try the user's home dir first (works if /home/<user> is not 700).
-  // Fall back to /var/tmp/nidara/appearance.json — written by ThemeManager
+  // Try the last-logged-in user's home dir first (works if /home/<user> is not
+  // 700). Fall back to /var/tmp/nidara/appearance.json — written by ThemeManager
   // as a world-readable mirror so the greeter (system user) can always read it.
   const candidates: string[] = [
-    `${getDefaultUser().homeDir}/.config/nidara/appearance.json`,
+    `${getPreferredUser().homeDir}/.config/nidara/appearance.json`,
     "/var/tmp/nidara/appearance.json",
   ]
   for (const path of candidates) {
