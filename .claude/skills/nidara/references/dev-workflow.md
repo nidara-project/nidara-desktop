@@ -441,7 +441,7 @@ All persistent state lives in `~/.config/nidara/`:
 | `region.json` | Time/date/timezone |
 | `gaming.json` | Game-mode config |
 | `night-light.json` | Night light schedule |
-| `wallpaper` | Current wallpaper path |
+| `wallpaper` | Current wallpaper path + transition (JSON; reserves a `surfaces` block for per-surface wallpapers — schema in `ui/lib/wallpaper.ts`) |
 | `greeter-prefs.json` | Greeter preferences |
 
 ### Hyprland config ownership model (settled 2026-06-05 — do NOT re-litigate)
