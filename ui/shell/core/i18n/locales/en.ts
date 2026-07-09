@@ -251,23 +251,19 @@ export default {
     "wallpaper.transition.bottom": "From bottom",
 
     // Apps
-    "settings.apps.installed": "INSTALLED APPS",
-    "settings.apps.apply": "Apply",
-    "settings.apps.cancel": "Cancel",
     "settings.apps.choose-image": "Choose image…",
-    "settings.apps.change": "Change icon",
     "settings.apps.restore": "Restore",
     "settings.apps.subtitle": "Customize icons for installed apps",
     "settings.apps.section": "Apps",
-    "settings.apps.title": "App Icons",
+    "settings.apps.title": "Installed Apps",
     "settings.apps.tooltip.remove-override": "Remove override and restore theme icon",
     "settings.apps.badge.override": "override",
     "settings.apps.dialog.icon": "Icon",
     "settings.apps.dialog.select-icon": "Select icon",
     "settings.apps.entry.search": "Search app...",
     "settings.apps.filter.images": "SVG / PNG images",
-    "settings.apps.no-icon": "no icon",
-    "settings.apps.status.apply-failed": "Could not apply override",
+    "settings.apps.detail.group.icon": "Icon",
+    "settings.apps.detail.icon.desc": "Choose an SVG or PNG image, or restore the theme icon",
 
     // Audio
     "settings.audio.group.output": "Output Devices",

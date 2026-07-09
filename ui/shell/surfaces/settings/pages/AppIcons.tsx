@@ -2,7 +2,7 @@ import { Gtk, Gdk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
 import appService, { type AppData } from "../../../core/AppService"
-import { pageBox } from "../SettingsHelpers"
+import { pageBox, listGroup, createRow, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { NidaraButton } from "../../../../lib/nidara-kit"
@@ -33,77 +33,51 @@ function makeIconImage(iconName: string | null, size: number): Gtk.Image {
     return img
 }
 
-// ── Icon picker dialog ────────────────────────────────────────────────────────
+// ── Per-app detail subpage ──────────────────────────────────────────────────────
+// Each app drills into its own subpage (nav.pushSubpage) rather than a modal — more
+// room, and a foundation for future per-app settings beyond just the icon. Changes
+// apply immediately (no Apply/Cancel step), matching every other Settings row.
 
-function openIconPicker(app: AppData, onChanged: () => void, parent: Gtk.Window | null) {
-    const originalIcon = app.icon ?? ""
+function buildAppIconDetailPage(app: AppData, syncRow: () => void): Gtk.Widget {
+    const page = pageBox("app-icon-detail-page")
+    const { box, listBox } = listGroup(t("settings.apps.detail.group.icon"))
 
-    const dialog = new Gtk.Window({
-        title: `${t("settings.apps.dialog.icon")} — ${app.name}`,
-        default_width: 420,
-        modal: true,
-        resizable: false,
-        css_classes: ["background", "glass", "nidara-settings-window"],
-        transient_for: parent ?? undefined,
-    })
+    const preview = new Gtk.Image({ pixel_size: 40, valign: Gtk.Align.CENTER })
+    const refreshPreview = () => {
+        // Re-reads fresh state the same way the row's syncRow does — app.icon gets
+        // canonicalized to the override path once one exists, so re-fetch by id
+        // rather than trust the (possibly now-stale) closure value.
+        const iconRef = appService.getAppData(app.id)?.icon ?? appService.getCanonicalIconName(app.icon ?? "")
+        app.icon = iconRef
+        const pb = loadPixbuf(iconRef, 40)
+        if (pb) preview.set_from_pixbuf(pb)
+        else preview.icon_name = iconRef ?? "application-x-executable"
+    }
+    refreshPreview()
 
-    const box = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 0,
-        margin_start: 24,
-        margin_end: 24,
-        margin_top: 24,
-        margin_bottom: 20,
-    })
-
-    // Preview of the current (or newly chosen) icon.
-    const previewBox = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL,
-        spacing: 8,
-        halign: Gtk.Align.CENTER,
-        margin_bottom: 18,
-    })
-    const previewImg = makeIconImage(appService.getCanonicalIconName(originalIcon), 72)
-    previewImg.pixel_size = 72
-    previewBox.append(previewImg)
-
-    // The user picks an IMAGE FILE — never an icon-theme name. So we show the path
-    // of the current override (or the newly chosen file), the only meaningful
-    // identifier here. The old free-text "theme icon name" field was a power-user
-    // trap (map an app to another themed icon by name) that just read as confusing.
-    const currentOverride = appService.getIconOverridePath(originalIcon)
-    const pathLabel = new Gtk.Label({
-        label: currentOverride ?? "",
-        css_classes: ["nidara-row-subtitle"],
-        halign: Gtk.Align.CENTER,
-        ellipsize: 3, // PANGO_ELLIPSIZE_END
-        max_width_chars: 42,
-        visible: !!currentOverride,
-    })
-    previewBox.append(pathLabel)
-    box.append(previewBox)
-
-    // Apply is declared first so the file picker's callback can enable it.
-    let selectedPath: string | null = null
-    const applyBtn = NidaraButton({
-        label: t("settings.apps.apply"),
-        variant: "primary",
-        pill: true,
-        sensitive: false, // enabled once an image is chosen
-    })
-    applyBtn.connect("clicked", () => {
-        if (!selectedPath) { dialog.close(); return }
-        const ok = appService.setIconOverride(originalIcon, selectedPath)
-        if (ok) { onChanged(); dialog.close() }
-        else { pathLabel.label = t("settings.apps.status.apply-failed"); pathLabel.visible = true }
-    })
-
-    // Choose image — the single, primary way to set an icon.
-    const chooseBtn = NidaraButton({
-        label: t("settings.apps.choose-image"),
+    const resetBtn = NidaraButton({
+        label: t("settings.apps.restore"),
         variant: "secondary",
         pill: true,
-        halign: Gtk.Align.CENTER,
+        valign: Gtk.Align.CENTER,
+        sensitive: !!appService.getIconOverridePath(app.icon ?? ""),
+    })
+    attachTooltip(resetBtn, t("settings.apps.tooltip.remove-override"), { chrome: false })
+    resetBtn.connect("clicked", () => {
+        appService.removeIconOverride(app.icon ?? "")
+        refreshPreview()
+        resetBtn.sensitive = false
+        syncRow()
+    })
+
+    // Choose image — the single, primary way to set an icon. The user picks an
+    // IMAGE FILE — never an icon-theme name (a prior free-text field was a
+    // confusing power-user trap; prior art macOS/Windows/GNOME = pick an image).
+    const chooseBtn = NidaraButton({
+        label: t("settings.apps.choose-image"),
+        variant: "primary",
+        pill: true,
+        valign: Gtk.Align.CENTER,
     })
     chooseBtn.connect("clicked", () => {
         const fd = new Gtk.FileDialog({ title: t("settings.apps.dialog.select-icon"), modal: true })
@@ -114,56 +88,35 @@ function openIconPicker(app: AppData, onChanged: () => void, parent: Gtk.Window 
         const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
         filters.append(filter)
         fd.set_filters(filters)
-        fd.open(dialog, null, (_: any, res: any) => {
+        const win = chooseBtn.get_root() as Gtk.Window | null
+        fd.open(win, null, (_: any, res: any) => {
             try {
                 const path = fd.open_finish(res)?.get_path()
-                if (path) {
-                    selectedPath = path
-                    const pb = loadPixbuf(path, 72)
-                    if (pb) previewImg.set_from_pixbuf(pb)
-                    pathLabel.label = path
-                    pathLabel.visible = true
-                    applyBtn.sensitive = true
+                if (!path) return
+                const ok = appService.setIconOverride(app.icon ?? "", path)
+                if (ok) {
+                    refreshPreview()
+                    resetBtn.sensitive = true
+                    syncRow()
                 }
             } catch {}
         })
     })
-    box.append(chooseBtn)
 
-    // Separator
-    box.append(new Gtk.Separator({ margin_top: 16, margin_bottom: 16 }))
+    const controlBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+    controlBox.append(preview)
+    controlBox.append(chooseBtn)
+    controlBox.append(resetBtn)
 
-    // Action row: Restore (left) · Cancel · Apply (right).
-    const btnRow = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END })
+    listBox.append(createRow(t("settings.apps.dialog.icon"), t("settings.apps.detail.icon.desc"), controlBox))
+    page.append(box)
 
-    const resetBtn = NidaraButton({
-        label: t("settings.apps.restore"),
-        variant: "secondary",
-        pill: true,
-        sensitive: !!currentOverride,
-    })
-    attachTooltip(resetBtn, t("settings.apps.tooltip.remove-override"), { chrome: false })
-    resetBtn.connect("clicked", () => {
-        appService.removeIconOverride(originalIcon)
-        onChanged()
-        dialog.close()
-    })
-
-    const cancelBtn = NidaraButton({ label: t("settings.apps.cancel"), variant: "secondary", pill: true })
-    cancelBtn.connect("clicked", () => dialog.close())
-
-    btnRow.append(resetBtn)
-    btnRow.append(cancelBtn)
-    btnRow.append(applyBtn)
-    box.append(btnRow)
-
-    dialog.set_child(box)
-    dialog.present()
+    return page
 }
 
 // ── App row ───────────────────────────────────────────────────────────────────
 
-function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBoxRow {
+function buildAppRow(app: AppData, nav: SettingsNav): Gtk.ListBoxRow {
     const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
     const box = new Gtk.Box({
         spacing: 14,
@@ -179,13 +132,13 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
     const textBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
     textBox.append(new Gtk.Label({ label: app.name, halign: Gtk.Align.START, css_classes: ["nidara-row-title"] }))
 
-    const iconLabel = new Gtk.Label({
-        label: canonical ?? (app.icon ?? t("settings.apps.no-icon")),
+    const idLabel = new Gtk.Label({
+        label: app.id,
         halign: Gtk.Align.START,
         css_classes: ["nidara-row-subtitle"],
         ellipsize: 3, // PANGO_ELLIPSIZE_END
     })
-    textBox.append(iconLabel)
+    textBox.append(idLabel)
 
     // Override badge
     const badge = new Gtk.Label({
@@ -196,10 +149,11 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
     })
 
     // Re-reads fresh state (setIconOverride/removeIconOverride call reload()
-    // synchronously) and re-syncs the whole row: icon, subtitle and badge. Passed
-    // to the picker so apply/restore reflect immediately — the row's own app.icon
-    // is a stale canonical snapshot (an override path, deleted on restore), so we
-    // re-fetch the freshly re-canonicalized icon from the service by id.
+    // synchronously) and re-syncs the row's icon + badge. Passed to the detail
+    // page so apply/restore reflect immediately — the row's own app.icon is a
+    // stale canonical snapshot (an override path, deleted on restore), so we
+    // re-fetch the freshly re-canonicalized icon from the service by id. (The
+    // id subtitle never changes, so it's not touched here.)
     const syncRow = () => {
         const iconRef = appService.getAppData(app.id)?.icon ?? appService.getCanonicalIconName(app.icon ?? "")
         // Sync the closure's app.icon with the freshly re-canonicalized value, so
@@ -209,26 +163,34 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
         const pb = loadPixbuf(iconRef, 32)
         if (pb) rowIcon.set_from_pixbuf(pb)
         else rowIcon.icon_name = iconRef ?? "application-x-executable"
-        iconLabel.label = iconRef ?? t("settings.apps.no-icon")
         badge.visible = !!appService.getIconOverridePath(iconRef ?? "")
     }
 
-    const editBtn = NidaraButton({
-        label: t("settings.apps.change"),
-        variant: "secondary",
-        pill: true,
-        valign: Gtk.Align.CENTER,
-    })
-    editBtn.connect("clicked", () => {
-        const win = row.get_root() as Gtk.Window | null
-        openIconPicker(app, syncRow, win)
+    // Each row drills into its own subpage (nav.pushSubpage) — see
+    // buildAppIconDetailPage. Decorative chevron mirrors Apps.tsx's navRow; the
+    // whole row is the click target since nothing else in it is interactive.
+    const chevron = new Gtk.Image({
+        gicon: Icons.chevronRight, pixel_size: 16,
+        opacity: 0.4, valign: Gtk.Align.CENTER, css_classes: ["nd-icon"],
     })
 
     box.append(rowIcon)
     box.append(textBox)
     box.append(badge)
-    box.append(editBtn)
+    box.append(chevron)
     row.set_child(box)
+    row.set_cursor_from_name("pointer")
+
+    const click = new Gtk.GestureClick()
+    click.connect("released", () => {
+        nav.pushSubpage({
+            id: `apps/icons/${app.id}`,
+            title: app.name,
+            parentId: "apps/icons",
+            build: () => buildAppIconDetailPage(app, syncRow),
+        })
+    })
+    row.add_controller(click)
 
     // Tag for filter
     ;(row as any)._appName = app.name.toLowerCase()
@@ -239,7 +201,7 @@ function buildAppRow(app: AppData, parentWindow: Gtk.Window | null): Gtk.ListBox
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function AppIconsPage() {
+export default function AppIconsPage(nav: SettingsNav) {
     const page = pageBox("apps-page")
 
     // Search — custom box with our nd-icon magnifier + Gtk.Text. Gtk.SearchEntry
@@ -269,15 +231,10 @@ export default function AppIconsPage() {
     page.append(searchEntry)
 
     // App list — build the group manually so we can wrap the ListBox in a ScrolledWindow.
-    // spacing:0 to match NidaraList: the title→card gap is owned by .nidara-list-title's
-    // margin-bottom, so the header binds to its card (see design-system.md).
+    // No title label: the page's own breadcrumb already reads "Installed Apps"
+    // (settings.apps.title), so a group header repeating it would be redundant —
+    // same call NidaraList makes when passed an empty title (list.ts).
     const groupBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, css_classes: ["nidara-list-group"] })
-    groupBox.append(new Gtk.Label({
-        label: t("settings.apps.installed"),
-        css_classes: ["nidara-list-title"],
-        halign: Gtk.Align.START,
-        margin_start: 10,
-    }))
 
     // No card chrome on the ListBox itself — it SCROLLS, so its rounded top/bottom
     // would scroll out of the viewport (the "cut-off background" bug). The card
@@ -289,7 +246,7 @@ export default function AppIconsPage() {
     })
 
     const apps = appService.getAllApps()
-    apps.forEach(app => appList.append(buildAppRow(app, null)))
+    apps.forEach(app => appList.append(buildAppRow(app, nav)))
 
     // Filter
     appList.set_filter_func((row: Gtk.ListBoxRow) => {
@@ -305,7 +262,7 @@ export default function AppIconsPage() {
         min_content_height: 400,
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         // Non-overlay: the scrollbar takes its own gutter instead of floating over
-        // the rows' right edge (where the "Change icon" button sits) and covering it.
+        // the rows' right edge (where the chevron sits) and covering it.
         overlay_scrolling: false,
         css_classes: ["apps-list-scroll"],
     })

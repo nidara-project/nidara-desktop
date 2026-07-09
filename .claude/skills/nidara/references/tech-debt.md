@@ -567,23 +567,22 @@ lockscreen silently never launched via the wrapper on every install — fixed by
 but any future wrapper MUST NOT introduce a root-only log path, and redirects into logs
 should never gate the exec (`>> "$LOG" 2>&1 || true` on the setup lines, or pre-`touch`).
 
-### 28. Settings → App Icons row is cramped — planned per-app subpage (2026-07-04)
-The installed-app row packs identity (icon + name + resolved path/name subtitle) + an "override"
-badge + a "Change icon" button into one line — it works but doesn't scale, and it's the only
-per-app config we expose. **Planned redesign:** each app drills into its **own subpage** (via
-`nav.pushSubpage`, the pattern the Apps landing already uses to reach Default Apps / App Icons),
-giving room for the icon override AND a natural home for **future per-app settings** (window
-rules, default workspace, gaming performance profile, autostart, permissions…). Also the intended
-stable surface for an agent to write per-app overrides. Deferred until per-app config is tackled
-for real; today's page is functional (search, scrollable card, choose-image dialog, working
-Restore). See memory `project_settings_apps_page`.
+### 28. Settings → App Icons row is cramped — RESOLVED (2026-07-09)
+Each row in Settings → Apps → **Installed Apps** (renamed from "App Icons") now drills into its
+own subpage via `nav.pushSubpage` (`apps/icons/{id}` → `buildAppIconDetailPage`), replacing the
+old modal dialog. The detail page applies instantly (choose image / restore, no Apply/Cancel),
+mirroring the pattern already used for the Bar page's launcher icon. It's also the intended stable
+surface for **future per-app settings** (window rules, default workspace, gaming profile,
+autostart, permissions…) and for an agent to write per-app overrides — add another `listGroup` to
+`buildAppIconDetailPage` when the next one lands. Row subtitle changed from the resolved icon
+name/path to `app.id` — meaningful for a general app list, and the icon internals don't belong
+there anymore now the page isn't icon-only. See memory `project_settings_apps_page`.
 
 ### 29. Ghost descenders on filter — line-height workaround is PROVISIONAL (2026-07-09)
-App Icons is the only Settings list that filters in place; on `invalidate_filter` GTK4 (4.22.4,
-default renderer, Wayland) leaves the descender ink of `y/g/j/p` behind hidden rows (ghost) and
-clips it on the visible ones — a GskGL damage/re-raster bug (hover row-state re-render and window
-resize both clear it). **This is the same bug the `settings-apps-per-app-subpage` branch tracked as
-an UNRESOLVED #29** — reconcile the two entries on merge, keeping THIS one (it carries the fix).
+App Icons / Installed Apps is the only Settings list that filters in place; on `invalidate_filter`
+GTK4 (4.22.4, default renderer, Wayland) leaves the descender ink of `y/g/j/p` behind hidden rows
+(ghost) and clips it on the visible ones — a GskGL damage/re-raster bug (hover row-state re-render
+and window resize both clear it; `queue_draw()` after `invalidate_filter()` does NOT).
 Current fix: `.apps-list .nidara-row-subtitle { line-height: 1.35 }` (grows the line box so the ink
 is inside it → drawn full AND repainted on filter). It **works but is provisional**: scoped to App
 Icons, so its subtitles are slightly looser than the shared `.nidara-row-subtitle` elsewhere — a
