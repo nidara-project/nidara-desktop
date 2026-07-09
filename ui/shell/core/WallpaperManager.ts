@@ -1,7 +1,8 @@
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
-import { readFile, writeFile } from "ags/file"
+import { writeFile } from "ags/file"
+import { readWallpaperConfig } from "../../lib/wallpaper"
 import { t } from "./i18n"
 
 const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/wallpaper`
@@ -45,23 +46,21 @@ class WallpaperManager extends GObject.Object {
     get transition() { return this._transition }
 
     private _loadSaved() {
-        try {
-            if (GLib.file_test(CONFIG_PATH, GLib.FileTest.EXISTS)) {
-                const data = JSON.parse(readFile(CONFIG_PATH))
-                // `path` is stored only as a hint for the Settings preview — awww restores
-                // the last wallpaper on its own via `awww restore` on session start.
-                this._current = data.path ?? ""
-                this._transition = data.transition ?? "random"
-            }
-        } catch (_) { }
+        // `path` is stored only as a hint for the Settings preview — awww restores
+        // the last wallpaper on its own via `awww restore` on session start.
+        const data = readWallpaperConfig()
+        this._current = data.path ?? ""
+        this._transition = (data.transition as TransitionType) ?? "random"
     }
 
     private _save() {
         const dir = `${GLib.get_user_config_dir()}/nidara`
         if (!GLib.file_test(dir, GLib.FileTest.EXISTS)) GLib.mkdir_with_parents(dir, 0o755)
-        // Only persist path as preview hint + transition preference.
-        // awww's own cache handles restoration at login.
-        writeFile(CONFIG_PATH, JSON.stringify({ path: this._current, transition: this._transition }))
+        // Merge over the existing file: the schema reserves per-surface override
+        // keys this manager doesn't own (see ui/lib/wallpaper.ts) — a plain
+        // overwrite would wipe them every time the desktop wallpaper changes.
+        const existing = readWallpaperConfig()
+        writeFile(CONFIG_PATH, JSON.stringify({ ...existing, path: this._current, transition: this._transition }))
     }
 
     async setWallpaper(path: string, transition?: TransitionType) {

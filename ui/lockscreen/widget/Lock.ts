@@ -1,24 +1,10 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
-import GLib from "gi://GLib"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import LockCard from "./LockCard"
 import PowerBar from "./PowerBar"
 import Clock from "./Clock"
-import { getDefaultUser } from "../../lib/users"
-
-function readWallpaperPath(): string | null {
-  try {
-    const user = getDefaultUser()
-    const path = `${user.homeDir}/.config/nidara/wallpaper`
-    const [ok, data] = GLib.file_get_contents(path)
-    if (!ok) return null
-    const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
-    return (cfg.path as string) || null
-  } catch {
-    return null
-  }
-}
+import { resolveWallpaper } from "../../lib/wallpaper"
 
 function buildWindow(onUnlock: () => void): Gtk.ApplicationWindow {
   const win = new Gtk.ApplicationWindow({
@@ -26,8 +12,11 @@ function buildWindow(onUnlock: () => void): Gtk.ApplicationWindow {
     css_classes: ["greeter-window"],
   })
 
-  const wallpaperPath = readWallpaperPath()
-  const fill: Gtk.Widget = (wallpaperPath && GLib.file_test(wallpaperPath, GLib.FileTest.EXISTS))
+  // The lockscreen runs inside the locked user's session, so its own config
+  // dir is the right source — never getDefaultUser(), which points at the
+  // first /etc/passwd user and reads the wrong home on multi-user machines.
+  const wallpaperPath = resolveWallpaper("lockscreen")
+  const fill: Gtk.Widget = wallpaperPath
     ? (() => {
         const pic = new Gtk.Picture({ hexpand: true, vexpand: true, content_fit: Gtk.ContentFit.COVER })
         pic.set_filename(wallpaperPath)

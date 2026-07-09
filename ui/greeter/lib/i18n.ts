@@ -3,9 +3,10 @@ import GLib from "gi://GLib"
 export type Locale = "en" | "es"
 
 function detectLocale(): Locale {
-  // Prefer saved greeter preference over LANG env
+  // Prefer saved greeter preference over LANG env. Same path greeter-prefs.ts
+  // reads/writes (the greeter user's own config dir, /var/lib/greeter/.config).
   try {
-    const [ok, data] = GLib.file_get_contents("/var/lib/greeter/.config/nidara/greeter-prefs.json")
+    const [ok, data] = GLib.file_get_contents(`${GLib.get_user_config_dir()}/nidara/greeter-prefs.json`)
     if (ok) {
       const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
       if (cfg.locale === "es") return "es"

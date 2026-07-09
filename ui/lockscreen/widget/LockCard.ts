@@ -2,12 +2,15 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 // @ts-ignore
 import AstalAuth from "gi://AstalAuth"
-import { getDefaultUser } from "../../lib/users"
+import { getCurrentUser } from "../../lib/users"
 import { makeAvatar } from "../../lib/avatar"
 import { t } from "../lib/i18n"
 
 export default function LockCard(onUnlock: () => void): Gtk.Widget {
-  const user = getDefaultUser()
+  // The session owner, NOT getDefaultUser(): this is both the displayed
+  // identity and the PAM account the password is verified against — the
+  // first /etc/passwd user would lock everyone else out of their own session.
+  const user = getCurrentUser()
   let isAuthenticating = false
 
   const avatar = makeAvatar(80)

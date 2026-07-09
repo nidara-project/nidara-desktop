@@ -10,21 +10,28 @@ const MONTHS_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug'
 const MONTHS_LONG  = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 function readRegionConfig(): { timeFormat: "24h" | "12h"; showSeconds: boolean; dateFormat: DateFormat } {
-  try {
-    const user = getDefaultUser()
-    const path = `${user.homeDir}/.config/nidara/region.json`
-    const [ok, data] = GLib.file_get_contents(path)
-    if (!ok) return { timeFormat: "24h", showSeconds: false, dateFormat: "long" }
-    const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
-    const fmt = (cfg.dateFormat as DateFormat) ?? "long"
-    return {
-      timeFormat: cfg.timeFormat === "12h" ? "12h" : "24h",
-      showSeconds: cfg.showSeconds === true,
-      dateFormat: fmt === "none" ? "long" : fmt,
-    }
-  } catch {
-    return { timeFormat: "24h", showSeconds: false, dateFormat: "long" }
+  const fallback = { timeFormat: "24h" as const, showSeconds: false, dateFormat: "long" as DateFormat }
+  // Try the user's home first (works if /home/<user> is not 700), then the
+  // world-readable mirror RegionConfig writes to /var/tmp/nidara — same
+  // pattern as the greeter's appearance.json read in app.ts.
+  const candidates = [
+    `${getDefaultUser().homeDir}/.config/nidara/region.json`,
+    "/var/tmp/nidara/region.json",
+  ]
+  for (const path of candidates) {
+    try {
+      const [ok, data] = GLib.file_get_contents(path)
+      if (!ok) continue
+      const cfg = JSON.parse(new TextDecoder().decode(data as Uint8Array))
+      const fmt = (cfg.dateFormat as DateFormat) ?? "long"
+      return {
+        timeFormat: cfg.timeFormat === "12h" ? "12h" : "24h",
+        showSeconds: cfg.showSeconds === true,
+        dateFormat: fmt === "none" ? "long" : fmt,
+      }
+    } catch { /* try next */ }
   }
+  return fallback
 }
 
 const region = readRegionConfig()

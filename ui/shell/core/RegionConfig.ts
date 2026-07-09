@@ -71,7 +71,20 @@ class RegionConfigManager extends GObject.Object {
             const dir = `${GLib.get_user_config_dir()}/nidara`
             if (!GLib.file_test(dir, GLib.FileTest.EXISTS))
                 GLib.mkdir_with_parents(dir, 0o755)
-            writeFile(CONFIG_PATH, JSON.stringify(this._settings, null, 2))
+            const json = JSON.stringify(this._settings, null, 2)
+            writeFile(CONFIG_PATH, json)
+
+            // Mirror to /var/tmp so the greeter (a system user with no access to
+            // a 700 home dir) can honor the clock format — same pattern as
+            // ThemeManager's appearance.json mirror.
+            try {
+                const sharedDir = "/var/tmp/nidara"
+                if (!GLib.file_test(sharedDir, GLib.FileTest.EXISTS))
+                    GLib.mkdir_with_parents(sharedDir, 0o755)
+                writeFile(`${sharedDir}/region.json`, json)
+            } catch (e) {
+                console.warn("[RegionConfig] could not write shared region:", e)
+            }
         } catch (e) {
             console.error("[RegionConfig] Save failed:", e)
         }
