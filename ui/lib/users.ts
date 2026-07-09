@@ -46,7 +46,18 @@ export function getUsers(): User[] {
   }
 }
 
+// First human user in /etc/passwd — for surfaces running OUTSIDE any user
+// session (the greeter, before anyone logs in). Never use this from the
+// lockscreen: it points at the wrong account on multi-user machines.
 export function getDefaultUser(): User {
   const users = getUsers()
   return users[0] ?? { username: "user", displayName: "User", avatarPath: null, homeDir: "" }
+}
+
+// The user running THIS process — the right identity for the lockscreen,
+// which runs inside the locked session as its owner.
+export function getCurrentUser(): User {
+  const username = GLib.get_user_name()
+  const match = getUsers().find(u => u.username === username)
+  return match ?? { username, displayName: username, avatarPath: null, homeDir: GLib.get_home_dir() }
 }

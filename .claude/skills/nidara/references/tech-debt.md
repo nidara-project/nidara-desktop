@@ -690,8 +690,13 @@ These were paid down; the *rule* remains:
   greeter paint via awww with their own `.lua`-side default fallback. The
   `~/.config/nidara/wallpaper` JSON reserves a `surfaces` block for future per-surface
   wallpapers from Settings — `WallpaperManager._save()` merge-writes so it never clobbers
-  keys it doesn't own. The lockscreen must use its OWN config dir, never `getDefaultUser()`
-  (wrong home on multi-user machines).
+  keys it doesn't own.
+- **`getDefaultUser()` is greeter-ONLY** (pre-login, no session). The lockscreen runs as the
+  locked session's owner and must use `getCurrentUser()` / its own config dir — using
+  `getDefaultUser()` there once pointed PAM at the first /etc/passwd user, locking every
+  other user out of their own session. For user config the greeter can't read (700 homes),
+  the shell mirrors world-readable copies to `/var/tmp/nidara/` (`appearance.json` from
+  ThemeManager, `region.json` from RegionConfig); greeter readers try home → mirror.
 - **`Status.ts` exclusion** — add a new overlay's `_field → notify` to `EXCLUSIVE` and call
   `closeExclusive(...)`; don't touch the other setters.
 - **Repo weight** — history was rewritten (.git 342→95 MiB); old clones must re-clone. Don't
