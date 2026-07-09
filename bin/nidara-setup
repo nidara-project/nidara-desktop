@@ -412,6 +412,16 @@ if [ "$ACTIVE_DM" = "none" ] || { [ "$ACTIVE_DM" = "greetd" ] && _greetd_is_ours
         echo "  [OK] Greeter Hyprland config symlinked to $GREETER_HOME/.config/hypr/hyprland.lua"
     fi
 
+    # The greeter session runs with HOME/XDG_CONFIG_HOME overridden to
+    # /var/lib/greeter (hyprland-greeter.lua), where it persists locale/kb
+    # prefs (greeter-prefs.json). Arch's greetd sysusers gives the greeter
+    # user home "/" and creates no dir, and the greeter can't mkdir under
+    # root-owned /var/lib — so without this, saving prefs silently fails on
+    # every boot and the language picker never sticks.
+    sudo mkdir -p /var/lib/greeter/.config/nidara
+    sudo chown -R greeter:greeter /var/lib/greeter
+    sudo chmod 755 /var/lib/greeter
+
     sudo systemctl enable greetd
     echo "  [OK] greetd enabled."
 elif [ "$ACTIVE_DM" = "greetd" ]; then

@@ -697,6 +697,16 @@ These were paid down; the *rule* remains:
   other user out of their own session. For user config the greeter can't read (700 homes),
   the shell mirrors world-readable copies to `/var/tmp/nidara/` (`appearance.json` from
   ThemeManager, `region.json` from RegionConfig); greeter readers try home → mirror.
+- **Greeter home mechanics** (two different "homes" — don't conflate): Arch greetd's
+  sysusers gives the `greeter` user passwd home `/` (that's where Hyprland's own config
+  discovery looks — nidara-setup's `~greeter/.config/hypr/hyprland.lua` symlink is the
+  fallback; the operative pointer is `HYPRLAND_CONFIG` in greetd's `config.toml`). INSIDE
+  the greeter session, `hyprland-greeter.lua` overrides `HOME`/`XDG_CONFIG_HOME` to
+  `/var/lib/greeter`, where `greeter-prefs.json` (locale/kb) lives — always read it via
+  `GLib.get_user_config_dir()`, never a hardcoded path. Nothing creates `/var/lib/greeter`
+  (Arch's sysusers doesn't) and the greeter user can't mkdir under root-owned `/var/lib`,
+  so **nidara-setup creates it** (greeter-owned) — before that fix, greeter prefs silently
+  never persisted across boots.
 - **`Status.ts` exclusion** — add a new overlay's `_field → notify` to `EXCLUSIVE` and call
   `closeExclusive(...)`; don't touch the other setters.
 - **Repo weight** — history was rewritten (.git 342→95 MiB); old clones must re-clone. Don't
