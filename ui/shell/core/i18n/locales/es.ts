@@ -138,6 +138,7 @@ export default {
     "settings.users.other.delete.confirm.title": "Eliminar usuario",
     "settings.users.other.delete.confirm.body":  "¿Eliminar permanentemente la cuenta y carpeta personal de",
     "settings.users.other.err.create":    "No se pudo crear el usuario. Comprueba los permisos.",
+    "settings.users.other.err.exists":    "Ese nombre de usuario ya existe.",
     "settings.users.other.pw":            "Contraseña",
     "settings.users.other.pw.placeholder": "Dejar en blanco para cuenta bloqueada",
     "settings.users.other.pw2":           "Confirmar contraseña",

@@ -221,7 +221,9 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
             setPassword()
         }).catch(e => {
             console.error("[Users] useradd:", e)
-            statusLabel.label = t("settings.users.other.err.create")
+            statusLabel.label = String(e?.message ?? e).includes("already exists")
+                ? t("settings.users.other.err.exists")
+                : t("settings.users.other.err.create")
             statusLabel.visible = true
             createBtn.sensitive = true
         })

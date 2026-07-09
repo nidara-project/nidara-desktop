@@ -138,6 +138,7 @@ export default {
     "settings.users.other.delete.confirm.title": "Delete User",
     "settings.users.other.delete.confirm.body":  "Permanently delete the account and home folder for",
     "settings.users.other.err.create":    "Failed to create user. Check permissions.",
+    "settings.users.other.err.exists":    "That username already exists.",
     "settings.users.other.pw":            "Password",
     "settings.users.other.pw.placeholder": "Leave blank for locked account",
     "settings.users.other.pw2":           "Confirm Password",
