@@ -144,6 +144,7 @@ export default {
     "settings.users.other.pw2.placeholder": "Repite la contraseña",
     "settings.users.other.err.pwmatch":   "Las contraseñas no coinciden",
     "settings.users.other.err.pw":        "No se pudo cambiar la contraseña.",
+    "settings.users.other.err.pw-set":    "Usuario creado, pero no se pudo establecer la contraseña. Vuelve a intentarlo.",
     "settings.users.other.pw.change":     "Cambiar contraseña",
     "settings.users.other.pw.apply":      "Aplicar",
 

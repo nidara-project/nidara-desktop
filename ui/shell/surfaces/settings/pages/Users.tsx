@@ -4,6 +4,7 @@ import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
 import { showNidaraAlert, NidaraButton } from "../../../../lib/nidara-kit"
+import { getUsers, getCurrentUser, type User } from "../../../../lib/users"
 import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { showAvatarCropper } from "../../../common/AvatarCropper"
 import { attachTooltip } from "../../../common/Tooltip"
@@ -11,29 +12,9 @@ import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 
 // ── Data helpers ──────────────────────────────────────────────────────────────
-
-interface SystemUser {
-    username: string
-    displayName: string
-    homeDir: string
-    uid: number
-}
-
-function parseUsers(): SystemUser[] {
-    try {
-        const [ok, bytes] = GLib.file_get_contents("/etc/passwd")
-        if (!ok) return []
-        const text = new TextDecoder().decode(bytes as Uint8Array)
-        return text.split("\n").flatMap(line => {
-            const p = line.split(":")
-            if (p.length < 7) return []
-            const uid = parseInt(p[2])
-            const shell = p[6].trim()
-            if (uid < 1000 || !shell || shell.includes("nologin") || shell.includes("false")) return []
-            return [{ username: p[0], displayName: (p[4] ?? "").split(",")[0].trim() || p[0], homeDir: p[5] ?? "", uid }]
-        })
-    } catch { return [] }
-}
+// User enumeration + avatar resolution come from the shared ui/lib/users.ts
+// (same source the greeter and lockscreen use), so all three surfaces agree on
+// the displayed name — including the GECOS→username fallback.
 
 function isInWheel(username: string): boolean {
     try {
@@ -46,23 +27,6 @@ function isInWheel(username: string): boolean {
         }
     } catch {}
     return false
-}
-
-function avatarFor(username: string, homeDir: string): string | null {
-    const accounts = `/var/lib/AccountsService/icons/${username}`
-    const face     = `${homeDir}/.face`
-    if (GLib.file_test(accounts, GLib.FileTest.EXISTS)) return accounts
-    if (GLib.file_test(face,     GLib.FileTest.EXISTS)) return face
-    return null
-}
-
-// ── Current-user helpers ──────────────────────────────────────────────────────
-
-function getDisplayName(): string {
-    try {
-        const n = GLib.get_real_name()
-        return n ? n.split(",")[0].trim() : GLib.get_user_name() ?? ""
-    } catch { return GLib.get_user_name() ?? "" }
 }
 
 // Register the written ~/.face with AccountsService so the greeter / other DEs pick
@@ -196,7 +160,9 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
         const uname = unameEntry.text.trim()
         const pw  = pwEntry.text
         const pw2 = pw2Entry.text
-        createBtn.sensitive = uname.length > 0 && pw.length > 0 && pw === pw2
+        // A blank password is allowed: the account is created locked, as the
+        // password placeholder promises.
+        createBtn.sensitive = uname.length > 0 && pw === pw2
         if (pw2.length > 0 && pw !== pw2) {
             statusLabel.label = t("settings.users.other.err.pwmatch"); statusLabel.visible = true
         } else { statusLabel.visible = false }
@@ -207,27 +173,52 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
 
     cancelBtn.connect("clicked", () => dialog.close())
 
+    // useradd succeeded but chpasswd is still pending/failed — a re-click must
+    // retry only the password step, never a second useradd.
+    let created = false
+
     createBtn.connect("clicked", () => {
         const uname = unameEntry.text.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "")
-        const fname = nameEntry.text.trim()
+        // ':' and newlines would corrupt the passwd GECOS entry — useradd rejects
+        // them with an unhelpful generic error, so strip them up front.
+        const fname = nameEntry.text.trim().replace(/[:\n\r]/g, "")
         const pw    = pwEntry.text
 
         createBtn.sensitive = false
         statusLabel.visible = false
 
-        const addCmd = adminSwitch.active
-            ? ["pkexec", "useradd", "-m", "-G", "wheel", "-c", fname, uname]
-            : ["pkexec", "useradd", "-m", "-c", fname, uname]
-
-        execAsync(addCmd).then(() => {
+        const setPassword = () => {
             const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
             proc.communicate_utf8_async(`${uname}:${pw}\n`, null, (_: any, res: any) => {
-                try { proc.communicate_utf8_finish(res) } catch (e) {
-                    console.error("[Users] chpasswd:", e)
-                }
-                dialog.close()
-                onCreated()
+                // finish() only throws on IO errors — a non-zero exit (e.g. the
+                // pkexec prompt was cancelled) must be read from get_successful().
+                let ok = false
+                try { proc.communicate_utf8_finish(res); ok = proc.get_successful() }
+                catch (e) { console.error("[Users] chpasswd:", e) }
+                if (ok) { dialog.close(); return }
+                statusLabel.label = t("settings.users.other.err.pw-set")
+                statusLabel.visible = true
+                createBtn.sensitive = true
             })
+        }
+
+        if (created) { setPassword(); return }
+
+        const addCmd = ["pkexec", "useradd", "-m",
+            ...(adminSwitch.active ? ["-G", "wheel"] : []),
+            ...(fname ? ["-c", fname] : []),
+            uname]
+
+        execAsync(addCmd).then(() => {
+            created = true
+            // The account exists now whatever happens to the password — freeze
+            // its identity fields and refresh the list behind the dialog.
+            nameEntry.sensitive = false
+            unameEntry.sensitive = false
+            adminSwitch.sensitive = false
+            onCreated()
+            if (pw.length === 0) { dialog.close(); return }
+            setPassword()
         }).catch(e => {
             console.error("[Users] useradd:", e)
             statusLabel.label = t("settings.users.other.err.create")
@@ -241,7 +232,7 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
 
 // ── "Change password" dialog ──────────────────────────────────────────────────
 
-function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null) {
+function showChangePasswordDialog(user: User, parentWin: Gtk.Window | null) {
     const dialog = new Gtk.Window({
         title: `${t("settings.users.other.pw.change")} — ${user.displayName}`,
         modal: true,
@@ -300,12 +291,15 @@ function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null
 
         const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
         proc.communicate_utf8_async(`${user.username}:${pw}\n`, null, (_: any, res: any) => {
-            try { proc.communicate_utf8_finish(res); dialog.close() } catch (e) {
-                console.error("[Users] chpasswd:", e)
-                statusLabel.label = t("settings.users.other.err.pw")
-                statusLabel.visible = true
-                applyBtn.sensitive = true
-            }
+            // finish() only throws on IO errors — a non-zero exit (e.g. the
+            // pkexec prompt was cancelled) must be read from get_successful().
+            let ok = false
+            try { proc.communicate_utf8_finish(res); ok = proc.get_successful() }
+            catch (e) { console.error("[Users] chpasswd:", e) }
+            if (ok) { dialog.close(); return }
+            statusLabel.label = t("settings.users.other.err.pw")
+            statusLabel.visible = true
+            applyBtn.sensitive = true
         })
     })
 
@@ -314,12 +308,11 @@ function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null
 
 // ── Other-user row ─────────────────────────────────────────────────────────────
 
-function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh: () => void): Gtk.ListBoxRow {
+function buildUserRow(user: User, parentWin: Gtk.Window | null, onRefresh: () => void): Gtk.ListBoxRow {
     const admin = isInWheel(user.username)
-    const avatar = avatarFor(user.username, user.homeDir)
 
     const avatarImg = new Gtk.Image({ pixel_size: 36, css_classes: ["users-avatar-sm"], valign: Gtk.Align.CENTER })
-    if (avatar) { try { avatarImg.set_from_file(avatar) } catch { avatarImg.gicon = Icons.userRound } }
+    if (user.avatarPath) { try { avatarImg.set_from_file(user.avatarPath) } catch { avatarImg.gicon = Icons.userRound } }
     else avatarImg.gicon = Icons.userRound
 
     const nameBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
@@ -398,9 +391,9 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
 export default function UsersPage() {
     const page = pageBox("users-page")
 
-    const username    = GLib.get_user_name() ?? ""
-    const displayName = getDisplayName()
-    const avatarPath  = avatarFor(username, GLib.get_home_dir() ?? "")
+    const me = getCurrentUser()
+    const { username, displayName } = me
+    const avatarPath = me.avatarPath
 
     // ── Your Account ─────────────────────────────────────────────────────────
     const profileGroup = listGroup(t("settings.users.group.profile"))
@@ -537,7 +530,7 @@ export default function UsersPage() {
     const rebuildOtherUsers = () => {
         while (otherList.get_first_child()) otherList.get_first_child()!.unparent()
 
-        const others = parseUsers().filter(u => u.username !== username)
+        const others = getUsers().filter(u => u.username !== username)
         if (others.length === 0) {
             const emptyRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
             emptyRow.set_child(new Gtk.Label({
