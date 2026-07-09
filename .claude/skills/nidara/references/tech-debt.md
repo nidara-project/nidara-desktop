@@ -697,16 +697,19 @@ These were paid down; the *rule* remains:
   other user out of their own session. For user config the greeter can't read (700 homes),
   the shell mirrors world-readable copies to `/var/tmp/nidara/` (`appearance.json` from
   ThemeManager, `region.json` from RegionConfig); greeter readers try home → mirror.
-- **Greeter home mechanics** (two different "homes" — don't conflate): Arch greetd's
-  sysusers gives the `greeter` user passwd home `/` (that's where Hyprland's own config
-  discovery looks — nidara-setup's `~greeter/.config/hypr/hyprland.lua` symlink is the
-  fallback; the operative pointer is `HYPRLAND_CONFIG` in greetd's `config.toml`). INSIDE
-  the greeter session, `hyprland-greeter.lua` overrides `HOME`/`XDG_CONFIG_HOME` to
-  `/var/lib/greeter`, where `greeter-prefs.json` (locale/kb) lives — always read it via
-  `GLib.get_user_config_dir()`, never a hardcoded path. Nothing creates `/var/lib/greeter`
-  (Arch's sysusers doesn't) and the greeter user can't mkdir under root-owned `/var/lib`,
-  so **nidara-setup creates it** (greeter-owned) — before that fix, greeter prefs silently
-  never persisted across boots.
+- **Greeter home = `/var/lib/greeter`, enforced by nidara-setup.** Arch greetd's sysusers
+  ships the `greeter` user with passwd home `/` and creates no dir — with that, greeter
+  artifacts (Hyprland's own config discovery, D-Bus-activated services like dconf, which
+  inherit the LOGIN env rather than the .lua's `hl.env`) land as dotfiles in the
+  filesystem root, and greeter prefs could never persist (the greeter can't mkdir under
+  root-owned `/var/lib`). nidara-setup therefore creates `/var/lib/greeter` (greeter-owned),
+  aligns the passwd home via `usermod -d` (idempotent; tolerates a busy greeter and
+  converges next run), and sweeps a stray greeter-owned `/.config`. `greeter-prefs.json`
+  (locale/kb) lives there — always read it via `GLib.get_user_config_dir()`, never a
+  hardcoded path (`hyprland-greeter.lua` also sets `HOME`/`XDG_CONFIG_HOME` to the same
+  place as belt-and-braces). The `~greeter/.config/hypr/hyprland.lua` symlink is only a
+  fallback; the operative pointer is `HYPRLAND_CONFIG` in greetd's `config.toml`. Verified
+  E2E in VM 07-09: home migrated, greeter boots, locale pref survives reboot.
 - **`Status.ts` exclusion** — add a new overlay's `_field → notify` to `EXCLUSIVE` and call
   `closeExclusive(...)`; don't touch the other setters.
 - **Repo weight** — history was rewritten (.git 342→95 MiB); old clones must re-clone. Don't
