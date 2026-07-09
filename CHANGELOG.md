@@ -5,6 +5,24 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.5] — 2026-07-09
+
+### Fixed
+
+- The lock screen now shows the default wallpaper on fresh installs — until a wallpaper
+  was picked in Settings it painted a flat backdrop. It also falls back gracefully (user
+  wallpaper → default) when the configured image no longer exists on disk, instead of
+  going blank. Groundwork included for assigning independent wallpapers to the desktop,
+  lock screen and login screen from Settings in a future release.
+- On multi-user machines the lock screen now shows — and verifies the password of — the
+  user who actually locked the session; previously it always presented the first user
+  account, locking everyone else out of their own session.
+- The login screen's clock now honors the time and date format chosen in Settings even
+  when the user's home directory is private (mode 700).
+- Config files generated before the Nidara rename no longer keep "Crystal Shell" headers
+  forever — they're rewritten (comments only, never user content) on the next
+  install or update.
+
 ## [0.1.4] — 2026-07-09
 
 ### Changed
