@@ -594,6 +594,18 @@ descenders"), or (c) bisect `GSK_RENDERER` (cairo vs ngl/vulkan) and file upstre
 screenshot/agent-driven verification is masked here** (interaction re-renders and hides it) — verify
 with a human. Same latent bug in `AppGrid.tsx`.
 
+### 30. Users page form dialogs are unstyled Gtk.Windows — need a nidara-kit form-dialog primitive (2026-07-10)
+Settings → Users has three dialogs with two different skins: Delete User goes through
+`showNidaraAlert` (nidara-kit `alert-dialog.ts`, full design-system chrome), while Add User and
+Change Password are hand-rolled plain `Gtk.Window`s — only their `NidaraButton`s are styled; the
+window, labels and entries render with GTK defaults, so they visibly belong to another family
+(user-flagged in the 07-10 VM pass). Deliberate deferral to keep PR #22 functional-only. The fix
+is NOT to hand-style those two windows: build a reusable **form-dialog primitive in
+`ui/lib/nidara-kit`** (window + heading + body slot + response row, sharing the alert-dialog's
+chrome/classes) and rebuild both dialogs on it — per the universal-components rule, so every
+future form dialog is born coherent. Design decisions pending: CSD header vs headerless card,
+glass level, entry styling (`nidara-alert-entry` already exists as a starting point).
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
