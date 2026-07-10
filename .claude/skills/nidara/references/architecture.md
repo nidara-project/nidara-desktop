@@ -33,7 +33,7 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 4. **`nidara-ui`** (UI launcher in `/usr/bin/`): kills stale `gjs`, then —
    - **Dev mode:** if `~/.config/nidara/.dev` exists, `cd` to its path and `ags run app.ts`.
    - **Prod mode:** exec the bundle at `/usr/share/nidara/ui/shell/build/nidara`.
-   - Log: `/tmp/nidara-ui.log`.
+   - Log: `${XDG_RUNTIME_DIR:-/tmp}/nidara-ui.log` (per-user — see tech-debt "Resolved" rule on log paths).
 5. **`app.ts`** (`ui/shell/app.ts`): sets dark/light via `Gtk.Settings.gtk_application_prefer_dark_theme` (pure GTK4 — no `Adw.init()`); registers the `nd-*-symbolic` icon search path; `app.start({ applicationId: "org.nidara.desktop", main, requestHandler })`. In `main()`: iterates monitors → `createUI(monitor)` (Bar + Dock per monitor), wires the dock-rebuild debounce, and populates `core/ShellActions` + the IPC registry (the bar/dock blur layer rules live in `hyprland.lua` as `hl.layer_rule` — the old `hyprctl keyword layerrule` calls were dead under the Lua parser and were removed).
 6. Reload in dev: **`Super+Shift+R`** re-runs `nidara-ui` (the old `start_ui.sh`/`reload_ui.sh` no longer exist).
 

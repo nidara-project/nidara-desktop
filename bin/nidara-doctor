@@ -21,7 +21,7 @@
 set -uo pipefail
 
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/nidara"
-LOG="/tmp/nidara-ui.log"
+LOG="${XDG_RUNTIME_DIR:-/tmp}/nidara-ui.log"
 
 # `cmd args…` → run, indent as a code block; print "n/a (reason)" on failure.
 section() { printf '\n## %s\n\n' "$1"; }

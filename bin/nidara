@@ -20,6 +20,18 @@ export CLUTTER_BACKEND=wayland
 export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
 export LD_LIBRARY_PATH="/usr/lib:/usr/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
+# First-login bootstrap (issue #23): install-time setup seeds per-user config
+# only for the user who ran install.sh. A user created later (Settings → Users,
+# useradd, archinstall…) reaches their first session with no ~/.config/nidara
+# at all — hyprland.lua then boots with a flood of lua errors and the shell
+# starts unthemed. Seed the same per-user defaults HERE, before Hyprland loads
+# its config; this covers every user-creation path and heals a deleted config
+# dir. Fail-soft: a seeding hiccup must never block the session (the shell
+# tolerates missing config), and no step in --user mode ever calls sudo.
+if [ ! -d "$HOME/.config/nidara" ] && command -v nidara-setup >/dev/null 2>&1; then
+    nidara-setup --user > "${XDG_RUNTIME_DIR:-/tmp}/nidara-first-login.log" 2>&1 || true
+fi
+
 # Load the shared config from /usr/share (NOT ~/.config/hypr). The double `--` is
 # deliberate: uwsm appends args after its `--` straight onto `start-hyprland`, and
 # `start-hyprland` only forwards args after ITS OWN `--` to Hyprland. So we need

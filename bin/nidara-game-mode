@@ -10,7 +10,9 @@
 #   nidara-game-mode off         — force deactivate
 # ─────────────────────────────────────────────────────────────────────────────
 
-STATE_FILE="/tmp/nidara-game-mode-${HYPRLAND_INSTANCE_SIGNATURE}.state"
+# Per-user runtime dir (also auto-cleaned at logout — game mode never outlives
+# the session it was toggled in).
+STATE_FILE="${XDG_RUNTIME_DIR:-/tmp}/nidara-game-mode-${HYPRLAND_INSTANCE_SIGNATURE}.state"
 
 _is_active() { [[ -f "$STATE_FILE" ]]; }
 

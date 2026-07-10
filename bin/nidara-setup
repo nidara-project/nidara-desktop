@@ -22,6 +22,13 @@
 # Nidara-owned file; user-owned files are NEVER overwritten. Run as your normal
 # user — it sudo-escalates for the system steps (and, when invoked via sudo,
 # drops back to $SUDO_USER for the per-user ones).
+#
+# --user: per-user steps ONLY (config seeding, uwsm env + NVIDIA, user
+# services) — never touches sudo, so it can run unattended inside a session.
+# This is the first-login bootstrap: bin/nidara calls it at session start when
+# ~/.config/nidara is missing (a user created after install time — Settings →
+# Users, useradd, archinstall — gets no seeding otherwise; issue #23). The
+# system-level steps were already done at install time and are skipped.
 # ─────────────────────────────────────────────────────────────────────────────
 
 set -e
@@ -37,10 +44,12 @@ CONFIG_DIR="${REAL_HOME}/.config/nidara"
 # (hypridle.conf) into the source tree at DIR instead of seeding copies, so
 # edits in the repo take effect without re-running setup.
 DEV_REPO=""
+USER_ONLY=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --dev-repo) DEV_REPO="$2"; shift 2 ;;
-        --help)     echo "Usage: nidara-setup [--dev-repo DIR]"; exit 0 ;;
+        --user)     USER_ONLY=yes; shift ;;
+        --help)     echo "Usage: nidara-setup [--dev-repo DIR] [--user]"; exit 0 ;;
         *)          echo "nidara-setup: unknown option '$1'" >&2; exit 1 ;;
     esac
 done
@@ -112,9 +121,9 @@ echo "  Detected: layout=$SYS_KB_LAYOUT  timezone=$SYS_TIMEZONE  locale=$SYS_LOC
 echo ""
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GObject Introspection environment
+# GObject Introspection environment (system — skipped by --user)
 # ─────────────────────────────────────────────────────────────────────────────
-if ! grep -q "GI_TYPELIB_PATH" /etc/environment 2>/dev/null; then
+if [ -z "$USER_ONLY" ] && ! grep -q "GI_TYPELIB_PATH" /etc/environment 2>/dev/null; then
     echo "  Configuring GI_TYPELIB_PATH in /etc/environment..."
     echo 'GI_TYPELIB_PATH="/usr/lib/girepository-1.0"' | sudo tee -a /etc/environment
 fi
@@ -152,10 +161,13 @@ done
 # inode/directory, so the Files item would open the TERMINAL (clean-install bug,
 # VM 06-22). Seed nautilus when there's no association yet OR when it's that kitty
 # default; never override a real user choice.
-_fm_default="$(run_user xdg-mime query default inode/directory 2>/dev/null)"
+# (fail-soft under set -e: this also runs unattended at session start via
+# --user, where an xdg-mime hiccup must not abort the rest of the seeding)
+_fm_default="$(run_user xdg-mime query default inode/directory 2>/dev/null || true)"
 if [ -z "$_fm_default" ] || [ "$_fm_default" = "kitty-open.desktop" ]; then
-    run_user xdg-mime default org.gnome.Nautilus.desktop inode/directory \
-        && echo "  [Init] Default file manager → nautilus (inode/directory, was: ${_fm_default:-none})"
+    run_user xdg-mime default org.gnome.Nautilus.desktop inode/directory 2>/dev/null \
+        && echo "  [Init] Default file manager → nautilus (inode/directory, was: ${_fm_default:-none})" \
+        || echo "  [WARN] could not set default file manager (xdg-mime failed)"
 fi
 
 # .mcp.json — MCP manifest for the user's AI agent (Claude Code et al). Points at
@@ -361,9 +373,10 @@ if command -v lspci >/dev/null 2>&1 \
     fi
 fi
 
-# ── Display manager ───────────────────────────────────────────────────────────
+# ── Display manager (system — skipped by --user) ─────────────────────────────
 # Only install and enable greetd if no other display manager is already active.
 # If the user already has sddm/gdm/lightdm/etc. enabled we leave it untouched.
+if [ -z "$USER_ONLY" ]; then
 _detect_dm() {
     for dm in sddm gdm lightdm lxdm xdm slim ly greetd; do
         if systemctl is-enabled "$dm" 2>/dev/null | grep -qE "^enabled"; then
@@ -451,6 +464,7 @@ elif [ "$ACTIVE_DM" = "greetd" ]; then
 else
     echo "  Display manager '$ACTIVE_DM' already enabled — skipping greetd setup."
 fi
+fi  # USER_ONLY
 
 # ── Nidara unit ────────────────────────────────────────────────────────
 # Deliberately NOT enabled via graphical-session.target — that would start the
@@ -466,18 +480,20 @@ user_systemctl disable nidara.service 2>/dev/null || true
 echo "  Enabling audio services..."
 user_systemctl enable --now wireplumber pipewire pipewire-pulse 2>/dev/null || true
 
-# ── Power profiles ────────────────────────────────────────────────────────────
+if [ -z "$USER_ONLY" ]; then
+# ── Power profiles (system — skipped by --user) ───────────────────────────────
 # Game mode toggles performance/balanced via powerprofilesctl (hyprland.lua).
 echo "  Enabling power-profiles-daemon..."
 sudo systemctl enable --now power-profiles-daemon 2>/dev/null || true
 
-# ── Bluetooth ─────────────────────────────────────────────────────────────────
+# ── Bluetooth (system — skipped by --user) ────────────────────────────────────
 # AstalBluetooth talks to BlueZ (org.bluez) over the system bus; the bluez daemon
 # provides that name. bluez-libs alone (the client library) is not enough — without
 # the daemon enabled there's no org.bluez, so the Bluetooth page reports "no adapter"
 # even on machines that DO have Bluetooth. Idle and harmless where there's no adapter.
 echo "  Enabling bluetooth..."
 sudo systemctl enable --now bluetooth.service 2>/dev/null || true
+fi  # USER_ONLY
 
 echo ""
 echo "  ✓ Nidara setup complete."
