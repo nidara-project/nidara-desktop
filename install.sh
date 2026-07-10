@@ -854,12 +854,9 @@ fi
 # bin/nidara-setup: ONE idempotent implementation, shared with the package
 # path (`pacman -S nidara && nidara-setup`) and with nidara-update. §6 just
 # refreshed /usr/bin/nidara-setup and its /usr/share/nidara payloads, so run
-# the installed copy. Dev installs point live-editable configs at the repo.
-if [ "$DEV_LIKE" = "yes" ]; then
-    bash /usr/bin/nidara-setup --dev-repo "$REPO_DIR"
-else
-    bash /usr/bin/nidara-setup
-fi
+# the installed copy. (The old --dev-repo flag is gone: hypridle.conf is user
+# state written by Settings → Power, never a symlink into the repo.)
+bash /usr/bin/nidara-setup
 
 echo ""
 if [ "$MODE" = "update-apply" ]; then

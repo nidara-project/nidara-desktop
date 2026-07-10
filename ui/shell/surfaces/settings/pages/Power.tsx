@@ -9,8 +9,10 @@ import Theme from "../../../core/ThemeManager"
 import { safeDisconnect } from "../../../core/signals"
 
 // ── hypridle config ───────────────────────────────────────────────────────────
-// The symlink at ~/.config/hypr/hypridle.conf resolves to the correct writable
-// target in both dev mode (repo file) and system mode (~/.config/nidara/).
+// The symlink at ~/.config/hypr/hypridle.conf always resolves to the per-user
+// copy in ~/.config/nidara/ (nidara-setup). It used to point into the dev REPO
+// on dev installs — writing here then dirtied the repo working tree, so that
+// mode was removed (2026-07-10): this file is user state, not shipped config.
 const HYPRIDLE_CONF = `${GLib.get_home_dir()}/.config/hypr/hypridle.conf`
 
 interface IdleConfig { screenOff: number; lock: number; suspend: number }

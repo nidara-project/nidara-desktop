@@ -40,16 +40,17 @@ REAL_USER="${SUDO_USER:-$USER}"
 REAL_HOME="$(getent passwd "$REAL_USER" | cut -d: -f6)"
 CONFIG_DIR="${REAL_HOME}/.config/nidara"
 
-# --dev-repo DIR (used by install.sh --dev only): symlink live-editable configs
-# (hypridle.conf) into the source tree at DIR instead of seeding copies, so
-# edits in the repo take effect without re-running setup.
-DEV_REPO=""
 USER_ONLY=""
 while [ $# -gt 0 ]; do
     case "$1" in
-        --dev-repo) DEV_REPO="$2"; shift 2 ;;
+        # --dev-repo (removed 2026-07-10): it symlinked hypridle.conf into the
+        # dev repo as "live-editable shipped config", but the Settings → Power
+        # page WRITES that file now — it's user state, and every UI change was
+        # landing in the repo working tree. Accepted as a no-op so an older
+        # install.sh calling a newer nidara-setup doesn't break mid-update.
+        --dev-repo) shift 2 ;;
         --user)     USER_ONLY=yes; shift ;;
-        --help)     echo "Usage: nidara-setup [--dev-repo DIR] [--user]"; exit 0 ;;
+        --help)     echo "Usage: nidara-setup [--user]"; exit 0 ;;
         *)          echo "nidara-setup: unknown option '$1'" >&2; exit 1 ;;
     esac
 done
@@ -266,25 +267,43 @@ for f in "$CONFIG_DIR/nidara-settings.lua" "$CONFIG_DIR/nidara-monitor.lua" "$CO
     fi
 done
 
-# Hypridle config
-# Dev repo:    symlink directly to the source tree so edits apply immediately
-# Otherwise:   copy to $CONFIG_DIR once (never overwritten), symlink from there
+# Hypridle config — per-user copy in $CONFIG_DIR (never overwritten), symlink
+# from ~/.config/hypr. This is USER STATE (Settings → Power writes it), never a
+# dev-repo symlink — that old mode routed UI writes into the repo working tree.
 mkdir -p "${REAL_HOME}/.config/hypr"
 chown "$REAL_USER" "${REAL_HOME}/.config/hypr"   # created under sudo; keep it user-owned
 
 for daemon in hypridle; do
     LINK="${REAL_HOME}/.config/hypr/${daemon}.conf"
-    if [ -n "$DEV_REPO" ]; then
-        TARGET="$DEV_REPO/config/hypr/${daemon}.conf"
-    else
-        TARGET="$CONFIG_DIR/${daemon}.conf"
-        if [ ! -f "$TARGET" ]; then
+    TARGET="$CONFIG_DIR/${daemon}.conf"
+    if [ ! -f "$TARGET" ]; then
+        # Migrate a pre-07-10 dev install: LINK pointed into the dev repo and
+        # carries the user's live (UI-written) settings — preserve them.
+        _old="$(readlink -f "$LINK" 2>/dev/null || true)"
+        if [ -n "$_old" ] && [ "$_old" != "$TARGET" ] && [ -f "$_old" ]; then
+            cp "$_old" "$TARGET"
+            echo "  [Migrate] $TARGET (from $_old)"
+        else
             cp "$SHARE/config/hypr/${daemon}.conf" "$TARGET"
-            chown "$REAL_USER" "$TARGET"
+            # Idle-suspend default: 30 min on laptops (battery present), never
+            # on desktops — auto-suspending a desktop kills downloads/remote
+            # sessions (GNOME/KDE draw the same line). Settings → Power is the
+            # explicit override either way.
+            if [ "$daemon" = hypridle ] && compgen -G "/sys/class/power_supply/BAT*" > /dev/null; then
+                cat >> "$TARGET" <<'CONF'
+
+# 3. Suspend after 30 min idle — seeded by nidara-setup (battery detected)
+listener {
+    timeout = 1800
+    on-timeout = systemctl suspend
+}
+CONF
+                echo "  [Init] idle-suspend 30 min enabled (battery detected)"
+            fi
             echo "  [Init] $TARGET"
         fi
+        chown "$REAL_USER" "$TARGET"
     fi
-    # Always (re)create the symlink so it points to the right target for the current mode
     ln -sf "$TARGET" "$LINK"
     echo "  [Symlink] $LINK -> $TARGET"
 done
