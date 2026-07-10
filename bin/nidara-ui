@@ -8,7 +8,10 @@
 
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/nidara"
 SYS_BUNDLE="/usr/share/nidara/ui/shell/build/nidara"
-LOG="/tmp/nidara-ui.log"
+# Per-user log path: a fixed /tmp file collides on multi-user systems (the
+# second user can't append to the first user's file, and a failed redirect
+# makes bash skip the exec entirely — the UI would silently never launch).
+LOG="${XDG_RUNTIME_DIR:-/tmp}/nidara-ui.log"
 
 # Kill any existing instance cleanly — but ONLY when run standalone. Under the
 # systemd unit, systemd already kills the old process's cgroup on restart, and a

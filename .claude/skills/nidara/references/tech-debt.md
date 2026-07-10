@@ -554,19 +554,6 @@ an accent-panel tint (or any token) without a real entry point — a Setting/`co
 same time. Side effect: the duplicate alpha/popover computation in `generateTokenHeader` is gone, so the
 light-mode opacity floor now lives in exactly ONE place (`nidaraVars`) — see #24.
 
-### 26. `bin/*` logs are single-user (`/tmp/nidara-*.log`) — collides on multi-user systems
-All launcher wrappers log to fixed `/tmp` paths (`nidara-ui.log`, `nidara-greeter.log`,
-`nidara-lock.log`). On a machine with two human users, the second user cannot append to the
-first user's file — and because bash aborts a command whose redirect fails, the wrapped
-binary **never launches** for that user. This exact mechanism already bit once (2026-07-03):
-`nidara-lock` logged to `/var/log/nidara-lock.log`, unwritable for ANY regular user, so the
-lockscreen silently never launched via the wrapper on every install — fixed by moving it to
-`/tmp` like the others. Proper fix when multi-user becomes a target:
-`${XDG_RUNTIME_DIR:-/tmp}/nidara-*.log` across all wrappers (per-user, always writable, and
-`install.sh` needs no changes). Low urgency — single-user is the current support scope —
-but any future wrapper MUST NOT introduce a root-only log path, and redirects into logs
-should never gate the exec (`>> "$LOG" 2>&1 || true` on the setup lines, or pre-`touch`).
-
 ### 28. Settings → App Icons row is cramped — RESOLVED (2026-07-09)
 Each row in Settings → Apps → **Installed Apps** (renamed from "App Icons") now drills into its
 own subpage via `nav.pushSubpage` (`apps/icons/{id}` → `buildAppIconDetailPage`), replacing the
@@ -606,20 +593,30 @@ chrome/classes) and rebuild both dialogs on it — per the universal-components 
 future form dialog is born coherent. Design decisions pending: CSD header vs headerless card,
 glass level, entry styling (`nidara-alert-entry` already exists as a starting point).
 
-### 31. First login of a NEW user gets no per-user config seeding (2026-07-10, deferred by user decision)
-Per-user config is seeded only by `install.sh` for the user RUNNING the install (GTK
-`settings.ini`, dconf defaults, icon theme, `~/.config/nidara/*`). Any user created later —
-Settings → Users dialog, plain `useradd`, a second archinstall/Calamares user — starts with
-**no `~/.config/nidara` at all** (VM-verified on first login of a fresh user): a flood of
-`hyprland.lua` errors at session start, Adwaita icons, black bar text (no dark mode). Fix
-direction when picked up: NOT copying files at user-creation time (covers only our dialog) but a
-**first-login bootstrap in the session startup path** — if `~/.config/nidara` is missing, seed
-the same defaults install.sh seeds, then continue; covers every creation path and heals deleted
-configs. Same multi-user sweep should take #26 (single-user `/tmp/nidara-*.log` paths).
+### 32. `/var/tmp/nidara` greeter mirror is first-writer-owned — a second user can't update it (2026-07-10)
+`ThemeManager.saveSettings` and `RegionConfig` mirror `appearance.json` + `region.json` into
+`/var/tmp/nidara` (dir 0755, owned by whoever wrote it first) so the greeter — a system user
+with no access to a 700 home — can render the accent and clock format. On a multi-user
+machine the SECOND user's shell cannot write there (fail-soft: a console warn, nothing
+breaks), so the login screen keeps reflecting the FIRST user's appearance no matter who used
+the machine last. Leftover of the 07-10 multi-user sweep (first-login bootstrap + per-user
+logs). Fix direction: per-user mirror files (e.g. `/var/tmp/nidara/<user>/…`) with the
+greeter reading the `lastUser`'s (it already tracks lastUser since PR #22) — touches shell +
+greeter; or a sticky group-writable dir. Low urgency, cosmetic.
 
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
+- **(was #26 + #31, resolved 2026-07-10) Wrapper logs/state are per-user; new users bootstrap
+  at first login.** Every `bin/*` wrapper writes its log (and runtime state) to
+  `${XDG_RUNTIME_DIR:-/tmp}/nidara-*` — NEVER a fixed `/tmp` name or a root-only path: on a
+  multi-user system the second user can't write the first user's file, and because bash skips
+  a command whose redirect fails, the wrapped binary silently never launches (exactly how the
+  lockscreen died on every install, 2026-07-03). Redirects into logs must never gate the exec.
+  Per-user seeding: `bin/nidara` runs `nidara-setup --user` at session start when
+  `~/.config/nidara` is missing (first-login bootstrap, issue #23 — details in
+  dev-workflow.md). **Any new per-user seed belongs in nidara-setup's per-user section** —
+  never in install.sh directly — so install, update AND first-login all apply it.
 - **(was #27, resolved 2026-07-05) Media player selection + cover art live in `core/MediaService.ts`.**
   Widgets must NEVER go back to `get_players()[0]` — the facade owns WHICH player the shell
   shows: auto heuristic (a PLAYING player beats paused ones; ties go to the most recent

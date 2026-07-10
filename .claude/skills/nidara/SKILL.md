@@ -62,7 +62,7 @@ The references are short and load-on-demand. Don't try to hold the whole project
 # ... edit TSX/SCSS in ui/shell/ ...
 # In a graphical session:
 Super+Shift+R                            # reload the UI (re-runs nidara-ui → ags run)
-tail -f /tmp/nidara-ui.log        # logs
+tail -f "$XDG_RUNTIME_DIR/nidara-ui.log"  # logs (per-user; falls back to /tmp)
 killall gjs                              # nuke stuck old UI when reload misbehaves
 cd ui/shell && npm run typecheck        # local typecheck (needs the git-ignored @girs/)
 cd ui/shell && npm run build            # SCSS compile + ags bundle

@@ -6,7 +6,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 BUNDLE="/usr/share/nidara/ui/greeter/build/nidara-greeter"
-LOG="/tmp/nidara-greeter.log"
+# Per-user log path (greetd's PAM session gives the greeter user its own
+# XDG_RUNTIME_DIR); /tmp fallback keeps a failed redirect from ever gating
+# the exec on exotic setups.
+LOG="${XDG_RUNTIME_DIR:-/tmp}/nidara-greeter.log"
 
 export GDK_BACKEND=wayland
 export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"

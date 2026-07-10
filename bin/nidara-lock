@@ -6,10 +6,11 @@
 # ─────────────────────────────────────────────────────────────────────────────
 
 BUNDLE="/usr/share/nidara/ui/lockscreen/build/nidara-lock"
-# /tmp like every other nidara-* log. /var/log is not user-writable: the
-# `>> $LOG` redirect fails and bash then skips launching the bundle entirely,
-# so the screen silently never locks (bit us 2026-07-03).
-LOG="/tmp/nidara-lock.log"
+# Per-user log path, like every other nidara-* log. NEVER a path the session
+# user can't write (/var/log, another user's /tmp file): the `>> $LOG` redirect
+# fails and bash then skips launching the bundle entirely, so the screen
+# silently never locks (bit us 2026-07-03 with /var/log).
+LOG="${XDG_RUNTIME_DIR:-/tmp}/nidara-lock.log"
 
 export GDK_BACKEND=wayland
 export GI_TYPELIB_PATH="/usr/lib/girepository-1.0:/usr/local/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"

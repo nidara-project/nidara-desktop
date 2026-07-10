@@ -328,7 +328,7 @@ with the code on purpose — see [Contributing](#contributing).
 ### Development Workflow
 
 - **Reload UI:** `Super + Shift + R`
-- **Logs:** `tail -f /tmp/nidara-ui.log`
+- **Logs:** `tail -f "$XDG_RUNTIME_DIR/nidara-ui.log"`
 - **Kill stale GJS process:** `killall gjs`
 - **Compile SCSS:** `cd ui/shell && sass --no-charset style.scss style.css && sed -i '/@charset/d' style.css`
 - **Type-check:** `cd ui/shell && npm run typecheck` (catches type errors before they reach the running shell)
