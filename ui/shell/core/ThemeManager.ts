@@ -543,6 +543,11 @@ class ThemeManager extends GObject.Object {
         // Runs before syncGtkTheme so the settings.ini it writes also gets Inter.
         if (this.interfaceSettings.get_user_value("font-name") === null)
             this.interfaceSettings.set_string("font-name", "Inter 11")
+        // Same deal for the monospace font: the schema default ("Adwaita Mono 11")
+        // names a font we don't even install, while ttf-jetbrains-mono-nerd ships
+        // with every Nidara install. Seed it once; never clobber a user's pick.
+        if (this.interfaceSettings.get_user_value("monospace-font-name") === null)
+            this.interfaceSettings.set_string("monospace-font-name", "JetBrainsMono Nerd Font 11")
 
         await this.syncGtkTheme()
         const settings = this.interfaceSettings
