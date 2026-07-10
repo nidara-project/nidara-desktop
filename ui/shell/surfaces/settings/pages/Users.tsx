@@ -84,6 +84,15 @@ function setRealName(name: string): boolean {
     }
 }
 
+// Resolve the window a widget lives in AT INTERACTION TIME. Rows are built
+// before the page is realized, so a window captured at build time is null —
+// and GJS refuses `transient_for: undefined` outright (the dialog then never
+// opens: the constructor throws before present()).
+function windowOf(w: Gtk.Widget): Gtk.Window | null {
+    const root = w.get_root()
+    return root instanceof Gtk.Window ? (root as unknown as Gtk.Window) : null
+}
+
 function spawnTerminalWithCommand(cmd: string) {
     const map: Record<string, string[]> = {
         kitty:          ["kitty", "--", "bash", "-c", cmd],
@@ -108,10 +117,10 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
     const dialog = new Gtk.Window({
         title: t("settings.users.other.add"),
         modal: true,
-        transient_for: parentWin ?? undefined,
         resizable: false,
         default_width: 380,
     })
+    if (parentWin) dialog.set_transient_for(parentWin)
 
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
@@ -238,10 +247,10 @@ function showChangePasswordDialog(user: User, parentWin: Gtk.Window | null) {
     const dialog = new Gtk.Window({
         title: `${t("settings.users.other.pw.change")} — ${user.displayName}`,
         modal: true,
-        transient_for: parentWin ?? undefined,
         resizable: false,
         default_width: 360,
     })
+    if (parentWin) dialog.set_transient_for(parentWin)
 
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
@@ -310,7 +319,7 @@ function showChangePasswordDialog(user: User, parentWin: Gtk.Window | null) {
 
 // ── Other-user row ─────────────────────────────────────────────────────────────
 
-function buildUserRow(user: User, parentWin: Gtk.Window | null, onRefresh: () => void): Gtk.ListBoxRow {
+function buildUserRow(user: User, onRefresh: () => void): Gtk.ListBoxRow {
     const admin = isInWheel(user.username)
 
     const avatarImg = new Gtk.Image({ pixel_size: 36, css_classes: ["users-avatar-sm"], valign: Gtk.Align.CENTER })
@@ -359,7 +368,7 @@ function buildUserRow(user: User, parentWin: Gtk.Window | null, onRefresh: () =>
         valign: Gtk.Align.CENTER,
     })
     attachTooltip(pwBtn, t("settings.users.other.pw.change"), { chrome: false })
-    pwBtn.connect("clicked", () => showChangePasswordDialog(user, parentWin))
+    pwBtn.connect("clicked", () => showChangePasswordDialog(user, windowOf(pwBtn)))
 
     const deleteBtn = new Gtk.Button({
         child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 14 , css_classes: ["nd-icon"] }),
@@ -369,7 +378,7 @@ function buildUserRow(user: User, parentWin: Gtk.Window | null, onRefresh: () =>
     attachTooltip(deleteBtn, t("settings.users.other.delete"), { chrome: false })
     deleteBtn.connect("clicked", () => {
         showNidaraAlert({
-            parent: parentWin,
+            parent: windowOf(deleteBtn),
             heading: t("settings.users.other.delete.confirm.title"),
             body: `${t("settings.users.other.delete.confirm.body")} "${user.displayName}" (${user.username})?`,
             responses: [
@@ -532,13 +541,6 @@ export default function UsersPage() {
     const otherGroup = listGroup(t("settings.users.group.other"))
     const otherList  = otherGroup.listBox
 
-    // Resolve the parent window lazily (needed for transient dialogs)
-    let parentWin: Gtk.Window | null = null
-    page.connect("realize", () => {
-        let w = page.get_root() as any
-        parentWin = w instanceof Gtk.Window ? w : null
-    })
-
     const rebuildOtherUsers = () => {
         // Rows must be removed through the ListBox (remove_all), never unparent()ed
         // directly: that leaves the box's internal row bookkeeping stale and every
@@ -556,7 +558,7 @@ export default function UsersPage() {
             }))
             otherList.append(emptyRow)
         } else {
-            others.forEach(u => otherList.append(buildUserRow(u, parentWin, rebuildOtherUsers)))
+            others.forEach(u => otherList.append(buildUserRow(u, rebuildOtherUsers)))
         }
 
         // Add User row — uses a flat Button so click always works regardless of SelectionMode
@@ -568,7 +570,7 @@ export default function UsersPage() {
         addInner.append(new Gtk.Image({ gicon: Icons.userRoundPlus, pixel_size: 20, opacity: 0.7 , css_classes: ["nd-icon"] }))
         addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["nidara-row-title"], halign: Gtk.Align.START }))
         addBtn.set_child(addInner)
-        addBtn.connect("clicked", () => showAddUserDialog(parentWin, rebuildOtherUsers))
+        addBtn.connect("clicked", () => showAddUserDialog(windowOf(addBtn), rebuildOtherUsers))
         const addRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
         addRow.set_child(addBtn)
         otherList.append(addRow)
