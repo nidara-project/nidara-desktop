@@ -594,6 +594,29 @@ descenders"), or (c) bisect `GSK_RENDERER` (cairo vs ngl/vulkan) and file upstre
 screenshot/agent-driven verification is masked here** (interaction re-renders and hides it) — verify
 with a human. Same latent bug in `AppGrid.tsx`.
 
+### 30. Users page form dialogs are unstyled Gtk.Windows — need a nidara-kit form-dialog primitive (2026-07-10)
+Settings → Users has three dialogs with two different skins: Delete User goes through
+`showNidaraAlert` (nidara-kit `alert-dialog.ts`, full design-system chrome), while Add User and
+Change Password are hand-rolled plain `Gtk.Window`s — only their `NidaraButton`s are styled; the
+window, labels and entries render with GTK defaults, so they visibly belong to another family
+(user-flagged in the 07-10 VM pass). Deliberate deferral to keep PR #22 functional-only. The fix
+is NOT to hand-style those two windows: build a reusable **form-dialog primitive in
+`ui/lib/nidara-kit`** (window + heading + body slot + response row, sharing the alert-dialog's
+chrome/classes) and rebuild both dialogs on it — per the universal-components rule, so every
+future form dialog is born coherent. Design decisions pending: CSD header vs headerless card,
+glass level, entry styling (`nidara-alert-entry` already exists as a starting point).
+
+### 31. First login of a NEW user gets no per-user config seeding (2026-07-10, deferred by user decision)
+Per-user config is seeded only by `install.sh` for the user RUNNING the install (GTK
+`settings.ini`, dconf defaults, icon theme, `~/.config/nidara/*`). Any user created later —
+Settings → Users dialog, plain `useradd`, a second archinstall/Calamares user — starts with
+**no `~/.config/nidara` at all** (VM-verified on first login of a fresh user): a flood of
+`hyprland.lua` errors at session start, Adwaita icons, black bar text (no dark mode). Fix
+direction when picked up: NOT copying files at user-creation time (covers only our dialog) but a
+**first-login bootstrap in the session startup path** — if `~/.config/nidara` is missing, seed
+the same defaults install.sh seeds, then continue; covers every creation path and heals deleted
+configs. Same multi-user sweep should take #26 (single-user `/tmp/nidara-*.log` paths).
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
@@ -682,7 +705,8 @@ These were paid down; the *rule* remains:
 - **Dock H/V** is deduplicated — fix dock logic in `DockCore.tsx` / `DockAxis.ts`, never the
   7-line wrappers.
 - **Accent colors** live only in `ui/lib/accent.ts` — add/change them there.
-- **Greeter ↔ lockscreen** share `ui/lib/accent.ts` + `ui/lib/users.ts` + `ui/lib/wallpaper.ts`;
+- **Greeter ↔ lockscreen ↔ shell** share `ui/lib/accent.ts` + `ui/lib/users.ts` + `ui/lib/wallpaper.ts`
+  (Settings → Users consumes `users.ts` too — don't reintroduce a per-surface passwd parser);
   `lib/i18n.ts` stays separate per bundle on purpose (different config paths / superset).
 - **Wallpaper resolution is centralized** in `ui/lib/wallpaper.ts` (`resolveWallpaper(surface)`:
   per-surface override → global `path` → `/usr/share/nidara/wallpaper.jpg`, each step
@@ -694,9 +718,27 @@ These were paid down; the *rule* remains:
 - **`getDefaultUser()` is greeter-ONLY** (pre-login, no session). The lockscreen runs as the
   locked session's owner and must use `getCurrentUser()` / its own config dir — using
   `getDefaultUser()` there once pointed PAM at the first /etc/passwd user, locking every
-  other user out of their own session. For user config the greeter can't read (700 homes),
+  other user out of their own session. Inside the greeter prefer `getPreferredUser()`
+  (`ui/greeter/lib/greeter-prefs.ts`): the last user who logged in from this greeter
+  (persisted as `lastUser` in `greeter-prefs.json` on successful auth), falling back to
+  `getDefaultUser()`. LoginCard preselects it (matching against its own `users` array —
+  the switcher chips compare by object identity) and app.ts/Clock.ts read that user's
+  appearance/region config. For user config the greeter can't read (700 homes),
   the shell mirrors world-readable copies to `/var/tmp/nidara/` (`appearance.json` from
   ThemeManager, `region.json` from RegionConfig); greeter readers try home → mirror.
+- **Greeter home = `/var/lib/greeter`, enforced by nidara-setup.** Arch greetd's sysusers
+  ships the `greeter` user with passwd home `/` and creates no dir — with that, greeter
+  artifacts (Hyprland's own config discovery, D-Bus-activated services like dconf, which
+  inherit the LOGIN env rather than the .lua's `hl.env`) land as dotfiles in the
+  filesystem root, and greeter prefs could never persist (the greeter can't mkdir under
+  root-owned `/var/lib`). nidara-setup therefore creates `/var/lib/greeter` (greeter-owned),
+  aligns the passwd home via `usermod -d` (idempotent; tolerates a busy greeter and
+  converges next run), and sweeps a stray greeter-owned `/.config`. `greeter-prefs.json`
+  (locale/kb) lives there — always read it via `GLib.get_user_config_dir()`, never a
+  hardcoded path (`hyprland-greeter.lua` also sets `HOME`/`XDG_CONFIG_HOME` to the same
+  place as belt-and-braces). The `~greeter/.config/hypr/hyprland.lua` symlink is only a
+  fallback; the operative pointer is `HYPRLAND_CONFIG` in greetd's `config.toml`. Verified
+  E2E in VM 07-09: home migrated, greeter boots, locale pref survives reboot.
 - **`Status.ts` exclusion** — add a new overlay's `_field → notify` to `EXCLUSIVE` and call
   `closeExclusive(...)`; don't touch the other setters.
 - **Repo weight** — history was rewritten (.git 342→95 MiB); old clones must re-clone. Don't

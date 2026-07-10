@@ -4,6 +4,7 @@ import Gio from "gi://Gio"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
 import { showNidaraAlert, NidaraButton } from "../../../../lib/nidara-kit"
+import { getUsers, getCurrentUser, type User } from "../../../../lib/users"
 import { listGroup, createRow, pageBox } from "../SettingsHelpers"
 import { showAvatarCropper } from "../../../common/AvatarCropper"
 import { attachTooltip } from "../../../common/Tooltip"
@@ -11,29 +12,9 @@ import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 
 // ── Data helpers ──────────────────────────────────────────────────────────────
-
-interface SystemUser {
-    username: string
-    displayName: string
-    homeDir: string
-    uid: number
-}
-
-function parseUsers(): SystemUser[] {
-    try {
-        const [ok, bytes] = GLib.file_get_contents("/etc/passwd")
-        if (!ok) return []
-        const text = new TextDecoder().decode(bytes as Uint8Array)
-        return text.split("\n").flatMap(line => {
-            const p = line.split(":")
-            if (p.length < 7) return []
-            const uid = parseInt(p[2])
-            const shell = p[6].trim()
-            if (uid < 1000 || !shell || shell.includes("nologin") || shell.includes("false")) return []
-            return [{ username: p[0], displayName: (p[4] ?? "").split(",")[0].trim() || p[0], homeDir: p[5] ?? "", uid }]
-        })
-    } catch { return [] }
-}
+// User enumeration + avatar resolution come from the shared ui/lib/users.ts
+// (same source the greeter and lockscreen use), so all three surfaces agree on
+// the displayed name — including the GECOS→username fallback.
 
 function isInWheel(username: string): boolean {
     try {
@@ -46,23 +27,6 @@ function isInWheel(username: string): boolean {
         }
     } catch {}
     return false
-}
-
-function avatarFor(username: string, homeDir: string): string | null {
-    const accounts = `/var/lib/AccountsService/icons/${username}`
-    const face     = `${homeDir}/.face`
-    if (GLib.file_test(accounts, GLib.FileTest.EXISTS)) return accounts
-    if (GLib.file_test(face,     GLib.FileTest.EXISTS)) return face
-    return null
-}
-
-// ── Current-user helpers ──────────────────────────────────────────────────────
-
-function getDisplayName(): string {
-    try {
-        const n = GLib.get_real_name()
-        return n ? n.split(",")[0].trim() : GLib.get_user_name() ?? ""
-    } catch { return GLib.get_user_name() ?? "" }
 }
 
 // Register the written ~/.face with AccountsService so the greeter / other DEs pick
@@ -120,6 +84,15 @@ function setRealName(name: string): boolean {
     }
 }
 
+// Resolve the window a widget lives in AT INTERACTION TIME. Rows are built
+// before the page is realized, so a window captured at build time is null —
+// and GJS refuses `transient_for: undefined` outright (the dialog then never
+// opens: the constructor throws before present()).
+function windowOf(w: Gtk.Widget): Gtk.Window | null {
+    const root = w.get_root()
+    return root instanceof Gtk.Window ? (root as unknown as Gtk.Window) : null
+}
+
 function spawnTerminalWithCommand(cmd: string) {
     const map: Record<string, string[]> = {
         kitty:          ["kitty", "--", "bash", "-c", cmd],
@@ -144,10 +117,10 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
     const dialog = new Gtk.Window({
         title: t("settings.users.other.add"),
         modal: true,
-        transient_for: parentWin ?? undefined,
         resizable: false,
         default_width: 380,
     })
+    if (parentWin) dialog.set_transient_for(parentWin)
 
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
@@ -196,7 +169,9 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
         const uname = unameEntry.text.trim()
         const pw  = pwEntry.text
         const pw2 = pw2Entry.text
-        createBtn.sensitive = uname.length > 0 && pw.length > 0 && pw === pw2
+        // A blank password is allowed: the account is created locked, as the
+        // password placeholder promises.
+        createBtn.sensitive = uname.length > 0 && pw === pw2
         if (pw2.length > 0 && pw !== pw2) {
             statusLabel.label = t("settings.users.other.err.pwmatch"); statusLabel.visible = true
         } else { statusLabel.visible = false }
@@ -207,30 +182,57 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
 
     cancelBtn.connect("clicked", () => dialog.close())
 
+    // useradd succeeded but chpasswd is still pending/failed — a re-click must
+    // retry only the password step, never a second useradd.
+    let created = false
+
     createBtn.connect("clicked", () => {
         const uname = unameEntry.text.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "")
-        const fname = nameEntry.text.trim()
+        // ':' and newlines would corrupt the passwd GECOS entry — useradd rejects
+        // them with an unhelpful generic error, so strip them up front.
+        const fname = nameEntry.text.trim().replace(/[:\n\r]/g, "")
         const pw    = pwEntry.text
 
         createBtn.sensitive = false
         statusLabel.visible = false
 
-        const addCmd = adminSwitch.active
-            ? ["pkexec", "useradd", "-m", "-G", "wheel", "-c", fname, uname]
-            : ["pkexec", "useradd", "-m", "-c", fname, uname]
-
-        execAsync(addCmd).then(() => {
+        const setPassword = () => {
             const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
             proc.communicate_utf8_async(`${uname}:${pw}\n`, null, (_: any, res: any) => {
-                try { proc.communicate_utf8_finish(res) } catch (e) {
-                    console.error("[Users] chpasswd:", e)
-                }
-                dialog.close()
-                onCreated()
+                // finish() only throws on IO errors — a non-zero exit (e.g. the
+                // pkexec prompt was cancelled) must be read from get_successful().
+                let ok = false
+                try { proc.communicate_utf8_finish(res); ok = proc.get_successful() }
+                catch (e) { console.error("[Users] chpasswd:", e) }
+                if (ok) { dialog.close(); return }
+                statusLabel.label = t("settings.users.other.err.pw-set")
+                statusLabel.visible = true
+                createBtn.sensitive = true
             })
+        }
+
+        if (created) { setPassword(); return }
+
+        const addCmd = ["pkexec", "useradd", "-m",
+            ...(adminSwitch.active ? ["-G", "wheel"] : []),
+            ...(fname ? ["-c", fname] : []),
+            uname]
+
+        execAsync(addCmd).then(() => {
+            created = true
+            // The account exists now whatever happens to the password — freeze
+            // its identity fields and refresh the list behind the dialog.
+            nameEntry.sensitive = false
+            unameEntry.sensitive = false
+            adminSwitch.sensitive = false
+            onCreated()
+            if (pw.length === 0) { dialog.close(); return }
+            setPassword()
         }).catch(e => {
             console.error("[Users] useradd:", e)
-            statusLabel.label = t("settings.users.other.err.create")
+            statusLabel.label = String(e?.message ?? e).includes("already exists")
+                ? t("settings.users.other.err.exists")
+                : t("settings.users.other.err.create")
             statusLabel.visible = true
             createBtn.sensitive = true
         })
@@ -241,14 +243,14 @@ function showAddUserDialog(parentWin: Gtk.Window | null, onCreated: () => void) 
 
 // ── "Change password" dialog ──────────────────────────────────────────────────
 
-function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null) {
+function showChangePasswordDialog(user: User, parentWin: Gtk.Window | null) {
     const dialog = new Gtk.Window({
         title: `${t("settings.users.other.pw.change")} — ${user.displayName}`,
         modal: true,
-        transient_for: parentWin ?? undefined,
         resizable: false,
         default_width: 360,
     })
+    if (parentWin) dialog.set_transient_for(parentWin)
 
     const box = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
@@ -300,12 +302,15 @@ function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null
 
         const proc = Gio.Subprocess.new(["pkexec", "chpasswd"], Gio.SubprocessFlags.STDIN_PIPE)
         proc.communicate_utf8_async(`${user.username}:${pw}\n`, null, (_: any, res: any) => {
-            try { proc.communicate_utf8_finish(res); dialog.close() } catch (e) {
-                console.error("[Users] chpasswd:", e)
-                statusLabel.label = t("settings.users.other.err.pw")
-                statusLabel.visible = true
-                applyBtn.sensitive = true
-            }
+            // finish() only throws on IO errors — a non-zero exit (e.g. the
+            // pkexec prompt was cancelled) must be read from get_successful().
+            let ok = false
+            try { proc.communicate_utf8_finish(res); ok = proc.get_successful() }
+            catch (e) { console.error("[Users] chpasswd:", e) }
+            if (ok) { dialog.close(); return }
+            statusLabel.label = t("settings.users.other.err.pw")
+            statusLabel.visible = true
+            applyBtn.sensitive = true
         })
     })
 
@@ -314,36 +319,45 @@ function showChangePasswordDialog(user: SystemUser, parentWin: Gtk.Window | null
 
 // ── Other-user row ─────────────────────────────────────────────────────────────
 
-function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh: () => void): Gtk.ListBoxRow {
+function buildUserRow(user: User, onRefresh: () => void): Gtk.ListBoxRow {
     const admin = isInWheel(user.username)
-    const avatar = avatarFor(user.username, user.homeDir)
 
     const avatarImg = new Gtk.Image({ pixel_size: 36, css_classes: ["users-avatar-sm"], valign: Gtk.Align.CENTER })
-    if (avatar) { try { avatarImg.set_from_file(avatar) } catch { avatarImg.gicon = Icons.userRound } }
-    else avatarImg.gicon = Icons.userRound
+    // The glyph fallback needs .nd-icon (dark-mode invert filter) — but only the
+    // glyph: the same filter would invert a real photo.
+    const showGlyph = () => { avatarImg.gicon = Icons.userRound; avatarImg.add_css_class("nd-icon") }
+    if (user.avatarPath) { try { avatarImg.set_from_file(user.avatarPath) } catch { showGlyph() } }
+    else showGlyph()
 
     const nameBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
     nameBox.append(new Gtk.Label({ label: user.displayName, css_classes: ["nidara-row-title"], halign: Gtk.Align.START }))
     nameBox.append(new Gtk.Label({ label: user.username, css_classes: ["nidara-row-subtitle"], halign: Gtk.Align.START }))
 
-    const adminBadge = new Gtk.Label({
-        label: t("settings.users.other.admin-badge"),
-        css_classes: ["users-admin-badge"],
+    // Always-visible label for the switch — an unlabeled toggle in the row reads
+    // as a mystery control (VM pass feedback). It also replaces the old "Admin"
+    // badge, which duplicated what the switch position already says.
+    const adminLabel = new Gtk.Label({
+        label: t("settings.users.other.admin"),
+        css_classes: ["nidara-row-subtitle"],
         valign: Gtk.Align.CENTER,
-        visible: admin,
     })
 
     const adminToggle = new Gtk.Switch({ active: admin, valign: Gtk.Align.CENTER })
     attachTooltip(adminToggle, t("settings.users.other.admin.tip"), { chrome: false })
+    let reverting = false
     adminToggle.connect("state-set", (_: any, state: boolean) => {
+        // The programmatic revert below re-enters this handler; without the guard
+        // it fired the OPPOSITE pkexec prompt, and cancelling that reverted again —
+        // an endless auth-prompt loop once the user dismissed the first dialog.
+        if (reverting) return false
         const cmd = state
             ? ["pkexec", "usermod", "-aG", "wheel", user.username]
             : ["pkexec", "gpasswd", "-d", user.username, "wheel"]
-        execAsync(cmd).then(() => {
-            adminBadge.visible = state
-        }).catch(e => {
+        execAsync(cmd).catch(e => {
             console.error("[Users] admin toggle:", e)
-            adminToggle.active = !state  // revert
+            reverting = true
+            adminToggle.active = !state
+            reverting = false
         })
         return false
     })
@@ -354,7 +368,7 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
         valign: Gtk.Align.CENTER,
     })
     attachTooltip(pwBtn, t("settings.users.other.pw.change"), { chrome: false })
-    pwBtn.connect("clicked", () => showChangePasswordDialog(user, parentWin))
+    pwBtn.connect("clicked", () => showChangePasswordDialog(user, windowOf(pwBtn)))
 
     const deleteBtn = new Gtk.Button({
         child: new Gtk.Image({ gicon: Icons.trash, pixel_size: 14 , css_classes: ["nd-icon"] }),
@@ -364,7 +378,7 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
     attachTooltip(deleteBtn, t("settings.users.other.delete"), { chrome: false })
     deleteBtn.connect("clicked", () => {
         showNidaraAlert({
-            parent: parentWin,
+            parent: windowOf(deleteBtn),
             heading: t("settings.users.other.delete.confirm.title"),
             body: `${t("settings.users.other.delete.confirm.body")} "${user.displayName}" (${user.username})?`,
             responses: [
@@ -383,7 +397,7 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
     const inner = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
     inner.append(avatarImg)
     inner.append(nameBox)
-    inner.append(adminBadge)
+    inner.append(adminLabel)
     inner.append(adminToggle)
     inner.append(pwBtn)
     inner.append(deleteBtn)
@@ -398,9 +412,9 @@ function buildUserRow(user: SystemUser, parentWin: Gtk.Window | null, onRefresh:
 export default function UsersPage() {
     const page = pageBox("users-page")
 
-    const username    = GLib.get_user_name() ?? ""
-    const displayName = getDisplayName()
-    const avatarPath  = avatarFor(username, GLib.get_home_dir() ?? "")
+    const me = getCurrentUser()
+    const { username, displayName } = me
+    const avatarPath = me.avatarPath
 
     // ── Your Account ─────────────────────────────────────────────────────────
     const profileGroup = listGroup(t("settings.users.group.profile"))
@@ -527,17 +541,13 @@ export default function UsersPage() {
     const otherGroup = listGroup(t("settings.users.group.other"))
     const otherList  = otherGroup.listBox
 
-    // Resolve the parent window lazily (needed for transient dialogs)
-    let parentWin: Gtk.Window | null = null
-    page.connect("realize", () => {
-        let w = page.get_root() as any
-        parentWin = w instanceof Gtk.Window ? w : null
-    })
-
     const rebuildOtherUsers = () => {
-        while (otherList.get_first_child()) otherList.get_first_child()!.unparent()
+        // Rows must be removed through the ListBox (remove_all), never unparent()ed
+        // directly: that leaves the box's internal row bookkeeping stale and every
+        // later append() dies on a gtk_widget_insert_after assertion (empty list).
+        otherList.remove_all()
 
-        const others = parseUsers().filter(u => u.username !== username)
+        const others = getUsers().filter(u => u.username !== username)
         if (others.length === 0) {
             const emptyRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
             emptyRow.set_child(new Gtk.Label({
@@ -548,7 +558,7 @@ export default function UsersPage() {
             }))
             otherList.append(emptyRow)
         } else {
-            others.forEach(u => otherList.append(buildUserRow(u, parentWin, rebuildOtherUsers)))
+            others.forEach(u => otherList.append(buildUserRow(u, rebuildOtherUsers)))
         }
 
         // Add User row — uses a flat Button so click always works regardless of SelectionMode
@@ -560,7 +570,7 @@ export default function UsersPage() {
         addInner.append(new Gtk.Image({ gicon: Icons.userRoundPlus, pixel_size: 20, opacity: 0.7 , css_classes: ["nd-icon"] }))
         addInner.append(new Gtk.Label({ label: t("settings.users.other.add"), css_classes: ["nidara-row-title"], halign: Gtk.Align.START }))
         addBtn.set_child(addInner)
-        addBtn.connect("clicked", () => showAddUserDialog(parentWin, rebuildOtherUsers))
+        addBtn.connect("clicked", () => showAddUserDialog(windowOf(addBtn), rebuildOtherUsers))
         const addRow = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
         addRow.set_child(addBtn)
         otherList.append(addRow)

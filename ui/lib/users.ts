@@ -1,8 +1,11 @@
 import GLib from "gi://GLib"
 
-// System user enumeration shared by the greeter and lockscreen bundles.
+// System user enumeration shared by the greeter, lockscreen and shell bundles.
 // Context-independent (reads /etc/passwd + AccountsService), so it behaves the
 // same whether running as the `greeter` system user or the logged-in user.
+// displayName falls back to the username when the GECOS field is empty — never
+// use GLib.get_real_name() for this: it returns the literal string "Unknown"
+// on empty GECOS (the archinstall/useradd default).
 
 export interface User {
   username: string
@@ -27,7 +30,7 @@ export function getUsers(): User[] {
       if (uid < 1000 || shell.includes("nologin") || shell.includes("false") || !shell) continue
 
       const gecos = parts[4] ?? ""
-      const displayName = gecos.split(",")[0] || username
+      const displayName = gecos.split(",")[0].trim() || username
 
       const homeDir = parts[5] ?? ""
       const accountsAvatar = `/var/lib/AccountsService/icons/${username}`

@@ -418,16 +418,6 @@ row.settings-adv-revealer-row {
     &:hover, &:active, &:selected { background: transparent; box-shadow: none; }
 }
 
-.users-admin-badge {
-    font-size: $fse-caption;
-    font-weight: $fw-semibold;
-    color: var(--nidara-text);
-    background: var(--nidara-accent-10);
-    border-radius: $nidara-radius-pill;
-    padding: 2px 8px;
-    margin-right: 4px;
-}
-
 // ── Preset / segmented control buttons ───────────────────────────────────────
 // Used in linked groups: Dock size presets, Gaming mode selector, etc.
 // Selected state is indicated by:

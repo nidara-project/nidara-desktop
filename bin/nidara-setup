@@ -402,6 +402,36 @@ if [ "$ACTIVE_DM" = "none" ] || { [ "$ACTIVE_DM" = "greetd" ] && _greetd_is_ours
         | sudo tee /etc/greetd/hyprland-greeter.lua > /dev/null
     sudo chmod 644 /etc/greetd/config.toml /etc/greetd/hyprland-greeter.lua
 
+    # The greeter session runs with HOME/XDG_CONFIG_HOME overridden to
+    # /var/lib/greeter (hyprland-greeter.lua), where it persists locale/kb
+    # prefs (greeter-prefs.json). Arch's greetd sysusers gives the greeter
+    # user home "/" and creates no dir, and the greeter can't mkdir under
+    # root-owned /var/lib — so without this, saving prefs silently fails on
+    # every boot and the language picker never sticks.
+    sudo mkdir -p /var/lib/greeter/.config/nidara
+    sudo chown -R greeter:greeter /var/lib/greeter
+    sudo chmod 755 /var/lib/greeter
+
+    # Align the passwd home too: with home "/" the greeter's stray artifacts
+    # (Hyprland's own config discovery, D-Bus-activated services like dconf —
+    # which inherit the LOGIN env, not the .lua's hl.env) land as dotfiles in
+    # the filesystem root. One home for everything: /var/lib/greeter.
+    _greeter_home=$(getent passwd greeter | cut -d: -f6)
+    if [ -n "$_greeter_home" ] && [ "$_greeter_home" != "/var/lib/greeter" ]; then
+        if sudo usermod -d /var/lib/greeter greeter 2>/dev/null; then
+            echo "  [Migrate] greeter home: $_greeter_home → /var/lib/greeter"
+        else
+            # usermod refuses while the greeter has live processes (rare: only
+            # when setup runs with the login screen up); next run converges.
+            echo "  [WARN] could not move greeter home (greeter busy?) — will retry on next update."
+        fi
+    fi
+    # Sweep the stray dotfiles from the old "/" home (ours only if greeter-owned).
+    if [ -d /.config ] && [ "$(stat -c %U /.config 2>/dev/null)" = "greeter" ]; then
+        sudo rm -rf /.config
+        echo "  [Migrate] removed stray greeter-owned /.config (home was /)"
+    fi
+
     # Symlink greeter Hyprland config to the greeter user's default location
     # (HYPRLAND_CONFIG in config.toml already points here; symlink is a fallback)
     GREETER_HOME=$(getent passwd greeter | cut -d: -f6)

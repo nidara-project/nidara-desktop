@@ -5,6 +5,7 @@ import GLib from "gi://GLib"
 import AstalGreet from "gi://AstalGreet"
 import { getSessions } from "../lib/sessions"
 import { getUsers, type User } from "../../lib/users"
+import { greeterPrefs, savePrefs } from "../lib/greeter-prefs"
 import { makeAvatar } from "../../lib/avatar"
 import { t, onLocaleChange } from "../lib/i18n"
 
@@ -23,7 +24,10 @@ export default function LoginCard(): Gtk.Widget {
   const sessions = getSessions()
   const users = getUsers()
   const fallback: User = { username: "user", displayName: "User", avatarPath: null, homeDir: "" }
-  let activeUser: User = users[0] ?? fallback
+  // Preselect the last user who logged in from this greeter. Match against the
+  // `users` array (not a fresh getUsers() call): the switcher chips compare by
+  // object identity.
+  let activeUser: User = users.find(u => u.username === greeterPrefs.lastUser) ?? users[0] ?? fallback
 
   let sessionIdx = Math.max(0, sessions.findIndex(s => s.id === "nidara"))
   let isAuthenticating = false
@@ -144,6 +148,7 @@ export default function LoginCard(): Gtk.Widget {
 
     try {
       await greetLogin(activeUser.username, password, session.exec)
+      savePrefs({ lastUser: activeUser.username })
       app.quit()
     } catch (e: any) {
       const msg = String(e?.message ?? e)
