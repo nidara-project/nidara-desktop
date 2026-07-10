@@ -5,6 +5,35 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.7] — 2026-07-11
+
+### Added
+
+- Default terminal configuration: kitty now ships with a Nidara config on new
+  setups — window padding that keeps text clear of the rounded corners, the
+  JetBrains Mono font, a subtle glass transparency, and terminal colors that
+  follow the system dark/light toggle live. Seeded only when you have no kitty
+  config of your own; an existing setup is never touched, and once seeded the
+  file is yours (updates never overwrite it).
+
+### Changed
+
+- Laptops now suspend after 30 minutes of idle by default (desktops never
+  auto-suspend); Settings → Power overrides this either way.
+
+### Fixed
+
+- Appearance → Fonts on a fresh install showed "Adwaita Mono" — a font Nidara
+  doesn't ship — as the monospace font. The bundled JetBrains Mono is now the
+  default; a font you picked yourself is never overridden.
+- Users created after install time (Settings → Users, `useradd`, archinstall)
+  now get their per-user configuration seeded at first login, before the
+  desktop loads — previously they landed on an unthemed session with defaults
+  missing. A deleted `~/.config/nidara` heals itself the same way.
+- Users without a profile photo now see the same avatar glyph on the login
+  screen, the lock screen and Settings, instead of a different placeholder on
+  each.
+
 ## [0.1.6] — 2026-07-10
 
 ### Added
