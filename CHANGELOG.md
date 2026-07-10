@@ -5,6 +5,33 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.6] — 2026-07-10
+
+### Added
+
+- The login screen now remembers the last user who signed in and preselects them at
+  boot — avatar, name and their appearance/clock preferences — instead of always
+  presenting the first account.
+
+### Fixed
+
+- Settings → Users no longer shows "Unknown" as the display name on systems installed
+  without a full name (e.g. archinstall); setting a name now takes effect immediately
+  across Settings, the login screen and the lock screen.
+- The language and keyboard layout picked at the login screen now survive a reboot,
+  and stray greeter dotfiles no longer land in the filesystem root.
+- Creating a user: cancelling the password authorization no longer closes the dialog
+  as if it had succeeded (the account existed but couldn't log in) — the error is
+  shown and Create retries just the password step; a blank password now intentionally
+  creates a locked account, as the field promised; picking an existing username now
+  says exactly that.
+- The Other Users list no longer goes blank after creating or deleting a user.
+- "Change Password" on a user row now opens (it failed silently before) and survives
+  a cancelled authorization prompt.
+- The administrator toggle no longer re-opens the authorization prompt in an endless
+  loop when cancelled, has a visible label now, and the user glyph in the list is no
+  longer black in dark mode.
+
 ## [0.1.5] — 2026-07-09
 
 ### Fixed
