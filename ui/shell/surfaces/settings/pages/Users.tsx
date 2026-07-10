@@ -314,31 +314,41 @@ function buildUserRow(user: User, parentWin: Gtk.Window | null, onRefresh: () =>
     const admin = isInWheel(user.username)
 
     const avatarImg = new Gtk.Image({ pixel_size: 36, css_classes: ["users-avatar-sm"], valign: Gtk.Align.CENTER })
-    if (user.avatarPath) { try { avatarImg.set_from_file(user.avatarPath) } catch { avatarImg.gicon = Icons.userRound } }
-    else avatarImg.gicon = Icons.userRound
+    // The glyph fallback needs .nd-icon (dark-mode invert filter) — but only the
+    // glyph: the same filter would invert a real photo.
+    const showGlyph = () => { avatarImg.gicon = Icons.userRound; avatarImg.add_css_class("nd-icon") }
+    if (user.avatarPath) { try { avatarImg.set_from_file(user.avatarPath) } catch { showGlyph() } }
+    else showGlyph()
 
     const nameBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 2, hexpand: true, valign: Gtk.Align.CENTER })
     nameBox.append(new Gtk.Label({ label: user.displayName, css_classes: ["nidara-row-title"], halign: Gtk.Align.START }))
     nameBox.append(new Gtk.Label({ label: user.username, css_classes: ["nidara-row-subtitle"], halign: Gtk.Align.START }))
 
-    const adminBadge = new Gtk.Label({
-        label: t("settings.users.other.admin-badge"),
-        css_classes: ["users-admin-badge"],
+    // Always-visible label for the switch — an unlabeled toggle in the row reads
+    // as a mystery control (VM pass feedback). It also replaces the old "Admin"
+    // badge, which duplicated what the switch position already says.
+    const adminLabel = new Gtk.Label({
+        label: t("settings.users.other.admin"),
+        css_classes: ["nidara-row-subtitle"],
         valign: Gtk.Align.CENTER,
-        visible: admin,
     })
 
     const adminToggle = new Gtk.Switch({ active: admin, valign: Gtk.Align.CENTER })
     attachTooltip(adminToggle, t("settings.users.other.admin.tip"), { chrome: false })
+    let reverting = false
     adminToggle.connect("state-set", (_: any, state: boolean) => {
+        // The programmatic revert below re-enters this handler; without the guard
+        // it fired the OPPOSITE pkexec prompt, and cancelling that reverted again —
+        // an endless auth-prompt loop once the user dismissed the first dialog.
+        if (reverting) return false
         const cmd = state
             ? ["pkexec", "usermod", "-aG", "wheel", user.username]
             : ["pkexec", "gpasswd", "-d", user.username, "wheel"]
-        execAsync(cmd).then(() => {
-            adminBadge.visible = state
-        }).catch(e => {
+        execAsync(cmd).catch(e => {
             console.error("[Users] admin toggle:", e)
-            adminToggle.active = !state  // revert
+            reverting = true
+            adminToggle.active = !state
+            reverting = false
         })
         return false
     })
@@ -378,7 +388,7 @@ function buildUserRow(user: User, parentWin: Gtk.Window | null, onRefresh: () =>
     const inner = new Gtk.Box({ spacing: 12, margin_start: 16, margin_end: 16, margin_top: 10, margin_bottom: 10 })
     inner.append(avatarImg)
     inner.append(nameBox)
-    inner.append(adminBadge)
+    inner.append(adminLabel)
     inner.append(adminToggle)
     inner.append(pwBtn)
     inner.append(deleteBtn)

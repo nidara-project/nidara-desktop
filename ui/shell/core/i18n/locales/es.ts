@@ -126,7 +126,6 @@ export default {
     "settings.users.other.empty":         "No hay otras cuentas de usuario",
     "settings.users.other.add":           "Añadir usuario…",
     "settings.users.other.admin":         "Administrador",
-    "settings.users.other.admin-badge":   "Admin",
     "settings.users.other.admin.tip":     "Activar/desactivar acceso de administrador (grupo wheel)",
     "settings.users.other.delete":        "Eliminar usuario",
     "settings.users.other.cancel":        "Cancelar",

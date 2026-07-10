@@ -126,7 +126,6 @@ export default {
     "settings.users.other.empty":         "No other user accounts",
     "settings.users.other.add":           "Add User…",
     "settings.users.other.admin":         "Administrator",
-    "settings.users.other.admin-badge":   "Admin",
     "settings.users.other.admin.tip":     "Toggle administrator (wheel group) access",
     "settings.users.other.delete":        "Delete User",
     "settings.users.other.cancel":        "Cancel",
