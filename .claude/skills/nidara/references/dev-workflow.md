@@ -102,6 +102,15 @@ to be a symlink to the repo (see footgun below); it was removed from
 `Icons.ts`/`app.ts`/`ThemeManager.ts` (2026-06-05). Rule of thumb: **shipped assets →
 `SHELL_ROOT`; user state → `~/.config/nidara/`.** They are never the same place.
 
+The greeter/lockscreen bundles have no `NIDARA_SHELL_ROOT` env; when shared code
+in `ui/lib/` needs a shipped shell asset (e.g. `avatar.ts`'s Settings-matching
+`user-round.svg` glyph), it falls back to the literal
+`/usr/share/nidara/ui/shell` — safe because those two bundles ALWAYS run from
+/usr/share (their bin wrappers) and install.sh ships `ui/shell/assets` there in
+BOTH install modes. Same pattern as the lockscreen loading the greeter's
+compiled `style.css` from its installed path. Always keep a theme-icon last
+resort for the missing-file case.
+
 ## Dev loop
 
 ```bash
