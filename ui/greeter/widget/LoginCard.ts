@@ -1,24 +1,12 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import GLib from "gi://GLib"
-// @ts-ignore
-import AstalGreet from "gi://AstalGreet"
 import { getSessions } from "../lib/sessions"
 import { getUsers, type User } from "../../lib/users"
 import { greeterPrefs, savePrefs } from "../lib/greeter-prefs"
 import { makeAvatar } from "../../lib/avatar"
+import { greetdLogin, AuthError } from "../lib/greetd"
 import { t, onLocaleChange } from "../lib/i18n"
-
-function greetLogin(username: string, password: string, cmd: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    try {
-      AstalGreet.login(username, password, cmd, (_: any, result: any) => {
-        try { AstalGreet.login_finish(result); resolve() }
-        catch (e) { reject(e) }
-      })
-    } catch (e) { reject(e) }
-  })
-}
 
 export default function LoginCard(): Gtk.Widget {
   const sessions = getSessions()
@@ -147,16 +135,24 @@ export default function LoginCard(): Gtk.Widget {
     errorLabel.visible = false
 
     try {
-      await greetLogin(activeUser.username, password, session.exec)
+      // greetdLogin (lib/greetd.ts) — NOT AstalGreet.login, which swallows
+      // auth errors and made a wrong password quit the greeter (TTY flash,
+      // no feedback). Only reaches quit() on a real session start.
+      await greetdLogin(activeUser.username, password, session.exec)
       savePrefs({ lastUser: activeUser.username })
       app.quit()
     } catch (e: any) {
       const msg = String(e?.message ?? e)
       console.error("[Greeter] login error:", msg)
-      showError(msg.toLowerCase().includes("auth") ? t("wrongPassword") : t("loginError"))
+      const isAuth = e instanceof AuthError && e.isAuthFailure
+      showError(isAuth ? t("wrongPassword") : t("loginError"))
+      // Re-enable BEFORE grabbing focus: grab_focus() on a still-insensitive
+      // entry silently fails ("GtkText did not receive a focus-out event"
+      // warning) and left the field unfocused after every failed attempt —
+      // the next keystrokes went nowhere until the user clicked the field.
+      setLoading(false)
       passwordEntry.set_text("")
       passwordEntry.grab_focus()
-      setLoading(false)
     }
   }
 
@@ -201,8 +197,12 @@ export default function LoginCard(): Gtk.Widget {
       })
       chip.connect("toggled", () => {
         if (!chip.active) { if (u === activeUser) chip.active = true; return }
-        for (const c of chips) if (c !== chip) c.active = false
+        // Update activeUser BEFORE deactivating the previous chip: its
+        // handler fires synchronously and re-activates itself whenever it
+        // still thinks it's the active user (the guard above) — which left
+        // the accent border on the OLD chip until a second click.
         setActiveUser(u)
+        for (const c of chips) if (c !== chip) c.active = false
       })
       chips.push(chip)
       switcher.append(chip)

@@ -607,6 +607,16 @@ greeter; or a sticky group-writable dir. Low urgency, cosmetic.
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
+- **(resolved 2026-07-10) Never call `AstalGreet.login()` — use the greeter's `lib/greetd.ts`.**
+  Upstream's `Request.send()` RETURNS greetd's `{type:"error"}` reply as an object (throws only
+  on socket/JSON failures) and `login_with_env()` discards every response, so a wrong password
+  "succeeds": the card quit()s, greetd sees "greeter exited without creating a session" and
+  terminates, systemd restarts it — TTY flash, fresh greeter, no error shown. It also never
+  `cancel_session`s the failed attempt, breaking the next `create_session`. `lib/greetd.ts`
+  drives the same Request classes but checks every response (throwing typed `AuthError`) and
+  always cancels on failure. VM-verified both paths 2026-07-10. Upstream PR candidate (like the
+  tray fix, Aylur/astal#451). Related greeter rule: re-enable widgets BEFORE `grab_focus()` —
+  grabbing an insensitive entry silently fails and strands keyboard focus.
 - **(was #26 + #31, resolved 2026-07-10) Wrapper logs/state are per-user; new users bootstrap
   at first login.** Every `bin/*` wrapper writes its log (and runtime state) to
   `${XDG_RUNTIME_DIR:-/tmp}/nidara-*` — NEVER a fixed `/tmp` name or a root-only path: on a

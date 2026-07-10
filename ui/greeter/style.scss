@@ -70,11 +70,16 @@ window > contents {
 }
 
 // Generic-glyph fallback (no photo, or a file the greeter user can't read):
-// give the circle a visible surface so the outline isn't empty.
+// give the circle a visible surface so the outline isn't empty. The color
+// only paints the last-resort SYMBOLIC theme icon; the shipped Lucide glyph
+// (avatar.ts adds .nd-icon) renders black and is inverted to white below —
+// same mechanism as the shell's _reset.scss. The greeter card is always dark
+// glass, so an unconditional invert is safe here.
 .greeter-avatar-fallback {
   background: rgba(255, 255, 255, 0.10);
   color: var(--nidara-text-secondary);
 }
+.greeter-avatar-fallback.nd-icon { -gtk-icon-filter: invert(1); }
 
 // ── Username ────────────────────────────────────────────────────────────────
 .greeter-username {
