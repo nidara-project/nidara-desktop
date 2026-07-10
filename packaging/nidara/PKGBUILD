@@ -47,7 +47,9 @@ depends=(
   kitty nautilus gnome-calculator pavucontrol
   # fonts + icon fallbacks the design system assumes
   ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji
-  papirus-icon-theme adwaita-icon-theme
+  # adwaita-cursors = the default cursorTheme in defaults/appearance.json; listed
+  # explicitly instead of relying on adwaita-icon-theme happening to depend on it
+  papirus-icon-theme adwaita-icon-theme adwaita-cursors
 )
 makedepends=(nodejs npm wlr-protocols pkgconf)
 backup=(etc/xdg-desktop-portal/hyprland-portals.conf)

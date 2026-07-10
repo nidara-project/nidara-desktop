@@ -252,7 +252,7 @@ PACMAN_DEPS="base-devel glib2-devel cmake meson ninja gobject-introspection vala
     polkit-gnome
     xdg-desktop-portal-gtk xdg-desktop-portal-hyprland
     ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji
-    papirus-icon-theme adwaita-icon-theme xdg-utils gsettings-desktop-schemas
+    papirus-icon-theme adwaita-icon-theme adwaita-cursors xdg-utils gsettings-desktop-schemas
     awww lz4"
 DEPS_LIST_SHA="$(printf '%s' "$PACMAN_DEPS" | sha256sum | awk '{print $1}')"
 # Set to "yes" once the Astal/AGS/appmenu stack is installed as prebuilt packages

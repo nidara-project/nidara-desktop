@@ -171,6 +171,21 @@ if [ -z "$_fm_default" ] || [ "$_fm_default" = "kitty-open.desktop" ]; then
         || echo "  [WARN] could not set default file manager (xdg-mime failed)"
 fi
 
+# Default kitty config — kitty ships no config file, and without window_padding
+# the first/last rows of text get clipped by Hyprland's 24px rounded corners.
+# Also names the JetBrains Mono we ship (kitty doesn't read the gsettings
+# monospace preference) and seeds the *-theme.auto.conf trio so kitty follows
+# the Appearance dark/light toggle live via the settings portal. Seeded ONLY
+# when the user has no kitty.conf at all — an existing kitty setup is never
+# touched, not even to add the theme files.
+KITTY_DIR="${REAL_HOME}/.config/kitty"
+if [ ! -f "$KITTY_DIR/kitty.conf" ] && [ -d "$SHARE/defaults/kitty" ]; then
+    mkdir -p "$KITTY_DIR"
+    cp "$SHARE/defaults/kitty/"*.conf "$KITTY_DIR/"
+    chown -R "$REAL_USER" "$KITTY_DIR"
+    echo "  [Init] $KITTY_DIR (padding, JetBrains Mono, glass, auto dark/light)"
+fi
+
 # .mcp.json — MCP manifest for the user's AI agent (Claude Code et al). Points at
 # the installed binary via PATH. Always (re)written: it's a runtime-managed pointer,
 # not user data. Opening an agent inside ~/.config/nidara discovers it
