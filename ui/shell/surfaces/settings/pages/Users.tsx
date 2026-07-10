@@ -530,7 +530,10 @@ export default function UsersPage() {
     })
 
     const rebuildOtherUsers = () => {
-        while (otherList.get_first_child()) otherList.get_first_child()!.unparent()
+        // Rows must be removed through the ListBox (remove_all), never unparent()ed
+        // directly: that leaves the box's internal row bookkeeping stale and every
+        // later append() dies on a gtk_widget_insert_after assertion (empty list).
+        otherList.remove_all()
 
         const others = getUsers().filter(u => u.username !== username)
         if (others.length === 0) {
