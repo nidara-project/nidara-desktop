@@ -606,6 +606,17 @@ chrome/classes) and rebuild both dialogs on it — per the universal-components 
 future form dialog is born coherent. Design decisions pending: CSD header vs headerless card,
 glass level, entry styling (`nidara-alert-entry` already exists as a starting point).
 
+### 31. First login of a NEW user gets no per-user config seeding (2026-07-10, deferred by user decision)
+Per-user config is seeded only by `install.sh` for the user RUNNING the install (GTK
+`settings.ini`, dconf defaults, icon theme, `~/.config/nidara/*`). Any user created later —
+Settings → Users dialog, plain `useradd`, a second archinstall/Calamares user — starts with
+**no `~/.config/nidara` at all** (VM-verified on first login of a fresh user): a flood of
+`hyprland.lua` errors at session start, Adwaita icons, black bar text (no dark mode). Fix
+direction when picked up: NOT copying files at user-creation time (covers only our dialog) but a
+**first-login bootstrap in the session startup path** — if `~/.config/nidara` is missing, seed
+the same defaults install.sh seeds, then continue; covers every creation path and heals deleted
+configs. Same multi-user sweep should take #26 (single-user `/tmp/nidara-*.log` paths).
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
