@@ -1,13 +1,9 @@
 import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { getPreferredUser } from "../lib/greeter-prefs"
+import { formatDatePart } from "../lib/dateNames"
 
 type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
-
-const DAYS_SHORT   = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const DAYS_LONG    = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-const MONTHS_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const MONTHS_LONG  = ['', 'January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 
 function readRegionConfig(): { timeFormat: "24h" | "12h"; showSeconds: boolean; dateFormat: DateFormat } {
   const fallback = { timeFormat: "24h" as const, showSeconds: false, dateFormat: "long" as DateFormat }
@@ -44,22 +40,7 @@ function formatTime(): string {
 }
 
 function formatDate(): string {
-  const now = GLib.DateTime.new_now_local()
-  const dow  = now.get_day_of_week()
-  const d    = now.get_day_of_month()
-  const m    = now.get_month()
-  const y    = now.get_year()
-  const dd   = String(d).padStart(2, "0")
-  const mm   = String(m).padStart(2, "0")
-  switch (region.dateFormat) {
-    case "none":       return ""
-    case "short":      return `${DAYS_SHORT[dow]}, ${MONTHS_SHORT[m]} ${d}`
-    case "short-year": return `${DAYS_SHORT[dow]}, ${MONTHS_SHORT[m]} ${d} ${y}`
-    case "long":       return `${DAYS_LONG[dow]}, ${MONTHS_LONG[m]} ${d}`
-    case "numeric":    return `${mm}/${dd}/${y}`
-    case "iso":        return `${y}-${mm}-${dd}`
-    default:           return `${DAYS_LONG[dow]}, ${MONTHS_LONG[m]} ${d}`
-  }
+  return formatDatePart(region.dateFormat, GLib.DateTime.new_now_local())
 }
 
 // Returns date + time labels for embedding inside a card (no container box)

@@ -733,6 +733,16 @@ These were paid down; the *rule* remains:
 - **Greeter ↔ lockscreen ↔ shell** share `ui/lib/accent.ts` + `ui/lib/users.ts` + `ui/lib/wallpaper.ts`
   (Settings → Users consumes `users.ts` too — don't reintroduce a per-surface passwd parser);
   `lib/i18n.ts` stays separate per bundle on purpose (different config paths / superset).
+- **Clock day/month names come from LC_TIME via GLib `%a/%A/%b/%B`** — every installed
+  locale is localized for free (the clock follows the "Regional Format" setting, like
+  Gtk.Calendar and macOS/GNOME). `formatDatePart()` derives day-first vs month-first order
+  from the locale's own `%x`. It's triplicated across `ui/shell/core/i18n/dateNames.ts`,
+  `ui/greeter/lib/dateNames.ts`, `ui/lockscreen/lib/dateNames.ts` (separate ags bundles) but
+  is now PURE LOGIC — no per-language data, so adding a language needs zero changes there.
+  Only the `settings.region.date.*` preview labels are hand-localized per catalog and must
+  match `formatDatePart` output for that language's typical locale. Caveat: the clock follows
+  LC_TIME, not the in-app UI-language toggle (they diverge only if the user sets a Regional
+  Format ≠ their UI language, which is correct), and the target locale must be generated.
 - **Wallpaper resolution is centralized** in `ui/lib/wallpaper.ts` (`resolveWallpaper(surface)`:
   per-surface override → global `path` → `/usr/share/nidara/wallpaper.jpg`, each step
   existence-checked). The lockscreen paints its own copy (session-lock covers awww); shell +

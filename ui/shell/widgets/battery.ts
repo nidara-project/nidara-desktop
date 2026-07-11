@@ -40,13 +40,13 @@ function formatTime(seconds: number): string {
 
 function getStateText(): string {
     if (!present()) return "—"
-    if (bat!.charged) return t("widget.battery.state.cargado")
+    if (bat!.charged) return t("widget.battery.state.charged")
     if (bat!.charging) {
         const ts = formatTime(bat!.time_to_full)
-        return ts ? `${t("widget.battery.state.cargando")} · ${ts}` : t("widget.battery.state.cargando")
+        return ts ? `${t("widget.battery.state.charging")} · ${ts}` : t("widget.battery.state.charging")
     }
     const ts = formatTime(bat!.time_to_empty)
-    return ts ? `${t("widget.battery.state.descargando")} · ${ts}` : t("widget.battery.state.descargando")
+    return ts ? `${t("widget.battery.state.discharging")} · ${ts}` : t("widget.battery.state.discharging")
 }
 
 // ── Cairo battery glyph (fill ∝ exact charge, green when charging, red when low) ──
@@ -226,7 +226,7 @@ function buildPanel(_onClose: () => void): Gtk.Widget {
 
     if (!present()) {
         box.append(new Gtk.Label({
-            label: t("widget.battery.label.bateria-no-disponible"),
+            label: t("widget.battery.label.unavailable"),
             css_classes: ["bar-popover-key"],
             halign: Gtk.Align.CENTER,
             margin_top: 8, margin_bottom: 8,

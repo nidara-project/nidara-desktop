@@ -2,6 +2,7 @@ import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import { readFile, writeFile } from "ags/file"
 import { execAsync } from "ags/process"
+import { formatDatePart } from "./i18n/dateNames"
 
 export type TimeFormat = "24h" | "12h"
 export type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
@@ -180,36 +181,18 @@ class RegionConfigManager extends GObject.Object {
             .catch(e => console.error("[RegionConfig] Failed to set timezone:", e))
     }
 
-    private static readonly DAYS_SHORT  = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-    private static readonly DAYS_LONG   = ['', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-    private static readonly MONTHS_SHORT = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-
     /**
-     * Returns a fully formatted clock string using locale-independent English
-     * day/month names. Avoids %a/%b/%A/%B which follow LC_TIME, not UI language.
+     * Returns a fully formatted clock string. Day/month names + date order come
+     * from the UI locale (see i18n/dateNames.ts), NOT from LC_TIME — so we avoid
+     * GLib's %a/%b/%A/%B, which follow LC_TIME rather than the UI language.
      */
     formatClock(dt?: GLib.DateTime): string {
         const now = dt ?? GLib.DateTime.new_now_local()
         const sec = this._settings.showSeconds ? ":%S" : ""
         const timeFmt = this._settings.timeFormat === "12h" ? `%I:%M${sec} %p` : `%H:%M${sec}`
         const time  = now.format(timeFmt) ?? ""
-        const dow   = now.get_day_of_week()    // 1=Mon … 7=Sun
-        const d     = now.get_day_of_month()
-        const m     = now.get_month()          // 1-12
-        const y     = now.get_year()
-        const dd    = String(d).padStart(2, "0")
-        const mm    = String(m).padStart(2, "0")
-        const dShort  = RegionConfigManager.DAYS_SHORT[dow]
-        const dLong   = RegionConfigManager.DAYS_LONG[dow]
-        const mShort  = RegionConfigManager.MONTHS_SHORT[m]
-        switch (this._settings.dateFormat) {
-            case "none":       return time
-            case "short-year": return `${dShort} ${mShort} ${d} ${y}  ${time}`
-            case "long":       return `${dLong}, ${mShort} ${d}  ${time}`
-            case "numeric":    return `${mm}/${dd}/${y}  ${time}`
-            case "iso":        return `${y}-${mm}-${dd}  ${time}`
-            default:           return `${dShort} ${mShort} ${d}  ${time}` // short
-        }
+        if (this._settings.dateFormat === "none") return time
+        return `${formatDatePart(this._settings.dateFormat, now)}  ${time}`
     }
 
     /** @deprecated Use formatClock() — returns locale-independent output */
