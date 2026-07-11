@@ -3,13 +3,15 @@ import GLib from "gi://GLib"
 import en from "./locales/en"
 import es from "./locales/es"
 import fr from "./locales/fr"
+import de from "./locales/de"
 
 type TranslationMap = Record<string, string>
 
 const locales: Record<string, TranslationMap> = {
     en,
     es,
-    fr
+    fr,
+    de
 }
 
 let activeLocale = "en"
@@ -19,6 +21,7 @@ export function detectLanguage() {
     if (langEnv.toLowerCase().startsWith("en")) activeLocale = "en"
     else if (langEnv.toLowerCase().startsWith("es")) activeLocale = "es"
     else if (langEnv.toLowerCase().startsWith("fr")) activeLocale = "fr"
+    else if (langEnv.toLowerCase().startsWith("de")) activeLocale = "de"
     else activeLocale = "en" // fallback default
 }
 
