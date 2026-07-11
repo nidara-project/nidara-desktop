@@ -565,8 +565,16 @@ autostart, permissions…) and for an agent to write per-app overrides — add a
 name/path to `app.id` — meaningful for a general app list, and the icon internals don't belong
 there anymore now the page isn't icon-only. See memory `project_settings_apps_page`.
 
-### 29. Ghost descenders on filter — line-height workaround is PROVISIONAL (2026-07-09)
-App Icons / Installed Apps is the only Settings list that filters in place; on `invalidate_filter`
+### 29. Ghost descenders on list mutation — line-height workaround is PROVISIONAL and PARTIAL (2026-07-09, extended 07-11)
+NOT just filtering: the same descender ghosts appear when ROWS ARE REMOVED from a plain
+settings list — user-confirmed 07-11 deleting entries in Settings → Apps → Autostart, whose
+entries list is a regular `.nidara-list` where the `.apps-list`-scoped line-height fix does
+NOT apply. Treat this as one bug with two triggers (filter-hide and row-removal); the user
+wants a **robust, definitive fix for all list-mutation cases** eventually, instead of chasing
+it list by list — that likely means resolving the underlying GTK repaint bug (options (b)/(c)
+below) or applying the line-height metric globally after a visual pass (option (a)).
+App Icons / Installed Apps and the Autostart app picker (same `.apps-list` classes, same filter
+idiom) are the Settings lists that filter in place; on `invalidate_filter`
 GTK4 (4.22.4, default renderer, Wayland) leaves the descender ink of `y/g/j/p` behind hidden rows
 (ghost) and clips it on the visible ones — a GskGL damage/re-raster bug (hover row-state re-render
 and window resize both clear it; `queue_draw()` after `invalidate_filter()` does NOT).
@@ -592,6 +600,16 @@ is NOT to hand-style those two windows: build a reusable **form-dialog primitive
 chrome/classes) and rebuild both dialogs on it — per the universal-components rule, so every
 future form dialog is born coherent. Design decisions pending: CSD header vs headerless card,
 glass level, entry styling (`nidara-alert-entry` already exists as a starting point).
+
+### 31. Legacy `~/.config/hypr/hyprland-user.lua` is edited in place, never migrated (2026-07-11)
+The Autostart page (now Settings → Apps → Autostart) resolves the effective override file the
+same way Lua's `require` does (`~/.config/nidara/` first, then `~/.config/hypr/`) and edits
+whichever it finds — see `resolveUserConf` in `Autostart.tsx` and dev-workflow.md's ownership
+model. A pre-2026-07 install that only has the hypr file keeps using it forever; we deliberately
+don't auto-migrate (moving a user's hand-edited file around is riskier than tolerating the legacy
+path). If a migration is ever wanted, it belongs in `nidara-setup`, not the Settings page. Note
+the duplicated search+list scaffold between `AppIcons.tsx` and the Autostart picker is marked
+"extract on third consumer" in both files.
 
 ### 32. `/var/tmp/nidara` greeter mirror is first-writer-owned — a second user can't update it (2026-07-10)
 `ThemeManager.saveSettings` and `RegionConfig` mirror `appearance.json` + `region.json` into

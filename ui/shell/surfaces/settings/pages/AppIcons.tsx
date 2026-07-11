@@ -1,37 +1,12 @@
-import { Gtk, Gdk } from "ags/gtk4"
+import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
-import GdkPixbuf from "gi://GdkPixbuf"
 import appService, { type AppData } from "../../../core/AppService"
 import { pageBox, listGroup, createRow, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { NidaraButton } from "../../../../lib/nidara-kit"
 import { attachTooltip } from "../../../common/Tooltip"
-
-// ── Icon preview helpers ──────────────────────────────────────────────────────
-
-function loadPixbuf(iconName: string | null, size: number): GdkPixbuf.Pixbuf | null {
-    if (!iconName) return null
-    try {
-        if (iconName.startsWith("/")) {
-            return GdkPixbuf.Pixbuf.new_from_file_at_size(iconName, size, size)
-        }
-        const theme = Gtk.IconTheme.get_for_display(Gdk.Display.get_default())
-        const paintable = theme.lookup_icon(iconName, null, size, 1, Gtk.TextDirection.LTR,
-            Gtk.IconLookupFlags.FORCE_REGULAR)
-        const path = paintable?.get_file()?.get_path()
-        if (path) return GdkPixbuf.Pixbuf.new_from_file_at_size(path, size, size)
-    } catch {}
-    return null
-}
-
-function makeIconImage(iconName: string | null, size: number): Gtk.Image {
-    const img = new Gtk.Image({ pixel_size: size })
-    const pb = loadPixbuf(iconName, size)
-    if (pb) img.set_from_pixbuf(pb)
-    else img.icon_name = iconName ?? "application-x-executable"
-    return img
-}
+import { loadPixbuf, makeIconImage } from "./AppIconImage"
 
 // ── Per-app detail subpage ──────────────────────────────────────────────────────
 // Each app drills into its own subpage (nav.pushSubpage) rather than a modal — more
@@ -203,6 +178,11 @@ function buildAppRow(app: AppData, nav: SettingsNav): Gtk.ListBoxRow {
 
 export default function AppIconsPage(nav: SettingsNav) {
     const page = pageBox("apps-page")
+
+    // NOTE: the search box + scrollable app list below are intentionally duplicated
+    // in Autostart.tsx's app picker (same classes, same filter idiom) — the scaffold
+    // carries page-specific tuning and hard-won fixes. On a THIRD consumer, extract
+    // a shared builder instead of copying again.
 
     // Search — custom box with our nd-icon magnifier + Gtk.Text. Gtk.SearchEntry
     // would force the icon theme's magnifier glyph; this matches the Settings

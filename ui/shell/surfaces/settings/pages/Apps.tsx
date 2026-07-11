@@ -4,11 +4,12 @@ import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import DefaultAppsPage from "./DefaultApps"
 import AppIconsPage from "./AppIcons"
+import AutostartPage from "./Autostart"
 
-// Apps landing — a parent page that drills into the two app-related screens
-// (Default Apps, App Icons) via subpages, so they share one sidebar entry.
-// Note: subpage content isn't in the search index (subpages build lazily); the
-// two rows below are, so a search for "default apps"/"app icons" still lands here.
+// Apps landing — a parent page that drills into the three app-related screens
+// (Default Apps, App Icons, Autostart) via subpages, so they share one sidebar
+// entry. Note: subpage content isn't in the search index (subpages build lazily);
+// the rows below are, so a search for "default apps"/"autostart" still lands here.
 
 function navRow(
     nav: SettingsNav,
@@ -46,6 +47,12 @@ export default function AppsPage(nav: SettingsNav) {
         t("settings.apps.title"),
         t("settings.apps.subtitle"),
         { id: "apps/icons", build: () => AppIconsPage(nav) },
+    ))
+    listBox.append(navRow(
+        nav,
+        t("settings.autostart.title"),
+        t("settings.autostart.subtitle"),
+        { id: "apps/autostart", build: () => AutostartPage(nav) },
     ))
 
     page.append(box)

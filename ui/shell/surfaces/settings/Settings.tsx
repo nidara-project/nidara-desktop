@@ -18,7 +18,6 @@ import AboutPage from "./pages/About"
 import InputPage from "./pages/Input"
 import AppsPage from "./pages/Apps"
 import BluetoothPage from "./pages/Bluetooth"
-import AutostartPage from "./pages/Autostart"
 import AccessibilityPage from "./pages/Accessibility"
 import UsersPage from "./pages/Users"
 import GamingPage from "./pages/Gaming"
@@ -92,7 +91,6 @@ export default function Settings(monitor: Gdk.Monitor) {
         { id: "input",        label: t("settings.input.title"),       icon: Icons.keyboard,      component: InputPage,        groupStart: true },
         { id: "power",        label: t("settings.power.title"),       icon: Icons.battery,       component: PowerPage        },
         { id: "region",       label: t("settings.region.title"),      icon: Icons.clock,         component: RegionPage       },
-        { id: "autostart",    label: t("settings.autostart.title"),   icon: Icons.rocket,        component: AutostartPage    },
         { id: "users",        label: t("settings.users.title"),       icon: Icons.userRound,     component: UsersPage        },
         { id: "ai",           label: t("settings.ai.title"),          icon: Icons.sparkles,      component: AiPage           },
         { id: "about",        label: t("settings.about.title"),       icon: Icons.info,          component: AboutPage        },
