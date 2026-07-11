@@ -467,8 +467,16 @@ verified-live model. Two tiers, cleanly split:
 **USER (per-user, in `~/.config/nidara/`):**
 - `hyprland-user.lua` — personal overrides, **never overwritten** by updates.
   `safe_require`'d LAST so it wins. The `@autostart start/end` marker block inside
-  it is managed by the Autostart Settings page (`Autostart.tsx`); everything outside
-  the markers is the user's free space.
+  it is managed by **Settings → Apps → Autostart** (`Autostart.tsx`); everything
+  outside the markers is the user's free space — but anything hand-written *inside*
+  the markers that isn't an `hl.exec_cmd` line is dropped on the next UI write
+  (managed-block semantics).
+  Resolution caveat: `package.path` in `hyprland.lua` lists `~/.config/nidara/`
+  BEFORE `~/.config/hypr/`, and Lua `require()` loads the FIRST match only. The
+  Settings page mirrors that order (`resolveUserConf`): it edits the nidara file if
+  present, else a legacy `~/.config/hypr/hyprland-user.lua` (pre-2026-07 installs
+  wrote there), else creates the canonical nidara one — so the UI always edits the
+  file Lua actually loads. Legacy files are edited in place, never migrated.
 - `nidara-settings.lua` — UI-generated input/keyboard config (sensitivity,
   `kb_layout`, repeat, touchpad), written by `InputConfig.ts` from the Input page.
 - `nidara-monitor.lua` — UI-generated monitor config (output/mode/scale/vrr),
@@ -489,6 +497,10 @@ an existing kitty setup is never touched, not even to add the theme files.
 `~/.config/hypr/hyprland.lua`, but Nidara deliberately keeps that directory
 empty and loads the shared config explicitly via `-c` (see load mechanism below).
 A stray `~/.config/hypr/hyprland.lua` is a leftover from older approaches — remove it.
+(One tolerated exception: a legacy `~/.config/hypr/hyprland-user.lua` from pre-2026-07
+installs keeps working — `package.path` includes that dir as a fallback and the
+Autostart page edits it in place when it's the only one. New files are always
+created in `~/.config/nidara/`.)
 
 `nidara-settings.lua` / `nidara-monitor.lua` are **live UI-generated config, not
 junk** — deleting them is technically safe (`hyprland.lua` uses `safe_require`/pcall,

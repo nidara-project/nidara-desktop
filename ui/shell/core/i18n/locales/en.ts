@@ -279,10 +279,14 @@ export default {
     "settings.audio.no-apps": "No apps playing audio",
 
     // Autostart
-    "settings.autostart.group.entries": "Startup entries in hyprland-user.lua",
+    "settings.autostart.group.entries": "Startup apps",
+    "settings.autostart.subtitle": "Choose which apps launch at startup",
     "settings.autostart.add": "Add",
+    "settings.autostart.add-app": "Add startup app…",
+    "settings.autostart.added": "added",
     "settings.autostart.apply-note": "Changes apply the next time Hyprland starts.",
-    "settings.autostart.empty": "No startup entries in hyprland-user.lua",
+    "settings.autostart.empty": "No startup apps yet",
+    "settings.autostart.group.custom": "Custom command",
     "settings.autostart.title": "Autostart",
     "settings.autostart.tooltip.remove": "Remove",
     "settings.autostart.entry.placeholder": "Command (e.g. nm-applet)",
