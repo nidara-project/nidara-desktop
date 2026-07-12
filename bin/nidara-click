@@ -265,7 +265,8 @@ function main() {
     if (!injector) { emit({ error: "nidara-input not found — re-run install.sh (it compiles the pointer backend)" }); return }
 
     // ── Visual choreography (land→confirm protocol; see surfaces/agent-pointer/).
-    // The fake AI cursor travels baseline→target while we hold (~200-450 ms); it
+    // The fake AI cursor pops in at the baseline and travels to the target while
+    // we hold (~0.45-1.2 s, distance-scaled — inside visual()'s `timeout 2`); it
     // only ripples AFTER the real injection is re-verified — the visual never lies.
     const cursorBase = cursorPos()
     visual(`${spec.action} ${gx} ${gy}`

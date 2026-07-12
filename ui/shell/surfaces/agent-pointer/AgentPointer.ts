@@ -2,9 +2,15 @@
  * Nidara — agent pointer overlay (the fake AI cursor).
  *
  * Draws the VISUAL for computer-use pointer actions: an accent-filled cursor
- * arrow with a glass "AI" badge that fades in, travels to the target with
- * easing, ripples when the real click lands, and fades out ~1s after the last
- * action. The real input is injected by nidara-input underneath — this window
+ * arrow with a glass "AI" badge that pops in at the real cursor's position,
+ * travels to the target on a gently bowed ease-in-out path, ripples when the
+ * real click lands, and lingers ~4s with a pulsing accent halo before fading.
+ * The halo is load-bearing, not decoration: the moment the real injection
+ * fires, the compositor warps the REAL cursor onto the landing point, and the
+ * hardware cursor plane always paints ON TOP of layer surfaces — the fake
+ * arrow gets covered and would read as "the AI cursor turned back into the
+ * normal one". The ring around the tip is what keeps the AI presence legible.
+ * The real input is injected by nidara-input underneath — this window
  * never receives nor produces input (empty input region, OVERLAY layer so it
  * stays visible over fullscreen windows).
  *
@@ -32,6 +38,7 @@ import app from "ags/gtk4/app"
 import { Gtk, Gdk } from "ags/gtk4"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
+import Gio from "gi://Gio"
 import Cairo from "gi://cairo"
 import Pango from "gi://Pango"
 import PangoCairo from "gi://PangoCairo"
@@ -41,14 +48,18 @@ import { t } from "../../core/i18n"
 import { hexToFloatRgb } from "../../common/DrawingUtils"
 
 type Kind = "click" | "rightclick" | "scroll" | "drag"
-type Phase = "hidden" | "travel" | "landed" | "effect" | "dragGlide" | "idle" | "fadeout"
+type Phase = "hidden" | "materialize" | "travel" | "landed" | "effect" | "dragGlide" | "idle" | "fadeout"
 
-const FADE_IN_MS = 140
-const FADE_OUT_MS = 180
+const FADE_IN_MS = 120
+const FADE_OUT_MS = 280
+const MATERIALIZE_MS = 160  // pop-in hold at the origin BEFORE travelling — lets the eye lock on
+const POP_MS = 260          // scale-overshoot window of the pop-in (overlaps into early travel)
 const RIPPLE_MS = 250
 const DRAG_GLIDE_MS = 290   // ≈ the real injector's 24-step glide (cosmetic skew accepted)
-const IDLE_MS = 1000
+const IDLE_MS = 4000        // linger after the last action — time to actually SEE the badge
 const ORPHAN_MS = 3000
+const IDLE_STRAY_PX = 24    // the user moved the real cursor this far during the linger → fade early
+const IDLE_POLL_MS = 500    // cursorpos poll cadence during the linger (idle phase only)
 
 // Cursor arrow: unit-height vertices (y down, hotspot at the tip = origin),
 // classic pointer silhouette with a tail notch. Scaled by ARROW_H at draw time.
@@ -129,6 +140,7 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
     let x = 0, y = 0                 // current cursor position (monitor-local logical px)
     let fromX = 0, fromY = 0         // travel origin
     let tx = 0, ty = 0               // travel target
+    let cpX = 0, cpY = 0             // bowed bezier control point (a dead-straight glide reads robotic)
     let dropX = 0, dropY = 0         // drag release point
     let travelStart = -1, travelDur = 1
     let glideStart = -1
@@ -136,10 +148,39 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
     let alpha = 0
     let pressed = false              // drag glide: cursor drawn "pressed" (Cairo scale 0.92)
     let ripple: { start: number, p: number, cx: number, cy: number, subtle: boolean } | null = null
+    let bornUs = -1                  // pop-in start (frame-clock µs); -1 = not yet ticked
+    let haloOn = false, haloT = 0    // landing halo: on from touchdown until hide, haloT in ms
+    let idlePollAcc = 0, strayBusy = false
     let lastUs = 0
     let pending: ((v: string) => void) | null = null
     let orphanTimer = 0
     let tickId: number | null = null
+
+    const easeInOutCubic = (t: number) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2
+    const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3)
+
+    // The user always wins, also during the linger: if the REAL cursor strays
+    // from the landing point while we idle, fade out early instead of leaving a
+    // stale accent arrow next to the user's departing cursor. Best-effort — any
+    // failure (no hyprctl, parse miss) just skips the check, never breaks the visual.
+    const checkStray = () => {
+        try {
+            const proc = Gio.Subprocess.new(["hyprctl", "cursorpos"],
+                Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_SILENCE)
+            proc.communicate_utf8_async(null, null, (_p, res) => {
+                strayBusy = false
+                try {
+                    const [, out] = proc.communicate_utf8_finish(res)
+                    const m = String(out ?? "").match(/(-?\d+),\s*(-?\d+)/)
+                    if (!m || phase !== "idle") return
+                    const geo = gdkmonitor.get_geometry()
+                    const cx = parseInt(m[1], 10) - geo.x
+                    const cy = parseInt(m[2], 10) - geo.y
+                    if (Math.hypot(cx - x, cy - y) > IDLE_STRAY_PX) phase = "fadeout"
+                } catch { /* best-effort */ }
+            })
+        } catch { strayBusy = false }
+    }
 
     const resolvePending = (v: string) => { if (pending) { const r = pending; pending = null; r(v) } }
     const clearOrphan = () => { if (orphanTimer) { GLib.source_remove(orphanTimer); orphanTimer = 0 } }
@@ -152,6 +193,9 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
         alpha = 0
         ripple = null
         pressed = false
+        bornUs = -1
+        haloOn = false
+        haloT = 0
         lastUs = 0
         try { win.set_visible(false) } catch (e) { console.error("[AgentPointer] hide failed:", e) }
     }
@@ -165,14 +209,23 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
         if (phase === "fadeout") alpha = Math.max(0, alpha - dtMs / FADE_OUT_MS)
         else alpha = Math.min(1, alpha + dtMs / FADE_IN_MS)
 
-        if (phase === "travel") {
+        if (haloOn) haloT += dtMs
+
+        if (phase === "materialize") {
+            if (bornUs < 0) bornUs = nowUs
+            if (nowUs - bornUs >= MATERIALIZE_MS * 1000) { phase = "travel"; travelStart = -1 }
+        } else if (phase === "travel") {
             if (travelStart < 0) travelStart = nowUs
             const tt = Math.min(1, (nowUs - travelStart) / (travelDur * 1000))
-            const eased = 1 - Math.pow(1 - tt, 3)   // ease-out cubic
-            x = fromX + (tx - fromX) * eased
-            y = fromY + (ty - fromY) * eased
+            // Ease-in-out along a gently bowed quadratic bezier — accelerate,
+            // cruise, decelerate, like a hand would; never the robotic zip.
+            const e = easeInOutCubic(tt), u = 1 - e
+            x = u * u * fromX + 2 * u * e * cpX + e * e * tx
+            y = u * u * fromY + 2 * u * e * cpY + e * e * ty
             if (tt >= 1) {
                 phase = "landed"
+                haloOn = true
+                haloT = 0
                 resolvePending("landed")
                 // Orphan guard: helper died between land and confirm/cancel.
                 orphanTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, ORPHAN_MS, () => {
@@ -194,6 +247,14 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
             }
         } else if (phase === "idle") {
             if (nowUs - idleStart >= IDLE_MS * 1000) phase = "fadeout"
+            else {
+                idlePollAcc += dtMs
+                if (idlePollAcc >= IDLE_POLL_MS && !strayBusy) {
+                    idlePollAcc = 0
+                    strayBusy = true
+                    checkStray()
+                }
+            }
         }
 
         if (ripple) {
@@ -201,7 +262,7 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
             ripple.p = Math.min(1, (nowUs - ripple.start) / (RIPPLE_MS * 1000))
             if (ripple.p >= 1) {
                 ripple = null
-                if (phase === "effect") { phase = "idle"; idleStart = nowUs }
+                if (phase === "effect") { phase = "idle"; idleStart = nowUs; idlePollAcc = 0 }
             }
         }
 
@@ -256,10 +317,33 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
             cr.stroke()
         }
 
+        // Landing halo — the real cursor warps ONTO the fake arrow the moment
+        // the injection fires, and the hardware cursor plane paints on top of
+        // any layer surface: the arrow alone would read as "back to normal".
+        // A pulsing accent ring around the tip keeps the AI presence legible
+        // for the whole linger, real cursor on top or not.
+        if (haloOn) {
+            const hAlpha = Math.min(1, haloT / 250) * alpha
+            const pulse = 0.5 + 0.5 * Math.sin(haloT / 300)
+            const r = 13 + 2 * pulse
+            cr.setSourceRGBA(accent.r, accent.g, accent.b, 0.12 * hAlpha)
+            cr.arc(x, y, r + 5, 0, 2 * Math.PI)
+            cr.fill()
+            cr.setSourceRGBA(accent.r, accent.g, accent.b, (0.35 + 0.15 * pulse) * hAlpha)
+            cr.setLineWidth(2)
+            cr.arc(x, y, r, 0, 2 * Math.PI)
+            cr.stroke()
+        }
+
         // Arrow — accent fill, white outline, dark outer hairline (structural
         // strokes stay black/white, GlassBubble practice). Hotspot = tip.
+        // Pop-in: born slightly oversized, settles to 1 — the eye locks on
+        // BEFORE the travel starts (it materializes under the real cursor).
+        const popAge = bornUs >= 0 ? Math.min(1, (lastUs - bornUs) / (POP_MS * 1000)) : 1
+        const popScale = 1 + 0.3 * (1 - easeOutCubic(popAge))
         cr.save()
         cr.translate(x, y)
+        cr.scale(popScale, popScale)
         if (pressed) cr.scale(0.92, 0.92)
         cr.setAntialias(2)  // GRAY
         cr.setLineJoin(1)   // ROUND — the tip's sharp angle would spike a miter join
@@ -322,22 +406,39 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
             dropX = (gx2 ?? gx) - geo.x
             dropY = (gy2 ?? gy) - geo.y
         }
-        if (phase === "hidden") {
+        const wasHidden = phase === "hidden"
+        if (wasHidden) {
             // Born WHERE the real cursor is (the injector will warp from there);
             // without a baseline, appear at the target and just fade in.
             x = fbx !== undefined ? fbx - geo.x : tx
             y = fby !== undefined ? fby - geo.y : ty
             alpha = 0
+            bornUs = -1
             show()
         }
         // else: already visible from a previous action — continue from (x, y).
         fromX = x
         fromY = y
         const dist = Math.hypot(tx - fromX, ty - fromY)
-        travelDur = Math.min(450, Math.max(200, 200 + dist * 0.12))
+        // Deliberate, hand-like pace: ~0.3s for a nudge, ~1s across the screen.
+        travelDur = Math.min(1000, 280 + dist * 0.5)
+        // Bow the path perpendicular to the straight line (capped) — see cpX/cpY.
+        const bow = Math.min(36, dist * 0.10)
+        if (dist > 1) {
+            cpX = (fromX + tx) / 2 - ((ty - fromY) / dist) * bow
+            cpY = (fromY + ty) / 2 + ((tx - fromX) / dist) * bow
+        } else {
+            cpX = (fromX + tx) / 2
+            cpY = (fromY + ty) / 2
+        }
         travelStart = -1
         glideStart = -1
-        phase = "travel"
+        haloOn = false
+        haloT = 0
+        idlePollAcc = 0
+        // A fresh appearance holds at the origin first (pop-in, MATERIALIZE_MS)
+        // so the eye can lock on; a chained action re-aims and travels directly.
+        phase = wasHidden ? "materialize" : "travel"
         return new Promise<string>(resolve => { pending = resolve })
     }
 

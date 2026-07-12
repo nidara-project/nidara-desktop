@@ -377,13 +377,22 @@ scrolling off-screen content, drag-and-drop / rubber-band selection / sliders):
 Cairo-painted cursor arrow (live accent fill + glass "AI" badge, `t("agentPointer.badge")`)
 plays the choreography on an OVERLAY layer-shell window per monitor
 (`surfaces/agent-pointer/AgentPointer.ts` — see architecture.md for the window-model exception).
-Only visible **during actions**: fade-in from the REAL cursor's position, eased travel to the
-target, ripple on click, fade-out ~1s after the last action (persistent state is already the
-bar's AI badge). Visible over fullscreen. Key properties:
+Only visible **during actions**: pop-in at the REAL cursor's position (MATERIALIZE hold so the
+eye locks on before anything moves), ease-in-out travel on a gently bowed bezier (~0.3-1 s,
+distance-scaled — deliberately hand-like, never a robotic zip), ripple on click, then a ~4 s
+linger with a pulsing accent **halo** around the tip before fading (persistent state is already
+the bar's AI badge). The halo is load-bearing, not decoration: the real injection warps the
+HARDWARE cursor onto the landing point and the cursor plane always paints on top of layer
+surfaces — without the ring the covered arrow reads as "the AI cursor turned back into the
+normal one" (the original v1 complaint). During the linger the overlay polls `hyprctl cursorpos`
+(~2 Hz, idle phase only): if the user moves the real cursor > 24 px off the landing point it
+fades early — the user always wins, also during the linger. Visible over fullscreen. Key
+properties:
 
 - **Land→confirm protocol — the visual never lies**: `nidara-click` reads `hyprctl cursorpos`
   (baseline), then blocks on `ags request agentPointer <kind> <gx> <gy> [gx2 gy2] [from bx by]`
-  — the request resolves when the fake cursor **lands** (~200-450 ms). It then **re-checks the
+  — the request resolves when the fake cursor **lands** (~0.45-1.2 s incl. pop-in; inside the
+  helper's `timeout 2` bound). It then **re-checks the
   gate** (the kill switch can fire mid-animation and now stops the injection inside that window)
   and re-reads `cursorpos`: if the user moved the mouse **> 10 logical px** (euclidean), it
   aborts with a readable `{ok:false}` error and sends `agentPointer cancel` (fade, NO ripple) —
