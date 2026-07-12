@@ -735,14 +735,27 @@ These were paid down; the *rule* remains:
   `lib/i18n.ts` stays separate per bundle on purpose (different config paths / superset).
 - **Clock day/month names come from LC_TIME via GLib `%a/%A/%b/%B`** — every installed
   locale is localized for free (the clock follows the "Regional Format" setting, like
-  Gtk.Calendar and macOS/GNOME). `formatDatePart()` derives day-first vs month-first order
-  from the locale's own `%x`. It's triplicated across `ui/shell/core/i18n/dateNames.ts`,
-  `ui/greeter/lib/dateNames.ts`, `ui/lockscreen/lib/dateNames.ts` (separate ags bundles) but
-  is now PURE LOGIC — no per-language data, so adding a language needs zero changes there.
+  Gtk.Calendar and macOS/GNOME). `formatDatePart()` derives the date order from the
+  locale's own `%x`: day-first, month-first, **or year-first** (zh_CN/ja_JP render
+  `%x` as `2000年01月02日` — added when those two languages were translated, since the
+  older day-first/month-first-only probe silently produced garbage, e.g. the numeric
+  format read "01年02年2000"). Year-first also captures the three separator/suffix
+  literals (年/月/日) as regex groups, so `short`/`short-year`/`long` assemble in
+  native order ("{month}{day}日 {weekday}") instead of the Western comma template.
+  `%a/%A/%b/%B` are `.trim()`-ed too — some locales (ja_JP's `abmon`) pad abbreviated
+  names to fixed width for tabular alignment, which otherwise leaks a stray space.
+  It's triplicated across `ui/shell/core/i18n/dateNames.ts`, `ui/greeter/lib/dateNames.ts`,
+  `ui/lockscreen/lib/dateNames.ts` (separate ags bundles) but is still PURE LOGIC — no
+  per-language data, so adding a language needs zero changes there, CJK included.
   Only the `settings.region.date.*` preview labels are hand-localized per catalog and must
-  match `formatDatePart` output for that language's typical locale. Caveat: the clock follows
-  LC_TIME, not the in-app UI-language toggle (they diverge only if the user sets a Regional
-  Format ≠ their UI language, which is correct), and the target locale must be generated.
+  match `formatDatePart` output for that language's typical locale — when it matters,
+  check `/usr/share/i18n/locales/<locale>` (glibc's own source) directly rather than
+  guessing. Caveat: the clock follows LC_TIME, not the in-app UI-language toggle (they
+  diverge only if the user sets a Regional Format ≠ their UI language, which is
+  correct), and the target locale must be generated. **Known remaining gap:** CJK
+  weekday placement/parenthesization conventions differ further within the family
+  (e.g. Japanese commonly parenthesizes: "4月6日(月)") — the current space-separated
+  rendering is generic and correct, not idiomatic polish; left for native review.
 - **Wallpaper resolution is centralized** in `ui/lib/wallpaper.ts` (`resolveWallpaper(surface)`:
   per-surface override → global `path` → `/usr/share/nidara/wallpaper.jpg`, each step
   existence-checked). The lockscreen paints its own copy (session-lock covers awww); shell +
