@@ -622,6 +622,19 @@ logs). Fix direction: per-user mirror files (e.g. `/var/tmp/nidara/<user>/…`) 
 greeter reading the `lastUser`'s (it already tracks lastUser since PR #22) — touches shell +
 greeter; or a sticky group-writable dir. Low urgency, cosmetic.
 
+### 33. Agent-pointer visual: accepted best-effort edges (2026-07-12)
+The fake AI cursor (`surfaces/agent-pointer/`, `agentPointer` IPC, choreography in
+`bin/nidara-click`) ships with three deliberately-accepted rough edges:
+- **Drag skew is cosmetic**: on confirm the fake cursor glides start→end in ~290 ms
+  *concurrently* with the real injector's 24-step drag — the two aren't frame-locked, so a
+  small visual/real offset during the glide is expected and fine (the endpoints match).
+- **Monitor hotplug is inherited, not handled**: one overlay window per monitor is created at
+  boot (same lifecycle as bar/dock); a monitor added later has no overlay until the shell
+  restarts. Same standing limitation as the rest of createUI.
+- **Multi-monitor INJECTION is still deferred** (`create_virtual_pointer_with_output`, see
+  state-and-ipc.md) — the overlay already routes the visual to the monitor containing the
+  target point, but verifying the injection mapping needs a second physical display.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

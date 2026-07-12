@@ -1,0 +1,6 @@
+// Agent pointer overlay (surfaces/agent-pointer/AgentPointer.ts) — the fake AI
+// cursor. Everything is painted in Cairo; the window itself must be fully
+// transparent (GTK windows otherwise carry the theme's background).
+window#nidara-agent-pointer {
+    background: transparent;
+}

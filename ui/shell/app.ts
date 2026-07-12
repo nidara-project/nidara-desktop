@@ -55,6 +55,7 @@ import Dock from "./surfaces/dock/Dock"
 import { syncConstants } from "./surfaces/dock/DockPhysics"
 import { onDockSettingsChanged, dockSettings } from "./surfaces/dock/state"
 import Bar from "./surfaces/bar/Bar"
+import AgentPointer, { isAgentPointerActive } from "./surfaces/agent-pointer/AgentPointer"
 import Settings from "./surfaces/settings/Settings"
 import Theme, { setPreferDark } from "./core/ThemeManager"
 import AboutWindow from "./surfaces/about/AboutWindow"
@@ -74,7 +75,9 @@ interface ShellWindow {
 // requestHandler and main() share this object directly (no globalThis needed for IPC).
 // Widget code (Dock, Bar, AppGrid) uses core/ShellActions — a shared typed registry
 // populated here after main() runs, avoiding circular imports with app.ts.
-const ipc: Record<string, ((...args: string[]) => string | void) | undefined> = {}
+// Entries may return a Promise (requestHandler already awaits it — agentPointer
+// resolves when the fake cursor lands; the GJS main loop stays free meanwhile).
+const ipc: Record<string, ((...args: string[]) => string | void | Promise<string | void>) | undefined> = {}
 
 // Whether the fullscreen app grid is open. Unlike the other overlays it lives
 // inside the dock window (not Status.ts), so dumpState reads its real state from
@@ -175,6 +178,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       agentConfig.pulseComputerAction()
       return "ok"
     },
+  },
+  agentPointer: {
+    desc: "PURELY VISUAL — drives the fake AI-cursor overlay that mirrors computer-use pointer actions; it never injects input (nidara-input does that underneath). Grammar: `agentPointer click|rightclick|scroll <gx> <gy> [from <bx> <by>]` or `agentPointer drag <gx> <gy> <gx2> <gy2> [from <bx> <by>]` (global logical px; the request resolves when the cursor LANDS on the target), then `agentPointer confirm` (the real action fired → click ripple) or `agentPointer cancel` (aborted → fade out, no ripple). Called by nidara-click; action kinds obey the allowComputerControl gate.",
+    run: args => ipc.agentPointer?.(...args),
   },
   // ── Window & workspace management ────────────────────────────────────────
   // The shell controlling its OWN compositor (Hyprland IS Nidara), so —
@@ -487,6 +494,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             recording: status.recording,
             barExpandedId: status.bar_expanded_id,
             ccDetailId: status.cc_detail_id,
+            agentPointer: isAgentPointerActive(),
           },
         },
         null,
@@ -541,9 +549,12 @@ app.start({
       try {
         const barWin = Bar(monitor)
         const dockWin = Dock(monitor)
-        
-        windows.add(barWin); 
+        // Fake AI cursor (created UNMAPPED — zero cost until an action plays)
+        const pointerWin = AgentPointer(monitor)
+
+        windows.add(barWin);
         windows.add(dockWin);
+        windows.add(pointerWin as any);
 
         // Dock rebuild on settings or pinned list change
         let rebuildTimer: number | null = null
@@ -685,6 +696,11 @@ app.start({
         if (w.name === "nidara-bar" || w.name === "nidara-dock") {
           try { w.hide() } catch (e) {}
         }
+        // The agent pointer paints on OVERLAY (above the lockscreen fallback) —
+        // vanish it instantly, symmetric with hiding the rest of the shell skin.
+        if (w.name === "nidara-agent-pointer") {
+          try { (w as any).agentPointerCancel?.(true) } catch (e) {}
+        }
       })
     }
     const unlockScreen = () => {
@@ -695,8 +711,51 @@ app.start({
       })
     }
 
+    // Fake AI cursor choreography (PURELY VISUAL — nidara-input injects the real
+    // input; see surfaces/agent-pointer/). Action kinds route to the overlay on
+    // the monitor containing the target point and return a Promise that resolves
+    // when the cursor LANDS; confirm/cancel broadcast (ungated — they only ever
+    // finish an animation that the gate already allowed to start).
+    const agentPointer = (...args: string[]): string | Promise<string | void> => {
+      const kind = (args[0] ?? "").trim()
+      const pointers: any[] = []
+      windows.forEach(w => { if (w.name === "nidara-agent-pointer") pointers.push(w) })
+      if (pointers.length === 0) return "agent-pointer overlay unavailable"
+      if (kind === "confirm" || kind === "cancel") {
+        pointers.forEach(p => {
+          try { kind === "confirm" ? p.agentPointerConfirm() : p.agentPointerCancel() }
+          catch (e) { console.error("[AgentPointer] IPC:", e) }
+        })
+        return "ok"
+      }
+      if (!["click", "rightclick", "scroll", "drag"].includes(kind))
+        return "usage: agentPointer click|rightclick|scroll <gx> <gy> [from <bx> <by>] | drag <gx> <gy> <gx2> <gy2> [from <bx> <by>] | confirm | cancel"
+      // Defense in depth: the visual mirrors gated computer-control actions, so
+      // action kinds obey the same gate (nidara-click checks it too).
+      if (!agentConfig.allowComputerControl)
+        return "computer-control is disabled — the agent-pointer visual only plays for gated actions"
+      const rest = args.slice(1)
+      const fi = rest.indexOf("from")
+      const coords = (fi >= 0 ? rest.slice(0, fi) : rest).map(Number)
+      const fromPair = (fi >= 0 ? rest.slice(fi + 1, fi + 3) : []).map(Number)
+      const [gx, gy, gx2, gy2] = coords
+      if (!isFinite(gx) || !isFinite(gy)) return "agentPointer: numeric <gx> <gy> required"
+      if (kind === "drag" && (!isFinite(gx2) || !isFinite(gy2)))
+        return "agentPointer drag: numeric <gx2> <gy2> required"
+      const [fbx, fby] = fromPair
+      const target = pointers.find(p => {
+        try {
+          const g = p.gdkmonitor?.get_geometry?.()
+          return g && gx >= g.x && gx < g.x + g.width && gy >= g.y && gy < g.y + g.height
+        } catch { return false }
+      }) ?? pointers[0]
+      return target.agentPointerRun(kind, gx, gy, gx2, gy2,
+        isFinite(fbx) ? fbx : undefined, isFinite(fby) ? fby : undefined)
+    }
+
     // Register IPC handlers (used by requestHandler)
     ipc.toggleAppGrid = toggleAppGrid
+    ipc.agentPointer = agentPointer
     ipc.openSettings = openSettings
     ipc.openSettingsPage = openSettingsPage as (...args: string[]) => string
     ipc.toggleOverview = toggleOverview
