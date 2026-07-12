@@ -64,46 +64,22 @@ const ClampLayout = GObject.registerClass(
     },
 )
 
-// Single-child host widget driven by ClampLayout.
-const ClampBin = GObject.registerClass(
-    class ClampBin extends Gtk.Widget {
-        _init(params?: Partial<Gtk.Widget.ConstructorProps>) {
-            super._init(params as any)
-            this.set_layout_manager(new ClampLayout())
-        }
-
-        get clampLayout(): InstanceType<typeof ClampLayout> {
-            return this.get_layout_manager() as InstanceType<typeof ClampLayout>
-        }
-
-        setChild(child: Gtk.Widget): void {
-            // `this` is a Gtk.Widget at runtime (the class extends it); the cast is the
-            // GJS-TS escape hatch for registerClass-wrapped subclasses, whose instance
-            // type TS doesn't infer as carrying the GI base.
-            child.set_parent(this as unknown as Gtk.Widget)
-        }
-
-        vfunc_dispose(): void {
-            // Custom Gtk.Widget subclasses must unparent children before dispose,
-            // or GTK warns about finalizing a widget that still has children.
-            let c = this.get_first_child()
-            while (c) {
-                c.unparent()
-                c = this.get_first_child()
-            }
-            super.vfunc_dispose()
-        }
-    },
-)
-
 export function NidaraClamp(
     child: Gtk.Widget,
     maxWidth = 800,
     vexpand  = true,
 ): Gtk.Widget {
-    const clamp = new ClampBin({ hexpand: true, vexpand })
-    clamp.clampLayout.maximumSize = maxWidth
-    clamp.setChild(child)
+    // The host is a plain C Gtk.Box (with ClampLayout replacing its BoxLayout),
+    // NOT a custom GJS Gtk.Widget subclass: a GJS subclass can't unparent its
+    // children on disposal — a JS vfunc_dispose is blocked when the widget is
+    // finalized from GC ("still has children left" warnings + child leak).
+    // GtkBox releases its children in C, which is GC-safe. Same constraint as
+    // ScaleRevealer.dismantle().
+    const clamp = new Gtk.Box({ hexpand: true, vexpand })
+    const layout = new ClampLayout()
+    layout.maximumSize = maxWidth
+    clamp.set_layout_manager(layout)
+    clamp.append(child)
     if (vexpand) child.vexpand = true
     return clamp
 }

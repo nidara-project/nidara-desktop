@@ -298,6 +298,23 @@ This is the table that decides almost every "which widget should I use?" questio
 
 **Rule of thumb:** everything is **pure GTK4** — libadwaita has been fully removed. Dark/light is set via `Gtk.Settings.gtk_application_prefer_dark_theme` (no `Adw.init()`); the About window is a plain `Gtk.Window` (no `Adw.AboutWindow`). Don't reintroduce any `Adw.*`.
 
+### Custom container widgets — a JS `vfunc_dispose` is a landmine
+
+GJS blocks JS callbacks during garbage collection. A GJS `Gtk.Widget` subclass that
+unparents its children in `vfunc_dispose` works on explicit destroy but NOT when the
+widget is finalized from GC (a dropped subtree, e.g. a replaced Settings subpage): the
+override is blocked (`Gjs-CRITICAL: Attempting to run a JS callback during garbage
+collection`), the chain-up never runs, and GTK warns `Finalizing …, but it still has
+children left` (the child subtree leaks). GTK4's own `gtk_widget_dispose` does NOT
+unparent children either, so a subclass *without* the override warns just the same —
+there is no safe GJS-subclass variant of a container.
+
+**Pattern:** host children in a plain **C container** (`Gtk.Box`) and get custom layout
+by replacing its layout manager (`box.set_layout_manager(new MyLayout())`) — GtkBox
+releases its children in C, which is GC-safe. `NidaraClamp` (`nidara-kit/clamp.ts`) does
+exactly this. When subclassing is unavoidable (`ScaleRevealer` needs snapshot-time
+scaling), expose an explicit teardown (`dismantle()`) and require callers to invoke it.
+
 ## Buttons — one component + a variant convention
 
 All action buttons go through **`NidaraButton`** (`ui/lib/nidara-kit/button.ts`) — never
