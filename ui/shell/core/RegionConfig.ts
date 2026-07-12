@@ -182,9 +182,9 @@ class RegionConfigManager extends GObject.Object {
     }
 
     /**
-     * Returns a fully formatted clock string. Day/month names + date order come
-     * from the UI locale (see i18n/dateNames.ts), NOT from LC_TIME — so we avoid
-     * GLib's %a/%b/%A/%B, which follow LC_TIME rather than the UI language.
+     * Returns a fully formatted clock string. The date portion (names + field
+     * order) follows the system regional format — LC_TIME via i18n/dateNames.ts,
+     * like Gtk.Calendar — not the in-app UI language.
      */
     formatClock(dt?: GLib.DateTime): string {
         const now = dt ?? GLib.DateTime.new_now_local()
