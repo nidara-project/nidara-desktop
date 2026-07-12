@@ -40,7 +40,7 @@ export function formatDatePart(fmt: DateFormat, dt: GLib.DateTime): string {
             if (YEAR_FIRST) return `${y}${ymdYearSep}${mb}${d}${ymdDaySuffix} ${wa}`
             return DAY_FIRST ? `${wa}, ${d} ${mb} ${y}` : `${wa}, ${mb} ${d} ${y}`
         case "long":
-            if (YEAR_FIRST) return `${y}${ymdYearSep}${mB}${d}${ymdDaySuffix} ${wA}`
+            if (YEAR_FIRST) return `${mB}${d}${ymdDaySuffix} ${wA}`
             return DAY_FIRST ? `${wA}, ${d} ${mB}` : `${wA}, ${mB} ${d}`
         case "numeric":
             if (YEAR_FIRST) return `${y}${ymdYearSep}${two(m)}${ymdMonthSep}${two(d)}${ymdDaySuffix}`
