@@ -384,6 +384,9 @@ export default {
     "settings.ai.connect-agent": "Collega il tuo agente",
     "settings.ai.connect-agent.desc": "Chiedi al tuo agente IA di registrare il server MCP descritto in questo file — funziona da qualsiasi client MCP",
 
+    // Badge on the fake AI cursor (surfaces/agent-pointer/)
+    "agentPointer.badge": "IA",
+
     "settings.bar.title": "Barra superiore",
     "settings.bar.group.layout": "Layout",
     "settings.bar.system-menu": "Menu di sistema",

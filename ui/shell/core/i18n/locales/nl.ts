@@ -384,6 +384,9 @@ export default {
     "settings.ai.connect-agent": "Verbind je agent",
     "settings.ai.connect-agent.desc": "Laat je AI-agent de MCP-server registreren die in dit bestand wordt beschreven — dit werkt vanuit elke MCP-client",
 
+    // Badge on the fake AI cursor (surfaces/agent-pointer/)
+    "agentPointer.badge": "AI",
+
     "settings.bar.title": "Bovenbalk",
     "settings.bar.group.layout": "Indeling",
     "settings.bar.system-menu": "Systeemmenu",

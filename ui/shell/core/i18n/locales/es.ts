@@ -538,6 +538,9 @@ export default {
     "settings.ai.connect-agent": "Conecta tu agente",
     "settings.ai.connect-agent.desc": "Dile a tu agente de IA que registre el servidor MCP descrito en este fichero — funciona desde cualquier cliente MCP",
 
+    // Insignia del cursor falso del agente (surfaces/agent-pointer/)
+    "agentPointer.badge": "IA",
+
     // System menu
     "bar.system-menu.about": "Acerca de este equipo",
     "bar.system-menu.settings": "Configuración del sistema…",

@@ -68,7 +68,8 @@ Current commands (run `listActions` for the live list): `toggleCC|toggleControlC
 `openWindowMenu`, `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`,
 `setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listApps`, `launchApp <id>`,
 `disableComputerControl`, `notifyComputerAction` (computer-use tools ping it so the bar's AI-control
-indicator pulses "active"), `listActions`, `dumpState`, plus the **window/workspace management**
+indicator pulses "active"), `agentPointer …` (drives the fake-AI-cursor visual — see the
+computer-use section), `listActions`, `dumpState`, plus the **window/workspace management**
 cluster (see below): `listWindows`, `listWorkspaces`, `focusWorkspace <id|±1|name>`,
 `focusDirection <l|r|u|d>`, `focusWindow <window>`,
 `closeWindow <window>`, `moveWindowToWorkspace <window> <wsId>`, `toggleFloat`/`toggleFullscreen`/
@@ -369,8 +370,46 @@ scrolling off-screen content, drag-and-drop / rubber-band selection / sliders):
   fractional-scale / multi-monitor before trusting (per [[feedback_debug_verify_before_theory]]).
 - **Deferred (not built)**: multi-monitor output targeting (`create_virtual_pointer_with_output`) —
   needs a second display to verify the per-output coordinate mapping.
-- **Still deferred (beyond drag + multi-monitor above)**: a per-action "acting now" flash; a
-  per-app allowlist; the Prism assistant as the perceive→act orchestration surface (Phase 3).
+- **Still deferred (beyond drag + multi-monitor above)**: a per-app allowlist; the Prism assistant
+  as the perceive→act orchestration surface (Phase 3).
+
+**The agent-pointer visual (fake AI cursor)** — pointer actions are no longer invisible: a
+Cairo-painted cursor arrow (live accent fill + glass "AI" badge, `t("agentPointer.badge")`)
+plays the choreography on an OVERLAY layer-shell window per monitor
+(`surfaces/agent-pointer/AgentPointer.ts` — see architecture.md for the window-model exception).
+Only visible **during actions**: pop-in at the REAL cursor's position (MATERIALIZE hold so the
+eye locks on before anything moves), ease-in-out travel on a gently bowed bezier (~0.3-1 s,
+distance-scaled — deliberately hand-like, never a robotic zip), ripple on click, then a ~4 s
+linger with a pulsing accent **halo** around the tip before fading (persistent state is already
+the bar's AI badge). The halo is load-bearing, not decoration: the real injection warps the
+HARDWARE cursor onto the landing point and the cursor plane always paints on top of layer
+surfaces — without the ring the covered arrow reads as "the AI cursor turned back into the
+normal one" (the original v1 complaint). During the linger the overlay polls `hyprctl cursorpos`
+(~2 Hz, idle phase only): if the user moves the real cursor > 24 px off the landing point it
+fades early — the user always wins, also during the linger. Visible over fullscreen. Key
+properties:
+
+- **Land→confirm protocol — the visual never lies**: `nidara-click` reads `hyprctl cursorpos`
+  (baseline), then blocks on `ags request agentPointer <kind> <gx> <gy> [gx2 gy2] [from bx by]`
+  — the request resolves when the fake cursor **lands** (~0.45-1.2 s incl. pop-in; inside the
+  helper's `timeout 2` bound). It then **re-checks the
+  gate** (the kill switch can fire mid-animation and now stops the injection inside that window)
+  and re-reads `cursorpos`: if the user moved the mouse **> 10 logical px** (euclidean), it
+  aborts with a readable `{ok:false}` error and sends `agentPointer cancel` (fade, NO ripple) —
+  **the user always wins**. Only if it actually injects does it send `agentPointer confirm`
+  (async, right before the injector spawns) → the ripple ≈ the real click; a drag glides the
+  fake cursor concurrently with the real 24-step drag (small cosmetic skew accepted).
+- **The visual is an ENHANCEMENT, never a gate**: `visual()` in `nidara-click` is
+  try/catch + `timeout 2` — shell down or pre-agentPointer shell = silent no-op, injection
+  proceeds. Abort authority lives ONLY in `nidara-click` (gate re-check + user-wins); the shell
+  overlay adds a 3s orphan timeout (helper died between land and confirm → fade out anyway).
+- **Gate parity (defense in depth)**: action kinds of the `agentPointer` IPC check
+  `allowComputerControl` in the shell too; `confirm`/`cancel` are ungated (they only finish an
+  animation). The kill switch (`disableComputerControl` / bar indicator / Settings → AI /
+  `Super+Shift+Esc`) hard-hides the overlay instantly via an `agentConfig.onChange` hook in the
+  factory; `hideForLock` cancels it too.
+- Verify with `dumpState.flags.agentPointer` (true while travelling/effecting/fading) and
+  `hyprctl layers` (`nidara-agent-pointer` listed only while acting — unmapped at rest).
 
 ### Adding a new IPC command
 

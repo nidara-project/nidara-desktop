@@ -384,6 +384,9 @@ export default {
     "settings.ai.connect-agent": "连接你的智能体",
     "settings.ai.connect-agent.desc": "让你的 AI 智能体注册此文件中描述的 MCP 服务器 — 适用于任何 MCP 客户端",
 
+    // Badge on the fake AI cursor (surfaces/agent-pointer/)
+    "agentPointer.badge": "AI",
+
     "settings.bar.title": "顶栏",
     "settings.bar.group.layout": "布局",
     "settings.bar.system-menu": "系统菜单",

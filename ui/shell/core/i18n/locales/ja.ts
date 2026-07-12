@@ -384,6 +384,9 @@ export default {
     "settings.ai.connect-agent": "エージェントを接続",
     "settings.ai.connect-agent.desc": "AI エージェントに、このファイルに記載された MCP サーバーを登録するよう指示してください — どの MCP クライアントからでも利用できます",
 
+    // Badge on the fake AI cursor (surfaces/agent-pointer/)
+    "agentPointer.badge": "AI",
+
     "settings.bar.title": "トップバー",
     "settings.bar.group.layout": "レイアウト",
     "settings.bar.system-menu": "システムメニュー",

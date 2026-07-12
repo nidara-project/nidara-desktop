@@ -384,6 +384,9 @@ export default {
     "settings.ai.connect-agent": "Ihren Agenten verbinden",
     "settings.ai.connect-agent.desc": "Weisen Sie Ihren KI-Agenten an, den in dieser Datei beschriebenen MCP-Server zu registrieren — er funktioniert mit jedem MCP-Client",
 
+    // Badge on the fake AI cursor (surfaces/agent-pointer/)
+    "agentPointer.badge": "KI",
+
     "settings.bar.title": "Obere Leiste",
     "settings.bar.group.layout": "Anordnung",
     "settings.bar.system-menu": "Systemmenü",
