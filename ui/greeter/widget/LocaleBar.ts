@@ -34,9 +34,21 @@ interface Language {
   label: string
 }
 
+// Endonyms, deliberately untranslated — everyone must be able to find their
+// own language regardless of what the greeter currently speaks.
 const LANGUAGES: Language[] = [
-  { id: "en", label: "EN" },
-  { id: "es", label: "ES" },
+  { id: "en",    label: "English" },
+  { id: "es",    label: "Español" },
+  { id: "fr",    label: "Français" },
+  { id: "de",    label: "Deutsch" },
+  { id: "it",    label: "Italiano" },
+  { id: "pt-BR", label: "Português (Brasil)" },
+  { id: "pt-PT", label: "Português (Portugal)" },
+  { id: "pl",    label: "Polski" },
+  { id: "nl",    label: "Nederlands" },
+  { id: "ru",    label: "Русский" },
+  { id: "zh-CN", label: "简体中文" },
+  { id: "ja",    label: "日本語" },
 ]
 
 // ── Widget ────────────────────────────────────────────────────────────────────
@@ -66,33 +78,28 @@ export default function LocaleBar(): Gtk.Widget {
       .catch(e => console.warn("[LocaleBar] kb_layout change:", e))
   })
 
-  // ── Language toggle buttons ───────────────────────────────────────────────
-  const langBox = new Gtk.Box({ spacing: 2, css_classes: ["locale-bar-lang-group"] })
+  // ── Language selector — same DropDown pattern as the keyboard one (12
+  // languages don't scale as toggle buttons). Picking one re-strings the
+  // GREETER only: the session's language still comes from /etc/locale.conf
+  // (Settings → Language) — greetd starts the session with an empty env.
+  const langIds   = LANGUAGES.map(l => l.id)
+  const langModel = new Gtk.StringList({ strings: LANGUAGES.map(l => l.label) })
+  const langDrp = new Gtk.DropDown({
+    model: langModel,
+    valign: Gtk.Align.CENTER,
+    css_classes: ["locale-bar-dropdown"],
+  })
+  const initLangIdx = langIds.indexOf(getLocale())
+  langDrp.selected = initLangIdx >= 0 ? initLangIdx : 0
 
-  for (const lang of LANGUAGES) {
-    const btn = new Gtk.ToggleButton({
-      label: lang.label,
-      active: getLocale() === lang.id,
-      css_classes: ["locale-bar-lang-btn"],
-    })
+  langDrp.connect("notify::selected", () => {
+    const id = langIds[langDrp.selected]
+    if (!id) return
+    setLocale(id)
+    savePrefs({ locale: id })
+  })
 
-    btn.connect("toggled", () => {
-      if (!btn.active) return
-      // Deactivate siblings
-      let child = langBox.get_first_child()
-      while (child) {
-        if (child !== btn && child instanceof Gtk.ToggleButton)
-          child.active = false
-        child = child.get_next_sibling()
-      }
-      setLocale(lang.id)
-      savePrefs({ locale: lang.id })
-    })
-
-    langBox.append(btn)
-  }
-
-  // ── Layout: [⌨ kbDrp] [sep] [lang buttons] ───────────────────────────────
+  // ── Layout: [⌨ kbDrp] [sep] [langDrp] ─────────────────────────────────────
   const kbIcon = new Gtk.Image({ icon_name: "input-keyboard-symbolic", pixel_size: 12 })
   kbIcon.add_css_class("locale-bar-icon")
 
@@ -105,7 +112,7 @@ export default function LocaleBar(): Gtk.Widget {
   row.append(kbIcon)
   row.append(kbDrp)
   row.append(new Gtk.Separator({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["locale-bar-sep"] }))
-  row.append(langBox)
+  row.append(langDrp)
 
   return row
 }
