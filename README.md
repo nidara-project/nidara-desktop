@@ -40,7 +40,7 @@ so every clone is ready to be worked on by an agent out of the box.
 - **Game Mode**: Steam games auto-move to a dedicated `gamespace` workspace (no blur/shadow/animations, `immediate` mode), optional library-art wallpaper and performance power profile; `Super + B` floats the bar above any fullscreen window.
 - **Login & Lock**: Custom AGS apps — a greetd-based greeter (`nidara-greeter`) and a lock screen (`nidara-lock`) built on `ext-session-lock-v1`, both sharing the Nidara look. The greeter is launched directly by greetd (no regreet); the lock screen uses no hyprlock.
 - **Idle management**: hypridle — configurable screen-off, lock, and suspend timers.
-- **Internationalization**: All UI strings via `t()`; English + Spanish included.
+- **Internationalization**: The shell ships in 11 languages — English, Spanish, French, German, Italian, Brazilian Portuguese, Polish, Dutch, Russian, Simplified Chinese, and Japanese (Settings → Language & Region). Clocks and dates follow the system regional format (`LC_TIME`), including on the login and lock screens.
 
 ---
 
