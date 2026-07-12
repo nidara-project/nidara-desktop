@@ -9,6 +9,7 @@ import it from "./locales/it"
 import pl from "./locales/pl"
 import nl from "./locales/nl"
 import ru from "./locales/ru"
+import zhCN from "./locales/zh-CN"
 
 type TranslationMap = Record<string, string>
 
@@ -21,7 +22,8 @@ const locales: Record<string, TranslationMap> = {
     it,
     pl,
     nl,
-    ru
+    ru,
+    "zh-CN": zhCN
 }
 
 let activeLocale = "en"
@@ -37,6 +39,7 @@ export function detectLanguage() {
     else if (langEnv.toLowerCase().startsWith("pl")) activeLocale = "pl"
     else if (langEnv.toLowerCase().startsWith("nl")) activeLocale = "nl"
     else if (langEnv.toLowerCase().startsWith("ru")) activeLocale = "ru"
+    else if (langEnv.toLowerCase().startsWith("zh")) activeLocale = "zh-CN"
     else activeLocale = "en" // fallback default
 }
 
