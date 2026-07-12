@@ -44,9 +44,14 @@ function emit(obj) { print(JSON.stringify(obj, null, 2)) }
 
 // Fire-and-forget: tell the shell an action just landed so the bar's AI-control
 // indicator shows its "active" pulse (decays back to "armed" after a few seconds).
-// Never blocks or fails the action if the shell isn't reachable.
+// Never blocks or fails the action if the shell isn't reachable. SILENCED stdio:
+// an async child inherits ours, so its "ok" response would pollute the JSON
+// contract on stdout (spawn_command_line_async can't redirect; Gio can).
 function pingShell() {
-    try { GLib.spawn_command_line_async("ags request notifyComputerAction") } catch {}
+    try {
+        Gio.Subprocess.new(["ags", "request", "notifyComputerAction"],
+            Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE)
+    } catch {}
 }
 function safe(fn, fb) { try { const v = fn(); return v == null ? fb : v } catch { return fb } }
 
@@ -66,6 +71,37 @@ function runJson(cmd) {
         if (!ok) return null
         return JSON.parse(new TextDecoder().decode(out))
     } catch { return null }
+}
+
+// Physical cursor position (global logical px) via `hyprctl cursorpos` — the
+// baseline for the user-wins check AND the fake cursor's travel origin. null on
+// any failure (the caller then skips the check rather than break the action).
+function cursorPos() {
+    try {
+        const [ok, out] = GLib.spawn_command_line_sync("hyprctl cursorpos")
+        if (!ok) return null
+        const m = new TextDecoder().decode(out).match(/(-?\d+),\s*(-?\d+)/)
+        return m ? { x: parseInt(m[1], 10), y: parseInt(m[2], 10) } : null
+    } catch { return null }
+}
+
+// Drive the shell's fake AI cursor (`ags request agentPointer …`). PURELY
+// VISUAL — an enhancement, never a gate: any failure (shell down, old shell
+// without the command) is a silent no-op and the injection proceeds. `wait`
+// blocks until the fake cursor LANDS (the request resolves on landing);
+// `timeout 2` bounds a hung shell. The `--` is load-bearing: the ags CLI
+// otherwise parses a negative coordinate (monitor left/above the origin) as a
+// flag and errors out (verified live 2026-07-12). The async path silences
+// stdio like pingShell (inherited stdout would pollute the JSON contract).
+function visual(cmd, wait = true) {
+    try {
+        if (wait) {
+            GLib.spawn_command_line_sync(`timeout 2 ags request -- agentPointer ${cmd}`)
+        } else {
+            Gio.Subprocess.new(["ags", "request", "--", "agentPointer", ...cmd.split(" ")],
+                Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE)
+        }
+    } catch {}
 }
 
 // nidara-input: PATH first, then a sibling of this script (dev checkout).
@@ -213,16 +249,48 @@ function main() {
     const mon = mons.find(m => m.id === monName) || mons.find(m => m.focused) || mons[0]
     if (!mon) { emit({ error: "could not resolve the active monitor geometry" }); return }
     const scale = mon.scale || 1
-    const outX = Math.round((at[0] + relX) - mon.x), outY = Math.round((at[1] + relY) - mon.y)
+    // Global logical target — what the fake-cursor overlay speaks (it converts
+    // to monitor-local itself); outX/outY below are the injector's output-relative.
+    const gx = Math.round(at[0] + relX), gy = Math.round(at[1] + relY)
+    const outX = gx - mon.x, outY = gy - mon.y
     const extW = Math.round(mon.width / scale), extH = Math.round(mon.height / scale)
     // Drag: map the drop point through the SAME monitor geometry as the start.
-    let outX2, outY2
+    let gx2, gy2, outX2, outY2
     if (isDrag) {
-        outX2 = Math.round((at[0] + relX2) - mon.x); outY2 = Math.round((at[1] + relY2) - mon.y)
+        gx2 = Math.round(at[0] + relX2); gy2 = Math.round(at[1] + relY2)
+        outX2 = gx2 - mon.x; outY2 = gy2 - mon.y
     }
 
     const injector = findInjector()
     if (!injector) { emit({ error: "nidara-input not found — re-run install.sh (it compiles the pointer backend)" }); return }
+
+    // ── Visual choreography (land→confirm protocol; see surfaces/agent-pointer/).
+    // The fake AI cursor pops in at the baseline and travels to the target while
+    // we hold (~0.45-1.2 s, distance-scaled — inside visual()'s `timeout 2`); it
+    // only ripples AFTER the real injection is re-verified — the visual never lies.
+    const cursorBase = cursorPos()
+    visual(`${spec.action} ${gx} ${gy}`
+        + (isDrag ? ` ${gx2} ${gy2}` : "")
+        + (cursorBase ? ` from ${cursorBase.x} ${cursorBase.y}` : ""))
+    // Re-check the gate: the kill switch (bar indicator / Super+Shift+Esc /
+    // disableComputerControl) can fire DURING the travel animation — this is what
+    // lets it stop an injection inside that window.
+    if (!controlEnabled()) {
+        visual("cancel", false)
+        emit({ ok: false, error: "aborted: computer-control was revoked during the action animation (kill switch)" })
+        return
+    }
+    // The user always wins: if the physical mouse moved during the animation,
+    // abort the injection. Skipped (never blocking) if either read failed.
+    const cursorNow = cursorPos()
+    if (cursorBase && cursorNow &&
+            Math.hypot(cursorNow.x - cursorBase.x, cursorNow.y - cursorBase.y) > 10) {
+        visual("cancel", false)
+        emit({ ok: false, error: "aborted: the user moved the mouse during the action animation — user input takes priority; retry when the pointer is idle" })
+        return
+    }
+    // Ripple ≈ the real click (drag: the glide runs concurrently with the real drag).
+    visual("confirm", false)
 
     // action maps 1:1 to the injector verb (click / rightclick / scroll / drag);
     // scroll appends the notch deltas, drag the drop point.

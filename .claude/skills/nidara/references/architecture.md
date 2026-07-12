@@ -49,6 +49,17 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
 - **`surfaces/`** — whole TSX surfaces that consume `core/` state. Each surface is a function that takes a `Gdk.Monitor` and returns a `Gtk.Widget`:
   - `bar/`, `dock/`, `control-center/`, `app-grid/`, `overview/`, `prism/`
   - `settings/` (+ `settings/pages/`, 18 pages), `about/`
+  - `agent-pointer/` — the fake AI cursor that visualizes computer-use pointer
+    actions (accent arrow + "AI" badge, Cairo-painted, click-through). A
+    **deliberate exception to commandment 5**: its OWN layer-shell window per
+    monitor on the **OVERLAY** layer, because it must paint above the bar itself
+    and above fullscreen windows. Cost at rest is zero — created **unmapped**,
+    `present()`ed only while an action plays, hidden after the fade-out (an
+    always-mapped empty layer once cost 30–47% GPU — tech-debt §11; never
+    regress). Its visibility lives outside `Status.ts` (not a user overlay):
+    `isAgentPointerActive()` → `dumpState.flags.agentPointer` (app-grid
+    precedent). Driven only via the `agentPointer` IPC command (land→confirm
+    protocol — see `state-and-ipc.md`); no ShellActions entry (no widget consumes it).
 - **`common/`** — shared UI pieces used across surfaces and widgets
   (`Slider`, `SquircleContainer`, `ScaleRevealer`, `MenuRow`, `widget-kit`, `DrawingUtils`…).
 - **`widgets/`** — atomic CC/bar widgets, **auto-registered**: one file that
