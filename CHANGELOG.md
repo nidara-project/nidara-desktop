@@ -5,6 +5,41 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-07-12
+
+### Added
+
+- **Nidara now speaks 11 languages.** French, German, Italian, Brazilian
+  Portuguese, Polish, Dutch, Russian, Simplified Chinese and Japanese join
+  English and Spanish. The desktop follows your system language; change it in
+  Settings → Language & Region.
+- **You can now see your AI agent's cursor.** When an agent acts through
+  computer control (off by default, Settings → AI), an accent-colored pointer
+  with an "AI" badge travels to the target and pulses where the action lands —
+  you always see where the agent clicked, and it backs off the moment you move
+  your own mouse. The red bar indicator and the Super+Shift+Esc kill switch
+  still stop everything instantly.
+- Autostart entries can now be added by picking from your installed apps —
+  search, pick, done. The raw-command field remains for advanced entries.
+
+### Changed
+
+- Clocks and dates across the desktop — top bar, login screen and lock
+  screen — now follow your system regional format: localized day and month
+  names and the native field order, including year-first formats such as
+  Chinese and Japanese (e.g. 7月12日 土曜日). Dates no longer render in
+  hardcoded English.
+- Autostart moved from its own sidebar page into Settings → Apps, and it now
+  appears in Settings search.
+- A consistency pass over the English and Spanish interface texts (sentence
+  case throughout, unified terminology).
+
+### Fixed
+
+- Autostart entries edited in Settings now take effect on a standard install —
+  the old page wrote to a file Hyprland never read, so its entries silently
+  never launched.
+
 ## [0.1.7] — 2026-07-11
 
 ### Added
