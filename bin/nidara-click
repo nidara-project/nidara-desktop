@@ -44,9 +44,14 @@ function emit(obj) { print(JSON.stringify(obj, null, 2)) }
 
 // Fire-and-forget: tell the shell an action just landed so the bar's AI-control
 // indicator shows its "active" pulse (decays back to "armed" after a few seconds).
-// Never blocks or fails the action if the shell isn't reachable.
+// Never blocks or fails the action if the shell isn't reachable. SILENCED stdio:
+// an async child inherits ours, so its "ok" response would pollute the JSON
+// contract on stdout (spawn_command_line_async can't redirect; Gio can).
 function pingShell() {
-    try { GLib.spawn_command_line_async("ags request notifyComputerAction") } catch {}
+    try {
+        Gio.Subprocess.new(["ags", "request", "notifyComputerAction"],
+            Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE)
+    } catch {}
 }
 function safe(fn, fb) { try { const v = fn(); return v == null ? fb : v } catch { return fb } }
 
@@ -86,11 +91,16 @@ function cursorPos() {
 // blocks until the fake cursor LANDS (the request resolves on landing);
 // `timeout 2` bounds a hung shell. The `--` is load-bearing: the ags CLI
 // otherwise parses a negative coordinate (monitor left/above the origin) as a
-// flag and errors out (verified live 2026-07-12).
+// flag and errors out (verified live 2026-07-12). The async path silences
+// stdio like pingShell (inherited stdout would pollute the JSON contract).
 function visual(cmd, wait = true) {
     try {
-        if (wait) GLib.spawn_command_line_sync(`timeout 2 ags request -- agentPointer ${cmd}`)
-        else GLib.spawn_command_line_async(`ags request -- agentPointer ${cmd}`)
+        if (wait) {
+            GLib.spawn_command_line_sync(`timeout 2 ags request -- agentPointer ${cmd}`)
+        } else {
+            Gio.Subprocess.new(["ags", "request", "--", "agentPointer", ...cmd.split(" ")],
+                Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE)
+        }
     } catch {}
 }
 
