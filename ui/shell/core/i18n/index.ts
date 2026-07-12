@@ -2,12 +2,30 @@ import GLib from "gi://GLib"
 
 import en from "./locales/en"
 import es from "./locales/es"
+import fr from "./locales/fr"
+import de from "./locales/de"
+import ptBR from "./locales/pt-BR"
+import it from "./locales/it"
+import pl from "./locales/pl"
+import nl from "./locales/nl"
+import ru from "./locales/ru"
+import zhCN from "./locales/zh-CN"
+import ja from "./locales/ja"
 
 type TranslationMap = Record<string, string>
 
 const locales: Record<string, TranslationMap> = {
     en,
-    es
+    es,
+    fr,
+    de,
+    "pt-BR": ptBR,
+    it,
+    pl,
+    nl,
+    ru,
+    "zh-CN": zhCN,
+    ja
 }
 
 let activeLocale = "en"
@@ -16,6 +34,15 @@ export function detectLanguage() {
     const langEnv = GLib.getenv("LANG") || ""
     if (langEnv.toLowerCase().startsWith("en")) activeLocale = "en"
     else if (langEnv.toLowerCase().startsWith("es")) activeLocale = "es"
+    else if (langEnv.toLowerCase().startsWith("fr")) activeLocale = "fr"
+    else if (langEnv.toLowerCase().startsWith("de")) activeLocale = "de"
+    else if (langEnv.toLowerCase().startsWith("pt")) activeLocale = "pt-BR"
+    else if (langEnv.toLowerCase().startsWith("it")) activeLocale = "it"
+    else if (langEnv.toLowerCase().startsWith("pl")) activeLocale = "pl"
+    else if (langEnv.toLowerCase().startsWith("nl")) activeLocale = "nl"
+    else if (langEnv.toLowerCase().startsWith("ru")) activeLocale = "ru"
+    else if (langEnv.toLowerCase().startsWith("zh")) activeLocale = "zh-CN"
+    else if (langEnv.toLowerCase().startsWith("ja")) activeLocale = "ja"
     else activeLocale = "en" // fallback default
 }
 
