@@ -76,6 +76,11 @@ export function isAgentPointerActive(): boolean {
 }
 
 export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
+    // NB: no `resizable: false` — it pins the window to its natural size
+    // (GTK's 200×200 default), which layer-shell then honors instead of
+    // stretching to the 4 anchors, and everything paints off-surface
+    // (measured live via `hyprctl layers`, 2026-07-12). LockOverlay is the
+    // working reference: 4 anchors, no explicit size, no resizable pin.
     const win = new Gtk.Window({
         name: "nidara-agent-pointer",
         css_classes: ["nidara-agent-pointer-window", "nd-ignore"],
@@ -83,7 +88,6 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
         focusable: false,
         can_focus: false,
         can_target: false,
-        resizable: false,
     })
     ;(win as any).gdkmonitor = gdkmonitor
 
