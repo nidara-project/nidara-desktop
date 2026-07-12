@@ -6,6 +6,7 @@ import fr from "./locales/fr"
 import de from "./locales/de"
 import ptBR from "./locales/pt-BR"
 import it from "./locales/it"
+import pl from "./locales/pl"
 
 type TranslationMap = Record<string, string>
 
@@ -15,7 +16,8 @@ const locales: Record<string, TranslationMap> = {
     fr,
     de,
     "pt-BR": ptBR,
-    it
+    it,
+    pl
 }
 
 let activeLocale = "en"
@@ -28,6 +30,7 @@ export function detectLanguage() {
     else if (langEnv.toLowerCase().startsWith("de")) activeLocale = "de"
     else if (langEnv.toLowerCase().startsWith("pt")) activeLocale = "pt-BR"
     else if (langEnv.toLowerCase().startsWith("it")) activeLocale = "it"
+    else if (langEnv.toLowerCase().startsWith("pl")) activeLocale = "pl"
     else activeLocale = "en" // fallback default
 }
 
