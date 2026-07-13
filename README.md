@@ -124,8 +124,9 @@ the very recipe the repo uses. It:
    `/usr/share/wayland-sessions/nidara.desktop` session entry. Prebuilt when the repo serves this
    release, otherwise built on the spot from the same `packaging/nidara/PKGBUILD`.
 3. Runs `nidara-setup` — the idempotent first-time setup: creates `~/.config/nidara/` with default
-   configs (never overwritten on updates), seeding keyboard layout, timezone and locale from your
-   existing Arch setup — it never prompts — and enables `pipewire`, `wireplumber`,
+   configs (never overwritten on updates), seeding keyboard layout and timezone from your existing
+   Arch setup and generating the system locales for every language the UI ships — it never
+   prompts — and enables `pipewire`, `wireplumber`,
    `power-profiles-daemon`, `bluetooth`, and (only if no display manager is already enabled)
    `greetd` with the Nidara greeter.
 

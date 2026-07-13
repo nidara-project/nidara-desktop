@@ -746,6 +746,27 @@ These were paid down; the *rule* remains:
 - **Greeter ↔ lockscreen ↔ shell** share `ui/lib/accent.ts` + `ui/lib/users.ts` + `ui/lib/wallpaper.ts`
   (Settings → Users consumes `users.ts` too — don't reintroduce a per-surface passwd parser);
   `lib/i18n.ts` stays separate per bundle on purpose (different config paths / superset).
+  Both mini-catalogs (greeter 12 keys, lockscreen 7) cover the full 12-language set —
+  including pt-PT, which the SHELL does not have yet (see below) — with the same
+  LANG-prefix detection chain as the shell plus one extra rule: `pt_br` → pt-BR before
+  the generic `pt` → pt-PT. Power/password terminology mirrors the shell catalogs
+  (`bar.system-menu.*`, `settings.users.password`) — keep them in lockstep when either
+  side changes. The greeter's language dropdown sets the GREETER's own language only
+  (persisted in `greeter-prefs.json`); the session language comes from
+  `/etc/locale.conf` via Settings → Language — greetd starts sessions with an empty
+  env, and the unprivileged greeter can neither `localectl` nor write other users'
+  homes. (Future idea, deliberately out of scope: let the greeter pick set the session
+  language — needs a privileged path.)
+- **`noto-fonts-cjk` is a hard dep** (install.sh §1 + PKGBUILD, since the i18n round-2
+  PR): the zh-CN/ja catalogs AND the 简体中文/日本語 endonyms in the language pickers
+  render as tofu boxes without it — caught in the 07-13 VM sweep (a clean Arch ships
+  no CJK font; ~300 MB installed, the honest cost of shipping those languages).
+- **Shell pt-PT catalog is PENDING** (deferred 07-13 to keep the code round small):
+  `ui/shell/core/i18n/locales/pt-PT.ts` (621 keys, European norm — ficheiro/ecrã/rato,
+  impersonal imperative like GNOME pt) + wiring in `core/i18n/index.ts` (import + map
+  entry + reorder detection: `pt_br` → pt-BR BEFORE `pt` → pt-PT) + README counter
+  11 → 12. Until then `detectLanguage()` sends all `pt*` to pt-BR. Same shape of
+  future candidate: zh-TW (today `zh_TW` → zh-CN).
 - **Clock day/month names come from LC_TIME via GLib `%a/%A/%b/%B`** — every installed
   locale is localized for free (the clock follows the "Regional Format" setting, like
   Gtk.Calendar and macOS/GNOME). `formatDatePart()` derives the date order from the
@@ -765,7 +786,11 @@ These were paid down; the *rule* remains:
   check `/usr/share/i18n/locales/<locale>` (glibc's own source) directly rather than
   guessing. Caveat: the clock follows LC_TIME, not the in-app UI-language toggle (they
   diverge only if the user sets a Regional Format ≠ their UI language, which is
-  correct), and the target locale must be generated. **Known remaining gap:** CJK
+  correct), and the target locale must be generated — nidara-setup generates the 12
+  shipped `xx_XX.UTF-8` locales in `/etc/locale.gen` + `locale-gen` (idempotent,
+  system-level, skipped by `--user`), which is also what makes Settings → Language
+  autocomplete them (`localectl list-locales` only lists generated ones).
+  **Known remaining gap:** CJK
   weekday placement/parenthesization conventions differ further within the family
   (e.g. Japanese commonly parenthesizes: "4月6日(月)") — the current space-separated
   rendering is generic and correct, not idiomatic polish; left for native review.

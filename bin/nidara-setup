@@ -130,6 +130,35 @@ if [ -z "$USER_ONLY" ] && ! grep -q "GI_TYPELIB_PATH" /etc/environment 2>/dev/nu
 fi
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Generated locales (system — skipped by --user)
+# The UI ships in 12 languages, but Settings → Language can only offer
+# GENERATED locales (`localectl list-locales` reads the uncommented entries of
+# /etc/locale.gen) and LC_TIME date names need the locale compiled — a stock
+# Arch typically generates just en_US plus the installer's pick. Uncomment the
+# shipped set and run locale-gen once, only when something was missing
+# (idempotent; costs a few MB in /usr/lib/locale/locale-archive).
+# ─────────────────────────────────────────────────────────────────────────────
+if [ -z "$USER_ONLY" ] && [ -f /etc/locale.gen ]; then
+    NIDARA_LOCALES="en_US es_ES fr_FR de_DE it_IT pt_BR pt_PT pl_PL nl_NL ru_RU zh_CN ja_JP"
+    _locales_missing=""
+    for _loc in $NIDARA_LOCALES; do
+        grep -qE "^${_loc}\.UTF-8" /etc/locale.gen || _locales_missing="$_locales_missing $_loc"
+    done
+    if [ -n "$_locales_missing" ]; then
+        echo "  Generating locales:$_locales_missing"
+        for _loc in $_locales_missing; do
+            if grep -qE "^#\s*${_loc}\.UTF-8 UTF-8" /etc/locale.gen; then
+                # Standard Arch locale.gen: the line exists commented — uncomment it.
+                sudo sed -i -E "s|^#\s*(${_loc}\.UTF-8 UTF-8)|\1|" /etc/locale.gen
+            else
+                echo "${_loc}.UTF-8 UTF-8" | sudo tee -a /etc/locale.gen >/dev/null
+            fi
+        done
+        sudo locale-gen
+    fi
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Per-user configuration (first run only, never overwrites)
 # ─────────────────────────────────────────────────────────────────────────────
 echo "  Initializing user configuration..."

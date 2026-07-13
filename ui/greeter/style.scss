@@ -234,9 +234,9 @@ dropdown.greeter-session-dropdown > button {
   &:active { background: rgba(255, 255, 255, 0.06); }
 }
 
-// Keyboard selector — compact, dimmed
-// min-height 18px + 3px vertical padding keep the three bottom-pill buttons
-// (this, .locale-bar-lang-btn, .greeter-power-btn) the exact same height.
+// Keyboard + language selectors — compact, dimmed
+// min-height 18px + 3px vertical padding keep the bottom-pill buttons
+// (this, .greeter-power-btn) the exact same height.
 dropdown.locale-bar-dropdown > button {
   color: var(--nidara-text-muted);
   font-size: 12px;
@@ -311,24 +311,6 @@ dropdown popover {
   margin: 4px 2px;
 }
 
-.locale-bar-lang-group {
-  background: transparent;
-}
-
-.locale-bar-lang-btn {
-  background: transparent;
-  border: none;
-  border-radius: var(--nidara-radius-pill);
-  color: var(--nidara-text-muted);
-  font-size: 12px;
-  font-weight: 500;
-  padding: 3px 8px;
-  min-height: 18px; // lockstep with .greeter-power-btn / locale-bar-dropdown
-
-  &:hover   { background: rgba(255, 255, 255, 0.07); color: var(--nidara-text-secondary); }
-  &:checked { background: var(--nidara-accent-20); color: var(--nidara-accent); }
-}
-
 // ── Power bar ────────────────────────────────────────────────────────────────
 .greeter-power-bar {
   background: var(--nidara-glass);
@@ -344,7 +326,7 @@ dropdown popover {
   color: #fff;
   padding: 3px 16px;
   font-size: 13px;
-  min-height: 18px; // lockstep with the locale-bar buttons next to it
+  min-height: 18px; // lockstep with the locale-bar dropdowns next to it
 
   &:hover  { background: var(--nidara-accent); }
   &:active { background: var(--nidara-accent); }
