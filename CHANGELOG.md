@@ -5,6 +5,34 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-07-13
+
+### Added
+
+- **Language selection everywhere it was missing.** The login screen now has a
+  language selector (every language shown by its own name), and installs now
+  generate the system locales for all shipped languages — so Settings →
+  Language & Region actually offers them. In 0.2.0 the translations shipped
+  inside the desktop, but most systems had no generated locale to select them
+  with.
+- **European Portuguese (pt-PT)** joins as the 12th language — a genuine
+  European translation (utilizador, palavra-passe, ficheiro…), distinct from
+  Brazilian Portuguese. The login screen and the lock screen now speak all 12
+  languages as well.
+
+### Fixed
+
+- **Chinese and Japanese now render with their correct regional character
+  forms.** All CJK text used to fall back to the Korean variant of the Noto
+  CJK fonts (a quirk of stock fontconfig on Arch), so Chinese and Japanese
+  users read their hanzi/kanji with Korean stroke shapes. Each language now
+  gets its proper regional variant (Simplified, Traditional, Japanese, Korean)
+  across the whole session — applications included. The Noto CJK fonts are
+  also installed by default, so 简体中文 and 日本語 in the language pickers no
+  longer render as empty boxes on a clean install.
+- A garbage-collection crash in a core layout container (NidaraClamp) that
+  could error when interface views were rebuilt.
+
 ## [0.2.0] — 2026-07-12
 
 ### Added
