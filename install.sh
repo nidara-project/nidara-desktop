@@ -799,6 +799,16 @@ sudo rm -f /usr/share/xdg-desktop-portal/portals/nidara.conf  # misplaced legacy
 sudo cp "$REPO_DIR/config/portal/nidara.portal" /usr/share/xdg-desktop-portal/portals/nidara.portal
 sudo cp "$REPO_DIR/config/portal/org.freedesktop.impl.portal.desktop.nidara.service" /usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.nidara.service
 sudo cp "$REPO_DIR/config/portal/hyprland-portals.conf" /etc/xdg-desktop-portal/hyprland-portals.conf
+
+# fontconfig: per-language CJK variant. Arch's noto-fonts-cjk ships no
+# fontconfig rules and fontconfig's own 65-nonlatin.conf hardcodes the KR face,
+# so zh/ja sessions render their Han characters with Korean stroke forms.
+# The rules prepend the regional face by text language; the 65-0- filename MUST
+# sort before 65-nonlatin.conf (see the file's header comment). (Shared file:
+# config/fontconfig/, also shipped by the nidara pacman package — keep ONE source.)
+sudo mkdir -p /usr/share/fontconfig/conf.avail /etc/fonts/conf.d
+sudo cp "$REPO_DIR/config/fontconfig/65-0-nidara-noto-cjk.conf" /usr/share/fontconfig/conf.avail/65-0-nidara-noto-cjk.conf
+sudo ln -sf /usr/share/fontconfig/conf.avail/65-0-nidara-noto-cjk.conf /etc/fonts/conf.d/65-0-nidara-noto-cjk.conf
 fi
 
 # Record the dependency pins this install was built against — --update compares

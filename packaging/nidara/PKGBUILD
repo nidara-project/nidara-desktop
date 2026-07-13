@@ -153,4 +153,12 @@ package() {
   install -Dm644 config/portal/org.freedesktop.impl.portal.desktop.nidara.service \
     "$pkgdir/usr/share/dbus-1/services/org.freedesktop.impl.portal.desktop.nidara.service"
   install -Dm644 config/portal/hyprland-portals.conf "$pkgdir/etc/xdg-desktop-portal/hyprland-portals.conf"
+
+  # fontconfig: per-language CJK variant — the 65-0- filename MUST sort before
+  # fontconfig's 65-nonlatin.conf (see the file's header comment)
+  install -Dm644 config/fontconfig/65-0-nidara-noto-cjk.conf \
+    "$pkgdir/usr/share/fontconfig/conf.avail/65-0-nidara-noto-cjk.conf"
+  install -d "$pkgdir/etc/fonts/conf.d"
+  ln -s /usr/share/fontconfig/conf.avail/65-0-nidara-noto-cjk.conf \
+    "$pkgdir/etc/fonts/conf.d/65-0-nidara-noto-cjk.conf"
 }

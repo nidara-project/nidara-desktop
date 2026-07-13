@@ -306,6 +306,25 @@ Type-wise, `t()` is typed `key: keyof typeof en` (`en` is the canonical key sour
 licence to skip es. (It used to derive from `es`, which broke the typecheck on every new key —
 fixed in `core/i18n/index.ts`.)
 
+### Fonts & CJK variants
+
+The UI font is **Inter** (ThemeManager seeds `Inter 11` into the `font-name` gsetting on first
+boot only — a user's explicit pick is never clobbered; `syncFont()` turns it into
+`* { font-family: "<pick>", "Symbols Nerd Font", sans-serif; }`). CJK and emoji render through
+Pango's **per-glyph fallback** — `noto-fonts-cjk`/`noto-fonts-emoji` are hard deps in both install
+channels — so there is no per-language font switching and none is needed.
+
+Which **regional Han variant** (SC/TC/JP/KR/HK) serves those fallback glyphs is decided by
+`config/fontconfig/65-0-nidara-noto-cjk.conf` (shipped by the pacman package AND install.sh §6 as
+`/usr/share/fontconfig/conf.avail/…` + symlink in `/etc/fonts/conf.d/`). **The `65-0-` filename is
+load-bearing**: fontconfig's own `65-nonlatin.conf` hardcodes the KR face in its fallback list, and
+among fallback families earlier list position wins — renamed to `70-` the rules load but every CJK
+locale still gets Korean stroke forms (full story in the file's header). The text language comes
+from `LANG` (Settings → Region), so verification is
+`fc-match "sans-serif:lang=ja"` → `Noto Sans CJK JP` (and SC/TC/HK/KR for zh-cn/zh-tw/zh-hk/ko).
+Known cosmetic limitation: the greeter runs with an empty greetd env (no `LANG`), so its kanji keep
+KR forms regardless of the greeter's own language dropdown.
+
 ### Testing Wi-Fi without a Wi-Fi adapter
 
 The Network settings page is driven by `AstalNetwork`, so most of it only exercises
