@@ -746,10 +746,10 @@ These were paid down; the *rule* remains:
 - **Greeter ↔ lockscreen ↔ shell** share `ui/lib/accent.ts` + `ui/lib/users.ts` + `ui/lib/wallpaper.ts`
   (Settings → Users consumes `users.ts` too — don't reintroduce a per-surface passwd parser);
   `lib/i18n.ts` stays separate per bundle on purpose (different config paths / superset).
-  Both mini-catalogs (greeter 12 keys, lockscreen 7) cover the full 12-language set —
-  including pt-PT, which the SHELL does not have yet (see below) — with the same
-  LANG-prefix detection chain as the shell plus one extra rule: `pt_br` → pt-BR before
-  the generic `pt` → pt-PT. Power/password terminology mirrors the shell catalogs
+  Both mini-catalogs (greeter 12 keys, lockscreen 7) cover the full 12-language set,
+  including pt-PT, with the same LANG-prefix detection chain as the shell (which now
+  also carries pt-PT — see `core/i18n/index.ts`) plus one extra rule: `pt_br` → pt-BR
+  before the generic `pt` → pt-PT. Power/password terminology mirrors the shell catalogs
   (`bar.system-menu.*`, `settings.users.password`) — keep them in lockstep when either
   side changes. The greeter's language dropdown sets the GREETER's own language only
   (persisted in `greeter-prefs.json`); the session language comes from
@@ -761,11 +761,13 @@ These were paid down; the *rule* remains:
   PR): the zh-CN/ja catalogs AND the 简体中文/日本語 endonyms in the language pickers
   render as tofu boxes without it — caught in the 07-13 VM sweep (a clean Arch ships
   no CJK font; ~300 MB installed, the honest cost of shipping those languages).
-- **Shell pt-PT catalog is PENDING** (deferred 07-13 to keep the code round small):
-  `ui/shell/core/i18n/locales/pt-PT.ts` (621 keys, European norm — ficheiro/ecrã/rato,
-  impersonal imperative like GNOME pt) + wiring in `core/i18n/index.ts` (import + map
-  entry + reorder detection: `pt_br` → pt-BR BEFORE `pt` → pt-PT) + README counter
-  11 → 12. Until then `detectLanguage()` sends all `pt*` to pt-BR. Same shape of
+- **Shell pt-PT catalog SHIPPED (07-13)**: `ui/shell/core/i18n/locales/pt-PT.ts`
+  (621 keys, European norm — utilizador/palavra-passe/ficheiro/ecrã/rato/eliminar/
+  definições/controlo, enclisis, `a + infinitivo` instead of gerund) wired into
+  `core/i18n/index.ts` (import + map entry + `detectLanguage()` reorder: `pt_br` →
+  pt-BR BEFORE the generic `pt` → pt-PT, mirroring the greeter/lockscreen chain) +
+  README counter 11 → 12. Not yet native-reviewed (same gate as the other 11
+  languages — see the translation-wave native-review follow-up). Same shape of
   future candidate: zh-TW (today `zh_TW` → zh-CN).
 - **Clock day/month names come from LC_TIME via GLib `%a/%A/%b/%B`** — every installed
   locale is localized for free (the clock follows the "Regional Format" setting, like

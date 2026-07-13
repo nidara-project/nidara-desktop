@@ -5,6 +5,7 @@ import es from "./locales/es"
 import fr from "./locales/fr"
 import de from "./locales/de"
 import ptBR from "./locales/pt-BR"
+import ptPT from "./locales/pt-PT"
 import it from "./locales/it"
 import pl from "./locales/pl"
 import nl from "./locales/nl"
@@ -20,6 +21,7 @@ const locales: Record<string, TranslationMap> = {
     fr,
     de,
     "pt-BR": ptBR,
+    "pt-PT": ptPT,
     it,
     pl,
     nl,
@@ -32,17 +34,22 @@ let activeLocale = "en"
 
 export function detectLanguage() {
     const langEnv = GLib.getenv("LANG") || ""
-    if (langEnv.toLowerCase().startsWith("en")) activeLocale = "en"
-    else if (langEnv.toLowerCase().startsWith("es")) activeLocale = "es"
-    else if (langEnv.toLowerCase().startsWith("fr")) activeLocale = "fr"
-    else if (langEnv.toLowerCase().startsWith("de")) activeLocale = "de"
-    else if (langEnv.toLowerCase().startsWith("pt")) activeLocale = "pt-BR"
-    else if (langEnv.toLowerCase().startsWith("it")) activeLocale = "it"
-    else if (langEnv.toLowerCase().startsWith("pl")) activeLocale = "pl"
-    else if (langEnv.toLowerCase().startsWith("nl")) activeLocale = "nl"
-    else if (langEnv.toLowerCase().startsWith("ru")) activeLocale = "ru"
-    else if (langEnv.toLowerCase().startsWith("zh")) activeLocale = "zh-CN"
-    else if (langEnv.toLowerCase().startsWith("ja")) activeLocale = "ja"
+    const l = langEnv.toLowerCase()
+    // pt_br must match before the generic pt rule: Brazil gets pt-BR, while
+    // pt_PT/pt_AO/pt_MZ/… follow the European norm (pt-PT). Same chain as the
+    // greeter's detectLocale().
+    if (l.startsWith("en")) activeLocale = "en"
+    else if (l.startsWith("es")) activeLocale = "es"
+    else if (l.startsWith("fr")) activeLocale = "fr"
+    else if (l.startsWith("de")) activeLocale = "de"
+    else if (l.startsWith("pt_br")) activeLocale = "pt-BR"
+    else if (l.startsWith("pt")) activeLocale = "pt-PT"
+    else if (l.startsWith("it")) activeLocale = "it"
+    else if (l.startsWith("pl")) activeLocale = "pl"
+    else if (l.startsWith("nl")) activeLocale = "nl"
+    else if (l.startsWith("ru")) activeLocale = "ru"
+    else if (l.startsWith("zh")) activeLocale = "zh-CN"
+    else if (l.startsWith("ja")) activeLocale = "ja"
     else activeLocale = "en" // fallback default
 }
 
