@@ -1,4 +1,5 @@
 import GLib from "gi://GLib"
+import { refreshDateFormat } from "./dateNames"
 
 // Mini-catalog: 12 keys × 12 languages. Deliberately duplicated per bundle
 // (greeter and lockscreen each ship their own i18n.ts — see the skill's
@@ -209,7 +210,72 @@ function detectLocale(): Locale {
         return cfg.locale as Locale
     }
   } catch {}
-  return localeFromLang(GLib.getenv("LANG") ?? "")
+  const lang = GLib.getenv("LANG")
+  if (lang) return localeFromLang(lang)
+  // greetd starts the greeter with an empty env (no LANG) — fall back to the
+  // system language Settings → Region writes to /etc/locale.conf
+  // (world-readable), so a machine configured in Spanish greets in Spanish
+  // before anyone ever touches the greeter's language picker.
+  try {
+    const [ok, data] = GLib.file_get_contents("/etc/locale.conf")
+    if (ok) {
+      const m = new TextDecoder().decode(data as Uint8Array).match(/^LANG=["']?([^"'\n]+)/m)
+      if (m) return localeFromLang(m[1])
+    }
+  } catch {}
+  return "en"
+}
+
+// The glibc locale each UI language runs the greeter PROCESS under: LC_TIME
+// drives the clock's date names (dateNames.ts formats via %a/%A/%b/%B) and
+// the process locale is where Pango takes the text language it hands to
+// fontconfig, which picks the regional Han face for CJK (the 65-0 fontconfig
+// rules — see the skill's "Fonts & CJK variants"). Exactly the set
+// nidara-setup generates (NIDARA_LOCALES), so on ≥0.3.0 installs every entry
+// is guaranteed present.
+const GLIBC_LOCALES: Record<Locale, string> = {
+  en: "en_US.UTF-8",
+  es: "es_ES.UTF-8",
+  fr: "fr_FR.UTF-8",
+  de: "de_DE.UTF-8",
+  it: "it_IT.UTF-8",
+  "pt-BR": "pt_BR.UTF-8",
+  "pt-PT": "pt_PT.UTF-8",
+  pl: "pl_PL.UTF-8",
+  nl: "nl_NL.UTF-8",
+  ru: "ru_RU.UTF-8",
+  "zh-CN": "zh_CN.UTF-8",
+  ja: "ja_JP.UTF-8",
+}
+
+// greetd's empty env leaves the greeter in the "C" locale: dates render in
+// English regardless of the UI language, and Pango tags text as non-CJK so
+// kanji fall back to the wrong regional face. Fix: set the process locale
+// ourselves via GJS's built-in gettext module (wraps setlocale(3)), reached
+// through the legacy `imports` global so the bundler never sees a bare
+// module specifier. Fail-soft: an ungenerated locale (pre-0.3.0 install)
+// makes setlocale return null and the process stays as it was — exactly the
+// old behavior.
+function applyProcessLocale(locale: Locale) {
+  try {
+    const gettext = (globalThis as any).imports?.gettext
+    const applied = gettext?.setlocale(gettext.LocaleCategory.ALL, GLIBC_LOCALES[locale])
+    if (!applied)
+      console.warn(`[i18n] setlocale(${GLIBC_LOCALES[locale]}) failed (locale not generated?) — dates keep the previous locale`)
+    refreshDateFormat()
+  } catch (e) {
+    console.warn("[i18n] applyProcessLocale:", e)
+  }
+}
+
+/**
+ * Align the process locale with the greeter's UI language. Must be called
+ * from app.start's main() — NOT at module init: GTK's own init runs
+ * setlocale(LC_ALL, "") (empty env → back to "C"), so a module-level call
+ * would be silently undone before the first render.
+ */
+export function initProcessLocale() {
+  applyProcessLocale(_locale)
 }
 
 let _locale: Locale = detectLocale()
@@ -226,6 +292,9 @@ export function getLocale(): Locale {
 export function setLocale(locale: Locale) {
   if (_locale === locale) return
   _locale = locale
+  // Before notifying: listeners re-read dates/strings, so the new LC_TIME
+  // (and the re-probed date order) must already be in effect.
+  applyProcessLocale(locale)
   _listeners.forEach(fn => fn())
 }
 

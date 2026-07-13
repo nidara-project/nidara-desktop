@@ -3,6 +3,7 @@ import { Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import Greeter from "./widget/Greeter"
 import { getPreferredUser } from "./lib/greeter-prefs"
+import { initProcessLocale } from "./lib/i18n"
 import { accentCssFor } from "../lib/accent"
 
 // Use our blank theme instead of Adwaita.
@@ -46,6 +47,12 @@ app.start({
   css: cssPath,
 
   main() {
+    // First thing after GTK init (which resets the locale to "C" — empty
+    // greetd env): align the process locale with the greeter's language, so
+    // the clock's date names AND Pango's CJK face selection are right from
+    // the first frame. See lib/i18n.ts initProcessLocale().
+    initProcessLocale()
+
     const display = Gdk.Display.get_default()
     if (!display) { console.error("[Greeter] No display"); return }
 

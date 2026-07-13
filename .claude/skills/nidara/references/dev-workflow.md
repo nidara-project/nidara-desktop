@@ -322,8 +322,20 @@ among fallback families earlier list position wins — renamed to `70-` the rule
 locale still gets Korean stroke forms (full story in the file's header). The text language comes
 from `LANG` (Settings → Region), so verification is
 `fc-match "sans-serif:lang=ja"` → `Noto Sans CJK JP` (and SC/TC/HK/KR for zh-cn/zh-tw/zh-hk/ko).
-Known cosmetic limitation: the greeter runs with an empty greetd env (no `LANG`), so its kanji keep
-KR forms regardless of the greeter's own language dropdown.
+
+The **greeter** runs with an empty greetd env (no `LANG` → "C" locale), which used to leave its
+clock in English and its kanji on the wrong regional face. It now sets its OWN process locale via
+GJS's built-in gettext module (`imports.gettext.setlocale`, reached through the legacy `imports`
+global so the bundler never sees a bare specifier): `initProcessLocale()` in
+`ui/greeter/lib/i18n.ts` maps the UI language (saved pref → `LANG` → `/etc/locale.conf` → en) to
+its glibc locale (`GLIBC_LOCALES`, the exact set nidara-setup generates). **Call-site is
+load-bearing**: it must run inside `app.start`'s `main()` — GTK's init calls
+`setlocale(LC_ALL, "")`, so a module-level call gets silently reset to "C" before first render.
+The language dropdown re-applies it live and `dateNames.refreshDateFormat()` re-probes the date
+order/separators (greeter-only export; %x reads the process locale, so a live switch must
+re-probe). Strings + dates update instantly; the Han glyph *face* follows on the next greeter
+start (Pango caches the process language). Fail-soft: an ungenerated locale leaves setlocale
+returning null and everything stays as before.
 
 ### Testing Wi-Fi without a Wi-Fi adapter
 

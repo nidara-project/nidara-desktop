@@ -756,7 +756,12 @@ These were paid down; the *rule* remains:
   `/etc/locale.conf` via Settings → Language — greetd starts sessions with an empty
   env, and the unprivileged greeter can neither `localectl` nor write other users'
   homes. (Future idea, deliberately out of scope: let the greeter pick set the session
-  language — needs a privileged path.)
+  language — needs a privileged path.) Since the date-locale fix, the greeter also
+  aligns its PROCESS locale with that language (`initProcessLocale()` — clock date
+  names via LC_TIME + Pango's CJK face selection; no-pref fallback reads
+  `/etc/locale.conf`, so the login screen speaks the system language out of the box);
+  mechanics + the GTK-resets-setlocale gotcha in dev-workflow.md "Fonts & CJK
+  variants".
 - **`noto-fonts-cjk` is a hard dep** (install.sh §1 + PKGBUILD, since the i18n round-2
   PR): the zh-CN/ja catalogs AND the 简体中文/日本語 endonyms in the language pickers
   render as tofu boxes without it — caught in the 07-13 VM sweep (a clean Arch ships
