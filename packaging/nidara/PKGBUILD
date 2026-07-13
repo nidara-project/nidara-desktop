@@ -45,8 +45,11 @@ depends=(
   xdg-utils gsettings-desktop-schemas awww lz4 mesa pam
   # default apps wired into the UI (Super+T, Files item, calculator widget…)
   kitty nautilus gnome-calculator pavucontrol
-  # fonts + icon fallbacks the design system assumes
-  ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji
+  # fonts + icon fallbacks the design system assumes; CJK because the shell,
+  # greeter and lockscreen ship zh-CN/ja catalogs AND every user sees the
+  # 简体中文/日本語 endonyms in the language pickers — without it they render
+  # as tofu boxes (VM sweep 2026-07-13)
+  ttf-jetbrains-mono-nerd inter-font noto-fonts-emoji noto-fonts-cjk
   # adwaita-cursors = the default cursorTheme in defaults/appearance.json; listed
   # explicitly instead of relying on adwaita-icon-theme happening to depend on it
   papirus-icon-theme adwaita-icon-theme adwaita-cursors

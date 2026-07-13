@@ -757,6 +757,10 @@ These were paid down; the *rule* remains:
   env, and the unprivileged greeter can neither `localectl` nor write other users'
   homes. (Future idea, deliberately out of scope: let the greeter pick set the session
   language — needs a privileged path.)
+- **`noto-fonts-cjk` is a hard dep** (install.sh §1 + PKGBUILD, since the i18n round-2
+  PR): the zh-CN/ja catalogs AND the 简体中文/日本語 endonyms in the language pickers
+  render as tofu boxes without it — caught in the 07-13 VM sweep (a clean Arch ships
+  no CJK font; ~300 MB installed, the honest cost of shipping those languages).
 - **Shell pt-PT catalog is PENDING** (deferred 07-13 to keep the code round small):
   `ui/shell/core/i18n/locales/pt-PT.ts` (621 keys, European norm — ficheiro/ecrã/rato,
   impersonal imperative like GNOME pt) + wiring in `core/i18n/index.ts` (import + map
