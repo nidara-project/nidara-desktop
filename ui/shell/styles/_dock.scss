@@ -81,7 +81,13 @@ window.nidara-dock-window,
 /* --- Launcher Icon Visibility --- */
 #cd-icon-box-launcher image {
     color: var(--nidara-text);
-    -gtk-icon-shadow: var(--nidara-icon-shadow);
+    // NO -gtk-icon-shadow here: the dock is a blurred layer with ignore_alpha 0.04
+    // (pinned just under dockOpacity's 0.05 floor so the 5%-frost capsule still
+    // blurs — see config/hypr/hyprland.lua:516). Hyprland blurs the wallpaper
+    // behind ANY shadow pixel above that threshold → a halo around the shadow. A
+    // shadow faint enough to stay under 0.04 everywhere is invisible anyway, so a
+    // real drop shadow and this blurred layer are mutually exclusive.
+    -gtk-icon-shadow: none;
 }
 /* ── Vertical Dock ───────────────────────────────────────────────────────── */
 window#nidara-dock-vertical {

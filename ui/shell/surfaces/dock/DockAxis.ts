@@ -294,23 +294,13 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 if (dotZone && dotZone.height_request !== DOCK_CONSTANTS.PILL_PADDING) {
                     dotZone.height_request = DOCK_CONSTANTS.PILL_PADDING
                 }
-                const plateOverlay = iconBox.get_first_child() as Gtk.Overlay
-                if (plateOverlay && plateOverlay.get_child) {
-                    const daIcon = plateOverlay.get_child()
-                    if (daIcon) {
-                        daIcon.set_size_request(tps, tps)
-                        ;(daIcon as any).set_content_width?.(tps)
-                        ;(daIcon as any).set_content_height?.(tps)
-                        const icon = (daIcon as any).get_next_sibling()
-                        if (icon) icon.set_size_request(tps, tps)
-                    }
-                } else {
-                    const icon = iconBox.get_first_child()
-                    if (icon) {
-                        icon.set_size_request(tps, tps)
-                        ;(icon as any).set_content_width?.(tps)
-                        ;(icon as any).set_content_height?.(tps)
-                    }
+                // Icon plates were removed (V700): the iconBox's first child is the
+                // icon widget directly, so size the icon itself.
+                const icon = iconBox.get_first_child()
+                if (icon) {
+                    icon.set_size_request(tps, tps)
+                    ;(icon as any).set_content_width?.(tps)
+                    ;(icon as any).set_content_height?.(tps)
                 }
             }
         },
