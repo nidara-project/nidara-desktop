@@ -114,11 +114,6 @@ function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[] {
   const pbG = parseInt(popoverBg.slice(3, 5), 16)
   const pbB = parseInt(popoverBg.slice(5, 7), 16)
 
-  // Dock item hover/plate tokens — scaled by dockOpacity
-  const d = config.dockOpacity
-  const dBase   = (d * 0.50).toFixed(3)
-  const dRaised = d.toFixed(3)
-
   // Material vibrancy ladder. Anchored to our reference values for our blur
   // profile (size=2, passes=2, vibrancy=0.4 → "subtle" row: thin .30 / regular
   // .45 / thick .65 / chrome .85), then OFFSET by the overlay opacity so the
@@ -174,8 +169,6 @@ function nidaraVars(config: NidaraThemeConfig, isDark: boolean): string[] {
     `  --nidara-state-selected: rgba(${r}, ${g}, ${b}, ${isDark ? "0.22" : "0.16"});`,
     `  --nidara-surface-raised: rgba(${fg}, 0.20);`,
     `  --nidara-surface-strong: rgba(${fg}, 0.30);`,   // one step above raised, for hover on raised fills
-    `  --nidara-dock-surface: rgba(${fg}, ${dBase});`,
-    `  --nidara-dock-surface-raised: rgba(${fg}, ${dRaised});`,
     `  --nidara-text: ${whiteOrBlack};`,
     // Secondary/dim are nudged UP in light mode: black ink over translucent light
     // glass (which sits on an arbitrary wallpaper) reads washed-out at the dark-mode
