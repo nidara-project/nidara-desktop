@@ -17,11 +17,12 @@ export type ArrowSide = "top" | "bottom" | "left" | "right"
 // straight sides and the whole thing reads as a bell, not a triangle. The straight
 // sides run tangent into the arc, so there's no kink. Don't make it tall enough to
 // separate the body far from the anchor.
-export const ARROW_W = 24   // base width of the pointer
-export const ARROW_H = 16   // how far it protrudes (= the separation from the anchor)
+export const ARROW_W = 16   // base width of the pointer
+export const ARROW_H = 8    // how far it protrudes (= the separation from the anchor). W:H sets the tip
+                            // apex angle — 16:8 ≈ 90°: a short, wide-ish pointer that stays close to the anchor
 export const BUF = 2        // AA buffer so the silhouette never clips the DrawingArea edge
 const BORDER_W = 1          // inner edge width
-const TIP_R = 8             // tip arc radius (= how round the point is) — independent of ARROW_H
+const TIP_R = 4             // tip arc radius (= how round the point is) — kept small so the arc stays well under half the diagonal and the point reads crisp, not bell-like
 const BASE_R = 8            // radius of the curved join where the pointer meets the body edge
 
 // Map a popover position to the side the pointer is painted on (it points back at
