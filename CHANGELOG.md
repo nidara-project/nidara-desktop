@@ -5,6 +5,29 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] — 2026-07-15
+
+### Changed
+
+- **System-tray icons each get their own capsule.** Every tray icon now sits in
+  its own glass capsule, coherent with every other bar icon, instead of being
+  grouped together in a single pill.
+- **Tooltip and menu pointers are shorter and sharper** — the little pointer that
+  aims from a bubble toward its anchor now sits closer to it and reads crisper.
+
+### Fixed
+
+- **Left-clicking a tray icon now brings the app to the front.** It focuses the
+  app's window — switching to its workspace if needed — instead of silently doing
+  nothing. (A Wayland app can't raise itself, so the desktop does it.)
+- **The login screen now shows dates and CJK text in the selected language.** The
+  greeter runs under the matching locale, so its clock's date names are localized
+  and Chinese/Japanese/Korean text uses the correct regional glyph shapes; before,
+  it defaulted to English dates and the wrong CJK faces.
+- **The launcher icon no longer halos on the dock.** Its drop shadow was being
+  blurred by the dock's own frosted layer into a faint halo; the shadow (invisible
+  anyway on a blurred layer) has been removed.
+
 ## [0.3.0] — 2026-07-13
 
 ### Added
