@@ -200,6 +200,11 @@ Consequence: a single bar can show some tray icons themed and others full-colour
 purely on what the icon theme provides. That's inherent to SNI (apps supply what they
 supply); making it coherent is a policy decision, deferred — see tech-debt #24.
 
+**Per-icon capsules (2026-07-15)**: each tray item sits in its OWN glass capsule (identical
+`SquircleContainer` params to the search/CC/clock capsules), NOT one grouped pill — so tray
+icons match every other bar icon. The click→window-focus wiring (PID-first match, `is_menu`,
+`activate` fallback) lives in architecture.md under `bar/Tray.tsx`.
+
 ## Accent palette (9 colors)
 
 | Name | Hex |
