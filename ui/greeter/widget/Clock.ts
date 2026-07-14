@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import { getPreferredUser } from "../lib/greeter-prefs"
 import { formatDatePart } from "../lib/dateNames"
+import { onLocaleChange } from "../lib/i18n"
 
 type DateFormat = "none" | "short" | "short-year" | "long" | "numeric" | "iso"
 
@@ -68,6 +69,10 @@ export default function Clock(): Gtk.Widget {
     dateLabel.label = formatDate()
     return GLib.SOURCE_CONTINUE
   })
+
+  // The language dropdown changes the process locale live (setLocale →
+  // applyProcessLocale) — repaint the date now, not on the next minute tick.
+  onLocaleChange(() => { dateLabel.label = formatDate() })
 
   const box = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
