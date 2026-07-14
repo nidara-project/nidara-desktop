@@ -529,11 +529,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
 
   right.append(optWidgets)
 
+  // Tray items each carry their own glass capsule (built in Tray.tsx), so there's
+  // no outer grouping capsule here — the tray is a plain spacing container that
+  // manages its own visibility (hidden while empty).
   const trayInner = Tray(openCustomExpansion)
-  const trayCapsule = SquircleContainer({ child: trayInner, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
-  trayInner.connect("notify::visible", () => trayCapsule.set_visible(trayInner.get_visible()))
-  trayCapsule.set_visible(trayInner.get_visible())
-  right.append(trayCapsule)
+  right.append(trayInner)
   const searchCapsule = SquircleContainer({ child: new Gtk.Image({ gicon: Icons.search, pixel_size: 16, margin_start: 16, margin_end: 16 , css_classes: ["nd-icon"] }), onClick: () => status.togglePrism(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(searchCapsule)
   // CC capsule layout: [16px left pad][gear 16px][16px right-gap] = 48px (matches the
@@ -629,7 +629,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       if (iconWidths.length === 0) return
 
       const spacing = 8
-      const fixedCapsules: Gtk.Widget[] = [trayCapsule, searchCapsule, ccBtn, timeCapsule]
+      const fixedCapsules: Gtk.Widget[] = [trayInner, searchCapsule, ccBtn, timeCapsule]
       const fixedW = fixedCapsules.reduce((s, w) => s + (w.get_visible() ? natW(w) + spacing : 0), 0)
       // Budget = space available to optWidgets before the right side would overlap the
       // workspace capsule. The workspace is centered, so each side gets at most:
