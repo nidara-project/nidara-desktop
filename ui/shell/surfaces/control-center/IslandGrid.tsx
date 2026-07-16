@@ -612,9 +612,12 @@ export default function IslandGrid() {
     const gestureClick = new Gtk.GestureClick()
     gestureClick.connect("released", () => {
         editMode = !editMode
-        status.cc_edit_mode = editMode
         if (editMode) hideDetail()
         rebuild()
+        // AFTER rebuild, deliberately: the bar's notify::cc-edit-mode handler
+        // stamps the window input region via measure(), which must already see
+        // the resized grid (allocation lags a layout pass; measure doesn't).
+        status.cc_edit_mode = editMode
     })
     editBtn.add_controller(gestureClick)
     ccLayout.connect("changed", () => rebuild())
@@ -642,8 +645,8 @@ export default function IslandGrid() {
             hideDetail()
             if (editMode) {
                 editMode = false
-                status.cc_edit_mode = false
                 rebuild()
+                status.cc_edit_mode = false   // after rebuild — same invariant as the edit pill
             }
         }
     })
