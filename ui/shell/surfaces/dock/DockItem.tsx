@@ -13,7 +13,7 @@ import trashService from "../../core/TrashService"
 import { DOCK_CONSTANTS } from "./DockPhysics"
 import hs from "../../core/HyprlandState"
 
-import { dragBus, mouseBus, pointerBus, dockSettings, changeMenuCount, menuState } from "./state"
+import { dragBus, pointerBus, dockSettings, changeMenuCount, menuState } from "./state"
 import Theme from "../../core/ThemeManager"
 import { iconAssetPath } from "../../core/Icons"
 import { t } from "../../core/i18n"
@@ -333,11 +333,8 @@ export function DockItem(
                 Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
                 cr.paint()
                 cr.restore()
-
-                // If animating, schedule next frame
-                if (state.isBouncing) {
-                    child.queue_draw()
-                }
+                // Bounce frames are driven by the animLoop timer (which queues draws
+                // itself) — no need to self-queue from inside the draw func.
             })
     } else {
         // Fallback for system icons

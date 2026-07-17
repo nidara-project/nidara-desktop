@@ -62,6 +62,14 @@ export function registerConfigEntries() {
         get: () => dockSettings.magnification,
         set: v => updateDockSettings({ magnification: v as boolean }),
     })
+    registerConfig("dock.maxIconSize", {
+        desc: "Peak icon size in pixels at full magnification.",
+        type: "number",
+        min: 64,
+        max: 128,
+        get: () => dockSettings.maxIconSize,
+        set: v => updateDockSettings({ maxIconSize: Math.round(v as number) }),
+    })
     registerConfig("dock.autoHide", {
         desc: "Hide the dock until the pointer reaches its screen edge.",
         type: "boolean",
