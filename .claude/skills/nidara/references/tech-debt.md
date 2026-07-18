@@ -898,6 +898,9 @@ These were paid down; the *rule* remains:
   edge (overlay children aren't measured → the banner never grows, the stack never shifts);
   the thumb fades via opacity so text never rewraps mid-hover; presses are capture-claimed
   (beat the card tap + swipe). The expanded NC row still lists every action below the text.
+  On BANNERS the close is NOT in the title line — it floats over the top-left corner via
+  the same overlay (macOS banner shape): the right edge belongs to the action capsules and
+  a title-line close collides with the top one. NC rows keep the title-line close.
 
 ---
 

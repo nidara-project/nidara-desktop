@@ -254,7 +254,9 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
         hoverControls.push(chevBtn); header.append(chevBtn)
     }
     hoverControls.push(clearBtn)
-    header.append(clearBtn)
+    // Banners float the close over the TOP-LEFT corner instead (overlay below, macOS
+    // shape) — the right edge belongs to the hover action capsules there.
+    if (!isPopup) header.append(clearBtn)
     hoverControls.forEach(w => w.set_visible(false))
 
     const openApp = async () => {
@@ -298,12 +300,17 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     // Release-phase click on every notification capsule (banner AND NC row):
     // both are swipe-to-dismiss, and a press-phase tap would fire before the
     // swipe can be recognised. See attachSwipeDismiss.
-    // Banner actions ride a Gtk.Overlay above the row content (they don't affect the
-    // banner's size — overlay children aren't measured).
+    // Banner controls ride a Gtk.Overlay above the row content (they don't affect the
+    // banner's size — overlay children aren't measured): close floating on the top-left
+    // corner, action capsules on the right edge. Keeping the close in the title line
+    // there would collide with the top action capsule (both live at the right edge).
     let content: Gtk.Widget = outerV
-    if (bannerActions) {
+    if (isPopup) {
         const ov = new Gtk.Overlay({ child: outerV })
-        ov.add_overlay(bannerActions)
+        clearBtn.halign = Gtk.Align.START; clearBtn.valign = Gtk.Align.START
+        clearBtn.margin_start = 6; clearBtn.margin_top = 6
+        ov.add_overlay(clearBtn)
+        if (bannerActions) ov.add_overlay(bannerActions)
         content = ov
     }
     const capsule = SquircleContainer({ child: content, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
