@@ -888,6 +888,12 @@ These were paid down; the *rule* remains:
   Banners never expand. Card controls (time · count badge / expand chevron · close) share
   the TITLE line — never a dedicated right column, which shortened every text line instead
   of just the title. The thumb is the card's right edge, spanning title+body centred.
+  The chevron/close are HOVER-ONLY (macOS): `visible:false` at rest so the title keeps the
+  width, swapped in for the timestamp on card enter/leave (EventControllerMotion on the
+  capsule — child crossings don't emit leave). The count badge is info, always visible.
+  The title line carries `height_request: 22` so the swap can't nudge tall rows by 1px.
+  The expanded-group control header hover-reveals via OPACITY + `can_target` instead — its
+  buttons steal no text width, and `visible` would reflow the row height there.
 
 ---
 

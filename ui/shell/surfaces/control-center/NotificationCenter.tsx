@@ -119,7 +119,16 @@ export function GroupControlHeader(props: { name: string, count: number, onToggl
     box.append(labelBox); box.append(collapseBtn); box.append(clearAllBtn)
     // Paint the background with the same shellOpacity squircle as the cards (the old CSS
     // surface fill was fixed and didn't follow the Settings opacity).
-    return SquircleContainer({ child: box, radius: 16, useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-group-ctrl-header"] })
+    const header = SquircleContainer({ child: box, radius: 16, useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-group-ctrl-header"] })
+    // Hover-reveal via OPACITY (not `visible`): the header spans full width, so keeping
+    // the buttons allocated costs no text space and the row never reflows on hover.
+    const setShown = (shown: boolean) => [collapseBtn, clearAllBtn].forEach(b => { b.opacity = shown ? 1 : 0; b.can_target = shown })
+    setShown(false)
+    const motion = new Gtk.EventControllerMotion()
+    motion.connect("enter", () => setShown(true))
+    motion.connect("leave", () => setShown(false))
+    header.add_controller(motion)
+    return header
 }
 
 export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupCount?: number, isExpanded?: boolean, onToggle?: () => void, onClearGroup?: () => void, isPopup?: boolean, itemExpanded?: boolean, onToggleItem?: () => void, onClose: () => void, onTimeLabel?: (label: Gtk.Label, time: number) => void }) {
@@ -136,13 +145,16 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     box.append(createIconWidget(n, 44))   // app icon stays vertically centred (like the hero)
 
     const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.START, hexpand: true })
-    const header = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, hexpand: true })
+    // height_request pins the title line so the hover reveal (21px buttons in, ~17px
+    // time out) can't nudge the card height by a pixel on rows taller than min-height.
+    const header = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, hexpand: true, height_request: 22 })
     // Title natural width capped a bit under the body's 30 (see the body note): the
     // controls now share this line, and the popup window sizes to natural width.
     header.append(new Gtk.Label({ label: cleanSummary, css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, lines: 1, hexpand: true, max_width_chars: 24, xalign: 0 }))
 
+    let timeLabel: Gtk.Label | null = null
     if (!isPopup) {
-        const timeLabel = new Gtk.Label({ label: timeAgo(n.time), css_classes: ["nc-item-time"], halign: Gtk.Align.END })
+        timeLabel = new Gtk.Label({ label: timeAgo(n.time), css_classes: ["nc-item-time"], halign: Gtk.Align.END })
         header.append(timeLabel)
         onTimeLabel?.(timeLabel, n.time)
     }
@@ -211,12 +223,19 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     // Controls live ON the title line (title · time · badge/chevron · close) — a dedicated
     // right column reserved its width across every text line, shortening the body too; only
     // the title should cede space to them. The thumb stays the card's right edge.
+    // The chevron/close are hover-only (macOS): out of the layout at rest so the title
+    // keeps the width, swapped in for the timestamp while the pointer is on the card.
+    // The count badge is information, not a control — always visible.
+    const hoverControls: Gtk.Widget[] = []
     if (isCollapsedGroup) {
         header.append(new Gtk.Label({ label: `${groupCount}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
     } else if (expandable) {
-        header.append(IconButton({ icon: itemExpanded ? Icons.chevronUp : Icons.chevronDown, iconSize: 13, variant: "neutral", captureClick: true, onClick: onToggleItem }))
+        const chevBtn = IconButton({ icon: itemExpanded ? Icons.chevronUp : Icons.chevronDown, iconSize: 13, variant: "neutral", captureClick: true, onClick: onToggleItem })
+        hoverControls.push(chevBtn); header.append(chevBtn)
     }
+    hoverControls.push(clearBtn)
     header.append(clearBtn)
+    hoverControls.forEach(w => w.set_visible(false))
 
     const openApp = async () => {
         const actions = n.get_actions() || []; const hasAction = (id: string) => actions.some(a => a.id === id)
@@ -259,7 +278,14 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     // Release-phase click on every notification capsule (banner AND NC row):
     // both are swipe-to-dismiss, and a press-phase tap would fire before the
     // swipe can be recognised. See attachSwipeDismiss.
-    return SquircleContainer({ child: outerV, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
+    const capsule = SquircleContainer({ child: outerV, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
+    // Hover ⇄ rest: controls in, timestamp out (leave restores). enter/leave fire on the
+    // capsule's whole territory — moving onto a child does NOT emit leave.
+    const hoverMotion = new Gtk.EventControllerMotion()
+    hoverMotion.connect("enter", () => { timeLabel?.set_visible(false); hoverControls.forEach(w => w.set_visible(true)) })
+    hoverMotion.connect("leave", () => { timeLabel?.set_visible(true); hoverControls.forEach(w => w.set_visible(false)) })
+    capsule.add_controller(hoverMotion)
+    return capsule
 }
 
 // Wrap an NC row so it can be swiped away like a banner. The row itself can't
