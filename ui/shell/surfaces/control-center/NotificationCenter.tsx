@@ -434,7 +434,7 @@ export default function NotificationCenter() {
     calendarIsland.set_halign(Gtk.Align.START)
     const emptyLabel = new Gtk.Label({ label: t("nc.empty"), css_classes: ["nc-empty"], margin_top: 64, halign: Gtk.Align.CENTER, visible: false })
     const pillBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 24, margin_bottom: 12, visible: false })
-    const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: t("nc.clear-all"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => notifd.notifications.forEach(n => n.dismiss()), css_classes: ["nc-clear-all-pill"] })
+    const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: t("nc.clear-all"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => clearAllAnimated(), css_classes: ["nc-clear-all-pill"] })
     pillBox.append(clearAllBtn)
 
     const notificationItemsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, hexpand: true })
@@ -530,6 +530,45 @@ export default function NotificationCenter() {
         })
     }
 
+    // "Clear notifications" replays the swipe-dismiss fling on every row, top to bottom
+    // with a small stagger (the iOS clear cascade) instead of vaporizing the list. The
+    // real dismissals run once the last row lands — `resolved`/`notified` are suppressed
+    // meanwhile so the tree isn't rebuilt mid-flight (notifications arriving during the
+    // cascade survive: only the snapshot taken at click time is dismissed). Rows clip at
+    // the panel wall like any translate in the scroller — exiting through the edge IS
+    // the look, no ghosts needed. Expanded-group control headers aren't swipe rows;
+    // they simply vanish with the final cleanup.
+    let pendingClear: AstalNotifd.Notification[] | null = null
+    const finishClear = () => {
+        const list = pendingClear; pendingClear = null
+        list?.forEach(n => n.dismiss())
+        updateNotifs()
+    }
+    const clearAllAnimated = () => {
+        if (pendingClear) return
+        const toDismiss = [...notifd.notifications]
+        if (toDismiss.length === 0) return
+        // The ScaleRevealer swipe rows in visual order; skip unmapped ones (sub-rows of
+        // a collapsed group's hidden revealer). Never descends INTO a row — none nest.
+        const rows: ScaleRevealer[] = []
+        const visit = (w: Gtk.Widget | null) => {
+            for (; w; w = w.get_next_sibling()) {
+                if (w instanceof ScaleRevealer) { if (w.get_mapped()) rows.push(w) }
+                else visit(w.get_first_child())
+            }
+        }
+        visit(notificationItemsBox.get_first_child())
+        if (rows.length === 0) { toDismiss.forEach(n => n.dismiss()); return }
+        pendingClear = toDismiss
+        let done = 0
+        rows.forEach((sr, i) => {
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 45, () => {
+                sr.swipeOut(GRID_WIDTH + 60, () => sr.collapseAway(() => { if (++done === rows.length && pendingClear) finishClear() }))
+                return GLib.SOURCE_REMOVE
+            })
+        })
+    }
+
     // Restamp the relative timestamps ("2m" → "3m") in place. A full updateNotifs()
     // used to do this via a minute bucket in the cache signature — tearing down and
     // recreating EVERY card (and re-reading hero images from disk) each minute.
@@ -549,13 +588,17 @@ export default function NotificationCenter() {
             })
         } else {
             if (timestampTimer !== null) { GLib.source_remove(timestampTimer); timestampTimer = null }
+            // NC closed mid-cascade: unmapped rows stop ticking, so settle the clear
+            // immediately (dismiss the snapshot, one rebuild).
+            if (pendingClear) finishClear()
             expandedGroups.clear()
             updateNotifs()
         }
     })
-    // Only rebuild when NC is open — opening NC always calls updateNotifs() above.
-    notifd.connect("notified", () => { if (status.nc_open) updateNotifs() })
-    notifd.connect("resolved", () => { if (status.nc_open) updateNotifs() })
+    // Only rebuild when NC is open — opening NC always calls updateNotifs() above;
+    // a running clear cascade defers rebuilds to finishClear.
+    notifd.connect("notified", () => { if (status.nc_open && !pendingClear) updateNotifs() })
+    notifd.connect("resolved", () => { if (status.nc_open && !pendingClear) updateNotifs() })
     updateNotifs()
 
     // Bar owns the panel geometry and pushes the vertical budget (bar→dock gap)

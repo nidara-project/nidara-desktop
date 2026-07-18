@@ -900,6 +900,11 @@ These were paid down; the *rule* remains:
   nudge tall rows by 1px. The expanded-group control header hover-reveals via OPACITY +
   `can_target` instead — its buttons steal no text width, and `visible` would reflow the
   row height there. The expanded NC row still lists every action below the text.
+  CLEAR-ALL replays the swipe fling per row (swipeOut → collapseAway), top-down with a
+  45ms stagger, WITHOUT ghosts — clipping at the panel wall is the intended exit look.
+  While the cascade runs, `resolved`/`notified` rebuilds are deferred (`pendingClear`) and
+  only the click-time snapshot gets dismissed at the end; closing the NC mid-cascade must
+  settle immediately (unmapped rows stop ticking — their tick callbacks never fire).
 
 ---
 
