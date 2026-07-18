@@ -37,30 +37,68 @@ export function createIconWidget(n: AstalNotifd.Notification, size: number) {
 }
 
 // A "hero" image (image-path / image-data hint) — screenshot thumbnails, album art,
-// chat avatars sent as content rather than the app icon. Returns null when the hint is
-// absent, is an icon name (handled by the app icon), or points at a missing file.
-export function createHeroWidget(n: AstalNotifd.Notification, size: number): Gtk.Widget | null {
+// chat avatars sent as content rather than the app icon. Null when the hint is absent,
+// is an icon name (handled by the app icon), or points at a missing file.
+function heroImagePath(n: AstalNotifd.Notification): string | null {
     const raw = n.image
     if (!raw) return null
     const path = raw.replace("file://", "")
     if (!path.startsWith("/") || !GLib.file_test(path, GLib.FileTest.EXISTS)) return null
-    let pixbuf: any = null
-    try { pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, size * 2, size * 2, true) } catch { return null }
-    if (!pixbuf) return null
+    return path
+}
 
-    const da = new Gtk.DrawingArea({ width_request: size, height_request: size, halign: Gtk.Align.END, valign: Gtk.Align.CENTER, css_classes: ["nc-hero"] })
+// Squircle-clipped cover-fit painter shared by the compact thumb and the expanded hero.
+function heroDrawingArea(pixbuf: any, w: number, h: number, radius: number, cssClass: string): Gtk.DrawingArea {
+    const da = new Gtk.DrawingArea({ width_request: w, height_request: h, css_classes: [cssClass] })
     let scaled: any = null   // cached cover-fit copy — scale_simple allocates, keep it out of the draw path
-    da.set_draw_func((_da: any, cr: any, w: number, h: number) => {
-        if (w <= 0 || h <= 0) return
+    da.set_draw_func((_da: any, cr: any, dw: number, dh: number) => {
+        if (dw <= 0 || dh <= 0) return
         // cover-fit: scale so the shorter side fills, then centre-crop inside the squircle
-        const scale = Math.max(w / pixbuf.get_width(), h / pixbuf.get_height())
+        const scale = Math.max(dw / pixbuf.get_width(), dh / pixbuf.get_height())
         const sw = Math.max(1, Math.round(pixbuf.get_width() * scale)), sh = Math.max(1, Math.round(pixbuf.get_height() * scale))
         if (!scaled || scaled.get_width() !== sw || scaled.get_height() !== sh)
             scaled = pixbuf.scale_simple(sw, sh, GdkPixbuf.InterpType.BILINEAR)
-        cr.save(); createSquirclePath(cr, 0, 0, w, h, 12, 3.2); cr.clip()
-        Gdk.cairo_set_source_pixbuf(cr, scaled, (w - sw) / 2, (h - sh) / 2); cr.paint(); cr.restore()
+        cr.save(); createSquirclePath(cr, 0, 0, dw, dh, radius, 3.2); cr.clip()
+        Gdk.cairo_set_source_pixbuf(cr, scaled, (dw - sw) / 2, (dh - sh) / 2); cr.paint(); cr.restore()
     })
     return da
+}
+
+export function createHeroWidget(n: AstalNotifd.Notification, size: number): Gtk.Widget | null {
+    const path = heroImagePath(n)
+    if (!path) return null
+    let pixbuf: any = null
+    try { pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, size * 2, size * 2, true) } catch { return null }
+    if (!pixbuf) return null
+    const da = heroDrawingArea(pixbuf, size, size, 12, "nc-hero")
+    da.halign = Gtk.Align.END; da.valign = Gtk.Align.CENTER
+    return da
+}
+
+// Expanded NC rows show the image at full card width (the iOS long-look / Android
+// BigPicture shape; the compact right thumb is the macOS shape). Small sources — chat
+// avatars are typically 64-160px — are excluded: cover-fitting one to ~320px is mush,
+// so they keep the thumbnail even when expanded. Banners never take this path.
+const HERO_BIG_MIN_SOURCE = 240
+export function hasExpandedHero(n: AstalNotifd.Notification): boolean {
+    const path = heroImagePath(n)
+    if (!path) return false
+    const [format, pw] = GdkPixbuf.Pixbuf.get_file_info(path)   // header read only, no decode
+    return !!format && pw >= HERO_BIG_MIN_SOURCE
+}
+
+export function createExpandedHeroWidget(n: AstalNotifd.Notification, width: number): Gtk.Widget | null {
+    const path = heroImagePath(n)
+    if (!path) return null
+    const [format, pw, ph] = GdkPixbuf.Pixbuf.get_file_info(path)
+    if (!format || pw < HERO_BIG_MIN_SOURCE) return null
+    // Height follows the source aspect at full width, clamped so a portrait doesn't take
+    // over the card and a wide strip stays visible; cover-fit crops the difference.
+    const height = Math.max(72, Math.min(200, Math.round(width * ph / pw)))
+    let pixbuf: any = null
+    try { pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, width * 2, width * 2, true) } catch { return null }
+    if (!pixbuf) return null
+    return heroDrawingArea(pixbuf, width, height, 16, "nc-hero-big")
 }
 
 // Relative timestamp for the NC cards. A helper (not inlined) so the per-minute
@@ -89,8 +127,12 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     const sanitize = (text: string) => (text || "").replace(/<[^>]*>/g, "").split("\n").join(" ").replace(/\s+/g, " ").trim()
     const cleanSummary = sanitize(n.summary); const cleanBody = sanitize(n.body)
 
+    // The card is a vertical stack: the classic horizontal row on top and, when the item
+    // is expanded with a big-enough image, the full-width hero (+ actions) below it.
+    const outerV = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12, valign: Gtk.Align.START, hexpand: true })
     // Content top-aligned: title sits at the same height as the badge/chevron on the right.
-    const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, margin_start: 16, margin_end: 16, margin_top: 12, margin_bottom: 12, valign: Gtk.Align.START, hexpand: true })
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.HORIZONTAL, spacing: 12, hexpand: true })
+    outerV.append(box)
     box.append(createIconWidget(n, 44))   // app icon stays vertically centred (like the hero)
 
     const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.START, hexpand: true })
@@ -129,8 +171,9 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     // Action buttons (skip the implicit "default" action — that's the card tap).
     // Only in the expanded size, so the normal size never grows/overflows.
     const actions = (n.get_actions() || []).filter(a => a.id !== "default" && a.label)
+    let actionRow: Gtk.Box | null = null
     if (actions.length > 0 && itemExpanded) {
-        const actionRow = new Gtk.Box({ spacing: 6, margin_top: 8, halign: Gtk.Align.START, css_classes: ["nc-action-row"] })
+        actionRow = new Gtk.Box({ spacing: 6, halign: Gtk.Align.START, css_classes: ["nc-action-row"] })
         actions.forEach(a => {
             const btn = new Gtk.Button({ label: a.label, css_classes: ["nc-action-btn"], halign: Gtk.Align.START })
             const stopProp = new Gtk.GestureClick(); stopProp.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
@@ -140,19 +183,29 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
                 if (onClose) onClose()
             })
             btn.add_controller(stopProp)
-            actionRow.append(btn)
+            actionRow!.append(btn)
         })
-        textStack.append(actionRow)
     }
 
     box.append(textStack)
 
-    const hero = createHeroWidget(n, 48)
-    if (hero) box.append(hero)
+    // Expanded + big source → full-width hero below the row (replaces the thumb);
+    // otherwise the compact right thumb, macOS-style.
+    const bigHero = itemExpanded ? createExpandedHeroWidget(n, GRID_WIDTH - 32) : null
+    if (bigHero) outerV.append(bigHero)
+    else {
+        const hero = createHeroWidget(n, 44)
+        if (hero) box.append(hero)
+    }
+    if (actionRow) {
+        if (bigHero) outerV.append(actionRow)   // actions sit under the image (outerV spacing separates them)
+        else { actionRow.margin_top = 8; textStack.append(actionRow) }
+    }
 
-    // An individual notification is expandable if it has actions or a body longer than the
-    // 2-line normal size can show. The chevron sits where grouped notifs show their count.
-    const expandable = !isPopup && groupCount === 1 && !!onToggleItem && (actions.length > 0 || cleanBody.length > 70)
+    // An individual notification is expandable if it has actions, a body longer than the
+    // 2-line normal size can show, or an image worth the full-width treatment. The
+    // chevron sits where grouped notifs show their count.
+    const expandable = !isPopup && groupCount === 1 && !!onToggleItem && (actions.length > 0 || cleanBody.length > 70 || hasExpandedHero(n))
 
     // Right column (top-aligned): count badge (collapsed group) OR expand chevron (individual),
     // over the close button.
@@ -206,7 +259,7 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     // Release-phase click on every notification capsule (banner AND NC row):
     // both are swipe-to-dismiss, and a press-phase tap would fire before the
     // swipe can be recognised. See attachSwipeDismiss.
-    return SquircleContainer({ child: box, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
+    return SquircleContainer({ child: outerV, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
 }
 
 // Wrap an NC row so it can be swiped away like a banner. The row itself can't

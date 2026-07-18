@@ -877,6 +877,15 @@ These were paid down; the *rule* remains:
   settles back and the live row is swapped in at identity. The row's `unmap` drops a live ghost
   and restores opacity (rows persist across NC open/close via the group cache — a row left at 0
   would come back invisible).
+- **Notification hero images have TWO shapes** (`NotificationCenter.tsx`): compact = 44px
+  cover-fit squircle thumb on the RIGHT (the macOS shape; banners and NC rows; text ceding
+  width to it is the universal pattern, not a bug); expanded NC rows swap the thumb for a
+  full-width `.nc-hero-big` below the text row (iOS long-look / Android BigPicture; action
+  buttons move under the image). Small sources never take the big path — `hasExpandedHero`
+  reads dimensions header-only via `GdkPixbuf.Pixbuf.get_file_info` and requires ≥240px
+  source width, so a 64-160px chat avatar keeps its thumb even when expanded instead of
+  being cover-fit into mush. Both shapes share one squircle painter (`heroDrawingArea`).
+  Banners never expand.
 
 ---
 
