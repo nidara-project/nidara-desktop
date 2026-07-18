@@ -6,7 +6,7 @@ import { execAsync } from "ags/process"
 import hs from "../../core/HyprlandState"
 import { drawSquircle, createSquirclePath } from "../../common/DrawingUtils"
 import SquircleContainer, { Shape } from "../../common/SquircleContainer"
-import { ScaleRevealer, attachHorizontalSwipe } from "../../common/ScaleRevealer"
+import { ScaleRevealer, attachGhostSwipeDismiss } from "../../common/ScaleRevealer"
 import IconButton from "../../common/IconButton"
 import Theme from "../../core/ThemeManager"
 import Gio from "gi://Gio"
@@ -209,23 +209,20 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     return SquircleContainer({ child: box, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
 }
 
-// Wrap an NC row so it can be swiped away. Unlike a banner, an NC row lives in a
-// clipping scroller and can't slide off-screen — a horizontal translate would
-// just chop against the panel walls. So the swipe gives FADE feedback while
-// dragging and, past threshold, COLLAPSES the row (height shrinks, rows below
-// close the gap) then dismisses. `content` is what's laid out (a capsule, or a
-// group stack); `target` is the widget the drag rides + whose release-tap the
-// swipe cancels (the capsule, which sits inside the stack for collapsed groups).
+// Wrap an NC row so it can be swiped away like a banner. The row itself can't
+// slide — it lives in a clipping scroller — so the drag visual is a GHOST of
+// the row painted above the panel (see attachGhostSwipeDismiss); past threshold
+// the ghost flings off-screen while the real row COLLAPSES (height shrinks,
+// rows below close the gap), then dismisses. `content` is what's laid out (a
+// capsule, or a group stack); `target` is the widget the drag rides + whose
+// release-tap the swipe cancels (the capsule, which sits inside the stack for
+// collapsed groups).
 function wrapSwipe(content: Gtk.Widget, onDismiss: () => void, target: Gtk.Widget = content): Gtk.Widget {
     // animateLayout so the collapse shrinks the row's HEIGHT (siblings reflow);
     // scaleFrom near 0 so it collapses essentially to nothing before it's gone.
     const sr = new ScaleRevealer(content, { animateLayout: true, scaleFrom: 0.06, durationOut: 220, pivot: "center" })
     sr.showInstant()
-    attachHorizontalSwipe(target, {
-        onUpdate: (dx) => sr.set_opacity(Math.max(0.4, 1 - Math.abs(dx) / 300)),   // fade feedback, no slide
-        onDismiss: () => sr.collapseAway(onDismiss),
-        onCancel: () => sr.set_opacity(1),
-    })
+    attachGhostSwipeDismiss(target, sr, { onDismiss })
     return sr
 }
 

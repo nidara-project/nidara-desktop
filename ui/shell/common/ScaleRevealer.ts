@@ -94,11 +94,18 @@ export class ScaleRevealer extends Gtk.Widget {
         this.queue_draw()
     }
 
+    // Cancel any running transition tick, freezing progress/opacity/swipe where
+    // they are. Re-grabbing a snapping-back swipe uses this to take over the
+    // ghost mid-flight.
+    cancelAnim() {
+        if (this.tickId !== null) { this.remove_tick_callback(this.tickId); this.tickId = null }
+    }
+
     // Fling the card off-screen in the swipe direction, fading, then onDone
     // (swipe-to-dismiss past threshold). Overflow stays VISIBLE for the travel;
     // the widget is dropped in onDone, so it never has to return to rest.
     swipeOut(toX: number, onDone?: () => void) {
-        if (this.tickId !== null) { this.remove_tick_callback(this.tickId); this.tickId = null }
+        this.cancelAnim()
         this.overflow = Gtk.Overflow.VISIBLE
         const fromX = this.swipeX
         const fromOp = this.opacity
@@ -121,13 +128,42 @@ export class ScaleRevealer extends Gtk.Widget {
         })
     }
 
+    // Ease the swipe back to rest after a below-threshold release: swipeX → 0,
+    // opacity back to 1. Ends exactly at identity — the ghosted NC swipe swaps
+    // the live row back in at that moment, so any residue would show as a seam.
+    settleSwipe(onDone?: () => void) {
+        this.cancelAnim()
+        const fromX = this.swipeX
+        const fromOp = this.opacity
+        const duration = 160
+        let startUs: number | null = null
+        this.tickId = this.add_tick_callback((_w, frameClock) => {
+            const now = frameClock.get_frame_time()
+            if (startUs === null) startUs = now
+            const t = Math.min(1, (now - startUs) / (duration * 1000))
+            const eased = 1 - Math.pow(1 - t, 3)   // ease-out (decelerate into place)
+            this.swipeX = fromX * (1 - eased)
+            this.opacity = fromOp + (1 - fromOp) * eased
+            this.queue_draw()
+            if (t >= 1) {
+                this.tickId = null
+                this.swipeX = 0
+                this.overflow = Gtk.Overflow.HIDDEN
+                this.opacity = 1
+                onDone?.()
+                return GLib.SOURCE_REMOVE
+            }
+            return GLib.SOURCE_CONTINUE
+        })
+    }
+
     // Collapse the widget away in place: shrink (animateLayout → height too, so
     // siblings close the gap) and fade FROM THE CURRENT opacity to 0, then drop.
     // Swipe-to-dismiss for NC rows, which can't slide off (the scroller clips) —
     // unlike reveal(false), it continues from whatever opacity the drag left,
     // so there's no jump-back-to-1 flicker before the fade.
     collapseAway(onDone?: () => void) {
-        if (this.tickId !== null) { this.remove_tick_callback(this.tickId); this.tickId = null }
+        this.cancelAnim()
         const fromProgress = this.progress
         const fromOpacity = this.opacity
         const duration = this.durationOut
@@ -271,10 +307,11 @@ export class ScaleRevealer extends Gtk.Widget {
 }
 
 // Anything that can host a transient swipe: paints a horizontal offset, flings
-// off, and fades. ScaleRevealer implements it (setSwipe/swipeOut/set_opacity).
+// off, settles back, and fades. ScaleRevealer implements it.
 export interface Swipeable {
     setSwipe(dx: number): void
     swipeOut(toX: number, onDone?: () => void): void
+    settleSwipe(onDone?: () => void): void
     set_opacity(opacity: number): void
 }
 
@@ -322,6 +359,10 @@ export function attachHorizontalSwipe(target: Gtk.Widget, opts: {
         if (Math.abs(dx) >= threshold) { opts.onDismiss(dx >= 0 ? 1 : -1); return }
         opts.onCancel?.()
     })
+    // A claimed sequence can die without a drag-end (row rebuilt mid-swipe,
+    // panel closed under the finger): reset, or the stale flag makes the next
+    // drag skip recognition and never claim.
+    drag.connect("cancel", () => { if (claimed) { claimed = false; opts.onCancel?.() } })
     target.add_controller(drag)
 }
 
@@ -347,6 +388,116 @@ export function attachSwipeDismiss(target: Gtk.Widget, swipeable: Swipeable, opt
             swipeable.setSwipe(vis)
         },
         onDismiss: (dir) => swipeable.swipeOut(dir * flingTo, opts.onDismiss),
-        onCancel: () => { swipeable.set_opacity(1); swipeable.setSwipe(0); opts.onRest?.() },
+        onCancel: () => swipeable.settleSwipe(opts.onRest),
+    })
+}
+
+// ── Ghosted swipe (rows clipped by a scroller) ─────────────────────────────
+//
+// An NC row can't slide off-screen: it lives inside a Gtk.ScrolledWindow, whose
+// viewport clips any horizontal translate at the panel walls. The escape is a
+// GHOST: when the swipe is recognised, the row's current render is captured as
+// a static paintable (WidgetPaintable.get_current_image — the same mechanism
+// GTK uses for DnD drag icons), the live row drops to opacity 0 (it keeps its
+// allocation, so siblings don't jump, and it keeps the pointer grab, so the
+// drag keeps tracking), and the capture is re-painted in an input-transparent
+// Gtk.Fixed layered over the Bar's master overlay — ABOVE every panel, outside
+// any clip. The ghost is what follows the finger and flings off-screen; the
+// row itself just height-collapses once dismissed. The capture is static, but
+// a card's content is inert during a 300ms swipe, so nothing is lost.
+
+// One shared ghost layer per master overlay, created lazily on the first swipe
+// and cached on the overlay itself. add_overlay order = paint order, so a
+// late-added layer sits above every panel/banner. can_target keeps the
+// full-window Fixed invisible to picking (the catcher must keep seeing
+// outside-clicks); it never affects the layer-shell input region either —
+// that region is stamped explicitly from specific widgets in Bar.
+const ghostLayerFor = (overlay: Gtk.Overlay): Gtk.Fixed => {
+    let layer = (overlay as any).__swipeGhostLayer as Gtk.Fixed | undefined
+    if (!layer) {
+        layer = new Gtk.Fixed({ can_target: false })
+        overlay.add_overlay(layer)
+        ;(overlay as any).__swipeGhostLayer = layer
+    }
+    return layer
+}
+
+// Swipe-to-dismiss for a clipped list row. `target` carries the gesture (and
+// the release-phase tap the swipe cancels); `row` is the ScaleRevealer wrapper
+// that gets ghosted while dragging and height-collapsed on dismiss.
+//
+//  - onDismiss fires after the row's collapse completes (siblings have closed
+//    the gap) — dismiss the notification there.
+export function attachGhostSwipeDismiss(target: Gtk.Widget, row: ScaleRevealer, opts: {
+    onDismiss: () => void, threshold?: number, flingTo?: number,
+}) {
+    const flingTo = opts.flingTo ?? 560
+    let ghost: ScaleRevealer | null = null
+    let ghostLayer: Gtk.Fixed | null = null
+    let base = 0   // swipe offset carried over when re-grabbing a settling ghost
+
+    const dropGhost = () => {
+        if (!ghost || !ghostLayer) return
+        ghostLayer.remove(ghost)
+        ghost.dismantle()
+        ghost = null
+    }
+
+    // If the row vanishes mid-swipe (list rebuild on a new notification, panel
+    // closed), don't leave the ghost floating on the overlay — and restore the
+    // row's opacity: rows persist across NC open/close via the group cache, so
+    // a row left at 0 would come back invisible.
+    row.connect("unmap", () => {
+        if (!ghost) return
+        dropGhost()
+        row.opacity = 1
+    })
+
+    attachHorizontalSwipe(target, {
+        threshold: opts.threshold,
+        onStart: () => {
+            if (ghost) {
+                // Re-grabbed while settling back: take over the existing ghost
+                // where it is (a fresh capture would snapshot the invisible row).
+                ghost.cancelAnim()
+                base = ghost.swipeX
+                return
+            }
+            base = 0
+            const overlay = row.get_ancestor(Gtk.Overlay.$gtype) as Gtk.Overlay | null
+            if (!overlay) return   // odd host — fall back to fade-only feedback below
+            const [ok, bounds] = row.compute_bounds(overlay)
+            if (!ok) return
+            const pic = new Gtk.Picture({
+                paintable: Gtk.WidgetPaintable.new(row).get_current_image(),
+                can_shrink: false, halign: Gtk.Align.START, valign: Gtk.Align.START,
+            })
+            ghostLayer = ghostLayerFor(overlay)
+            ghost = new ScaleRevealer(pic, { animateLayout: false })
+            ghost.can_target = false
+            ghost.showInstant()
+            ghostLayer.put(ghost, bounds.get_x(), bounds.get_y())
+            row.opacity = 0   // keeps its allocation + the pointer grab; the ghost is the visual now
+        },
+        onUpdate: (dx) => {
+            if (!ghost) { row.set_opacity(Math.max(0.4, 1 - Math.abs(dx) / 300)); return }
+            const vis = swipeRubberband(base + dx)
+            ghost.set_opacity(Math.max(0.15, 1 - Math.abs(vis) / 320))
+            ghost.setSwipe(vis)
+        },
+        onDismiss: (dir) => {
+            if (ghost) {
+                // Detach before collapsing: the collapse ends in unmap, and the
+                // cleanup handler above must not kill the fling mid-flight.
+                const g = ghost
+                ghost = null
+                g.swipeOut(dir * flingTo, () => { ghostLayer?.remove(g); g.dismantle() })
+            }
+            row.collapseAway(opts.onDismiss)   // gap closes while the ghost flies
+        },
+        onCancel: () => {
+            if (!ghost) { row.set_opacity(1); return }
+            ghost.settleSwipe(() => { row.set_opacity(1); dropGhost() })
+        },
     })
 }

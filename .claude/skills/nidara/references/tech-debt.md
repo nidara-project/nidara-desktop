@@ -863,14 +863,20 @@ These were paid down; the *rule* remains:
   `bar-helpers.ts` is the only grandfathered non-widget in `widgets/` (EXCLUDE list).
 - **Notification swipe-to-dismiss** — one implementation in `common/ScaleRevealer.ts`:
   `attachHorizontalSwipe` (gesture detector — claims only on horizontal intent so the NC
-  scroller keeps its vertical drag; cancels the row's release-phase tap) + `setSwipe`/`swipeOut`
-  (paint-only snapshot translate + off-screen fling; never use margins — they reflow the card,
-  double-painting wrapped labels) + `collapseAway` (height-collapse for list rows). Cards must
-  open on RELEASE (`SquircleContainer` `clickOnRelease`) or the press-tap fires before the swipe
-  is recognised. **Banners slide off** (they can leave the screen). **NC rows only FADE + COLLAPSE**
-  because the `Gtk.ScrolledWindow` clips horizontally — a translated full-width row chops against
-  the panel walls. DEFERRED: make the NC swipe actually SLIDE like the banner (needs the dragged
-  row painted above the scroller's clip — a floating overlay for the active row, or reparenting).
+  scroller keeps its vertical drag; cancels the row's release-phase tap) + `setSwipe`/`swipeOut`/
+  `settleSwipe` (paint-only snapshot translate + off-screen fling / animated snap-back; never use
+  margins — they reflow the card, double-painting wrapped labels) + `collapseAway` (height-collapse
+  for list rows). Cards must open on RELEASE (`SquircleContainer` `clickOnRelease`) or the
+  press-tap fires before the swipe is recognised. **Banners slide off directly** (they can leave
+  the screen). **NC rows slide via a GHOST** (`attachGhostSwipeDismiss`): the scroller clips any
+  translate at the panel walls, so on swipe start the row's render is captured statically
+  (`WidgetPaintable.get_current_image` — the DnD-drag-icon mechanism), the live row drops to
+  opacity 0 (keeps its allocation AND the pointer grab), and the capture follows the finger from
+  an input-transparent `Gtk.Fixed` lazily layered over the Bar's master overlay, above every
+  panel. On dismiss the ghost flings off while the real row height-collapses; on cancel the ghost
+  settles back and the live row is swapped in at identity. The row's `unmap` drops a live ghost
+  and restores opacity (rows persist across NC open/close via the group cache — a row left at 0
+  would come back invisible).
 
 ---
 
