@@ -91,6 +91,9 @@ export function buildWindowMenu(onClose: () => void): Gtk.Widget {
                 for (const member of grouped) {
                     groupSection.append(menuRow({
                         label: labelFor(member),
+                        // Window titles are arbitrarily long; the menu is fixed at
+                        // 230, so ellipsize rather than let a tab label widen it.
+                        ellipsize: true,
                         checked: member === self,
                         onClick: () => { if (member !== self) hs.focusWindow(member); onClose() },
                     }))
