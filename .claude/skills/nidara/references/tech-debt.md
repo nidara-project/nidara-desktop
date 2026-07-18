@@ -894,6 +894,10 @@ These were paid down; the *rule* remains:
   The title line carries `height_request: 22` so the swap can't nudge tall rows by 1px.
   The expanded-group control header hover-reveals via OPACITY + `can_target` instead — its
   buttons steal no text width, and `visible` would reflow the row height there.
+  Banner ACTIONS are hover-revealed too: ≤2 glass capsules on a `Gtk.Overlay` at the right
+  edge (overlay children aren't measured → the banner never grows, the stack never shifts);
+  the thumb fades via opacity so text never rewraps mid-hover; presses are capture-claimed
+  (beat the card tap + swipe). The expanded NC row still lists every action below the text.
 
 ---
 

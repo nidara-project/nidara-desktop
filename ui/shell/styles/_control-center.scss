@@ -358,6 +358,13 @@
 /* (.nc-right-col / .nc-badge-stacked deleted — controls moved onto the title line;
    the dedicated right column shortened every text line, not just the title.) */
 
+/* Hover-revealed banner action capsules (background/border painted by SquircleContainer). */
+.nc-banner-action-label {
+    font-size: $fs-caption;
+    font-weight: $fw-semibold;
+    color: var(--nidara-text);
+}
+
 .nc-action-btn {
     padding: 2px 8px;
     min-height: 0;

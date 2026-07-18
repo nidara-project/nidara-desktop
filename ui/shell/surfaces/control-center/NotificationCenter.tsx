@@ -206,14 +206,34 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     // Expanded + big source → full-width hero below the row (replaces the thumb);
     // otherwise the compact right thumb, macOS-style.
     const bigHero = itemExpanded ? createExpandedHeroWidget(n, GRID_WIDTH - 32) : null
+    let thumb: Gtk.Widget | null = null
     if (bigHero) outerV.append(bigHero)
     else {
-        const hero = createHeroWidget(n, 44)
-        if (hero) box.append(hero)
+        thumb = createHeroWidget(n, 44)
+        if (thumb) box.append(thumb)
     }
     if (actionRow) {
         if (bigHero) outerV.append(actionRow)   // actions sit under the image (outerV spacing separates them)
         else { actionRow.margin_top = 8; textStack.append(actionRow) }
+    }
+
+    // Banner actions (macOS shape): glass capsules OVERLAID on the right edge, revealed
+    // on hover — the banner never grows and the stack below it never shifts. Capped at 2
+    // (the expanded NC row shows them all). The thumb fades via opacity, not `visible`,
+    // so the text never rewraps under the pointer.
+    let bannerActions: Gtk.Box | null = null
+    if (isPopup && actions.length > 0) {
+        bannerActions = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, halign: Gtk.Align.END, valign: Gtk.Align.CENTER, margin_end: 12, visible: false, css_classes: ["nc-banner-actions"] })
+        actions.slice(0, 2).forEach(a => {
+            const lbl = new Gtk.Label({ label: a.label, css_classes: ["nc-banner-action-label"], margin_start: 14, margin_end: 14, margin_top: 5, margin_bottom: 5, ellipsize: 3, max_width_chars: 14 })
+            const btn = SquircleContainer({ child: lbl, shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.10 } })
+            // Capture-claim like the expanded row's action buttons: beats the card's
+            // release-tap AND the swipe detector.
+            const g = new Gtk.GestureClick(); g.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+            g.connect("pressed", (gesture) => { gesture.set_state(Gtk.EventSequenceState.CLAIMED); n.invoke(a.id); if (onClose) onClose() })
+            btn.add_controller(g)
+            bannerActions!.append(btn)
+        })
     }
 
     // An individual notification is expandable if it has actions, a body longer than the
@@ -278,12 +298,26 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     // Release-phase click on every notification capsule (banner AND NC row):
     // both are swipe-to-dismiss, and a press-phase tap would fire before the
     // swipe can be recognised. See attachSwipeDismiss.
-    const capsule = SquircleContainer({ child: outerV, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
+    // Banner actions ride a Gtk.Overlay above the row content (they don't affect the
+    // banner's size — overlay children aren't measured).
+    let content: Gtk.Widget = outerV
+    if (bannerActions) {
+        const ov = new Gtk.Overlay({ child: outerV })
+        ov.add_overlay(bannerActions)
+        content = ov
+    }
+    const capsule = SquircleContainer({ child: content, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
     // Hover ⇄ rest: controls in, timestamp out (leave restores). enter/leave fire on the
     // capsule's whole territory — moving onto a child does NOT emit leave.
     const hoverMotion = new Gtk.EventControllerMotion()
-    hoverMotion.connect("enter", () => { timeLabel?.set_visible(false); hoverControls.forEach(w => w.set_visible(true)) })
-    hoverMotion.connect("leave", () => { timeLabel?.set_visible(true); hoverControls.forEach(w => w.set_visible(false)) })
+    hoverMotion.connect("enter", () => {
+        timeLabel?.set_visible(false); hoverControls.forEach(w => w.set_visible(true))
+        if (bannerActions) { bannerActions.set_visible(true); if (thumb) thumb.opacity = 0 }
+    })
+    hoverMotion.connect("leave", () => {
+        timeLabel?.set_visible(true); hoverControls.forEach(w => w.set_visible(false))
+        if (bannerActions) { bannerActions.set_visible(false); if (thumb) thumb.opacity = 1 }
+    })
     capsule.add_controller(hoverMotion)
     return capsule
 }
