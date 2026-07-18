@@ -6,6 +6,7 @@ import { execAsync } from "ags/process"
 import hs from "../../core/HyprlandState"
 import { drawSquircle, createSquirclePath } from "../../common/DrawingUtils"
 import SquircleContainer, { Shape } from "../../common/SquircleContainer"
+import { ScaleRevealer, attachHorizontalSwipe } from "../../common/ScaleRevealer"
 import IconButton from "../../common/IconButton"
 import Theme from "../../core/ThemeManager"
 import Gio from "gi://Gio"
@@ -202,7 +203,30 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
         await openApp()
     }
 
-    return SquircleContainer({ child: box, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction })
+    // Release-phase click on every notification capsule (banner AND NC row):
+    // both are swipe-to-dismiss, and a press-phase tap would fire before the
+    // swipe can be recognised. See attachSwipeDismiss.
+    return SquircleContainer({ child: box, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
+}
+
+// Wrap an NC row so it can be swiped away. Unlike a banner, an NC row lives in a
+// clipping scroller and can't slide off-screen — a horizontal translate would
+// just chop against the panel walls. So the swipe gives FADE feedback while
+// dragging and, past threshold, COLLAPSES the row (height shrinks, rows below
+// close the gap) then dismisses. `content` is what's laid out (a capsule, or a
+// group stack); `target` is the widget the drag rides + whose release-tap the
+// swipe cancels (the capsule, which sits inside the stack for collapsed groups).
+function wrapSwipe(content: Gtk.Widget, onDismiss: () => void, target: Gtk.Widget = content): Gtk.Widget {
+    // animateLayout so the collapse shrinks the row's HEIGHT (siblings reflow);
+    // scaleFrom near 0 so it collapses essentially to nothing before it's gone.
+    const sr = new ScaleRevealer(content, { animateLayout: true, scaleFrom: 0.06, durationOut: 220, pivot: "center" })
+    sr.showInstant()
+    attachHorizontalSwipe(target, {
+        onUpdate: (dx) => sr.set_opacity(Math.max(0.4, 1 - Math.abs(dx) / 300)),   // fade feedback, no slide
+        onDismiss: () => sr.collapseAway(onDismiss),
+        onCancel: () => sr.set_opacity(1),
+    })
+    return sr
 }
 
 function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
@@ -339,8 +363,12 @@ export default function NotificationCenter() {
                 groupCache.set(id, cache); notificationItemsBox.append(container)
             }
             if (cache.sig !== sig) {
-                while (cache.headerBox.get_first_child()) cache.headerBox.get_first_child()?.unparent()
-                while (cache.subBox.get_first_child()) cache.subBox.get_first_child()?.unparent()
+                // Rows are now ScaleRevealer wrappers (swipe host) — dismantle so
+                // the wrapped card unparents too (no "still has children" on GC);
+                // the group header is a plain widget, just unparent it.
+                const disownRow = (c: Gtk.Widget) => { if (typeof (c as any).dismantle === "function") (c as any).dismantle(); c.unparent() }
+                while (cache.headerBox.get_first_child()) disownRow(cache.headerBox.get_first_child()!)
+                while (cache.subBox.get_first_child()) disownRow(cache.subBox.get_first_child()!)
                 cache.timeLabels = []   // rebuilt capsules register fresh labels below
                 const regTime = (label: Gtk.Label, time: number) => cache!.timeLabels.push({ label, time })
                 const closeNC = () => { status.nc_open = false }
@@ -350,16 +378,22 @@ export default function NotificationCenter() {
                     if (isExpanded) {
                         cache.container.remove_css_class("nc-group-with-ghost")
                         cache.headerBox.append(GroupControlHeader({ name: appName, count: gl.length, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()) }))
-                        sortedGroup.forEach(n => cache!.subBox.append(NotificationCapsule({ n, groupCount: 1, isExpanded: true, onToggle: undefined, onClearGroup: () => n.dismiss(), itemExpanded: expandedItems.has(n.id), onToggleItem: () => toggleItem(n.id), onClose: closeNC, onTimeLabel: regTime })))
+                        sortedGroup.forEach(n => {
+                            const cap = NotificationCapsule({ n, groupCount: 1, isExpanded: true, onToggle: undefined, onClearGroup: () => n.dismiss(), itemExpanded: expandedItems.has(n.id), onToggleItem: () => toggleItem(n.id), onClose: closeNC, onTimeLabel: regTime })
+                            cache!.subBox.append(wrapSwipe(cap, () => n.dismiss()))   // swipe an expanded item → dismiss just it
+                        })
                     } else {
                         cache.container.add_css_class("nc-group-with-ghost")
                         const capsule = NotificationCapsule({ n: sortedGroup[0], groupCount: gl.length, isExpanded: false, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()), onClose: closeNC, onTimeLabel: regTime })
-                        cache.headerBox.append(makeGroupStack(capsule, gl.length))
+                        // Swipe a collapsed group → clear the whole group (like its
+                        // X). The gesture rides the capsule; the whole stack slides.
+                        cache.headerBox.append(wrapSwipe(makeGroupStack(capsule, gl.length), () => gl.forEach(m => m.dismiss()), capsule))
                     }
                     cache.revealer.reveal_child = isExpanded
                 } else {
                     cache.container.remove_css_class("nc-group-with-ghost")
-                    cache.headerBox.append(NotificationCapsule({ n: sortedGroup[0], groupCount: 1, isExpanded: false, onToggle: undefined, onClearGroup: () => sortedGroup[0].dismiss(), itemExpanded: expandedItems.has(sortedGroup[0].id), onToggleItem: () => toggleItem(sortedGroup[0].id), onClose: closeNC, onTimeLabel: regTime }))
+                    const cap = NotificationCapsule({ n: sortedGroup[0], groupCount: 1, isExpanded: false, onToggle: undefined, onClearGroup: () => sortedGroup[0].dismiss(), itemExpanded: expandedItems.has(sortedGroup[0].id), onToggleItem: () => toggleItem(sortedGroup[0].id), onClose: closeNC, onTimeLabel: regTime })
+                    cache.headerBox.append(wrapSwipe(cap, () => sortedGroup[0].dismiss()))
                     expandedGroups.delete(id); cache.revealer.reveal_child = false
                 }
                 cache.sig = sig

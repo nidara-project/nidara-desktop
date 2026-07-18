@@ -861,6 +861,16 @@ These were paid down; the *rule* remains:
   manual imports to `widgets/index.ts`; the registry comes from `scripts/gen-widget-index.mjs`
   (phase 1 of the widget plugin system; phase 2 — zero-layout contract — still deferred).
   `bar-helpers.ts` is the only grandfathered non-widget in `widgets/` (EXCLUDE list).
+- **Notification swipe-to-dismiss** — one implementation in `common/ScaleRevealer.ts`:
+  `attachHorizontalSwipe` (gesture detector — claims only on horizontal intent so the NC
+  scroller keeps its vertical drag; cancels the row's release-phase tap) + `setSwipe`/`swipeOut`
+  (paint-only snapshot translate + off-screen fling; never use margins — they reflow the card,
+  double-painting wrapped labels) + `collapseAway` (height-collapse for list rows). Cards must
+  open on RELEASE (`SquircleContainer` `clickOnRelease`) or the press-tap fires before the swipe
+  is recognised. **Banners slide off** (they can leave the screen). **NC rows only FADE + COLLAPSE**
+  because the `Gtk.ScrolledWindow` clips horizontally — a translated full-width row chops against
+  the panel walls. DEFERRED: make the NC swipe actually SLIDE like the banner (needs the dragged
+  row painted above the scroller's clip — a floating overlay for the active row, or reparenting).
 
 ---
 

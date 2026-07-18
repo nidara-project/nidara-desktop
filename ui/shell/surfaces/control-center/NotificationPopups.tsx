@@ -3,12 +3,11 @@ import AstalNotifd from "gi://AstalNotifd"
 import GLib from "gi://GLib"
 import { NotificationCapsule } from "./NotificationCenter"
 import { GRID_WIDTH } from "./CCLayoutManager"
-import { ScaleRevealer } from "../../common/ScaleRevealer"
+import { ScaleRevealer, attachSwipeDismiss } from "../../common/ScaleRevealer"
 import notifConfig from "../../core/NotifConfig"
 import status from "../../core/Status"
 
 const MAX_VISIBLE = 4       // cap stacked banners; oldest gets retired first
-const SWIPE_THRESHOLD = 90  // px of horizontal drag to dismiss the banner
 const ANIM_MS = 300         // grow/shrink in+out duration
 
 export function NotificationPopupsWidget() {
@@ -30,6 +29,25 @@ export function NotificationPopupsWidget() {
     const entries = new Map<number, Entry>()
     const timerMap = new Map<number, number>()
     let orderSeq = 0
+
+    // Bar owns the layer-shell input region and only re-stamps it on overlay
+    // open/close — so a banner appearing with no panel open sits OUTSIDE the
+    // region (just the 40px bar strip) and the pointer passes through it: no
+    // close, no swipe, no actions. Bar wires (box as any).onStackChanged to its
+    // updateInputRegion; we fire it whenever the stack settles at a new size.
+    // Deferred a frame (and coalesced) so it reads the settled allocation, not
+    // the mid-animation one — the banner is only clickable once fully grown in
+    // anyway, and a burst of banners re-stamps once.
+    let stampPending = false
+    const notifyStackChanged = () => {
+        if (stampPending) return
+        stampPending = true
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => {
+            stampPending = false
+            ;(box as any).onStackChanged?.()
+            return GLib.SOURCE_REMOVE
+        })
+    }
 
     const clearTimer = (id: number) => {
         const timer = timerMap.get(id)
@@ -55,6 +73,7 @@ export function NotificationPopupsWidget() {
             if (entry.revealer.get_parent() === box) box.remove(entry.revealer)
             entry.revealer.dismantle()
             entries.delete(id)
+            notifyStackChanged()   // stack shrank — re-stamp the input region
         }
     }
 
@@ -84,21 +103,17 @@ export function NotificationPopupsWidget() {
         motion.connect("leave", () => { if (entries.has(id)) startTimer(id) })
         capsule.add_controller(motion)
 
-        // Horizontal swipe to dismiss the banner (the notification stays in the NC).
-        const drag = new Gtk.GestureDrag()
-        drag.connect("drag-update", (_g, ox) => {
-            const dx = ox || 0
-            capsule.set_opacity(Math.max(0.15, 1 - Math.abs(dx) / 320))
-            capsule.set_margin_start(Math.max(0, dx))
-            capsule.set_margin_end(Math.max(0, -dx))
+        // Horizontal swipe to dismiss the banner (the notification stays in the
+        // NC). The capsule also carries a release-phase tap-to-open; the swipe
+        // claims the sequence to cancel it, and pauses the auto-dismiss for the
+        // whole gesture. GRID_WIDTH + slop clears the card's box + the gap to the
+        // screen edge on the fling.
+        attachSwipeDismiss(capsule, revealer, {
+            onSwipeStart: () => clearTimer(id),
+            onDismiss: () => hardRemove(id),
+            onRest: () => { if (entries.has(id) && !timerMap.has(id)) startTimer(id) },
+            flingTo: GRID_WIDTH + 200,
         })
-        drag.connect("drag-end", (_g, ox) => {
-            const dx = ox || 0
-            if (Math.abs(dx) >= SWIPE_THRESHOLD) { animateOut(id); return }
-            capsule.set_opacity(1); capsule.set_margin_start(0); capsule.set_margin_end(0)
-            if (entries.has(id) && !timerMap.has(id)) startTimer(id)
-        })
-        capsule.add_controller(drag)
 
         box.append(revealer)
         entries.set(id, { revealer, capsule, order: orderSeq++ })
@@ -109,7 +124,10 @@ export function NotificationPopupsWidget() {
             for (let i = 0; i < sorted.length - MAX_VISIBLE; i++) animateOut(sorted[i][0])
         }
 
-        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { entries.get(id)?.revealer.reveal(true); return GLib.SOURCE_REMOVE })
+        // Re-stamp once the banner has fully grown in (its allocation is final
+        // then, so the input region covers the whole capsule — close button,
+        // actions, swipe area).
+        GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { entries.get(id)?.revealer.reveal(true, notifyStackChanged); return GLib.SOURCE_REMOVE })
         startTimer(id)
     }
 
