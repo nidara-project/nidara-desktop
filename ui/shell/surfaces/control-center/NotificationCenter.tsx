@@ -259,7 +259,12 @@ export default function NotificationCenter() {
     const LANE = 8
     const outer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, width_request: GRID_WIDTH + LANE, css_classes: ["nc-outer"] })
 
-    const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vscrollbar_policy: Gtk.PolicyType.AUTOMATIC, vexpand: true, hexpand: true, css_classes: ["nc-scroll", "nc-transparent-scroll"] })
+    // propagate_natural_height: the panel hugs its visible content (calendar +
+    // cards) instead of filling the bar→dock gap — empty column space would sit
+    // above the Bar's catcher and swallow the outside-clicks that dismiss the
+    // NC. max_content_height (set via setMaxHeight below) is the cap: past it
+    // the list scrolls.
+    const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vscrollbar_policy: Gtk.PolicyType.AUTOMATIC, vexpand: true, hexpand: true, propagate_natural_height: true, css_classes: ["nc-scroll", "nc-transparent-scroll"] })
     // The scroll forces its child to the full viewport width (GRID_WIDTH + LANE). A
     // padding-right of LANE (in .nc-content-box) keeps the cards at GRID_WIDTH and leaves
     // the lane free on the right for the overlay scrollbar — no reflow, no overlap.
@@ -370,5 +375,12 @@ export default function NotificationCenter() {
     notifd.connect("notified", () => { if (status.nc_open) updateNotifs() })
     notifd.connect("resolved", () => { if (status.nc_open) updateNotifs() })
     updateNotifs()
+
+    // Bar owns the panel geometry and pushes the vertical budget (bar→dock gap)
+    // here; the scroller absorbs it as its cap — see the note on `scroll`.
+    // Attached to the returned widget like WorkspaceOverview's onOpen.
+    ;(outer as any).setMaxHeight = (px: number) => {
+        scroll.max_content_height = Math.max(UNIT, Math.round(px - CAL_H - 12))   // 12 = outer spacing
+    }
     return outer
 }

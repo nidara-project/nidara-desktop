@@ -114,7 +114,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   expansionCapsule.visible = false
 
   const cc = new ScaleRevealer(ControlCenterWidget(gdkmonitor), { ...OVERLAY_POP, pivot: "top-right" })
-  const nc = new ScaleRevealer(NotificationCenter(), { ...OVERLAY_POP, pivot: "top-right" })
+  const ncWidget = NotificationCenter()
+  const nc = new ScaleRevealer(ncWidget, { ...OVERLAY_POP, pivot: "top-right" })
   const prism = Prism()
   const popups = NotificationPopupsWidget()
   const systemMenu = new ScaleRevealer(SystemMenuOverlay(), { ...OVERLAY_POP, pivot: "top-left" })
@@ -190,12 +191,19 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   prism.margin_top = 0
   popups.margin_top = PANEL_TOP
 
-  // NC fills the gap between bar and dock; CC is capped to the same budget so it
-  // never overflows on short screens (was a fixed 800px). Reactive to dock size.
+  // Panels are CONTENT-sized, capped to the bar→dock budget — never forced
+  // taller. The old approach (height_request on the wrappers) inflated the
+  // panels' invisible bounds past their visible content, and since panels sit
+  // ABOVE the catcher in the overlay stack, GTK's picking handed that dead
+  // area's clicks to a transparent Box instead of the catcher — outside-clicks
+  // below the CC's Edit pill / the NC's last card didn't dismiss. (It never
+  // capped anything anyway: a size request can only RAISE a widget's minimum.)
+  // NC takes the budget via its scroller's max_content_height (content-sized
+  // until the list overflows, then it scrolls); CC needs no cap — its content
+  // maxes out at the fixed 8-row board. Reactive to dock size.
   const applyPanelHeights = () => {
     const maxH = monGeo.height - BAR_H - dockBottomFootprint() - SAFETY
-    nc.height_request = maxH
-    cc.height_request = Math.min(800, maxH)
+    ;(ncWidget as any).setMaxHeight?.(maxH)
   }
   applyPanelHeights()
   onDockSettingsChanged(applyPanelHeights)
@@ -226,7 +234,23 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       }
       addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism); addWidgetToRegion(systemMenu); addWidgetToRegion(overview)
       addWidgetToRegion(expansionCapsule)
-      
+
+      // CC edit mode is the one state whose region is NOT backed by the
+      // full-screen catcher rect, so it must match the panel exactly — but
+      // toggling edit mode also resizes the CC, and get_allocation() lags a
+      // layout pass behind. measure() reflects the resize immediately
+      // (IslandGrid flips cc_edit_mode AFTER its rebuild for exactly this),
+      // so union the measured natural height too: the grown grid + Done pill
+      // are clickable in this very frame, not one stamp later.
+      if (status.cc_edit_mode && cc.get_visible()) {
+          const alloc = cc.get_allocation()
+          if (alloc.width > 1) {
+              const [, natH] = cc.measure(Gtk.Orientation.VERTICAL, alloc.width)
+              // @ts-ignore
+              region.unionRectangle({ x: Math.round(alloc.x), y: Math.round(alloc.y), width: Math.round(alloc.width), height: Math.round(Math.max(alloc.height, natH)) })
+          }
+      }
+
       // Add each popup individually to the input region
       let child = popups.get_first_child()
       while (child) {
@@ -234,7 +258,15 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           child = child.get_next_sibling()
       }
 
-      if (surface.set_input_region) surface.set_input_region(region)
+      if (surface.set_input_region) {
+          surface.set_input_region(region)
+          // Wayland input regions are double-buffered: they only take effect on
+          // the surface's next commit. Stamps riding a visual change commit with
+          // that frame, but a stamp between frames (the deferred edit-mode
+          // re-stamp below) would otherwise sit pending until some incidental
+          // repaint — queue one so the region applies now.
+          win.queue_draw()
+      }
   }
 
   // Unified overlay pop (ScaleRevealer: subtle grow + fade, GTK-side). On close
@@ -258,7 +290,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     updateInputRegion()
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
-  status.connect("notify::cc-edit-mode", syncOverlays)
+  // Toggling edit mode RESIZES the CC (content-height grid ↔ full 8-row board
+  // + Done pill) while the full-screen catcher rect is skipped, so the region
+  // must track the panel's real size. The synchronous stamp handles the grow
+  // direction via measure() (see updateInputRegion); this deferred re-stamp
+  // settles the shrink direction (leaving edit mode briefly over-covers, which
+  // would eat clicks meant for windows under the vacated strip) once the
+  // post-toggle allocation exists (defer-a-frame idiom, as showExpansion).
+  status.connect("notify::cc-edit-mode", () => {
+    syncOverlays()
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 50, () => { updateInputRegion(); return GLib.SOURCE_REMOVE })
+  })
 
   // The bar grabs the keyboard EXCLUSIVE while a keyboard-driven overlay (Prism
   // or the Workspace Overview) is open, so the compositor grants focus to the
