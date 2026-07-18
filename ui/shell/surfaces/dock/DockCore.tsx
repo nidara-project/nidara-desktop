@@ -14,7 +14,7 @@ import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
-import { DOCK_CONSTANTS, syncConstants, springStep, slideSpringStep } from "./DockPhysics"
+import { DOCK_CONSTANTS, syncConstants, springStep, slideSpringStep, stepSpring } from "./DockPhysics"
 import type { SpringChannel } from "./DockPhysics"
 import appService from "../../core/AppService"
 import trashService from "../../core/TrashService"
@@ -242,9 +242,11 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     //   144 Hz frame → 1/144 × 2.4 = 1/60  (identical to the old fixed step)
     //   60 Hz frame  → 1/60  × 2.4 = 1/25  (same real-time speed, was 2.4× slower)
     // and dropped frames no longer slow the animation down.
-    // MAX_DT caps recovery after long gaps AND keeps the semi-implicit Euler
-    // integration stable for the stiffest spring (reorder slide: ω=√700≈26.5,
-    // ω·dt must stay well below 2 → 26.5 × 1/25 ≈ 1.06).
+    // MAX_DT only caps how much simulated time one frame may advance after a
+    // long gap (the frame clock stalls while a fullscreen window occludes the
+    // dock). Numerical stability does NOT come from this cap — stepSpring
+    // substeps internally (see DockPhysics), because at MAX_DT the damping
+    // term of a single Euler step diverges (c·dt = 52/25 > 2).
     const SIM_SPEED = 2.4
     const MAX_DT = 1 / 25
 
@@ -371,9 +373,9 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
             const slideAbsDelta = Math.abs(slideDelta)
             const slideAbsVel = Math.abs(slideVelocity)
             if (slideAbsDelta > 0.2 || slideAbsVel > 0.2) {
-                const slideForce = SLIDE_STIFFNESS * slideDelta - SLIDE_DAMPING * slideVelocity
-                slideVelocity += slideForce * dt
-                slideCurrent += slideVelocity * dt
+                scratchCh.target = slideTarget; scratchCh.current = slideCurrent; scratchCh.velocity = slideVelocity
+                stepSpring(scratchCh, dt, SLIDE_STIFFNESS, SLIDE_DAMPING)
+                slideCurrent = scratchCh.current; slideVelocity = scratchCh.velocity
                 if (layerShellReady) axis.applySlide(win, Math.round(slideCurrent))
                 if (axis.vertical) da.queue_draw()
                 axis.buildInputRegion(win, smoothedBarMain, revealState())
