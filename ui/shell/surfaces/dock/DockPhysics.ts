@@ -159,6 +159,31 @@ export function calculateDockItemMetrics(
  * Uses aggressive snap: if |delta| < SNAP_POS AND |velocity| < SNAP_VEL,
  * snap immediately to target. This eliminates perpetual micro-oscillation.
  */
+// ── Integration ──────────────────────────────────────────────────────────
+// Semi-implicit Euler: v += (k·Δ − c·v)·h; x += v·h. The velocity update
+// multiplies v by (1 − c·h) each step — when c·h > 2 the damping term itself
+// flips v's sign and GROWS it every frame, so the spring diverges exponentially
+// instead of settling (seen live 2026-07-18: a fullscreen window starves the
+// dock's frame clock down to GDK's ~60 Hz fallback, dt clamps to MAX_DT = 1/25,
+// and the auto-hide slide with c = 52 hits c·h = 2.08 → slideCurrent reached
+// 1e+68 px and the exclusive zone stormed until the NaN snap reset it).
+// Stability is a property of the SUBSTEP, not of the simulated time: integrate
+// any dt in substeps of at most H_STABLE. H_STABLE = 1/60 keeps every damping
+// used here far inside the bound (c·h ≤ 53/60 ≈ 0.88) and makes the canonical
+// 144 Hz path (dt = 1/60 exactly) a single substep — bit-identical to the
+// approved feel.
+const H_STABLE = 1 / 60
+
+export function stepSpring(ch: SpringChannel, dt: number, stiffness: number, damping: number): void {
+    let rem = dt
+    while (rem > 1e-9) {
+        const h = rem > H_STABLE ? H_STABLE : rem
+        ch.velocity += (stiffness * (ch.target - ch.current) - damping * ch.velocity) * h
+        ch.current  += ch.velocity * h
+        rem -= h
+    }
+}
+
 export function springStep(ch: SpringChannel, dt: number): boolean {
     const delta = ch.target - ch.current;
     const absDelta = Math.abs(delta);
@@ -171,10 +196,7 @@ export function springStep(ch: SpringChannel, dt: number): boolean {
         return false;
     }
 
-    // Critically damped spring: F = stiffness * delta - damping * velocity
-    const force = DOCK_CONSTANTS.STIFFNESS * delta - DOCK_CONSTANTS.DAMPING * ch.velocity;
-    ch.velocity += force * dt;
-    ch.current += ch.velocity * dt;
+    stepSpring(ch, dt, DOCK_CONSTANTS.STIFFNESS, DOCK_CONSTANTS.DAMPING)
     return true;
 }
 
@@ -192,9 +214,7 @@ export function slideSpringStep(ch: SpringChannel, dt: number): boolean {
         ch.velocity = 0
         return false
     }
-    const force = STIFFNESS * delta - DAMPING * ch.velocity
-    ch.velocity += force * dt
-    ch.current  += ch.velocity * dt
+    stepSpring(ch, dt, STIFFNESS, DAMPING)
     return true
 }
 
