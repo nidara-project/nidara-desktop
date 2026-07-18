@@ -355,15 +355,8 @@
     margin-right: 4px;
 }
 
-.nc-right-col {
-    margin-left: 2px;
-    min-width: 24px;
-}
-
-/* Count badge when stacked in the right column (vertical), not inline in the header */
-.nc-badge-stacked {
-    margin-left: 0;
-}
+/* (.nc-right-col / .nc-badge-stacked deleted — controls moved onto the title line;
+   the dedicated right column shortened every text line, not just the title.) */
 
 .nc-action-btn {
     padding: 2px 8px;

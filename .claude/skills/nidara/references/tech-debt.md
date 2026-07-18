@@ -885,7 +885,9 @@ These were paid down; the *rule* remains:
   reads dimensions header-only via `GdkPixbuf.Pixbuf.get_file_info` and requires ≥240px
   source width, so a 64-160px chat avatar keeps its thumb even when expanded instead of
   being cover-fit into mush. Both shapes share one squircle painter (`heroDrawingArea`).
-  Banners never expand.
+  Banners never expand. Card controls (time · count badge / expand chevron · close) share
+  the TITLE line — never a dedicated right column, which shortened every text line instead
+  of just the title. The thumb is the card's right edge, spanning title+body centred.
 
 ---
 

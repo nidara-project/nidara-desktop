@@ -137,7 +137,9 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
 
     const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.START, hexpand: true })
     const header = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, hexpand: true })
-    header.append(new Gtk.Label({ label: cleanSummary, css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, lines: 1, hexpand: true, max_width_chars: 30, xalign: 0 }))
+    // Title natural width capped a bit under the body's 30 (see the body note): the
+    // controls now share this line, and the popup window sizes to natural width.
+    header.append(new Gtk.Label({ label: cleanSummary, css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, lines: 1, hexpand: true, max_width_chars: 24, xalign: 0 }))
 
     if (!isPopup) {
         const timeLabel = new Gtk.Label({ label: timeAgo(n.time), css_classes: ["nc-item-time"], halign: Gtk.Align.END })
@@ -203,20 +205,18 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     }
 
     // An individual notification is expandable if it has actions, a body longer than the
-    // 2-line normal size can show, or an image worth the full-width treatment. The
-    // chevron sits where grouped notifs show their count.
+    // 2-line normal size can show, or an image worth the full-width treatment.
     const expandable = !isPopup && groupCount === 1 && !!onToggleItem && (actions.length > 0 || cleanBody.length > 70 || hasExpandedHero(n))
 
-    // Right column (top-aligned): count badge (collapsed group) OR expand chevron (individual),
-    // over the close button.
-    const rightCol = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6, valign: Gtk.Align.START, halign: Gtk.Align.CENTER, css_classes: ["nc-right-col"] })
+    // Controls live ON the title line (title · time · badge/chevron · close) — a dedicated
+    // right column reserved its width across every text line, shortening the body too; only
+    // the title should cede space to them. The thumb stays the card's right edge.
     if (isCollapsedGroup) {
-        rightCol.append(new Gtk.Label({ label: `${groupCount}`, css_classes: ["nc-badge-header", "nc-badge-stacked"], halign: Gtk.Align.CENTER }))
+        header.append(new Gtk.Label({ label: `${groupCount}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
     } else if (expandable) {
-        rightCol.append(IconButton({ icon: itemExpanded ? Icons.chevronUp : Icons.chevronDown, iconSize: 13, variant: "neutral", captureClick: true, onClick: onToggleItem }))
+        header.append(IconButton({ icon: itemExpanded ? Icons.chevronUp : Icons.chevronDown, iconSize: 13, variant: "neutral", captureClick: true, onClick: onToggleItem }))
     }
-    rightCol.append(clearBtn)
-    box.append(rightCol)
+    header.append(clearBtn)
 
     const openApp = async () => {
         const actions = n.get_actions() || []; const hasAction = (id: string) => actions.some(a => a.id === id)
