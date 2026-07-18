@@ -5,6 +5,32 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] — 2026-07-18
+
+### Changed
+
+- **Dock magnification now defaults to its full size (128px).** Hovering the
+  dock grows icons to double their resting size on fresh installs; existing
+  installs keep whatever they had configured.
+- **Dock animations feel the same on every monitor.** The magnification and
+  auto-hide springs are now clocked by real time instead of frames, so a 60 Hz
+  monitor gets the same snappy feel as a 144 Hz one (it used to run 2.4× slower
+  there), and mixed-refresh multi-monitor setups stay consistent.
+
+### Fixed
+
+- **Reordering dock icons now tracks the pointer precisely.** Dragging an icon
+  across the pinned/open-apps separator used to need the pointer well past it,
+  and the whole open-apps zone inherited that lag; the drop preview also
+  flickered when the pointer sat exactly between two positions. Both gone.
+- **Control Center and Notification Center no longer swallow clicks around
+  them.** Their clickable area now matches the visible panels exactly —
+  including the Control Center's edit mode — so clicking beside a panel reaches
+  whatever is beneath instead of doing nothing.
+- **Long window titles no longer overflow the window menu.** Group-member rows
+  in the bar's window menu truncate with an ellipsis instead of stretching past
+  the menu's glass capsule.
+
 ## [0.3.1] — 2026-07-15
 
 ### Changed

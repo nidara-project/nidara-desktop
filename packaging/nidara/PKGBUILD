@@ -12,7 +12,7 @@
 # §6's file layout. First-time system/user setup (greetd, services, per-user
 # config seeding) is NOT packaging's job — see install.sh / nidara-setup.
 pkgname=nidara
-pkgver=0.3.1
+pkgver=0.3.2
 pkgrel=1
 pkgdesc="Nidara — a fluid, glassmorphic desktop environment (Hyprland + AGS/GTK4)"
 arch=(x86_64)
