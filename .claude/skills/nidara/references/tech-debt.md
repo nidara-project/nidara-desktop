@@ -635,6 +635,22 @@ The fake AI cursor (`surfaces/agent-pointer/`, `agentPointer` IPC, choreography 
   state-and-ipc.md) — the overlay already routes the visual to the monitor containing the
   target point, but verifying the injection mapping needs a second physical display.
 
+### 34. Gtk-CRITICAL `gtk_widget_is_ancestor` on dock context-menu open — GTK bug, don't chase it (2026-07-16)
+Every dock context-menu open logs `Gtk-CRITICAL … gtk_widget_is_ancestor: assertion
+'GTK_IS_WIDGET (widget)' failed`. Diagnosed with a live gdb backtrace: it's a missing NULL
+check inside GTK (`gtk_popover_focus`, gtkpopover.c:1126, still unfixed in GTK main as of
+2026-07-16). When an `autohide` popover is shown, GTK tries to move keyboard focus into it;
+if the popover has **no focusable children** AND **nothing in the root window holds keyboard
+focus**, `gtk_root_get_focus` returns NULL and GTK passes it unchecked to
+`gtk_widget_is_ancestor`. The dock menu always meets both conditions (custom non-focusable
+glass rows + a layer-shell window that never holds keyboard focus) → exactly one CRITICAL
+per open. 100% harmless: the assertion aborts that check and the menu works normally. The
+same applies to any other autohide glass menu on a layer surface (tray, app-grid) if its
+window has no focused widget. **Do NOT "fix" it in shell code** — making menu rows focusable
+would change real focus behavior just to silence someone else's warning. The right fix is a
+one-liner upstream (`if (!p || …)` at that line); reporting to GNOME/gtk is pending (no
+GitLab account yet).
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
