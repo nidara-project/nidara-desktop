@@ -131,8 +131,8 @@ export function GroupControlHeader(props: { name: string, count: number, onToggl
     return header
 }
 
-export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupCount?: number, isExpanded?: boolean, onToggle?: () => void, onClearGroup?: () => void, isPopup?: boolean, itemExpanded?: boolean, onToggleItem?: () => void, onClose: () => void, onTimeLabel?: (label: Gtk.Label, time: number) => void }) {
-    const { n, groupCount = 1, isExpanded = false, onToggle, onClearGroup, isPopup = false, itemExpanded = false, onToggleItem, onClose, onTimeLabel } = props
+export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupCount?: number, isExpanded?: boolean, onToggle?: () => void, onClearGroup?: () => void, isPopup?: boolean, itemExpanded?: boolean, onToggleItem?: () => void, onClose: () => void, onTimeLabel?: (label: Gtk.Label, time: number) => void, startHovered?: boolean }) {
+    const { n, groupCount = 1, isExpanded = false, onToggle, onClearGroup, isPopup = false, itemExpanded = false, onToggleItem, onClose, onTimeLabel, startHovered = false } = props
     const sanitize = (text: string) => (text || "").replace(/<[^>]*>/g, "").split("\n").join(" ").replace(/\s+/g, " ").trim()
     const cleanSummary = sanitize(n.summary); const cleanBody = sanitize(n.body)
 
@@ -310,18 +310,19 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     // Hover ⇄ rest (leave restores). The timestamp only swaps out when a chevron takes
     // its place — with the close in the corner, hiding it otherwise buys nothing.
     // enter/leave fire on the capsule's whole territory — a child crossing is not a leave.
+    const applyHover = (h: boolean) => {
+        clearBtn.set_visible(h)
+        if (chevBtn) { timeLabel?.set_visible(!h); chevBtn.set_visible(h) }
+        if (bannerActions) { bannerActions.set_visible(h); if (thumb) thumb.opacity = h ? 0 : 1 }
+    }
     const hoverMotion = new Gtk.EventControllerMotion()
-    hoverMotion.connect("enter", () => {
-        clearBtn.set_visible(true)
-        if (chevBtn) { timeLabel?.set_visible(false); chevBtn.set_visible(true) }
-        if (bannerActions) { bannerActions.set_visible(true); if (thumb) thumb.opacity = 0 }
-    })
-    hoverMotion.connect("leave", () => {
-        clearBtn.set_visible(false)
-        if (chevBtn) { timeLabel?.set_visible(true); chevBtn.set_visible(false) }
-        if (bannerActions) { bannerActions.set_visible(false); if (thumb) thumb.opacity = 1 }
-    })
+    hoverMotion.connect("enter", () => applyHover(true))
+    hoverMotion.connect("leave", () => applyHover(false))
     capsule.add_controller(hoverMotion)
+    // A row rebuilt UNDER the pointer (its chevron was just clicked) starts in the hover
+    // state — GTK only re-synthesizes the crossing a beat later, and starting at rest
+    // makes the controls blink off/on across the rebuild. Leave still restores rest.
+    if (startHovered) applyHover(true)
     return capsule
 }
 
@@ -394,7 +395,10 @@ export default function NotificationCenter() {
     const notifd = AstalNotifd.get_default()
     const expandedGroups = new Set<string>()
     const expandedItems = new Set<number>()   // individual notifs (by n.id) in expanded size
-    const toggleItem = (nid: number) => { if (expandedItems.has(nid)) expandedItems.delete(nid); else expandedItems.add(nid); updateNotifs() }
+    // The row whose chevron was just clicked — its rebuilt capsule starts in the hover
+    // state (the pointer is on it by definition). See startHovered in NotificationCapsule.
+    let hoverSeed: number | null = null
+    const toggleItem = (nid: number) => { if (expandedItems.has(nid)) expandedItems.delete(nid); else expandedItems.add(nid); hoverSeed = nid; updateNotifs(); hoverSeed = null }
     const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string, timeLabels: { label: Gtk.Label, time: number }[] }>()
 
     // The content keeps its full width (GRID_WIDTH); LANE is extra space ADDED on the right
@@ -492,7 +496,7 @@ export default function NotificationCenter() {
                         cache.container.remove_css_class("nc-group-with-ghost")
                         cache.headerBox.append(GroupControlHeader({ name: appName, count: gl.length, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()) }))
                         sortedGroup.forEach(n => {
-                            const cap = NotificationCapsule({ n, groupCount: 1, isExpanded: true, onToggle: undefined, onClearGroup: () => n.dismiss(), itemExpanded: expandedItems.has(n.id), onToggleItem: () => toggleItem(n.id), onClose: closeNC, onTimeLabel: regTime })
+                            const cap = NotificationCapsule({ n, groupCount: 1, isExpanded: true, onToggle: undefined, onClearGroup: () => n.dismiss(), itemExpanded: expandedItems.has(n.id), onToggleItem: () => toggleItem(n.id), onClose: closeNC, onTimeLabel: regTime, startHovered: hoverSeed === n.id })
                             cache!.subBox.append(wrapSwipe(cap, () => n.dismiss()))   // swipe an expanded item → dismiss just it
                         })
                     } else {
@@ -505,7 +509,7 @@ export default function NotificationCenter() {
                     cache.revealer.reveal_child = isExpanded
                 } else {
                     cache.container.remove_css_class("nc-group-with-ghost")
-                    const cap = NotificationCapsule({ n: sortedGroup[0], groupCount: 1, isExpanded: false, onToggle: undefined, onClearGroup: () => sortedGroup[0].dismiss(), itemExpanded: expandedItems.has(sortedGroup[0].id), onToggleItem: () => toggleItem(sortedGroup[0].id), onClose: closeNC, onTimeLabel: regTime })
+                    const cap = NotificationCapsule({ n: sortedGroup[0], groupCount: 1, isExpanded: false, onToggle: undefined, onClearGroup: () => sortedGroup[0].dismiss(), itemExpanded: expandedItems.has(sortedGroup[0].id), onToggleItem: () => toggleItem(sortedGroup[0].id), onClose: closeNC, onTimeLabel: regTime, startHovered: hoverSeed === sortedGroup[0].id })
                     cache.headerBox.append(wrapSwipe(cap, () => sortedGroup[0].dismiss()))
                     expandedGroups.delete(id); cache.revealer.reveal_child = false
                 }
