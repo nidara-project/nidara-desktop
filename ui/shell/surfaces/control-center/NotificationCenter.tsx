@@ -48,16 +48,25 @@ export function createHeroWidget(n: AstalNotifd.Notification, size: number): Gtk
     if (!pixbuf) return null
 
     const da = new Gtk.DrawingArea({ width_request: size, height_request: size, halign: Gtk.Align.END, valign: Gtk.Align.CENTER, css_classes: ["nc-hero"] })
+    let scaled: any = null   // cached cover-fit copy — scale_simple allocates, keep it out of the draw path
     da.set_draw_func((_da: any, cr: any, w: number, h: number) => {
         if (w <= 0 || h <= 0) return
         // cover-fit: scale so the shorter side fills, then centre-crop inside the squircle
         const scale = Math.max(w / pixbuf.get_width(), h / pixbuf.get_height())
         const sw = Math.max(1, Math.round(pixbuf.get_width() * scale)), sh = Math.max(1, Math.round(pixbuf.get_height() * scale))
-        const small = pixbuf.scale_simple(sw, sh, GdkPixbuf.InterpType.BILINEAR)
+        if (!scaled || scaled.get_width() !== sw || scaled.get_height() !== sh)
+            scaled = pixbuf.scale_simple(sw, sh, GdkPixbuf.InterpType.BILINEAR)
         cr.save(); createSquirclePath(cr, 0, 0, w, h, 12, 3.2); cr.clip()
-        Gdk.cairo_set_source_pixbuf(cr, small, (w - sw) / 2, (h - sh) / 2); cr.paint(); cr.restore()
+        Gdk.cairo_set_source_pixbuf(cr, scaled, (w - sw) / 2, (h - sh) / 2); cr.paint(); cr.restore()
     })
     return da
+}
+
+// Relative timestamp for the NC cards. A helper (not inlined) so the per-minute
+// refresh can restamp the label text in place instead of rebuilding every card.
+export function timeAgo(time: number): string {
+    const d = Math.floor(Date.now() / 1000) - time
+    return d < 60 ? t("nc.time.now") : (d < 3600 ? `${Math.floor(d / 60)}m` : `${Math.floor(d / 3600)}h`)
 }
 
 export function GroupControlHeader(props: { name: string, count: number, onToggle: () => void, onClearGroup: () => void }) {
@@ -74,8 +83,8 @@ export function GroupControlHeader(props: { name: string, count: number, onToggl
     return SquircleContainer({ child: box, radius: 16, useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-group-ctrl-header"] })
 }
 
-export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupCount?: number, isExpanded?: boolean, onToggle?: () => void, onClearGroup?: () => void, isPopup?: boolean, itemExpanded?: boolean, onToggleItem?: () => void, onClose: () => void }) {
-    const { n, groupCount = 1, isExpanded = false, onToggle, onClearGroup, isPopup = false, itemExpanded = false, onToggleItem, onClose } = props
+export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupCount?: number, isExpanded?: boolean, onToggle?: () => void, onClearGroup?: () => void, isPopup?: boolean, itemExpanded?: boolean, onToggleItem?: () => void, onClose: () => void, onTimeLabel?: (label: Gtk.Label, time: number) => void }) {
+    const { n, groupCount = 1, isExpanded = false, onToggle, onClearGroup, isPopup = false, itemExpanded = false, onToggleItem, onClose, onTimeLabel } = props
     const sanitize = (text: string) => (text || "").replace(/<[^>]*>/g, "").split("\n").join(" ").replace(/\s+/g, " ").trim()
     const cleanSummary = sanitize(n.summary); const cleanBody = sanitize(n.body)
 
@@ -88,9 +97,9 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     header.append(new Gtk.Label({ label: cleanSummary, css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.START, ellipsize: 3, lines: 1, hexpand: true, max_width_chars: 30, xalign: 0 }))
 
     if (!isPopup) {
-        const now = Math.floor(Date.now()/1000); const d = now - n.time
-        const timeStr = d < 60 ? t("nc.time.now") : (d < 3600 ? `${Math.floor(d/60)}m` : `${Math.floor(d/3600)}h`)
-        header.append(new Gtk.Label({ label: timeStr, css_classes: ["nc-item-time"], halign: Gtk.Align.END }))
+        const timeLabel = new Gtk.Label({ label: timeAgo(n.time), css_classes: ["nc-item-time"], halign: Gtk.Align.END })
+        header.append(timeLabel)
+        onTimeLabel?.(timeLabel, n.time)
     }
 
     textStack.append(header)
@@ -249,7 +258,7 @@ export default function NotificationCenter() {
     const expandedGroups = new Set<string>()
     const expandedItems = new Set<number>()   // individual notifs (by n.id) in expanded size
     const toggleItem = (nid: number) => { if (expandedItems.has(nid)) expandedItems.delete(nid); else expandedItems.add(nid); updateNotifs() }
-    const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string }>()
+    const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string, timeLabels: { label: Gtk.Label, time: number }[] }>()
 
     // The content keeps its full width (GRID_WIDTH); LANE is extra space ADDED on the right
     // to host the scrollbar. The overlay scrollbar floats in that lane only when there's
@@ -314,8 +323,11 @@ export default function NotificationCenter() {
         sortedIds.forEach((id, index) => {
             const gl = groups.get(id)!; const sortedGroup = gl.sort((a, b) => b.time - a.time || b.id - a.id)
             const isExpanded = expandedGroups.has(id)
-            const timeBucket = Math.floor(Date.now() / 60_000)
-            const sig = `${gl.length}:${isExpanded}:${sortedGroup.map(n => n.id).join(",")}:${sortedGroup.map(n => expandedItems.has(n.id) ? '1' : '0').join('')}:${timeBucket}`
+            // Content (summary/body/time) is part of the signature so a REPLACED
+            // notification (same id, new content — progress updates) rebuilds its card.
+            // The old minute-bucket term is gone: timestamps restamp via refreshTimes()
+            // instead of tearing down every card each minute.
+            const sig = `${gl.length}:${isExpanded}:${sortedGroup.map(n => `${n.id}~${n.time}~${n.summary}~${n.body}`).join("|")}:${sortedGroup.map(n => expandedItems.has(n.id) ? '1' : '0').join('')}`
             let cache = groupCache.get(id)
             if (!cache) {
                 const subBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_top: 4 })
@@ -323,12 +335,14 @@ export default function NotificationCenter() {
                 const headerBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
                 const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
                 container.append(headerBox); container.append(revealer)
-                cache = { container, headerBox, revealer, subBox, sig: "" }
+                cache = { container, headerBox, revealer, subBox, sig: "", timeLabels: [] }
                 groupCache.set(id, cache); notificationItemsBox.append(container)
             }
             if (cache.sig !== sig) {
                 while (cache.headerBox.get_first_child()) cache.headerBox.get_first_child()?.unparent()
                 while (cache.subBox.get_first_child()) cache.subBox.get_first_child()?.unparent()
+                cache.timeLabels = []   // rebuilt capsules register fresh labels below
+                const regTime = (label: Gtk.Label, time: number) => cache!.timeLabels.push({ label, time })
                 const closeNC = () => { status.nc_open = false }
                 const onToggle = () => { if (expandedGroups.has(id)) expandedGroups.delete(id); else expandedGroups.add(id); updateNotifs() }
                 const appName = appService.getResolvedApp(sortedGroup[0].desktop_entry || sortedGroup[0].app_name)?.name || sortedGroup[0].app_name || "App"
@@ -336,33 +350,50 @@ export default function NotificationCenter() {
                     if (isExpanded) {
                         cache.container.remove_css_class("nc-group-with-ghost")
                         cache.headerBox.append(GroupControlHeader({ name: appName, count: gl.length, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()) }))
-                        sortedGroup.forEach(n => cache!.subBox.append(NotificationCapsule({ n, groupCount: 1, isExpanded: true, onToggle: undefined, onClearGroup: () => n.dismiss(), itemExpanded: expandedItems.has(n.id), onToggleItem: () => toggleItem(n.id), onClose: closeNC })))
+                        sortedGroup.forEach(n => cache!.subBox.append(NotificationCapsule({ n, groupCount: 1, isExpanded: true, onToggle: undefined, onClearGroup: () => n.dismiss(), itemExpanded: expandedItems.has(n.id), onToggleItem: () => toggleItem(n.id), onClose: closeNC, onTimeLabel: regTime })))
                     } else {
                         cache.container.add_css_class("nc-group-with-ghost")
-                        const capsule = NotificationCapsule({ n: sortedGroup[0], groupCount: gl.length, isExpanded: false, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()), onClose: closeNC })
+                        const capsule = NotificationCapsule({ n: sortedGroup[0], groupCount: gl.length, isExpanded: false, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()), onClose: closeNC, onTimeLabel: regTime })
                         cache.headerBox.append(makeGroupStack(capsule, gl.length))
                     }
                     cache.revealer.reveal_child = isExpanded
                 } else {
                     cache.container.remove_css_class("nc-group-with-ghost")
-                    cache.headerBox.append(NotificationCapsule({ n: sortedGroup[0], groupCount: 1, isExpanded: false, onToggle: undefined, onClearGroup: () => sortedGroup[0].dismiss(), itemExpanded: expandedItems.has(sortedGroup[0].id), onToggleItem: () => toggleItem(sortedGroup[0].id), onClose: closeNC }))
+                    cache.headerBox.append(NotificationCapsule({ n: sortedGroup[0], groupCount: 1, isExpanded: false, onToggle: undefined, onClearGroup: () => sortedGroup[0].dismiss(), itemExpanded: expandedItems.has(sortedGroup[0].id), onToggleItem: () => toggleItem(sortedGroup[0].id), onClose: closeNC, onTimeLabel: regTime }))
                     expandedGroups.delete(id); cache.revealer.reveal_child = false
                 }
                 cache.sig = sig
             }
             if (!cache.container.get_parent()) notificationItemsBox.append(cache.container)
         })
+
+        // Containers persist across updates, so append order alone goes stale: a
+        // brand-new group lands at the end and an old group that just received the
+        // newest notification stays put. Re-apply the recency order to the tree.
+        let prev: Gtk.Widget | null = null
+        sortedIds.forEach(id => {
+            const c = groupCache.get(id)?.container
+            if (!c || !c.get_parent()) return
+            notificationItemsBox.reorder_child_after(c, prev)
+            prev = c
+        })
     }
+
+    // Restamp the relative timestamps ("2m" → "3m") in place. A full updateNotifs()
+    // used to do this via a minute bucket in the cache signature — tearing down and
+    // recreating EVERY card (and re-reading hero images from disk) each minute.
+    const refreshTimes = () => groupCache.forEach(c => c.timeLabels.forEach(tl => tl.label.set_label(timeAgo(tl.time))))
 
     let timestampTimer: number | null = null
 
     status.connect("notify::nc-open", () => {
         if (status.nc_open) {
             updateNotifs()
+            refreshTimes()   // groups with an unchanged signature keep their old labels
             // Refresh relative timestamps ("2m", "1h") while NC is visible.
             timestampTimer = GLib.timeout_add(GLib.PRIORITY_LOW, 60_000, () => {
                 if (!status.nc_open) { timestampTimer = null; return GLib.SOURCE_REMOVE }
-                updateNotifs()
+                refreshTimes()
                 return GLib.SOURCE_CONTINUE
             })
         } else {

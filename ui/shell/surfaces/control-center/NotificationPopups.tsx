@@ -115,6 +115,14 @@ export function NotificationPopupsWidget() {
 
     const onResolved = (_: any, id: number) => animateOut(id)
 
+    // New banners are already suppressed while the CC/NC is open (see onNotified),
+    // but a banner ALREADY on screen would sit on top of the opening panel — the
+    // popups overlay stacks above CC/NC in the same corner. Retire live ones too.
+    // (animateOut defers the map deletion to the reveal callback, so iterating here is safe.)
+    const retireForPanel = () => { if (status.cc_open || status.nc_open) entries.forEach((_e, id) => animateOut(id)) }
+    status.connect("notify::cc-open", retireForPanel)
+    status.connect("notify::nc-open", retireForPanel)
+
     notifd.connect("notified", (s, id) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { onNotified(s, id); return GLib.SOURCE_REMOVE }))
     notifd.connect("resolved", (s, id) => GLib.idle_add(GLib.PRIORITY_DEFAULT, () => { onResolved(s, id); return GLib.SOURCE_REMOVE }))
 
