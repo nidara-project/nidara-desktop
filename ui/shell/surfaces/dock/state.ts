@@ -188,31 +188,22 @@ export interface AnimState {
 
 // --- EVENT BUSES ---
 // V499: Unified dragBus to ensure Dock and DockItem share the exact same state.
+// (The old hover half — setHover/clearHover/hoverId — was dead: nothing ever
+// called setHover, so hoverId was permanently "".)
 export const dragBus = {
-    listeners: [] as ((draggingId: string, hoverId: string) => void)[],
+    listeners: [] as ((draggingId: string) => void)[],
     draggingId: "",
-    hoverId: "",
-    subscribe(fn: (draggingId: string, hoverId: string) => void) {
+    subscribe(fn: (draggingId: string) => void) {
         this.listeners.push(fn)
         return () => { this.listeners = this.listeners.filter(l => l !== fn) }
     },
     emit() {
-        this.listeners.forEach(fn => fn(this.draggingId, this.hoverId))
+        this.listeners.forEach(fn => fn(this.draggingId))
     },
     setDragging(id: string) {
         this.draggingId = id
         this.emit()
     },
-    setHover(id: string) {
-        if (!id && this.draggingId) return // Sticky
-        if (this.hoverId === id) return
-        this.hoverId = id
-        this.emit()
-    },
-    clearHover() {
-        this.hoverId = ""
-        this.emit()
-    }
 }
 
 

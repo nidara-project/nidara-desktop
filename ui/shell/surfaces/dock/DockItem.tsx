@@ -162,7 +162,7 @@ export function DockItem(
     })
 
     // V457: Live reordering handler for visual states
-    const unsub = dragBus.subscribe((draggingId, hoverId) => {
+    const unsub = dragBus.subscribe((draggingId) => {
         const isDraggingMe = draggingId === appId || draggingId === cleanId
         if (isDraggingMe) {
             itemBox.add_css_class("cd-dragging")
@@ -699,7 +699,6 @@ export function DockItem(
             // handles the leave→re-enter cycle correctly without blocking.
             pointerBus.emitButtonReleased()
             dragBus.setDragging("")
-            dragBus.clearHover()
         }
         // Defer flag reset so leftClick.released (fires in the same event batch) still
         // sees gestureIsDragging = true and skips launching the app after a drag.

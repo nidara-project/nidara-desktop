@@ -403,25 +403,42 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
         if (draggingId && previewIdx !== -1) {
             const rel = mousePos - lockedStart
-            const slotSize = DOCK_CONSTANTS.APP_SLOT
-            let targetIdx = Math.floor(rel / slotSize)
-
-            if (previewIdx !== -1) {
-                const currentSlotCenter = previewIdx * slotSize + slotSize / 2
-                const distToCenter = rel - currentSlotCenter
-                if (Math.abs(distToCenter) < slotSize * 0.50) targetIdx = previewIdx
-            }
-
+            const slotW = DOCK_CONSTANTS.APP_SLOT
             const total = currentTotalItems || 10
-            if (targetIdx < 0) targetIdx = 0
+
+            // Map the pointer to a slot by accumulating each slot's REAL width in
+            // the current preview order (separators are SEPARATOR_SLOT, ~¼ of an
+            // APP_SLOT) from the same drag-locked origin the old model used. The
+            // old uniform floor(rel / APP_SLOT) pretended separators were app-sized,
+            // offsetting every slot right of a separator by the width difference
+            // (~54px at 64px icons): crossing the pinned/running separator needed
+            // the pointer ~54px past it, and the whole running region inherited
+            // that lag for the rest of the drag. Uses only the item ORDER — no live
+            // geometry, which shifts under magnification while dragging.
+            let targetIdx = -1
+            let holdLo = -1, holdHi = -1     // span of the current preview slot
+            let edge = 0
+            for (let i = 0; i < orderedIds.length; i++) {
+                const left = edge
+                edge += animRegistry.get(orderedIds[i])?.isSeparator
+                    ? DOCK_CONSTANTS.SEPARATOR_SLOT : slotW
+                if (i === previewIdx) { holdLo = left; holdHi = edge }
+                if (targetIdx === -1 && rel < edge) targetIdx = i
+            }
+            if (targetIdx === -1) targetIdx = total   // past the far end
             if (targetIdx > total) targetIdx = total
+
+            // Hysteresis: hold the current slot until the pointer is 15% of an
+            // APP_SLOT past its edges, so ±1px jitter on a slot boundary can't
+            // flip the preview back and forth — every flip is a full update()
+            // plus a slide animation of everything after the slot.
+            const H = slotW * 0.15
+            if (holdLo >= 0 && rel > holdLo - H && rel < holdHi + H) targetIdx = previewIdx
 
             if (targetIdx !== previewIdx) {
                 previewIdx = targetIdx
                 update(true)
             }
-
-            if (targetIdx < 0 || targetIdx > total) dragBus.clearHover()
         }
 
         animRegistry.forEach((state) => axis.computeTargets(mousePos, state))
