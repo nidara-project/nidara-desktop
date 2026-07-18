@@ -228,48 +228,82 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         runUnifiedTick(true)
     }
 
+    // Scratch spring channel, reused for every icon/channel every frame. The tick
+    // used to allocate 3–5 fresh channel objects per icon per frame (~4k objects/s
+    // while animating) purely as a calling convention for springStep — same math,
+    // zero garbage this way.
+    const scratchCh: SpringChannel = { target: 0, current: 0, velocity: 0 }
+
+    // ── Frame pacing ─────────────────────────────────────────────────────────
+    // The springs were tuned by eye on a 144 Hz monitor while the tick assumed a
+    // fixed 1/60 s step — i.e. the APPROVED feel is the simulation running 2.4×
+    // real time. That feel is canonical. Keep it exactly, but clock it from the
+    // frame clock's real elapsed time so it is refresh-rate independent:
+    //   144 Hz frame → 1/144 × 2.4 = 1/60  (identical to the old fixed step)
+    //   60 Hz frame  → 1/60  × 2.4 = 1/25  (same real-time speed, was 2.4× slower)
+    // and dropped frames no longer slow the animation down.
+    // MAX_DT caps recovery after long gaps AND keeps the semi-implicit Euler
+    // integration stable for the stiffest spring (reorder slide: ω=√700≈26.5,
+    // ω·dt must stay well below 2 → 26.5 × 1/25 ≈ 1.06).
+    const SIM_SPEED = 2.4
+    const MAX_DT = 1 / 25
+
     const runUnifiedTick = (seedFrame = false) => {
         if (tickId !== null) return
-        tickId = bar.add_tick_callback((_, _clock) => {
-            if (menuState.openCount > 0) return true
+        // Per-registration frame timestamp: the tick stops/starts (menus, settling),
+        // and a fresh registration must not integrate across the stopped gap.
+        let lastFrameUs = -1
+        tickId = bar.add_tick_callback((_, clock) => {
+            if (menuState.openCount > 0) {
+                // Springs are frozen while a menu is open — stop the tick entirely
+                // instead of idling every vsync. onMenuCountChanged restarts it
+                // (updateAllTargets + runUnifiedTick) when the count drops to 0.
+                tickId = null
+                return false
+            }
 
             if (orderedIds.length === 0) {
                 tickId = null
                 return false
             }
 
-            const dt = 1 / 60
+            const nowUs = clock.get_frame_time()
+            const dt = lastFrameUs < 0
+                ? 1 / 60   // first frame after (re)registration: one canonical step
+                : Math.min(((nowUs - lastFrameUs) / 1e6) * SIM_SPEED, MAX_DT)
+            lastFrameUs = nowUs
             let active = false
 
             // Step 1: advance all icon springs
             orderedIds.forEach((id) => {
                 const state = animRegistry.get(id)
                 if (!state) return
+                const ch = scratchCh
 
-                const scaleChannel: SpringChannel = { target: state.targetScale, current: state.currentScale, velocity: state.velocityScale }
-                const widthChannel: SpringChannel = { target: state.targetWidth, current: state.currentWidth, velocity: state.velocityWidth }
-                const marginChannel: SpringChannel = { target: state.targetMargin, current: state.currentMargin, velocity: state.velocityMargin }
+                ch.target = state.targetScale; ch.current = state.currentScale; ch.velocity = state.velocityScale
+                const a1 = springStep(ch, dt)
+                state.currentScale = ch.current; state.velocityScale = ch.velocity
 
-                const a1 = springStep(scaleChannel, dt)
-                const a2 = springStep(widthChannel, dt)
-                const a3 = springStep(marginChannel, dt)
+                ch.target = state.targetWidth; ch.current = state.currentWidth; ch.velocity = state.velocityWidth
+                const a2 = springStep(ch, dt)
+                state.currentWidth = ch.current; state.velocityWidth = ch.velocity
 
-                state.currentScale = scaleChannel.current; state.velocityScale = scaleChannel.velocity
-                state.currentWidth = widthChannel.current; state.velocityWidth = widthChannel.velocity
-                state.currentMargin = marginChannel.current; state.velocityMargin = marginChannel.velocity
+                ch.target = state.targetMargin; ch.current = state.currentMargin; ch.velocity = state.velocityMargin
+                const a3 = springStep(ch, dt)
+                state.currentMargin = ch.current; state.velocityMargin = ch.velocity
 
                 let a4 = false
                 if (state.currentSlideX !== 0 || state.targetSlideX !== 0) {
-                    const slideXCh: SpringChannel = { target: state.targetSlideX, current: state.currentSlideX, velocity: state.velocitySlideX }
-                    a4 = slideSpringStep(slideXCh, dt)
-                    state.currentSlideX = slideXCh.current; state.velocitySlideX = slideXCh.velocity
+                    ch.target = state.targetSlideX; ch.current = state.currentSlideX; ch.velocity = state.velocitySlideX
+                    a4 = slideSpringStep(ch, dt)
+                    state.currentSlideX = ch.current; state.velocitySlideX = ch.velocity
                 }
 
                 let a5 = false
                 if (state.currentHeight !== state.targetHeight) {
-                    const heightCh: SpringChannel = { target: state.targetHeight, current: state.currentHeight, velocity: state.velocityHeight }
-                    a5 = springStep(heightCh, dt)
-                    state.currentHeight = heightCh.current; state.velocityHeight = heightCh.velocity
+                    ch.target = state.targetHeight; ch.current = state.currentHeight; ch.velocity = state.velocityHeight
+                    a5 = springStep(ch, dt)
+                    state.currentHeight = ch.current; state.velocityHeight = ch.velocity
                 }
 
                 if (a1 || a2 || a3 || a4 || a5) active = true
@@ -369,25 +403,42 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
 
         if (draggingId && previewIdx !== -1) {
             const rel = mousePos - lockedStart
-            const slotSize = DOCK_CONSTANTS.APP_SLOT
-            let targetIdx = Math.floor(rel / slotSize)
-
-            if (previewIdx !== -1) {
-                const currentSlotCenter = previewIdx * slotSize + slotSize / 2
-                const distToCenter = rel - currentSlotCenter
-                if (Math.abs(distToCenter) < slotSize * 0.50) targetIdx = previewIdx
-            }
-
+            const slotW = DOCK_CONSTANTS.APP_SLOT
             const total = currentTotalItems || 10
-            if (targetIdx < 0) targetIdx = 0
+
+            // Map the pointer to a slot by accumulating each slot's REAL width in
+            // the current preview order (separators are SEPARATOR_SLOT, ~¼ of an
+            // APP_SLOT) from the same drag-locked origin the old model used. The
+            // old uniform floor(rel / APP_SLOT) pretended separators were app-sized,
+            // offsetting every slot right of a separator by the width difference
+            // (~54px at 64px icons): crossing the pinned/running separator needed
+            // the pointer ~54px past it, and the whole running region inherited
+            // that lag for the rest of the drag. Uses only the item ORDER — no live
+            // geometry, which shifts under magnification while dragging.
+            let targetIdx = -1
+            let holdLo = -1, holdHi = -1     // span of the current preview slot
+            let edge = 0
+            for (let i = 0; i < orderedIds.length; i++) {
+                const left = edge
+                edge += animRegistry.get(orderedIds[i])?.isSeparator
+                    ? DOCK_CONSTANTS.SEPARATOR_SLOT : slotW
+                if (i === previewIdx) { holdLo = left; holdHi = edge }
+                if (targetIdx === -1 && rel < edge) targetIdx = i
+            }
+            if (targetIdx === -1) targetIdx = total   // past the far end
             if (targetIdx > total) targetIdx = total
+
+            // Hysteresis: hold the current slot until the pointer is 15% of an
+            // APP_SLOT past its edges, so ±1px jitter on a slot boundary can't
+            // flip the preview back and forth — every flip is a full update()
+            // plus a slide animation of everything after the slot.
+            const H = slotW * 0.15
+            if (holdLo >= 0 && rel > holdLo - H && rel < holdHi + H) targetIdx = previewIdx
 
             if (targetIdx !== previewIdx) {
                 previewIdx = targetIdx
                 update(true)
             }
-
-            if (targetIdx < 0 || targetIdx > total) dragBus.clearHover()
         }
 
         animRegistry.forEach((state) => axis.computeTargets(mousePos, state))
@@ -1276,7 +1327,19 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         setFullscreenMode(hs.isRealFullscreen(client))
     }
 
-    hs.connect("changed", checkFullscreen)
+    const fsConn = hs.connect("changed", checkFullscreen)
+    // Own destroy hook (the main one above predates this section): the dock is
+    // rebuilt in-process on position/autoHide/geometry changes, and this handler
+    // used to leak — every rebuild left a live "changed" subscription driving
+    // fullscreen state into a destroyed window.
+    win.connect("destroy", () => {
+        safeDisconnect(hs, fsConn)
+        if (trackedClient && trackedClientConn !== null) {
+            safeDisconnect(trackedClient, trackedClientConn)
+            trackedClient = null
+            trackedClientConn = null
+        }
+    })
     checkFullscreen()
 
     update()

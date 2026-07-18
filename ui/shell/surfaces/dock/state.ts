@@ -3,7 +3,7 @@
  * V106: Extracted for modular architecture
  */
 
-import { Gtk, Gdk } from "ags/gtk4"
+import { Gtk } from "ags/gtk4"
 import { writeFile, readFile } from "ags/file"
 import GLib from "gi://GLib"
 // --- PERSISTENCE ---
@@ -22,13 +22,6 @@ const ensureConfigDir = () => {
         GLib.mkdir_with_parents(CONFIG_DIR, 0o755)
 }
 
-// --- DOCK CONFIGURATION ---
-export const DOCK_CONFIG = {
-    MAX_ICON_SIZE: 160,
-    MAGNIFICATION_SCALE: 2.2,
-    HOME_ICON_FALLBACK: ["user-home", "system-file-manager", "folder"],
-}
-
 // --- DOCK SETTINGS (Reactive, Persisted) ---
 
 export type DockPosition = 'bottom' | 'left' | 'right'
@@ -36,7 +29,7 @@ export type DockPosition = 'bottom' | 'left' | 'right'
 export interface DockSettings {
     iconSize: number        // 32–96, default 48
     magnification: boolean  // default true
-    maxIconSize: number     // 64–128, default 108
+    maxIconSize: number     // 64–128, default 128 (full magnification)
     showIndicators: boolean // default true
     screenGap: number       // 4–16, default 8
     autoHide: boolean       // hide dock when mouse leaves, default false
@@ -47,7 +40,7 @@ export interface DockSettings {
 const DOCK_DEFAULTS: DockSettings = {
     iconSize: 64,
     magnification: true,
-    maxIconSize: 108,
+    maxIconSize: 128,
     showIndicators: true,
     screenGap: 8,
     autoHide: false,
@@ -195,39 +188,24 @@ export interface AnimState {
 
 // --- EVENT BUSES ---
 // V499: Unified dragBus to ensure Dock and DockItem share the exact same state.
+// (The old hover half — setHover/clearHover/hoverId — was dead: nothing ever
+// called setHover, so hoverId was permanently "".)
 export const dragBus = {
-    listeners: [] as ((draggingId: string, hoverId: string) => void)[],
+    listeners: [] as ((draggingId: string) => void)[],
     draggingId: "",
-    hoverId: "",
-    subscribe(fn: (draggingId: string, hoverId: string) => void) {
+    subscribe(fn: (draggingId: string) => void) {
         this.listeners.push(fn)
         return () => { this.listeners = this.listeners.filter(l => l !== fn) }
     },
     emit() {
-        this.listeners.forEach(fn => fn(this.draggingId, this.hoverId))
+        this.listeners.forEach(fn => fn(this.draggingId))
     },
     setDragging(id: string) {
         this.draggingId = id
         this.emit()
     },
-    setHover(id: string) {
-        if (!id && this.draggingId) return // Sticky
-        if (this.hoverId === id) return
-        this.hoverId = id
-        this.emit()
-    },
-    clearHover() {
-        this.hoverId = ""
-        this.emit()
-    }
 }
 
-
-export const mouseBus = {
-    listeners: new Set<(x: number) => void>(),
-    emit(x: number) { this.listeners.forEach(l => l(x)) },
-    subscribe(l: (x: number) => void) { this.listeners.add(l); return () => this.listeners.delete(l) }
-}
 
 // Signals any button release on a dock icon (click, long-press, drag end).
 // Dock.tsx subscribes to set isDndEnding=true, blocking the spurious

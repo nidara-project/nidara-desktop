@@ -37,9 +37,7 @@ function deriveConstants(iconSize: number, maxSize: number, magnification: boole
         // ... (physics constants stay same)
         minSize: iconSize,
         maxSize: magnification ? maxSize : iconSize,
-        range: 2.5,
         SIGMA: 1.1,
-        sensitivity: 0.35,
         STIFFNESS: 320,
         DAMPING: 38,
 
@@ -55,17 +53,12 @@ function deriveConstants(iconSize: number, maxSize: number, magnification: boole
         INDICATOR_GAP: INDICATOR_PAD,
         PILL_PADDING: PILL_PAD,
 
-        // ANIMATION
-        TICK_INTERVAL: 16,
-        TOOLTIP_DELAY: 500,
-
         // Snap thresholds
         SNAP_POS: 0.3,
         SNAP_VEL: 0.5,
 
         // WINDOW GEOMETRY
         PILL_HEIGHT: pillHeight,
-        WINDOW_HEIGHT: Math.round(pillHeight + (maxSize - iconSize) + (PILL_PAD * 2)),
         EXCLUSIVE_ZONE: pillHeight + screenGap,
     }
 }
@@ -131,12 +124,16 @@ export function calculateDockItemMetrics(
             return {
                 scale: targetScale,
                 width: DOCK_CONSTANTS.SEPARATOR_SLOT * targetScale,
-                height: 48,
+                // Height is NOT animated: neither axis applies currentHeight to the
+                // separator line (H uses the SEPARATOR_HEIGHT constant, V ignores it),
+                // so returning the rest height keeps the height spring settled instead
+                // of pointlessly animating a value nobody renders.
+                height: DOCK_CONSTANTS.SEPARATOR_HEIGHT,
                 translateY: 0,
                 margin: 0,
             };
         }
-        return { scale: 1.0, width: DOCK_CONSTANTS.SEPARATOR_SLOT, height: 48, translateY: 0, margin: 0 };
+        return { scale: 1.0, width: DOCK_CONSTANTS.SEPARATOR_SLOT, height: DOCK_CONSTANTS.SEPARATOR_HEIGHT, translateY: 0, margin: 0 };
     }
 
     const targetScale = 1 + (intensity * ((DOCK_CONSTANTS.maxSize / DOCK_CONSTANTS.minSize) - 1));
@@ -144,7 +141,9 @@ export function calculateDockItemMetrics(
 
     return {
         width: targetWidth,
-        height: targetWidth,
+        // Same as the separator: icon layout never reads currentHeight (both axes size
+        // the item from width/scale/margins), so keep the height channel at rest.
+        height: DOCK_CONSTANTS.PILL_HEIGHT,
         scale: targetScale,
         translateY: 0,
         margin: DOCK_CONSTANTS.ICON_MARGIN,
