@@ -240,24 +240,21 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     // 2-line normal size can show, or an image worth the full-width treatment.
     const expandable = !isPopup && groupCount === 1 && !!onToggleItem && (actions.length > 0 || cleanBody.length > 70 || hasExpandedHero(n))
 
-    // Controls live ON the title line (title · time · badge/chevron · close) — a dedicated
-    // right column reserved its width across every text line, shortening the body too; only
-    // the title should cede space to them. The thumb stays the card's right edge.
-    // The chevron/close are hover-only (macOS): out of the layout at rest so the title
-    // keeps the width, swapped in for the timestamp while the pointer is on the card.
-    // The count badge is information, not a control — always visible.
-    const hoverControls: Gtk.Widget[] = []
+    // Title line: title · time · badge/chevron — a dedicated right column reserved its
+    // width across every text line, shortening the body too; only the title should cede
+    // space. The close is NOT here: it floats over the card's top-left corner (overlay
+    // below), hover-only — the one macOS position, identical on banners and NC rows.
+    // The chevron is hover-only too, swapped in for the timestamp (line stays put); the
+    // count badge is information, not a control — always visible.
+    let chevBtn: Gtk.Widget | null = null
     if (isCollapsedGroup) {
         header.append(new Gtk.Label({ label: `${groupCount}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
     } else if (expandable) {
-        const chevBtn = IconButton({ icon: itemExpanded ? Icons.chevronUp : Icons.chevronDown, iconSize: 13, variant: "neutral", captureClick: true, onClick: onToggleItem })
-        hoverControls.push(chevBtn); header.append(chevBtn)
+        chevBtn = IconButton({ icon: itemExpanded ? Icons.chevronUp : Icons.chevronDown, iconSize: 13, variant: "neutral", captureClick: true, onClick: onToggleItem })
+        chevBtn.set_visible(false)
+        header.append(chevBtn)
     }
-    hoverControls.push(clearBtn)
-    // Banners float the close over the TOP-LEFT corner instead (overlay below, macOS
-    // shape) — the right edge belongs to the hover action capsules there.
-    if (!isPopup) header.append(clearBtn)
-    hoverControls.forEach(w => w.set_visible(false))
+    clearBtn.set_visible(false)
 
     const openApp = async () => {
         const actions = n.get_actions() || []; const hasAction = (id: string) => actions.some(a => a.id === id)
@@ -300,29 +297,28 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     // Release-phase click on every notification capsule (banner AND NC row):
     // both are swipe-to-dismiss, and a press-phase tap would fire before the
     // swipe can be recognised. See attachSwipeDismiss.
-    // Banner controls ride a Gtk.Overlay above the row content (they don't affect the
-    // banner's size — overlay children aren't measured): close floating on the top-left
-    // corner, action capsules on the right edge. Keeping the close in the title line
-    // there would collide with the top action capsule (both live at the right edge).
-    let content: Gtk.Widget = outerV
-    if (isPopup) {
-        const ov = new Gtk.Overlay({ child: outerV })
-        clearBtn.halign = Gtk.Align.START; clearBtn.valign = Gtk.Align.START
-        clearBtn.margin_start = 6; clearBtn.margin_top = 6
-        ov.add_overlay(clearBtn)
-        if (bannerActions) ov.add_overlay(bannerActions)
-        content = ov
-    }
-    const capsule = SquircleContainer({ child: content, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
-    // Hover ⇄ rest: controls in, timestamp out (leave restores). enter/leave fire on the
-    // capsule's whole territory — moving onto a child does NOT emit leave.
+    // Hover controls ride a Gtk.Overlay above the card content (they don't affect its
+    // size — overlay children aren't measured): the close floats over the top-left
+    // corner on EVERY card (banner and NC row — one macOS position, no inconsistency),
+    // banner action capsules take the right edge.
+    const ov = new Gtk.Overlay({ child: outerV })
+    clearBtn.halign = Gtk.Align.START; clearBtn.valign = Gtk.Align.START
+    clearBtn.margin_start = 6; clearBtn.margin_top = 6
+    ov.add_overlay(clearBtn)
+    if (bannerActions) ov.add_overlay(bannerActions)
+    const capsule = SquircleContainer({ child: ov, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
+    // Hover ⇄ rest (leave restores). The timestamp only swaps out when a chevron takes
+    // its place — with the close in the corner, hiding it otherwise buys nothing.
+    // enter/leave fire on the capsule's whole territory — a child crossing is not a leave.
     const hoverMotion = new Gtk.EventControllerMotion()
     hoverMotion.connect("enter", () => {
-        timeLabel?.set_visible(false); hoverControls.forEach(w => w.set_visible(true))
+        clearBtn.set_visible(true)
+        if (chevBtn) { timeLabel?.set_visible(false); chevBtn.set_visible(true) }
         if (bannerActions) { bannerActions.set_visible(true); if (thumb) thumb.opacity = 0 }
     })
     hoverMotion.connect("leave", () => {
-        timeLabel?.set_visible(true); hoverControls.forEach(w => w.set_visible(false))
+        clearBtn.set_visible(false)
+        if (chevBtn) { timeLabel?.set_visible(true); chevBtn.set_visible(false) }
         if (bannerActions) { bannerActions.set_visible(false); if (thumb) thumb.opacity = 1 }
     })
     capsule.add_controller(hoverMotion)

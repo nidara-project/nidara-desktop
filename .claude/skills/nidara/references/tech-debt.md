@@ -888,19 +888,18 @@ These were paid down; the *rule* remains:
   Banners never expand. Card controls (time · count badge / expand chevron · close) share
   the TITLE line — never a dedicated right column, which shortened every text line instead
   of just the title. The thumb is the card's right edge, spanning title+body centred.
-  The chevron/close are HOVER-ONLY (macOS): `visible:false` at rest so the title keeps the
-  width, swapped in for the timestamp on card enter/leave (EventControllerMotion on the
-  capsule — child crossings don't emit leave). The count badge is info, always visible.
-  The title line carries `height_request: 22` so the swap can't nudge tall rows by 1px.
-  The expanded-group control header hover-reveals via OPACITY + `can_target` instead — its
-  buttons steal no text width, and `visible` would reflow the row height there.
-  Banner ACTIONS are hover-revealed too: ≤2 glass capsules on a `Gtk.Overlay` at the right
-  edge (overlay children aren't measured → the banner never grows, the stack never shifts);
-  the thumb fades via opacity so text never rewraps mid-hover; presses are capture-claimed
-  (beat the card tap + swipe). The expanded NC row still lists every action below the text.
-  On BANNERS the close is NOT in the title line — it floats over the top-left corner via
-  the same overlay (macOS banner shape): the right edge belongs to the action capsules and
-  a title-line close collides with the top one. NC rows keep the title-line close.
+  All card controls are HOVER-ONLY (macOS), one scheme on EVERY card (banner and NC row —
+  no per-surface inconsistency): the CLOSE floats over the top-left corner on a
+  `Gtk.Overlay` (overlay children aren't measured → never affects card size); the RIGHT
+  edge is contextual — expand chevron on the title line (swapped in for the timestamp so
+  the line stays put; no chevron → the timestamp just stays) for NC rows, ≤2 glass action
+  capsules overlaid for banners (the thumb fades via opacity so text never rewraps
+  mid-hover; presses capture-claimed to beat the card tap + swipe). The count badge is
+  info, always visible. Reveal is via EventControllerMotion on the capsule (child
+  crossings don't emit leave); the title line pins `height_request: 22` so reveals can't
+  nudge tall rows by 1px. The expanded-group control header hover-reveals via OPACITY +
+  `can_target` instead — its buttons steal no text width, and `visible` would reflow the
+  row height there. The expanded NC row still lists every action below the text.
 
 ---
 
