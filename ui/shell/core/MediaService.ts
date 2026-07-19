@@ -27,6 +27,7 @@
 import AstalMpris from "gi://AstalMpris"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import GioUnix from "gi://GioUnix"
 import { execAsync } from "ags/process"
 import { safeDisconnect } from "./signals"
 
@@ -135,11 +136,13 @@ export function playerLabel(p: any): string {
     return p?.identity || p?.entry || "Player"
 }
 
-/** The player's app icon as a GIcon (desktop entry lookup), or null. */
+/** The player's app icon as a GIcon (desktop entry lookup), or null. GJS moved
+ *  DesktopAppInfo to GioUnix (GLib ≥ 2.80); the Gio.* alias still works but logs a
+ *  Gjs-WARNING with a full stack trace on every access. */
 export function playerAppIcon(p: any): any {
     const entry: string = p?.entry || ""
     if (!entry) return null
-    try { return Gio.DesktopAppInfo.new(`${entry}.desktop`)?.get_icon() ?? null }
+    try { return GioUnix.DesktopAppInfo.new(`${entry}.desktop`)?.get_icon() ?? null }
     catch { return null }
 }
 

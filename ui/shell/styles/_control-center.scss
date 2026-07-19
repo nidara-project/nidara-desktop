@@ -247,8 +247,13 @@
 
 .nc-group-with-ghost {
     /* The ghost strip's height is already accounted for; claw back just a little so the
-       gap to the next notification stays comfortable for both 1- and 2-layer stacks. */
+       gap to the next notification stays comfortable for both 1- and 2-layer stacks.
+       min-height matches the negative margin: when the swipe/clear-all collapse animates
+       the group's content below 2px, the box would report a NEGATIVE min height (content
+       + margin) and GTK warns "sizes must be >= 0" once per group. The floor keeps the
+       reported size at exactly 0 on those last frames — visually identical. */
     margin-bottom: -2px;
+    min-height: 2px;
 }
 
 .nc-badge-header {
