@@ -27,6 +27,7 @@
 import AstalMpris from "gi://AstalMpris"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
+import GioUnix from "gi://GioUnix"
 import { execAsync } from "ags/process"
 import { safeDisconnect } from "./signals"
 
@@ -140,7 +141,9 @@ export function playerLabel(p: any): string {
  *  the installed file is chromium.desktop; some players omit it entirely), so
  *  the lookup walks candidates — exact entry, lowercased, the bus-name app
  *  segment (org.mpris.MediaPlayer2.<app>[.instanceN]) — and falls back to a
- *  desktop-file search on the human identity ("Chromium" → chromium.desktop). */
+ *  desktop-file search on the human identity ("Chromium" → chromium.desktop).
+ *  Uses GioUnix.DesktopAppInfo: GJS moved it there (GLib ≥ 2.80); the Gio.*
+ *  alias still works but logs a Gjs-WARNING with a stack trace per access. */
 export function playerAppIcon(p: any): any {
     if (!p) return null
     const candidates: string[] = []
@@ -151,15 +154,15 @@ export function playerAppIcon(p: any): any {
     if (tail) candidates.push(tail, tail.split(".")[0])
     for (const c of candidates) {
         try {
-            const icon = Gio.DesktopAppInfo.new(`${c}.desktop`)?.get_icon()
+            const icon = GioUnix.DesktopAppInfo.new(`${c}.desktop`)?.get_icon()
             if (icon) return icon
         } catch {}
     }
     const identity: string = p.identity || ""
     if (identity) {
         try {
-            const id = Gio.DesktopAppInfo.search(identity)[0]?.[0]
-            const icon = id ? Gio.DesktopAppInfo.new(id)?.get_icon() : null
+            const id = GioUnix.DesktopAppInfo.search(identity)[0]?.[0]
+            const icon = id ? GioUnix.DesktopAppInfo.new(id)?.get_icon() : null
             if (icon) return icon
         } catch {}
     }
