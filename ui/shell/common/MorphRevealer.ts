@@ -76,10 +76,10 @@ import { drawSquircle } from "./DrawingUtils"
 
 const CONTENT_START = 0.45     // contentTarget fades over [CONTENT_START, 1]
 const SOURCE_FADE_END = 0.35   // sourceGhost dissolves over [0, SOURCE_FADE_END]
-// TEST DIAL (2026-07-19): global slow-motion multiplier so the morph can be
-// studied by eye while the choreography is tuned — the transformation must be
-// clearly perceptible (capsule visibly growing/settling). SHIP AT 1.
-const SLOWMO = 5
+// TUNING DIAL: global slow-motion multiplier so the morph can be studied by
+// eye while choreography changes are tuned (5 was used for the 2026-07-19
+// sessions). SHIPS AT 1 — never merge a branch with this raised.
+const SLOWMO = 1
 const PAIR_STAGGER = 0       // per-pair timeline offset. 0.06 was tried and read
                              // as "out of sync with the animation" (user,
                              // 2026-07-19): ghosts move in lockstep with the shape.
