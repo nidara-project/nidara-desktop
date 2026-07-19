@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import AstalMpris from "gi://AstalMpris"
 import SquircleContainer from "../../common/SquircleContainer"
-import { MorphRevealer, MorphGlass } from "../../common/MorphRevealer"
+import { MorphRevealer, MorphGlass, MorphPair } from "../../common/MorphRevealer"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { CAPSULE_BORDER } from "../bar/capsule"
 import Theme from "../../core/ThemeManager"
@@ -10,7 +10,7 @@ import status, { ISLAND_OVERVIEW, ISLAND_PLAYER } from "../../core/Status"
 import * as media from "../../core/MediaService"
 import { safeDisconnect } from "../../core/signals"
 import WorkspaceOverview, { WO_GLASS } from "../overview/WorkspaceOverview"
-import PlayerIsland, { PlayerCompact, PLAYER_GLASS } from "./PlayerIsland"
+import PlayerIsland, { PlayerCompact, makeArtGhost, PLAYER_GLASS } from "./PlayerIsland"
 
 // The Activity Island — the bar-center capsule as a MULTI-PURPOSE morphing
 // surface. The capsule is the island's COMPACT state; each thing it can host
@@ -81,7 +81,8 @@ export function ActivityIsland() {
         interpolate_size: true,
     })
     compactStack.add_named(dotsBox, "dots")
-    compactStack.add_named(PlayerCompact(), "player")
+    const playerPage = PlayerCompact()
+    compactStack.add_named(playerPage, "player")
     // Expansion is EXPLICIT and follows the compact: the capsule opens what it
     // is currently showing. The overview always stays reachable via Super+W.
     let activityLive = false
@@ -151,17 +152,41 @@ export function ActivityIsland() {
 
     const registerMode = (mode: IslandMode) => {
         const w = mode.widget as any
+        // Traveling twins, one set per revealer (a widget has ONE parent):
+        // capsule dots → the mode's landing dots; compact cover art → the
+        // mode's art slot. Pairs whose source page isn't the live compact are
+        // skipped frame-by-frame inside MorphRevealer (rectOf → unmapped).
+        const pairs: MorphPair[] = []
+        if (w.morphDots) {
+            for (let i = 0; i < WS_COUNT; i++) pairs.push({
+                ghost: makeWorkspaceDot(i + 1),
+                getSource: () => ((capsule as any).morphDots?.[i] as Gtk.Widget) ?? null,
+                getTarget: () => (w.morphDots?.[i] as Gtk.Widget) ?? null,
+            })
+        }
+        if (w.morphArt) pairs.push({
+            ghost: makeArtGhost(),
+            getSource: () => ((playerPage as any).artDa as Gtk.Widget) ?? null,
+            getTarget: () => (w.morphArt as Gtk.Widget) ?? null,
+        })
         const revealer = new MorphRevealer(mode.widget, {
             getSourceWidget: () => capsule,
             contentTarget: w.morphContent ?? null,
             glassWidget: w.morphGlass ?? null,
             glassArea: (w.morphGlass as any)?.glassArea ?? null,
-            // Traveling ghost dots only when the mode has landing dots.
-            dots: w.morphDots ? {
-                ghosts: Array.from({ length: WS_COUNT }, (_, i) => makeWorkspaceDot(i + 1)),
-                getSource: (i: number) => ((capsule as any).morphDots?.[i] as Gtk.Widget) ?? null,
-                getTarget: (i: number) => (w.morphDots?.[i] as Gtk.Widget) ?? null,
-            } : null,
+            pairs,
+            // Media compact content (title/EQ/art) dissolves into the growing
+            // island whenever the compact is on the player page — for EVERY
+            // mode (opening the overview over playing music must not blink
+            // the compact out either). The dots page needs no source ghost
+            // when its landing dots exist (the pairs ARE the continuity);
+            // known gap: `togglePlayer` via IPC while the compact shows dots
+            // still blinks them out (no landing slot to fly to) — rare, agent
+            // path only. Modes with an art pair get a twin with a transparent
+            // art slot: the flying art ghost owns those pixels.
+            sourceGhost: PlayerCompact({ ghost: true, hideArt: !!w.morphArt }),
+            getSourceContent: () => playerPage,
+            getSourceGhostOn: () => activityLive,
             glassFrom: compactGlass,
             glassTo: mode.glass,
         })

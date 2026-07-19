@@ -379,6 +379,8 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     })
 
     updatePlayer()
+    // Landing slot of the island morph's cover-art pair (PlayerIsland.tsx).
+    ;(root as any).artDa = artDa
     return root
 }
 

@@ -21,6 +21,11 @@ import { safeDisconnect } from "../../core/signals"
 //     mini cover art + ellipsized title + a small animated EQ (design agreed
 //     2026-07-19). Self-syncing from MediaService, same lifetime model as the
 //     other bar capsule content (long-lived, never disconnected).
+//   - PlayerCompact({ ghost: true }) / makeArtGhost(): twins for the morph's
+//     continuity tracks (MorphRevealer sourceGhost / art MorphPair). Ghost
+//     twins run NO timers of their own — the EQ phase is module-shared and
+//     advanced only by the real compact, so a ghost painted mid-morph shows
+//     bit-identical bars for free (and an idle ghost never damages the bar).
 //
 // The WHEN (mutation policy, pause grace, click routing) lives in
 // ActivityIsland.tsx — this file only renders.
@@ -52,16 +57,22 @@ export default function PlayerIsland() {
     })
     windowContent.append(squircle)
 
-    // Morph handles (see common/MorphRevealer.ts). No morphDots — the ghost
-    // dots only travel for the overview; the player content just fades in.
+    // Morph handles (see common/MorphRevealer.ts). morphArt is the landing
+    // slot of the cover-art MorphPair: the compact's mini art flies into it.
     ;(windowContent as any).morphContent = inner
     ;(windowContent as any).morphGlass = squircle
+    ;(windowContent as any).morphArt = (panel as any).artDa ?? null
     return windowContent
 }
 
 // ── Compact form ─────────────────────────────────────────────────────────────
 
 const ART = 20        // mini cover art (squircle-clipped, like the panel's 96px art)
+const PANEL_ART = 96  // MUST match buildMediaDetailPanel's ART_SIZE
+// Compact art corner radius = the panel's 14 scaled to the compact size, so
+// the art MorphPair's ghost (a 96px twin, uniformly scaled) matches BOTH
+// endpoints — a fixed 7 here made the frame-0 swap visibly round the corners.
+const ART_RADIUS = 14 * ART / PANEL_ART
 const EQ_BARS = 3
 const EQ_W = 13
 const EQ_H = 13
@@ -71,7 +82,18 @@ const EQ_H = 13
 // widgets/media.ts). 10 fps still reads as motion at this size.
 const EQ_FRAME_MS = 100
 
-export function PlayerCompact(): Gtk.Widget {
+// Module-shared EQ phase: advanced ONLY by real (non-ghost) compacts, read by
+// every EQ draw — a morph ghost's bars stay in perfect sync with the capsule's
+// without running a second timer.
+let eqPhase = 0
+
+export function PlayerCompact(opts: {
+    ghost?: boolean
+    /** Ghost twins for a mode with an art MorphPair keep the art SLOT (layout
+     *  must match the real compact) but paint it transparent — the flying art
+     *  ghost owns those pixels; two visible copies would diverge mid-flight. */
+    hideArt?: boolean
+} = {}): Gtk.Widget {
     let player: any = null
     let playerSig: number | null = null
     let playing = false
@@ -83,11 +105,12 @@ export function PlayerCompact(): Gtk.Widget {
     const artDa = new Gtk.DrawingArea({
         width_request: ART, height_request: ART,
         valign: Gtk.Align.CENTER,
+        opacity: opts.hideArt ? 0 : 1,
     })
     artDa.set_draw_func((_, cr, w, h) => {
         if (w <= 0 || h <= 0) return
         cr.save()
-        createSquirclePath(cr, 0, 0, w, h, 7, 3.2)
+        createSquirclePath(cr, 0, 0, w, h, ART_RADIUS, 3.2)
         if (artPixbuf) {
             cr.clip()
             Gdk.cairo_set_source_pixbuf(cr, artPixbuf, 0, 0)
@@ -108,7 +131,6 @@ export function PlayerCompact(): Gtk.Widget {
     })
 
     // EQ — three round-capped bars, animated only while PLAYING and mapped.
-    let phase = 0
     let eqTimer: number | null = null
     const eq = new Gtk.DrawingArea({
         width_request: EQ_W, height_request: EQ_H,
@@ -125,7 +147,7 @@ export function PlayerCompact(): Gtk.Widget {
         cr.setLineWidth(bw)
         cr.setLineCap(1)   // round caps, same as the resource rings
         for (let i = 0; i < EQ_BARS; i++) {
-            const lvl = playing ? 0.35 + 0.65 * Math.abs(Math.sin(phase * EQ_SPEED[i] + i * 1.7)) : 0.28
+            const lvl = playing ? 0.35 + 0.65 * Math.abs(Math.sin(eqPhase * EQ_SPEED[i] + i * 1.7)) : 0.28
             const x = i * (bw + gap) + bw / 2
             const top = h - Math.max(bw, lvl * h) + bw / 2
             cr.moveTo(x, h - bw / 2)
@@ -134,17 +156,18 @@ export function PlayerCompact(): Gtk.Widget {
         }
     })
     const ensureEqTimer = () => {
-        if (eqTimer !== null || !playing || !eq.get_mapped()) return
+        if (opts.ghost || eqTimer !== null || !playing || !eq.get_mapped()) return
         eqTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, EQ_FRAME_MS, () => {
             if (!playing || !eq.get_mapped()) { eqTimer = null; return GLib.SOURCE_REMOVE }
-            phase += 0.35
+            eqPhase += 0.35
             eq.queue_draw()
             return GLib.SOURCE_CONTINUE
         })
     }
     // Compact hidden (stack on the dots page) → unmapped → timer stops; map
-    // while playing restarts it.
-    eq.connect("map", ensureEqTimer)
+    // while playing restarts it. (Ghost twins never tick: the morph's own
+    // per-frame redraw repaints them reading the shared phase.)
+    if (!opts.ghost) eq.connect("map", ensureEqTimer)
 
     const box = new Gtk.Box({ spacing: 8, margin_start: 12, margin_end: 14 })
     box.append(artDa)
@@ -188,5 +211,49 @@ export function PlayerCompact(): Gtk.Widget {
     })
     rewire()
 
+    // Source handle for the art MorphPair (ActivityIsland wires it).
+    ;(box as any).artDa = artDa
     return box
+}
+
+// ── Art morph ghost ──────────────────────────────────────────────────────────
+// The traveling twin of the cover art: natural size = the PANEL slot (96px,
+// radius 14 — identical draw to buildMediaDetailPanel's artDa), scaled DOWN
+// by the morph toward the compact's 20px slot, so it stays sharp the whole
+// flight and matches both endpoints (the compact's radius is derived from
+// this one, see ART_RADIUS).
+export function makeArtGhost(): Gtk.Widget {
+    let pixbuf: GdkPixbuf.Pixbuf | null = null
+    let loaded: string | null = null
+    const da = new Gtk.DrawingArea({ width_request: PANEL_ART, height_request: PANEL_ART })
+    // Decode guarded by path identity, evaluated ON DRAW: the ghost only
+    // paints during morph frames (the revealer redraws it every frame), and a
+    // track can change while the island sits open — checking here means the
+    // close flight always carries the CURRENT art, with no per-tick wiring.
+    const sync = () => {
+        const path = media.resolveCoverArt(media.selectedPlayer())
+        if (path === loaded) return
+        loaded = path
+        if (path) {
+            try { pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, PANEL_ART, PANEL_ART, false) }
+            catch { pixbuf = null }
+        } else { pixbuf = null }
+    }
+    da.set_draw_func((_, cr, w, h) => {
+        if (w <= 0 || h <= 0) return
+        sync()
+        cr.save()
+        createSquirclePath(cr, 0, 0, w, h, 14, 3.2)
+        if (pixbuf) {
+            cr.clip()
+            Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
+            cr.paint()
+        } else {
+            const c = Theme.chromeIsDark ? 1 : 0
+            cr.setSourceRGBA(c, c, c, 0.1)
+            cr.fill()
+        }
+        cr.restore()
+    })
+    return da
 }

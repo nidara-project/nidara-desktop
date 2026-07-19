@@ -27,18 +27,31 @@ import { drawSquircle } from "./DrawingUtils"
 //      defect (scaling the rendered container stretched them) is gone. The
 //      compositor blur keys off the painted pixels, so it follows the morph
 //      for free.
-//   2. THE DOTS. The capsule's five workspace dots don't vanish — ghost
-//      twins (real `.workspace-dot` widgets, children of this revealer, so
-//      CSS state/colors stay live) travel per-dot from each capsule dot's
-//      bounds to its landing dot in the island content (the card headers),
-//      with a slight per-dot stagger. The landing dots are opacity-0 until
-//      the morph rests, then swap in under the ghosts invisibly.
-//   3. THE CONTENT. `contentTarget` (labels + schematics) fades in over the
+//   2. THE PAIRS. Compact elements with a slot in the expanded content don't
+//      vanish — ghost twins (REAL widgets, children of this revealer, so CSS
+//      state/live data stay correct) travel from each source element's bounds
+//      to where its landing element is painted this frame. The landing
+//      elements are opacity-0 until the morph rests, then swap in under the
+//      ghosts invisibly. Consumers: the capsule's five workspace dots → the
+//      overview card headers; the media compact's cover art → the player
+//      panel's artwork. A pair whose source is unmapped this open (the
+//      compact has mutated to another page) is skipped and its landing
+//      element rides the content fade instead.
+//   3. THE SOURCE CONTENT. Compact content WITHOUT a landing slot (media
+//      title/EQ; the whole media compact when opening the overview) must not
+//      blink out on frame 0: a `sourceGhost` twin rides the growing shape
+//      (uniform scale, anchored where the compact content sits inside the
+//      source pill) and dissolves over [0, SOURCE_FADE_END] — the compact
+//      visibly melts INTO the island instead of disappearing. Gated per
+//      reveal by `getSourceGhostOn` (the island only shows it while the
+//      compact is actually on the matching page).
+//   4. THE CONTENT. `contentTarget` (the expanded content) fades in over the
 //      LAST stretch [CONTENT_START, 1] while the child paints with the glass
 //      rect mapped onto the interpolated rect — content materializes INSIDE
 //      the already-formed shape (it's fading in from 0 during that window, so
 //      the transient scaled render is imperceptible; the SHAPE is never
-//      scaled).
+//      scaled). Between the source dissolve and the content fade the flying
+//      pair ghosts (art, dots) carry the continuity.
 //
 // Bounds are re-read via compute_bounds every frame (bar relayouts can't
 // leave a stale origin). If the source capsule is hidden/unmapped at open
@@ -61,14 +74,15 @@ import { drawSquircle } from "./DrawingUtils"
 // edge then stays pinned through the whole lerp — the capsule never travels,
 // it only transforms.
 
-const CONTENT_START = 0.45   // contentTarget fades over [CONTENT_START, 1]
+const CONTENT_START = 0.45     // contentTarget fades over [CONTENT_START, 1]
+const SOURCE_FADE_END = 0.35   // sourceGhost dissolves over [0, SOURCE_FADE_END]
 // TEST DIAL (2026-07-19): global slow-motion multiplier so the morph can be
 // studied by eye while the choreography is tuned — the transformation must be
 // clearly perceptible (capsule visibly growing/settling). SHIP AT 1.
 const SLOWMO = 5
-const DOT_STAGGER = 0        // per-dot timeline offset. 0.06 was tried and read
+const PAIR_STAGGER = 0       // per-pair timeline offset. 0.06 was tried and read
                              // as "out of sync with the animation" (user,
-                             // 2026-07-19): dots move in lockstep with the shape.
+                             // 2026-07-19): ghosts move in lockstep with the shape.
 const POP_SOLID_AT = 0.25    // fallback pop only: whole-widget fade window
 const GLASS_INSET = 2.0      // MUST match SquircleContainer's techInset default
 
@@ -84,6 +98,16 @@ export interface MorphGlass {
 }
 
 interface Rect { x: number, y: number, w: number, h: number }
+
+/** One traveling element: a ghost twin flies from the live source element's
+ *  bounds to where the live target element is painted each frame. Ghost MUST
+ *  render identically to both ends (same widget/draw code) or the endpoint
+ *  swaps read as pops. */
+export interface MorphPair {
+    ghost: Gtk.Widget
+    getSource: () => Gtk.Widget | null
+    getTarget: () => Gtk.Widget | null
+}
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v))
@@ -106,11 +130,10 @@ export class MorphRevealer extends Gtk.Widget {
     contentTarget: Gtk.Widget | null
     glassWidget: Gtk.Widget | null
     glassArea: Gtk.Widget | null
-    dots: {
-        ghosts: Gtk.Widget[],
-        getSource: (i: number) => Gtk.Widget | null,
-        getTarget: (i: number) => Gtk.Widget | null,
-    } | null
+    pairs: MorphPair[]
+    sourceGhost: Gtk.Widget | null
+    getSourceContent: (() => Gtk.Widget | null) | null
+    getSourceGhostOn: (() => boolean) | null
     glassFrom: () => MorphGlass
     glassTo: () => MorphGlass
     durationIn: number
@@ -118,6 +141,7 @@ export class MorphRevealer extends Gtk.Widget {
     progress = 0          // 0 = collapsed into the source, 1 = at rest
     tickId: number | null = null
     fromSource = false    // latched per open: real capsule morph vs fallback pop
+    ghostOn = false       // latched per reveal(): paint the sourceGhost track?
 
     constructor(child: Gtk.Widget, opts: {
         getSourceWidget: () => Gtk.Widget | null,
@@ -129,7 +153,16 @@ export class MorphRevealer extends Gtk.Widget {
         /** Its paint layer (SquircleContainer's `.glassArea`), suppressed
          *  mid-morph so the interpolated clone owns the shape. */
         glassArea?: Gtk.Widget | null,
-        dots?: MorphRevealer["dots"],
+        /** Traveling element twins (dots → card headers, art → panel art). */
+        pairs?: MorphPair[],
+        /** Twin of the compact content that dissolves into the growing shape
+         *  (track 3 above). Pass the LIVE compact page via getSourceContent
+         *  so the twin is anchored where the real content sits. */
+        sourceGhost?: Gtk.Widget | null,
+        getSourceContent?: () => Gtk.Widget | null,
+        /** Whether the sourceGhost matches what the compact currently shows —
+         *  read (and latched) on every reveal(), both directions. */
+        getSourceGhostOn?: () => boolean,
         durationIn?: number, durationOut?: number,
     }) {
         super({})
@@ -140,11 +173,15 @@ export class MorphRevealer extends Gtk.Widget {
         this.contentTarget = opts.contentTarget ?? null
         this.glassWidget = opts.glassWidget ?? null
         this.glassArea = opts.glassArea ?? null
-        this.dots = opts.dots ?? null
+        this.pairs = opts.pairs ?? []
+        this.sourceGhost = opts.sourceGhost ?? null
+        this.getSourceContent = opts.getSourceContent ?? null
+        this.getSourceGhostOn = opts.getSourceGhostOn ?? null
         this.durationIn = opts.durationIn ?? 300
         this.durationOut = opts.durationOut ?? 220
         this.child.set_parent(this)
-        for (const ghost of this.dots?.ghosts ?? []) ghost.set_parent(this)
+        for (const p of this.pairs) p.ghost.set_parent(this)
+        this.sourceGhost?.set_parent(this)
         this.set_visible(false)
     }
 
@@ -171,17 +208,16 @@ export class MorphRevealer extends Gtk.Widget {
         if (src) src.opacity = p <= 0 ? 1 : 0
         if (this.contentTarget)
             this.contentTarget.opacity = clamp01((p - CONTENT_START) / (1 - CONTENT_START))
-        // Landing dots exist only at rest — the ghosts own the journey. Without
-        // a ghost for dot i (fallback mode, or the compact has MUTATED away
-        // from the dots page so the source dot is unmapped) that landing dot
-        // rides the content fade with its parent instead of popping at rest.
-        if (this.dots) {
-            for (let i = 0; i < this.dots.ghosts.length; i++) {
-                const target = this.dots.getTarget(i)
-                if (!target) continue
-                const hasGhost = this.fromSource && this.rectOf(this.dots.getSource(i)) !== null
-                target.opacity = (!hasGhost || resting) ? 1 : 0
-            }
+        // Landing elements exist only at rest — the ghosts own the journey.
+        // Without a ghost for a pair (fallback mode, or the compact has
+        // MUTATED away from that pair's page so its source is unmapped) the
+        // landing element rides the content fade with its parent instead of
+        // popping at rest.
+        for (const pair of this.pairs) {
+            const target = pair.getTarget()
+            if (!target) continue
+            const hasGhost = this.fromSource && this.rectOf(pair.getSource()) !== null
+            target.opacity = (!hasGhost || resting) ? 1 : 0
         }
         this.queue_draw()
     }
@@ -196,6 +232,10 @@ export class MorphRevealer extends Gtk.Widget {
     // vanishes, capsule appears" instead of one object transforming.
     reveal(open: boolean, onDone?: () => void) {
         if (this.tickId !== null) { this.remove_tick_callback(this.tickId); this.tickId = null }
+        // Latched on EVERY reveal (the compact can mutate while a mode is
+        // open — e.g. a pause grace expiring under the overview — so the
+        // close must dissolve/condense whatever the compact shows NOW).
+        this.ghostOn = this.sourceGhost !== null && (this.getSourceGhostOn?.() ?? true)
         if (open) {
             // Latched per open (the close mirrors the open's mode); the rects
             // themselves are still re-read live every frame.
@@ -245,7 +285,9 @@ export class MorphRevealer extends Gtk.Widget {
     vfunc_size_allocate(width: number, height: number, baseline: number) {
         this.child.allocate(width, height, baseline, null)
         // Ghosts get their natural size at the origin; snapshot places them.
-        for (const ghost of this.dots?.ghosts ?? []) {
+        const ghosts = this.pairs.map(p => p.ghost)
+        if (this.sourceGhost) ghosts.push(this.sourceGhost)
+        for (const ghost of ghosts) {
             const [, gw] = ghost.measure(Gtk.Orientation.HORIZONTAL, -1)
             const [, gh] = ghost.measure(Gtk.Orientation.VERTICAL, -1)
             ghost.allocate(Math.max(1, gw), Math.max(1, gh), -1, null)
@@ -310,19 +352,50 @@ export class MorphRevealer extends Gtk.Widget {
             snapshot.restore()
         }
 
-        // 3. THE DOTS — ghost twins travel from the capsule dots to where each
-        // landing dot is being PAINTED THIS FRAME (its resting bounds pushed
-        // through the same f→R(p) content mapping). Lerping toward the resting
-        // position instead left the ghosts drifting off the still-scaling
-        // cards they belong to until the last frame — read as "out of sync".
-        // Painted last, so they ride on the glass.
-        if (this.fromSource && this.dots) {
-            const count = this.dots.ghosts.length
-            const denom = Math.max(0.01, 1 - (count - 1) * DOT_STAGGER)
+        // 3. THE SOURCE CONTENT — the compact content's twin rides the growing
+        // shape (uniform scale k, anchored where the real content sits inside
+        // the source pill) and dissolves over [0, SOURCE_FADE_END]: the
+        // compact melts INTO the island instead of blinking out on frame 0.
+        // Vertically the twin (allocated at its natural height) is centered
+        // within the mapped content rect — the real page fills the pill and
+        // centers its children, so this lands the twin exactly on them.
+        if (this.fromSource && this.ghostOn && this.sourceGhost && p < SOURCE_FADE_END && s.w > 0) {
+            const g = this.sourceGhost
+            const gw = g.get_width()
+            const gh = g.get_height()
+            const c = this.rectOf(this.getSourceContent?.() ?? null) ?? s
+            if (gw > 0 && gh > 0) {
+                const k = R.w / s.w
+                snapshot.push_opacity(1 - p / SOURCE_FADE_END)
+                const off = new Graphene.Point()
+                off.init(
+                    R.x + (c.x - s.x) * k,
+                    R.y + (c.y - s.y) * k + (c.h - gh) * k / 2,
+                )
+                snapshot.save()
+                snapshot.translate(off)
+                snapshot.scale(k, k)
+                this.snapshot_child(g, snapshot)
+                snapshot.restore()
+                snapshot.pop()
+            }
+        }
+
+        // 4. THE PAIRS — ghost twins travel from each source element to where
+        // its landing element is being PAINTED THIS FRAME (its resting bounds
+        // pushed through the same f→R(p) content mapping). Lerping toward the
+        // resting position instead left the ghosts drifting off the
+        // still-scaling content they belong to until the last frame — read as
+        // "out of sync". Painted last, so they ride on the glass and the
+        // dissolving source content.
+        if (this.fromSource && this.pairs.length > 0) {
+            const count = this.pairs.length
+            const denom = Math.max(0.01, 1 - (count - 1) * PAIR_STAGGER)
             for (let i = 0; i < count; i++) {
-                const gs = this.rectOf(this.dots.getSource(i))
-                const gt = this.rectOf(this.dots.getTarget(i))
-                const ghost = this.dots.ghosts[i]
+                const pair = this.pairs[i]
+                const gs = this.rectOf(pair.getSource())
+                const gt = this.rectOf(pair.getTarget())
+                const ghost = pair.ghost
                 const gw = ghost.get_width()
                 const gh = ghost.get_height()
                 if (!gs || !gt || gw <= 0 || gh <= 0) continue
@@ -331,7 +404,7 @@ export class MorphRevealer extends Gtk.Widget {
                     y: R.y + (gt.y - f.y) * sy,
                     w: gt.w * sx, h: gt.h * sy,
                 }
-                const r = lerpRect(gs, mapped, clamp01((p - i * DOT_STAGGER) / denom))
+                const r = lerpRect(gs, mapped, clamp01((p - i * PAIR_STAGGER) / denom))
                 const doff = new Graphene.Point()
                 doff.init(r.x, r.y)
                 snapshot.save()
@@ -348,7 +421,8 @@ export class MorphRevealer extends Gtk.Widget {
     // would leak). Long-lived overlay wrappers never need it.
     dismantle() {
         if (this.tickId !== null) { this.remove_tick_callback(this.tickId); this.tickId = null }
-        for (const ghost of this.dots?.ghosts ?? []) ghost.unparent()
+        for (const p of this.pairs) p.ghost.unparent()
+        this.sourceGhost?.unparent()
         this.child?.unparent()
     }
 }
