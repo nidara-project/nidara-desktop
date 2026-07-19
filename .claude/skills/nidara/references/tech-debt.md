@@ -349,7 +349,8 @@ cluster — the CC/overlay/Settings widgets that recycle: `Sliders.tsx`, `MediaI
 fires on every realize/unrealize cycle, so the second run disconnected a stale id). Migrated 21 files:
 `core/{NetworkService,AudioService,BluetoothService}.ts`, `surfaces/bar/{Bar,AppTitle,Tray}.tsx`,
 `surfaces/control-center/{Toggles,NotificationCenter}.tsx`, `surfaces/dock/{DockCore,DockItem}.tsx`,
-`surfaces/overview/{WorkspaceOverview,WorkspacePreview}.tsx`, `surfaces/app-grid/AppGrid.tsx`,
+`surfaces/overview/WorkspaceOverview.tsx` (WorkspacePreview.tsx was deleted 2026-07-19: orphaned,
+Gtk.Popover-based), `surfaces/app-grid/AppGrid.tsx`,
 `surfaces/about/AboutWindow.tsx`, `widgets/wifi.ts`, and the Settings pages
 (Appearance, Display, Region, Input, Network, Bluetooth). Verified: zero `try{…disconnect…}catch`
 left tree-wide, the only `.disconnect(` call is inside `safeDisconnect` itself; typecheck + build green.

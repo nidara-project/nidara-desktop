@@ -6,7 +6,7 @@ import { Gdk, Gtk } from "ags/gtk4"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import status from "./core/Status"
+import status, { ISLAND_OVERVIEW } from "./core/Status"
 import shellActions from "./core/ShellActions"
 import { currentLocale } from "./core/i18n"
 import { readFile } from "ags/file"
@@ -485,7 +485,8 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             prism: status.prism_open,
             appGrid: isAppGridOpen(),
             systemMenu: status.system_menu_open,
-            overview: status.overview_open,
+            overview: status.island_mode === ISLAND_OVERVIEW,   // back-compat key
+            island: status.island_mode,
             settings: status.settings_open,
             about: status.about_open,
           },

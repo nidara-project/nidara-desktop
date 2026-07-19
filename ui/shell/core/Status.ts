@@ -18,7 +18,7 @@ export class UIStatus extends GObject.Object {
                 "settings-open": GObject.ParamSpec.boolean("settings-open", "Settings Open", "Settings window visibility", GObject.ParamFlags.READWRITE, false),
                 "cc-edit-mode": GObject.ParamSpec.boolean("cc-edit-mode", "CC Edit Mode", "CC edit mode active", GObject.ParamFlags.READWRITE, false),
                 "system-menu-open": GObject.ParamSpec.boolean("system-menu-open", "System Menu Open", "System Menu visibility", GObject.ParamFlags.READWRITE, false),
-                "overview-open": GObject.ParamSpec.boolean("overview-open", "Overview Open", "Overview visibility", GObject.ParamFlags.READWRITE, false),
+                "island-mode": GObject.ParamSpec.string("island-mode", "Island Mode", "Active Activity Island mode id, empty = collapsed", GObject.ParamFlags.READWRITE, ""),
                 "about-open": GObject.ParamSpec.boolean("about-open", "About Open", "About window visibility", GObject.ParamFlags.READWRITE, false),
                 "recording": GObject.ParamSpec.boolean("recording", "Recording", "Screen recording active", GObject.ParamFlags.READWRITE, false),
                 "bar-expanded-id": GObject.ParamSpec.string("bar-expanded-id", "Bar Expanded ID", "ID of the expanded bar widget, empty = none", GObject.ParamFlags.READWRITE, ""),
@@ -34,20 +34,21 @@ export class UIStatus extends GObject.Object {
     private _settings_open = false
     private _cc_edit_mode  = false
     private _system_menu_open = false
-    private _overview_open = false
+    private _island_mode = ""
     private _about_open = false
     private _recording = false
     private _bar_expanded_id = ""
     private _cc_detail_id = ""
 
-    // The five mutually-exclusive overlays. Opening one closes the rest.
-    // Maps the snake-cased backing field to its GObject notify name.
+    // The boolean mutually-exclusive overlays. Opening one closes the rest —
+    // plus the Activity Island, whose state is a mode STRING (island_mode),
+    // handled explicitly inside closeExclusive. Maps the snake-cased backing
+    // field to its GObject notify name.
     private static readonly EXCLUSIVE: Record<string, string> = {
         _cc_open: "cc-open",
         _nc_open: "nc-open",
         _prism_open: "prism-open",
         _system_menu_open: "system-menu-open",
-        _overview_open: "overview-open",
     }
 
     /**
@@ -63,6 +64,10 @@ export class UIStatus extends GObject.Object {
                 self[field] = false
                 this.notify(name)
             }
+        }
+        if (keep !== "_island_mode" && this._island_mode !== "") {
+            this._island_mode = ""
+            this.notify("island-mode")
         }
         if (opts.notif && this._notif_active) {
             this._notif_active = false
@@ -128,16 +133,20 @@ export class UIStatus extends GObject.Object {
         this.notify("system-menu-open")
     }
 
-    public get overview_open() { return this._overview_open }
-    public set overview_open(v: boolean) {
-        if (this._overview_open === v) return
-        this._overview_open = v
-        if (v) this.closeExclusive("_overview_open", { barExpanded: true })
-        this.notify("overview-open")
+    /** Activity Island state: the id of the expanded mode (ISLAND_OVERVIEW,
+     *  future "player"/"agent"/…), "" = collapsed to the compact capsule.
+     *  Replaces the old overview_open boolean — the overview is now just the
+     *  island's first mode (see surfaces/island/ActivityIsland.tsx). */
+    public get island_mode() { return this._island_mode }
+    public set island_mode(v: string) {
+        if (this._island_mode === v) return
+        this._island_mode = v
+        if (v !== "") this.closeExclusive("_island_mode", { barExpanded: true })
+        this.notify("island-mode")
     }
 
     public get isAnyOverlayOpen(): boolean {
-        return this._cc_open || this._nc_open || this._prism_open || this._system_menu_open || this._overview_open || this._bar_expanded_id !== ""
+        return this._cc_open || this._nc_open || this._prism_open || this._system_menu_open || this._island_mode !== "" || this._bar_expanded_id !== ""
     }
 
     public get about_open() { return this._about_open }
@@ -177,9 +186,14 @@ export class UIStatus extends GObject.Object {
     toggleNC() { this.nc_open = !this.nc_open }
     togglePrism() { this.prism_open = !this.prism_open }
     toggleSystemMenu() { this.system_menu_open = !this.system_menu_open }
-    toggleOverview() { this.overview_open = !this.overview_open }
+    toggleIsland(id: string) { this.island_mode = this.island_mode === id ? "" : id }
+    toggleOverview() { this.toggleIsland(ISLAND_OVERVIEW) }
     toggleAbout() { this.about_open = !this.about_open }
 }
+
+// Island mode ids live here (core) so surfaces and IPC share one vocabulary
+// without surface-to-surface imports.
+export const ISLAND_OVERVIEW = "overview"
 
 export const status = new UIStatus()
 export default status
