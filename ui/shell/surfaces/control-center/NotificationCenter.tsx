@@ -114,12 +114,16 @@ export function GroupControlHeader(props: { name: string, count: number, onToggl
     const labelBox = new Gtk.Box({ spacing: 8, hexpand: true, valign: Gtk.Align.CENTER })
     labelBox.append(new Gtk.Label({ label: name, css_classes: ["nc-group-header-name"], halign: Gtk.Align.START }))
     labelBox.append(new Gtk.Label({ label: `${count}`, css_classes: ["nc-badge-header"], valign: Gtk.Align.CENTER }))
-    const collapseBtn = IconButton({ icon: Icons.chevronUp, iconSize: 14, variant: "neutral", onClick: onToggle })
-    const clearAllBtn = IconButton({ icon: Icons.close, iconSize: 14, variant: "danger", onClick: onClearGroup })
+    // captureClick: the header capsule below carries a release-phase tap (collapse) and
+    // a swipe gesture — the buttons claim on press so they beat both.
+    const collapseBtn = IconButton({ icon: Icons.chevronUp, iconSize: 14, variant: "neutral", captureClick: true, onClick: onToggle })
+    const clearAllBtn = IconButton({ icon: Icons.close, iconSize: 14, variant: "danger", captureClick: true, onClick: onClearGroup })
     box.append(labelBox); box.append(collapseBtn); box.append(clearAllBtn)
     // Paint the background with the same shellOpacity squircle as the cards (the old CSS
-    // surface fill was fixed and didn't follow the Settings opacity).
-    const header = SquircleContainer({ child: box, radius: 16, useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-group-ctrl-header"] })
+    // surface fill was fixed and didn't follow the Settings opacity). Tapping the header
+    // background collapses the group, same as the chevron — release-phase because the
+    // header is also a swipe target (see the NC row capsules for the pattern).
+    const header = SquircleContainer({ child: box, radius: 16, useShellOpacity: true, gloss: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-group-ctrl-header"], onClick: onToggle, clickOnRelease: true })
     // Hover-reveal via OPACITY (not `visible`): the header spans full width, so keeping
     // the buttons allocated costs no text space and the row never reflows on hover.
     const setShown = (shown: boolean) => [collapseBtn, clearAllBtn].forEach(b => { b.opacity = shown ? 1 : 0; b.can_target = shown })
@@ -342,7 +346,6 @@ function wrapSwipe(content: Gtk.Widget, onDismiss: () => void, target: Gtk.Widge
     attachGhostSwipeDismiss(target, sr, { onDismiss })
     return sr
 }
-
 function makeGroupStack(card: Gtk.Widget, groupCount: number): Gtk.Widget {
     if (groupCount <= 1) return card
 
@@ -432,13 +435,16 @@ export default function NotificationCenter() {
     // (the LANE sits to the right of both).
     calendarIsland.set_size_request(GRID_WIDTH, CAL_H)
     calendarIsland.set_halign(Gtk.Align.START)
-    const emptyLabel = new Gtk.Label({ label: t("nc.empty"), css_classes: ["nc-empty"], margin_top: 64, halign: Gtk.Align.CENTER, visible: false })
+    // The empty state rides the same glass capsule as the clear-all pill — bare text sat
+    // straight on the wallpaper and washed out on light backgrounds.
+    const emptyBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 24, margin_bottom: 12, visible: false })
+    emptyBox.append(SquircleContainer({ child: new Gtk.Label({ label: t("nc.empty"), css_classes: ["nc-empty"], margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 } }))
     const pillBox = new Gtk.Box({ halign: Gtk.Align.CENTER, margin_top: 24, margin_bottom: 12, visible: false })
     const clearAllBtn = SquircleContainer({ child: new Gtk.Label({ label: t("nc.clear-all"), margin_start: 32, margin_end: 32, margin_top: 12, margin_bottom: 12 }), shape: Shape.CAPSULE, useShellOpacity: true, gloss: true, borderColor: { r: 0, g: 0, b: 0, a: 0 }, hoverBorderColor: { r: 0, g: 0, b: 0, a: 0 }, onClick: () => clearAllAnimated(), css_classes: ["nc-clear-all-pill"] })
     pillBox.append(clearAllBtn)
 
     const notificationItemsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, hexpand: true })
-    listContainer.append(emptyLabel)
+    listContainer.append(emptyBox)
     listContainer.append(notificationItemsBox)
     listContainer.append(pillBox)
 
@@ -458,7 +464,7 @@ export default function NotificationCenter() {
             const timeA = Math.max(...groups.get(a)!.map(x => x.time)); const timeB = Math.max(...groups.get(b)!.map(x => x.time))
             return timeB - timeA || Math.max(...groups.get(b)!.map(x => x.id)) - Math.max(...groups.get(a)!.map(x => x.id))
         })
-        emptyLabel.set_visible(notifs.length === 0); pillBox.set_visible(notifs.length > 0)
+        emptyBox.set_visible(notifs.length === 0); pillBox.set_visible(notifs.length > 0)
         groupCache.forEach((cache, id) => { if (!Array.from(groups.keys()).includes(id)) { if (cache.container.get_parent()) notificationItemsBox.remove(cache.container); groupCache.delete(id) } })
 
         sortedIds.forEach((id, index) => {
@@ -480,9 +486,9 @@ export default function NotificationCenter() {
                 groupCache.set(id, cache); notificationItemsBox.append(container)
             }
             if (cache.sig !== sig) {
-                // Rows are now ScaleRevealer wrappers (swipe host) — dismantle so
-                // the wrapped card unparents too (no "still has children" on GC);
-                // the group header is a plain widget, just unparent it.
+                // Rows (and the expanded-group header) are ScaleRevealer wrappers —
+                // dismantle so the wrapped card unparents too (no "still has
+                // children" on GC).
                 const disownRow = (c: Gtk.Widget) => { if (typeof (c as any).dismantle === "function") (c as any).dismantle(); c.unparent() }
                 while (cache.headerBox.get_first_child()) disownRow(cache.headerBox.get_first_child()!)
                 while (cache.subBox.get_first_child()) disownRow(cache.subBox.get_first_child()!)
@@ -494,7 +500,12 @@ export default function NotificationCenter() {
                 if (gl.length > 1) {
                     if (isExpanded) {
                         cache.container.remove_css_class("nc-group-with-ghost")
-                        cache.headerBox.append(GroupControlHeader({ name: appName, count: gl.length, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()) }))
+                        // Swiping the header clears the whole group (its X): the header
+                        // flings out by hand, then its remaining rows cascade after it.
+                        cache.headerBox.append(wrapSwipe(
+                            GroupControlHeader({ name: appName, count: gl.length, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()) }),
+                            () => cascadeOut(collectRows(cache!.subBox), gl),
+                        ))
                         sortedGroup.forEach(n => {
                             const cap = NotificationCapsule({ n, groupCount: 1, isExpanded: true, onToggle: undefined, onClearGroup: () => n.dismiss(), itemExpanded: expandedItems.has(n.id), onToggleItem: () => toggleItem(n.id), onClose: closeNC, onTimeLabel: regTime, startHovered: hoverSeed === n.id })
                             cache!.subBox.append(wrapSwipe(cap, () => n.dismiss()))   // swipe an expanded item → dismiss just it
@@ -536,20 +547,18 @@ export default function NotificationCenter() {
     // meanwhile so the tree isn't rebuilt mid-flight (notifications arriving during the
     // cascade survive: only the snapshot taken at click time is dismissed). Rows clip at
     // the panel wall like any translate in the scroller — exiting through the edge IS
-    // the look, no ghosts needed. Expanded-group control headers aren't swipe rows;
-    // they simply vanish with the final cleanup.
+    // the look, no ghosts needed. Expanded-group control headers are swipe rows too
+    // (their swipe clears the group), so they fling out in sequence like any row.
     let pendingClear: AstalNotifd.Notification[] | null = null
     const finishClear = () => {
         const list = pendingClear; pendingClear = null
         list?.forEach(n => n.dismiss())
         updateNotifs()
     }
-    const clearAllAnimated = () => {
-        if (pendingClear) return
-        const toDismiss = [...notifd.notifications]
-        if (toDismiss.length === 0) return
-        // The ScaleRevealer swipe rows in visual order; skip unmapped ones (sub-rows of
-        // a collapsed group's hidden revealer). Never descends INTO a row — none nest.
+    // The ScaleRevealer swipe rows under `root` in visual order; skips unmapped ones
+    // (sub-rows of a collapsed group's hidden revealer). Never descends INTO a row —
+    // none nest.
+    const collectRows = (root: Gtk.Widget): ScaleRevealer[] => {
         const rows: ScaleRevealer[] = []
         const visit = (w: Gtk.Widget | null) => {
             for (; w; w = w.get_next_sibling()) {
@@ -557,9 +566,16 @@ export default function NotificationCenter() {
                 else visit(w.get_first_child())
             }
         }
-        visit(notificationItemsBox.get_first_child())
-        if (rows.length === 0) { toDismiss.forEach(n => n.dismiss()); return }
-        pendingClear = toDismiss
+        visit(root.get_first_child())
+        return rows
+    }
+    // Fling `rows` out top to bottom with the stagger, then dismiss `snapshot` once the
+    // last row lands. Shared by clear-all (every row) and the group-header swipe (that
+    // group's remaining rows).
+    const cascadeOut = (rows: ScaleRevealer[], snapshot: AstalNotifd.Notification[]) => {
+        if (pendingClear || snapshot.length === 0) return
+        if (rows.length === 0) { snapshot.forEach(n => n.dismiss()); return }
+        pendingClear = snapshot
         let done = 0
         rows.forEach((sr, i) => {
             GLib.timeout_add(GLib.PRIORITY_DEFAULT, i * 45, () => {
@@ -568,6 +584,7 @@ export default function NotificationCenter() {
             })
         })
     }
+    const clearAllAnimated = () => cascadeOut(collectRows(notificationItemsBox), [...notifd.notifications])
 
     // Restamp the relative timestamps ("2m" → "3m") in place. A full updateNotifs()
     // used to do this via a minute bucket in the cache signature — tearing down and
