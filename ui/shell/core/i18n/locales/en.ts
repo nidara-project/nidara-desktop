@@ -621,6 +621,10 @@ export default {
     "widget.wifi.row.status": "Status",
     "widget.wifi.row.disabled": "Disabled",
 
+    // Activity Island — battery-critical alert
+    "island.battery.critical": "Battery critically low",
+    "island.battery.hint": "Connect the charger",
+
     // Battery widget
     "widget.battery.label.unavailable": "Battery not available",
     "widget.battery.name": "Battery",

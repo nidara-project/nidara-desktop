@@ -759,22 +759,27 @@ workspace dots → overview card headers (`makeWorkspaceDot` twins — the one s
 identical render everywhere), and the media compact's cover art → the player panel's
 96px artwork (ghost built at 96px and scaled DOWN so it stays sharp; the compact's art
 radius is derived as `14*20/96` so pure uniform scaling matches BOTH endpoint swaps).
-(b) The **source dissolve** (`sourceGhost` + `getSourceContent` + `getSourceGhostOn`):
+(b) The **source dissolve** (`sourceGhosts[]` + `getSourceGhost` + `getSourceContent`):
 compact content WITHOUT a landing slot (media title/EQ; the whole media compact when
 opening the overview) gets a twin that rides the growing shape (uniform scale, anchored
 where the content sits in the pill, vertically centered) and dissolves over progress
-[0, 0.35] — the compact melts INTO the island instead of blinking out on frame 0.
+[0, 0.35] — the compact melts INTO the island instead of blinking out on frame 0. The
+compact can show ANY activity's form, so each revealer owns ONE twin per form
+(single-parent rule) and `getSourceGhost` resolves the twin matching what the compact
+shows NOW (latched per `reveal()`, both directions; null = no dissolve — the dots page,
+whose landing pairs ARE the continuity).
 GTK trap for ANY snapshot-painted ghost: `snapshot_child` already applies the child's
 own margin offset, and `compute_bounds` on the real widget EXCLUDES its margins — so a
 ghost twin must carry NO margins or every offset is applied twice (the media twin's
 12px double-shift pushed the EQ past the glass edge mid-morph and made the contraction
 land with a visible re-seat; user-caught 2026-07-19).
-Gated per `reveal()` by `getSourceGhostOn` (only while the compact actually shows that
-page); ghost twins run NO timers — the EQ phase is module-shared in `PlayerIsland.tsx`
-and advanced only by the real compact, so ghosts repaint bit-identical bars via the
-morph's own per-frame redraw (an idle ghost never damages the bar). A mode with an art
-pair gets a twin with a transparent art slot (layout intact, the flying ghost owns those
-pixels — two visible copies would diverge mid-flight). (c) The **content**
+Ghost twins run NO timers — live text/phase is SHARED module state advanced only by the
+real compact (the EQ phase in `PlayerIsland.tsx`; the REC elapsed label in
+`IslandActivities.tsx` syncs every registered label including the twins'), so ghosts
+repaint bit-identical via the morph's own per-frame redraw (an idle ghost never damages
+the bar). A mode with an art pair gets a media twin with a transparent art slot (layout
+intact, the flying ghost owns those pixels — two visible copies would diverge
+mid-flight). (c) The **content**
 (`contentTarget`) fades in over the last stretch (progress 0.45→1) while the child
 paints with the glass rect mapped onto the interpolated rect — content materializes
 inside the already-formed shape; between the dissolve's end (0.35) and the content's
@@ -793,15 +798,21 @@ GC/teardown + interface-merge typing gotchas (`dismantle()` unparents ghosts too
 back to an OVERLAY_POP-equivalent centered pop when the source is unmapped at open
 (`fromSource` latched per open; no ghosts, landing dots ride the content fade).
 **Consumer: the Activity Island** (`surfaces/island/ActivityIsland.tsx`) — the bar-center
-capsule as a multi-purpose surface. The island owns the compact capsule (workspace dots)
-and a MODE registry; `registerMode` builds one MorphRevealer per mode, wiring the
+capsule as a multi-purpose surface. The island owns the compact capsule (workspace dots
++ one page per activity, see architecture.md for the ACTIVITY REGISTRY) and a MODE
+registry; `registerMode` builds one MorphRevealer per mode, wiring the
 capsule as source, the mode's glass recipe (`glassFrom`/`glassTo`, read live per frame
 from `Theme.chromeIsDark` + `barOpacity`/`overlayOpacity`; the overview end imports
-`WO_GLASS` from `WorkspaceOverview.tsx` and the player end `PLAYER_GLASS` from
-`PlayerIsland.tsx` so recipe and real paint can't drift), and the
+`WO_GLASS` from `WorkspaceOverview.tsx`, the player end `PLAYER_GLASS` from
+`PlayerIsland.tsx`, the battery end `BATTERY_GLASS` from `BatteryIsland.tsx` so recipe
+and real paint can't drift), and the
 `morphContent`/`morphGlass`/`morphDots`/`morphArt` handles the mode widget exposes
-(`registerMode` turns morphDots/morphArt into `MorphPair`s and gives every revealer a
-media sourceGhost gated on the compact's live page). `Bar.tsx` stays
+(`registerMode` turns morphDots/morphArt into `MorphPair`s — the morphArt pair belongs
+to the mode's OWNER activity (`expandMode === mode.id`) and flies that activity's
+`flyer` element (media art → panel art, battery glyph → alert glyph; ghost built at the
+PANEL slot's size, scaled down; skipped while another activity fronts) — and gives every
+revealer one source-dissolve twin per activity that declares `makeGhost`; only the
+owner's twin gets `hideArt`). `Bar.tsx` stays
 the mount point: it places the capsule, mounts the revealers, and on
 `notify::island-mode` re-pins each revealer's top edge to the capsule's bounds
 (`island.syncAnchor`) so the morph only inflates down/sideways — the capsule never
