@@ -58,6 +58,9 @@ export class ScaleRevealer extends Gtk.Widget {
     progress = 0          // 0 = hidden, 1 = fully revealed
     tickId: number | null = null
     swipeX = 0            // transient horizontal swipe offset (notification dismiss)
+    morphFrom: number | null = null   // height-morph origin (see morphFromHeight)
+    morphEased = 0
+    morphTickId: number | null = null
 
     constructor(child: Gtk.Widget, opts?: {
         duration?: number, durationIn?: number, durationOut?: number,
@@ -72,6 +75,44 @@ export class ScaleRevealer extends Gtk.Widget {
         this.child = child
         this.child.set_parent(this)
         this.opacity = 0
+    }
+
+    // Swap the child in place (banner replacement — same id, new content): the
+    // wrapper keeps its progress/opacity/swipe state, so an on-screen banner
+    // updates its content without replaying the grow-in.
+    setChild(next: Gtk.Widget) {
+        if (next === this.child) return
+        this.child.unparent()
+        this.child = next
+        next.set_parent(this)
+        this.queue_resize()
+    }
+
+    // Ease the measured height from `h0` (the predecessor's allocated height) to
+    // the child's own natural height. The NC uses it when a rebuilt row or group
+    // header replaces its old widget — without it the swap snaps the whole column
+    // by the height difference in one frame. Top-anchored: the child keeps its
+    // natural allocation and the box's spare space (or clip, when growing) eases
+    // away. Separate tick from reveal/swipe so neither cancels the other.
+    morphFromHeight(h0: number, duration = 250) {
+        if (this.morphTickId !== null) { this.remove_tick_callback(this.morphTickId); this.morphTickId = null }
+        if (h0 <= 0) return
+        this.morphFrom = h0
+        this.morphEased = 0
+        let startUs: number | null = null
+        this.morphTickId = this.add_tick_callback((_w, frameClock) => {
+            const now = frameClock.get_frame_time()
+            if (startUs === null) startUs = now
+            const t = Math.min(1, (now - startUs) / (duration * 1000))
+            this.morphEased = 1 - Math.pow(1 - t, 3)   // ease-out (decelerate into place)
+            this.queue_resize()
+            if (t >= 1) {
+                this.morphTickId = null
+                this.morphFrom = null
+                return GLib.SOURCE_REMOVE
+            }
+            return GLib.SOURCE_CONTINUE
+        })
     }
 
     currentScale(): number {
@@ -230,8 +271,12 @@ export class ScaleRevealer extends Gtk.Widget {
         const [min, nat] = this.child.measure(orientation, for_size)
         if (!this.animateLayout || orientation === Gtk.Orientation.HORIZONTAL) return [min, nat, -1, -1]
         const s = this.currentScale()
-        const sMin = Math.floor(min * s)
-        const sNat = Math.max(sMin, Math.floor(nat * s))
+        let sMin = Math.floor(min * s)
+        let sNat = Math.max(sMin, Math.floor(nat * s))
+        if (this.morphFrom !== null) {
+            sNat = Math.round(this.morphFrom + (sNat - this.morphFrom) * this.morphEased)
+            sMin = Math.min(sMin, sNat)
+        }
         return [sMin, sNat, -1, -1]
     }
 
@@ -302,6 +347,7 @@ export class ScaleRevealer extends Gtk.Widget {
     // children left" warnings).
     dismantle() {
         if (this.tickId !== null) { this.remove_tick_callback(this.tickId); this.tickId = null }
+        if (this.morphTickId !== null) { this.remove_tick_callback(this.morphTickId); this.morphTickId = null }
         this.child?.unparent()
     }
 }

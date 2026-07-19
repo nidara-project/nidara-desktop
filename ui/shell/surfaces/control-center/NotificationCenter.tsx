@@ -31,7 +31,10 @@ export function createIconWidget(n: AstalNotifd.Notification, size: number) {
     } else {
         const fallback = appService.getIconName(n.app_icon || n.app_name)
         if (fallback?.startsWith("/") || fallback?.startsWith("file://")) img.gicon = Gio.FileIcon.new(Gio.File.new_for_path(fallback.replace("file://", "")))
-        else if (fallback) img.icon_name = fallback; else img.gicon = Icons.info
+        else if (fallback) img.icon_name = fallback
+        // nd-icon ONLY on our own Lucide fallback art (black stroke → mode filter);
+        // app icons must never get the invert — it corrupted their colors once.
+        else { img.gicon = Icons.info; img.add_css_class("nd-icon") }
     }
     return img
 }
@@ -310,6 +313,9 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
     clearBtn.margin_start = 6; clearBtn.margin_top = 6
     ov.add_overlay(clearBtn)
     if (bannerActions) ov.add_overlay(bannerActions)
+    // CRITICAL urgency gets no visual decoration — macOS/GNOME don't mark it
+    // either: never auto-expiring IS the signal. The 1px inner edge is part of
+    // the glass sheen, not an indicator channel.
     const capsule = SquircleContainer({ child: ov, radius: 32, useShellOpacity: true, gloss: true, hexpand: true, borderColor: { r: 1, g: 1, b: 1, a: 0.05 }, css_classes: ["nc-capsule-item"], onClick: handleAction, clickOnRelease: true })
     // Hover ⇄ rest (leave restores). The timestamp only swaps out when a chevron takes
     // its place — with the close in the corner, hiding it otherwise buys nothing.
@@ -338,11 +344,15 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
 // capsule, or a group stack); `target` is the widget the drag rides + whose
 // release-tap the swipe cancels (the capsule, which sits inside the stack for
 // collapsed groups).
-function wrapSwipe(content: Gtk.Widget, onDismiss: () => void, target: Gtk.Widget = content): Gtk.Widget {
+function wrapSwipe(content: Gtk.Widget, onDismiss: () => void, target: Gtk.Widget = content, morphFrom = 0): Gtk.Widget {
     // animateLayout so the collapse shrinks the row's HEIGHT (siblings reflow);
     // scaleFrom near 0 so it collapses essentially to nothing before it's gone.
     const sr = new ScaleRevealer(content, { animateLayout: true, scaleFrom: 0.06, durationOut: 220, pivot: "center" })
     sr.showInstant()
+    // morphFrom > 0: this wrapper REPLACES one that was morphFrom px tall (item
+    // expand/collapse, header ⇄ stacked-capsule swap) — ease the height over
+    // instead of snapping the column by the difference.
+    if (morphFrom > 0) sr.morphFromHeight(morphFrom)
     attachGhostSwipeDismiss(target, sr, { onDismiss })
     return sr
 }
@@ -402,7 +412,7 @@ export default function NotificationCenter() {
     // state (the pointer is on it by definition). See startHovered in NotificationCapsule.
     let hoverSeed: number | null = null
     const toggleItem = (nid: number) => { if (expandedItems.has(nid)) expandedItems.delete(nid); else expandedItems.add(nid); hoverSeed = nid; updateNotifs(); hoverSeed = null }
-    const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string, timeLabels: { label: Gtk.Label, time: number }[] }>()
+    const groupCache = new Map<string, { container: Gtk.Box, headerBox: Gtk.Box, revealer: any, subBox: Gtk.Box, sig: string, timeLabels: { label: Gtk.Label, time: number }[], expanded: boolean, subClearTimer: number | null }>()
 
     // The content keeps its full width (GRID_WIDTH); LANE is extra space ADDED on the right
     // to host the scrollbar. The overlay scrollbar floats in that lane only when there's
@@ -452,7 +462,9 @@ export default function NotificationCenter() {
     outer.append(scroll)
 
     const updateNotifs = () => {
-        const notifs = notifd.notifications; const groups = new Map<string, AstalNotifd.Notification[]>()
+        // `transient` (freedesktop) = excluded from persistence: banner only, never
+        // an NC row. The popups side dismisses them when their banner retires.
+        const notifs = notifd.notifications.filter(n => !n.transient); const groups = new Map<string, AstalNotifd.Notification[]>()
         notifs.forEach(n => {
             const id = appService.getResolvedApp(n.desktop_entry || n.app_name)?.id || n.app_name || "unknown"
             const list = groups.get(id) || []; list.push(n); groups.set(id, list)
@@ -465,7 +477,7 @@ export default function NotificationCenter() {
             return timeB - timeA || Math.max(...groups.get(b)!.map(x => x.id)) - Math.max(...groups.get(a)!.map(x => x.id))
         })
         emptyBox.set_visible(notifs.length === 0); pillBox.set_visible(notifs.length > 0)
-        groupCache.forEach((cache, id) => { if (!Array.from(groups.keys()).includes(id)) { if (cache.container.get_parent()) notificationItemsBox.remove(cache.container); groupCache.delete(id) } })
+        groupCache.forEach((cache, id) => { if (!Array.from(groups.keys()).includes(id)) { if (cache.subClearTimer !== null) GLib.source_remove(cache.subClearTimer); if (cache.container.get_parent()) notificationItemsBox.remove(cache.container); groupCache.delete(id) } })
 
         sortedIds.forEach((id, index) => {
             const gl = groups.get(id)!; const sortedGroup = gl.sort((a, b) => b.time - a.time || b.id - a.id)
@@ -482,7 +494,7 @@ export default function NotificationCenter() {
                 const headerBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL })
                 const container = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 0, hexpand: true })
                 container.append(headerBox); container.append(revealer)
-                cache = { container, headerBox, revealer, subBox, sig: "", timeLabels: [] }
+                cache = { container, headerBox, revealer, subBox, sig: "", timeLabels: [], expanded: false, subClearTimer: null }
                 groupCache.set(id, cache); notificationItemsBox.append(container)
             }
             if (cache.sig !== sig) {
@@ -490,8 +502,35 @@ export default function NotificationCenter() {
                 // dismantle so the wrapped card unparents too (no "still has
                 // children" on GC).
                 const disownRow = (c: Gtk.Widget) => { if (typeof (c as any).dismantle === "function") (c as any).dismantle(); c.unparent() }
+                // Choreography inputs, captured BEFORE teardown: the old height of the
+                // headerBox content (the header ⇄ stacked-capsule swap morphs instead of
+                // snapping ±50px) and of the row whose chevron was just toggled.
+                const wasExpanded = cache.expanded
+                const expandToggled = isExpanded !== wasExpanded
+                const headerOldH = expandToggled ? (cache.headerBox.get_first_child()?.get_height() ?? 0) : 0
+                let seedOldH = 0
+                if (hoverSeed !== null) {
+                    if (gl.length === 1 && sortedGroup[0].id === hoverSeed) seedOldH = cache.headerBox.get_first_child()?.get_height() ?? 0
+                    else if (isExpanded && wasExpanded) {
+                        const idx = sortedGroup.findIndex(m => m.id === hoverSeed)
+                        let c = cache.subBox.get_first_child()
+                        for (let i = 0; i < idx && c; i++) c = c.get_next_sibling()
+                        if (idx >= 0) seedOldH = c?.get_height() ?? 0
+                    }
+                }
+                if (cache.subClearTimer !== null) { GLib.source_remove(cache.subClearTimer); cache.subClearTimer = null }
                 while (cache.headerBox.get_first_child()) disownRow(cache.headerBox.get_first_child()!)
-                while (cache.subBox.get_first_child()) disownRow(cache.subBox.get_first_child()!)
+                // Collapsing (expanded → collapsed/single): KEEP the old rows in the
+                // revealer so its slide-up animates over real content — the wholesale
+                // teardown emptied it first, which snapped the whole column up in one
+                // frame. They're disowned once the 350ms transition has landed.
+                const collapsing = wasExpanded && !isExpanded
+                if (!collapsing) { while (cache.subBox.get_first_child()) disownRow(cache.subBox.get_first_child()!) }
+                else cache.subClearTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 380, () => {
+                    cache!.subClearTimer = null
+                    while (cache!.subBox.get_first_child()) disownRow(cache!.subBox.get_first_child()!)
+                    return GLib.SOURCE_REMOVE
+                })
                 cache.timeLabels = []   // rebuilt capsules register fresh labels below
                 const regTime = (label: Gtk.Label, time: number) => cache!.timeLabels.push({ label, time })
                 const closeNC = () => { status.nc_open = false }
@@ -505,25 +544,27 @@ export default function NotificationCenter() {
                         cache.headerBox.append(wrapSwipe(
                             GroupControlHeader({ name: appName, count: gl.length, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()) }),
                             () => cascadeOut(collectRows(cache!.subBox), gl),
+                            undefined, headerOldH,
                         ))
                         sortedGroup.forEach(n => {
                             const cap = NotificationCapsule({ n, groupCount: 1, isExpanded: true, onToggle: undefined, onClearGroup: () => n.dismiss(), itemExpanded: expandedItems.has(n.id), onToggleItem: () => toggleItem(n.id), onClose: closeNC, onTimeLabel: regTime, startHovered: hoverSeed === n.id })
-                            cache!.subBox.append(wrapSwipe(cap, () => n.dismiss()))   // swipe an expanded item → dismiss just it
+                            cache!.subBox.append(wrapSwipe(cap, () => n.dismiss(), undefined, n.id === hoverSeed ? seedOldH : 0))   // swipe an expanded item → dismiss just it
                         })
                     } else {
                         cache.container.add_css_class("nc-group-with-ghost")
                         const capsule = NotificationCapsule({ n: sortedGroup[0], groupCount: gl.length, isExpanded: false, onToggle, onClearGroup: () => gl.forEach(m => m.dismiss()), onClose: closeNC, onTimeLabel: regTime })
                         // Swipe a collapsed group → clear the whole group (like its
                         // X). The gesture rides the capsule; the whole stack slides.
-                        cache.headerBox.append(wrapSwipe(makeGroupStack(capsule, gl.length), () => gl.forEach(m => m.dismiss()), capsule))
+                        cache.headerBox.append(wrapSwipe(makeGroupStack(capsule, gl.length), () => gl.forEach(m => m.dismiss()), capsule, headerOldH))
                     }
                     cache.revealer.reveal_child = isExpanded
                 } else {
                     cache.container.remove_css_class("nc-group-with-ghost")
                     const cap = NotificationCapsule({ n: sortedGroup[0], groupCount: 1, isExpanded: false, onToggle: undefined, onClearGroup: () => sortedGroup[0].dismiss(), itemExpanded: expandedItems.has(sortedGroup[0].id), onToggleItem: () => toggleItem(sortedGroup[0].id), onClose: closeNC, onTimeLabel: regTime, startHovered: hoverSeed === sortedGroup[0].id })
-                    cache.headerBox.append(wrapSwipe(cap, () => sortedGroup[0].dismiss()))
+                    cache.headerBox.append(wrapSwipe(cap, () => sortedGroup[0].dismiss(), undefined, seedOldH || headerOldH))
                     expandedGroups.delete(id); cache.revealer.reveal_child = false
                 }
+                cache.expanded = isExpanded && gl.length > 1
                 cache.sig = sig
             }
             if (!cache.container.get_parent()) notificationItemsBox.append(cache.container)
@@ -608,7 +649,9 @@ export default function NotificationCenter() {
             // NC closed mid-cascade: unmapped rows stop ticking, so settle the clear
             // immediately (dismiss the snapshot, one rebuild).
             if (pendingClear) finishClear()
+            // Fresh slate on reopen: groups AND individual rows come back collapsed.
             expandedGroups.clear()
+            expandedItems.clear()
             updateNotifs()
         }
     })
