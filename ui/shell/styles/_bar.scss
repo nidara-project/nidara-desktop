@@ -213,6 +213,42 @@ window#nidara-bar-zone {
     0%, 100% { opacity: 1; }
     50%       { opacity: 0.3; }
 }
+
+// ── Activity Island: compact activity forms ───────────────────────────────────
+// The capsule's mutated content while an activity is live (media rides the
+// player compact's own Cairo painters; these are the REC and battery forms).
+.island-rec-dot {
+    border-radius: var(--nidara-radius-pill);
+    background: var(--nidara-danger);
+    animation: rec-pulse 1.4s ease-in-out infinite;
+}
+
+.island-rec-time {
+    font-size: $fs-small;
+    font-weight: $fw-semibold;
+    font-variant-numeric: tabular-nums;   // ticking digits must not jitter
+    color: var(--nidara-text);
+}
+
+.island-battery-pct {
+    font-size: $fs-small;
+    font-weight: $fw-bold;
+    font-variant-numeric: tabular-nums;
+    color: var(--nidara-danger);   // this form only ever shows while critical
+}
+
+// ── Activity Island: battery-critical expanded surface ────────────────────────
+.island-battery-title {
+    font-size: $fs-small;
+    font-weight: $fw-bold;
+    color: var(--nidara-text);
+}
+
+.island-battery-sub {
+    font-size: $fs-caption;
+    font-weight: $fw-regular;
+    color: var(--nidara-text-dim);
+}
 /* --- Window menu (AppTitle expansion) --- */
 // Inline move-to-workspace strip: flat numbered buttons, current one accented
 // and disabled. Rows/headers/separators come from the shared nidara-menu-*

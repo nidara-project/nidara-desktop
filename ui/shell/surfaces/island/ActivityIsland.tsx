@@ -1,56 +1,47 @@
 import { Gtk } from "ags/gtk4"
-import GLib from "gi://GLib"
-import AstalMpris from "gi://AstalMpris"
 import SquircleContainer from "../../common/SquircleContainer"
 import { MorphRevealer, MorphGlass, MorphPair } from "../../common/MorphRevealer"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { CAPSULE_BORDER } from "../bar/capsule"
 import Theme from "../../core/ThemeManager"
-import status, { ISLAND_OVERVIEW, ISLAND_PLAYER } from "../../core/Status"
-import * as media from "../../core/MediaService"
-import { safeDisconnect } from "../../core/signals"
+import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY } from "../../core/Status"
 import WorkspaceOverview, { WO_GLASS } from "../overview/WorkspaceOverview"
-import PlayerIsland, { PlayerCompact, makeArtGhost, PLAYER_GLASS } from "./PlayerIsland"
+import PlayerIsland, { makeArtGhost, PLAYER_GLASS } from "./PlayerIsland"
+import BatteryIsland, { BATTERY_GLASS } from "./BatteryIsland"
+import { buildActivities } from "./IslandActivities"
 
 // The Activity Island — the bar-center capsule as a MULTI-PURPOSE morphing
 // surface. The capsule is the island's COMPACT state; each thing it can host
-// (workspace overview today; media player, live alerts, the native agent
-// later) is a registered MODE with its own expanded surface and glass recipe,
-// all sharing one morph engine (common/MorphRevealer.ts) and one state field
+// (workspace overview, media player, battery alert; the native agent later)
+// is a registered MODE with its own expanded surface and glass recipe, all
+// sharing one morph engine (common/MorphRevealer.ts) and one state field
 // (status.island_mode, mutually exclusive with the other overlays).
 //
 // Design rules (agreed 2026-07-19):
 // - COMPACT MUTATES BY ACTIVITY (full replacement, not an iOS-style split):
 //   when a live activity exists, the capsule's compact content transforms into
-//   that activity's compact form. Phase 2 machinery — today the compact state
-//   is always the workspace dots.
+//   that activity's compact form.
 // - EXPANSION IS EXPLICIT (click/keybind), except HIGH-PRIORITY events
 //   (critical battery, agent needs confirmation) which may auto-expand.
 //   Ambient state changes only ever touch the compact content.
 // - The island hosts LIVE/STATEFUL things; transactional freedesktop
 //   notifications stay in their banners/NC.
 //
-// Phase 1: the mode registry with the overview migrated as the first mode —
-// one revealer per mode (each keeps its own glass recipe and content; only one
-// is ever open, enforced by status.island_mode). The Bar stays the mount
-// point: it appends `capsule` to its center box, mounts every `revealers`
-// entry on its master overlay, and drives reveal/anchor/keyboard through the
-// returned helpers on notify::island-mode.
-//
-// Phase 2 (this file): COMPACT MUTATION + the player mode. The capsule's
-// content is a Gtk.Stack (crossfade + interpolate_size, so the pill's width
-// animates with the swap) holding one page per compact form: the workspace
-// dots (neutral state) and the media compact (PlayerCompact). The activity
-// controller below OWNS the policy: playing media mutates the compact; pause
-// holds it for a grace window before reverting; the player leaving the bus
-// reverts instantly (and closes the expanded player). Clicking the capsule
-// expands whatever the compact is currently showing.
+// Phase 3 (this file): the ACTIVITY REGISTRY. Activities are DATA — each one
+// declares its compact form, a priority, a liveness signal and (optionally)
+// an expanded mode + auto-expand policy (see IslandActivity below; the
+// concrete activities live in IslandActivities.tsx). The engine here owns the
+// arbitration: the highest-priority LIVE activity fronts the compact (the
+// capsule's Gtk.Stack crossfades + interpolates size, so the pill reshapes
+// with the swap); none live = the workspace dots. Clicking the capsule
+// expands whatever fronts it. This is the mechanic the agent mode will ride
+// (a "working" pill that expands when the agent needs a confirmation).
 
 export interface IslandMode {
     id: string
     /** Expanded surface, built once and revealed by the morph. May expose the
-     *  morph handles (`morphContent`/`morphGlass`/`morphDots`) and nav hooks
-     *  (`onOpen`/`handleKey`) — see MorphRevealer / WorkspaceOverview. */
+     *  morph handles (`morphContent`/`morphGlass`/`morphDots`/`morphArt`) and
+     *  nav hooks (`onOpen`/`handleKey`) — see MorphRevealer / WorkspaceOverview. */
     widget: Gtk.Widget
     /** Glass recipe of the expanded container (the morph's far end). */
     glass: () => MorphGlass
@@ -59,8 +50,40 @@ export interface IslandMode {
     needsKeyboard?: boolean
 }
 
+/** One thing the island can show live status for. Declared as data; the
+ *  engine below arbitrates which live activity fronts the compact. */
+export interface IslandActivity {
+    /** Compact page name in the capsule's stack. */
+    id: string
+    /** Higher wins the compact when several activities are live. Ambient
+     *  media sits lowest; an active capture above it; critical alerts top. */
+    priority: number
+    /** The capsule's compact form while this activity fronts (carries its own
+     *  side margins — 16px is the bar capsule family standard). */
+    compact: Gtk.Widget
+    /** Twin factory for the morph's source-dissolve track — called once per
+     *  registered mode (a widget has ONE parent, so each revealer owns its own
+     *  twin set). hideArt = that mode has an art landing slot (the flying art
+     *  ghost owns those pixels; the twin keeps the slot but paints it clear). */
+    makeGhost?: (opts: { hideArt: boolean }) => Gtk.Widget
+    /** Source element of a mode's art MorphPair while this activity fronts
+     *  (media's mini cover art). Activities without one skip the pair — the
+     *  landing art rides the content fade instead. */
+    artSource?: () => Gtk.Widget | null
+    /** Expanded mode opened by clicking the capsule while this activity
+     *  fronts. Omit = the click falls back to the workspace overview. */
+    expandMode?: string
+    /** HIGH-priority only: expand automatically when this activity TAKES the
+     *  front (once per takeover — closing the island while the condition
+     *  persists must not re-open it). */
+    autoExpand?: boolean
+    /** Wire liveness; call `changed` whenever isLive() may have flipped. */
+    watch: (changed: () => void) => void
+    isLive: () => boolean
+}
+
 export function ActivityIsland() {
-    // ── Compact state: dots page + player page in a morphing stack ──────────
+    // ── Compact state: dots page + one page per activity, in a morphing stack ─
     // (Dots absorbed from the old surfaces/bar/Workspaces.tsx — the capsule
     // belongs to the island now; the bar just places it.)
     const dotsBox = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16 })
@@ -81,65 +104,43 @@ export function ActivityIsland() {
         interpolate_size: true,
     })
     compactStack.add_named(dotsBox, "dots")
-    const playerPage = PlayerCompact()
-    compactStack.add_named(playerPage, "player")
+    const activities = buildActivities()
+    for (const a of activities) compactStack.add_named(a.compact, a.id)
+
     // Expansion is EXPLICIT and follows the compact: the capsule opens what it
     // is currently showing. The overview always stays reachable via Super+W.
-    let activityLive = false
-    const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleIsland(activityLive ? ISLAND_PLAYER : ISLAND_OVERVIEW) })
+    let front: IslandActivity | null = null
+    const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleIsland(front?.expandMode ?? ISLAND_OVERVIEW) })
     // Live dot refs for the morph: ghosts lerp FROM these bounds. (While the
-    // compact shows the player the dots are unmapped and MorphRevealer lets
+    // compact shows an activity the dots are unmapped and MorphRevealer lets
     // the overview's landing dots ride the content fade instead.)
     ;(capsule as any).morphDots = dots
 
-    // ── Activity controller: WHEN the compact mutates ───────────────────────
-    // Playing media is an AMBIENT activity — it mutates the compact, never
-    // auto-expands (auto-expansion is reserved for high-priority events).
-    // Pause keeps the player form for a grace window (track changes and short
-    // pauses must not flicker dots↔player); the player leaving the bus reverts
-    // instantly and closes the expanded player if it was open.
-    const PAUSE_GRACE_S = 12
-    let graceTimer: number | null = null
-    let curPlayer: any = null
-    let playerSig: number | null = null
-
-    const cancelGrace = () => {
-        if (graceTimer !== null) { GLib.source_remove(graceTimer); graceTimer = null }
+    // ── Arbitration: WHICH live activity fronts the compact ──────────────────
+    // Liveness POLICY stays inside each activity (media owns its pause grace,
+    // battery its hysteresis) — the engine only picks the winner and applies
+    // the two cross-activity rules: a dead activity's expanded surface closes,
+    // and an auto-expand activity opens its surface when it takes the front.
+    const arbitrate = () => {
+        const live = activities.filter(a => a.isLive())
+        const next = live.length ? live.reduce((m, a) => (a.priority > m.priority ? a : m)) : null
+        if (next === front) return
+        const prev = front
+        front = next
+        compactStack.visible_child_name = front?.id ?? "dots"
+        // The thing the open surface was showing is GONE (player left the bus,
+        // battery recovered) — close it; a mere front takeover by a higher
+        // priority leaves a still-live activity's surface open.
+        if (prev?.expandMode && status.island_mode === prev.expandMode && !prev.isLive())
+            status.island_mode = ""
+        if (front?.autoExpand && front.expandMode)
+            status.island_mode = front.expandMode
     }
-    const setCompact = (playerForm: boolean) => {
-        if (activityLive === playerForm) return
-        activityLive = playerForm
-        compactStack.visible_child_name = playerForm ? "player" : "dots"
-    }
-    const evaluate = () => {
-        const playing = curPlayer?.playback_status === AstalMpris.PlaybackStatus.PLAYING
-        if (playing) {
-            cancelGrace()
-            setCompact(true)
-        } else if (!curPlayer) {
-            cancelGrace()
-            setCompact(false)
-            if (status.island_mode === ISLAND_PLAYER) status.island_mode = ""
-        } else if (activityLive && graceTimer === null) {
-            graceTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, PAUSE_GRACE_S, () => {
-                graceTimer = null
-                // The user is looking at the open player panel — hold the
-                // compact; the island-mode close below re-evaluates.
-                if (status.island_mode !== ISLAND_PLAYER) setCompact(false)
-                return GLib.SOURCE_REMOVE
-            })
-        }
-    }
-    const rewire = () => {
-        safeDisconnect(curPlayer, playerSig); playerSig = null
-        curPlayer = media.selectedPlayer()
-        if (curPlayer) playerSig = curPlayer.connect("notify::playback-status", evaluate)
-        evaluate()
-    }
-    media.subscribe(rewire)
-    // A pause grace may have expired while the expanded player was open.
-    status.connect("notify::island-mode", () => { if (status.island_mode === "") evaluate() })
-    rewire()
+    for (const a of activities) a.watch(arbitrate)
+    // Closing a mode can end a liveness clause (media holds its compact while
+    // its panel is open; a pause grace may have expired underneath).
+    status.connect("notify::island-mode", () => { if (status.island_mode === "") arbitrate() })
+    arbitrate()
 
     // Both morph endpoints paint chrome glass (SquircleContainer chrome:true):
     // tint pinned by shellAppearance, alpha from the bar/overlay opacity axes.
@@ -166,27 +167,27 @@ export function ActivityIsland() {
         }
         if (w.morphArt) pairs.push({
             ghost: makeArtGhost(),
-            getSource: () => ((playerPage as any).artDa as Gtk.Widget) ?? null,
+            getSource: () => front?.artSource?.() ?? null,
             getTarget: () => (w.morphArt as Gtk.Widget) ?? null,
         })
+        // Source-dissolve twins: whatever activity fronts the compact melts
+        // into the growing island for EVERY mode (opening the overview over
+        // playing music must not blink the compact out either). The dots page
+        // needs no twin — its landing pairs ARE the continuity; known gap: a
+        // mode opened via IPC while the compact shows dots still blinks them
+        // out (no landing slot to fly to) — rare, agent path only.
+        const twins = new Map<string, Gtk.Widget>()
+        for (const a of activities)
+            if (a.makeGhost) twins.set(a.id, a.makeGhost({ hideArt: !!w.morphArt }))
         const revealer = new MorphRevealer(mode.widget, {
             getSourceWidget: () => capsule,
             contentTarget: w.morphContent ?? null,
             glassWidget: w.morphGlass ?? null,
             glassArea: (w.morphGlass as any)?.glassArea ?? null,
             pairs,
-            // Media compact content (title/EQ/art) dissolves into the growing
-            // island whenever the compact is on the player page — for EVERY
-            // mode (opening the overview over playing music must not blink
-            // the compact out either). The dots page needs no source ghost
-            // when its landing dots exist (the pairs ARE the continuity);
-            // known gap: `togglePlayer` via IPC while the compact shows dots
-            // still blinks them out (no landing slot to fly to) — rare, agent
-            // path only. Modes with an art pair get a twin with a transparent
-            // art slot: the flying art ghost owns those pixels.
-            sourceGhost: PlayerCompact({ ghost: true, hideArt: !!w.morphArt }),
-            getSourceContent: () => playerPage,
-            getSourceGhostOn: () => activityLive,
+            sourceGhosts: [...twins.values()],
+            getSourceGhost: () => (front ? twins.get(front.id) ?? null : null),
+            getSourceContent: () => front?.compact ?? null,
             glassFrom: compactGlass,
             glassTo: mode.glass,
         })
@@ -210,6 +211,13 @@ export function ActivityIsland() {
         id: ISLAND_PLAYER,
         widget: PlayerIsland(),
         glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: PLAYER_GLASS.border, n: PLAYER_GLASS.n, radius: PLAYER_GLASS.radius }),
+    })
+    // No keyboard grab either: the battery alert is dismissed by outside click
+    // / Esc-less design, same ambient contract as the player.
+    registerMode({
+        id: ISLAND_BATTERY,
+        widget: BatteryIsland(),
+        glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: BATTERY_GLASS.border, n: BATTERY_GLASS.n, radius: BATTERY_GLASS.radius }),
     })
 
     const active = () => modes.get(status.island_mode) ?? null

@@ -195,6 +195,7 @@ export class UIStatus extends GObject.Object {
 // without surface-to-surface imports.
 export const ISLAND_OVERVIEW = "overview"
 export const ISLAND_PLAYER = "player"
+export const ISLAND_BATTERY = "battery"
 
 export const status = new UIStatus()
 export default status

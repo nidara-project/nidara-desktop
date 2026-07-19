@@ -39,12 +39,13 @@ import { drawSquircle } from "./DrawingUtils"
 //      element rides the content fade instead.
 //   3. THE SOURCE CONTENT. Compact content WITHOUT a landing slot (media
 //      title/EQ; the whole media compact when opening the overview) must not
-//      blink out on frame 0: a `sourceGhost` twin rides the growing shape
+//      blink out on frame 0: a source-ghost twin rides the growing shape
 //      (uniform scale, anchored where the compact content sits inside the
 //      source pill) and dissolves over [0, SOURCE_FADE_END] — the compact
-//      visibly melts INTO the island instead of disappearing. Gated per
-//      reveal by `getSourceGhostOn` (the island only shows it while the
-//      compact is actually on the matching page).
+//      visibly melts INTO the island instead of disappearing. The compact
+//      can show ANY activity's form, so the revealer owns one twin per form
+//      (`sourceGhosts`) and `getSourceGhost` resolves the matching one
+//      (latched per reveal; null = no dissolve, e.g. the dots page).
 //   4. THE CONTENT. `contentTarget` (the expanded content) fades in over the
 //      LAST stretch [CONTENT_START, 1] while the child paints with the glass
 //      rect mapped onto the interpolated rect — content materializes INSIDE
@@ -131,9 +132,9 @@ export class MorphRevealer extends Gtk.Widget {
     glassWidget: Gtk.Widget | null
     glassArea: Gtk.Widget | null
     pairs: MorphPair[]
-    sourceGhost: Gtk.Widget | null
+    sourceGhosts: Gtk.Widget[]
+    getSourceGhost: (() => Gtk.Widget | null) | null
     getSourceContent: (() => Gtk.Widget | null) | null
-    getSourceGhostOn: (() => boolean) | null
     glassFrom: () => MorphGlass
     glassTo: () => MorphGlass
     durationIn: number
@@ -141,7 +142,7 @@ export class MorphRevealer extends Gtk.Widget {
     progress = 0          // 0 = collapsed into the source, 1 = at rest
     tickId: number | null = null
     fromSource = false    // latched per open: real capsule morph vs fallback pop
-    ghostOn = false       // latched per reveal(): paint the sourceGhost track?
+    activeGhost: Gtk.Widget | null = null  // latched per reveal(): the sourceGhost track to paint
 
     constructor(child: Gtk.Widget, opts: {
         getSourceWidget: () => Gtk.Widget | null,
@@ -155,14 +156,17 @@ export class MorphRevealer extends Gtk.Widget {
         glassArea?: Gtk.Widget | null,
         /** Traveling element twins (dots → card headers, art → panel art). */
         pairs?: MorphPair[],
-        /** Twin of the compact content that dissolves into the growing shape
-         *  (track 3 above). Pass the LIVE compact page via getSourceContent
-         *  so the twin is anchored where the real content sits. */
-        sourceGhost?: Gtk.Widget | null,
+        /** Twins of the compact content that dissolves into the growing shape
+         *  (track 3 above) — ONE per compact form that needs the dissolve
+         *  (widgets have a single parent, so each revealer owns its own set).
+         *  `getSourceGhost` resolves which twin matches what the compact shows
+         *  NOW (null = no dissolve, e.g. the dots page whose landing pairs ARE
+         *  the continuity); read (and latched) on every reveal(), both
+         *  directions. Pass the LIVE compact page via getSourceContent so the
+         *  twin is anchored where the real content sits. */
+        sourceGhosts?: Gtk.Widget[],
+        getSourceGhost?: () => Gtk.Widget | null,
         getSourceContent?: () => Gtk.Widget | null,
-        /** Whether the sourceGhost matches what the compact currently shows —
-         *  read (and latched) on every reveal(), both directions. */
-        getSourceGhostOn?: () => boolean,
         durationIn?: number, durationOut?: number,
     }) {
         super({})
@@ -174,14 +178,14 @@ export class MorphRevealer extends Gtk.Widget {
         this.glassWidget = opts.glassWidget ?? null
         this.glassArea = opts.glassArea ?? null
         this.pairs = opts.pairs ?? []
-        this.sourceGhost = opts.sourceGhost ?? null
+        this.sourceGhosts = opts.sourceGhosts ?? []
+        this.getSourceGhost = opts.getSourceGhost ?? null
         this.getSourceContent = opts.getSourceContent ?? null
-        this.getSourceGhostOn = opts.getSourceGhostOn ?? null
         this.durationIn = opts.durationIn ?? 300
         this.durationOut = opts.durationOut ?? 220
         this.child.set_parent(this)
         for (const p of this.pairs) p.ghost.set_parent(this)
-        this.sourceGhost?.set_parent(this)
+        for (const g of this.sourceGhosts) g.set_parent(this)
         this.set_visible(false)
     }
 
@@ -235,7 +239,7 @@ export class MorphRevealer extends Gtk.Widget {
         // Latched on EVERY reveal (the compact can mutate while a mode is
         // open — e.g. a pause grace expiring under the overview — so the
         // close must dissolve/condense whatever the compact shows NOW).
-        this.ghostOn = this.sourceGhost !== null && (this.getSourceGhostOn?.() ?? true)
+        this.activeGhost = this.getSourceGhost?.() ?? null
         if (open) {
             // Latched per open (the close mirrors the open's mode); the rects
             // themselves are still re-read live every frame.
@@ -286,7 +290,7 @@ export class MorphRevealer extends Gtk.Widget {
         this.child.allocate(width, height, baseline, null)
         // Ghosts get their natural size at the origin; snapshot places them.
         const ghosts = this.pairs.map(p => p.ghost)
-        if (this.sourceGhost) ghosts.push(this.sourceGhost)
+        ghosts.push(...this.sourceGhosts)
         for (const ghost of ghosts) {
             const [, gw] = ghost.measure(Gtk.Orientation.HORIZONTAL, -1)
             const [, gh] = ghost.measure(Gtk.Orientation.VERTICAL, -1)
@@ -359,8 +363,8 @@ export class MorphRevealer extends Gtk.Widget {
         // Vertically the twin (allocated at its natural height) is centered
         // within the mapped content rect — the real page fills the pill and
         // centers its children, so this lands the twin exactly on them.
-        if (this.fromSource && this.ghostOn && this.sourceGhost && p < SOURCE_FADE_END && s.w > 0) {
-            const g = this.sourceGhost
+        if (this.fromSource && this.activeGhost && p < SOURCE_FADE_END && s.w > 0) {
+            const g = this.activeGhost
             const gw = g.get_width()
             const gh = g.get_height()
             const c = this.rectOf(this.getSourceContent?.() ?? null) ?? s

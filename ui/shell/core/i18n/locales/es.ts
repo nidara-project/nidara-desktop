@@ -596,6 +596,8 @@ export default {
     "widget.wifi.row.disabled": "Desactivado",
 
     // Battery widget
+    "island.battery.critical": "Batería críticamente baja",
+    "island.battery.hint": "Conecta el cargador",
     "widget.battery.label.unavailable": "Batería no disponible",
     "widget.battery.name": "Batería",
     "widget.battery.state.charged": "Cargado",
