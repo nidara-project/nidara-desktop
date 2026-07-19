@@ -764,6 +764,11 @@ compact content WITHOUT a landing slot (media title/EQ; the whole media compact 
 opening the overview) gets a twin that rides the growing shape (uniform scale, anchored
 where the content sits in the pill, vertically centered) and dissolves over progress
 [0, 0.35] — the compact melts INTO the island instead of blinking out on frame 0.
+GTK trap for ANY snapshot-painted ghost: `snapshot_child` already applies the child's
+own margin offset, and `compute_bounds` on the real widget EXCLUDES its margins — so a
+ghost twin must carry NO margins or every offset is applied twice (the media twin's
+12px double-shift pushed the EQ past the glass edge mid-morph and made the contraction
+land with a visible re-seat; user-caught 2026-07-19).
 Gated per `reveal()` by `getSourceGhostOn` (only while the compact actually shows that
 page); ghost twins run NO timers — the EQ phase is module-shared in `PlayerIsland.tsx`
 and advanced only by the real compact, so ghosts repaint bit-identical bars via the

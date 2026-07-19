@@ -169,7 +169,15 @@ export function PlayerCompact(opts: {
     // per-frame redraw repaints them reading the shared phase.)
     if (!opts.ghost) eq.connect("map", ensureEqTimer)
 
-    const box = new Gtk.Box({ spacing: 8, margin_start: 12, margin_end: 14 })
+    // Ghost twins carry NO margins: MorphRevealer anchors them on the REAL
+    // page's content bounds (compute_bounds excludes margins), and
+    // snapshot_child already applies the child's own margin offset — margins
+    // on the twin double that offset and shift the whole ghost 12px right
+    // (EQ past the glass edge mid-morph + a visible re-seat when the
+    // contraction lands; user-caught 2026-07-19).
+    const box = opts.ghost
+        ? new Gtk.Box({ spacing: 8 })
+        : new Gtk.Box({ spacing: 8, margin_start: 12, margin_end: 14 })
     box.append(artDa)
     box.append(title)
     box.append(eq)

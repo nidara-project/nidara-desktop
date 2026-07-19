@@ -135,12 +135,35 @@ export function playerLabel(p: any): string {
     return p?.identity || p?.entry || "Player"
 }
 
-/** The player's app icon as a GIcon (desktop entry lookup), or null. */
+/** The player's app icon as a GIcon, or null. The MPRIS DesktopEntry field is
+ *  unreliable in the wild (Chromium instances publish "chromium-browser" while
+ *  the installed file is chromium.desktop; some players omit it entirely), so
+ *  the lookup walks candidates — exact entry, lowercased, the bus-name app
+ *  segment (org.mpris.MediaPlayer2.<app>[.instanceN]) — and falls back to a
+ *  desktop-file search on the human identity ("Chromium" → chromium.desktop). */
 export function playerAppIcon(p: any): any {
-    const entry: string = p?.entry || ""
-    if (!entry) return null
-    try { return Gio.DesktopAppInfo.new(`${entry}.desktop`)?.get_icon() ?? null }
-    catch { return null }
+    if (!p) return null
+    const candidates: string[] = []
+    const entry: string = p.entry || ""
+    if (entry) candidates.push(entry, entry.toLowerCase())
+    const bus: string = p.bus_name || ""
+    const tail = bus.split("org.mpris.MediaPlayer2.")[1] ?? ""
+    if (tail) candidates.push(tail, tail.split(".")[0])
+    for (const c of candidates) {
+        try {
+            const icon = Gio.DesktopAppInfo.new(`${c}.desktop`)?.get_icon()
+            if (icon) return icon
+        } catch {}
+    }
+    const identity: string = p.identity || ""
+    if (identity) {
+        try {
+            const id = Gio.DesktopAppInfo.search(identity)[0]?.[0]
+            const icon = id ? Gio.DesktopAppInfo.new(id)?.get_icon() : null
+            if (icon) return icon
+        } catch {}
+    }
+    return null
 }
 
 // ── Cover-art resolution ─────────────────────────────────────────────────────
