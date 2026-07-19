@@ -194,6 +194,7 @@ export class UIStatus extends GObject.Object {
 // Island mode ids live here (core) so surfaces and IPC share one vocabulary
 // without surface-to-surface imports.
 export const ISLAND_OVERVIEW = "overview"
+export const ISLAND_PLAYER = "player"
 
 export const status = new UIStatus()
 export default status

@@ -6,7 +6,8 @@ import { Gdk, Gtk } from "ags/gtk4"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import status, { ISLAND_OVERVIEW } from "./core/Status"
+import status, { ISLAND_OVERVIEW, ISLAND_PLAYER } from "./core/Status"
+import { selectedPlayer } from "./core/MediaService"
 import shellActions from "./core/ShellActions"
 import { currentLocale } from "./core/i18n"
 import { readFile } from "ags/file"
@@ -146,6 +147,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: args => ipc.openSettingsPage?.(args[0] ?? ""),
   },
   toggleOverview: { desc: "Toggle the workspaces overview", run: () => ipc.toggleOverview?.() },
+  togglePlayer: {
+    desc: "Toggle the media player island (the bar capsule's expanded player). Needs an MPRIS player on the bus — verify via dumpState `overlays.island`",
+    run: () => selectedPlayer() ? void status.toggleIsland(ISLAND_PLAYER) : "no media player on the bus",
+  },
   toggleAbout: {
     desc: "Toggle the About window (system info card, window `nidara-about`) — the deterministic hook " +
       "for the system-menu item. Pair with `queryUI .about-spec-val@about` or dumpState `overlays.about` to verify.",

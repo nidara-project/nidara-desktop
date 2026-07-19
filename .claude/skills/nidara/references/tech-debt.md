@@ -652,6 +652,14 @@ would change real focus behavior just to silence someone else's warning. The rig
 one-liner upstream (`if (!p || …)` at that line); reporting to GNOME/gtk is pending (no
 GitLab account yet).
 
+### 35. Island media compact: focus-aware mutation deferred (2026-07-19)
+The capsule's compact content mutates to the media form whenever the selected player is
+PLAYING. The agreed ideal is stricter: only mutate while the playing app is NOT focused
+(music in the foreground app doesn't need an ambient indicator — you're looking at it).
+Deferred from phase 2 as secondary; needs `HyprlandState` focused-window class matched
+against the player's `entry`, with a real edge case: a browser playing in a background TAB
+of a focused window would wrongly count as "focused". Design the matching before wiring it.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:

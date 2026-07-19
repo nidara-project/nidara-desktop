@@ -14,7 +14,7 @@ Setting any of these to `true` closes all the rest:
 - `nc_open`
 - `prism_open`
 - `system_menu_open`
-- `island_mode` (a STRING, not a bool — the Activity Island's open mode id, `""` = collapsed; `ISLAND_OVERVIEW` (`"overview"`) is the only mode today. Replaced the old `overview_open` boolean when the overview became the island's first mode — see `surfaces/island/ActivityIsland.tsx`.)
+- `island_mode` (a STRING, not a bool — the Activity Island's open mode id, `""` = collapsed; modes today: `ISLAND_OVERVIEW` (`"overview"`) and `ISLAND_PLAYER` (`"player"`, the media panel). Replaced the old `overview_open` boolean when the overview became the island's first mode — see `surfaces/island/ActivityIsland.tsx`. Note `""` only means no mode is EXPANDED — the capsule's compact content mutates independently (dots ↔ media compact) and is not Status state.)
 
 The exclusion is implemented by the private `closeExclusive(keep, opts)` helper — each setter calls it on open; when adding a new exclusive overlay, add its `_field → notify-name` to the `EXCLUSIVE` map and call `closeExclusive` from the new setter (don't touch the other setters). Two string-valued members are special-cased: `island_mode` is cleared explicitly inside `closeExclusive` (it can't live in the boolean `EXCLUSIVE` map), and `bar_expanded_id` (the pill expansion capsule) is a **one-way member**: setting it non-empty closes the overlays, and the overlay setters clear it via `opts.barExpanded`. New island MODES are NOT new Status fields — they're new ids for `island_mode`, registered in `ActivityIsland` (mode ids are exported from `Status.ts` so core/IPC/surfaces share one vocabulary).
 
@@ -64,7 +64,7 @@ read source to discover it:
 
 Current commands (run `listActions` for the live list): `toggleCC|toggleControlCenter`,
 `toggleNC|toggleNotificationCenter`, `togglePrism|toggleSearch`, `toggleAppGrid`,
-`openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `toggleAbout`, `toggleBarOverlay` (alias `toggleGameOverlay`),
+`openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `togglePlayer` (media island; errors if no MPRIS player is on the bus), `toggleAbout`, `toggleBarOverlay` (alias `toggleGameOverlay`),
 `openWindowMenu`, `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`,
 `setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listApps`, `launchApp <id>`,
 `disableComputerControl`, `notifyComputerAction` (computer-use tools ping it so the bar's AI-control

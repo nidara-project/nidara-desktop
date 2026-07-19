@@ -171,12 +171,16 @@ export class MorphRevealer extends Gtk.Widget {
         if (src) src.opacity = p <= 0 ? 1 : 0
         if (this.contentTarget)
             this.contentTarget.opacity = clamp01((p - CONTENT_START) / (1 - CONTENT_START))
-        // Landing dots exist only at rest — the ghosts own the journey. In
-        // fallback mode there are no ghosts, so they ride the content fade.
+        // Landing dots exist only at rest — the ghosts own the journey. Without
+        // a ghost for dot i (fallback mode, or the compact has MUTATED away
+        // from the dots page so the source dot is unmapped) that landing dot
+        // rides the content fade with its parent instead of popping at rest.
         if (this.dots) {
             for (let i = 0; i < this.dots.ghosts.length; i++) {
                 const target = this.dots.getTarget(i)
-                if (target) target.opacity = (!this.fromSource || resting) ? 1 : 0
+                if (!target) continue
+                const hasGhost = this.fromSource && this.rectOf(this.dots.getSource(i)) !== null
+                target.opacity = (!hasGhost || resting) ? 1 : 0
             }
         }
         this.queue_draw()

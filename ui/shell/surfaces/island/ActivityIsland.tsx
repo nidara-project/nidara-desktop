@@ -1,11 +1,16 @@
 import { Gtk } from "ags/gtk4"
+import GLib from "gi://GLib"
+import AstalMpris from "gi://AstalMpris"
 import SquircleContainer from "../../common/SquircleContainer"
 import { MorphRevealer, MorphGlass } from "../../common/MorphRevealer"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { CAPSULE_BORDER } from "../bar/capsule"
 import Theme from "../../core/ThemeManager"
-import status, { ISLAND_OVERVIEW } from "../../core/Status"
+import status, { ISLAND_OVERVIEW, ISLAND_PLAYER } from "../../core/Status"
+import * as media from "../../core/MediaService"
+import { safeDisconnect } from "../../core/signals"
 import WorkspaceOverview, { WO_GLASS } from "../overview/WorkspaceOverview"
+import PlayerIsland, { PlayerCompact, PLAYER_GLASS } from "./PlayerIsland"
 
 // The Activity Island — the bar-center capsule as a MULTI-PURPOSE morphing
 // surface. The capsule is the island's COMPACT state; each thing it can host
@@ -25,12 +30,21 @@ import WorkspaceOverview, { WO_GLASS } from "../overview/WorkspaceOverview"
 // - The island hosts LIVE/STATEFUL things; transactional freedesktop
 //   notifications stay in their banners/NC.
 //
-// Phase 1 (this file): the mode registry with the overview migrated as the
-// first mode — one revealer per mode (each keeps its own glass recipe and
-// content; only one is ever open, enforced by status.island_mode). The Bar
-// stays the mount point: it appends `capsule` to its center box, mounts every
-// `revealers` entry on its master overlay, and drives reveal/anchor/keyboard
-// through the returned helpers on notify::island-mode.
+// Phase 1: the mode registry with the overview migrated as the first mode —
+// one revealer per mode (each keeps its own glass recipe and content; only one
+// is ever open, enforced by status.island_mode). The Bar stays the mount
+// point: it appends `capsule` to its center box, mounts every `revealers`
+// entry on its master overlay, and drives reveal/anchor/keyboard through the
+// returned helpers on notify::island-mode.
+//
+// Phase 2 (this file): COMPACT MUTATION + the player mode. The capsule's
+// content is a Gtk.Stack (crossfade + interpolate_size, so the pill's width
+// animates with the swap) holding one page per compact form: the workspace
+// dots (neutral state) and the media compact (PlayerCompact). The activity
+// controller below OWNS the policy: playing media mutates the compact; pause
+// holds it for a grace window before reverting; the player leaving the bus
+// reverts instantly (and closes the expanded player). Clicking the capsule
+// expands whatever the compact is currently showing.
 
 export interface IslandMode {
     id: string
@@ -46,19 +60,85 @@ export interface IslandMode {
 }
 
 export function ActivityIsland() {
-    // ── Compact state: the workspace dots capsule ────────────────────────────
-    // (Absorbed from the old surfaces/bar/Workspaces.tsx — the capsule belongs
-    // to the island now; the bar just places it.)
-    const box = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16 })
+    // ── Compact state: dots page + player page in a morphing stack ──────────
+    // (Dots absorbed from the old surfaces/bar/Workspaces.tsx — the capsule
+    // belongs to the island now; the bar just places it.)
+    const dotsBox = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16 })
     const dots: Gtk.Widget[] = []
     for (let i = 1; i <= WS_COUNT; i++) {
         const dot = makeWorkspaceDot(i)
         dots.push(dot)
-        box.append(dot)
+        dotsBox.append(dot)
     }
-    const capsule = SquircleContainer({ child: box, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleIsland(ISLAND_OVERVIEW) })
-    // Live dot refs for the morph: ghosts lerp FROM these bounds.
+    // interpolate_size + non-homogeneous: the capsule's pill WIDTH animates
+    // along with the crossfade when the compact mutates — one shape reshaping,
+    // not a jump-cut (same principle as the big morph, GTK-native here).
+    const compactStack = new Gtk.Stack({
+        transition_type: Gtk.StackTransitionType.CROSSFADE,
+        transition_duration: 350,
+        hhomogeneous: false,
+        vhomogeneous: false,
+        interpolate_size: true,
+    })
+    compactStack.add_named(dotsBox, "dots")
+    compactStack.add_named(PlayerCompact(), "player")
+    // Expansion is EXPLICIT and follows the compact: the capsule opens what it
+    // is currently showing. The overview always stays reachable via Super+W.
+    let activityLive = false
+    const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleIsland(activityLive ? ISLAND_PLAYER : ISLAND_OVERVIEW) })
+    // Live dot refs for the morph: ghosts lerp FROM these bounds. (While the
+    // compact shows the player the dots are unmapped and MorphRevealer lets
+    // the overview's landing dots ride the content fade instead.)
     ;(capsule as any).morphDots = dots
+
+    // ── Activity controller: WHEN the compact mutates ───────────────────────
+    // Playing media is an AMBIENT activity — it mutates the compact, never
+    // auto-expands (auto-expansion is reserved for high-priority events).
+    // Pause keeps the player form for a grace window (track changes and short
+    // pauses must not flicker dots↔player); the player leaving the bus reverts
+    // instantly and closes the expanded player if it was open.
+    const PAUSE_GRACE_S = 12
+    let graceTimer: number | null = null
+    let curPlayer: any = null
+    let playerSig: number | null = null
+
+    const cancelGrace = () => {
+        if (graceTimer !== null) { GLib.source_remove(graceTimer); graceTimer = null }
+    }
+    const setCompact = (playerForm: boolean) => {
+        if (activityLive === playerForm) return
+        activityLive = playerForm
+        compactStack.visible_child_name = playerForm ? "player" : "dots"
+    }
+    const evaluate = () => {
+        const playing = curPlayer?.playback_status === AstalMpris.PlaybackStatus.PLAYING
+        if (playing) {
+            cancelGrace()
+            setCompact(true)
+        } else if (!curPlayer) {
+            cancelGrace()
+            setCompact(false)
+            if (status.island_mode === ISLAND_PLAYER) status.island_mode = ""
+        } else if (activityLive && graceTimer === null) {
+            graceTimer = GLib.timeout_add_seconds(GLib.PRIORITY_DEFAULT, PAUSE_GRACE_S, () => {
+                graceTimer = null
+                // The user is looking at the open player panel — hold the
+                // compact; the island-mode close below re-evaluates.
+                if (status.island_mode !== ISLAND_PLAYER) setCompact(false)
+                return GLib.SOURCE_REMOVE
+            })
+        }
+    }
+    const rewire = () => {
+        safeDisconnect(curPlayer, playerSig); playerSig = null
+        curPlayer = media.selectedPlayer()
+        if (curPlayer) playerSig = curPlayer.connect("notify::playback-status", evaluate)
+        evaluate()
+    }
+    media.subscribe(rewire)
+    // A pause grace may have expired while the expanded player was open.
+    status.connect("notify::island-mode", () => { if (status.island_mode === "") evaluate() })
+    rewire()
 
     // Both morph endpoints paint chrome glass (SquircleContainer chrome:true):
     // tint pinned by shellAppearance, alpha from the bar/overlay opacity axes.
@@ -93,12 +173,18 @@ export function ActivityIsland() {
         modes.set(mode.id, { mode, revealer })
     }
 
-    // Phase 1: the overview is the island's first (and only) mode.
     registerMode({
         id: ISLAND_OVERVIEW,
         widget: WorkspaceOverview(),
         glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: WO_GLASS.border, n: WO_GLASS.n, radius: WO_GLASS.radius }),
         needsKeyboard: true,
+    })
+    // No keyboard grab: the player panel is ambient — media keys and app focus
+    // keep working; it closes on outside click / capsule click like CC.
+    registerMode({
+        id: ISLAND_PLAYER,
+        widget: PlayerIsland(),
+        glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: PLAYER_GLASS.border, n: PLAYER_GLASS.n, radius: PLAYER_GLASS.radius }),
     })
 
     const active = () => modes.get(status.island_mode) ?? null
