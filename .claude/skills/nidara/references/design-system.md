@@ -715,6 +715,13 @@ borders) stays perceptible — that tail is what made the old CSS fade look "non
   dispose override never runs on GC finalization and the child leaks ("still has children
   left" warnings). Long-lived wrappers (the overlays) never need it; per-notification
   banners do.
+- **In-place content swap + height morph:** `setChild(next)` replaces the child while the
+  wrapper keeps its progress/opacity/swipe state — banner replacement (same id, new
+  content) updates without replaying the grow-in. `morphFromHeight(h0)` eases the
+  *measured* height from a predecessor's allocated height to the new child's natural
+  (top-anchored, own tick so reveal/swipe don't cancel it) — the NC uses it when a rebuilt
+  row (item chevron toggle) or the group header ⇄ stacked-capsule swap replaces its old
+  widget, so the column glides instead of snapping by the height difference.
 - **Typing gotcha:** the class merges `export interface ScaleRevealer extends Gtk.Widget`
   because the ambient `ags/gtk4` typing exposes `Gtk` as `any` in value position — without
   the merge, tsc can't see the inheritance. Don't add TS `private` members or members whose

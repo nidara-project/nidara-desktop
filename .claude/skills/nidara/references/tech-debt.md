@@ -861,6 +861,50 @@ These were paid down; the *rule* remains:
   manual imports to `widgets/index.ts`; the registry comes from `scripts/gen-widget-index.mjs`
   (phase 1 of the widget plugin system; phase 2 — zero-layout contract — still deferred).
   `bar-helpers.ts` is the only grandfathered non-widget in `widgets/` (EXCLUDE list).
+- **Notification swipe-to-dismiss** — one implementation in `common/ScaleRevealer.ts`:
+  `attachHorizontalSwipe` (gesture detector — claims only on horizontal intent so the NC
+  scroller keeps its vertical drag; cancels the row's release-phase tap) + `setSwipe`/`swipeOut`/
+  `settleSwipe` (paint-only snapshot translate + off-screen fling / animated snap-back; never use
+  margins — they reflow the card, double-painting wrapped labels) + `collapseAway` (height-collapse
+  for list rows). Cards must open on RELEASE (`SquircleContainer` `clickOnRelease`) or the
+  press-tap fires before the swipe is recognised. **Banners slide off directly** (they can leave
+  the screen). **NC rows slide via a GHOST** (`attachGhostSwipeDismiss`): the scroller clips any
+  translate at the panel walls, so on swipe start the row's render is captured statically
+  (`WidgetPaintable.get_current_image` — the DnD-drag-icon mechanism), the live row drops to
+  opacity 0 (keeps its allocation AND the pointer grab), and the capture follows the finger from
+  an input-transparent `Gtk.Fixed` lazily layered over the Bar's master overlay, above every
+  panel. On dismiss the ghost flings off while the real row height-collapses; on cancel the ghost
+  settles back and the live row is swapped in at identity. The row's `unmap` drops a live ghost
+  and restores opacity (rows persist across NC open/close via the group cache — a row left at 0
+  would come back invisible).
+- **Notification hero images have TWO shapes** (`NotificationCenter.tsx`): compact = 44px
+  cover-fit squircle thumb on the RIGHT (the macOS shape; banners and NC rows; text ceding
+  width to it is the universal pattern, not a bug); expanded NC rows swap the thumb for a
+  full-width `.nc-hero-big` below the text row (iOS long-look / Android BigPicture; action
+  buttons move under the image). Small sources never take the big path — `hasExpandedHero`
+  reads dimensions header-only via `GdkPixbuf.Pixbuf.get_file_info` and requires ≥240px
+  source width, so a 64-160px chat avatar keeps its thumb even when expanded instead of
+  being cover-fit into mush. Both shapes share one squircle painter (`heroDrawingArea`).
+  Banners never expand. Card controls (time · count badge / expand chevron · close) share
+  the TITLE line — never a dedicated right column, which shortened every text line instead
+  of just the title. The thumb is the card's right edge, spanning title+body centred.
+  All card controls are HOVER-ONLY (macOS), one scheme on EVERY card (banner and NC row —
+  no per-surface inconsistency): the CLOSE floats over the top-left corner on a
+  `Gtk.Overlay` (overlay children aren't measured → never affects card size); the RIGHT
+  edge is contextual — expand chevron on the title line (swapped in for the timestamp so
+  the line stays put; no chevron → the timestamp just stays) for NC rows, ≤2 glass action
+  capsules overlaid for banners (the thumb fades via opacity so text never rewraps
+  mid-hover; presses capture-claimed to beat the card tap + swipe). The count badge is
+  info, always visible. Reveal is via EventControllerMotion on the capsule (child
+  crossings don't emit leave); the title line pins `height_request: 22` so reveals can't
+  nudge tall rows by 1px. The expanded-group control header hover-reveals via OPACITY +
+  `can_target` instead — its buttons steal no text width, and `visible` would reflow the
+  row height there. The expanded NC row still lists every action below the text.
+  CLEAR-ALL replays the swipe fling per row (swipeOut → collapseAway), top-down with a
+  45ms stagger, WITHOUT ghosts — clipping at the panel wall is the intended exit look.
+  While the cascade runs, `resolved`/`notified` rebuilds are deferred (`pendingClear`) and
+  only the click-time snapshot gets dismissed at the end; closing the NC mid-cascade must
+  settle immediately (unmapped rows stop ticking — their tick callbacks never fire).
 
 ---
 

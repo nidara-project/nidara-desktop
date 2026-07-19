@@ -355,14 +355,14 @@
     margin-right: 4px;
 }
 
-.nc-right-col {
-    margin-left: 2px;
-    min-width: 24px;
-}
+/* (.nc-right-col / .nc-badge-stacked deleted — controls moved onto the title line;
+   the dedicated right column shortened every text line, not just the title.) */
 
-/* Count badge when stacked in the right column (vertical), not inline in the header */
-.nc-badge-stacked {
-    margin-left: 0;
+/* Hover-revealed banner action capsules (background/border painted by SquircleContainer). */
+.nc-banner-action-label {
+    font-size: $fs-caption;
+    font-weight: $fw-semibold;
+    color: var(--nidara-text);
 }
 
 .nc-action-btn {
@@ -432,10 +432,10 @@
 }
 
 .nc-empty {
-    font-size: $fs-subtitle;
-    font-weight: $fw-medium;
-    /* No background behind it (sits straight on the glass), so 0.3 looked washed out. */
-    color: var(--nidara-text-secondary);
+    /* Sits inside the same glass capsule as the clear-all pill — match its type. */
+    font-size: $fs-small;
+    font-weight: $fw-bold;
+    color: var(--nidara-text-dim);
 }
 
 .nc-clear-all-pill {

@@ -251,12 +251,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           }
       }
 
-      // Add each popup individually to the input region
-      let child = popups.get_first_child()
-      while (child) {
-          addWidgetToRegion(child)
-          child = child.get_next_sibling()
-      }
+      // Notification banners. `popups` is a direct overlay child (aligned
+      // top-right, content-sized), so its allocation is already window-relative
+      // and tightly wraps the whole live banner stack — one rect covers every
+      // banner, and it self-skips when empty (natural height 0). Adding the box
+      // rather than iterating its ScaleRevealer children also fixes a latent
+      // coordinate bug: a child's get_allocation() is relative to the box, not
+      // the window, so those rects landed in the wrong place. The stamp is
+      // re-run on every stack change via popups.onStackChanged (wired below) —
+      // without a panel open the region is otherwise just the 40px bar strip,
+      // and clicks would pass straight through the banner.
+      addWidgetToRegion(popups)
 
       if (surface.set_input_region) {
           surface.set_input_region(region)
@@ -268,6 +273,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           win.queue_draw()
       }
   }
+
+  // Banners appear/vanish independently of the overlay open/close events that
+  // drive updateInputRegion, so the popups widget calls back here whenever its
+  // stack settles (banner grown in, or dismissed) to re-stamp the region.
+  ;(popups as any).onStackChanged = updateInputRegion
 
   // Unified overlay pop (ScaleRevealer: subtle grow + fade, GTK-side). On close
   // the wrapper hides itself when the animation completes and THEN refreshes the

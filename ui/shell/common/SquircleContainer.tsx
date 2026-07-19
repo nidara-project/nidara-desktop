@@ -21,6 +21,11 @@ interface SquircleContainerProps {
     hoverColor?: { r: number, g: number, b: number }
     hoverAlpha?: number
     onClick?: () => void
+    /** Fire onClick on button RELEASE instead of PRESS. Needed when the same
+     *  widget also carries a GestureDrag (notification banner swipe-to-dismiss):
+     *  a press-phase click fires before any motion, so the drag can never be
+     *  recognised and claim the sequence. Default false (press — snappier). */
+    clickOnRelease?: boolean
     perfect?: boolean
     borderColor?: { r: number, g: number, b: number, a: number }
     hoverBorderColor?: { r: number, g: number, b: number, a: number }
@@ -102,6 +107,7 @@ export default function SquircleContainer({
     hoverColor,
     hoverAlpha,
     onClick,
+    clickOnRelease = false,
     perfect = false,
     borderColor,
     hoverBorderColor,
@@ -226,7 +232,10 @@ export default function SquircleContainer({
 
     if (onClick) {
         const click = new Gtk.GestureClick()
-        click.connect("pressed", () => onClick())
+        // Release-phase for drag-carrying widgets (banners): a competing
+        // GestureDrag that claims the sequence mid-motion then cancels this
+        // click, so a swipe never also triggers the tap action.
+        click.connect(clickOnRelease ? "released" : "pressed", () => onClick())
         grid.add_controller(click)
     }
 
