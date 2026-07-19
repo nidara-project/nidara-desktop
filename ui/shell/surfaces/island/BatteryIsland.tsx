@@ -64,8 +64,10 @@ export default function BatteryIsland(): Gtk.Widget {
     })
     windowContent.append(squircle)
 
-    // Morph handles (see common/MorphRevealer.ts).
+    // Morph handles (see common/MorphRevealer.ts). morphArt is the landing
+    // slot of the battery flyer pair: the compact's glyph flies into it.
     ;(windowContent as any).morphContent = inner
     ;(windowContent as any).morphGlass = squircle
+    ;(windowContent as any).morphArt = glyph
     return windowContent
 }

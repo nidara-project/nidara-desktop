@@ -7,7 +7,7 @@ import { CAPSULE_BORDER } from "../bar/capsule"
 import Theme from "../../core/ThemeManager"
 import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY } from "../../core/Status"
 import WorkspaceOverview, { WO_GLASS } from "../overview/WorkspaceOverview"
-import PlayerIsland, { makeArtGhost, PLAYER_GLASS } from "./PlayerIsland"
+import PlayerIsland, { PLAYER_GLASS } from "./PlayerIsland"
 import BatteryIsland, { BATTERY_GLASS } from "./BatteryIsland"
 import { buildActivities } from "./IslandActivities"
 
@@ -64,13 +64,19 @@ export interface IslandActivity {
     compact: Gtk.Widget
     /** Twin factory for the morph's source-dissolve track — called once per
      *  registered mode (a widget has ONE parent, so each revealer owns its own
-     *  twin set). hideArt = that mode has an art landing slot (the flying art
-     *  ghost owns those pixels; the twin keeps the slot but paints it clear). */
+     *  twin set). hideArt = this activity's flyer element FLIES in that mode
+     *  (the flying ghost owns those pixels; the twin keeps the slot but
+     *  paints it clear). */
     makeGhost?: (opts: { hideArt: boolean }) => Gtk.Widget
-    /** Source element of a mode's art MorphPair while this activity fronts
-     *  (media's mini cover art). Activities without one skip the pair — the
-     *  landing art rides the content fade instead. */
-    artSource?: () => Gtk.Widget | null
+    /** Continuity pair: an element of this activity's compact FLIES into its
+     *  expanded mode's `morphArt` slot (media's mini art → the panel's 96px
+     *  artwork, battery's glyph → the alert's glyph). The ghost is built at
+     *  the PANEL slot's natural size and scaled down by the morph so it stays
+     *  sharp at both endpoints. */
+    flyer?: {
+        makeGhost: () => Gtk.Widget
+        getSource: () => Gtk.Widget | null
+    }
     /** Expanded mode opened by clicking the capsule while this activity
      *  fronts. Omit = the click falls back to the workspace overview. */
     expandMode?: string
@@ -188,9 +194,15 @@ export function ActivityIsland() {
                 getTarget: () => (w.morphDots?.[i] as Gtk.Widget) ?? null,
             })
         }
-        if (w.morphArt) pairs.push({
-            ghost: makeArtGhost(),
-            getSource: () => front?.artSource?.() ?? null,
+        // The flyer pair belongs to the mode's OWNER activity (the one whose
+        // expandMode is this mode): its compact element flies into the mode's
+        // morphArt slot. The pair is skipped frame-by-frame while another
+        // activity fronts the compact (source unmapped → landing element
+        // rides the content fade).
+        const owner = activities.find(a => a.expandMode === mode.id && a.flyer)
+        if (w.morphArt && owner) pairs.push({
+            ghost: owner.flyer!.makeGhost(),
+            getSource: () => (front === owner ? owner.flyer!.getSource() : null),
             getTarget: () => (w.morphArt as Gtk.Widget) ?? null,
         })
         // Source-dissolve twins: whatever activity fronts the compact melts
@@ -198,10 +210,11 @@ export function ActivityIsland() {
         // playing music must not blink the compact out either). The dots page
         // needs no twin — its landing pairs ARE the continuity; known gap: a
         // mode opened via IPC while the compact shows dots still blinks them
-        // out (no landing slot to fly to) — rare, agent path only.
+        // out (no landing slot to fly to) — rare, agent path only. hideArt
+        // only for the OWNER's twin: only its element actually flies here.
         const twins = new Map<string, Gtk.Widget>()
         for (const a of activities)
-            if (a.makeGhost) twins.set(a.id, a.makeGhost({ hideArt: !!w.morphArt }))
+            if (a.makeGhost) twins.set(a.id, a.makeGhost({ hideArt: !!w.morphArt && a === owner }))
         const revealer = new MorphRevealer(mode.widget, {
             getSourceWidget: () => capsule,
             contentTarget: w.morphContent ?? null,

@@ -5,7 +5,7 @@ import AstalBattery from "gi://AstalBattery"
 import status, { ISLAND_PLAYER, ISLAND_BATTERY } from "../../core/Status"
 import * as media from "../../core/MediaService"
 import { safeDisconnect } from "../../core/signals"
-import { PlayerCompact } from "./PlayerIsland"
+import { PlayerCompact, makeArtGhost } from "./PlayerIsland"
 import { makeBatteryGlyph, batteryPresent, batteryFrac } from "../../common/BatteryGlyph"
 import type { IslandActivity } from "./ActivityIsland"
 
@@ -64,7 +64,12 @@ function mediaActivity(): IslandActivity {
         compact,
         expandMode: ISLAND_PLAYER,
         makeGhost: ({ hideArt }) => PlayerCompact({ ghost: true, hideArt }),
-        artSource: () => ((compact as any).artDa as Gtk.Widget) ?? null,
+        // The compact's mini cover art FLIES into the player panel's 96px
+        // artwork (ghost built at panel size, scaled down — stays sharp).
+        flyer: {
+            makeGhost: makeArtGhost,
+            getSource: () => ((compact as any).artDa as Gtk.Widget) ?? null,
+        },
         watch: (cb) => { changed = cb; media.subscribe(rewire); rewire() },
         // The open player panel HOLDS liveness while a player exists (a grace
         // expiring under the open panel must not yank the compact); closing
@@ -100,9 +105,15 @@ function recActivity(): IslandActivity {
             return GLib.SOURCE_CONTINUE
         })
     }
-    const makeForm = () => {
+    // Ghost twins carry NO margins — snapshot_child already applies the
+    // child's own margin offset, so margins on a twin shift the whole ghost
+    // sideways mid-morph (the documented MorphRevealer gotcha; the battery
+    // twin's 16px re-bit it 2026-07-20 pushing the % past the glass edge).
+    const makeForm = (opts: { ghost?: boolean } = {}) => {
         // halign CENTER: symmetric pill resize mid-mutation (ActivityIsland).
-        const box = new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
+        const box = opts.ghost
+            ? new Gtk.Box({ spacing: 8 })
+            : new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
         const dot = new Gtk.Box({ css_classes: ["island-rec-dot"], width_request: 8, height_request: 8, valign: Gtk.Align.CENTER })
         const time = new Gtk.Label({ css_classes: ["island-rec-time"], valign: Gtk.Align.CENTER, label: "0:00" })
         labels.push(time)
@@ -114,7 +125,7 @@ function recActivity(): IslandActivity {
         id: "rec",
         priority: 20,
         compact: makeForm(),
-        makeGhost: () => makeForm(),
+        makeGhost: () => makeForm({ ghost: true }),
         watch: (changed) => {
             status.connect("notify::recording", () => {
                 if (status.recording) { recStart = Date.now(); syncLabels(); ensureTick() }
@@ -149,25 +160,41 @@ function batteryActivity(): IslandActivity {
         for (const l of labels) l.label = v
         for (const g of glyphs) g.queue_draw()
     }
-    const makeForm = () => {
+    // Ghost twins: NO margins (see recActivity's makeForm note). hideArt =
+    // this twin rides a mode whose glyph FLIES (the flyer pair below): keep
+    // the glyph's slot but paint it clear — the flying ghost owns those
+    // pixels, two visible copies would diverge mid-flight.
+    const makeForm = (opts: { ghost?: boolean, hideArt?: boolean } = {}) => {
         // halign CENTER: symmetric pill resize mid-mutation (ActivityIsland).
-        const box = new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
+        const box = opts.ghost
+            ? new Gtk.Box({ spacing: 8 })
+            : new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
         const glyph = makeBatteryGlyph(11)
         glyph.valign = Gtk.Align.CENTER
+        if (opts.hideArt) glyph.opacity = 0
         const pct = new Gtk.Label({ css_classes: ["island-battery-pct"], valign: Gtk.Align.CENTER })
         labels.push(pct)
         glyphs.push(glyph)
         box.append(glyph)
         box.append(pct)
+        ;(box as any).glyph = glyph
         return box
     }
+    const compact = makeForm()
     return {
         id: "battery",
         priority: 30,
-        compact: makeForm(),
+        compact,
         expandMode: ISLAND_BATTERY,
         autoExpand: true,
-        makeGhost: () => makeForm(),
+        makeGhost: ({ hideArt }) => makeForm({ ghost: true, hideArt }),
+        // The compact's glyph FLIES into the panel's glyph slot (same
+        // continuity as media's cover art): ghost built at the PANEL size
+        // (26, matching BatteryIsland's) and scaled down so it stays sharp.
+        flyer: {
+            makeGhost: () => makeBatteryGlyph(26),
+            getSource: () => ((compact as any).glyph as Gtk.Widget) ?? null,
+        },
         watch: (changed) => {
             bat?.connect("notify", () => { evalCritical(); syncForms(); changed() })
             evalCritical(); syncForms()

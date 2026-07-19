@@ -807,9 +807,12 @@ from `Theme.chromeIsDark` + `barOpacity`/`overlayOpacity`; the overview end impo
 `PlayerIsland.tsx`, the battery end `BATTERY_GLASS` from `BatteryIsland.tsx` so recipe
 and real paint can't drift), and the
 `morphContent`/`morphGlass`/`morphDots`/`morphArt` handles the mode widget exposes
-(`registerMode` turns morphDots/morphArt into `MorphPair`s — the art pair's source
-resolves to the FRONTING activity's `artSource` — and gives every revealer one
-source-dissolve twin per activity that declares `makeGhost`). `Bar.tsx` stays
+(`registerMode` turns morphDots/morphArt into `MorphPair`s — the morphArt pair belongs
+to the mode's OWNER activity (`expandMode === mode.id`) and flies that activity's
+`flyer` element (media art → panel art, battery glyph → alert glyph; ghost built at the
+PANEL slot's size, scaled down; skipped while another activity fronts) — and gives every
+revealer one source-dissolve twin per activity that declares `makeGhost`; only the
+owner's twin gets `hideArt`). `Bar.tsx` stays
 the mount point: it places the capsule, mounts the revealers, and on
 `notify::island-mode` re-pins each revealer's top edge to the capsule's bounds
 (`island.syncAnchor`) so the morph only inflates down/sideways — the capsule never
