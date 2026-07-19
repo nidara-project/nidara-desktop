@@ -175,9 +175,11 @@ export function PlayerCompact(opts: {
     // on the twin double that offset and shift the whole ghost 12px right
     // (EQ past the glass edge mid-morph + a visible re-seat when the
     // contraction lands; user-caught 2026-07-19).
+    // 16px side air = the bar capsule family standard (dots, clock, search all
+    // use 16) — anything tighter reads cramped next to its siblings.
     const box = opts.ghost
         ? new Gtk.Box({ spacing: 8 })
-        : new Gtk.Box({ spacing: 8, margin_start: 12, margin_end: 14 })
+        : new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16 })
     box.append(artDa)
     box.append(title)
     box.append(eq)
