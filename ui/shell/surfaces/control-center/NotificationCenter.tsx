@@ -108,7 +108,10 @@ export function createExpandedHeroWidget(n: AstalNotifd.Notification, width: num
 // refresh can restamp the label text in place instead of rebuilding every card.
 export function timeAgo(time: number): string {
     const d = Math.floor(Date.now() / 1000) - time
-    return d < 60 ? t("nc.time.now") : (d < 3600 ? `${Math.floor(d / 60)}m` : `${Math.floor(d / 3600)}h`)
+    if (d < 60) return t("nc.time.now")
+    if (d < 3600) return `${Math.floor(d / 60)}m`
+    if (d < 86400) return `${Math.floor(d / 3600)}h`
+    return `${Math.floor(d / 86400)}d`
 }
 
 export function GroupControlHeader(props: { name: string, count: number, onToggle: () => void, onClearGroup: () => void }) {
@@ -140,7 +143,14 @@ export function GroupControlHeader(props: { name: string, count: number, onToggl
 
 export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupCount?: number, isExpanded?: boolean, onToggle?: () => void, onClearGroup?: () => void, isPopup?: boolean, itemExpanded?: boolean, onToggleItem?: () => void, onClose: () => void, onTimeLabel?: (label: Gtk.Label, time: number) => void, startHovered?: boolean }) {
     const { n, groupCount = 1, isExpanded = false, onToggle, onClearGroup, isPopup = false, itemExpanded = false, onToggleItem, onClose, onTimeLabel, startHovered = false } = props
-    const sanitize = (text: string) => (text || "").replace(/<[^>]*>/g, "").split("\n").join(" ").replace(/\s+/g, " ").trim()
+    // Strip markup tags first, THEN decode entities (a decoded "<" must not read as a
+    // tag), with &amp; last so "&amp;lt;" stays a literal "&lt;". Labels are plain text
+    // (no use_markup), so decoded characters render as-is.
+    const decodeEntities = (s: string) => s
+        .replace(/&#x([0-9a-f]+);/gi, (m, h) => { const cp = parseInt(h, 16); return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m })
+        .replace(/&#(\d+);/g, (m, n) => { const cp = parseInt(n, 10); return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : m })
+        .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, "\"").replace(/&apos;/g, "'").replace(/&amp;/g, "&")
+    const sanitize = (text: string) => decodeEntities((text || "").replace(/<[^>]*>/g, "")).split("\n").join(" ").replace(/\s+/g, " ").trim()
     const cleanSummary = sanitize(n.summary); const cleanBody = sanitize(n.body)
 
     // The card is a vertical stack: the classic horizontal row on top and, when the item
@@ -267,15 +277,22 @@ export function NotificationCapsule(props: { n: AstalNotifd.Notification, groupC
         const actions = n.get_actions() || []; const hasAction = (id: string) => actions.some(a => a.id === id)
         const appName = n.desktop_entry || n.app_name || ""; const lowerApp = appName.toLowerCase()
         if (lowerApp) {
-            let searchClass = lowerApp
-            if (lowerApp.includes("telegr")) searchClass = "org.telegram.desktop"
-            if (lowerApp.includes("chrome")) searchClass = "google-chrome"
-            if (lowerApp.includes("discord")) searchClass = "discord"
+            // Derive candidate window classes from the app registry instead of per-app
+            // hardcoding: getAppInfo resolves desktop_entry/app_name however the sender
+            // spelled it (exact id, StartupWMClass, exec, name, prefixed ids), and the
+            // resolved desktop id + wmClass + exec are the class spellings Hyprland can
+            // report ("Telegram Desktop" → org.telegram.desktop, etc.).
+            const resolvedId = appService.getAppInfo(appName)?.get_id()?.replace(/\.desktop$/i, "").toLowerCase()
+            const appData = resolvedId ? appService.getAppData(resolvedId) : null
+            const classCandidates = new Set([lowerApp, resolvedId, appData?.wmClass, appData?.exec].filter(Boolean) as string[])
             try {
                 // hs.clients is the cached, always-current client list — no per-open
                 // `hyprctl -j clients` re-shell — and hs.focusWindow centralizes the
                 // focus dispatch (same Lua dispatch string the dock uses).
-                const target = hs.clients.find((c: any) => c.class?.toLowerCase().includes(lowerApp) || c.class === searchClass)
+                const target = hs.clients.find((c: any) => {
+                    const cls = c.class?.toLowerCase()
+                    return !!cls && (classCandidates.has(cls) || cls.includes(lowerApp))
+                })
                 if (target) {
                     await hs.focusWindow(target.address)
                     if (hasAction("default")) n.invoke("default")
