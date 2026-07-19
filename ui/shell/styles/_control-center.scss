@@ -432,10 +432,10 @@
 }
 
 .nc-empty {
-    font-size: $fs-subtitle;
-    font-weight: $fw-medium;
-    /* No background behind it (sits straight on the glass), so 0.3 looked washed out. */
-    color: var(--nidara-text-secondary);
+    /* Sits inside the same glass capsule as the clear-all pill — match its type. */
+    font-size: $fs-small;
+    font-weight: $fw-bold;
+    color: var(--nidara-text-dim);
 }
 
 .nc-clear-all-pill {
