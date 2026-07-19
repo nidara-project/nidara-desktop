@@ -176,10 +176,13 @@ export function PlayerCompact(opts: {
     // (EQ past the glass edge mid-morph + a visible re-seat when the
     // contraction lands; user-caught 2026-07-19).
     // 16px side air = the bar capsule family standard (dots, clock, search all
-    // use 16) — anything tighter reads cramped next to its siblings.
+    // use 16) — anything tighter reads cramped next to its siblings. halign
+    // CENTER so mid-mutation the resizing pill condenses symmetrically around
+    // the content instead of dragging it with the moving left edge (see the
+    // compact-page rule in ActivityIsland.tsx).
     const box = opts.ghost
         ? new Gtk.Box({ spacing: 8 })
-        : new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16 })
+        : new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
     box.append(artDa)
     box.append(title)
     box.append(eq)

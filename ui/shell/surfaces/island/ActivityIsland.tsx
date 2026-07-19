@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import GLib from "gi://GLib"
 import SquircleContainer from "../../common/SquircleContainer"
 import { MorphRevealer, MorphGlass, MorphPair } from "../../common/MorphRevealer"
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
@@ -86,7 +87,13 @@ export function ActivityIsland() {
     // ── Compact state: dots page + one page per activity, in a morphing stack ─
     // (Dots absorbed from the old surfaces/bar/Workspaces.tsx — the capsule
     // belongs to the island now; the bar just places it.)
-    const dotsBox = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16 })
+    // halign CENTER on every compact page: during the stack's width
+    // interpolation the incoming page is allocated at the still-resizing pill
+    // width — left-packed content rides the MOVING left edge and visibly
+    // drifts sideways (user-caught 2026-07-20 on media→battery). Centered,
+    // the pill condenses/expands symmetrically around the content. At rest
+    // (allocation = natural width) CENTER and FILL are identical.
+    const dotsBox = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
     const dots: Gtk.Widget[] = []
     for (let i = 1; i <= WS_COUNT; i++) {
         const dot = makeWorkspaceDot(i)
@@ -96,9 +103,10 @@ export function ActivityIsland() {
     // interpolate_size + non-homogeneous: the capsule's pill WIDTH animates
     // along with the crossfade when the compact mutates — one shape reshaping,
     // not a jump-cut (same principle as the big morph, GTK-native here).
+    const COMPACT_SWAP_MS = 350
     const compactStack = new Gtk.Stack({
         transition_type: Gtk.StackTransitionType.CROSSFADE,
-        transition_duration: 350,
+        transition_duration: COMPACT_SWAP_MS,
         hhomogeneous: false,
         vhomogeneous: false,
         interpolate_size: true,
@@ -121,6 +129,7 @@ export function ActivityIsland() {
     // battery its hysteresis) — the engine only picks the winner and applies
     // the two cross-activity rules: a dead activity's expanded surface closes,
     // and an auto-expand activity opens its surface when it takes the front.
+    let autoExpandTimer: number | null = null
     const arbitrate = () => {
         const live = activities.filter(a => a.isLive())
         const next = live.length ? live.reduce((m, a) => (a.priority > m.priority ? a : m)) : null
@@ -133,8 +142,22 @@ export function ActivityIsland() {
         // priority leaves a still-live activity's surface open.
         if (prev?.expandMode && status.island_mode === prev.expandMode && !prev.isLive())
             status.island_mode = ""
-        if (front?.autoExpand && front.expandMode)
-            status.island_mode = front.expandMode
+        if (front?.autoExpand && front.expandMode) {
+            // SEQUENCED, not immediate: the compact mutation (crossfade + pill
+            // resize + the new page's first allocation) must LAND before the
+            // morph reads the capsule as its source — expanding in the same
+            // tick grew the island out of a still-resizing pill (visible
+            // re-seat) and dissolved a compact form the user never saw settle
+            // (a phantom red % — user-caught 2026-07-20). One beat after the
+            // swap it reads as two deliberate steps: mutate, then open.
+            const a = front
+            if (autoExpandTimer !== null) GLib.source_remove(autoExpandTimer)
+            autoExpandTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, COMPACT_SWAP_MS + 80, () => {
+                autoExpandTimer = null
+                if (front === a && a.isLive()) status.island_mode = a.expandMode!
+                return GLib.SOURCE_REMOVE
+            })
+        }
     }
     for (const a of activities) a.watch(arbitrate)
     // Closing a mode can end a liveness clause (media holds its compact while

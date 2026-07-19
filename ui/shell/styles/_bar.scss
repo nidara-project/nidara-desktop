@@ -234,7 +234,9 @@ window#nidara-bar-zone {
     font-size: $fs-small;
     font-weight: $fw-bold;
     font-variant-numeric: tabular-nums;
-    color: var(--nidara-danger);   // this form only ever shows while critical
+    // White on purpose (user call 2026-07-20): the shell has NO red text —
+    // danger lives in fills/dots (the glyph's red sliver carries the alarm).
+    color: var(--nidara-text);
 }
 
 // ── Activity Island: battery-critical expanded surface ────────────────────────

@@ -101,7 +101,8 @@ function recActivity(): IslandActivity {
         })
     }
     const makeForm = () => {
-        const box = new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16 })
+        // halign CENTER: symmetric pill resize mid-mutation (ActivityIsland).
+        const box = new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
         const dot = new Gtk.Box({ css_classes: ["island-rec-dot"], width_request: 8, height_request: 8, valign: Gtk.Align.CENTER })
         const time = new Gtk.Label({ css_classes: ["island-rec-time"], valign: Gtk.Align.CENTER, label: "0:00" })
         labels.push(time)
@@ -149,7 +150,8 @@ function batteryActivity(): IslandActivity {
         for (const g of glyphs) g.queue_draw()
     }
     const makeForm = () => {
-        const box = new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16 })
+        // halign CENTER: symmetric pill resize mid-mutation (ActivityIsland).
+        const box = new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
         const glyph = makeBatteryGlyph(11)
         glyph.valign = Gtk.Align.CENTER
         const pct = new Gtk.Label({ css_classes: ["island-battery-pct"], valign: Gtk.Align.CENTER })
