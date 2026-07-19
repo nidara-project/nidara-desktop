@@ -5,6 +5,41 @@ All notable changes to Nidara are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-07-20
+
+### Added
+
+- **The Activity Island.** The workspaces capsule at the bar's center is now a
+  living, multi-purpose surface. Its panels don't pop over it — the capsule
+  itself transforms: the workspace overview grows out of the pill as one
+  continuous glass shape and condenses back into it when it closes.
+- **Now Playing on the island.** While media plays, the capsule morphs into a
+  mini player — cover art, title and a live equalizer. Clicking it expands the
+  full player panel, the cover art flying into place. A short pause or a track
+  change never flickers the capsule back and forth, and it returns to the
+  workspace dots when the player quits.
+- **Live activities, with priorities.** The island now hosts live system
+  state: an active screen recording shows a pulsing REC dot with the elapsed
+  time (an active capture outranks music), and a critically low battery takes
+  over the capsule and opens an alert on its own — it dismisses itself the
+  moment you plug in. This is the groundwork the native assistant will build
+  on.
+- **Notification Center, polished end to end.** Notification groups stack as
+  cards with a peeking edge and expand with a smooth choreography; hovering a
+  notification reveals its controls in the corner; swiping flings it out the
+  way it came (swiping a collapsed group clears the whole group); "Clear
+  notifications" cascades the list out top-to-bottom. Banners respect
+  freedesktop urgency, transient and replacement semantics, and now show above
+  open panels.
+
+### Fixed
+
+- Notification ordering no longer goes stale when an older group receives the
+  newest message, and timestamps refresh each minute without rebuilding the
+  cards under your pointer.
+- The shell log is quieter: two recurring GTK/GJS warnings (one per media
+  update, one per notification swipe) are fixed at the source.
+
 ## [0.3.3] — 2026-07-18
 
 ### Fixed
