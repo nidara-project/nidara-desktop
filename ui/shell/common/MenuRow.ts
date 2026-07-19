@@ -11,6 +11,10 @@ export interface MenuRowOpts {
     label: string
     /** A GIcon as produced by core/Icons (the GI typings don't export Gio.Icon). */
     icon?: Gio.FileIcon
+    /** The icon is full-color app art (desktop-entry GIcon) — skip `nd-icon`,
+     *  whose invert(1) recolor is meant for the shell's black symbolic SVGs
+     *  and turns a color icon negative. */
+    appIcon?: boolean
     /** Shows a trailing accent check. The check widget always exists (hidden when
      *  false/undefined) so setRowChecked can flip it after an async state read. */
     checked?: boolean
@@ -30,7 +34,7 @@ const CHECK_KEY = "__nidaraMenuCheck"
 export function menuRow(opts: MenuRowOpts): Gtk.Button {
     const inner = new Gtk.Box({ spacing: 10 })
     if (opts.icon) {
-        inner.append(new Gtk.Image({ gicon: opts.icon, pixel_size: 15, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
+        inner.append(new Gtk.Image({ gicon: opts.icon, pixel_size: 15, css_classes: opts.appIcon ? [] : ["nd-icon"], valign: Gtk.Align.CENTER }))
     }
     // A long label (e.g. a group member's window title) can widen the menu. In a
     // fixed-width menu that overflows, so opt into ellipsize (same recipe as

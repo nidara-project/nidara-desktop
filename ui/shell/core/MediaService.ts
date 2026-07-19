@@ -136,14 +136,37 @@ export function playerLabel(p: any): string {
     return p?.identity || p?.entry || "Player"
 }
 
-/** The player's app icon as a GIcon (desktop entry lookup), or null. GJS moved
- *  DesktopAppInfo to GioUnix (GLib ≥ 2.80); the Gio.* alias still works but logs a
- *  Gjs-WARNING with a full stack trace on every access. */
+/** The player's app icon as a GIcon, or null. The MPRIS DesktopEntry field is
+ *  unreliable in the wild (Chromium instances publish "chromium-browser" while
+ *  the installed file is chromium.desktop; some players omit it entirely), so
+ *  the lookup walks candidates — exact entry, lowercased, the bus-name app
+ *  segment (org.mpris.MediaPlayer2.<app>[.instanceN]) — and falls back to a
+ *  desktop-file search on the human identity ("Chromium" → chromium.desktop).
+ *  Uses GioUnix.DesktopAppInfo: GJS moved it there (GLib ≥ 2.80); the Gio.*
+ *  alias still works but logs a Gjs-WARNING with a stack trace per access. */
 export function playerAppIcon(p: any): any {
-    const entry: string = p?.entry || ""
-    if (!entry) return null
-    try { return GioUnix.DesktopAppInfo.new(`${entry}.desktop`)?.get_icon() ?? null }
-    catch { return null }
+    if (!p) return null
+    const candidates: string[] = []
+    const entry: string = p.entry || ""
+    if (entry) candidates.push(entry, entry.toLowerCase())
+    const bus: string = p.bus_name || ""
+    const tail = bus.split("org.mpris.MediaPlayer2.")[1] ?? ""
+    if (tail) candidates.push(tail, tail.split(".")[0])
+    for (const c of candidates) {
+        try {
+            const icon = GioUnix.DesktopAppInfo.new(`${c}.desktop`)?.get_icon()
+            if (icon) return icon
+        } catch {}
+    }
+    const identity: string = p.identity || ""
+    if (identity) {
+        try {
+            const id = GioUnix.DesktopAppInfo.search(identity)[0]?.[0]
+            const icon = id ? GioUnix.DesktopAppInfo.new(id)?.get_icon() : null
+            if (icon) return icon
+        } catch {}
+    }
+    return null
 }
 
 // ── Cover-art resolution ─────────────────────────────────────────────────────

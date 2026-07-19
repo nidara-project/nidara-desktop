@@ -1055,7 +1055,7 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         status.connect("notify::nc-open", overlayRecovery),
         status.connect("notify::prism-open", overlayRecovery),
         status.connect("notify::system-menu-open", overlayRecovery),
-        status.connect("notify::overview-open", overlayRecovery),
+        status.connect("notify::island-mode", overlayRecovery),
     ]
 
     const pConn = pointerBus.onButtonReleased(() => {

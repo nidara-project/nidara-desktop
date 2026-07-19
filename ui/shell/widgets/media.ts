@@ -96,9 +96,10 @@ function fmt(secs: number): string {
         : `${m}:${String(sec).padStart(2, "0")}`
 }
 
-// Shared rich player panel used by both bar expanded and CC detail.
+// Shared rich player panel used by the bar expanded pill, the CC detail page
+// and the Activity Island's player mode (surfaces/island/PlayerIsland.tsx).
 // Progress is expressed as 0-100% so makeHSlider's range never needs to change.
-function buildDetailPanel(widthRequest: number): Gtk.Widget {
+export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     let player: any = null
     let playerSigId: number | null = null
     let progressTimer: number | null = null
@@ -221,9 +222,11 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
                 label: pl.title || "", css_classes: ["nidara-menu-label"],
                 opacity: 0.55, ellipsize: 3, max_width_chars: 14, visible: !!pl.title,
             })
+            const rowIcon = media.playerAppIcon(pl)
             srcRows.append(menuRow({
                 label: media.playerLabel(pl),
-                icon: media.playerAppIcon(pl) ?? Icons.play,
+                icon: rowIcon ?? Icons.play,
+                appIcon: !!rowIcon,
                 checked: media.pinnedBus() === pl.bus_name,
                 trailing: hint,
                 onClick: () => { media.pinPlayer(pl.bus_name); srcPopover?.popdown() },
@@ -336,7 +339,13 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
         const bus = p?.bus_name ?? null
         if (bus !== srcIconBus) {
             srcIconBus = bus
-            srcAppImg.gicon = media.playerAppIcon(p) ?? Icons.play
+            const appIcon = media.playerAppIcon(p)
+            srcAppImg.gicon = appIcon ?? Icons.play
+            // App icons are full-color — nd-icon's invert(1) (for the shell's
+            // black symbolic SVGs) turns them negative. Keep it only for the
+            // play fallback.
+            if (appIcon) srcAppImg.remove_css_class("nd-icon")
+            else srcAppImg.add_css_class("nd-icon")
         }
         loadArt()
         syncProgress()
@@ -378,16 +387,18 @@ function buildDetailPanel(widthRequest: number): Gtk.Widget {
     })
 
     updatePlayer()
+    // Landing slot of the island morph's cover-art pair (PlayerIsland.tsx).
+    ;(root as any).artDa = artDa
     return root
 }
 
 // Bar pill expansion: same rich panel, fixed width to match CC detail squircle
 function buildBarExpanded(_onClose: () => void): Gtk.Widget {
-    return buildDetailPanel(PANEL_W.full)
+    return buildMediaDetailPanel(PANEL_W.full)
 }
 
 function buildCCDetail(_onClose: () => void): Gtk.Widget {
-    return buildDetailPanel(0)
+    return buildMediaDetailPanel(0)
 }
 
 const mediaWidget: AtomicWidget = {

@@ -244,5 +244,11 @@ export default function SquircleContainer({
         grid.connect("unrealize", cleanup)
     }
 
+    // Handle for morph layers (common/MorphRevealer.ts): a morphing overlay
+    // suppresses this container's own glass paint (opacity 0 on the DA — the
+    // content child on top is untouched) while it paints an interpolated
+    // Cairo clone of the same shape, then hands back at rest.
+    ;(grid as any).glassArea = da
+
     return grid
 }

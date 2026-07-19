@@ -732,6 +732,86 @@ borders) stays perceptible — that tail is what made the old CSS fade look "non
   full *unwrapped* text width as its natural width, and a layer window sizes to natural
   (the NC's scroll clamps it, a popup window balloons).
 
+### Capsule→island morph — `MorphRevealer`
+
+**`MorphRevealer`** (`common/MorphRevealer.ts`) is the Dynamic-Island variant of the same
+engine: ONE shape that transforms. Instead of scaling a rendered container (which
+stretches the 1px border and the corners), mid-morph the revealer paints a Cairo squircle
+**every frame with truly interpolated geometry** — rect, corner radius, superellipse `n`,
+glass alpha and border color all lerp from the capsule's pill (perfect pill ≡ `n=2`,
+`r=h/2`) to the island container's recipe. It paints with the same `drawSquircle` +
+params (inset 2, borderWidth 1, gloss) as `SquircleContainer` — which exposes its paint
+layer as `(grid as any).glassArea` exactly for this — so the clone is pixel-identical to
+both real widgets at the endpoints: the source capsule is hard-swapped for the clone on
+frame 0 (opacity only, stays clickable geometry) and the island's real glass takes over
+at rest. Hyprland's blur keys off painted pixels, so it follows the morph for free.
+Three more tracks complete the "same object" illusion — the rule they implement:
+**something must be on the glass at every instant of the flight** (an empty-glass window
+reads as "content disappears and reappears", user-caught 2026-07-19). (a) **Traveling
+pairs** (`MorphPair[]`): ghost twins of compact elements WITH a landing slot in the
+expanded content fly from the live source element's bounds to where the landing element
+is painted THIS frame (resting bounds pushed through the frame's content mapping —
+chasing the resting position instead visibly desynced the ghosts from the still-scaling
+content, as did a per-pair stagger; both tried and rejected, lockstep). Landing elements
+are opacity-0 until rest; a pair whose source is unmapped (the compact mutated to another
+page) is skipped and its landing element rides the content fade. Consumers: the 5
+workspace dots → overview card headers (`makeWorkspaceDot` twins — the one shared dot,
+identical render everywhere), and the media compact's cover art → the player panel's
+96px artwork (ghost built at 96px and scaled DOWN so it stays sharp; the compact's art
+radius is derived as `14*20/96` so pure uniform scaling matches BOTH endpoint swaps).
+(b) The **source dissolve** (`sourceGhost` + `getSourceContent` + `getSourceGhostOn`):
+compact content WITHOUT a landing slot (media title/EQ; the whole media compact when
+opening the overview) gets a twin that rides the growing shape (uniform scale, anchored
+where the content sits in the pill, vertically centered) and dissolves over progress
+[0, 0.35] — the compact melts INTO the island instead of blinking out on frame 0.
+GTK trap for ANY snapshot-painted ghost: `snapshot_child` already applies the child's
+own margin offset, and `compute_bounds` on the real widget EXCLUDES its margins — so a
+ghost twin must carry NO margins or every offset is applied twice (the media twin's
+12px double-shift pushed the EQ past the glass edge mid-morph and made the contraction
+land with a visible re-seat; user-caught 2026-07-19).
+Gated per `reveal()` by `getSourceGhostOn` (only while the compact actually shows that
+page); ghost twins run NO timers — the EQ phase is module-shared in `PlayerIsland.tsx`
+and advanced only by the real compact, so ghosts repaint bit-identical bars via the
+morph's own per-frame redraw (an idle ghost never damages the bar). A mode with an art
+pair gets a twin with a transparent art slot (layout intact, the flying ghost owns those
+pixels — two visible copies would diverge mid-flight). (c) The **content**
+(`contentTarget`) fades in over the last stretch (progress 0.45→1) while the child
+paints with the glass rect mapped onto the interpolated rect — content materializes
+inside the already-formed shape; between the dissolve's end (0.35) and the content's
+start (0.45) the flying pairs carry the continuity. All bounds are
+`compute_bounds`-re-read every frame so bar relayouts can't leave a stale origin. Same `reveal(open, onDone?)` contract as
+`ScaleRevealer` (self-managed visibility, close-then-`onDone` for the input-region
+refresh) — but easing is cubic **ease-in-out in BOTH directions**, a deliberate deviation
+from the asymmetric rule: that rule serves fade-pops whose decelerating exit leaves a
+low-opacity tail; the morph is a solid object and the transformation must read both
+ways — ease-in on close compressed the whole spatial shrink into the final sprint and
+read as "overview vanishes, capsule appears" (user-caught, 2026-07-19). A module-level
+`SLOWMO` test dial multiplies both durations while the choreography is tuned by eye —
+**ship at 1**. Gtk.Bin measure/allocate pass-through for the child (ghosts
+are extra children allocated at natural size and placed at snapshot time), and the same
+GC/teardown + interface-merge typing gotchas (`dismantle()` unparents ghosts too). Falls
+back to an OVERLAY_POP-equivalent centered pop when the source is unmapped at open
+(`fromSource` latched per open; no ghosts, landing dots ride the content fade).
+**Consumer: the Activity Island** (`surfaces/island/ActivityIsland.tsx`) — the bar-center
+capsule as a multi-purpose surface. The island owns the compact capsule (workspace dots)
+and a MODE registry; `registerMode` builds one MorphRevealer per mode, wiring the
+capsule as source, the mode's glass recipe (`glassFrom`/`glassTo`, read live per frame
+from `Theme.chromeIsDark` + `barOpacity`/`overlayOpacity`; the overview end imports
+`WO_GLASS` from `WorkspaceOverview.tsx` and the player end `PLAYER_GLASS` from
+`PlayerIsland.tsx` so recipe and real paint can't drift), and the
+`morphContent`/`morphGlass`/`morphDots`/`morphArt` handles the mode widget exposes
+(`registerMode` turns morphDots/morphArt into `MorphPair`s and gives every revealer a
+media sourceGhost gated on the compact's live page). `Bar.tsx` stays
+the mount point: it places the capsule, mounts the revealers, and on
+`notify::island-mode` re-pins each revealer's top edge to the capsule's bounds
+(`island.syncAnchor`) so the morph only inflates down/sideways — the capsule never
+travels. Known affordance trade-off: while open, the island's rect overlaps the
+bar-center strip, so re-clicking the capsule to close is off — Esc / outside click /
+selecting a workspace close it. Known cosmetic nit: the capsule's hover border (accent,
+via `hoverBorderAccent`) isn't replicated by the clone, so opening from hover snaps the
+1px border to its rest color on frame 0. A future island mode (player, agent) is a
+`registerMode` call plus a new id exported from `Status.ts` — not a new Status field.
+
 ## SCSS conventions and anti-patterns
 
 These are the patterns that bite. Most "the styles look wrong" bugs in this codebase are violations of one of these.

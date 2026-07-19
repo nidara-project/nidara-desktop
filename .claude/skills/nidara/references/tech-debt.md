@@ -349,7 +349,8 @@ cluster — the CC/overlay/Settings widgets that recycle: `Sliders.tsx`, `MediaI
 fires on every realize/unrealize cycle, so the second run disconnected a stale id). Migrated 21 files:
 `core/{NetworkService,AudioService,BluetoothService}.ts`, `surfaces/bar/{Bar,AppTitle,Tray}.tsx`,
 `surfaces/control-center/{Toggles,NotificationCenter}.tsx`, `surfaces/dock/{DockCore,DockItem}.tsx`,
-`surfaces/overview/{WorkspaceOverview,WorkspacePreview}.tsx`, `surfaces/app-grid/AppGrid.tsx`,
+`surfaces/overview/WorkspaceOverview.tsx` (WorkspacePreview.tsx was deleted 2026-07-19: orphaned,
+Gtk.Popover-based), `surfaces/app-grid/AppGrid.tsx`,
 `surfaces/about/AboutWindow.tsx`, `widgets/wifi.ts`, and the Settings pages
 (Appearance, Display, Region, Input, Network, Bluetooth). Verified: zero `try{…disconnect…}catch`
 left tree-wide, the only `.disconnect(` call is inside `safeDisconnect` itself; typecheck + build green.
@@ -650,6 +651,14 @@ window has no focused widget. **Do NOT "fix" it in shell code** — making menu 
 would change real focus behavior just to silence someone else's warning. The right fix is a
 one-liner upstream (`if (!p || …)` at that line); reporting to GNOME/gtk is pending (no
 GitLab account yet).
+
+### 35. Island media compact: focus-aware mutation deferred (2026-07-19)
+The capsule's compact content mutates to the media form whenever the selected player is
+PLAYING. The agreed ideal is stricter: only mutate while the playing app is NOT focused
+(music in the foreground app doesn't need an ambient indicator — you're looking at it).
+Deferred from phase 2 as secondary; needs `HyprlandState` focused-window class matched
+against the player's `entry`, with a real edge case: a browser playing in a background TAB
+of a focused window would wrongly count as "focused". Design the matching before wiring it.
 
 ## Resolved — rules that still apply
 

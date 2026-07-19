@@ -4,6 +4,7 @@ import AstalNotifd from "gi://AstalNotifd"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
+import { MorphRevealer } from "../../common/MorphRevealer"
 import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
@@ -18,7 +19,6 @@ import registry, { widgetAvailable, watchWidgetAvailability } from "../../widget
 import Tray from "./Tray"
 import { SystemMenuOverlay } from "./SystemMenu"
 import { AppTitle } from "./AppTitle"
-import { Workspaces } from "./Workspaces"
 import { ccBadge } from "./StatusIndicators"
 
 // Overlay panels mounted on the bar window (avoids separate layer-shell surfaces)
@@ -26,7 +26,7 @@ import { ControlCenterWidget } from "../control-center/ControlCenter"
 import NotificationCenter from "../control-center/NotificationCenter"
 import Prism from "../prism/Prism"
 import { NotificationPopupsWidget } from "../control-center/NotificationPopups"
-import WorkspaceOverview from "../overview/WorkspaceOverview"
+import { ActivityIsland } from "../island/ActivityIsland"
 import { execAsync } from "ags/process"
 import { t } from "../../core/i18n"
 import { barSettings, onBarSettingsChanged } from "./barState"
@@ -119,8 +119,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const prism = Prism()
   const popups = NotificationPopupsWidget()
   const systemMenu = new ScaleRevealer(SystemMenuOverlay(), { ...OVERLAY_POP, pivot: "top-left" })
-  const overviewWidget = WorkspaceOverview(gdkmonitor)
-  const overview = new ScaleRevealer(overviewWidget, { ...OVERLAY_POP, pivot: "center" })
+  // The Activity Island: the bar-center workspace capsule as a multi-purpose
+  // morphing surface — capsule = compact state, expanded modes morph out of
+  // it Dynamic-Island-style, one MorphRevealer per mode, all driven by
+  // status.island_mode (see surfaces/island/ActivityIsland.tsx). Phase 1
+  // ships one mode: the workspace overview.
+  const island = ActivityIsland()
   // Invisible below-bar button — dismisses any open overlay on outside click.
   // It deliberately does NOT cover the bar strip (margin_top set with the panel
   // geometry below): capsule clicks must reach the capsules so switching
@@ -129,19 +133,21 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   catcher.connect("clicked", () => {
     if (status.cc_edit_mode) return   // don't close CC while in edit mode
     status.cc_open = false; status.nc_open = false; status.prism_open = false; status.system_menu_open = false
-    status.overview_open = false; status.bar_expanded_id = ""
+    status.island_mode = ""; status.bar_expanded_id = ""
   })
 
   masterOverlay.set_child(barBox)
   masterOverlay.add_overlay(catcher)       // behind panels, above bar base
   masterOverlay.add_overlay(expansionCapsule)  // above catcher, below major overlays
-  masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu); masterOverlay.add_overlay(overview)
+  masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu)
+  island.revealers.forEach(r => masterOverlay.add_overlay(r))
 
   cc.valign = Gtk.Align.START; cc.halign = Gtk.Align.END
   nc.valign = Gtk.Align.START; nc.halign = Gtk.Align.END
   prism.valign = Gtk.Align.CENTER; prism.halign = Gtk.Align.CENTER
   popups.valign = Gtk.Align.START; popups.halign = Gtk.Align.END
-  overview.valign = Gtk.Align.CENTER; overview.halign = Gtk.Align.CENTER
+  // (Island revealers set their own top-anchored/centered alignment — see
+  // ActivityIsland's registerMode.)
   // The wrapper MUST be aligned (its root keeps top-left margins inside): an
   // unaligned overlay child FILLs the whole window and, sitting above the
   // catcher, swallows the outside-clicks that should dismiss the menu.
@@ -232,7 +238,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           // @ts-ignore
           region.unionRectangle({ x: Math.round(alloc.x), y: Math.round(alloc.y), width: Math.round(alloc.width), height: Math.round(alloc.height) })
       }
-      addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism); addWidgetToRegion(systemMenu); addWidgetToRegion(overview)
+      addWidgetToRegion(cc); addWidgetToRegion(nc); addWidgetToRegion(prism); addWidgetToRegion(systemMenu)
+      island.revealers.forEach(addWidgetToRegion)
       addWidgetToRegion(expansionCapsule)
 
       // CC edit mode is the one state whose region is NOT backed by the
@@ -282,18 +289,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Unified overlay pop (ScaleRevealer: subtle grow + fade, GTK-side). On close
   // the wrapper hides itself when the animation completes and THEN refreshes the
   // layer-shell input region, so the panel never keeps catching clicks.
-  const popToggle = (pop: ScaleRevealer) => (open: boolean) =>
+  const popToggle = (pop: ScaleRevealer | MorphRevealer) => (open: boolean) =>
       pop.reveal(open, () => { if (!open) updateInputRegion() })
   const setCCVisible = popToggle(cc)
   const setNCVisible = popToggle(nc)
   const setSystemMenuVisible = popToggle(systemMenu)
   const setPrismVisible = popToggle(prism)
-  const setOverviewVisible = popToggle(overview)
 
   const syncOverlays = () => {
     catcher.set_visible(status.isAnyOverlayOpen && !status.cc_edit_mode)
     setCCVisible(status.cc_open); setNCVisible(status.nc_open); setPrismVisible(status.prism_open); setSystemMenuVisible(status.system_menu_open)
-    setOverviewVisible(status.overview_open)
+    island.sync((r, open) => popToggle(r)(open))
     // Update immediately — reveal() flips visibility synchronously on open, so
     // the region calculation is accurate without waiting for a layout pass; the
     // post-close refresh happens in each toggle's reveal callback.
@@ -318,27 +324,30 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // ON_DEMAND is wrong here. Only called from notify handlers (post layer-shell
   // init); never from the construction-time syncOverlays().
   const syncKeyboardMode = () => {
-    Gtk4LayerShell.set_keyboard_mode(win, (status.prism_open || status.overview_open)
+    Gtk4LayerShell.set_keyboard_mode(win, (status.prism_open || island.needsKeyboard())
       ? Gtk4LayerShell.KeyboardMode.EXCLUSIVE
       : Gtk4LayerShell.KeyboardMode.NONE)
   }
 
-  status.connect("notify::overview-open", () => {
+  status.connect("notify::island-mode", () => {
+    // Pin the island's top to the capsule's top before syncOverlays reveals it
+    // (the capsule ref is the truth — survives layout changes).
+    if (status.island_mode) island.syncAnchor(masterOverlay, PANEL_TOP)
     syncOverlays()
     syncKeyboardMode()
-    if (status.overview_open) (overviewWidget as any).onOpen?.()
+    if (status.island_mode) island.onOpened()   // seed the mode's keyboard nav
   })
 
-  // Route keys to the overview while it's open (←/→ move the cursor, Enter
+  // Route keys to the open island mode (overview: ←/→ move the cursor, Enter
   // switches + closes, Esc closes). CAPTURE phase so it fires before any focused
   // child — mirrors the app grid's key controller on the dock window.
-  const overviewKeyCtrl = new Gtk.EventControllerKey()
-  overviewKeyCtrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
-  overviewKeyCtrl.connect("key-pressed", (_c: any, keyval: number) => {
-    if (!status.overview_open) return false
-    return (overviewWidget as any).handleKey?.(keyval) ?? false
+  const islandKeyCtrl = new Gtk.EventControllerKey()
+  islandKeyCtrl.set_propagation_phase(Gtk.PropagationPhase.CAPTURE)
+  islandKeyCtrl.connect("key-pressed", (_c: any, keyval: number) => {
+    if (!status.island_mode) return false
+    return island.handleKey(keyval)
   })
-  win.add_controller(overviewKeyCtrl)
+  win.add_controller(islandKeyCtrl)
 
   // ── Bar expansion show/hide ────────────────────────────────────────────────
   // Centers the panel horizontally under the clicked bar capsule (hidden widgets
@@ -437,7 +446,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   appTitleWidget.set_visible(barSettings.showAppTitle)
   left.append(sysMenuWidget)
   left.append(appTitleWidget)
-  const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER }); center.append(Workspaces())
+  const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER })
+  center.append(island.capsule)   // the island's compact state (workspace dots)
   center.set_visible(barSettings.showWorkspaces)
   const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 8 })
   // Absorbs SizeGroup slack so actual capsules stay pinned to the right edge.
