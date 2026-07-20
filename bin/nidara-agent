@@ -1,0 +1,553 @@
+#!/usr/bin/env -S gjs -m
+// ─────────────────────────────────────────────────────────────────────────────
+// nidara-agent — the brain of Nidara's built-in Assistant.
+// Installed to /usr/bin/nidara-agent. NOT an MCP server and NOT invoked by the
+// user directly: it is a long-running CHILD of the shell (spawned by
+// core/AgentService.ts on first use) that speaks a tiny JSON-lines protocol over
+// stdio — the inverse of nidara-mcp (there the shell is the client; here it is).
+//
+// WHAT IT DOES: turns natural language into desktop actions. Each user turn runs
+// a streaming tool-use loop against a BYOK LLM (Anthropic Messages API, or any
+// OpenAI-compatible endpoint incl. a local Ollama) and executes the model's tool
+// calls by shelling out to `ags request` — the SAME official door the CLI and
+// nidara-mcp use. So the assistant is just another client of the gated surface:
+// Settings → AI gates (allowConfigWrite …) and the kill switch apply for free,
+// and a new IPC action becomes usable with zero changes here (run_action is a
+// passthrough — 100% coverage, like the MCP server).
+//
+// Plain GJS on purpose (same pattern as nidara-mcp / nidara-portal): no Node,
+// no npm deps on installed systems. HTTP is `curl -N` streaming SSE as a
+// subprocess — the house pattern (every HTTP call in the repo is curl), so this
+// adds zero dependencies.
+//
+// CONFIG (re-read from ai.json EVERY turn, so changes take effect live):
+//   brainBackend ("" | "anthropic" | "openai"), brainModel, brainEndpoint.
+// The API KEY is never in ai.json — it lives in the DE keyring (libsecret,
+// schema org.nidara.Assistant, attribute `backend`), written by Settings → AI.
+//
+// PROTOCOL (newline-delimited JSON):
+//   shell→daemon: {t:"user",text} · {t:"cancel"} · {t:"reset"}
+//   daemon→shell: {t:"state",s:"thinking"|"acting"|"idle"} · {t:"delta",text}
+//                 {t:"tool",name,summary} · {t:"toolresult",ok,summary}
+//                 {t:"done",usage:{input,output}} · {t:"error",message}
+// ─────────────────────────────────────────────────────────────────────────────
+
+import GLib from "gi://GLib"
+import Gio from "gi://Gio"
+import GioUnix from "gi://GioUnix"
+import Secret from "gi://Secret"
+
+const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
+const MAX_STEPS = 8            // hard cap on tool-use round-trips per user turn
+const HTTP_TIMEOUT = "120"     // curl --max-time (seconds)
+
+// ── Shell plumbing (shared shape with nidara-mcp) ────────────────────────────
+
+function textFile(path) {
+    const [ok, bytes] = GLib.file_get_contents(path)
+    if (!ok) throw new Error(`cannot read ${path}`)
+    return new TextDecoder().decode(bytes)
+}
+
+function readAiJson() {
+    try {
+        if (!GLib.file_test(AI_JSON, GLib.FileTest.EXISTS)) return {}
+        return JSON.parse(textFile(AI_JSON))
+    } catch {
+        return {}
+    }
+}
+
+// Run a command synchronously, capturing stdout+stderr. Used for the fast
+// `ags request` calls (system-prompt build + tool execution); the slow leg (the
+// LLM stream) is async curl so cancel still works mid-turn.
+function run(argv) {
+    const proc = Gio.Subprocess.new(
+        argv,
+        Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
+    )
+    const [, out, err] = proc.communicate_utf8(null, null)
+    return { ok: proc.get_successful(), out: (out ?? "").trim(), err: (err ?? "").trim() }
+}
+
+// Delegates to the shell. Returns its output even on a non-zero exit, because a
+// gate refusal (e.g. allowConfigWrite off) is a self-explanatory MESSAGE, not a
+// crash — we hand it straight to the model as the tool result.
+function agsRequest(args) {
+    const r = run(["ags", "request", ...args])
+    if (!r.ok && !r.out)
+        throw new Error(`ags request failed (is the shell running?): ${r.err || "no output"}`)
+    return r.out
+}
+
+// ── Keyring (fail-soft) ──────────────────────────────────────────────────────
+// A Nidara session unlocks gnome-keyring at login (PAM). If the Secret Service
+// is unavailable (or no key stored), lookup returns null and the backend proceeds
+// keyless — fine for a local Ollama, surfaced as an auth error for Anthropic.
+const KEY_SCHEMA = Secret.Schema.new(
+    "org.nidara.Assistant",
+    Secret.SchemaFlags.NONE,
+    { backend: Secret.SchemaAttributeType.STRING },
+)
+function lookupKey(backend) {
+    if (!backend) return null
+    try {
+        return Secret.password_lookup_sync(KEY_SCHEMA, { backend }, null)
+    } catch {
+        return null
+    }
+}
+
+// ── stdio emitter + reader ───────────────────────────────────────────────────
+
+const stdout = new Gio.DataOutputStream({
+    base_stream: new GioUnix.OutputStream({ fd: 1, close_fd: false }),
+})
+function emit(obj) {
+    stdout.put_string(JSON.stringify(obj) + "\n", null)
+    stdout.flush(null)
+}
+const emitError = (m) => emit({ t: "error", message: String(m) })
+const emitDelta = (text) => { if (text) emit({ t: "delta", text }) }
+
+// ── Tools offered to the model ───────────────────────────────────────────────
+// Execution = `ags request …`; the gates live in the shell. run_action is a
+// passthrough so every IPC action is reachable without touching this file.
+const TOOL_DEFS = [
+    {
+        name: "run_action",
+        description:
+            "Run a Nidara shell IPC action by name (e.g. toggleControlCenter, settingsPage bluetooth, focusWorkspace 2, launchApp org.gnome.Nautilus). Use ONLY names from the AVAILABLE IPC ACTIONS list. This is how you operate the desktop.",
+        props: {
+            action: { type: "string", description: "Action name from the actions list" },
+            args: { type: "array", items: { type: "string" }, description: "Positional arguments, if the action takes any" },
+        },
+        required: ["action"],
+    },
+    {
+        name: "set_config",
+        description:
+            "Change a shell setting through the validated door (persists and updates the UI like Settings would). Keys and valid values are in the SETTINGS SCHEMA. Gated by Settings → AI; if it refuses, tell the user how to enable it — don't retry.",
+        props: {
+            key: { type: "string", description: "Setting key from the schema" },
+            value: { type: "string", description: "New value, as a string (e.g. \"blue\", \"48\", \"true\")" },
+        },
+        required: ["key", "value"],
+    },
+    {
+        name: "get_config",
+        description: "Read shell settings: one value if `key` is given, all values otherwise.",
+        props: { key: { type: "string", description: "Setting key from the schema" } },
+        required: [],
+    },
+    {
+        name: "dump_state",
+        description:
+            "Re-read live desktop state (open overlays, dark mode, monitors, effective Hyprland config). Use it to VERIFY a change actually took effect before confirming to the user.",
+        props: {},
+        required: [],
+    },
+]
+const ANTHROPIC_TOOLS = TOOL_DEFS.map(d => ({
+    name: d.name, description: d.description,
+    input_schema: { type: "object", properties: d.props, required: d.required },
+}))
+const OPENAI_TOOLS = TOOL_DEFS.map(d => ({
+    type: "function",
+    function: { name: d.name, description: d.description, parameters: { type: "object", properties: d.props, required: d.required } },
+}))
+
+function summarizeTool(tu) {
+    const i = tu.input || {}
+    switch (tu.name) {
+        case "run_action": return `run_action ${i.action || i.name || "?"}${i.args?.length ? " " + i.args.join(" ") : ""}`
+        case "set_config": return `set_config ${i.key}=${i.value}`
+        case "get_config": return `get_config ${i.key || "(all)"}`
+        default: return tu.name
+    }
+}
+
+function execTool(tu) {
+    try {
+        let out
+        switch (tu.name) {
+            case "run_action": {
+                const name = tu.input?.action || tu.input?.name
+                if (!name) return { ok: false, content: "run_action needs an action name" }
+                const args = Array.isArray(tu.input?.args) ? tu.input.args.map(String) : []
+                out = agsRequest([String(name), ...args])
+                break
+            }
+            case "set_config":
+                if (!tu.input?.key) return { ok: false, content: "set_config needs key and value" }
+                out = agsRequest(["setConfig", String(tu.input.key), String(tu.input.value ?? "")])
+                break
+            case "get_config":
+                out = agsRequest(tu.input?.key ? ["getConfig", String(tu.input.key)] : ["getConfig"])
+                break
+            case "dump_state":
+                out = agsRequest(["dumpState"])
+                break
+            default:
+                return { ok: false, content: `unknown tool: ${tu.name}` }
+        }
+        return { ok: true, content: out || "(ok)" }
+    } catch (e) {
+        return { ok: false, content: String(e?.message ?? e) }
+    }
+}
+
+// ── System prompt (built once per session; reset() clears it) ────────────────
+let systemCache = null
+function buildSystemPrompt() {
+    if (systemCache) return systemCache
+    let actions = "", config = "", state = ""
+    try { actions = agsRequest(["listActions"]) } catch {}
+    try { config = agsRequest(["describeConfig"]) } catch {}
+    try { state = agsRequest(["dumpState"]) } catch {}
+    const lang = GLib.getenv("LANG") || "en"
+    systemCache = [
+        "You are Assistant, the built-in helper for the Nidara desktop (a Wayland desktop environment for Arch Linux, compositor Hyprland).",
+        "You help the user operate their desktop with natural language by calling tools.",
+        "Rules:",
+        "- Be concise: you answer in a small chat panel.",
+        "- The user is in charge. Do only what they ask; ask first before anything destructive or irreversible.",
+        "- Never invent action names or config keys. Call run_action only with names from the actions list below, and set_config/get_config only with keys from the settings schema below.",
+        "- Prefer set_config for settings and run_action for everything else. After acting, verify with dump_state/get_config when useful, then briefly confirm what changed.",
+        `- Reply in the user's language (LANG=${lang}).`,
+        "",
+        "AVAILABLE IPC ACTIONS (JSON):",
+        actions || "(unavailable — the shell may be starting)",
+        "",
+        "SETTINGS SCHEMA (JSON):",
+        config || "(unavailable)",
+        "",
+        "CURRENT DESKTOP STATE (JSON snapshot at session start):",
+        state || "(unavailable)",
+    ].join("\n")
+    return systemCache
+}
+
+// ── Conversation history (neutral, backend-agnostic) ─────────────────────────
+// { role:"user", text }
+// { role:"assistant", text, toolUses:[{id,name,input}] }
+// { role:"tool", results:[{id,name,content}] }
+const history = []
+
+function toAnthropicMsg(m) {
+    if (m.role === "user") return { role: "user", content: [{ type: "text", text: m.text }] }
+    if (m.role === "assistant") {
+        const content = []
+        if (m.text) content.push({ type: "text", text: m.text })
+        for (const tu of m.toolUses || []) content.push({ type: "tool_use", id: tu.id, name: tu.name, input: tu.input })
+        return content.length ? { role: "assistant", content } : null
+    }
+    // tool → tool_result blocks ride in a user-role message
+    return { role: "user", content: (m.results || []).map(r => ({ type: "tool_result", tool_use_id: r.id, content: r.content })) }
+}
+
+function toOpenaiMsgs(m) {
+    if (m.role === "user") return [{ role: "user", content: m.text }]
+    if (m.role === "assistant") {
+        const msg = { role: "assistant", content: m.text || null }
+        if ((m.toolUses || []).length)
+            msg.tool_calls = m.toolUses.map(tu => ({ id: tu.id, type: "function", function: { name: tu.name, arguments: JSON.stringify(tu.input || {}) } }))
+        return [msg]
+    }
+    return (m.results || []).map(r => ({ role: "tool", tool_call_id: r.id, content: r.content }))
+}
+
+// ── Request builders ─────────────────────────────────────────────────────────
+
+function buildAnthropicReq(cfg, key, system) {
+    const body = {
+        model: cfg.brainModel || "claude-opus-4-8",
+        max_tokens: 2048,
+        stream: true,
+        system,
+        tools: ANTHROPIC_TOOLS,
+        messages: history.map(toAnthropicMsg).filter(Boolean),
+    }
+    return {
+        url: "https://api.anthropic.com/v1/messages",
+        headers: [
+            ["content-type", "application/json"],
+            ["x-api-key", key || ""],
+            ["anthropic-version", "2023-06-01"],
+        ],
+        body: JSON.stringify(body),
+    }
+}
+
+function buildOpenaiReq(cfg, key, system) {
+    const endpoint = (cfg.brainEndpoint || "http://localhost:11434/v1").replace(/\/+$/, "")
+    const messages = [{ role: "system", content: system }, ...history.flatMap(toOpenaiMsgs)]
+    const body = {
+        model: cfg.brainModel || "",
+        stream: true,
+        stream_options: { include_usage: true },
+        tools: OPENAI_TOOLS,
+        messages,
+    }
+    const headers = [["content-type", "application/json"]]
+    if (key) headers.push(["authorization", `Bearer ${key}`])
+    return { url: `${endpoint}/chat/completions`, headers, body: JSON.stringify(body) }
+}
+
+// ── SSE stream handlers (accumulate text + tool calls, emit deltas live) ─────
+
+function makeAnthropicHandler() {
+    let text = ""
+    const toolUses = []          // {index,id,name,jsonParts}
+    let stopReason = null
+    let usage = { input: 0, output: 0 }
+    let errorMsg = null
+    let curEvent = null
+    return {
+        onLine(line) {
+            if (line.startsWith("event:")) { curEvent = line.slice(6).trim(); return }
+            if (!line.startsWith("data:")) return
+            const payload = line.slice(5).trim()
+            if (!payload) return
+            let data
+            try { data = JSON.parse(payload) } catch { return }
+            switch (data.type || curEvent) {
+                case "message_start":
+                    usage.input = data.message?.usage?.input_tokens ?? 0
+                    break
+                case "content_block_start":
+                    if (data.content_block?.type === "tool_use")
+                        toolUses.push({ index: data.index, id: data.content_block.id, name: data.content_block.name, jsonParts: [] })
+                    break
+                case "content_block_delta": {
+                    const d = data.delta
+                    if (d?.type === "text_delta") { text += d.text; emitDelta(d.text) }
+                    else if (d?.type === "input_json_delta") {
+                        const tu = toolUses.find(t => t.index === data.index)
+                        if (tu) tu.jsonParts.push(d.partial_json || "")
+                    }
+                    break
+                }
+                case "message_delta":
+                    if (data.delta?.stop_reason) stopReason = data.delta.stop_reason
+                    if (data.usage?.output_tokens) usage.output = data.usage.output_tokens
+                    break
+                case "error":
+                    errorMsg = data.error?.message || "stream error"
+                    break
+            }
+        },
+        result() {
+            const tus = toolUses.map(t => {
+                let input = {}
+                try { input = t.jsonParts.length ? JSON.parse(t.jsonParts.join("")) : {} } catch {}
+                return { id: t.id, name: t.name, input }
+            })
+            return { text, toolUses: tus, stopReason, usage, errorMsg }
+        },
+    }
+}
+
+function makeOpenaiHandler() {
+    let text = ""
+    const byIdx = {}             // index -> {id,name,argParts}
+    let finishReason = null
+    let usage = { input: 0, output: 0 }
+    let errorMsg = null
+    return {
+        onLine(line) {
+            if (!line.startsWith("data:")) return
+            const payload = line.slice(5).trim()
+            if (!payload || payload === "[DONE]") return
+            let data
+            try { data = JSON.parse(payload) } catch { return }
+            if (data.error) { errorMsg = data.error.message || String(data.error); return }
+            if (data.usage) {
+                usage.input = data.usage.prompt_tokens ?? usage.input
+                usage.output = data.usage.completion_tokens ?? usage.output
+            }
+            const choice = data.choices?.[0]
+            if (!choice) return
+            const delta = choice.delta || {}
+            if (delta.content) { text += delta.content; emitDelta(delta.content) }
+            for (const tc of delta.tool_calls || []) {
+                const idx = tc.index ?? 0
+                const slot = byIdx[idx] || (byIdx[idx] = { id: tc.id, name: "", argParts: [] })
+                if (tc.id) slot.id = tc.id
+                if (tc.function?.name) slot.name = tc.function.name
+                if (tc.function?.arguments) slot.argParts.push(tc.function.arguments)
+            }
+            if (choice.finish_reason) finishReason = choice.finish_reason
+        },
+        result() {
+            const tus = Object.keys(byIdx).sort((a, b) => +a - +b).map(k => {
+                const s = byIdx[k]
+                let input = {}
+                try { input = s.argParts.length ? JSON.parse(s.argParts.join("")) : {} } catch {}
+                return { id: s.id || `call_${k}`, name: s.name, input }
+            })
+            return { text, toolUses: tus, stopReason: finishReason === "tool_calls" ? "tool_use" : "end", usage, errorMsg }
+        },
+    }
+}
+
+// ── curl SSE transport ───────────────────────────────────────────────────────
+let currentCurl = null
+
+function readAllLines(dataIn, onLine) {
+    return new Promise((resolve) => {
+        const loop = () => {
+            dataIn.read_line_async(GLib.PRIORITY_DEFAULT, null, (src, res) => {
+                let line
+                try { [line] = src.read_line_finish_utf8(res) } catch { return resolve() }
+                if (line === null) return resolve()   // EOF
+                try { onLine(line) } catch (e) { logError(e) }
+                loop()
+            })
+        }
+        loop()
+    })
+}
+
+async function streamCurl(req, onLine) {
+    const argv = ["curl", "-sS", "-N", "--no-buffer", "--fail-with-body", "--max-time", HTTP_TIMEOUT, "-X", "POST"]
+    for (const [k, v] of req.headers) argv.push("-H", `${k}: ${v}`)
+    argv.push("--data-binary", "@-", req.url)
+
+    const proc = Gio.Subprocess.new(
+        argv,
+        Gio.SubprocessFlags.STDIN_PIPE | Gio.SubprocessFlags.STDOUT_PIPE | Gio.SubprocessFlags.STDERR_PIPE,
+    )
+    currentCurl = proc
+
+    // Write the whole request body, then close stdin. curl consumes the (small)
+    // body before the server streams the response, so this never deadlocks.
+    const stdin = proc.get_stdin_pipe()
+    try {
+        stdin.write_all(new TextEncoder().encode(req.body), null)
+        stdin.close(null)
+    } catch {
+        // curl already gone (e.g. force_exit); fall through to read/exit handling.
+    }
+
+    let raw = ""
+    const dataIn = new Gio.DataInputStream({ base_stream: proc.get_stdout_pipe() })
+    await readAllLines(dataIn, (line) => { raw += line + "\n"; onLine(line) })
+    await new Promise((res) => proc.wait_async(null, () => res()))
+
+    currentCurl = null
+    return { ok: proc.get_successful(), raw }
+}
+
+function bestError(raw) {
+    const trimmed = (raw || "").trim()
+    try {
+        const j = JSON.parse(trimmed)
+        const m = j?.error?.message || (typeof j?.error === "string" ? j.error : null)
+        if (m) return m
+    } catch {}
+    return trimmed ? trimmed.slice(0, 300) : "Request failed — check the provider, endpoint, and API key."
+}
+
+const truncate = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s || "")
+
+// ── The turn loop ────────────────────────────────────────────────────────────
+let busy = false
+let cancelled = false
+
+async function runTurn(userText) {
+    const cfg = readAiJson()
+    const backend = cfg.brainBackend || ""
+    const turnUsage = { input: 0, output: 0 }
+    try {
+        if (!backend) {
+            emitError("No assistant provider is configured. Open Settings → AI to choose one.")
+            return
+        }
+        history.push({ role: "user", text: userText })
+        const system = buildSystemPrompt()
+        emit({ t: "state", s: "thinking" })
+
+        let step = 0
+        while (step++ < MAX_STEPS) {
+            if (cancelled) return
+            const key = lookupKey(backend)
+            const req = backend === "anthropic" ? buildAnthropicReq(cfg, key, system) : buildOpenaiReq(cfg, key, system)
+            const handler = backend === "anthropic" ? makeAnthropicHandler() : makeOpenaiHandler()
+
+            const { ok, raw } = await streamCurl(req, (l) => handler.onLine(l))
+            if (cancelled) return
+
+            const r = handler.result()
+            if (r.errorMsg) { emitError(r.errorMsg); return }
+            if (!ok) { emitError(bestError(raw)); return }
+
+            history.push({ role: "assistant", text: r.text, toolUses: r.toolUses })
+            turnUsage.input += r.usage.input
+            turnUsage.output += r.usage.output
+
+            if (r.stopReason === "tool_use" && r.toolUses.length) {
+                emit({ t: "state", s: "acting" })
+                const results = []
+                for (const tu of r.toolUses) {
+                    if (cancelled) return
+                    emit({ t: "tool", name: tu.name, summary: summarizeTool(tu) })
+                    const res = execTool(tu)
+                    emit({ t: "toolresult", ok: res.ok, summary: truncate(res.content, 200) })
+                    results.push({ id: tu.id, name: tu.name, content: res.content })
+                }
+                history.push({ role: "tool", results })
+                emit({ t: "state", s: "thinking" })
+                continue
+            }
+            break   // no tool calls → the model answered
+        }
+        emit({ t: "done", usage: turnUsage })
+    } finally {
+        emit({ t: "state", s: "idle" })
+    }
+}
+
+// ── Protocol dispatch ────────────────────────────────────────────────────────
+
+function handleMessage(msg) {
+    switch (msg?.t) {
+        case "user":
+            if (busy) return   // one turn at a time; the shell disables input while busy
+            cancelled = false
+            busy = true
+            runTurn(String(msg.text || ""))
+                .catch((e) => emitError(String(e?.message ?? e)))
+                .finally(() => { busy = false })
+            break
+        case "cancel":
+            cancelled = true
+            if (currentCurl) { try { currentCurl.force_exit() } catch {} }
+            break
+        case "reset":
+            history.length = 0
+            systemCache = null
+            cancelled = true
+            if (currentCurl) { try { currentCurl.force_exit() } catch {} }
+            break
+    }
+}
+
+const loop = new GLib.MainLoop(null, false)
+const stdin = new Gio.DataInputStream({
+    base_stream: new GioUnix.InputStream({ fd: 0, close_fd: false }),
+})
+function readLoop() {
+    stdin.read_line_async(GLib.PRIORITY_DEFAULT, null, (src, res) => {
+        let line
+        try { [line] = src.read_line_finish_utf8(res) } catch { return loop.quit() }
+        if (line === null) return loop.quit()    // shell closed stdin → exit
+        if (line.trim()) {
+            try { handleMessage(JSON.parse(line)) } catch (e) { emitError(`bad message: ${e}`) }
+        }
+        readLoop()
+    })
+}
+
+readLoop()
+loop.run()

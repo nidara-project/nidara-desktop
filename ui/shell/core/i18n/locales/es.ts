@@ -538,6 +538,25 @@ export default {
     "settings.ai.connect-agent": "Conecta tu agente",
     "settings.ai.connect-agent.desc": "Dile a tu agente de IA que registre el servidor MCP descrito en este fichero — funciona desde cualquier cliente MCP",
 
+    // Asistente integrado — el cerebro (BYOK); la clave vive en el llavero, nunca en ficheros
+    "settings.ai.brain.group": "Asistente",
+    "settings.ai.brain.backend": "Proveedor",
+    "settings.ai.brain.backend.desc": "Qué servicio ejecuta el modelo del asistente integrado. Usa tu propia clave.",
+    "settings.ai.brain.backend.off": "Desactivado",
+    "settings.ai.brain.backend.anthropic": "Anthropic",
+    "settings.ai.brain.backend.openai": "Compatible con OpenAI",
+    "settings.ai.brain.model": "Modelo",
+    "settings.ai.brain.model.desc": "Identificador del modelo con el que habla el asistente (p. ej. claude-opus-4-8, o el nombre de un modelo local).",
+    "settings.ai.brain.endpoint": "Endpoint",
+    "settings.ai.brain.endpoint.desc": "URL base del servidor compatible con OpenAI (p. ej. un Ollama local en http://localhost:11434/v1).",
+    "settings.ai.brain.key": "Clave de API",
+    "settings.ai.brain.key.desc": "Se guarda en el llavero del sistema, nunca en ficheros de texto plano.",
+    "settings.ai.brain.key.placeholder": "Pega la clave de API…",
+    "settings.ai.brain.key.stored": "•••••••• guardada en el llavero",
+    "settings.ai.brain.key.unavailable": "Llavero no disponible",
+    "settings.ai.brain.key.save": "Guardar",
+    "settings.ai.brain.key.clear": "Borrar",
+
     // Insignia del cursor falso del agente (surfaces/agent-pointer/)
     "agentPointer.badge": "IA",
 

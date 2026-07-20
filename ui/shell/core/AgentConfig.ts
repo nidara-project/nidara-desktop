@@ -20,6 +20,16 @@ interface AgentSettings {
                                    // while granted the bar shows a kill-switch indicator: subtle
                                    // "armed" when idle, a bright "active" pulse while acting
                                    // (see computerActing / pulseComputerAction)
+
+    // ── The built-in Assistant's BRAIN (BYOK) ───────────────────────────────
+    // Which LLM the native assistant (surfaces/island Agent mode + bin/nidara-agent)
+    // talks to. NOT a gate — these are plain config values the daemon re-reads per
+    // turn from ai.json. "" = no brain configured (assistant shows an empty state).
+    // The API KEY is NEVER stored here — it lives in the DE keyring (libsecret,
+    // schema org.nidara.Assistant, attribute backend). See Settings → AI.
+    brainBackend: "" | "anthropic" | "openai"  // "" = off; anthropic = Messages API; openai = OpenAI-compatible (covers Ollama)
+    brainModel: string                          // model id, e.g. claude-opus-4-8 or a local model name
+    brainEndpoint: string                       // base URL for the openai-compatible backend (ignored for anthropic)
 }
 
 const DEFAULTS: AgentSettings = {
@@ -28,6 +38,9 @@ const DEFAULTS: AgentSettings = {
     allowMcp: true,
     allowComputerUse: false,
     allowComputerControl: false,
+    brainBackend: "",
+    brainModel: "claude-opus-4-8",
+    brainEndpoint: "http://localhost:11434/v1",
 }
 
 let _settings: AgentSettings = { ...DEFAULTS }
@@ -65,6 +78,10 @@ export const agentConfig = {
     get allowMcp() { return _settings.allowMcp },
     get allowComputerUse() { return _settings.allowComputerUse },
     get allowComputerControl() { return _settings.allowComputerControl },
+
+    get brainBackend() { return _settings.brainBackend },
+    get brainModel() { return _settings.brainModel },
+    get brainEndpoint() { return _settings.brainEndpoint },
 
     // True for ACTING_DECAY_MS after the most recent computer-use action fired.
     get computerActing() { return _acting },
@@ -141,6 +158,27 @@ export const agentConfig = {
                 console.error("[AgentConfig] enabling toolkit-accessibility failed:", e)
             }
         }
+        save()
+        _listeners.forEach(fn => fn())
+    },
+
+    // ── Assistant brain setters ─────────────────────────────────────────────
+    // Read live by bin/nidara-agent (re-reads ai.json per turn), so changing the
+    // brain needs no restart. The API key is handled separately (keyring), never here.
+    setBrainBackend(val: "" | "anthropic" | "openai") {
+        _settings.brainBackend = val
+        save()
+        _listeners.forEach(fn => fn())
+    },
+
+    setBrainModel(val: string) {
+        _settings.brainModel = val
+        save()
+        _listeners.forEach(fn => fn())
+    },
+
+    setBrainEndpoint(val: string) {
+        _settings.brainEndpoint = val
         save()
         _listeners.forEach(fn => fn())
     },

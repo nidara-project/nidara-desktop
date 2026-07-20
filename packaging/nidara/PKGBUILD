@@ -27,6 +27,10 @@ install=nidara.install
 depends=(
   # compositor + session plumbing
   hyprland hypridle hyprsunset uwsm greetd power-profiles-daemon polkit-gnome
+  # keyring: the Secret Service (org.freedesktop.secrets) the built-in Assistant
+  # stores its API key in; libsecret provides the Secret-1 typelib the shell +
+  # nidara-agent import (gi://Secret)
+  gnome-keyring libsecret
   # GTK/GJS runtime
   gjs gtk3 gtk4 gtk-layer-shell gtk4-layer-shell libpeas-2 wayland
   # pinned Astal/AGS stack (served by the [nidara] repo)
@@ -109,7 +113,7 @@ package() {
   local b
   for b in nidara nidara-ui nidara-greeter nidara-lock nidara-before-sleep \
            nidara-after-sleep nidara-game-mode nidara-doctor nidara-portal \
-           nidara-mcp nidara-a11y nidara-act nidara-type nidara-click \
+           nidara-mcp nidara-agent nidara-a11y nidara-act nidara-type nidara-click \
            nidara-update nidara-setup; do
     install -Dm755 "bin/$b" "$pkgdir/usr/bin/$b"
   done

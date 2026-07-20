@@ -660,6 +660,21 @@ Deferred from phase 2 as secondary; needs `HyprlandState` focused-window class m
 against the player's `entry`, with a real edge case: a browser playing in a background TAB
 of a focused window would wrongly count as "focused". Design the matching before wiring it.
 
+### 36. Built-in Assistant v1 = brain only; the face is PR 2 (2026-07-20)
+`bin/nidara-agent` (the brain: BYOK LLM tool-use loop) + Settings → AI brain picker + keyring
+landed in PR 1. **PR 2 is the FACE**: `core/AgentService.ts` (owns the daemon subprocess, parses
+its JSON-lines events, holds the transcript) + the island **Agent mode** (`surfaces/island/
+AgentIsland.tsx`, `ISLAND_AGENT`, activity priority 25 between REC 20 and battery 30) + `Super+A →
+toggleAgent` + SCSS + island i18n. Until then `nidara-agent` is only reachable by hand
+(dev-workflow.md). Minor v1 debt to revisit with the UI: (a) the **model field is shared across
+backends** — switching Anthropic↔OpenAI keeps the same `brainModel`, so the default `claude-opus-4-8`
+is wrong for a fresh OpenAI/Ollama pick (user must retype it); consider per-backend model memory.
+(b) Conversation history is an unbounded in-memory array capped only by `MAX_STEPS` per turn — add a
+turn cap / context-window trim before long sessions. (c) `toolresult.ok` is `true` whenever the tool
+RAN (even when the shell's output is a refusal/validation error) — the truth is in the content, which
+the model reads, but the UI chip may want to detect error-shaped output. Full plan:
+`~/.claude/plans/spicy-twirling-galaxy.md`.
+
 ## Resolved — rules that still apply
 
 These were paid down; the *rule* remains:
