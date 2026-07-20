@@ -251,6 +251,88 @@ window#nidara-bar-zone {
     font-weight: $fw-regular;
     color: var(--nidara-text-dim);
 }
+
+// ── Activity Island: the built-in Assistant ──────────────────────────────────
+// Compact "working pill" + the expanded chat panel. Neutral fills throughout —
+// accent is reserved for active/selected state (commandment 10), so bubbles and
+// chips use the surface/text tokens; a tool rejection tints its dot danger.
+.agent-compact-label {
+    font-size: $fs-small;
+    font-weight: $fw-medium;
+    color: var(--nidara-text);
+}
+
+.agent-header {
+    .agent-title {
+        font-size: $fs-subtitle;
+        font-weight: $fw-semibold;
+        color: var(--nidara-text);
+    }
+    .agent-status {
+        font-size: $fs-caption;
+        color: var(--nidara-text-dim);
+        font-variant-numeric: tabular-nums;
+    }
+}
+
+.agent-reset, .agent-send {
+    @include nidara-reset;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+    min-width: 30px;
+    min-height: 30px;
+    border-radius: var(--nidara-radius-pill);
+    &:hover { background: var(--nidara-surface-hover); }
+}
+
+.agent-bubble {
+    padding: 8px 12px;
+    border-radius: var(--nidara-radius-lg);
+    .agent-bubble-text {
+        font-size: $fs-small;
+        color: var(--nidara-text);
+    }
+}
+.agent-bubble-user {
+    background: var(--nidara-surface-raised);
+}
+.agent-bubble-assistant {
+    background: var(--nidara-surface);
+}
+
+.agent-tool-chips { margin-top: 2px; }
+.agent-tool-chip {
+    padding: 3px 8px;
+    border-radius: var(--nidara-radius-pill);
+    background: var(--nidara-surface-back);
+    .agent-tool-dot {
+        border-radius: var(--nidara-radius-pill);
+        background: var(--nidara-text-dim);
+    }
+    .agent-tool-label {
+        font-size: $fs-mini;
+        color: var(--nidara-text-dim);
+        font-variant-numeric: tabular-nums;
+    }
+    &.agent-tool-fail .agent-tool-dot { background: var(--nidara-danger); }
+}
+
+.agent-entry {
+    @include nidara-reset;
+    padding: 8px 14px;
+    border-radius: var(--nidara-radius-pill);
+    background: var(--nidara-surface);
+    color: var(--nidara-text);
+    font-size: $fs-small;
+    caret-color: var(--nidara-accent);   // the caret IS active state → accent
+}
+
+.agent-empty-text {
+    font-size: $fs-small;
+    color: var(--nidara-text-dim);
+}
+
 /* --- Window menu (AppTitle expansion) --- */
 // Inline move-to-workspace strip: flat numbered buttons, current one accented
 // and disabled. Rows/headers/separators come from the shared nidara-menu-*

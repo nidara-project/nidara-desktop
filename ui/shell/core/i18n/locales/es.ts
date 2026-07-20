@@ -617,6 +617,17 @@ export default {
     // Battery widget
     "island.battery.critical": "Batería críticamente baja",
     "island.battery.hint": "Conecta el cargador",
+
+    // Activity Island — el asistente integrado
+    "island.agent.title": "Asistente",
+    "island.agent.status.idle": "Asistente",
+    "island.agent.status.thinking": "Pensando…",
+    "island.agent.status.acting": "Trabajando…",
+    "island.agent.placeholder": "Pregúntame o pídeme algo…",
+    "island.agent.reset": "Conversación nueva",
+    "island.agent.tokens": "%d tokens",
+    "island.agent.empty": "Elige un proveedor y añade tu clave de API para empezar a usar el asistente.",
+    "island.agent.open-settings": "Abrir Ajustes → IA",
     "widget.battery.label.unavailable": "Batería no disponible",
     "widget.battery.name": "Batería",
     "widget.battery.state.charged": "Cargado",

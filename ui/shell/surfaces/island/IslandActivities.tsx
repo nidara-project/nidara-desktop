@@ -2,10 +2,12 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import AstalMpris from "gi://AstalMpris"
 import AstalBattery from "gi://AstalBattery"
-import status, { ISLAND_PLAYER, ISLAND_BATTERY } from "../../core/Status"
+import status, { ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT } from "../../core/Status"
 import * as media from "../../core/MediaService"
 import { safeDisconnect } from "../../core/signals"
 import { PlayerCompact, makeArtGhost } from "./PlayerIsland"
+import { AgentCompact } from "./AgentIsland"
+import agentService from "../../core/AgentService"
 import { makeBatteryGlyph, batteryPresent, batteryFrac } from "../../common/BatteryGlyph"
 import type { IslandActivity } from "./ActivityIsland"
 
@@ -203,6 +205,33 @@ function batteryActivity(): IslandActivity {
     }
 }
 
+// ── Assistant: the "working pill", and the source while its panel is open ─────
+// Priority 25 sits between recording (20) and battery-critical (30): a running
+// assistant outranks ambient media + a capture, but a dying battery still wins.
+// Liveness = a turn in flight (busy) OR its panel open (holds the compact as the
+// morph source, like the player). Does NOT auto-expand via the engine flag —
+// AgentService opens the island itself when a background turn FINISHES (the flag
+// fires on TAKING the front, not on finishing); closing the island mid-turn does
+// not cancel (isLive stays true while busy → the pill keeps working).
+function agentActivity(): IslandActivity {
+    const compact = AgentCompact()
+    return {
+        id: "agent",
+        priority: 25,
+        compact,
+        expandMode: ISLAND_AGENT,
+        makeGhost: () => AgentCompact({ ghost: true }),
+        watch: (changed) => {
+            agentService.subscribe(changed)
+            // Re-arbitrate on island open/close too: opening the agent cold via
+            // Super+A must mutate the compact to the agent form BEFORE the morph
+            // reads its source (no dots-blink), and closing must revert.
+            status.connect("notify::island-mode", changed)
+        },
+        isLive: () => agentService.busy || status.island_mode === ISLAND_AGENT,
+    }
+}
+
 export function buildActivities(): IslandActivity[] {
-    return [mediaActivity(), recActivity(), batteryActivity()]
+    return [mediaActivity(), recActivity(), batteryActivity(), agentActivity()]
 }

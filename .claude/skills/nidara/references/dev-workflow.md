@@ -624,6 +624,7 @@ symlink, that's the bug — make it a real dir.
 | `Super` (tap) | App launcher (grid) |
 | `Super+Space` | Search (Prism) |
 | `Super+W` | Workspace Overview (keyboard-navigable: ←/→ move, Enter switch, Esc close) |
+| `Super+A` | Assistant (the built-in agent island; Esc closes) |
 | `Super+T` | Kitty |
 | `Super+E` | Nautilus |
 | `Super+L` | Lock |

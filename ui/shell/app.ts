@@ -6,7 +6,7 @@ import { Gdk, Gtk } from "ags/gtk4"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import status, { ISLAND_OVERVIEW, ISLAND_PLAYER } from "./core/Status"
+import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_AGENT } from "./core/Status"
 import { selectedPlayer } from "./core/MediaService"
 import shellActions from "./core/ShellActions"
 import { currentLocale } from "./core/i18n"
@@ -150,6 +150,10 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
   togglePlayer: {
     desc: "Toggle the media player island (the bar capsule's expanded player). Needs an MPRIS player on the bus — verify via dumpState `overlays.island`",
     run: () => selectedPlayer() ? void status.toggleIsland(ISLAND_PLAYER) : "no media player on the bus",
+  },
+  toggleAgent: {
+    desc: "Toggle the built-in Assistant island (the conversational agent). Opens the empty state if no provider is configured (Settings → AI)",
+    run: () => void status.toggleIsland(ISLAND_AGENT),
   },
   toggleAbout: {
     desc: "Toggle the About window (system info card, window `nidara-about`) — the deterministic hook " +

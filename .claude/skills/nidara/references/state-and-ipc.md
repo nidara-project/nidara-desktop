@@ -64,7 +64,7 @@ read source to discover it:
 
 Current commands (run `listActions` for the live list): `toggleCC|toggleControlCenter`,
 `toggleNC|toggleNotificationCenter`, `togglePrism|toggleSearch`, `toggleAppGrid`,
-`openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `togglePlayer` (media island; errors if no MPRIS player is on the bus), `toggleAbout`, `toggleBarOverlay` (alias `toggleGameOverlay`),
+`openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `togglePlayer` (media island; errors if no MPRIS player is on the bus), `toggleAgent` (the built-in Assistant island; `Super+A`), `toggleAbout`, `toggleBarOverlay` (alias `toggleGameOverlay`),
 `openWindowMenu`, `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`,
 `setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listApps`, `launchApp <id>`,
 `disableComputerControl`, `notifyComputerAction` (computer-use tools ping it so the bar's AI-control
@@ -292,6 +292,18 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   NOT block a write — a `set_config` E2E hits the live shell for real. Test the daemon's
   rejection-surfacing non-destructively with an INVALID value instead (the validator refuses, nothing
   mutates), or flip the real gate in Settings.
+
+**UI wiring (the face).** `core/AgentService.ts` owns the daemon subprocess + the transcript and
+exposes `send`/`cancel`/`reset` + `subscribe` (see `architecture.md`). The chat lives in the Activity
+Island as the **`agent` mode** (`surfaces/island/AgentIsland.tsx`, `ISLAND_AGENT`,
+`needsKeyboard:true`) with a matching **`agent` activity** (priority 25 — the "working pill"). IPC:
+**`toggleAgent`** → `status.toggleIsland(ISLAND_AGENT)`, bound to **`Super+A`** in `hyprland.lua`.
+Two behaviours worth knowing: (1) the agent activity `isLive` = `busy || island_mode===ISLAND_AGENT`,
+so closing the island mid-turn does NOT cancel (the pill keeps working) and reopening shows the same
+transcript; (2) **expand-on-finish** — when a turn ends with the desktop otherwise idle (`!isAnyOverlayOpen`),
+AgentService pops the island open so a background answer surfaces. Being the island's first TEXT mode,
+its `handleKey` claims only Escape (everything else falls through to the entry); the bar grants EXCLUSIVE
+keyboard while `needsKeyboard()`. The empty state (no provider) routes to Settings → AI.
 
 ### The computer-use layer (third-party perception + action)
 

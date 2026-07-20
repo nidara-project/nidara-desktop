@@ -5,10 +5,11 @@ import { MorphRevealer, MorphGlass, MorphPair } from "../../common/MorphRevealer
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { CAPSULE_BORDER } from "../bar/capsule"
 import Theme from "../../core/ThemeManager"
-import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY } from "../../core/Status"
+import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT } from "../../core/Status"
 import WorkspaceOverview, { WO_GLASS } from "../overview/WorkspaceOverview"
 import PlayerIsland, { PLAYER_GLASS } from "./PlayerIsland"
 import BatteryIsland, { BATTERY_GLASS } from "./BatteryIsland"
+import AgentIsland, { AGENT_GLASS } from "./AgentIsland"
 import { buildActivities } from "./IslandActivities"
 
 // The Activity Island — the bar-center capsule as a MULTI-PURPOSE morphing
@@ -254,6 +255,15 @@ export function ActivityIsland() {
         id: ISLAND_BATTERY,
         widget: BatteryIsland(),
         glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: BATTERY_GLASS.border, n: BATTERY_GLASS.n, radius: BATTERY_GLASS.radius }),
+    })
+    // Keyboard grab: the assistant has a text entry (like the overview cursor
+    // needs keys, this needs the entry to receive them — the bar grants EXCLUSIVE
+    // while needsKeyboard). handleKey only claims Escape; the rest reaches the entry.
+    registerMode({
+        id: ISLAND_AGENT,
+        widget: AgentIsland(),
+        glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: AGENT_GLASS.border, n: AGENT_GLASS.n, radius: AGENT_GLASS.radius }),
+        needsKeyboard: true,
     })
 
     const active = () => modes.get(status.island_mode) ?? null
