@@ -747,9 +747,13 @@ Ordered by what hurt most in the live run:
    the loop skipped it and ended the turn empty. The user's symptom was exact: *"only answers the
    first time, the second time it doesn't"* — the first turn needed no tool. Fix: execute tool calls
    when they are PRESENT (see `state-and-ipc.md`). This was the payoff for doing items 1–2 first;
-   diagnosis took one `grep`, not a debugging session. (Related and still true: Google's error text
-   steers callers toward its Interactions API, so the compat path may degrade over time → a native
-   Gemini backend may stop being optional.)
+   diagnosis took one `grep`, not a debugging session. **Second layer, same day:** with the call
+   finally executing, Gemini 400'd the NEXT request — it requires its encrypted **thought signature**
+   to be echoed back with the call (`extra_content.google.thought_signature`). Also fixed; see
+   `state-and-ipc.md`. Two provider-specific quirks in one path is the real signal here: **Google's
+   compat endpoint is a moving target**, and its own error text steers callers toward the Interactions
+   API — a native Gemini backend is drifting from "optional" to "eventually necessary". Not building
+   it yet, but that is the direction; log `sig=`/`finish=` are the early-warning instruments.
 4. **No sense of activity.** `thinking`/`acting` only swap a word in the header. Needs a real pulse
    while streaming, the tool being run, and a visible end-of-turn.
 5. **Replies ignore the UI language.** Answered in English on a Spanish session; `LANG` is in the

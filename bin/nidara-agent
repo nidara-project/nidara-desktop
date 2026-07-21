@@ -269,7 +269,14 @@ function toOpenaiMsgs(m) {
     if (m.role === "assistant") {
         const msg = { role: "assistant", content: m.text || null }
         if ((m.toolUses || []).length)
-            msg.tool_calls = m.toolUses.map(tu => ({ id: tu.id, type: "function", function: { name: tu.name, arguments: JSON.stringify(tu.input || {}) } }))
+            msg.tool_calls = m.toolUses.map(tu => {
+                const call = { id: tu.id, type: "function", function: { name: tu.name, arguments: JSON.stringify(tu.input || {}) } }
+                // Echo the provider's opaque per-call extras (Gemini 3's thought
+                // signature) exactly as received — mandatory for Gemini, ignored
+                // by every other OpenAI-compatible provider.
+                if (tu.extra) call.extra_content = tu.extra
+                return call
+            })
         return [msg]
     }
     return (m.results || []).map(r => ({ role: "tool", tool_call_id: r.id, content: r.content }))
@@ -390,10 +397,16 @@ function makeOpenaiHandler() {
             if (delta.content) { text += delta.content; emitDelta(delta.content) }
             for (const tc of delta.tool_calls || []) {
                 const idx = tc.index ?? 0
-                const slot = byIdx[idx] || (byIdx[idx] = { id: tc.id, name: "", argParts: [] })
+                const slot = byIdx[idx] || (byIdx[idx] = { id: tc.id, name: "", argParts: [], extra: null })
                 if (tc.id) slot.id = tc.id
                 if (tc.function?.name) slot.name = tc.function.name
                 if (tc.function?.arguments) slot.argParts.push(tc.function.arguments)
+                // Gemini 3 attaches an encrypted "thought signature" to the call
+                // (extra_content.google.thought_signature) and REJECTS the next
+                // request with a 400 unless it is echoed back verbatim. Opaque to
+                // us: carry it, never interpret it. Other OpenAI-compatible
+                // providers simply never send the field.
+                if (tc.extra_content) slot.extra = tc.extra_content
             }
             if (choice.finish_reason) finishReason = choice.finish_reason
         },
@@ -402,7 +415,7 @@ function makeOpenaiHandler() {
                 const s = byIdx[k]
                 let input = {}
                 try { input = s.argParts.length ? JSON.parse(s.argParts.join("")) : {} } catch {}
-                return { id: s.id || `call_${k}`, name: s.name, input }
+                return { id: s.id || `call_${k}`, name: s.name, input, extra: s.extra }
             })
             // Trust the PRESENCE of tool calls over finish_reason. Measured
             // 2026-07-21 against Google's OpenAI-compatible endpoint
@@ -556,7 +569,11 @@ async function runTurn(userText) {
             // finish= is the provider's RAW value; stop= is how the loop read it.
             // Keep both: the two disagreeing is exactly how Google's compat path
             // was caught dropping tool calls.
-            log(`step ${step}: ok=${ok} text=${r.text.length}c tools=${r.toolUses.length} stop=${r.stopReason || "?"} finish=${r.finishReason || "?"} tok=${r.usage.input}/${r.usage.output}`)
+            // sig= counts per-call opaque extras captured (Gemini's thought
+            // signature): sig=0/1 on a Gemini turn means the stream didn't carry
+            // it and the echo can't work — worth knowing without guessing.
+            const sigs = r.toolUses.filter(tu => tu.extra).length
+            log(`step ${step}: ok=${ok} text=${r.text.length}c tools=${r.toolUses.length}${r.toolUses.length ? ` sig=${sigs}/${r.toolUses.length}` : ""} stop=${r.stopReason || "?"} finish=${r.finishReason || "?"} tok=${r.usage.input}/${r.usage.output}`)
             if (r.errorMsg) { log(`step ${step}: provider error: ${truncate(r.errorMsg, 200)}`); emitError(r.errorMsg); return }
             if (!ok) { emitError(bestError(raw, err)); return }
 

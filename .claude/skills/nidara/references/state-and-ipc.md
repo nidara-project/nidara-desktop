@@ -296,6 +296,14 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   once and then went dead on the first turn that needed a tool**. If tool calls accumulated, execute
   them. The per-step log prints `stop=` (how the loop read it) next to `finish=` (the provider's raw
   value) precisely so the next divergence shows up instead of being inferred.
+- **Carry the provider's opaque per-call extras back verbatim.** Gemini 3 attaches an encrypted
+  **thought signature** to every function call (`tool_calls[].extra_content.google.thought_signature`)
+  and answers the FOLLOWING request with a **400** unless it is echoed back inside the assistant
+  message's `tool_calls`. So `toolUses` carries an `extra` blob straight from the stream into
+  `toOpenaiMsgs()` — never interpreted, never rebuilt, just relayed. Other OpenAI-compatible
+  providers don't send the field and don't care. The step log prints `sig=N/M` whenever a turn has
+  tool calls: `sig=0/1` against Gemini means the signature never arrived and the echo can't work
+  (which would make the compat path unusable for tools → the native backend stops being optional).
 - **Tools offered to the model**: `run_action(action, args?)`, `set_config(key, value)`,
   `get_config(key?)`, `dump_state()` — all executed via `ags request`, gates enforced by the shell
   (a refusal comes back as the tool-result STRING; the daemon never re-checks gates). No
