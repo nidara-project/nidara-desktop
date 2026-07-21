@@ -1,82 +1,98 @@
 import { Gtk } from "ags/gtk4"
 import Secret from "gi://Secret"
-import { listGroup, pageBox, toggleRow, createRow, dropdownRow, staticLabel } from "../SettingsHelpers"
+import { listGroup, pageBox, toggleRow, createRow, createStackedRow, dropdownRow, staticLabel } from "../SettingsHelpers"
 import { NidaraButton } from "../../../../lib/nidara-kit"
 import agentConfig from "../../../core/AgentConfig"
+import { AGENT_PROVIDERS, providerById } from "../../../core/AgentProviders"
+import { fetchModels, catalogNeedsKey } from "../../../core/AgentCatalog"
 import { configKeys } from "../../../core/ConfigRegistry"
 import { t } from "../../../core/i18n"
 
 // The built-in Assistant's API key lives in the DE keyring (libsecret), never in
-// ai.json. One entry per backend (attribute `backend`), so a user can keep both an
-// Anthropic and an OpenAI-compatible key. bin/nidara-agent reads it back with the
-// same schema. All calls are fail-soft: a Nidara session may have no Secret Service
-// running yet (gnome-keyring is unlocked at login via PAM — see install.sh), and the
-// page must never crash the shell when the keyring is unavailable.
+// ai.json. One entry per PROVIDER (attribute `provider`), not per wire protocol:
+// a key belongs to the company that issued it, and OpenAI/Google/SpaceXAI (plus
+// anything behind "Other API endpoint…") all ride the same openai-compatible path
+// — keyed by protocol they would overwrite each other's key and the user would get
+// a 401 from a provider whose key they just saved. bin/nidara-agent reads it back
+// with the same schema. All calls are
+// fail-soft: a Nidara session may have no Secret Service running yet (gnome-keyring
+// is unlocked at login via PAM — see install.sh), and the page must never crash the
+// shell when the keyring is unavailable.
+// Brand names — deliberately NOT translated (proper nouns). Only "Off", "Custom"
+// and the "(local)" qualifier on Ollama go through i18n.
+const PROVIDER_NAMES: Record<string, string> = {
+    anthropic: "Anthropic",
+    openai: "OpenAI",
+    google: "Google (Gemini)",
+    spacexai: "SpaceXAI (Grok)",
+}
+
 const KEY_SCHEMA = Secret.Schema.new(
     "org.nidara.Assistant",
     Secret.SchemaFlags.NONE,
-    { backend: Secret.SchemaAttributeType.STRING },
+    { provider: Secret.SchemaAttributeType.STRING },
 )
 
 function keyringAvailable(): boolean {
     // A lookup for a non-existent attribute returns null when the service is up and
     // throws when it's down — the cheapest liveness probe.
     try {
-        Secret.password_lookup_sync(KEY_SCHEMA, { backend: "__probe__" }, null)
+        Secret.password_lookup_sync(KEY_SCHEMA, { provider: "__probe__" }, null)
         return true
     } catch {
         return false
     }
 }
 
-function hasKey(backend: string): boolean {
-    if (!backend) return false
+function hasKey(provider: string): boolean {
+    if (!provider) return false
     try {
-        return !!Secret.password_lookup_sync(KEY_SCHEMA, { backend }, null)
+        return !!Secret.password_lookup_sync(KEY_SCHEMA, { provider }, null)
     } catch {
         return false
     }
 }
 
-function storeKey(backend: string, key: string): boolean {
+// Writes are ASYNC on purpose — this is not a style preference. Storing a secret can
+// put a PASSWORD DIALOG up (gcr-prompter, activated on demand) whenever the login
+// keyring has to be created or unlocked — i.e. on any session without PAM
+// auto-unlock, and the very first time on any session. The call does not return
+// until the user answers, so the sync variant would block the GTK main loop and
+// freeze the WHOLE SHELL for as long as that dialog sits there — measured
+// 2026-07-21 on a box that had just installed gnome-keyring. Reads stay sync: a
+// lookup answers immediately even with no keyring at all (it reports "not found"),
+// so opening this page is safe.
+function storeKey(provider: string, key: string, done: (ok: boolean) => void): void {
     try {
-        return Secret.password_store_sync(
-            KEY_SCHEMA, { backend }, Secret.COLLECTION_DEFAULT,
-            `Nidara Assistant — ${backend}`, key, null,
+        Secret.password_store(
+            KEY_SCHEMA, { provider }, Secret.COLLECTION_DEFAULT,
+            `Nidara Assistant — ${provider}`, key, null,
+            (_src: any, res: any) => {
+                let ok = false
+                try { ok = Secret.password_store_finish(res) } catch (e) {
+                    console.error("[Ai] keyring store failed:", e)
+                }
+                done(ok)
+            },
         )
     } catch (e) {
         console.error("[Ai] keyring store failed:", e)
-        return false
+        done(false)
     }
 }
 
-function clearKey(backend: string): void {
+function clearKey(provider: string, done: () => void): void {
     try {
-        Secret.password_clear_sync(KEY_SCHEMA, { backend }, null)
+        Secret.password_clear(KEY_SCHEMA, { provider }, null, (_src: any, res: any) => {
+            try { Secret.password_clear_finish(res) } catch (e) {
+                console.error("[Ai] keyring clear failed:", e)
+            }
+            done()
+        })
     } catch (e) {
         console.error("[Ai] keyring clear failed:", e)
+        done()
     }
-}
-
-// Free-text setting row committing on Enter or focus-out (never per-keystroke — the
-// setter writes ai.json). A blanked field reverts to the stored value.
-function entryRow(
-    label: string,
-    subtitle: string,
-    get: () => string,
-    set: (v: string) => void,
-): { row: Gtk.Widget; entry: Gtk.Entry } {
-    const entry = new Gtk.Entry({ text: get(), valign: Gtk.Align.CENTER, width_chars: 22 })
-    const commit = () => {
-        const v = entry.get_text().trim()
-        if (v && v !== get()) set(v)
-        else if (!v) entry.set_text(get())
-    }
-    entry.connect("activate", commit)
-    const focus = new Gtk.EventControllerFocus()
-    focus.connect("leave", commit)
-    entry.add_controller(focus)
-    return { row: createRow(label, subtitle, entry), entry }
 }
 
 // Settings → AI: governance of the agent-facing surface, plus the built-in
@@ -92,83 +108,196 @@ export default function AiPage() {
     // ── Assistant — the built-in conversational agent's brain (BYOK) ─────────
     const brainGroup = listGroup(t("settings.ai.brain.group"))
 
-    // Backend picker. Display labels ↔ stored ids ("" | "anthropic" | "openai").
-    const BACKENDS: Array<{ id: "" | "anthropic" | "openai"; label: string }> = [
-        { id: "",          label: t("settings.ai.brain.backend.off") },
-        { id: "anthropic", label: t("settings.ai.brain.backend.anthropic") },
-        { id: "openai",    label: t("settings.ai.brain.backend.openai") },
+    // Provider picker — by NAME, not by wire protocol. The protocol (anthropic vs
+    // openai-compatible) stays internal: AgentConfig.setBrainProvider derives it,
+    // plus the endpoint and the remembered model. Provider names are proper nouns,
+    // so only "Off" and "Custom" are translated.
+    const PROVIDERS: Array<{ id: string; label: string }> = [
+        { id: "", label: t("settings.ai.brain.provider.off") },
+        ...AGENT_PROVIDERS.map(p => ({
+            id: p.id,
+            label: p.id === "custom"    ? t("settings.ai.brain.provider.custom")
+                : p.id === "localhost" ? t("settings.ai.brain.provider.localhost")
+                : p.id === "ollama"    ? t("settings.ai.brain.provider.ollama")
+                : PROVIDER_NAMES[p.id] ?? p.id,
+        })),
     ]
-    const labelFor = (id: string) => BACKENDS.find(b => b.id === id)?.label ?? BACKENDS[0].label
-    const idFor = (label: string) => BACKENDS.find(b => b.label === label)?.id ?? ""
+    const labelFor = (id: string) => PROVIDERS.find(b => b.id === id)?.label ?? PROVIDERS[0].label
+    const idFor = (label: string) => PROVIDERS.find(b => b.label === label)?.id ?? ""
 
-    // Model + endpoint + key rows are built first so the backend cb can toggle them.
-    const model = entryRow(
-        t("settings.ai.brain.model"),
-        t("settings.ai.brain.model.desc"),
-        () => agentConfig.brainModel,
-        (v) => agentConfig.setBrainModel(v),
-    )
-    const endpoint = entryRow(
-        t("settings.ai.brain.endpoint"),
-        t("settings.ai.brain.endpoint.desc"),
-        () => agentConfig.brainEndpoint,
-        (v) => agentConfig.setBrainEndpoint(v),
-    )
+    // ── Model row: free text + an optional catalog fetched from the provider ────
+    // The ENTRY stays the source of truth. The dropdown is an aid: it appears only
+    // after a successful fetch and just fills the entry. That ordering matters —
+    // a catalog can fail (no key, no network, a server with no /models) and the
+    // user must still be able to type an id, so nothing is ever gated on it.
+    const modelEntry = new Gtk.Entry({
+        text: agentConfig.brainModel, hexpand: true,
+        placeholder_text: t("settings.ai.brain.model.placeholder"),
+    })
+    // Unlike the other entries, an EMPTY value commits: clearing the model must
+    // actually clear it. Reverting to the stored value on blank (the entryRow
+    // convention) made a deleted id reappear on focus-out — user-caught 2026-07-21.
+    const commitModel = () => {
+        const v = modelEntry.get_text().trim()
+        if (v !== agentConfig.brainModel) agentConfig.setBrainModel(v)
+    }
+    modelEntry.connect("activate", commitModel)
+    const modelFocus = new Gtk.EventControllerFocus()
+    modelFocus.connect("leave", commitModel)
+    modelEntry.add_controller(modelFocus)
+
+    const modelList = new Gtk.StringList({ strings: [] })
+    const modelDrop = new Gtk.DropDown({ model: modelList, visible: false, valign: Gtk.Align.CENTER })
+    let suppressDropCb = false
+    modelDrop.connect("notify::selected", () => {
+        if (suppressDropCb) return
+        const item = modelList.get_string(modelDrop.selected)
+        if (item) { modelEntry.set_text(item); commitModel() }
+    })
+
+    const fetchBtn = NidaraButton({ label: t("settings.ai.brain.model.fetch"), pill: true })
+    const modelStatus = new Gtk.Label({
+        css_classes: ["nidara-row-subtitle"], halign: Gtk.Align.START, xalign: 0,
+        wrap: true, visible: false,
+    })
+
+    fetchBtn.connect("clicked", () => {
+        const p = providerById(agentConfig.brainProvider)
+        if (!p) return
+        // A hosted catalog is authenticated: say so plainly instead of firing a
+        // request that can only come back as a 401.
+        if (catalogNeedsKey(p) && !hasKey(p.id)) {
+            modelDrop.visible = false
+            modelStatus.visible = true
+            modelStatus.label = t("settings.ai.brain.model.needkey")
+            return
+        }
+        fetchBtn.sensitive = false
+        modelStatus.visible = true
+        modelStatus.label = t("settings.ai.brain.model.fetching")
+        fetchModels(p, agentConfig.brainEndpoint, (r) => {
+            fetchBtn.sensitive = true
+            if (r.models.length) {
+                suppressDropCb = true
+                while (modelList.get_n_items() > 0) modelList.remove(0)
+                r.models.forEach(m => modelList.append(m))
+                // Preselect the model already configured, if the catalog has it.
+                const idx = r.models.indexOf(agentConfig.brainModel)
+                modelDrop.selected = idx >= 0 ? idx : Gtk.INVALID_LIST_POSITION
+                suppressDropCb = false
+                modelDrop.visible = true
+                modelStatus.visible = false
+            } else {
+                modelDrop.visible = false
+                modelStatus.label = t("settings.ai.brain.model.failed").replace("%s", r.error)
+            }
+        })
+    })
+
+    const modelLine = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
+    modelLine.append(modelEntry); modelLine.append(modelDrop); modelLine.append(fetchBtn)
+    const modelBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 6 })
+    modelBox.append(modelLine); modelBox.append(modelStatus)
+    const model = {
+        row: createStackedRow(t("settings.ai.brain.model"), t("settings.ai.brain.model.desc"), modelBox),
+        entry: modelEntry,
+    }
+    // Stacked too: a URL in the trailing slot is a narrow stub with the description
+    // wrapping to two lines beside it — the same squeeze as the key field.
+    const endpointEntry = new Gtk.Entry({ text: agentConfig.brainEndpoint, hexpand: true })
+    const commitEndpoint = () => {
+        const v = endpointEntry.get_text().trim()
+        if (v && v !== agentConfig.brainEndpoint) agentConfig.setBrainEndpoint(v)
+        else if (!v) endpointEntry.set_text(agentConfig.brainEndpoint)
+    }
+    endpointEntry.connect("activate", commitEndpoint)
+    const endpointFocus = new Gtk.EventControllerFocus()
+    endpointFocus.connect("leave", commitEndpoint)
+    endpointEntry.add_controller(endpointFocus)
+    const endpoint = {
+        row: createStackedRow(t("settings.ai.brain.endpoint"), t("settings.ai.brain.endpoint.desc"), endpointEntry),
+        entry: endpointEntry,
+    }
 
     // API key row: a password entry + save/clear, status carried in the placeholder
     // (the stored key is never re-shown).
     const keyEntry = new Gtk.PasswordEntry({ show_peek_icon: true, valign: Gtk.Align.CENTER, width_chars: 16 })
+    // Labelled "Save key" / "Forget key", not "Save" / "Clear": this is the ONLY
+    // button on a page where every other field commits on Enter/focus-out, so a bare
+    // "Save" reads as "save the whole form" (user-caught 2026-07-21).
     const saveBtn = NidaraButton({ label: t("settings.ai.brain.key.save"), variant: "primary", pill: true })
     const clearBtn = NidaraButton({ label: t("settings.ai.brain.key.clear"), pill: true })
+    // Stacked row: the entry + its two buttons get the full width of the card. In
+    // the trailing slot of a normal row the entry was squeezed to a stub.
+    keyEntry.hexpand = true
     const keyBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
     keyBox.append(keyEntry); keyBox.append(saveBtn); keyBox.append(clearBtn)
-    const keyRow = createRow(t("settings.ai.brain.key"), t("settings.ai.brain.key.desc"), keyBox)
+    const keyRow = createStackedRow(t("settings.ai.brain.key"), t("settings.ai.brain.key.desc"), keyBox)
 
     function refreshKeyUI() {
-        const b = agentConfig.brainBackend
+        const id = agentConfig.brainProvider
+        const p = providerById(id)
+        const needsKey = !!p && !p.local          // Ollama runs locally: no key to hold
         const avail = keyringAvailable()
-        const stored = avail && hasKey(b)
+        const stored = avail && hasKey(id)
         keyEntry.placeholder_text =
-            !b       ? t("settings.ai.brain.key.placeholder") :
-            !avail   ? t("settings.ai.brain.key.unavailable") :
-            stored   ? t("settings.ai.brain.key.stored") :
-                       t("settings.ai.brain.key.placeholder")
-        keyEntry.sensitive = !!b && avail
-        saveBtn.sensitive = !!b && avail
-        clearBtn.sensitive = !!b && avail && stored
+            !needsKey ? t("settings.ai.brain.key.placeholder") :
+            !avail    ? t("settings.ai.brain.key.unavailable") :
+            stored    ? t("settings.ai.brain.key.stored") :
+                        t("settings.ai.brain.key.placeholder")
+        keyEntry.sensitive = needsKey && avail
+        saveBtn.sensitive = needsKey && avail
+        clearBtn.sensitive = needsKey && avail && stored
     }
 
-    saveBtn.connect("clicked", () => {
+    const commitKey = () => {
         const k = keyEntry.get_text().trim()
         if (!k) return
-        if (storeKey(agentConfig.brainBackend, k)) {
+        // The keyring may put a password dialog up (creating/unlocking the login
+        // keyring). Disable the button meanwhile so the row reads as "working"
+        // instead of dead, and let the async callback re-enable it.
+        saveBtn.sensitive = false
+        storeKey(agentConfig.brainProvider, k, (ok) => {
+            if (ok) keyEntry.set_text("")
+            refreshKeyUI()
+        })
+    }
+    saveBtn.connect("clicked", commitKey)
+    // Enter commits too — same gesture as every other field on this page.
+    keyEntry.connect("activate", commitKey)
+    clearBtn.connect("clicked", () => {
+        clearBtn.sensitive = false
+        clearKey(agentConfig.brainProvider, () => {
             keyEntry.set_text("")
             refreshKeyUI()
-        }
-    })
-    clearBtn.connect("clicked", () => {
-        clearKey(agentConfig.brainBackend)
-        keyEntry.set_text("")
-        refreshKeyUI()
+        })
     })
 
-    // Enable rows per backend: model + key for any provider; endpoint only for the
-    // OpenAI-compatible backend (Anthropic ignores it).
+    // Row visibility per provider: the model is always editable (a stale default
+    // must be a retype, never a dead end); the endpoint only for Custom (named
+    // providers pin their own URL); the key for everything except local runtimes.
     function refreshSensitivity() {
-        const b = agentConfig.brainBackend
-        model.row.sensitive = b !== ""
-        endpoint.row.sensitive = b === "openai"
-        keyRow.sensitive = b !== ""
+        const p = providerById(agentConfig.brainProvider)
+        model.row.sensitive = !!p
+        endpoint.row.visible = !!p?.editableEndpoint
+        keyRow.visible = !p || !p.local
+        keyRow.sensitive = !!p && !p.local
+        model.entry.set_text(agentConfig.brainModel)
+        endpoint.entry.set_text(agentConfig.brainEndpoint)
+        // A catalog belongs to the provider that answered it — drop it on every
+        // switch, or Anthropic's list would sit there offering models to Ollama.
+        modelDrop.visible = false
+        modelStatus.visible = false
         refreshKeyUI()
     }
 
     brainGroup.listBox.append(dropdownRow(
-        t("settings.ai.brain.backend"),
-        t("settings.ai.brain.backend.desc"),
-        labelFor(agentConfig.brainBackend),
-        BACKENDS.map(b => b.label),
-        (v) => { agentConfig.setBrainBackend(idFor(v)); refreshSensitivity() },
-        (apply) => agentConfig.onChange(() => apply(labelFor(agentConfig.brainBackend))),
+        t("settings.ai.brain.provider"),
+        t("settings.ai.brain.provider.desc"),
+        labelFor(agentConfig.brainProvider),
+        PROVIDERS.map(b => b.label),
+        (v) => { agentConfig.setBrainProvider(idFor(v)); refreshSensitivity() },
+        (apply) => agentConfig.onChange(() => apply(labelFor(agentConfig.brainProvider))),
     ))
     brainGroup.listBox.append(model.row)
     brainGroup.listBox.append(endpoint.row)

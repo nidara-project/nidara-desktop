@@ -9,6 +9,7 @@
 // subset; grow it opportunistically as services gain setters.
 
 import { registerConfig } from "./core/ConfigRegistry"
+import { AGENT_PROVIDERS } from "./core/AgentProviders"
 import Theme from "./core/ThemeManager"
 import { ACCENT_PALETTE, type AccentKey, type ShellAppearance } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
@@ -148,8 +149,15 @@ export function registerConfigEntries() {
     // The built-in Assistant's brain (BYOK). Visible so agents can see how the
     // native assistant is configured; set it in Settings → AI (the API key lives
     // in the keyring and is deliberately NOT exposed here).
+    registerConfig("ai.brainProvider", {
+        desc: "Which provider the built-in Assistant talks to: '' (off) or a provider id (anthropic, openai, google, mistral, groq, openrouter, ollama, custom). Set it in Settings → AI.",
+        type: "enum",
+        enum: ["", ...AGENT_PROVIDERS.map(p => p.id)],
+        writable: false,
+        get: () => agentConfig.brainProvider,
+    })
     registerConfig("ai.brainBackend", {
-        desc: "Which LLM backend the built-in Assistant uses: '' (off), 'anthropic', or 'openai' (OpenAI-compatible, incl. Ollama). Set it in Settings → AI.",
+        desc: "Wire protocol derived from the provider: '' (off), 'anthropic' (Messages API), or 'openai' (OpenAI-compatible). Read-only — pick a provider instead.",
         type: "enum",
         enum: ["", "anthropic", "openai"],
         writable: false,

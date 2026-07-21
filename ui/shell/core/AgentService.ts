@@ -171,7 +171,7 @@ export const agentService = {
     get lastError(): string | null { return lastError },
 
     /** Whether a provider is configured (Settings → AI) — drives the empty state. */
-    configured(): boolean { return agentConfig.brainBackend !== "" },
+    configured(): boolean { return agentConfig.brainProvider !== "" },
 
     send(text: string) {
         const msg = text.trim()

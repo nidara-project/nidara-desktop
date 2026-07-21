@@ -664,9 +664,9 @@ of a focused window would wrongly count as "focused". Design the matching before
 Brain (PR 1: `bin/nidara-agent` + Settings → AI picker + keyring) and face (PR 2: `core/AgentService.ts`
 + island **Agent mode** `surfaces/island/AgentIsland.tsx` `ISLAND_AGENT`, `agent` activity priority 25,
 `Super+A → toggleAgent`, SCSS in `_bar.scss`, `island.agent.*` i18n) are both implemented. Residual v1
-debt: (a) the **model field is shared across backends** — switching Anthropic↔OpenAI keeps the same
-`brainModel`, so the default `claude-opus-4-8` is wrong for a fresh OpenAI/Ollama pick (user retypes it);
-consider per-backend model memory. (b) Conversation history is unbounded (daemon-side, capped only by
+debt: ~~(a) the model field is shared across backends~~ — **RESOLVED 2026-07-21** by the provider
+picker: `brainModels` in `ai.json` is per-provider model memory, restored on every switch.
+(b) Conversation history is unbounded (daemon-side, capped only by
 `MAX_STEPS`/turn; UI transcript grows too) — add a turn cap / context trim before long sessions.
 (c) `toolresult.ok` is `true` whenever the tool RAN (even on a shell refusal/validation error) — the
 truth is in the content the model reads, but the UI chip only tints danger when the daemon says
@@ -699,21 +699,56 @@ asked):
 - Privacy note for v1.1+: stored conversations are potentially sensitive plaintext on disk — ship an
   easy "clear history" and consider making persistence a toggle.
 
-**Provider picker UX — deferred to "another round" (user, 2026-07-20).** The Settings → AI backend
-dropdown currently shows `Anthropic` / `OpenAI-compatible` — the second is JARGON: a user with a Google
-or Mistral key sees no name they recognise and stalls ("which do I pick?"). Fix: pick by **provider
-NAME** (Anthropic · OpenAI · Google (Gemini) · Mistral · Groq · OpenRouter · Ollama (local) · Custom),
-mapping under the hood to the two wire backends (only Anthropic is native; the rest ride the
-OpenAI-compatible path). Selecting a name **auto-fills the endpoint** (hidden/read-only except for
-Custom) + a sensible default model; the daemon needs NO change (it already reads `brainEndpoint` from
-ai.json). **Keyring caveat — the real reason to do it BEFORE release:** PR 1 stores the key with the
-libsecret attribute `backend` (`anthropic`/`openai`), so two OpenAI-compatible providers (Google +
-Mistral) would COLLIDE on one key slot. The picker must switch the attribute to the **provider id**
-(`google`/`mistral`/…). Changing that pre-merge is free; after users store keys it's a migration. All in
-`Ai.tsx` + `AgentConfig` + the `gi://Secret` calls. Google endpoint (AI-Studio Gemini API, simple key):
-`https://generativelanguage.googleapis.com/v1beta/openai`; Vertex AI is OpenAI-shaped too but needs GCP
-OAuth (not a plain key) → not BYOK-simple. Optional later: a **native Gemini backend** (3rd backend) for
-better tool-call/usage handling — the compat path already covers Gemini for v1, so low priority.
+**Provider picker — ✅ DONE 2026-07-21 (was deferred; shipped before the 0.5.0 tag, which was the
+whole point).** Settings → AI now picks by **provider NAME** via `core/AgentProviders.ts`; the two wire
+protocols stay internal. The load-bearing part was the **keyring slot**: the key is now stored under the
+libsecret attribute `provider` (`google`/`mistral`/…) instead of `backend` (`anthropic`/`openai`) — with
+a protocol-keyed slot, Google and Mistral (both openai-compatible) would overwrite each other's key and
+the symptom is a 401 from a provider whose key the user just saved. Doing it pre-release was free; after
+users store keys it is a migration. Also closed #36(a) via `brainModels` per-provider model memory.
+
+**Two residual notes.** (a) `defaultModel` for the non-Anthropic providers is best-effort — only the
+Anthropic id is verified against a first-party source (the `claude-api` skill); model ids churn, which
+is exactly why the model field stays editable. Don't treat the table as authoritative. (b) A **native
+Gemini backend** (a 3rd protocol, better tool-call/usage handling) remains optional and low priority —
+the compat path already covers Gemini. Vertex AI is OpenAI-shaped too but needs GCP OAuth rather than a
+plain key, so it is not BYOK-simple and is deliberately absent from the registry.
+
+### 39. Built-in Assistant is NOT release-ready — polish backlog (2026-07-21)
+**User's call after the first real end-to-end run against a live provider: "estamos muy lejos de
+publicar esto… no sé si va a ser para la 5.0".** The skeleton works — it connects, streams, calls
+tools — but the PRODUCT feel is absent. Treat the Assistant as unfinished regardless of what the
+milestone says, and do not let a 0.5.0 tag imply otherwise.
+
+**⚠️ Release exposure — decide before ANY tag.** Brain and face are already merged to `main` (#48,
+#49). It is off by default (`brainProvider: ""` = no traffic, no key, empty state) and only reachable
+via `Super+A`, so shipping it dormant is defensible — but it IS reachable, and the empty state invites
+the user to configure it. Either accept that and say so in the release notes, or gate it behind a flag
+until the list below is closed. Do not discover this question at tag time.
+
+Ordered by what hurt most in the live run:
+
+1. **A turn can die in total silence.** Asking it to change the accent colour produced no response, no
+   error, nothing; the daemon was simply gone afterwards. Any abnormal end (daemon exit, empty
+   completion, tool loop giving up) MUST paint something in the island. Silence is the worst outcome
+   and currently the easiest one to hit.
+2. **No telemetry on the agent path.** Not one line in `nidara-ui.log` for spawn, turn start/end, or
+   tool calls — the daemon inherits the shell's stderr, so even its death left no trace, which is why
+   the failure above could not be reconstructed *after the fact*. Log daemon lifecycle + turn
+   boundaries before chasing any further agent bug; without it every future report is unreconstructible.
+3. **Tool calls against Google's OpenAI-compatible path — UNVERIFIED HYPOTHESIS.** The silent death
+   happened on a tool-call turn against Gemini. Plausible that its compat endpoint shapes streamed
+   tool calls differently from what `makeOpenaiHandler()` expects. **Not measured** — verify with the
+   raw stream before acting on it. (Related: Google's own error text now steers callers toward its
+   Interactions API, so the compat path may degrade over time → a native Gemini backend may stop
+   being optional.)
+4. **No sense of activity.** `thinking`/`acting` only swap a word in the header. Needs a real pulse
+   while streaming, the tool being run, and a visible end-of-turn.
+5. **Replies ignore the UI language.** Answered in English on a Spanish session; `LANG` is in the
+   generated system prompt but clearly does not carry enough weight.
+6. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
+   retired — picking it 404s. The catalog exposes no retired flag, so this cannot be filtered
+   reliably; the model field stays free text on purpose.
 
 ### 37. No `NidaraScroller` in the kit — every surface re-solves the scrollbar (2026-07-21)
 **User's call, deferred by them ("not now, but we have to"):** the scrollbar is rebuilt from scratch

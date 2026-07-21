@@ -84,15 +84,20 @@ function agsRequest(args) {
 // A Nidara session unlocks gnome-keyring at login (PAM). If the Secret Service
 // is unavailable (or no key stored), lookup returns null and the backend proceeds
 // keyless — fine for a local Ollama, surfaced as an auth error for Anthropic.
+// Keyed by PROVIDER id (anthropic/openai/google/…), not by wire protocol: several
+// providers share the openai-compatible protocol but each has its own key, so a
+// protocol-keyed slot would make them collide. The shell owns the provider table
+// (ui/shell/core/AgentProviders.ts) and writes the resolved backend/endpoint into
+// ai.json — this daemon only needs the id to find the right key.
 const KEY_SCHEMA = Secret.Schema.new(
     "org.nidara.Assistant",
     Secret.SchemaFlags.NONE,
-    { backend: Secret.SchemaAttributeType.STRING },
+    { provider: Secret.SchemaAttributeType.STRING },
 )
-function lookupKey(backend) {
-    if (!backend) return null
+function lookupKey(provider) {
+    if (!provider) return null
     try {
-        return Secret.password_lookup_sync(KEY_SCHEMA, { backend }, null)
+        return Secret.password_lookup_sync(KEY_SCHEMA, { provider }, null)
     } catch {
         return null
     }
@@ -439,6 +444,11 @@ async function streamCurl(req, onLine) {
     return { ok: proc.get_successful(), raw }
 }
 
+// Provider errors are the ONLY diagnosis the user gets when a turn fails, so they
+// must arrive whole. The old 300-char cap chopped Google's "this model is retired,
+// migrate to <url>" mid-URL — the actionable half (user-caught 2026-07-21).
+const ERR_MAX = 2000
+
 function bestError(raw) {
     const trimmed = (raw || "").trim()
     try {
@@ -446,7 +456,18 @@ function bestError(raw) {
         const m = j?.error?.message || (typeof j?.error === "string" ? j.error : null)
         if (m) return m
     } catch {}
-    return trimmed ? trimmed.slice(0, 300) : "Request failed — check the provider, endpoint, and API key."
+    // Salvage path: a body that doesn't parse (truncated stream, two objects
+    // concatenated, a proxy's HTML wrapper) can still carry the message — pull it
+    // out rather than dumping raw braces at the user.
+    // Closed string first; then the same thing UNTERMINATED, because a stream that
+    // got cut is exactly when the user most needs to read what the provider said.
+    const m = /"message"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(trimmed)
+        || /"message"\s*:\s*"((?:[^"\\]|\\.)*)$/.exec(trimmed)
+    if (m) {
+        try { return JSON.parse(`"${m[1]}"`) } catch { return m[1] }
+    }
+    return trimmed ? truncate(trimmed, ERR_MAX)
+        : "Request failed — check the provider, endpoint, and API key."
 }
 
 const truncate = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s || "")
@@ -471,7 +492,7 @@ async function runTurn(userText) {
         let step = 0
         while (step++ < MAX_STEPS) {
             if (cancelled) return
-            const key = lookupKey(backend)
+            const key = lookupKey(cfg.brainProvider || "")
             const req = backend === "anthropic" ? buildAnthropicReq(cfg, key, system) : buildOpenaiReq(cfg, key, system)
             const handler = backend === "anthropic" ? makeAnthropicHandler() : makeOpenaiHandler()
 

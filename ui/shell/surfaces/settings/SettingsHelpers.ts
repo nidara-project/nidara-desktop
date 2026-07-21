@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import { makeHSlider } from "../../common/Slider"
-import { NidaraRow, NidaraList } from "../../../lib/nidara-kit"
+import { NidaraRow, NidaraStackedRow, NidaraList } from "../../../lib/nidara-kit"
 
 /**
  * Shared UI helpers for Settings pages.
@@ -56,6 +56,15 @@ export const createRow = (label: string, subtitle: string, widget: Gtk.Widget, t
         _searchIndex.push({ pageId: _pageCtx.id, pageLabel: _pageCtx.label, label, subtitle })
     }
     return NidaraRow(label, subtitle, widget, [], titleIcon, leadingIcon)
+}
+
+/** Same as createRow but with the control on its own full-width line underneath —
+ *  for entries + buttons that the trailing slot would squeeze. */
+export const createStackedRow = (label: string, subtitle: string, widget: Gtk.Widget) => {
+    if (_pageCtx.id) {
+        _searchIndex.push({ pageId: _pageCtx.id, pageLabel: _pageCtx.label, label, subtitle })
+    }
+    return NidaraStackedRow(label, subtitle, widget)
 }
 
 // ── Toggle Row ────────────────────────────────────────────────────────────────
