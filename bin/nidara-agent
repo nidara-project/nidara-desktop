@@ -432,9 +432,15 @@ function makeAnthropicHandler() {
         },
         result() {
             const tus = toolUses.map(t => {
+                const rawArgs = t.jsonParts.join("")
                 let input = {}
-                try { input = t.jsonParts.length ? JSON.parse(t.jsonParts.join("")) : {} } catch {}
-                return { id: t.id, name: t.name, input }
+                // Same rule as the OpenAI handler: never swallow a parse failure,
+                // and carry rawArgs so the repeat-failure guard can tell two
+                // different bad calls to the same tool apart.
+                try { input = rawArgs ? JSON.parse(rawArgs) : {} } catch (e) {
+                    log(`tool args did not parse for ${t.name || "?"}: ${e} — raw: ${truncate(rawArgs, 300)}`)
+                }
+                return { id: t.id, name: t.name, input, rawArgs }
             })
             return { text, toolUses: tus, stopReason, finishReason: stopReason, usage, errorMsg }
         },
@@ -443,7 +449,11 @@ function makeAnthropicHandler() {
 
 function makeOpenaiHandler() {
     let text = ""
-    const byIdx = {}             // index -> {id,name,argParts}
+    // Insertion-ordered so the calls stay in the order the model asked for them.
+    // Keyed by stream index when there is one, by call id otherwise — see the
+    // accumulation loop.
+    const slots = new Map()
+    let lastKey = null
     let finishReason = null
     let usage = { input: 0, output: 0, cached: 0 }
     let errorMsg = null
@@ -470,8 +480,22 @@ function makeOpenaiHandler() {
             const delta = choice.delta || {}
             if (delta.content) { text += delta.content; emitDelta(delta.content) }
             for (const tc of delta.tool_calls || []) {
-                const idx = tc.index ?? 0
-                const slot = byIdx[idx] || (byIdx[idx] = { id: tc.id, name: "", argParts: [], extra: null })
+                // WHICH call does this chunk belong to? OpenAI streams an `index`
+                // on every chunk (first one also carries the id, continuations
+                // don't). Google's compat layer omits `index` entirely and
+                // identifies calls by id alone — so `tc.index ?? 0` filed EVERY
+                // call under 0: two calls became one slot with their arguments
+                // concatenated into invalid JSON ({"action":"listWindows"}{}) and
+                // the name overwritten by the last. Measured 2026-07-21; the
+                // symptom was a "run_action ?" chip and a silently dropped call.
+                // Order of preference: explicit index → call id → continue the
+                // slot we were filling (a pure continuation chunk has neither).
+                const key = tc.index != null ? `i${tc.index}`
+                    : tc.id ? `d${tc.id}`
+                    : lastKey ?? "i0"
+                lastKey = key
+                let slot = slots.get(key)
+                if (!slot) slots.set(key, slot = { id: tc.id, name: "", argParts: [], extra: null })
                 if (tc.id) slot.id = tc.id
                 if (tc.function?.name) slot.name = tc.function.name
                 // Spec says `arguments` is a STRING of JSON. Read permissively:
@@ -491,8 +515,7 @@ function makeOpenaiHandler() {
             if (choice.finish_reason) finishReason = choice.finish_reason
         },
         result() {
-            const tus = Object.keys(byIdx).sort((a, b) => +a - +b).map(k => {
-                const s = byIdx[k]
+            const tus = [...slots.values()].map((s, k) => {
                 const rawArgs = s.argParts.join("")
                 let input = {}
                 // A swallowed parse failure here is indistinguishable from "the

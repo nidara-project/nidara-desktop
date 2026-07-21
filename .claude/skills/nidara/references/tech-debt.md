@@ -765,15 +765,15 @@ Ordered by what hurt most in the live run:
    language" AS the locale — a more literal model would have obeyed it and answered in English.
    Prompt fixed to state the rule properly. **Lesson for anything locale-driven in the shell: a
    configured locale is evidence about the user, not an instruction about the current interaction.**
-6. **Google reports NO cached tokens — the fixed prompt looks fully billed every step.** First
-   reading of the new `cached=` instrument (2026-07-21, `gemini-3-flash-preview`): the field never
-   appeared across an 8-step turn while input held at ~2.9–3.5k per step. Either its compat layer
-   doesn't do implicit caching or it doesn't report it there — **not distinguishable from outside**,
-   so don't conclude either. What IS established: the trim worked in the real world (step 1 of a
-   fresh session went 4403 → 2885 input tokens, −34%), and an 8-step turn cost ~25k input tokens.
-   Anthropic's explicit `cache_control` is in but UNVERIFIED (no key to test with). Next step if this
-   matters: a session against a provider that does report `cached_tokens` (OpenAI) to confirm the
-   instrument works, before drawing conclusions about Google.
+6. ~~**Google reports NO cached tokens.**~~ **WRONG, and corrected within the hour (2026-07-21) — it
+   caches fine.** A later turn read `tok=4717/32 cached=4022`: **85% of the input served from cache**.
+   The first reading missed it because implicit caching only pays off from the SECOND request of a
+   session, and that turn's steps each carried a growing prefix. Lesson worth keeping: `cached=0` on
+   an early request means "not yet", not "never" — judge caching across a session, not a step.
+   So **the fixed system prompt is largely NOT the problem it looked like**, and further prompt
+   shrinking has poor returns. What is established: the trim did work (step 1 of a fresh session
+   4403 → 2885 input tokens, −34%), and the real cost driver is STEP COUNT — an 8-step turn cost
+   ~25k input tokens. Anthropic's explicit `cache_control` is in but UNVERIFIED (no key to test).
 7. **Tool results go into history at FULL length, forever.** Found while cutting the system prompt
    (2026-07-21). The island truncates a tool result to 200 chars for display, but `history` keeps the
    whole thing, and every later request resends it: one `get_config` with no key adds ~4.5 KB of

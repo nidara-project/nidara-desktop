@@ -314,6 +314,14 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   is malformed. Also read `arguments` permissively (string per spec, object from some compat
   endpoints) and **log a JSON parse failure**: swallowing it makes a malformed call look identical to
   "the model sent nothing", which is how this was misdiagnosed at first.
+- **Key streamed tool calls by index OR id — never `index ?? 0`.** OpenAI puts an `index` on every
+  chunk; **Google's compat layer omits it entirely** and identifies calls by `id`. Defaulting to 0
+  filed every call in one slot: two calls merged into one, arguments concatenated into invalid JSON
+  (`{"action":"listWindows"}{}`), name overwritten by the last, and the UI showed a `run_action ?`
+  chip for a call the model never made that way. This was the real cause of what looked like a dumb
+  model. Resolution order: explicit `index` → call `id` → continue the slot being filled (a pure
+  continuation chunk carries neither). Keep the slots insertion-ordered so multiple calls execute in
+  the order asked for.
 - **Tools offered to the model**: `run_action(action, args?)`, `set_config(key, value)`,
   `get_config(key?)`, `dump_state()` — all executed via `ags request`, gates enforced by the shell
   (a refusal comes back as the tool-result STRING; the daemon never re-checks gates). No
@@ -331,9 +339,12 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   - **Prompt caching.** The prompt is byte-identical across a session, so it is cacheable. The
     OpenAI-compatible providers do this implicitly (no flag); **Anthropic does not and must be asked**
     — hence `cache_control: {type:"ephemeral"}` on the system block (write 1.25×, reads 0.1×).
-  **Before optimising this further, read `cached=` in the step log** — it reports what the provider
-  actually served from cache. Shrinking a prompt that is already being cache-served is wasted work,
-  and the reverse (a session where `cached=` stays 0) is the thing worth chasing. `ai.brainProvider`/`ai.brainBackend`/`ai.brainModel` are visible read-only via `describeConfig`
+  **Before optimising this further, read `cached=` in the step log** — and read it across a SESSION,
+  not one request: implicit caching only pays from the second request onwards, so `cached=0` early
+  means "not yet", not "never". Measured against Google 2026-07-21: `tok=4717 cached=4022` — 85%
+  served from cache, i.e. the fixed prompt is largely a non-problem and further shrinking has poor
+  returns. **The cost driver is STEP COUNT, not prompt size** (an 8-step turn cost ~25k input tokens);
+  optimise the loop, not the prose. `ai.brainProvider`/`ai.brainBackend`/`ai.brainModel` are visible read-only via `describeConfig`
   (like the other `ai.*` keys); the key is not exposed.
 - **Test headless with `scripts/dev/fake-brain.py`** (a scripted OpenAI-compatible SSE mock) — see
   `dev-workflow.md`. GOTCHA proven 2026-07-20: the write gate lives in the SHELL (it reads the
