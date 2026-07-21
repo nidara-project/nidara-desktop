@@ -754,8 +754,15 @@ Ordered by what hurt most in the live run:
    compat endpoint is a moving target**, and its own error text steers callers toward the Interactions
    API — a native Gemini backend is drifting from "optional" to "eventually necessary". Not building
    it yet, but that is the direction; log `sig=`/`finish=` are the early-warning instruments.
-4. **No sense of activity.** `thinking`/`acting` only swap a word in the header. Needs a real pulse
-   while streaming, the tool being run, and a visible end-of-turn.
+4. ~~**No sense of activity.**~~ **ADDRESSED 2026-07-21** (branch `agent-feel`). The root problem was
+   not the missing animation but that the pending assistant bubble was HIDDEN (empty rows are
+   hidden), so the transcript showed literally nothing during the wait — a blank panel where the
+   user is actually looking. Now: the pending bubble holds a three-dot pulse until the first token
+   lands (`common/PulseDots.ts`), the capsule glyph breathes while a turn is in flight (the only
+   sign of life when work runs with the island closed), and a tool chip's dot breathes while that
+   tool is RUNNING, settling when its result arrives. Shared refcounted driver — see
+   `design-system.md`. **Still open under this heading:** no explicit end-of-turn beat beyond the
+   dots vanishing and the header switching to the token count; judge whether that is enough in use.
 5. ~~**Replies ignore the UI language.**~~ **The item was WRONG — reframed by the user 2026-07-21.**
    The desired behaviour is the opposite of what it asked for: **the assistant replies in the language
    of the MESSAGE, and follows the user if they switch. The desktop locale is a hint for the ambiguous

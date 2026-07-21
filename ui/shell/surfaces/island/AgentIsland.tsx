@@ -3,6 +3,7 @@ import GLib from "gi://GLib"
 import SquircleContainer from "../../common/SquircleContainer"
 import { PANEL_W } from "../../common/widget-kit"
 import { NidaraButton } from "../../../lib/nidara-kit"
+import { makePulseDots, pulseOpacity } from "../../common/PulseDots"
 import Icons from "../../core/Icons"
 import agentService, { Turn, ToolCall } from "../../core/AgentService"
 import shellActions from "../../core/ShellActions"
@@ -69,9 +70,18 @@ export function AgentCompact(opts: { ghost?: boolean } = {}): Gtk.Widget {
         : new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
     box.append(glyph)
     box.append(label)
+    // The glyph breathes while a turn is in flight — this pill IS the only sign
+    // of life when the work is happening with the island closed, and a static
+    // icon next to a static word reads as "stuck", not "busy". Ghost twins take
+    // no subscription: the morph's own redraw paints them from the shared phase.
+    const breath = pulseOpacity(glyph, { ghost: opts.ghost })
     // Both real and ghost track the status word so a dissolving twin matches the
     // capsule mid-morph (a label update is trivial — no timer, unlike the EQ).
-    agentService.subscribe(() => { label.label = statusWord() })
+    agentService.subscribe(() => {
+        label.label = statusWord()
+        breath.setActive(agentService.busy)
+    })
+    breath.setActive(agentService.busy)
     return box
 }
 
@@ -83,10 +93,15 @@ function makeToolChip(): { row: Gtk.Widget; update: (tc: ToolCall) => void } {
     const row = new Gtk.Box({ css_classes: ["agent-tool-chip"], spacing: 6 })
     row.append(dot)
     row.append(label)
+    // A chip appears when the tool STARTS and only later learns its outcome, so
+    // between those two beats the dot breathes: that is the difference between
+    // "running this now" and "ran this", which the chip could not express before.
+    const breath = pulseOpacity(dot)
     return {
         row,
         update: (tc) => {
             label.label = tc.summary
+            breath.setActive(tc.ok === undefined)
             // Semantic, never accent: a shell rejection tints the dot danger.
             if (tc.ok === false) row.add_css_class("agent-tool-fail")
             else row.remove_css_class("agent-tool-fail")
@@ -99,7 +114,12 @@ interface RenderedTurn {
     // the streaming (last) one: send() pushes the user turn and an empty
     // assistant turn together, so the user's turn is never "last" and would
     // otherwise render as an empty bubble.
-    update: (turn: Turn) => void
+    //
+    // `pending` = this is the assistant turn currently being worked on and it
+    // has nothing to show yet. That used to render as NOTHING (empty rows are
+    // hidden), so the transcript sat blank for the whole wait — the one place
+    // the user is looking. It now holds the working indicator.
+    update: (turn: Turn, pending?: boolean) => void
 }
 
 function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
@@ -130,7 +150,10 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
         spacing: 6,
         css_classes: ["agent-bubble", isUser ? "agent-bubble-user" : "agent-bubble-assistant"],
     })
+    // Working indicator — only ever mounted in an assistant bubble.
+    const pulse = isUser ? null : makePulseDots()
     bubble.append(textLabel)
+    if (pulse) bubble.append(pulse.widget)
     bubble.append(toolsBox)
     bubble.append(errorLabel)
     // Assistant left, user right — the bubble hugs its content; the row aligns it.
@@ -138,9 +161,18 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
     row.append(bubble)
 
     const chips: Array<ReturnType<typeof makeToolChip>> = []
-    const update = (tn: Turn) => {
+    const update = (tn: Turn, pending = false) => {
         textLabel.label = tn.text
         textLabel.visible = !!tn.text
+        // The dots hold the empty bubble open until the first token lands, then
+        // get out of the way — they mark "nothing yet", not "still working"
+        // (streaming text is its own proof of life). While tools run the chips
+        // carry the beat instead.
+        const waiting = pending && !tn.text && !tn.tools.length && !tn.error
+        if (pulse) {
+            pulse.widget.visible = waiting
+            pulse.setActive(waiting)
+        }
         for (let j = chips.length; j < tn.tools.length; j++) {
             const chip = makeToolChip()
             toolsBox.append(chip.row)
@@ -150,10 +182,11 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
         toolsBox.visible = tn.tools.length > 0
         errorText.label = tn.error ?? ""
         errorLabel.visible = !!tn.error
-        // An assistant turn is pushed EMPTY the moment you send; without this it
-        // paints as a bare padded pill until the first delta lands. The header's
-        // "Thinking…" carries that beat instead.
-        row.visible = !!tn.text || tn.tools.length > 0 || !!tn.error
+        // An assistant turn is pushed EMPTY the moment you send. It stays hidden
+        // when there is genuinely nothing to say (a finished turn with no
+        // content is a bug caught elsewhere), but while it is PENDING the row
+        // shows so the dots have somewhere to live.
+        row.visible = !!tn.text || tn.tools.length > 0 || !!tn.error || waiting
     }
     update(turn)
     return { row, rendered: { update } }
@@ -274,8 +307,10 @@ export default function AgentIsland() {
             if (last) listBox.remove(last)
         }
         // Only the last turn mutates after creation (deltas + tool events stream
-        // into it); every earlier turn already painted in makeBubble.
-        if (tr.length) rendered[tr.length - 1].update(tr[tr.length - 1])
+        // into it); every earlier turn already painted in makeBubble. It is also
+        // the only turn that can be pending — the working indicator belongs to
+        // the turn in flight, never to history.
+        if (tr.length) rendered[tr.length - 1].update(tr[tr.length - 1], svc.busy)
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => { scrollToBottom(); return GLib.SOURCE_REMOVE })
     }
     svc.subscribe(reconcile)
