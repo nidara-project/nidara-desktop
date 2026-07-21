@@ -135,7 +135,7 @@ const TOOL_DEFS = [
     {
         name: "run_action",
         description:
-            "Run a Nidara shell IPC action by name (e.g. toggleControlCenter, settingsPage bluetooth, focusWorkspace 2, launchApp org.gnome.Nautilus). Use ONLY names from the AVAILABLE IPC ACTIONS list. This is how you operate the desktop.",
+            "Run a Nidara shell action by name. This is how you operate the desktop. Use ONLY names returned by list_actions — call that first if you have not in this conversation.",
         props: {
             action: { type: "string", description: "Action name from the actions list" },
             args: { type: "array", items: { type: "string" }, description: "Positional arguments, if the action takes any" },
@@ -145,7 +145,7 @@ const TOOL_DEFS = [
     {
         name: "set_config",
         description:
-            "Change a shell setting through the validated door (persists and updates the UI like Settings would). Keys and valid values are in the SETTINGS SCHEMA. Gated by Settings → AI; if it refuses, tell the user how to enable it — don't retry.",
+            "Change a setting through the validated door (persists and updates the UI like Settings would). Use ONLY keys returned by describe_settings — call that first if you have not in this conversation. Gated by Settings → AI; if it refuses, tell the user how to enable it — don't retry.",
         props: {
             key: { type: "string", description: "Setting key from the schema" },
             value: { type: "string", description: "New value, as a string (e.g. \"blue\", \"48\", \"true\")" },
@@ -162,6 +162,25 @@ const TOOL_DEFS = [
         name: "dump_state",
         description:
             "Re-read live desktop state (open overlays, dark mode, monitors, effective Hyprland config). Use it to VERIFY a change actually took effect before confirming to the user.",
+        props: {},
+        required: [],
+    },
+    // ── Discovery ────────────────────────────────────────────────────────────
+    // The catalogues used to be pasted into the system prompt, which meant every
+    // "hello" paid ~2.2k tokens for knowledge it never used. They are tools now:
+    // the model asks when a request actually touches the desktop, and the answer
+    // then lives in history for the rest of the conversation.
+    {
+        name: "list_actions",
+        description:
+            "List every desktop action you can run, with a description of each. You do NOT know these in advance — call this ONCE before your first run_action in a conversation. Required: never guess an action name.",
+        props: {},
+        required: [],
+    },
+    {
+        name: "describe_settings",
+        description:
+            "List every setting you can read or change: key, type, valid values, current value, and whether it is writable. You do NOT know these in advance — call this ONCE before your first set_config or targeted get_config in a conversation. Required: never guess a setting key.",
         props: {},
         required: [],
     },
@@ -215,6 +234,12 @@ function execTool(tu) {
             case "dump_state":
                 out = agsRequest(["dumpState"])
                 break
+            case "list_actions":
+                out = actionsForPrompt(agsRequest(["listActions"]))
+                break
+            case "describe_settings":
+                out = agsRequest(["describeConfig"])
+                break
             default:
                 return { ok: false, content: `unknown tool: ${tu.name}` }
         }
@@ -265,20 +290,37 @@ function actionsForPrompt(raw) {
     }
 }
 
+// PROGRESSIVE DISCLOSURE (user's call 2026-07-21: "load what the agent needs
+// WHEN it needs it, not always by default").
+//
+// This prompt used to paste in the whole IPC action list, the whole settings
+// schema and a state snapshot: 2,269 of the 3,157 tokens a bare "hello" cost —
+// 72% of every request, for knowledge most turns never touch. They are tools
+// now (list_actions / describe_settings / dump_state), so the catalogues enter
+// the conversation only once a request actually needs them, and then stay in
+// history for the rest of it.
+//
+// Counter-intuitively this is cheaper for REAL desktop requests too, not just
+// small talk: the extra discovery round-trip is a SMALL request, and the big
+// payload is carried by fewer messages overall than when it prefixes every one.
+//
+// The cost of this design is compliance: a model that forgets to ask will
+// invent action names. Three defences, all deliberate — the rules below are
+// imperative, the tool descriptions repeat the requirement, and run_action's
+// rejection hands back what was actually sent (see execTool).
 function buildSystemPrompt() {
     if (systemCache) return systemCache
-    let actions = "", config = "", state = ""
-    try { actions = actionsForPrompt(agsRequest(["listActions"])) } catch {}
-    try { config = compactJson(agsRequest(["describeConfig"])) } catch {}
-    try { state = compactJson(agsRequest(["dumpState"])) } catch {}
     const lang = GLib.getenv("LANG") || "en"
     systemCache = [
         "You are Assistant, the built-in helper for the Nidara desktop (a Wayland desktop environment for Arch Linux, compositor Hyprland).",
         "You help the user operate their desktop with natural language by calling tools.",
+        "You can: open and close shell surfaces (control center, notifications, search, app grid, settings…), manage windows and workspaces, launch apps, change desktop settings, and read live desktop state.",
         "Rules:",
         "- Be concise: you answer in a small chat panel.",
         "- The user is in charge. Do only what they ask; ask first before anything destructive or irreversible.",
-        "- Never invent action names or config keys. Call run_action only with names from the actions list below, and set_config/get_config only with keys from the settings schema below.",
+        "- If the message does NOT involve the desktop (a greeting, a general question, chit-chat), just answer. Do not call any tool.",
+        "- When it DOES involve the desktop, you must look up what exists before acting: call list_actions before your first run_action, and describe_settings before your first set_config or targeted get_config. Once per conversation is enough — the answers stay in the conversation.",
+        "- NEVER invent or guess an action name or a setting key. If you have not looked it up in this conversation, look it up first.",
         "- Prefer set_config for settings and run_action for everything else. After acting, verify with dump_state/get_config when useful, then briefly confirm what changed.",
         // The language of the MESSAGE wins, always. The desktop locale is a hint
         // for the ambiguous case, never the rule: people routinely run an English
@@ -289,15 +331,6 @@ function buildSystemPrompt() {
         // message.)
         "- Reply in the SAME language the user wrote their message in, and follow them if they switch.",
         `- Only when that is genuinely unclear (a first message too short to tell), fall back to the desktop locale (LANG=${lang}).`,
-        "",
-        "AVAILABLE IPC ACTIONS (JSON):",
-        actions || "(unavailable — the shell may be starting)",
-        "",
-        "SETTINGS SCHEMA (JSON):",
-        config || "(unavailable)",
-        "",
-        "CURRENT DESKTOP STATE (JSON snapshot at session start):",
-        state || "(unavailable)",
     ].join("\n")
     return systemCache
 }
@@ -363,6 +396,7 @@ function buildAnthropicReq(cfg, key, system) {
             ["anthropic-version", "2023-06-01"],
         ],
         body: JSON.stringify(body),
+        toolBytes: JSON.stringify(ANTHROPIC_TOOLS).length,
     }
 }
 
@@ -378,7 +412,7 @@ function buildOpenaiReq(cfg, key, system) {
     }
     const headers = [["content-type", "application/json"]]
     if (key) headers.push(["authorization", `Bearer ${key}`])
-    return { url: `${endpoint}/chat/completions`, headers, body: JSON.stringify(body) }
+    return { url: `${endpoint}/chat/completions`, headers, body: JSON.stringify(body), toolBytes: JSON.stringify(OPENAI_TOOLS).length }
 }
 
 // ── SSE stream handlers (accumulate text + tool calls, emit deltas live) ─────
@@ -681,11 +715,15 @@ async function runTurn(userText) {
             const key = lookupKey(cfg.brainProvider || "")
             const req = backend === "anthropic" ? buildAnthropicReq(cfg, key, system) : buildOpenaiReq(cfg, key, system)
             const handler = backend === "anthropic" ? makeAnthropicHandler() : makeOpenaiHandler()
-            // sys/hist split, because "the request is big" is not actionable:
-            // the system prompt is FIXED (and cacheable), the history GROWS. Which
-            // one dominates decides whether to shrink the prompt or the loop.
+            // Three-way split, because "the request is big" is not actionable.
+            // sys and tools are FIXED per session (and cacheable); hist is what
+            // GROWS. Which one dominates decides whether to shrink the prompt or
+            // the loop. (Counting tools separately matters since the catalogues
+            // became tools: lumping them into "hist" made a bare greeting look
+            // like it carried 2.5 KB of conversation.)
             const sysBytes = system.length
-            log(`step ${step}: POST ${hostOf(req.url)} body=${req.body.length}b (sys=${sysBytes}b hist=${req.body.length - sysBytes}b) key=${key ? "yes" : "none"}`)
+            const toolBytes = req.toolBytes ?? 0
+            log(`step ${step}: POST ${hostOf(req.url)} body=${req.body.length}b (sys=${sysBytes}b tools=${toolBytes}b hist=${req.body.length - sysBytes - toolBytes}b) key=${key ? "yes" : "none"}`)
 
             const { ok, raw, err } = await streamCurl(req, (l) => handler.onLine(l))
             if (cancelled) { log(`step ${step}: cancelled by user`); return }

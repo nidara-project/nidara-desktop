@@ -790,16 +790,15 @@ Ordered by what hurt most in the live run:
    **General rule this cost three wrong conclusions to learn: judge a provider behaviour over a
    RUN of requests, never one reading.** Established regardless: the real cost driver is STEP COUNT
    (an 8-step turn cost ~25k input tokens).
-7. **Tool results go into history at full length, forever — now COMPACTED, not capped.** The island
+7. **Tool results go into history at full length, forever — COMPACTED, not capped.** The island
    truncates a result to 200 chars for display, but `history` keeps the whole thing and every later
-   request resends it. `compactJson()` is now applied to tool output too (−25% to −34%: listWindows
-   −32%, listApps −25%), which is lossless and compounds because the result is re-sent on every
-   later step. **What remains is genuinely lossy and is deliberately NOT done**: capping a large
-   result, or dropping old turns from history. Both cost capability (a truncated window list, a
-   forgotten earlier instruction) and the cache already absorbs much of the repeated prefix. The
-   lossless well is close to dry here — the honest next lever is fewer STEPS, not smaller payloads.
-   `step N: POST host body=Xb (sys=Yb hist=Zb)` in the log tells you which half is actually growing
-   before anyone optimises on instinct.
+   request resends it. `compactJson()` applies to tool output too (listWindows −32%, listApps −25%),
+   which is lossless and compounds. Since the catalogues became tools (progressive disclosure, see
+   `state-and-ipc.md`), **the catalogue itself is now a tool result living in history** — so this is
+   the growth path that matters most. What remains is genuinely lossy and deliberately NOT done:
+   capping a large result, or dropping old turns. Both cost capability. `step N: POST host body=Xb
+   (sys=Yb tools=Zb hist=Wb)` tells you which part is actually growing before anyone optimises on
+   instinct.
 8. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
    retired — picking it 404s. The catalog exposes no retired flag, so this cannot be filtered
    reliably; the model field stays free text on purpose.
