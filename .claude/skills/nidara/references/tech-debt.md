@@ -799,7 +799,16 @@ Ordered by what hurt most in the live run:
    capping a large result, or dropping old turns. Both cost capability. `step N: POST host body=Xb
    (sys=Yb tools=Zb hist=Wb)` tells you which part is actually growing before anyone optimises on
    instinct.
-8. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
+8. **The island's token counter is CUMULATIVE and doesn't say so (2026-07-21).** It shows the whole
+   conversation's usage; the user read "2k tokens" as the cost of the turn they had just sent (that
+   turn was 1,078). Not wrong data, ambiguous framing — a number in a chat header doesn't announce
+   its own scope. **Deferred by the user ("lo dejamos así de momento"), with their idea recorded:
+   put the PER-TURN detail in a tooltip** and leave the header showing the conversation total, which
+   is what actually reaches the bill. If picked up: use the house tooltip (`common/Tooltip.ts`) —
+   there are no native GTK tooltips in this shell — and the per-turn numbers already exist in the
+   daemon's `turn end` log line, they simply aren't carried to the UI (only the running totals are,
+   via `done`). Cheapest shape: add the turn's own usage to the `done` payload alongside the totals.
+9. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
    retired — picking it 404s. The catalog exposes no retired flag, so this cannot be filtered
    reliably; the model field stays free text on purpose.
 
