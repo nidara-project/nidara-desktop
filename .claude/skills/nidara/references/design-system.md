@@ -41,6 +41,40 @@ nidara-reset; background: transparent; } }` and a transparent `ListBox`. Also se
 rows' trailing controls (buttons). The shell scrollbar is already themed (`_reset.scss`, scoped to
 `.nidara-settings-window` etc.) as a thin pill.
 
+## Any ScrolledWindow: `overlay_scrolling: false` unless a lane is reserved
+
+Generalises the note above — this one keeps recurring (Settings lists, then the Assistant
+transcript, 2026-07-21). GTK4 defaults to **overlay scrolling**: the bar is painted ON TOP of the
+content, so it lands over whatever hugs the trailing edge — a row's buttons, or right-aligned chat
+bubbles. Two sanctioned fixes, in order of preference:
+
+1. **`overlay_scrolling: false`** — GTK allocates the scrollbar its own gutter. Cheapest (one
+   property), but the gutter appears WITH the bar, so the content **resizes** the moment the view
+   starts overflowing, and GTK's gutter sits visibly inset from the edge. Fine for a settings list
+   whose rows are already full-width; **not** fine for a surface the user watches while it grows.
+   Precedent: `Autostart.tsx`, `AppIcons.tsx`.
+2. **Reserve a lane** (preferred on any live/animated surface). Keep overlay scrolling and pad the
+   scrolling content by the lane width — always, overflowing or not — so nothing ever shifts; then
+   pin the bar flush to the lane with a `trough` reset (`margin/padding: 0`) + a 1px slider side
+   margin, so it grows toward the wall instead of back over the content. Recipe:
+   `.nc-content-box` + `.nc-transparent-scroll` (`_control-center.scss`, fixed `GRID_WIDTH` cards)
+   and `.agent-transcript` + `.agent-scroller` (`_bar.scss`, 8px lane, 4px slider). Caveat both
+   inherit: the slider still fattens on hover — Adwaita's `.hovering` rule beats explicit state
+   selectors; stopping it needs a structural change, not more specificity.
+
+The user's ask that settled this (2026-07-21, Assistant transcript): *thin, as far right as
+possible, and it must not affect the chat's content or size* — that is exactly case 2.
+
+**Specificity trap, cost us a full round:** the shell scrollbar in `_reset.scss` is scoped by **ID**
+(`#nidara-bar scrollbar slider` = (1,0,2)). A per-surface override written as a bare class
+(`.agent-scroller scrollbar slider` = (0,1,2)) **loses silently** — you then debug geometry from CSS
+that never applied. Keep the override inside its `window#name` scope (commandment 2) and it inherits
+the ID, landing at (1,1,2). Also: the visible gap beside an overlay bar is Adwaita's **`trough`
+margins**, not the slider width — reset the trough. Component to end this: tech-debt #37.
+
+Never "fix" it by adding blanket right padding to a surface — that pays 8px of dead air on every
+surface, overflowing or not.
+
 ## Search field — `.settings-search` box, never `Gtk.SearchEntry`
 
 A search input on a shell/Settings surface is a **`Gtk.Box.settings-search`** holding an

@@ -73,9 +73,11 @@ function makeToolChip(): { row: Gtk.Widget; update: (tc: ToolCall) => void } {
 }
 
 interface RenderedTurn {
-    textLabel: Gtk.Label
-    toolsBox: Gtk.Box
-    chips: Array<ReturnType<typeof makeToolChip>>
+    // One updater per turn. A turn must paint AT CREATION, not only while it is
+    // the streaming (last) one: send() pushes the user turn and an empty
+    // assistant turn together, so the user's turn is never "last" and would
+    // otherwise render as an empty bubble.
+    update: (turn: Turn) => void
 }
 
 function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
@@ -98,10 +100,35 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
     // Assistant left, user right — the bubble hugs its content; the row aligns it.
     const row = new Gtk.Box({ halign: isUser ? Gtk.Align.END : Gtk.Align.START })
     row.append(bubble)
-    return { row, rendered: { textLabel, toolsBox, chips: [] } }
+
+    const chips: Array<ReturnType<typeof makeToolChip>> = []
+    const update = (tn: Turn) => {
+        textLabel.label = tn.text
+        textLabel.visible = !!tn.text
+        for (let j = chips.length; j < tn.tools.length; j++) {
+            const chip = makeToolChip()
+            toolsBox.append(chip.row)
+            chips.push(chip)
+        }
+        tn.tools.forEach((tc, j) => chips[j]?.update(tc))
+        toolsBox.visible = tn.tools.length > 0
+        // An assistant turn is pushed EMPTY the moment you send; without this it
+        // paints as a bare padded pill until the first delta lands. The header's
+        // "Thinking…" carries that beat instead.
+        row.visible = !!tn.text || tn.tools.length > 0
+    }
+    update(turn)
+    return { row, rendered: { update } }
 }
 
 // ── Expanded surface ─────────────────────────────────────────────────────────
+
+// The scrollbar's lane. It is the panel's own right padding, NOT a slice taken
+// out of the text column: the transcript alone spans into it (every other row
+// keeps margin_end: LANE), so the bar rides flush to the glass edge, ~11px clear
+// of the bubbles, and its hover growth eats padding instead of text. The panel's
+// outer size is unchanged — inner is LANE wider and its right margin is 0.
+const LANE = 16
 
 export default function AgentIsland() {
     const svc = agentService
@@ -112,7 +139,7 @@ export default function AgentIsland() {
     const resetBtn = new Gtk.Button({ css_classes: ["agent-reset", "nd-icon-button"], valign: Gtk.Align.CENTER, tooltip_text: t("island.agent.reset") })
     resetBtn.set_child(new Gtk.Image({ gicon: Icons.rotateCcw, pixel_size: 16, css_classes: ["nd-icon"] }))
     resetBtn.connect("clicked", () => svc.reset())
-    const header = new Gtk.Box({ css_classes: ["agent-header"], spacing: 8 })
+    const header = new Gtk.Box({ css_classes: ["agent-header"], spacing: 8, margin_end: LANE })
     header.append(title)
     header.append(new Gtk.Box({ hexpand: true }))
     header.append(statusLabel)
@@ -125,6 +152,10 @@ export default function AgentIsland() {
         max_content_height: 300,
         hscrollbar_policy: Gtk.PolicyType.NEVER,
         vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
+        // Overlay scrolling stays ON here (unlike Settings' lists): the bar must not
+        // resize the chat when it appears. It rides a RESERVED lane instead — the
+        // transcript's own right padding, pinned flush by the scrollbar block in
+        // _bar.scss. See design-system.md, "Any ScrolledWindow".
         css_classes: ["agent-scroller"],
         child: listBox,
     })
@@ -141,7 +172,7 @@ export default function AgentIsland() {
     }
     entry.connect("activate", doSend)
     sendBtn.connect("clicked", doSend)
-    const entryBox = new Gtk.Box({ css_classes: ["agent-entry-box"], spacing: 8 })
+    const entryBox = new Gtk.Box({ css_classes: ["agent-entry-box"], spacing: 8, margin_end: LANE })
     entryBox.append(entry)
     entryBox.append(sendBtn)
 
@@ -153,7 +184,7 @@ export default function AgentIsland() {
     const emptyLabel = new Gtk.Label({ label: t("island.agent.empty"), css_classes: ["agent-empty-text"], wrap: true, xalign: 0, halign: Gtk.Align.START })
     const emptyBtn = NidaraButton({ label: t("island.agent.open-settings"), variant: "primary", pill: true })
     emptyBtn.connect("clicked", () => { shellActions.openSettingsPage?.("ai"); status.island_mode = "" })
-    const emptyBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["agent-empty"] })
+    const emptyBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["agent-empty"], margin_end: LANE })
     emptyBox.append(emptyLabel)
     emptyBox.append(emptyBtn)
 
@@ -163,8 +194,10 @@ export default function AgentIsland() {
 
     const inner = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL, spacing: 12,
-        margin_top: 14, margin_bottom: 14, margin_start: 16, margin_end: 16,
-        width_request: PANEL_W.full,
+        // margin_end 0 + a LANE-wider request: same outer glass as before, but the
+        // right padding now lives INSIDE, where the scrollbar can use it.
+        margin_top: 14, margin_bottom: 14, margin_start: 16, margin_end: 0,
+        width_request: PANEL_W.full + LANE,
         css_classes: ["agent-panel"],
     })
     inner.append(header)
@@ -202,20 +235,9 @@ export default function AgentIsland() {
             const last = listBox.get_last_child()
             if (last) listBox.remove(last)
         }
-        // Update the streaming (last) turn's text + tool chips.
-        if (tr.length) {
-            const turn = tr[tr.length - 1]
-            const r = rendered[tr.length - 1]
-            r.textLabel.label = turn.text
-            r.textLabel.visible = !!turn.text
-            for (let j = r.chips.length; j < turn.tools.length; j++) {
-                const chip = makeToolChip()
-                r.toolsBox.append(chip.row)
-                r.chips.push(chip)
-            }
-            turn.tools.forEach((tc, j) => r.chips[j]?.update(tc))
-            r.toolsBox.visible = turn.tools.length > 0
-        }
+        // Only the last turn mutates after creation (deltas + tool events stream
+        // into it); every earlier turn already painted in makeBubble.
+        if (tr.length) rendered[tr.length - 1].update(tr[tr.length - 1])
         GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => { scrollToBottom(); return GLib.SOURCE_REMOVE })
     }
     svc.subscribe(reconcile)

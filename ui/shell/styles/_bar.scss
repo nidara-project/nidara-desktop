@@ -256,81 +256,126 @@ window#nidara-bar-zone {
 // Compact "working pill" + the expanded chat panel. Neutral fills throughout —
 // accent is reserved for active/selected state (commandment 10), so bubbles and
 // chips use the surface/text tokens; a tool rejection tints its dot danger.
-.agent-compact-label {
-    font-size: $fs-small;
-    font-weight: $fw-medium;
-    color: var(--nidara-text);
-}
-
-.agent-header {
-    .agent-title {
-        font-size: $fs-subtitle;
-        font-weight: $fw-semibold;
-        color: var(--nidara-text);
-    }
-    .agent-status {
-        font-size: $fs-caption;
-        color: var(--nidara-text-dim);
-        font-variant-numeric: tabular-nums;
-    }
-}
-
-.agent-reset, .agent-send {
-    @include nidara-reset;
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    min-width: 30px;
-    min-height: 30px;
-    border-radius: var(--nidara-radius-pill);
-    &:hover { background: var(--nidara-surface-hover); }
-}
-
-.agent-bubble {
-    padding: 8px 12px;
-    border-radius: var(--nidara-radius-lg);
-    .agent-bubble-text {
+#nidara-bar,
+.nidara-bar-window {
+    .agent-compact-label {
         font-size: $fs-small;
+        font-weight: $fw-medium;
         color: var(--nidara-text);
     }
-}
-.agent-bubble-user {
-    background: var(--nidara-surface-raised);
-}
-.agent-bubble-assistant {
-    background: var(--nidara-surface);
-}
 
-.agent-tool-chips { margin-top: 2px; }
-.agent-tool-chip {
-    padding: 3px 8px;
-    border-radius: var(--nidara-radius-pill);
-    background: var(--nidara-surface-back);
-    .agent-tool-dot {
+    .agent-header {
+        .agent-title {
+            font-size: $fs-subtitle;
+            font-weight: $fw-semibold;
+            color: var(--nidara-text);
+        }
+        .agent-status {
+            font-size: $fs-caption;
+            color: var(--nidara-text-dim);
+            font-variant-numeric: tabular-nums;
+        }
+    }
+
+    .agent-reset, .agent-send {
+        @include nidara-reset;
+        background: transparent;
+        border: none;
+        box-shadow: none;
+        min-width: 30px;
+        min-height: 30px;
         border-radius: var(--nidara-radius-pill);
-        background: var(--nidara-text-dim);
+        &:hover { background: var(--nidara-surface-hover); }
     }
-    .agent-tool-label {
-        font-size: $fs-mini;
+
+    /* Transcript scroll — RESERVED LANE, not a GTK gutter (design-system.md, "Any
+       ScrolledWindow"). The 8px right padding is always there, overflowing or not, so the
+       bar appearing never resizes or shifts the chat; the trough reset + 1px slider margin
+       pin it flush to the lane's right edge instead of floating inset over the bubbles
+       (GTK's default overlay bar sits well inside the content). Same recipe as the NC's
+       .nc-transparent-scroll — including its caveat: the slider still fattens on hover,
+       Adwaita's .hovering rule wins over the explicit state selectors below. */
+    /* Matches LANE in AgentIsland.tsx — keeps the bubbles in the same column as
+       the header/entry while the scroller itself spans into the panel padding. */
+    .agent-transcript { padding-right: 16px; }
+
+    .agent-scroller scrollbar,
+    .agent-scroller scrollbar.overlay-indicator {
+        min-width: 0;
+        background: transparent;
+        border: none;
+
+        trough { min-width: 0; margin: 0; padding: 0; background: transparent; border: none; }
+
+        slider,
+        &.hovering slider,
+        &.dragging slider {
+            min-width: 4px;
+            min-height: 24px;
+            margin: 2px 1px;          /* 1px right keeps it flush to the lane edge */
+            /* Adwaita's BASE slider rule (extracted from the gtk4 gresource) carries
+               `border: 4px solid transparent` — invisible but 8px of real width. It
+               only shows up on hover, when the overlay-indicator's `:not(.hovering)`
+               rule stops applying and the base takes over: 8px min-width + 8px border
+               ≈ the whole 16px lane. Killing the border pins the hovered slider at
+               4px, so hover growth can never reach the bubbles. */
+            border: none;
+            background: var(--nidara-surface-raised);
+            border-radius: var(--nidara-radius-pill);
+            transition: background 0.2s #{$ease};
+        }
+
+        &:hover slider,
+        &.hovering slider,
+        &.dragging slider { background: var(--nidara-text-dim); }
+    }
+
+    .agent-bubble {
+        padding: 8px 12px;
+        border-radius: var(--nidara-radius-lg);
+        .agent-bubble-text {
+            font-size: $fs-small;
+            color: var(--nidara-text);
+        }
+    }
+    .agent-bubble-user {
+        background: var(--nidara-surface-raised);
+    }
+    .agent-bubble-assistant {
+        background: var(--nidara-surface);
+    }
+
+    .agent-tool-chips { margin-top: 2px; }
+    .agent-tool-chip {
+        padding: 3px 8px;
+        border-radius: var(--nidara-radius-pill);
+        background: var(--nidara-surface-back);
+        .agent-tool-dot {
+            border-radius: var(--nidara-radius-pill);
+            background: var(--nidara-text-dim);
+        }
+        .agent-tool-label {
+            font-size: $fs-mini;
+            color: var(--nidara-text-dim);
+            font-variant-numeric: tabular-nums;
+        }
+        &.agent-tool-fail .agent-tool-dot { background: var(--nidara-danger); }
+    }
+
+    .agent-entry {
+        @include nidara-reset;
+        padding: 8px 14px;
+        border-radius: var(--nidara-radius-pill);
+        background: var(--nidara-surface);
+        color: var(--nidara-text);
+        font-size: $fs-small;
+        caret-color: var(--nidara-accent);   // the caret IS active state → accent
+    }
+
+    .agent-empty-text {
+        font-size: $fs-small;
         color: var(--nidara-text-dim);
-        font-variant-numeric: tabular-nums;
     }
-    &.agent-tool-fail .agent-tool-dot { background: var(--nidara-danger); }
-}
-
-.agent-entry {
-    @include nidara-reset;
-    padding: 8px 14px;
-    border-radius: var(--nidara-radius-pill);
-    background: var(--nidara-surface);
-    color: var(--nidara-text);
-    font-size: $fs-small;
-    caret-color: var(--nidara-accent);   // the caret IS active state → accent
-}
-
-.agent-empty-text {
-    font-size: $fs-small;
-    color: var(--nidara-text-dim);
 }
 
 /* --- Window menu (AppTitle expansion) --- */

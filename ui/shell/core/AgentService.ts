@@ -30,7 +30,10 @@ export interface Turn {
 }
 
 let proc: Gio.Subprocess | null = null
-let stdin: Gio.DataOutputStream | null = null
+// Typed via InstanceType, not `Gio.DataOutputStream`: the @girs Gio namespace
+// exposes these two as values but not as types (unlike Gio.Subprocess), so the
+// namespace form fails typecheck. Resolving through the value works everywhere.
+let stdin: InstanceType<typeof Gio.DataOutputStream> | null = null
 
 let transcript: Turn[] = []
 let busy = false
@@ -52,7 +55,7 @@ function resolveDaemon(): string[] {
     return []
 }
 
-function readLoop(din: Gio.DataInputStream) {
+function readLoop(din: InstanceType<typeof Gio.DataInputStream>) {
     din.read_line_async(GLib.PRIORITY_DEFAULT, null, (src, res) => {
         let line: string | null
         try { [line] = src.read_line_finish_utf8(res) } catch { return }
