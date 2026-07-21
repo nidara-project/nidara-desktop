@@ -345,6 +345,16 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   discovered what it needs, −66%; a desktop turn INCLUDING the discovery round-trip, −9% (the extra
   request is a small one). It also loads only the half it needs — a question about windows never
   pays for the settings schema.
+  **The action NAMES stay in the prompt; only their descriptions are lazy.** Progressive disclosure
+  as first built cost real capability: told it could "manage windows and workspaces" but with no way
+  to know `listWindows` existed, the model reached for `dump_state` (no window list in it) and told
+  the user it couldn't see their windows — a promise with no means of discovery (user-caught
+  2026-07-21). A bare name index costs **113 tokens against 1,231** for the full catalogue, and the
+  names are self-describing enough to act on directly, so it also makes the common path CHEAPER: a
+  "what windows do I have" turn went 23,287 → 11,444 bytes by skipping the lookup entirely.
+  `list_actions` remains for descriptions and argument shapes. The index is GENERATED from
+  `listActions` at session start — never hardcode it, or a new IPC action stops appearing for free.
+  General lesson: with progressive disclosure, **hide the detail, never the existence**.
   **Answering "what can you do" must NOT go through the catalogues** — measured 2026-07-21: it sent
   the model after BOTH full dumps, 4k tokens to answer a question about itself, and a reply written
   from 42 raw IPC names (`toggleCC`, `sendWindowToSpecial`) is a worse answer than one written from a

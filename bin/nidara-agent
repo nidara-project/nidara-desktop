@@ -135,7 +135,7 @@ const TOOL_DEFS = [
     {
         name: "run_action",
         description:
-            "Run a Nidara shell action by name. This is how you operate the desktop. Use ONLY names returned by list_actions — call that first if you have not in this conversation.",
+            "Run a Nidara shell action by name. This is how you operate the desktop. Use a name from the ACTIONS list in your instructions; call list_actions when you need to know what one does or which arguments it takes.",
         props: {
             action: { type: "string", description: "Action name from the actions list" },
             args: { type: "array", items: { type: "string" }, description: "Positional arguments, if the action takes any" },
@@ -308,8 +308,33 @@ function actionsForPrompt(raw) {
 // invent action names. Three defences, all deliberate — the rules below are
 // imperative, the tool descriptions repeat the requirement, and run_action's
 // rejection hands back what was actually sent (see execTool).
+// The NAMES of every action, and nothing else. 113 tokens against 1,231 for the
+// full catalogue with descriptions and aliases (measured 2026-07-21).
+//
+// This exists because progressive disclosure, as first built, cost real
+// capability: the model was told it could "manage windows and workspaces" but
+// had no way to know `listWindows` existed without a lookup it never performed,
+// so it reached for `dump_state` (which carries no window list) and then told the
+// user it couldn't see their windows. A promise with no means of discovery is
+// worse than no promise. Names are self-describing enough to act on directly;
+// `list_actions` still carries the descriptions and arguments for anything the
+// model isn't sure about.
+//
+// Generated, never hardcoded — a newly added IPC action shows up here for free,
+// which is the property that keeps this prompt self-maintaining.
+function actionNames() {
+    try {
+        return Object.keys(JSON.parse(agsRequest(["listActions"])))
+            .filter(n => !HIDDEN_ACTIONS.has(n))
+            .join(", ")
+    } catch {
+        return ""
+    }
+}
+
 function buildSystemPrompt() {
     if (systemCache) return systemCache
+    const names = actionNames()
     const lang = GLib.getenv("LANG") || "en"
     systemCache = [
         "You are Assistant, the built-in helper for the Nidara desktop (a Wayland desktop environment for Arch Linux, compositor Hyprland).",
@@ -324,8 +349,8 @@ function buildSystemPrompt() {
         "- The user is in charge. Do only what they ask; ask first before anything destructive or irreversible.",
         "- If the message does NOT involve the desktop (a greeting, a general question, chit-chat), just answer. Do not call any tool.",
         "- Asked what you can do? Answer from that summary in your own words — never call list_actions or describe_settings just to describe yourself.",
-        "- When it DOES involve the desktop, you must look up what exists before acting: call list_actions before your first run_action, and describe_settings before your first set_config or targeted get_config. Once per conversation is enough — the answers stay in the conversation.",
-        "- NEVER invent or guess an action name or a setting key. If you have not looked it up in this conversation, look it up first.",
+        "- When it DOES involve the desktop, use the action names listed below with run_action. Call list_actions when you need an action's description or its arguments — always before using one you are not certain how to call. Call describe_settings before your first set_config or targeted get_config. Once per conversation is enough — the answers stay in the conversation.",
+        "- NEVER invent an action name or a setting key: use the names below, or look them up first. If an action fails, read the error and correct the call — do not repeat it unchanged.",
         "- Prefer set_config for settings and run_action for everything else. After acting, verify with dump_state/get_config when useful, then briefly confirm what changed.",
         // The language of the MESSAGE wins, always. The desktop locale is a hint
         // for the ambiguous case, never the rule: people routinely run an English
@@ -336,6 +361,7 @@ function buildSystemPrompt() {
         // message.)
         "- Reply in the SAME language the user wrote their message in, and follow them if they switch.",
         `- Only when that is genuinely unclear (a first message too short to tell), fall back to the desktop locale (LANG=${lang}).`,
+        ...(names ? ["", `ACTIONS you can run (names only — call list_actions for what each does and what arguments it takes): ${names}`] : []),
     ].join("\n")
     return systemCache
 }
