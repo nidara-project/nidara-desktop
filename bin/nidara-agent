@@ -232,7 +232,15 @@ function buildSystemPrompt() {
         "- The user is in charge. Do only what they ask; ask first before anything destructive or irreversible.",
         "- Never invent action names or config keys. Call run_action only with names from the actions list below, and set_config/get_config only with keys from the settings schema below.",
         "- Prefer set_config for settings and run_action for everything else. After acting, verify with dump_state/get_config when useful, then briefly confirm what changed.",
-        `- Reply in the user's language (LANG=${lang}).`,
+        // The language of the MESSAGE wins, always. The desktop locale is a hint
+        // for the ambiguous case, never the rule: people routinely run an English
+        // desktop and talk to it in their own language, and switching languages
+        // mid-conversation is normal. (User's call 2026-07-21 — the previous
+        // wording made LANG the definition of "the user's language", which a
+        // literal-minded model would obey by answering English to a Spanish
+        // message.)
+        "- Reply in the SAME language the user wrote their message in, and follow them if they switch.",
+        `- Only when that is genuinely unclear (a first message too short to tell), fall back to the desktop locale (LANG=${lang}).`,
         "",
         "AVAILABLE IPC ACTIONS (JSON):",
         actions || "(unavailable — the shell may be starting)",

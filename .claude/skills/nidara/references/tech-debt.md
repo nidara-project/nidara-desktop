@@ -756,8 +756,15 @@ Ordered by what hurt most in the live run:
    it yet, but that is the direction; log `sig=`/`finish=` are the early-warning instruments.
 4. **No sense of activity.** `thinking`/`acting` only swap a word in the header. Needs a real pulse
    while streaming, the tool being run, and a visible end-of-turn.
-5. **Replies ignore the UI language.** Answered in English on a Spanish session; `LANG` is in the
-   generated system prompt but clearly does not carry enough weight.
+5. ~~**Replies ignore the UI language.**~~ **The item was WRONG — reframed by the user 2026-07-21.**
+   The desired behaviour is the opposite of what it asked for: **the assistant replies in the language
+   of the MESSAGE, and follows the user if they switch. The desktop locale is a hint for the ambiguous
+   case, never the rule** — running an English desktop and talking to it in Spanish is normal, and the
+   locale says nothing about the language of a given sentence. Live behaviour already did the right
+   thing, but the system prompt said `Reply in the user's language (LANG=…)`, which defines "their
+   language" AS the locale — a more literal model would have obeyed it and answered in English.
+   Prompt fixed to state the rule properly. **Lesson for anything locale-driven in the shell: a
+   configured locale is evidence about the user, not an instruction about the current interaction.**
 6. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
    retired — picking it 404s. The catalog exposes no retired flag, so this cannot be filtered
    reliably; the model field stays free text on purpose.
