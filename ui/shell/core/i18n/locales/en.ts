@@ -370,6 +370,8 @@ export default {
     "settings.ai.allow-config-write.desc": "Local agents and scripts can modify shell settings through the official interface. Reading state is always available.",
     "settings.ai.allow-screenshot": "Allow agents to capture the screen",
     "settings.ai.allow-screenshot.desc": "Lets agents take a screenshot to visually verify their changes (`ags request screenshot`)",
+    "settings.ai.allow-window-close": "Close windows",
+    "settings.ai.allow-window-close.desc": "Let the assistant close windows when you ask it to. It asks the window to close, so apps can still prompt to save.",
     "settings.ai.allow-mcp": "Enable MCP server",
     "settings.ai.allow-mcp.desc": "Lets `nidara-mcp` serve shell tools (actions, settings, state, screenshots, diagnostics) to MCP clients like Claude Code. Takes effect immediately.",
     "settings.ai.allow-computer-use": "Allow agents to see other apps",

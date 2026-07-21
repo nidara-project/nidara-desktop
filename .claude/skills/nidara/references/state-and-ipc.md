@@ -77,6 +77,17 @@ cluster (see below): `listWindows`, `listWorkspaces`, `focusWorkspace <id|±1|na
 `moveWindowOutOfGroup <window>`, `sendWindowToSpecial [name] [window]`, `setLayout <dwindle|master>`.
 Aliases are intentional — Hyprland keybinds were renamed at one point and old names are kept.
 
+**One member of that cluster is GATED: `closeWindow`** (`ai.allowWindowClose`, default **true**).
+The rest stay ungated on purpose — focus, move, float, fullscreen, pin, group and layout are all
+reversible, so they are the shell driving its own compositor. Closing is the one that can destroy
+unsaved work, and "the model misread a sentence" is a realistic way to reach it (user's call
+2026-07-21). Default true because it *asks* the window to close rather than killing it, so an app
+with unsaved work still gets to prompt, and "close the browser" is a reasonable thing to ask an
+assistant. The gate is enforced in the SHELL's IPC handler like every other gate — never in the
+daemon.
+
+
+
 `screenshot [path]` captures the focused monitor with grim and returns the PNG path
 (default `/tmp/nidara-shot-<ts>.png`) — the visual-verification leg of the agent
 loop: open a surface (`toggleCC`, `settingsPage X`), wait ~1.5 s, `screenshot`, read the

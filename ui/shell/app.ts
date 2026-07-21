@@ -286,8 +286,15 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     },
   },
   closeWindow: {
-    desc: "Close a window by address (from listWindows) or class/title (`closeWindow 0x..`). Asks the window to close (may prompt to save) — not a kill.",
+    desc: "Close a window by address (from listWindows) or class/title (`closeWindow 0x..`). Asks the window to close (may prompt to save) — not a kill. Gated by Settings → AI.",
     run: args => {
+      // The ONE gated member of the window/workspace cluster. The rest stay
+      // ungated because they are reversible (focus, move, float, layout) — this
+      // one can destroy unsaved work, and "the model misread a sentence" is a
+      // realistic way to trigger it. The prompt tells the assistant to ask before
+      // anything destructive, but a rule in a prompt is a suggestion, not a lock.
+      if (!agentConfig.allowWindowClose)
+        return "closing windows is disabled — enable it in Settings → AI (or ai.json)"
       const w = resolveWindow(args[0])
       if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
       hyprlandState.closeWindow(w.address)
@@ -484,6 +491,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
           ai: {
             allowConfigWrite: agentConfig.allowConfigWrite,
             allowScreenshot: agentConfig.allowScreenshot,
+            allowWindowClose: agentConfig.allowWindowClose,
             allowMcp: agentConfig.allowMcp,
             allowComputerUse: agentConfig.allowComputerUse,
             allowComputerControl: agentConfig.allowComputerControl,

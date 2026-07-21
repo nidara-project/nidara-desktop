@@ -12,6 +12,13 @@ const CONFIG_PATH = `${GLib.get_user_config_dir()}/nidara/ai.json`
 interface AgentSettings {
     allowConfigWrite: boolean  // agents may change settings via setConfig, default true
     allowScreenshot: boolean   // agents may capture the screen via the screenshot IPC, default true
+    allowWindowClose: boolean  // agents may CLOSE windows via the closeWindow IPC, default true.
+                               // The rest of the window/workspace cluster stays ungated on purpose
+                               // (focus/move/float/layout are all reversible); closing is the one
+                               // op that can destroy work, so it gets its own switch. Default TRUE
+                               // because it asks the window to close rather than killing it — an
+                               // app with unsaved work still gets to prompt — and "close the
+                               // browser" is a reasonable thing to ask an assistant for.
     allowMcp: boolean          // nidara-mcp serves tools to MCP clients, default true
     allowComputerUse: boolean      // agents may PERCEIVE third-party apps via AT-SPI (nidara-a11y),
                                    // default FALSE — reaches outside the shell's own surface
@@ -49,6 +56,7 @@ interface AgentSettings {
 const DEFAULTS: AgentSettings = {
     allowConfigWrite: true,
     allowScreenshot: true,
+    allowWindowClose: true,
     allowMcp: true,
     allowComputerUse: false,
     allowComputerControl: false,
@@ -92,6 +100,7 @@ const ACTING_DECAY_MS = 4000
 export const agentConfig = {
     get allowConfigWrite() { return _settings.allowConfigWrite },
     get allowScreenshot() { return _settings.allowScreenshot },
+    get allowWindowClose() { return _settings.allowWindowClose },
     get allowMcp() { return _settings.allowMcp },
     get allowComputerUse() { return _settings.allowComputerUse },
     get allowComputerControl() { return _settings.allowComputerControl },
@@ -127,6 +136,12 @@ export const agentConfig = {
 
     setAllowScreenshot(val: boolean) {
         _settings.allowScreenshot = val
+        save()
+        _listeners.forEach(fn => fn())
+    },
+
+    setAllowWindowClose(val: boolean) {
+        _settings.allowWindowClose = val
         save()
         _listeners.forEach(fn => fn())
     },

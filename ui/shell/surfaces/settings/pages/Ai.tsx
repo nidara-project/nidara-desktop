@@ -325,6 +325,16 @@ export default function AiPage() {
         (apply) => agentConfig.onChange(() => apply(agentConfig.allowScreenshot)),
     ))
 
+    // The one gated window operation — the rest of the cluster (focus, move,
+    // float, layout) is reversible and stays ungated.
+    accessGroup.listBox.append(toggleRow(
+        t("settings.ai.allow-window-close"),
+        t("settings.ai.allow-window-close.desc"),
+        agentConfig.allowWindowClose,
+        (v) => agentConfig.setAllowWindowClose(v),
+        (apply) => agentConfig.onChange(() => apply(agentConfig.allowWindowClose)),
+    ))
+
     page.append(accessGroup.box)
 
     // ── Other apps — the computer-use layer (reaches OUTSIDE the shell) ──────
