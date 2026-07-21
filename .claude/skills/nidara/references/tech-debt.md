@@ -790,21 +790,22 @@ Ordered by what hurt most in the live run:
    **General rule this cost three wrong conclusions to learn: judge a provider behaviour over a
    RUN of requests, never one reading.** Established regardless: the real cost driver is STEP COUNT
    (an 8-step turn cost ~25k input tokens).
-7. **Our prompt is now too SMALL to cache on Anthropic — `cache_control` is currently decorative
-   (found 2026-07-21 via the `claude-api` skill).** Prompt caching has a documented **minimum
-   cacheable prefix**, and a prefix under it silently doesn't cache — no error, just
-   `cache_creation_input_tokens: 0`: Opus 4.8/4.7/4.6/4.5 and Haiku 4.5 need **4096 tokens**,
-   Fable 5 / Sonnet 4.6 need 2048, Sonnet 4.5 needs 1024. After the progressive-disclosure cut our
-   entire prefix (system + tool schemas) is **~1,000 tokens** — a quarter of the Opus minimum. The
-   `cache_control: ephemeral` block we added therefore never fires as things stand. Left in place
-   deliberately (harmless, and correct the moment the prefix grows past the threshold) but **do not
-   count it as a win**. Same shape as the Google finding above: we optimised below the threshold at
-   which the discount exists. **Do not pad the prompt to reach 4096** — same reasoning as before.
-   Two related notes for whenever caching becomes real: (a) `cache_control` sits only on the system
-   block, so the GROWING conversation is never cached — the documented multi-turn pattern is a second
-   breakpoint on the last content block of the newest turn (max 4 per request); (b) placement is
-   otherwise right — tools render BEFORE system, so a marker on the system block covers the tool
-   schemas too.
+7. **Anthropic caching: two breakpoints, and only the second one can ever fire (2026-07-21).**
+   A `cache_control` marker caches everything from the start of the request up to itself, and render
+   order is tools → system → messages. There is a **minimum cacheable prefix** — 4096 tokens on Opus
+   4.8/4.7/4.6/4.5 and Haiku 4.5, 2048 on Fable 5 / Sonnet 4.6, 1024 on Sonnet 4.5 — and a shorter
+   prefix silently doesn't cache (no error, `cache_creation_input_tokens: 0`).
+   Our tools + system span is **~1,213 tokens** and NEVER GROWS, so the system-block marker is dead by
+   construction. The lesson generalises: **a marker over a fixed-size prefix below the minimum is
+   inert; only a marker after something that grows can ever engage.** Hence `markNewestTurn()` — a
+   second marker on the newest turn's last content block, so the span includes the conversation and
+   crosses the minimum on a normal chat (live turns measured 3.0–4.9k tokens).
+   **NOT VERIFIED against a live Anthropic key** — the logic is unit-checked by extracting the real
+   functions and running them, but nothing has watched `cache_read_input_tokens` on the wire. The
+   system marker is left in place: harmless, and correct the moment that span grows.
+   **Do NOT pad the prompt to reach 4096** — the fix is where the marker goes, not how fat the prompt
+   is. Known limit accepted: a breakpoint looks back only ~20 content blocks, so a tool-heavy turn
+   that adds more than that simply misses.
 8. **The daemon's user-facing strings are English-only.** Every message it emits — "The answer was cut
    off…", "The assistant kept repeating…", relayed provider errors — is a hardcoded English literal,
    while the assistant itself answers in the user's language. It is a separate process with no access

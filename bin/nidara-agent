@@ -406,6 +406,30 @@ function toOpenaiMsgs(m) {
 
 // ── Request builders ─────────────────────────────────────────────────────────
 
+// SECOND cache breakpoint, on the newest turn's last content block.
+//
+// Why two: a breakpoint caches everything from the start of the request up to
+// itself, and render order is tools → system → messages. The system breakpoint
+// below therefore covers a span that NEVER GROWS (~1.2k tokens here) — and a
+// prefix under the model's minimum (4096 tokens on Opus, 2048 on Sonnet) is
+// silently not cached at all. The conversation is the only part that grows, so
+// without a marker after it, caching can never engage no matter how long the
+// chat runs. With one, the span crosses the minimum on a normal conversation
+// and everything already said gets re-read at ~10% instead of full price.
+//
+// Safe to mutate: toAnthropicMsg builds fresh objects per call, so this touches
+// the request, never `history`.
+//
+// Known limit (not worth engineering around yet): a breakpoint only looks back
+// ~20 content blocks for a prior entry, and a tool-heavy turn can add more than
+// that — such a turn simply misses instead of hitting.
+function markNewestTurn(messages) {
+    const last = messages[messages.length - 1]
+    if (!last || !Array.isArray(last.content) || !last.content.length) return messages
+    last.content[last.content.length - 1].cache_control = { type: "ephemeral" }
+    return messages
+}
+
 function buildAnthropicReq(cfg, key, system) {
     const body = {
         model: cfg.brainModel || "claude-opus-4-8",
@@ -422,7 +446,7 @@ function buildAnthropicReq(cfg, key, system) {
         // cost into a rounding error from the second request onwards.
         system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         tools: ANTHROPIC_TOOLS,
-        messages: history.map(toAnthropicMsg).filter(Boolean),
+        messages: markNewestTurn(history.map(toAnthropicMsg).filter(Boolean)),
     }
     return {
         url: "https://api.anthropic.com/v1/messages",
