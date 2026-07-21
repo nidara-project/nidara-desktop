@@ -765,15 +765,24 @@ Ordered by what hurt most in the live run:
    language" AS the locale — a more literal model would have obeyed it and answered in English.
    Prompt fixed to state the rule properly. **Lesson for anything locale-driven in the shell: a
    configured locale is evidence about the user, not an instruction about the current interaction.**
-6. ~~**Google reports NO cached tokens.**~~ **WRONG, and corrected within the hour (2026-07-21) — it
-   caches fine.** A later turn read `tok=4717/32 cached=4022`: **85% of the input served from cache**.
-   The first reading missed it because implicit caching only pays off from the SECOND request of a
-   session, and that turn's steps each carried a growing prefix. Lesson worth keeping: `cached=0` on
-   an early request means "not yet", not "never" — judge caching across a session, not a step.
-   So **the fixed system prompt is largely NOT the problem it looked like**, and further prompt
-   shrinking has poor returns. What is established: the trim did work (step 1 of a fresh session
-   4403 → 2885 input tokens, −34%), and the real cost driver is STEP COUNT — an 8-step turn cost
-   ~25k input tokens. Anthropic's explicit `cache_control` is in but UNVERIFIED (no key to test).
+6. **Gemini 3 Flash Preview essentially does not cache for us — and shrinking the prompt may have
+   made it worse.** The `cached=` instrument settled this after two wrong readings of my own (first
+   "never caches", then "caches fine, 85%" off a single hit). **The real number: 1 cache hit in 36
+   requests.** Our side is verified correct — consecutive request bodies share a byte-identical 99%
+   prefix (recorded and diffed), so nothing we send invalidates it. Two documented reasons on
+   Google's side: Gemini 3 requires a **4,096-token minimum** for implicit caching, and there is an
+   **open report that implicit caching does not work on `gemini-3-flash-preview` when tools are
+   defined** — and we always define tools. Fits the data: the single hit was the one request clearly
+   above 4k (4717 → 4022 cached).
+   **The uncomfortable irony: the trim took step 1 from 4403 → 2885 tokens, i.e. from above that
+   threshold to below it.** Do NOT respond by padding the prompt to game the threshold — fragile,
+   model-specific, and it bets on a path Google itself reports as broken. The trim is an
+   unconditional saving (fewer tokens sent is less paid, cache or no cache); caching is a bonus this
+   preview model does not reliably deliver. A non-preview model, or Anthropic (explicit
+   `cache_control`, implemented but UNVERIFIED — no key), should behave better.
+   **General rule this cost three wrong conclusions to learn: judge a provider behaviour over a
+   RUN of requests, never one reading.** Established regardless: the real cost driver is STEP COUNT
+   (an 8-step turn cost ~25k input tokens).
 7. **Tool results go into history at full length, forever — now COMPACTED, not capped.** The island
    truncates a result to 200 chars for display, but `history` keeps the whole thing and every later
    request resends it. `compactJson()` is now applied to tool output too (−25% to −34%: listWindows

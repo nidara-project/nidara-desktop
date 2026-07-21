@@ -41,11 +41,13 @@ function compactCount(n: number): string {
 // "9812" does not. `cached` is a subset of input, never added on top.
 function formatUsage(u: { input: number; output: number; cached: number }): string {
     const label = t("island.agent.tokens").replace("%s", compactCount(u.input + u.output))
-    if (u.cached > 0 && u.input > 0) {
-        const pct = Math.round((u.cached / u.input) * 100)
-        if (pct >= 1) return `${label} · ${t("island.agent.tokens-cached").replace("%d", String(pct))}`
-    }
-    return label
+    if (u.input <= 0) return label
+    // Shown even at 0%, deliberately. Hiding it when there is no cache hides the
+    // number exactly when it matters most — "0% cached" means you are paying full
+    // price for every token, which is the case worth noticing. Blank would be
+    // indistinguishable from the feature not working (user-caught 2026-07-21).
+    const pct = Math.round((u.cached / u.input) * 100)
+    return `${label} · ${t("island.agent.tokens-cached").replace("%d", String(pct))}`
 }
 
 // Compact status word from the service state.
