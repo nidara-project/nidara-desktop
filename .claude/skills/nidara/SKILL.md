@@ -80,6 +80,7 @@ ags request listWorkspaces               # workspaces as JSON [{id,name,windows,
 ags request focusWindow <window>         # raise/focus a window by address or class — a WM op (UNGATED, like a dock click); also the precondition for the synthetic keyboard (which stays gated)
 ags request disableComputerControl       # kill switch: revoke AI control instantly (also: click the bar indicator, or Super+Shift+Esc)
 nidara-doctor                     # Markdown diagnostic report (bug/PR evidence)
+nidara-agent                      # the built-in Assistant's BRAIN: a BYOK LLM tool-use loop (Anthropic Messages / OpenAI-compatible via curl-SSE) whose tools ARE `ags request` — so the assistant is just another client of the gated surface. A stdio child of the shell (spawned by core/AgentService in PR 2), NOT run by hand; API key in the DE keyring (libsecret schema org.nidara.Assistant), brain config in ai.json (brainBackend/brainModel/brainEndpoint). Test with scripts/dev/fake-brain.py
 nidara-mcp                        # all of the above as MCP tools over stdio (incl. list_windows/list_workspaces (reads), focus_window (ungated WM op), query_app → nidara-a11y, do_app_action → nidara-act, type_text/press_key → nidara-type, click_app/click_at (left + button:"right") / scroll_app/scroll_at / drag_at → nidara-click; WM action verbs via run_action; .mcp.json: repo root for dev; installer-managed copy in ~/.config/nidara/ for users)
 ```
 

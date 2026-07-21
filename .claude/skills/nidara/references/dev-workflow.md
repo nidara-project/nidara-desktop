@@ -464,6 +464,45 @@ it to a **0–1 fraction** (per the GI docs). The widget uses `bat.percentage` (
 for the Cairo fill and `× 100` for the label — an earlier `Math.round(bat.percentage)` in
 the detail panel was a latent "0%/1%" bug, hidden only because desktops never showed it.
 
+### Testing the built-in Assistant (`nidara-agent`) without a key or network
+
+`bin/nidara-agent` is the assistant's brain (BYOK LLM tool-use loop over stdio — see
+`state-and-ipc.md`). Exercise it headlessly with `scripts/dev/fake-brain.py`, a scripted
+OpenAI-compatible SSE mock (same spirit as the other `fake-*` helpers) that plays exactly one
+tool-use round-trip:
+
+```bash
+# 1) point an ISOLATED config at the mock (don't touch the real ai.json — the daemon
+#    reads $XDG_CONFIG_HOME/nidara/ai.json, but `ags request` still hits the live shell):
+mkdir -p /tmp/tc/nidara
+printf '{"brainBackend":"openai","brainModel":"mock","brainEndpoint":"http://localhost:11435/v1"}' \
+  > /tmp/tc/nidara/ai.json
+# 2) run the mock (default = a harmless read: get_config appearance.accent):
+python3 scripts/dev/fake-brain.py &
+# 3) feed the daemon a user message, keeping stdin open, and read the event stream:
+{ printf '{"t":"user","text":"what accent am I using?"}\n'; tail -f /dev/null; } \
+  | timeout 15 env XDG_CONFIG_HOME=/tmp/tc gjs -m bin/nidara-agent
+# expect: state thinking → acting → tool get_config → toolresult {...value:"blue"} →
+#         thinking → delta "Done." → done{usage} → idle
+```
+
+Env on the mock scripts the tool call: `FAKE_BRAIN_TOOL` / `FAKE_BRAIN_ARGS` (JSON) /
+`FAKE_BRAIN_FINAL`. Two gotchas (both proven 2026-07-20):
+- **The write gate is enforced by the SHELL, not the daemon.** The shell checks its OWN
+  `allowConfigWrite` (from the REAL `ai.json`), so a test config with `allowConfigWrite:false` does
+  NOT stop a `set_config` — the daemon's tool hits the live shell and really writes (a `set_config`
+  mock DID toggle night light for real; revert with `ags request setConfig … false`). To prove the
+  daemon **surfaces a rejection** without mutating anything, script an **invalid value** (e.g.
+  `nightlight.enabled=banana`): the shell's validator refuses, the daemon relays the error string,
+  the model reports it, nothing changes.
+- **Don't drive the daemon over a plain `subprocess` pipe with Python `readline`** — gjs's stdout
+  buffered oddly there; the `{ printf …; tail -f /dev/null; } | gjs` shell form is what worked. The
+  `timeout` killing the still-alive daemon (exit 124) is expected — it waits for more stdin.
+
+**CI girs note:** the daemon + `Settings → AI` import `gi://Secret` (libsecret). It's already
+installed (transitive) so `@girs/secret-1.d.ts` exists locally, but if CI typecheck ever complains
+about `gi://Secret`, the `ci-assets` girs snapshot needs a refresh (`scripts/dev/publish-ci-typings.sh`).
+
 ## Persistence
 
 All persistent state lives in `~/.config/nidara/`:

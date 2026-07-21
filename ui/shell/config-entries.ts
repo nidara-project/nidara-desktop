@@ -145,4 +145,20 @@ export function registerConfigEntries() {
         writable: false,
         get: () => agentConfig.allowMcp,
     })
+    // The built-in Assistant's brain (BYOK). Visible so agents can see how the
+    // native assistant is configured; set it in Settings → AI (the API key lives
+    // in the keyring and is deliberately NOT exposed here).
+    registerConfig("ai.brainBackend", {
+        desc: "Which LLM backend the built-in Assistant uses: '' (off), 'anthropic', or 'openai' (OpenAI-compatible, incl. Ollama). Set it in Settings → AI.",
+        type: "enum",
+        enum: ["", "anthropic", "openai"],
+        writable: false,
+        get: () => agentConfig.brainBackend,
+    })
+    registerConfig("ai.brainModel", {
+        desc: "Model id the built-in Assistant talks to (e.g. claude-opus-4-8, or a local model name). Set it in Settings → AI.",
+        type: "string",
+        writable: false,
+        get: () => agentConfig.brainModel,
+    })
 }

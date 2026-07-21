@@ -520,6 +520,21 @@ if [ "$ACTIVE_DM" = "none" ] || { [ "$ACTIVE_DM" = "greetd" ] && _greetd_is_ours
 
     sudo systemctl enable greetd
     echo "  [OK] greetd enabled."
+
+    # Auto-unlock the GNOME keyring at greetd login, so the DE offers a Secret
+    # Service (org.freedesktop.secrets) without a separate prompt — the built-in
+    # Assistant's API key lives there, and git/VS Code/browsers get it for free.
+    # Uses the login password greetd already collected. Idempotent (guarded on the
+    # module name). The keyring daemon's secrets component is launched per-session
+    # from hyprland.lua; these PAM lines are what unlock it. /etc/pam.d/greetd is
+    # shipped by the greetd package, present by the time deps are installed.
+    if [ -f /etc/pam.d/greetd ] && ! grep -q 'pam_gnome_keyring' /etc/pam.d/greetd; then
+        printf '%s\n' \
+            'auth       optional  pam_gnome_keyring.so' \
+            'session    optional  pam_gnome_keyring.so auto_start' \
+            | sudo tee -a /etc/pam.d/greetd > /dev/null
+        echo "  [OK] gnome-keyring PAM auto-unlock added to /etc/pam.d/greetd"
+    fi
 elif [ "$ACTIVE_DM" = "greetd" ]; then
     echo "  greetd is enabled but set up with a different greeter — leaving it untouched."
     echo "  To use Nidara's greeter, point /etc/greetd/config.toml at the files in"

@@ -384,6 +384,25 @@ export default {
     "settings.ai.connect-agent": "Connect your agent",
     "settings.ai.connect-agent.desc": "Tell your AI agent to register the MCP server described in this file — it works from any MCP client",
 
+    // Built-in Assistant — the brain (BYOK); key lives in the keyring, never in files
+    "settings.ai.brain.group": "Assistant",
+    "settings.ai.brain.backend": "Provider",
+    "settings.ai.brain.backend.desc": "Which service runs the built-in assistant's model. Bring your own key.",
+    "settings.ai.brain.backend.off": "Off",
+    "settings.ai.brain.backend.anthropic": "Anthropic",
+    "settings.ai.brain.backend.openai": "OpenAI-compatible",
+    "settings.ai.brain.model": "Model",
+    "settings.ai.brain.model.desc": "Model id the assistant talks to (e.g. claude-opus-4-8, or a local model name).",
+    "settings.ai.brain.endpoint": "Endpoint",
+    "settings.ai.brain.endpoint.desc": "Base URL of the OpenAI-compatible server (e.g. a local Ollama at http://localhost:11434/v1).",
+    "settings.ai.brain.key": "API key",
+    "settings.ai.brain.key.desc": "Stored in the system keyring, never in plain files.",
+    "settings.ai.brain.key.placeholder": "Paste API key…",
+    "settings.ai.brain.key.stored": "•••••••• stored in keyring",
+    "settings.ai.brain.key.unavailable": "Keyring unavailable",
+    "settings.ai.brain.key.save": "Save",
+    "settings.ai.brain.key.clear": "Clear",
+
     // Badge on the fake AI cursor (surfaces/agent-pointer/)
     "agentPointer.badge": "AI",
 
