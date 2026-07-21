@@ -345,6 +345,12 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   discovered what it needs, −66%; a desktop turn INCLUDING the discovery round-trip, −9% (the extra
   request is a small one). It also loads only the half it needs — a question about windows never
   pays for the settings schema.
+  **Answering "what can you do" must NOT go through the catalogues** — measured 2026-07-21: it sent
+  the model after BOTH full dumps, 4k tokens to answer a question about itself, and a reply written
+  from 42 raw IPC names (`toggleCC`, `sendWindowToSpecial`) is a worse answer than one written from a
+  curated summary. So the core carries a one-line capability summary plus an explicit rule to answer
+  from it. That summary costs ~53 tokens on EVERY request, which is only worth it because it buys a
+  better answer as well as a cheaper one — keep it short for exactly that reason.
   **The cost of this design is compliance**: a model that forgets to look up will invent action
   names. Three defences, keep all three — the core rules are imperative ("NEVER invent or guess"),
   each tool description repeats the requirement, and `run_action`'s rejection hands back what was
