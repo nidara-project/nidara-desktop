@@ -790,7 +790,28 @@ Ordered by what hurt most in the live run:
    **General rule this cost three wrong conclusions to learn: judge a provider behaviour over a
    RUN of requests, never one reading.** Established regardless: the real cost driver is STEP COUNT
    (an 8-step turn cost ~25k input tokens).
-7. **Tool results go into history at full length, forever — COMPACTED, not capped.** The island
+7. **Our prompt is now too SMALL to cache on Anthropic — `cache_control` is currently decorative
+   (found 2026-07-21 via the `claude-api` skill).** Prompt caching has a documented **minimum
+   cacheable prefix**, and a prefix under it silently doesn't cache — no error, just
+   `cache_creation_input_tokens: 0`: Opus 4.8/4.7/4.6/4.5 and Haiku 4.5 need **4096 tokens**,
+   Fable 5 / Sonnet 4.6 need 2048, Sonnet 4.5 needs 1024. After the progressive-disclosure cut our
+   entire prefix (system + tool schemas) is **~1,000 tokens** — a quarter of the Opus minimum. The
+   `cache_control: ephemeral` block we added therefore never fires as things stand. Left in place
+   deliberately (harmless, and correct the moment the prefix grows past the threshold) but **do not
+   count it as a win**. Same shape as the Google finding above: we optimised below the threshold at
+   which the discount exists. **Do not pad the prompt to reach 4096** — same reasoning as before.
+   Two related notes for whenever caching becomes real: (a) `cache_control` sits only on the system
+   block, so the GROWING conversation is never cached — the documented multi-turn pattern is a second
+   breakpoint on the last content block of the newest turn (max 4 per request); (b) placement is
+   otherwise right — tools render BEFORE system, so a marker on the system block covers the tool
+   schemas too.
+8. **The daemon's user-facing strings are English-only.** Every message it emits — "The answer was cut
+   off…", "The assistant kept repeating…", relayed provider errors — is a hardcoded English literal,
+   while the assistant itself answers in the user's language. It is a separate process with no access
+   to `core/i18n`, so the fix is either passing the locale's strings in at spawn or moving these
+   messages to the shell side (`AgentService` already owns two of them via `t()`). Not urgent, clearly
+   wrong.
+9. **Tool results go into history at full length, forever — COMPACTED, not capped.** The island
    truncates a result to 200 chars for display, but `history` keeps the whole thing and every later
    request resends it. `compactJson()` applies to tool output too (listWindows −32%, listApps −25%),
    which is lossless and compounds. Since the catalogues became tools (progressive disclosure, see
@@ -799,7 +820,7 @@ Ordered by what hurt most in the live run:
    capping a large result, or dropping old turns. Both cost capability. `step N: POST host body=Xb
    (sys=Yb tools=Zb hist=Wb)` tells you which part is actually growing before anyone optimises on
    instinct.
-8. **The island's token counter is CUMULATIVE and doesn't say so (2026-07-21).** It shows the whole
+10. **The island's token counter is CUMULATIVE and doesn't say so (2026-07-21).** It shows the whole
    conversation's usage; the user read "2k tokens" as the cost of the turn they had just sent (that
    turn was 1,078). Not wrong data, ambiguous framing — a number in a chat header doesn't announce
    its own scope. **Deferred by the user ("lo dejamos así de momento"), with their idea recorded:
@@ -808,7 +829,7 @@ Ordered by what hurt most in the live run:
    there are no native GTK tooltips in this shell — and the per-turn numbers already exist in the
    daemon's `turn end` log line, they simply aren't carried to the UI (only the running totals are,
    via `done`). Cheapest shape: add the turn's own usage to the `done` payload alongside the totals.
-9. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
+11. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
    retired — picking it 404s. The catalog exposes no retired flag, so this cannot be filtered
    reliably; the model field stays free text on purpose.
 
