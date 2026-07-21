@@ -634,6 +634,8 @@ export default {
     "island.agent.tokens": "%d tokens",
     "island.agent.empty": "Elige un proveedor y añade tu clave de API para empezar a usar el asistente.",
     "island.agent.open-settings": "Abrir Ajustes → IA",
+    "island.agent.error.died": "El asistente se ha detenido inesperadamente. Vuelve a enviar tu mensaje para reintentarlo.",
+    "island.agent.error.empty": "El asistente ha terminado el turno sin responder.",
     "widget.battery.label.unavailable": "Batería no disponible",
     "widget.battery.name": "Batería",
     "widget.battery.state.charged": "Cargado",

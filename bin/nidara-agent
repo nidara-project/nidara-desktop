@@ -41,6 +41,19 @@ const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
 const MAX_STEPS = 8            // hard cap on tool-use round-trips per user turn
 const HTTP_TIMEOUT = "120"     // curl --max-time (seconds)
 
+// ── Telemetry ────────────────────────────────────────────────────────────────
+// stderr is INHERITED from the shell, which nidara-ui appends to nidara-ui.log —
+// so these lines land next to the shell's own, in order, for free.
+//
+// Rule learned the hard way (2026-07-21): a turn that fails must be
+// reconstructible AFTER THE FACT. A user reporting "it did nothing" is useless
+// without a trace, and the daemon's own death is exactly the case that can't
+// report itself. So: lifecycle + turn boundaries + every HTTP leg + every tool.
+// NEVER log the user's prompt or the model's reply (a desktop log is not the
+// place for the conversation) — length and shape only. Never log the API key.
+const log = (msg) => printerr(`[nidara-agent] ${msg}`)
+const hostOf = (url) => { try { return url.replace(/^https?:\/\//, "").split("/")[0] } catch { return "?" } }
+
 // ── Shell plumbing (shared shape with nidara-mcp) ────────────────────────────
 
 function textFile(path) {
@@ -440,8 +453,33 @@ async function streamCurl(req, onLine) {
     await readAllLines(dataIn, (line) => { raw += line + "\n"; onLine(line) })
     await new Promise((res) => proc.wait_async(null, () => res()))
 
+    // curl's OWN failures (DNS, TLS, --max-time, connection refused) only ever
+    // appear on stderr, which used to be piped and then dropped — so a dead
+    // endpoint reached the user as the generic "Request failed". Safe to drain
+    // synchronously here: the process has already exited, and `-sS` keeps this
+    // to one line.
+    const err = drainStream(proc.get_stderr_pipe())
+    const ok = proc.get_successful()
     currentCurl = null
-    return { ok: proc.get_successful(), raw }
+    if (!ok) log(`curl failed: exit=${proc.get_exit_status()} ${err ? `stderr="${truncate(err, 200)}"` : `body=${raw.length}b`}`)
+    return { ok, raw, err }
+}
+
+// Read a stream to EOF. Only for pipes of an exited process (see streamCurl).
+function drainStream(stream) {
+    if (!stream) return ""
+    try {
+        const din = new Gio.DataInputStream({ base_stream: stream })
+        let out = ""
+        for (;;) {
+            const [line] = din.read_line_utf8(null)
+            if (line === null) break
+            out += line + "\n"
+        }
+        return out.trim()
+    } catch {
+        return ""
+    }
 }
 
 // Provider errors are the ONLY diagnosis the user gets when a turn fails, so they
@@ -449,8 +487,11 @@ async function streamCurl(req, onLine) {
 // migrate to <url>" mid-URL — the actionable half (user-caught 2026-07-21).
 const ERR_MAX = 2000
 
-function bestError(raw) {
+function bestError(raw, curlErr) {
     const trimmed = (raw || "").trim()
+    // Nothing came back at all → the failure is curl's, and its stderr line is
+    // the only thing that says WHY (timeout / refused / TLS / unknown host).
+    if (!trimmed) return curlErr ? truncate(curlErr, ERR_MAX) : "Request failed — check the provider, endpoint, and API key."
     try {
         const j = JSON.parse(trimmed)
         const m = j?.error?.message || (typeof j?.error === "string" ? j.error : null)
@@ -466,8 +507,7 @@ function bestError(raw) {
     if (m) {
         try { return JSON.parse(`"${m[1]}"`) } catch { return m[1] }
     }
-    return trimmed ? truncate(trimmed, ERR_MAX)
-        : "Request failed — check the provider, endpoint, and API key."
+    return truncate(trimmed, ERR_MAX)
 }
 
 const truncate = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s || "")
@@ -480,28 +520,33 @@ async function runTurn(userText) {
     const cfg = readAiJson()
     const backend = cfg.brainBackend || ""
     const turnUsage = { input: 0, output: 0 }
+    const t0 = GLib.get_monotonic_time()
+    let step = 0
     try {
         if (!backend) {
+            log("turn refused: no provider configured")
             emitError("No assistant provider is configured. Open Settings → AI to choose one.")
             return
         }
         history.push({ role: "user", text: userText })
         const system = buildSystemPrompt()
         emit({ t: "state", s: "thinking" })
+        log(`turn start: provider=${cfg.brainProvider || "?"} backend=${backend} model=${cfg.brainModel || "(default)"} chars=${userText.length} history=${history.length}`)
 
-        let step = 0
         while (step++ < MAX_STEPS) {
             if (cancelled) return
             const key = lookupKey(cfg.brainProvider || "")
             const req = backend === "anthropic" ? buildAnthropicReq(cfg, key, system) : buildOpenaiReq(cfg, key, system)
             const handler = backend === "anthropic" ? makeAnthropicHandler() : makeOpenaiHandler()
+            log(`step ${step}: POST ${hostOf(req.url)} body=${req.body.length}b key=${key ? "yes" : "none"}`)
 
-            const { ok, raw } = await streamCurl(req, (l) => handler.onLine(l))
-            if (cancelled) return
+            const { ok, raw, err } = await streamCurl(req, (l) => handler.onLine(l))
+            if (cancelled) { log(`step ${step}: cancelled by user`); return }
 
             const r = handler.result()
-            if (r.errorMsg) { emitError(r.errorMsg); return }
-            if (!ok) { emitError(bestError(raw)); return }
+            log(`step ${step}: ok=${ok} text=${r.text.length}c tools=${r.toolUses.length} stop=${r.stopReason || "?"} tok=${r.usage.input}/${r.usage.output}`)
+            if (r.errorMsg) { log(`step ${step}: provider error: ${truncate(r.errorMsg, 200)}`); emitError(r.errorMsg); return }
+            if (!ok) { emitError(bestError(raw, err)); return }
 
             history.push({ role: "assistant", text: r.text, toolUses: r.toolUses })
             turnUsage.input += r.usage.input
@@ -514,6 +559,7 @@ async function runTurn(userText) {
                     if (cancelled) return
                     emit({ t: "tool", name: tu.name, summary: summarizeTool(tu) })
                     const res = execTool(tu)
+                    log(`tool ${summarizeTool(tu)} → ${res.ok ? "ok" : "FAIL"} ${truncate(res.content, 120).replace(/\n/g, " ")}`)
                     emit({ t: "toolresult", ok: res.ok, summary: truncate(res.content, 200) })
                     results.push({ id: tu.id, name: tu.name, content: res.content })
                 }
@@ -521,10 +567,25 @@ async function runTurn(userText) {
                 emit({ t: "state", s: "thinking" })
                 continue
             }
-            break   // no tool calls → the model answered
+            // No tool calls → the model answered. An answer with NO text is still
+            // an abnormal end: the UI would paint an empty bubble, i.e. silence.
+            if (!r.text.trim()) {
+                log(`turn ended with empty completion (stop=${r.stopReason || "?"})`)
+                emitError("The model ended the turn without replying. Try again, or pick a different model in Settings → AI.")
+                return
+            }
+            break
+        }
+        // Fell out of the loop still calling tools: the model never converged on
+        // an answer. Say so — this used to end as a silent `done`.
+        if (step > MAX_STEPS) {
+            log(`turn hit the ${MAX_STEPS}-step cap without a final answer`)
+            emitError(`Stopped after ${MAX_STEPS} tool steps without a final answer.`)
+            return
         }
         emit({ t: "done", usage: turnUsage })
     } finally {
+        log(`turn end: steps=${Math.min(step, MAX_STEPS)} tok=${turnUsage.input}/${turnUsage.output} ${Math.round((GLib.get_monotonic_time() - t0) / 1000)}ms`)
         emit({ t: "state", s: "idle" })
     }
 }
@@ -534,18 +595,22 @@ async function runTurn(userText) {
 function handleMessage(msg) {
     switch (msg?.t) {
         case "user":
-            if (busy) return   // one turn at a time; the shell disables input while busy
+            if (busy) { log("dropped a user turn: still busy"); return }   // one turn at a time; the shell disables input while busy
             cancelled = false
             busy = true
             runTurn(String(msg.text || ""))
-                .catch((e) => emitError(String(e?.message ?? e)))
+                // The last net: anything thrown outside runTurn's own handling
+                // still reaches the user as a message instead of dying quietly.
+                .catch((e) => { log(`turn threw: ${e?.stack || e}`); emitError(String(e?.message ?? e)) })
                 .finally(() => { busy = false })
             break
         case "cancel":
+            log("cancel")
             cancelled = true
             if (currentCurl) { try { currentCurl.force_exit() } catch {} }
             break
         case "reset":
+            log("reset: history cleared")
             history.length = 0
             systemCache = null
             cancelled = true
@@ -561,14 +626,15 @@ const stdin = new Gio.DataInputStream({
 function readLoop() {
     stdin.read_line_async(GLib.PRIORITY_DEFAULT, null, (src, res) => {
         let line
-        try { [line] = src.read_line_finish_utf8(res) } catch { return loop.quit() }
-        if (line === null) return loop.quit()    // shell closed stdin → exit
+        try { [line] = src.read_line_finish_utf8(res) } catch (e) { log(`stdin read failed: ${e} — exiting`); return loop.quit() }
+        if (line === null) { log("shell closed stdin — exiting"); return loop.quit() }   // normal shutdown
         if (line.trim()) {
-            try { handleMessage(JSON.parse(line)) } catch (e) { emitError(`bad message: ${e}`) }
+            try { handleMessage(JSON.parse(line)) } catch (e) { log(`bad message: ${e}`); emitError(`bad message: ${e}`) }
         }
         readLoop()
     })
 }
 
+log("started")
 readLoop()
 loop.run()

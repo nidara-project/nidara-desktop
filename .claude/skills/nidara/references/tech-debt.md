@@ -728,20 +728,27 @@ until the list below is closed. Do not discover this question at tag time.
 
 Ordered by what hurt most in the live run:
 
-1. **A turn can die in total silence.** Asking it to change the accent colour produced no response, no
-   error, nothing; the daemon was simply gone afterwards. Any abnormal end (daemon exit, empty
-   completion, tool loop giving up) MUST paint something in the island. Silence is the worst outcome
-   and currently the easiest one to hit.
-2. **No telemetry on the agent path.** Not one line in `nidara-ui.log` for spawn, turn start/end, or
-   tool calls — the daemon inherits the shell's stderr, so even its death left no trace, which is why
-   the failure above could not be reconstructed *after the fact*. Log daemon lifecycle + turn
-   boundaries before chasing any further agent bug; without it every future report is unreconstructible.
+1. ~~**A turn can die in total silence.**~~ **ADDRESSED 2026-07-21** (same branch as the provider
+   picker). Every abnormal end now paints: provider error, curl-level failure, empty completion, the
+   `MAX_STEPS` cap (daemon side), daemon death mid-turn / failed spawn / failed write (shell side).
+   `Turn.error` is its own field so an error arriving after partial text is no longer swallowed, and
+   `failTurn()` re-opens the island when the failure happened in the background. The four daemon-side
+   paths are E2E-verified against the mock; **the shell-side paths (death mid-turn, spawn failure)
+   are NOT yet confirmed in a live session** — that is the next thing to check, not an assumption.
+   See the invariant in `state-and-ipc.md`.
+2. ~~**No telemetry on the agent path.**~~ **DONE 2026-07-21** — lifecycle, turn boundaries, every
+   HTTP leg, every tool, and the daemon's exit status/signal, from both halves, into `nidara-ui.log`.
+   Rules (prompt/reply/key never logged; stderr must stay inherited) in `state-and-ipc.md`.
+   A bonus that fell out of it: curl's stderr used to be piped and dropped, so a dead endpoint
+   surfaced as the generic "Request failed" — it now reads "Failed to connect to …".
 3. **Tool calls against Google's OpenAI-compatible path — UNVERIFIED HYPOTHESIS.** The silent death
    happened on a tool-call turn against Gemini. Plausible that its compat endpoint shapes streamed
    tool calls differently from what `makeOpenaiHandler()` expects. **Not measured** — verify with the
    raw stream before acting on it. (Related: Google's own error text now steers callers toward its
    Interactions API, so the compat path may degrade over time → a native Gemini backend may stop
-   being optional.)
+   being optional.) Now cheap to measure: the per-step line logs `text=Nc tools=N stop=…`, so a turn
+   where Gemini's tool call never materialises is visible in `nidara-ui.log` without instrumenting
+   anything further.
 4. **No sense of activity.** `thinking`/`acting` only swap a word in the header. Needs a real pulse
    while streaming, the tool being run, and a visible end-of-turn.
 5. **Replies ignore the UI language.** Answered in English on a Spanish session; `LANG` is in the

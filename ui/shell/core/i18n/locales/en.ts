@@ -662,6 +662,9 @@ export default {
     "island.agent.tokens": "%d tokens",
     "island.agent.empty": "Choose a provider and add your API key to start using the assistant.",
     "island.agent.open-settings": "Open Settings → AI",
+    // Abnormal ends. A turn NEVER finishes without either a reply or one of these.
+    "island.agent.error.died": "The assistant stopped unexpectedly. Send your message again to retry.",
+    "island.agent.error.empty": "The assistant ended the turn without replying.",
 
     // Battery widget
     "widget.battery.label.unavailable": "Battery not available",

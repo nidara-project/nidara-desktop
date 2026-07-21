@@ -337,6 +337,13 @@ window#nidara-bar-zone {
             font-size: $fs-small;
             color: var(--nidara-text);
         }
+        // Abnormal end of a turn. Semantic danger, never accent (accent is
+        // active/selected state only). Dimmer than body text: it explains a
+        // failure, it isn't an alarm.
+        .agent-bubble-error {
+            font-size: $fs-mini;
+            color: var(--nidara-danger);
+        }
     }
     .agent-bubble-user {
         background: var(--nidara-surface-raised);

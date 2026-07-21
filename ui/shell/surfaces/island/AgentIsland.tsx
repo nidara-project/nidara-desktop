@@ -90,6 +90,12 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
         selectable: !isUser,
     })
     const toolsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, css_classes: ["agent-tool-chips"] })
+    // Abnormal end (provider error, daemon death, empty completion). Its own row,
+    // not appended to the text: a turn that streamed half an answer and then died
+    // must SHOW that it died. Semantic danger tint, never accent.
+    const errorLabel = new Gtk.Label({
+        css_classes: ["agent-bubble-error"], wrap: true, xalign: 0, halign: Gtk.Align.START, visible: false,
+    })
     const bubble = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 6,
@@ -97,6 +103,7 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
     })
     bubble.append(textLabel)
     bubble.append(toolsBox)
+    bubble.append(errorLabel)
     // Assistant left, user right — the bubble hugs its content; the row aligns it.
     const row = new Gtk.Box({ halign: isUser ? Gtk.Align.END : Gtk.Align.START })
     row.append(bubble)
@@ -112,10 +119,12 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
         }
         tn.tools.forEach((tc, j) => chips[j]?.update(tc))
         toolsBox.visible = tn.tools.length > 0
+        errorLabel.label = tn.error ?? ""
+        errorLabel.visible = !!tn.error
         // An assistant turn is pushed EMPTY the moment you send; without this it
         // paints as a bare padded pill until the first delta lands. The header's
         // "Thinking…" carries that beat instead.
-        row.visible = !!tn.text || tn.tools.length > 0
+        row.visible = !!tn.text || tn.tools.length > 0 || !!tn.error
     }
     update(turn)
     return { row, rendered: { update } }

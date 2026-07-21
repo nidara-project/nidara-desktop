@@ -304,6 +304,23 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   rejection-surfacing non-destructively with an INVALID value instead (the validator refuses, nothing
   mutates), or flip the real gate in Settings.
 
+- **A turn NEVER ends in silence — treat this as an invariant, not a nicety** (the worst bug of the
+  first live run, tech-debt #39). Every abnormal end has to reach the island: provider error, curl
+  failure, empty completion, the `MAX_STEPS` cap, and — shell-side — the daemon dying mid-turn or a
+  failed spawn/write. `Turn.error` is a field of its OWN (not appended to `text`) precisely so an
+  error that lands AFTER some text already streamed still shows; `AgentService.failTurn()` is the one
+  door for all of it, and it re-opens the island when the failure happened with it closed. If you add
+  a code path that can end a turn, it must end it through text or through `failTurn`.
+- **Telemetry: both halves land in `nidara-ui.log`.** The daemon logs to **stderr, which it inherits
+  from the shell** (`Gio.Subprocess` is spawned with STDIN/STDOUT pipes only — do NOT pipe stderr, that
+  would swallow it), prefixed `[nidara-agent]`; `AgentService` logs `[AgentService]`. Together they
+  cover: spawn (argv) → turn start (provider/backend/model, prompt LENGTH) → each HTTP leg (host, body
+  size, whether a key was found) → each step's result shape → each tool + outcome → turn end (duration,
+  tokens) → daemon death **with exit status or signal**. `grep -E '\[(nidara-)?[aA]gent' nidara-ui.log`
+  reads a whole session. **Never log the prompt or the reply** (a desktop log is not the conversation's
+  home) and never the key — shape only. Without this a user's "it did nothing" is unreconstructible,
+  which is exactly how the 2026-07-21 silent death was lost.
+
 **UI wiring (the face).** `core/AgentService.ts` owns the daemon subprocess + the transcript and
 exposes `send`/`cancel`/`reset` + `subscribe` (see `architecture.md`). The chat lives in the Activity
 Island as the **`agent` mode** (`surfaces/island/AgentIsland.tsx`, `ISLAND_AGENT`,

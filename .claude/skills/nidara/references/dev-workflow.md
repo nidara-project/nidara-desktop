@@ -499,6 +499,26 @@ Env on the mock scripts the tool call: `FAKE_BRAIN_TOOL` / `FAKE_BRAIN_ARGS` (JS
   buffered oddly there; the `{ printf …; tail -f /dev/null; } | gjs` shell form is what worked. The
   `timeout` killing the still-alive daemon (exit 124) is expected — it waits for more stdin.
 
+**Reading what happened.** Both halves log into `nidara-ui.log` (the daemon over the shell's
+inherited stderr), so one grep replays a whole session:
+
+```bash
+grep -E '\[(nidara-)?[aA]gent' "$XDG_RUNTIME_DIR/nidara-ui.log"
+# spawn → turn start (provider/backend/model) → step N POST host → step N ok=… text=…c tools=…
+# → tool <summary> → ok/FAIL → turn end (steps, tokens, ms) → daemon gone (exit N | signal N)
+```
+
+Prompts and replies are deliberately NOT logged (length only), so this is safe to paste into an
+issue. When a report says "it did nothing", this is the first thing to ask for.
+
+**Testing the abnormal ends** (the "a turn must never end in silence" invariant): point the config
+at a dead port for a curl failure; `FAKE_BRAIN_FINAL=""` for an empty completion; a mock that always
+streams a `tool_calls` chunk for the `MAX_STEPS` cap; `pkill -f nidara-agent` mid-turn for the
+shell-side death path. Each must land a visible line in the island — never an empty bubble.
+**Gotcha that cost real time here:** `pkill -f fake-brain.py` **kills the calling shell too** — the
+tool's own command line contains the pattern. Use a pattern that can't match itself
+(`pkill -f 'python3 .*brain[.]py'`) or kill by PID.
+
 **CI girs note:** the daemon + `Settings → AI` import `gi://Secret` (libsecret). It's already
 installed (transitive) so `@girs/secret-1.d.ts` exists locally, but if CI typecheck ever complains
 about `gi://Secret`, the `ci-assets` girs snapshot needs a refresh (`scripts/dev/publish-ci-typings.sh`).
