@@ -191,7 +191,16 @@ function execTool(tu) {
         switch (tu.name) {
             case "run_action": {
                 const name = tu.input?.action || tu.input?.name
-                if (!name) return { ok: false, content: "run_action needs an action name" }
+                if (!name) {
+                    // Hand the model back WHAT IT SENT. A bare "needs an action
+                    // name" told it nothing it didn't already believe, and it
+                    // retried the identical call seven times (2026-07-21).
+                    log(`run_action without an action name — raw args: ${truncate(tu.rawArgs || "(none)", 300)}`)
+                    return {
+                        ok: false,
+                        content: `run_action requires the "action" property, and your call did not have it. You sent: ${truncate(tu.rawArgs || "(no arguments)", 300)}. Retrying the same call will fail again — use a name from the AVAILABLE IPC ACTIONS list, e.g. {"action":"toggleControlCenter"}.`,
+                    }
+                }
                 const args = Array.isArray(tu.input?.args) ? tu.input.args.map(String) : []
                 out = agsRequest([String(name), ...args])
                 break
@@ -465,7 +474,13 @@ function makeOpenaiHandler() {
                 const slot = byIdx[idx] || (byIdx[idx] = { id: tc.id, name: "", argParts: [], extra: null })
                 if (tc.id) slot.id = tc.id
                 if (tc.function?.name) slot.name = tc.function.name
-                if (tc.function?.arguments) slot.argParts.push(tc.function.arguments)
+                // Spec says `arguments` is a STRING of JSON. Read permissively:
+                // some compat endpoints hand back an already-parsed object, and
+                // joining that into a string yields "[object Object]".
+                if (tc.function?.arguments != null) {
+                    const a = tc.function.arguments
+                    slot.argParts.push(typeof a === "string" ? a : JSON.stringify(a))
+                }
                 // Gemini 3 attaches an encrypted "thought signature" to the call
                 // (extra_content.google.thought_signature) and REJECTS the next
                 // request with a 400 unless it is echoed back verbatim. Opaque to
@@ -478,9 +493,15 @@ function makeOpenaiHandler() {
         result() {
             const tus = Object.keys(byIdx).sort((a, b) => +a - +b).map(k => {
                 const s = byIdx[k]
+                const rawArgs = s.argParts.join("")
                 let input = {}
-                try { input = s.argParts.length ? JSON.parse(s.argParts.join("")) : {} } catch {}
-                return { id: s.id || `call_${k}`, name: s.name, input, extra: s.extra }
+                // A swallowed parse failure here is indistinguishable from "the
+                // model sent no arguments" — which is exactly how a malformed
+                // call got misread as the model's fault (2026-07-21). Say so.
+                try { input = rawArgs ? JSON.parse(rawArgs) : {} } catch (e) {
+                    log(`tool args did not parse for ${s.name || "?"}: ${e} — raw: ${truncate(rawArgs, 300)}`)
+                }
+                return { id: s.id || `call_${k}`, name: s.name, input, rawArgs, extra: s.extra }
             })
             // Trust the PRESENCE of tool calls over finish_reason. Measured
             // 2026-07-21 against Google's OpenAI-compatible endpoint
@@ -609,6 +630,7 @@ async function runTurn(userText) {
     const turnUsage = { input: 0, output: 0 }
     const t0 = GLib.get_monotonic_time()
     let step = 0
+    let lastFailure = null     // signature of the previous failed tool call (loop guard)
     try {
         if (!backend) {
             log("turn refused: no provider configured")
@@ -655,6 +677,7 @@ async function runTurn(userText) {
             if (r.stopReason === "tool_use" && r.toolUses.length) {
                 emit({ t: "state", s: "acting" })
                 const results = []
+                let stuckOn = null
                 for (const tu of r.toolUses) {
                     if (cancelled) return
                     emit({ t: "tool", name: tu.name, summary: summarizeTool(tu) })
@@ -662,8 +685,28 @@ async function runTurn(userText) {
                     log(`tool ${summarizeTool(tu)} → ${res.ok ? "ok" : "FAIL"} ${truncate(res.content, 120).replace(/\n/g, " ")}`)
                     emit({ t: "toolresult", ok: res.ok, summary: truncate(res.content, 200) })
                     results.push({ id: tu.id, name: tu.name, content: res.content })
+
+                    // A model that repeats a call it was just told is invalid will
+                    // usually keep repeating it: on 2026-07-21 the identical bad
+                    // run_action ran SEVEN times, burning the step budget and
+                    // ~25k input tokens on one question. Two strikes is enough to
+                    // know it isn't converging — and the user pays per attempt.
+                    const sig = `${tu.name}:${tu.rawArgs || ""}`
+                    if (!res.ok) {
+                        if (sig === lastFailure) stuckOn = summarizeTool(tu)
+                        lastFailure = sig
+                    } else if (sig === lastFailure) {
+                        lastFailure = null
+                    }
                 }
+                // History FIRST, always: every tool call needs its matching result
+                // or the next request is malformed and the provider rejects it.
                 history.push({ role: "tool", results })
+                if (stuckOn) {
+                    log(`aborting turn: identical failing tool call repeated (${stuckOn})`)
+                    emitError("The assistant kept repeating the same failing action, so I stopped it before it ran up the bill. Try rewording what you asked for.")
+                    return
+                }
                 emit({ t: "state", s: "thinking" })
                 continue
             }

@@ -304,6 +304,16 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   providers don't send the field and don't care. The step log prints `sig=N/M` whenever a turn has
   tool calls: `sig=0/1` against Gemini means the signature never arrived and the echo can't work
   (which would make the compat path unusable for tools → the native backend stops being optional).
+- **A failing tool call gets TWO strikes, then the turn is aborted.** Measured 2026-07-21: Gemini
+  called `run_action` with `{"args":[…]}` and no `action`, was told it was invalid, and repeated the
+  identical call **seven times** — the whole step budget and ~25k input tokens on one question. The
+  loop now compares `name + rawArgs` against the previous failure and stops on the repeat. Two
+  supporting rules: a rejection message must hand the model back **what it actually sent** (a bare
+  "needs an action name" told it nothing it didn't already believe), and `history` must receive the
+  tool results **before** any abort — every tool call needs its matching result or the next request
+  is malformed. Also read `arguments` permissively (string per spec, object from some compat
+  endpoints) and **log a JSON parse failure**: swallowing it makes a malformed call look identical to
+  "the model sent nothing", which is how this was misdiagnosed at first.
 - **Tools offered to the model**: `run_action(action, args?)`, `set_config(key, value)`,
   `get_config(key?)`, `dump_state()` — all executed via `ags request`, gates enforced by the shell
   (a refusal comes back as the tool-result STRING; the daemon never re-checks gates). No
