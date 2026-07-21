@@ -485,7 +485,21 @@ Cairo-painted, not CSS. The getter is only ever CALLED while `frac > 0` (i.e. on
 recording), so it doesn't need its own "am I active" guard. Pulsing needs `watchActive` to do more
 than relay one domain signal: it must ALSO tick a ~15fps redraw timer *while active* so the
 sine wave visibly advances, started/stopped on `notify::recording` (no timer at all while idle —
-same "no session-long timers for hidden work" discipline as `poll.ts`). Migrating `screenrecord`
+same "no session-long timers for hidden work" discipline as `poll.ts`).
+
+**The "something is happening" pulse — `common/PulseDots.ts`.** The shell's one working
+indicator: `makePulseDots()` (the three-dot typing idiom, Cairo) and `pulseOpacity(widget)`
+for anything that breathes without its own drawing area (the Assistant capsule's glyph, a
+running tool chip's dot). Two rules that are easy to re-implement wrongly:
+**ONE refcounted driver, never a timer per consumer** — a second timer advances the shared
+phase twice as fast, so the animation speed would depend on how many indicators happen to be
+on screen; consumers subscribe/unsubscribe and the single 10 fps timer exists only while at
+least one is active AND mapped. And **gate on `get_mapped()`, not just on "is it busy"** —
+the island hides rather than destroys, so a widget stays "active" while invisible and would
+otherwise tick forever behind a closed panel. Opacity, never `transform: scale` (commandment
+3), and alpha is what reads as breathing anyway.
+
+Migrating `screenrecord`
 also retired its OWN one-off CSS states (`.rec-active-bg` icon-badge tint + keyframe, same
 badge-only-not-whole-capsule pattern VPN had before), and deleted `.rec-stop-icon { color: danger
 }` outright — dead CSS on a `Gtk.Image`, the exact bug class documented in the icon-tinting entry
@@ -825,7 +839,8 @@ ghost twin must carry NO margins or every offset is applied twice (the media twi
 12px double-shift pushed the EQ past the glass edge mid-morph and made the contraction
 land with a visible re-seat; user-caught 2026-07-19).
 Ghost twins run NO timers — live text/phase is SHARED module state advanced only by the
-real compact (the EQ phase in `PlayerIsland.tsx`; the REC elapsed label in
+real compact (the EQ phase in `PlayerIsland.tsx`; the shared pulse driver in
+`common/PulseDots.ts`; the REC elapsed label in
 `IslandActivities.tsx` syncs every registered label including the twins'), so ghosts
 repaint bit-identical via the morph's own per-frame redraw (an idle ghost never damages
 the bar). A mode with an art pair gets a media twin with a transparent art slot (layout

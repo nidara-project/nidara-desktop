@@ -754,8 +754,15 @@ Ordered by what hurt most in the live run:
    compat endpoint is a moving target**, and its own error text steers callers toward the Interactions
    API — a native Gemini backend is drifting from "optional" to "eventually necessary". Not building
    it yet, but that is the direction; log `sig=`/`finish=` are the early-warning instruments.
-4. **No sense of activity.** `thinking`/`acting` only swap a word in the header. Needs a real pulse
-   while streaming, the tool being run, and a visible end-of-turn.
+4. ~~**No sense of activity.**~~ **ADDRESSED 2026-07-21** (branch `agent-feel`). The root problem was
+   not the missing animation but that the pending assistant bubble was HIDDEN (empty rows are
+   hidden), so the transcript showed literally nothing during the wait — a blank panel where the
+   user is actually looking. Now: the pending bubble holds a three-dot pulse until the first token
+   lands (`common/PulseDots.ts`), the capsule glyph breathes while a turn is in flight (the only
+   sign of life when work runs with the island closed), and a tool chip's dot breathes while that
+   tool is RUNNING, settling when its result arrives. Shared refcounted driver — see
+   `design-system.md`. **Still open under this heading:** no explicit end-of-turn beat beyond the
+   dots vanishing and the header switching to the token count; judge whether that is enough in use.
 5. ~~**Replies ignore the UI language.**~~ **The item was WRONG — reframed by the user 2026-07-21.**
    The desired behaviour is the opposite of what it asked for: **the assistant replies in the language
    of the MESSAGE, and follows the user if they switch. The desktop locale is a hint for the ambiguous
@@ -783,17 +790,25 @@ Ordered by what hurt most in the live run:
    **General rule this cost three wrong conclusions to learn: judge a provider behaviour over a
    RUN of requests, never one reading.** Established regardless: the real cost driver is STEP COUNT
    (an 8-step turn cost ~25k input tokens).
-7. **Tool results go into history at full length, forever — now COMPACTED, not capped.** The island
+7. **Tool results go into history at full length, forever — COMPACTED, not capped.** The island
    truncates a result to 200 chars for display, but `history` keeps the whole thing and every later
-   request resends it. `compactJson()` is now applied to tool output too (−25% to −34%: listWindows
-   −32%, listApps −25%), which is lossless and compounds because the result is re-sent on every
-   later step. **What remains is genuinely lossy and is deliberately NOT done**: capping a large
-   result, or dropping old turns from history. Both cost capability (a truncated window list, a
-   forgotten earlier instruction) and the cache already absorbs much of the repeated prefix. The
-   lossless well is close to dry here — the honest next lever is fewer STEPS, not smaller payloads.
-   `step N: POST host body=Xb (sys=Yb hist=Zb)` in the log tells you which half is actually growing
-   before anyone optimises on instinct.
-8. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
+   request resends it. `compactJson()` applies to tool output too (listWindows −32%, listApps −25%),
+   which is lossless and compounds. Since the catalogues became tools (progressive disclosure, see
+   `state-and-ipc.md`), **the catalogue itself is now a tool result living in history** — so this is
+   the growth path that matters most. What remains is genuinely lossy and deliberately NOT done:
+   capping a large result, or dropping old turns. Both cost capability. `step N: POST host body=Xb
+   (sys=Yb tools=Zb hist=Wb)` tells you which part is actually growing before anyone optimises on
+   instinct.
+8. **The island's token counter is CUMULATIVE and doesn't say so (2026-07-21).** It shows the whole
+   conversation's usage; the user read "2k tokens" as the cost of the turn they had just sent (that
+   turn was 1,078). Not wrong data, ambiguous framing — a number in a chat header doesn't announce
+   its own scope. **Deferred by the user ("lo dejamos así de momento"), with their idea recorded:
+   put the PER-TURN detail in a tooltip** and leave the header showing the conversation total, which
+   is what actually reaches the bill. If picked up: use the house tooltip (`common/Tooltip.ts`) —
+   there are no native GTK tooltips in this shell — and the per-turn numbers already exist in the
+   daemon's `turn end` log line, they simply aren't carried to the UI (only the running totals are,
+   via `done`). Cheapest shape: add the turn's own usage to the `done` payload alongside the totals.
+9. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
    retired — picking it 404s. The catalog exposes no retired flag, so this cannot be filtered
    reliably; the model field stays free text on purpose.
 

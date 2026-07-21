@@ -140,6 +140,12 @@ export function registerConfigEntries() {
         writable: false,
         get: () => agentConfig.allowScreenshot,
     })
+    registerConfig("ai.allowWindowClose", {
+        desc: "Whether agents may close windows via the closeWindow IPC. Toggle it in Settings → AI.",
+        type: "boolean",
+        writable: false,
+        get: () => agentConfig.allowWindowClose,
+    })
     registerConfig("ai.allowMcp", {
         desc: "Whether nidara-mcp serves tools to MCP clients. Toggle it in Settings → AI.",
         type: "boolean",

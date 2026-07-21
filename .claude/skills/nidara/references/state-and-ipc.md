@@ -77,6 +77,17 @@ cluster (see below): `listWindows`, `listWorkspaces`, `focusWorkspace <id|±1|na
 `moveWindowOutOfGroup <window>`, `sendWindowToSpecial [name] [window]`, `setLayout <dwindle|master>`.
 Aliases are intentional — Hyprland keybinds were renamed at one point and old names are kept.
 
+**One member of that cluster is GATED: `closeWindow`** (`ai.allowWindowClose`, default **true**).
+The rest stay ungated on purpose — focus, move, float, fullscreen, pin, group and layout are all
+reversible, so they are the shell driving its own compositor. Closing is the one that can destroy
+unsaved work, and "the model misread a sentence" is a realistic way to reach it (user's call
+2026-07-21). Default true because it *asks* the window to close rather than killing it, so an app
+with unsaved work still gets to prompt, and "close the browser" is a reasonable thing to ask an
+assistant. The gate is enforced in the SHELL's IPC handler like every other gate — never in the
+daemon.
+
+
+
 `screenshot [path]` captures the focused monitor with grim and returns the PNG path
 (default `/tmp/nidara-shot-<ts>.png`) — the visual-verification leg of the agent
 loop: open a surface (`toggleCC`, `settingsPage X`), wait ~1.5 s, `screenshot`, read the
@@ -313,6 +324,60 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   providers don't send the field and don't care. The step log prints `sig=N/M` whenever a turn has
   tool calls: `sig=0/1` against Gemini means the signature never arrived and the echo can't work
   (which would make the compat path unusable for tools → the native backend stops being optional).
+- **A failing tool call gets TWO strikes, then the turn is aborted.** Measured 2026-07-21: Gemini
+  called `run_action` with `{"args":[…]}` and no `action`, was told it was invalid, and repeated the
+  identical call **seven times** — the whole step budget and ~25k input tokens on one question. The
+  loop now compares `name + rawArgs` against the previous failure and stops on the repeat. Two
+  supporting rules: a rejection message must hand the model back **what it actually sent** (a bare
+  "needs an action name" told it nothing it didn't already believe), and `history` must receive the
+  tool results **before** any abort — every tool call needs its matching result or the next request
+  is malformed. Also read `arguments` permissively (string per spec, object from some compat
+  endpoints) and **log a JSON parse failure**: swallowing it makes a malformed call look identical to
+  "the model sent nothing", which is how this was misdiagnosed at first.
+- **Key streamed tool calls by index OR id — never `index ?? 0`.** OpenAI puts an `index` on every
+  chunk; **Google's compat layer omits it entirely** and identifies calls by `id`. Defaulting to 0
+  filed every call in one slot: two calls merged into one, arguments concatenated into invalid JSON
+  (`{"action":"listWindows"}{}`), name overwritten by the last, and the UI showed a `run_action ?`
+  chip for a call the model never made that way. This was the real cause of what looked like a dumb
+  model. Resolution order: explicit `index` → call `id` → continue the slot being filled (a pure
+  continuation chunk carries neither). Keep the slots insertion-ordered so multiple calls execute in
+  the order asked for.
+- **Tools offered to the model**: `run_action(action, args?)`, `set_config(key, value)`,
+  `get_config(key?)`, `dump_state()` — all executed via `ags request`, gates enforced by the shell
+  (a refusal comes back as the tool-result STRING; the daemon never re-checks gates). No
+  screenshot/computer-use in v1.
+- **System prompt = a small static core. The catalogues are TOOLS, not prose** (progressive
+  disclosure, user's call 2026-07-21: "load what the agent needs when it needs it"). It used to paste
+  in the whole IPC action list + settings schema + a state snapshot: **2,269 of the 3,157 tokens a
+  bare "hello" cost — 72% of every request** for knowledge most turns never touch. Now
+  `list_actions` / `describe_settings` / `dump_state` are tools the model calls when a request
+  actually reaches the desktop, and the answer then lives in history for the rest of the
+  conversation. Measured: a greeting **12,630 → 4,041 bytes (−68%)**; a desktop turn that already
+  discovered what it needs, −66%; a desktop turn INCLUDING the discovery round-trip, −9% (the extra
+  request is a small one). It also loads only the half it needs — a question about windows never
+  pays for the settings schema.
+  **The action NAMES stay in the prompt; only their descriptions are lazy.** Progressive disclosure
+  as first built cost real capability: told it could "manage windows and workspaces" but with no way
+  to know `listWindows` existed, the model reached for `dump_state` (no window list in it) and told
+  the user it couldn't see their windows — a promise with no means of discovery (user-caught
+  2026-07-21). A bare name index costs **113 tokens against 1,231** for the full catalogue, and the
+  names are self-describing enough to act on directly, so it also makes the common path CHEAPER: a
+  "what windows do I have" turn went 23,287 → 11,444 bytes by skipping the lookup entirely.
+  `list_actions` remains for descriptions and argument shapes. The index is GENERATED from
+  `listActions` at session start — never hardcode it, or a new IPC action stops appearing for free.
+  General lesson: with progressive disclosure, **hide the detail, never the existence**.
+  **Answering "what can you do" must NOT go through the catalogues** — measured 2026-07-21: it sent
+  the model after BOTH full dumps, 4k tokens to answer a question about itself, and a reply written
+  from 42 raw IPC names (`toggleCC`, `sendWindowToSpecial`) is a worse answer than one written from a
+  curated summary. So the core carries a one-line capability summary plus an explicit rule to answer
+  from it. That summary costs ~53 tokens on EVERY request, which is only worth it because it buys a
+  better answer as well as a cheaper one — keep it short for exactly that reason.
+  **The cost of this design is compliance**: a model that forgets to look up will invent action
+  names. Three defences, keep all three — the core rules are imperative ("NEVER invent or guess"),
+  each tool description repeats the requirement, and `run_action`'s rejection hands back what was
+  actually sent. If a model is seen guessing, strengthen those before reverting to a fat prompt.
+  Side benefit: `buildSystemPrompt()` no longer calls `ags request` at all, so the daemon no longer
+  depends on the shell being up at spawn.
 - **A failing tool call gets TWO strikes, then the turn is aborted.** Measured 2026-07-21: Gemini
   called `run_action` with `{"args":[…]}` and no `action`, was told it was invalid, and repeated the
   identical call **seven times** — the whole step budget and ~25k input tokens on one question. The
