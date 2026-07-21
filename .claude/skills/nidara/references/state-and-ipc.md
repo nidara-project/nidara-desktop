@@ -289,6 +289,15 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   session with no Secret Service yet just proceeds keyless (fine for Ollama; an auth error for
   Anthropic). The keyring is unlocked at login via PAM (`pam_gnome_keyring` in `/etc/pam.d/greetd`,
   wired by `nidara-setup`) and its secrets component is launched from `hyprland.lua`.
+- **Token accounting has three rules, each learned from getting it wrong (2026-07-21).**
+  (1) **`done` carries the turn's cost and lives in the `finally`** — it used to sit on the success
+  path, so the expensive failures (a 25k-token turn that hit the step cap) reported *zero*. Usage is
+  also accumulated BEFORE any early return. (2) **Normalise across backends**: OpenAI-compatible
+  `prompt_tokens` INCLUDES cached tokens, Anthropic's `input_tokens` EXCLUDES cache reads/writes —
+  so the Anthropic handler adds them back. Without this the same label means two different things
+  depending on which provider the user picked. (3) **`cached` is a SUBSET of input, never an
+  addition** — the island shows it as a percentage (`5.4k tokens · 74% cached`), because the useful
+  question is "is this being re-read cheaply", which a raw count doesn't answer.
 - **Read tool calls from their PRESENCE, not from `finish_reason`** (measured 2026-07-21, Google
   `gemini-3-flash-preview` over the compat endpoint): it streams a `tool_calls` delta and then
   finishes with `"stop"`. The loop used to gate execution on `finish_reason === "tool_calls"`, so the

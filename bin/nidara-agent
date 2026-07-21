@@ -218,7 +218,11 @@ function execTool(tu) {
             default:
                 return { ok: false, content: `unknown tool: ${tu.name}` }
         }
-        return { ok: true, content: out || "(ok)" }
+        // Same lossless squeeze as the system prompt, and it matters MORE here:
+        // a tool result is appended to `history` and re-sent on every later
+        // request of the conversation, so its pretty-printing is paid again and
+        // again. Measured 2026-07-21: listWindows −32%, listApps −25%.
+        return { ok: true, content: compactJson(out) || "(ok)" }
     } catch (e) {
         return { ok: false, content: String(e?.message ?? e) }
     }
@@ -400,12 +404,13 @@ function makeAnthropicHandler() {
             switch (data.type || curEvent) {
                 case "message_start": {
                     const u = data.message?.usage ?? {}
-                    usage.input = u.input_tokens ?? 0
-                    // Anthropic bills cache reads/writes separately from
-                    // input_tokens, so the raw count alone understates a cache
-                    // MISS and overstates nothing — count both to see the split.
+                    // Anthropic reports cache reads/writes OUTSIDE input_tokens,
+                    // unlike the OpenAI shape where prompt_tokens includes them.
+                    // Normalise to "all prompt tokens processed" so the island's
+                    // number means the same thing whichever provider you picked.
                     usage.cached = u.cache_read_input_tokens ?? 0
                     usage.cacheWrite = u.cache_creation_input_tokens ?? 0
+                    usage.input = (u.input_tokens ?? 0) + usage.cached + usage.cacheWrite
                     break
                 }
                 case "content_block_start":
@@ -650,7 +655,13 @@ let cancelled = false
 async function runTurn(userText) {
     const cfg = readAiJson()
     const backend = cfg.brainBackend || ""
-    const turnUsage = { input: 0, output: 0 }
+    // input = every prompt token the provider processed this turn, COMPARABLE
+    // across backends: OpenAI-compatible `prompt_tokens` already includes the
+    // cached ones, while Anthropic reports cache reads/writes OUTSIDE
+    // `input_tokens` — so the raw fields mean different things and are normalised
+    // in the handlers, not here. `cached` is the subset served from cache (cheap);
+    // total − cached is what was billed at full rate.
+    const turnUsage = { input: 0, output: 0, cached: 0 }
     const t0 = GLib.get_monotonic_time()
     let step = 0
     let lastFailure = null     // signature of the previous failed tool call (loop guard)
@@ -670,7 +681,11 @@ async function runTurn(userText) {
             const key = lookupKey(cfg.brainProvider || "")
             const req = backend === "anthropic" ? buildAnthropicReq(cfg, key, system) : buildOpenaiReq(cfg, key, system)
             const handler = backend === "anthropic" ? makeAnthropicHandler() : makeOpenaiHandler()
-            log(`step ${step}: POST ${hostOf(req.url)} body=${req.body.length}b key=${key ? "yes" : "none"}`)
+            // sys/hist split, because "the request is big" is not actionable:
+            // the system prompt is FIXED (and cacheable), the history GROWS. Which
+            // one dominates decides whether to shrink the prompt or the loop.
+            const sysBytes = system.length
+            log(`step ${step}: POST ${hostOf(req.url)} body=${req.body.length}b (sys=${sysBytes}b hist=${req.body.length - sysBytes}b) key=${key ? "yes" : "none"}`)
 
             const { ok, raw, err } = await streamCurl(req, (l) => handler.onLine(l))
             if (cancelled) { log(`step ${step}: cancelled by user`); return }
@@ -690,12 +705,17 @@ async function runTurn(userText) {
                 ? ` cached=${r.usage.cached}${r.usage.cacheWrite ? `+w${r.usage.cacheWrite}` : ""}`
                 : ""
             log(`step ${step}: ok=${ok} text=${r.text.length}c tools=${r.toolUses.length}${r.toolUses.length ? ` sig=${sigs}/${r.toolUses.length}` : ""} stop=${r.stopReason || "?"} finish=${r.finishReason || "?"} tok=${r.usage.input}/${r.usage.output}${cacheNote}`)
+            // Count BEFORE any early return: a turn that fails still cost money,
+            // and the failures are the expensive ones (a 25k-token turn that
+            // ended at the step cap reported ZERO usage — user-caught 07-21).
+            turnUsage.input += r.usage.input
+            turnUsage.output += r.usage.output
+            turnUsage.cached += r.usage.cached
+
             if (r.errorMsg) { log(`step ${step}: provider error: ${truncate(r.errorMsg, 200)}`); emitError(r.errorMsg); return }
             if (!ok) { emitError(bestError(raw, err)); return }
 
             history.push({ role: "assistant", text: r.text, toolUses: r.toolUses })
-            turnUsage.input += r.usage.input
-            turnUsage.output += r.usage.output
 
             if (r.stopReason === "tool_use" && r.toolUses.length) {
                 emit({ t: "state", s: "acting" })
@@ -749,9 +769,12 @@ async function runTurn(userText) {
             emitError(`Stopped after ${MAX_STEPS} tool steps without a final answer.`)
             return
         }
-        emit({ t: "done", usage: turnUsage })
     } finally {
-        log(`turn end: steps=${Math.min(step, MAX_STEPS)} tok=${turnUsage.input}/${turnUsage.output} ${Math.round((GLib.get_monotonic_time() - t0) / 1000)}ms`)
+        // `done` carries the turn's cost and NOTHING else, so it belongs in the
+        // finally: it used to sit on the success path only, which meant the
+        // expensive failures were exactly the ones the island never counted.
+        emit({ t: "done", usage: turnUsage })
+        log(`turn end: steps=${Math.min(step, MAX_STEPS)} tok=${turnUsage.input}/${turnUsage.output} cached=${turnUsage.cached} ${Math.round((GLib.get_monotonic_time() - t0) / 1000)}ms`)
         emit({ t: "state", s: "idle" })
     }
 }

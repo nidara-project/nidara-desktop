@@ -774,13 +774,16 @@ Ordered by what hurt most in the live run:
    shrinking has poor returns. What is established: the trim did work (step 1 of a fresh session
    4403 → 2885 input tokens, −34%), and the real cost driver is STEP COUNT — an 8-step turn cost
    ~25k input tokens. Anthropic's explicit `cache_control` is in but UNVERIFIED (no key to test).
-7. **Tool results go into history at FULL length, forever.** Found while cutting the system prompt
-   (2026-07-21). The island truncates a tool result to 200 chars for display, but `history` keeps the
-   whole thing, and every later request resends it: one `get_config` with no key adds ~4.5 KB of
-   settings JSON to every subsequent request of that conversation. The system prompt is now the
-   *fixed* cost; this is the one that GROWS. Not fixed yet because the honest answer needs measuring
-   (a cap degrades what the model can reason about, and `cached=` may already absorb most of it) —
-   measure a long conversation before capping anything.
+7. **Tool results go into history at full length, forever — now COMPACTED, not capped.** The island
+   truncates a result to 200 chars for display, but `history` keeps the whole thing and every later
+   request resends it. `compactJson()` is now applied to tool output too (−25% to −34%: listWindows
+   −32%, listApps −25%), which is lossless and compounds because the result is re-sent on every
+   later step. **What remains is genuinely lossy and is deliberately NOT done**: capping a large
+   result, or dropping old turns from history. Both cost capability (a truncated window list, a
+   forgotten earlier instruction) and the cache already absorbs much of the repeated prefix. The
+   lossless well is close to dry here — the honest next lever is fewer STEPS, not smaller payloads.
+   `step N: POST host body=Xb (sys=Yb hist=Zb)` in the log tells you which half is actually growing
+   before anyone optimises on instinct.
 8. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
    retired — picking it 404s. The catalog exposes no retired flag, so this cannot be filtered
    reliably; the model field stays free text on purpose.

@@ -48,7 +48,7 @@ let stdin: InstanceType<typeof Gio.DataOutputStream> | null = null
 let transcript: Turn[] = []
 let busy = false
 let agentState: "idle" | "thinking" | "acting" = "idle"
-let usage = { input: 0, output: 0 }
+let usage = { input: 0, output: 0, cached: 0 }
 let lastError: string | null = null
 let cancelling = false      // user pressed cancel → an empty turn is expected, not a fault
 
@@ -211,6 +211,11 @@ function handleEvent(ev: any) {
         case "done":
             usage.input += ev.usage?.input ?? 0
             usage.output += ev.usage?.output ?? 0
+            // Prompt tokens the provider served from cache — a SUBSET of input,
+            // not an extra. Surfaced separately because it is the difference
+            // between "this conversation is getting expensive" and "most of it
+            // is being re-read cheaply".
+            usage.cached += ev.usage?.cached ?? 0
             notify()
             break
         case "error": {
@@ -271,7 +276,7 @@ export const agentService = {
     reset() {
         log(`reset: ${transcript.length} turns dropped`)
         transcript = []
-        usage = { input: 0, output: 0 }
+        usage = { input: 0, output: 0, cached: 0 }
         lastError = null
         cancelling = false
         writeLine({ t: "reset" })

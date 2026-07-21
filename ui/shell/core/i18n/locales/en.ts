@@ -659,7 +659,8 @@ export default {
     "island.agent.status.acting": "Working…",
     "island.agent.placeholder": "Ask or tell me to do something…",
     "island.agent.reset": "New conversation",
-    "island.agent.tokens": "%d tokens",
+    "island.agent.tokens": "%s tokens",
+    "island.agent.tokens-cached": "%d% cached",
     "island.agent.empty": "Choose a provider and add your API key to start using the assistant.",
     "island.agent.open-settings": "Open Settings → AI",
     // Abnormal ends. A turn NEVER finishes without either a reply or one of these.

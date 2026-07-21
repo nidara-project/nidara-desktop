@@ -28,6 +28,26 @@ import { t } from "../../core/i18n"
 // MorphRevealer (same contract as PLAYER_GLASS / WO_GLASS / BATTERY_GLASS).
 export const AGENT_GLASS = { radius: 32, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
 
+// 950 → "950", 5432 → "5.4k", 25310 → "25k". A long conversation must not push
+// the header title around.
+function compactCount(n: number): string {
+    if (n < 1000) return String(n)
+    return `${(n / 1000).toFixed(n < 10000 ? 1 : 0)}k`
+}
+
+// Total tokens, plus the SHARE served from the provider's cache when there is
+// one. The share, not the raw count: what the user wants at a glance is whether
+// this conversation is being re-read cheaply — "74% cached" answers that where
+// "9812" does not. `cached` is a subset of input, never added on top.
+function formatUsage(u: { input: number; output: number; cached: number }): string {
+    const label = t("island.agent.tokens").replace("%s", compactCount(u.input + u.output))
+    if (u.cached > 0 && u.input > 0) {
+        const pct = Math.round((u.cached / u.input) * 100)
+        if (pct >= 1) return `${label} · ${t("island.agent.tokens-cached").replace("%d", String(pct))}`
+    }
+    return label
+}
+
 // Compact status word from the service state.
 function statusWord(): string {
     if (agentService.state === "acting") return t("island.agent.status.acting")
@@ -235,7 +255,7 @@ export default function AgentIsland() {
         const u = svc.usage
         statusLabel.label = svc.busy
             ? statusWord()
-            : (u.input + u.output > 0 ? t("island.agent.tokens").replace("%d", String(u.input + u.output)) : "")
+            : (u.input + u.output > 0 ? formatUsage(u) : "")
 
         if (!configured) return
 
