@@ -741,14 +741,15 @@ Ordered by what hurt most in the live run:
    Rules (prompt/reply/key never logged; stderr must stay inherited) in `state-and-ipc.md`.
    A bonus that fell out of it: curl's stderr used to be piped and dropped, so a dead endpoint
    surfaced as the generic "Request failed" — it now reads "Failed to connect to …".
-3. **Tool calls against Google's OpenAI-compatible path — UNVERIFIED HYPOTHESIS.** The silent death
-   happened on a tool-call turn against Gemini. Plausible that its compat endpoint shapes streamed
-   tool calls differently from what `makeOpenaiHandler()` expects. **Not measured** — verify with the
-   raw stream before acting on it. (Related: Google's own error text now steers callers toward its
-   Interactions API, so the compat path may degrade over time → a native Gemini backend may stop
-   being optional.) Now cheap to measure: the per-step line logs `text=Nc tools=N stop=…`, so a turn
-   where Gemini's tool call never materialises is visible in `nidara-ui.log` without instrumenting
-   anything further.
+3. ~~**Tool calls against Google's OpenAI-compatible path — UNVERIFIED HYPOTHESIS.**~~ **MEASURED AND
+   FIXED 2026-07-21**, by the telemetry above, on the first try: `step 1: ok=true text=0c tools=1
+   stop=end` — Gemini streamed the tool call and finished with `"stop"` instead of `"tool_calls"`, so
+   the loop skipped it and ended the turn empty. The user's symptom was exact: *"only answers the
+   first time, the second time it doesn't"* — the first turn needed no tool. Fix: execute tool calls
+   when they are PRESENT (see `state-and-ipc.md`). This was the payoff for doing items 1–2 first;
+   diagnosis took one `grep`, not a debugging session. (Related and still true: Google's error text
+   steers callers toward its Interactions API, so the compat path may degrade over time → a native
+   Gemini backend may stop being optional.)
 4. **No sense of activity.** `thinking`/`acting` only swap a word in the header. Needs a real pulse
    while streaming, the tool being run, and a visible end-of-turn.
 5. **Replies ignore the UI language.** Answered in English on a Spanish session; `LANG` is in the

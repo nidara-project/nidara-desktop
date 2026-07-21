@@ -289,6 +289,13 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   session with no Secret Service yet just proceeds keyless (fine for Ollama; an auth error for
   Anthropic). The keyring is unlocked at login via PAM (`pam_gnome_keyring` in `/etc/pam.d/greetd`,
   wired by `nidara-setup`) and its secrets component is launched from `hyprland.lua`.
+- **Read tool calls from their PRESENCE, not from `finish_reason`** (measured 2026-07-21, Google
+  `gemini-3-flash-preview` over the compat endpoint): it streams a `tool_calls` delta and then
+  finishes with `"stop"`. The loop used to gate execution on `finish_reason === "tool_calls"`, so the
+  call was dropped, no tool ran, and the turn ended with nothing to say — **every conversation worked
+  once and then went dead on the first turn that needed a tool**. If tool calls accumulated, execute
+  them. The per-step log prints `stop=` (how the loop read it) next to `finish=` (the provider's raw
+  value) precisely so the next divergence shows up instead of being inferred.
 - **Tools offered to the model**: `run_action(action, args?)`, `set_config(key, value)`,
   `get_config(key?)`, `dump_state()` — all executed via `ags request`, gates enforced by the shell
   (a refusal comes back as the tool-result STRING; the daemon never re-checks gates). No

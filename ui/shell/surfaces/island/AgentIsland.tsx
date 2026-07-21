@@ -92,10 +92,17 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
     const toolsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, css_classes: ["agent-tool-chips"] })
     // Abnormal end (provider error, daemon death, empty completion). Its own row,
     // not appended to the text: a turn that streamed half an answer and then died
-    // must SHOW that it died. Semantic danger tint, never accent.
-    const errorLabel = new Gtk.Label({
-        css_classes: ["agent-bubble-error"], wrap: true, xalign: 0, halign: Gtk.Align.START, visible: false,
-    })
+    // must SHOW that it died.
+    //
+    // The DOT carries the danger colour and the text stays neutral — the house
+    // rule (same as the failed tool chip right above, same as the critical
+    // battery glyph). Red text on glass reads badly, which is why the first cut
+    // of this was rejected.
+    const errorDot = new Gtk.Box({ css_classes: ["agent-error-dot"], width_request: 6, height_request: 6, valign: Gtk.Align.START })
+    const errorText = new Gtk.Label({ css_classes: ["agent-error-text"], wrap: true, xalign: 0, halign: Gtk.Align.START })
+    const errorLabel = new Gtk.Box({ css_classes: ["agent-error-row"], spacing: 6, visible: false })
+    errorLabel.append(errorDot)
+    errorLabel.append(errorText)
     const bubble = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 6,
@@ -119,7 +126,7 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
         }
         tn.tools.forEach((tc, j) => chips[j]?.update(tc))
         toolsBox.visible = tn.tools.length > 0
-        errorLabel.label = tn.error ?? ""
+        errorText.label = tn.error ?? ""
         errorLabel.visible = !!tn.error
         // An assistant turn is pushed EMPTY the moment you send; without this it
         // paints as a bare padded pill until the first delta lands. The header's

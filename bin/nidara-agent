@@ -361,7 +361,7 @@ function makeAnthropicHandler() {
                 try { input = t.jsonParts.length ? JSON.parse(t.jsonParts.join("")) : {} } catch {}
                 return { id: t.id, name: t.name, input }
             })
-            return { text, toolUses: tus, stopReason, usage, errorMsg }
+            return { text, toolUses: tus, stopReason, finishReason: stopReason, usage, errorMsg }
         },
     }
 }
@@ -404,7 +404,16 @@ function makeOpenaiHandler() {
                 try { input = s.argParts.length ? JSON.parse(s.argParts.join("")) : {} } catch {}
                 return { id: s.id || `call_${k}`, name: s.name, input }
             })
-            return { text, toolUses: tus, stopReason: finishReason === "tool_calls" ? "tool_use" : "end", usage, errorMsg }
+            // Trust the PRESENCE of tool calls over finish_reason. Measured
+            // 2026-07-21 against Google's OpenAI-compatible endpoint
+            // (gemini-3-flash-preview): it streams a tool call and then finishes
+            // with "stop", not "tool_calls". Keying off finish_reason alone
+            // dropped the call on the floor and ended the turn with nothing to
+            // say — the second turn of every conversation that needed a tool.
+            // A model that asked for a tool must get its result back; a stray
+            // finish_reason is the provider's business, not the loop's.
+            const wantsTools = tus.length > 0 || finishReason === "tool_calls"
+            return { text, toolUses: tus, stopReason: wantsTools ? "tool_use" : "end", finishReason, usage, errorMsg }
         },
     }
 }
@@ -544,7 +553,10 @@ async function runTurn(userText) {
             if (cancelled) { log(`step ${step}: cancelled by user`); return }
 
             const r = handler.result()
-            log(`step ${step}: ok=${ok} text=${r.text.length}c tools=${r.toolUses.length} stop=${r.stopReason || "?"} tok=${r.usage.input}/${r.usage.output}`)
+            // finish= is the provider's RAW value; stop= is how the loop read it.
+            // Keep both: the two disagreeing is exactly how Google's compat path
+            // was caught dropping tool calls.
+            log(`step ${step}: ok=${ok} text=${r.text.length}c tools=${r.toolUses.length} stop=${r.stopReason || "?"} finish=${r.finishReason || "?"} tok=${r.usage.input}/${r.usage.output}`)
             if (r.errorMsg) { log(`step ${step}: provider error: ${truncate(r.errorMsg, 200)}`); emitError(r.errorMsg); return }
             if (!ok) { emitError(bestError(raw, err)); return }
 
