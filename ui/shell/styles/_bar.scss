@@ -337,6 +337,19 @@ window#nidara-bar-zone {
             font-size: $fs-small;
             color: var(--nidara-text);
         }
+        // Abnormal end of a turn. The DOT is the semantic mark, the text stays
+        // neutral-dim — red text on glass reads badly (house rule: colour goes in
+        // the mark or the fill, never in the copy).
+        .agent-error-row { margin-top: 2px; }
+        .agent-error-dot {
+            margin-top: 5px;                     // optical: aligns to the first text line
+            border-radius: var(--nidara-radius-pill);
+            background: var(--nidara-danger);
+        }
+        .agent-error-text {
+            font-size: $fs-small;
+            color: var(--nidara-text-dim);
+        }
     }
     .agent-bubble-user {
         background: var(--nidara-surface-raised);

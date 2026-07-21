@@ -145,6 +145,23 @@ Tokens live in `styles/_base.scss`. Dark/light values are injected at runtime by
 
 The only legitimate hex literals are the accent swatches and the danger/success/warning seeds defined inside `NidaraTheme.ts`.
 
+### Semantic colour goes in a MARK or a FILL — never in the copy
+
+**Do not tint text `--nidara-danger`/`--nidara-warning`.** Red type on glass reads badly (thin
+weights over a translucent, blurred backdrop), and it shouts where a mark suffices. The signal
+belongs to a small dedicated element next to the neutral text, or to a filled background:
+
+| Signal | Where the colour lives | Text |
+|---|---|---|
+| Tool call rejected (`.agent-tool-fail`) | the 6px dot | `--nidara-text-dim` |
+| Turn ended abnormally (`.agent-error-row`) | the 6px dot | `--nidara-text-dim` |
+| Battery critical | the battery glyph's fill | plain white `%` |
+| Recording active | the whole capsule fills | `--nidara-text` on top |
+
+Rejected twice now (battery `%` 2026-07-20, assistant errors 2026-07-21 — both caught by the
+user's eye), which is why it is a rule and not a preference. Corollary already documented below:
+once a capsule fills with a semantic colour, do NOT tint the label on top of it as well.
+
 ## Shell-skin appearance & opacity (`appearance.shellAppearance` + the glass sliders)
 
 ### Appearance pin — the WHOLE shell skin, not just bar/dock

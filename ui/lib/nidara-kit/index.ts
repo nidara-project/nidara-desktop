@@ -31,7 +31,7 @@ export { NidaraFontButton } from "./fontbutton"
 
 // NidaraRow / NidaraList — universal list row + boxed list card (the one place
 // a row/list is built; used by Settings, Control Center and any future surface)
-export { NidaraRow } from "./row"
+export { NidaraRow, NidaraStackedRow } from "./row"
 export type { NidaraRowResult } from "./row"
 export { NidaraList } from "./list"
 export type { NidaraListResult } from "./list"

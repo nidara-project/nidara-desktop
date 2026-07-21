@@ -41,6 +41,19 @@ const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
 const MAX_STEPS = 8            // hard cap on tool-use round-trips per user turn
 const HTTP_TIMEOUT = "120"     // curl --max-time (seconds)
 
+// ── Telemetry ────────────────────────────────────────────────────────────────
+// stderr is INHERITED from the shell, which nidara-ui appends to nidara-ui.log —
+// so these lines land next to the shell's own, in order, for free.
+//
+// Rule learned the hard way (2026-07-21): a turn that fails must be
+// reconstructible AFTER THE FACT. A user reporting "it did nothing" is useless
+// without a trace, and the daemon's own death is exactly the case that can't
+// report itself. So: lifecycle + turn boundaries + every HTTP leg + every tool.
+// NEVER log the user's prompt or the model's reply (a desktop log is not the
+// place for the conversation) — length and shape only. Never log the API key.
+const log = (msg) => printerr(`[nidara-agent] ${msg}`)
+const hostOf = (url) => { try { return url.replace(/^https?:\/\//, "").split("/")[0] } catch { return "?" } }
+
 // ── Shell plumbing (shared shape with nidara-mcp) ────────────────────────────
 
 function textFile(path) {
@@ -84,15 +97,20 @@ function agsRequest(args) {
 // A Nidara session unlocks gnome-keyring at login (PAM). If the Secret Service
 // is unavailable (or no key stored), lookup returns null and the backend proceeds
 // keyless — fine for a local Ollama, surfaced as an auth error for Anthropic.
+// Keyed by PROVIDER id (anthropic/openai/google/…), not by wire protocol: several
+// providers share the openai-compatible protocol but each has its own key, so a
+// protocol-keyed slot would make them collide. The shell owns the provider table
+// (ui/shell/core/AgentProviders.ts) and writes the resolved backend/endpoint into
+// ai.json — this daemon only needs the id to find the right key.
 const KEY_SCHEMA = Secret.Schema.new(
     "org.nidara.Assistant",
     Secret.SchemaFlags.NONE,
-    { backend: Secret.SchemaAttributeType.STRING },
+    { provider: Secret.SchemaAttributeType.STRING },
 )
-function lookupKey(backend) {
-    if (!backend) return null
+function lookupKey(provider) {
+    if (!provider) return null
     try {
-        return Secret.password_lookup_sync(KEY_SCHEMA, { backend }, null)
+        return Secret.password_lookup_sync(KEY_SCHEMA, { provider }, null)
     } catch {
         return null
     }
@@ -173,7 +191,16 @@ function execTool(tu) {
         switch (tu.name) {
             case "run_action": {
                 const name = tu.input?.action || tu.input?.name
-                if (!name) return { ok: false, content: "run_action needs an action name" }
+                if (!name) {
+                    // Hand the model back WHAT IT SENT. A bare "needs an action
+                    // name" told it nothing it didn't already believe, and it
+                    // retried the identical call seven times (2026-07-21).
+                    log(`run_action without an action name — raw args: ${truncate(tu.rawArgs || "(none)", 300)}`)
+                    return {
+                        ok: false,
+                        content: `run_action requires the "action" property, and your call did not have it. You sent: ${truncate(tu.rawArgs || "(no arguments)", 300)}. Retrying the same call will fail again — use a name from the AVAILABLE IPC ACTIONS list, e.g. {"action":"toggleControlCenter"}.`,
+                    }
+                }
                 const args = Array.isArray(tu.input?.args) ? tu.input.args.map(String) : []
                 out = agsRequest([String(name), ...args])
                 break
@@ -191,7 +218,11 @@ function execTool(tu) {
             default:
                 return { ok: false, content: `unknown tool: ${tu.name}` }
         }
-        return { ok: true, content: out || "(ok)" }
+        // Same lossless squeeze as the system prompt, and it matters MORE here:
+        // a tool result is appended to `history` and re-sent on every later
+        // request of the conversation, so its pretty-printing is paid again and
+        // again. Measured 2026-07-21: listWindows −32%, listApps −25%.
+        return { ok: true, content: compactJson(out) || "(ok)" }
     } catch (e) {
         return { ok: false, content: String(e?.message ?? e) }
     }
@@ -199,12 +230,47 @@ function execTool(tu) {
 
 // ── System prompt (built once per session; reset() clears it) ────────────────
 let systemCache = null
+// The shell pretty-prints its JSON for humans reading `ags request` in a
+// terminal. The model does not need the indentation, and it is ~13% of the
+// system prompt (measured 2026-07-21: 12.5 KB → 10.8 KB across the three dumps).
+// Lossless, so there is no reason not to. Falls back to the original string if
+// it somehow isn't JSON.
+function compactJson(s) {
+    try { return JSON.stringify(JSON.parse(s)) } catch { return s }
+}
+
+// Actions the assistant should not be TOLD about. Two kinds, and the listing is
+// ~1.7 KB lighter without them (measured 2026-07-21):
+//   1. Already offered as first-class tools with better descriptions — listing
+//      them again invites the model to reach the same thing two ways.
+//   2. Shell-internal plumbing: the lockscreen and the computer-use visual layer
+//      call these on the shell's behalf. Nobody asks their desktop to
+//      "notifyComputerAction", and the kill switch is the USER's control.
+// A DENYLIST on purpose: `run_action` stays a passthrough and a newly added
+// action still shows up for free, which is the property that keeps this whole
+// prompt self-maintaining.
+const HIDDEN_ACTIONS = new Set([
+    "describeConfig", "getConfig", "setConfig", "dumpState", "listActions",
+    "hideForLock", "showAfterLock", "notifyComputerAction", "agentPointer", "disableComputerControl",
+])
+
+function actionsForPrompt(raw) {
+    try {
+        const all = JSON.parse(raw)
+        const kept = {}
+        for (const [name, def] of Object.entries(all)) if (!HIDDEN_ACTIONS.has(name)) kept[name] = def
+        return JSON.stringify(kept)
+    } catch {
+        return raw
+    }
+}
+
 function buildSystemPrompt() {
     if (systemCache) return systemCache
     let actions = "", config = "", state = ""
-    try { actions = agsRequest(["listActions"]) } catch {}
-    try { config = agsRequest(["describeConfig"]) } catch {}
-    try { state = agsRequest(["dumpState"]) } catch {}
+    try { actions = actionsForPrompt(agsRequest(["listActions"])) } catch {}
+    try { config = compactJson(agsRequest(["describeConfig"])) } catch {}
+    try { state = compactJson(agsRequest(["dumpState"])) } catch {}
     const lang = GLib.getenv("LANG") || "en"
     systemCache = [
         "You are Assistant, the built-in helper for the Nidara desktop (a Wayland desktop environment for Arch Linux, compositor Hyprland).",
@@ -214,7 +280,15 @@ function buildSystemPrompt() {
         "- The user is in charge. Do only what they ask; ask first before anything destructive or irreversible.",
         "- Never invent action names or config keys. Call run_action only with names from the actions list below, and set_config/get_config only with keys from the settings schema below.",
         "- Prefer set_config for settings and run_action for everything else. After acting, verify with dump_state/get_config when useful, then briefly confirm what changed.",
-        `- Reply in the user's language (LANG=${lang}).`,
+        // The language of the MESSAGE wins, always. The desktop locale is a hint
+        // for the ambiguous case, never the rule: people routinely run an English
+        // desktop and talk to it in their own language, and switching languages
+        // mid-conversation is normal. (User's call 2026-07-21 — the previous
+        // wording made LANG the definition of "the user's language", which a
+        // literal-minded model would obey by answering English to a Spanish
+        // message.)
+        "- Reply in the SAME language the user wrote their message in, and follow them if they switch.",
+        `- Only when that is genuinely unclear (a first message too short to tell), fall back to the desktop locale (LANG=${lang}).`,
         "",
         "AVAILABLE IPC ACTIONS (JSON):",
         actions || "(unavailable — the shell may be starting)",
@@ -251,7 +325,14 @@ function toOpenaiMsgs(m) {
     if (m.role === "assistant") {
         const msg = { role: "assistant", content: m.text || null }
         if ((m.toolUses || []).length)
-            msg.tool_calls = m.toolUses.map(tu => ({ id: tu.id, type: "function", function: { name: tu.name, arguments: JSON.stringify(tu.input || {}) } }))
+            msg.tool_calls = m.toolUses.map(tu => {
+                const call = { id: tu.id, type: "function", function: { name: tu.name, arguments: JSON.stringify(tu.input || {}) } }
+                // Echo the provider's opaque per-call extras (Gemini 3's thought
+                // signature) exactly as received — mandatory for Gemini, ignored
+                // by every other OpenAI-compatible provider.
+                if (tu.extra) call.extra_content = tu.extra
+                return call
+            })
         return [msg]
     }
     return (m.results || []).map(r => ({ role: "tool", tool_call_id: r.id, content: r.content }))
@@ -264,7 +345,13 @@ function buildAnthropicReq(cfg, key, system) {
         model: cfg.brainModel || "claude-opus-4-8",
         max_tokens: 2048,
         stream: true,
-        system,
+        // The system prompt is ~3.4k tokens of autogenerated introspection and it
+        // is IDENTICAL on every request of a session — including the extra request
+        // each tool step costs. Anthropic does not cache implicitly (unlike the
+        // OpenAI-compatible providers), it has to be asked: a cache write costs
+        // 1.25×, every later read 0.1×. Marking the system block turns the fixed
+        // cost into a rounding error from the second request onwards.
+        system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
         tools: ANTHROPIC_TOOLS,
         messages: history.map(toAnthropicMsg).filter(Boolean),
     }
@@ -300,7 +387,10 @@ function makeAnthropicHandler() {
     let text = ""
     const toolUses = []          // {index,id,name,jsonParts}
     let stopReason = null
-    let usage = { input: 0, output: 0 }
+    // cached = prompt tokens served from the provider's cache. Reported, not
+    // requested — the only way to know whether the fixed system prompt is
+    // actually being billed in full every turn (see the OpenAI handler).
+    let usage = { input: 0, output: 0, cached: 0 }
     let errorMsg = null
     let curEvent = null
     return {
@@ -312,9 +402,17 @@ function makeAnthropicHandler() {
             let data
             try { data = JSON.parse(payload) } catch { return }
             switch (data.type || curEvent) {
-                case "message_start":
-                    usage.input = data.message?.usage?.input_tokens ?? 0
+                case "message_start": {
+                    const u = data.message?.usage ?? {}
+                    // Anthropic reports cache reads/writes OUTSIDE input_tokens,
+                    // unlike the OpenAI shape where prompt_tokens includes them.
+                    // Normalise to "all prompt tokens processed" so the island's
+                    // number means the same thing whichever provider you picked.
+                    usage.cached = u.cache_read_input_tokens ?? 0
+                    usage.cacheWrite = u.cache_creation_input_tokens ?? 0
+                    usage.input = (u.input_tokens ?? 0) + usage.cached + usage.cacheWrite
                     break
+                }
                 case "content_block_start":
                     if (data.content_block?.type === "tool_use")
                         toolUses.push({ index: data.index, id: data.content_block.id, name: data.content_block.name, jsonParts: [] })
@@ -339,20 +437,30 @@ function makeAnthropicHandler() {
         },
         result() {
             const tus = toolUses.map(t => {
+                const rawArgs = t.jsonParts.join("")
                 let input = {}
-                try { input = t.jsonParts.length ? JSON.parse(t.jsonParts.join("")) : {} } catch {}
-                return { id: t.id, name: t.name, input }
+                // Same rule as the OpenAI handler: never swallow a parse failure,
+                // and carry rawArgs so the repeat-failure guard can tell two
+                // different bad calls to the same tool apart.
+                try { input = rawArgs ? JSON.parse(rawArgs) : {} } catch (e) {
+                    log(`tool args did not parse for ${t.name || "?"}: ${e} — raw: ${truncate(rawArgs, 300)}`)
+                }
+                return { id: t.id, name: t.name, input, rawArgs }
             })
-            return { text, toolUses: tus, stopReason, usage, errorMsg }
+            return { text, toolUses: tus, stopReason, finishReason: stopReason, usage, errorMsg }
         },
     }
 }
 
 function makeOpenaiHandler() {
     let text = ""
-    const byIdx = {}             // index -> {id,name,argParts}
+    // Insertion-ordered so the calls stay in the order the model asked for them.
+    // Keyed by stream index when there is one, by call id otherwise — see the
+    // accumulation loop.
+    const slots = new Map()
+    let lastKey = null
     let finishReason = null
-    let usage = { input: 0, output: 0 }
+    let usage = { input: 0, output: 0, cached: 0 }
     let errorMsg = null
     return {
         onLine(line) {
@@ -365,28 +473,74 @@ function makeOpenaiHandler() {
             if (data.usage) {
                 usage.input = data.usage.prompt_tokens ?? usage.input
                 usage.output = data.usage.completion_tokens ?? usage.output
+                // OpenAI-compatible providers cache repeated prefixes IMPLICITLY
+                // (no request flag) and report the hit here. This is the number
+                // that says whether the ~3.4k-token system prompt is actually
+                // being paid for on every request or served from cache — the
+                // difference between "expensive" and "looks expensive".
+                usage.cached = data.usage.prompt_tokens_details?.cached_tokens ?? usage.cached
             }
             const choice = data.choices?.[0]
             if (!choice) return
             const delta = choice.delta || {}
             if (delta.content) { text += delta.content; emitDelta(delta.content) }
             for (const tc of delta.tool_calls || []) {
-                const idx = tc.index ?? 0
-                const slot = byIdx[idx] || (byIdx[idx] = { id: tc.id, name: "", argParts: [] })
+                // WHICH call does this chunk belong to? OpenAI streams an `index`
+                // on every chunk (first one also carries the id, continuations
+                // don't). Google's compat layer omits `index` entirely and
+                // identifies calls by id alone — so `tc.index ?? 0` filed EVERY
+                // call under 0: two calls became one slot with their arguments
+                // concatenated into invalid JSON ({"action":"listWindows"}{}) and
+                // the name overwritten by the last. Measured 2026-07-21; the
+                // symptom was a "run_action ?" chip and a silently dropped call.
+                // Order of preference: explicit index → call id → continue the
+                // slot we were filling (a pure continuation chunk has neither).
+                const key = tc.index != null ? `i${tc.index}`
+                    : tc.id ? `d${tc.id}`
+                    : lastKey ?? "i0"
+                lastKey = key
+                let slot = slots.get(key)
+                if (!slot) slots.set(key, slot = { id: tc.id, name: "", argParts: [], extra: null })
                 if (tc.id) slot.id = tc.id
                 if (tc.function?.name) slot.name = tc.function.name
-                if (tc.function?.arguments) slot.argParts.push(tc.function.arguments)
+                // Spec says `arguments` is a STRING of JSON. Read permissively:
+                // some compat endpoints hand back an already-parsed object, and
+                // joining that into a string yields "[object Object]".
+                if (tc.function?.arguments != null) {
+                    const a = tc.function.arguments
+                    slot.argParts.push(typeof a === "string" ? a : JSON.stringify(a))
+                }
+                // Gemini 3 attaches an encrypted "thought signature" to the call
+                // (extra_content.google.thought_signature) and REJECTS the next
+                // request with a 400 unless it is echoed back verbatim. Opaque to
+                // us: carry it, never interpret it. Other OpenAI-compatible
+                // providers simply never send the field.
+                if (tc.extra_content) slot.extra = tc.extra_content
             }
             if (choice.finish_reason) finishReason = choice.finish_reason
         },
         result() {
-            const tus = Object.keys(byIdx).sort((a, b) => +a - +b).map(k => {
-                const s = byIdx[k]
+            const tus = [...slots.values()].map((s, k) => {
+                const rawArgs = s.argParts.join("")
                 let input = {}
-                try { input = s.argParts.length ? JSON.parse(s.argParts.join("")) : {} } catch {}
-                return { id: s.id || `call_${k}`, name: s.name, input }
+                // A swallowed parse failure here is indistinguishable from "the
+                // model sent no arguments" — which is exactly how a malformed
+                // call got misread as the model's fault (2026-07-21). Say so.
+                try { input = rawArgs ? JSON.parse(rawArgs) : {} } catch (e) {
+                    log(`tool args did not parse for ${s.name || "?"}: ${e} — raw: ${truncate(rawArgs, 300)}`)
+                }
+                return { id: s.id || `call_${k}`, name: s.name, input, rawArgs, extra: s.extra }
             })
-            return { text, toolUses: tus, stopReason: finishReason === "tool_calls" ? "tool_use" : "end", usage, errorMsg }
+            // Trust the PRESENCE of tool calls over finish_reason. Measured
+            // 2026-07-21 against Google's OpenAI-compatible endpoint
+            // (gemini-3-flash-preview): it streams a tool call and then finishes
+            // with "stop", not "tool_calls". Keying off finish_reason alone
+            // dropped the call on the floor and ended the turn with nothing to
+            // say — the second turn of every conversation that needed a tool.
+            // A model that asked for a tool must get its result back; a stray
+            // finish_reason is the provider's business, not the loop's.
+            const wantsTools = tus.length > 0 || finishReason === "tool_calls"
+            return { text, toolUses: tus, stopReason: wantsTools ? "tool_use" : "end", finishReason, usage, errorMsg }
         },
     }
 }
@@ -435,18 +589,61 @@ async function streamCurl(req, onLine) {
     await readAllLines(dataIn, (line) => { raw += line + "\n"; onLine(line) })
     await new Promise((res) => proc.wait_async(null, () => res()))
 
+    // curl's OWN failures (DNS, TLS, --max-time, connection refused) only ever
+    // appear on stderr, which used to be piped and then dropped — so a dead
+    // endpoint reached the user as the generic "Request failed". Safe to drain
+    // synchronously here: the process has already exited, and `-sS` keeps this
+    // to one line.
+    const err = drainStream(proc.get_stderr_pipe())
+    const ok = proc.get_successful()
     currentCurl = null
-    return { ok: proc.get_successful(), raw }
+    if (!ok) log(`curl failed: exit=${proc.get_exit_status()} ${err ? `stderr="${truncate(err, 200)}"` : `body=${raw.length}b`}`)
+    return { ok, raw, err }
 }
 
-function bestError(raw) {
+// Read a stream to EOF. Only for pipes of an exited process (see streamCurl).
+function drainStream(stream) {
+    if (!stream) return ""
+    try {
+        const din = new Gio.DataInputStream({ base_stream: stream })
+        let out = ""
+        for (;;) {
+            const [line] = din.read_line_utf8(null)
+            if (line === null) break
+            out += line + "\n"
+        }
+        return out.trim()
+    } catch {
+        return ""
+    }
+}
+
+// Provider errors are the ONLY diagnosis the user gets when a turn fails, so they
+// must arrive whole. The old 300-char cap chopped Google's "this model is retired,
+// migrate to <url>" mid-URL — the actionable half (user-caught 2026-07-21).
+const ERR_MAX = 2000
+
+function bestError(raw, curlErr) {
     const trimmed = (raw || "").trim()
+    // Nothing came back at all → the failure is curl's, and its stderr line is
+    // the only thing that says WHY (timeout / refused / TLS / unknown host).
+    if (!trimmed) return curlErr ? truncate(curlErr, ERR_MAX) : "Request failed — check the provider, endpoint, and API key."
     try {
         const j = JSON.parse(trimmed)
         const m = j?.error?.message || (typeof j?.error === "string" ? j.error : null)
         if (m) return m
     } catch {}
-    return trimmed ? trimmed.slice(0, 300) : "Request failed — check the provider, endpoint, and API key."
+    // Salvage path: a body that doesn't parse (truncated stream, two objects
+    // concatenated, a proxy's HTML wrapper) can still carry the message — pull it
+    // out rather than dumping raw braces at the user.
+    // Closed string first; then the same thing UNTERMINATED, because a stream that
+    // got cut is exactly when the user most needs to read what the provider said.
+    const m = /"message"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(trimmed)
+        || /"message"\s*:\s*"((?:[^"\\]|\\.)*)$/.exec(trimmed)
+    if (m) {
+        try { return JSON.parse(`"${m[1]}"`) } catch { return m[1] }
+    }
+    return truncate(trimmed, ERR_MAX)
 }
 
 const truncate = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s || "")
@@ -458,52 +655,126 @@ let cancelled = false
 async function runTurn(userText) {
     const cfg = readAiJson()
     const backend = cfg.brainBackend || ""
-    const turnUsage = { input: 0, output: 0 }
+    // input = every prompt token the provider processed this turn, COMPARABLE
+    // across backends: OpenAI-compatible `prompt_tokens` already includes the
+    // cached ones, while Anthropic reports cache reads/writes OUTSIDE
+    // `input_tokens` — so the raw fields mean different things and are normalised
+    // in the handlers, not here. `cached` is the subset served from cache (cheap);
+    // total − cached is what was billed at full rate.
+    const turnUsage = { input: 0, output: 0, cached: 0 }
+    const t0 = GLib.get_monotonic_time()
+    let step = 0
+    let lastFailure = null     // signature of the previous failed tool call (loop guard)
     try {
         if (!backend) {
+            log("turn refused: no provider configured")
             emitError("No assistant provider is configured. Open Settings → AI to choose one.")
             return
         }
         history.push({ role: "user", text: userText })
         const system = buildSystemPrompt()
         emit({ t: "state", s: "thinking" })
+        log(`turn start: provider=${cfg.brainProvider || "?"} backend=${backend} model=${cfg.brainModel || "(default)"} chars=${userText.length} history=${history.length}`)
 
-        let step = 0
         while (step++ < MAX_STEPS) {
             if (cancelled) return
-            const key = lookupKey(backend)
+            const key = lookupKey(cfg.brainProvider || "")
             const req = backend === "anthropic" ? buildAnthropicReq(cfg, key, system) : buildOpenaiReq(cfg, key, system)
             const handler = backend === "anthropic" ? makeAnthropicHandler() : makeOpenaiHandler()
+            // sys/hist split, because "the request is big" is not actionable:
+            // the system prompt is FIXED (and cacheable), the history GROWS. Which
+            // one dominates decides whether to shrink the prompt or the loop.
+            const sysBytes = system.length
+            log(`step ${step}: POST ${hostOf(req.url)} body=${req.body.length}b (sys=${sysBytes}b hist=${req.body.length - sysBytes}b) key=${key ? "yes" : "none"}`)
 
-            const { ok, raw } = await streamCurl(req, (l) => handler.onLine(l))
-            if (cancelled) return
+            const { ok, raw, err } = await streamCurl(req, (l) => handler.onLine(l))
+            if (cancelled) { log(`step ${step}: cancelled by user`); return }
 
             const r = handler.result()
-            if (r.errorMsg) { emitError(r.errorMsg); return }
-            if (!ok) { emitError(bestError(raw)); return }
-
-            history.push({ role: "assistant", text: r.text, toolUses: r.toolUses })
+            // finish= is the provider's RAW value; stop= is how the loop read it.
+            // Keep both: the two disagreeing is exactly how Google's compat path
+            // was caught dropping tool calls.
+            // sig= counts per-call opaque extras captured (Gemini's thought
+            // signature): sig=0/1 on a Gemini turn means the stream didn't carry
+            // it and the echo can't work — worth knowing without guessing.
+            const sigs = r.toolUses.filter(tu => tu.extra).length
+            // cached= is the share of the input served from the provider's cache.
+            // A session where it stays 0 after the first request means the fixed
+            // prompt is being billed in full every single time.
+            const cacheNote = r.usage.cached || r.usage.cacheWrite
+                ? ` cached=${r.usage.cached}${r.usage.cacheWrite ? `+w${r.usage.cacheWrite}` : ""}`
+                : ""
+            log(`step ${step}: ok=${ok} text=${r.text.length}c tools=${r.toolUses.length}${r.toolUses.length ? ` sig=${sigs}/${r.toolUses.length}` : ""} stop=${r.stopReason || "?"} finish=${r.finishReason || "?"} tok=${r.usage.input}/${r.usage.output}${cacheNote}`)
+            // Count BEFORE any early return: a turn that fails still cost money,
+            // and the failures are the expensive ones (a 25k-token turn that
+            // ended at the step cap reported ZERO usage — user-caught 07-21).
             turnUsage.input += r.usage.input
             turnUsage.output += r.usage.output
+            turnUsage.cached += r.usage.cached
+
+            if (r.errorMsg) { log(`step ${step}: provider error: ${truncate(r.errorMsg, 200)}`); emitError(r.errorMsg); return }
+            if (!ok) { emitError(bestError(raw, err)); return }
+
+            history.push({ role: "assistant", text: r.text, toolUses: r.toolUses })
 
             if (r.stopReason === "tool_use" && r.toolUses.length) {
                 emit({ t: "state", s: "acting" })
                 const results = []
+                let stuckOn = null
                 for (const tu of r.toolUses) {
                     if (cancelled) return
                     emit({ t: "tool", name: tu.name, summary: summarizeTool(tu) })
                     const res = execTool(tu)
+                    log(`tool ${summarizeTool(tu)} → ${res.ok ? "ok" : "FAIL"} ${truncate(res.content, 120).replace(/\n/g, " ")}`)
                     emit({ t: "toolresult", ok: res.ok, summary: truncate(res.content, 200) })
                     results.push({ id: tu.id, name: tu.name, content: res.content })
+
+                    // A model that repeats a call it was just told is invalid will
+                    // usually keep repeating it: on 2026-07-21 the identical bad
+                    // run_action ran SEVEN times, burning the step budget and
+                    // ~25k input tokens on one question. Two strikes is enough to
+                    // know it isn't converging — and the user pays per attempt.
+                    const sig = `${tu.name}:${tu.rawArgs || ""}`
+                    if (!res.ok) {
+                        if (sig === lastFailure) stuckOn = summarizeTool(tu)
+                        lastFailure = sig
+                    } else if (sig === lastFailure) {
+                        lastFailure = null
+                    }
                 }
+                // History FIRST, always: every tool call needs its matching result
+                // or the next request is malformed and the provider rejects it.
                 history.push({ role: "tool", results })
+                if (stuckOn) {
+                    log(`aborting turn: identical failing tool call repeated (${stuckOn})`)
+                    emitError("The assistant kept repeating the same failing action, so I stopped it before it ran up the bill. Try rewording what you asked for.")
+                    return
+                }
                 emit({ t: "state", s: "thinking" })
                 continue
             }
-            break   // no tool calls → the model answered
+            // No tool calls → the model answered. An answer with NO text is still
+            // an abnormal end: the UI would paint an empty bubble, i.e. silence.
+            if (!r.text.trim()) {
+                log(`turn ended with empty completion (stop=${r.stopReason || "?"})`)
+                emitError("The model ended the turn without replying. Try again, or pick a different model in Settings → AI.")
+                return
+            }
+            break
         }
-        emit({ t: "done", usage: turnUsage })
+        // Fell out of the loop still calling tools: the model never converged on
+        // an answer. Say so — this used to end as a silent `done`.
+        if (step > MAX_STEPS) {
+            log(`turn hit the ${MAX_STEPS}-step cap without a final answer`)
+            emitError(`Stopped after ${MAX_STEPS} tool steps without a final answer.`)
+            return
+        }
     } finally {
+        // `done` carries the turn's cost and NOTHING else, so it belongs in the
+        // finally: it used to sit on the success path only, which meant the
+        // expensive failures were exactly the ones the island never counted.
+        emit({ t: "done", usage: turnUsage })
+        log(`turn end: steps=${Math.min(step, MAX_STEPS)} tok=${turnUsage.input}/${turnUsage.output} cached=${turnUsage.cached} ${Math.round((GLib.get_monotonic_time() - t0) / 1000)}ms`)
         emit({ t: "state", s: "idle" })
     }
 }
@@ -513,18 +784,22 @@ async function runTurn(userText) {
 function handleMessage(msg) {
     switch (msg?.t) {
         case "user":
-            if (busy) return   // one turn at a time; the shell disables input while busy
+            if (busy) { log("dropped a user turn: still busy"); return }   // one turn at a time; the shell disables input while busy
             cancelled = false
             busy = true
             runTurn(String(msg.text || ""))
-                .catch((e) => emitError(String(e?.message ?? e)))
+                // The last net: anything thrown outside runTurn's own handling
+                // still reaches the user as a message instead of dying quietly.
+                .catch((e) => { log(`turn threw: ${e?.stack || e}`); emitError(String(e?.message ?? e)) })
                 .finally(() => { busy = false })
             break
         case "cancel":
+            log("cancel")
             cancelled = true
             if (currentCurl) { try { currentCurl.force_exit() } catch {} }
             break
         case "reset":
+            log("reset: history cleared")
             history.length = 0
             systemCache = null
             cancelled = true
@@ -540,14 +815,15 @@ const stdin = new Gio.DataInputStream({
 function readLoop() {
     stdin.read_line_async(GLib.PRIORITY_DEFAULT, null, (src, res) => {
         let line
-        try { [line] = src.read_line_finish_utf8(res) } catch { return loop.quit() }
-        if (line === null) return loop.quit()    // shell closed stdin → exit
+        try { [line] = src.read_line_finish_utf8(res) } catch (e) { log(`stdin read failed: ${e} — exiting`); return loop.quit() }
+        if (line === null) { log("shell closed stdin — exiting"); return loop.quit() }   // normal shutdown
         if (line.trim()) {
-            try { handleMessage(JSON.parse(line)) } catch (e) { emitError(`bad message: ${e}`) }
+            try { handleMessage(JSON.parse(line)) } catch (e) { log(`bad message: ${e}`); emitError(`bad message: ${e}`) }
         }
         readLoop()
     })
 }
 
+log("started")
 readLoop()
 loop.run()

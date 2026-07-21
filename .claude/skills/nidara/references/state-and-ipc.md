@@ -270,21 +270,90 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   `anthropic-version`) and any OpenAI-compatible endpoint (`POST {endpoint}/chat/completions`,
   `Authorization: Bearer` optional — covers a local Ollama). Both **streamed via `curl -N` SSE**
   as a `Gio.Subprocess` (the house HTTP pattern — zero new deps); `cancel` = `force_exit()` the curl.
-- **Config re-read from `ai.json` every turn** (`brainBackend`/`brainModel`/`brainEndpoint`, via
-  `AgentConfig`), so a provider/model change takes effect live. The **API key is NEVER in `ai.json`**:
-  it lives in the DE keyring — **libsecret, schema `org.nidara.Assistant`, attribute `backend`**
-  (one key per backend). Written by Settings → AI (`gi://Secret` `password_store`/`password_clear`),
+- **Provider vs protocol** (`core/AgentProviders.ts`): the user picks a provider by NAME
+  (Anthropic · OpenAI · Google (Gemini) · Mistral · Groq · OpenRouter · Ollama (local) · Custom);
+  the registry maps each to one of the two wire protocols and pins its endpoint + default model.
+  `AgentConfig.setBrainProvider(id)` writes `brainProvider` **and** the derived `brainBackend` /
+  `brainEndpoint` / `brainModel`, so **the daemon stays dumb** — it never carries a provider table.
+  `brainModels` is per-provider model memory (switching to Ollama no longer leaves
+  `claude-opus-4-8` in the field). Adding a provider = one row in the registry + one i18n label;
+  brand names are proper nouns and are NOT translated (only Off/Ollama (local)/Custom are).
+- **Config re-read from `ai.json` every turn** (`brainProvider`/`brainBackend`/`brainModel`/
+  `brainEndpoint`, via `AgentConfig`), so a provider/model change takes effect live. The
+  **API key is NEVER in `ai.json`**: it lives in the DE keyring — **libsecret, schema
+  `org.nidara.Assistant`, attribute `provider`** (one key per PROVIDER, not per protocol —
+  a key belongs to the company that issued it, and Google/Mistral/Groq all ride the openai
+  path, so a protocol-keyed slot would make them overwrite each other and return a 401 from a
+  provider whose key was just saved). Written by Settings → AI (`gi://Secret` `password_store`/`password_clear`),
   read back by the daemon (`Secret.password_lookup_sync`). All keyring calls are **fail-soft**: a
   session with no Secret Service yet just proceeds keyless (fine for Ollama; an auth error for
   Anthropic). The keyring is unlocked at login via PAM (`pam_gnome_keyring` in `/etc/pam.d/greetd`,
   wired by `nidara-setup`) and its secrets component is launched from `hyprland.lua`.
+- **Token accounting has three rules, each learned from getting it wrong (2026-07-21).**
+  (1) **`done` carries the turn's cost and lives in the `finally`** — it used to sit on the success
+  path, so the expensive failures (a 25k-token turn that hit the step cap) reported *zero*. Usage is
+  also accumulated BEFORE any early return. (2) **Normalise across backends**: OpenAI-compatible
+  `prompt_tokens` INCLUDES cached tokens, Anthropic's `input_tokens` EXCLUDES cache reads/writes —
+  so the Anthropic handler adds them back. Without this the same label means two different things
+  depending on which provider the user picked. (3) **`cached` is a SUBSET of input, never an
+  addition** — the island shows it as a percentage (`5.4k tokens · 74% cached`), because the useful
+  question is "is this being re-read cheaply", which a raw count doesn't answer.
+- **Read tool calls from their PRESENCE, not from `finish_reason`** (measured 2026-07-21, Google
+  `gemini-3-flash-preview` over the compat endpoint): it streams a `tool_calls` delta and then
+  finishes with `"stop"`. The loop used to gate execution on `finish_reason === "tool_calls"`, so the
+  call was dropped, no tool ran, and the turn ended with nothing to say — **every conversation worked
+  once and then went dead on the first turn that needed a tool**. If tool calls accumulated, execute
+  them. The per-step log prints `stop=` (how the loop read it) next to `finish=` (the provider's raw
+  value) precisely so the next divergence shows up instead of being inferred.
+- **Carry the provider's opaque per-call extras back verbatim.** Gemini 3 attaches an encrypted
+  **thought signature** to every function call (`tool_calls[].extra_content.google.thought_signature`)
+  and answers the FOLLOWING request with a **400** unless it is echoed back inside the assistant
+  message's `tool_calls`. So `toolUses` carries an `extra` blob straight from the stream into
+  `toOpenaiMsgs()` — never interpreted, never rebuilt, just relayed. Other OpenAI-compatible
+  providers don't send the field and don't care. The step log prints `sig=N/M` whenever a turn has
+  tool calls: `sig=0/1` against Gemini means the signature never arrived and the echo can't work
+  (which would make the compat path unusable for tools → the native backend stops being optional).
+- **A failing tool call gets TWO strikes, then the turn is aborted.** Measured 2026-07-21: Gemini
+  called `run_action` with `{"args":[…]}` and no `action`, was told it was invalid, and repeated the
+  identical call **seven times** — the whole step budget and ~25k input tokens on one question. The
+  loop now compares `name + rawArgs` against the previous failure and stops on the repeat. Two
+  supporting rules: a rejection message must hand the model back **what it actually sent** (a bare
+  "needs an action name" told it nothing it didn't already believe), and `history` must receive the
+  tool results **before** any abort — every tool call needs its matching result or the next request
+  is malformed. Also read `arguments` permissively (string per spec, object from some compat
+  endpoints) and **log a JSON parse failure**: swallowing it makes a malformed call look identical to
+  "the model sent nothing", which is how this was misdiagnosed at first.
+- **Key streamed tool calls by index OR id — never `index ?? 0`.** OpenAI puts an `index` on every
+  chunk; **Google's compat layer omits it entirely** and identifies calls by `id`. Defaulting to 0
+  filed every call in one slot: two calls merged into one, arguments concatenated into invalid JSON
+  (`{"action":"listWindows"}{}`), name overwritten by the last, and the UI showed a `run_action ?`
+  chip for a call the model never made that way. This was the real cause of what looked like a dumb
+  model. Resolution order: explicit `index` → call `id` → continue the slot being filled (a pure
+  continuation chunk carries neither). Keep the slots insertion-ordered so multiple calls execute in
+  the order asked for.
 - **Tools offered to the model**: `run_action(action, args?)`, `set_config(key, value)`,
   `get_config(key?)`, `dump_state()` — all executed via `ags request`, gates enforced by the shell
   (a refusal comes back as the tool-result STRING; the daemon never re-checks gates). No
   screenshot/computer-use in v1.
 - **System prompt** is autogenerated once per session: a short static core + a dump of
   `listActions` + `describeConfig` + a `dumpState` snapshot, so new actions/settings are usable with
-  no prompt edits. `ai.brainBackend`/`ai.brainModel` are visible read-only via `describeConfig`
+  no prompt edits. **It is also the dominant token cost** — ~3.4k tokens, resent on EVERY request,
+  and a tool step costs an extra request. Three things keep it in check (all measured 2026-07-21,
+  16.3 KB → 12.5 KB on the wire, −23%):
+  - **`compactJson()`** strips the pretty-printing the shell emits for humans (−13%, lossless).
+  - **`HIDDEN_ACTIONS`** keeps out actions already offered as first-class tools (`getConfig`,
+    `setConfig`, `dumpState`, …) and shell-internal plumbing (`hideForLock`, `agentPointer`, the kill
+    switch). A **denylist**, deliberately: `run_action` stays a passthrough and a NEW action still
+    appears for free — the property that makes the prompt self-maintaining.
+  - **Prompt caching.** The prompt is byte-identical across a session, so it is cacheable. The
+    OpenAI-compatible providers do this implicitly (no flag); **Anthropic does not and must be asked**
+    — hence `cache_control: {type:"ephemeral"}` on the system block (write 1.25×, reads 0.1×).
+  **Before optimising this further, read `cached=` in the step log** — and read it across a SESSION,
+  not one request: implicit caching only pays from the second request onwards, so `cached=0` early
+  means "not yet", not "never". Measured against Google 2026-07-21: `tok=4717 cached=4022` — 85%
+  served from cache, i.e. the fixed prompt is largely a non-problem and further shrinking has poor
+  returns. **The cost driver is STEP COUNT, not prompt size** (an 8-step turn cost ~25k input tokens);
+  optimise the loop, not the prose. `ai.brainProvider`/`ai.brainBackend`/`ai.brainModel` are visible read-only via `describeConfig`
   (like the other `ai.*` keys); the key is not exposed.
 - **Test headless with `scripts/dev/fake-brain.py`** (a scripted OpenAI-compatible SSE mock) — see
   `dev-workflow.md`. GOTCHA proven 2026-07-20: the write gate lives in the SHELL (it reads the
@@ -292,6 +361,23 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   NOT block a write — a `set_config` E2E hits the live shell for real. Test the daemon's
   rejection-surfacing non-destructively with an INVALID value instead (the validator refuses, nothing
   mutates), or flip the real gate in Settings.
+
+- **A turn NEVER ends in silence — treat this as an invariant, not a nicety** (the worst bug of the
+  first live run, tech-debt #39). Every abnormal end has to reach the island: provider error, curl
+  failure, empty completion, the `MAX_STEPS` cap, and — shell-side — the daemon dying mid-turn or a
+  failed spawn/write. `Turn.error` is a field of its OWN (not appended to `text`) precisely so an
+  error that lands AFTER some text already streamed still shows; `AgentService.failTurn()` is the one
+  door for all of it, and it re-opens the island when the failure happened with it closed. If you add
+  a code path that can end a turn, it must end it through text or through `failTurn`.
+- **Telemetry: both halves land in `nidara-ui.log`.** The daemon logs to **stderr, which it inherits
+  from the shell** (`Gio.Subprocess` is spawned with STDIN/STDOUT pipes only — do NOT pipe stderr, that
+  would swallow it), prefixed `[nidara-agent]`; `AgentService` logs `[AgentService]`. Together they
+  cover: spawn (argv) → turn start (provider/backend/model, prompt LENGTH) → each HTTP leg (host, body
+  size, whether a key was found) → each step's result shape → each tool + outcome → turn end (duration,
+  tokens) → daemon death **with exit status or signal**. `grep -E '\[(nidara-)?[aA]gent' nidara-ui.log`
+  reads a whole session. **Never log the prompt or the reply** (a desktop log is not the conversation's
+  home) and never the key — shape only. Without this a user's "it did nothing" is unreconstructible,
+  which is exactly how the 2026-07-21 silent death was lost.
 
 **UI wiring (the face).** `core/AgentService.ts` owns the daemon subprocess + the transcript and
 exposes `send`/`cancel`/`reset` + `subscribe` (see `architecture.md`). The chat lives in the Activity

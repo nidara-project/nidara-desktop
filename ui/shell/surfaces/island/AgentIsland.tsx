@@ -28,6 +28,28 @@ import { t } from "../../core/i18n"
 // MorphRevealer (same contract as PLAYER_GLASS / WO_GLASS / BATTERY_GLASS).
 export const AGENT_GLASS = { radius: 32, n: 3.2, border: { r: 1, g: 1, b: 1, a: 0.1 } }
 
+// 950 → "950", 5432 → "5.4k", 25310 → "25k". A long conversation must not push
+// the header title around.
+function compactCount(n: number): string {
+    if (n < 1000) return String(n)
+    return `${(n / 1000).toFixed(n < 10000 ? 1 : 0)}k`
+}
+
+// Total tokens, plus the SHARE served from the provider's cache when there is
+// one. The share, not the raw count: what the user wants at a glance is whether
+// this conversation is being re-read cheaply — "74% cached" answers that where
+// "9812" does not. `cached` is a subset of input, never added on top.
+function formatUsage(u: { input: number; output: number; cached: number }): string {
+    const label = t("island.agent.tokens").replace("%s", compactCount(u.input + u.output))
+    if (u.input <= 0) return label
+    // Shown even at 0%, deliberately. Hiding it when there is no cache hides the
+    // number exactly when it matters most — "0% cached" means you are paying full
+    // price for every token, which is the case worth noticing. Blank would be
+    // indistinguishable from the feature not working (user-caught 2026-07-21).
+    const pct = Math.round((u.cached / u.input) * 100)
+    return `${label} · ${t("island.agent.tokens-cached").replace("%d", String(pct))}`
+}
+
 // Compact status word from the service state.
 function statusWord(): string {
     if (agentService.state === "acting") return t("island.agent.status.acting")
@@ -90,6 +112,19 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
         selectable: !isUser,
     })
     const toolsBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 4, css_classes: ["agent-tool-chips"] })
+    // Abnormal end (provider error, daemon death, empty completion). Its own row,
+    // not appended to the text: a turn that streamed half an answer and then died
+    // must SHOW that it died.
+    //
+    // The DOT carries the danger colour and the text stays neutral — the house
+    // rule (same as the failed tool chip right above, same as the critical
+    // battery glyph). Red text on glass reads badly, which is why the first cut
+    // of this was rejected.
+    const errorDot = new Gtk.Box({ css_classes: ["agent-error-dot"], width_request: 6, height_request: 6, valign: Gtk.Align.START })
+    const errorText = new Gtk.Label({ css_classes: ["agent-error-text"], wrap: true, xalign: 0, halign: Gtk.Align.START })
+    const errorLabel = new Gtk.Box({ css_classes: ["agent-error-row"], spacing: 6, visible: false })
+    errorLabel.append(errorDot)
+    errorLabel.append(errorText)
     const bubble = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 6,
@@ -97,6 +132,7 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
     })
     bubble.append(textLabel)
     bubble.append(toolsBox)
+    bubble.append(errorLabel)
     // Assistant left, user right — the bubble hugs its content; the row aligns it.
     const row = new Gtk.Box({ halign: isUser ? Gtk.Align.END : Gtk.Align.START })
     row.append(bubble)
@@ -112,10 +148,12 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
         }
         tn.tools.forEach((tc, j) => chips[j]?.update(tc))
         toolsBox.visible = tn.tools.length > 0
+        errorText.label = tn.error ?? ""
+        errorLabel.visible = !!tn.error
         // An assistant turn is pushed EMPTY the moment you send; without this it
         // paints as a bare padded pill until the first delta lands. The header's
         // "Thinking…" carries that beat instead.
-        row.visible = !!tn.text || tn.tools.length > 0
+        row.visible = !!tn.text || tn.tools.length > 0 || !!tn.error
     }
     update(turn)
     return { row, rendered: { update } }
@@ -219,7 +257,7 @@ export default function AgentIsland() {
         const u = svc.usage
         statusLabel.label = svc.busy
             ? statusWord()
-            : (u.input + u.output > 0 ? t("island.agent.tokens").replace("%d", String(u.input + u.output)) : "")
+            : (u.input + u.output > 0 ? formatUsage(u) : "")
 
         if (!configured) return
 

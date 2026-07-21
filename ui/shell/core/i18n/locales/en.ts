@@ -386,22 +386,30 @@ export default {
 
     // Built-in Assistant — the brain (BYOK); key lives in the keyring, never in files
     "settings.ai.brain.group": "Assistant",
-    "settings.ai.brain.backend": "Provider",
-    "settings.ai.brain.backend.desc": "Which service runs the built-in assistant's model. Bring your own key.",
-    "settings.ai.brain.backend.off": "Off",
-    "settings.ai.brain.backend.anthropic": "Anthropic",
-    "settings.ai.brain.backend.openai": "OpenAI-compatible",
+    // Provider names are proper nouns and stay untranslated (see Ai.tsx) — only
+    // these three are strings.
+    "settings.ai.brain.provider": "Provider",
+    "settings.ai.brain.provider.desc": "Which service runs the built-in assistant's model. Bring your own key.",
+    "settings.ai.brain.provider.off": "Off",
+    "settings.ai.brain.provider.ollama": "Ollama (local)",
+    "settings.ai.brain.provider.localhost": "Local server…",
+    "settings.ai.brain.provider.custom": "Other API endpoint…",
     "settings.ai.brain.model": "Model",
     "settings.ai.brain.model.desc": "Model id the assistant talks to (e.g. claude-opus-4-8, or a local model name).",
     "settings.ai.brain.endpoint": "Endpoint",
     "settings.ai.brain.endpoint.desc": "Base URL of the OpenAI-compatible server (e.g. a local Ollama at http://localhost:11434/v1).",
+    "settings.ai.brain.model.placeholder": "Find models, or type an id",
+    "settings.ai.brain.model.fetch": "Find models",
+    "settings.ai.brain.model.fetching": "Asking the provider…",
+    "settings.ai.brain.model.failed": "Couldn't read the model list: %s. You can still type the id.",
+    "settings.ai.brain.model.needkey": "Save your API key first — the model list is behind it.",
     "settings.ai.brain.key": "API key",
     "settings.ai.brain.key.desc": "Stored in the system keyring, never in plain files.",
     "settings.ai.brain.key.placeholder": "Paste API key…",
     "settings.ai.brain.key.stored": "•••••••• stored in keyring",
     "settings.ai.brain.key.unavailable": "Keyring unavailable",
-    "settings.ai.brain.key.save": "Save",
-    "settings.ai.brain.key.clear": "Clear",
+    "settings.ai.brain.key.save": "Save key",
+    "settings.ai.brain.key.clear": "Forget",
 
     // Badge on the fake AI cursor (surfaces/agent-pointer/)
     "agentPointer.badge": "AI",
@@ -651,9 +659,13 @@ export default {
     "island.agent.status.acting": "Working…",
     "island.agent.placeholder": "Ask or tell me to do something…",
     "island.agent.reset": "New conversation",
-    "island.agent.tokens": "%d tokens",
+    "island.agent.tokens": "%s tokens",
+    "island.agent.tokens-cached": "%d% cached",
     "island.agent.empty": "Choose a provider and add your API key to start using the assistant.",
     "island.agent.open-settings": "Open Settings → AI",
+    // Abnormal ends. A turn NEVER finishes without either a reply or one of these.
+    "island.agent.error.died": "The assistant stopped unexpectedly. Send your message again to retry.",
+    "island.agent.error.empty": "The assistant ended the turn without replying.",
 
     // Battery widget
     "widget.battery.label.unavailable": "Battery not available",

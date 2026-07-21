@@ -1,5 +1,6 @@
 import GLib from "gi://GLib"
 import { readFile, writeFile } from "ags/file"
+import { providerById } from "./AgentProviders"
 
 // Governance for the agent-facing surface (Settings → AI). This gates the
 // OFFICIAL door (`ags request setConfig`, future MCP server) — it is a consent
@@ -26,10 +27,23 @@ interface AgentSettings {
     // talks to. NOT a gate — these are plain config values the daemon re-reads per
     // turn from ai.json. "" = no brain configured (assistant shows an empty state).
     // The API KEY is NEVER stored here — it lives in the DE keyring (libsecret,
-    // schema org.nidara.Assistant, attribute backend). See Settings → AI.
-    brainBackend: "" | "anthropic" | "openai"  // "" = off; anthropic = Messages API; openai = OpenAI-compatible (covers Ollama)
-    brainModel: string                          // model id, e.g. claude-opus-4-8 or a local model name
+    // schema org.nidara.Assistant, attribute provider). See Settings → AI.
+    //
+    // brainProvider is what the USER picks (a name: anthropic/openai/google/…, see
+    // core/AgentProviders.ts). brainBackend/brainEndpoint are DERIVED from it and
+    // written alongside so bin/nidara-agent stays dumb: it reads the protocol and
+    // URL it needs without carrying a provider table of its own.
+    brainProvider: string                       // "" = off; else a provider id from AGENT_PROVIDERS
+    brainBackend: "" | "anthropic" | "openai"   // derived wire protocol ("" = off)
+    brainModel: string                          // model id of the ACTIVE provider (what the daemon reads)
     brainEndpoint: string                       // base URL for the openai-compatible backend (ignored for anthropic)
+    /** Per-provider model memory, keyed by provider id. Switching providers restores
+     *  the model you last used there instead of carrying a wrong one across (picking
+     *  Ollama used to leave `claude-opus-4-8` in the field). */
+    brainModels: Record<string, string>
+    /** Same for endpoints, so an edited URL survives a round trip through another
+     *  provider — only meaningful where the endpoint is editable (Ollama, Custom). */
+    brainEndpoints: Record<string, string>
 }
 
 const DEFAULTS: AgentSettings = {
@@ -38,9 +52,12 @@ const DEFAULTS: AgentSettings = {
     allowMcp: true,
     allowComputerUse: false,
     allowComputerControl: false,
+    brainProvider: "",
     brainBackend: "",
-    brainModel: "claude-opus-4-8",
+    brainModel: "",
     brainEndpoint: "http://localhost:11434/v1",
+    brainModels: {},
+    brainEndpoints: {},
 }
 
 let _settings: AgentSettings = { ...DEFAULTS }
@@ -79,6 +96,7 @@ export const agentConfig = {
     get allowComputerUse() { return _settings.allowComputerUse },
     get allowComputerControl() { return _settings.allowComputerControl },
 
+    get brainProvider() { return _settings.brainProvider },
     get brainBackend() { return _settings.brainBackend },
     get brainModel() { return _settings.brainModel },
     get brainEndpoint() { return _settings.brainEndpoint },
@@ -165,20 +183,44 @@ export const agentConfig = {
     // ── Assistant brain setters ─────────────────────────────────────────────
     // Read live by bin/nidara-agent (re-reads ai.json per turn), so changing the
     // brain needs no restart. The API key is handled separately (keyring), never here.
-    setBrainBackend(val: "" | "anthropic" | "openai") {
-        _settings.brainBackend = val
+    /** Pick a provider by id. Resolves the wire backend + endpoint and restores the
+     *  model last used with THAT provider (falling back to its default), so the three
+     *  derived fields the daemon reads are always consistent with the pick. */
+    setBrainProvider(id: string) {
+        const p = providerById(id)
+        _settings.brainProvider = p ? p.id : ""
+        _settings.brainBackend = p ? p.backend : ""
+        if (p) {
+            // No fallback default: an unset model is an honest empty state the user
+            // fills from the catalog, not a stale guess pretending to be configured.
+            _settings.brainModel = _settings.brainModels[p.id] || ""
+            // Editable-endpoint providers (Ollama, Custom) restore the URL the user
+            // last set for THEM; hosted providers are always pinned to their own.
+            _settings.brainEndpoint = p.editableEndpoint
+                ? (_settings.brainEndpoints[p.id] || p.endpoint)
+                : p.endpoint
+        }
         save()
         _listeners.forEach(fn => fn())
     },
 
+    /** Empty is a valid value: clearing the field must actually clear it, and must
+     *  also drop the per-provider memory — otherwise the old id reappears the next
+     *  time you come back to this provider (user-caught 2026-07-21: "mock" kept
+     *  coming back). */
     setBrainModel(val: string) {
         _settings.brainModel = val
+        if (_settings.brainProvider) {
+            if (val) _settings.brainModels[_settings.brainProvider] = val
+            else delete _settings.brainModels[_settings.brainProvider]
+        }
         save()
         _listeners.forEach(fn => fn())
     },
 
     setBrainEndpoint(val: string) {
         _settings.brainEndpoint = val
+        if (_settings.brainProvider) _settings.brainEndpoints[_settings.brainProvider] = val
         save()
         _listeners.forEach(fn => fn())
     },
