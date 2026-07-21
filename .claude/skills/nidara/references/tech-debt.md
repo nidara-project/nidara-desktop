@@ -765,7 +765,14 @@ Ordered by what hurt most in the live run:
    language" AS the locale — a more literal model would have obeyed it and answered in English.
    Prompt fixed to state the rule properly. **Lesson for anything locale-driven in the shell: a
    configured locale is evidence about the user, not an instruction about the current interaction.**
-6. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
+6. **Tool results go into history at FULL length, forever.** Found while cutting the system prompt
+   (2026-07-21). The island truncates a tool result to 200 chars for display, but `history` keeps the
+   whole thing, and every later request resends it: one `get_config` with no key adds ~4.5 KB of
+   settings JSON to every subsequent request of that conversation. The system prompt is now the
+   *fixed* cost; this is the one that GROWS. Not fixed yet because the honest answer needs measuring
+   (a cap degrades what the model can reason about, and `cached=` may already absorb most of it) —
+   measure a long conversation before capping anything.
+7. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
    retired — picking it 404s. The catalog exposes no retired flag, so this cannot be filtered
    reliably; the model field stays free text on purpose.
 
