@@ -660,20 +660,107 @@ Deferred from phase 2 as secondary; needs `HyprlandState` focused-window class m
 against the player's `entry`, with a real edge case: a browser playing in a background TAB
 of a focused window would wrongly count as "focused". Design the matching before wiring it.
 
-### 36. Built-in Assistant v1 = brain only; the face is PR 2 (2026-07-20)
-`bin/nidara-agent` (the brain: BYOK LLM tool-use loop) + Settings → AI brain picker + keyring
-landed in PR 1. **PR 2 is the FACE**: `core/AgentService.ts` (owns the daemon subprocess, parses
-its JSON-lines events, holds the transcript) + the island **Agent mode** (`surfaces/island/
-AgentIsland.tsx`, `ISLAND_AGENT`, activity priority 25 between REC 20 and battery 30) + `Super+A →
-toggleAgent` + SCSS + island i18n. Until then `nidara-agent` is only reachable by hand
-(dev-workflow.md). Minor v1 debt to revisit with the UI: (a) the **model field is shared across
-backends** — switching Anthropic↔OpenAI keeps the same `brainModel`, so the default `claude-opus-4-8`
-is wrong for a fresh OpenAI/Ollama pick (user must retype it); consider per-backend model memory.
-(b) Conversation history is an unbounded in-memory array capped only by `MAX_STEPS` per turn — add a
-turn cap / context-window trim before long sessions. (c) `toolresult.ok` is `true` whenever the tool
-RAN (even when the shell's output is a refusal/validation error) — the truth is in the content, which
-the model reads, but the UI chip may want to detect error-shaped output. Full plan:
+### 36. Built-in Assistant v1 — minor debt after both PRs (2026-07-20)
+Brain (PR 1: `bin/nidara-agent` + Settings → AI picker + keyring) and face (PR 2: `core/AgentService.ts`
++ island **Agent mode** `surfaces/island/AgentIsland.tsx` `ISLAND_AGENT`, `agent` activity priority 25,
+`Super+A → toggleAgent`, SCSS in `_bar.scss`, `island.agent.*` i18n) are both implemented. Residual v1
+debt: (a) the **model field is shared across backends** — switching Anthropic↔OpenAI keeps the same
+`brainModel`, so the default `claude-opus-4-8` is wrong for a fresh OpenAI/Ollama pick (user retypes it);
+consider per-backend model memory. (b) Conversation history is unbounded (daemon-side, capped only by
+`MAX_STEPS`/turn; UI transcript grows too) — add a turn cap / context trim before long sessions.
+(c) `toolresult.ok` is `true` whenever the tool RAN (even on a shell refusal/validation error) — the
+truth is in the content the model reads, but the UI chip only tints danger when the daemon says
+`ok:false`, which it currently never does for a refusal string; consider error-shape detection.
+(d) AgentIsland bubbles have no max-width cap (wrap at the 356px panel). (e) Anthropic backend
+implemented to spec but only OpenAI-compatible verified live. (f) **Expand-on-finish** may feel
+intrusive — watch the user's live verdict; easy to gate tighter or drop. Full plan:
 `~/.claude/plans/spicy-twirling-galaxy.md`.
+
+**Conversation persistence / history / memory — deferred, user-confirmed 2026-07-20 ("leave it for
+now, note it").** Current v1 behaviour (intended): the conversation lives in memory only — it PERSISTS
+across closing/reopening the island and across compact mutations (the `AgentService` transcript + the
+`AgentIsland` widget are session-long singletons; the island only hides on close, never rebuilds), and a
+background turn keeps running when the island is closed. It is wiped by a shell reload / logout / reboot,
+and by the "New conversation" reset (which also clears the daemon's `history`). NOTE the two histories
+can desync: `AgentService.transcript` is the UI view; the daemon's `history[]` is the model context — a
+daemon crash+respawn keeps the UI but loses the model's memory. The agreed roadmap (do NOT build until
+asked):
+- **v1.1 — persist the CURRENT conversation** (small, high value): write the transcript as JSON under
+  `~/.config/nidara/agent/` (house convention) and, on boot, re-feed the structured `history`
+  (user/assistant/tool, not just bubble text) to the daemon so the model *continues* with context, not
+  just displays it. Closes the "lose the thread on reload" gap.
+- **v2 — conversation history browser**: "New conversation" archives the current thread; a list to
+  revisit past threads (`conversations/*.json`, auto title + timestamp). New UI surface (a submode or
+  panel) → needs a design round.
+- **v3 — long-term memory of FACTS about the user** (opt-in, big): extract → store → inject into the
+  system prompt, à la Claude/ChatGPT memory. Distinct from the desktop-STATE memory the assistant
+  already has (system prompt regenerates from dumpState/describeConfig/listActions each session). Must
+  fit Nidara's privacy stance: opt-in, with UI to view/edit/delete what it remembers.
+- Privacy note for v1.1+: stored conversations are potentially sensitive plaintext on disk — ship an
+  easy "clear history" and consider making persistence a toggle.
+
+**Provider picker UX — deferred to "another round" (user, 2026-07-20).** The Settings → AI backend
+dropdown currently shows `Anthropic` / `OpenAI-compatible` — the second is JARGON: a user with a Google
+or Mistral key sees no name they recognise and stalls ("which do I pick?"). Fix: pick by **provider
+NAME** (Anthropic · OpenAI · Google (Gemini) · Mistral · Groq · OpenRouter · Ollama (local) · Custom),
+mapping under the hood to the two wire backends (only Anthropic is native; the rest ride the
+OpenAI-compatible path). Selecting a name **auto-fills the endpoint** (hidden/read-only except for
+Custom) + a sensible default model; the daemon needs NO change (it already reads `brainEndpoint` from
+ai.json). **Keyring caveat — the real reason to do it BEFORE release:** PR 1 stores the key with the
+libsecret attribute `backend` (`anthropic`/`openai`), so two OpenAI-compatible providers (Google +
+Mistral) would COLLIDE on one key slot. The picker must switch the attribute to the **provider id**
+(`google`/`mistral`/…). Changing that pre-merge is free; after users store keys it's a migration. All in
+`Ai.tsx` + `AgentConfig` + the `gi://Secret` calls. Google endpoint (AI-Studio Gemini API, simple key):
+`https://generativelanguage.googleapis.com/v1beta/openai`; Vertex AI is OpenAI-shaped too but needs GCP
+OAuth (not a plain key) → not BYOK-simple. Optional later: a **native Gemini backend** (3rd backend) for
+better tool-call/usage handling — the compat path already covers Gemini for v1, so low priority.
+
+### 37. No `NidaraScroller` in the kit — every surface re-solves the scrollbar (2026-07-21)
+**User's call, deferred by them ("not now, but we have to"):** the scrollbar is rebuilt from scratch
+on every surface that scrolls, so it looks and behaves differently in each one and the same bugs get
+re-litigated. Three separate hand-rolled versions today: `.nc-scroll.nc-transparent-scroll`
+(`_control-center.scss`), the Settings lists (`overlay_scrolling: false` + `_reset.scss`), and
+`.agent-scroller` (`_bar.scss`). Each re-derives the lane, the trough reset and the flush pin.
+
+**What bit us here (2026-07-21, twice in one sitting)** and what the component must encode:
+- The `_reset.scss` shell scrollbar is scoped by **ID** (`#nidara-bar scrollbar slider`, (1,0,2)).
+  Any per-surface override written as a bare class (`.agent-scroller scrollbar slider`, (0,1,2))
+  **silently loses** — the CSS looks right, applies nothing, and you debug geometry that was never
+  in play. A surface override MUST sit inside its window scope (commandment 2 gives you the ID for
+  free — which is the real reason that commandment exists here, not tidiness).
+- The default GTK overlay bar floats **inset** from the edge: the visible "gap on the right" comes
+  from Adwaita's `trough` margins, not from the slider's width. Fixing it means resetting the
+  trough, not shrinking the slider.
+
+**Hover growth is a THIRD trap, and the numbers matter** (extracted from the gtk4 gresource, not
+guessed): Adwaita's overlay indicator is `min-width: 3px` at rest via
+`scrollbar.overlay-indicator:not(.dragging):not(.hovering)`, but on hover that rule stops applying
+and the BASE `scrollbar > range > trough > slider` takes over — `min-width: 8px` **plus
+`border: 4px solid transparent`** (invisible, 8px of real width) ≈ 16px, plus a `#313131cc` track.
+An override that only sets `min-width` does NOT stop the growth; it must also kill the `border`.
+
+**Open nit, user-deferred to this component (2026-07-21):** pinned flush the bar reads as slightly
+OUTSIDE the panel near the rounded corners — the lane runs to the glass edge while the squircle
+curves inward, so the slider's travel extremes overhang the curve. The component should stop the
+lane ~3–4px short of the glass edge (or inset by the corner radius at the extremes). The user's
+verdict on the current state was "better, but maybe too far right — leave it for the component".
+
+Shape when built: `NidaraScroller` in `ui/lib/nidara-kit/` owning lane width, trough reset, flush
+pin, thin slider and the hover behaviour, with the three call sites migrated onto it. Universal
+reusables are `nidara-*` in the kit, never per-surface classes.
+
+### 38. `queryUI` is blind to the Activity Island (2026-07-21)
+With `island_mode: "agent"` and the panel visibly on screen, `ags request queryUI .agent-panel`
+returns **0 nodes** — as does every other island class. `core/UITree.ts` only descends widgets that
+report `get_mapped()`, and the island's surfaces are painted by `MorphRevealer` via snapshot, so its
+subtree never appears. Consequence: the shell's own introspection surface — the one an agent uses to
+VERIFY what it just did — cannot see the island at all, including the Assistant's own face. Found
+while trying to measure the transcript's geometry; the fallback was `ags request screenshot` + eyeball,
+which is exactly the manual loop queryUI exists to replace. Fix direction: teach the walk to descend
+snapshot-painted surfaces (the revealer knows its child), or have island modes register their content
+root with UITree. NOTE for whoever debugs with it: a selector that matches nothing returns the same
+`count: 0` as a broken traversal — check against a known-live class (e.g. `.bar-centerbox`) before
+concluding queryUI is broken.
 
 ## Resolved — rules that still apply
 

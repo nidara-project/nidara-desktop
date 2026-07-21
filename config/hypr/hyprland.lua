@@ -218,6 +218,7 @@ hl.bind(mainMod .. " + L",         hl.dsp.exec_cmd("nidara-lock"))
 -- ── Keybinds — App launchers ─────────────────────────────────────────────────
 hl.bind(mainMod .. " + S",   hl.dsp.exec_cmd("ags request openSettings"))
 hl.bind("SUPER + SUPER_L",   hl.dsp.exec_cmd("ags request toggleAppGrid"), { release = true })
+hl.bind(mainMod .. " + A",   hl.dsp.exec_cmd("ags request toggleAgent"))
 hl.bind(mainMod .. " + B",          hl.dsp.exec_cmd("ags request toggleBarOverlay"))
 hl.bind(mainMod .. " + SHIFT + G", hl.dsp.exec_cmd("nidara-game-mode toggle"))
 hl.bind(mainMod .. " + SHIFT + ESCAPE", hl.dsp.exec_cmd("ags request disableComputerControl")) -- kill switch: revoke AI computer-control instantly

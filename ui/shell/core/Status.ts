@@ -196,6 +196,7 @@ export class UIStatus extends GObject.Object {
 export const ISLAND_OVERVIEW = "overview"
 export const ISLAND_PLAYER = "player"
 export const ISLAND_BATTERY = "battery"
+export const ISLAND_AGENT = "agent"
 
 export const status = new UIStatus()
 export default status
