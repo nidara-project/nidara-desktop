@@ -806,13 +806,41 @@ Ordered by what hurt most in the live run:
    **Do NOT pad the prompt to reach 4096** — the fix is where the marker goes, not how fat the prompt
    is. Known limit accepted: a breakpoint looks back only ~20 content blocks, so a tool-heavy turn
    that adds more than that simply misses.
-8. **The daemon's user-facing strings are English-only.** Every message it emits — "The answer was cut
+8. **A native Gemini backend — evidence accumulating, decision NOT taken (2026-07-21).**
+   Three separate failures in one afternoon all traced to Google's OpenAI-*compatible* layer, not to
+   the model: (a) tool calls streamed with `finish_reason: "stop"` instead of `"tool_calls"`, so calls
+   were dropped; (b) Gemini 3's thought signature had to be echoed back or the next request 400s;
+   (c) implicit caching that we cannot influence — no marker to place, 1 hit in 36 requests across two
+   models. (a) and (b) are translation artefacts of the compat shim; (c) is a capability the compat
+   path simply does not expose (Google's own API has explicit cached-content, with real control).
+   A native backend would address all three — and cost a THIRD wire protocol to maintain, against a
+   standing rule of "Anthropic native, everything else via compat". **Not proposed for now.** Recorded
+   so the decision is made against the accumulated evidence rather than the next surprise. Revisit if
+   a fourth compat-specific defect appears, or if token cost on Google becomes a real complaint.
+
+9. **We cannot currently tell "no cache" from "cache not reported" on Google — settle it before
+   designing anything else around caching (user's call 2026-07-21: "define it properly before doing it
+   wrong, or doing it three times").** What is established: the field we read
+   (`usage.prompt_tokens_details.cached_tokens`) is real and Google does populate it — a single
+   reading of 4022 proves the plumbing. What is NOT established: whether a `0` is a measurement or a
+   silence. From inside the daemon those are indistinguishable, so no amount of further log-reading
+   settles it. **Method to use before touching caching again** (this is the process that three wrong
+   conclusions in one afternoon earned):
+   1. **Dump the provider's RAW usage object once**, not the one field we extract — if Google reports
+      cache under another key in the compat layer, our instrument reads 0 forever while caching works.
+   2. **Judge over a RUN, not a sample** — the three wrong conclusions each came from one reading.
+   3. **Confirm against an INDEPENDENT source** (the provider's own billing/usage console) before
+      concluding. Self-reported telemetry cannot validate itself.
+   4. **Never design around unverified provider behaviour** — and never pad, restructure, or add a
+      protocol to chase a discount that has not been observed end to end.
+
+10. **The daemon's user-facing strings are English-only.** Every message it emits — "The answer was cut
    off…", "The assistant kept repeating…", relayed provider errors — is a hardcoded English literal,
    while the assistant itself answers in the user's language. It is a separate process with no access
    to `core/i18n`, so the fix is either passing the locale's strings in at spawn or moving these
    messages to the shell side (`AgentService` already owns two of them via `t()`). Not urgent, clearly
    wrong.
-9. **Tool results go into history at full length, forever — COMPACTED, not capped.** The island
+11. **Tool results go into history at full length, forever — COMPACTED, not capped.** The island
    truncates a result to 200 chars for display, but `history` keeps the whole thing and every later
    request resends it. `compactJson()` applies to tool output too (listWindows −32%, listApps −25%),
    which is lossless and compounds. Since the catalogues became tools (progressive disclosure, see
@@ -821,7 +849,7 @@ Ordered by what hurt most in the live run:
    capping a large result, or dropping old turns. Both cost capability. `step N: POST host body=Xb
    (sys=Yb tools=Zb hist=Wb)` tells you which part is actually growing before anyone optimises on
    instinct.
-10. **The island's token counter is CUMULATIVE and doesn't say so (2026-07-21).** It shows the whole
+12. **The island's token counter is CUMULATIVE and doesn't say so (2026-07-21).** It shows the whole
    conversation's usage; the user read "2k tokens" as the cost of the turn they had just sent (that
    turn was 1,078). Not wrong data, ambiguous framing — a number in a chat header doesn't announce
    its own scope. **Deferred by the user ("lo dejamos así de momento"), with their idea recorded:
@@ -830,7 +858,7 @@ Ordered by what hurt most in the live run:
    there are no native GTK tooltips in this shell — and the per-turn numbers already exist in the
    daemon's `turn end` log line, they simply aren't carried to the UI (only the running totals are,
    via `done`). Cheapest shape: add the turn's own usage to the `done` payload alongside the totals.
-11. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
+13. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
    retired — picking it 404s. The catalog exposes no retired flag, so this cannot be filtered
    reliably; the model field stays free text on purpose.
 
