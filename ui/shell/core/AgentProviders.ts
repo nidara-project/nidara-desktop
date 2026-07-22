@@ -18,9 +18,14 @@
 export interface AgentProvider {
     /** Stable id. Persisted in ai.json AND used as the libsecret attribute. */
     id: string
-    /** Wire protocol. Only Anthropic is native; everything else is OpenAI-shaped. */
-    backend: "anthropic" | "openai"
-    /** Base URL for the openai path. "" for Anthropic (the daemon knows its own). */
+    /** Wire protocol, and the tiering is deliberate: NATIVE (`anthropic`, `gemini`)
+     *  for the providers we ship as a first choice, COMPAT (`openai`) as the
+     *  universal fallback. Riding the compat shim costs every translation defect
+     *  the shim has and every capability it doesn't expose — acceptable for the
+     *  long tail, not for a provider we recommend. Promoting a provider to native
+     *  is a new adapter in the daemon, not a change to this row's meaning. */
+    backend: "anthropic" | "gemini" | "openai"
+    /** Base URL. "" for Anthropic (the daemon knows its own). */
     endpoint: string
     /** Show the endpoint row. True for Custom (obviously) and for Ollama: 11434 is
      *  only the DEFAULT port — `OLLAMA_HOST` changes it, and pointing at an Ollama
@@ -47,7 +52,12 @@ export const AGENT_PROVIDERS: AgentProvider[] = [
     // adding a row should mean "enough users asked", not "it exists".
     { id: "anthropic",  backend: "anthropic", endpoint: "" },
     { id: "openai",     backend: "openai",    endpoint: "https://api.openai.com/v1" },
-    { id: "google",     backend: "openai",    endpoint: "https://generativelanguage.googleapis.com/v1beta/openai" },
+    // NATIVE since 2026-07-22, via Google's Interactions API (GA 2026-06-22, their
+    // recommended surface; `generateContent` is legacy and new agent features ship
+    // only on Interactions). Was on the compat shim, which cost three defects in a
+    // single afternoon — all translation artefacts, none the model's fault. Note
+    // the endpoint drops the `/openai` suffix: that path IS the shim.
+    { id: "google",     backend: "gemini",    endpoint: "https://generativelanguage.googleapis.com/v1beta" },
     // SpaceXAI — xAI rebranded 2026-07-06 (Grok, and the developer API, kept their
     // names and endpoint; verified against docs.x.ai, not from memory).
     { id: "spacexai",   backend: "openai",    endpoint: "https://api.x.ai/v1" },

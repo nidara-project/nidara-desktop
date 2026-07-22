@@ -149,8 +149,16 @@ export default function AiPage() {
     const modelList = new Gtk.StringList({ strings: [] })
     const modelDrop = new Gtk.DropDown({ model: modelList, visible: false, valign: Gtk.Align.CENTER })
     let suppressDropCb = false
+    // Index 0 is a PLACEHOLDER, not a model. GtkDropDown builds its own
+    // GtkSingleSelection with `autoselect` on, which refuses to hold "nothing
+    // selected" — set INVALID_LIST_POSITION and it snaps back to item 0. So the
+    // catalog can't simply be left unselected: without a placeholder the first
+    // model in the list always looks chosen, which reads as "this is your model"
+    // for something the user never picked (user-caught 2026-07-22).
     modelDrop.connect("notify::selected", () => {
         if (suppressDropCb) return
+        // Row 0 selects nothing on purpose — never commit it over a real value.
+        if (modelDrop.selected === 0) return
         const item = modelList.get_string(modelDrop.selected)
         if (item) { modelEntry.set_text(item); commitModel() }
     })
@@ -180,10 +188,17 @@ export default function AiPage() {
             if (r.models.length) {
                 suppressDropCb = true
                 while (modelList.get_n_items() > 0) modelList.remove(0)
+                modelList.append(t("settings.ai.brain.model.choose"))
                 r.models.forEach(m => modelList.append(m))
-                // Preselect the model already configured, if the catalog has it.
-                const idx = r.models.indexOf(agentConfig.brainModel)
-                modelDrop.selected = idx >= 0 ? idx : Gtk.INVALID_LIST_POSITION
+                // Preselect the configured model, comparing on the BARE id: the
+                // stored value may still carry Google's `models/` prefix (the
+                // compat spelling) while the catalog is now normalised without it,
+                // and a mismatch here silently looks like "your model isn't offered".
+                const bare = (s: string) => s.replace(/^models\//, "")
+                const idx = r.models.findIndex(m => bare(m) === bare(agentConfig.brainModel))
+                // +1 for the placeholder row; 0 means "none matched", which is
+                // exactly the placeholder — no model gets chosen on the user's behalf.
+                modelDrop.selected = idx >= 0 ? idx + 1 : 0
                 suppressDropCb = false
                 modelDrop.visible = true
                 modelStatus.visible = false

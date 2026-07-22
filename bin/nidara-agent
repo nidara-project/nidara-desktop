@@ -40,6 +40,8 @@ import Secret from "gi://Secret"
 const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
 const MAX_STEPS = 8            // hard cap on tool-use round-trips per user turn
 const HTTP_TIMEOUT = "120"     // curl --max-time (seconds)
+const MAX_HTTP_ATTEMPTS = 3    // 1 try + up to 2 retries on a 5xx / network blip
+const RETRY_BASE_MS = 600      // linear backoff between attempts: 600 ms, then 1200 ms
 
 // ── Telemetry ────────────────────────────────────────────────────────────────
 // stderr is INHERITED from the shell, which nidara-ui appends to nidara-ui.log —
@@ -126,22 +128,36 @@ function emit(obj) {
     stdout.flush(null)
 }
 const emitError = (m) => emit({ t: "error", message: String(m) })
-const emitDelta = (text) => { if (text) emit({ t: "delta", text }) }
+// Count deltas so a failed request can only be retried BEFORE any text has been
+// shown — a retry after that would double-render the reply. Monotonic across the
+// session; the retry loop only compares before/after within a single attempt.
+let deltasEmitted = 0
+const emitDelta = (text) => { if (text) { deltasEmitted++; emit({ t: "delta", text }) } }
 
 // ── Tools offered to the model ───────────────────────────────────────────────
-// Execution = `ags request …`; the gates live in the shell. run_action is a
-// passthrough so every IPC action is reachable without touching this file.
-const TOOL_DEFS = [
-    {
-        name: "run_action",
-        description:
-            "Run a Nidara shell action by name. This is how you operate the desktop. Use a name from the ACTIONS list in your instructions; call list_actions when you need to know what one does or which arguments it takes.",
-        props: {
-            action: { type: "string", description: "Action name from the actions list" },
-            args: { type: "array", items: { type: "string" }, description: "Positional arguments, if the action takes any" },
-        },
-        required: ["action"],
-    },
+// FIRST-CLASS tools, not a run_action passthrough behind a list_actions lookup.
+// That indirection was the root of two measured failures (2026-07-22):
+//
+//   1. COST. The model had to spend a whole round-trip on list_actions to learn
+//      an action's args before it could act — and every round-trip re-sends the
+//      entire growing transcript (sys+tools+history). A one-line "move this
+//      window" became 5 requests; the fixed ~1800-token prefix was billed 5×.
+//      The old code's own comment called the discovery request "SMALL". It is not
+//      — it is a full request. That assumption is what this overturns.
+//   2. WRONG NAMESPACE. Real tools were snake_case (run_action, set_config) while
+//      actions were camelCase behind run_action, so the model invented snake_case
+//      tool names like `list_apps` and the call died as "unknown tool".
+//
+// One namespace fixes both: actions become snake_case tools with their own
+// descriptions, always present (no discovery), impossible to mis-namespace
+// (list_apps IS the tool). Generated from `ags request listActions`, so a newly
+// added action still shows up for free — the self-maintaining property is kept.
+//
+// SETTINGS stay progressive: describe_settings gates a 4 KB schema whose 12:1
+// size-to-lookup ratio genuinely pays for on-demand loading (measured 2026-07-21).
+// Actions do not — their whole catalogue of names+descriptions is ~1 KB, cheaper
+// to carry than one discovery round-trip.
+const STATIC_TOOL_DEFS = [
     {
         name: "set_config",
         description:
@@ -165,18 +181,6 @@ const TOOL_DEFS = [
         props: {},
         required: [],
     },
-    // ── Discovery ────────────────────────────────────────────────────────────
-    // The catalogues used to be pasted into the system prompt, which meant every
-    // "hello" paid ~2.2k tokens for knowledge it never used. They are tools now:
-    // the model asks when a request actually touches the desktop, and the answer
-    // then lives in history for the rest of the conversation.
-    {
-        name: "list_actions",
-        description:
-            "List every desktop action you can run, with a description of each. You do NOT know these in advance — call this ONCE before your first run_action in a conversation. Required: never guess an action name.",
-        props: {},
-        required: [],
-    },
     {
         name: "describe_settings",
         description:
@@ -185,45 +189,78 @@ const TOOL_DEFS = [
         required: [],
     },
 ]
-const ANTHROPIC_TOOLS = TOOL_DEFS.map(d => ({
+
+// IPC action name (camelCase) → wire tool name (snake_case). Function-calling
+// convention is snake_case, and matching it is what stops the model inventing
+// `list_apps` for `listApps`.
+const toSnake = (s) => s.replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase()
+
+// Built once per session (actions don't change under a running shell), cached
+// like the system prompt. Falls back to just the static tools if the shell is
+// mid-reload — the turn still works, minus the desktop actions, rather than
+// crashing.
+let toolsetCache = null   // { defs, actionMap: { snake: camel } }
+function buildToolset() {
+    if (toolsetCache) return toolsetCache
+    const defs = [...STATIC_TOOL_DEFS]
+    const actionMap = {}
+    try {
+        const all = JSON.parse(agsRequest(["listActions"]))
+        for (const [name, def] of Object.entries(all)) {
+            if (HIDDEN_ACTIONS.has(name)) continue
+            const snake = toSnake(name)
+            actionMap[snake] = name
+            defs.push({
+                name: snake,
+                // TERSE. This block is FIXED and re-sent on every step of every
+                // turn, so each byte is paid per request. The first cut of this
+                // refactor kept the full listActions description plus a 90-char
+                // args blurb on all 32 tools → a 14 KB tools block, 3.6k tokens
+                // billed 5× in one turn, worse than the discovery step it replaced
+                // (measured 2026-07-22). Trim the description to its first clause
+                // (drop the "(e.g. …)" examples) and give args NO description — the
+                // snake_case name and the short description already say enough.
+                description: (def.desc || name).split(/[.(]/)[0].trim(),
+                props: { args: { type: "array", items: { type: "string" } } },
+                required: [],
+            })
+        }
+    } catch (e) {
+        log(`buildToolset: listActions failed (${e}) — desktop actions unavailable this turn`)
+    }
+    toolsetCache = { defs, actionMap }
+    return toolsetCache
+}
+const anthropicTools = () => buildToolset().defs.map(d => ({
     name: d.name, description: d.description,
     input_schema: { type: "object", properties: d.props, required: d.required },
 }))
-const OPENAI_TOOLS = TOOL_DEFS.map(d => ({
+const openaiTools = () => buildToolset().defs.map(d => ({
     type: "function",
     function: { name: d.name, description: d.description, parameters: { type: "object", properties: d.props, required: d.required } },
+}))
+const geminiTools = () => buildToolset().defs.map(d => ({
+    type: "function", name: d.name, description: d.description,
+    parameters: { type: "object", properties: d.props, required: d.required },
 }))
 
 function summarizeTool(tu) {
     const i = tu.input || {}
     switch (tu.name) {
-        case "run_action": return `run_action ${i.action || i.name || "?"}${i.args?.length ? " " + i.args.join(" ") : ""}`
         case "set_config": return `set_config ${i.key}=${i.value}`
         case "get_config": return `get_config ${i.key || "(all)"}`
-        default: return tu.name
+        case "dump_state": return "dump_state"
+        case "describe_settings": return "describe_settings"
+        // A desktop action tool: name plus any positional args.
+        default: return `${tu.name}${Array.isArray(i.args) && i.args.length ? " " + i.args.join(" ") : ""}`
     }
 }
 
 function execTool(tu) {
     try {
         let out
+        const args = () => Array.isArray(tu.input?.args) ? tu.input.args.map(String) : []
         switch (tu.name) {
-            case "run_action": {
-                const name = tu.input?.action || tu.input?.name
-                if (!name) {
-                    // Hand the model back WHAT IT SENT. A bare "needs an action
-                    // name" told it nothing it didn't already believe, and it
-                    // retried the identical call seven times (2026-07-21).
-                    log(`run_action without an action name — raw args: ${truncate(tu.rawArgs || "(none)", 300)}`)
-                    return {
-                        ok: false,
-                        content: `run_action requires the "action" property, and your call did not have it. You sent: ${truncate(tu.rawArgs || "(no arguments)", 300)}. Retrying the same call will fail again — use a name from the AVAILABLE IPC ACTIONS list, e.g. {"action":"toggleControlCenter"}.`,
-                    }
-                }
-                const args = Array.isArray(tu.input?.args) ? tu.input.args.map(String) : []
-                out = agsRequest([String(name), ...args])
-                break
-            }
             case "set_config":
                 if (!tu.input?.key) return { ok: false, content: "set_config needs key and value" }
                 out = agsRequest(["setConfig", String(tu.input.key), String(tu.input.value ?? "")])
@@ -234,14 +271,25 @@ function execTool(tu) {
             case "dump_state":
                 out = agsRequest(["dumpState"])
                 break
-            case "list_actions":
-                out = actionsForPrompt(agsRequest(["listActions"]))
-                break
             case "describe_settings":
                 out = agsRequest(["describeConfig"])
                 break
-            default:
-                return { ok: false, content: `unknown tool: ${tu.name}` }
+            default: {
+                // A desktop action tool. The wire name is snake_case; map it back
+                // to the camelCase IPC action. The map is authoritative; the
+                // knownActions() fallback catches a model that called an action by
+                // its real camelCase name anyway — either way the surface and gates
+                // are exactly what the shell exposes, no new door.
+                const { actionMap } = buildToolset()
+                const action = actionMap[tu.name] || (knownActions().has(tu.name) ? tu.name : null)
+                if (action) { out = agsRequest([action, ...args()]); break }
+                // Genuinely unknown. Name the real tools so the correction is
+                // actionable instead of a dead end.
+                return {
+                    ok: false,
+                    content: `There is no tool called "${tu.name}". Available tools: ${buildToolset().defs.map(d => d.name).join(", ")}. Call one of those directly.`,
+                }
+            }
         }
         // Same lossless squeeze as the system prompt, and it matters MORE here:
         // a tool result is appended to `history` and re-sent on every later
@@ -279,79 +327,44 @@ const HIDDEN_ACTIONS = new Set([
     "hideForLock", "showAfterLock", "notifyComputerAction", "agentPointer", "disableComputerControl",
 ])
 
-function actionsForPrompt(raw) {
-    try {
-        const all = JSON.parse(raw)
-        const kept = {}
-        for (const [name, def] of Object.entries(all)) if (!HIDDEN_ACTIONS.has(name)) kept[name] = def
-        return JSON.stringify(kept)
-    } catch {
-        return raw
-    }
-}
 
-// PROGRESSIVE DISCLOSURE (user's call 2026-07-21: "load what the agent needs
-// WHEN it needs it, not always by default").
-//
-// This prompt used to paste in the whole IPC action list, the whole settings
-// schema and a state snapshot: 2,269 of the 3,157 tokens a bare "hello" cost —
-// 72% of every request, for knowledge most turns never touch. They are tools
-// now (list_actions / describe_settings / dump_state), so the catalogues enter
-// the conversation only once a request actually needs them, and then stay in
-// history for the rest of it.
-//
-// Counter-intuitively this is cheaper for REAL desktop requests too, not just
-// small talk: the extra discovery round-trip is a SMALL request, and the big
-// payload is carried by fewer messages overall than when it prefixes every one.
-//
-// The cost of this design is compliance: a model that forgets to ask will
-// invent action names. Three defences, all deliberate — the rules below are
-// imperative, the tool descriptions repeat the requirement, and run_action's
-// rejection hands back what was actually sent (see execTool).
-// The NAMES of every action, and nothing else. 113 tokens against 1,231 for the
-// full catalogue with descriptions and aliases (measured 2026-07-21).
-//
-// This exists because progressive disclosure, as first built, cost real
-// capability: the model was told it could "manage windows and workspaces" but
-// had no way to know `listWindows` existed without a lookup it never performed,
-// so it reached for `dump_state` (which carries no window list) and then told the
-// user it couldn't see their windows. A promise with no means of discovery is
-// worse than no promise. Names are self-describing enough to act on directly;
-// `list_actions` still carries the descriptions and arguments for anything the
-// model isn't sure about.
-//
-// Generated, never hardcoded — a newly added IPC action shows up here for free,
-// which is the property that keeps this prompt self-maintaining.
-function actionNames() {
+// Every action the shell exposes, INCLUDING the hidden ones: this is the "is
+// this a real action?" oracle for the salvage path in execTool, not something
+// the model is shown. run_action passes hidden names through too, so gating the
+// salvage on the visible subset would make the same call succeed or fail
+// depending on how the model happened to phrase it.
+let actionSetCache = null
+function knownActions() {
+    if (actionSetCache) return actionSetCache
     try {
-        return Object.keys(JSON.parse(agsRequest(["listActions"])))
-            .filter(n => !HIDDEN_ACTIONS.has(n))
-            .join(", ")
+        actionSetCache = new Set(Object.keys(JSON.parse(agsRequest(["listActions"]))))
     } catch {
-        return ""
+        // Don't cache a failure — the shell may just have been mid-reload.
+        return new Set()
     }
+    return actionSetCache
 }
 
 function buildSystemPrompt() {
     if (systemCache) return systemCache
-    const names = actionNames()
     const lang = GLib.getenv("LANG") || "en"
     systemCache = [
         "You are Assistant, the built-in helper for the Nidara desktop (a Wayland desktop environment for Arch Linux, compositor Hyprland).",
         "You help the user operate their desktop with natural language by calling tools.",
         // Rich enough to ANSWER from — see the "describing yourself" rule below.
-        // Asking the model to describe itself used to send it after both full
-        // catalogues (4k tokens to answer a question about itself), which is the
-        // one case where looking things up is pure waste.
         "What you can do: open/close shell surfaces (control center, notifications, search, app grid, overview, settings); manage windows and workspaces; launch apps; change settings (appearance, accent, dark mode, dock, notifications, night light, gaming); read desktop state.",
         "Rules:",
         "- Be concise: you answer in a small chat panel.",
         "- The user is in charge. Do only what they ask; ask first before anything destructive or irreversible.",
         "- If the message does NOT involve the desktop (a greeting, a general question, chit-chat), just answer. Do not call any tool.",
-        "- Asked what you can do? Answer from that summary in your own words — never call list_actions or describe_settings just to describe yourself.",
-        "- When it DOES involve the desktop, use the action names listed below with run_action. Call list_actions when you need an action's description or its arguments — always before using one you are not certain how to call. Call describe_settings before your first set_config or targeted get_config. Once per conversation is enough — the answers stay in the conversation.",
-        "- NEVER invent an action name or a setting key: use the names below, or look them up first. If an action fails, read the error and correct the call — do not repeat it unchanged.",
-        "- Prefer set_config for settings and run_action for everything else. After acting, verify with dump_state/get_config when useful, then briefly confirm what changed.",
+        "- Asked what you can do? Answer from that summary in your own words — do not call a tool just to describe yourself.",
+        // The tools now ARE the desktop actions (one tool per action, with its own
+        // description and args), so there is no run_action indirection and no
+        // discovery step: the model reads the tool list and calls what it needs.
+        // Settings stay behind describe_settings because that schema is large.
+        "- Each desktop action is its own tool — call it directly with any positional arguments it needs. Do not look actions up; they are all in your tool list.",
+        "- Settings are the exception: call describe_settings once before your first set_config or targeted get_config, then use the keys it returns. Never guess a setting key.",
+        "- If a tool call fails, read the error and correct the call — do not repeat it unchanged. After acting, verify with dump_state/get_config when useful, then briefly confirm what changed.",
         // The language of the MESSAGE wins, always. The desktop locale is a hint
         // for the ambiguous case, never the rule: people routinely run an English
         // desktop and talk to it in their own language, and switching languages
@@ -361,7 +374,6 @@ function buildSystemPrompt() {
         // message.)
         "- Reply in the SAME language the user wrote their message in, and follow them if they switch.",
         `- Only when that is genuinely unclear (a first message too short to tell), fall back to the desktop locale (LANG=${lang}).`,
-        ...(names ? ["", `ACTIONS you can run (names only — call list_actions for what each does and what arguments it takes): ${names}`] : []),
     ].join("\n")
     return systemCache
 }
@@ -371,6 +383,32 @@ function buildSystemPrompt() {
 // { role:"assistant", text, toolUses:[{id,name,input}] }
 // { role:"tool", results:[{id,name,content}] }
 const history = []
+
+// Index in `history` where the CURRENT user turn begins. Everything before it is
+// a completed prior turn. Set at the top of runTurn; reset with the history.
+let turnStartIndex = 0
+
+
+// Tool RESULTS are the whales in the transcript, and the reason both the cost and
+// the cache complaint exist. Measured 2026-07-22: a single `listApps` is 5.8 KB,
+// and once it lands in history it rides in EVERY later request forever — 85% of a
+// 31 KB body, growing to a 57k-token turn, and the ceiling that pinned the implicit
+// cache at 3% (only the fixed prefix caches; a history that changes every turn never
+// does). Once a PRIOR turn's result has been reasoned over, the model has already
+// taken what it needed — the payload no longer has to travel. So for the REQUEST we
+// stub the content of tool results from before the current turn, keeping every step,
+// id, pairing and thought-signature intact (only the payload string shrinks). This
+// is the standard "clear old tool results" context move; doing it at request-build
+// time keeps the real `history` full for the UI and the logs. Current-turn results
+// stay whole — the model is still working on them. The model is told it can re-run
+// the action, which it does for the rare follow-up that needs the old data again.
+const RESULT_STUB = "(earlier result omitted to save context — re-run the action if you need this again)"
+function historyForRequest() {
+    return history.map((m, i) =>
+        m.role === "tool" && i < turnStartIndex
+            ? { ...m, results: (m.results || []).map(r => ({ ...r, content: RESULT_STUB })) }
+            : m)
+}
 
 function toAnthropicMsg(m) {
     if (m.role === "user") return { role: "user", content: [{ type: "text", text: m.text }] }
@@ -445,8 +483,8 @@ function buildAnthropicReq(cfg, key, system) {
         // 1.25×, every later read 0.1×. Marking the system block turns the fixed
         // cost into a rounding error from the second request onwards.
         system: [{ type: "text", text: system, cache_control: { type: "ephemeral" } }],
-        tools: ANTHROPIC_TOOLS,
-        messages: markNewestTurn(history.map(toAnthropicMsg).filter(Boolean)),
+        tools: anthropicTools(),
+        messages: markNewestTurn(historyForRequest().map(toAnthropicMsg).filter(Boolean)),
     }
     return {
         url: "https://api.anthropic.com/v1/messages",
@@ -456,23 +494,235 @@ function buildAnthropicReq(cfg, key, system) {
             ["anthropic-version", "2023-06-01"],
         ],
         body: JSON.stringify(body),
-        toolBytes: JSON.stringify(ANTHROPIC_TOOLS).length,
+        toolBytes: JSON.stringify(body.tools).length,
     }
 }
 
 function buildOpenaiReq(cfg, key, system) {
     const endpoint = (cfg.brainEndpoint || "http://localhost:11434/v1").replace(/\/+$/, "")
-    const messages = [{ role: "system", content: system }, ...history.flatMap(toOpenaiMsgs)]
+    const messages = [{ role: "system", content: system }, ...historyForRequest().flatMap(toOpenaiMsgs)]
     const body = {
         model: cfg.brainModel || "",
         stream: true,
         stream_options: { include_usage: true },
-        tools: OPENAI_TOOLS,
+        tools: openaiTools(),
         messages,
     }
     const headers = [["content-type", "application/json"]]
     if (key) headers.push(["authorization", `Bearer ${key}`])
-    return { url: `${endpoint}/chat/completions`, headers, body: JSON.stringify(body), toolBytes: JSON.stringify(OPENAI_TOOLS).length }
+    return { url: `${endpoint}/chat/completions`, headers, body: JSON.stringify(body), toolBytes: JSON.stringify(body.tools).length }
+}
+
+// ── Gemini native (Interactions API) ─────────────────────────────────────────
+// Google's Interactions API went GA 2026-06-22 and is their recommended surface
+// for new work; `generateContent` still runs but is legacy, and new agent
+// features ship only here. We were reaching Gemini through the OpenAI-COMPAT
+// shim, which cost us three defects in one afternoon (2026-07-21) — none of them
+// the model's fault: tool calls finishing with "stop" instead of "tool_calls",
+// the thought signature that must be echoed or the next request 400s, and no
+// cache control at all. All three are translation artefacts. This backend talks
+// to Google directly, so they stop existing rather than get worked around.
+//
+// PHASE 1 deliberately sends `store: false` and the full step history on every
+// request — the same cost profile we have today. The saving lives in
+// `previous_interaction_id` (the server keeps the conversation; we send an id
+// instead of the transcript), and that REQUIRES `store: true`, i.e. the
+// conversation resting on Google's servers. That is a product decision about the
+// user's data, not a technical one, so it is not made here. When it is made,
+// phase 2 is small and sits on top of this.
+// Tools for the Interactions API are geminiTools() — the shared first-class set,
+// built once from listActions. See the tool-definition block near the top.
+
+// Neutral history → Interactions steps. Flatter than the other two backends:
+// there are no roles, every event is its own typed step, which is also why the
+// stream maps so cleanly onto the tool chips the island already draws.
+function toGeminiSteps(m) {
+    if (m.role === "user") return [{ type: "user_input", content: [{ type: "text", text: m.text }] }]
+    if (m.role === "assistant") {
+        const steps = []
+        // The thought step (with its signature) MUST precede the model_output in the
+        // rebuilt history, verbatim — dropping it made the model return an empty
+        // completion on every follow-up (spec: ThoughtStep {type,signature};
+        // oracle-confirmed 2026-07-22). Only present on turns that produced text;
+        // function_call turns carry their signature on the call itself.
+        if (m.thoughtSig) steps.push({ type: "thought", signature: m.thoughtSig })
+        if (m.text) steps.push({ type: "model_output", content: [{ type: "text", text: m.text }] })
+        for (const tu of m.toolUses || []) {
+            const call = { type: "function_call", id: tu.id, name: tu.name, arguments: tu.input || {} }
+            // Verbatim, never interpreted. Omitting it is what broke the second
+            // step of every tool-using turn (2026-07-22).
+            if (tu.extra) call.signature = tu.extra
+            steps.push(call)
+        }
+        return steps
+    }
+    // `result` is a PLAIN STRING, not the [{type:"text"}] array the docs show.
+    // That array form is the MULTIMODAL one and only 3.x models accept it —
+    // gemini-2.5-flash rejects it with "Multimodal function responses are not
+    // supported for this model" (measured across three models 2026-07-22). Our
+    // results are always text, so the string form loses nothing and keeps older
+    // models working. Do not "fix" this back to the documented shape.
+    //
+    // A failed result has no error flag here (Anthropic has is_error, the compat
+    // path has none either). Say it in the text so a refusal still reads as one.
+    return (m.results || []).map(r => ({
+        type: "function_result",
+        call_id: r.id,
+        name: r.name,
+        result: r.ok === false ? `ERROR: ${r.content}` : r.content,
+    }))
+}
+
+function buildGeminiReq(cfg, key, system) {
+    const endpoint = (cfg.brainEndpoint || "https://generativelanguage.googleapis.com/v1beta").replace(/\/+$/, "")
+    // Full history, re-sent each step (store:false, no previous_interaction_id).
+    //
+    // Phase 2 (delta + previous_interaction_id + store:true) was implemented and
+    // TESTED here 2026-07-22, and reverted: it saved network bandwidth but the
+    // token COUNT is what the model PROCESSES, and the server reconstructs the full
+    // transcript from the stored id, so the counted/billed tokens did not drop.
+    // Worse, it produced cached=0 across every step and both turns of the test,
+    // where re-sending the full history (below) lets the implicit prefix cache
+    // reach ~48% — a stable sys+tools+earlier-history prefix is exactly what that
+    // cache matches. Sending tiny deltas gives it nothing to match. Per the
+    // standing rule (don't design around caching not observed working end to end),
+    // the re-send path is kept. If a future model/mode shows previous_interaction_id
+    // actually caching, revisit with numbers.
+    const body = {
+        // `models/gemini-2.5-flash` is the COMPAT spelling; the native surface
+        // takes a bare id. Normalise rather than make the user re-pick a model
+        // they already chose — a stale prefix would 400 with nothing on screen
+        // to connect it to a provider switch that happened underneath them.
+        // The fallback only fires if Google is selected with no model picked (the
+        // picker normally forces a choice); `gemini-flash-latest` is Google's
+        // documented auto-alias for the current GA flash, so it never rots the way
+        // a pinned version id does.
+        model: (cfg.brainModel || "gemini-flash-latest").replace(/^models\//, ""),
+        system_instruction: system,
+        input: historyForRequest().flatMap(toGeminiSteps),
+        tools: geminiTools(),
+        stream: true,
+        store: false,
+    }
+    return {
+        url: `${endpoint}/interactions`,
+        headers: [
+            ["content-type", "application/json"],
+            ["x-goog-api-key", key || ""],
+        ],
+        body: JSON.stringify(body),
+        toolBytes: JSON.stringify(body.tools).length,
+    }
+}
+
+function makeGeminiHandler() {
+    let text = ""
+    // Keyed by the step index the stream reports, so parallel calls stay apart —
+    // the exact failure the compat path hit when Google omitted `index` and two
+    // calls collapsed into one slot.
+    const slots = new Map()
+    let usage = { input: 0, output: 0, cached: 0, thought: 0 }
+    // A text reply is preceded by a `thought` step whose thought_signature MUST be
+    // echoed back on the NEXT turn or the model returns an empty completion — the
+    // same rule as the function_call signature, but for text. Dropping it is what
+    // made every follow-up message fail (oracle-confirmed 2026-07-22).
+    let thoughtSig = null
+    let errorMsg = null
+    let interactionId = null
+    let status = null
+    return {
+        onLine(line) {
+            if (!line.startsWith("data:")) return
+            const payload = line.slice(5).trim()
+            if (!payload || payload === "[DONE]") return
+            let data
+            try { data = JSON.parse(payload) } catch { return }
+            if (data.error) { errorMsg = data.error.message || String(data.error); return }
+            switch (data.event_type) {
+                case "interaction.created":
+                    // Captured for the log now; it is also the handle phase 2
+                    // needs, both to continue the conversation and to DELETE the
+                    // stored copy when the user clears it.
+                    interactionId = data.interaction?.id ?? null
+                    break
+                case "step.start": {
+                    const s = data.step || {}
+                    // `signature` rides on the function_call step and MUST be echoed
+                    // back verbatim or the next request is rejected — the same
+                    // thought-signature rule the compat path hit, except here it is
+                    // a first-class field instead of a nested extra_content blob.
+                    // Verified against the live API 2026-07-22: a fabricated
+                    // function_call without it fails with a bare "Request contains
+                    // an invalid argument", which names no field and points nowhere.
+                    if (s.type === "function_call")
+                        slots.set(data.index, { id: s.id, name: s.name, argParts: [], signature: s.signature ?? null })
+                    break
+                }
+                case "step.delta": {
+                    const d = data.delta || {}
+                    if (d.type === "text" && d.text) { text += d.text; emitDelta(d.text) }
+                    // Function arguments arrive as string fragments to concatenate,
+                    // the same shape as every other provider.
+                    else if (d.type === "arguments_delta" && d.arguments != null) {
+                        const slot = slots.get(data.index)
+                        if (slot) slot.argParts.push(typeof d.arguments === "string" ? d.arguments : JSON.stringify(d.arguments))
+                    }
+                    // The reasoning signature for a TEXT reply rides on its own
+                    // `thought` step's delta (function calls carry it on the call).
+                    else if (d.type === "thought_signature" && d.signature) thoughtSig = d.signature
+                    break
+                }
+                case "interaction.completed": {
+                    const u = data.interaction?.usage || {}
+                    // Google's usage has SIX buckets (verified against the
+                    // Interactions OpenAPI spec 2026-07-22): total_input_tokens,
+                    // total_output_tokens, total_cached_tokens, total_tool_use_tokens,
+                    // total_thought_tokens, total_tokens. Reading only input+output
+                    // DROPPED the tool-declaration and thinking tokens on the floor —
+                    // an undercount that hid exactly the tool block's per-step cost.
+                    // total_tokens is the spec's authoritative request total ("prompt
+                    // + responses + other internal tokens"), so report THAT. output
+                    // stays the plainly-defined generated count and input absorbs the
+                    // rest, so input+output === total_tokens with NO assumption about
+                    // how the sub-buckets compose (the spec doesn't pin that down).
+                    const out = u.total_output_tokens ?? 0
+                    const total = u.total_tokens ?? ((u.total_input_tokens ?? 0) + out)
+                    usage.output = u.total_output_tokens ?? usage.output
+                    usage.input = Math.max(0, total - out)
+                    // A FIRST-CLASS field here, unlike the compat path where it
+                    // was buried in prompt_tokens_details and never populated.
+                    usage.cached = u.total_cached_tokens ?? usage.cached
+                    // Thinking tokens: a THIRD additive bucket (oracle 2026-07-22:
+                    // total 214 = input 112 + output 30 + thought 72). Already inside
+                    // the total above; surfaced separately so the log shows how much a
+                    // turn spent THINKING — a real, previously invisible cost driver
+                    // and a genuine lever (thinking budget on models that expose one).
+                    usage.thought = u.total_thought_tokens ?? usage.thought
+                    status = data.interaction?.status ?? status
+                    interactionId = data.interaction?.id ?? interactionId
+                    break
+                }
+            }
+        },
+        result() {
+            const tus = [...slots.values()].map((s, k) => {
+                const rawArgs = s.argParts.join("")
+                let input = {}
+                try { input = rawArgs ? JSON.parse(rawArgs) : {} } catch (e) {
+                    log(`tool args did not parse for ${s.name || "?"}: ${e} — raw: ${truncate(rawArgs, 300)}`)
+                }
+                // Carried in the neutral history's `extra` slot, the same one the
+                // compat path uses for this exact purpose.
+                return { id: s.id || `call_${k}`, name: s.name, input, rawArgs, extra: s.signature }
+            })
+            if (interactionId) log(`interaction ${interactionId} status=${status || "?"}`)
+            // Same rule as the other backends: the PRESENCE of tool calls decides,
+            // never a status field. A model that asked for a tool gets its result.
+            // interactionId is the phase-2 handle: chained into the next request as
+            // previous_interaction_id, and collected for deletion on reset.
+            return { text, toolUses: tus, thoughtSig, stopReason: tus.length ? "tool_use" : "end", finishReason: status, usage, errorMsg, interactionId }
+        },
+    }
 }
 
 // ── SSE stream handlers (accumulate text + tool calls, emit deltas live) ─────
@@ -658,7 +908,14 @@ function readAllLines(dataIn, onLine) {
 }
 
 async function streamCurl(req, onLine) {
-    const argv = ["curl", "-sS", "-N", "--no-buffer", "--fail-with-body", "--max-time", HTTP_TIMEOUT, "-X", "POST"]
+    const argv = ["curl", "-sS", "-N", "--no-buffer", "--fail-with-body", "--max-time", HTTP_TIMEOUT,
+        // Emit the final HTTP status to STDERR (via `%{stderr}`), never onto the
+        // SSE stdout stream: the retry path must tell a transient 5xx / dropped
+        // connection (retryable) apart from a 4xx (auth / bad request — retrying
+        // just burns time and money). Drained and stripped below so this marker
+        // never leaks into the error the user sees.
+        "-w", "%{stderr}nidara-http:%{http_code}",
+        "-X", "POST"]
     for (const [k, v] of req.headers) argv.push("-H", `${k}: ${v}`)
     argv.push("--data-binary", "@-", req.url)
 
@@ -688,11 +945,18 @@ async function streamCurl(req, onLine) {
     // endpoint reached the user as the generic "Request failed". Safe to drain
     // synchronously here: the process has already exited, and `-sS` keeps this
     // to one line.
-    const err = drainStream(proc.get_stderr_pipe())
+    const errRaw = drainStream(proc.get_stderr_pipe())
+    // `nidara-http:NNN` comes from the -w write-out above; it is 000 (→ 0) when no
+    // response was received at all (DNS / TLS / refused / timeout), which the retry
+    // path reads as a network blip.
+    const httpMatch = /nidara-http:(\d+)/.exec(errRaw)
+    const httpCode = httpMatch ? parseInt(httpMatch[1], 10) : 0
+    const err = errRaw.replace(/nidara-http:\d+/, "").trim()
+    const exitCode = proc.get_exit_status()
     const ok = proc.get_successful()
     currentCurl = null
-    if (!ok) log(`curl failed: exit=${proc.get_exit_status()} ${err ? `stderr="${truncate(err, 200)}"` : `body=${raw.length}b`}`)
-    return { ok, raw, err }
+    if (!ok) log(`curl failed: exit=${exitCode} http=${httpCode || "net"} ${err ? `stderr="${truncate(err, 200)}"` : `body=${raw.length}b`}`)
+    return { ok, raw, err, httpCode, exitCode }
 }
 
 // Read a stream to EOF. Only for pipes of an exited process (see streamCurl).
@@ -742,6 +1006,14 @@ function bestError(raw, curlErr) {
 
 const truncate = (s, n) => (s && s.length > n ? s.slice(0, n) + "…" : s || "")
 
+// Async, non-blocking wait (GLib timer) used for retry backoff — the main loop
+// keeps running, so an in-flight `cancel` message is still processed during the pause.
+function sleep(ms) {
+    return new Promise((res) => {
+        GLib.timeout_add(GLib.PRIORITY_DEFAULT, ms, () => { res(); return GLib.SOURCE_REMOVE })
+    })
+}
+
 // ── The turn loop ────────────────────────────────────────────────────────────
 let busy = false
 let cancelled = false
@@ -755,7 +1027,7 @@ async function runTurn(userText) {
     // `input_tokens` — so the raw fields mean different things and are normalised
     // in the handlers, not here. `cached` is the subset served from cache (cheap);
     // total − cached is what was billed at full rate.
-    const turnUsage = { input: 0, output: 0, cached: 0 }
+    const turnUsage = { input: 0, output: 0, cached: 0, thought: 0 }
     const t0 = GLib.get_monotonic_time()
     let step = 0
     let lastFailure = null     // signature of the previous failed tool call (loop guard)
@@ -766,6 +1038,10 @@ async function runTurn(userText) {
             return
         }
         history.push({ role: "user", text: userText })
+        // Boundary for historyForRequest(): this user message and everything after
+        // it is the current turn (kept full); everything before is prior turns
+        // (tool results stubbed).
+        turnStartIndex = history.length - 1
         const system = buildSystemPrompt()
         emit({ t: "state", s: "thinking" })
         log(`turn start: provider=${cfg.brainProvider || "?"} backend=${backend} model=${cfg.brainModel || "(default)"} chars=${userText.length} history=${history.length}`)
@@ -773,8 +1049,21 @@ async function runTurn(userText) {
         while (step++ < MAX_STEPS) {
             if (cancelled) return
             const key = lookupKey(cfg.brainProvider || "")
-            const req = backend === "anthropic" ? buildAnthropicReq(cfg, key, system) : buildOpenaiReq(cfg, key, system)
-            const handler = backend === "anthropic" ? makeAnthropicHandler() : makeOpenaiHandler()
+            // Three wire protocols on purpose, and the split is not arbitrary:
+            // NATIVE for the providers we ship as a first choice (full capability,
+            // no translation layer to inherit defects from), COMPAT as the
+            // universal fallback that makes Ollama, localhost and custom endpoints
+            // work with one adapter — which for a Linux desktop is a real feature
+            // (offline, no key, nothing leaves the machine), not a shortcut.
+            const req = backend === "anthropic" ? buildAnthropicReq(cfg, key, system)
+                : backend === "gemini" ? buildGeminiReq(cfg, key, system)
+                : buildOpenaiReq(cfg, key, system)
+            // Factory, not an instance: the retry loop below re-creates the handler
+            // per attempt, because a failed leg may have half-accumulated text or
+            // tool JSON and a retry has to start clean.
+            const makeHandler = backend === "anthropic" ? makeAnthropicHandler
+                : backend === "gemini" ? makeGeminiHandler
+                : makeOpenaiHandler
             // Three-way split, because "the request is big" is not actionable.
             // sys and tools are FIXED per session (and cacheable); hist is what
             // GROWS. Which one dominates decides whether to shrink the prompt or
@@ -785,8 +1074,29 @@ async function runTurn(userText) {
             const toolBytes = req.toolBytes ?? 0
             log(`step ${step}: POST ${hostOf(req.url)} body=${req.body.length}b (sys=${sysBytes}b tools=${toolBytes}b hist=${req.body.length - sysBytes - toolBytes}b) key=${key ? "yes" : "none"}`)
 
-            const { ok, raw, err } = await streamCurl(req, (l) => handler.onLine(l))
-            if (cancelled) { log(`step ${step}: cancelled by user`); return }
+            // A 5xx or a dropped/refused connection is usually a transient blip, and
+            // the request has NOT been acted on yet (tools run only after the stream
+            // closes) — so a fresh attempt is safe. Two hard limits keep it honest:
+            // never retry once any text has been streamed to the UI (a retry would
+            // double-render it), and never retry a 4xx (client error) or a full
+            // timeout (exit 28 — re-running a 120 s hang three times only triples the
+            // wait; a genuine flicker fails fast and gets the retry). Fresh handler
+            // each attempt; only the final attempt's result is used and counted.
+            let handler, ok, raw, err, httpCode, exitCode
+            for (let attempt = 1; attempt <= MAX_HTTP_ATTEMPTS; attempt++) {
+                handler = makeHandler()
+                const deltasBefore = deltasEmitted
+                ;({ ok, raw, err, httpCode, exitCode } = await streamCurl(req, (l) => handler.onLine(l)))
+                if (cancelled) { log(`step ${step}: cancelled by user`); return }
+                if (ok) break
+                const streamed = deltasEmitted > deltasBefore
+                const retryable = !streamed && (httpCode >= 500 || (httpCode === 0 && exitCode !== 28))
+                if (!retryable || attempt === MAX_HTTP_ATTEMPTS) break
+                const backoff = RETRY_BASE_MS * attempt
+                log(`step ${step}: attempt ${attempt}/${MAX_HTTP_ATTEMPTS} failed (http=${httpCode || "net"}) — retrying in ${backoff}ms`)
+                await sleep(backoff)
+                if (cancelled) { log(`step ${step}: cancelled during retry backoff`); return }
+            }
 
             const r = handler.result()
             // finish= is the provider's RAW value; stop= is how the loop read it.
@@ -802,18 +1112,19 @@ async function runTurn(userText) {
             const cacheNote = r.usage.cached || r.usage.cacheWrite
                 ? ` cached=${r.usage.cached}${r.usage.cacheWrite ? `+w${r.usage.cacheWrite}` : ""}`
                 : ""
-            log(`step ${step}: ok=${ok} text=${r.text.length}c tools=${r.toolUses.length}${r.toolUses.length ? ` sig=${sigs}/${r.toolUses.length}` : ""} stop=${r.stopReason || "?"} finish=${r.finishReason || "?"} tok=${r.usage.input}/${r.usage.output}${cacheNote}`)
+            log(`step ${step}: ok=${ok} text=${r.text.length}c tools=${r.toolUses.length}${r.toolUses.length ? ` sig=${sigs}/${r.toolUses.length}` : ""} stop=${r.stopReason || "?"} finish=${r.finishReason || "?"} tok=${r.usage.input}/${r.usage.output}${r.usage.thought ? ` think=${r.usage.thought}` : ""}${cacheNote}`)
             // Count BEFORE any early return: a turn that fails still cost money,
             // and the failures are the expensive ones (a 25k-token turn that
             // ended at the step cap reported ZERO usage — user-caught 07-21).
             turnUsage.input += r.usage.input
             turnUsage.output += r.usage.output
             turnUsage.cached += r.usage.cached
+            turnUsage.thought += r.usage.thought ?? 0
 
             if (r.errorMsg) { log(`step ${step}: provider error: ${truncate(r.errorMsg, 200)}`); emitError(r.errorMsg); return }
             if (!ok) { emitError(bestError(raw, err)); return }
 
-            history.push({ role: "assistant", text: r.text, toolUses: r.toolUses })
+            history.push({ role: "assistant", text: r.text, toolUses: r.toolUses, thoughtSig: r.thoughtSig })
 
             if (r.stopReason === "tool_use" && r.toolUses.length) {
                 emit({ t: "state", s: "acting" })
@@ -891,7 +1202,7 @@ async function runTurn(userText) {
         // finally: it used to sit on the success path only, which meant the
         // expensive failures were exactly the ones the island never counted.
         emit({ t: "done", usage: turnUsage })
-        log(`turn end: steps=${Math.min(step, MAX_STEPS)} tok=${turnUsage.input}/${turnUsage.output} cached=${turnUsage.cached} ${Math.round((GLib.get_monotonic_time() - t0) / 1000)}ms`)
+        log(`turn end: steps=${Math.min(step, MAX_STEPS)} tok=${turnUsage.input}/${turnUsage.output}${turnUsage.thought ? ` think=${turnUsage.thought}` : ""} cached=${turnUsage.cached} ${Math.round((GLib.get_monotonic_time() - t0) / 1000)}ms`)
         emit({ t: "state", s: "idle" })
     }
 }
@@ -918,7 +1229,10 @@ function handleMessage(msg) {
         case "reset":
             log("reset: history cleared")
             history.length = 0
+            turnStartIndex = 0
             systemCache = null
+            actionSetCache = null
+            toolsetCache = null
             cancelled = true
             if (currentCurl) { try { currentCurl.force_exit() } catch {} }
             break

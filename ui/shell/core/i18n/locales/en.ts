@@ -402,6 +402,7 @@ export default {
     "settings.ai.brain.endpoint.desc": "Base URL of the OpenAI-compatible server (e.g. a local Ollama at http://localhost:11434/v1).",
     "settings.ai.brain.model.placeholder": "Find models, or type an id",
     "settings.ai.brain.model.fetch": "Find models",
+    "settings.ai.brain.model.choose": "Choose a model…",
     "settings.ai.brain.model.fetching": "Asking the provider…",
     "settings.ai.brain.model.failed": "Couldn't read the model list: %s. You can still type the id.",
     "settings.ai.brain.model.needkey": "Save your API key first — the model list is behind it.",

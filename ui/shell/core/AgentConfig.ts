@@ -41,9 +41,9 @@ interface AgentSettings {
     // written alongside so bin/nidara-agent stays dumb: it reads the protocol and
     // URL it needs without carrying a provider table of its own.
     brainProvider: string                       // "" = off; else a provider id from AGENT_PROVIDERS
-    brainBackend: "" | "anthropic" | "openai"   // derived wire protocol ("" = off)
+    brainBackend: "" | "anthropic" | "gemini" | "openai"  // derived wire protocol ("" = off)
     brainModel: string                          // model id of the ACTIVE provider (what the daemon reads)
-    brainEndpoint: string                       // base URL for the openai-compatible backend (ignored for anthropic)
+    brainEndpoint: string                       // base URL (ignored for anthropic, which knows its own)
     /** Per-provider model memory, keyed by provider id. Switching providers restores
      *  the model you last used there instead of carrying a wrong one across (picking
      *  Ollama used to leave `claude-opus-4-8` in the field). */
@@ -73,6 +73,20 @@ try {
     if (GLib.file_test(CONFIG_PATH, GLib.FileTest.EXISTS)) {
         const data = JSON.parse(readFile(CONFIG_PATH)) as Partial<AgentSettings>
         _settings = { ...DEFAULTS, ...data }
+        // RE-DERIVE the wire protocol from the provider table on every load.
+        // brainBackend/brainEndpoint are documented as derived from brainProvider,
+        // but they are also persisted — and only recomputed inside
+        // setBrainProvider(). So a provider that changes protocol upstream (Google
+        // moved compat → native on 2026-07-22) would keep hitting the OLD path out
+        // of a stale file until the user happened to re-pick it in Settings, with
+        // no symptom to explain why. The table is the source of truth; a derived
+        // field must never outlive it.
+        const p = providerById(_settings.brainProvider)
+        if (p) {
+            _settings.brainBackend = p.backend
+            // An editable endpoint is the USER's value — never clobber it.
+            if (!p.editableEndpoint) _settings.brainEndpoint = p.endpoint
+        }
     }
 } catch {}
 

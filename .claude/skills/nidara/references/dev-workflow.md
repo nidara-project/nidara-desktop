@@ -206,7 +206,8 @@ Gotchas that cost real debugging time:
   compiled `style.css` over the installed copies under `/usr/share/nidara/` (+ wrappers
   under `/usr/bin/`) and restart greetd / re-lock.
 
-CI gates **SCSS compile + typecheck + widgets-gen freshness + headless boot smoke**.
+CI gates **SCSS compile + typecheck + widgets-gen freshness + headless boot smoke + Assistant
+loop** (`agent-loop`, see below).
 
 The **smoke job** (`scripts/ci/headless-smoke.sh`, `smoke` in ci.yml) is the only gate that
 actually RUNS the shell: the runner loads the kernel's **vkms** module (virtual KMS — needed
@@ -518,6 +519,26 @@ shell-side death path. Each must land a visible line in the island — never an 
 **Gotcha that cost real time here:** `pkill -f fake-brain.py` **kills the calling shell too** — the
 tool's own command line contains the pattern. Use a pattern that can't match itself
 (`pkill -f 'python3 .*brain[.]py'`) or kill by PID.
+
+**CI gate (`agent-loop` in ci.yml → `scripts/ci/agent-loop-test.py`).** The manual walk above is
+now also a hermetic regression test — the every-serious-bug-was-a-wire-shape-bug lesson turned into
+a gate. It spawns the real daemon (gjs) against an in-process OpenAI-compatible mock under a temp
+`XDG_CONFIG_HOME`, with a stub `ags` on `PATH` so a tool call returns a value with no live shell (an
+empty `brainProvider` keeps it off the keyring/D-Bus). It asserts the tool-use loop end to end (tool
+call parsed, split args accumulated, tool dispatched, final text streamed) **and both halves of the
+transient-failure policy**: a scripted **503 is retried** past, a **4xx surfaces without retry**.
+Runs on `ubuntu-latest` with only `gjs` + `gir1.2-secret-1` (no Arch container). When you add a wire
+quirk worth locking in (the next Gemini-shaped surprise), add a scenario to the mock rather than
+trusting a live session to catch the regression.
+
+**Transient-failure retry (the daemon, `streamCurl`/`runTurn`).** A 5xx or a dropped/refused
+connection is retried up to `MAX_HTTP_ATTEMPTS` with linear backoff, because it is usually a blip
+and tools run only AFTER the stream closes, so nothing was half-applied. Two guards make it safe, and
+both are load-bearing: retry only **before any delta was streamed** (else the reply double-renders —
+`deltasEmitted` is the guard), and never retry a **4xx** (client error) or a **full timeout** (curl
+exit 28 — re-running a 120 s hang thrice just triples the wait). The HTTP status comes back on curl's
+**stderr** via `-w '%{stderr}nidara-http:%{http_code}'` (000 → a network-level failure), kept off the
+SSE stdout stream on purpose. Handler is re-created per attempt (a failed leg may hold partial state).
 
 **CI girs note:** the daemon + `Settings → AI` import `gi://Secret` (libsecret). It's already
 installed (transitive) so `@girs/secret-1.d.ts` exists locally, but if CI typecheck ever complains

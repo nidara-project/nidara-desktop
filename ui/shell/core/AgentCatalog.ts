@@ -33,11 +33,20 @@ function parseModels(json: string): string[] {
     const out: string[] = []
     try {
         const body = JSON.parse(json)
-        // Both protocols answer `{ data: [ { id }, … ] }` — Anthropic adds
-        // display_name, OpenAI-compatible servers vary in the extra fields.
-        const rows = Array.isArray(body?.data) ? body.data : []
+        // Anthropic and the OpenAI-compatible servers answer `{ data: [ { id }, … ] }`.
+        // Google's NATIVE catalog answers `{ models: [ { name: "models/…" }, … ] }` —
+        // different key, different field, and the id carries a `models/` prefix the
+        // Interactions API does not want back. Accept both shapes rather than branch
+        // at the call site: a catalog parser that only knows one wire format is how
+        // "find models" silently returned nothing when Google went native.
+        const rows = Array.isArray(body?.data) ? body.data
+            : Array.isArray(body?.models) ? body.models
+            : []
         for (const r of rows) {
-            const id = typeof r?.id === "string" ? r.id : ""
+            const raw = typeof r?.id === "string" ? r.id
+                : typeof r?.name === "string" ? r.name
+                : ""
+            const id = raw.replace(/^models\//, "")
             if (!id || seen.has(id) || NON_CHAT.test(id)) continue
             seen.add(id)
             out.push(id)
@@ -80,8 +89,12 @@ export function fetchModels(
     done: (r: CatalogResult) => void,
 ): void {
     withKey(p.id, (key) => {
-        // Anthropic speaks its own Models API; everything else is the OpenAI shape.
+        // Each native backend speaks its own Models API; the compat path is the
+        // OpenAI shape. Note Google's native catalog lives at `<endpoint>/models`
+        // too — the URL happens to line up, but the AUTH HEADER does not, which is
+        // the sort of near-miss that reads as "no models" instead of "wrong key".
         const anthropic = p.backend === "anthropic"
+        const gemini = p.backend === "gemini"
         const url = anthropic
             ? "https://api.anthropic.com/v1/models"
             : `${endpoint.replace(/\/+$/, "")}/models`
@@ -92,6 +105,8 @@ export function fetchModels(
         const argv = ["curl", "-sS", "--fail-with-body", "--max-time", "15", url]
         if (anthropic) {
             argv.push("-H", `x-api-key: ${key ?? ""}`, "-H", "anthropic-version: 2023-06-01")
+        } else if (gemini) {
+            argv.push("-H", `x-goog-api-key: ${key ?? ""}`)
         } else if (key) {
             // Local servers (Ollama) usually take no key — only send one if stored.
             argv.push("-H", `Authorization: Bearer ${key}`)

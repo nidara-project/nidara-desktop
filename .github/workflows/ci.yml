@@ -27,6 +27,12 @@
 #     (listActions/dumpState), no JS errors in the boot log. Screenshots are
 #     uploaded as artifacts for HUMAN review — deliberately not a pixel diff.
 #     All logic lives in scripts/ci/headless-smoke.sh.
+#   - agent-loop: drive the real Assistant daemon (bin/nidara-agent) through one
+#     tool-use turn against a mock OpenAI-compatible provider — asserts the stream
+#     parsing (tool call, split args, final text) AND both halves of the 5xx retry
+#     policy (a 503 is retried past, a 4xx surfaces without retry). Hermetic: no
+#     network, key, or running shell — only gjs. Logic in
+#     scripts/ci/agent-loop-test.py.
 
 name: CI
 
@@ -143,3 +149,18 @@ jobs:
             echo "Fix: run 'node scripts/gen-widget-index.mjs' and commit the updated widgets.gen.ts alongside your widget change."
             exit 1
           fi
+
+  agent-loop:
+    name: Assistant loop (nidara-agent)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # The daemon is plain GJS (no Node) and imports gi://Secret, so the runner
+      # needs the gjs interpreter and the libsecret typelib. curl + python3 are
+      # already on ubuntu-latest. gjs pulls the GLib/Gio/GioUnix typelibs it needs.
+      - name: Install gjs + libsecret typelib
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq gjs gir1.2-secret-1
+      - name: Drive nidara-agent against a mock provider (must succeed)
+        run: python3 scripts/ci/agent-loop-test.py
