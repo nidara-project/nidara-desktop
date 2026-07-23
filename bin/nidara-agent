@@ -135,28 +135,27 @@ let deltasEmitted = 0
 const emitDelta = (text) => { if (text) { deltasEmitted++; emit({ t: "delta", text }) } }
 
 // ── Tools offered to the model ───────────────────────────────────────────────
-// FIRST-CLASS tools, not a run_action passthrough behind a list_actions lookup.
-// That indirection was the root of two measured failures (2026-07-22):
+// ONE passthrough tool (run_action) whose DESCRIPTION carries an index of every
+// desktop action — name + one-clause summary — instead of 32 first-class tool
+// schemas. Generated from `ags request listActions`, so a new action still appears
+// for free (the self-maintaining property), and it weighs ~450 tokens where the 32
+// JSON schemas weighed ~2000 — a block that is re-sent on EVERY step of EVERY turn,
+// so every byte is paid per request (measured 2026-07-23).
 //
-//   1. COST. The model had to spend a whole round-trip on list_actions to learn
-//      an action's args before it could act — and every round-trip re-sends the
-//      entire growing transcript (sys+tools+history). A one-line "move this
-//      window" became 5 requests; the fixed ~1800-token prefix was billed 5×.
-//      The old code's own comment called the discovery request "SMALL". It is not
-//      — it is a full request. That assumption is what this overturns.
-//   2. WRONG NAMESPACE. Real tools were snake_case (run_action, set_config) while
-//      actions were camelCase behind run_action, so the model invented snake_case
-//      tool names like `list_apps` and the call died as "unknown tool".
+// This keeps BOTH properties the first-class tools were adopted for, at ~¼ the cost:
+//   1. NO DISCOVERY ROUND-TRIP. Names + summaries sit in front of the model at all
+//      times (in run_action's description), so it never spends a request on a
+//      list_actions lookup before acting. The earlier run_action design paid that
+//      round-trip because the names lived BEHIND a lookup; moving them into the
+//      description removes it. A text index — not 32 schemas — is all that took.
+//   2. NO INVENTED NAMES. The index lists snake_case names, run_action takes a
+//      snake_case `action`, and execTool maps it back (camelCase accepted too).
 //
-// One namespace fixes both: actions become snake_case tools with their own
-// descriptions, always present (no discovery), impossible to mis-namespace
-// (list_apps IS the tool). Generated from `ags request listActions`, so a newly
-// added action still shows up for free — the self-maintaining property is kept.
-//
-// SETTINGS stay progressive: describe_settings gates a 4 KB schema whose 12:1
-// size-to-lookup ratio genuinely pays for on-demand loading (measured 2026-07-21).
-// Actions do not — their whole catalogue of names+descriptions is ~1 KB, cheaper
-// to carry than one discovery round-trip.
+// SETTINGS stay dedicated tools (set_config/get_config/dump_state/describe_settings):
+// structured args plus a discipline (describe_settings before guessing a key) that a
+// passthrough would blur, and describe_settings still gates its 4 KB schema on demand.
+// run_action resolves ONLY the visible actions — the config door is those dedicated
+// tools, and shell-internal plumbing stays unreachable by the model.
 const STATIC_TOOL_DEFS = [
     {
         name: "set_config",
@@ -204,30 +203,40 @@ function buildToolset() {
     if (toolsetCache) return toolsetCache
     const defs = [...STATIC_TOOL_DEFS]
     const actionMap = {}
+    const index = []
     try {
         const all = JSON.parse(agsRequest(["listActions"]))
         for (const [name, def] of Object.entries(all)) {
             if (HIDDEN_ACTIONS.has(name)) continue
             const snake = toSnake(name)
             actionMap[snake] = name
-            defs.push({
-                name: snake,
-                // TERSE. This block is FIXED and re-sent on every step of every
-                // turn, so each byte is paid per request. The first cut of this
-                // refactor kept the full listActions description plus a 90-char
-                // args blurb on all 32 tools → a 14 KB tools block, 3.6k tokens
-                // billed 5× in one turn, worse than the discovery step it replaced
-                // (measured 2026-07-22). Trim the description to its first clause
-                // (drop the "(e.g. …)" examples) and give args NO description — the
-                // snake_case name and the short description already say enough.
-                description: (def.desc || name).split(/[.(]/)[0].trim(),
-                props: { args: { type: "array", items: { type: "string" } } },
-                required: [],
-            })
+            // First clause only: drop trailing sentences, "(e.g. …)" examples and
+            // inline JSON field lists ("[{…}]"). Name + first clause is enough to
+            // PICK the action; the model learns a result's shape from the first
+            // real call. This whole index rides in run_action's description and is
+            // re-sent on every step, so each byte is paid per request.
+            const desc = (def.desc || "").split(/[.[(]/)[0].trim()
+            index.push(desc && desc.toLowerCase() !== snake.replace(/_/g, " ")
+                ? `${snake} — ${desc}` : snake)
         }
     } catch (e) {
         log(`buildToolset: listActions failed (${e}) — desktop actions unavailable this turn`)
     }
+    // A single passthrough tool. If listActions failed (shell mid-reload) the index
+    // is empty and we omit it entirely — the turn still works with the settings
+    // tools, minus desktop actions, rather than offering an empty run_action.
+    if (index.length) defs.push({
+        name: "run_action",
+        description:
+            "Perform ONE desktop action: pass `action` (a name from the list below) plus any positional `args` it takes. "
+            + "This list is the COMPLETE set of actions — never invent a name and never look anything up; everything you can do is here:\n"
+            + index.sort().join("\n"),
+        props: {
+            action: { type: "string", description: "One of the action names listed in this description" },
+            args: { type: "array", items: { type: "string" }, description: "Positional arguments, if the action takes any" },
+        },
+        required: ["action"],
+    })
     toolsetCache = { defs, actionMap }
     return toolsetCache
 }
@@ -251,8 +260,8 @@ function summarizeTool(tu) {
         case "get_config": return `get_config ${i.key || "(all)"}`
         case "dump_state": return "dump_state"
         case "describe_settings": return "describe_settings"
-        // A desktop action tool: name plus any positional args.
-        default: return `${tu.name}${Array.isArray(i.args) && i.args.length ? " " + i.args.join(" ") : ""}`
+        case "run_action": return `run_action ${i.action || "?"}${Array.isArray(i.args) && i.args.length ? " " + i.args.join(" ") : ""}`
+        default: return tu.name
     }
 }
 
@@ -274,22 +283,30 @@ function execTool(tu) {
             case "describe_settings":
                 out = agsRequest(["describeConfig"])
                 break
-            default: {
-                // A desktop action tool. The wire name is snake_case; map it back
-                // to the camelCase IPC action. The map is authoritative; the
-                // knownActions() fallback catches a model that called an action by
-                // its real camelCase name anyway — either way the surface and gates
-                // are exactly what the shell exposes, no new door.
+            case "run_action": {
+                const name = String(tu.input?.action || "").trim()
+                if (!name) return { ok: false, content: "run_action needs an `action` name — pick one from the list in its description." }
+                // Wire name is snake_case; map back to the camelCase IPC action.
+                // Accept a camelCase name too (a model that echoed the real name).
+                // Resolves ONLY the visible actions in actionMap — the config door
+                // is the dedicated tools, and hidden plumbing stays unreachable, so
+                // this opens no gate the tool list doesn't already advertise.
                 const { actionMap } = buildToolset()
-                const action = actionMap[tu.name] || (knownActions().has(tu.name) ? tu.name : null)
-                if (action) { out = agsRequest([action, ...args()]); break }
-                // Genuinely unknown. Name the real tools so the correction is
-                // actionable instead of a dead end.
+                const action = actionMap[name] || actionMap[toSnake(name)] || null
+                if (!action) return {
+                    ok: false,
+                    content: `No action named "${name}". Use exactly one of the names listed in run_action's description; do not invent one.`,
+                }
+                out = agsRequest([action, ...args()])
+                break
+            }
+            default:
+                // The model named a tool that isn't offered. Name the real ones so
+                // the correction is actionable instead of a dead end.
                 return {
                     ok: false,
-                    content: `There is no tool called "${tu.name}". Available tools: ${buildToolset().defs.map(d => d.name).join(", ")}. Call one of those directly.`,
+                    content: `There is no tool called "${tu.name}". Available tools: ${buildToolset().defs.map(d => d.name).join(", ")}.`,
                 }
-            }
         }
         // Same lossless squeeze as the system prompt, and it matters MORE here:
         // a tool result is appended to `history` and re-sent on every later
@@ -314,7 +331,8 @@ function compactJson(s) {
 
 // Actions the assistant should not be TOLD about. Two kinds, and the listing is
 // ~1.7 KB lighter without them (measured 2026-07-21):
-//   1. Already offered as first-class tools with better descriptions — listing
+//   1. Already offered as dedicated tools with better descriptions (the settings
+//      cluster), or redundant with run_action's own index (listActions) — listing
 //      them again invites the model to reach the same thing two ways.
 //   2. Shell-internal plumbing: the lockscreen and the computer-use visual layer
 //      call these on the shell's behalf. Nobody asks their desktop to
@@ -327,23 +345,6 @@ const HIDDEN_ACTIONS = new Set([
     "hideForLock", "showAfterLock", "notifyComputerAction", "agentPointer", "disableComputerControl",
 ])
 
-
-// Every action the shell exposes, INCLUDING the hidden ones: this is the "is
-// this a real action?" oracle for the salvage path in execTool, not something
-// the model is shown. run_action passes hidden names through too, so gating the
-// salvage on the visible subset would make the same call succeed or fail
-// depending on how the model happened to phrase it.
-let actionSetCache = null
-function knownActions() {
-    if (actionSetCache) return actionSetCache
-    try {
-        actionSetCache = new Set(Object.keys(JSON.parse(agsRequest(["listActions"]))))
-    } catch {
-        // Don't cache a failure — the shell may just have been mid-reload.
-        return new Set()
-    }
-    return actionSetCache
-}
 
 function buildSystemPrompt() {
     if (systemCache) return systemCache
@@ -358,11 +359,11 @@ function buildSystemPrompt() {
         "- The user is in charge. Do only what they ask; ask first before anything destructive or irreversible.",
         "- If the message does NOT involve the desktop (a greeting, a general question, chit-chat), just answer. Do not call any tool.",
         "- Asked what you can do? Answer from that summary in your own words — do not call a tool just to describe yourself.",
-        // The tools now ARE the desktop actions (one tool per action, with its own
-        // description and args), so there is no run_action indirection and no
-        // discovery step: the model reads the tool list and calls what it needs.
-        // Settings stay behind describe_settings because that schema is large.
-        "- Each desktop action is its own tool — call it directly with any positional arguments it needs. Do not look actions up; they are all in your tool list.",
+        // Desktop actions go through the single run_action tool: its description
+        // lists every action name + summary, so the model picks one and calls it in
+        // ONE step — no discovery lookup. Settings keep their own tools because that
+        // schema is large and guessing a key is the costly mistake.
+        "- To do something on the desktop, call run_action with an action name from the list in its description, plus any positional arguments it needs. The list is complete — pick a name from it, never invent one, and never look actions up.",
         "- Settings are the exception: call describe_settings once before your first set_config or targeted get_config, then use the keys it returns. Never guess a setting key.",
         "- If a tool call fails, read the error and correct the call — do not repeat it unchanged. After acting, verify with dump_state/get_config when useful, then briefly confirm what changed.",
         // The language of the MESSAGE wins, always. The desktop locale is a hint
@@ -1231,7 +1232,6 @@ function handleMessage(msg) {
             history.length = 0
             turnStartIndex = 0
             systemCache = null
-            actionSetCache = null
             toolsetCache = null
             cancelled = true
             if (currentCurl) { try { currentCurl.force_exit() } catch {} }

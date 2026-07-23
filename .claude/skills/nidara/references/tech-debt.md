@@ -840,15 +840,17 @@ Ordered by what hurt most in the live run:
    to `core/i18n`, so the fix is either passing the locale's strings in at spawn or moving these
    messages to the shell side (`AgentService` already owns two of them via `t()`). Not urgent, clearly
    wrong.
-11. **Tool results go into history at full length, forever — COMPACTED, not capped.** The island
-   truncates a result to 200 chars for display, but `history` keeps the whole thing and every later
-   request resends it. `compactJson()` applies to tool output too (listWindows −32%, listApps −25%),
-   which is lossless and compounds. Since the catalogues became tools (progressive disclosure, see
-   `state-and-ipc.md`), **the catalogue itself is now a tool result living in history** — so this is
-   the growth path that matters most. What remains is genuinely lossy and deliberately NOT done:
-   capping a large result, or dropping old turns. Both cost capability. `step N: POST host body=Xb
-   (sys=Yb tools=Zb hist=Wb)` tells you which part is actually growing before anyone optimises on
-   instinct.
+11. **Tool results ride in history and are resent every later request — COMPACTED, plus old turns
+   STUBBED.** The island truncates a result to 200 chars for display, but `history` keeps the whole
+   thing. Two lossless mitigations, both current: `compactJson()` on tool output (listWindows −32%,
+   listApps −25%), and `historyForRequest()`/`RESULT_STUB`, which replaces the CONTENT of tool results
+   from turns BEFORE the current one with a short stub (structure, ids, pairing, thought-signatures all
+   intact) so a `listApps` whale stops riding every later request forever. Note the action catalogue is
+   NO LONGER a history result — since 2026-07-23 it lives in `run_action`'s fixed (cached) description,
+   so `describe_settings`' schema is the main catalogue that still lands in history as a result. What
+   remains genuinely lossy and deliberately NOT done: capping a large CURRENT-turn result. `step N: POST
+   host body=Xb (sys=Yb tools=Zb hist=Wb)` tells you which part is actually growing before anyone
+   optimises on instinct.
 12. **The island's token counter is CUMULATIVE and doesn't say so (2026-07-21).** It shows the whole
    conversation's usage; the user read "2k tokens" as the cost of the turn they had just sent (that
    turn was 1,078). Not wrong data, ambiguous framing — a number in a chat header doesn't announce

@@ -342,84 +342,56 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   model. Resolution order: explicit `index` → call `id` → continue the slot being filled (a pure
   continuation chunk carries neither). Keep the slots insertion-ordered so multiple calls execute in
   the order asked for.
-- **Tools offered to the model**: `run_action(action, args?)`, `set_config(key, value)`,
-  `get_config(key?)`, `dump_state()` — all executed via `ags request`, gates enforced by the shell
-  (a refusal comes back as the tool-result STRING; the daemon never re-checks gates). No
-  screenshot/computer-use in v1.
-- **System prompt = a small static core. The catalogues are TOOLS, not prose** (progressive
-  disclosure, user's call 2026-07-21: "load what the agent needs when it needs it"). It used to paste
-  in the whole IPC action list + settings schema + a state snapshot: **2,269 of the 3,157 tokens a
-  bare "hello" cost — 72% of every request** for knowledge most turns never touch. Now
-  `list_actions` / `describe_settings` / `dump_state` are tools the model calls when a request
-  actually reaches the desktop, and the answer then lives in history for the rest of the
-  conversation. Measured: a greeting **12,630 → 4,041 bytes (−68%)**; a desktop turn that already
-  discovered what it needs, −66%; a desktop turn INCLUDING the discovery round-trip, −9% (the extra
-  request is a small one). It also loads only the half it needs — a question about windows never
-  pays for the settings schema.
-  **The action NAMES stay in the prompt; only their descriptions are lazy.** Progressive disclosure
-  as first built cost real capability: told it could "manage windows and workspaces" but with no way
-  to know `listWindows` existed, the model reached for `dump_state` (no window list in it) and told
-  the user it couldn't see their windows — a promise with no means of discovery (user-caught
-  2026-07-21). A bare name index costs **113 tokens against 1,231** for the full catalogue, and the
-  names are self-describing enough to act on directly, so it also makes the common path CHEAPER: a
-  "what windows do I have" turn went 23,287 → 11,444 bytes by skipping the lookup entirely.
-  `list_actions` remains for descriptions and argument shapes. The index is GENERATED from
-  `listActions` at session start — never hardcode it, or a new IPC action stops appearing for free.
-  General lesson: with progressive disclosure, **hide the detail, never the existence**.
-  **Answering "what can you do" must NOT go through the catalogues** — measured 2026-07-21: it sent
-  the model after BOTH full dumps, 4k tokens to answer a question about itself, and a reply written
-  from 42 raw IPC names (`toggleCC`, `sendWindowToSpecial`) is a worse answer than one written from a
-  curated summary. So the core carries a one-line capability summary plus an explicit rule to answer
-  from it. That summary costs ~53 tokens on EVERY request, which is only worth it because it buys a
-  better answer as well as a cheaper one — keep it short for exactly that reason.
-  **The cost of this design is compliance**: a model that forgets to look up will invent action
-  names. Three defences, keep all three — the core rules are imperative ("NEVER invent or guess"),
-  each tool description repeats the requirement, and `run_action`'s rejection hands back what was
-  actually sent. If a model is seen guessing, strengthen those before reverting to a fat prompt.
-  Side benefit: `buildSystemPrompt()` no longer calls `ags request` at all, so the daemon no longer
-  depends on the shell being up at spawn.
-- **A failing tool call gets TWO strikes, then the turn is aborted.** Measured 2026-07-21: Gemini
-  called `run_action` with `{"args":[…]}` and no `action`, was told it was invalid, and repeated the
-  identical call **seven times** — the whole step budget and ~25k input tokens on one question. The
-  loop now compares `name + rawArgs` against the previous failure and stops on the repeat. Two
-  supporting rules: a rejection message must hand the model back **what it actually sent** (a bare
-  "needs an action name" told it nothing it didn't already believe), and `history` must receive the
-  tool results **before** any abort — every tool call needs its matching result or the next request
-  is malformed. Also read `arguments` permissively (string per spec, object from some compat
-  endpoints) and **log a JSON parse failure**: swallowing it makes a malformed call look identical to
-  "the model sent nothing", which is how this was misdiagnosed at first.
-- **Key streamed tool calls by index OR id — never `index ?? 0`.** OpenAI puts an `index` on every
-  chunk; **Google's compat layer omits it entirely** and identifies calls by `id`. Defaulting to 0
-  filed every call in one slot: two calls merged into one, arguments concatenated into invalid JSON
-  (`{"action":"listWindows"}{}`), name overwritten by the last, and the UI showed a `run_action ?`
-  chip for a call the model never made that way. This was the real cause of what looked like a dumb
-  model. Resolution order: explicit `index` → call `id` → continue the slot being filled (a pure
-  continuation chunk carries neither). Keep the slots insertion-ordered so multiple calls execute in
-  the order asked for.
-- **Tools offered to the model**: `run_action(action, args?)`, `set_config(key, value)`,
-  `get_config(key?)`, `dump_state()` — all executed via `ags request`, gates enforced by the shell
-  (a refusal comes back as the tool-result STRING; the daemon never re-checks gates). No
-  screenshot/computer-use in v1.
-- **System prompt** is autogenerated once per session: a short static core + a dump of
-  `listActions` + `describeConfig` + a `dumpState` snapshot, so new actions/settings are usable with
-  no prompt edits. **It is also the dominant token cost** — ~3.4k tokens, resent on EVERY request,
-  and a tool step costs an extra request. Three things keep it in check (all measured 2026-07-21,
-  16.3 KB → 12.5 KB on the wire, −23%):
-  - **`compactJson()`** strips the pretty-printing the shell emits for humans (−13%, lossless).
-  - **`HIDDEN_ACTIONS`** keeps out actions already offered as first-class tools (`getConfig`,
-    `setConfig`, `dumpState`, …) and shell-internal plumbing (`hideForLock`, `agentPointer`, the kill
-    switch). A **denylist**, deliberately: `run_action` stays a passthrough and a NEW action still
-    appears for free — the property that makes the prompt self-maintaining.
-  - **Prompt caching.** The prompt is byte-identical across a session, so it is cacheable. The
-    OpenAI-compatible providers do this implicitly (no flag); **Anthropic does not and must be asked**
-    — hence `cache_control: {type:"ephemeral"}` on the system block (write 1.25×, reads 0.1×).
-  **Before optimising this further, read `cached=` in the step log** — and read it across a SESSION,
-  not one request: implicit caching only pays from the second request onwards, so `cached=0` early
-  means "not yet", not "never". Measured against Google 2026-07-21: `tok=4717 cached=4022` — 85%
-  served from cache, i.e. the fixed prompt is largely a non-problem and further shrinking has poor
-  returns. **The cost driver is STEP COUNT, not prompt size** (an 8-step turn cost ~25k input tokens);
-  optimise the loop, not the prose. `ai.brainProvider`/`ai.brainBackend`/`ai.brainModel` are visible read-only via `describeConfig`
-  (like the other `ai.*` keys); the key is not exposed.
+- **Tools offered to the model** (five, all executed via `ags request`, gates enforced by the shell —
+  a refusal comes back as the tool-result STRING; the daemon never re-checks gates; no
+  screenshot/computer-use in v1): `run_action(action, args?)` for every desktop action, plus the
+  settings/state cluster `set_config(key, value)`, `get_config(key?)`, `dump_state()`,
+  `describe_settings()`.
+- **Every desktop action goes through ONE `run_action` tool whose DESCRIPTION carries a name index**
+  — `snake_name — first clause of the action's description`, one per line — instead of one first-class
+  tool schema per action. The index is GENERATED from `listActions` in `buildToolset()` (cached per
+  session), so a new IPC action still appears for free — the self-maintaining property. Measured
+  2026-07-23 against the live 42-action shell, same method (the daemon's `body=… tools=Nb` log): the
+  whole tool block **8,819 → 3,808 bytes (−57%)**, and the full fixed prefix re-sent on EVERY step
+  (`sys`+`tools`) **10,426 → 5,495 bytes (~halved)**. The 32-action index is ~1,600 chars (~450 tok)
+  where the same 32 as JSON schemas were ~2,000 tok.
+  **Why an index and not 32 first-class tools** (that was tried and committed briefly in `cd459db`,
+  then reverted 2026-07-23 at the user's request to cut fixed cost): a text index buys the same two
+  things the first-class tools were adopted for, at ¼ the weight. (1) **No discovery round-trip** —
+  names + summaries are always in front of the model, so it never spends a request on a `list_actions`
+  lookup before acting; the *earlier* run_action design paid that round-trip only because the names
+  lived BEHIND a lookup, and moving them into the description is what removes it. (2) **No invented
+  names** — the index is snake_case, `run_action` takes a snake_case `action`, and `execTool` maps it
+  back (accepting camelCase too). Keep descriptions in the index, not bare names: `toggle_cc` /
+  `toggle_nc` / `toggle_prism` are ambiguous, and that one clause is what lets "open control center"
+  land in one step.
+- **Settings stay their own tools, deliberately.** `describe_settings()` gates a ~4 KB schema whose
+  size-to-lookup ratio genuinely pays for on-demand loading, and the model must call it once before a
+  `set_config`/targeted `get_config` (never guess a key). `run_action` resolves ONLY the visible
+  actions in `actionMap` — the config door is these dedicated tools, and hidden plumbing stays
+  unreachable, so run_action opens no gate the tool list doesn't already advertise. The static core
+  also carries a one-line **capability summary** + an explicit rule to answer "what can you do?" from
+  it (never a tool) — a reply built from 42 raw IPC names is a worse answer than one from a curated
+  summary; costs ~50 tok on every request, worth it for the better answer as much as the cheaper one.
+- **The cost of the index design is compliance** — a model that ignores the list will invent a name.
+  Three defences, keep all three: the core rules are imperative ("pick a name from the list, never
+  invent one, never look actions up"), the `run_action` description repeats "this list is the
+  COMPLETE set", and its rejection hands back the exact name it sent. If a model is seen guessing,
+  strengthen those before reverting to fatter tool schemas. Side benefit: `buildSystemPrompt()` never
+  calls `ags request`, so the daemon doesn't depend on the shell being up at spawn.
+- **Two lossless squeezes stay** (both still in `buildToolset`/`execTool`): **`compactJson()`** strips
+  the pretty-printing the shell emits for humans (tool results ride in `history` and are re-sent every
+  later step, so this matters more there than in the prompt), and **`HIDDEN_ACTIONS`** is a denylist
+  keeping out actions already offered as dedicated tools (`getConfig`/`setConfig`/`dumpState`/
+  `describeConfig`), the redundant `listActions`, and shell-internal plumbing (`hideForLock`,
+  `agentPointer`, the kill switch). Denylist on purpose: a NEW action still appears in the index for
+  free.
+- **Token/cache is a PARKED topic (user, 2026-07-22) — don't reopen it with experiments.** What is
+  known and stable: `cached` is a SUBSET of input shown as a percentage on the island; the cost driver
+  is STEP COUNT, not prompt size (an 8-step turn is ~25k input tokens); Anthropic needs
+  `cache_control:{type:"ephemeral"}` on the system block while OpenAI-compat caches implicitly; and
+  Google's implicit cache is unreliable with tools defined. `ai.brainProvider`/`brainBackend`/
+  `brainModel` are visible read-only via `describeConfig`; the key is never exposed.
 - **Test headless with `scripts/dev/fake-brain.py`** (a scripted OpenAI-compatible SSE mock) — see
   `dev-workflow.md`. GOTCHA proven 2026-07-20: the write gate lives in the SHELL (it reads the
   user's REAL `ai.json`), so pointing the daemon at a test config with `allowConfigWrite:false` does
