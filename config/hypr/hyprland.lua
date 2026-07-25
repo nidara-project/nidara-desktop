@@ -518,7 +518,17 @@ hl.window_rule({
 -- blurred by this rule — NOT by `decoration:blur:popups`, which only covers
 -- popups of WINDOWS. Their content must clear `popups_ignorealpha` (0.30); the
 -- tooltip floors its glass at 0.38 for exactly that. See tech-debt #26.
+-- nidara-island: the Activity Island's expanded modes live in their OWN surface
+-- on the OVERLAY level, one above the bar's TOP. That is the whole point: a
+-- surface's blur samples what was composited BEFORE it, so this rule is what
+-- finally difumina the bar's capsules under the island. Inside one window it
+-- was impossible — Cairo has no backdrop-filter, so at the default 0.05 glass
+-- the capsules read through sharp (see ui/shell/surfaces/island/IslandWindow.ts).
+-- 0.01 like the bar, NOT the 0.30 a popup would need: `ignore_alpha` and
+-- `popups_ignorealpha` are different knobs, which is why the island keeps its
+-- 0.05 glass and stays tied to the user's opacity setting.
 hl.layer_rule({ match = { namespace = "nidara-bar" },      blur = true, blur_popups = true, ignore_alpha = 0.01  })
+hl.layer_rule({ match = { namespace = "nidara-island" },   blur = true, ignore_alpha = 0.01  })
 hl.layer_rule({ match = { namespace = "nidara-dock" },     blur = true, blur_popups = true, ignore_alpha = 0.04 })
 hl.layer_rule({ match = { namespace = "nidara-lock" },     blur = true, ignore_alpha = 0.3   })
 

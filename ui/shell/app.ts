@@ -573,6 +573,10 @@ app.start({
         windows.add(barWin);
         windows.add(dockWin);
         windows.add(pointerWin as any);
+        // The Activity Island's own OVERLAY layer surface (see IslandWindow.ts):
+        // a sibling toplevel the bar creates, tracked here so teardown reaches it.
+        const islandWin = (barWin as any).islandWindow
+        if (islandWin) windows.add(islandWin)
 
         // Dock rebuild on settings or pinned list change
         let rebuildTimer: number | null = null

@@ -24,7 +24,13 @@
 }
 
 #nidara-bar,
-.nidara-bar-window {
+.nidara-bar-window,
+/* The Activity Island's own layer surface. Transparent via CSS, never
+   set_opacity(0) — toplevel opacity goes through the compositing pipeline
+   (same reason as the zone reservor below). Everything it shows is painted
+   by the mode revealers. */
+#nidara-island,
+.nidara-island-window {
     background: transparent;
     padding: 0;
     margin: 0;
@@ -256,8 +262,14 @@ window#nidara-bar-zone {
 // Compact "working pill" + the expanded chat panel. Neutral fills throughout —
 // accent is reserved for active/selected state (commandment 10), so bubbles and
 // chips use the surface/text tokens; a tool rejection tints its dot danger.
+//
+// BOTH windows: the compact pill stays in the bar's surface while the expanded
+// panel now paints in the island's own (IslandWindow.ts). Scoped CSS that names
+// only one of them silently loses half the Assistant's styling.
 #nidara-bar,
-.nidara-bar-window {
+.nidara-bar-window,
+#nidara-island,
+.nidara-island-window {
     .agent-compact-label {
         font-size: $fs-small;
         font-weight: $fw-medium;

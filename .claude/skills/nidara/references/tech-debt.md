@@ -733,8 +733,14 @@ Ordered by what hurt most in the live run:
    `MAX_STEPS` cap (daemon side), daemon death mid-turn / failed spawn / failed write (shell side).
    `Turn.error` is its own field so an error arriving after partial text is no longer swallowed, and
    `failTurn()` re-opens the island when the failure happened in the background. The four daemon-side
-   paths are E2E-verified against the mock; **the shell-side paths (death mid-turn, spawn failure)
-   are NOT yet confirmed in a live session** — that is the next thing to check, not an assumption.
+   paths are E2E-verified against the mock. **Death mid-turn is now CONFIRMED LIVE (2026-07-25)**:
+   a watcher tailed `nidara-ui.log` for the daemon's `turn start` line and `SIGKILL`ed it 1.5 s later,
+   so the kill landed while a real Gemini turn was in flight (`POST … body=5658b` already out). The
+   shell logged `daemon gone (signal 9) MID-TURN` and — verified by reading the screen, not the log —
+   the error row was visible and mapped with `island.agent.error.died`. Do it that way rather than by
+   hand: killing on a human's reaction time races the turn, and a screenshot would only prove pixels,
+   not that the label is live. **Still unconfirmed: failed spawn / failed write** (needs a
+   deliberately broken daemon path).
    See the invariant in `state-and-ipc.md`.
 2. ~~**No telemetry on the agent path.**~~ **DONE 2026-07-21** — lifecycle, turn boundaries, every
    HTTP leg, every tool, and the daemon's exit status/signal, from both halves, into `nidara-ui.log`.
@@ -761,8 +767,19 @@ Ordered by what hurt most in the live run:
    lands (`common/PulseDots.ts`), the capsule glyph breathes while a turn is in flight (the only
    sign of life when work runs with the island closed), and a tool chip's dot breathes while that
    tool is RUNNING, settling when its result arrives. Shared refcounted driver — see
-   `design-system.md`. **Still open under this heading:** no explicit end-of-turn beat beyond the
-   dots vanishing and the header switching to the token count; judge whether that is enough in use.
+   `design-system.md`. **Still open under this heading — but only for ONE of three cases** (split
+   2026-07-25; the original wording overstated it). A turn ends with no positive beat: the dots stop,
+   the glyph stops breathing, the header switches to the token count — all absences, no "done".
+   Case by case:
+   - **Island closed, work in the background** → already handled, and well: `AgentService.ts`
+     expand-on-finish pops the island open with the answer when the desktop is otherwise idle.
+   - **Island open, user watching** → the arriving text IS the beat, same as every chat UI
+     (ChatGPT, Claude). Adding a chime/flash here would be noise. Deliberately nothing.
+   - **⚠️ THE REAL HOLE: the turn finishes while another overlay is open** (CC, Search…). Expand-on-
+     finish is suppressed on purpose — never steal from another overlay — so the answer lands with
+     **zero** signal: the glyph just settles back to the workspace dots as if nothing happened. Fix
+     direction: the capsule should hold an "unread answer" mark until the island is opened, instead
+     of reverting. Not built; judge it in use first.
 5. ~~**Replies ignore the UI language.**~~ **The item was WRONG — reframed by the user 2026-07-21.**
    The desired behaviour is the opposite of what it asked for: **the assistant replies in the language
    of the MESSAGE, and follows the user if they switch. The desktop locale is a hint for the ambiguous
@@ -902,18 +919,23 @@ Shape when built: `NidaraScroller` in `ui/lib/nidara-kit/` owning lane width, tr
 pin, thin slider and the hover behaviour, with the three call sites migrated onto it. Universal
 reusables are `nidara-*` in the kit, never per-surface classes.
 
-### 38. `queryUI` is blind to the Activity Island (2026-07-21)
-With `island_mode: "agent"` and the panel visibly on screen, `ags request queryUI .agent-panel`
-returns **0 nodes** — as does every other island class. `core/UITree.ts` only descends widgets that
-report `get_mapped()`, and the island's surfaces are painted by `MorphRevealer` via snapshot, so its
-subtree never appears. Consequence: the shell's own introspection surface — the one an agent uses to
-VERIFY what it just did — cannot see the island at all, including the Assistant's own face. Found
-while trying to measure the transcript's geometry; the fallback was `ags request screenshot` + eyeball,
-which is exactly the manual loop queryUI exists to replace. Fix direction: teach the walk to descend
-snapshot-painted surfaces (the revealer knows its child), or have island modes register their content
-root with UITree. NOTE for whoever debugs with it: a selector that matches nothing returns the same
-`count: 0` as a broken traversal — check against a known-live class (e.g. `.bar-centerbox`) before
-concluding queryUI is broken.
+### 38. ~~`queryUI` is blind to the Activity Island~~ — NOT REPRODUCIBLE; it was a measurement error (2026-07-21, retracted 2026-07-25)
+**The bug does not exist.** With the island open and at rest, `queryUI` sees its whole subtree:
+`.agent-panel` 1, `.agent-transcript` 1, `.agent-scroller` 1, `.agent-bubble` 2, `.agent-error-text` 1,
+paths resolving through `MorphRevealer.top > … > GtkBox.agent-panel`. A snapshot-painted surface is
+still mapped at rest, so `core/UITree.ts` descends it fine. Do NOT "fix" the walk.
+
+**What actually happened, and it is a trap worth keeping:** `Bar.tsx` mounts an `overlay-catcher`
+that dismisses the island on any outside click — and typing `ags request queryUI` in a terminal
+requires clicking that terminal. The island was closing *before* the query ran, so `queryUI` correctly
+reported `count: 0` for a surface that was no longer on screen. This is exactly the confusion the
+original entry warned about one line later, and it caught its own author twice more on 2026-07-25.
+
+**Method rule for introspecting any dismiss-on-click-outside surface:** open it and query it **in the
+same shell invocation** (`ags request toggleAgent; ags request queryUI …`), and read `dumpState`'s
+`overlays.island` **in that same pass** — otherwise you cannot tell "not on screen" from "traversal
+broken". Both return `count: 0`. Sanity-check the walk itself against a class that is always live
+(`.bar-centerbox`).
 
 ## Resolved — rules that still apply
 
@@ -1169,6 +1191,36 @@ These were paid down; the *rule* remains:
   While the cascade runs, `resolved`/`notified` rebuilds are deferred (`pendingClear`) and
   only the click-time snapshot gets dismissed at the end; closing the NC mid-cascade must
   settle immediately (unmapped rows stop ticking — their tick callbacks never fire).
+
+### 40. Activity Island on its own layer surface — residuals (2026-07-26)
+
+The island's expanded modes moved out of the bar's window into `nidara-island`
+(`surfaces/island/IslandWindow.ts`, OVERLAY level) so Hyprland's blur finally reaches the bar
+capsules underneath — a surface cannot blur its own siblings, which is why the capsules read
+sharp through the glass before. The move is a deliberate, documented exception to commandment 5
+(see `architecture.md` / `state-and-ipc.md`). What it left behind:
+
+- **The surface is MONITOR-SIZED, not content-sized.** Anchored on all four edges with
+  `exclusive_zone = -1`, which buys a deterministic origin (the bar's own surface is inset by a
+  side dock's exclusive zone) and let the morph's anchoring code stay shaped exactly as before.
+  Cost: while a mode is open, Hyprland runs a full-monitor blur pass for a surface that is mostly
+  transparent. Mitigated by mapping the window only while a mode is open, so idle cost is zero.
+  If it ever shows up in a GPU profile, the fix direction is a content-sized surface positioned by
+  layer-shell margins — the origin then becomes explicit instead of derived, and `sourceOffset`
+  gets simpler, not harder. Not done because it buys nothing measured yet.
+- **`sourceOffset` is measured, but only for a LEFT dock.** `monGeo.width - barWin.get_width()`
+  with the side taken from `dockSideState`. A right-side dock shortens the bar without moving its
+  origin, so dx stays 0 — correct today, but it is one assumption about how the compositor lays
+  surfaces out, in one function, and that is where to look first if the island ever opens
+  off-centre with a side dock.
+- **UNVERIFIED BY EYE: the double blur.** The bar blurs the wallpaper; the island now blurs
+  bar+wallpaper on top of that. Whether the capsules' 1px inner white edge survives that or smears
+  is a judgement only the user's eye can make (screenshots hide exactly this class of artifact).
+- **Pre-existing leak found in passing, NOT fixed:** `MorphRevealer.dismantle()` calls
+  `this.sourceGhost?.unparent()` — the field is `sourceGhosts` (an array), so the optional chain
+  no-ops and every source-ghost twin leaks its parent link. Harmless today (island revealers are
+  long-lived and `dismantle` is never called on them), one line to fix when someone is in there
+  for a real reason.
 
 ---
 

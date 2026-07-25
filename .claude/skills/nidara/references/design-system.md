@@ -274,6 +274,37 @@ icons match every other bar icon. The click→window-focus wiring (PID-first mat
 
 GTK has no true `backdrop-filter`. CSS only sets the translucent background, sheen, and border. The `backdrop-filter: blur()` you see in SCSS is **web-preview only** and is ignored by AGS at runtime. Real blur comes from Hyprland `layerrule blur, <namespace>`. Don't try to "fix" the absent blur from inside CSS — it's not a CSS problem.
 
+### Blur is per SURFACE, and it can only ever reach DOWNWARD
+
+The corollary that costs people hours: Hyprland blurs what was composited **behind
+a surface**, once, at composite time. Everything painted inside one GTK window
+lands in **one buffer**, so **nothing can blur its siblings** — two widgets in the
+same window composite in Cairo, which has no backdrop filter. Symptom when you hit
+it: a translucent panel sits visibly on top of another widget, and that widget
+shows through **sharp**, which reads as "the blur isn't applied" or "that widget is
+on top". Neither is true. This is what forced the Activity Island onto its own
+layer surface (`IslandWindow.ts`) — it is the only overlay that covers the bar row,
+and at the default `overlayOpacity` of 0.05 the bar capsules read straight through
+it. A surface on a HIGHER layer level is composited after, so its blur samples the
+one below. **Verified live, 2026-07-25** (Hyprland 0.55.4): an OVERLAY-level layer
+with `ignore_alpha = 0.01` blurred the TOP-level bar underneath at glass alphas
+0.05 / 0.20 / 0.38 alike — `new_optimizations` does not restrict sampling to the
+background, and `xray` is off.
+
+**Three different alpha thresholds, don't mix them up:**
+
+| Surface kind | Knob | Value here | Practical floor for the glass |
+|---|---|---|---|
+| Layer (bar, dock, island) | `ignore_alpha` per `layer_rule` | 0.01 bar/island, 0.04 dock | none — 0.05 glass blurs fine |
+| Popup of a layer (tooltip, dock menu) | `popups_ignorealpha` (global) | 0.30 | ≈0.38 (`NidaraTheme.popoverAlpha`) |
+| Popup of a window (Settings dropdown) | `decoration:blur:popups` + same 0.30 | 0.30 | ≈0.38 |
+
+So "make it a popover to get blur" is a real technique (it's why Settings uses the
+native `Gtk.DropDown` — see the dropdown note below), but it **costs the 0.38
+floor** and therefore stops honouring a low user opacity setting. A layer surface
+gets blur with no floor. Pick accordingly; `popups_ignorealpha` cannot be lowered
+without Hyprland blurring the popup's own drop shadow into a halo.
+
 ## Glass capsule edge = AA, NOT none (don't flip it back)
 
 `drawSquircle` fills the glass body with **antialias GRAY (AA)** so the capsule
