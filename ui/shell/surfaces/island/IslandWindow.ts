@@ -4,6 +4,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import GLib from "gi://GLib"
 import { MorphRevealer } from "../../common/MorphRevealer"
+import status from "../../core/Status"
 
 // The Activity Island's OWN layer surface — the one documented exception to
 // "overlays live inside the Bar's window" (skill commandment #5).
@@ -56,6 +57,16 @@ export interface IslandWindowHandle {
      *  relative to this, exactly as it used to be against the bar's overlay. */
     root: () => Gtk.Widget
     setKeyboardGrab: (grab: boolean) => void
+    /** Outside-click dismissal, which MUST live on this surface. A layer surface
+     *  holding an EXCLUSIVE keyboard grab also receives the pointer in Hyprland,
+     *  regardless of input regions — so while a `needsKeyboard` mode is open the
+     *  bar's own catcher never sees the click. That is why the overview and the
+     *  assistant stopped closing on outside click when the island moved out of
+     *  the bar's window, while the ambient player (no grab) kept working.
+     *  `topInset` keeps the bar strip live so clicking another bar capsule still
+     *  switches surfaces in ONE click; pass 0 for grabbing modes, where those
+     *  clicks cannot reach the bar anyway and should just dismiss. */
+    setCatcher: (open: boolean, topInset: number) => void
     /** Re-stamp the click-through mask: the capsule always, plus whatever mode
      *  is currently revealed. */
     updateInputRegion: () => void
@@ -111,6 +122,11 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     let hitTarget: Gtk.Widget | null = null
     let revealers: MorphRevealer[] = []
 
+    // Mirrors the bar's own catcher, on this surface — see setCatcher's doc.
+    const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
+    catcher.connect("clicked", () => { status.island_mode = "" })
+    let catcherTop: number | null = null   // null = off
+
     const updateInputRegion = () => {
         const surface = win.get_native()?.get_surface()
         if (!surface?.set_input_region) return
@@ -130,11 +146,19 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             })
         }
         // The capsule must stay clickable at all times — it is a bar control that
-        // happens to be painted here. Everything else stays click-through so the
-        // bar's catcher underneath keeps receiving the outside-clicks that
-        // dismiss overlays: the dismissal path is unchanged by the move.
+        // happens to be painted here.
         add(hitTarget)
         for (const r of revealers) add(r)
+        // The catcher's rect is stamped EXPLICITLY rather than measured: it is
+        // shown and stamped in the same turn, so its allocation is still a layout
+        // pass behind. (Same reason the bar unions its own catcher rect by hand.)
+        if (catcherTop !== null) {
+            // @ts-ignore
+            region.unionRectangle({
+                x: 0, y: catcherTop,
+                width: Math.round(monGeo.width), height: Math.round(monGeo.height - catcherTop),
+            })
+        }
         surface.set_input_region(region)
         win.queue_draw()   // input regions are double-buffered: apply on next commit
     }
@@ -146,6 +170,9 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             hitTarget = target
             revealers = mounted
             root.add_overlay(row)
+            // Between the capsule and the modes: later overlay children paint on
+            // top, so the catcher must never sit above a revealed mode.
+            root.add_overlay(catcher)
             for (const r of mounted) root.add_overlay(r)
             // Present once, and stay mapped: the capsule is permanent furniture
             // now. Deferred like the bar's own present so the first frame has a
@@ -165,6 +192,12 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
                     ? Gtk4LayerShell.KeyboardMode.EXCLUSIVE
                     : Gtk4LayerShell.KeyboardMode.NONE)
             } catch (e) { console.error("[IslandWindow] keyboard mode failed:", e) }
+        },
+        setCatcher: (open, topInset) => {
+            catcherTop = open ? Math.max(0, Math.round(topInset)) : null
+            catcher.margin_top = catcherTop ?? 0
+            catcher.set_visible(open)
+            updateInputRegion()
         },
         updateInputRegion,
         setShown: (shown) => {

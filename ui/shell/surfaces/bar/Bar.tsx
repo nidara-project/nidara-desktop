@@ -367,6 +367,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // ordinary measurement; no deferred frame needed.
       island.syncAnchor(islandWin.root(), PANEL_TOP)
     }
+    // Outside-click dismissal has to be stamped on the ISLAND's surface: while a
+    // needsKeyboard mode holds the EXCLUSIVE grab, Hyprland routes the pointer to
+    // that surface too, so the bar's catcher never sees the click (which is why
+    // the overview and the assistant stopped closing, while the ambient player
+    // kept working). Grabbing modes take the full height — a bar-strip click
+    // can't reach the bar anyway, so dismissing beats doing nothing; ambient
+    // modes keep the strip live so capsule-to-capsule switching stays ONE click.
+    islandWin.setCatcher(!!status.island_mode, island.needsKeyboard() ? 0 : BAR_H)
     syncIslandModes()
     islandWin.setKeyboardGrab(status.island_mode ? island.needsKeyboard() : false)
     if (status.island_mode) island.onOpened()   // seed the mode's keyboard nav
