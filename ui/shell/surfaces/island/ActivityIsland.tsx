@@ -90,17 +90,7 @@ export interface IslandActivity {
     isLive: () => boolean
 }
 
-/** How the island reaches the capsule it morphs out of. The capsule lives in
- *  the BAR's surface and the expanded modes in the island's own (see
- *  IslandWindow.ts), so every source rect crosses a window boundary. */
-export interface IslandSource {
-    /** Root of the bar's widget hierarchy. */
-    root: () => Gtk.Widget | null
-    /** The bar surface's origin relative to the island surface's. */
-    offset: () => { dx: number, dy: number }
-}
-
-export function ActivityIsland(source: IslandSource) {
+export function ActivityIsland() {
     // ── Compact state: dots page + one page per activity, in a morphing stack ─
     // (Dots absorbed from the old surfaces/bar/Workspaces.tsx — the capsule
     // belongs to the island now; the bar just places it.)
@@ -228,8 +218,6 @@ export function ActivityIsland(source: IslandSource) {
             if (a.makeGhost) twins.set(a.id, a.makeGhost({ hideArt: !!w.morphArt && a === owner }))
         const revealer = new MorphRevealer(mode.widget, {
             getSourceWidget: () => capsule,
-            sourceRoot: source.root,
-            sourceOffset: source.offset,
             contentTarget: w.morphContent ?? null,
             glassWidget: w.morphGlass ?? null,
             glassArea: (w.morphGlass as any)?.glassArea ?? null,
@@ -242,9 +230,10 @@ export function ActivityIsland(source: IslandSource) {
         })
         // The island is the capsule GROWN, not a separate panel: top-anchored
         // (top edge pinned to the capsule by syncAnchor), centered like the
-        // capsule — the morph only inflates down/sideways. CENTER is centering
-        // within the ISLAND surface (the whole monitor) now, so syncAnchor also
-        // re-centres it on the capsule whenever the bar's surface is inset.
+        // capsule — the morph only inflates down/sideways. Both the capsule and
+        // this revealer live in the ISLAND's surface (IslandWindow.ts), which is
+        // exactly the monitor rect, so CENTER here and the capsule's own CENTER
+        // land on the same axis with no correction.
         revealer.valign = Gtk.Align.START
         revealer.halign = Gtk.Align.CENTER
         modes.set(mode.id, { mode, revealer })
@@ -301,35 +290,20 @@ export function ActivityIsland(source: IslandSource) {
         handleKey: (keyval: number): boolean => ((active()?.mode.widget as any)?.handleKey?.(keyval)) ?? false,
         /** Pin every revealer's top edge to the capsule's top (both wear their
          *  glass with the same 2px Cairo inset, so aligning the BOXES aligns
-         *  the drawn edges) and re-centre it on the capsule. Falls back to the
-         *  panel gap when the capsule is hidden (showWorkspaces off — matches
-         *  the morph's centered-pop fallback). Call per-open, before the reveal.
+         *  the drawn edges). Falls back to the panel gap when the capsule is
+         *  hidden (showWorkspaces off — matches the morph's centered-pop
+         *  fallback). Call per-open, before the reveal.
          *
-         *  `relativeTo` is a widget in the BAR (the capsule's own hierarchy);
-         *  `hostWidth` is the island surface's width. The two surfaces only
-         *  coincide when nothing has inset the bar, so both axes are corrected
-         *  by `source.offset()` — dx is 0 in every layout except a non-auto-
-         *  hiding LEFT dock. */
-        syncAnchor: (relativeTo: Gtk.Widget, fallbackTop: number, hostWidth: number) => {
+         *  `relativeTo` is the ISLAND surface's root: the capsule was moved onto
+         *  that surface with the revealers, so this is an ordinary same-window
+         *  measurement again (it used to cross into the bar's window). */
+        syncAnchor: (relativeTo: Gtk.Widget, fallbackTop: number) => {
             let top = fallbackTop
-            let centerX: number | null = null
             if (capsule.get_mapped()) {
                 const [ok, b] = capsule.compute_bounds(relativeTo)
-                if (ok) {
-                    top = Math.round(b.get_y())
-                    centerX = b.get_x() + b.get_width() / 2
-                }
+                if (ok) top = Math.round(b.get_y())
             }
-            const { dx, dy } = source.offset()
-            // halign CENTER centres within (width − margin_start − margin_end),
-            // so a margin_start of 2·delta moves the centre right by delta (and
-            // margin_end does the mirror). Both are 0 in the common layout.
-            const delta = centerX === null ? 0 : Math.round(centerX + dx - hostWidth / 2)
-            for (const rt of modes.values()) {
-                rt.revealer.margin_top = top + dy
-                rt.revealer.margin_start = Math.max(0, 2 * delta)
-                rt.revealer.margin_end = Math.max(0, -2 * delta)
-            }
+            for (const rt of modes.values()) rt.revealer.margin_top = top
         },
     }
 }

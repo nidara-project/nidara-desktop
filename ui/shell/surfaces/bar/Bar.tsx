@@ -126,16 +126,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // status.island_mode (see surfaces/island/ActivityIsland.tsx). Phase 1
   // ships one mode: the workspace overview.
   //
-  // The COMPACT capsule stays here in the bar; the EXPANDED modes live in
-  // their own OVERLAY layer surface (IslandWindow.ts) — the one deliberate
-  // exception to "overlays live inside the Bar's window", because a surface
-  // cannot blur its own siblings and the island must blur the bar capsules it
-  // covers. The morph spans both, hence the source root/offset bridge.
+  // The WHOLE island — compact capsule included — lives in its own OVERLAY
+  // layer surface (IslandWindow.ts), the one deliberate exception to "overlays
+  // live inside the Bar's window": a surface cannot blur its own siblings, and
+  // the island must blur the bar capsules it covers. The capsule goes with it so
+  // the morph stays ONE object transforming on ONE surface; splitting them meant
+  // two surfaces painting glass over the same pixels mid-morph, and their blurs
+  // stacked into a visible seam. The bar still owns the capsule's geometry (the
+  // row below) — it just hands the widget over.
   const islandWin = IslandWindow(gdkmonitor)
-  const island = ActivityIsland({
-    root: () => masterOverlay,
-    offset: () => islandWin.sourceOffset(win),
-  })
+  const island = ActivityIsland()
   // Invisible below-bar button — dismisses any open overlay on outside click.
   // It deliberately does NOT cover the bar strip (margin_top set with the panel
   // geometry below): capsule clicks must reach the capsules so switching
@@ -151,7 +151,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   masterOverlay.add_overlay(catcher)       // behind panels, above bar base
   masterOverlay.add_overlay(expansionCapsule)  // above catcher, below major overlays
   masterOverlay.add_overlay(cc); masterOverlay.add_overlay(nc); masterOverlay.add_overlay(prism); masterOverlay.add_overlay(popups); masterOverlay.add_overlay(systemMenu)
-  islandWin.mount(island.revealers)   // NOT on masterOverlay — see islandWin above
+  // (The island — capsule row + mode revealers — is mounted on its own surface
+  // further down, once `center` has been built. NOT on masterOverlay.)
 
   cc.valign = Gtk.Align.START; cc.halign = Gtk.Align.END
   nc.valign = Gtk.Align.START; nc.halign = Gtk.Align.END
@@ -319,19 +320,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     updateInputRegion()
   }
 
-  // The island's own surface: same reveal contract, but the region it refreshes
-  // is that window's, and the surface is UNMAPPED once the closing morph has
-  // finished — an idle transparent full-monitor layer would still cost a blur
-  // pass every frame. `island.sync` drives every mode, so the modes that are
-  // already closed fire their callback synchronously: only unmap when NOTHING
-  // is left visible, or a close animation still in flight gets cut off.
+  // The island's own surface: same reveal contract, only the region it refreshes
+  // belongs to that window. The surface stays MAPPED — the capsule lives on it,
+  // so there is no "closed" state to unmap into.
   const syncIslandModes = () => {
-    island.sync((r, open) => r.reveal(open, () => {
-      if (open) return
-      islandWin.updateInputRegion()
-      if (!status.island_mode && !island.revealers.some(other => other.get_visible()))
-        islandWin.close()
-    }))
+    island.sync((r, open) => r.reveal(open, () => { if (!open) islandWin.updateInputRegion() }))
     islandWin.updateInputRegion()
   }
   status.connect("notify::cc-open", syncOverlays); status.connect("notify::nc-open", syncOverlays); status.connect("notify::system-menu-open", syncOverlays)
@@ -369,20 +362,14 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // Re-assert our layer level in case the bar is currently in overlay mode
       // (it moves to OVERLAY too, which would otherwise stack it above us).
       islandWin.raise()
-      // Map first, act on the next frame: the morph reads the capsule's bounds
-      // THROUGH this window's root, and an unmapped root yields no source rect
-      // — the capsule morph would silently degrade to the centered fallback pop.
-      islandWin.open(() => {
-        if (!status.island_mode) return   // closed again during the deferred frame
-        island.syncAnchor(masterOverlay, PANEL_TOP, islandWin.win.get_width() || monGeo.width)
-        syncIslandModes()
-        islandWin.setKeyboardGrab(island.needsKeyboard())
-        island.onOpened()                 // seed the mode's keyboard nav
-      })
-    } else {
-      syncIslandModes()
-      islandWin.setKeyboardGrab(false)
+      // Pin the island's top to the capsule's top before the reveal (the capsule
+      // ref is the truth — survives layout changes). Same surface, so this is an
+      // ordinary measurement; no deferred frame needed.
+      island.syncAnchor(islandWin.root(), PANEL_TOP)
     }
+    syncIslandModes()
+    islandWin.setKeyboardGrab(status.island_mode ? island.needsKeyboard() : false)
+    if (status.island_mode) island.onOpened()   // seed the mode's keyboard nav
   })
 
   // Route keys to the open island mode (overview: ←/→ move the cursor, Enter
@@ -498,6 +485,24 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER })
   center.append(island.capsule)   // the island's compact state (workspace dots)
   center.set_visible(barSettings.showWorkspaces)
+  // `center` is NOT put in the bar's CenterBox: the capsule paints on the
+  // island's surface (see islandWin above). It goes into a row that reuses the
+  // SAME `.bar-centerbox` class the bar's own row does, so the 8px top margin
+  // and the 40px row height come from one CSS rule instead of a constant
+  // duplicated across two windows — the capsule lands pixel-identically where
+  // the bar would have drawn it. `center` still exists and still holds the live
+  // capsule, so `measureOverflow` can keep measuring its natural width.
+  const islandRow = new Gtk.Box({ css_classes: ["bar-centerbox"], height_request: BAR_H, valign: Gtk.Align.START })
+  islandRow.append(center)
+  center.hexpand = true           // halign CENTER inside a full-width row
+  islandWin.mount(islandRow, island.capsule, island.revealers)
+  // The capsule is a CLICK TARGET living on a mostly click-through surface, so
+  // its rect in the input region has to track its real size — and that size
+  // moves on its own: the compact stack interpolates width when the fronting
+  // activity changes, and a media title of a different length reshapes the pill
+  // with no page change at all. The glass DrawingArea's `resize` fires on
+  // exactly those, and only those.
+  ;(island.capsule as any).glassArea?.connect("resize", () => islandWin.updateInputRegion())
   const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 8 })
   // Absorbs SizeGroup slack so actual capsules stay pinned to the right edge.
   // When left > right (long window title), SizeGroup widens the right allocation;
@@ -673,7 +678,10 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const timeCapsule = SquircleContainer({ child: timeContent, onClick: () => status.toggleNC(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true })
   right.append(timeCapsule)
 
-  barBox.set_start_widget(left); barBox.set_center_widget(center); barBox.set_end_widget(right)
+  // No center widget: the capsule that used to sit there paints on the island's
+  // surface now. The SizeGroup below already forces equal flanks, so CenterBox
+  // still places everything as before — it just has nothing to centre.
+  barBox.set_start_widget(left); barBox.set_end_widget(right)
 
   onBarSettingsChanged((s) => {
     sysMenuWidget.set_visible(s.showSystemMenu)
@@ -786,10 +794,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           if (active && !barOverlayActive) {
               Gtk4LayerShell.set_exclusive_zone(win, 0) // release top reservation
               win.set_opacity(0)
-              // The island is its own surface: hiding the bar no longer hides it.
-              // Close it instead of leaving a panel floating over a fullscreen
-              // window with no capsule under it.
+              // The island is its own surface, and the CAPSULE lives on it — so
+              // hiding the bar no longer hides it. Close any open mode and unmap
+              // the surface, or the capsule floats alone over the fullscreen
+              // window (and keeps costing a blur pass).
               status.island_mode = ""
+              islandWin.setShown(false)
           } else if (!active) {
               if (barOverlayActive) {
                   // Exit overlay mode when fullscreen ends
@@ -798,6 +808,11 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               }
               Gtk4LayerShell.set_exclusive_zone(win, 40) // restore top reservation
               win.set_opacity(1)
+              // Bring the capsule back with the bar, and re-assert our level:
+              // present() re-adds the surface to Hyprland's overlay list, and the
+              // bar may have moved layers in between.
+              islandWin.setShown(true)
+              islandWin.raise()
           }
       } catch (e) {}
   }
@@ -830,16 +845,20 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
               Gtk4LayerShell.set_exclusive_zone(win, 0) // release top reservation
               win.set_opacity(1)
               win.present()
-              // The bar just joined OVERLAY, which appends it AFTER the island in
-              // Hyprland's list for that level — re-assert ours so the island
-              // stays on top (and keeps blurring the bar rather than being
-              // covered by it).
+              // The capsule comes back with the bar (fullscreen may have unmapped
+              // it). Then re-assert our level: the bar just joined OVERLAY, which
+              // appends it AFTER the island in Hyprland's list for that level, so
+              // without this the bar would cover the island instead of being
+              // blurred by it.
+              islandWin.setShown(true)
               islandWin.raise()
           } else {
               Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
               if (barFullscreenMode) {
                   Gtk4LayerShell.set_exclusive_zone(win, 0)
                   win.set_opacity(0)
+                  status.island_mode = ""
+                  islandWin.setShown(false)   // back to hidden-for-fullscreen
               } else {
                   Gtk4LayerShell.set_exclusive_zone(win, 40) // restore top reservation
               }

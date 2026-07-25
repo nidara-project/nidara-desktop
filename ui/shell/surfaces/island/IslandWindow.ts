@@ -4,56 +4,64 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import Cairo from "gi://cairo"
 import GLib from "gi://GLib"
 import { MorphRevealer } from "../../common/MorphRevealer"
-import { dockSideState } from "../dock/state"
 
 // The Activity Island's OWN layer surface — the one documented exception to
 // "overlays live inside the Bar's window" (skill commandment #5).
 //
 // WHY. Hyprland's layer blur difumina what is BEHIND a surface, once, at
-// composite time. Everything painted inside one GTK window lands in one
-// buffer, so the island's glass could never blur the bar capsules it grows
-// over: Cairo has no backdrop-filter, and at the default 0.05 glass alpha the
-// capsules read through it sharp and untouched (the bug this file fixes).
-// A SEPARATE surface on a HIGHER layer level is rendered after the bar, so the
-// blur pass samples the bar — capsules included — and the island finally reads
-// as glass over the bar instead of a pane of cling film.
+// composite time. Everything painted inside one GTK window lands in one buffer,
+// so an island inside the bar's window could never blur the bar capsules it
+// grows over: Cairo has no backdrop-filter, and at the default 0.05 glass alpha
+// those capsules read through it sharp and untouched. A SEPARATE surface on a
+// HIGHER layer level is composited after the bar, so the blur pass samples it.
 //
-// VERIFIED, not assumed (2026-07-25, Hyprland 0.55.4): a throwaway layer
-// surface on OVERLAY with `ignore_alpha = 0.01` blurred the bar beneath it at
-// glass alphas 0.05 / 0.20 / 0.38 alike. `new_optimizations` does not restrict
-// blur sampling to the background, and `xray` is off.
+// VERIFIED, not assumed (2026-07-25, Hyprland 0.55.4): a throwaway layer surface
+// on OVERLAY with `ignore_alpha = 0.01` blurred the bar beneath it at glass
+// alphas 0.05 / 0.20 / 0.38 alike. `new_optimizations` does not restrict blur
+// sampling to the background, and `xray` is off.
 //
-// WHY NOT A POPOVER (the other candidate, as Settings' dropdowns do it):
-// popups are blurred under `popups_ignorealpha = 0.30`, a DIFFERENT knob from
-// a layer's `ignore_alpha`, and it cannot be lowered without Hyprland blurring
-// the popup's own drop shadow into a halo. A popover island would have to floor
-// its glass at 0.38 (as `NidaraTheme.popoverAlpha` does) and would stop
-// honouring the user's opacity setting. A layer keeps 0.05.
+// WHY NOT A POPOVER (the other candidate, as Settings' dropdowns do it): popups
+// are blurred under `popups_ignorealpha = 0.30`, a DIFFERENT knob from a layer's
+// `ignore_alpha`, and it cannot be lowered without Hyprland blurring the popup's
+// own drop shadow into a halo. A popover island would have to floor its glass at
+// 0.38 (as `NidaraTheme.popoverAlpha` does) and would stop honouring the user's
+// opacity setting. A layer keeps 0.05.
 //
-// GEOMETRY. Anchored on all four edges with `exclusive_zone = -1`, so the
-// surface is EXACTLY the monitor rect no matter what the bar and the dock
-// reserve — a deterministic origin the morph can be rebased onto. The bar's
-// own surface is NOT the monitor rect (a non-auto-hiding side dock's exclusive
-// zone insets it), hence `sourceOffset` below.
+// THE COMPACT CAPSULE LIVES HERE TOO — and that is the whole point of the
+// design, not an implementation detail. The island is meant to be ONE object
+// that changes shape: the capsule's pill inflates into the expanded container
+// and deflates back. With the capsule on the bar's surface and the expanded
+// modes here, the morph spanned two surfaces, which meant (a) a cross-window
+// coordinate bridge in MorphRevealer and (b) both surfaces painting glass over
+// the same pixels mid-morph, so their blurs stacked and the transition showed a
+// visible seam (user-caught 2026-07-26). One surface owns the shape end to end:
+// no bridge, no stacked blur, and `compute_bounds` just works.
+//
+// The bar still owns the capsule's GEOMETRY (Bar.tsx builds the row and hands it
+// over) — the row reuses `.bar-centerbox`/`.bar-center` so the 8px top margin and
+// 40px row height come from the same CSS the bar uses, not a duplicated constant.
 
 const NAMESPACE = "nidara-island"
 
 export interface IslandWindowHandle {
     win: Gtk.Window
-    /** Mount point for the mode revealers (same alignment contract as the bar's
-     *  master overlay: they set their own valign/halign + margin_top). */
-    mount: (revealers: MorphRevealer[]) => void
-    /** Origin of the BAR's surface relative to ours, for the morph's source
-     *  rects. Pass the bar window; measured, not derived from dock constants. */
-    sourceOffset: (barWin: Gtk.Window) => { dx: number, dy: number }
-    /** Map the surface and call back on the next frame, once it can be measured
-     *  — the morph reads the capsule's bounds through this window's root, and an
-     *  unmapped root would silently degrade it to the centered fallback pop. */
-    open: (onReady: () => void) => void
-    /** Unmap once the closing morph has collapsed (no idle blur pass). */
-    close: () => void
+    /** Mount the compact capsule's row (always present) and the mode revealers
+     *  (revealed on demand). Both end up in ONE surface — see the header.
+     *  `hitTarget` is the capsule ITSELF, not the row: the row spans the whole
+     *  monitor width to centre the capsule, and stamping that into the input
+     *  region would swallow every click meant for the bar's own capsules
+     *  underneath. */
+    mount: (capsuleRow: Gtk.Widget, hitTarget: Gtk.Widget, revealers: MorphRevealer[]) => void
+    /** Root the revealers are anchored against — their `margin_top` is measured
+     *  relative to this, exactly as it used to be against the bar's overlay. */
+    root: () => Gtk.Widget
     setKeyboardGrab: (grab: boolean) => void
+    /** Re-stamp the click-through mask: the capsule always, plus whatever mode
+     *  is currently revealed. */
     updateInputRegion: () => void
+    /** Follow the bar in and out of sight (fullscreen hide, lock). Unmapping
+     *  also drops the surface's blur pass entirely. */
+    setShown: (shown: boolean) => void
     /** Re-assert our layer level. Hyprland appends a surface to its layer list
      *  when the level is (re)set, so whenever the BAR moves to OVERLAY too (bar
      *  overlay mode) it would land after us and cover the island. */
@@ -74,7 +82,7 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     const root = new Gtk.Overlay({ valign: Gtk.Align.FILL, vexpand: true })
     // Gtk.Overlay needs a main child; an empty box keeps the overlay children's
     // alignment contract identical to the bar's master overlay. It catches
-    // nothing — the input region below only ever covers the island itself.
+    // nothing — the input region below only ever covers what is painted.
     root.set_child(new Gtk.Box())
     win.set_child(root)
 
@@ -89,9 +97,10 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         for (const edge of [Gtk4LayerShell.Edge.TOP, Gtk4LayerShell.Edge.LEFT,
                             Gtk4LayerShell.Edge.RIGHT, Gtk4LayerShell.Edge.BOTTOM])
             Gtk4LayerShell.set_anchor(win, edge, true)
-        // -1 = ignore every exclusive zone, ours and everyone else's. Without it
-        // the bar's own 40px reservation would push this surface down by 40 and
-        // the morph's rects would be off by exactly that.
+        // -1 = ignore every exclusive zone, ours and everyone else's, so the
+        // surface is EXACTLY the monitor rect. Anything else and the bar's own
+        // 40px reservation would push us down by 40 — and since the capsule now
+        // lives here, that would move the capsule off the bar row.
         Gtk4LayerShell.set_exclusive_zone(win, -1)
         Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
         Gtk4LayerShell.set_monitor(win, gdkmonitor)
@@ -99,54 +108,57 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         console.error("[IslandWindow] LayerShell failed:", e)
     }
 
-    let mounted: MorphRevealer[] = []
+    let hitTarget: Gtk.Widget | null = null
+    let revealers: MorphRevealer[] = []
 
     const updateInputRegion = () => {
         const surface = win.get_native()?.get_surface()
         if (!surface?.set_input_region) return
         const region = new Cairo.Region()
-        // ONLY the island itself. Everything else stays click-through so the
-        // bar's catcher underneath keeps receiving the outside-clicks that
-        // dismiss overlays — the dismissal path is unchanged by the move.
-        for (const r of mounted) {
-            if (!r.get_visible()) continue
-            const alloc = r.get_allocation()
-            if (alloc.width <= 1 || alloc.height <= 1) continue
+        // compute_bounds against the root, NOT get_allocation(): the capsule is
+        // nested (root > row > centre box > capsule) and a child's allocation is
+        // relative to its parent, so an allocation would land the rect in the
+        // wrong place. Bounds are root-relative whatever the depth.
+        const add = (w: Gtk.Widget | null) => {
+            if (!w?.get_visible() || !w.get_mapped()) return
+            const [ok, b] = w.compute_bounds(root)
+            if (!ok || b.get_width() <= 1 || b.get_height() <= 1) return
             // @ts-ignore  (same untyped Cairo.Region call as Bar.tsx)
             region.unionRectangle({
-                x: Math.round(alloc.x), y: Math.round(alloc.y),
-                width: Math.round(alloc.width), height: Math.round(alloc.height),
+                x: Math.round(b.get_x()), y: Math.round(b.get_y()),
+                width: Math.round(b.get_width()), height: Math.round(b.get_height()),
             })
         }
+        // The capsule must stay clickable at all times — it is a bar control that
+        // happens to be painted here. Everything else stays click-through so the
+        // bar's catcher underneath keeps receiving the outside-clicks that
+        // dismiss overlays: the dismissal path is unchanged by the move.
+        add(hitTarget)
+        for (const r of revealers) add(r)
         surface.set_input_region(region)
         win.queue_draw()   // input regions are double-buffered: apply on next commit
     }
 
     return {
         win,
-        mount: (revealers) => {
-            mounted = revealers
-            for (const r of revealers) root.add_overlay(r)
+        root: () => root,
+        mount: (row, target, mounted) => {
+            hitTarget = target
+            revealers = mounted
+            root.add_overlay(row)
+            for (const r of mounted) root.add_overlay(r)
+            // Present once, and stay mapped: the capsule is permanent furniture
+            // now. Deferred like the bar's own present so the first frame has a
+            // settled layout, and the region stamped after it so the capsule is
+            // clickable from the start.
+            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => {
+                win.present()
+                GLib.timeout_add(GLib.PRIORITY_DEFAULT, 120, () => {
+                    updateInputRegion(); return GLib.SOURCE_REMOVE
+                })
+                return GLib.SOURCE_REMOVE
+            })
         },
-        sourceOffset: (barWin) => {
-            // We are the monitor rect; the bar may be inset by a side dock's
-            // exclusive zone. Measure the inset from the bar's actual width
-            // rather than recomputing the dock's geometry — the compositor is
-            // the authority on how much it actually reserved. Only a LEFT dock
-            // moves the bar's ORIGIN; a right one only shortens it.
-            const barW = barWin.get_width()
-            const inset = barW > 0 ? Math.max(0, monGeo.width - barW) : 0
-            return { dx: dockSideState.position === "left" ? inset : 0, dy: 0 }
-        },
-        open: (onReady) => {
-            if (!win.get_visible()) win.present()
-            // Defer one frame so the surface is mapped and laid out before the
-            // morph reads bounds through it (same idiom as the bar's expansion
-            // panel). Skipping this costs the capsule morph its source rect and
-            // silently drops to the fallback pop.
-            GLib.timeout_add(GLib.PRIORITY_DEFAULT, 16, () => { onReady(); return GLib.SOURCE_REMOVE })
-        },
-        close: () => { win.set_visible(false) },
         setKeyboardGrab: (grab) => {
             try {
                 Gtk4LayerShell.set_keyboard_mode(win, grab
@@ -155,6 +167,10 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             } catch (e) { console.error("[IslandWindow] keyboard mode failed:", e) }
         },
         updateInputRegion,
+        setShown: (shown) => {
+            if (shown) { win.present(); updateInputRegion() }
+            else win.set_visible(false)
+        },
         raise: () => {
             try { Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY) } catch (e) {}
         },

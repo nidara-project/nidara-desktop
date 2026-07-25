@@ -61,14 +61,6 @@ import { drawSquircle } from "./DrawingUtils"
 // the island's own glass params, no ghosts, landing dots left riding the
 // content fade.
 //
-// CROSS-WINDOW SOURCES. The island paints in its OWN layer surface (so the
-// compositor blurs the bar underneath it — see IslandWindow.ts), while the
-// capsule it morphs out of stays in the bar's. `compute_bounds` only resolves
-// inside one widget hierarchy, so every SOURCE lookup goes through
-// `rectOfSource`: bounds in the source window's root coords, plus that
-// window's origin relative to ours, minus our own origin. TARGET lookups
-// (glassWidget, pair.getTarget) stay local — they're our children.
-//
 // Same engine family as ScaleRevealer: snapshot-time paint that ends at
 // identity (commandment 9 satisfied at rest; mid-morph paint intentionally
 // diverges from the allocation, the same accepted transient as every
@@ -136,8 +128,6 @@ export class MorphRevealer extends Gtk.Widget {
 
     child: Gtk.Widget
     getSourceWidget: () => Gtk.Widget | null
-    sourceRoot: (() => Gtk.Widget | null) | null
-    sourceOffset: (() => { dx: number, dy: number }) | null
     contentTarget: Gtk.Widget | null
     glassWidget: Gtk.Widget | null
     glassArea: Gtk.Widget | null
@@ -156,12 +146,6 @@ export class MorphRevealer extends Gtk.Widget {
 
     constructor(child: Gtk.Widget, opts: {
         getSourceWidget: () => Gtk.Widget | null,
-        /** Root of the window the SOURCE widgets live in, when that isn't ours.
-         *  Omit for a same-window morph (the original behaviour). */
-        sourceRoot?: () => Gtk.Widget | null,
-        /** Origin of that window relative to ours, in pixels. Both are layer
-         *  surfaces the shell places itself, so this is known, not guessed. */
-        sourceOffset?: () => { dx: number, dy: number },
         glassFrom: () => MorphGlass,
         glassTo: () => MorphGlass,
         contentTarget?: Gtk.Widget | null,
@@ -188,8 +172,6 @@ export class MorphRevealer extends Gtk.Widget {
         super({})
         this.child = child
         this.getSourceWidget = opts.getSourceWidget
-        this.sourceRoot = opts.sourceRoot ?? null
-        this.sourceOffset = opts.sourceOffset ?? null
         this.glassFrom = opts.glassFrom
         this.glassTo = opts.glassTo
         this.contentTarget = opts.contentTarget ?? null
@@ -215,42 +197,6 @@ export class MorphRevealer extends Gtk.Widget {
         return { x: b.get_x(), y: b.get_y(), w: b.get_width(), h: b.get_height() }
     }
 
-    /** Is there a usable source to morph out of? Deliberately independent of
-     *  OUR OWN allocation: reveal() has to answer this before the first layout
-     *  pass, and asking for our origin that early fails — which would silently
-     *  demote every open to the centered fallback pop instead of the capsule
-     *  morph. Only `rectOfSource` (per-frame, always allocated) needs it. */
-    sourceUsable(w: Gtk.Widget | null): boolean {
-        if (!w?.get_mapped()) return false
-        const root = this.sourceRoot?.() ?? null
-        if (!root) return this.rectOf(w) !== null
-        const [ok, b] = w.compute_bounds(root)
-        return ok && b.get_width() > 0
-    }
-
-    /** Bounds of a widget that lives in the SOURCE window (the bar's capsule and
-     *  its contents) while we paint in our own. Without `sourceRoot` this is
-     *  plain `rectOf` — one code path serves both the same-window morph and the
-     *  cross-surface one. Returns null (→ fallback pop, never a wrong origin)
-     *  whenever either hierarchy can't be resolved this frame. */
-    rectOfSource(w: Gtk.Widget | null): Rect | null {
-        const root = this.sourceRoot?.() ?? null
-        if (!root) return this.rectOf(w)
-        if (!w?.get_mapped()) return null
-        const [ok, b] = w.compute_bounds(root)
-        if (!ok || b.get_width() <= 0) return null
-        const myRoot = this.get_root() as unknown as Gtk.Widget | null
-        if (!myRoot) return null
-        const [ok2, mine] = this.compute_bounds(myRoot)
-        if (!ok2) return null
-        const { dx, dy } = this.sourceOffset?.() ?? { dx: 0, dy: 0 }
-        return {
-            x: b.get_x() + dx - mine.get_x(),
-            y: b.get_y() + dy - mine.get_y(),
-            w: b.get_width(), h: b.get_height(),
-        }
-    }
-
     applyProgress() {
         const p = this.progress
         const resting = p >= 1
@@ -274,9 +220,7 @@ export class MorphRevealer extends Gtk.Widget {
         for (const pair of this.pairs) {
             const target = pair.getTarget()
             if (!target) continue
-            // sourceUsable, not rectOfSource: applyProgress also runs from
-            // reveal() before our first allocation (see sourceUsable).
-            const hasGhost = this.fromSource && this.sourceUsable(pair.getSource())
+            const hasGhost = this.fromSource && this.rectOf(pair.getSource()) !== null
             target.opacity = (!hasGhost || resting) ? 1 : 0
         }
         this.queue_draw()
@@ -299,7 +243,7 @@ export class MorphRevealer extends Gtk.Widget {
         if (open) {
             // Latched per open (the close mirrors the open's mode); the rects
             // themselves are still re-read live every frame.
-            this.fromSource = this.sourceUsable(this.getSourceWidget?.() ?? null)
+            this.fromSource = this.rectOf(this.getSourceWidget?.() ?? null) !== null
             // Sync visuals before the first frame so the island never flashes
             // at full size/opacity between set_visible and the first tick.
             this.set_visible(true)
@@ -362,7 +306,7 @@ export class MorphRevealer extends Gtk.Widget {
         if (w <= 0 || h <= 0) return
 
         const f = this.rectOf(this.glassWidget) ?? { x: 0, y: 0, w, h }
-        const s = (this.fromSource ? this.rectOfSource(this.getSourceWidget?.() ?? null) : null)
+        const s = (this.fromSource ? this.rectOf(this.getSourceWidget?.() ?? null) : null)
             ?? { x: f.x + f.w * 0.015, y: f.y + f.h * 0.015, w: f.w * 0.97, h: f.h * 0.97 }
         const R = lerpRect(s, f, p)
         // Content mapping: glass rect f → current rect R(p). Shared by the
@@ -423,7 +367,7 @@ export class MorphRevealer extends Gtk.Widget {
             const g = this.activeGhost
             const gw = g.get_width()
             const gh = g.get_height()
-            const c = this.rectOfSource(this.getSourceContent?.() ?? null) ?? s
+            const c = this.rectOf(this.getSourceContent?.() ?? null) ?? s
             if (gw > 0 && gh > 0) {
                 const k = R.w / s.w
                 snapshot.push_opacity(1 - p / SOURCE_FADE_END)
@@ -453,7 +397,7 @@ export class MorphRevealer extends Gtk.Widget {
             const denom = Math.max(0.01, 1 - (count - 1) * PAIR_STAGGER)
             for (let i = 0; i < count; i++) {
                 const pair = this.pairs[i]
-                const gs = this.rectOfSource(pair.getSource())
+                const gs = this.rectOf(pair.getSource())
                 const gt = this.rectOf(pair.getTarget())
                 const ghost = pair.ghost
                 const gw = ghost.get_width()

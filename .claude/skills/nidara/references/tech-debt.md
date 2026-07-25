@@ -1194,28 +1194,40 @@ These were paid down; the *rule* remains:
 
 ### 40. Activity Island on its own layer surface — residuals (2026-07-26)
 
-The island's expanded modes moved out of the bar's window into `nidara-island`
-(`surfaces/island/IslandWindow.ts`, OVERLAY level) so Hyprland's blur finally reaches the bar
-capsules underneath — a surface cannot blur its own siblings, which is why the capsules read
-sharp through the glass before. The move is a deliberate, documented exception to commandment 5
-(see `architecture.md` / `state-and-ipc.md`). What it left behind:
+The whole Activity Island — compact capsule included — moved out of the bar's window into
+`nidara-island` (`surfaces/island/IslandWindow.ts`, OVERLAY level) so Hyprland's blur finally
+reaches the bar capsules underneath: a surface cannot blur its own siblings, which is why they
+read sharp through the glass before. A deliberate, documented exception to commandment 5 (see
+`architecture.md` / `state-and-ipc.md`).
 
-- **The surface is MONITOR-SIZED, not content-sized.** Anchored on all four edges with
-  `exclusive_zone = -1`, which buys a deterministic origin (the bar's own surface is inset by a
-  side dock's exclusive zone) and let the morph's anchoring code stay shaped exactly as before.
-  Cost: while a mode is open, Hyprland runs a full-monitor blur pass for a surface that is mostly
-  transparent. Mitigated by mapping the window only while a mode is open, so idle cost is zero.
-  If it ever shows up in a GPU profile, the fix direction is a content-sized surface positioned by
-  layer-shell margins — the origin then becomes explicit instead of derived, and `sourceOffset`
-  gets simpler, not harder. Not done because it buys nothing measured yet.
-- **`sourceOffset` is measured, but only for a LEFT dock.** `monGeo.width - barWin.get_width()`
-  with the side taken from `dockSideState`. A right-side dock shortens the bar without moving its
-  origin, so dx stays 0 — correct today, but it is one assumption about how the compositor lays
-  surfaces out, in one function, and that is where to look first if the island ever opens
-  off-centre with a side dock.
-- **UNVERIFIED BY EYE: the double blur.** The bar blurs the wallpaper; the island now blurs
-  bar+wallpaper on top of that. Whether the capsules' 1px inner white edge survives that or smears
-  is a judgement only the user's eye can make (screenshots hide exactly this class of artifact).
+**The capsule moved on the second pass, and the first pass is the lesson.** Leaving it on the bar's
+surface while only the modes moved cost a cross-window coordinate bridge in `MorphRevealer` — and
+made both surfaces paint glass over the same pixels mid-morph, whose blurs stacked into a seam the
+user caught immediately on close. Splitting an object that morphs across two surfaces is the wrong
+shape; the bridge is deleted, not refactored.
+
+What it left behind:
+
+- **The surface is MONITOR-SIZED and always mapped.** Anchored on all four edges with
+  `exclusive_zone = -1` — anything else and the bar's own 40px reservation pushes the surface, and
+  therefore the capsule, off the bar row. So there are now two permanently-mapped full-monitor
+  blurred layers instead of one. Damage tracking should make the idle cost of a static transparent
+  surface near zero (the bar has lived this way forever), but **that is reasoning, not a
+  measurement** — if a GPU-idle regression appears, this is the first suspect, and the fix
+  direction is a surface sized to the bar row when collapsed and to the monitor while a mode is
+  open (resize on open/close, never per frame).
+- **The capsule is now at the MONITOR centre, not the bar-surface centre.** Identical in every
+  layout except a non-auto-hiding side dock, whose exclusive zone insets the bar. There the capsule
+  (and the island, which shares the axis) will sit slightly off the bar's own centre, and
+  `measureOverflow`'s budget — which assumes the capsule splits the bar evenly — is off by the same
+  amount. Untested with a side dock; low stakes, but that is where to look.
+- **The island is above the DOCK now.** It used to be in the bar's window, which stacks below the
+  dock; on OVERLAY it stacks above. An expanded mode tall enough to reach a bottom dock will draw
+  over it instead of under. No mode is that tall today.
+- **UNVERIFIED BY EYE: the double blur.** The bar blurs the wallpaper; the island blurs
+  bar+wallpaper on top of that wherever it covers the bar's OTHER capsules (AppTitle, clock, tray).
+  Whether their 1px inner white edge survives that or smears is a judgement only the user's eye can
+  make (screenshots hide exactly this class of artifact).
 - **Pre-existing leak found in passing, NOT fixed:** `MorphRevealer.dismantle()` calls
   `this.sourceGhost?.unparent()` — the field is `sourceGhosts` (an array), so the optional chain
   no-ops and every source-ghost twin leaks its parent link. Harmless today (island revealers are
