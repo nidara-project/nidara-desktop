@@ -277,13 +277,18 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   - shell→daemon: `{t:"user",text}` · `{t:"cancel"}` · `{t:"reset"}`
   - daemon→shell: `{t:"state",s:"thinking"|"acting"|"idle"}` · `{t:"delta",text}` ·
     `{t:"tool",name,summary}` · `{t:"toolresult",ok,summary}` · `{t:"done",usage}` · `{t:"error",message}`
-- **BYOK, two backends**: Anthropic Messages API (`POST /v1/messages`, `x-api-key` +
-  `anthropic-version`) and any OpenAI-compatible endpoint (`POST {endpoint}/chat/completions`,
-  `Authorization: Bearer` optional — covers a local Ollama). Both **streamed via `curl -N` SSE**
-  as a `Gio.Subprocess` (the house HTTP pattern — zero new deps); `cancel` = `force_exit()` the curl.
+- **BYOK, THREE backends** (two native + one universal, and the split is deliberate): Anthropic
+  Messages API (`POST /v1/messages`, `x-api-key` + `anthropic-version`) · **Gemini native**
+  (Interactions API, `POST {endpoint}/interactions`, `x-goog-api-key`) · any **OpenAI-compatible**
+  endpoint (`POST {endpoint}/chat/completions`, `Authorization: Bearer` optional — this is what makes
+  a local Ollama, a custom server and most clouds work with one adapter, which on a Linux desktop is
+  a feature, not a shortcut). Native for the providers shipped as a first choice, so their quirks
+  stop being ours: Google's compat shim cost three defects in one afternoon, all translation
+  artefacts. All three **streamed via `curl -N` SSE** as a `Gio.Subprocess` (the house HTTP pattern —
+  zero new deps); `cancel` = `force_exit()` the curl.
 - **Provider vs protocol** (`core/AgentProviders.ts`): the user picks a provider by NAME
   (Anthropic · OpenAI · Google (Gemini) · Mistral · Groq · OpenRouter · Ollama (local) · Custom);
-  the registry maps each to one of the two wire protocols and pins its endpoint + default model.
+  the registry maps each onto one of the three wire protocols and pins its endpoint + default model.
   `AgentConfig.setBrainProvider(id)` writes `brainProvider` **and** the derived `brainBackend` /
   `brainEndpoint` / `brainModel`, so **the daemon stays dumb** — it never carries a provider table.
   `brainModels` is per-provider model memory (switching to Ollama no longer leaves
@@ -324,6 +329,30 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   providers don't send the field and don't care. The step log prints `sig=N/M` whenever a turn has
   tool calls: `sig=0/1` against Gemini means the signature never arrived and the echo can't work
   (which would make the compat path unusable for tools → the native backend stops being optional).
+- **Anthropic's equivalent of that rule: echo the THINKING BLOCKS back, verbatim.** Same shape of
+  trap, found 2026-07-25 by reading the reference instead of by losing a turn to it. The rule (docs
+  → thinking → *preserving thinking blocks*): *"when you return a tool result, the thinking blocks
+  from the assistant message must come back with it"*, and *"rebuilding the message or filtering out
+  `redacted_thinking` blocks triggers a 400 error"*. `toAnthropicMsg()` **does** rebuild the
+  message, so the blocks are captured in the handler (`thinkBlocks`), ride on the history entry as
+  `thinking` (the Anthropic twin of Gemini's `thoughtSig`; each lane's converter reads its own field
+  and ignores the other's) and are re-emitted **ahead of** the text/`tool_use` they belong to. Three
+  details that make this easy to get wrong:
+  - With the default `display: "omitted"` (Opus 5 / 4.8 / 4.7) **no `thinking_delta` ever arrives**:
+    the block opens empty, receives one **`signature_delta`** just before closing, and that
+    signature is the whole payload. A handler watching only for text sees an empty block and
+    silently drops the one field that has to go back.
+  - The lane got away without this only because it never asks for thinking, and on Opus 4.8/4.7
+    omitting the parameter means none. **On Claude Opus 5 thinking is ON by default** — the blocks
+    arrive unasked, so a tool-using turn on the flagship model would have 400'd on its second step.
+  - The newest-turn cache breakpoint must **not** land on a thinking block (adding a field to one is
+    exactly the "modified" case), and `max_tokens` is a ceiling on **thinking + answer together** —
+    sized for prose alone it turns a normal reply into a mid-sentence cut-off reported as "hit the
+    reply length limit". Hence 32768: under the output cap of every current model (Haiku 4.5 is the
+    lowest at 64k) so it can never itself become a 400.
+  Covered by CI (`agent-loop` scenario 3) — the assertion is on the captured request bytes, so it
+  holds without a key. `think=` in the step log now also reports Anthropic's thinking tokens
+  (`usage.output_tokens_details.thinking_tokens`, final `message_delta` only).
 - **A failing tool call gets TWO strikes, then the turn is aborted.** Measured 2026-07-21: Gemini
   called `run_action` with `{"args":[…]}` and no `action`, was told it was invalid, and repeated the
   identical call **seven times** — the whole step budget and ~25k input tokens on one question. The

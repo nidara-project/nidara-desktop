@@ -790,22 +790,26 @@ Ordered by what hurt most in the live run:
    **General rule this cost three wrong conclusions to learn: judge a provider behaviour over a
    RUN of requests, never one reading.** Established regardless: the real cost driver is STEP COUNT
    (an 8-step turn cost ~25k input tokens).
-7. **Anthropic caching: two breakpoints, and only the second one can ever fire (2026-07-21).**
-   A `cache_control` marker caches everything from the start of the request up to itself, and render
-   order is tools → system → messages. There is a **minimum cacheable prefix** — 4096 tokens on Opus
-   4.8/4.7/4.6/4.5 and Haiku 4.5, 2048 on Fable 5 / Sonnet 4.6, 1024 on Sonnet 4.5 — and a shorter
-   prefix silently doesn't cache (no error, `cache_creation_input_tokens: 0`).
-   Our tools + system span is **~1,213 tokens** and NEVER GROWS, so the system-block marker is dead by
-   construction. The lesson generalises: **a marker over a fixed-size prefix below the minimum is
-   inert; only a marker after something that grows can ever engage.** Hence `markNewestTurn()` — a
-   second marker on the newest turn's last content block, so the span includes the conversation and
-   crosses the minimum on a normal chat (live turns measured 3.0–4.9k tokens).
-   **NOT VERIFIED against a live Anthropic key** — the logic is unit-checked by extracting the real
-   functions and running them, but nothing has watched `cache_read_input_tokens` on the wire. The
-   system marker is left in place: harmless, and correct the moment that span grows.
-   **Do NOT pad the prompt to reach 4096** — the fix is where the marker goes, not how fat the prompt
-   is. Known limit accepted: a breakpoint looks back only ~20 content blocks, so a tool-heavy turn
-   that adds more than that simply misses.
+7. **Anthropic caching: two breakpoints — and the premise of this item was WRONG (corrected
+   2026-07-25).** A `cache_control` marker caches everything from the start of the request up to
+   itself, and render order is tools → system → messages. There is a **minimum cacheable prefix**
+   below which a marker silently does nothing (no error, `cache_creation_input_tokens: 0`) — and that
+   minimum is **not flat and not monotonic across generations**, which is what the earlier version of
+   this item got wrong (it assumed 4096 everywhere): **512** on Opus 5 / Fable 5, **1024** on Opus 4.8
+   / Sonnet 5 / Sonnet 4.6 / Sonnet 4.5, **2048** on Opus 4.7, **4096** on Opus 4.6/4.5 and Haiku 4.5.
+   Our tools + system span is **~1,213 tokens** and never grows, so the same marker is **live on Opus
+   5, borderline on Opus 4.8, and dead on Opus 4.7 and older** — i.e. "the system marker can never
+   fire" was true for the models of the day and is false for the current default. The generalisable
+   half stands: **a marker over a fixed-size prefix below the minimum is inert; only a marker after
+   something that grows can ever engage** — hence `markNewestTurn()`, a second marker on the newest
+   turn's last content block (live turns measured 3.0–4.9k tokens). It must never land on a thinking
+   block; see `state-and-ipc.md`.
+   **Still NOT verified against a live Anthropic key** — the logic is unit-checked and the request
+   bytes are asserted in CI, but nothing has watched `cache_read_input_tokens` come back on the wire.
+   **Do NOT pad the prompt to cross a threshold** — the fix is where the marker goes, not how fat the
+   prompt is, and padding for the older models would buy nothing on the newer ones. Known limit
+   accepted: a breakpoint looks back only ~20 content blocks, so a tool-heavy turn that adds more than
+   that simply misses.
 8. **A native Gemini backend — evidence accumulating, decision NOT taken (2026-07-21).**
    Three separate failures in one afternoon all traced to Google's OpenAI-*compatible* layer, not to
    the model: (a) tool calls streamed with `finish_reason: "stop"` instead of `"tool_calls"`, so calls

@@ -39,6 +39,12 @@ ARGS = '{"key":"appearance.accent","value":"blue"}'
 FINAL = "Done — the accent is now blue."
 DEADLINE_S = 30
 
+# The Anthropic lane is driven through a stub `curl` (see make_stub_curl): its
+# endpoint is not configurable, so there is nothing to point at a local mock.
+# This signature must come back byte-for-byte in the next request's assistant
+# turn — that is the whole assertion.
+SIG = "TESTSIG-do-not-alter/AAECAwQ="
+
 
 # ── The mock LLM (OpenAI-compatible streaming) ───────────────────────────────
 class Mock(BaseHTTPRequestHandler):
@@ -142,7 +148,71 @@ def make_stub_ags(bind: Path):
     (bind / "ags").chmod(0o755)
 
 
-def drive_daemon(port: int):
+# ── The Anthropic lane: a stub `curl` instead of a mock server ────────────────
+# buildAnthropicReq hardcodes api.anthropic.com (deliberately — an env-settable
+# base URL would be a place to redirect a user's API key), so this lane cannot be
+# pointed at a local socket. Standing in for `curl` gets the same coverage and
+# more: the request body the daemon actually built is captured on disk, so the
+# test asserts the BYTES, not just the outcome.
+STUB_CURL = r'''#!/usr/bin/env python3
+import json, os, pathlib, sys
+rec = pathlib.Path(os.environ["NIDARA_TEST_REC"])
+body = sys.stdin.read()
+rec.joinpath("req-%d.json" % (len(list(rec.glob("req-*.json"))) + 1)).write_text(body)
+try:
+    msgs = json.loads(body).get("messages", [])
+except Exception:
+    msgs = []
+after_tool = any(
+    isinstance(m.get("content"), list)
+    and any(isinstance(b, dict) and b.get("type") == "tool_result" for b in m["content"])
+    for m in msgs
+)
+def ev(kind, data):
+    sys.stdout.write("event: %s\ndata: %s\n\n" % (kind, json.dumps(data)))
+ev("message_start", {"type": "message_start", "message": {"usage": {
+    "input_tokens": 11, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}}})
+if not after_tool:
+    # A thinking block exactly as it arrives with display "omitted" (the default
+    # on Opus 5 / 4.8 / 4.7): opens empty, receives ONE signature_delta, closes.
+    ev("content_block_start", {"type": "content_block_start", "index": 0,
+       "content_block": {"type": "thinking", "thinking": "", "signature": ""}})
+    ev("content_block_delta", {"type": "content_block_delta", "index": 0,
+       "delta": {"type": "signature_delta", "signature": "@SIG@"}})
+    ev("content_block_stop", {"type": "content_block_stop", "index": 0})
+    ev("content_block_start", {"type": "content_block_start", "index": 1,
+       "content_block": {"type": "tool_use", "id": "toolu_test1", "name": "@TOOL@", "input": {}}})
+    half = len("@ARGS@") // 2
+    ev("content_block_delta", {"type": "content_block_delta", "index": 1,
+       "delta": {"type": "input_json_delta", "partial_json": "@ARGS@"[:half]}})
+    ev("content_block_delta", {"type": "content_block_delta", "index": 1,
+       "delta": {"type": "input_json_delta", "partial_json": "@ARGS@"[half:]}})
+    ev("content_block_stop", {"type": "content_block_stop", "index": 1})
+    ev("message_delta", {"type": "message_delta", "delta": {"stop_reason": "tool_use"},
+       "usage": {"output_tokens": 9, "output_tokens_details": {"thinking_tokens": 5}}})
+else:
+    ev("content_block_start", {"type": "content_block_start", "index": 0,
+       "content_block": {"type": "text", "text": ""}})
+    ev("content_block_delta", {"type": "content_block_delta", "index": 0,
+       "delta": {"type": "text_delta", "text": "@FINAL@"}})
+    ev("content_block_stop", {"type": "content_block_stop", "index": 0})
+    ev("message_delta", {"type": "message_delta", "delta": {"stop_reason": "end_turn"},
+       "usage": {"output_tokens": 12}})
+ev("message_stop", {"type": "message_stop"})
+sys.stdout.flush()
+# Mirror the -w write-out marker the daemon parses off stderr.
+sys.stderr.write("nidara-http:200 nidara-retry:\n")
+'''
+
+
+def make_stub_curl(bind: Path, rec: Path):
+    src = (STUB_CURL.replace("@SIG@", SIG).replace("@TOOL@", TOOL)
+           .replace("@ARGS@", ARGS.replace('"', '\\"')).replace("@FINAL@", FINAL))
+    (bind / "curl").write_text(src)
+    (bind / "curl").chmod(0o755)
+
+
+def drive_daemon(port: int, anthropic_rec: Path | None = None):
     """Spawn a fresh daemon, send one user turn, return (events, stderr_lines)."""
     tmp = Path(tempfile.mkdtemp(prefix="nidara-agent-test-"))
     try:
@@ -150,7 +220,7 @@ def drive_daemon(port: int):
         # Empty provider → the keyring is never touched (no D-Bus in CI); the mock
         # needs no key anyway.
         (tmp / "nidara" / "ai.json").write_text(json.dumps({
-            "brainBackend": "openai",
+            "brainBackend": "anthropic" if anthropic_rec else "openai",
             "brainProvider": "",
             "brainModel": "mock",
             "brainEndpoint": f"http://127.0.0.1:{port}/v1",
@@ -158,11 +228,15 @@ def drive_daemon(port: int):
         bind = tmp / "bin"
         bind.mkdir()
         make_stub_ags(bind)
+        if anthropic_rec:
+            make_stub_curl(bind, anthropic_rec)
 
         env = dict(os.environ)
         env["XDG_CONFIG_HOME"] = str(tmp)
         env["PATH"] = f"{bind}:{env.get('PATH', '')}"
         env.setdefault("LANG", "en_US.UTF-8")
+        if anthropic_rec:
+            env["NIDARA_TEST_REC"] = str(anthropic_rec)
 
         proc = subprocess.Popen(
             ["gjs", "-m", str(DAEMON)],
@@ -270,6 +344,57 @@ def main():
         if Mock.hits != 1:
             problems.append(f"a 4xx was retried: expected exactly 1 request, got {Mock.hits}")
         report("4xx surfaces without retry", problems, events, stderr_lines)
+
+        # ── Scenario 3: Anthropic lane — thinking blocks echoed back verbatim ─
+        # The rule (Anthropic docs, "preserving thinking blocks"): when you return
+        # a tool result, the assistant turn must carry its thinking blocks back
+        # unmodified, or the request 400s. The daemon REBUILDS that message, so
+        # this is a standing regression risk, and it only bites on models where
+        # thinking is on — which now includes the default flagship. Asserted on the
+        # captured request bodies rather than on a live provider's blessing.
+        rec = Path(tempfile.mkdtemp(prefix="nidara-agent-rec-"))
+        try:
+            events, stderr_lines = drive_daemon(port, anthropic_rec=rec)
+            problems = []
+            reqs = sorted(rec.glob("req-*.json"))
+            if len(reqs) < 2:
+                problems.append(f"expected 2 requests (tool call + follow-up), got {len(reqs)}")
+            else:
+                first = json.loads(reqs[0].read_text())
+                second = json.loads(reqs[1].read_text())
+                if not first.get("tools"):
+                    problems.append("request 1 carried no tools")
+                sys_blocks = first.get("system") or []
+                if not (sys_blocks and sys_blocks[0].get("cache_control")):
+                    problems.append("request 1 lost the system cache breakpoint")
+                asst = [m for m in second.get("messages", []) if m.get("role") == "assistant"]
+                if not asst:
+                    problems.append("request 2 had no assistant turn to echo")
+                else:
+                    blocks = asst[-1].get("content") or []
+                    kinds = [b.get("type") for b in blocks]
+                    if not blocks or blocks[0].get("type") != "thinking":
+                        problems.append(f"thinking block not echoed first — got {kinds}")
+                    else:
+                        tb = blocks[0]
+                        if tb.get("signature") != SIG:
+                            problems.append(f"signature altered or dropped: {tb.get('signature')!r}")
+                        if "cache_control" in tb:
+                            problems.append("cache breakpoint landed ON the thinking block (modifies it)")
+                    if "tool_use" not in kinds:
+                        problems.append(f"tool_use missing from the echoed turn — got {kinds}")
+                    results = [b for m in second["messages"] if isinstance(m.get("content"), list)
+                               for b in m["content"] if b.get("type") == "tool_result"]
+                    if not results:
+                        problems.append("no tool_result in request 2")
+            text = "".join(e.get("text", "") for e in events if e.get("t") == "delta")
+            if FINAL not in text:
+                problems.append(f"final answer missing (streamed text: {text!r})")
+            if not any("think=5" in l for l in stderr_lines):
+                problems.append("thinking tokens not read from usage (no think=5 in telemetry)")
+            report("anthropic: thinking blocks survive the tool round-trip", problems, events, stderr_lines)
+        finally:
+            shutil.rmtree(rec, ignore_errors=True)
 
         return 1 if failures else 0
     finally:

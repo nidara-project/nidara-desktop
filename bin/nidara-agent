@@ -42,6 +42,10 @@ const MAX_STEPS = 8            // hard cap on tool-use round-trips per user turn
 const HTTP_TIMEOUT = "120"     // curl --max-time (seconds)
 const MAX_HTTP_ATTEMPTS = 3    // 1 try + up to 2 retries on a 5xx / network blip
 const RETRY_BASE_MS = 600      // linear backoff between attempts: 600 ms, then 1200 ms
+// Ceiling on an honoured `retry-after`. Past this the wait is worse than the
+// truth: the island would sit "thinking" in silence for a minute with no way to
+// tell a rate limit from a hang, so the provider's own message is shown instead.
+const RETRY_AFTER_MAX_MS = 15000
 
 // ── Telemetry ────────────────────────────────────────────────────────────────
 // stderr is INHERITED from the shell, which nidara-ui appends to nidara-ui.log —
@@ -414,10 +418,31 @@ function historyForRequest() {
 function toAnthropicMsg(m) {
     if (m.role === "user") return { role: "user", content: [{ type: "text", text: m.text }] }
     if (m.role === "assistant") {
-        const content = []
-        if (m.text) content.push({ type: "text", text: m.text })
-        for (const tu of m.toolUses || []) content.push({ type: "tool_use", id: tu.id, name: tu.name, input: tu.input })
-        return content.length ? { role: "assistant", content } : null
+        const body = []
+        if (m.text) body.push({ type: "text", text: m.text })
+        for (const tu of m.toolUses || []) body.push({ type: "tool_use", id: tu.id, name: tu.name, input: tu.input })
+        if (!body.length) return null
+        // THINKING BLOCKS GO BACK FIRST AND VERBATIM. Anthropic's rule, quoted:
+        // "when you return a tool result, the thinking blocks from the assistant
+        // message must come back with it", and "rebuilding the message or filtering
+        // out redacted_thinking blocks triggers a 400 error" (docs: thinking →
+        // preserving thinking blocks). Rebuilding is exactly what this function
+        // does, so the blocks have to be carried through `history` and re-emitted
+        // ahead of the text/tool_use they belong to.
+        //
+        // This lane sent NO thinking blocks until now and got away with it only
+        // because it never asks for thinking, and on Opus 4.8/4.7 omitting the
+        // parameter means no thinking. On CLAUDE OPUS 5 THINKING IS ON BY DEFAULT:
+        // the blocks arrive whether or not you asked, so a tool-using turn on the
+        // current flagship model would have hit that 400 on its second step. Found
+        // by reading the spec, not by a user losing a turn — which is the whole
+        // point of doing this against the reference (see the Gemini signature
+        // above: identical shape of bug, learned the expensive way).
+        //
+        // Opaque on purpose: with the default display ("omitted") the `thinking`
+        // field comes back an empty string and only `signature` is populated, so
+        // there is nothing here to read — only to relay unchanged.
+        return { role: "assistant", content: [...(m.thinking || []), ...body] }
     }
     // tool → tool_result blocks ride in a user-role message
     // is_error marks a failure AS a failure: without it a rejection reads like a
@@ -450,8 +475,14 @@ function toOpenaiMsgs(m) {
 // Why two: a breakpoint caches everything from the start of the request up to
 // itself, and render order is tools → system → messages. The system breakpoint
 // below therefore covers a span that NEVER GROWS (~1.2k tokens here) — and a
-// prefix under the model's minimum (4096 tokens on Opus, 2048 on Sonnet) is
-// silently not cached at all. The conversation is the only part that grows, so
+// prefix under the model's minimum is silently not cached at all. That minimum
+// is NOT monotonic across generations and our ~1.2k span lands on both sides of
+// it: 512 tokens on Opus 5 (cached), 1024 on Opus 4.8 / Sonnet 5 / Sonnet 4.6
+// (borderline), 2048 on Opus 4.7 and 4096 on Opus 4.6/4.5 and Haiku 4.5 (never
+// cached). So on the current flagship the fixed prompt DOES cache — the earlier
+// note here, and tech-debt #39.7, both assumed a flat 4096 and were wrong for
+// today's models. Do NOT pad the prompt to cross a threshold on the older ones.
+// The conversation is the only part that grows, so
 // without a marker after it, caching can never engage no matter how long the
 // chat runs. With one, the span crosses the minimum on a normal conversation
 // and everything already said gets re-read at ~10% instead of full price.
@@ -465,17 +496,36 @@ function toOpenaiMsgs(m) {
 function markNewestTurn(messages) {
     const last = messages[messages.length - 1]
     if (!last || !Array.isArray(last.content) || !last.content.length) return messages
-    last.content[last.content.length - 1].cache_control = { type: "ephemeral" }
+    // Never land the marker on a thinking block: those are relayed verbatim
+    // (see toAnthropicMsg) and adding a field to one is the "modified" case the
+    // API rejects. Walk back to the last ordinary block instead; if a turn is
+    // somehow nothing but thinking, skip the breakpoint rather than risk the turn.
+    for (let i = last.content.length - 1; i >= 0; i--) {
+        const b = last.content[i]
+        if (b.type === "thinking" || b.type === "redacted_thinking") continue
+        b.cache_control = { type: "ephemeral" }
+        break
+    }
     return messages
 }
 
 function buildAnthropicReq(cfg, key, system) {
     const body = {
-        model: cfg.brainModel || "claude-opus-4-8",
+        // Only fires if Anthropic is selected with no model picked (the picker
+        // normally forces a choice from the live /v1/models list).
+        model: cfg.brainModel || "claude-opus-5",
         // A ceiling, not a budget: unreached tokens cost nothing, and 2048 cut
         // off any answer longer than a couple of paragraphs. Truncation is
         // detected below either way.
-        max_tokens: 8192,
+        //
+        // Raised from 8192 because THINKING TOKENS COUNT AGAINST THIS. With
+        // thinking on by default on Opus 5, reasoning and the answer share the
+        // ceiling, so a budget sized for prose alone turns a normal reply into a
+        // mid-sentence cut-off — reported to the user as "hit the reply length
+        // limit", i.e. a self-inflicted bug that reads like a model limitation.
+        // 32768 stays under the output cap of every current model (Haiku 4.5 is
+        // the lowest at 64k) so it cannot become a 400 on the small ones.
+        max_tokens: 32768,
         stream: true,
         // The system prompt is ~3.4k tokens of autogenerated introspection and it
         // is IDENTICAL on every request of a session — including the extra request
@@ -731,6 +781,11 @@ function makeGeminiHandler() {
 function makeAnthropicHandler() {
     let text = ""
     const toolUses = []          // {index,id,name,jsonParts}
+    // Thinking blocks in stream order, captured to be RELAYED, never read: the
+    // assistant turn has to carry them back or the next request 400s (see
+    // toAnthropicMsg). With the default display the text is empty and only the
+    // signature matters, which is why nothing here is surfaced to the UI.
+    const thinkBlocks = []       // {index,type,thinking,signature,data}
     let stopReason = null
     // cached = prompt tokens served from the provider's cache. Reported, not
     // requested — the only way to know whether the fixed system prompt is
@@ -758,10 +813,18 @@ function makeAnthropicHandler() {
                     usage.input = (u.input_tokens ?? 0) + usage.cached + usage.cacheWrite
                     break
                 }
-                case "content_block_start":
-                    if (data.content_block?.type === "tool_use")
-                        toolUses.push({ index: data.index, id: data.content_block.id, name: data.content_block.name, jsonParts: [] })
+                case "content_block_start": {
+                    const cb = data.content_block
+                    if (cb?.type === "tool_use")
+                        toolUses.push({ index: data.index, id: cb.id, name: cb.name, jsonParts: [] })
+                    else if (cb?.type === "thinking")
+                        thinkBlocks.push({ index: data.index, type: "thinking", thinking: cb.thinking || "", signature: cb.signature || "" })
+                    // Encrypted reasoning. Filtering these out is called out by name
+                    // in the docs as a 400 — carry the blob and nothing else.
+                    else if (cb?.type === "redacted_thinking")
+                        thinkBlocks.push({ index: data.index, type: "redacted_thinking", data: cb.data || "" })
                     break
+                }
                 case "content_block_delta": {
                     const d = data.delta
                     if (d?.type === "text_delta") { text += d.text; emitDelta(d.text) }
@@ -769,12 +832,36 @@ function makeAnthropicHandler() {
                         const tu = toolUses.find(t => t.index === data.index)
                         if (tu) tu.jsonParts.push(d.partial_json || "")
                     }
+                    // A thinking block streams its text as thinking_delta and then
+                    // ONE signature_delta just before it closes. With display
+                    // "omitted" (the default on Opus 5 / 4.8 / 4.7) the text deltas
+                    // never come and the signature delta is the whole block — so a
+                    // handler that only watches for text sees an empty block and
+                    // silently drops the one field that has to be echoed.
+                    else if (d?.type === "thinking_delta" || d?.type === "signature_delta") {
+                        const tb = thinkBlocks.find(b => b.index === data.index)
+                        if (tb && d.type === "thinking_delta") tb.thinking += d.thinking || ""
+                        else if (tb) tb.signature = d.signature || ""
+                    }
                     break
                 }
-                case "message_delta":
+                case "message_delta": {
                     if (data.delta?.stop_reason) stopReason = data.delta.stop_reason
+                    // Per spec these counts are CUMULATIVE — assign, never add.
                     if (data.usage?.output_tokens) usage.output = data.usage.output_tokens
+                    // How much of the billed output was internal reasoning. Only on
+                    // the final message_delta, and the same `think=` column the
+                    // Gemini lane already logs — without it, thinking spend on this
+                    // lane is invisible exactly like Google's 34% undercount was.
+                    const th = data.usage?.output_tokens_details?.thinking_tokens
+                    if (th != null) usage.thought = th
+                    // Populated ONLY on a refusal. Logged, never branched on: the
+                    // category ("cyber", "bio", …) is the difference between an
+                    // issue report that explains itself and one that guesses.
+                    const cat = data.delta?.stop_details?.category
+                    if (cat) log(`provider refusal category=${cat}`)
                     break
+                }
                 case "error":
                     errorMsg = data.error?.message || "stream error"
                     break
@@ -792,7 +879,14 @@ function makeAnthropicHandler() {
                 }
                 return { id: t.id, name: t.name, input, rawArgs }
             })
-            return { text, toolUses: tus, stopReason, finishReason: stopReason, usage, errorMsg }
+            // Rebuilt in stream order and stripped of our bookkeeping index, so what
+            // goes back on the wire is byte-for-byte what came off it.
+            const thinking = thinkBlocks
+                .sort((a, b) => a.index - b.index)
+                .map(b => b.type === "thinking"
+                    ? { type: "thinking", thinking: b.thinking, signature: b.signature }
+                    : { type: "redacted_thinking", data: b.data })
+            return { text, toolUses: tus, thinking, stopReason, finishReason: stopReason, usage, errorMsg }
         },
     }
 }
@@ -915,7 +1009,12 @@ async function streamCurl(req, onLine) {
         // connection (retryable) apart from a 4xx (auth / bad request — retrying
         // just burns time and money). Drained and stripped below so this marker
         // never leaks into the error the user sees.
-        "-w", "%{stderr}nidara-http:%{http_code}",
+        // `retry-after` rides along the same way: every provider here answers a
+        // rate limit with it, and honouring the number they give beats guessing a
+        // backoff. Digits only when parsed below — the header's other legal form is
+        // an HTTP date (with spaces and commas), which simply won't match and falls
+        // back to the linear backoff rather than being misread.
+        "-w", "%{stderr}nidara-http:%{http_code} nidara-retry:%header{retry-after}",
         "-X", "POST"]
     for (const [k, v] of req.headers) argv.push("-H", `${k}: ${v}`)
     argv.push("--data-binary", "@-", req.url)
@@ -952,12 +1051,14 @@ async function streamCurl(req, onLine) {
     // path reads as a network blip.
     const httpMatch = /nidara-http:(\d+)/.exec(errRaw)
     const httpCode = httpMatch ? parseInt(httpMatch[1], 10) : 0
-    const err = errRaw.replace(/nidara-http:\d+/, "").trim()
+    const retryMatch = /nidara-retry:(\d+)/.exec(errRaw)
+    const retryAfter = retryMatch ? parseInt(retryMatch[1], 10) : 0   // seconds, 0 = absent
+    const err = errRaw.replace(/nidara-http:\d+/, "").replace(/nidara-retry:\S*/, "").trim()
     const exitCode = proc.get_exit_status()
     const ok = proc.get_successful()
     currentCurl = null
-    if (!ok) log(`curl failed: exit=${exitCode} http=${httpCode || "net"} ${err ? `stderr="${truncate(err, 200)}"` : `body=${raw.length}b`}`)
-    return { ok, raw, err, httpCode, exitCode }
+    if (!ok) log(`curl failed: exit=${exitCode} http=${httpCode || "net"}${retryAfter ? ` retry-after=${retryAfter}s` : ""} ${err ? `stderr="${truncate(err, 200)}"` : `body=${raw.length}b`}`)
+    return { ok, raw, err, httpCode, exitCode, retryAfter }
 }
 
 // Read a stream to EOF. Only for pipes of an exited process (see streamCurl).
@@ -1079,22 +1180,40 @@ async function runTurn(userText) {
             // the request has NOT been acted on yet (tools run only after the stream
             // closes) — so a fresh attempt is safe. Two hard limits keep it honest:
             // never retry once any text has been streamed to the UI (a retry would
-            // double-render it), and never retry a 4xx (client error) or a full
-            // timeout (exit 28 — re-running a 120 s hang three times only triples the
-            // wait; a genuine flicker fails fast and gets the retry). Fresh handler
-            // each attempt; only the final attempt's result is used and counted.
-            let handler, ok, raw, err, httpCode, exitCode
+            // double-render it), and never retry a full timeout (exit 28 — re-running
+            // a 120 s hang three times only triples the wait; a genuine flicker fails
+            // fast and gets the retry). Fresh handler each attempt; only the final
+            // attempt's result is used and counted.
+            //
+            // 429 IS RETRYABLE, and leaving it out was a real hole: it is the single
+            // most likely transient failure for someone on a new key or a free tier,
+            // and it arrived as a hard error mid-conversation. Anthropic's own
+            // documented retry set is 408 / 409 / 429 / 5xx plus connection errors,
+            // and the OpenAI-compatible providers use the same codes, so all three
+            // lanes get it from one place. Everything else 4xx (401 bad key, 400 bad
+            // request, 404 wrong model) is still surfaced immediately — retrying a
+            // client error only burns time and money.
+            let handler, ok, raw, err, httpCode, exitCode, retryAfter
             for (let attempt = 1; attempt <= MAX_HTTP_ATTEMPTS; attempt++) {
                 handler = makeHandler()
                 const deltasBefore = deltasEmitted
-                ;({ ok, raw, err, httpCode, exitCode } = await streamCurl(req, (l) => handler.onLine(l)))
+                ;({ ok, raw, err, httpCode, exitCode, retryAfter } = await streamCurl(req, (l) => handler.onLine(l)))
                 if (cancelled) { log(`step ${step}: cancelled by user`); return }
                 if (ok) break
                 const streamed = deltasEmitted > deltasBefore
-                const retryable = !streamed && (httpCode >= 500 || (httpCode === 0 && exitCode !== 28))
-                if (!retryable || attempt === MAX_HTTP_ATTEMPTS) break
-                const backoff = RETRY_BASE_MS * attempt
-                log(`step ${step}: attempt ${attempt}/${MAX_HTTP_ATTEMPTS} failed (http=${httpCode || "net"}) — retrying in ${backoff}ms`)
+                const transient = httpCode >= 500 || httpCode === 429 || httpCode === 408 || httpCode === 409
+                    || (httpCode === 0 && exitCode !== 28)
+                // The provider said how long to wait: obey it, up to the point where
+                // waiting silently is worse than telling the user (see the constant).
+                const waitMs = retryAfter ? retryAfter * 1000 : RETRY_BASE_MS * attempt
+                const retryable = !streamed && transient && waitMs <= RETRY_AFTER_MAX_MS
+                if (!retryable || attempt === MAX_HTTP_ATTEMPTS) {
+                    if (transient && waitMs > RETRY_AFTER_MAX_MS)
+                        log(`step ${step}: not retrying — provider asked for ${retryAfter}s, past the ${RETRY_AFTER_MAX_MS}ms ceiling`)
+                    break
+                }
+                const backoff = waitMs
+                log(`step ${step}: attempt ${attempt}/${MAX_HTTP_ATTEMPTS} failed (http=${httpCode || "net"}${retryAfter ? `, retry-after=${retryAfter}s` : ""}) — retrying in ${backoff}ms`)
                 await sleep(backoff)
                 if (cancelled) { log(`step ${step}: cancelled during retry backoff`); return }
             }
@@ -1125,7 +1244,12 @@ async function runTurn(userText) {
             if (r.errorMsg) { log(`step ${step}: provider error: ${truncate(r.errorMsg, 200)}`); emitError(r.errorMsg); return }
             if (!ok) { emitError(bestError(raw, err)); return }
 
-            history.push({ role: "assistant", text: r.text, toolUses: r.toolUses, thoughtSig: r.thoughtSig })
+            // thoughtSig (Gemini) and thinking (Anthropic) are the same idea by two
+            // wire shapes: opaque reasoning state the provider demands back verbatim.
+            // Each lane's converter reads its own field and ignores the other's, so a
+            // provider switch mid-conversation degrades to "no signature" rather than
+            // sending one provider's blob to another.
+            history.push({ role: "assistant", text: r.text, toolUses: r.toolUses, thoughtSig: r.thoughtSig, thinking: r.thinking })
 
             if (r.stopReason === "tool_use" && r.toolUses.length) {
                 emit({ t: "state", s: "acting" })

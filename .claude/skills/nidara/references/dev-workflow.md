@@ -531,14 +531,62 @@ Runs on `ubuntu-latest` with only `gjs` + `gir1.2-secret-1` (no Arch container).
 quirk worth locking in (the next Gemini-shaped surprise), add a scenario to the mock rather than
 trusting a live session to catch the regression.
 
-**Transient-failure retry (the daemon, `streamCurl`/`runTurn`).** A 5xx or a dropped/refused
-connection is retried up to `MAX_HTTP_ATTEMPTS` with linear backoff, because it is usually a blip
-and tools run only AFTER the stream closes, so nothing was half-applied. Two guards make it safe, and
-both are load-bearing: retry only **before any delta was streamed** (else the reply double-renders —
-`deltasEmitted` is the guard), and never retry a **4xx** (client error) or a **full timeout** (curl
-exit 28 — re-running a 120 s hang thrice just triples the wait). The HTTP status comes back on curl's
-**stderr** via `-w '%{stderr}nidara-http:%{http_code}'` (000 → a network-level failure), kept off the
-SSE stdout stream on purpose. Handler is re-created per attempt (a failed leg may hold partial state).
+**Scenario 3 tests the ANTHROPIC lane with a stub `curl`, not a mock server.** `buildAnthropicReq`
+hardcodes `api.anthropic.com` on purpose — an env-settable base URL would be a place to redirect a
+user's API key — so there is nothing to point at a local socket. A stub `curl` on `PATH` (same trick
+as the stub `ags`) reads the body off stdin, **writes it to disk**, replays a canned Anthropic SSE
+stream, and mirrors the `nidara-http:` marker on stderr. The assertions then run against the captured
+**bytes**: thinking block echoed first and unmodified, signature identical, no `cache_control` on it,
+`tool_use` still present, `tool_result` in the follow-up. That is how a lane with **no key available**
+gets real end-to-end coverage — and it is checkable: remove the echo in `toAnthropicMsg` and the
+scenario fails with `thinking block not echoed first`.
+
+**Transient-failure retry (the daemon, `streamCurl`/`runTurn`).** A 5xx, **429/408/409**, or a
+dropped/refused connection is retried up to `MAX_HTTP_ATTEMPTS`, because it is usually transient and
+tools run only AFTER the stream closes, so nothing was half-applied. **429 was missing until
+2026-07-25** and it is the single most likely transient failure for a user on a new key or a free
+tier — it used to arrive as a hard error mid-conversation. The retryable set matches what the
+providers document (Anthropic: 408/409/429/5xx + connection errors; the OpenAI-compatible endpoints
+use the same codes), so all three lanes share one policy. Guards, all load-bearing: retry only
+**before any delta was streamed** (else the reply double-renders — `deltasEmitted` is the guard);
+never retry any other **4xx** or a **full timeout** (curl exit 28 — re-running a 120 s hang thrice
+just triples the wait); and **honour `retry-after`** when the provider sends it, except past
+`RETRY_AFTER_MAX_MS` (15 s), where sitting silently is worse than showing the provider's own message.
+Status and `retry-after` both come back on curl's **stderr** via
+`-w '%{stderr}nidara-http:%{http_code} nidara-retry:%header{retry-after}'` (000 → network-level
+failure; the header's HTTP-date form simply won't match the digit regex and falls back to linear
+backoff), kept off the SSE stdout stream on purpose. Handler is re-created per attempt (a failed leg
+may hold partial state).
+
+### Re-syncing a wire lane against its provider (the defined procedure)
+
+The three lanes in `bin/nidara-agent` are **our** code speaking someone else's protocol, by choice
+(zero runtime deps). The cost of that choice is exactly one recurring chore: when a provider moves,
+we re-sync. Doing it as a defined pass is the difference between an afternoon and a week — the
+Gemini episode of 2026-07-21 cost three defects in one day because the protocol was inferred from
+error responses instead of read. **Never diagnose a provider by trying things.** The order is:
+
+1. **Read the authoritative source, not the error.** Anthropic → the bundled `claude-api` skill,
+   plus the docs pages with a `.md` suffix for clean markdown (`streaming.md`, `thinking*.md`,
+   `handling-stop-reasons.md`). Gemini → the Interactions **OpenAPI JSON**
+   (`curl -sL https://ai.google.dev/static/api/interactions.openapi.json` + `jq .components.schemas.X`;
+   WebFetch truncates the 331 KB). OpenAI-compat → `openai-python`'s stream accumulation, which is
+   the de-facto spec every compat endpoint is written against.
+2. **Diff six things per lane**, in this order — they are where every bug has been:
+   request shape · stream event/delta **names** · **opaque state the provider demands back verbatim**
+   (thought signatures, thinking blocks — the most expensive class, twice now) · usage field names and
+   whether cached tokens are inside or outside the input count · stop/finish values *and* what the
+   loop keys off · the retryable status set.
+3. **Transcribe, don't adopt.** Port the behaviour into the GJS handler; keep the comment that says
+   which documented rule it implements, so the next reader can re-verify without re-deriving.
+4. **Lock it into `agent-loop`** as a scenario, then prove the scenario earns its place: break the
+   fix on purpose and watch it fail. A test that passes with and without the fix is worse than none.
+5. **Say what is still unknown.** A lane verified against a reference is not a lane verified in
+   production; write that down rather than implying coverage that isn't there.
+
+Symptoms that mean a lane has drifted: follow-up turns come back **empty** (dropped opaque state),
+tool calls **vanish** (keying off a status field instead of presence), a **400 on the second step**
+of a tool turn (rebuilt assistant message), usage that looks too **cheap** (unread sub-buckets).
 
 **CI girs note:** the daemon + `Settings → AI` import `gi://Secret` (libsecret). It's already
 installed (transitive) so `@girs/secret-1.d.ts` exists locally, but if CI typecheck ever complains
