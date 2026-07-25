@@ -75,8 +75,18 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     height come from one CSS rule instead of a constant duplicated per window.
     Geometry: anchored on all four edges with `exclusive_zone = -1`, so the
     surface is EXACTLY the monitor rect regardless of what the bar and dock
-    reserve (anything else and the bar's own 40px reservation would push the
-    surface — and therefore the capsule — off the bar row). Always mapped: the
+    reserve (with zone 0 the bar's own 40px reservation would push the surface —
+    and therefore the capsule — off the bar row).
+    **The layer-shell rule worth memorising, because a wrong guess about it cost
+    real time:** a surface requesting `exclusive_zone > 0` is arranged against
+    the FULL output area; only surfaces asking for **zone 0** get pushed into the
+    remaining usable area; `-1` ignores everything. So the bar (zone 40) and the
+    island (zone -1) are BOTH the full monitor rect, always, whatever the dock
+    reserves — a side dock covers the bar, it never displaces it. Verify with
+    `hyprctl layers -j` against `hyprctl monitors -j`'s `reserved` rather than
+    reasoning from the anchors: on DP-1 that reads `reserved [0,40,0,100]` with
+    `nidara-bar` still at `0 0 2560 1440`. This is also why `syncPanelMargins`
+    dodges a side dock by hand. Always mapped: the
     capsule is permanent furniture, so there is no "closed" state to unmap into.
     It follows the bar out of sight instead — fullscreen hide and lock BOTH have
     to name `nidara-island` explicitly (`lockScreen`/`unlockScreen` in `app.ts`

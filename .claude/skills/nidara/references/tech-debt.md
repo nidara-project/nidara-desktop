@@ -1216,11 +1216,16 @@ What it left behind:
   measurement** — if a GPU-idle regression appears, this is the first suspect, and the fix
   direction is a surface sized to the bar row when collapsed and to the monitor while a mode is
   open (resize on open/close, never per frame).
-- **The capsule is now at the MONITOR centre, not the bar-surface centre.** Identical in every
-  layout except a non-auto-hiding side dock, whose exclusive zone insets the bar. There the capsule
-  (and the island, which shares the axis) will sit slightly off the bar's own centre, and
-  `measureOverflow`'s budget — which assumes the capsule splits the bar evenly — is off by the same
-  amount. Untested with a side dock; low stakes, but that is where to look.
+- ~~The capsule is now at the MONITOR centre, not the bar-surface centre.~~ **RETRACTED the same
+  day — the premise was false.** It assumed a side dock's exclusive zone insets the bar's surface.
+  It does not: layer-shell arranges a surface requesting `exclusive_zone > 0` against the FULL
+  output area, and only surfaces asking for zone 0 are pushed into the remaining usable area. The
+  bar asks for 40. Measured on DP-1: `hyprctl monitors -j` reports `reserved [0,40,0,100]` with a
+  bottom dock, while `hyprctl layers -j` still puts `nidara-bar` at `0 0 2560 1440` — the full
+  monitor. So **the bar and the island are the same rect in every dock configuration**, the capsule
+  does not move, and `measureOverflow`'s budget is unaffected. (The first pass's `sourceOffset`
+  therefore always computed 0 — dead code, correctly deleted with the rest of the bridge.) The
+  misleading claim came from a stale "trade-off" comment in `Bar.tsx`, now corrected in place.
 - **The island is above the DOCK now.** It used to be in the bar's window, which stacks below the
   dock; on OVERLAY it stacks above. An expanded mode tall enough to reach a bottom dock will draw
   over it instead of under. No mode is that tall today.

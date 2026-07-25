@@ -702,8 +702,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // gdk_wayland_surface_configure → gdk_surface_request_layout ~60/s on that 2560×1
   // surface; a content-bearing surface like the bar or dock never storms).
   // Reserving from the bar itself deletes that surface and the storm.
-  // Trade-off: with a side (left/right) dock the bar now respects the dock's
-  // exclusive zone (starts after it) instead of spanning the full width above it.
+  //
+  // A "trade-off" documented here — that the bar would now respect a side dock's
+  // exclusive zone and start after it — WAS WRONG, and cost real time in 2026-07
+  // because it reads plausibly. Layer-shell arranges a surface requesting
+  // `exclusive_zone > 0` against the FULL output area; only surfaces asking for
+  // zone 0 get pushed into the remaining usable area. The bar asks for 40, so it
+  // spans the whole monitor no matter what anyone else reserves. Measured:
+  // `hyprctl monitors -j` reports reserved [0,40,0,100] with a bottom dock while
+  // `hyprctl layers -j` still puts nidara-bar at 0 0 2560 1440. That is also why
+  // syncPanelMargins has to dodge a side dock by hand a few lines up — the dock
+  // covers the bar, it does not displace it.
 
   try {
     Gtk4LayerShell.init_for_window(win)
