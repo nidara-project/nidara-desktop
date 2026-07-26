@@ -705,6 +705,65 @@ symlink, that's the bug — make it a real dir.
 - **GOTCHA — sourcing order:** uwsm **sources** `~/.config/uwsm/env` as a shell, and it does so AFTER the launcher's own exports, so the env file WINS on any conflicting var. (A stale `QT_QPA_PLATFORMTHEME=qt6ct` in the env file was silently overriding the launcher's `xdgdesktopportal` — fixed in `defaults/uwsm/env` + an idempotent migration in install.sh.) Because it's sourced, values with shell metachars must be quoted: `export QT_QPA_PLATFORM="wayland;xcb"` (a bare `;` truncates the var and runs `xcb` as a command).
 - **NVIDIA autodetect:** `install.sh` detects NVIDIA hardware + active driver (`lspci` + `lsmod`) and uncomments the GPU env vars in `~/.config/uwsm/env` ONLY for the proprietary/open driver (never nouveau — those `nvidia-drm`/GBM vars break a nouveau/mesa session). It warns (never auto-edits boot) if `nvidia_drm modeset` is off, and informs on hybrid graphics. AMD/Intel need nothing.
 
+### The login keyring — why it must be PAM's daemon, not systemd's
+
+**Symptom when this breaks:** the session comes up fine, then the first thing that wants a secret
+(browser, the built-in Assistant, git) prompts for a keyring password the user already typed at
+login. Settings → AI still shows a key saved, because the key IS there — the keyring holding it is
+locked. The fix is NOT to store the key somewhere else.
+
+The unlock is a two-part handshake, and Arch ships a third party that breaks it by default:
+
+1. `pam_gnome_keyring` (wired into `/etc/pam.d/greetd` by `nidara-setup`) starts
+   `gnome-keyring-daemon --login --daemonize` holding the login password. Per the man page,
+   `--login` "does not complete actual initialization" — the daemon parks, waiting.
+2. `hyprland.lua` runs `gnome-keyring-daemon --start --components=secrets`, the documented
+   completion step. **The unlock happens here, not in step 1.** Treating that line as boilerplate
+   and dropping it leaves a session whose secrets nobody can read.
+3. But before parking, the `--login` daemon probes `$XDG_RUNTIME_DIR/keyring/control` to check
+   whether a daemon is already running — and on Arch that exact path is the `ListenStream` of
+   `gnome-keyring-daemon.socket`, **enabled by preset**. The probe is what starts the rival
+   daemon, so discovery always succeeds: the PAM daemon logs `discover_other_daemon: 1`, prints
+   its environment and exits *before* reaching `gkd_login_unlock()` (that call lives only on the
+   initialize path in upstream `daemon/gkd-main.c`). The socket-activated daemon that survives
+   never saw the password. On first login it is worse than a failed unlock: no `login.keyring` is
+   created at all, so the user gets a *create-a-keyring* dialog whose password is then whatever
+   they typed — and PAM can never open it again.
+
+So `nidara-setup` **masks** `gnome-keyring-daemon.socket` for the user. Without `--now`: the
+running daemon keeps serving the current session and the change lands at next login.
+
+**It has to be `mask`, not `disable`** — the trap that eats an afternoon. The socket is routinely
+enabled in *global* scope (`/etc/systemd/user/sockets.target.wants/`), and against that a
+`systemctl --user disable` is a silent no-op: it reports success, `list-unit-files` still says
+`enabled`, and the socket starts anyway. systemd does warn ("enabled in global scope … will still
+be started automatically"), which is easy to scroll past. Mask wins in user scope and also survives
+`systemctl --user preset-all` (the Arch preset for it is `enabled`). Mask the **socket only**: the
+`.service` is only reachable through it, and masking that too would break other desktops sharing
+the account that start it deliberately.
+
+**This cannot leave a session without a Secret Service**, which is the objection to check before
+touching it: `--start` starts a daemon when it finds none (that is exactly what
+`/etc/xdg/autostart/gnome-keyring-secrets.desktop` does), and `org.freedesktop.secrets` stays
+D-Bus activatable underneath. The only thing removed is the racer.
+
+Verifying is a **logout/login**, not a reload — nothing about this path is reachable from
+`Super+Shift+R`, and the CI smoke does not cover it (the headless boot has no PAM login). Read it
+back from the journal of the new session:
+
+```bash
+journalctl -b --since "-5 min" | grep -iE "keyring|discover_other_daemon"
+# healthy:  no discover_other_daemon line; the daemon that runs is the PAM one
+# broken:   "discover_other_daemon: 1" + systemd "Started GNOME Keyring daemon."
+ls -l ~/.local/share/keyrings/login.keyring   # must exist, born at the login minute
+busctl --user call org.freedesktop.secrets /org/freedesktop/secrets \
+  org.freedesktop.DBus.Properties Get ss org.freedesktop.Secret.Service Collections
+```
+
+A `login.keyring` whose birth time is *later* than the session's start was created by a prompt
+dialog, not by PAM — its password is not the login password and PAM will never open it. Move it
+aside and let the next login recreate it.
+
 ## Default keybindings (from `hyprland.lua`)
 
 | Keys | Action |

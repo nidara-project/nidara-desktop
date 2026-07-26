@@ -242,10 +242,15 @@ hl.on("hyprland.start", function()
     hl.exec_cmd([==[sh -c 'i=0; while [ $i -lt 30 ]; do q=$(awww query 2>/dev/null); t=$(printf "%s\n" "$q" | grep -c .); d=$(printf "%s\n" "$q" | grep -c "image:"); [ "$t" -gt 0 ] && [ "$t" = "$d" ] && break; i=$((i+1)); sleep 0.1; done; awww img "$1" --transition-type none || awww img "$2" --transition-type none' nidara-wallpaper ]==]
         .. shquote(resolveWallpaper()) .. " " .. shquote(DEFAULT_WALLPAPER))
     hl.exec_cmd("uwsm app -s b -- /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1")
-    -- GNOME keyring, secrets component only: PAM already started+unlocked it at login
-    -- (nidara-setup wires pam_gnome_keyring into greetd); this picks up that daemon so
-    -- the session offers org.freedesktop.secrets — the built-in Assistant's API key
-    -- plus git/VS Code/browser credentials. Secrets only (no ssh/gpg agent takeover).
+    -- GNOME keyring, secrets component only. PAM started the daemon at login holding
+    -- the login password (nidara-setup wires pam_gnome_keyring into greetd) but left it
+    -- deliberately uninitialized: THIS line is the `--start` it has been waiting for, and
+    -- completing initialization is what unlocks the login keyring. It is not a formality —
+    -- skip it and the session has secrets nobody can read. The other half of the deal is
+    -- in nidara-setup: gnome-keyring-daemon.socket must stay disabled, or it wins the race
+    -- for $XDG_RUNTIME_DIR/keyring/control and the PAM daemon exits with the password.
+    -- Result: org.freedesktop.secrets for the built-in Assistant's API key plus git/VS
+    -- Code/browser credentials. Secrets only (no ssh/gpg agent takeover).
     hl.exec_cmd("uwsm app -s b -- gnome-keyring-daemon --start --components=secrets")
     hl.exec_cmd("uwsm app -s b -- hypridle")
     hl.exec_cmd("uwsm app -s b -- wl-paste --watch cliphist store")

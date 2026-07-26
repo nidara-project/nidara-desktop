@@ -304,7 +304,11 @@ with zero changes here (`run_action` is a passthrough — 100% coverage, exactly
   read back by the daemon (`Secret.password_lookup_sync`). All keyring calls are **fail-soft**: a
   session with no Secret Service yet just proceeds keyless (fine for Ollama; an auth error for
   Anthropic). The keyring is unlocked at login via PAM (`pam_gnome_keyring` in `/etc/pam.d/greetd`,
-  wired by `nidara-setup`) and its secrets component is launched from `hyprland.lua`.
+  wired by `nidara-setup`), and `hyprland.lua`'s `gnome-keyring-daemon --start` is what completes
+  that daemon's initialization — the unlock does NOT happen without it. Both halves depend on
+  `gnome-keyring-daemon.socket` being disabled; if you ever see the Assistant report no key on a
+  session where Settings → AI shows one saved, that is the symptom — read "The login keyring"
+  in `dev-workflow.md` before touching anything else.
 - **Token accounting has three rules, each learned from getting it wrong (2026-07-21).**
   (1) **`done` carries the turn's cost and lives in the `finally`** — it used to sit on the success
   path, so the expensive failures (a 25k-token turn that hit the step cap) reported *zero*. Usage is

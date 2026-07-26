@@ -558,6 +558,37 @@ user_systemctl disable nidara.service 2>/dev/null || true
 echo "  Enabling audio services..."
 user_systemctl enable --now wireplumber pipewire pipewire-pulse 2>/dev/null || true
 
+# ── GNOME keyring: let PAM own the daemon ─────────────────────────────────────
+# Without this the login keyring is NEVER unlocked, and the first thing to want a
+# secret (browser, Assistant) prompts for a password the user already typed at login.
+#
+# pam_gnome_keyring starts `gnome-keyring-daemon --login --daemonize` holding the
+# login password; that daemon deliberately does not finish initializing, waiting for
+# the session's `--start` (hyprland.lua) to complete it. But first it probes
+# $XDG_RUNTIME_DIR/keyring/control to check whether a daemon is already running — and
+# on Arch that exact path is gnome-keyring-daemon.socket, enabled by preset. Probing
+# it IS what starts the rival daemon, so discovery always "succeeds": the PAM daemon
+# logs `discover_other_daemon: 1`, prints its environment and exits WITHOUT reaching
+# gkd_login_unlock(). The socket-activated daemon that survives never saw the
+# password, so the keyring stays locked (and is never created on first login).
+#
+# Taking the socket out leaves the PAM daemon alone, which is the flow hyprland.lua's
+# `--start` was written for. It cannot leave a session without a Secret Service:
+# `--start` starts a daemon when it finds none (that is what /etc/xdg/autostart uses),
+# and org.freedesktop.secrets stays D-Bus activatable on top of that (its .service file
+# has a plain Exec=, no SystemdService=, so masking the unit does not reach it).
+#
+# It must be `mask`, not `disable`: the socket is commonly enabled in GLOBAL scope
+# (/etc/systemd/user/sockets.target.wants/), where a user-scope disable is a silent
+# no-op — systemd even says so and starts it anyway. Mask wins in user scope, and it
+# also survives `systemctl --user preset-all` (the Arch preset is `enabled`). Only the
+# socket: the .service is reachable only through it, and masking that too would break
+# other desktops on the same account that start it deliberately. No `--now` — the
+# running daemon keeps serving this session and the change lands at the next login.
+# To undo: systemctl --user unmask gnome-keyring-daemon.socket
+echo "  Letting PAM own the GNOME keyring daemon (login keyring auto-unlock)..."
+user_systemctl mask gnome-keyring-daemon.socket 2>/dev/null || true
+
 if [ -z "$USER_ONLY" ]; then
 # ── Power profiles (system — skipped by --user) ───────────────────────────────
 # Game mode toggles performance/balanced via powerprofilesctl (hyprland.lua).
