@@ -207,13 +207,18 @@ Measured on the Hyprland event socket (2026-07-26, one open/close of the island'
   6.79  MARK   hyprctl activewindow = [kitty]     # …while the window is still right there
 ```
 
-Releasing an EXCLUSIVE keyboard grab makes Hyprland announce that nothing is focused, and **no event
-ever restores it**. So AstalHyprland's `focused_client` goes null and stays null after every island
-mode with `needsKeyboard` (overview, assistant), every Prism dismissal and every app-grid close. The
-one thing that heals it is an *unrelated* re-emission — Hyprland re-sends `activewindow>>class,title`
-when the focused window's **title** changes — which is why a terminal with a spinner recovers by
-itself within a second and an idle browser stays "unfocused" indefinitely. That intermittency is what
-makes this look like a rendering bug instead of a state bug.
+Releasing an EXCLUSIVE keyboard grab makes Hyprland announce that nothing is focused. Whether a
+restoring `activewindow>><class,title>` follows is **not guaranteed**: it depends on Hyprland's
+`refocusLastWindow()` succeeding, which needs an eligible last window still on the visible workspace
+and no keyboard-focusable layer under the cursor. When it does follow it lands within a millisecond
+(that is the normal case since the `ON_DEMAND` fix below); when it does not, AstalHyprland's
+`focused_client` goes null and **stays** null. The one thing that heals it then is an *unrelated*
+re-emission — Hyprland re-sends `activewindow>>class,title` when the focused window's **title**
+changes — which is why a terminal with a spinner recovers by itself within a second and an idle
+browser stays "unfocused" indefinitely. That intermittency is what makes this look like a rendering
+bug instead of a state bug. The trace above was captured while the dock still rested in `ON_DEMAND`,
+which suppressed the restore entirely; the reconciliation stays regardless, because the null is
+always emitted first and the restore is only usual, not certain.
 
 It is never only a cosmetic bug, because *everything* asks who is focused: the bar's title capsule
 falls back to the workspace name, `WindowMenu` finds no window to act on, `DockItem` loses its focus
@@ -263,10 +268,27 @@ that switches workspace *while closing* must use it; `focusWorkspace` is for sur
 
 ### How to find out who holds the keyboard: `dumpState.keyboardFocus`
 
-The compositor will not tell you, and three dead ends prove it (2026-07-26): `hyprctl activewindow`
-reports the focused **window**, which stays put while a layer surface holds the keys; `hyprctl layers`
-does not expose keyboard interactivity at all; and Hyprland's own log carries no focus lines (checked
-on a 55 MB `hyprland.log` — zero matches for "focus"; it is all aquamarine backend spam).
+Two of the obvious routes are dead ends (2026-07-26): `hyprctl activewindow` reports the focused
+**window**, which stays put while a layer surface holds the keys, and `hyprctl layers` does not expose
+keyboard interactivity at all. The third — Hyprland's own log — is **not** a dead end, contrary to an
+earlier note here: the log looks empty of focus lines only because Hyprland's core logging is off by
+default (`debug:disable_logs` defaults to true; everything you see in `hyprland.log` is aquamarine
+backend spam, which logs separately). Turning it on is worth doing before theorising about focus, and
+there is one catch:
+
+```lua
+-- ~/.config/nidara/hyprland-user.lua  (temporary, remove afterwards)
+hl.config({ debug = { disable_logs = false } })
+```
+
+```bash
+hyprctl reload                 # REQUIRED: the logger re-reads the flag only on a config reload,
+                               # so `hyprctl eval` alone sets the value and changes nothing
+hyprctl rollinglog -f          # then every focus change is announced:
+# DEBUG ]: Set keyboard focus to surface 0x…, with [Window 0x…: title: "…"]
+```
+
+Pair it with the event socket (`activewindow>>,` = the drop) and you can read the whole handover.
 
 Our side does know, because GDK marks a toplevel active when the compositor sends it
 `wl_keyboard.enter`. `dumpState.keyboardFocus` reports that per shell window:
@@ -287,29 +309,51 @@ up, `null` when a surface is holding the keyboard for nothing. **No surface acti
 means either the user's window has the keys or nobody does. Disambiguate with the event socket — the
 drop is announced as `activewindow>>,`.
 
-What this instrument found, and what to keep in mind when touching keyboard modes:
-
-| moment | who holds the keyboard |
-|---|---|
-| at rest, just after a shell reload | **`nidara-dock`**, no focus widget |
-| overview open | `nidara-island` |
-| overview closed | **nobody** |
-| app grid open | `nidara-dock` |
-| app grid closed | **`nidara-dock`, still** |
-| Prism open | `nidara-bar` (`GtkText.prism-search-entry`) |
-| Prism closed | **nobody** |
-
-Two distinct faults, and neither is cosmetic — in both the user's window stops receiving keys until
-pointer motion re-triggers focus-follows-mouse. A surface resting in `ON_DEMAND` (the dock) simply
-**keeps** the keyboard; a surface resting in `NONE` (island, bar) leaves it **nowhere**. Note in
-particular that `ON_DEMAND` does *not* hand focus back to the window — that was a wrong guess, and
-this table is what disproved it.
-
 Repairs ruled out by measurement, so nobody re-tries them: `focusWindow` on the still-active window
 (Hyprland no-ops it — the dispatch emits nothing), `focus({ monitor })` (no effect),
 `focus({ last })` (works, but focuses a *different* window and can change workspace), and
 `cursor.move` nudges (warping the pointer generates no libinput motion, so focus-follows-mouse never
 fires — which is why moving the mouse *by hand* cures it and a synthetic move does not).
+
+### THE RULE: a shell surface rests in `NONE`, never in `ON_DEMAND`
+
+`ON_DEMAND` reads like "available but idle". It is not, and taking it literally cost a long hunt for a
+bug that looked like four different bugs (2026-07-26). Both halves are in Hyprland's
+`src/desktop/view/LayerSurface.cpp` — read them, don't reason from the protocol wording:
+
+- **`onMap`** grabs the seat for *any* interactivity other than `NONE`
+  (`GRABSFOCUS = ISEXCLUSIVE || interactivity != NONE`). A surface that maps `ON_DEMAND` takes the
+  keyboard **immediately**, so every shell reload left the dock holding it with `focusWidget: null` —
+  keys went nowhere until the user moved the mouse.
+- **`onCommit`** treats the two ways down from `EXCLUSIVE` completely differently:
+  `EXCLUSIVE → NONE` runs `rawSurfaceFocus(nullptr)` **and `refocusLastWindow()`**, which hands the
+  keyboard back to the last window; `EXCLUSIVE → ON_DEMAND` only calls `simulateMouseMovement()` — a
+  no-op when the pointer has not actually moved. So closing the app grid left the dock holding the
+  keyboard, and *that* was the "poisoning" that made every other surface look broken afterwards.
+
+`ON_DEMAND` is legitimate in exactly one shape: **transiently, on a surface that already holds the
+keyboard**, because a `Gtk.Popover` cannot take focus from under an `EXCLUSIVE` grab (the app grid's
+context menu). It drops to `ON_DEMAND` for the life of the popover and climbs back to `EXCLUSIVE`. It
+is never a resting mode.
+
+With every surface resting in `NONE`, the release is clean and measurable — `activewindow>>,`
+followed by `activewindow>><the window>` inside 1 ms, on all three grabbing surfaces (bar/Prism,
+island/overview+assistant, dock/app grid). `dumpState.keyboardFocus` shows `{}` at rest, and a `{}`
+there now means the user's window has the keys, not that they are lost.
+
+**The trap on the way out, and why the previous attempt was abandoned.** Fixing the keyboard exposed a
+latent input-region bug that had been masked by it: the dock's layer surface is the size of the whole
+screen (`0 0 2560 1440` — it hosts the fullscreen app grid) and sits on `TOP` above the bar, so while
+the app grid is open its input region is stamped over everything. `DockAxis.buildInputRegion` dedupes
+by a shape key, and the open path used to call `set_input_region(null)` **directly**, bypassing that
+cache — so the key still described the *resting* region. On close, `buildInputRegion` recomputed the
+same resting key, matched the stale cache and **skipped the restore**, leaving a full-screen surface
+eating every click on the screen; only the island, on `OVERLAY`, still got any (which is exactly how
+the symptom reads: "the bar capsules are dead, but the Activity Island works"). It self-healed on dock
+hover, because magnification changes the key. What hid it before was the compositor's
+`simulateMouseMovement()` on the `EXCLUSIVE → ON_DEMAND` release: the fake motion re-entered the dock
+and changed the key for us. **Rule: never call `set_input_region` behind a dedupe cache's back** — go
+through the function that owns the key.
 
 ### The agent config surface: `describeConfig` / `getConfig` / `setConfig`
 
@@ -795,4 +839,4 @@ If you find yourself making a new overlay its own window, stop and ask why. The 
 
 If you add another state change that both resizes an overlay and relies on per-widget region rects, follow the same recipe.
 
-**Keyboard focus for a keyboard-driven overlay → `EXCLUSIVE`, not `ON_DEMAND`.** Because the overlays share the Bar's single layer-shell window, keyboard focus is a *window-level* concern: `Bar.tsx` calls `Gtk4LayerShell.set_keyboard_mode(win, …)` via a shared `syncKeyboardMode()` helper on the relevant overlay's `notify`. Click-only overlays (CC/NC/SystemMenu) need no keyboard, so they never set a mode. Two overlays DO need it: **Prism** (text input) and the **Activity Island** when its open mode declares `needsKeyboard` (the overview does: arrow-key workspace nav) — `syncKeyboardMode()` grants `EXCLUSIVE` while either holds (`prism_open || island.needsKeyboard()`) and returns to `NONE` otherwise. The Overview owns no text field: it exposes `onOpen()`/`handleKey()` on its widget, `ActivityIsland` routes them per-mode, and `Bar.tsx` adds a CAPTURE-phase `Gtk.EventControllerKey` on `win` that forwards keys to `island.handleKey` while `island_mode` is set (←/→ move a `.keyboard-focus` cursor, Enter switches + closes, Esc closes) — the exact pattern the app grid uses on the dock window. A search/text overlay (Prism) **must** open with `EXCLUSIVE` and return to `NONE` on close — under `ON_DEMAND` **Hyprland withholds keyboard focus from the layer surface until the pointer enters or clicks it**, so the search caret won't blink and you literally can't type until you move the mouse. `EXCLUSIVE` makes the compositor grant focus the instant the surface opens (a widget-side `entry.grab_focus()` alone is not enough — the toplevel must be compositor-active for the caret to render). The app grid (its own window) does the same: `EXCLUSIVE` while open, dropping to `ON_DEMAND` **only** when a `Gtk.Popover` context menu needs to take keyboard focus (an EXCLUSIVE layer won't let a child popover grab it); Prism has no popover, so it stays `EXCLUSIVE` throughout. When adding a new overlay with a text field, wire the same EXCLUSIVE↔NONE toggle.
+**Keyboard focus for a keyboard-driven overlay → `EXCLUSIVE`, not `ON_DEMAND`.** Because the overlays share the Bar's single layer-shell window, keyboard focus is a *window-level* concern: `Bar.tsx` calls `Gtk4LayerShell.set_keyboard_mode(win, …)` via a shared `syncKeyboardMode()` helper on the relevant overlay's `notify`. Click-only overlays (CC/NC/SystemMenu) need no keyboard, so they never set a mode. Two overlays DO need it: **Prism** (text input) and the **Activity Island** when its open mode declares `needsKeyboard` (the overview does: arrow-key workspace nav) — `syncKeyboardMode()` grants `EXCLUSIVE` while either holds (`prism_open || island.needsKeyboard()`) and returns to `NONE` otherwise. The Overview owns no text field: it exposes `onOpen()`/`handleKey()` on its widget, `ActivityIsland` routes them per-mode, and `Bar.tsx` adds a CAPTURE-phase `Gtk.EventControllerKey` on `win` that forwards keys to `island.handleKey` while `island_mode` is set (←/→ move a `.keyboard-focus` cursor, Enter switches + closes, Esc closes) — the exact pattern the app grid uses on the dock window. A search/text overlay (Prism) **must** open with `EXCLUSIVE` and return to `NONE` on close — under `ON_DEMAND` **Hyprland withholds keyboard focus from the layer surface until the pointer enters or clicks it**, so the search caret won't blink and you literally can't type until you move the mouse. `EXCLUSIVE` makes the compositor grant focus the instant the surface opens (a widget-side `entry.grab_focus()` alone is not enough — the toplevel must be compositor-active for the caret to render). The app grid (its own window) does the same: `EXCLUSIVE` while open, dropping to `ON_DEMAND` **only** when a `Gtk.Popover` context menu needs to take keyboard focus (an EXCLUSIVE layer won't let a child popover grab it); Prism has no popover, so it stays `EXCLUSIVE` throughout. When adding a new overlay with a text field, wire the same EXCLUSIVE↔NONE toggle — and note that the *resting* end of that toggle is `NONE` and nothing else: see "THE RULE: a shell surface rests in `NONE`, never in `ON_DEMAND`" above for what `ON_DEMAND` actually does to the seat.

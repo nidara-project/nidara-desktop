@@ -980,7 +980,15 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         try {
             Gtk4LayerShell.set_namespace(win, "nidara-dock")
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
-            Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+            // NONE at rest, never ON_DEMAND — the dock has no keyboard job of its
+            // own (its key controller returns early unless the app grid is open).
+            // ON_DEMAND is not "available but inactive": Hyprland grabs the seat
+            // for ANY interactivity != NONE the moment the surface maps
+            // (LayerSurface.cpp onMap → GRABSFOCUS), so every shell reload left
+            // the dock holding the keyboard with no focus widget — keys went
+            // nowhere until the user moved the mouse. See closeAppGridPanel for
+            // the release half of the same rule.
+            Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
 
             axis.setupAnchors(win)
 
@@ -1212,6 +1220,10 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
     // ── Embedded AppGrid panel ────────────────────────────────────────────────
     const appGrid = AppGridPanel(gdkmonitor, () => closeAppGridPanel())
 
+    // Only used WHILE the grid is open: a Gtk.Popover context menu can't take
+    // focus under an EXCLUSIVE grab, so the grid drops to ON_DEMAND for the life
+    // of the popover and climbs back to EXCLUSIVE when it closes. ON_DEMAND is
+    // deliberately confined to that window — it is never the resting mode.
     appGrid.setKeyboardModeCallback(
         () => { if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE) },
         () => { if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND) }
@@ -1238,8 +1250,14 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         // launching icon (magnified), and motion is ignored while the panel is open, so
         // they'd otherwise stay frozen mid-bulge. Same as launching any app.
         updateAllTargets(-1000)
-        const surface = win.get_native()?.get_surface()
-        if (surface) surface.set_input_region(null)
+        // Go through buildInputRegion (which stamps the whole surface while the
+        // panel is open) instead of calling set_input_region directly: the axis
+        // dedupes by a shape key, and a direct call leaves that key describing the
+        // RESTING region while the surface actually accepts input everywhere. The
+        // close path then recomputes the same resting key, matches the stale cache
+        // and skips the restore — leaving this 2560x1440 TOP surface swallowing
+        // every click on screen (only the island, on OVERLAY, still got them).
+        axis.buildInputRegion(win, smoothedBarMain, revealState())
         if (!isRevealed) {
             setRevealed(true)
             runUnifiedTick(true)
@@ -1256,7 +1274,14 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         win.set_focus_visible(false)
         if (layerShellReady) {
             Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.TOP)
-            Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND)
+            // Back to NONE, not ON_DEMAND: dropping EXCLUSIVE→NONE is the only
+            // transition where Hyprland hands the keyboard back (LayerSurface.cpp
+            // onCommit → rawSurfaceFocus(nullptr) + refocusLastWindow). The
+            // EXCLUSIVE→ON_DEMAND branch next to it only replays a mouse motion,
+            // which is a no-op when the pointer hasn't actually moved — so the
+            // dock kept the seat's keyboard focus after every app-grid close and
+            // nothing but real pointer movement recovered it.
+            Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.NONE)
             axis.setExclusiveZone(win, (isRevealed && !dockSettings.autoHide) ? DOCK_CONSTANTS.EXCLUSIVE_ZONE : 0)
         }
         if (fullscreenMode && !cursorInDock) {
