@@ -59,6 +59,17 @@ export default function WorkspaceOverview() {
     // CAPTURE-phase key controller owns navigation the same way Prism does.
     let navIdx = -1
 
+    // Closing the overview gives up the island's EXCLUSIVE keyboard grab, and Hyprland
+    // answers a grab release by refocusing the last window — which, on an EMPTY target,
+    // drags the workspace back and silently undoes the switch the user just made. The
+    // release is double-buffered and lands ~12 ms late, so no ordering here can win the
+    // race; `focusWorkspaceOnGrabRelease` waits for the compositor to announce it. The
+    // full measurement (and why the obvious fix does not work) is on that method.
+    const switchToWorkspace = (id: number) => {
+        status.island_mode = ""
+        hs.focusWorkspaceOnGrabRelease(id)
+    }
+
     // Each card carries the SAME state dot as the bar capsule (shared
     // makeWorkspaceDot, identical CSS): the morph's traveling ghosts land
     // exactly on these — the capsule's dot row fans out into the card headers.
@@ -91,10 +102,7 @@ export default function WorkspaceOverview() {
 
         const btn = new Gtk.Button({ child: itemBox, css_classes: ["wo-btn"] })
         btn.set_focus_on_click(false)
-        btn.connect("clicked", () => {
-            hs.focusWorkspace(i)
-            status.island_mode = ""
-        })
+        btn.connect("clicked", () => switchToWorkspace(i))
 
         slots.set(i, { itemBox, label, count, schematic: schematic.sync })
         const col = (i - 1) % WS_COUNT
@@ -166,7 +174,7 @@ export default function WorkspaceOverview() {
         if (keyval === Gdk.KEY_Left)  { if (navIdx > 1)        { navIdx--; refreshKbFocus() } return true }
         if (keyval === Gdk.KEY_Right) { if (navIdx < WS_COUNT) { navIdx++; refreshKbFocus() } return true }
         if (keyval === Gdk.KEY_Return || keyval === Gdk.KEY_KP_Enter) {
-            if (navIdx >= 1) { hs.focusWorkspace(navIdx); status.island_mode = "" }
+            if (navIdx >= 1) switchToWorkspace(navIdx)
             return true
         }
         // 1..5 (top row or keypad) jump straight to that workspace — same muscle
@@ -174,7 +182,7 @@ export default function WorkspaceOverview() {
         const digit = keyval >= Gdk.KEY_1 && keyval < Gdk.KEY_1 + WS_COUNT ? keyval - Gdk.KEY_0
                     : keyval >= Gdk.KEY_KP_1 && keyval < Gdk.KEY_KP_1 + WS_COUNT ? keyval - Gdk.KEY_KP_0
                     : 0
-        if (digit) { hs.focusWorkspace(digit); status.island_mode = ""; return true }
+        if (digit) { switchToWorkspace(digit); return true }
         return false
     }
 

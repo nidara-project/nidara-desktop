@@ -231,6 +231,36 @@ still open, **and still on the focused workspace**. Two consequences worth keepi
 The rule this encodes, and the one to preserve if you touch `getWordmark`: **the workspace name is the
 fallback for an empty workspace, not for "the compositor went quiet".**
 
+#### The same release also UNDOES a workspace switch — and you cannot win that race by ordering
+
+Hyprland does not merely announce the null: it **refocuses the last window**, and focusing a window
+that lives on another workspace *takes the workspace with it*. So a surface that switches workspace
+and closes in the same gesture — the overview does exactly that — can put the user on an empty
+workspace and have the compositor yank them back a few milliseconds later. Only empty targets are
+affected: with a window of its own on the target, the refocus lands there and nothing moves. It read
+as "sometimes", which is what a race always reads as.
+
+**The obvious fix does not work, so do not re-try it.** Releasing the grab first and dispatching
+second changes nothing, because *asking* for the release is not performing it: layer-shell keyboard
+interactivity is **double-buffered state**, applied only on the surface's next commit. Measured with
+`scripts/dev/hypr-trace.py` against the shell's own log (2026-07-26):
+
+```
+t+0 ms    [shell]  set_keyboard_mode(NONE) requested, hyprctl dispatch spawned
+t+8 ms    [hypr]   workspace>>5      ← a whole SUBPROCESS lands first
+t+12 ms   [hypr]   activewindow>>,   ← our Wayland state only reaches the compositor now
+t+12 ms   [hypr]   workspace>>1      ← …and takes the workspace back with it
+```
+
+A `hyprctl` subprocess beats our own surface state by ~4 ms. Reordering the two calls left the bug at
+12 failures in 21 attempts; an idle tick between them changed nothing either.
+
+What works is waiting for the compositor to **announce** the release — that announcement is the same
+`activewindow` null above — which is what `HyprlandState.focusWorkspaceOnGrabRelease(id)` does, with
+an 80 ms fallback for the case where nothing was focused and no announcement is coming. Any surface
+that switches workspace *while closing* must use it; `focusWorkspace` is for surfaces that stay open
+(the app grid switches workspaces without releasing its grab, so it is unaffected).
+
 ### How to find out who holds the keyboard: `dumpState.keyboardFocus`
 
 The compositor will not tell you, and three dead ends prove it (2026-07-26): `hyprctl activewindow`

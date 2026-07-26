@@ -2,6 +2,7 @@ import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import AstalHyprland from "gi://AstalHyprland"
 import { execAsync, exec } from "ags/process"
+import { safeDisconnect } from "./signals"
 
 // Tracked IPC event names that require a full state refresh
 const TRACKED_EVENTS = [
@@ -334,6 +335,50 @@ class HyprlandStateClass extends GObject.Object {
 
     focusWorkspace(id: number) {
         return this._dispatch(`hl.dsp.focus({ workspace = ${id} })`)
+    }
+
+    /** Switch workspace from a surface that is CLOSING — i.e. one that is giving up
+     *  an EXCLUSIVE keyboard grab in the same gesture (the island's overview, and
+     *  anything that copies it). Plain `focusWorkspace` silently loses that race.
+     *
+     *  Releasing a grab makes Hyprland refocus the last window, and focusing a window
+     *  that lives on another workspace DRAGS THE WORKSPACE BACK — so the user clicks
+     *  an empty workspace, lands on it, and is yanked to where they came from. It only
+     *  bites empty targets: with a window of its own on the target, the refocus lands
+     *  there and nothing moves.
+     *
+     *  Asking for the release is not performing it. Layer-shell keyboard interactivity
+     *  is DOUBLE-BUFFERED: the compositor applies it on the surface's next commit.
+     *  Measured on the event socket against the shell's own log (2026-07-26):
+     *
+     *      t+0 ms   set_keyboard_mode(NONE) requested, dispatch spawned
+     *      t+8 ms   workspace>>5      the hyprctl subprocess already landed
+     *      t+12 ms  activewindow>>,   the release only NOW reaches the compositor
+     *      t+12 ms  workspace>>1      …and takes the workspace with it
+     *
+     *  So a subprocess spawn beats our own Wayland state by ~4 ms and reordering the
+     *  two calls cannot help (tried, measured, still 12/21 failures). Wait for the
+     *  compositor to ANNOUNCE the release instead — that announcement is the
+     *  `activewindow` null this class already reconciles (see `focusedClient`). */
+    focusWorkspaceOnGrabRelease(id: number) {
+        let done = false
+        let handler = 0
+        let timer = 0
+        const go = () => {
+            if (done) return
+            done = true
+            safeDisconnect(this.hl, handler)
+            if (timer) { GLib.source_remove(timer); timer = 0 }
+            this.focusWorkspace(id)
+        }
+        handler = this.hl.connect("event", (_h: any, name: string) => {
+            if (name === "activewindow") go()
+        })
+        // Fallback for "no announcement is coming" — nothing was focused to lose, so
+        // the release passes in silence (leaving an empty workspace for another one).
+        // Not a tuning knob: the measured window is 12-15 ms, this is 5× that, and
+        // firing early is merely the old behaviour, never worse.
+        timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => { timer = 0; go(); return GLib.SOURCE_REMOVE })
     }
 
     /** Switch workspace by a Hyprland workspace STRING — relative ("e+1"/"e-1",
