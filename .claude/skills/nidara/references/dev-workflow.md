@@ -761,15 +761,33 @@ nothing about this path is reachable from `Super+Shift+R`, and the CI smoke does
 headless boot has no PAM login). Read it back from the journal of the new session:
 
 ```bash
-journalctl -b --since "-5 min" | grep -iE "keyring|discover_other_daemon"
-# healthy:  no discover_other_daemon line; the daemon that runs is the PAM one
-# broken:   "discover_other_daemon: 1" + systemd "Started GNOME Keyring daemon."
-ls -l ~/.local/share/keyrings/login.keyring   # must exist, born at the login minute
-systemctl --user status gnome-keyring-daemon.service   # must be dead — a running one IS the rival
 gdbus call --session -d org.freedesktop.secrets -o /org/freedesktop/secrets/collection/login \
   -m org.freedesktop.DBus.Properties.Get org.freedesktop.Secret.Collection Locked
 # healthy: (<false>,)    broken: UnknownMethod: Object does not exist at path
+pgrep -a -f gnome-keyring-daemon      # healthy: ONE, and it is `--daemonize --login` (PAM's)
+                                      # broken:  `--foreground --components=pkcs11,secrets` (systemd's)
+systemctl --user status gnome-keyring-daemon.service   # must be dead — a running one IS the rival
+journalctl -b --since "-5 min" | grep -iE "keyring|discover_other_daemon"
+ls -l ~/.local/share/keyrings/login.keyring   # must exist, born at the login minute
 ```
+
+**`discover_other_daemon: 1` on its own does NOT mean broken** — do not read it as the tell, it
+appears in a perfectly healthy session. It is logged by whichever daemon loses the discovery, and in
+the working flow that is `hyprland.lua`'s `--start` finding PAM's daemon, i.e. the handshake
+succeeding. What distinguishes the two cases is *which daemon survives*, hence `pgrep` above:
+`--daemonize --login` in a `session-N.scope` cgroup is PAM's and correct; `--foreground
+--components=pkcs11,secrets` under `user@$UID.service/app.slice` is systemd's and is the bug. A
+healthy boot reads:
+
+```
+greetd[…]: gkr-pam: gnome-keyring-daemon started properly and unlocked keyring
+systemd[…]: Started gnome-keyring-daemon.          ← the uwsm scope for hyprland.lua's --start
+gnome-keyring-daemon[…]: discover_other_daemon: 1  ← that --start finding PAM's daemon: correct
+```
+
+Ignore anything logged for the **greeter's own uid** (`/run/user/955`, `greetd[…]: gkr-pam:
+couldn't unlock the login keyring` before the user logs in, plus a `Started GNOME Keyring daemon.`
+that stops when the greeter exits). Different user, different runtime dir, unrelated to this.
 
 A `login.keyring` whose birth time is *later* than the session's start was created by a prompt
 dialog, not by PAM — its password is not the login password and PAM will never open it. Move it
