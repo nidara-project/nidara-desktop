@@ -171,7 +171,7 @@ function batteryActivity(): IslandActivity {
         const box = opts.ghost
             ? new Gtk.Box({ spacing: 8 })
             : new Gtk.Box({ spacing: 8, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
-        const glyph = makeBatteryGlyph(11)
+        const glyph = makeBatteryGlyph(16)   // icon box, same as the bar's battery pill
         glyph.valign = Gtk.Align.CENTER
         if (opts.hideArt) glyph.opacity = 0
         const pct = new Gtk.Label({ css_classes: ["island-battery-pct"], valign: Gtk.Align.CENTER })
@@ -192,9 +192,9 @@ function batteryActivity(): IslandActivity {
         makeGhost: ({ hideArt }) => makeForm({ ghost: true, hideArt }),
         // The compact's glyph FLIES into the panel's glyph slot (same
         // continuity as media's cover art): ghost built at the PANEL size
-        // (26, matching BatteryIsland's) and scaled down so it stays sharp.
+        // (44, matching BatteryIsland's) and scaled down so it stays sharp.
         flyer: {
-            makeGhost: () => makeBatteryGlyph(26),
+            makeGhost: () => makeBatteryGlyph(44),
             getSource: () => ((compact as any).glyph as Gtk.Widget) ?? null,
         },
         watch: (changed) => {

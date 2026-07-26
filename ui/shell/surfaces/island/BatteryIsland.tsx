@@ -19,7 +19,7 @@ export const BATTERY_GLASS = { radius: 32, n: 3.2, border: { r: 1, g: 1, b: 1, a
 export default function BatteryIsland(): Gtk.Widget {
     const bat = AstalBattery.get_default()
 
-    const glyph = makeBatteryGlyph(26)
+    const glyph = makeBatteryGlyph(44)   // icon box; the compact's flyer ghost is built at this size too
     const title = new Gtk.Label({
         label: t("island.battery.critical"),
         css_classes: ["island-battery-title"],

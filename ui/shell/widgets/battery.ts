@@ -37,6 +37,8 @@ function getStateText(): string {
     return ts ? `${t("widget.battery.state.discharging")} · ${ts}` : t("widget.battery.state.discharging")
 }
 
+// Sizes below are ICON BOXES (Gtk.Image pixel_size equivalents), not glyph
+// heights — see common/BatteryGlyph.ts.
 const makeGlyph = makeBatteryGlyph
 
 // Connect a sync callback to the battery's notify signal with auto-cleanup.
@@ -60,7 +62,7 @@ function notPresent(): Gtk.Widget {
 
 // ── 1×1 (Small): glyph + percentage, centred in the round island ──────────────
 function buildSingle(): Gtk.Widget {
-    const glyph = makeGlyph(17)
+    const glyph = makeGlyph(28)   // same box the other tiles' icons get
     const pct = new Gtk.Label({ css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.CENTER })
 
     const group = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3, halign: Gtk.Align.CENTER })
@@ -91,7 +93,7 @@ function buildWide(): Gtk.Widget {
         halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER,
         width_request: 48, height_request: 48,
     })
-    const glyph = makeGlyph(16, true)   // fill the 48px circle; draw_func centres the glyph
+    const glyph = makeGlyph(28, true)   // pixel_size 28 like every other tile icon; draw_func centres it in the 48px circle
     iconBox.append(glyph)
 
     const textStack = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, valign: Gtk.Align.CENTER, hexpand: true })
@@ -115,7 +117,7 @@ function buildWide(): Gtk.Widget {
 
 // ── 2×2 (Large): big glyph + percentage + state, centred ──────────────────────
 function buildSquare(): Gtk.Widget {
-    const glyph = makeGlyph(34)
+    const glyph = makeGlyph(56)
     const pct = new Gtk.Label({ css_classes: ["cc-atomic-label-bold"], halign: Gtk.Align.CENTER })
     const state = new Gtk.Label({ css_classes: ["cc-atomic-label-dim"], halign: Gtk.Align.CENTER })
 
@@ -162,7 +164,7 @@ function buildPanel(_onClose: () => void): Gtk.Widget {
         return box
     }
 
-    const glyph = makeGlyph(28)
+    const glyph = makeGlyph(48)
     const pct  = new Gtk.Label({ css_classes: ["bar-popover-val"], halign: Gtk.Align.CENTER })
     const head = new Gtk.Box({ spacing: 12, halign: Gtk.Align.CENTER, valign: Gtk.Align.CENTER })
     head.append(glyph); head.append(pct)
@@ -185,7 +187,9 @@ function buildBarContent(): Gtk.Widget {
     if (!present()) {
         return new Gtk.Image({ gicon: Icons.battery, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
     }
-    const glyph = makeGlyph(11)
+    // 16 = the pixel_size every other bar icon uses, so this capsule is exactly
+    // as wide as theirs (a hand-tuned glyph box made it 9px wider — don't).
+    const glyph = makeGlyph(16)
     glyph.margin_start = 16
     glyph.margin_end = 16
     bindSync(glyph, () => glyph.queue_draw())
