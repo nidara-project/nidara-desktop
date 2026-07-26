@@ -58,6 +58,16 @@ class HyprlandStateClass extends GObject.Object {
     // the event: the workspace name is the fallback for an EMPTY workspace, not for
     // "the compositor went quiet". A remembered window that has been closed, or moved
     // to another workspace, correctly stops being the answer.
+    //
+    // The compositor's LIVE answer needs the same validation, for the mirror-image
+    // failure: while a layer surface holds an EXCLUSIVE grab, Hyprland *refuses* to
+    // move window focus at all ("Refusing a keyboard focus to a window because of an
+    // exclusive ls"), so switching workspace from the app grid's strip leaves
+    // `focused_client` pointing at a window on the workspace you LEFT — no event, no
+    // null, just a confident wrong answer. Measured 2026-07-26: on ws4 with the grid
+    // open, `hyprctl activewindow` still named the ws1 terminal while ws4's own
+    // `lastwindow` correctly named the browser. Hence the invariant below, which both
+    // halves now share: THE FOCUSED WINDOW IS ALWAYS ON THE FOCUSED WORKSPACE.
     private _lastFocusedAddr = ""
     private _focusFallback: AstalHyprland.Client | null = null
 
@@ -86,11 +96,23 @@ class HyprlandStateClass extends GObject.Object {
     get focusedMonitor()   { return this.hl.focused_monitor }
 
     /** The focused window — held steady across Hyprland's spurious "no active
-     *  window". Falls back to `_focusFallback` (see it) when the compositor has
-     *  gone quiet, so consumers only ever see null when there is genuinely
-     *  nothing focused on the focused workspace. */
+     *  window", and never a window from the workspace you just left. Falls back to
+     *  `_focusFallback` (see it) whenever the compositor's own answer fails the
+     *  invariant, so consumers only ever see null when there is genuinely nothing
+     *  focused on the focused workspace. */
     get focusedClient(): AstalHyprland.Client | null {
-        return this.hl.focused_client ?? this._focusFallback
+        const raw = this.hl.focused_client as AstalHyprland.Client | null
+        return this._focusIsHere(raw) ? raw : this._focusFallback
+    }
+
+    /** Is the compositor's answer about the workspace the user is looking AT?
+     *  Special (scratchpad) workspaces overlay the active one and are announced on
+     *  `activespecial`, never on `workspace`, so `focusedWorkspaceId` keeps naming
+     *  the normal workspace underneath — a window on a special one (negative id)
+     *  therefore counts as here, or focusing the scratchpad would blank the title. */
+    private _focusIsHere(c: AstalHyprland.Client | null): boolean {
+        const id = (c as any)?.workspace?.id
+        return typeof id === "number" && (id === this.focusedWorkspaceId || id < 0)
     }
 
     /** True ONLY for real fullscreen (Hyprland FSMODE 2), not "maximized" (FSMODE 1)
@@ -264,18 +286,27 @@ class HyprlandStateClass extends GObject.Object {
             // Reconcile focus BEFORE the signature: a grab release that only silenced
             // the compositor must not read as a structural change, or every consumer
             // repaints to say the same thing.
-            const live = this.hl.focused_client as AstalHyprland.Client | null
+            const raw = this.hl.focused_client as AstalHyprland.Client | null
+            // Trust the compositor's answer only while it is ON the focused workspace:
+            // under an EXCLUSIVE grab it keeps naming the window you left behind.
+            const live = this._focusIsHere(raw) ? raw : null
             if (live) {
                 this._lastFocusedAddr = bareAddr((live as any).address)
                 this._focusFallback = null
             } else {
                 // Still open, and still on the workspace we're looking at? Then the
                 // null is the compositor going quiet, not a window losing focus.
-                this._focusFallback = this._lastFocusedAddr
+                const remembered = this._lastFocusedAddr
                     ? this.clients.find(c =>
                         bareAddr((c as any).address) === this._lastFocusedAddr
                         && c?.workspace?.id === this.focusedWorkspaceId) ?? null
                     : null
+                // Otherwise ask the workspace itself which window it would focus.
+                // `last_client` is Hyprland's own `lastwindow`, so this is still the
+                // compositor's answer, not an invention — and it stays correct while
+                // a grab blocks the focus from actually moving. Re-validated against
+                // the live client list because it can name a window that has closed.
+                this._focusFallback = remembered ?? this._workspaceLastClient()
             }
 
             // Only notify when the STRUCTURAL state actually changed. AstalHyprland
@@ -290,6 +321,21 @@ class HyprlandStateClass extends GObject.Object {
         } catch (e) {
             console.error("[HyprlandState] refresh failed:", e)
         }
+    }
+
+    /** The window the FOCUSED workspace would give focus to — Hyprland's own
+     *  `lastwindow`, re-validated against the live client list (it can name a window
+     *  that has since closed, and it is stale by definition on a workspace that has
+     *  never been visited). Empty workspace → null, which is what makes the bar fall
+     *  back to the workspace name. No hyprctl: `Workspace.last_client` is already in
+     *  the cached array, so this stays inside the "_refresh never shells out" rule. */
+    private _workspaceLastClient(): AstalHyprland.Client | null {
+        const ws = this.workspaces.find(w => (w as any)?.id === this.focusedWorkspaceId)
+        const addr = bareAddr(((ws as any)?.last_client as any)?.address)
+        if (!addr) return null
+        return this.clients.find(c =>
+            bareAddr((c as any).address) === addr
+            && c?.workspace?.id === this.focusedWorkspaceId) ?? null
     }
 
     // Cheap structural fingerprint of the state "changed" consumers react to (window

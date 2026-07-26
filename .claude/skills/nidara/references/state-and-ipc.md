@@ -236,6 +236,35 @@ still open, **and still on the focused workspace**. Two consequences worth keepi
 The rule this encodes, and the one to preserve if you touch `getWordmark`: **the workspace name is the
 fallback for an empty workspace, not for "the compositor went quiet".**
 
+#### The compositor's LIVE answer needs the same validation — it can be confidently wrong
+
+The reconciliation above only guarded the *null*. The mirror-image failure is a non-null lie: while a
+layer surface holds an EXCLUSIVE grab, Hyprland **refuses to move window focus at all** (`rawWindowFocus`:
+"Refusing a keyboard focus to a window because of an exclusive ls"). So switching workspace from the app
+grid's workspace strip — which switches *without* closing, keeping its grab — leaves `focused_client`
+naming a window on the workspace you LEFT. No event, no null, just a stale answer that the title capsule
+repeated back. Measured 2026-07-26: standing on ws4 with the grid open, `hyprctl activewindow` still named
+the ws1 terminal, while ws4's own `lastwindow` correctly named the browser.
+
+So `focusedClient` enforces one invariant on both halves: **the focused window is always on the focused
+workspace.** The compositor's live answer is used only if it satisfies it; otherwise the fallback chain is
+
+1. the remembered address, if still open **and** still here (the grab-release case above), then
+2. the focused workspace's own `last_client` — Hyprland's `lastwindow`, i.e. the window that workspace
+   *would* focus. Still the compositor's answer, not an invention, and it stays right while a grab blocks
+   the focus from actually moving. Re-validated against the live client list, since it can name a window
+   that has closed.
+3. nothing → `null` → the workspace name (an empty workspace, per the rule above).
+
+One exception is deliberate: a window on a **special (scratchpad) workspace** counts as here. Special
+workspaces overlay the active one and announce themselves on `activespecial`, never on `workspace`, so
+`focusedWorkspaceId` keeps naming the normal workspace underneath — without the exception, popping the
+scratchpad would blank the title.
+
+Note the door: the getter, not just `_refresh`. `_refresh` computes the fallback, but
+`get focusedClient()` is what consumers call, and it consults `hl.focused_client` live (so it stays fresh
+between refreshes) — the validation has to be *there* too, or the raw value walks straight past it.
+
 #### The same release also UNDOES a workspace switch — and you cannot win that race by ordering
 
 Hyprland does not merely announce the null: it **refocuses the last window**, and focusing a window
