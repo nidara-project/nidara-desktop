@@ -247,8 +247,9 @@ hl.on("hyprland.start", function()
     -- deliberately uninitialized: THIS line is the `--start` it has been waiting for, and
     -- completing initialization is what unlocks the login keyring. It is not a formality —
     -- skip it and the session has secrets nobody can read. The other half of the deal is
-    -- in nidara-setup: gnome-keyring-daemon.socket must stay disabled, or it wins the race
-    -- for $XDG_RUNTIME_DIR/keyring/control and the PAM daemon exits with the password.
+    -- in nidara-setup: gnome-keyring-daemon.socket must be masked AND not running, or it
+    -- wins the race for $XDG_RUNTIME_DIR/keyring/control and the PAM daemon exits with the
+    -- password still in hand (masked-but-already-running is just as fatal as unmasked).
     -- Result: org.freedesktop.secrets for the built-in Assistant's API key plus git/VS
     -- Code/browser credentials. Secrets only (no ssh/gpg agent takeover).
     hl.exec_cmd("uwsm app -s b -- gnome-keyring-daemon --start --components=secrets")

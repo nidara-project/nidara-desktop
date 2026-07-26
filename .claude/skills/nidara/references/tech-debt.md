@@ -1241,6 +1241,25 @@ What it left behind:
   long-lived and `dismantle` is never called on them), one line to fix when someone is in there
   for a real reason.
 
+### 41. Settings → AI takes a hung keyring write for a working one (2026-07-26)
+
+`surfaces/settings/pages/Ai.tsx` treats the Secret Service as binary — reachable or not — and a
+keyring that is *listed but not loaded* is neither. Two gaps, both hit on a real machine (see the
+login-keyring section of `dev-workflow.md` for how a session gets into that state):
+
+- `keyringAvailable()` only proves the SERVICE answers: it does a lookup and reports success when
+  nothing throws. A collection whose D-Bus object does not exist answers lookups instantly with "not
+  found", so the check passes and every button enables. The honest probe is the collection object
+  (`/org/freedesktop/secrets/collection/login`), not the service.
+- `storeKey()` disables `saveBtn` and re-enables it only from the store callback. When the write
+  blocks on an unlock prompt that never resolves — `gcr-prompter` starts, times out after 10 s and
+  dies without answering — the callback never runs, so the button stays dead **forever, with no
+  message**. It reads as "Settings → AI is broken" when the desktop's keyring is the broken part.
+
+Fix direction: a timeout around the store (10–15 s) that re-enables the button and surfaces a real
+error pointing at the keyring, plus a writability probe instead of a liveness one. Worth doing —
+the failure is silent, and the Assistant's API key is the one thing this page exists to save.
+
 ---
 
 ## Meta: how to interpret "tech debt" here

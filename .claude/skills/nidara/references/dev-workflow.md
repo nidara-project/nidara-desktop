@@ -730,8 +730,17 @@ The unlock is a two-part handshake, and Arch ships a third party that breaks it 
    created at all, so the user gets a *create-a-keyring* dialog whose password is then whatever
    they typed — and PAM can never open it again.
 
-So `nidara-setup` **masks** `gnome-keyring-daemon.socket` for the user. Without `--now`: the
-running daemon keeps serving the current session and the change lands at next login.
+So `nidara-setup` **masks** `gnome-keyring-daemon.socket` for the user — **and stops it**, which is
+not the same sentence twice. `mask` only refuses *future* starts; it never touches a unit that is
+already running, and `user@$UID.service` outlives the session whenever lingering is on
+(`loginctl enable-linger`, which plenty of tooling sets). A daemon socket-started before the mask
+therefore survives logout after logout still owning `$XDG_RUNTIME_DIR/keyring/control`, every later
+login repeats `discover_other_daemon: 1`, and the mask reads as inert: the user logs out, logs back
+in and reports "nothing changed" (2026-07-26 — only a reboot cleared it). Stop the **socket** first,
+because the `.service` `Requires=` it and follows it down, whereas stopping the service alone leaves
+the socket listening for the next probe to re-activate. If D-Bus activation re-spawns a daemon
+afterwards, that machine needs a **reboot**, not a logout; `nidara-setup` checks for exactly that and
+says so instead of reporting success.
 
 **It has to be `mask`, not `disable`** — the trap that eats an afternoon. The socket is routinely
 enabled in *global* scope (`/etc/systemd/user/sockets.target.wants/`), and against that a
@@ -747,22 +756,37 @@ touching it: `--start` starts a daemon when it finds none (that is exactly what
 `/etc/xdg/autostart/gnome-keyring-secrets.desktop` does), and `org.freedesktop.secrets` stays
 D-Bus activatable underneath. The only thing removed is the racer.
 
-Verifying is a **logout/login**, not a reload — nothing about this path is reachable from
-`Super+Shift+R`, and the CI smoke does not cover it (the headless boot has no PAM login). Read it
-back from the journal of the new session:
+Verifying is a **logout/login** (a **reboot** if a rival daemon was already running), not a reload —
+nothing about this path is reachable from `Super+Shift+R`, and the CI smoke does not cover it (the
+headless boot has no PAM login). Read it back from the journal of the new session:
 
 ```bash
 journalctl -b --since "-5 min" | grep -iE "keyring|discover_other_daemon"
 # healthy:  no discover_other_daemon line; the daemon that runs is the PAM one
 # broken:   "discover_other_daemon: 1" + systemd "Started GNOME Keyring daemon."
 ls -l ~/.local/share/keyrings/login.keyring   # must exist, born at the login minute
-busctl --user call org.freedesktop.secrets /org/freedesktop/secrets \
-  org.freedesktop.DBus.Properties Get ss org.freedesktop.Secret.Service Collections
+systemctl --user status gnome-keyring-daemon.service   # must be dead — a running one IS the rival
+gdbus call --session -d org.freedesktop.secrets -o /org/freedesktop/secrets/collection/login \
+  -m org.freedesktop.DBus.Properties.Get org.freedesktop.Secret.Collection Locked
+# healthy: (<false>,)    broken: UnknownMethod: Object does not exist at path
 ```
 
 A `login.keyring` whose birth time is *later* than the session's start was created by a prompt
 dialog, not by PAM — its password is not the login password and PAM will never open it. Move it
 aside and let the next login recreate it.
+
+**Do not verify with the service's `Collections` property.** It lists `/collection/login` — and
+`ReadAlias default` resolves to it — even when that collection was never loaded, which is exactly
+the broken state; ask the collection object itself, as above. `Object does not exist at path` is the
+signature of *listed but not loaded*, and it fails **asymmetrically**, which is why it gets
+misfiled as a UI bug: reads answer instantly ("not found" — there is nothing to search), so
+Settings → AI enables its buttons, while the first write must unlock, spawns `gcr-prompter` and
+hangs forever (`timeout 12 secret-tool store …` exits 124, and the journal shows the prompter dying
+on its own 10-second inactivity timeout). Two causes produce it: a rival daemon (above), or a stale
+`user.keystore` whose password is not the login one — `couldn't initialize slot with master
+password: The password or PIN is incorrect` in `journalctl --user -u gnome-keyring-daemon`. For the
+second, move `user.keystore` and `login.keyring` aside and log in again; PAM recreates both. Only
+PAM can, so restarting the daemon by hand never fixes either.
 
 ## Default keybindings (from `hyprland.lua`)
 

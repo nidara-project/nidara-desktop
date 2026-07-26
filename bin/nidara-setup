@@ -583,11 +583,31 @@ user_systemctl enable --now wireplumber pipewire pipewire-pulse 2>/dev/null || t
 # no-op — systemd even says so and starts it anyway. Mask wins in user scope, and it
 # also survives `systemctl --user preset-all` (the Arch preset is `enabled`). Only the
 # socket: the .service is reachable only through it, and masking that too would break
-# other desktops on the same account that start it deliberately. No `--now` — the
-# running daemon keeps serving this session and the change lands at the next login.
+# other desktops on the same account that start it deliberately.
+#
+# The mask alone is NOT enough, and this is the part that reads as the fix having failed:
+# masking never touches a unit that is already running, and user@$UID.service outlives the
+# session whenever lingering is on (`loginctl enable-linger` — plenty of tooling sets it).
+# A daemon socket-started before the mask then survives logout after logout still owning
+# $XDG_RUNTIME_DIR/keyring/control, every later login repeats `discover_other_daemon: 1`,
+# and the mask looks inert until a full reboot. So stop it too — the socket FIRST, because
+# the .service `Requires=` it and follows it down, whereas stopping the service alone
+# leaves the socket listening and the next probe re-activates it. This still cannot leave
+# a session without a Secret Service (org.freedesktop.secrets stays D-Bus activatable, as
+# above); what the stop buys is the NEXT login, the only moment PAM can hand a daemon the
+# password.
 # To undo: systemctl --user unmask gnome-keyring-daemon.socket
 echo "  Letting PAM own the GNOME keyring daemon (login keyring auto-unlock)..."
 user_systemctl mask gnome-keyring-daemon.socket 2>/dev/null || true
+user_systemctl stop gnome-keyring-daemon.socket gnome-keyring-daemon.service 2>/dev/null || true
+# Still alive => D-Bus activation re-spawned it (something asked for a secret in between).
+# With lingering that one survives into the next session and wins the race again, so this
+# case needs a reboot, not a logout — say so instead of reporting success.
+if pgrep -u "$REAL_USER" -f gnome-keyring-daemon >/dev/null 2>&1; then
+    echo "  [WARN] A gnome-keyring-daemon from before this change is still running."
+    echo "         Reboot (not just log out) before trusting the login keyring: it can"
+    echo "         outlive the session, and PAM's daemon defers to whatever it finds."
+fi
 
 if [ -z "$USER_ONLY" ]; then
 # ── Power profiles (system — skipped by --user) ───────────────────────────────
