@@ -37,6 +37,32 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
 5. **`app.ts`** (`ui/shell/app.ts`): sets dark/light via `Gtk.Settings.gtk_application_prefer_dark_theme` (pure GTK4 — no `Adw.init()`); registers the `nd-*-symbolic` icon search path; `app.start({ applicationId: "org.nidara.desktop", main, requestHandler })`. In `main()`: iterates monitors → `createUI(monitor)` (Bar + Dock per monitor), wires the dock-rebuild debounce, and populates `core/ShellActions` + the IPC registry (the bar/dock blur layer rules live in `hyprland.lua` as `hl.layer_rule` — the old `hyprctl keyword layerrule` calls were dead under the Lua parser and were removed).
 6. Reload in dev: **`Super+Shift+R`** re-runs `nidara-ui` (the old `start_ui.sh`/`reload_ui.sh` no longer exist).
 
+### Wallpaper at login: never trust awww's cache
+
+`~/.config/nidara/wallpaper` is the **single source of truth** (written by `WallpaperManager`,
+shown in Settings, resolved by greeter/lockscreen via `ui/lib/wallpaper.ts`). `awww-daemon` keeps a
+per-output cache of its own (`~/.cache/awww/<ver>/<OUTPUT>`), but it is **shadow state, not
+authority**: it records the last `awww img` and nothing else, and the restore is **asynchronous** —
+the daemon literally builds and *spawns* `awww img --outputs=<out> --transition-type=none <path>`
+once each output is configured, so it lands well **after** the socket starts answering `awww query`.
+
+That gap is a trap. The original startup line ("apply the shipped default only if nothing is being
+displayed") raced it, and when it won it wrote the **shipped default into the cache** — which every
+later boot then faithfully restored, so the user's wallpaper was gone for good while Settings still
+showed it. Self-perpetuating, and it looked like the shell had "forgotten" the setting (2026-07-26).
+
+The rule for anything that paints the wallpaper at session start: **wait until every output reports
+`image:` in `awww query`** (that's the daemon's own restore having landed), bounded by a timeout for
+the fresh-install case where the cache is empty and no restore is ever coming (`misc:background_color`
+covers that window), **then apply the resolved path from the config file over it** — one
+authoritative apply, no conditional, `--transition-type none`. The Lua side owns this (helpers
+`readWallpaperCfg`/`resolveWallpaper`/`shquote` near the top of `hyprland.lua`), **not** the shell:
+the shell restarts mid-session (`Restart=on-failure`, `Super+Shift+R`) and would stomp the gaming
+hero-art swap, whose "previous wallpaper" state lives in the compositor process.
+
+Do **not** "simplify" this by passing `--no-cache` to the daemon: the cache is also what paints a
+monitor hot-plugged mid-session, which nothing else currently handles.
+
 ## Directory map (`ui/shell/`)
 
 Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026-06-11):

@@ -440,7 +440,9 @@ defaults (caught by the clean-VM first-run test, 2026-06-20). **PR #27 curated `
 and added the packaging that made it resolve: `papirus-icon-theme`/`adwaita-icon-theme`/`xdg-utils`,
 the default file-manager association (`xdg-mime` `inode/directory` → nautilus, else the dock's Files
 item `xdg-open`ed a terminal), and a wallpaper-on-first-run fallback in `hyprland.lua` (awww-daemon's
-cache is empty on a fresh box).
+cache is empty on a fresh box). *(That fallback was itself replaced on 2026-07-26 — it raced the
+daemon's async cache restore and could permanently overwrite the user's wallpaper with the shipped
+default; see architecture.md "Wallpaper at login: never trust awww's cache".)*
 **Now fully resolved (bar/CC placement):** `defaults/widgets.json` and `defaults/cc_layout.json` were
 **deleted** — bar/CC placement no longer ships as a personal dump. It comes from the shell's **code
 defaults** (`DEFAULT_PLACEMENT` from each widget's `defaultInBar`/`defaultInCc`, + `CC_DEFAULT_ORDER`,

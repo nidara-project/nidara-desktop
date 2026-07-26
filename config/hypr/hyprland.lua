@@ -28,6 +28,41 @@ local function safe_require(mod)
 end
 
 
+-- ── Wallpaper state ───────────────────────────────────────────────────────────
+-- The single source of truth for the wallpaper is ~/.config/nidara/wallpaper
+-- (JSON, written by the shell's WallpaperManager, shown in Settings, resolved by
+-- the greeter and lockscreen through ui/lib/wallpaper.ts). awww keeps a cache of
+-- its own, but that cache is NOT authoritative — see the startup block below.
+local DEFAULT_WALLPAPER = "/usr/share/nidara/wallpaper.jpg"
+
+local function readWallpaperCfg()
+    local f = io.open(home .. "/.config/nidara/wallpaper", "r")
+    if not f then return nil, "fade" end
+    local raw = f:read("*a"); f:close()
+    return raw:match('"path"%s*:%s*"([^"]+)"'),
+           raw:match('"transition"%s*:%s*"([^"]+)"') or "fade"
+end
+
+-- Path the desktop should paint: the saved wallpaper if it still exists on disk
+-- (a deleted image or an unmounted drive falls through), else the shipped
+-- default. Mirrors resolveWallpaper() in ui/lib/wallpaper.ts.
+local function resolveWallpaper()
+    local saved = readWallpaperCfg()
+    if saved and saved ~= "" then
+        local f = io.open(saved, "r")
+        if f then f:close(); return saved end
+    end
+    return DEFAULT_WALLPAPER
+end
+
+-- Single-quote a string for the shell (POSIX: close, escape, reopen), so paths
+-- with spaces or quotes survive the trip through exec.
+local function shquote(s)
+    local escaped = tostring(s):gsub("'", "'\\''")
+    return "'" .. escaped .. "'"
+end
+
+
 -- ── Monitor ───────────────────────────────────────────────────────────────────
 -- Per-monitor overrides live in nidara-monitor.lua (sourced at the bottom).
 hl.monitor({ output = "", mode = "preferred", position = "auto", scale = "auto" })
@@ -189,11 +224,23 @@ hl.on("hyprland.start", function()
     -- app slice: systemd deprioritizes them under CPU/IO/memory pressure and the OOM
     -- killer targets them before real apps — correct for wallpaper/idle/clipboard helpers.
     hl.exec_cmd("uwsm app -s b -- awww-daemon")
-    -- First-run wallpaper: awww-daemon restores its own cached image, but on a fresh
-    -- install the cache is empty — so the desktop would be blank. Wait for the daemon,
-    -- then apply the shipped default ONLY if nothing is being displayed (so a restored
-    -- image or a user's choice is never clobbered).
-    hl.exec_cmd("sh -c 'for i in 1 2 3 4 5; do awww query >/dev/null 2>&1 && break; sleep 0.5; done; awww query 2>/dev/null | grep -q image: || awww img /usr/share/nidara/wallpaper.jpg --transition-type none'")
+    -- Wallpaper. awww-daemon restores its own cache on startup, but that cache is
+    -- NOT authoritative: it records the last `awww img` and nothing else, and the
+    -- restore is ASYNCHRONOUS — the daemon builds and spawns
+    -- `awww img --outputs=<out> --transition-type=none <path>` once each output is
+    -- configured, so it lands some time AFTER the socket starts answering `query`.
+    -- The old check here ("apply the shipped default only if nothing is being
+    -- displayed") raced exactly that gap; when it won, it wrote the DEFAULT into
+    -- the cache, which every later boot then faithfully restored — so the user's
+    -- wallpaper was lost for good while Settings still showed it (2026-07-26).
+    -- Instead: wait until every output reports an image (i.e. the daemon's own
+    -- restore has landed), bounded at ~3 s for a fresh install whose cache is empty
+    -- — `background_color` above covers that window — then assert the wallpaper
+    -- from ~/.config/nidara/wallpaper over it. One authoritative apply, no race.
+    -- The `||` is the last rung of the resolution chain: an existing but undecodable
+    -- image falls through to the shipped default rather than leaving the desktop bare.
+    hl.exec_cmd([==[sh -c 'i=0; while [ $i -lt 30 ]; do q=$(awww query 2>/dev/null); t=$(printf "%s\n" "$q" | grep -c .); d=$(printf "%s\n" "$q" | grep -c "image:"); [ "$t" -gt 0 ] && [ "$t" = "$d" ] && break; i=$((i+1)); sleep 0.1; done; awww img "$1" --transition-type none || awww img "$2" --transition-type none' nidara-wallpaper ]==]
+        .. shquote(resolveWallpaper()) .. " " .. shquote(DEFAULT_WALLPAPER))
     hl.exec_cmd("uwsm app -s b -- /usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1")
     -- GNOME keyring, secrets component only: PAM already started+unlocked it at login
     -- (nidara-setup wires pam_gnome_keyring into greetd); this picks up that daemon so
@@ -373,14 +420,6 @@ local function readGamingCfg()
     local transition = raw:match('"transition"%s*:%s*"([^"]+)"') or "grow"
     local perfOn     = raw:match('"performanceProfile"%s*:%s*(true)') ~= nil
     return mode, custom, transition, perfOn
-end
-
-local function readWallpaperCfg()
-    local f = io.open(os.getenv("HOME") .. "/.config/nidara/wallpaper", "r")
-    if not f then return nil, "fade" end
-    local raw = f:read("*a"); f:close()
-    return raw:match('"path"%s*:%s*"([^"]+)"'),
-           raw:match('"transition"%s*:%s*"([^"]+)"') or "fade"
 end
 
 local function findSteamHero(appid)
