@@ -514,6 +514,47 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             ccDetailId: status.cc_detail_id,
             agentPointer: isAgentPointerActive(),
           },
+          // WHO HOLDS THE KEYBOARD. The compositor will not tell you: `hyprctl
+          // activewindow` reports the focused WINDOW (which stays put while a layer
+          // surface holds the keys), `hyprctl layers` does not expose keyboard
+          // interactivity at all, and Hyprland's log carries no focus lines (checked:
+          // 55 MB, zero matches). But OUR side knows — GDK marks a toplevel active
+          // when the compositor sends it wl_keyboard.enter — so ask the windows.
+          //
+          // `active` true on a shell surface means the keyboard is going THERE, not
+          // to the user's window. `focusWidget` is what would receive a keypress
+          // inside it, which is how you catch a surface holding the keyboard for a
+          // panel that is no longer open.
+          keyboardFocus: (() => {
+            const out: Record<string, unknown> = {}
+            try {
+              for (const w of (app.get_windows() ?? [])) {
+                const name = (w as any).name || "(unnamed)"
+                let focusWidget: string | null = null
+                try {
+                  const f = (w as any).get_focus?.()
+                  if (f) {
+                    const cls = (f.cssClasses ?? []).join(".")
+                    focusWidget = `${f.constructor?.$gtype?.name ?? "widget"}${cls ? "." + cls : ""}`
+                  }
+                } catch (_) {}
+                // `is-active` is a PROPERTY on Gtk.Window, not a method — read it as
+                // one (with get_property as a fallback) or GJS throws.
+                let active = false
+                try { active = !!(w as any).is_active } catch (_) {}
+                if (!active) { try { active = !!(w as any).get_property?.("is-active") } catch (_) {} }
+                out[name] = {
+                  active,
+                  visible: !!(w as any).visible,
+                  focusable: !!(w as any).focusable,
+                  focusWidget,
+                }
+              }
+            } catch (e) {
+              out["error"] = String(e)
+            }
+            return out
+          })(),
         },
         null,
         2,

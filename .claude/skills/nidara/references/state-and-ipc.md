@@ -231,6 +231,56 @@ still open, **and still on the focused workspace**. Two consequences worth keepi
 The rule this encodes, and the one to preserve if you touch `getWordmark`: **the workspace name is the
 fallback for an empty workspace, not for "the compositor went quiet".**
 
+### How to find out who holds the keyboard: `dumpState.keyboardFocus`
+
+The compositor will not tell you, and three dead ends prove it (2026-07-26): `hyprctl activewindow`
+reports the focused **window**, which stays put while a layer surface holds the keys; `hyprctl layers`
+does not expose keyboard interactivity at all; and Hyprland's own log carries no focus lines (checked
+on a 55 MB `hyprland.log` — zero matches for "focus"; it is all aquamarine backend spam).
+
+Our side does know, because GDK marks a toplevel active when the compositor sends it
+`wl_keyboard.enter`. `dumpState.keyboardFocus` reports that per shell window:
+
+```bash
+ags request dumpState | jq -c '.keyboardFocus'
+```
+
+```
+"nidara-dock":   {"active": true,  "focusable": false, "focusWidget": null}   # ← keys go nowhere
+"nidara-bar":    {"active": false, ...}
+"nidara-island": {"active": false, ...}
+```
+
+`active: true` on a shell surface means the keyboard is going **there**, not to the user's window.
+`focusWidget` is what would receive a keypress inside it — `GtkText.prism-search-entry` when Prism is
+up, `null` when a surface is holding the keyboard for nothing. **No surface active is ambiguous**: it
+means either the user's window has the keys or nobody does. Disambiguate with the event socket — the
+drop is announced as `activewindow>>,`.
+
+What this instrument found, and what to keep in mind when touching keyboard modes:
+
+| moment | who holds the keyboard |
+|---|---|
+| at rest, just after a shell reload | **`nidara-dock`**, no focus widget |
+| overview open | `nidara-island` |
+| overview closed | **nobody** |
+| app grid open | `nidara-dock` |
+| app grid closed | **`nidara-dock`, still** |
+| Prism open | `nidara-bar` (`GtkText.prism-search-entry`) |
+| Prism closed | **nobody** |
+
+Two distinct faults, and neither is cosmetic — in both the user's window stops receiving keys until
+pointer motion re-triggers focus-follows-mouse. A surface resting in `ON_DEMAND` (the dock) simply
+**keeps** the keyboard; a surface resting in `NONE` (island, bar) leaves it **nowhere**. Note in
+particular that `ON_DEMAND` does *not* hand focus back to the window — that was a wrong guess, and
+this table is what disproved it.
+
+Repairs ruled out by measurement, so nobody re-tries them: `focusWindow` on the still-active window
+(Hyprland no-ops it — the dispatch emits nothing), `focus({ monitor })` (no effect),
+`focus({ last })` (works, but focuses a *different* window and can change workspace), and
+`cursor.move` nudges (warping the pointer generates no libinput motion, so focus-follows-mouse never
+fires — which is why moving the mouse *by hand* cures it and a synthetic move does not).
+
 ### The agent config surface: `describeConfig` / `getConfig` / `setConfig`
 
 Settings are exposed to agents through a typed registry (`core/ConfigRegistry.ts`; entries
