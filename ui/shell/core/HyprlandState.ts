@@ -16,6 +16,10 @@ const TRACKED_EVENTS = [
 // Minimum ms between refreshes — see _scheduleRefresh (caps the tech-debt #11 storm).
 const REFRESH_MIN_INTERVAL_MS = 60
 
+// AstalHyprland reports window addresses with and without the "0x" prefix depending
+// on where they came from — always compare bare (same convention as resolveWindow).
+const bareAddr = (s?: string) => (s ?? "").toLowerCase().replace(/^0x/, "")
+
 class HyprlandStateClass extends GObject.Object {
     static {
         GObject.registerClass({
@@ -33,6 +37,28 @@ class HyprlandStateClass extends GObject.Object {
     private _refreshPending = false
     private _lastRefreshUs = 0
     private _lastSig = ""
+
+    // Hyprland announces "no active window" (`activewindow>>,` + `activewindowv2>>`)
+    // when one of OUR OWN layer surfaces RELEASES an EXCLUSIVE keyboard grab — the
+    // island's overview and assistant, Prism, the app grid — and then never announces
+    // a restore, even though the window is still there and focused. Measured on the
+    // event socket 2026-07-26: taking the grab emits nothing at all, releasing it
+    // emits the null, and `hyprctl activewindow` reports the real window throughout.
+    // The only thing that ever heals it is an unrelated re-emission of activewindow
+    // (Hyprland re-sends it when the focused window's TITLE changes), which is why a
+    // terminal recovers on its own and a static window stays "unfocused" forever.
+    //
+    // The blast radius is everything that asks who is focused: the bar's title
+    // capsule falls back to the workspace name, the window menu finds no window, the
+    // dock loses its focus ring, "screenshot the focused window" has no target.
+    //
+    // So we keep the last real focus and re-validate it against the live client list.
+    // That also states the rule the UI actually wants, instead of merely papering over
+    // the event: the workspace name is the fallback for an EMPTY workspace, not for
+    // "the compositor went quiet". A remembered window that has been closed, or moved
+    // to another workspace, correctly stops being the answer.
+    private _lastFocusedAddr = ""
+    private _focusFallback: AstalHyprland.Client | null = null
 
     // Cached raw arrays — one refresh per signal batch, shared by all consumers
     clients:    AstalHyprland.Client[]    = []
@@ -56,8 +82,15 @@ class HyprlandStateClass extends GObject.Object {
 
     // Direct proxies — no caching needed, these are lightweight GObject accessors
     get focusedWorkspace() { return this.hl.focused_workspace }
-    get focusedClient()    { return this.hl.focused_client }
     get focusedMonitor()   { return this.hl.focused_monitor }
+
+    /** The focused window — held steady across Hyprland's spurious "no active
+     *  window". Falls back to `_focusFallback` (see it) when the compositor has
+     *  gone quiet, so consumers only ever see null when there is genuinely
+     *  nothing focused on the focused workspace. */
+    get focusedClient(): AstalHyprland.Client | null {
+        return this.hl.focused_client ?? this._focusFallback
+    }
 
     /** True ONLY for real fullscreen (Hyprland FSMODE 2), not "maximized" (FSMODE 1)
      *  or none. AstalHyprland exposes Client.fullscreen as the Fullscreen ENUM, not a
@@ -227,6 +260,23 @@ class HyprlandStateClass extends GObject.Object {
                 this.clientsByWorkspace.get(wsId)!.push(c)
             }
 
+            // Reconcile focus BEFORE the signature: a grab release that only silenced
+            // the compositor must not read as a structural change, or every consumer
+            // repaints to say the same thing.
+            const live = this.hl.focused_client as AstalHyprland.Client | null
+            if (live) {
+                this._lastFocusedAddr = bareAddr((live as any).address)
+                this._focusFallback = null
+            } else {
+                // Still open, and still on the workspace we're looking at? Then the
+                // null is the compositor going quiet, not a window losing focus.
+                this._focusFallback = this._lastFocusedAddr
+                    ? this.clients.find(c =>
+                        bareAddr((c as any).address) === this._lastFocusedAddr
+                        && c?.workspace?.id === this.focusedWorkspaceId) ?? null
+                    : null
+            }
+
             // Only notify when the STRUCTURAL state actually changed. AstalHyprland
             // re-emits "event" spuriously (and a focused window's title can churn fast,
             // e.g. a terminal spinner) — without this guard every such no-op refresh
@@ -246,7 +296,8 @@ class HyprlandStateClass extends GObject.Object {
     // window titles — AppTitle tracks those via its own notify::title — so a
     // fast-updating title doesn't churn "changed".
     private _stateSignature(): string {
-        let s = `${this.focusedWorkspaceId}|${(this.hl.focused_client as any)?.address ?? ""}`
+        // The RECONCILED focus, not hl.focused_client: a spurious null is not a change.
+        let s = `${this.focusedWorkspaceId}|${(this.focusedClient as any)?.address ?? ""}`
         for (const c of this.clients as any[]) {
             if (!c) continue
             s += `;${c.address},${c.class},${c.x},${c.y},${c.width},${c.height},${c.workspace?.id ?? ""}`

@@ -192,6 +192,45 @@ and `Super+B` / `toggleBarOverlay` still promotes it to the OVERLAY layer above 
 window. When you need the authoritative int instead of the cached enum, read `HyprlandState.
 getClientJson(addr).fullscreen` (`hyprctl clients -j`: `0` none / `1` maximized / `2` fullscreen).
 
+### Hyprland reports "no active window" when OUR OWN layer surface drops a keyboard grab
+
+Read `HyprlandState.focusedClient`, **never `AstalHyprland.get_default().focused_client`** — the raw
+property lies, and it stays lying.
+
+Measured on the Hyprland event socket (2026-07-26, one open/close of the island's overview):
+
+```
+  1.62  MARK   ==> OPEN overview        # taking an EXCLUSIVE grab emits NOTHING
+  4.25  MARK   ==> CLOSE overview
+  4.27  EVENT  activewindow>>,          # releasing it announces "no active window"
+  4.27  EVENT  activewindowv2>>
+  6.79  MARK   hyprctl activewindow = [kitty]     # …while the window is still right there
+```
+
+Releasing an EXCLUSIVE keyboard grab makes Hyprland announce that nothing is focused, and **no event
+ever restores it**. So AstalHyprland's `focused_client` goes null and stays null after every island
+mode with `needsKeyboard` (overview, assistant), every Prism dismissal and every app-grid close. The
+one thing that heals it is an *unrelated* re-emission — Hyprland re-sends `activewindow>>class,title`
+when the focused window's **title** changes — which is why a terminal with a spinner recovers by
+itself within a second and an idle browser stays "unfocused" indefinitely. That intermittency is what
+makes this look like a rendering bug instead of a state bug.
+
+It is never only a cosmetic bug, because *everything* asks who is focused: the bar's title capsule
+falls back to the workspace name, `WindowMenu` finds no window to act on, `DockItem` loses its focus
+ring, and "screenshot the focused window" has no target.
+
+`HyprlandState._refresh` therefore reconciles focus before computing its state signature: it keeps the
+last address Hyprland genuinely reported as focused and re-validates it against the live client list —
+still open, **and still on the focused workspace**. Two consequences worth keeping:
+
+- The workspace check is what makes it correct rather than a patch. Without it, switching to an empty
+  workspace would keep showing the window you left behind on the previous one.
+- Reconciling *before* `_stateSignature()` means a grab release is not a structural change at all, so
+  nothing repaints and the capsule never even blinks.
+
+The rule this encodes, and the one to preserve if you touch `getWordmark`: **the workspace name is the
+fallback for an empty workspace, not for "the compositor went quiet".**
+
 ### The agent config surface: `describeConfig` / `getConfig` / `setConfig`
 
 Settings are exposed to agents through a typed registry (`core/ConfigRegistry.ts`; entries
