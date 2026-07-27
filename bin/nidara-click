@@ -121,6 +121,21 @@ function visual(cmd, wait = true) {
     } catch {}
 }
 
+// Ask the shell to step out of the way for this action, and hand the keyboard back
+// after. Unlike `visual` above this is NOT cosmetic. While one of Nidara's own layer
+// surfaces holds an EXCLUSIVE keyboard grab — which the Assistant island does the
+// entire time the user is typing at it — Hyprland refuses to move window focus at
+// all (FocusState.cpp: "Refusing a keyboard focus to a window because of an exclusive
+// ls") AND routes the pointer to that surface regardless of its input region. So from
+// inside the Assistant the focus check below could never pass, and the click would
+// have been swallowed even if it had. `begin` answers only once the compositor has
+// APPLIED the release, so it is deliberately synchronous. A shell that is down, or
+// too old to know the command, is a silent no-op — exactly the behaviour that existed
+// before this; and if we die before `end`, the shell restores itself.
+function yieldInput(verb) {
+    try { GLib.spawn_command_line_sync(`timeout 3 ags request -- yieldInput ${verb}`) } catch {}
+}
+
 // nidara-input: PATH first, then a sibling of this script (dev checkout).
 function findInjector() {
     const inPath = GLib.find_program_in_path("nidara-input")
@@ -224,6 +239,18 @@ function main() {
         emit({ error: "usage: nidara-click app|rclick-app|hover-app <app> <node> [role] [occurrence] | at|rclick-at|hover-at <app> <x> <y> | scroll-app <app> <node> <dx> <dy> [role] [occurrence] | scroll-at <app> <x> <y> <dx> <dy> | drag-app <app> <from-node> <to-node> [from-role] [from-occurrence] [to-role] [to-occurrence] | drag-at <app> <x1> <y1> <x2> <y2>" })
         return
     }
+    // Past the guards, so this call is going to act: make room for it. The yield
+    // must wrap the FOCUS CHECK too, not just the injection — before the shell lets
+    // go, the check cannot pass by construction (see yieldInput).
+    yieldInput("begin")
+    try {
+        return act(mode, app, spec)
+    } finally {
+        yieldInput("end")
+    }
+}
+
+function act(mode, app, spec) {
     const isScroll = spec.action === "scroll"
     const isDrag = spec.action === "drag"
 

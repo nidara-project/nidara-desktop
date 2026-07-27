@@ -437,6 +437,20 @@ class HyprlandStateClass extends GObject.Object {
      *  compositor to ANNOUNCE the release instead — that announcement is the
      *  `activewindow` null this class already reconciles (see `focusedClient`). */
     focusWorkspaceOnGrabRelease(id: number) {
+        this.afterGrabRelease(() => this.focusWorkspace(id))
+    }
+
+    /** Run `cb` once the compositor has ANNOUNCED that a shell surface gave up its
+     *  EXCLUSIVE keyboard grab — the generic half of `focusWorkspaceOnGrabRelease`
+     *  (read its comment for the measurement this encodes). Any caller that has just
+     *  asked a surface to drop the grab and must not act until the compositor has
+     *  actually applied it goes through here: the workspace switch above, and the
+     *  input yield that lets computer-use reach a real window (`core/InputYield`).
+     *
+     *  The 80 ms fallback covers "no announcement is coming" — with nothing focused
+     *  to lose, the release passes in silence. Not a tuning knob: the measured window
+     *  is 12-15 ms, this is 5× that, and firing early is merely the old behaviour. */
+    afterGrabRelease(cb: () => void) {
         let done = false
         let handler = 0
         let timer = 0
@@ -445,15 +459,11 @@ class HyprlandStateClass extends GObject.Object {
             done = true
             safeDisconnect(this.hl, handler)
             if (timer) { GLib.source_remove(timer); timer = 0 }
-            this.focusWorkspace(id)
+            cb()
         }
         handler = this.hl.connect("event", (_h: any, name: string) => {
             if (name === "activewindow") go()
         })
-        // Fallback for "no announcement is coming" — nothing was focused to lose, so
-        // the release passes in silence (leaving an empty workspace for another one).
-        // Not a tuning knob: the measured window is 12-15 ms, this is 5× that, and
-        // firing early is merely the old behaviour, never worse.
         timer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => { timer = 0; go(); return GLib.SOURCE_REMOVE })
     }
 

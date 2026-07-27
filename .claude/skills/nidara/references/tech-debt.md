@@ -726,6 +726,26 @@ still open and now have TWO consumers to land in, which is the argument for doin
 The surface both consumers now mirror is **symmetric** — five verbs, each with an
 `-app` and an `-at` form.
 
+**(e) ~~Every pointer/keyboard verb was structurally dead from inside the
+Assistant.~~ FIXED 2026-07-27, and it is the reason the first live trial read as
+"it can't do anything".** Not a fifth gap in the verb surface: a compositor
+constraint nobody had connected to computer-use. `CFocusState::rawWindowFocus`
+returns early while any layer surface holds an EXCLUSIVE keyboard grab — which the
+Assistant island does the whole time the user is typing at it — so `focus_window`
+was a no-op, the helpers' focus check then correctly refused, and the click would
+have been swallowed anyway (Hyprland routes the pointer to a grabbing surface
+regardless of its input region, and the island spans the monitor). AT-SPI
+perception and `do_app_action` were unaffected, which is what made it look like
+model clumsiness. Fixed with `core/InputYield` + the `yieldInput` IPC (the helpers
+ask the shell to let go for the length of one verb); `focusWindow` now verifies
+instead of reporting a refused focus as success. Full reasoning in
+`state-and-ipc.md` → "The shell has to STEP OUT OF THE WAY for computer-use".
+**The mis-diagnosis is worth remembering:** the first reading was "`hyprctl
+activewindow` lies while a grab is held", and the obvious fix — source focus from
+`listWindows.focused` instead — would have made the helper approve an action that
+cannot land, and typed the agent's text into its own prompt box. The compositor's
+source code settled it in one grep.
+
 **Found while verifying (a) live, and it decided how the Assistant's hover reads:**
 a GTK tooltip is **not an accessibility node**. Hovering Nautilus's Back button
 rendered the tooltip in a screenshot while the AT-SPI tree held zero tooltip-role

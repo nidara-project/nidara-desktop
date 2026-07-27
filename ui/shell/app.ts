@@ -7,6 +7,7 @@ import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
 import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_AGENT } from "./core/Status"
+import inputYield from "./core/InputYield"
 import { selectedPlayer } from "./core/MediaService"
 import shellActions from "./core/ShellActions"
 import { currentLocale } from "./core/i18n"
@@ -192,6 +193,15 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     desc: "PURELY VISUAL — drives the fake AI-cursor overlay that mirrors computer-use pointer actions; it never injects input (nidara-input does that underneath). Grammar: `agentPointer click|rightclick|move|scroll <gx> <gy> [from <bx> <by>]` or `agentPointer drag <gx> <gy> <gx2> <gy2> [from <bx> <by>]` (global logical px; the request resolves when the cursor LANDS on the target), then `agentPointer confirm` (the real action fired → click ripple, or for `move` just the linger: a hover presses nothing, so it must not ripple) or `agentPointer cancel` (aborted → fade out, no ripple). Called by nidara-click; action kinds obey the allowComputerControl gate.",
     run: args => ipc.agentPointer?.(...args),
   },
+  yieldInput: {
+    desc: "PLUMBING for the computer-use helpers, which call it themselves — there is no reason to invoke it directly. `yieldInput begin` makes every shell surface holding an EXCLUSIVE keyboard grab (the Assistant island, Prism, the app grid) drop it and go click-through, and only answers once the compositor has APPLIED the release; `yieldInput end` hands it back. Without it Hyprland refuses to move window focus at all while we grab, and routes synthetic clicks to our own surface — see core/InputYield. Self-heals if a helper dies mid-action.",
+    run: async args => {
+      const verb = (args[0] ?? "").trim().toLowerCase()
+      if (verb === "begin") { await inputYield.begin(); return "yielded" }
+      if (verb === "end") { inputYield.end(); return "restored" }
+      return "usage: yieldInput <begin|end>"
+    },
+  },
   // ── Window & workspace management ────────────────────────────────────────
   // The shell controlling its OWN compositor (Hyprland IS Nidara), so —
   // like launchApp — these are UNGATED: a window-manager op (focus/move/close a
@@ -284,12 +294,27 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     },
   },
   focusWindow: {
-    desc: "Focus/raise a window by address (from listWindows) or class/title (`focusWindow firefox`). Also the precondition for the synthetic keyboard (type_text/press_key require the target to be the focused window).",
-    run: args => {
+    desc: "Focus/raise a window by address (from listWindows) or class/title (`focusWindow firefox`). Also the precondition for the synthetic keyboard (type_text/press_key require the target to be the focused window). VERIFIES the move and says so — it does not report success for a focus the compositor refused.",
+    run: async args => {
       const w = resolveWindow(args[0])
       if (!w) return `no window matching "${args[0] ?? ""}" — see listWindows`
-      hyprlandState.focusWindow(w.address)
-      return `focused ${w.class}: ${w.title}`
+      // Yield first, or this is a no-op: Hyprland refuses to move window focus
+      // while one of our layer surfaces holds an EXCLUSIVE grab, which the
+      // Assistant island always does while the user is typing at it. That is what
+      // made every "focused X" here a lie the model then acted on (core/InputYield).
+      await inputYield.begin()
+      try {
+        await hyprlandState.focusWindow(w.address)
+        // Settle: the dispatch is a subprocess and the answer arrives by event.
+        await new Promise<void>(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => { r(); return GLib.SOURCE_REMOVE }))
+        const bare = (s?: string) => (s ?? "").toLowerCase().replace(/^0x/, "")
+        const now = hyprlandState.focusedClient as any
+        if (bare(now?.address) !== bare(w.address))
+          return `focus refused by the compositor — still on ${now?.class ?? "nothing"}; asked for ${w.class}: ${w.title}`
+        return `focused ${w.class}: ${w.title}`
+      } finally {
+        inputYield.end()
+      }
     },
   },
   closeWindow: {

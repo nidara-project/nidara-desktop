@@ -5,6 +5,7 @@ import Cairo from "gi://cairo"
 import GLib from "gi://GLib"
 import { MorphRevealer } from "../../common/MorphRevealer"
 import status from "../../core/Status"
+import inputYield from "../../core/InputYield"
 
 // The Activity Island's OWN layer surface — the one documented exception to
 // "overlays live inside the Bar's window" (skill commandment #5).
@@ -131,6 +132,15 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         const surface = win.get_native()?.get_surface()
         if (!surface?.set_input_region) return
         const region = new Cairo.Region()
+        // Yielded for an agent action (core/InputYield): fully click-through, capsule
+        // included. This surface spans the WHOLE monitor, so leaving the panel's own
+        // rect stamped would still eat every synthetic click aimed at whatever sits
+        // behind the Assistant — the exact clicks the yield exists to let through.
+        if (inputYield.active) {
+            surface.set_input_region(region)
+            win.queue_draw()
+            return
+        }
         // compute_bounds against the root, NOT get_allocation(): the capsule is
         // nested (root > row > centre box > capsule) and a child's allocation is
         // relative to its parent, so an allocation would land the rect in the

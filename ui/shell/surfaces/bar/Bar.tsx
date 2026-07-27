@@ -13,6 +13,7 @@ import { CAPSULE_BORDER } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import appService from "../../core/AppService"
 import status from "../../core/Status"
+import inputYield from "../../core/InputYield"
 import widgetConfig from "../../core/WidgetConfig"
 import regionConfig from "../../core/RegionConfig"
 import registry, { widgetAvailable, watchWidgetAvailability } from "../../widgets/index"
@@ -230,7 +231,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       const surface = win.get_native()?.get_surface()
       if (!surface) return
       const region = new Cairo.Region()
-      
+
+      // Yielded for an agent action: an EMPTY region, so a synthetic click lands on
+      // the app under us instead of on Prism's backdrop. Dropping the grab alone is
+      // not enough — that only stops Hyprland routing the pointer here regardless of
+      // the region; the region itself still covers the screen while an overlay is up.
+      if (inputYield.active) {
+          if (surface.set_input_region) { surface.set_input_region(region); win.queue_draw() }
+          return
+      }
+
+
       // Bar strip (40px)
       // @ts-ignore
       region.unionRectangle({ x: 0, y: 0, width: Math.round(monGeo.width), height: 40 })
@@ -347,11 +358,28 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // The island's keyboard-driven modes (overview cursor, agent entry) grab on
   // THEIR OWN surface now — two surfaces must never both hold EXCLUSIVE, or the
   // compositor picks one and the other silently stops receiving keys.
+  //
+  // Both grabs are also suspended while `inputYield` is active: an exclusive layer
+  // surface makes Hyprland REFUSE to move window focus at all, so computer-use
+  // cannot reach the app it was asked to drive until we let go (core/InputYield).
+  const barGrabbing = () => status.prism_open
+  const islandGrabbing = () => !!status.island_mode && island.needsKeyboard()
+
   const syncKeyboardMode = () => {
-    Gtk4LayerShell.set_keyboard_mode(win, status.prism_open
+    Gtk4LayerShell.set_keyboard_mode(win, barGrabbing() && !inputYield.active
       ? Gtk4LayerShell.KeyboardMode.EXCLUSIVE
       : Gtk4LayerShell.KeyboardMode.NONE)
   }
+  const syncIslandGrab = () => islandWin.setKeyboardGrab(islandGrabbing() && !inputYield.active)
+
+  inputYield.registerHolder(barGrabbing)
+  inputYield.registerHolder(islandGrabbing)
+  inputYield.connect("notify::active", () => {
+    syncKeyboardMode()
+    syncIslandGrab()
+    updateInputRegion()
+    islandWin.updateInputRegion()
+  })
 
   status.connect("notify::island-mode", () => {
     // Immediately: the catcher and whatever Status's mutual exclusion just
@@ -376,7 +404,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
     // modes keep the strip live so capsule-to-capsule switching stays ONE click.
     islandWin.setCatcher(!!status.island_mode, island.needsKeyboard() ? 0 : BAR_H)
     syncIslandModes()
-    islandWin.setKeyboardGrab(status.island_mode ? island.needsKeyboard() : false)
+    syncIslandGrab()
     if (status.island_mode) island.onOpened()   // seed the mode's keyboard nav
   })
 

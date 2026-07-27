@@ -69,7 +69,8 @@ Current commands (run `listActions` for the live list): `toggleCC|toggleControlC
 `setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listApps`, `launchApp <id>`,
 `disableComputerControl`, `notifyComputerAction` (computer-use tools ping it so the bar's AI-control
 indicator pulses "active"), `agentPointer …` (drives the fake-AI-cursor visual — see the
-computer-use section), `listActions`, `dumpState`, plus the **window/workspace management**
+computer-use section), `yieldInput <begin|end>` (the helpers make the shell let go of the keyboard
+so their action can land — see "The shell has to step out of the way"), `listActions`, `dumpState`, plus the **window/workspace management**
 cluster (see below): `listWindows`, `listWorkspaces`, `focusWorkspace <id|±1|name>`,
 `focusDirection <l|r|u|d>`, `focusWindow <window>`,
 `closeWindow <window>`, `moveWindowToWorkspace <window> <wsId>`, `toggleFloat`/`toggleFullscreen`/
@@ -160,6 +161,13 @@ still has its global `allowMcp` floor; local `ags request` is always available.
 - **`<window>` is resolved by `resolveWindow(arg)` in `app.ts`** — accepts an exact address
   (`0x…`, what `listWindows` reports — precise) **or** a class/title substring (`firefox`). Every
   window-targeting command shares it, so they all take the same flexible argument.
+- **`focusWindow` yields the shell's keyboard grab first, and VERIFIES.** While one of our layer
+  surfaces grabs, the dispatch is refused outright (next section), so the old handler returned
+  `focused <class>: <title>` for a focus that never happened — and the model believed it and kept
+  going. It now wraps the dispatch in `inputYield.begin()/end()`, waits 80 ms for the answer to
+  arrive by event, compares `HyprlandState.focusedClient` against the requested address, and reports
+  `focus refused by the compositor — still on <class>` when they differ. If you add another
+  focus-moving IPC command, do the same: a success string is a claim, and this one is checkable.
 - **`focusWindow` is ungated** (it used to be gated as the synthetic-keyboard precondition).
   Focusing a window is benign — exactly what a dock click or `launchApp` already does ungated —
   and the gates that matter (`type_text`/`press_key`/`click_*` + AT-SPI `do_app_action`) still
@@ -294,6 +302,61 @@ What works is waiting for the compositor to **announce** the release — that an
 an 80 ms fallback for the case where nothing was focused and no announcement is coming. Any surface
 that switches workspace *while closing* must use it; `focusWorkspace` is for surfaces that stay open
 (the app grid switches workspaces without releasing its grab, so it is unaffected).
+
+### The shell has to STEP OUT OF THE WAY for computer-use: `core/InputYield`
+
+The same refusal has a second victim, and it is the one that made the built-in Assistant look
+useless. Read the compositor's own code (`FocusState.cpp`, `CFocusState::rawWindowFocus`, 0.56):
+
+```cpp
+if (!g_pInputManager->m_exclusiveLSes.empty()) {
+    Log::logger->log(Log::DEBUG, "Refusing a keyboard focus to a window because of an exclusive ls");
+    return;                       // ← a hard return: focus does NOT move, no event is posted
+}
+```
+
+The Assistant island is `needsKeyboard: true`, so it holds an EXCLUSIVE grab the entire time the
+user is typing at it. Therefore, from inside the Assistant:
+
+1. `focus_window <app>` is a **no-op**. Not slow, not racy — refused.
+2. `hyprctl activewindow` then correctly still names the old window, so every helper's focus check
+   (`nidara-click`, `nidara-type`) refuses. **That guard was right.** Do not "fix" it by sourcing
+   focus from the shell (`listWindows.focused`) instead: that only teaches the helper to approve an
+   action that cannot land, and for the keyboard it is actively harmful — the keys genuinely belong
+   to the island, so the text would be typed into the Assistant's own prompt box.
+3. Even with focus sorted, the click would be eaten: Hyprland routes the **pointer** to an
+   exclusive-grabbing surface regardless of its input region, and the island spans the whole
+   monitor (that is why it needs its own catcher — `IslandWindow.setCatcher`).
+
+AT-SPI perception (`query_app`) and named actions (`do_app_action`) never look at focus, so those
+kept working throughout — which is why the failure looked like "the model is bad at clicking".
+
+**The fix is a scoped truce, `core/InputYield`.** `begin()` asks every grabbing surface to drop to
+`NONE` *and* stamp an EMPTY input region, waits for the compositor to announce the release
+(`hyprlandState.afterGrabRelease` — the release is double-buffered, see above), and only then lets
+the caller act. `end()` gives the grab back. Things to keep if you touch it:
+
+- **The helpers drive it, not the agent daemon** (`yieldInput begin|end`, spawned like `visual`).
+  That way an external MCP client acting while the user has Prism or the app grid open is covered
+  by the same mechanism, instead of only the built-in Assistant.
+- **Dropping the grab is not enough on its own.** The grab is what makes Hyprland ignore input
+  regions; the region itself still covers the screen while a panel is open. Every grabbing surface
+  therefore goes click-through for the duration: `Bar.updateInputRegion`, `IslandWindow.updateInputRegion`
+  (capsule included — the surface is monitor-sized) and both `DockAxis.buildInputRegion` bodies
+  return early on `inputYield.active`. In the dock that early return needs **its own region cache
+  key** (`"yield"`), or the restore matches the stale key and silently skips.
+- **`registerHolder` exists so the common case costs nothing.** With no surface grabbing, `begin()`
+  resolves immediately instead of paying the 80 ms release wait on every single action.
+- **A watchdog (15 s) restores everything** if a helper dies between `begin` and `end`. Without it
+  a crash would leave the shell keyboard-less and click-through with no way back.
+- Restore to what the surface should hold **now**, not to what it held before: the app grid drops
+  to `ON_DEMAND` while a context-menu popover is open, and a blind restore to `EXCLUSIVE` would
+  break that menu.
+
+Sequence that works, and why (verified against `rawSurfaceFocus`, which touches only
+`m_focusSurface` — a layer-shell grab never clears `m_focusWindow`): `focusWindow` yields → focus
+moves → grab comes back (window focus untouched) → the helper yields again → the release refocuses
+the last window, which is the target → `hyprctl activewindow` names it → the focus check passes.
 
 ### How to find out who holds the keyboard: `dumpState.keyboardFocus`
 

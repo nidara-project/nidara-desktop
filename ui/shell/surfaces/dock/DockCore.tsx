@@ -24,6 +24,7 @@ import {
     menuState, onMenuCountChanged, dockSideState, onPinnedChanged,
 } from "./state"
 import status from "../../core/Status"
+import inputYield from "../../core/InputYield"
 import hs from "../../core/HyprlandState"
 import Theme from "../../core/ThemeManager"
 import { t } from "../../core/i18n"
@@ -1228,6 +1229,23 @@ export default function DockCore(gdkmonitor: any, axis: AxisAdapter) {
         () => { if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.EXCLUSIVE) },
         () => { if (layerShellReady) Gtk4LayerShell.set_keyboard_mode(win, Gtk4LayerShell.KeyboardMode.ON_DEMAND) }
     )
+
+    // Step aside while an agent acts on another app (core/InputYield): an exclusive
+    // grab makes Hyprland REFUSE to move window focus at all, so an open app grid
+    // blocks computer-use exactly the way the Assistant island did. Only the grid
+    // ever grabs here — the resting dock is NONE — so this is a no-op otherwise.
+    // Restore to whatever the grid should be holding NOW: a context-menu popover
+    // still wants ON_DEMAND (it cannot take focus under EXCLUSIVE), so a blind
+    // restore to EXCLUSIVE would break the menu the user left open.
+    inputYield.registerHolder(() => appGridPanelOpen)
+    inputYield.connect("notify::active", () => {
+        if (!layerShellReady || !appGridPanelOpen) return
+        Gtk4LayerShell.set_keyboard_mode(win,
+            inputYield.active                  ? Gtk4LayerShell.KeyboardMode.NONE
+            : revealState().menuOpenCount > 0  ? Gtk4LayerShell.KeyboardMode.ON_DEMAND
+            :                                    Gtk4LayerShell.KeyboardMode.EXCLUSIVE)
+        axis.buildInputRegion(win, smoothedBarMain, revealState())
+    })
 
     appGrid.widget.visible = false
     appGrid.widget.halign  = Gtk.Align.CENTER

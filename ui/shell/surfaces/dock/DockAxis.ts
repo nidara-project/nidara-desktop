@@ -18,6 +18,7 @@ import Cairo from "gi://cairo"
 import { DOCK_CONSTANTS, calculateDockItemMetrics } from "./DockPhysics"
 import { drawSquircle } from "../../common/DrawingUtils"
 import Theme from "../../core/ThemeManager"
+import inputYield from "../../core/InputYield"
 import { dockSettings, dockSideState } from "./state"
 import type { AnimState } from "./state"
 
@@ -350,6 +351,11 @@ export function horizontalAxis(gdkmonitor: any): AxisAdapter {
                 if (rect) region.unionRectangle(rect)
                 surface.set_input_region(region)
             }
+            // Yielded for an agent action (core/InputYield): click-through, so a
+            // synthetic click reaches the app rather than the open app grid — which
+            // stamps the whole surface below. Its own key, so the restore recomputes
+            // a different one and re-applies instead of matching a stale cache.
+            if (inputYield.active) { apply("yield", setRect(null)); return }
             if (st.appGridPanelOpen) { apply("null", () => surface.set_input_region(null)); return }
             if (st.fullscreenMode && !st.appGridPanelOpen && !st.isRevealed) {
                 apply("empty", setRect(null)); return
@@ -698,6 +704,11 @@ export function verticalAxis(gdkmonitor: any): AxisAdapter {
                 if (rect) region.unionRectangle(rect)
                 surface.set_input_region(region)
             }
+            // Yielded for an agent action (core/InputYield): click-through, so a
+            // synthetic click reaches the app rather than the open app grid — which
+            // stamps the whole surface below. Its own key, so the restore recomputes
+            // a different one and re-applies instead of matching a stale cache.
+            if (inputYield.active) { apply("yield", setRect(null)); return }
             if (st.appGridPanelOpen) { apply("null", () => surface.set_input_region(null)); return }
             if (st.fullscreenMode && !st.appGridPanelOpen && !st.isRevealed) {
                 apply("empty", setRect(null)); return

@@ -63,6 +63,20 @@ function run(argv) {
     return { ok: proc.get_successful(), out: (out ?? "").trim(), err: (err ?? "").trim() }
 }
 
+// Ask the shell to step out of the way for this injection, and hand the keyboard
+// back after. While one of Nidara's own layer surfaces holds an EXCLUSIVE keyboard
+// grab — which the Assistant island does the entire time the user is typing at it —
+// Hyprland refuses to move window focus at all (FocusState.cpp: "Refusing a keyboard
+// focus to a window because of an exclusive ls"), so the focus gate below could never
+// pass; and the keyboard genuinely belongs to that surface, so injecting anyway would
+// type into the Assistant's own prompt. `begin` answers only once the compositor has
+// APPLIED the release, so it is deliberately synchronous. A shell that is down, or too
+// old to know the command, is a silent no-op; if we die before `end`, the shell
+// restores itself.
+function yieldInput(verb) {
+    try { GLib.spawn_command_line_sync(`timeout 3 ags request -- yieldInput ${verb}`) } catch {}
+}
+
 // Hyprland's focused window class (lowercased), e.g. "telegramdesktop".
 function hyprActiveClass() {
     try {
@@ -138,6 +152,19 @@ function main() {
         return
     }
 
+    // Past the guards, so this call is going to inject: make room for it. The yield
+    // wraps the FOCUS GATE too — before the shell lets go, the gate cannot pass by
+    // construction, and the keystrokes would have gone to the Assistant's own entry
+    // rather than to the app (see yieldInput).
+    yieldInput("begin")
+    try {
+        return inject(mode, app, payload, wtype)
+    } finally {
+        yieldInput("end")
+    }
+}
+
+function inject(mode, app, payload, wtype) {
     // Focus gate: only inject into the named app while it is actually focused.
     const active = hyprActiveClass()
     if (!focusMatches(active, app)) {
