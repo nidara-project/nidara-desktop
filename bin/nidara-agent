@@ -567,11 +567,20 @@ const ACT_TOOL_DEFS = [
     {
         name: "do_app_action",
         description:
-            "Invoke one of the accessibility actions query_app listed for a control (\"activate\", \"SetFocus\", or an app action like \"view.show-hidden-files\"). Deterministic and not focus-dependent — the FIRST choice for acting on another app. Add `role`/`occurrence` when several controls share a name.",
+            "Invoke an accessibility action on a control. Deterministic and not focus-dependent — the FIRST choice for acting on another app. "
+            // A live failure, 2026-07-27: asked to toggle Nautilus's sidebar, the
+            // model sent `win.toggle-sidebar` to a panel — a plausible GTK action
+            // name it had never seen, on a node whose `actions` array was empty.
+            // The old wording offered "an app action like view.show-hidden-files"
+            // as an example, which is precisely an invitation to invent one. Both
+            // halves of the rule matter: the action is COPIED from the node's own
+            // list, and the node has to be one that owns it.
+            + "`action` must be COPIED from that node's own `actions` array as returned by query_app — never a name you have not seen there, however plausible it sounds. "
+            + "A node whose `actions` is empty cannot be driven this way: click_app it instead. Add `role`/`occurrence` when several controls share a name.",
         props: {
             app: { type: "string", description: "App name substring" },
             node: { type: "string", description: "Accessible name of the control, from query_app" },
-            action: { type: "string", description: "One of that control's `actions`" },
+            action: { type: "string", description: "Copied from that control's `actions` array" },
             role: { type: "string", description: "Disambiguate by role (e.g. \"button\")" },
             occurrence: { type: "integer", description: "0-based index among matches" },
         },
@@ -1107,29 +1116,90 @@ function helperResult(name, argv) {
 //   - `match` filters nodes by name / text / role substring — asking a question
 //     instead of downloading the building. It is the lever the truncation notice
 //     names, so the model always has a next move.
-//   - the ancestor `path` is trimmed: last two links only, and each link capped.
-//     It is the single heaviest field in both apps measured — 51 KB of Nautilus's
-//     102 KB and 348 KB of Telegram's 503 KB — because the full chain is repeated
-//     for every sibling. THIS consumer never navigates by it: every action tool
-//     targets a control by name + role + occurrence. The tail is kept because
-//     "which panel is this in" is what disambiguates; the per-link cap exists
-//     because an ancestor's name can BE the content (a Telegram list item's
-//     accessible name is the whole message, ~900 chars, repeated down the chain),
-//     and orientation never needed 900 characters. The node's OWN name and text
-//     are untouched — only the ancestry is abbreviated.
-//     Measured: Nautilus −41 %, Telegram −61 %.
+//   - each node is LEANED and the ancestor `path` trimmed (last two links, each
+//     capped): dropped are the fields that carry no targeting information — the
+//     `window` string repeated on all 175 nodes, `type` (a duplicate of `role`
+//     in every node observed), `visible` (already in `states`), and the states
+//     every node has (`sensitive`/`showing`/…). The path is the single heaviest
+//     field — 51 KB of Nautilus's 102 KB, 348 KB of Telegram's 503 KB, because
+//     the chain repeats for every sibling and an ancestor's name can BE the
+//     content (a Telegram list item's accessible name is the whole message,
+//     ~900 chars, echoed down every descendant). This consumer never navigates
+//     by path; it targets name + role + occurrence.
+//   - REPEATED SIBLINGS COLLAPSE. A file manager's hundred rows are one *kind*
+//     of thing; the model needs to know a list exists and how long it is, not to
+//     read it. Keep the first few of each (path, role) group and replace the rest
+//     with a count.
+//
+// This is not tuning: WITHOUT the last two, a live Nautilus put its "Show Sidebar"
+// button — correctly named, action `click` — at node 157 of 175, byte 55,313 of
+// 60,367, i.e. PAST the cap. The model was asked to toggle the sidebar, never saw
+// the button, and guessed. Measured after: Nautilus 102 KB → 27 KB (the whole
+// window now fits in one answer), Telegram 503 KB → 34 KB.
 //
 // MCP clients keep the raw tree: they have the context for it and pay once per
 // call, where this one pays on every step of the turn.
 const A11Y_PATH_LINKS = 2
 const A11Y_LINK_CHARS = 48
+const A11Y_SIBLINGS = 3
+// A window's controls are the point of the tool, so this cap is higher than the
+// generic one — sized from measurement (a leaned Nautilus is 27 KB) so a normal
+// window arrives WHOLE rather than cut at its header bar.
+const MAX_A11Y_RESULT = 32000
+// States every node carries; they say nothing about which control to pick.
+const A11Y_NOISE_STATES = new Set([
+    "sensitive", "showing", "visible", "enabled", "focusable", "selectable", "opaque",
+])
 
-function projectA11yNode(n) {
-    if (typeof n?.path !== "string") return n
-    let links = n.path.split(" > ")
-        .map(l => (l.length > A11Y_LINK_CHARS ? l.slice(0, A11Y_LINK_CHARS) + "…" : l))
-    if (links.length > A11Y_PATH_LINKS) links = ["…", ...links.slice(-A11Y_PATH_LINKS)]
-    return { ...n, path: links.join(" > ") }
+function leanA11yNode(n) {
+    if (!n || typeof n !== "object") return n
+    const o = {}
+    if (n.id) o.id = n.id
+    if (n.role) o.role = n.role
+    // `type` is the same string as `role` in every node observed; keep it only if
+    // some toolkit ever disagrees, so nothing is silently lost.
+    if (n.type && n.type !== n.role) o.type = n.type
+    if (n.text) o.text = n.text
+    if (Array.isArray(n.actions) && n.actions.length) o.actions = n.actions
+    if (Array.isArray(n.shortcuts) && n.shortcuts.length) o.shortcuts = n.shortcuts
+    const states = (n.states || []).filter(s => !A11Y_NOISE_STATES.has(s))
+    if (states.length) o.states = states
+    if (n.bounds) o.bounds = n.bounds
+    if (typeof n.path === "string") {
+        let links = n.path.split(" > ")
+            .map(l => (l.length > A11Y_LINK_CHARS ? l.slice(0, A11Y_LINK_CHARS) + "…" : l))
+        if (links.length > A11Y_PATH_LINKS) links = ["…", ...links.slice(-A11Y_PATH_LINKS)]
+        o.path = links.join(" > ")
+    }
+    return o
+}
+
+// Keep the first A11Y_SIBLINGS of each (path, role) run and replace the rest with
+// one entry carrying the count. Document order is preserved — reordering a tree
+// would cost the model the one thing the flat list still encodes, which is where
+// things sit relative to each other.
+function collapseA11ySiblings(nodes) {
+    const groups = new Map()
+    for (const n of nodes) {
+        const k = JSON.stringify([n.path ?? "", n.role ?? ""])
+        groups.set(k, (groups.get(k) || 0) + 1)
+    }
+    const out = [], emitted = new Map()
+    for (const n of nodes) {
+        const k = JSON.stringify([n.path ?? "", n.role ?? ""])
+        const size = groups.get(k)
+        if (size <= A11Y_SIBLINGS) { out.push(n); continue }
+        const seen = emitted.get(k) || 0
+        if (seen < A11Y_SIBLINGS) { out.push(n); emitted.set(k, seen + 1); continue }
+        if (seen === A11Y_SIBLINGS) {
+            emitted.set(k, seen + 1)
+            out.push({
+                role: n.role, path: n.path, omitted: size - A11Y_SIBLINGS,
+                note: "more of the same kind here — use `match` to reach a specific one",
+            })
+        }
+    }
+    return out
 }
 
 function queryAppTool(app, match) {
@@ -1146,22 +1216,45 @@ function queryAppTool(app, match) {
     const total = data.nodes.length
     const needle = String(match ?? "").trim().toLowerCase()
     let nodes = data.nodes
-    if (needle) {
+    if (needle)
         nodes = nodes.filter(n => [n.id, n.text, n.role, n.type].some(
             v => typeof v === "string" && v.toLowerCase().includes(needle)))
-        data.match = match
-        data.scanned = total
+
+    // The window title lives on every node and is the same string on all of them
+    // whenever one window matched — hoist it rather than pay for 175 copies.
+    const windows = [...new Set(nodes.map(n => n.window).filter(Boolean))]
+    let lean = nodes.map(leanA11yNode)
+    const beforeCollapse = lean.length
+    lean = collapseA11ySiblings(lean)
+
+    // Built fresh, with the ORIENTATION FIELDS FIRST: what this is, how much of it
+    // there is, and what to do next. Appending that after 30 KB of nodes puts the
+    // one actionable sentence behind everything else in the result.
+    const out = {
+        source: data.source,
+        app: data.app ?? app ?? null,
+        ...(windows.length === 1 ? { window: windows[0] } : {}),
+        ...(needle ? { match, scanned: total } : {}),
+        count: lean.length,
+        ...(beforeCollapse !== lean.length ? { of_nodes: beforeCollapse } : {}),
+    }
+    if (needle && !nodes.length)
         // An empty match is a dead end unless it says why: the control may simply
         // be named in the user's language, and the model needs to know the window
         // was NOT empty before it tells the user it found nothing.
-        if (!nodes.length)
-            data.hint = `no node matched "${match}" among ${total} nodes in this window — try another word, a role (e.g. "button"), or call again without \`match\`.`
+        out.hint = `no node matched "${match}" among ${total} nodes in this window — try another word, a role (e.g. "button"), or call again without \`match\`.`
+    else if (data.hint) out.hint = data.hint
+    if (data.apps) out.apps = data.apps
+    out.nodes = lean
+
+    const content = JSON.stringify(out)
+    if (content.length <= MAX_A11Y_RESULT) return { ok: true, content }
+    return {
+        ok: true,
+        content: content.slice(0, MAX_A11Y_RESULT)
+            + `\n… cut here: this window is too big for one answer. Call query_app again with \`match\` set to what you are `
+            + "after (a control's name, or a role like \"button\") — do not re-run this unchanged.",
     }
-    data.count = nodes.length
-    data.nodes = nodes.map(projectA11yNode)
-    return capResult({ ok: true, content: JSON.stringify(data) },
-        "This window's tree is bigger than one answer. Call query_app again with `match` set to what you are after "
-        + "(a control's name, or a role like \"button\") — do not re-run this unchanged.")
 }
 
 // Agent-friendly direction + notch count → the signed (dx, dy) wheel notches the

@@ -261,17 +261,27 @@ print(json.dumps(@REPLY@))
 # message, repeated down every descendant's chain) and the reason the projection
 # exists at all.
 LONG_LINK = "list item#" + ("verbose accessible name " * 12)
+# The tree shape that broke it live: a long run of identical rows FIRST and the
+# control the user asked for LAST. Document order puts a GTK app's header bar at
+# the end, so a positional cut loses exactly the buttons worth pressing — measured
+# on Nautilus, where "Show Sidebar" sat at node 157 of 175, byte 55,313 of 60,367.
 STUB_A11Y = r'''#!/usr/bin/env python3
 import json, os, pathlib, sys
 pathlib.Path(os.environ["NIDARA_TEST_ARGV"], "nidara-a11y.json").write_text(json.dumps(sys.argv[1:]))
 if not sys.argv[1:]:
     print(json.dumps({"error": "computer-use is disabled — enable it in Settings → AI"}))
     raise SystemExit
-print(json.dumps({"source": "atspi", "app": sys.argv[1], "count": 1, "nodes": [
-    {"id": "Trash", "role": "push button", "text": None, "actions": ["activate"],
-     "bounds": {"x": 1, "y": 2, "w": 3, "h": 4},
-     "path": " > ".join(["frame#Files", "panel", "@LONG@", "scroll pane", "list"])},
-]}))
+deep = " > ".join(["frame#Files", "panel", "@LONG@", "scroll pane", "list"])
+rows = [{"id": "file-%03d.txt" % i, "role": "table row", "type": "table row", "text": None,
+         "states": ["sensitive", "showing", "selectable"], "actions": ["click"],
+         "visible": True, "window": "Files", "bounds": {"x": 0, "y": i, "w": 900, "h": 32},
+         "path": deep} for i in range(120)]
+tail = {"id": "Show Sidebar", "role": "toggle button", "type": "toggle button", "text": None,
+        "states": ["sensitive", "showing"], "actions": ["click"], "visible": True,
+        "window": "Files", "bounds": {"x": 1, "y": 2, "w": 34, "h": 34},
+        "path": "frame#Files > panel > header bar"}
+print(json.dumps({"source": "atspi", "app": sys.argv[1],
+                  "count": len(rows) + 1, "nodes": rows + [tail]}))
 '''
 
 
@@ -540,18 +550,27 @@ def main():
                 # must mark THAT result failed.
                 if results[2].get("ok"):
                     problems.append("a helper refusal was reported as a SUCCESSFUL tool result")
-            # The projection: an accessibility tree is far bigger than a turn's
-            # budget (measured live: 102 KB for Nautilus, 503 KB for Telegram,
-            # against a 24 KB cap), and the ancestor path is the heaviest field in
-            # both. Dropping this trim silently multiplies the cost of every look.
+            # The projection. An accessibility tree is far bigger than a turn's
+            # budget (measured live: 102 KB for Nautilus, 503 KB for Telegram
+            # against a 24 KB cap) and a plain head-cut loses the wrong end: the
+            # control the user named comes LAST in document order, behind the
+            # content. Three assertions, each for one half of the fix.
             tree = next((m.get("content", "") for m in Mock.last_messages
-                         if m.get("role") == "tool" and "push button" in str(m.get("content", ""))), "")
+                         if m.get("role") == "tool" and "table row" in str(m.get("content", ""))), "")
             if not tree:
                 problems.append("the query_app result never reached the next request")
-            elif LONG_LINK in tree:
-                problems.append("the ancestor path was relayed at full length (projection not applied)")
-            elif "… > " not in tree:
-                problems.append(f"the ancestor path was not trimmed: {tree[:200]!r}")
+            else:
+                if LONG_LINK in tree:
+                    problems.append("the ancestor path was relayed at full length (not trimmed)")
+                elif "… > " not in tree:
+                    problems.append(f"the ancestor path was not trimmed: {tree[:200]!r}")
+                if '"omitted"' not in tree:
+                    problems.append("a run of 120 identical rows was not collapsed")
+                # THE regression that started this: the button after the list.
+                if "Show Sidebar" not in tree:
+                    problems.append("the control AFTER the long list did not survive the projection")
+                if '"visible"' in tree or '"window"' in tree.split('"nodes"')[0][40:]:
+                    problems.append("per-node noise (visible/window) was not leaned out")
             text = "".join(e.get("text", "") for e in events if e.get("t") == "delta")
             if FINAL not in text:
                 problems.append(f"turn did not complete (streamed text: {text!r})")

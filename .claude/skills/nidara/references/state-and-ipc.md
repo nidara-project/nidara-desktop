@@ -785,21 +785,41 @@ Five things are specific to this consumer and are the whole content of the work:
   (`{error}` / `{ok:false}` / `{ok:true}`); MCP relays it as text, but three things here read `ok`
   and all three are wrong otherwise — the island's tool chip (it would settle as success), the
   two-strike repeat guard, and the model.
-- **A real accessibility tree does not fit in a chat, and `query_app` is projected because of it.**
-  Measured on a live session (2026-07-27): **Nautilus 102 KB compacted, Telegram 503 KB**, against
-  a 24 KB tool-result cap — the raw tool would have handed the model a blind cut plus the generic
-  "narrow the request (a line range)" advice, which names a lever this tool does not have. Two
-  changes, neither of which makes anything unreachable: a **`match`** parameter (substring over
-  name/text/role — the lever the truncation notice now names, and an empty match reports how many
-  nodes WERE scanned so "I found nothing" is distinguishable from "the window was empty"), and the
-  ancestor **`path` trimmed to its last two links, each capped at 48 chars**. The path is the
-  heaviest field in both apps (51 KB of Nautilus's 102, **348 KB of Telegram's 503**) because the
-  chain repeats for every sibling, and an ancestor's name can BE the content — a Telegram list
-  item's accessible name is the entire message, ~900 chars, echoed down every descendant. This
-  consumer never navigates by path (it targets name + role + occurrence), so the tail is
-  orientation only. Result: **−41 % Nautilus, −61 % Telegram**, and a filtered look at a real
-  window costs ~650 b instead of the full 24 KB cut. MCP clients keep the raw tree — they have the
+- **A real accessibility tree does not fit in a chat, and `query_app` is projected because of it.
+  This was proven by a live failure, not predicted.** Asked to toggle Nautilus's sidebar, the
+  Assistant queried the window, never found the control, and invented an action name. The button
+  was there and perfectly described — `id:"Show Sidebar"`, `role:"toggle button"`,
+  `actions:["click"]` — at **node 157 of 175, byte 55,313 of 60,367**: past the cap.
+  **A positional cut loses the wrong end** — GTK walks content first and chrome last, so a file
+  list fills the budget and the header bar, where the buttons worth pressing live, is what falls
+  off. Four changes, none of which makes anything unreachable:
+  - **`match`** (substring over name/text/role) — the lever the truncation notice names. An empty
+    match reports how many nodes WERE scanned, so "nothing matched" is distinguishable from "the
+    window is empty". A matched look costs **~256 b**.
+  - **Leaned nodes** — drop what carries no targeting information: `window` (the same string on all
+    175 nodes; hoisted to the top), `type` (a duplicate of `role` in every node observed),
+    `visible` (already in `states`), and the states every node has (`sensitive`/`showing`/…).
+  - **`path` trimmed** to its last two links, each capped at 48 chars. It is the heaviest field —
+    51 KB of Nautilus's 102, **348 KB of Telegram's 503** — because the chain repeats for every
+    sibling and an ancestor's name can BE the content (a Telegram list item's accessible name is
+    the whole message, ~900 chars, echoed down every descendant). This consumer never navigates by
+    path; it targets name + role + occurrence.
+  - **Repeated siblings collapse** — first 3 of each `path`+`role` run, then a count. A file
+    manager's hundred rows are one *kind* of thing. Document order is preserved: reordering would
+    cost the model the only spatial information a flat list still carries.
+
+  Measured after: **Nautilus 102 KB → 27 KB, Telegram 503 KB → 19 KB, both arriving WHOLE** instead
+  of cut at the header bar. Orientation fields (`window`, `count`, `of_nodes`, `match`, `hint`) are
+  emitted FIRST — a notice appended after 30 KB of nodes sits behind everything else in the result.
+  The cap here is its own (`MAX_A11Y_RESULT`, 32 KB, sized from those measurements) because a
+  window's controls are the whole point of the tool. MCP clients keep the raw tree — they have the
   context and pay once per call.
+- **A tool description must not model the thing it forbids.** The same live failure had a second
+  half: `do_app_action` was sent `win.toggle-sidebar` — a plausible GTK action name the model had
+  never seen — aimed at a panel whose `actions` array was empty. The description had offered *"or
+  an app action like `view.show-hidden-files`"* as an example, which is an invitation to invent
+  one. It now says the action must be COPIED from that node's own `actions`, and that a node with
+  none is `click_app`'s job.
 - **The descriptions are re-authored, not copied, and the reason is not brevity.** THIS CLIENT HAS
   NO EYES. The MCP wording sends an agent to a screenshot to read what the tree cannot show; here
   that is advice to stare at a PNG it will never receive. So `hover_app` says a tooltip's text is
@@ -810,8 +830,10 @@ Five things are specific to this consumer and are the whole content of the work:
 
 Covered by CI (`agent-loop` scenario 4): both gate states, the positional argv handed to
 `nidara-click` (`role` omitted + `occurrence` given must pad with `""`, or the occurrence lands in
-the role slot and filters for a control whose role is `"2"`), the refusal-honesty flag, and the
-path projection. All four assertions were verified to FAIL when the corresponding line is removed —
+the role slot and filters for a control whose role is `"2"`), the refusal-honesty flag, and every
+half of the projection. Its stub tree is the shape that broke it live — a long run of identical
+rows FIRST and the control the user asked for LAST — and the load-bearing assertion is that **the
+control after the list survives**. Each assertion was verified to FAIL when its line is removed,
 which is the only reason to believe any of them.
 
 ### The computer-use layer (third-party perception + action)
