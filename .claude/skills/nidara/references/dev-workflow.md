@@ -523,8 +523,15 @@ tool's own command line contains the pattern. Use a pattern that can't match its
 **CI gate (`agent-loop` in ci.yml → `scripts/ci/agent-loop-test.py`).** The manual walk above is
 now also a hermetic regression test — the every-serious-bug-was-a-wire-shape-bug lesson turned into
 a gate. It spawns the real daemon (gjs) against an in-process OpenAI-compatible mock under a temp
-`XDG_CONFIG_HOME`, with a stub `ags` on `PATH` so a tool call returns a value with no live shell (an
-empty `brainProvider` keeps it off the keyring/D-Bus). It asserts the tool-use loop end to end (tool
+`XDG_CONFIG_HOME` **and a temp `XDG_STATE_HOME`**, with a stub `ags` on `PATH` so a tool call returns
+a value with no live shell (an empty `brainProvider` keeps it off the keyring/D-Bus).
+**Both temp dirs are load-bearing, and the second one was learned the hard way.** The daemon restores
+its session from `XDG_STATE_HOME` at startup, so leaving that one real made "spawn a fresh daemon" a
+lie: the earlier scenarios' history arrived in scenario 3's *first* request, the stub `curl` reads
+"this is round 2" off a `tool_result` appearing **anywhere** in the messages, and the round-trip under
+test silently never happened (`session restored: N entries` in the failure telemetry is the tell). It
+was also reading and overwriting the developer's own conversation on every local run. **Anything you
+teach the daemon to persist needs its directory isolated here in the same change.** It asserts the tool-use loop end to end (tool
 call parsed, split args accumulated, tool dispatched, final text streamed) **and both halves of the
 transient-failure policy**: a scripted **503 is retried** past, a **4xx surfaces without retry**.
 Runs on `ubuntu-latest` with only `gjs` + `gir1.2-secret-1` (no Arch container). When you add a wire
