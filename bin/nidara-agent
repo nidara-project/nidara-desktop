@@ -1004,10 +1004,21 @@ let turnStartIndex = 0
 // stay whole — the model is still working on them. The model is told it can re-run
 // the action, which it does for the rare follow-up that needs the old data again.
 const RESULT_STUB = "(earlier result omitted to save context — re-run the action if you need this again)"
+// A loaded SKILL is the one tool result that must survive stubbing. The rule above
+// holds for DATA — the model read listApps, took what it needed, the payload no
+// longer has to travel. A skill is not data: it is the instructions the model is
+// supposed to keep obeying for the rest of the conversation. Stubbing it meant
+// turn 1 followed the ownership model and turn 2 saw "(earlier result omitted —
+// re-run the action if you need this again)", so the model either re-loaded it
+// (paying the same ~2.3k tokens again, as NEW content that defeats prefix caching
+// precisely when the conversation was about to benefit from it) or carried on with
+// half-remembered rules. Both are worse than just keeping it.
+const isSkillResult = (r) => r.name === "load_skill"
+
 function historyForRequest() {
     return history.map((m, i) =>
         m.role === "tool" && i < turnStartIndex
-            ? { ...m, results: (m.results || []).map(r => ({ ...r, content: RESULT_STUB })) }
+            ? { ...m, results: (m.results || []).map(r => isSkillResult(r) ? r : { ...r, content: RESULT_STUB }) }
             : m)
 }
 
