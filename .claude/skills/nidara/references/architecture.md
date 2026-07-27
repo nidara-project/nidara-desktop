@@ -222,10 +222,15 @@ To change config live, use **`hyprctl eval "hl.<call>(...)"`** — e.g.
 the argument is wrapped as `hl.dispatch(<arg>)`, so legacy dispatcher strings are Lua
 syntax errors: `hyprctl dispatch dpms on` ✗ → `hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })'` ✓
 (actions `enable`/`disable`/`toggle`), `hyprctl dispatch exit` ✗ → `'hl.dsp.exit()'` ✓.
-**A WRONG SELECTOR KEY DOES NOT NO-OP — IT FALLS BACK TO THE ACTIVE WINDOW.** Only a
-Lua *syntax* error is reported; an unknown key in a valid table is accepted, the
-dispatcher finds no selector, and it acts **on whatever is focused**. So a dispatch
-that names window A can fire on window B, and `ok` tells you nothing.
+**LUA DISPATCHERS IGNORE UNKNOWN FIELDS SILENTLY, AND THEN RUN WITH DEFAULTS.** Only a
+Lua *syntax* error comes back as an error; a misspelt or guessed key inside a valid
+table is accepted and the dispatcher executes anyway. This has bitten twice, both times
+on the user's live session: `cycle_next({ prev = … })` — there is no `prev`, the field
+is `next = false` — ran with defaults and cycled the user's focus (2026-07-02); and the
+window-selector case below.
+**For a selector, "ignored" means IT FALLS BACK TO THE ACTIVE WINDOW.** The dispatcher
+finds no selector and acts **on whatever is focused**, so a dispatch that names window A
+fires on window B, with `ok` as the only feedback.
 `hl.dsp.window.close({ address = "0x…" })` — wrong key — tried to close the **focused
 terminal**, and was stopped only by that terminal's own close confirmation (2026-07-27,
 hit for real while cleaning up after a live test; the user saw the dialog). Measured
@@ -235,6 +240,13 @@ The selector key is `window`, and its value carries the `address:` prefix:
 `hl.dsp.window.close({ window = 'address:0x…' })`. **`HyprlandState._winSel()` is the
 canonical spelling — copy it, never retype it**, and never read `ok` as "it happened":
 verify the effect on the window you meant.
+Never guess a field name. The authority is
+`src/config/lua/bindings/LuaBindingsDispatchers.cpp` at the exact tag (`hyprctl version`).
+For dispatchers with REQUIRED args there is a probe that constructs without dispatching —
+`hyprctl eval "return (function() local ok, err = pcall(function() return <expr> end);
+return ok and 'OK' or tostring(err) end)()"` — but note its limit, which is exactly the
+hole both incidents fell through: an unknown key on an OPTIONAL arg constructs fine, so
+the probe answers `OK` for a call that will still fire on the wrong window.
 This is not cosmetic: legacy dpms strings in `hypridle.conf` failed silently for months and
 left the screen unrecoverable-black after wake-from-suspend (2026-06-10 incident — the
 after-sleep hook is the ONLY thing that re-enables displays, so treat its syntax as critical
