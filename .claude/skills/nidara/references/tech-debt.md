@@ -678,6 +678,43 @@ implemented to spec but only OpenAI-compatible verified live. (f) **Expand-on-fi
 intrusive — watch the user's live verdict; easy to gate tighter or drop. Full plan:
 `~/.claude/plans/spicy-twirling-galaxy.md`.
 
+### 37. Assistant file layer ("tier 1") — debt created 2026-07-27
+The six daemon-local file tools shipped (see `state-and-ipc.md` for the frontiers and the
+enforced invariants). What they left behind:
+
+**(a) The fixed prompt roughly doubled and item 36(b) is now urgent, not theoretical.**
+Measured: `sys` 1687→2688 b, `tools` 3893→7543 b ≈ **+1163 tokens on every step of every
+turn**, against a `run_action` design that was squeezed to ~450 tokens precisely because
+that cost is paid per request. Cache breakpoints recover most of it on paper, but the
+Gemini lane was observed at `cached=0` on the FIRST step of each turn (implicit cache
+expiring in the ~2 min between turns), so on that lane it is largely paid in full. The two
+path lists inside `read_file`/`edit_file` descriptions are the largest single addition and
+are the first dial to turn — they exist to buy the absence of a guess-and-retry round-trip
+(break-even ≈ 25 requests), so measure before cutting them.
+
+**(b) `MAX_STEPS` is now 16 with still no context compaction.** File reads make turns
+genuinely longer, and a `read_file` result can be 24 KB (the `MAX_TOOL_RESULT` cap). The
+existing prior-turn `RESULT_STUB` does not help WITHIN a turn. A long diagnostic
+conversation will hit context limits before it hits the step cap. This is the same debt as
+36(b) seen from the other side; do the turn cap / trim before raising `MAX_STEPS` again.
+
+**(c) No IPC/MCP parity, on purpose — but re-check the reasoning if it ever bites.** File
+tools are daemon-local because MCP clients bring their own. If Nidara ever grows a
+non-MCP external consumer that needs them, that argument stops holding.
+
+**(d) `reloadHyprland` is untested live.** Registration and the dispatch path were checked
+in source only; it re-applies monitor config and the standing rule here is that
+display-affecting commands are not verified by running them. Wants a human eye.
+
+**(e) The `customize` skill is the only skill, and it is unversioned.** Nothing checks that
+`skills/customize/SKILL.md` still matches the code — if the frontier changes and the skill
+does not, the assistant confidently tells users the wrong ownership model. Consider a CI
+check tying the writable-file list in the skill to `WRITE_FILES` in the daemon.
+
+**(f) Legacy `~/.config/hypr/hyprland-user.lua` is writable but NOT git-tracked** — the
+undo history only covers `~/.config/nidara`. Rare (pre-2026-07 installs), logged, and not
+worth a second repo, but know it before promising a user "you can always undo".
+
 **Conversation persistence / history / memory — deferred, user-confirmed 2026-07-20 ("leave it for
 now, note it").** Current v1 behaviour (intended): the conversation lives in memory only — it PERSISTS
 across closing/reopening the island and across compact mutations (the `AgentService` transcript + the

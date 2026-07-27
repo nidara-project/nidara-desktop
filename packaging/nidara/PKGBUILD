@@ -139,6 +139,13 @@ package() {
   cp -r defaults "$pkgdir/usr/share/nidara/defaults"
   rm -rf "$pkgdir/usr/share/nidara/defaults/wallpaper"
 
+  # Assistant skills — markdown playbooks bin/nidara-agent loads on demand. This
+  # is the path a PACKAGE install takes, and it is the one that matters most: a
+  # --dev checkout reads the repo's skills/ directly, so forgetting this line
+  # would leave load_skill quietly absent for every real user while working
+  # perfectly on the maintainer's machine.
+  cp -r skills "$pkgdir/usr/share/nidara/skills"
+
   # Greeter's blank GTK4 theme (GTK_THEME=nidara → zero theme rules; GTK falls
   # back to Adwaita silently if this file is missing — a real past bite)
   install -Dm644 ui/greeter/theme/gtk.css "$pkgdir/usr/share/themes/nidara/gtk-4.0/gtk.css"

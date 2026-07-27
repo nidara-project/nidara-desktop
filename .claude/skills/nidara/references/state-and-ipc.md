@@ -458,10 +458,11 @@ is visible via `describeConfig` but not writable via `setConfig`.
 ### The built-in Assistant: `bin/nidara-agent` (the brain)
 
 The MCP server exposes the surface to EXTERNAL agents. `bin/nidara-agent` is Nidara's
-OWN conversational assistant — and it is deliberately **just another client of the same
-gated surface**: its tools ARE `ags request` calls, so Settings → AI gates
-(`allowConfigWrite` …) and the kill switch apply for free, and a new IPC action is usable
-with zero changes here (`run_action` is a passthrough — 100% coverage, exactly like MCP).
+OWN conversational assistant — and for everything it does TO THE DESKTOP it is deliberately
+**just another client of the same gated surface**: those tools ARE `ags request` calls, so
+Settings → AI gates (`allowConfigWrite` …) and the kill switch apply for free, and a new IPC
+action is usable with zero changes here (`run_action` is a passthrough — 100% coverage,
+exactly like MCP). The **file layer below is the one documented exception** to that rule.
 
 - **Standalone GJS** (same no-Node pattern as `nidara-mcp`), but the INVERSE topology: it is a
   long-running **stdio child of the shell** (spawned by `core/AgentService.ts` in the island
@@ -652,6 +653,79 @@ transcript; (2) **expand-on-finish** — when a turn ends with the desktop other
 AgentService pops the island open so a background answer surfaces. Being the island's first TEXT mode,
 its `handleKey` claims only Escape (everything else falls through to the entry); the bar grants EXCLUSIVE
 keyboard while `needsKeyboard()`. The empty state (no provider) routes to Settings → AI.
+
+#### The file layer ("tier 1") — the ONE thing that is not `ags request`
+
+Added 2026-07-27. Six tools implemented **inside the daemon** with GLib/Gio rather than as IPC
+actions: `read_file` · `list_dir` · `search_files` · `edit_file` · `write_file` · `load_skill`.
+
+**Why it breaks the "everything through the gated surface" rule, deliberately:** external MCP
+clients already bring their own file tools, so there is nothing for `nidara-mcp` to inherit; and
+pushing file contents through the `ags` socket would put blocking I/O on the shell's main loop for
+no gain. Do not "fix" this by promoting them to IPC actions.
+
+**No bash, and this is not a step towards it.** Reading a file is a syscall — five of the six touch
+no subprocess at all. `search_files` spawns `grep` with a **fixed argv**; `Gio.Subprocess.new()`
+takes an array and never invokes a shell, so the model supplies data, never a command.
+
+**Two frontiers, different shapes on purpose** (`resolvePath(raw, mode)` is the single door):
+
+| | |
+|---|---|
+| **READ** — prefix roots | `~/.config/nidara`, `~/.config/uwsm`, `~/.config/hypr`, `/usr/share/nidara`, plus the shell log (both spellings of `nidara-ui`'s `${XDG_RUNTIME_DIR:-/tmp}` fallback). NOT the rest of `$HOME`: whatever it reads goes to the model provider, so this is a privacy boundary too. Symlinks ARE followed — in `--dev`, `/usr/share/nidara/config/hypr/hyprland.lua` is a symlink into the repo. |
+| **WRITE** — exact 3-file allowlist | `~/.config/nidara/hyprland-user.lua` (+ the legacy `~/.config/hypr/` one), `~/.config/nidara/hypridle.conf`. Symlinks refused here. |
+
+Paths are `GLib.canonicalize_filename`'d **before** the prefix check, so `~/.config/nidara/../../.ssh`
+resolves and is refused rather than sneaking past.
+
+**The write frontier grants DEFERRED EXECUTION and there is no way around it** —
+`hyprland-user.lua` exists to hold `hl.exec_cmd(…)`, `hypridle.conf` holds `on-timeout` commands. That
+is inherent to "add me a keybind", not a hole, but it means tier 1's property is **"nothing
+invisible"**, not "cannot execute": everything scheduled is legible plain text, gated, and revertible.
+Hence `allowFileWrite` defaults **OFF** (like computer-use) while `allowFileRead` defaults **ON** (like
+screenshot — Nidara reading Nidara). Write implies read; revoking read revokes write.
+**`~/.config/uwsm/env` is readable and deliberately NOT writable**: `LD_PRELOAD` there is straight
+privilege escalation.
+
+**Every settings JSON is absent from the write list, and the reason is a real bug class:**
+`AgentConfig.save()` serialises the whole in-memory `_settings` on every change and **no config JSON
+has a `FileMonitor`** — so a hand-edit survives until the next settings change and is then silently
+overwritten. `set_config` is the only correct door. This is also why `skills/customize/SKILL.md` leads
+with it.
+
+**Three invariants enforced in code, not documented and hoped for:**
+- The `-- @autostart start/end` block of `hyprland-user.lua` belongs to Settings → Apps → Autostart
+  (`Autostart.tsx:writeEntries` re-reads from disk and splices only that region). Both write tools diff
+  the block before/after and refuse — an edit inside it would vanish days later with nothing linking
+  cause to effect.
+- `write_file` refuses to overwrite a file not read this session (`readThisSession`, cleared on
+  `reset`). `edit_file` needs no such check: knowing the exact text to replace IS having read it.
+- `edit_file` requires a **unique** match; an ambiguous anchor edits a line nobody was looking at.
+
+**Git-backed undo.** `~/.config/nidara` becomes a git repo on the first assistant write; every write is
+a commit; identity passed per-invocation so it works with no global git config; failures are logged and
+never fail the write. **The baseline commit MUST happen before the file is written** — the first
+implementation initialised after, which committed the already-changed file as the baseline and made the
+assistant's very first action the one thing that could never be undone.
+
+**Skills** (`skills/<name>/SKILL.md`, resolved dev-checkout-first via the `.dev` marker exactly like
+`readShellVersion`, else `/usr/share/nidara/skills`). Progressive disclosure is mandatory, not a
+refinement: this very skill is ~100k tokens across its references — right for a developer's agent,
+unusable where every token rides on every step of every turn. So `load_skill`'s description carries
+only names + one-line descriptions and the body is fetched on demand. **Shipped by BOTH install paths**
+— `install.sh` and `packaging/nidara/PKGBUILD`; forgetting the PKGBUILD line leaves `load_skill`
+quietly absent for every package user while working perfectly on the maintainer's machine.
+
+**`reloadHyprland`** (`HyprlandState.reloadConfig`) exists because a config edit previously had no way
+to be applied: the shell listened for `configreloaded` and nothing could provoke it. It bypasses
+`_dispatch` on purpose — `reload` is a top-level `hyprctl` command, not a dispatcher.
+
+**Cost, measured 2026-07-27** — the fixed per-request prompt roughly doubled: `sys` 1687→2688 b,
+`tools` 3893→7543 b, i.e. **≈ +1163 tokens on every step of every turn**. Mostly recovered by the
+existing cache breakpoints, but the Gemini lane was observed at `cached=0` on the first step of each
+turn (implicit cache expiring between turns). The two path lists inside `read_file`/`edit_file`
+descriptions are the biggest single addition and are the first dial to turn if this needs shrinking —
+they buy the absence of a guess-and-retry round-trip.
 
 ### The computer-use layer (third-party perception + action)
 

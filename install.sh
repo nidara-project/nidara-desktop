@@ -691,6 +691,13 @@ sudo cp -r "$REPO_DIR/defaults" /usr/share/nidara/defaults
 sudo rm -rf /usr/share/nidara/defaults/wallpaper
 sudo cp -r "$REPO_DIR/config/greetd" /usr/share/nidara/config/greetd
 
+# Assistant skills: markdown playbooks bin/nidara-agent loads on demand (its
+# load_skill tool). Replaced wholesale rather than merged, so a skill deleted
+# upstream actually disappears. A --dev install reads the repo's skills/ directly
+# (the .dev marker wins in skillsDir()), so this copy is what non-dev installs get.
+sudo rm -rf /usr/share/nidara/skills
+sudo cp -r "$REPO_DIR/skills" /usr/share/nidara/skills
+
 # Default wallpaper (jpg since 2026-07). The stale wallpaper.png can go now:
 # the DM block re-syncs a Nidara-owned /etc/greetd in this same run (tech-debt
 # #16 fix), so the greeter .lua points at wallpaper.jpg again; a foreign

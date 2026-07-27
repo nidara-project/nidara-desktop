@@ -272,6 +272,85 @@ const emitError = (m) => emit({ t: "error", message: String(m) })
 let deltasEmitted = 0
 const emitDelta = (text) => { if (text) { deltasEmitted++; emit({ t: "delta", text }) } }
 
+// ── Skills ───────────────────────────────────────────────────────────────────
+// Markdown playbooks the assistant loads ON DEMAND. Progressive disclosure is the
+// whole point and not a refinement: the in-repo `nidara` skill is ~100k tokens
+// across its references, which is correct for a developer's agent and unusable
+// here, where every token rides on every step of every turn. So the tool
+// description carries only names + one-line descriptions (~30 tokens today) and
+// the body is fetched when the model decides it needs it.
+//
+// Same resolution order as Paths.ts/readShellVersion: a --dev checkout wins over
+// the installed copy, so editing a skill in the repo takes effect without an
+// install.
+function skillsDir() {
+    try {
+        const [ok, bytes] = GLib.file_get_contents(`${HOME}/.config/nidara/.dev`)
+        if (ok) {
+            const dir = `${new TextDecoder().decode(bytes).trim()}/skills`
+            if (GLib.file_test(dir, GLib.FileTest.IS_DIR)) return dir
+        }
+    } catch {}
+    return "/usr/share/nidara/skills"
+}
+
+// Split YAML-ish frontmatter from the body. Deliberately not a YAML parser: the
+// contract is two flat `key: value` lines, and a skill that gets fancier than
+// that should be simplified rather than met with a parser.
+function parseSkill(text) {
+    const m = /^---\n([\s\S]*?)\n---\n?/.exec(text)
+    if (!m) return { meta: {}, body: text }
+    const meta = {}
+    for (const line of m[1].split("\n")) {
+        const kv = /^(\w+):\s*(.*)$/.exec(line)
+        if (kv) meta[kv[1]] = kv[2].trim()
+    }
+    return { meta, body: text.slice(m[0].length).trim() }
+}
+
+let skillsCache = null   // { name: { path, description } }
+function skills() {
+    if (skillsCache) return skillsCache
+    skillsCache = {}
+    const dir = skillsDir()
+    try {
+        const en = Gio.File.new_for_path(dir).enumerate_children(
+            "standard::name,standard::type", Gio.FileQueryInfoFlags.NONE, null)
+        for (;;) {
+            const info = en.next_file(null)
+            if (!info) break
+            if (info.get_file_type() !== Gio.FileType.DIRECTORY) continue
+            const name = info.get_name()
+            const path = `${dir}/${name}/SKILL.md`
+            if (!GLib.file_test(path, GLib.FileTest.EXISTS)) continue
+            let description = ""
+            try {
+                const { meta } = parseSkill(textFile(path))
+                description = meta.description || ""
+            } catch {}
+            skillsCache[name] = { path, description }
+        }
+        en.close(null)
+    } catch (e) {
+        log(`skills: none available (${dir}: ${e?.message ?? e})`)
+    }
+    return skillsCache
+}
+
+function loadSkillTool(name) {
+    const all = skills()
+    const hit = all[String(name ?? "").trim()]
+    if (!hit) return {
+        ok: false,
+        content: `No skill called "${name}". Available: ${Object.keys(all).join(", ") || "(none)"}.`,
+    }
+    try {
+        return { ok: true, content: parseSkill(textFile(hit.path)).body }
+    } catch (e) {
+        return { ok: false, content: `Could not load skill "${name}": ${e?.message ?? e}` }
+    }
+}
+
 // ── Tools offered to the model ───────────────────────────────────────────────
 // ONE passthrough tool (run_action) whose DESCRIPTION carries an index of every
 // desktop action — name + one-clause summary — instead of 32 first-class tool
@@ -439,6 +518,21 @@ function buildToolset() {
         },
         required: ["action"],
     })
+    // Same shape as run_action's index and for the same reason: names + one-line
+    // descriptions in front of the model at all times, bodies behind a call.
+    // Omitted entirely when no skills are installed, rather than offering a tool
+    // that can only fail.
+    const available = skills()
+    const names = Object.keys(available).sort()
+    if (names.length) defs.push({
+        name: "load_skill",
+        description:
+            "Load a playbook with detailed instructions for a kind of task. Read the one that matches BEFORE you start — it carries rules you cannot infer, and getting them wrong is worse than being slow. Available:\n"
+            + names.map(n => `${n} — ${available[n].description || "(no description)"}`).join("\n"),
+        props: { name: { type: "string", description: `One of: ${names.join(", ")}` } },
+        required: ["name"],
+    })
+
     toolsetCache = { defs, actionMap }
     return toolsetCache
 }
@@ -471,6 +565,7 @@ function summarizeTool(tu) {
         case "search_files": return `search_files "${truncate(String(i.pattern ?? ""), 40)}" in ${prettyPath(i.path)}`
         case "edit_file": return `edit_file ${prettyPath(i.path)}`
         case "write_file": return `write_file ${prettyPath(i.path)}`
+        case "load_skill": return `load_skill ${i.name || "?"}`
         case "run_action": return `run_action ${i.action || "?"}${Array.isArray(i.args) && i.args.length ? " " + i.args.join(" ") : ""}`
         default: return tu.name
     }
@@ -779,6 +874,8 @@ function execTool(tu) {
                 if (r.error) return { ok: false, content: r.error }
                 return capResult(editFileTool(r.path, String(tu.input?.old_text ?? ""), String(tu.input?.new_text ?? "")))
             }
+            case "load_skill":
+                return capResult(loadSkillTool(tu.input?.name))
             case "write_file": {
                 const gate = fileGate("write")
                 if (gate) return { ok: false, content: gate }
@@ -863,6 +960,11 @@ function buildSystemPrompt() {
         // settings JSON edited by hand looks right and is silently overwritten by
         // the shell minutes later. The tools refuse it, but saying it here stops
         // the model spending a step finding that out.
+        // The routing rule below is the SUMMARY; the `customize` skill is the full
+        // ownership model (which files the shell owns, why a hand-edited settings
+        // JSON disappears, the @autostart block). Pointing at it here is what makes
+        // progressive disclosure actually happen — a skill nobody loads is a file.
+        "- Before your FIRST file change in a conversation, call load_skill on the skill that matches (for desktop customization that is `customize`). It carries rules you cannot infer from the file itself.",
         "- Routing a change: a SETTING goes through set_config. A keybind, window rule or startup program goes in ~/.config/nidara/hyprland-user.lua (read it, then edit_file) — then call run_action reload_hyprland to apply it. Never edit a settings JSON directly; the shell owns those and would overwrite you.",
         // The language of the MESSAGE wins, always. The desktop locale is a hint
         // for the ambiguous case, never the rule: people routinely run an English
@@ -1851,6 +1953,9 @@ function handleMessage(msg) {
             turnStartIndex = 0
             systemCache = null
             toolsetCache = null
+            // Re-scanned on the next turn, so a skill edited in a --dev checkout
+            // takes effect on "new conversation" instead of needing a respawn.
+            skillsCache = null
             // The model's memory of what it read is gone with the history, so the
             // no-blind-overwrite check must forget too — otherwise a fresh
             // conversation inherits permission to overwrite a file it can no
