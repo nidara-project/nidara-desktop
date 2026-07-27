@@ -718,20 +718,24 @@ path for POSITIONING rather than replace it for buttons.
 **Order matters, and it is not what it looks like:** doing the Assistant's
 computer-use parity FIRST would duplicate (a), (b) and (d) into a fourth consumer
 and cement the drag asymmetry in one more place. Fix the surface, then mirror it.
-With (a) and (b) landed, the surface a parity pass would mirror is now
-**symmetric** — five verbs, each with an `-app` and an `-at` form. (d) is still
-open and still duplicates into whatever consumes it, which is the remaining
-argument for keeping the Assistant's parity last.
+**Done in that order** — (a) and (b) landed in #62, and the Assistant mirrored the
+*fixed* surface afterwards (2026-07-27): same names, same parameters, hover and
+`drag_app` included from the start rather than bolted on later. (c) and (d) are
+still open and now have TWO consumers to land in, which is the argument for doing
+(d) in the wrapper rather than in either caller.
+The surface both consumers now mirror is **symmetric** — five verbs, each with an
+`-app` and an `-at` form.
 
-**Found while verifying (a) live, and it bears on the parity decision:** a GTK
-tooltip is **not an accessibility node**. Hovering Nautilus's Back button rendered
-the tooltip in a screenshot while the AT-SPI tree held zero tooltip-role nodes
-before and after. So hover reveals state that a client WITHOUT VISION still cannot
-read — the MCP descriptions now say to use `screenshot` for tooltip text. For the
-built-in Assistant (no vision today) that makes hover useful for *provoking* UI —
-opening hover menus, revealing controls, which are ordinary accessibles — but not
-for reading tooltips. Weigh that when scoping its parity, and do not "fix" the
-absence of tooltip nodes: it is GTK's, not ours.
+**Found while verifying (a) live, and it decided how the Assistant's hover reads:**
+a GTK tooltip is **not an accessibility node**. Hovering Nautilus's Back button
+rendered the tooltip in a screenshot while the AT-SPI tree held zero tooltip-role
+nodes before and after. So hover reveals state that a client WITHOUT VISION still
+cannot read — the MCP descriptions say to use `screenshot` for tooltip text, which
+would be useless advice for the Assistant (it gets a path, not an image). Its
+`hover_app` description therefore says the tooltip text is unreachable **and to say
+so to the user**; hover stays useful there for *provoking* UI — opening hover menus,
+revealing controls, which are ordinary accessibles. Do not "fix" the absence of
+tooltip nodes: it is GTK's, not ours.
 
 **Not a gap, recorded to stop it being "fixed" again:** `screenshot` is reachable
 by the built-in Assistant today (it is not in `HIDDEN_ACTIONS`) and returns a PNG
@@ -739,7 +743,11 @@ path the Assistant cannot see. That is FINE — "take me a screenshot" is a
 legitimate user request the Assistant fulfils without vision. Do not hide it. The
 only adjustment worth making is wording: the MCP description frames screenshots as
 a way for an agent to *verify its own work*, which is true for a client with vision
-and false for the Assistant.
+and false for the Assistant. **Done 2026-07-27**, and in the cheaper place: the
+`listActions` first clause the Assistant actually sees was already neutral, so the
+correction is one line in the gated prompt block — *screenshot returns a file PATH,
+you never see the image, never describe its contents*. It sits behind the
+perception gate because that is when a model starts reaching for eyes.
 
 ### 37. Assistant file layer ("tier 1") — debt created 2026-07-27
 The six daemon-local file tools shipped (see `state-and-ipc.md` for the frontiers and the

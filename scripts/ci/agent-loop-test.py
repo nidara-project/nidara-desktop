@@ -41,6 +41,13 @@ ARGS = '{"key":"appearance.accent","value":"blue"}'
 FINAL = "Done — the accent is now blue."
 DEADLINE_S = 30
 
+# Computer-use scenario. `role` is omitted while `occurrence` is given ON PURPOSE:
+# nidara-click reads the tail POSITIONALLY, so an omitted role has to be padded
+# with "" — drop it and the occurrence lands in the role slot, filtering for a
+# control whose role is "2" (which matches nothing, silently).
+CLICK_ARGS = '{"app":"nautilus","node":"Trash","occurrence":2}'
+CLICK_ARGV = ["app", "nautilus", "Trash", "", "2"]
+
 # The Anthropic lane is driven through a stub `curl` (see make_stub_curl): its
 # endpoint is not configurable, so there is nothing to point at a local mock.
 # This signature must come back byte-for-byte in the next request's assistant
@@ -50,13 +57,17 @@ SIG = "TESTSIG-do-not-alter/AAECAwQ="
 
 # ── The mock LLM (OpenAI-compatible streaming) ───────────────────────────────
 class Mock(BaseHTTPRequestHandler):
-    mode = "retry"        # "retry" | "client_error", set per scenario
+    mode = "retry"        # "retry" | "client_error" | "computer_use", per scenario
     hits = 0
     served_5xx = False
+    last_tools = []       # tool NAMES offered in the most recent request
+    last_messages = []    # messages of the most recent request (tool results included)
 
     @classmethod
     def reset(cls, mode):
         cls.mode, cls.hits, cls.served_5xx = mode, 0, False
+        cls.last_tools = []
+        cls.last_messages = []
 
     def log_message(self, *a):
         pass  # quiet
@@ -83,10 +94,14 @@ class Mock(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         body = self.rfile.read(length) if length else b"{}"
         try:
-            messages = json.loads(body).get("messages", [])
+            payload = json.loads(body)
         except Exception:
-            messages = []
+            payload = {}
+        messages = payload.get("messages", [])
+        Mock.last_tools = [t.get("function", {}).get("name") for t in payload.get("tools", [])]
+        Mock.last_messages = messages
         has_tool_result = any(m.get("role") == "tool" for m in messages)
+        tool_results = sum(1 for m in messages if m.get("role") == "tool")
 
         # A 4xx must be surfaced, never retried: fail every request the same way.
         if Mock.mode == "client_error":
@@ -108,17 +123,35 @@ class Mock(BaseHTTPRequestHandler):
             self.wfile.write(s.encode())
             self.wfile.flush()
 
-        if not has_tool_result:
-            # Round 1: one tool_call, arguments split across two chunks (exercises
-            # the daemon's partial-JSON accumulation).
+        def call_tool(name, args, call_id):
             send(self._chunk(delta={"role": "assistant", "content": ""}))
             send(self._chunk(delta={"tool_calls": [
-                {"index": 0, "id": "call_1", "type": "function",
-                 "function": {"name": TOOL, "arguments": ""}}]}))
-            half = len(ARGS) // 2
-            send(self._chunk(delta={"tool_calls": [{"index": 0, "function": {"arguments": ARGS[:half]}}]}))
-            send(self._chunk(delta={"tool_calls": [{"index": 0, "function": {"arguments": ARGS[half:]}}]}))
+                {"index": 0, "id": call_id, "type": "function",
+                 "function": {"name": name, "arguments": ""}}]}))
+            half = len(args) // 2
+            send(self._chunk(delta={"tool_calls": [{"index": 0, "function": {"arguments": args[:half]}}]}))
+            send(self._chunk(delta={"tool_calls": [{"index": 0, "function": {"arguments": args[half:]}}]}))
             send(self._chunk(finish="tool_calls"))
+
+        if Mock.mode == "computer_use":
+            # Three helper-backed calls in one turn: a pointer click that SUCCEEDS
+            # (asserted on the argv the helper received), a perception call that
+            # returns a tree (asserted on the projection applied to it), and one
+            # the helper REFUSES (asserted on the result being marked failed).
+            if tool_results == 0:
+                call_tool("click_app", CLICK_ARGS, "call_click")
+            elif tool_results == 1:
+                call_tool("query_app", '{"app":"nautilus"}', "call_query")
+            elif tool_results == 2:
+                call_tool("query_app", "{}", "call_refused")
+            else:
+                send(self._chunk(delta={"role": "assistant", "content": FINAL[:1]}))
+                send(self._chunk(delta={"content": FINAL[1:]}))
+                send(self._chunk(finish="stop"))
+        elif not has_tool_result:
+            # Round 1: one tool_call, arguments split across two chunks (exercises
+            # the daemon's partial-JSON accumulation).
+            call_tool(TOOL, ARGS, "call_1")
         else:
             # Round 2: final answer, text split across two chunks.
             send(self._chunk(delta={"role": "assistant", "content": FINAL[:1]}))
@@ -207,6 +240,52 @@ sys.stderr.write("nidara-http:200 nidara-retry:\n")
 '''
 
 
+# ── The computer-use helpers: stubs that RECORD their argv ───────────────────
+# The daemon's job here is to translate a tool call into the right command line
+# for a helper that enforces the gate, verifies focus and drives the pointer.
+# There is no compositor and no AT-SPI bus in CI, so the helpers are replaced by
+# recorders: what is under test is the argv, which is exactly where a silent
+# defect lives (a dropped positional pad aims at the wrong control and every
+# layer still reports success).
+STUB_HELPER = r'''#!/usr/bin/env python3
+import json, os, pathlib, sys
+pathlib.Path(os.environ["NIDARA_TEST_ARGV"], "@NAME@.json").write_text(json.dumps(sys.argv[1:]))
+print(json.dumps(@REPLY@))
+'''
+
+# nidara-a11y answers differently depending on whether it was given an app, so one
+# stub covers both halves under test: a real-shaped TREE (projection) and a gate
+# REFUSAL (the daemon must mark that result failed, not "ok" with an error inside).
+# The ancestor path is deliberately deep AND long-linked — that is the shape
+# measured on a live session (a Telegram list item's accessible name IS the whole
+# message, repeated down every descendant's chain) and the reason the projection
+# exists at all.
+LONG_LINK = "list item#" + ("verbose accessible name " * 12)
+STUB_A11Y = r'''#!/usr/bin/env python3
+import json, os, pathlib, sys
+pathlib.Path(os.environ["NIDARA_TEST_ARGV"], "nidara-a11y.json").write_text(json.dumps(sys.argv[1:]))
+if not sys.argv[1:]:
+    print(json.dumps({"error": "computer-use is disabled — enable it in Settings → AI"}))
+    raise SystemExit
+print(json.dumps({"source": "atspi", "app": sys.argv[1], "count": 1, "nodes": [
+    {"id": "Trash", "role": "push button", "text": None, "actions": ["activate"],
+     "bounds": {"x": 1, "y": 2, "w": 3, "h": 4},
+     "path": " > ".join(["frame#Files", "panel", "@LONG@", "scroll pane", "list"])},
+]}))
+'''
+
+
+def make_stub_helpers(bind: Path):
+    # A successful pointer action, the shape nidara-click prints.
+    p = bind / "nidara-click"
+    p.write_text(STUB_HELPER.replace("@NAME@", "nidara-click")
+                 .replace("@REPLY@", repr({"ok": True, "app": "nautilus", "mode": "app"})))
+    p.chmod(0o755)
+    p = bind / "nidara-a11y"
+    p.write_text(STUB_A11Y.replace("@LONG@", LONG_LINK))
+    p.chmod(0o755)
+
+
 def make_stub_curl(bind: Path, rec: Path):
     src = (STUB_CURL.replace("@SIG@", SIG).replace("@TOOL@", TOOL)
            .replace("@ARGS@", ARGS.replace('"', '\\"')).replace("@FINAL@", FINAL))
@@ -214,7 +293,9 @@ def make_stub_curl(bind: Path, rec: Path):
     (bind / "curl").chmod(0o755)
 
 
-def drive_daemon(port: int, anthropic_rec: Path | None = None):
+def drive_daemon(port: int, anthropic_rec: Path | None = None,
+                 ai_extra: dict | None = None, argv_rec: Path | None = None,
+                 prompt: str = "make the accent blue"):
     """Spawn a fresh daemon, send one user turn, return (events, stderr_lines)."""
     tmp = Path(tempfile.mkdtemp(prefix="nidara-agent-test-"))
     try:
@@ -226,10 +307,13 @@ def drive_daemon(port: int, anthropic_rec: Path | None = None):
             "brainProvider": "",
             "brainModel": "mock",
             "brainEndpoint": f"http://127.0.0.1:{port}/v1",
+            **(ai_extra or {}),
         }))
         bind = tmp / "bin"
         bind.mkdir()
         make_stub_ags(bind)
+        if argv_rec:
+            make_stub_helpers(bind)
         if anthropic_rec:
             make_stub_curl(bind, anthropic_rec)
 
@@ -246,6 +330,8 @@ def drive_daemon(port: int, anthropic_rec: Path | None = None):
         env.setdefault("LANG", "en_US.UTF-8")
         if anthropic_rec:
             env["NIDARA_TEST_REC"] = str(anthropic_rec)
+        if argv_rec:
+            env["NIDARA_TEST_ARGV"] = str(argv_rec)
 
         proc = subprocess.Popen(
             ["gjs", "-m", str(DAEMON)],
@@ -276,7 +362,7 @@ def drive_daemon(port: int, anthropic_rec: Path | None = None):
         threading.Thread(target=read_stdout, daemon=True).start()
         threading.Thread(target=read_stderr, daemon=True).start()
 
-        proc.stdin.write(json.dumps({"t": "user", "text": "make the accent blue"}) + "\n")
+        proc.stdin.write(json.dumps({"t": "user", "text": prompt}) + "\n")
         proc.stdin.flush()
         done.wait(DEADLINE_S)
 
@@ -404,6 +490,74 @@ def main():
             report("anthropic: thinking blocks survive the tool round-trip", problems, events, stderr_lines)
         finally:
             shutil.rmtree(rec, ignore_errors=True)
+
+        # ── Scenario 4: computer-use is gate-CONDITIONED, and the argv is right ─
+        # Two properties, both invisible from the outside:
+        #  (1) OFFERED, not merely permitted — with the gates off (the shipped
+        #      default) the schemas must not be in the request at all. A model
+        #      told about a tool it cannot use promises the user something it
+        #      cannot deliver, and the schemas are re-sent on every step to do it.
+        #  (2) The argv handed to the helper is what the helper's positional CLI
+        #      means. Getting it wrong aims at a different control while every
+        #      layer still reports success.
+        Mock.reset("computer_use")
+        events, stderr_lines = drive_daemon(port, prompt="empty the trash in files")
+        problems = []
+        offered = [t for t in Mock.last_tools if t in ("query_app", "click_app", "do_app_action")]
+        if offered:
+            problems.append(f"computer-use tools offered with both gates OFF: {offered}")
+        report("computer-use: not offered while gated off", problems, events, stderr_lines)
+
+        Mock.reset("computer_use")
+        argv_rec = Path(tempfile.mkdtemp(prefix="nidara-agent-argv-"))
+        try:
+            events, stderr_lines = drive_daemon(
+                port,
+                ai_extra={"allowComputerUse": True, "allowComputerControl": True},
+                argv_rec=argv_rec,
+                prompt="empty the trash in files",
+            )
+            problems = []
+            for expected in ("query_app", "click_app", "do_app_action", "drag_app"):
+                if expected not in Mock.last_tools:
+                    problems.append(f"{expected} missing from the tool list with both gates on")
+            click = argv_rec / "nidara-click.json"
+            if not click.exists():
+                problems.append("nidara-click was never invoked")
+            else:
+                got = json.loads(click.read_text())
+                if got != CLICK_ARGV:
+                    problems.append(f"nidara-click argv wrong: {got} != {CLICK_ARGV}")
+            results = [e for e in events if e.get("t") == "toolresult"]
+            if len(results) < 3:
+                problems.append(f"expected 3 tool results (click + query + refusal), got {len(results)}")
+            else:
+                if not results[0].get("ok"):
+                    problems.append("the successful click was reported as failed")
+                if not results[1].get("ok"):
+                    problems.append("a successful query_app was reported as failed")
+                # The refusal half: nidara-a11y answers {"error": …} and the daemon
+                # must mark THAT result failed.
+                if results[2].get("ok"):
+                    problems.append("a helper refusal was reported as a SUCCESSFUL tool result")
+            # The projection: an accessibility tree is far bigger than a turn's
+            # budget (measured live: 102 KB for Nautilus, 503 KB for Telegram,
+            # against a 24 KB cap), and the ancestor path is the heaviest field in
+            # both. Dropping this trim silently multiplies the cost of every look.
+            tree = next((m.get("content", "") for m in Mock.last_messages
+                         if m.get("role") == "tool" and "push button" in str(m.get("content", ""))), "")
+            if not tree:
+                problems.append("the query_app result never reached the next request")
+            elif LONG_LINK in tree:
+                problems.append("the ancestor path was relayed at full length (projection not applied)")
+            elif "… > " not in tree:
+                problems.append(f"the ancestor path was not trimmed: {tree[:200]!r}")
+            text = "".join(e.get("text", "") for e in events if e.get("t") == "delta")
+            if FINAL not in text:
+                problems.append(f"turn did not complete (streamed text: {text!r})")
+            report("computer-use: offered when gated on, argv + refusal honest", problems, events, stderr_lines)
+        finally:
+            shutil.rmtree(argv_rec, ignore_errors=True)
 
         return 1 if failures else 0
     finally:

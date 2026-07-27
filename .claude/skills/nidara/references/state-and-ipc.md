@@ -569,11 +569,12 @@ exactly like MCP). The **file layer below is the one documented exception** to t
   model. Resolution order: explicit `index` → call `id` → continue the slot being filled (a pure
   continuation chunk carries neither). Keep the slots insertion-ordered so multiple calls execute in
   the order asked for.
-- **Tools offered to the model** (five, all executed via `ags request`, gates enforced by the shell —
-  a refusal comes back as the tool-result STRING; the daemon never re-checks gates; no
-  screenshot/computer-use in v1): `run_action(action, args?)` for every desktop action, plus the
-  settings/state cluster `set_config(key, value)`, `get_config(key?)`, `dump_state()`,
-  `describe_settings()`.
+- **Tools offered to the model.** The `ags request` five — `run_action(action, args?)` for every
+  desktop action, plus the settings/state cluster `set_config(key, value)`, `get_config(key?)`,
+  `dump_state()`, `describe_settings()` — with gates enforced by the SHELL (a refusal comes back as
+  the tool-result STRING; the daemon never re-checks those). Two groups do not go through
+  `ags request` and enforce their own gates in the daemon: the **file layer** and the
+  **computer-use tools** (both below).
 - **Every desktop action goes through ONE `run_action` tool whose DESCRIPTION carries a name index**
   — `snake_name — first clause of the action's description`, one per line — instead of one first-class
   tool schema per action. The index is GENERATED from `listActions` in `buildToolset()` (cached per
@@ -758,10 +759,68 @@ turn (implicit cache expiring between turns). The two path lists inside `read_fi
 descriptions are the biggest single addition and are the first dial to turn if this needs shrinking —
 they buy the absence of a guess-and-retry round-trip.
 
+#### Computer-use — the same helpers, but only while the gate is on (2026-07-27)
+
+The Assistant reaches third-party apps through the **same four helpers** MCP uses
+(`nidara-a11y`/`nidara-act`/`nidara-type`/`nidara-click`, see the next section), with the **same
+tool names and parameters** (one addition: `query_app` takes a `match` — see the projection below).
+One vocabulary for the project: a verb added to the wrapper lands in both consumers with the same
+shape, and the section below documents both.
+
+Five things are specific to this consumer and are the whole content of the work:
+
+- **The gates decide what is OFFERED, not only what is refused.** `buildToolset()` appends
+  `query_app` only while `allowComputerUse` is on, and the ten action tools only while
+  `allowComputerControl` is too. Both ship OFF, so the common case pays nothing — measured on the
+  CI shell: fixed prefix **8,472 b → 9,384 b** with perception (+912 b), **→ 17,400 b** with control
+  (**+8,928 b ≈ +2,200 tokens on every step**). That number is the reason for the conditioning, not
+  a footnote to it. Perception-without-control is a real state and is offered as one: look at an
+  app and report, touch nothing.
+- **The gate is re-read at the TURN BOUNDARY** (`syncComputerGate()` in `runTurn`), which drops the
+  cached toolset AND system prompt when it changed. Without that, a user who grants permission
+  mid-conversation keeps talking to an assistant that was never told. Deliberately not mid-turn:
+  rebuilding between two steps of one request chain produces a `tool_result` for a tool the
+  provider was never offered.
+- **`helperResult()` marks a refusal as a FAILED result.** Every helper prints one JSON object
+  (`{error}` / `{ok:false}` / `{ok:true}`); MCP relays it as text, but three things here read `ok`
+  and all three are wrong otherwise — the island's tool chip (it would settle as success), the
+  two-strike repeat guard, and the model.
+- **A real accessibility tree does not fit in a chat, and `query_app` is projected because of it.**
+  Measured on a live session (2026-07-27): **Nautilus 102 KB compacted, Telegram 503 KB**, against
+  a 24 KB tool-result cap — the raw tool would have handed the model a blind cut plus the generic
+  "narrow the request (a line range)" advice, which names a lever this tool does not have. Two
+  changes, neither of which makes anything unreachable: a **`match`** parameter (substring over
+  name/text/role — the lever the truncation notice now names, and an empty match reports how many
+  nodes WERE scanned so "I found nothing" is distinguishable from "the window was empty"), and the
+  ancestor **`path` trimmed to its last two links, each capped at 48 chars**. The path is the
+  heaviest field in both apps (51 KB of Nautilus's 102, **348 KB of Telegram's 503**) because the
+  chain repeats for every sibling, and an ancestor's name can BE the content — a Telegram list
+  item's accessible name is the entire message, ~900 chars, echoed down every descendant. This
+  consumer never navigates by path (it targets name + role + occurrence), so the tail is
+  orientation only. Result: **−41 % Nautilus, −61 % Telegram**, and a filtered look at a real
+  window costs ~650 b instead of the full 24 KB cut. MCP clients keep the raw tree — they have the
+  context and pay once per call.
+- **The descriptions are re-authored, not copied, and the reason is not brevity.** THIS CLIENT HAS
+  NO EYES. The MCP wording sends an agent to a screenshot to read what the tree cannot show; here
+  that is advice to stare at a PNG it will never receive. So `hover_app` says a tooltip's text is
+  unreachable *and to say so*, the `*_at` tools say coordinates come from a node's bounds and never
+  a guess, and the gated prompt block states once that `run_action screenshot` returns a **path**,
+  not a picture. Cross-cutting rules (focus first, preference order do_app_action → keyboard →
+  pointer → coordinates) live in that prompt block instead of being repeated in eleven schemas.
+
+Covered by CI (`agent-loop` scenario 4): both gate states, the positional argv handed to
+`nidara-click` (`role` omitted + `occurrence` given must pad with `""`, or the occurrence lands in
+the role slot and filters for a control whose role is `"2"`), the refusal-honesty flag, and the
+path projection. All four assertions were verified to FAIL when the corresponding line is removed —
+which is the only reason to believe any of them.
+
 ### The computer-use layer (third-party perception + action)
 
 The agent surface above is the shell controlling **itself**. The computer-use layer is the jump
-to perceiving and driving **any** third-party app. Phase 1 — perception, read-only:
+to perceiving and driving **any** third-party app. **Two consumers, one surface:** `nidara-mcp` for
+external agents and the built-in Assistant (above) — both spawn the same helpers with the same
+verbs, and the helpers are where every gate, focus check and kill-switch re-check lives. Add a verb
+here and it is one wrapper mode + one tool in each consumer. Phase 1 — perception, read-only:
 
 - **`bin/nidara-a11y`** (standalone GJS, `gi://Atspi`; same no-Node pattern as
   `nidara-mcp`/`nidara-portal`) reads an app's **AT-SPI2 accessibility tree** and prints
