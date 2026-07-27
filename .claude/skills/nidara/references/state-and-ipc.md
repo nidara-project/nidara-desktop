@@ -654,6 +654,36 @@ AgentService pops the island open so a background answer surfaces. Being the isl
 its `handleKey` claims only Escape (everything else falls through to the entry); the bar grants EXCLUSIVE
 keyboard while `needsKeyboard()`. The empty state (no provider) routes to Settings → AI.
 
+#### Session persistence — the conversation survives a reload (2026-07-27)
+
+The daemon is a **child** of the shell, so `Super+Shift+R` took it down and the model's context with
+it. Both halves are now written to disk at the same turn boundary, each by whoever owns the data:
+
+| File | Owner | Holds |
+|---|---|---|
+| `$XDG_STATE_HOME/nidara/agent/session.json` | `bin/nidara-agent` | the neutral `history` (model context) |
+| `$XDG_STATE_HOME/nidara/agent/transcript.json` | `core/AgentService.ts` | the `transcript` (bubbles) |
+
+**Not `~/.config/nidara/`, and this overrides the house "all user state is JSON under
+`~/.config/nidara`" convention** — that directory is a git repo now (the write tools' undo history),
+so a conversation persisted there gets committed permanently into a repo the user never asked for. A
+conversation is not configuration; the shell log already lives outside `~/.config` for the same
+reason. Directory is 0700; the content is plaintext.
+
+Three details that are load-bearing:
+- **Written at the turn boundary only.** Mid-turn the history is inconsistent (a `tool_use` without
+  its result), and a provider rejects that on restore.
+- **The persisted history is the STUBBED view** (`historyForRequest()`), so prior turns' tool results
+  are not stored at full size — they are already omitted from every request. `load_skill` results are
+  exempt, so a restored conversation keeps its rules instead of silently losing them.
+- **`reset()` deletes BOTH files from the shell side.** The daemon clears its own on `{t:"reset"}`,
+  but it is spawned lazily, so "New conversation" on an idle desktop reaches a daemon that is not
+  running — `writeLine` returns false, the UI empties, and the next message resurrects the thread the
+  user just discarded. The shell owns the session LIFECYCLE; the daemon owns its file's contents.
+
+A turn **in flight** is still lost — see `tech-debt.md` #37(g); fixing that means making the daemon a
+systemd sibling rather than a child, and is deferred until tier 2 needs it.
+
 #### The file layer ("tier 1") — the ONE thing that is not `ags request`
 
 Added 2026-07-27. Six tools implemented **inside the daemon** with GLib/Gio rather than as IPC

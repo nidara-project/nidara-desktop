@@ -1015,6 +1015,84 @@ const RESULT_STUB = "(earlier result omitted to save context — re-run the acti
 // half-remembered rules. Both are worse than just keeping it.
 const isSkillResult = (r) => r.name === "load_skill"
 
+// ── Session persistence ──────────────────────────────────────────────────────
+// The daemon is a CHILD of the shell, so `Super+Shift+R` (or a crash, or a
+// logout) takes it down and the model's context with it: the user came back to a
+// conversation the assistant no longer remembered having. That is annoying in
+// tier 1 and disqualifying for tier 2, where the assistant editing the shell and
+// reloading it means killing its own parent.
+//
+// This is the cheap half of the fix (the roadmap's "v1.1"): survive across
+// restarts by writing state down, rather than by re-parenting the daemon onto its
+// own systemd unit. It covers reload/crash/logout BETWEEN turns, which is every
+// case that actually happens today. A turn in flight is still lost — that needs
+// the sibling-service topology, and it can wait until tier 2 forces it.
+//
+// NOT in ~/.config/nidara, deliberately, breaking the house "all user state is
+// JSON under ~/.config/nidara" convention for one specific reason: that directory
+// is now a GIT REPO (the write tools' undo history), so persisting conversations
+// there would commit the user's chat, permanently, into a repo they never asked
+// for. A conversation is not configuration — it is much closer to the log, which
+// already lives outside ~/.config. XDG_STATE_HOME is exactly this: state that
+// should survive a restart but is not config.
+const STATE_DIR = `${GLib.getenv("XDG_STATE_HOME") || `${HOME}/.local/state`}/nidara/agent`
+const SESSION_FILE = `${STATE_DIR}/session.json`
+const SESSION_VERSION = 1
+// Bound the file. Tool results are already stubbed for prior turns before this is
+// written (see saveSession), so the weight is mostly text, but an unbounded chat
+// would still grow forever on disk — and re-feeding 500 turns to the model on the
+// next boot would be its own bill. Keeps the most recent entries.
+const MAX_PERSISTED = 120
+
+function saveSession() {
+    try {
+        GLib.mkdir_with_parents(STATE_DIR, 0o700)
+        // Persist the STUBBED view, not the raw history: prior turns' tool results
+        // are already omitted from every request, so keeping their full payloads on
+        // disk would store megabytes the model will never see again. Skills survive
+        // (isSkillResult), which is exactly what should be restored — they are the
+        // instructions, not the data.
+        const entries = historyForRequest().slice(-MAX_PERSISTED)
+        const payload = JSON.stringify({ version: SESSION_VERSION, updated: Date.now(), history: entries })
+        // The 0700 directory above is what protects this — the file holds the
+        // conversation in plaintext, and mkdir's mode is the part GJS can actually
+        // guarantee (GLib.chmod is not introspected).
+        GLib.file_set_contents(SESSION_FILE, payload)
+        log(`session saved: ${entries.length} entries, ${payload.length}b`)
+    } catch (e) {
+        // Never fatal: a conversation that cannot be saved is still a conversation.
+        log(`session save failed: ${e?.message ?? e}`)
+    }
+}
+
+function loadSession() {
+    try {
+        if (!GLib.file_test(SESSION_FILE, GLib.FileTest.EXISTS)) return
+        const data = JSON.parse(textFile(SESSION_FILE))
+        if (data?.version !== SESSION_VERSION || !Array.isArray(data.history)) {
+            log(`session ignored: version ${data?.version} (expected ${SESSION_VERSION})`)
+            return
+        }
+        history.push(...data.history)
+        // Everything restored is a PRIOR turn by definition, so the next request
+        // stubs it — which is a no-op, since it was persisted stubbed.
+        turnStartIndex = history.length
+        log(`session restored: ${history.length} entries`)
+    } catch (e) {
+        log(`session restore failed: ${e?.message ?? e} — starting fresh`)
+        history.length = 0
+        turnStartIndex = 0
+    }
+}
+
+function clearSession() {
+    try {
+        if (GLib.file_test(SESSION_FILE, GLib.FileTest.EXISTS)) GLib.unlink(SESSION_FILE)
+    } catch (e) {
+        log(`session clear failed: ${e?.message ?? e}`)
+    }
+}
+
 function historyForRequest() {
     return history.map((m, i) =>
         m.role === "tool" && i < turnStartIndex
@@ -1933,6 +2011,10 @@ async function runTurn(userText) {
         // `done` carries the turn's cost and NOTHING else, so it belongs in the
         // finally: it used to sit on the success path only, which meant the
         // expensive failures were exactly the ones the island never counted.
+        // Written at the turn boundary, which is also the only point where the
+        // history is in a consistent state (every tool_use has its result — a
+        // half-written turn restored later would be rejected by the provider).
+        saveSession()
         emit({ t: "done", usage: turnUsage })
         log(`turn end: steps=${Math.min(step, MAX_STEPS)} tok=${turnUsage.input}/${turnUsage.output}${turnUsage.thought ? ` think=${turnUsage.thought}` : ""} cached=${turnUsage.cached} ${Math.round((GLib.get_monotonic_time() - t0) / 1000)}ms`)
         emit({ t: "state", s: "idle" })
@@ -1962,6 +2044,9 @@ function handleMessage(msg) {
             log("reset: history cleared")
             history.length = 0
             turnStartIndex = 0
+            // "New conversation" must mean it on disk too, or the next restart
+            // resurrects the thread the user just discarded.
+            clearSession()
             systemCache = null
             toolsetCache = null
             // Re-scanned on the next turn, so a skill edited in a --dev checkout
@@ -1995,5 +2080,8 @@ function readLoop() {
 }
 
 log("started")
+// Before the first message, so a restored conversation is already the model's
+// context when the user's next turn arrives.
+loadSession()
 readLoop()
 loop.run()

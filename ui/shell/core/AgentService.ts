@@ -39,6 +39,86 @@ export interface Turn {
     error?: string
 }
 
+// ── Session persistence (the UI half) ────────────────────────────────────────
+// The daemon persists its own `history` (the MODEL's context); this persists the
+// `transcript` (what the USER sees). Two files, each owned by whoever holds the
+// data — the shell never had the daemon's neutral history and the daemon never
+// had the bubbles.
+//
+// They cannot meaningfully desync: the daemon is a child of this process, so they
+// die together and are restored together, and both are written at the same turn
+// boundary. `reset()` clears both.
+//
+// Location matches the daemon's and breaks the "all user state under
+// ~/.config/nidara" convention on purpose: that directory is now a git repo (the
+// assistant's undo history), and committing the user's conversations into it is
+// not a thing to do by accident. See bin/nidara-agent's STATE_DIR comment.
+const STATE_DIR = `${GLib.getenv("XDG_STATE_HOME") ?? `${GLib.get_home_dir()}/.local/state`}/nidara/agent`
+const TRANSCRIPT_FILE = `${STATE_DIR}/transcript.json`
+const TRANSCRIPT_VERSION = 1
+/** Mirrors the daemon's MAX_PERSISTED so the two views stay the same length. */
+const MAX_PERSISTED = 120
+
+function saveTranscript() {
+    try {
+        GLib.mkdir_with_parents(STATE_DIR, 0o700)
+        GLib.file_set_contents(TRANSCRIPT_FILE, JSON.stringify({
+            version: TRANSCRIPT_VERSION,
+            updated: Date.now(),
+            transcript: transcript.slice(-MAX_PERSISTED),
+        }))
+    } catch (e) {
+        // Never fatal — losing the saved copy is worth less than the live one.
+        log(`transcript save failed: ${e}`)
+    }
+}
+
+function loadTranscript() {
+    try {
+        if (!GLib.file_test(TRANSCRIPT_FILE, GLib.FileTest.EXISTS)) return
+        const [ok, bytes] = GLib.file_get_contents(TRANSCRIPT_FILE)
+        if (!ok) return
+        const data = JSON.parse(new TextDecoder().decode(bytes))
+        if (data?.version !== TRANSCRIPT_VERSION || !Array.isArray(data.transcript)) return
+        // A turn that was mid-flight when the shell died has no ending. Drop a
+        // trailing assistant turn with nothing in it rather than restoring an
+        // empty bubble the user would read as the assistant ignoring them.
+        const restored: Turn[] = data.transcript
+        const last = restored[restored.length - 1]
+        if (last?.role === "assistant" && !last.text && !last.error && !last.tools?.length) restored.pop()
+        transcript = restored
+        log(`transcript restored: ${transcript.length} turns`)
+    } catch (e) {
+        log(`transcript restore failed: ${e} — starting fresh`)
+        transcript = []
+    }
+}
+
+/**
+ * End the persisted session — BOTH halves, including the daemon's.
+ *
+ * The daemon clears its own `session.json` when it receives `{t:"reset"}`, but it
+ * is spawned LAZILY, so "New conversation" on an idle desktop reaches a daemon
+ * that is not running: `writeLine` returns false and nothing happens on disk. The
+ * next message would then spawn a daemon that restores the very thread the user
+ * just discarded — the UI empty and the model still remembering.
+ *
+ * So the shell, which owns the session LIFECYCLE (it decides when a conversation
+ * ends), removes both files; the daemon still owns what goes INSIDE its own.
+ * Deleting it under a running daemon is harmless: the reset message it also
+ * receives clears the in-memory history, and the next turn rewrites the file.
+ */
+function clearSessionFiles() {
+    for (const path of [TRANSCRIPT_FILE, `${STATE_DIR}/session.json`]) {
+        try {
+            if (GLib.file_test(path, GLib.FileTest.EXISTS))
+                Gio.File.new_for_path(path).delete(null)
+        } catch (e) {
+            log(`session clear failed for ${path}: ${e}`)
+        }
+    }
+}
+
 let proc: Gio.Subprocess | null = null
 // Typed via InstanceType, not `Gio.DataOutputStream`: the @girs Gio namespace
 // exposes these two as values but not as types (unlike Gio.Subprocess), so the
@@ -178,6 +258,9 @@ function handleEvent(ev: any) {
                     a.error = t("island.agent.error.empty")
                 cancelling = false
                 log(`turn end: ${Math.round((Date.now() - turnStartedAt))}ms text=${a?.text.length ?? 0}c tools=${a?.tools.length ?? 0}${a?.error ? " ERROR" : ""}`)
+                // Same boundary the daemon writes its own half on, so the two
+                // files always describe the same conversation.
+                saveTranscript()
                 // Expand-on-finish: work may have run with the island closed
                 // (background). If the desktop is otherwise idle, pop the answer
                 // open. Never steal from another open overlay (CC/Prism/…) or
@@ -279,6 +362,7 @@ export const agentService = {
         usage = { input: 0, output: 0, cached: 0 }
         lastError = null
         cancelling = false
+        clearSessionFiles()
         writeLine({ t: "reset" })
         notify()
     },
@@ -288,5 +372,12 @@ export const agentService = {
         return () => listeners.delete(fn)
     },
 }
+
+// At the BOTTOM on purpose: `log`, `transcript` and the rest are `const`/`let`
+// bindings above, so calling this any earlier in the module hits their temporal
+// dead zone. The island reads `agentService.transcript` when it first renders,
+// which is well after module evaluation, so the restored conversation is already
+// there.
+loadTranscript()
 
 export default agentService

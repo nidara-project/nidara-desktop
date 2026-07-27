@@ -711,6 +711,19 @@ display-affecting commands are not verified by running them. Wants a human eye.
 does not, the assistant confidently tells users the wrong ownership model. Consider a CI
 check tying the writable-file list in the skill to `WRITE_FILES` in the daemon.
 
+**(g) A turn IN FLIGHT is still lost to a shell restart — the daemon is a CHILD of
+the shell.** Session persistence (36 v1.1) covers reload/crash/logout *between*
+turns, which is every case that happens today. It does not cover the tier-2 case:
+an assistant that edits shell source and reloads is killing its own parent, and
+therefore itself, mid-turn. The fix is topological, not more persistence —
+promote `bin/nidara-agent` to its own **systemd user service** (sibling, not
+child) with a socket instead of stdio pipes; there is precedent in
+`bin/nidara.service`. Deliberately NOT built yet: it trades the lazy-spawn
+property ("an idle desktop shouldn't carry an extra gjs", and one holding an API
+key) for survival nobody needs until tier 2 exists. Build it when tier 2 forces
+it, and make "build → verify → reload" an explicit end-of-turn step at the same
+time so the restart lands on a turn boundary the persistence already handles.
+
 **(f) Legacy `~/.config/hypr/hyprland-user.lua` is writable but NOT git-tracked** — the
 undo history only covers `~/.config/nidara`. Rare (pre-2026-07 installs), logged, and not
 worth a second repo, but know it before promising a user "you can always undo".
@@ -724,10 +737,21 @@ and by the "New conversation" reset (which also clears the daemon's `history`). 
 can desync: `AgentService.transcript` is the UI view; the daemon's `history[]` is the model context — a
 daemon crash+respawn keeps the UI but loses the model's memory. The agreed roadmap (do NOT build until
 asked):
-- **v1.1 — persist the CURRENT conversation** (small, high value): write the transcript as JSON under
-  `~/.config/nidara/agent/` (house convention) and, on boot, re-feed the structured `history`
-  (user/assistant/tool, not just bubble text) to the daemon so the model *continues* with context, not
-  just displays it. Closes the "lose the thread on reload" gap.
+- ~~**v1.1 — persist the CURRENT conversation**~~ — **DONE 2026-07-27.** Both halves, each owned by
+  whoever holds the data: the daemon writes its neutral `history` to `session.json`, `AgentService`
+  writes the `transcript` to `transcript.json`, both at the same turn boundary (the only point where
+  the history is consistent — every `tool_use` has its result, and a half-written turn restored later
+  would be rejected by the provider). **NOT under `~/.config/nidara/`, which is where this entry
+  originally said to put it**: that directory became a git repo on 2026-07-27 (the write tools' undo
+  history), so persisting there would commit the user's conversations, permanently, into a repo they
+  never asked for. It lives in `$XDG_STATE_HOME/nidara/agent/` (0700) instead — a conversation is not
+  configuration, and the shell log already sets the precedent for state outside `~/.config`.
+  Two things worth knowing: the persisted history is the **stubbed** view (prior turns' tool results
+  are already omitted from every request, so storing their full payloads would be megabytes the model
+  will never see again) with `load_skill` results **exempt**, so a restored conversation still carries
+  its rules; and `reset()` deletes BOTH files from the shell side, because the daemon is spawned
+  lazily and "New conversation" on an idle desktop would otherwise reach a daemon that is not running
+  — clearing the UI while leaving the model's copy on disk to be resurrected by the next message.
 - **v2 — conversation history browser**: "New conversation" archives the current thread; a list to
   revisit past threads (`conversations/*.json`, auto title + timestamp). New UI surface (a submode or
   panel) → needs a design round.
