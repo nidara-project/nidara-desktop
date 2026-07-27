@@ -222,12 +222,19 @@ To change config live, use **`hyprctl eval "hl.<call>(...)"`** — e.g.
 the argument is wrapped as `hl.dispatch(<arg>)`, so legacy dispatcher strings are Lua
 syntax errors: `hyprctl dispatch dpms on` ✗ → `hyprctl dispatch 'hl.dsp.dpms({ action = "enable" })'` ✓
 (actions `enable`/`disable`/`toggle`), `hyprctl dispatch exit` ✗ → `'hl.dsp.exit()'` ✓.
-**A WRONG TABLE KEY PRINTS `ok` AND DOES NOTHING** — only a Lua *syntax* error is
-reported. `hl.dsp.window.close({ address = "0x…" })` answers `ok` and closes nothing;
-the selector key is `window`, and its value carries the `address:` prefix:
-`hl.dsp.window.close({ window = 'address:0x…' })` (hit while cleaning up after a live
-test, 2026-07-27). `HyprlandState._winSel()` is the canonical spelling — copy it rather
-than guessing, and never read `ok` as "it happened": verify the effect.
+**A WRONG SELECTOR KEY DOES NOT NO-OP — IT FALLS BACK TO THE ACTIVE WINDOW.** Only a
+Lua *syntax* error is reported; an unknown key in a valid table is accepted, the
+dispatcher finds no selector, and it acts **on whatever is focused**. So a dispatch
+that names window A can fire on window B, and `ok` tells you nothing.
+`hl.dsp.window.close({ address = "0x…" })` — wrong key — tried to close the **focused
+terminal**, and was stopped only by that terminal's own close confirmation (2026-07-27,
+hit for real while cleaning up after a live test; the user saw the dialog). Measured
+afterwards on two throwaway windows: `float({ action = 'toggle', address = "<inactive
+window>" })` left the named window alone and floated the **active** one.
+The selector key is `window`, and its value carries the `address:` prefix:
+`hl.dsp.window.close({ window = 'address:0x…' })`. **`HyprlandState._winSel()` is the
+canonical spelling — copy it, never retype it**, and never read `ok` as "it happened":
+verify the effect on the window you meant.
 This is not cosmetic: legacy dpms strings in `hypridle.conf` failed silently for months and
 left the screen unrecoverable-black after wake-from-suspend (2026-06-10 incident — the
 after-sleep hook is the ONLY thing that re-enables displays, so treat its syntax as critical
