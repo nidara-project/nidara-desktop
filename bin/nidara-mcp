@@ -398,6 +398,58 @@ const TOOLS = [
         },
     },
     {
+        name: "hover_app",
+        description:
+            "Move the pointer over a control in a THIRD-PARTY app WITHOUT pressing anything — the way to reach state that does not exist until the pointer is there: tooltips, hover-revealed buttons, menus that open on hover. Call query_app AFTER this to read what appeared; reading before hovering shows nothing, because the app has not drawn it yet. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                app: { type: "string", description: "Target app — must be the focused window" },
+                node: { type: "string", description: "Accessible name of the control to hover over" },
+                role: { type: "string", description: "Disambiguate by AT-SPI role" },
+                occurrence: { type: "integer", description: "Disambiguate by 0-based index among matches" },
+            },
+            required: ["app", "node"],
+            additionalProperties: false,
+        },
+        handler: ({ app, node, role, occurrence } = {}) => {
+            if (!computerControlEnabled())
+                return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
+            if (!app || !node) return errResult("hover_app needs app and node")
+            const c = findTool("nidara-click")
+            if (!c) return errResult("nidara-click not found — re-run install.sh")
+            const argv = [c, "hover-app", app, node]
+            if (role || occurrence != null) argv.push(role || "")
+            if (occurrence != null) argv.push(String(occurrence))
+            const r = run(argv)
+            return r.out ? okResult(r.out) : errResult(`hover_app failed: ${r.err || "no output"}`)
+        },
+    },
+    {
+        name: "hover_at",
+        description:
+            "Move the pointer over a WINDOW-RELATIVE point (x, y from the window's top-left) WITHOUT pressing anything — like hover_app but for canvas / custom-drawn surfaces with no accessible to name. Reveals tooltips and hover-only controls; read them with query_app AFTER hovering. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                app: { type: "string", description: "Target app — must be the focused window" },
+                x: { type: "integer", description: "X offset from the window's top-left" },
+                y: { type: "integer", description: "Y offset from the window's top-left" },
+            },
+            required: ["app", "x", "y"],
+            additionalProperties: false,
+        },
+        handler: ({ app, x, y } = {}) => {
+            if (!computerControlEnabled())
+                return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
+            if (!app || x == null || y == null) return errResult("hover_at needs app, x and y")
+            const c = findTool("nidara-click")
+            if (!c) return errResult("nidara-click not found — re-run install.sh")
+            const r = run([c, "hover-at", app, String(x), String(y)])
+            return r.out ? okResult(r.out) : errResult(`hover_at failed: ${r.err || "no output"}`)
+        },
+    },
+    {
         name: "scroll_at",
         description:
             "Scroll a THIRD-PARTY app with a synthetic mouse wheel, with the pointer over a WINDOW-RELATIVE point (x, y from the window's top-left) — use to reveal off-screen content in lists/views/canvases. The point decides WHICH scrollable region receives the wheel. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
@@ -456,9 +508,46 @@ const TOOLS = [
         },
     },
     {
+        name: "drag_app",
+        description:
+            "Drag with a synthetic pointer from one named control to another: press at the `from` control's centre, glide, release at the `to` control's centre — the archetypal drag-and-drop (a file into a folder, an item between lists, a card between columns) without guessing coordinates. Both controls are resolved before anything is pressed. Use drag_at instead when either end is a raw point (a canvas, a slider position). Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                app: { type: "string", description: "Target app — must be the focused window" },
+                from_node: { type: "string", description: "Accessible name of the control to drag FROM" },
+                to_node: { type: "string", description: "Accessible name of the control to drop ON" },
+                from_role: { type: "string", description: "Disambiguate the FROM control by AT-SPI role" },
+                from_occurrence: { type: "integer", description: "Disambiguate the FROM control by 0-based index among matches" },
+                to_role: { type: "string", description: "Disambiguate the TO control by AT-SPI role" },
+                to_occurrence: { type: "integer", description: "Disambiguate the TO control by 0-based index among matches" },
+            },
+            required: ["app", "from_node", "to_node"],
+            additionalProperties: false,
+        },
+        handler: ({ app, from_node, to_node, from_role, from_occurrence, to_role, to_occurrence } = {}) => {
+            if (!computerControlEnabled())
+                return errResult("computer-control is disabled — enable 'Allow Agents to Control Other Apps' in Settings → AI (it requires perception too)")
+            if (!app || !from_node || !to_node) return errResult("drag_app needs app, from_node and to_node")
+            const c = findTool("nidara-click")
+            if (!c) return errResult("nidara-click not found — re-run install.sh")
+            // Positional tail: [from-role] [from-occ] [to-role] [to-occ]. Any later
+            // one forces the earlier ones to be present, so pad with "" rather than
+            // skipping — an omitted role reads as "no role filter" on the far side.
+            const argv = [c, "drag-app", app, from_node, to_node]
+            const tail = [from_role || "", from_occurrence != null ? String(from_occurrence) : "",
+                to_role || "", to_occurrence != null ? String(to_occurrence) : ""]
+            let last = -1
+            tail.forEach((v, i) => { if (v !== "") last = i })
+            if (last >= 0) argv.push(...tail.slice(0, last + 1))
+            const r = run(argv)
+            return r.out ? okResult(r.out) : errResult(`drag_app failed: ${r.err || "no output"}`)
+        },
+    },
+    {
         name: "drag_at",
         description:
-            "Drag with a synthetic pointer from one WINDOW-RELATIVE point to another: press at (from_x, from_y), glide, release at (to_x, to_y) — for drag-and-drop, rubber-band selection, reordering, dragging a slider handle, or text selection that a click can't do. To drag from/to a named control, read its centre from query_app `bounds` and pass those coordinates. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+            "Drag with a synthetic pointer from one WINDOW-RELATIVE point to another: press at (from_x, from_y), glide, release at (to_x, to_y) — for drag-and-drop, rubber-band selection, reordering, dragging a slider handle, or text selection that a click can't do. When BOTH ends are named controls, prefer drag_app. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
         inputSchema: {
             type: "object",
             properties: {

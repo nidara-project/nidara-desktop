@@ -189,7 +189,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     },
   },
   agentPointer: {
-    desc: "PURELY VISUAL — drives the fake AI-cursor overlay that mirrors computer-use pointer actions; it never injects input (nidara-input does that underneath). Grammar: `agentPointer click|rightclick|scroll <gx> <gy> [from <bx> <by>]` or `agentPointer drag <gx> <gy> <gx2> <gy2> [from <bx> <by>]` (global logical px; the request resolves when the cursor LANDS on the target), then `agentPointer confirm` (the real action fired → click ripple) or `agentPointer cancel` (aborted → fade out, no ripple). Called by nidara-click; action kinds obey the allowComputerControl gate.",
+    desc: "PURELY VISUAL — drives the fake AI-cursor overlay that mirrors computer-use pointer actions; it never injects input (nidara-input does that underneath). Grammar: `agentPointer click|rightclick|move|scroll <gx> <gy> [from <bx> <by>]` or `agentPointer drag <gx> <gy> <gx2> <gy2> [from <bx> <by>]` (global logical px; the request resolves when the cursor LANDS on the target), then `agentPointer confirm` (the real action fired → click ripple, or for `move` just the linger: a hover presses nothing, so it must not ripple) or `agentPointer cancel` (aborted → fade out, no ripple). Called by nidara-click; action kinds obey the allowComputerControl gate.",
     run: args => ipc.agentPointer?.(...args),
   },
   // ── Window & workspace management ────────────────────────────────────────
@@ -823,8 +823,8 @@ app.start({
         })
         return "ok"
       }
-      if (!["click", "rightclick", "scroll", "drag"].includes(kind))
-        return "usage: agentPointer click|rightclick|scroll <gx> <gy> [from <bx> <by>] | drag <gx> <gy> <gx2> <gy2> [from <bx> <by>] | confirm | cancel"
+      if (!["click", "rightclick", "move", "scroll", "drag"].includes(kind))
+        return "usage: agentPointer click|rightclick|move|scroll <gx> <gy> [from <bx> <by>] | drag <gx> <gy> <gx2> <gy2> [from <bx> <by>] | confirm | cancel"
       // Defense in depth: the visual mirrors gated computer-control actions, so
       // action kinds obey the same gate (nidara-click checks it too).
       if (!agentConfig.allowComputerControl)

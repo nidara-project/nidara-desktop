@@ -47,7 +47,7 @@ import agentConfig from "../../core/AgentConfig"
 import { t } from "../../core/i18n"
 import { hexToFloatRgb } from "../../common/DrawingUtils"
 
-type Kind = "click" | "rightclick" | "scroll" | "drag"
+type Kind = "click" | "rightclick" | "move" | "scroll" | "drag"
 type Phase = "hidden" | "materialize" | "travel" | "landed" | "effect" | "dragGlide" | "idle" | "fadeout"
 
 const FADE_IN_MS = 120
@@ -246,6 +246,9 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
                 phase = "effect"
             }
         } else if (phase === "idle") {
+            // Lazy start, same sentinel pattern as travel/glide: a hover enters idle
+            // straight from confirm(), which has no frame clock to stamp it with.
+            if (idleStart < 0) idleStart = nowUs
             if (nowUs - idleStart >= IDLE_MS * 1000) phase = "fadeout"
             else {
                 idlePollAcc += dtMs
@@ -450,6 +453,13 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
             pressed = true
             glideStart = -1
             phase = "dragGlide"
+        } else if (kind === "move") {
+            // A hover presses NOTHING, so it must not ripple — the visual never
+            // lies, and a ripple here would read as a click the user never got.
+            // Landing IS the whole action: go straight to the linger.
+            idleStart = -1
+            idlePollAcc = 0
+            phase = "idle"
         } else {
             ripple = { start: -1, p: 0, cx: x, cy: y, subtle: kind === "scroll" }
             phase = "effect"

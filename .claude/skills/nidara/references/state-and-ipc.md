@@ -427,8 +427,9 @@ changes. Tools: `list_actions`, `run_action(name, args)`, `list_apps`, `launch_a
 `dump_state`, `query_ui(selector)`, `list_windows`, `list_workspaces`,
 `query_app(app)`, `do_app_action(app, node, action)`, `type_text(app, text)`,
 `press_key(app, key)`, `focus_window(window)` (ungated — a WM op), `click_app(app, node, button?)`, `click_at(app, x, y, button?)`,
+`hover_app(app, node)`, `hover_at(app, x, y)`,
 `scroll_app(app, node, direction, amount?)`, `scroll_at(app, x, y, direction, amount?)`,
-`drag_at(app, from_x, from_y, to_x, to_y)`,
+`drag_app(app, from_node, to_node)`, `drag_at(app, from_x, from_y, to_x, to_y)`,
 `describe_config`, `get_config`, `set_config`, `screenshot` (returns the PNG **inline as MCP image
 content** — the client sees it without a separate read), `doctor`.
 (Action verbs like `openWindowMenu` need no dedicated tool — they go through `run_action`; the
@@ -857,13 +858,24 @@ scrolling off-screen content, drag-and-drop / rubber-band selection / sliders):
   focus-verify, AT-SPI node resolution (centre) or a window-relative point, then the **coordinate
   mapping** — `global = window.at + rel` (AT-SPI window coords are logical, like Hyprland's `at`);
   `output_rel = global − monitor.xy`; `extent = monitor.{w,h} / monitor.scale` (hyprctl `w/h` are
-  physical). Modes: `app`/`at` (left-click), `rclick-app`/`rclick-at` (right-click),
-  `scroll-app`/`scroll-at` (scroll, with `<dx> <dy>` notches), `drag-at` (two window-relative
-  points). MCP: `click_app`/`click_at` take a `button` (`"left"`/`"right"`); `scroll_app`/`scroll_at`
-  take `direction` (up/down/left/right) + `amount` (notches, default 3), mapped to dx/dy by the
-  server; `drag_at(app, from_x, from_y, to_x, to_y)`. Drag is **point→point only** — to drag
-  from/to a named control, resolve its centre from `query_app` bounds and pass the coords (no
-  `drag-app`: a two-ended gesture doesn't map cleanly to the single-node `*-app` shape).
+  physical). **Every verb has both forms** — `*-app` names an AT-SPI node, `*-at` takes a
+  window-relative point: `app`/`at` (left-click), `rclick-app`/`rclick-at` (right-click),
+  `hover-app`/`hover-at` (pointer move, no button), `scroll-app`/`scroll-at` (scroll, with
+  `<dx> <dy>` notches), `drag-app`/`drag-at` (two nodes / two points). The CLI mode name is the
+  wrapper's vocabulary and `MODES[mode].action` is the injector's — they differ where the
+  user-facing verb is clearer (`hover-*` → the C verb `move`). MCP: `click_app`/`click_at` take a
+  `button` (`"left"`/`"right"`); `scroll_app`/`scroll_at` take `direction` (up/down/left/right) +
+  `amount` (notches, default 3), mapped to dx/dy by the server; `drag_app(app, from_node, to_node)`
+  with per-end `from_role`/`from_occurrence`/`to_role`/`to_occurrence`, `drag_at(app, from_x,
+  from_y, to_x, to_y)`.
+  **`hover-*` is not a lesser click.** It is the only way to reach state that does not exist until
+  the pointer is there — tooltips, hover-revealed controls, submenus that open on hover — so the
+  a11y tree cannot show it to you in advance. Read the tree AFTER hovering.
+  **Correction (2026-07-27):** this file used to justify the absence of `drag-app` with *"a
+  two-ended gesture doesn't map cleanly to the single-node `*-app` shape"*. It maps fine — the
+  wrapper resolves both ends through the same `resolveNode()` before anything is pressed, and a
+  half-resolved drag is precisely what that ordering prevents. The real reason it was missing was
+  that nobody had written it.
 - **Same gate + indicator + kill switch + focus verification** as the keyboard (clicking/scrolling
   is position/stacking-dependent, so geometry is read FRESH right before injecting). First slice is
   single-monitor.

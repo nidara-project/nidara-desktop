@@ -10,15 +10,22 @@
 //   nidara-click at         <app> <x> <y>                           # left-click a window-relative point (canvas)
 //   nidara-click rclick-app <app> <node> [role] [occurrence]        # right-click a control's centre
 //   nidara-click rclick-at  <app> <x> <y>                           # right-click a window-relative point
+//   nidara-click hover-app  <app> <node> [role] [occurrence]        # move the pointer over a control (no button)
+//   nidara-click hover-at   <app> <x> <y>                           # move the pointer over a window-relative point
 //   nidara-click scroll-app <app> <node> <dx> <dy> [role] [occ]     # scroll at a control's centre
 //   nidara-click scroll-at  <app> <x> <y> <dx> <dy>                 # scroll at a window-relative point
+//   nidara-click drag-app   <app> <from> <to> [fr] [fo] [tr] [to]   # drag between two controls' centres
 //   nidara-click drag-at    <app> <x1> <y1> <x2> <y2>               # press at (x1,y1), drag to (x2,y2), release
 //   (<dx>/<dy> = signed wheel notches: dy>0 down, dx>0 right)
 //
 // Use this only when do_action / keyboard can't reach a control (canvas, no
-// activatable action, no a11y), or for right-click / scroll / drag (DnD,
-// rubber-band selection). Drag from/to a CONTROL = resolve its centre via
-// query_app bounds, then drag-at those points. Pair with focus_window first.
+// activatable action, no a11y), or for right-click / hover / scroll / drag (DnD,
+// rubber-band selection). Pair with focus_window first.
+//
+// HOVER is not a lesser click — it is the only way to reach state the a11y tree
+// cannot show you, because it does not exist until the pointer is there:
+// tooltips, hover-revealed controls, submenus that open on hover. Read the tree
+// AFTER hovering, not before.
 //
 // SAFETY — clicking is position/stacking-dependent (even more than typing). So
 // <app> is REQUIRED and verified to be Hyprland's active window, and the window
@@ -161,14 +168,37 @@ function findNodeCentres(appFilter, nodeName, roleFilter) {
 // CLI mode → injector verb (`action`) + how the target position is resolved
 // (`target`): "app" = an AT-SPI node's centre, "at" = a window-relative point.
 // app/at stay exactly as the original left-click surface (backward compatible).
+// The mode name is the CLI's vocabulary and `action` is the injector's — they
+// differ where the user-facing verb is clearer (hover-* → the C verb `move`,
+// rclick-* → `rightclick`).
 const MODES = {
     "app":        { action: "click",      target: "app" },
     "at":         { action: "click",      target: "at" },
     "rclick-app": { action: "rightclick", target: "app" },
     "rclick-at":  { action: "rightclick", target: "at" },
+    "hover-app":  { action: "move",       target: "app" },
+    "hover-at":   { action: "move",       target: "at" },
     "scroll-app": { action: "scroll",     target: "app" },
     "scroll-at":  { action: "scroll",     target: "at" },
+    "drag-app":   { action: "drag",       target: "app" },
     "drag-at":    { action: "drag",       target: "at" },
+}
+
+// Resolve one node name (+ optional role / occurrence) to its window-relative
+// centre. Emits the error itself and returns null — callers just bail. `label`
+// names WHICH end failed, which only matters for drag-app's two of them.
+function resolveNode(appFilter, app, label, nodeName, role, occRaw) {
+    const where = label ? `${label} node ` : "node "
+    const hits = findNodeCentres(appFilter, nodeName, role)
+    if (!hits.length) { emit({ error: `no showing ${where}named "${nodeName}" in "${app}"` }); return null }
+    if (hits.length > 1 && occRaw === "") {
+        emit({ error: `ambiguous: ${hits.length} nodes match the ${where}"${nodeName}" — pass a role and/or occurrence`,
+            candidates: hits.slice(0, 20) })
+        return null
+    }
+    const t = occRaw === "" ? hits[0] : hits[parseInt(occRaw, 10)]
+    if (!t) { emit({ error: `${where}occurrence out of range (${hits.length} matches)` }); return null }
+    return t
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────
@@ -181,7 +211,7 @@ function main() {
     const app = (ARGV[1] ?? "").trim()
     const spec = MODES[mode]
     if (!spec || !app) {
-        emit({ error: "usage: nidara-click app|rclick-app <app> <node> [role] [occurrence] | at|rclick-at <app> <x> <y> | scroll-app <app> <node> <dx> <dy> [role] [occurrence] | scroll-at <app> <x> <y> <dx> <dy> | drag-at <app> <x1> <y1> <x2> <y2>" })
+        emit({ error: "usage: nidara-click app|rclick-app|hover-app <app> <node> [role] [occurrence] | at|rclick-at|hover-at <app> <x> <y> | scroll-app <app> <node> <dx> <dy> [role] [occurrence] | scroll-at <app> <x> <y> <dx> <dy> | drag-app <app> <from-node> <to-node> [from-role] [from-occurrence] [to-role] [to-occurrence] | drag-at <app> <x1> <y1> <x2> <y2>" })
         return
     }
     const isScroll = spec.action === "scroll"
@@ -204,26 +234,37 @@ function main() {
     if (spec.target === "app") {
         const nodeName = (ARGV[2] ?? "").trim()
         if (!nodeName) { emit({ error: `${mode} needs a node name` }); return }
-        // scroll-app: <node> <dx> <dy> [role] [occurrence]; click: <node> [role] [occurrence]
-        let role, occRaw
-        if (isScroll) {
-            dx = parseInt(ARGV[3] ?? "", 10); dy = parseInt(ARGV[4] ?? "", 10)
-            if (isNaN(dx) || isNaN(dy)) { emit({ error: "scroll-app needs numeric <dx> <dy>" }); return }
-            role = (ARGV[5] ?? "").trim() || null
-            occRaw = (ARGV[6] ?? "").trim()
-        } else {
-            role = (ARGV[3] ?? "").trim() || null
-            occRaw = (ARGV[4] ?? "").trim()
-        }
         Atspi.init()
-        const hits = findNodeCentres(a, nodeName, role)
-        if (!hits.length) { emit({ error: `no showing node named "${nodeName}" in "${app}"` }); return }
-        if (hits.length > 1 && occRaw === "") {
-            emit({ error: `ambiguous: ${hits.length} nodes match "${nodeName}" — pass a role and/or occurrence`, candidates: hits.slice(0, 20) }); return
+        if (isDrag) {
+            // drag-app: <from> <to> [from-role] [from-occ] [to-role] [to-occ].
+            // BOTH ends resolve before anything is injected — a half-resolved drag
+            // would press the button and have nowhere legitimate to release it.
+            const toName = (ARGV[3] ?? "").trim()
+            if (!toName) { emit({ error: "drag-app needs <from-node> <to-node>" }); return }
+            const from = resolveNode(a, app, "from", nodeName,
+                (ARGV[4] ?? "").trim() || null, (ARGV[5] ?? "").trim())
+            if (!from) return
+            const to = resolveNode(a, app, "to", toName,
+                (ARGV[6] ?? "").trim() || null, (ARGV[7] ?? "").trim())
+            if (!to) return
+            relX = from.x; relY = from.y
+            relX2 = to.x; relY2 = to.y
+        } else {
+            // scroll-app: <node> <dx> <dy> [role] [occurrence]; click/hover: <node> [role] [occurrence]
+            let role, occRaw
+            if (isScroll) {
+                dx = parseInt(ARGV[3] ?? "", 10); dy = parseInt(ARGV[4] ?? "", 10)
+                if (isNaN(dx) || isNaN(dy)) { emit({ error: "scroll-app needs numeric <dx> <dy>" }); return }
+                role = (ARGV[5] ?? "").trim() || null
+                occRaw = (ARGV[6] ?? "").trim()
+            } else {
+                role = (ARGV[3] ?? "").trim() || null
+                occRaw = (ARGV[4] ?? "").trim()
+            }
+            const t = resolveNode(a, app, "", nodeName, role, occRaw)
+            if (!t) return
+            relX = t.x; relY = t.y
         }
-        const t = occRaw === "" ? hits[0] : hits[parseInt(occRaw, 10)]
-        if (!t) { emit({ error: `occurrence out of range (${hits.length} matches)` }); return }
-        relX = t.x; relY = t.y
     } else {
         relX = parseInt(ARGV[2] ?? "", 10); relY = parseInt(ARGV[3] ?? "", 10)
         if (isNaN(relX) || isNaN(relY)) { emit({ error: `${mode} needs numeric <x> <y>` }); return }

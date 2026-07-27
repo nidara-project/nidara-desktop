@@ -682,20 +682,23 @@ intrusive — watch the user's live verdict; easy to gate tighter or drop. Full 
 Traced every verb through all four layers (`nidara-input.c` → `nidara-click` →
 `nidara-mcp` → the built-in Assistant). **Layer 2→3 is complete** — `click_app` /
 `click_at` absorb all four click modes via a `button` param, so the MCP server is
-correctly wired and is NOT where the problem is. Four gaps, cheapest first:
+correctly wired and is NOT where the problem is. Four gaps, cheapest first;
+**(a) and (b) are fixed, (c) and (d) are open.**
 
-**(a) `move` is BUILT AND UNREACHABLE.** `nidara-input.c` implements five verbs
-(`move` `click` `rightclick` `scroll` `drag`, header line 5); `nidara-click`'s
-`MODES` table (line 164) exposes seven modes and **none of them is `move`**. So
-hover — the thing that reveals tooltips, submenus and hover-only controls, i.e.
-state the a11y tree cannot show you until the pointer is there — is compiled,
-documented and dead. Wrapper + MCP work only, **no C**.
+**(a) ~~`move` is BUILT AND UNREACHABLE.~~ FIXED 2026-07-27** — `hover-app` /
+`hover-at` in `nidara-click`'s `MODES` (→ the C verb `move`), `hover_app` /
+`hover_at` in MCP, and a `move` kind in the fake-cursor choreography that
+**lingers without rippling** (a hover presses nothing, and the visual never
+lies). No C, as predicted. The estimate that missed: this was billed as "wrapper
++ MCP", but the pointer overlay is a third consumer of the verb list — anything
+that adds a verb has to teach `agentPointer` what it looks like.
 
-**(b) `drag` is the only asymmetric verb.** Every other verb has both an `-app`
-form (name an AT-SPI node) and an `-at` form (coordinates). Drag has only
-`drag-at`, so dragging a file from one list to another — the archetypal drag —
-forces coordinate guessing instead of naming both ends. The wrapper already
-resolves node→coords for clicks, so this is wrapper + MCP only, **no C**.
+**(b) ~~`drag` is the only asymmetric verb.~~ FIXED 2026-07-27** — `drag-app` /
+`drag_app` resolve BOTH ends through the same `resolveNode()` before anything is
+pressed (a half-resolved drag would press the button with nowhere legitimate to
+release it), with per-end role/occurrence disambiguation. The old justification
+for its absence — *"a two-ended gesture doesn't map cleanly to the single-node
+`*-app` shape"* — was wrong and is corrected in `state-and-ipc.md`.
 
 **(c) No middle button, no double-click, at any layer.** The injector knows only
 `BTN_LEFT`/`BTN_RIGHT`, and a double-click is not two clicks — it needs the
@@ -715,6 +718,10 @@ path for POSITIONING rather than replace it for buttons.
 **Order matters, and it is not what it looks like:** doing the Assistant's
 computer-use parity FIRST would duplicate (a), (b) and (d) into a fourth consumer
 and cement the drag asymmetry in one more place. Fix the surface, then mirror it.
+With (a) and (b) landed, the surface a parity pass would mirror is now
+**symmetric** — five verbs, each with an `-app` and an `-at` form. (d) is still
+open and still duplicates into whatever consumes it, which is the remaining
+argument for keeping the Assistant's parity last.
 
 **Not a gap, recorded to stop it being "fixed" again:** `screenshot` is reachable
 by the built-in Assistant today (it is not in `HIDDEN_ACTIONS`) and returns a PNG
