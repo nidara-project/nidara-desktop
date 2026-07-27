@@ -38,7 +38,27 @@ import GioUnix from "gi://GioUnix"
 import Secret from "gi://Secret"
 
 const AI_JSON = `${GLib.get_user_config_dir()}/nidara/ai.json`
-const MAX_STEPS = 8            // hard cap on tool-use round-trips per user turn
+// Hard cap on tool-use round-trips per user turn. Was 8, sized for "open the
+// control center" — one action and an answer. Reading files makes turns genuinely
+// longer (find the file → read it → correlate with state → answer), and a turn
+// that dies at the cap costs the user everything it already spent and delivers
+// nothing. 16 covers a real diagnosis without becoming a budget to burn: this is
+// still a desktop assistant, not a coding agent, and the repeated-failure guard
+// below stops the pathological case long before the cap does.
+const MAX_STEPS = 16
+// Paging for read_file. The default is what a model gets when it doesn't think
+// about it, so it has to be small enough that an unthinking read of a big file is
+// survivable; the max is the escape hatch for when it does think.
+const READ_LINES_DEFAULT = 400
+const READ_LINES_MAX = 2000
+const MAX_SEARCH_HITS = 100
+// Ceiling on ANY tool result, applied after the tool runs. Tool results are the
+// whales in the transcript — they land in `history` and ride in every later
+// request of the conversation (measured 2026-07-22: one listApps was 85% of a
+// 31 KB body) — and file reads are the first tool here able to produce hundreds of
+// KB in a single call. Set above every current IPC result, so in practice this
+// only ever bites a file read, and it tells the model how to narrow it.
+const MAX_TOOL_RESULT = 24000
 const HTTP_TIMEOUT = "120"     // curl --max-time (seconds)
 const MAX_HTTP_ATTEMPTS = 3    // 1 try + up to 2 retries on a 5xx / network blip
 const RETRY_BASE_MS = 600      // linear backoff between attempts: 600 ms, then 1200 ms
@@ -75,6 +95,120 @@ function readAiJson() {
     } catch {
         return {}
     }
+}
+
+// ── File frontier (tier 1) ───────────────────────────────────────────────────
+// The assistant's file tools are DAEMON-LOCAL, not IPC actions: external MCP
+// clients bring their own file tools, so there is nothing to mirror onto that
+// surface, and routing file contents through the ags socket would put blocking
+// I/O on the shell's main loop for no gain.
+//
+// Two frontiers, and they are deliberately NOT the same shape:
+//
+//   READ — prefix roots. Nidara's own domain: the user's desktop state, the
+//   shipped defaults (so the assistant can see what it is overriding), and the
+//   shell log (what turns it from a remote control into something that can
+//   diagnose). Not the rest of $HOME: whatever it reads is sent to the model
+//   provider, so the read frontier is a privacy boundary as much as a safety one.
+//
+//   WRITE — an EXACT allowlist of three files, because the write frontier grants
+//   deferred execution and there is no way around that: hyprland-user.lua exists
+//   to hold hl.exec_cmd(…) and hypridle.conf holds on-timeout commands, so
+//   writing them schedules commands for the next session. That is inherent to
+//   "add me a keybind", not a hole. What keeps it honest is that everything
+//   scheduled is legible plain text, gated (allowFileWrite, default off) and
+//   revertible — never an invisible action.
+//
+//   ~/.config/uwsm/env is READABLE and deliberately NOT WRITABLE: it sets the
+//   session environment, so LD_PRELOAD there is straight privilege escalation,
+//   and nothing a user asks an assistant for needs it.
+//
+// Every settings JSON is absent from the write list on purpose — the shell holds
+// them in memory and rewrites them wholesale with no FileMonitor, so an outside
+// edit is silently clobbered by the next settings change. set_config is the only
+// correct door. See skills/customize/SKILL.md.
+const HOME = GLib.get_home_dir()
+const RUNTIME_DIR = GLib.getenv("XDG_RUNTIME_DIR") || "/tmp"
+
+const READ_ROOTS = [
+    `${HOME}/.config/nidara`,
+    `${HOME}/.config/uwsm`,
+    `${HOME}/.config/hypr`,
+    "/usr/share/nidara",
+]
+// Single files outside those roots. The log path mirrors bin/nidara-ui's own
+// `${XDG_RUNTIME_DIR:-/tmp}` fallback; both spellings are listed so the tool
+// works whichever one the session actually used.
+const READ_FILES = [`${RUNTIME_DIR}/nidara-ui.log`, "/tmp/nidara-ui.log"]
+
+// The legacy ~/.config/hypr/hyprland-user.lua is included because pre-2026-07
+// installs still load it (package.path lists ~/.config/nidara first and Lua
+// require() takes the FIRST match, which is what Autostart.tsx's resolveUserConf
+// mirrors) — editing the file Lua actually loads matters more than tidiness.
+const WRITE_FILES = [
+    `${HOME}/.config/nidara/hyprland-user.lua`,
+    `${HOME}/.config/hypr/hyprland-user.lua`,
+    `${HOME}/.config/nidara/hypridle.conf`,
+]
+
+const underRoot = (path, root) => path === root || path.startsWith(root + "/")
+
+// Resolve a model-supplied path and decide whether it is inside the frontier.
+// Returns { path } or { error } — the error text goes straight back to the model
+// as the tool result, so it names what IS allowed rather than just refusing.
+function resolvePath(raw, mode) {
+    let p = String(raw ?? "").trim()
+    if (!p) return { error: "No path given." }
+    if (p === "~") p = HOME
+    else if (p.startsWith("~/")) p = HOME + p.slice(1)
+    if (!p.startsWith("/")) return { error: `Path must be absolute (or start with ~/): "${raw}"` }
+    // Purely lexical: collapses "." and ".." without touching the filesystem, so
+    // "~/.config/nidara/../../.ssh/id_rsa" is resolved BEFORE the prefix check
+    // rather than sneaking past it.
+    const path = GLib.canonicalize_filename(p, null)
+
+    if (mode === "write") {
+        if (!WRITE_FILES.includes(path)) return {
+            error: `Not writable: ${path}. You may only write: ${WRITE_FILES.join(", ")}. `
+                + "Settings live behind set_config — never edit a settings file directly, the shell overwrites it.",
+        }
+        // Symlinks are refused on the write side only. A symlink here would let a
+        // path that passes the allowlist land somewhere else entirely, and the
+        // allowlist is three known files that have no reason to be links. (Reads
+        // do follow them: in a --dev install /usr/share/nidara/config/hypr/
+        // hyprland.lua IS a symlink into the repo, and following it is correct.)
+        try {
+            const info = Gio.File.new_for_path(path).query_info(
+                "standard::is-symlink", Gio.FileQueryInfoFlags.NOFOLLOW_SYMLINKS, null)
+            if (info.get_is_symlink()) return { error: `Refusing to write through a symlink: ${path}` }
+        } catch {
+            // Does not exist yet — fine, creating it is allowed.
+        }
+        return { path }
+    }
+
+    if (READ_FILES.includes(path) || READ_ROOTS.some(r => underRoot(path, r))) return { path }
+    return {
+        error: `Not readable: ${path}. You may read ${READ_ROOTS.join(", ")} and the shell log `
+            + `(${READ_FILES[0]}). Everything else is outside your frontier — say so rather than working around it.`,
+    }
+}
+
+// Gate check, re-read per call like every other Nidara helper (nidara-a11y et al),
+// so flipping the switch in Settings → AI takes effect on the next message.
+function fileGate(mode) {
+    const cfg = readAiJson()
+    if (mode === "write") {
+        if (cfg.allowFileWrite !== true) return "Editing files is turned off. The user can enable it in Settings → AI → Files."
+        // Defence in depth: the shell keeps these consistent (setAllowFileWrite
+        // implies read), but ai.json is a plain file anyone can hand-edit into an
+        // inconsistent state, and "write without read" is exactly the combination
+        // that corrupts a file instead of editing it.
+        if (cfg.allowFileRead !== true) return "Editing files needs reading them first, which is turned off (Settings → AI → Files)."
+        return null
+    }
+    if (cfg.allowFileRead !== true) return "Reading files is turned off. The user can enable it in Settings → AI → Files."
+    return null
 }
 
 // Run a command synchronously, capturing stdout+stderr. Used for the fast
@@ -191,6 +325,38 @@ const STATIC_TOOL_DEFS = [
         props: {},
         required: [],
     },
+    // ── File tools (tier 1) ──────────────────────────────────────────────────
+    // Deliberately terse: these ride in every request of every turn, and the
+    // frontier does not need explaining here — a refusal names what IS allowed,
+    // which is cheaper than pre-emptive prose and arrives exactly when it helps.
+    // The `customize` skill carries the ownership model; load_skill fetches it.
+    {
+        name: "read_file",
+        description:
+            "Read a text file from the desktop's own config, the shipped defaults in /usr/share/nidara, or the shell log. Returns numbered lines. Long files are paged: use `offset`/`limit` and read the part you need, not the whole thing.",
+        props: {
+            path: { type: "string", description: "Absolute path, or ~/… " },
+            offset: { type: "number", description: "First line to return (1-based, default 1)" },
+            limit: { type: "number", description: `Lines to return (default ${READ_LINES_DEFAULT}, max ${READ_LINES_MAX})` },
+        },
+        required: ["path"],
+    },
+    {
+        name: "list_dir",
+        description: "List a directory: names, whether each is a file or directory, and size.",
+        props: { path: { type: "string", description: "Absolute path, or ~/… " } },
+        required: ["path"],
+    },
+    {
+        name: "search_files",
+        description:
+            "Search file contents for a pattern (extended regex) and return matching lines with their file and line number. Use this on the shell log to find an error, or across the config to find where something is set.",
+        props: {
+            pattern: { type: "string", description: "Extended regular expression" },
+            path: { type: "string", description: "File or directory to search" },
+        },
+        required: ["pattern", "path"],
+    },
 ]
 
 // IPC action name (camelCase) → wire tool name (snake_case). Function-calling
@@ -257,6 +423,10 @@ const geminiTools = () => buildToolset().defs.map(d => ({
     parameters: { type: "object", properties: d.props, required: d.required },
 }))
 
+// Shorten a path for the island's tool chip: the user knows where their own
+// config lives, and the full path pushes the interesting part off the capsule.
+const prettyPath = (p) => String(p ?? "").replace(HOME, "~")
+
 function summarizeTool(tu) {
     const i = tu.input || {}
     switch (tu.name) {
@@ -264,9 +434,109 @@ function summarizeTool(tu) {
         case "get_config": return `get_config ${i.key || "(all)"}`
         case "dump_state": return "dump_state"
         case "describe_settings": return "describe_settings"
+        case "read_file": return `read_file ${prettyPath(i.path)}${i.offset ? `:${i.offset}` : ""}`
+        case "list_dir": return `list_dir ${prettyPath(i.path)}`
+        case "search_files": return `search_files "${truncate(String(i.pattern ?? ""), 40)}" in ${prettyPath(i.path)}`
         case "run_action": return `run_action ${i.action || "?"}${Array.isArray(i.args) && i.args.length ? " " + i.args.join(" ") : ""}`
         default: return tu.name
     }
+}
+
+// ── File tool implementations ────────────────────────────────────────────────
+// GLib/Gio directly: reading a file is a syscall, not a program to launch, so
+// there is no subprocess and no shell in any of these. search_files is the one
+// that shells out, and it does so with a FIXED argv — Gio.Subprocess takes an
+// array and never invokes a shell, so the model supplies data, never a command.
+
+// Applied to EVERY tool result. See MAX_TOOL_RESULT: the cost of a fat result is
+// paid again on every later request of the conversation, not just once.
+const capResult = (res) =>
+    res.content && res.content.length > MAX_TOOL_RESULT
+        ? {
+            ...res,
+            content: res.content.slice(0, MAX_TOOL_RESULT)
+                + `\n… truncated at ${MAX_TOOL_RESULT} characters. Narrow the request (a line range, a tighter pattern) — do not re-run this unchanged.`,
+        }
+        : res
+
+function readFileTool(path, offset, limit) {
+    let raw
+    try {
+        const [ok, data] = GLib.file_get_contents(path)
+        if (!ok) return { ok: false, content: `Could not read ${path}.` }
+        raw = data
+    } catch (e) {
+        return { ok: false, content: `Could not read ${path}: ${e?.message ?? e}` }
+    }
+    let text
+    try {
+        // fatal:true so a binary file is refused with a sentence instead of
+        // becoming a screenful of replacement characters the model then reasons about.
+        text = new TextDecoder("utf-8", { fatal: true }).decode(raw)
+    } catch {
+        return { ok: false, content: `${path} is not a UTF-8 text file.` }
+    }
+
+    const lines = text.split("\n")
+    // A trailing newline leaves a final empty element; drop it so the line count
+    // matches what every other tool would report for this file.
+    if (lines.length && lines[lines.length - 1] === "") lines.pop()
+    if (!lines.length) return { ok: true, content: `(${path} is empty)` }
+
+    const start = Math.max(1, Math.floor(Number(offset) || 1))
+    const count = Math.min(READ_LINES_MAX, Math.max(1, Math.floor(Number(limit) || READ_LINES_DEFAULT)))
+    const slice = lines.slice(start - 1, start - 1 + count)
+    if (!slice.length) return {
+        ok: false,
+        content: `${path} has ${lines.length} lines; offset ${start} is past the end.`,
+    }
+
+    const last = start + slice.length - 1
+    const more = last < lines.length
+        ? `\n… ${lines.length - last} more lines (continue at offset ${last + 1})`
+        : ""
+    // Numbered because the model needs a stable handle to talk to the user about
+    // ("line 12 binds Super+T") and, once write lands, to target an edit.
+    return { ok: true, content: slice.map((l, i) => `${start + i}\t${l}`).join("\n") + more }
+}
+
+function listDirTool(path) {
+    try {
+        const en = Gio.File.new_for_path(path).enumerate_children(
+            "standard::name,standard::type,standard::size",
+            Gio.FileQueryInfoFlags.NONE, null)
+        const rows = []
+        for (;;) {
+            const info = en.next_file(null)
+            if (!info) break
+            rows.push(info.get_file_type() === Gio.FileType.DIRECTORY
+                ? `${info.get_name()}/`
+                : `${info.get_name()}\t${info.get_size()} bytes`)
+        }
+        en.close(null)
+        rows.sort()
+        return { ok: true, content: rows.length ? rows.join("\n") : `(${path} is empty)` }
+    } catch (e) {
+        return { ok: false, content: `Could not list ${path}: ${e?.message ?? e}` }
+    }
+}
+
+function searchFilesTool(pattern, path) {
+    // -r walks a directory (harmless on a single file), -n gives line numbers,
+    // -I skips binaries, -E is the documented dialect, and `--` guarantees a
+    // pattern or path beginning with "-" is read as data rather than a flag.
+    // -m is grep's PER-FILE cap; the global one is applied below.
+    const r = run(["grep", "-rnI", "-E", "-m", String(MAX_SEARCH_HITS), "--", pattern, path])
+    // grep exits 1 for "no matches" — an answer, not a failure. Reporting it as a
+    // failure would invite the model to "fix" a correct call and search again.
+    if (!r.out) return { ok: true, content: r.err ? `No matches. (${truncate(r.err, 200)})` : "No matches." }
+
+    const hits = r.out.split("\n")
+    const shown = hits.slice(0, MAX_SEARCH_HITS)
+    const more = hits.length > shown.length
+        ? `\n… ${hits.length - shown.length} more matches — narrow the pattern or the path.`
+        : ""
+    return { ok: true, content: shown.join("\n") + more }
 }
 
 function execTool(tu) {
@@ -304,6 +574,29 @@ function execTool(tu) {
                 out = agsRequest([action, ...args()])
                 break
             }
+            case "read_file": {
+                const gate = fileGate("read")
+                if (gate) return { ok: false, content: gate }
+                const r = resolvePath(tu.input?.path, "read")
+                if (r.error) return { ok: false, content: r.error }
+                return capResult(readFileTool(r.path, tu.input?.offset, tu.input?.limit))
+            }
+            case "list_dir": {
+                const gate = fileGate("read")
+                if (gate) return { ok: false, content: gate }
+                const r = resolvePath(tu.input?.path, "read")
+                if (r.error) return { ok: false, content: r.error }
+                return capResult(listDirTool(r.path))
+            }
+            case "search_files": {
+                const gate = fileGate("read")
+                if (gate) return { ok: false, content: gate }
+                const pattern = String(tu.input?.pattern ?? "")
+                if (!pattern) return { ok: false, content: "search_files needs a `pattern`." }
+                const r = resolvePath(tu.input?.path, "read")
+                if (r.error) return { ok: false, content: r.error }
+                return capResult(searchFilesTool(pattern, r.path))
+            }
             default:
                 // The model named a tool that isn't offered. Name the real ones so
                 // the correction is actionable instead of a dead end.
@@ -316,7 +609,7 @@ function execTool(tu) {
         // a tool result is appended to `history` and re-sent on every later
         // request of the conversation, so its pretty-printing is paid again and
         // again. Measured 2026-07-21: listWindows −32%, listApps −25%.
-        return { ok: true, content: compactJson(out) || "(ok)" }
+        return capResult({ ok: true, content: compactJson(out) || "(ok)" })
     } catch (e) {
         return { ok: false, content: String(e?.message ?? e) }
     }
@@ -357,7 +650,7 @@ function buildSystemPrompt() {
         "You are Assistant, the built-in helper for the Nidara desktop (a Wayland desktop environment for Arch Linux, compositor Hyprland).",
         "You help the user operate their desktop with natural language by calling tools.",
         // Rich enough to ANSWER from — see the "describing yourself" rule below.
-        "What you can do: open/close shell surfaces (control center, notifications, search, app grid, overview, settings); manage windows and workspaces; launch apps; change settings (appearance, accent, dark mode, dock, notifications, night light, gaming); read desktop state.",
+        "What you can do: open/close shell surfaces (control center, notifications, search, app grid, overview, settings); manage windows and workspaces; launch apps; change settings (appearance, accent, dark mode, dock, notifications, night light, gaming); read desktop state; read the desktop's own configuration files, its shipped defaults and the shell log.",
         "Rules:",
         "- Be concise: you answer in a small chat panel.",
         "- The user is in charge. Do only what they ask; ask first before anything destructive or irreversible.",
@@ -370,6 +663,12 @@ function buildSystemPrompt() {
         "- To do something on the desktop, call run_action with an action name from the list in its description, plus any positional arguments it needs. The list is complete — pick a name from it, never invent one, and never look actions up.",
         "- Settings are the exception: call describe_settings once before your first set_config or targeted get_config, then use the keys it returns. Never guess a setting key.",
         "- If a tool call fails, read the error and correct the call — do not repeat it unchanged. After acting, verify with dump_state/get_config when useful, then briefly confirm what changed.",
+        // The point of the file tools. Without this the model treats them as a
+        // way to answer "what does my config say", which is the least of it: the
+        // difference between a remote control and an assistant is looking at the
+        // log before offering a theory.
+        "- When something is WRONG (a glitch, a surface not opening, an app misbehaving), investigate before you answer: read the shell log and the relevant config file, say what you found, then propose the fix. Do not guess at a cause you have not looked for.",
+        "- You can read Nidara's own config and defaults, not the user's other files. If something is outside what you can reach, say so plainly instead of working around it.",
         // The language of the MESSAGE wins, always. The desktop locale is a hint
         // for the ambiguous case, never the rule: people routinely run an English
         // desktop and talk to it in their own language, and switching languages

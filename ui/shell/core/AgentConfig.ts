@@ -29,6 +29,26 @@ interface AgentSettings {
                                    // "armed" when idle, a bright "active" pulse while acting
                                    // (see computerActing / pulseComputerAction)
 
+    // ── The built-in Assistant's FILE access (tier 1) ───────────────────────
+    // Read live by bin/nidara-agent (re-reads ai.json per turn). These gate the
+    // daemon's own file tools, NOT an IPC action: external MCP clients already
+    // bring their own file tools, so there is nothing to mirror onto that surface.
+    // The frontier itself (which paths) lives in the daemon — this is only the
+    // on/off consent. See skills/customize/SKILL.md for the ownership model.
+    allowFileRead: boolean     // assistant may READ Nidara's own config, the shipped
+                               // defaults in /usr/share/nidara, and the shell log.
+                               // Default TRUE: same domain as dumpState/screenshot —
+                               // Nidara reading Nidara. Note it does send those file
+                               // contents to the configured model provider.
+    allowFileWrite: boolean    // assistant may WRITE the handful of files no running
+                               // service owns (hyprland-user.lua, hypridle.conf).
+                               // Default FALSE, and it is NOT the same risk class as
+                               // allowConfigWrite: those files exist to hold
+                               // hl.exec_cmd(…) / on-timeout commands, so writing them
+                               // schedules arbitrary commands for the next session.
+                               // Legible and revertible (plain text, git-tracked), but
+                               // execution nonetheless — hence opt-in, like computer-use.
+
     // ── The built-in Assistant's BRAIN (BYOK) ───────────────────────────────
     // Which LLM the native assistant (surfaces/island Agent mode + bin/nidara-agent)
     // talks to. NOT a gate — these are plain config values the daemon re-reads per
@@ -60,6 +80,8 @@ const DEFAULTS: AgentSettings = {
     allowMcp: true,
     allowComputerUse: false,
     allowComputerControl: false,
+    allowFileRead: true,
+    allowFileWrite: false,
     brainProvider: "",
     brainBackend: "",
     brainModel: "",
@@ -118,6 +140,8 @@ export const agentConfig = {
     get allowMcp() { return _settings.allowMcp },
     get allowComputerUse() { return _settings.allowComputerUse },
     get allowComputerControl() { return _settings.allowComputerControl },
+    get allowFileRead() { return _settings.allowFileRead },
+    get allowFileWrite() { return _settings.allowFileWrite },
 
     get brainProvider() { return _settings.brainProvider },
     get brainBackend() { return _settings.brainBackend },
@@ -205,6 +229,28 @@ export const agentConfig = {
                 console.error("[AgentConfig] enabling toolkit-accessibility failed:", e)
             }
         }
+        save()
+        _listeners.forEach(fn => fn())
+    },
+
+    // Read live by bin/nidara-agent (re-reads ai.json per turn), so flipping
+    // these takes effect on the next message with no restart.
+    setAllowFileRead(val: boolean) {
+        _settings.allowFileRead = val
+        // Writing without reading is how you clobber a file someone else lives
+        // in: every write path in the daemon re-reads first (the skill makes it a
+        // rule). Revoking read therefore revokes write too, rather than leaving a
+        // combination that can only corrupt.
+        if (!val) _settings.allowFileWrite = false
+        save()
+        _listeners.forEach(fn => fn())
+    },
+
+    // Write REQUIRES read, mirroring allowComputerControl → allowComputerUse:
+    // you can't safely edit what you can't see.
+    setAllowFileWrite(val: boolean) {
+        _settings.allowFileWrite = val
+        if (val) _settings.allowFileRead = true
         save()
         _listeners.forEach(fn => fn())
     },

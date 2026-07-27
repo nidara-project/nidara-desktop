@@ -352,6 +352,31 @@ export default function AiPage() {
 
     page.append(accessGroup.box)
 
+    // ── Files — the built-in Assistant's own config-layer access ─────────────
+    // Daemon-local (bin/nidara-agent), not an IPC action: external MCP clients
+    // bring their own file tools. Reading is same-domain (Nidara's own config,
+    // shipped defaults, the shell log); writing is opt-in because the writable
+    // files exist to hold commands.
+    const filesGroup = listGroup(t("settings.ai.group.files"))
+
+    filesGroup.listBox.append(toggleRow(
+        t("settings.ai.allow-file-read"),
+        t("settings.ai.allow-file-read.desc"),
+        agentConfig.allowFileRead,
+        (v) => agentConfig.setAllowFileRead(v),
+        (apply) => agentConfig.onChange(() => apply(agentConfig.allowFileRead)),
+    ))
+
+    filesGroup.listBox.append(toggleRow(
+        t("settings.ai.allow-file-write"),
+        t("settings.ai.allow-file-write.desc"),
+        agentConfig.allowFileWrite,
+        (v) => agentConfig.setAllowFileWrite(v),
+        (apply) => agentConfig.onChange(() => apply(agentConfig.allowFileWrite)),
+    ))
+
+    page.append(filesGroup.box)
+
     // ── Other apps — the computer-use layer (reaches OUTSIDE the shell) ──────
     const otherAppsGroup = listGroup(t("settings.ai.group.other-apps"))
 
