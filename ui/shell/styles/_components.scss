@@ -95,6 +95,15 @@ selection {
     // the larger group↔group gap is the page spacing (settings-page, 24px).
     margin-bottom: 8px;
 }
+// Group footer: the scope a title can't carry (who a group applies to). Same left
+// edge as .nidara-list-title, mirroring its margin-bottom above the card so the
+// footer binds to the card it explains rather than to the next group's header.
+.nidara-list-footer {
+    font-size: $fse-caption;
+    color: var(--nidara-text-dim);
+    margin-left: 4px;
+    margin-top: 8px;
+}
 .nidara-row-title {
     font-size: $fse-small;
     font-weight: $fw-medium;

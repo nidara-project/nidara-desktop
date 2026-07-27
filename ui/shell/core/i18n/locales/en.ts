@@ -363,9 +363,15 @@ export default {
     "settings.notif.dnd-default.desc": "Start each session with Do Not Disturb active",
 
     "settings.ai.title": "AI",
+    // Group footers answer the question the titles cannot: WHO does this govern?
+    // Some of these permissions apply to every agent, some only to the built-in
+    // Assistant, and nothing on the page said which was which.
     "settings.ai.group.access": "Desktop access",
+    "settings.ai.group.access.scope": "Applies to every agent — the built-in Assistant and any client connected over MCP.",
     "settings.ai.group.other-apps": "Other apps",
+    "settings.ai.group.other-apps.scope": "Applies to every agent. Unlike the permissions above, these reach outside Nidara and into whichever app you have focused.",
     "settings.ai.group.mcp": "MCP server",
+    "settings.ai.group.mcp.scope": "The channel connected clients arrive through. Turning it off disconnects them and changes nothing for the built-in Assistant.",
     "settings.ai.allow-config-write": "Allow agents to change settings",
     "settings.ai.allow-config-write.desc": "Local agents and scripts can modify shell settings through the official interface. Reading state is always available.",
     "settings.ai.allow-screenshot": "Allow agents to capture the screen",
@@ -373,6 +379,7 @@ export default {
     "settings.ai.allow-window-close": "Close windows",
     "settings.ai.allow-window-close.desc": "Let the assistant close windows when you ask it to. It asks the window to close, so apps can still prompt to save.",
     "settings.ai.group.files": "Files",
+    "settings.ai.group.files.scope": "The built-in Assistant only. Connected clients such as Claude Code bring their own file access, which Nidara neither provides nor governs.",
     "settings.ai.allow-file-read": "Let the Assistant read your configuration",
     "settings.ai.allow-file-read.desc": "Lets the built-in Assistant read Nidara's own settings, the shipped defaults and the shell log, so it can diagnose a problem instead of guessing. It never reads the rest of your files. What it does read is sent to your chosen model provider.",
     "settings.ai.allow-file-write": "Let the Assistant edit your configuration",
@@ -393,6 +400,7 @@ export default {
 
     // Built-in Assistant — the brain (BYOK); key lives in the keyring, never in files
     "settings.ai.brain.group": "Assistant",
+    "settings.ai.brain.group.scope": "Which model Nidara's own Assistant talks to, and the key it uses. Connected clients bring their own model and key.",
     // Provider names are proper nouns and stay untranslated (see Ai.tsx) — only
     // these three are strings.
     "settings.ai.brain.provider": "Provider",

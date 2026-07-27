@@ -47,7 +47,10 @@ export const getSearchIndex = (): SearchItem[] => [..._searchIndex]
 // ── Boxed List Group ──────────────────────────────────────────────────────────
 // Thin wrapper over the universal NidaraList component. Settings-specific code
 // keeps its own entry point, but the actual list is the shared component.
-export const listGroup = (title: string) => NidaraList(title)
+/** A settings group. `footer` prints dimmed prose under the card for the scope a
+ *  title cannot carry — e.g. WHICH agents a permission group governs (Settings →
+ *  AI). Per-row explanation belongs in the row subtitle, not here. */
+export const listGroup = (title: string, footer: string = "") => NidaraList(title, [], footer)
 
 // ── Generic Row ───────────────────────────────────────────────────────────────
 // Universal NidaraRow + the settings-only side effect (search-index registration).

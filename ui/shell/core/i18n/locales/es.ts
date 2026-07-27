@@ -518,8 +518,11 @@ export default {
     // AI
     "settings.ai.title": "IA",
     "settings.ai.group.access": "Acceso al escritorio",
+    "settings.ai.group.access.scope": "Afecta a cualquier agente: al Asistente integrado y a cualquier cliente conectado por MCP.",
     "settings.ai.group.other-apps": "Otras aplicaciones",
+    "settings.ai.group.other-apps.scope": "Afecta a cualquier agente. A diferencia de los permisos de arriba, estos salen de Nidara y llegan a la aplicación que tengas enfocada.",
     "settings.ai.group.mcp": "Servidor MCP",
+    "settings.ai.group.mcp.scope": "El canal por el que llegan los clientes conectados. Desactivarlo los desconecta y no cambia nada para el Asistente integrado.",
     "settings.ai.group.surface": "Interfaz del agente",
     "settings.ai.allow-config-write": "Permitir a los agentes cambiar ajustes",
     "settings.ai.allow-config-write.desc": "Los agentes y scripts locales pueden modificar ajustes del shell a través de la interfaz oficial. La lectura de estado siempre está disponible.",
@@ -528,6 +531,7 @@ export default {
     "settings.ai.allow-window-close": "Cerrar ventanas",
     "settings.ai.allow-window-close.desc": "Permite al asistente cerrar ventanas cuando se lo pidas. Pide el cierre a la ventana, así que las apps pueden seguir preguntando si quieres guardar.",
     "settings.ai.group.files": "Archivos",
+    "settings.ai.group.files.scope": "Solo el Asistente integrado. Los clientes conectados, como Claude Code, traen su propio acceso a archivos, que Nidara ni proporciona ni gobierna.",
     "settings.ai.allow-file-read": "Permitir que el Asistente lea tu configuración",
     "settings.ai.allow-file-read.desc": "Permite que el Asistente integrado lea los ajustes de Nidara, los valores por defecto instalados y el registro del shell, para que pueda diagnosticar un problema en vez de adivinar. Nunca lee el resto de tus archivos. Lo que lea se envía al proveedor de modelo que hayas elegido.",
     "settings.ai.allow-file-write": "Permitir que el Asistente edite tu configuración",
@@ -547,6 +551,7 @@ export default {
 
     // Asistente integrado — el cerebro (BYOK); la clave vive en el llavero, nunca en ficheros
     "settings.ai.brain.group": "Asistente",
+    "settings.ai.brain.group.scope": "Con qué modelo habla el Asistente de Nidara y qué clave usa. Los clientes conectados traen su propio modelo y su propia clave.",
     "settings.ai.brain.provider": "Proveedor",
     "settings.ai.brain.provider.desc": "Qué servicio ejecuta el modelo del asistente integrado. Usa tu propia clave.",
     "settings.ai.brain.provider.off": "Desactivado",

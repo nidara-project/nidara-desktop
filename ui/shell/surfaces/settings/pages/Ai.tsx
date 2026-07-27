@@ -96,17 +96,25 @@ function clearKey(provider: string, done: () => void): void {
 }
 
 // Settings → AI: governance of the agent-facing surface, plus the built-in
-// Assistant's brain. Groups, one concept each: the ASSISTANT (which LLM it talks
-// to, BYOK) · what agents may do to THIS desktop (shell-scoped, default on) · what
-// they may do to OTHER apps (computer-use, escalating, default off) · the MCP
-// channel (server toggle + connection file — a transport, not a permission) · and
-// read-only interface facts. Every row must gate, drive, or report something REAL —
-// no placeholder toggles.
+// Assistant's brain. Groups are ordered by WHAT a permission reaches — this
+// desktop, then your files, then other apps — because that is the risk escalation
+// a user is deciding about.
+//
+// But the axis the page kept silent about is WHO each group governs, and the two
+// do not line up: the brain and the file layer are the built-in Assistant ALONE
+// (the file tools are daemon-local — an MCP client brings its own), while config
+// write / screenshot / window close / computer-use apply to EVERY agent, connected
+// clients included. A user reading "Files" had no way to tell that it does not
+// govern Claude Code. So every group carries a FOOTER naming its audience
+// (`…group.*.scope`), which is the macOS/iOS idiom for scope a title can't hold.
+// Keep footers about AUDIENCE; per-row explanation belongs in the row subtitle.
+//
+// Every row must gate, drive, or report something REAL — no placeholder toggles.
 export default function AiPage() {
     const page = pageBox("ai-page")
 
     // ── Assistant — the built-in conversational agent's brain (BYOK) ─────────
-    const brainGroup = listGroup(t("settings.ai.brain.group"))
+    const brainGroup = listGroup(t("settings.ai.brain.group"), t("settings.ai.brain.group.scope"))
 
     // Provider picker — by NAME, not by wire protocol. The protocol (anthropic vs
     // openai-compatible) stays internal: AgentConfig.setBrainProvider derives it,
@@ -322,7 +330,7 @@ export default function AiPage() {
     page.append(brainGroup.box)
 
     // ── Desktop access — what agents may do to the shell itself ─────────────
-    const accessGroup = listGroup(t("settings.ai.group.access"))
+    const accessGroup = listGroup(t("settings.ai.group.access"), t("settings.ai.group.access.scope"))
 
     accessGroup.listBox.append(toggleRow(
         t("settings.ai.allow-config-write"),
@@ -357,7 +365,7 @@ export default function AiPage() {
     // bring their own file tools. Reading is same-domain (Nidara's own config,
     // shipped defaults, the shell log); writing is opt-in because the writable
     // files exist to hold commands.
-    const filesGroup = listGroup(t("settings.ai.group.files"))
+    const filesGroup = listGroup(t("settings.ai.group.files"), t("settings.ai.group.files.scope"))
 
     filesGroup.listBox.append(toggleRow(
         t("settings.ai.allow-file-read"),
@@ -378,7 +386,7 @@ export default function AiPage() {
     page.append(filesGroup.box)
 
     // ── Other apps — the computer-use layer (reaches OUTSIDE the shell) ──────
-    const otherAppsGroup = listGroup(t("settings.ai.group.other-apps"))
+    const otherAppsGroup = listGroup(t("settings.ai.group.other-apps"), t("settings.ai.group.other-apps.scope"))
 
     otherAppsGroup.listBox.append(toggleRow(
         t("settings.ai.allow-computer-use"),
@@ -399,7 +407,7 @@ export default function AiPage() {
     page.append(otherAppsGroup.box)
 
     // ── MCP server — the channel external clients connect through ────────────
-    const mcpGroup = listGroup(t("settings.ai.group.mcp"))
+    const mcpGroup = listGroup(t("settings.ai.group.mcp"), t("settings.ai.group.mcp.scope"))
 
     mcpGroup.listBox.append(toggleRow(
         t("settings.ai.allow-mcp"),

@@ -6,6 +6,7 @@ export interface NidaraRowResult {
     box: Gtk.Box
 }
 
+
 /**
  * NidaraRow — the ONE place a list/menu row is built.
  *
@@ -40,7 +41,16 @@ function textColumn(label: string, subtitle: string, titleIcon?: Gtk.Widget): Gt
     if (subtitle) {
         text.append(new Gtk.Label({
             label: subtitle, css_classes: ["nidara-row-subtitle"],
-            halign: Gtk.Align.START, xalign: 0, wrap: true,
+            // FILL + hexpand, NOT halign START. A halign-START label is allocated its
+            // NATURAL width, and a wrapping GtkLabel's natural width is a line-balancing
+            // heuristic — so every description picked its own break column and the page
+            // read as random: measured live 2026-07-27 with `ags request queryUI`, these
+            // same subtitles came out 310, 332, 369, 372, 442, 456, 480, 486, 493, 501,
+            // 540, 556, 567 and 589 px wide, one line here, two there, at no consistent
+            // edge. Filling the column makes the width identical for every row, so a
+            // break happens only where the card actually ends. `xalign: 0` keeps the
+            // text left-aligned inside that full-width box.
+            halign: Gtk.Align.FILL, hexpand: true, xalign: 0, wrap: true,
         }))
     }
     return text
@@ -91,32 +101,12 @@ export function NidaraRow(
 
     if (leadingIcon) box.append(leadingIcon)
 
-    const text = new Gtk.Box({
-        orientation: Gtk.Orientation.VERTICAL, spacing: 2,
-        hexpand: true, valign: Gtk.Align.CENTER,
-    })
-    const titleLabel = new Gtk.Label({
-        label, css_classes: ["nidara-row-title"],
-        halign: Gtk.Align.START, xalign: 0, wrap: true,
-    })
-    if (titleIcon) {
-        const titleLine = new Gtk.Box({ spacing: 6, halign: Gtk.Align.START })
-        titleLine.append(titleLabel)
-        titleLine.append(titleIcon)
-        text.append(titleLine)
-    } else {
-        text.append(titleLabel)
-    }
-    if (subtitle) {
-        // wrap lets a long subtitle shrink/wrap instead of forcing the text column
-        // wide and pushing the trailing control out of alignment.
-        text.append(new Gtk.Label({
-            label: subtitle, css_classes: ["nidara-row-subtitle"],
-            halign: Gtk.Align.START, xalign: 0, wrap: true,
-        }))
-    }
-
-    box.append(text)
+    // textColumn, not a copy of it. This function used to inline its own — byte for
+    // byte the same widgets — which is why a fix applied to `textColumn` changed the
+    // stacked rows and left every ordinary row untouched (caught live 2026-07-27,
+    // after the fix "did nothing"). The helper's docstring already claimed both
+    // shapes shared it; now they do.
+    box.append(textColumn(label, subtitle, titleIcon))
     if (control) box.append(control)
 
     const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row", ...extraClasses] })

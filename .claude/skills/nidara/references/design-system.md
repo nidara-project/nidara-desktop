@@ -29,6 +29,34 @@ attachment gap; don't rely on the old box spacing, which is gone). A page that h
 group instead of `NidaraList` (AppIcons wraps the ListBox in a ScrolledWindow) must likewise use
 `spacing: 0` on its `nidara-list-group` box, not `12`.
 
+**Prefer the built-in footer to a hand-rolled note.** `NidaraList(title, extraClasses, footer)`
+takes explanatory prose and prints it as `.nidara-list-footer` under the card, indented to the
+title's left edge with the same 8px attachment gap. Use it for the scope a title cannot carry —
+Settings → AI states WHICH agents each permission group governs there, because some apply to every
+agent and some only to the built-in Assistant. Per-row explanation still belongs in the row's own
+subtitle.
+
+## Wrapping prose FILLS its column — never `halign: START`
+
+Any label that can wrap (row subtitles, list footers) must be built
+**`halign: FILL, hexpand: true, xalign: 0, wrap: true`**. It is not a style preference:
+
+A `halign: START` label is allocated its NATURAL width, and a wrapping `GtkLabel`'s natural width
+is **GTK's own line-balancing heuristic**, not the space available. So every description picks its
+own break column and the page reads as random — one row on a single line, the next broken at some
+other width, for no reason a user can see. Measured live on Settings → AI (2026-07-27, via
+`ags request queryUI .nidara-row-subtitle`): fourteen subtitles in one page came out **310, 332,
+369, 372, 442, 456, 480, 486, 493, 501, 540, 556, 567 and 589 px** wide. With FILL they are 610 px
+across every toggle row, and the only remaining variation is the rows whose trailing control is
+wider (a dropdown, a path label) — which is structural and reads as such.
+
+`max_width_chars` does NOT fix this. It only caps the natural width, so it removes the widest
+outliers and leaves the heuristic in charge underneath — it looked identical on screen.
+
+**Verify wrapping with `ags request queryUI <selector>`, not with your eyes on a screenshot**: it
+reports each node's real `bounds`, so "do these all break at the same column?" is a set of numbers
+rather than a judgement call.
+
 ## Scrollable boxed list — card on the ScrolledWindow, not the list
 
 When a boxed list must scroll INSIDE a fixed card (App Icons' installed-apps list), the card

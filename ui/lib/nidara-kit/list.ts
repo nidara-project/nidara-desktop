@@ -15,12 +15,20 @@ export interface NidaraListResult {
  * Control Center detail lists and any future surface — never reinvent a
  * per-surface list class. See feedback_universal_components.
  *
+ * An optional `footer` prints small dimmed prose UNDER the card. It is for the
+ * scope a title cannot carry — who a group applies to, what it deliberately does
+ * NOT cover — which is the macOS/iOS group-footer idiom. Use it when a user could
+ * reasonably misread the group's reach; do not use it for per-row explanation,
+ * which belongs in the row's own subtitle.
+ *
  * @example
  *   const { box, listBox } = NidaraList("Network")
  *   listBox.append(NidaraRow("Wi-Fi", "", toggle))
  *   page.append(box)
  */
-export function NidaraList(title: string = "", extraClasses: string[] = []): NidaraListResult {
+export function NidaraList(
+    title: string = "", extraClasses: string[] = [], footer: string = "",
+): NidaraListResult {
     // spacing:0 — the title→card gap is owned entirely by .nidara-list-title's
     // margin-bottom (design-system.md), so the header binds to the card BELOW it.
     // Group↔group separation is the page-level spacing (settings-page, 24px); the
@@ -45,5 +53,21 @@ export function NidaraList(title: string = "", extraClasses: string[] = []): Nid
     })
 
     box.append(listBox)
+
+    if (footer) {
+        // Mirrors the title's indent (widget margin + the class's own margin-left)
+        // so header, card and footer share one left edge. Wraps: this is prose, and
+        // Settings is resizable.
+        box.append(new Gtk.Label({
+            label: footer,
+            css_classes: ["nidara-list-footer"],
+            // Fills its column for the same reason a row subtitle does — see the note
+            // in row.ts. A footer and the subtitles above it are the same kind of
+            // prose sitting inches apart; they must break at the same edge.
+            halign: Gtk.Align.FILL, hexpand: true, xalign: 0, margin_start: 10,
+            margin_end: 10, wrap: true,
+        }))
+    }
+
     return { box, listBox }
 }
