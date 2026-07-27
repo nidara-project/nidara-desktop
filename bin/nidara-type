@@ -37,8 +37,19 @@ function emit(obj) { print(JSON.stringify(obj, null, 2)) }
 // Fire-and-forget: tell the shell an action just landed so the bar's AI-control
 // indicator shows its "active" pulse (decays back to "armed" after a few seconds).
 // Never blocks or fails the action if the shell isn't reachable.
+//
+// Gio, NOT spawn_command_line_async: the latter cannot redirect stdio, so the
+// child INHERITS ours and the `ags` CLI's reply ("ok") lands on OUR stdout — right
+// after the JSON we just printed. That breaks the one-JSON-per-helper contract the
+// daemon parses, so a successful injection came back to the model as a FAILURE, and
+// deterministically: the daemon reads to EOF, and the pipe's write end stays open
+// until this child exits too, so the "ok" is always waited for. It stayed hidden
+// while the focus gate refused every call from the Assistant before reaching here.
 function pingShell() {
-    try { GLib.spawn_command_line_async("ags request notifyComputerAction") } catch {}
+    try {
+        Gio.Subprocess.new(["ags", "request", "notifyComputerAction"],
+            Gio.SubprocessFlags.STDOUT_SILENCE | Gio.SubprocessFlags.STDERR_SILENCE)
+    } catch {}
 }
 
 // Both gates required; both default OFF (absent/garbled ai.json → disabled).

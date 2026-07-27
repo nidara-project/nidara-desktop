@@ -167,19 +167,40 @@ function centreOf(acc) {
     if (!r) return null
     return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), role: roleOf(acc) }
 }
+// How many real node names a failed lookup reports back. A miss used to be a dead
+// end ("no showing node named X"), and the model's only recovery was to spend a
+// whole round trip on query_app — measured 2026-07-28 in a live run: two of eleven
+// calls were guesses ("page tab", "Start") that bought nothing. The names cost
+// NOTHING to collect: `nameOf(acc)` is already called for every node on this walk.
+const MAX_SUGGESTIONS = 40
+
+// …but ONLY the ones that could plausibly be a control. An accessible name is not a
+// label: in a chat app it is the ENTIRE MESSAGE (measured on Telegram — this is the
+// same thing that made a raw a11y dump 503 KB). A button label is short and
+// single-line; a content blob is neither. Filtering here rather than at emit time
+// also bounds what the walk accumulates, instead of holding a megabyte to print 40
+// items. A suggestion list that costs more than the round trip it saves is a
+// regression, so keep this filter honest if you widen it.
+const MAX_SUGGESTION_LEN = 48
+const isLabelish = nm => nm.length <= MAX_SUGGESTION_LEN && !nm.includes("\n")
+
 function findNodeCentres(appFilter, nodeName, roleFilter) {
     const desktop = safe(() => Atspi.get_desktop(0), null)
-    if (!desktop) return []
+    if (!desktop) return { hits: [], seen: [] }
     const want = nodeName.toLowerCase(), exact = [], partial = []
+    const seen = new Set()
     let scanned = 0
     const visit = (acc, depth) => {
         if (scanned >= MAX_NODES || depth > MAX_DEPTH || !isShowing(acc)) return
         scanned++
         const nm = nameOf(acc)
-        if (nm && (!roleFilter || roleOf(acc) === roleFilter)) {
-            const low = nm.toLowerCase()
-            if (low === want) { const c = centreOf(acc); if (c) exact.push(c) }
-            else if (low.includes(want)) { const c = centreOf(acc); if (c) partial.push(c) }
+        if (nm) {
+            if (seen.size < MAX_SUGGESTIONS && isLabelish(nm)) seen.add(nm)
+            if (!roleFilter || roleOf(acc) === roleFilter) {
+                const low = nm.toLowerCase()
+                if (low === want) { const c = centreOf(acc); if (c) exact.push(c) }
+                else if (low.includes(want)) { const c = centreOf(acc); if (c) partial.push(c) }
+            }
         }
         for (const k of children(acc)) visit(k, depth + 1)
     }
@@ -187,7 +208,7 @@ function findNodeCentres(appFilter, nodeName, roleFilter) {
         if (!nameOf(app).toLowerCase().includes(appFilter)) continue
         for (const win of children(app)) visit(win, 0)
     }
-    return exact.length ? exact : partial
+    return { hits: exact.length ? exact : partial, seen: [...seen] }
 }
 
 // CLI mode → injector verb (`action`) + how the target position is resolved
@@ -214,8 +235,20 @@ const MODES = {
 // names WHICH end failed, which only matters for drag-app's two of them.
 function resolveNode(appFilter, app, label, nodeName, role, occRaw) {
     const where = label ? `${label} node ` : "node "
-    const hits = findNodeCentres(appFilter, nodeName, role)
-    if (!hits.length) { emit({ error: `no showing ${where}named "${nodeName}" in "${app}"` }); return null }
+    const { hits, seen } = findNodeCentres(appFilter, nodeName, role)
+    if (!hits.length) {
+        // Answer the next question in the same breath. `showing` is what is on screen
+        // RIGHT NOW, which is also the honest reason a name can be correct and still
+        // missing (a control that only appears once something else is set).
+        emit({
+            error: `no showing ${where}named "${nodeName}" in "${app}"`
+                + (seen.length
+                    ? " — `showing` lists the short, single-line names on screen right now (control labels); pick one VERBATIM. Not there? The control may only appear once something else is set, or its name is long/multi-line — then use query_app with a match."
+                    : " — nothing label-like is showing; check the right window is focused, or use query_app to see the tree."),
+            showing: seen,
+        })
+        return null
+    }
     if (hits.length > 1 && occRaw === "") {
         emit({ error: `ambiguous: ${hits.length} nodes match the ${where}"${nodeName}" — pass a role and/or occurrence`,
             candidates: hits.slice(0, 20) })

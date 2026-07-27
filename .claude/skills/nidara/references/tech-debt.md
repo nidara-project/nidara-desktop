@@ -746,6 +746,32 @@ activewindow` lies while a grab is held", and the obvious fix — source focus f
 cannot land, and typed the agent's text into its own prompt box. The compositor's
 source code settled it in one grep.
 
+**(f) ~~A successful action reported FAILURE — `pingShell` polluted stdout.~~
+FIXED 2026-07-28, found in the first live run after (e).** `nidara-type` and
+`nidara-act` pinged the AI-control indicator with
+`GLib.spawn_command_line_async("ags request notifyComputerAction")`, which **cannot
+redirect stdio**, so the child inherited ours and the `ags` CLI's reply (`ok`)
+landed on the helper's stdout right after its JSON. The daemon parses exactly one
+JSON per helper, so it failed → the tool came back `ok:false`. **Deterministic, not
+racy:** the daemon reads to EOF, and the pipe's write end stays open until the ping
+child exits, so the `ok` is always waited for. Worst in `nidara-act`, which pings
+only when the action **succeeded** — so the tool reported failure precisely when it
+had worked. `nidara-click` already had the fix (Gio + `STDOUT_SILENCE`) and the
+comment explaining it; the other two never got it. It stayed invisible because the
+focus gate refused every Assistant call before reaching the ping. **Rule for any new
+helper: nothing but the one JSON may reach stdout — fire-and-forget children must be
+`Gio.Subprocess` with `STDOUT_SILENCE`, never `spawn_command_line_async`.**
+
+**(g) A miss now answers the next question.** `nidara-click`'s "no showing node
+named X" was a dead end, and recovery cost a whole `query_app` round trip (measured:
+2 of 11 calls in that run were guesses — `"page tab"`, a ROLE in the name slot, and
+`"Start"`). It now returns `showing`: the short, single-line names on screen, free
+because `nameOf` is already called for every node on that walk. **The filter is the
+point, not a detail** — an accessible name is not a label (in Telegram it is the
+entire message), so unfiltered this returned ~10 KB and would have cost more than
+the round trip it saves. Live-checked against Telegram: 1157 bytes, 40 real control
+labels.
+
 **Found while verifying (a) live, and it decided how the Assistant's hover reads:**
 a GTK tooltip is **not an accessibility node**. Hovering Nautilus's Back button
 rendered the tooltip in a screenshot while the AT-SPI tree held zero tooltip-role
