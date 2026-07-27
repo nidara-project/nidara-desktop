@@ -69,7 +69,8 @@ Current commands (run `listActions` for the live list): `toggleCC|toggleControlC
 `setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listApps`, `launchApp <id>`,
 `disableComputerControl`, `notifyComputerAction` (computer-use tools ping it so the bar's AI-control
 indicator pulses "active"), `agentPointer …` (drives the fake-AI-cursor visual — see the
-computer-use section), `yieldInput <begin|end>` (the helpers make the shell let go of the keyboard
+computer-use section), `setIsland <closed|agent|overview|player|battery>` (EXACT island state — use this
+over the ambiguous `toggle*` when you cannot see the current one), `yieldInput <begin|end>` (the helpers make the shell let go of the keyboard
 so their action can land — see "The shell has to step out of the way"), `listActions`, `dumpState`, plus the **window/workspace management**
 cluster (see below): `listWindows`, `listWorkspaces`, `focusWorkspace <id|±1|name>`,
 `focusDirection <l|r|u|d>`, `focusWindow <window>`,

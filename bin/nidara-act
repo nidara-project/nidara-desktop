@@ -169,7 +169,7 @@ function main() {
     const occurrence = occRaw === "" ? null : parseInt(occRaw, 10)
 
     if (!app || !nodeName || !action) {
-        emit({ error: "usage: nidara-act <app> <node-name> <action> [role] [occurrence]" })
+        emit({ error: "usage: nidara-act <app> <node-name> <action|set-value=N> [role] [occurrence]" })
         return
     }
 
@@ -194,14 +194,57 @@ function main() {
         return
     }
 
+    // Two BUILT-IN verbs that are not AT-SPI "actions" at all, handled before the
+    // Action interface is consulted. They exist because of a measured dead end: a
+    // GTK4 spin button ("Minutes" in GNOME Clocks) exposes an EMPTY action list, so
+    // `SetFocus` failed, the agent typed the digits blind, and they landed on
+    // whatever had focus and concatenated with what was already there — asking for
+    // 7 minutes produced 11 h 40 min (= 700 minutes). Verified against a real
+    // GtkSpinButton 2026-07-28: `value=true component=true`, i.e. the number was
+    // always settable directly; only the Action interface was empty.
+    //
+    // `set-value=N` is strictly better than typing for anything numeric: no focus,
+    // no keystrokes, no accumulation, and it reports the value the widget actually
+    // took (clamped to its own min/max) rather than what we hoped it took.
+    const setValue = /^set-value=(-?\d+(?:\.\d+)?)$/.exec(action)
+    if (setValue) {
+        const want = parseFloat(setValue[1])
+        const val = safe(() => target.get_value_iface(), null)
+        if (!val) {
+            emit({ error: `node "${nodeName}" has no AT-SPI value to set (not a spin button / slider)`, node: describe(target) })
+            return
+        }
+        const ok = safe(() => Atspi.Value.prototype.set_current_value.call(val, want), false)
+        // Read back rather than trust the setter: a spin button clamps silently, and
+        // "it returned true" is not the same claim as "it now holds 7".
+        const got = safe(() => Atspi.Value.prototype.get_current_value.call(val), null)
+        if (ok === true) pingShell()
+        emit({ ok: ok === true && got === want, app, node: describe(target), action: "set-value",
+            requested: want, value: got,
+            ...(got !== want ? { note: "the widget clamped or rejected the value — check its min/max" } : {}) })
+        return
+    }
+    // NO `focus` VERB — do not add one back. `Atspi.Component.grab_focus` is the
+    // obvious companion to set-value, and it does not work: measured 2026-07-28
+    // against a live GtkSpinButton, it returns FALSE even with its own window
+    // already focused (`hyprctl activewindow` = the probe). GTK4 dropped ATK and
+    // its own AT-SPI backend does not implement Component.GrabFocus, so on the
+    // toolkit this desktop is built from the verb would fail every time — a tool
+    // that always returns false is worse than no tool, and it would cost prompt
+    // bytes on every request to say so. Focus a WINDOW with `focusWindow`; to put a
+    // value somewhere, set the value instead of aiming the keyboard at it.
+
+    // Every failure below advertises the built-in: the reason the timer went wrong
+    // was an agent that knew only `SetFocus` and had no way to learn otherwise.
+    const BUILTINS = ["set-value=<number>"]
     const { iface, names } = actionsOf(target)
     if (!iface) {
-        emit({ error: `node "${nodeName}" exposes no AT-SPI actions`, node: describe(target) })
+        emit({ error: `node "${nodeName}" exposes no AT-SPI actions`, node: describe(target), available: BUILTINS })
         return
     }
     const idx = names.findIndex(n => n === action)
     if (idx < 0) {
-        emit({ error: `action "${action}" not available on this node`, node: describe(target), available: names })
+        emit({ error: `action "${action}" not available on this node`, node: describe(target), available: [...names, ...BUILTINS] })
         return
     }
 

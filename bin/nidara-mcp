@@ -253,7 +253,12 @@ const TOOLS = [
     {
         name: "do_app_action",
         description:
-            "Act on a THIRD-PARTY app by invoking a named accessibility action on a named control — deterministic, NO synthetic mouse/keyboard (the action the control exposes, e.g. \"activate\", \"SetFocus\", or a GTK action like \"view.show-hidden-files\"). Discover a node's name + available `actions` with query_app first, then act by name. GTK4 exposes rich actions; Qt often exposes only \"SetFocus\" (clicking such controls needs synthetic input, not yet available). Gated by Settings → AI → Allow Agents to Control Other Apps (off by default; requires perception). If multiple controls share the name, pass `role` and/or `occurrence` to disambiguate.",
+            // Kept in step with the built-in Assistant's wording (bin/nidara-agent),
+            // including the two lessons it paid for: an example action name invites
+            // the model to invent one (a live failure — `win.toggle-sidebar` sent to
+            // a node whose `actions` was empty), and a spin button carries a VALUE,
+            // not an action (typing into one blind turned "7 minutes" into 11h40).
+            "Act on a THIRD-PARTY app by invoking a named accessibility action on a named control — deterministic, NO synthetic mouse/keyboard. `action` must be COPIED from that node's own `actions` array as returned by query_app; never a name you have not seen there, however plausible. Discover the node with query_app first. SPECIAL: a node query_app reports with a `value` block (spin buttons, sliders — their `actions` is empty) is set with `action: \"set-value=<number>\"`; always prefer that over typing digits, since it needs no focus, cannot concatenate with what the field already holds, and reports the value the widget actually took. A node with an empty `actions` and no `value` cannot be driven this way — use click_app. Gated by Settings → AI → Allow Agents to Control Other Apps (off by default; requires perception). If multiple controls share the name, pass `role` and/or `occurrence` to disambiguate.",
         inputSchema: {
             type: "object",
             properties: {

@@ -132,8 +132,29 @@ function visual(cmd, wait = true) {
 // APPLIED the release, so it is deliberately synchronous. A shell that is down, or
 // too old to know the command, is a silent no-op — exactly the behaviour that existed
 // before this; and if we die before `end`, the shell restores itself.
+//
+// `begin` also answers with the Activity Island's covered rect, which is why it is
+// worth reading the reply: the Assistant lives in that island and cannot see it, so
+// it happily resolves controls sitting UNDERNEATH its own panel. Those clicks land
+// (the yield makes the surface click-through) but they land where the user has no
+// way to watch, which is indistinguishable from the assistant acting behind their
+// back. Reported, not refused — the click is legitimate, it is the invisibility
+// that needs saying.
 function yieldInput(verb) {
-    try { GLib.spawn_command_line_sync(`timeout 3 ags request -- yieldInput ${verb}`) } catch {}
+    try {
+        const [ok, out] = GLib.spawn_command_line_sync(`timeout 3 ags request -- yieldInput ${verb}`)
+        if (!ok || !out) return null
+        return JSON.parse(new TextDecoder().decode(out).trim())
+    } catch { return null }
+}
+
+// Is an output-relative point inside the island's covered rect? Both are
+// monitor-LOCAL, so the monitor has to match or this compares across screens.
+function underIsland(bounds, outX, outY, monName) {
+    if (!bounds) return false
+    if (bounds.monitor && monName && bounds.monitor !== monName) return false
+    return outX >= bounds.x && outX < bounds.x + bounds.w
+        && outY >= bounds.y && outY < bounds.y + bounds.h
 }
 
 // nidara-input: PATH first, then a sibling of this script (dev checkout).
@@ -275,15 +296,15 @@ function main() {
     // Past the guards, so this call is going to act: make room for it. The yield
     // must wrap the FOCUS CHECK too, not just the injection — before the shell lets
     // go, the check cannot pass by construction (see yieldInput).
-    yieldInput("begin")
+    const yielded = yieldInput("begin")
     try {
-        return act(mode, app, spec)
+        return act(mode, app, spec, yielded?.islandBounds ?? null)
     } finally {
         yieldInput("end")
     }
 }
 
-function act(mode, app, spec) {
+function act(mode, app, spec, islandBounds) {
     const isScroll = spec.action === "scroll"
     const isDrag = spec.action === "drag"
 
@@ -414,9 +435,14 @@ function act(mode, app, spec) {
         emit({ ok: false, error: `nidara-input failed: ${(err || "").trim() || "no output"}` }); return
     }
     pingShell()
+    // The action SUCCEEDED — this is a visibility warning, not a failure. See
+    // yieldInput: the click lands, but under the Assistant's own panel the user
+    // cannot see it happen.
+    const hidden = underIsland(islandBounds, outX, outY, mon.name)
     emit({ ok: true, app, mode, target: { outX, outY, extW, extH },
         ...(isScroll ? { scroll: { dx, dy } } : {}),
-        ...(isDrag ? { drop: { outX2, outY2 } } : {}), window: { at, monitor: mon.name } })
+        ...(isDrag ? { drop: { outX2, outY2 } } : {}), window: { at, monitor: mon.name },
+        ...(hidden ? { warning: "this landed UNDER the Activity Island, where the user cannot see it — run `setIsland closed` before acting in that area, then reopen with `setIsland agent` when you are done", islandBounds } : {}) })
 }
 
 main()

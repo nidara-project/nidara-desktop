@@ -576,7 +576,16 @@ const ACT_TOOL_DEFS = [
             // halves of the rule matter: the action is COPIED from the node's own
             // list, and the node has to be one that owns it.
             + "`action` must be COPIED from that node's own `actions` array as returned by query_app — never a name you have not seen there, however plausible it sounds. "
-            + "A node whose `actions` is empty cannot be driven this way: click_app it instead. Add `role`/`occurrence` when several controls share a name.",
+            + "A node whose `actions` is empty cannot be driven this way — with ONE exception below. Add `role`/`occurrence` when several controls share a name. "
+            // The 11h40m bug, 2026-07-28: asked for a 7-minute timer, the model
+            // found GNOME Clocks' "Minutes" spin button, saw an EMPTY actions array,
+            // could not focus it (GTK4 exposes no focus action), typed "7" blind,
+            // and the digits landed on whatever had focus and concatenated with what
+            // was already there — 700 minutes. Spin buttons and sliders carry a
+            // VALUE, not an action; query_app now reports it, and this is how it is
+            // written. Say so here or the model has no way to connect the two.
+            + "SPECIAL: for a node that query_app reports with a `value` block (spin buttons, sliders — their `actions` is empty), pass `action: \"set-value=<number>\"` to set it directly. "
+            + "ALWAYS prefer this over typing digits: it needs no focus, cannot concatenate with what is already in the field, and it reports back the value the widget actually took (it clamps to its own min/max).",
         props: {
             app: { type: "string", description: "App name substring" },
             node: { type: "string", description: "Accessible name of the control, from query_app" },
@@ -1524,12 +1533,26 @@ function buildSystemPrompt() {
     if (gate.act) beyondNidara.push(
         "- You can act on other applications. In order of preference: do_app_action (deterministic, no synthetic input) first, then press_key/type_text on a focused control, then click_app/hover_app, and the coordinate forms (click_at/hover_at/scroll_at/drag_at) LAST — only with numbers taken from a query_app node's bounds, never guessed.",
         "- All of those act on the FOCUSED window and refuse otherwise: call run_action focus_window first. Afterwards re-read with query_app before you tell the user it worked. The user can revoke this at any moment and moving their mouse cancels an action in flight — if that happens, say so, don't retry silently.",
+        // The user watching cannot see through your own panel. Reported by them
+        // 2026-07-28 as a design fault, and they are right: acting under your own UI
+        // is indistinguishable from acting behind their back.
+        "- YOU ARE DRAWN ON THIS SCREEN. The Assistant sits in the Activity Island, which covers part of the display; dump_state reports the rect as overlays.islandBounds, and a click that lands inside it comes back with a `warning`. When you must act in that area, call run_action setIsland closed first, do the work so the user can watch it, then run_action setIsland agent to come back. Closing it does not end your turn or lose this conversation.",
     )
     systemCache = [
         "You are Assistant, the built-in helper for the Nidara desktop (a Wayland desktop environment for Arch Linux, compositor Hyprland).",
         "You help the user operate their desktop with natural language by calling tools.",
         // Rich enough to ANSWER from — see the "describing yourself" rule below.
-        "What you can do: open/close shell surfaces (control center, notifications, search, app grid, overview, settings); manage windows and workspaces; launch apps; change settings (appearance, accent, dark mode, dock, notifications, night light, gaming); read desktop state; read the desktop's own configuration files, its shipped defaults and the shell log.",
+        // This summary is LOAD-BEARING, not flavour: the rule below tells the model
+        // to answer "what can you do?" from it without calling a tool. So anything
+        // missing here the model will actively DENY. Measured 2026-07-28: with both
+        // computer-use gates ON, asked to add a timer, it answered "no puedo — mis
+        // funciones me permiten controlar ajustes, abrir aplicaciones o administrar
+        // ventanas" — a near-verbatim recital of this line, which said nothing about
+        // driving other apps. It took the user insisting twice to get it to try.
+        // Hence the gated tail: the sentence has to grow when the capability does.
+        "What you can do: open/close shell surfaces (control center, notifications, search, app grid, overview, settings); manage windows and workspaces; launch apps; change settings (appearance, accent, dark mode, dock, notifications, night light, gaming); read desktop state; read the desktop's own configuration files, its shipped defaults and the shell log."
+            + (gate.see ? " You can also READ what is on screen inside other applications." : "")
+            + (gate.act ? " And you can OPERATE other applications — press their buttons, set their values, type into them — so a request the desktop itself cannot serve (\"set a 7-minute timer\") is usually done by launching the right app and driving its interface. Do that rather than saying you cannot." : ""),
         "Rules:",
         "- Be concise: you answer in a small chat panel.",
         "- The user is in charge. Do only what they ask; ask first before anything destructive or irreversible.",

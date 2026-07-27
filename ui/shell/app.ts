@@ -6,7 +6,7 @@ import { Gdk, Gtk } from "ags/gtk4"
 import Gtk4LayerShell from "gi://Gtk4LayerShell"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_AGENT } from "./core/Status"
+import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT } from "./core/Status"
 import inputYield from "./core/InputYield"
 import { selectedPlayer } from "./core/MediaService"
 import shellActions from "./core/ShellActions"
@@ -86,6 +86,18 @@ const ipc: Record<string, ((...args: string[]) => string | void | Promise<string
 // the dock via this accessor. Populated by main(); false until the dock exists.
 let isAppGridOpen: () => boolean = () => false
 
+// What the Activity Island COVERS on screen, monitor-relative — capsule plus the
+// revealed mode, or null when the island paints nothing. Also populated by main().
+//
+// This is agent-facing. The Assistant lives inside that island and cannot see it:
+// it was resolving controls that sit underneath its own panel and clicking them
+// where the user has no way to watch. `dumpState` reports the rect and `yieldInput
+// begin` hands it to the pointer helper, so a click can say so instead of landing
+// invisibly. OR across monitors is meaningless here (each island is on its own
+// monitor), so this reports the FIRST island that is painting something.
+type Rect = { x: number, y: number, w: number, h: number }
+let islandRect: () => Rect | null = () => null
+
 // Declarative IPC surface — the single source of truth for `ags request`.
 // `listActions` introspects this table, so adding a command here is ALL it takes
 // for scripts and agents to discover it; never grow a parallel switch elsewhere.
@@ -156,6 +168,19 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     desc: "Toggle the built-in Assistant island (the conversational agent). Opens the empty state if no provider is configured (Settings → AI)",
     run: () => void status.toggleIsland(ISLAND_AGENT),
   },
+  setIsland: {
+    desc: "Set the Activity Island to an EXACT state — `setIsland closed` (alias `\"\"`) collapses it to the bar capsule, `setIsland agent|overview|player|battery` opens that mode. Unlike the toggle* commands this is not ambiguous when you cannot see the current state, so it is the one to use programmatically; read the state back from dumpState `overlays.island` / `overlays.islandBounds`. The Assistant runs INSIDE this island: closing it does not end the turn or lose the conversation (the transcript is persisted and redrawn on reopen), so closing it to uncover a control you need to click is safe.",
+    run: args => {
+      const raw = (args[0] ?? "").trim().toLowerCase()
+      const mode = (raw === "closed" || raw === "close" || raw === "none") ? "" : raw
+      const known = ["", ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT]
+      if (!known.includes(mode))
+        return `unknown island mode "${raw}" — one of: closed, ${known.filter(Boolean).join(", ")}`
+      if (mode === ISLAND_PLAYER && !selectedPlayer()) return "no media player on the bus"
+      status.island_mode = mode
+      return mode === "" ? "island closed" : `island set to ${mode}`
+    },
+  },
   toggleAbout: {
     desc: "Toggle the About window (system info card, window `nidara-about`) — the deterministic hook " +
       "for the system-menu item. Pair with `queryUI .about-spec-val@about` or dumpState `overlays.about` to verify.",
@@ -194,10 +219,19 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     run: args => ipc.agentPointer?.(...args),
   },
   yieldInput: {
-    desc: "PLUMBING for the computer-use helpers, which call it themselves — there is no reason to invoke it directly. `yieldInput begin` makes every shell surface holding an EXCLUSIVE keyboard grab (the Assistant island, Prism, the app grid) drop it and go click-through, and only answers once the compositor has APPLIED the release; `yieldInput end` hands it back. Without it Hyprland refuses to move window focus at all while we grab, and routes synthetic clicks to our own surface — see core/InputYield. Self-heals if a helper dies mid-action.",
+    desc: "PLUMBING for the computer-use helpers, which call it themselves — there is no reason to invoke it directly. `yieldInput begin` makes every shell surface holding an EXCLUSIVE keyboard grab (the Assistant island, Prism, the app grid) drop it and go click-through, and only answers once the compositor has APPLIED the release; `yieldInput end` hands it back. Without it Hyprland refuses to move window focus at all while we grab, and routes synthetic clicks to our own surface — see core/InputYield. Self-heals if a helper dies mid-action. `begin` answers with JSON `{yielded, islandBounds}` so the caller can tell whether its target sits under the Activity Island.",
     run: async args => {
       const verb = (args[0] ?? "").trim().toLowerCase()
-      if (verb === "begin") { await inputYield.begin(); return "yielded" }
+      if (verb === "begin") {
+        // Read the rect BEFORE yielding — the yield makes the island click-through
+        // but does not move or hide it, so this is what still covers the screen.
+        // Returned here rather than via a second request: the helper is already
+        // paying for this round trip, and a click needs the answer at exactly this
+        // moment (the panel can be revealed or collapsed between two actions).
+        const r = islandRect()
+        await inputYield.begin()
+        return JSON.stringify({ yielded: true, islandBounds: r })
+      }
       if (verb === "end") { inputYield.end(); return "restored" }
       return "usage: yieldInput <begin|end>"
     },
@@ -558,6 +592,11 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             systemMenu: status.system_menu_open,
             overview: status.island_mode === ISLAND_OVERVIEW,   // back-compat key
             island: status.island_mode,
+            // Where the island physically sits, so an agent driving another app can
+            // tell that a control it resolved is hidden behind the Assistant's own
+            // panel — and close it (`setIsland closed`) instead of clicking where
+            // the user cannot see. null = the island is painting nothing there.
+            islandBounds: islandRect(),
             settings: status.settings_open,
             about: status.about_open,
           },
@@ -751,6 +790,15 @@ app.start({
         if (w.name === "nidara-dock") try { if ((w as any).isAppGridPanelOpen?.()) open = true } catch (e) { console.error(e) }
       })
       return open
+    }
+    // Same idiom for the island's covered rect (see islandRect's declaration).
+    islandRect = () => {
+      let r: Rect | null = null
+      windows.forEach(w => {
+        if (r || w.name !== "nidara-island") return
+        try { r = (w as any).occupiedRect?.() ?? null } catch (e) { console.error(e) }
+      })
+      return r
     }
     // Show + raise Settings. present()'s Wayland activation is IGNORED by Hyprland
     // when the window sits on another workspace (misc:focus_on_activate=false), so

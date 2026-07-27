@@ -762,6 +762,45 @@ focus gate refused every Assistant call before reaching the ping. **Rule for any
 helper: nothing but the one JSON may reach stdout — fire-and-forget children must be
 `Gio.Subprocess` with `STDOUT_SILENCE`, never `spawn_command_line_async`.**
 
+**(h) Three failures from the second live run (a 7-minute timer), all fixed
+2026-07-28.** Read the transcript, not the vibe — every one had a mechanical cause.
+
+- **"No puedo."** Twice, with both gates ON, before the user insisted. The model was
+  reciting the system prompt's *"What you can do"* summary, which listed shell
+  surfaces and windows and said nothing about driving other apps — while a rule two
+  lines below tells it to answer that question **from the summary, without calling a
+  tool**. So a capability missing from that sentence is one the model actively
+  DENIES. The summary now grows with the gates. **Anything you add to computer-use
+  has to be added there too, or it does not exist as far as self-description goes.**
+- **7 minutes became 11 h 40 min (= 700 minutes).** GNOME Clocks' "Minutes" node is a
+  `spin button` whose `actions` array is **empty**, so `SetFocus` failed, and the
+  agent typed "7" blind — the digits landed on whatever had focus and concatenated
+  with what was already in the field. Verified against a live GtkSpinButton: the
+  widget reports `value=true component=true`, i.e. the number was always settable
+  directly. `nidara-a11y` now reports a `value` block (current/min/max) for anything
+  carrying the Value interface, and `nidara-act` takes `set-value=<n>`, reading the
+  result BACK so a clamp is reported as `ok:false` with the real value rather than a
+  cheerful lie. No new tool: `do_app_action` already passes `action` through, so this
+  cost zero prompt bytes — only the descriptions changed (daemon + MCP, kept in step).
+- **It clicked controls sitting UNDER its own panel.** The user called this a design
+  fault and had asked for the fix long before: *the agent must know whether the
+  island is open and be able to control it.* The island now reports what it COVERS
+  (`IslandWindow.occupiedRect`, capsule + revealed mode, with the monitor connector
+  so a multi-monitor consumer cannot compare across screens) via
+  `dumpState.overlays.islandBounds`; `yieldInput begin` returns the same rect so
+  `nidara-click` can flag a click that lands inside it **as a warning on a SUCCESSFUL
+  action** — the click does land (the yield makes the surface click-through), it is
+  the invisibility that needs saying. `setIsland <mode|closed>` is the exact-state
+  verb. Resizing/reshaping the island from the agent is explicitly LATER (user).
+
+**NO `focus` VERB — measured, not assumed, so do not add one back.**
+`Atspi.Component.grab_focus` is the obvious companion to `set-value` and it returns
+FALSE on GTK4 even with its own window already focused (checked against a live
+GtkSpinButton with `hyprctl activewindow` naming the probe). GTK4 dropped ATK and its
+AT-SPI backend does not implement `Component.GrabFocus`. A tool that always fails is
+worse than no tool AND costs prompt bytes on every request. Focus a WINDOW with
+`focusWindow`; to put a value somewhere, set the value instead of aiming a keyboard.
+
 **(g) A miss now answers the next question.** `nidara-click`'s "no showing node
 named X" was a dead end, and recovery cost a whole `query_app` round trip (measured:
 2 of 11 calls in that run were guesses — `"page tab"`, a ROLE in the name slot, and

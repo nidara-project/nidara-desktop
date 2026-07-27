@@ -167,11 +167,32 @@ function boundsOf(acc) {
     return { x: Math.round(r.x), y: Math.round(r.y), w: Math.round(r.width), h: Math.round(r.height) }
 }
 
+// Current/min/max for anything that carries an AT-SPI VALUE — spin buttons,
+// sliders, progress bars. Reported because otherwise a numeric field looks inert:
+// a GTK4 spin button exposes an EMPTY action list, so an agent reading only
+// `actions` concludes it can do nothing but type at it. It cannot type at it
+// reliably either (no focus action), and typing blind is what turned "7 minutes"
+// into 11 h 40 min. With this, the node advertises that `set-value=N` applies.
+// Only emitted when the interface exists, so ordinary nodes stay lean.
+function valueOf(acc) {
+    const iface = safe(() => acc.get_value_iface(), null)
+    if (!iface) return null
+    const cur = safe(() => Atspi.Value.prototype.get_current_value.call(iface), null)
+    if (cur == null) return null
+    return {
+        current: cur,
+        min: safe(() => Atspi.Value.prototype.get_minimum_value.call(iface), null),
+        max: safe(() => Atspi.Value.prototype.get_maximum_value.call(iface), null),
+        settable: true,
+    }
+}
+
 function nodeOf(acc, windowLabel, path) {
     const roleName = safe(() => acc.get_role_name(), "?")
     const name = safe(() => acc.get_name(), "") || null
     const actions = actionsOf(acc)
     const shortcuts = shortcutsOf(acc)
+    const value = valueOf(acc)
     return {
         window: windowLabel,
         type: roleName,            // AT-SPI role name — analogous to UITree's GType
@@ -182,6 +203,7 @@ function nodeOf(acc, windowLabel, path) {
         actions,
         // Only when present — keeps the common (no-shortcut) node lean.
         ...(shortcuts.length ? { shortcuts } : {}),
+        ...(value ? { value } : {}),
         visible: isShowing(acc),
         bounds: boundsOf(acc),
         path,
@@ -189,7 +211,7 @@ function nodeOf(acc, windowLabel, path) {
 }
 
 function isInteresting(n) {
-    return !!(n.id || n.text || n.actions.length || INTERACTIVE_ROLES.has(n.type))
+    return !!(n.id || n.text || n.actions.length || n.value || INTERACTIVE_ROLES.has(n.type))
 }
 
 // ── tree walk ──────────────────────────────────────────────────────────────────
