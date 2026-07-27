@@ -723,6 +723,16 @@ With (a) and (b) landed, the surface a parity pass would mirror is now
 open and still duplicates into whatever consumes it, which is the remaining
 argument for keeping the Assistant's parity last.
 
+**Found while verifying (a) live, and it bears on the parity decision:** a GTK
+tooltip is **not an accessibility node**. Hovering Nautilus's Back button rendered
+the tooltip in a screenshot while the AT-SPI tree held zero tooltip-role nodes
+before and after. So hover reveals state that a client WITHOUT VISION still cannot
+read — the MCP descriptions now say to use `screenshot` for tooltip text. For the
+built-in Assistant (no vision today) that makes hover useful for *provoking* UI —
+opening hover menus, revealing controls, which are ordinary accessibles — but not
+for reading tooltips. Weigh that when scoping its parity, and do not "fix" the
+absence of tooltip nodes: it is GTK's, not ours.
+
 **Not a gap, recorded to stop it being "fixed" again:** `screenshot` is reachable
 by the built-in Assistant today (it is not in `HIDDEN_ACTIONS`) and returns a PNG
 path the Assistant cannot see. That is FINE — "take me a screenshot" is a

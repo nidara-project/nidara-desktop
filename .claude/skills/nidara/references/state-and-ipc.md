@@ -870,7 +870,12 @@ scrolling off-screen content, drag-and-drop / rubber-band selection / sliders):
   from_y, to_x, to_y)`.
   **`hover-*` is not a lesser click.** It is the only way to reach state that does not exist until
   the pointer is there — tooltips, hover-revealed controls, submenus that open on hover — so the
-  a11y tree cannot show it to you in advance. Read the tree AFTER hovering.
+  a11y tree cannot show it to you in advance. Read the tree AFTER hovering, **with one measured
+  exception: a GTK tooltip is drawn on screen but is not an accessible at all.** Verified live on
+  GTK4 (Nautilus, 2026-07-27): hovering its Back button rendered the tooltip in a screenshot while
+  the AT-SPI tree held **zero** tooltip-role nodes before *and* after. So a hover can reveal state
+  that a client without vision still cannot read — `screenshot` is the only way to that text.
+  Controls a hover *reveals* are ordinary widgets and do appear in the tree.
   **Correction (2026-07-27):** this file used to justify the absence of `drag-app` with *"a
   two-ended gesture doesn't map cleanly to the single-node `*-app` shape"*. It maps fine — the
   wrapper resolves both ends through the same `resolveNode()` before anything is pressed, and a

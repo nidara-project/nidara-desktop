@@ -400,7 +400,7 @@ const TOOLS = [
     {
         name: "hover_app",
         description:
-            "Move the pointer over a control in a THIRD-PARTY app WITHOUT pressing anything — the way to reach state that does not exist until the pointer is there: tooltips, hover-revealed buttons, menus that open on hover. Call query_app AFTER this to read what appeared; reading before hovering shows nothing, because the app has not drawn it yet. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+            "Move the pointer over a control in a THIRD-PARTY app WITHOUT pressing anything — the way to reach state that does not exist until the pointer is there: tooltips, hover-revealed buttons, menus that open on hover. Read the result AFTER hovering: revealed CONTROLS are ordinary widgets and show up in query_app, but a GTK TOOLTIP is drawn without being an accessibility node (measured on GTK4) — query_app will not see it, so read tooltip text with screenshot instead. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
         inputSchema: {
             type: "object",
             properties: {
@@ -428,7 +428,7 @@ const TOOLS = [
     {
         name: "hover_at",
         description:
-            "Move the pointer over a WINDOW-RELATIVE point (x, y from the window's top-left) WITHOUT pressing anything — like hover_app but for canvas / custom-drawn surfaces with no accessible to name. Reveals tooltips and hover-only controls; read them with query_app AFTER hovering. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+            "Move the pointer over a WINDOW-RELATIVE point (x, y from the window's top-left) WITHOUT pressing anything — like hover_app but for canvas / custom-drawn surfaces with no accessible to name. Reveals tooltips and hover-only controls; read revealed controls with query_app, but tooltip TEXT with screenshot (a GTK tooltip is not an accessibility node). Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
         inputSchema: {
             type: "object",
             properties: {
