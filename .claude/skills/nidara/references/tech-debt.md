@@ -678,6 +678,52 @@ implemented to spec but only OpenAI-compatible verified live. (f) **Expand-on-fi
 intrusive — watch the user's live verdict; easy to gate tighter or drop. Full plan:
 `~/.claude/plans/spicy-twirling-galaxy.md`.
 
+### 38. Computer-use verb surface — gaps found by audit 2026-07-27
+Traced every verb through all four layers (`nidara-input.c` → `nidara-click` →
+`nidara-mcp` → the built-in Assistant). **Layer 2→3 is complete** — `click_app` /
+`click_at` absorb all four click modes via a `button` param, so the MCP server is
+correctly wired and is NOT where the problem is. Four gaps, cheapest first:
+
+**(a) `move` is BUILT AND UNREACHABLE.** `nidara-input.c` implements five verbs
+(`move` `click` `rightclick` `scroll` `drag`, header line 5); `nidara-click`'s
+`MODES` table (line 164) exposes seven modes and **none of them is `move`**. So
+hover — the thing that reveals tooltips, submenus and hover-only controls, i.e.
+state the a11y tree cannot show you until the pointer is there — is compiled,
+documented and dead. Wrapper + MCP work only, **no C**.
+
+**(b) `drag` is the only asymmetric verb.** Every other verb has both an `-app`
+form (name an AT-SPI node) and an `-at` form (coordinates). Drag has only
+`drag-at`, so dragging a file from one list to another — the archetypal drag —
+forces coordinate guessing instead of naming both ends. The wrapper already
+resolves node→coords for clicks, so this is wrapper + MCP only, **no C**.
+
+**(c) No middle button, no double-click, at any layer.** The injector knows only
+`BTN_LEFT`/`BTN_RIGHT`, and a double-click is not two clicks — it needs the
+timing window modelled. This one IS new C, which means recompiling the binary on
+every machine (`install.sh` builds it), so weigh it accordingly. Double-click
+probably earns that (opening things in file managers is constant); middle-click
+looks marginal.
+
+**(d) Single-output, cross-cutting.** `nidara-input.c`'s header says so
+explicitly: it maps logical coords against ONE output's extent, so every
+positioned verb is wrong on a multi-monitor setup. Widest-reaching of the four.
+Hyprland's own cursor control (`dispatch movecursor`, global coords, natively
+multi-monitor) is the candidate here — it stays compositor-mediated, so it does
+not violate the no-uinput guardian rule; it would complement the virtual-pointer
+path for POSITIONING rather than replace it for buttons.
+
+**Order matters, and it is not what it looks like:** doing the Assistant's
+computer-use parity FIRST would duplicate (a), (b) and (d) into a fourth consumer
+and cement the drag asymmetry in one more place. Fix the surface, then mirror it.
+
+**Not a gap, recorded to stop it being "fixed" again:** `screenshot` is reachable
+by the built-in Assistant today (it is not in `HIDDEN_ACTIONS`) and returns a PNG
+path the Assistant cannot see. That is FINE — "take me a screenshot" is a
+legitimate user request the Assistant fulfils without vision. Do not hide it. The
+only adjustment worth making is wording: the MCP description frames screenshots as
+a way for an agent to *verify its own work*, which is true for a client with vision
+and false for the Assistant.
+
 ### 37. Assistant file layer ("tier 1") — debt created 2026-07-27
 The six daemon-local file tools shipped (see `state-and-ipc.md` for the frontiers and the
 enforced invariants). What they left behind:
