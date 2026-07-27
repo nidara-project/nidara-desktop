@@ -15,8 +15,10 @@
 # OpenAI-compatible mock stands in for the LLM; a stub `ags` on PATH stands in for
 # the shell so tool execution returns a value instead of failing. The daemon runs
 # exactly as installed (gjs), reading a throwaway ai.json under a temp
-# XDG_CONFIG_HOME. Needs only: gjs, curl, python3 (and the Secret-1 typelib the
-# daemon imports — gir1.2-secret-1 on Debian/Ubuntu).
+# XDG_CONFIG_HOME and persisting its session under a temp XDG_STATE_HOME — both
+# per case, so cases cannot leak history into each other and running this on a
+# real machine cannot touch your own conversation. Needs only: gjs, curl, python3
+# (and the Secret-1 typelib the daemon imports — gir1.2-secret-1 on Debian/Ubuntu).
 #
 # Run locally:  python3 scripts/ci/agent-loop-test.py
 # Exit 0 = pass, non-zero = a failure (with the daemon's telemetry printed).
@@ -233,6 +235,13 @@ def drive_daemon(port: int, anthropic_rec: Path | None = None):
 
         env = dict(os.environ)
         env["XDG_CONFIG_HOME"] = str(tmp)
+        # The daemon persists its conversation under XDG_STATE_HOME and RESTORES it
+        # on startup, so this has to be per-case or "a fresh daemon" is a lie: the
+        # previous case's history would arrive in request 1 and the Anthropic stub,
+        # which reads "round 2" off the presence of a tool_result anywhere in the
+        # messages, would answer the final text and skip the round-trip under test.
+        # It also keeps the test off the developer's own conversation.
+        env["XDG_STATE_HOME"] = str(tmp / "state")
         env["PATH"] = f"{bind}:{env.get('PATH', '')}"
         env.setdefault("LANG", "en_US.UTF-8")
         if anthropic_rec:
