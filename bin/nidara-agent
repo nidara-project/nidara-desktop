@@ -333,7 +333,15 @@ const STATIC_TOOL_DEFS = [
     {
         name: "read_file",
         description:
-            "Read a text file from the desktop's own config, the shipped defaults in /usr/share/nidara, or the shell log. Returns numbered lines. Long files are paged: use `offset`/`limit` and read the part you need, not the whole thing.",
+            "Read a text file. Returns numbered lines; long files are paged, so use `offset`/`limit` and read the part you need rather than the whole thing.\n"
+            // The paths, in front of the model at all times — the same reasoning as
+            // run_action's action index. Without them it has to guess a path, take
+            // the refusal (which does name the roots) and retry: a whole wasted
+            // step, ~2000 tokens of round-trip, to save ~50 here.
+            + "What you can read:\n"
+            + `- ${HOME}/.config/nidara/ — the user's desktop state: settings JSONs (read-only, change them with set_config), hyprland-user.lua (their keybinds/rules), hypridle.conf\n`
+            + "- /usr/share/nidara/ — shipped defaults, including the base config/hypr/hyprland.lua that hyprland-user.lua overrides\n"
+            + `- ${READ_FILES[0]} — the shell log: what actually happened, in order. Read this before theorising about a problem.`,
         props: {
             path: { type: "string", description: "Absolute path, or ~/… " },
             offset: { type: "number", description: "First line to return (1-based, default 1)" },
@@ -356,6 +364,30 @@ const STATIC_TOOL_DEFS = [
             path: { type: "string", description: "File or directory to search" },
         },
         required: ["pattern", "path"],
+    },
+    {
+        name: "edit_file",
+        description:
+            "Replace an exact piece of text in a file you may write. `old_text` must match EXACTLY and appear exactly once — include surrounding lines to make it unique. Read the file first.\n"
+            // Same reasoning as read_file's path list: the writable set is three
+            // files, so naming them costs less than a refused call and a retry.
+            + "Writable: ~/.config/nidara/hyprland-user.lua (keybinds, window rules, startup), ~/.config/nidara/hypridle.conf (idle/power timeouts). Settings are NOT files — change them with set_config.",
+        props: {
+            path: { type: "string", description: "File to edit" },
+            old_text: { type: "string", description: "Exact text to replace (must be unique in the file)" },
+            new_text: { type: "string", description: "Replacement text (empty string deletes it)" },
+        },
+        required: ["path", "old_text", "new_text"],
+    },
+    {
+        name: "write_file",
+        description:
+            "Create a writable file, or replace one whole. Prefer edit_file for a change to an existing file; this refuses to overwrite a file you have not read this session.",
+        props: {
+            path: { type: "string", description: "File to write" },
+            content: { type: "string", description: "Full new contents" },
+        },
+        required: ["path", "content"],
     },
 ]
 
@@ -437,6 +469,8 @@ function summarizeTool(tu) {
         case "read_file": return `read_file ${prettyPath(i.path)}${i.offset ? `:${i.offset}` : ""}`
         case "list_dir": return `list_dir ${prettyPath(i.path)}`
         case "search_files": return `search_files "${truncate(String(i.pattern ?? ""), 40)}" in ${prettyPath(i.path)}`
+        case "edit_file": return `edit_file ${prettyPath(i.path)}`
+        case "write_file": return `write_file ${prettyPath(i.path)}`
         case "run_action": return `run_action ${i.action || "?"}${Array.isArray(i.args) && i.args.length ? " " + i.args.join(" ") : ""}`
         default: return tu.name
     }
@@ -491,6 +525,9 @@ function readFileTool(path, offset, limit) {
         content: `${path} has ${lines.length} lines; offset ${start} is past the end.`,
     }
 
+    // Records that this path has been seen, which is what write_file's
+    // no-blind-overwrite check consults.
+    readThisSession.add(path)
     const last = start + slice.length - 1
     const more = last < lines.length
         ? `\n… ${lines.length - last} more lines (continue at offset ${last + 1})`
@@ -537,6 +574,144 @@ function searchFilesTool(pattern, path) {
         ? `\n… ${hits.length - shown.length} more matches — narrow the pattern or the path.`
         : ""
     return { ok: true, content: shown.join("\n") + more }
+}
+
+// ── Write side ───────────────────────────────────────────────────────────────
+// Paths read via read_file this session. write_file (a blind full overwrite) is
+// refused for anything absent from here — the skill asks the model to read before
+// it writes, and an invariant is worth more than a request. edit_file needs no
+// such check: knowing the exact text to replace IS having read it.
+const readThisSession = new Set()
+
+const AUTOSTART_BEGIN = "-- @autostart start"
+const AUTOSTART_END = "-- @autostart end"
+
+// The region of hyprland-user.lua that Settings → Apps → Autostart owns. It
+// rewrites this block from the UI's own list, so anything the assistant puts
+// inside is dropped the next time the user opens that page — silently, days
+// later. Enforced rather than documented: the model writes OUTSIDE the markers or
+// not at all.
+function autostartBlock(text) {
+    const lines = text.split("\n")
+    const s = lines.findIndex(l => l.trim() === AUTOSTART_BEGIN)
+    const e = lines.findIndex(l => l.trim() === AUTOSTART_END)
+    if (s === -1 || e === -1 || e < s) return null
+    return lines.slice(s, e + 1).join("\n")
+}
+
+function autostartGuard(before, after) {
+    const b = autostartBlock(before)
+    if (b === null) return null            // no managed block — nothing to protect
+    const a = autostartBlock(after)
+    if (a === null) return "That edit would remove the `-- @autostart start/end` block, which Settings → Apps → Autostart owns. Leave it exactly as it is and put your change outside the markers."
+    if (a !== b) return "That edit changes the text between `-- @autostart start` and `-- @autostart end`. That block belongs to Settings → Apps → Autostart and is rewritten from the UI's list, so your change there would silently disappear. Put it outside the markers — a second hl.on(\"hyprland.start\", …) block is fine."
+    return null
+}
+
+// Git-backed undo for the config layer. Best-effort by design: a failure here is
+// logged and never fails the write, because the snapshot is a safety net, not the
+// operation the user asked for. Identity is passed per-invocation so this works on
+// a machine with no global git config.
+const CONFIG_DIR = `${HOME}/.config/nidara`
+const GIT = ["git", "-c", "user.name=Nidara Assistant", "-c", "user.email=assistant@nidara.local", "-C", CONFIG_DIR]
+
+// MUST run BEFORE the file is written. Getting this backwards is not a cosmetic
+// ordering nit: `git init` + `add -A` after the write would commit the ALREADY
+// CHANGED file as the baseline, so the very first thing the assistant ever did
+// would be the one thing that could never be undone. Caught in testing 2026-07-27,
+// when the first write produced a history with a single "baseline" commit holding
+// the new content and nothing to revert to.
+function gitEnsureBaseline() {
+    try {
+        if (GLib.file_test(`${CONFIG_DIR}/.git`, GLib.FileTest.EXISTS)) return
+        const init = run([...GIT, "init", "-q"])
+        if (!init.ok) { log(`git: init failed (${truncate(init.err, 120)}) — no undo history`); return }
+        run([...GIT, "add", "-A"])
+        run([...GIT, "commit", "-q", "-m", "Baseline: the config as it was before the Assistant's first change"])
+        log("git: initialised undo history in ~/.config/nidara")
+    } catch (e) {
+        log(`git: baseline failed (${e})`)
+    }
+}
+
+function gitSnapshot(label) {
+    try {
+        if (!GLib.file_test(`${CONFIG_DIR}/.git`, GLib.FileTest.EXISTS)) return
+        run([...GIT, "add", "-A"])
+        const c = run([...GIT, "commit", "-q", "-m", label])
+        // `-q` still reports an empty commit on stdout; it means the write changed
+        // nothing, which is worth neither a log line nor an error.
+        const quiet = `${c.out} ${c.err}`.includes("nothing to commit")
+        if (!c.ok && !quiet) log(`git: commit failed (${truncate(c.err || c.out, 120)})`)
+    } catch (e) {
+        log(`git: snapshot failed (${e}) — the write itself succeeded`)
+    }
+}
+
+// Read the current contents of a write target. Missing is not an error: creating
+// hypridle.conf or a first hyprland-user.lua is legitimate.
+function currentText(path) {
+    try {
+        const [ok, data] = GLib.file_get_contents(path)
+        if (!ok) return ""
+        return new TextDecoder().decode(data)
+    } catch {
+        return ""
+    }
+}
+
+function commitWrite(path, text, label) {
+    // Baseline FIRST — see gitEnsureBaseline. The pre-change state has to be in a
+    // commit before the file changes, or the first edit is unrevertible.
+    const tracked = path.startsWith(CONFIG_DIR + "/")
+    if (tracked) gitEnsureBaseline()
+    try {
+        GLib.mkdir_with_parents(GLib.path_get_dirname(path), 0o755)
+        if (!GLib.file_set_contents(path, text)) return { ok: false, content: `Could not write ${path}.` }
+    } catch (e) {
+        return { ok: false, content: `Could not write ${path}: ${e?.message ?? e}` }
+    }
+    // The file changed under the model; the old copy in its context is now stale.
+    readThisSession.delete(path)
+    if (tracked) gitSnapshot(label)
+    const hint = path.endsWith(".lua")
+        ? " Run `run_action reload_hyprland` to apply it, then say what changed."
+        : ""
+    return { ok: true, content: `Wrote ${path} (${text.split("\n").length} lines).${hint}` }
+}
+
+function writeFileTool(path, content) {
+    if (!readThisSession.has(path) && GLib.file_test(path, GLib.FileTest.EXISTS)) return {
+        ok: false,
+        content: `Read ${path} first — write_file replaces the whole file, and this one already exists. Use read_file, then edit_file for a targeted change.`,
+    }
+    const before = currentText(path)
+    const guard = autostartGuard(before, content)
+    if (guard) return { ok: false, content: guard }
+    return commitWrite(path, content, `Assistant: rewrote ${GLib.path_get_basename(path)}`)
+}
+
+function editFileTool(path, oldText, newText) {
+    if (!oldText) return { ok: false, content: "edit_file needs `old_text` — the exact text to replace. To create a file or replace it wholesale, use write_file." }
+    const before = currentText(path)
+    if (!before) return { ok: false, content: `${path} is empty or missing — use write_file to create it.` }
+
+    // Exact and UNIQUE. A first-match replace on an ambiguous anchor edits a line
+    // the model wasn't looking at, and nothing downstream would notice.
+    const first = before.indexOf(oldText)
+    if (first === -1) return {
+        ok: false,
+        content: `That exact text is not in ${path}. Re-read the file — it may have changed, or the whitespace may differ — and match it exactly.`,
+    }
+    if (before.indexOf(oldText, first + 1) !== -1) return {
+        ok: false,
+        content: `That text appears more than once in ${path}. Include enough surrounding lines to make it unique.`,
+    }
+
+    const after = before.slice(0, first) + newText + before.slice(first + oldText.length)
+    const guard = autostartGuard(before, after)
+    if (guard) return { ok: false, content: guard }
+    return commitWrite(path, after, `Assistant: edited ${GLib.path_get_basename(path)}`)
 }
 
 function execTool(tu) {
@@ -596,6 +771,21 @@ function execTool(tu) {
                 const r = resolvePath(tu.input?.path, "read")
                 if (r.error) return { ok: false, content: r.error }
                 return capResult(searchFilesTool(pattern, r.path))
+            }
+            case "edit_file": {
+                const gate = fileGate("write")
+                if (gate) return { ok: false, content: gate }
+                const r = resolvePath(tu.input?.path, "write")
+                if (r.error) return { ok: false, content: r.error }
+                return capResult(editFileTool(r.path, String(tu.input?.old_text ?? ""), String(tu.input?.new_text ?? "")))
+            }
+            case "write_file": {
+                const gate = fileGate("write")
+                if (gate) return { ok: false, content: gate }
+                const r = resolvePath(tu.input?.path, "write")
+                if (r.error) return { ok: false, content: r.error }
+                if (tu.input?.content == null) return { ok: false, content: "write_file needs `content`." }
+                return capResult(writeFileTool(r.path, String(tu.input.content)))
             }
             default:
                 // The model named a tool that isn't offered. Name the real ones so
@@ -669,6 +859,11 @@ function buildSystemPrompt() {
         // log before offering a theory.
         "- When something is WRONG (a glitch, a surface not opening, an app misbehaving), investigate before you answer: read the shell log and the relevant config file, say what you found, then propose the fix. Do not guess at a cause you have not looked for.",
         "- You can read Nidara's own config and defaults, not the user's other files. If something is outside what you can reach, say so plainly instead of working around it.",
+        // The routing rule, and the single most costly mistake available here: a
+        // settings JSON edited by hand looks right and is silently overwritten by
+        // the shell minutes later. The tools refuse it, but saying it here stops
+        // the model spending a step finding that out.
+        "- Routing a change: a SETTING goes through set_config. A keybind, window rule or startup program goes in ~/.config/nidara/hyprland-user.lua (read it, then edit_file) — then call run_action reload_hyprland to apply it. Never edit a settings JSON directly; the shell owns those and would overwrite you.",
         // The language of the MESSAGE wins, always. The desktop locale is a hint
         // for the ambiguous case, never the rule: people routinely run an English
         // desktop and talk to it in their own language, and switching languages
@@ -1656,6 +1851,11 @@ function handleMessage(msg) {
             turnStartIndex = 0
             systemCache = null
             toolsetCache = null
+            // The model's memory of what it read is gone with the history, so the
+            // no-blind-overwrite check must forget too — otherwise a fresh
+            // conversation inherits permission to overwrite a file it can no
+            // longer see.
+            readThisSession.clear()
             cancelled = true
             if (currentCurl) { try { currentCurl.force_exit() } catch {} }
             break

@@ -379,6 +379,24 @@ class HyprlandStateClass extends GObject.Object {
         return `window = 'address:${addr}'`
     }
 
+    /** Make Hyprland re-read its config. NOT a dispatch — `reload` is a top-level
+     *  hyprctl command, so it deliberately bypasses `_dispatch` (whose contract is
+     *  hl.dsp.* Lua) rather than being wrapped into one.
+     *
+     *  Exists because a config edit had no way to be APPLIED from here: the shell
+     *  listens for `configreloaded` and re-syncs on it, but nothing could provoke
+     *  it. That left the assistant able to write a keybind into hyprland-user.lua
+     *  and unable to either activate or verify it — a read → act → verify loop with
+     *  the last step missing.
+     *
+     *  Safe to call spuriously: a reload re-runs the same config, and the shell's
+     *  own `config-reloaded` handler already refreshes the modes cache and
+     *  effective-config consumers, which is exactly what should happen. */
+    reloadConfig() {
+        return execAsync(["hyprctl", "reload"])
+            .catch(e => console.error("[HyprlandState] reload:", e))
+    }
+
     focusWorkspace(id: number) {
         return this._dispatch(`hl.dsp.focus({ workspace = ${id} })`)
     }

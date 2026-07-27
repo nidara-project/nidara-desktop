@@ -246,6 +246,13 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       )
     },
   },
+  reloadHyprland: {
+    desc: "Make Hyprland re-read its config, applying edits to hyprland-user.lua (keybinds, window rules). Ungated, like the other compositor ops: it re-runs the config the user already has. Call it after editing that file, then verify with dumpState.",
+    run: () => {
+      hyprlandState.reloadConfig()
+      return "hyprland config reloaded"
+    },
+  },
   focusWorkspace: {
     desc: "Switch workspace. Absolute id (`focusWorkspace 3`, see listWorkspaces), relative (`+1`/`-1` = next/prev incl. empty), or a Hyprland workspace string (`previous`, `e+1`, `name:foo`).",
     run: args => {
@@ -469,7 +476,7 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     },
   },
   dumpState: {
-    desc: "Dump live shell state as JSON (version, theme, locale, overlays, effective Hyprland config)",
+    desc: "Dump live shell state as JSON (version, theme, locale, monitors incl. resolution/refresh/scale, overlays, effective Hyprland config)",
     run: () => {
       const display = Gdk.Display.get_default()
       return JSON.stringify(
@@ -478,7 +485,29 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             version: readShellVersion(),
             locale: currentLocale(),
             darkMode: Theme.isDark,
-            monitors: display ? display.get_monitors().get_n_items() : 0,
+            // A COUNT was all this reported until now, which meant the one
+            // question anybody actually asks about their display — "what
+            // resolution am I running?" — had no answer anywhere on the agent
+            // surface. Reading nidara-monitor.lua does not answer it either: that
+            // file records the user's PICK, which is normally `mode = "preferred"`.
+            // AstalHyprland's monitor objects carry the effective geometry the
+            // compositor is really driving, and HyprlandState already caches them
+            // for the Display page, so this is the authoritative answer for free.
+            // Kept as `monitors` (an array now): every consumer of the old number
+            // wanted "how many", and .length still gives it.
+            monitors: hyprlandState.monitors.map((m: any) => ({
+              name: m.name,
+              description: m.description || m.model || "",
+              width: m.width,
+              height: m.height,
+              refreshRate: Math.round((m.refreshRate ?? 0) * 100) / 100,
+              scale: m.scale,
+              x: m.x,
+              y: m.y,
+              transform: m.transform,
+              focused: m.focused,
+            })),
+            monitorCount: display ? display.get_monitors().get_n_items() : 0,
           },
           // EFFECTIVE compositor config (includes hyprland-user.lua overrides) —
           // what the system actually runs, not our shipped defaults.
