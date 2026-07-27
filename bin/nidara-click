@@ -99,7 +99,17 @@ function cursorPos() {
 // `timeout 2` bounds a hung shell. The `--` is load-bearing: the ags CLI
 // otherwise parses a negative coordinate (monitor left/above the origin) as a
 // flag and errors out (verified live 2026-07-12). The async path silences
-// stdio like pingShell (inherited stdout would pollute the JSON contract).
+// stdio like pingShell (inherited stdout would pollute the JSON contract);
+// `wait` uses spawn_sync, which CAPTURES stdout, so it is equally safe.
+//
+// EVERY `cancel` MUST WAIT. An abort emits its JSON and returns, so the process
+// exits within microseconds — a fire-and-forget spawn does not survive that, the
+// request never reaches the shell, and the choreography only ends on the 3 s
+// orphan timeout. Measured 2026-07-27: an aborted action left the fake cursor up
+// (and, since the shell now hides the REAL pointer for the duration, the user
+// without a cursor) for **5.3 s after they moved the mouse**, against 343 ms once
+// the cancel is actually delivered. `confirm` survives async only because the
+// injection runs after it — if that order ever changes, make it wait too.
 function visual(cmd, wait = true) {
     try {
         if (wait) {
@@ -317,7 +327,7 @@ function main() {
     // disableComputerControl) can fire DURING the travel animation — this is what
     // lets it stop an injection inside that window.
     if (!controlEnabled()) {
-        visual("cancel", false)
+        visual("cancel")
         emit({ ok: false, error: "aborted: computer-control was revoked during the action animation (kill switch)" })
         return
     }
@@ -326,7 +336,7 @@ function main() {
     const cursorNow = cursorPos()
     if (cursorBase && cursorNow &&
             Math.hypot(cursorNow.x - cursorBase.x, cursorNow.y - cursorBase.y) > 10) {
-        visual("cancel", false)
+        visual("cancel")
         emit({ ok: false, error: "aborted: the user moved the mouse during the action animation — user input takes priority; retry when the pointer is idle" })
         return
     }

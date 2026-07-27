@@ -901,12 +901,31 @@ plays the choreography on an OVERLAY layer-shell window per monitor
 (`surfaces/agent-pointer/AgentPointer.ts` — see architecture.md for the window-model exception).
 Only visible **during actions**: pop-in at the REAL cursor's position (MATERIALIZE hold so the
 eye locks on before anything moves), ease-in-out travel on a gently bowed bezier (~0.3-1 s,
-distance-scaled — deliberately hand-like, never a robotic zip), ripple on click, then a ~4 s
-linger with a pulsing accent **halo** around the tip before fading (persistent state is already
-the bar's AI badge). The halo is load-bearing, not decoration: the real injection warps the
-HARDWARE cursor onto the landing point and the cursor plane always paints on top of layer
-surfaces — without the ring the covered arrow reads as "the AI cursor turned back into the
-normal one" (the original v1 complaint). During the linger the overlay polls `hyprctl cursorpos`
+distance-scaled — deliberately hand-like, never a robotic zip), an effect keyed to the verb, then
+a ~4 s linger with a pulsing accent **halo** around the tip before fading (persistent state is
+already the bar's AI badge). **The effect must not lie about what the machine did**: a click
+ripples OUTWARD ("something left here — a button went down"); a **hover** gets the same ring run
+backwards, contracting onto the tip and docking into the halo's radius ("something arrived here"),
+and its halo skips the 250 ms ramp so the accent never blinks out at the moment of landing.
+
+**The real cursor is HIDDEN for the length of a choreography** (`cursor:invisible` via
+`hs.setRealCursorVisible()`), and this is not polish — it is the only available fix. The hardware
+cursor plane paints above every layer surface, so the fake arrow cannot be drawn over the real
+one; the halo was the first attempt and a live session rejected it (2026-07-27): what the eye
+follows is the cursor, and you saw the ordinary black pointer land on top of the arrow and then
+teleport between chained actions. There is no way to raise a layer above the cursor plane, so the
+other one goes. **The SHELL owns the hide, never `nidara-click`** — that helper is short-lived and
+a crash between hide and restore would leave the user with no pointer. Every ending already passes
+through `hardHide` (fade complete, kill switch, `hideForLock`, 3 s orphan timeout), which is where
+the restore lives; `syncRealCursor()` derives the state from `isAgentPointerActive()` rather than
+counting calls, so a burst across monitors cannot strand it; and the factory restores once per
+shell start as unconditional insurance against a shell that died mid-action.
+**Consequence that made a latent bug expensive:** every `cancel` from `nidara-click` must be sent
+with `wait`. An abort emits its JSON and returns, so a fire-and-forget spawn dies with the process
+and the choreography only ends on the orphan timeout. Measured: moving the mouse mid-action left
+the user with **no cursor for 5.3 s**, against 343 ms once the cancel is delivered, and ~1.1 s end
+to end (the remaining second is the travel — the wrapper only checks the physical cursor once the
+fake one has landed). During the linger the overlay polls `hyprctl cursorpos`
 (~2 Hz, idle phase only): if the user moves the real cursor > 24 px off the landing point it
 fades early — the user always wins, also during the linger. Visible over fullscreen. Key
 properties:
@@ -917,10 +936,12 @@ properties:
   helper's `timeout 2` bound). It then **re-checks the
   gate** (the kill switch can fire mid-animation and now stops the injection inside that window)
   and re-reads `cursorpos`: if the user moved the mouse **> 10 logical px** (euclidean), it
-  aborts with a readable `{ok:false}` error and sends `agentPointer cancel` (fade, NO ripple) —
-  **the user always wins**. Only if it actually injects does it send `agentPointer confirm`
-  (async, right before the injector spawns) → the ripple ≈ the real click; a drag glides the
-  fake cursor concurrently with the real 24-step drag (small cosmetic skew accepted).
+  aborts with a readable `{ok:false}` error and sends `agentPointer cancel` **synchronously**
+  (fade, NO ripple) — **the user always wins**. Only if it actually injects does it send
+  `agentPointer confirm` (async, right before the injector spawns) → the ripple ≈ the real click;
+  a drag glides the fake cursor concurrently with the real 24-step drag (small cosmetic skew
+  accepted). `confirm` survives being async only because the injector spawns after it; if that
+  order ever changes it has to wait too, for the reason above.
 - **The visual is an ENHANCEMENT, never a gate**: `visual()` in `nidara-click` is
   try/catch + `timeout 2` — shell down or pre-agentPointer shell = silent no-op, injection
   proceeds. Abort authority lives ONLY in `nidara-click` (gate re-check + user-wins); the shell

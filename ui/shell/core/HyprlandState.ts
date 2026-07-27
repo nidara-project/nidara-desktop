@@ -218,6 +218,18 @@ class HyprlandStateClass extends GObject.Object {
         return execAsync(["hyprctl", "setcursor", theme, String(size)]).catch(() => {})
     }
 
+    /** Show/hide the REAL pointer (`cursor:invisible`). Rendering only — input is
+     *  unaffected, so hover and clicks still land while it is hidden.
+     *
+     *  The only caller is the agent-pointer overlay, and the reason is physical:
+     *  the hardware cursor plane paints above every layer surface, so the fake AI
+     *  cursor cannot be drawn on top of the real one — the real one has to go away
+     *  for the length of an AI action. **Whoever hides it owns restoring it on
+     *  every exit path**, including crashes; see `surfaces/agent-pointer/`. */
+    setRealCursorVisible(visible: boolean) {
+        return this.evalLua(`hl.config({ cursor = { invisible = ${visible ? "false" : "true"} } })`)
+    }
+
     /** Hyprland version, e.g. "0.55.2" ("" on failure). */
     async version(): Promise<string> {
         try {

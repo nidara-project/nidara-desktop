@@ -43,6 +43,7 @@ import Cairo from "gi://cairo"
 import Pango from "gi://Pango"
 import PangoCairo from "gi://PangoCairo"
 import Theme from "../../core/ThemeManager"
+import hs from "../../core/HyprlandState"
 import agentConfig from "../../core/AgentConfig"
 import { t } from "../../core/i18n"
 import { hexToFloatRgb } from "../../common/DrawingUtils"
@@ -55,6 +56,8 @@ const FADE_OUT_MS = 280
 const MATERIALIZE_MS = 160  // pop-in hold at the origin BEFORE travelling — lets the eye lock on
 const POP_MS = 260          // scale-overshoot window of the pop-in (overlaps into early travel)
 const RIPPLE_MS = 250
+const HALO_R = 13           // resting halo radius — where the hover arrival ring docks
+const ARRIVE_R0 = 30        // hover arrival ring starts here and contracts to HALO_R
 const DRAG_GLIDE_MS = 290   // ≈ the real injector's 24-step glide (cosmetic skew accepted)
 const IDLE_MS = 4000        // linger after the last action — time to actually SEE the badge
 const ORPHAN_MS = 3000
@@ -86,7 +89,44 @@ export function isAgentPointerActive(): boolean {
     return false
 }
 
+// ── The real pointer, while the AI is driving ────────────────────────────────
+// The hardware cursor plane paints ON TOP of every layer surface. So the moment
+// the injection warps the real pointer onto the landing point, the ordinary black
+// cursor covers the accent arrow — and across chained actions you watch that black
+// cursor teleport from stop to stop. Reported from a live session (2026-07-27);
+// the landing halo was the first answer and it was not enough, because what the
+// eye follows is the cursor, not a ring behind it. There is no way to put a layer
+// above the cursor plane, so the other one goes: `cursor:invisible` hides the real
+// pointer for exactly as long as a choreography is on screen. Input is unaffected.
+//
+// THE SHELL OWNS THIS, deliberately not `nidara-click`: that helper is short-lived
+// and a crash between hide and restore would leave the user with no pointer at all.
+// Here, every path that ends a choreography passes through `hardHide`/fade-out —
+// including the kill switch, the lockscreen hard-hide and the 3 s orphan timeout —
+// so the restore rides on machinery that already exists. `syncRealCursor()` is
+// idempotent and derives the state from `isAgentPointerActive()` rather than from
+// counting calls, so a burst across monitors cannot leave it stuck.
+let cursorHidden = false
+function syncRealCursor() {
+    const hide = isAgentPointerActive()
+    if (hide === cursorHidden) return
+    cursorHidden = hide
+    hs.setRealCursorVisible(!hide)
+}
+
+// Unconditional insurance, once per shell start: if a previous shell died mid-action
+// the cursor is still invisible and nothing else would ever put it back. Runs from
+// the factory rather than at import time — by then the monitors are enumerated, so
+// Hyprland is certainly up to answer.
+let restoredOnStart = false
+function restoreCursorOnce() {
+    if (restoredOnStart) return
+    restoredOnStart = true
+    hs.setRealCursorVisible(true)
+}
+
 export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
+    restoreCursorOnce()
     // NB: no `resizable: false` — it pins the window to its natural size
     // (GTK's 200×200 default), which layer-shell then honors instead of
     // stretching to the 4 anchors, and everything paints off-surface
@@ -147,7 +187,10 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
     let idleStart = 0
     let alpha = 0
     let pressed = false              // drag glide: cursor drawn "pressed" (Cairo scale 0.92)
-    let ripple: { start: number, p: number, cx: number, cy: number, subtle: boolean } | null = null
+    // `inward` inverts the ring: it CONTRACTS onto the tip instead of expanding
+    // out of it. Expanding reads as "something left here" (a button went down);
+    // contracting reads as "something arrived here", which is what a hover is.
+    let ripple: { start: number, p: number, cx: number, cy: number, subtle: boolean, inward?: boolean } | null = null
     let bornUs = -1                  // pop-in start (frame-clock µs); -1 = not yet ticked
     let haloOn = false, haloT = 0    // landing halo: on from touchdown until hide, haloT in ms
     let idlePollAcc = 0, strayBusy = false
@@ -198,6 +241,10 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
         haloT = 0
         lastUs = 0
         try { win.set_visible(false) } catch (e) { console.error("[AgentPointer] hide failed:", e) }
+        // Last statement on purpose: phase is already "hidden", so if this was the
+        // last visible pointer the real cursor comes back here — and EVERY ending
+        // (fade-out complete, kill switch, lockscreen, orphan timeout) lands here.
+        syncRealCursor()
     }
 
     const tick = (_w: Gtk.Widget, fc: Gdk.FrameClock): boolean => {
@@ -246,9 +293,6 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
                 phase = "effect"
             }
         } else if (phase === "idle") {
-            // Lazy start, same sentinel pattern as travel/glide: a hover enters idle
-            // straight from confirm(), which has no frame clock to stamp it with.
-            if (idleStart < 0) idleStart = nowUs
             if (nowUs - idleStart >= IDLE_MS * 1000) phase = "fadeout"
             else {
                 idlePollAcc += dtMs
@@ -311,12 +355,23 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
         const accent = hexToFloatRgb(Theme.accentPalette[Theme.accentColor].color)
 
         // Click ripple — an accent ring expanding from where the REAL action fired.
+        // Hover arrival (`inward`) — the same ring run backwards: it starts wide and
+        // faint, contracts onto the tip while brightening, and docks into the halo's
+        // radius instead of collapsing to nothing.
         if (ripple && ripple.p > 0 && ripple.p < 1) {
             const maxR = ripple.subtle ? 10 : 18
             const a0 = ripple.subtle ? 0.35 : 0.6
-            cr.setSourceRGBA(accent.r, accent.g, accent.b, a0 * (1 - ripple.p) * alpha)
+            const r = ripple.inward
+                ? ARRIVE_R0 - (ARRIVE_R0 - HALO_R) * ripple.p
+                : maxR * ripple.p
+            // Outward fades as it grows; inward peaks mid-flight so it neither pops
+            // in at full strength nor ends on a hard edge as it merges with the halo.
+            const a = ripple.inward
+                ? a0 * Math.sin(ripple.p * Math.PI)
+                : a0 * (1 - ripple.p)
+            cr.setSourceRGBA(accent.r, accent.g, accent.b, a * alpha)
             cr.setLineWidth(2.5)
-            cr.arc(ripple.cx, ripple.cy, maxR * ripple.p, 0, 2 * Math.PI)
+            cr.arc(ripple.cx, ripple.cy, r, 0, 2 * Math.PI)
             cr.stroke()
         }
 
@@ -326,9 +381,14 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
         // A pulsing accent ring around the tip keeps the AI presence legible
         // for the whole linger, real cursor on top or not.
         if (haloOn) {
-            const hAlpha = Math.min(1, haloT / 250) * alpha
+            // The ramp exists so the halo does not pop in under a click's ripple.
+            // A HOVER has the opposite need: the real cursor warps on top of the
+            // arrow at this exact moment, and a halo still fading in leaves the
+            // accent gone for a beat — which reads as the AI cursor turning back
+            // into the normal one. So a hover's halo is at full strength on frame 0.
+            const hAlpha = (kind === "move" ? 1 : Math.min(1, haloT / 250)) * alpha
             const pulse = 0.5 + 0.5 * Math.sin(haloT / 300)
-            const r = 13 + 2 * pulse
+            const r = HALO_R + 2 * pulse
             cr.setSourceRGBA(accent.r, accent.g, accent.b, 0.12 * hAlpha)
             cr.arc(x, y, r + 5, 0, 2 * Math.PI)
             cr.fill()
@@ -442,6 +502,9 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
         // A fresh appearance holds at the origin first (pop-in, MATERIALIZE_MS)
         // so the eye can lock on; a chained action re-aims and travels directly.
         phase = wasHidden ? "materialize" : "travel"
+        // After `phase` is set, never before: syncRealCursor reads it back through
+        // isAgentPointerActive(), and inside show() the phase is still "hidden".
+        syncRealCursor()
         return new Promise<string>(resolve => { pending = resolve })
     }
 
@@ -454,12 +517,13 @@ export default function AgentPointer(gdkmonitor: Gdk.Monitor): Gtk.Window {
             glideStart = -1
             phase = "dragGlide"
         } else if (kind === "move") {
-            // A hover presses NOTHING, so it must not ripple — the visual never
-            // lies, and a ripple here would read as a click the user never got.
-            // Landing IS the whole action: go straight to the linger.
-            idleStart = -1
-            idlePollAcc = 0
-            phase = "idle"
+            // A hover presses NOTHING, so it must not ripple OUTWARD — that reads
+            // as a click the user never got. But it is not nothing either: the
+            // pointer ARRIVED, and that deserves its own mark, or the accent
+            // vanishes the instant the real cursor lands on top of the arrow
+            // (reported from a live session, 2026-07-27). Same ring, run backwards.
+            ripple = { start: -1, p: 0, cx: x, cy: y, subtle: false, inward: true }
+            phase = "effect"
         } else {
             ripple = { start: -1, p: 0, cx: x, cy: y, subtle: kind === "scroll" }
             phase = "effect"
