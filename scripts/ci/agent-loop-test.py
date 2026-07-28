@@ -134,16 +134,19 @@ class Mock(BaseHTTPRequestHandler):
             send(self._chunk(finish="tool_calls"))
 
         if Mock.mode == "computer_use":
-            # Three helper-backed calls in one turn: a pointer click that SUCCEEDS
+            # Four helper-backed calls in one turn: a pointer click that SUCCEEDS
             # (asserted on the argv the helper received), a perception call that
-            # returns a tree (asserted on the projection applied to it), and one
-            # the helper REFUSES (asserted on the result being marked failed).
+            # returns a tree (asserted on the projection applied to it), one the
+            # helper REFUSES (asserted on the result being marked failed), and a
+            # match that finds NOTHING — the step before the expensive fallback.
             if tool_results == 0:
                 call_tool("click_app", CLICK_ARGS, "call_click")
             elif tool_results == 1:
                 call_tool("query_app", '{"app":"nautilus"}', "call_query")
             elif tool_results == 2:
                 call_tool("query_app", "{}", "call_refused")
+            elif tool_results == 3:
+                call_tool("query_app", '{"app":"nautilus","match":"buscar"}', "call_nomatch")
             else:
                 send(self._chunk(delta={"role": "assistant", "content": FINAL[:1]}))
                 send(self._chunk(delta={"content": FINAL[1:]}))
@@ -738,6 +741,32 @@ def main():
                     problems.append("the control AFTER the long list did not survive the projection")
                 if '"visible"' in tree or '"window"' in tree.split('"nodes"')[0][40:]:
                     problems.append("per-node noise (visible/window) was not leaned out")
+            # A match that finds NOTHING is one step from the whole-window dump —
+            # measured live 2026-07-29: it cost ~78k of a 125k-token turn, spent to
+            # learn that a button is called "Buscar mensajes". So the empty result
+            # has to carry the labels on screen AND the price of the alternative.
+            miss = next((m.get("content", "") for m in Mock.last_messages
+                         if m.get("role") == "tool" and '"match"' in str(m.get("content", ""))), "")
+            if not miss:
+                problems.append("the no-match query_app result never reached the next request")
+            else:
+                try:
+                    got = json.loads(miss)
+                except Exception:
+                    got = {}
+                showing = got.get("showing")
+                if not showing:
+                    problems.append("a match that found nothing did not report the labels on screen")
+                # Document order would hand back file-000.txt: the stub's only
+                # control sits LAST, behind 120 rows. Controls come first or the
+                # list is the head-cut bug again, one level up.
+                elif showing[0] != "Show Sidebar":
+                    problems.append(f"labels are not control-first: {showing[:3]}")
+                hint = got.get("hint", "")
+                if "KB" not in hint:
+                    problems.append(f"the fallback was recommended without its price: {hint!r}")
+                if "was NOT empty" not in hint:
+                    problems.append(f"an empty match did not say the window was not empty: {hint!r}")
             text = "".join(e.get("text", "") for e in events if e.get("t") == "delta")
             if FINAL not in text:
                 problems.append(f"turn did not complete (streamed text: {text!r})")

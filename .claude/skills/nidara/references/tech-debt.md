@@ -762,6 +762,34 @@ focus gate refused every Assistant call before reaching the ping. **Rule for any
 helper: nothing but the one JSON may reach stdout — fire-and-forget children must be
 `Gio.Subprocess` with `STDOUT_SILENCE`, never `spawn_command_line_async`.**
 
+**(k) The fourth live run cost 62 % of its tokens on ONE unfiltered `query_app`.
+Fixed 2026-07-29.** The run itself went well — the focus refusal from (j) recovered
+in a single step, exactly as designed. The waste was elsewhere, and only the token
+counts show it: step 1 filtered (`match:"search"`, 4 hits, history 3,199 b), and
+because the UI is in **Spanish** none of the 4 was the button, so step 2 asked for
+the whole window. History went to 40,845 b and **every one of the six remaining
+steps carried it** — ~78k of the turn's 125,483 input tokens, spent to discover
+that the control is called "Buscar mensajes".
+
+**The model cannot see the price of what it is about to ask for.** Worse, the old
+code only hinted on a match of exactly ZERO, and the hint recommended *"call again
+without `match`"* — i.e. it pointed at the 37 KB path without naming its cost. Now
+a filtered query with ≤ 8 hits carries `showing` (the labels on screen) and a hint
+that states the size of the dump it is declining to recommend. Free: those nodes
+are already in hand, and it is computed **only** on that path.
+
+**`showing` is CONTROL-FIRST, and that is the whole point** — taking labels in
+document order repeats the head-cut bug the projection exists to fix, one level up.
+Measured on the live Telegram window: document order spends 18 of its first 19
+slots on table cells (*Remitente, Mensaje, Entrega…*), while filtering by role
+gives **16 names, all controls, 401 bytes, with "Buscar mensajes" second**. Below 8
+control-role names it falls back to every labelish name — an unknown toolkit must
+degrade to a noisy list, never an empty one. Pinned in `agent-loop` scenario 4,
+where the stub's only control sits at node 121 behind 120 rows: with the role pass
+removed the assertion reports `['file-000.txt', …]`. The live measurement is **Qt**
+(Telegram); the GTK side is the stub, built from the measured Nautilus tree, not
+re-measured live.
+
 **(j) The third live run SUCCEEDED — and its two wasted steps were both our own
 text, not the model's judgement. Fixed 2026-07-29.** "Añade un temporizador de 7
 minutos con título Hola Manola": 11 steps, timer created, Clocks tiled with a

@@ -554,7 +554,7 @@ const SEE_TOOL_DEFS = [
     {
         name: "query_app",
         description:
-            "Look inside ANOTHER application's window through its accessibility tree: a flat list of controls with role, name, text, the actions each one exposes, and window-relative bounds. This is how you see outside Nidara — you have no other view of another app. Targets the focused window unless you pass `app`. A real window holds hundreds of controls, so pass `match` when you know what you are after. Some toolkits expose little or nothing; if the tree comes back empty, say so rather than acting blind.",
+            "Look inside ANOTHER application's window through its accessibility tree: a flat list of controls with role, name, text, the actions each one exposes, and window-relative bounds. This is how you see outside Nidara — you have no other view of another app. Targets the focused window unless you pass `app`. A real window holds hundreds of controls, so pass `match` when you know what you are after; a match that finds little answers with `showing`, the labels on screen — read those before asking for a whole window. Some toolkits expose little or nothing; if the tree comes back empty, say so rather than acting blind.",
         props: {
             app: { type: "string", description: "App name substring; omit for the focused window" },
             match: { type: "string", description: "Keep only controls whose name, text or role contains this" },
@@ -1155,10 +1155,65 @@ const A11Y_SIBLINGS = 3
 // generic one — sized from measurement (a leaned Nautilus is 27 KB) so a normal
 // window arrives WHOLE rather than cut at its header bar.
 const MAX_A11Y_RESULT = 32000
+// A filtered query that came back with little is ONE STEP from the expensive
+// fallback, and the model cannot see the price it is about to pay. Measured in a
+// live run 2026-07-29: `match:"search"` on a Spanish Telegram matched 4 nodes,
+// none of them the button; the model then asked for the whole window, history
+// went 3,199 b → 40,845 b, and every one of the six remaining steps carried it —
+// ~78k of the turn's 125k input tokens, spent to learn that the control is called
+// "Buscar mensajes". The labels themselves cost 697 bytes (measured, same window).
+// So below this many hits the result carries the on-screen labels AND the size of
+// the dump it is about to ask for. Same filter as nidara-click/nidara-act's
+// `showing` — a name is not a label (in a chat app it is the whole message).
+const A11Y_SHOWING_HITS = 8
+const A11Y_SHOWING_MAX = 40
+// Below this many control-role names, fall back to every labelish name: an unknown
+// toolkit must degrade to a noisy list, never to an empty one.
+const A11Y_SHOWING_FALLBACK = 8
 // States every node carries; they say nothing about which control to pick.
 const A11Y_NOISE_STATES = new Set([
     "sensitive", "showing", "visible", "enabled", "focusable", "selectable", "opaque",
 ])
+
+// Roles that name something you can ACT on, as opposed to something you can read.
+// The distinction is the whole value of the list below: taking labels in document
+// order repeats the mistake the projection already fixes for nodes — content comes
+// first and chrome last, so a positional cut keeps the reading and loses the doing.
+// Measured on a live Telegram window: document order spends 18 of its first 19
+// slots on table cells (Remitente, Mensaje, Entrega…), while filtering by role
+// yields 16 names that are ALL controls, with the one the model was hunting
+// ("Buscar mensajes") second. Roles observed across GTK and Qt.
+const A11Y_CONTROL_ROLES = new Set([
+    "push button", "button", "toggle button", "menu item", "check menu item",
+    "radio menu item", "menu", "page tab", "check box", "radio button", "combo box",
+    "text", "entry", "password text", "link", "spin button", "slider", "list item",
+])
+
+// The short, single-line accessible names on screen, deduped and capped, CONTROLS
+// FIRST. Free: these nodes are already in hand. `A11Y_LINK_CHARS` doubles as the
+// label ceiling — the same 48 the helpers use, and for the same reason (a name is
+// not a label; in a chat app it is the entire message).
+function labelsOf(nodes) {
+    const labelish = n => {
+        const nm = typeof n?.id === "string" ? n.id : ""
+        return nm && nm.length <= A11Y_LINK_CHARS && !nm.includes("\n") ? nm : null
+    }
+    const seen = new Set()
+    for (const n of nodes) {
+        const nm = labelish(n)
+        if (nm && A11Y_CONTROL_ROLES.has(n.role)) seen.add(nm)
+        if (seen.size >= A11Y_SHOWING_MAX) break
+    }
+    // Only if the roles told us almost nothing — a toolkit we have not seen, or a
+    // window that really is all content. Better a noisy list than an empty one.
+    if (seen.size < A11Y_SHOWING_FALLBACK)
+        for (const n of nodes) {
+            const nm = labelish(n)
+            if (nm) seen.add(nm)
+            if (seen.size >= A11Y_SHOWING_MAX) break
+        }
+    return [...seen]
+}
 
 function leanA11yNode(n) {
     if (!n || typeof n !== "object") return n
@@ -1247,12 +1302,25 @@ function queryAppTool(app, match) {
         count: lean.length,
         ...(beforeCollapse !== lean.length ? { of_nodes: beforeCollapse } : {}),
     }
-    if (needle && !nodes.length)
-        // An empty match is a dead end unless it says why: the control may simply
-        // be named in the user's language, and the model needs to know the window
-        // was NOT empty before it tells the user it found nothing.
-        out.hint = `no node matched "${match}" among ${total} nodes in this window — try another word, a role (e.g. "button"), or call again without \`match\`.`
-    else if (data.hint) out.hint = data.hint
+    // Below the threshold the next move is almost always the whole-window dump, so
+    // answer it here: the labels that ARE on screen (which is where the local
+    // language lives), and what the dump would cost. Computed only on this path —
+    // a filtered query that found what it wanted must not pay for either.
+    const showing = needle && lean.length <= A11Y_SHOWING_HITS ? labelsOf(data.nodes) : null
+    if (showing) {
+        const kb = Math.round(
+            JSON.stringify(collapseA11ySiblings(data.nodes.map(leanA11yNode))).length / 1024)
+        const priced = `Calling again without \`match\` returns the WHOLE window (~${kb} KB here), `
+            + "and it then rides on every later step of this turn — try another word first."
+        out.hint = nodes.length
+            ? `only ${nodes.length} of ${total} nodes matched "${match}". If none is the control you want, `
+                + "`showing` lists the labels actually on screen — the control is often named in the user's "
+                + `own language, not English. Pick one VERBATIM. ${priced}`
+            : `no node matched "${match}" among ${total} nodes in this window — it was NOT empty. `
+                + "`showing` lists the labels actually on screen (the control is probably named in the "
+                + `user's own language); pick one VERBATIM, or filter by a role like "button". ${priced}`
+    } else if (data.hint) out.hint = data.hint
+    if (showing) out.showing = showing
     if (data.apps) out.apps = data.apps
     out.nodes = lean
 
