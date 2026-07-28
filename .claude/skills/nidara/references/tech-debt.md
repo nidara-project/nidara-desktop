@@ -762,6 +762,42 @@ focus gate refused every Assistant call before reaching the ping. **Rule for any
 helper: nothing but the one JSON may reach stdout — fire-and-forget children must be
 `Gio.Subprocess` with `STDOUT_SILENCE`, never `spawn_command_line_async`.**
 
+**(l) A hover DOES hold — until our own island takes the pointer back. Measured
+2026-07-29, do not re-derive.** The user hovered Telegram's emoji button through
+the agent, watched the panel open, and then watched it close on its own. Three
+facts, all measured live, and they decide a design question that was about to be
+answered wrongly:
+
+1. **The pointer never moves back.** `hyprctl cursorpos` reported the hover target
+   (1207, 1308) still, seconds after `nidara-click` had exited. With the island
+   CLOSED the panel stayed open indefinitely — user-confirmed on screen.
+2. **Opening the island closes it.** While a `needsKeyboard` island mode is open,
+   `Bar.tsx` calls `setCatcher(true, 0)`, and `IslandWindow.updateInputRegion`
+   stamps a dismissal rect from y=0 to the full monitor height. `InputYield`
+   empties that region for the action and `Bar.tsx`'s `notify::active` handler
+   re-stamps it at `end()` — so the app under the cursor gets a pointer LEAVE and
+   the popup closes. **A hover is not a state we hold; it is a consequence of which
+   surface owns the pointer.**
+3. **The revealed popup may not exist for AT-SPI at all.** Two independent walks of
+   Telegram's tree with the panel open ON SCREEN: 398 → 401 nodes, the four new
+   ones unrelated churn (a chat item's presence changed), and **one window** in the
+   tree throughout. A Qt popup is drawn without an accessible node, exactly like a
+   GTK tooltip.
+
+**Fact 3 is why the obvious fix was NOT built.** The plan was to have `hover_app`
+read the tree inside the truce, before `end()` closes the popup — an atomic "hover
+and look". It would have returned nothing here, because there is nothing to return.
+Measuring first is the only reason that code does not exist. The sticky-yield
+variant (hold the truce open across a hover) dies on the same fact and costs a
+click-through shell for up to the 15 s watchdog.
+
+What shipped instead is the sequence that already works, taught where the decision
+is made: **`setIsland closed` → `hover_app` → `query_app` → `setIsland agent`**, in
+the gated prompt block, plus honest descriptions on both consumers (a hover holds;
+what it reveals may be unreadable — say so rather than guess). No CI pin: the
+constraint lives in the compositor's pointer-focus rules, and a string assertion on
+prose would be theatre.
+
 **(k) The fourth live run cost 62 % of its tokens on ONE unfiltered `query_app`.
 Fixed 2026-07-29.** The run itself went well — the focus refusal from (j) recovered
 in a single step, exactly as designed. The waste was elsewhere, and only the token

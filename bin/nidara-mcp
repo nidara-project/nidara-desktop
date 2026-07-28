@@ -405,7 +405,7 @@ const TOOLS = [
     {
         name: "hover_app",
         description:
-            "Move the pointer over a control in a THIRD-PARTY app WITHOUT pressing anything — the way to reach state that does not exist until the pointer is there: tooltips, hover-revealed buttons, menus that open on hover. Read the result AFTER hovering: revealed CONTROLS are ordinary widgets and show up in query_app, but a GTK TOOLTIP is drawn without being an accessibility node (measured on GTK4) — query_app will not see it, so read tooltip text with screenshot instead. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
+            "Move the pointer over a control in a THIRD-PARTY app WITHOUT pressing anything — the way to reach state that does not exist until the pointer is there: tooltips, hover-revealed buttons, menus that open on hover. Read the result AFTER hovering: the pointer stays put, so what appeared stays open, and revealed CONTROLS are ordinary widgets that show up in query_app. What does NOT: a GTK TOOLTIP (measured on GTK4) and Qt popups (measured — Telegram's emoji panel was open on screen and absent from its whole tree); read those with screenshot instead. A shell overlay that covers the screen (Nidara's Activity Island while open) takes the pointer back the moment it returns, which closes whatever the hover revealed — check dumpState.overlays.islandBounds if a hover seems not to stick. Focus the window first (focus_window). SAFETY: `app` must be the focused window. Gated by Settings → AI → Allow Agents to Control Other Apps.",
         inputSchema: {
             type: "object",
             properties: {

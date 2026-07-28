@@ -1046,6 +1046,18 @@ scrolling off-screen content, drag-and-drop / rubber-band selection / sliders):
   the AT-SPI tree held **zero** tooltip-role nodes before *and* after. So a hover can reveal state
   that a client without vision still cannot read — `screenshot` is the only way to that text.
   Controls a hover *reveals* are ordinary widgets and do appear in the tree.
+  **Two more measured facts, 2026-07-29 (tech-debt #38 (l)) — a hover HOLDS, and what it reveals
+  may not exist for AT-SPI.** The pointer is never moved back: `hyprctl cursorpos` still reported
+  the target seconds after the helper exited, and the revealed panel stayed open indefinitely. But
+  a hover is not a state we keep — it is a consequence of **which surface owns the pointer**, so
+  the moment a full-screen shell region returns the app gets a pointer LEAVE and the popup closes.
+  That is exactly what the **Activity Island's dismissal catcher** does (`setCatcher(true, 0)` →
+  a rect from y=0 to the full monitor height), re-stamped by `InputYield`'s `end()`. Hence the
+  sequence the agent is taught: **`setIsland closed` → `hover_app` → `query_app` → `setIsland
+  agent`**. And the second fact: **a Qt popup is as invisible as a GTK tooltip** — Telegram's emoji
+  panel, open on screen, was absent from two independent walks of its tree (398 → 401 nodes, all
+  four new ones unrelated, one window throughout). This is why `hover_app` does NOT read the tree
+  inside the truce: it would have returned nothing.
   **Correction (2026-07-27):** this file used to justify the absence of `drag-app` with *"a
   two-ended gesture doesn't map cleanly to the single-node `*-app` shape"*. It maps fine — the
   wrapper resolves both ends through the same `resolveNode()` before anything is pressed, and a

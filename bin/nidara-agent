@@ -643,7 +643,7 @@ const ACT_TOOL_DEFS = [
     {
         name: "hover_app",
         description:
-            "Move the pointer onto a control without pressing anything — the only way to reach state that does not exist until the pointer is there: hover-revealed buttons, menus that open on hover. Call query_app AFTER hovering to read what appeared. A TOOLTIP is drawn without being an accessibility node, so hovering cannot get you its text: tell the user you cannot read it instead of guessing.",
+            "Move the pointer onto a control without pressing anything — the only way to reach state that does not exist until the pointer is there: hover-revealed buttons, menus that open on hover. The pointer STAYS there afterwards, so what appeared stays open; query_app then reads it — but only if the toolkit publishes it. A tooltip never is one, and neither is a Qt popup (measured: Telegram's emoji panel, open on screen, was absent from its whole tree). If query_app cannot see what you revealed, tell the user you cannot read it instead of guessing.",
         props: {
             app: { type: "string", description: "App name" },
             node: { type: "string", description: "Accessible name of the control, from query_app" },
@@ -1623,6 +1623,10 @@ function buildSystemPrompt() {
         // 2026-07-28 as a design fault, and they are right: acting under your own UI
         // is indistinguishable from acting behind their back.
         "- YOU ARE DRAWN ON THIS SCREEN. The Assistant sits in the Activity Island, which covers part of the display; dump_state reports the rect as overlays.islandBounds, and a click that lands inside it comes back with a `warning`. When you must act in that area, call run_action setIsland closed first, do the work so the user can watch it, then run_action setIsland agent to come back. Closing it does not end your turn or lose this conversation.",
+        // Measured 2026-07-29 with the panel open on screen: the pointer never
+        // moves back, so a hover holds — until the island's full-screen dismissal
+        // region returns and the app under the cursor gets a pointer LEAVE.
+        "- HOVER IS THE SHARP CASE OF THAT. What a hover reveals dies the instant your panel comes back, because the island takes the pointer. So close it BEFORE hovering, not after: setIsland closed → hover_app → query_app → setIsland agent.",
     )
     systemCache = [
         "You are Assistant, the built-in helper for the Nidara desktop (a Wayland desktop environment for Arch Linux, compositor Hyprland).",
