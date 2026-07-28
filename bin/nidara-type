@@ -5,8 +5,16 @@
 // third-party app via `wtype` (Wayland-native zwp_virtual_keyboard, no daemon),
 // for controls that AT-SPI `do_action` can't reach — e.g. typing into a Qt
 // text field, or pressing Enter/Space to activate a Qt button (those expose
-// only SetFocus). Pair with `nidara-act <app> <node> SetFocus` to target a
-// control first, then type into it here.
+// only SetFocus).
+//
+// TWO DIFFERENT KINDS OF FOCUS, and confusing them cost a step in a live run:
+//   • the WINDOW must be Hyprland's active one — that is the gate below, and the
+//     only verb for it is `focus_window`. `nidara-act … SetFocus` cannot do this.
+//   • the CONTROL inside it: `nidara-act <app> <node> SetFocus` works ONLY where
+//     the toolkit exposes that action (Qt usually does; GTK4 usually does not —
+//     it dropped ATK, so Component.GrabFocus returns false and many nodes carry an
+//     empty action list). To put a NUMBER somewhere, don't aim a keyboard at all:
+//     `nidara-act <app> <node> set-value=N` sets it and reads the result back.
 //
 //   nidara-type text <app> <string>     e.g. nidara-type text telegram "hola"
 //   nidara-type key  <app> <keyspec>    e.g. nidara-type key telegram Return
@@ -110,6 +118,23 @@ function focusMatches(activeClass, app) {
     return !!tail && (tail.includes(app) || app.includes(tail))
 }
 
+// The address of the window the caller MEANT, for the refusal to hand back. A
+// refusal that only says "not focused" costs three steps to recover from — measured
+// 2026-07-28 in a live run: type_text refused, then list_windows, then focus_window,
+// then the retry. We already know which app was named, so the lookup belongs here.
+// Runs ONLY on the refusal path: the happy path must not pay for a second hyprctl.
+function focusHint(app) {
+    try {
+        const [ok, out] = GLib.spawn_command_line_sync("hyprctl clients -j")
+        if (!ok) return null
+        const wins = JSON.parse(new TextDecoder().decode(out))
+        const hit = wins.find(w => focusMatches((w.class || "").toLowerCase(), app))
+        return hit ? { address: hit.address, class: hit.class, title: hit.title } : null
+    } catch {
+        return null
+    }
+}
+
 // wtype modifier names (it speaks xkb): map common aliases.
 const MOD_MAP = {
     ctrl: "ctrl", control: "ctrl", ctl: "ctrl",
@@ -179,7 +204,18 @@ function inject(mode, app, payload, wtype) {
     // Focus gate: only inject into the named app while it is actually focused.
     const active = hyprActiveClass()
     if (!focusMatches(active, app)) {
-        emit({ error: `refused: "${app}" is not the focused window (active: ${active ?? "unknown"}) — focus it first (e.g. do_app_action … SetFocus)`, active })
+        // Name the remedy that WORKS. This used to say "do_app_action … SetFocus",
+        // which is a dead end we had already measured: GTK4 dropped ATK, its AT-SPI
+        // backend does not implement Component.GrabFocus, and most GTK4 nodes carry
+        // an empty action list. In the live run of 2026-07-28 the model did exactly
+        // what this string said and burned a step on it before recovering on its own.
+        const hint = focusHint(app)
+        emit({
+            error: `refused: "${app}" is not the focused window (active: ${active ?? "unknown"}) — focus the WINDOW first with focus_window`
+                + (hint ? ` (address ${hint.address}), then retry` : `; it is not open — run_action list_windows to see what is`),
+            active,
+            ...(hint ? { focus: hint } : {}),
+        })
         return
     }
 

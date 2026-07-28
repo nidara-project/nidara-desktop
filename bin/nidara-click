@@ -315,7 +315,21 @@ function act(mode, app, spec, islandBounds) {
     const focused = activeClass && (activeClass.includes(a) || a.includes(activeClass) ||
         (activeClass.split(".").pop() || "").includes(a))
     if (!focused) {
-        emit({ error: `refused: "${app}" is not the focused window (active: ${activeClass || "unknown"}) — focus it first (focus_window)`, active: activeClass })
+        // Hand back the address of the window that WAS meant, so recovery is one
+        // step instead of three (list_windows → focus_window → retry, measured in a
+        // live run 2026-07-28). Only on this path — the happy path must not pay for
+        // a second hyprctl call. Kept identical in nidara-type.
+        const clients = runJson("hyprctl clients -j") || []
+        const hit = clients.find(w => {
+            const c = (w.class || "").toLowerCase()
+            return c && (c.includes(a) || a.includes(c) || (c.split(".").pop() || "").includes(a))
+        })
+        emit({
+            error: `refused: "${app}" is not the focused window (active: ${activeClass || "unknown"}) — focus the WINDOW first with focus_window`
+                + (hit ? ` (address ${hit.address}), then retry` : `; it is not open — run_action list_windows to see what is`),
+            active: activeClass,
+            ...(hit ? { focus: { address: hit.address, class: hit.class, title: hit.title } } : {}),
+        })
         return
     }
 

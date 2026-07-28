@@ -589,8 +589,12 @@ exactly like MCP). The **file layer below is the one documented exception** to t
   message's `tool_calls`. So `toolUses` carries an `extra` blob straight from the stream into
   `toOpenaiMsgs()` — never interpreted, never rebuilt, just relayed. Other OpenAI-compatible
   providers don't send the field and don't care. The step log prints `sig=N/M` whenever a turn has
-  tool calls: `sig=0/1` against Gemini means the signature never arrived and the echo can't work
-  (which would make the compat path unusable for tools → the native backend stops being optional).
+  tool calls, **and `tsig=y|n` next to it on the native Gemini lane — read the pair, never `sig=`
+  alone.** The signature legitimately arrives in either place, and on the live Interactions stream
+  it normally rides the **thought step**, not the call: `sig=0/1 tsig=y` is a HEALTHY turn. The
+  real defect is neither (`sig=0/1 tsig=n`), which 400s the next request, and the daemon prints an
+  explicit *"NO reasoning signature anywhere"* line for it rather than leaving a counter to be
+  interpreted — `sig=0/N` alone was misread as a defect indicator for weeks (tech-debt #38 (i)).
 - **Anthropic's equivalent of that rule: echo the THINKING BLOCKS back, verbatim.** Same shape of
   trap, found 2026-07-25 by reading the reference instead of by losing a turn to it. The rule (docs
   → thinking → *preserving thinking blocks*): *"when you return a tool result, the thinking blocks
@@ -966,8 +970,13 @@ Qt buttons that only expose `SetFocus` → focus then press Enter/Space):
   `zwp_virtual_keyboard`, no daemon; SEPARATE binary, synthetic input never lives in the perceive
   or AT-SPI-action helpers). `nidara-type text <app> <string>` /
   `nidara-type key <app> <keyspec>` (`Return`, `Tab`, `ctrl+a`, `ctrl+shift+t`; `super`→`logo`).
-  MCP: `type_text` / `press_key`. The loop: `query_app` → `do_app_action … SetFocus` →
-  `type_text`/`press_key`.
+  MCP: `type_text` / `press_key`. The loop: `query_app` → `focus_window` →
+  `type_text`/`press_key`. **Two different kinds of focus, and confusing them cost a step in a
+  live run (2026-07-28):** the WINDOW must be Hyprland's active one and `focus_window` is the only
+  verb for that — `do_app_action … SetFocus` cannot do it. Focusing the CONTROL with `SetFocus`
+  works only where the toolkit exposes that action (Qt usually does; **GTK4 usually does not** — it
+  dropped ATK, `Component.GrabFocus` returns false and many nodes carry an empty action list). To
+  put a NUMBER in a field, don't aim a keyboard at all: `do_app_action … set-value=N`.
 - **Same gate as 2a** (`allowComputerControl` + the 2a indicator/kill switch) — no new toggle.
 - **SAFETY — focus-dependent**: `wtype` types into whatever window has focus (unlike `do_action`).
   So `<app>` is **required** and `nidara-type` **verifies it is Hyprland's active window**
@@ -982,7 +991,11 @@ Qt buttons that only expose `SetFocus` → focus then press Enter/Space):
   config). **Ungated** — it's a window-manager op (see "Window & workspace management" above), as
   benign as a dock click; the keyboard/pointer tools it feeds stay gated and focus-verified. The
   full autonomous loop:
-  `focus_window telegram` → `do_app_action telegram "<field>" SetFocus` → `type_text telegram "…"`.
+  `focus_window telegram` → `do_app_action telegram "<field>" SetFocus` → `type_text telegram "…"`
+  (the middle step is the **Qt** case; on GTK4 it usually fails — go straight from `focus_window`
+  to `type_text`, or use `set-value` for a number). A refusal from `nidara-type`/`nidara-click`
+  now carries the target window's **address** in `focus`, so recovery is one `focus_window` call
+  and not the `list_windows` → `focus_window` → retry that a live run spent three steps on.
 
 Phase 2b-ii — **synthetic pointer (click, right-click, scroll, drag), built**, for what AT-SPI/keyboard
 can't reach (canvas, no-a11y surfaces, list items/tabs that need a real click, context menus,

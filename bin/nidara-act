@@ -113,16 +113,34 @@ function appMatches(appName, filter) {
     return appName.toLowerCase().includes(filter)
 }
 
+// A miss reports the names actually on screen, exactly as nidara-click does — the
+// two helpers are aimed by the SAME name, so a dead end in one is a dead end in
+// both. Measured 2026-07-28: `do_app_action Clocks "Hola Manola" SetFocus` missed
+// and the reply listed APPLICATIONS, which is the wrong question answered (the app
+// had matched); recovery cost a whole query_app round trip. The names are free —
+// nameOf() is already called for every node on this walk.
+//
+// The filter is the point, not a detail: an accessible name is not a label (in a
+// chat app it is the entire message — the same thing that made a raw a11y dump
+// 503 KB), so only short single-line names qualify. A suggestion list that costs
+// more than the round trip it saves is a regression. Keep these in step with
+// nidara-click's copies if you touch them.
+const MAX_SUGGESTIONS = 40
+const MAX_SUGGESTION_LEN = 48
+const isLabelish = nm => nm.length <= MAX_SUGGESTION_LEN && !nm.includes("\n")
+
 // Collect every showing node in the target app(s) whose name matches `nodeName`
 // (case-insensitive exact, then substring) and, if given, whose role matches.
 function findMatches(filter, nodeName, roleFilter) {
     const desktop = safe(() => Atspi.get_desktop(0), null)
-    if (!desktop) return { matches: [], apps: [] }
+    if (!desktop) return { matches: [], apps: [], showing: [], appFound: false }
 
     const want = nodeName.toLowerCase()
     const exact = []
     const partial = []
     const apps = []
+    const seen = new Set()
+    let appFound = false
     let scanned = 0
 
     const visit = (acc, depth) => {
@@ -131,6 +149,7 @@ function findMatches(filter, nodeName, roleFilter) {
         scanned++
         const nm = nameOf(acc)
         if (nm) {
+            if (seen.size < MAX_SUGGESTIONS && isLabelish(nm)) seen.add(nm)
             const role = roleOf(acc)
             if (!roleFilter || role === roleFilter) {
                 const low = nm.toLowerCase()
@@ -145,10 +164,11 @@ function findMatches(filter, nodeName, roleFilter) {
         const appName = nameOf(app) || "?"
         apps.push(appName)
         if (!appMatches(appName, filter)) continue
+        appFound = true
         for (const win of children(app)) visit(win, 0)
     }
     // Prefer exact-name matches; fall back to substring matches.
-    return { matches: exact.length ? exact : partial, apps }
+    return { matches: exact.length ? exact : partial, apps, showing: [...seen], appFound }
 }
 
 function describe(acc) {
@@ -175,9 +195,22 @@ function main() {
 
     Atspi.init()
 
-    const { matches, apps } = findMatches(app.toLowerCase(), nodeName, roleFilter)
+    const { matches, apps, showing, appFound } = findMatches(app.toLowerCase(), nodeName, roleFilter)
     if (!matches.length) {
-        emit({ error: `no showing node named "${nodeName}"${roleFilter ? ` (role ${roleFilter})` : ""} found in app "${app}"`, apps })
+        // Two different misses, two different next questions. The app not matching
+        // is the only case where a list of APPLICATIONS is the answer; once the app
+        // is found, what the caller needs is the names on its screen.
+        if (!appFound) {
+            emit({ error: `no app matching "${app}" is running — \`apps\` lists the accessible applications right now`, apps })
+            return
+        }
+        emit({
+            error: `no showing node named "${nodeName}"${roleFilter ? ` (role ${roleFilter})` : ""} found in app "${app}"`
+                + (showing.length
+                    ? " — `showing` lists the short, single-line names on screen right now (control labels); pick one VERBATIM. Not there? The control may only appear once something else is set, or its name is long/multi-line — then use query_app with a match."
+                    : " — nothing label-like is showing; check the right window is focused, or use query_app to see the tree."),
+            showing,
+        })
         return
     }
     if (matches.length > 1 && occurrence === null) {

@@ -332,6 +332,17 @@ sys.stderr.write("nidara-http:200")
 '''
 
 
+# The same stream with the signature delta REMOVED — the genuine defect, as opposed
+# to `sig=0/1`, which is what a HEALTHY turn looks like on this shape. Nothing here
+# 400s (the stub is not the API), because what is under test is that the daemon SAYS
+# the signature is missing instead of leaving a counter to be misread.
+STUB_CURL_GEMINI_NOSIG = STUB_CURL_GEMINI.replace(
+    '    ev("step.delta", {"event_type": "step.delta", "index": 0, "delta": {"signature": "@SIG@"}})\n', "")
+# A no-op replace would make the scenario below test the SIGNED stream and pass for
+# the wrong reason — the exact failure mode this whole suite exists to catch.
+assert STUB_CURL_GEMINI_NOSIG != STUB_CURL_GEMINI, "the unsigned Gemini stub is identical to the signed one"
+
+
 def make_stub_helpers(bind: Path):
     # A successful pointer action, the shape nidara-click prints.
     p = bind / "nidara-click"
@@ -352,7 +363,8 @@ def make_stub_curl(bind: Path, rec: Path, template: str = None):
 
 def drive_daemon(port: int, anthropic_rec: Path | None = None,
                  ai_extra: dict | None = None, argv_rec: Path | None = None,
-                 prompt: str = "make the accent blue", gemini_rec: Path | None = None):
+                 prompt: str = "make the accent blue", gemini_rec: Path | None = None,
+                 gemini_template: str | None = None):
     """Spawn a fresh daemon, send one user turn, return (events, stderr_lines)."""
     tmp = Path(tempfile.mkdtemp(prefix="nidara-agent-test-"))
     try:
@@ -375,7 +387,7 @@ def drive_daemon(port: int, anthropic_rec: Path | None = None,
         if anthropic_rec:
             make_stub_curl(bind, anthropic_rec)
         if gemini_rec:
-            make_stub_curl(bind, gemini_rec, STUB_CURL_GEMINI)
+            make_stub_curl(bind, gemini_rec, gemini_template or STUB_CURL_GEMINI)
 
         env = dict(os.environ)
         env["XDG_CONFIG_HOME"] = str(tmp)
@@ -586,13 +598,75 @@ def main():
             text = "".join(e.get("text", "") for e in events if e.get("t") == "delta")
             if FINAL not in text:
                 problems.append(f"final answer missing (streamed text: {text!r})")
-            if not any("sig=1/1" in l for l in stderr_lines) and \
-               not any("think=5" in l for l in stderr_lines):
-                problems.append("signature/usage telemetry missing from the step log")
+            # The step log must SAY where the signature was, not leave it to be
+            # inferred. On this stream shape (the live one) it rides the thought
+            # step, so `sig=0/1` is correct and healthy — reading that counter alone
+            # as a defect is what wasted weeks. `tsig=y` is the half that matters.
+            if not any("tsig=y" in l for l in stderr_lines):
+                problems.append("the step log never reported the captured thought signature (tsig=y)")
+            if any("NO reasoning signature" in l for l in stderr_lines):
+                problems.append("a captured signature was reported as missing")
+            if not any("think=5" in l for l in stderr_lines):
+                problems.append("usage telemetry missing from the step log")
             report("gemini: the reasoning signature survives the tool round-trip",
                    problems, events, stderr_lines)
         finally:
             shutil.rmtree(rec, ignore_errors=True)
+
+        # ── Scenario 3c: a turn with NO signature anywhere says so ────────────
+        # The counterpart to 3b, and the reason it exists: for weeks the only
+        # outward sign of the broken capture was `sig=0/1`, which turned out to be
+        # what a HEALTHY turn prints too (the signature rides the thought step, not
+        # the call). A number that reads the same whether or not the thing works is
+        # not telemetry. So the daemon must NAME the defect when it is real —
+        # otherwise the next occurrence is again found by a user, weeks later.
+        rec = Path(tempfile.mkdtemp(prefix="nidara-agent-grec2-"))
+        try:
+            events, stderr_lines = drive_daemon(port, gemini_rec=rec,
+                                                gemini_template=STUB_CURL_GEMINI_NOSIG)
+            problems = []
+            if not any("NO reasoning signature" in l for l in stderr_lines):
+                problems.append("an unsigned Gemini tool turn was logged as if it were fine")
+            if not any("tsig=n" in l for l in stderr_lines):
+                problems.append("the step log did not mark the thought signature as absent (tsig=n)")
+            report("gemini: an unsigned tool turn is named, not left to a counter",
+                   problems, events, stderr_lines)
+        finally:
+            shutil.rmtree(rec, ignore_errors=True)
+
+        # ── Scenario 3d: the advice we give names a remedy that EXISTS ────────
+        # Static, deliberately: it caught a live failure that no stub would. The
+        # daemon's type_text description said "Focus the field first (do_app_action
+        # … SetFocus)" — measured to be a dead end on GTK4 (ATK dropped, so
+        # Component.GrabFocus returns false and most nodes carry an empty action
+        # list). In the live run of 2026-07-28 the model did exactly that, wasted a
+        # step, and only recovered by finding focus_window on its own. The refusal
+        # in nidara-type repeated the same wrong remedy while its sibling
+        # nidara-click already said the right one — the same advice-drift-between-
+        # siblings that produced the double-`ok` bug. Both halves are pinned here.
+        problems = []
+        for name in ("nidara-type", "nidara-click"):
+            src = (REPO / "bin" / name).read_text()
+            line = next((l for l in src.splitlines() if "is not the focused window" in l), "")
+            if not line:
+                problems.append(f"{name}: the focus-gate refusal string vanished — did the gate go with it?")
+                continue
+            if "focus_window" not in line:
+                problems.append(f"{name}: the refusal does not name focus_window: {line.strip()[:120]}")
+            if "SetFocus" in line:
+                problems.append(f"{name}: the refusal still points at SetFocus, which cannot focus a window")
+        for name in ("nidara-agent", "nidara-mcp"):
+            src = (REPO / "bin" / name).read_text()
+            for tool in ("type_text", "press_key"):
+                # The description block that follows the tool's name declaration.
+                i = src.find(f'"{tool}"')
+                desc = src[i:i + 1200] if i >= 0 else ""
+                if not desc:
+                    problems.append(f"{name}: {tool} not found")
+                elif "SetFocus" in desc and "focus_window" not in desc:
+                    problems.append(f"{name}: {tool} still tells the model to focus with SetFocus")
+        report("computer-use: the focus advice points at a verb that works",
+               problems, [], [])
 
         # ── Scenario 4: computer-use is gate-CONDITIONED, and the argv is right ─
         # Two properties, both invisible from the outside:

@@ -762,6 +762,42 @@ focus gate refused every Assistant call before reaching the ping. **Rule for any
 helper: nothing but the one JSON may reach stdout — fire-and-forget children must be
 `Gio.Subprocess` with `STDOUT_SILENCE`, never `spawn_command_line_async`.**
 
+**(j) The third live run SUCCEEDED — and its two wasted steps were both our own
+text, not the model's judgement. Fixed 2026-07-29.** "Añade un temporizador de 7
+minutos con título Hola Manola": 11 steps, timer created, Clocks tiled with a
+floating window over it. Two tool calls failed on the way, and the transcript names
+the cause of each — read the log, not the vibe.
+
+- **We taught a remedy we had already measured as broken.** Step 4 was
+  `do_app_action Clocks "Hola Manola" SetFocus`, and the model did not invent it:
+  `type_text`'s own description said *"Focus the field first (do_app_action …
+  SetFocus)"*, and `nidara-type`'s focus-gate refusal repeated it — while
+  `nidara-click`'s refusal already said the right thing (`focus_window`), and while
+  entry (h) above records that GTK4 does not implement `Component.GrabFocus`.
+  **Advice drift between sibling helpers, the same class as the double-`ok` bug in
+  (a).** Now all four say the same thing, and the distinction is stated once,
+  everywhere it appears: the WINDOW is focused with `focus_window` (the only verb
+  that can); a CONTROL takes `SetFocus` only where the toolkit exposes it (Qt yes,
+  GTK4 usually not); a NUMBER takes `set-value=N` and no keyboard at all. Pinned
+  **statically** by `agent-loop` scenario 3d — no stub would have caught this, and
+  a live run is not a place to discover our own documentation is wrong.
+- **A refusal that names the remedy but not the target still costs three steps.**
+  `type_text` → refused → `list_windows` → `focus_window` → retry. The helper knew
+  which app was meant, so both `nidara-type` and `nidara-click` now resolve it and
+  hand back `focus: {address, class, title}` — recovery is one call. The lookup runs
+  **only on the refusal path**; the happy path must not pay for a second `hyprctl`.
+- **`nidara-act`'s miss was still a dead end** — the `showing` list from (g) went to
+  `nidara-click` only, and the two helpers are aimed by the SAME name, so a dead end
+  in one is a dead end in both. It answered with a list of *applications*, which is
+  the wrong question answered when the app has already matched. Now: app not found →
+  `apps` (the only case where that list IS the answer); node not found → `showing`,
+  same 40-name / 48-char / single-line filter as `nidara-click`.
+
+Verified live (read-only paths only — no pointer verbs): a node miss on Clocks
+returns 11 real control labels, an unknown app returns the app list, and both
+refusals hand back `0x55c8c9cc6df0` — the exact address the model had spent two
+steps discovering.
+
 **(i) ~~Every Gemini tool turn died on step 2 — the reasoning signature was never
 captured.~~ FIXED 2026-07-28.** Surfaced as "a JSON error from Google"; the log said
 only `curl failed: exit=22 http=400`. Three things had to be fixed to even see it,
@@ -786,7 +822,19 @@ and the order matters if this recurs:
    The daemon tested `d.type === "thought_signature"`, a shape the API never sends,
    so it captured nothing and replayed unsigned calls. **`sig=0/1` in the step log
    was this, and it had been sitting in the log for weeks read as a curiosity.**
-   Treat `sig=0/N` on a Gemini turn as a defect, not a quirk.
+
+   **CORRECTION, 2026-07-29 — do NOT read `sig=` alone.** The first version of this
+   entry said "treat `sig=0/N` on a Gemini turn as a defect, not a quirk", and that
+   is wrong in the direction that wastes time: the signature rides the **thought
+   step**, so `sigs` (which counts signatures on the CALL) is legitimately 0 on a
+   perfectly healthy turn. The next live run — 11 steps, every request 200 —
+   printed `sig=0/1` on all of them. A counter that reads identically whether or
+   not the thing works is not telemetry. The step log now prints **`tsig=y|n`**
+   beside it, and the genuine failure (neither place) gets its own named line:
+   *"NO reasoning signature anywhere … the next request will be rejected"*.
+   Pinned by `agent-loop` **scenario 3c**, whose stub is 3b's stream with the
+   signature delta deleted (with an `assert` that the deletion actually happened,
+   so a no-op replace cannot make it pass for the wrong reason).
 3. **A dead end that made it worse:** the model had called `list_apps` — an ACTION
    from run_action's index — as if it were a tool, and got "there is no tool called
    list_apps", which is the least useful possible answer about a name that plainly

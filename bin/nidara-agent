@@ -598,7 +598,7 @@ const ACT_TOOL_DEFS = [
     {
         name: "type_text",
         description:
-            "Type literal text into another app with a synthetic keyboard, for fields no accessibility action can fill. Focus the field first (do_app_action … SetFocus). Does NOT press Enter — that is press_key.",
+            "Type literal text into another app with a synthetic keyboard, for fields no accessibility action can fill. The app must be the FOCUSED window — focus it with run_action focus_window, never with SetFocus (that is a control-level action most GTK4 apps do not have). To put a NUMBER in a field, prefer do_app_action with action=\"set-value=N\". Does NOT press Enter — that is press_key.",
         props: {
             app: { type: "string", description: "App name" },
             text: { type: "string", description: "Literal text to type" },
@@ -2582,16 +2582,23 @@ async function runTurn(userText) {
             // Keep both: the two disagreeing is exactly how Google's compat path
             // was caught dropping tool calls.
             // sig= counts per-call opaque extras captured (Gemini's thought
-            // signature): sig=0/1 on a Gemini turn means the stream didn't carry
-            // it and the echo can't work — worth knowing without guessing.
+            // signature). READ IT WITH tsig=: the signature legitimately arrives in
+            // EITHER place, and on the live Interactions stream it is normally the
+            // thought step (index 0) rather than the function_call, so a healthy
+            // Gemini turn reads `sig=0/1 tsig=y` — that was misread as a defect for
+            // weeks. The real defect is NEITHER, which 400s the next request, and it
+            // gets its own line below instead of a counter to interpret.
             const sigs = r.toolUses.filter(tu => tu.extra).length
+            const tsigNote = r.thoughtSig === undefined ? "" : ` tsig=${r.thoughtSig ? "y" : "n"}`
+            if (r.toolUses.length && !sigs && r.thoughtSig !== undefined && !r.thoughtSig)
+                log(`step ${step}: NO reasoning signature anywhere (neither on the ${r.toolUses.length} call(s) nor a thought step) — the next request will be rejected as "invalid argument". The stream shape changed; see tech-debt #38 (i).`)
             // cached= is the share of the input served from the provider's cache.
             // A session where it stays 0 after the first request means the fixed
             // prompt is being billed in full every single time.
             const cacheNote = r.usage.cached || r.usage.cacheWrite
                 ? ` cached=${r.usage.cached}${r.usage.cacheWrite ? `+w${r.usage.cacheWrite}` : ""}`
                 : ""
-            log(`step ${step}: ok=${ok} text=${r.text.length}c tools=${r.toolUses.length}${r.toolUses.length ? ` sig=${sigs}/${r.toolUses.length}` : ""} stop=${r.stopReason || "?"} finish=${r.finishReason || "?"} tok=${r.usage.input}/${r.usage.output}${r.usage.thought ? ` think=${r.usage.thought}` : ""}${cacheNote}`)
+            log(`step ${step}: ok=${ok} text=${r.text.length}c tools=${r.toolUses.length}${r.toolUses.length ? ` sig=${sigs}/${r.toolUses.length}${tsigNote}` : ""} stop=${r.stopReason || "?"} finish=${r.finishReason || "?"} tok=${r.usage.input}/${r.usage.output}${r.usage.thought ? ` think=${r.usage.thought}` : ""}${cacheNote}`)
             // Count BEFORE any early return: a turn that fails still cost money,
             // and the failures are the expensive ones (a 25k-token turn that
             // ended at the step cap reported ZERO usage — user-caught 07-21).
