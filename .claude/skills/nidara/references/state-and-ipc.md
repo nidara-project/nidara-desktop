@@ -864,6 +864,10 @@ Five things are specific to this consumer and are the whole content of the work:
   - **`match`** (substring over name/text/role) — the lever the truncation notice names. An empty
     match reports how many nodes WERE scanned, so "nothing matched" is distinguishable from "the
     window is empty". A matched look costs **~256 b**.
+  - **`match` takes alternation** — `"a|b"` keeps a node matching either, so the two ends of a drag
+    are one call. Added because the model wrote `match:"cs.svg|Trash"` unprompted and got five
+    empty results against the old plain-substring test (live, 2026-07-29). A literal `|` in a name
+    loses; that is the trade.
   - **`showing` on a match with ≤ 8 hits, plus the PRICE of the alternative.** A filtered query
     that found little is one step from the whole-window dump, and the model cannot see what that
     costs: measured 2026-07-29, one such fallback on Telegram put 37 KB into the history and rode
@@ -873,9 +877,13 @@ Five things are specific to this consumer and are the whole content of the work:
     that recommended `without match` while saying nothing about its cost. **Control-first, not
     document order** — same head-cut trap one level up: on the live Telegram tree, document order
     spends 18 of its first 19 slots on table cells, while a role filter gives 16 names, all
-    controls, 401 b, target second. Under 8 control-role names it falls back to every labelish
-    name (an unknown toolkit degrades to noisy, never empty). MCP clients are unaffected — this
-    lives in the daemon's projection, and they get the raw tree.
+    controls, 401 b, target second. **But control-first is an ORDERING, not a filter** — the
+    remaining slots fill with everything else labelish, because in a chat window the content is
+    noise while in a **file manager the content is the target** (Nautilus draws items as
+    `table cell`/`table row`; a role-only list offered "Open Trash" and not the file to drag onto
+    it, and the model paid a 21 KB dump for the other half). Filling costs Nautilus 406 → 729 b
+    and Telegram 401 → 743 b. MCP clients are unaffected — this lives in the daemon's projection,
+    and they get the raw tree.
   - **Leaned nodes** — drop what carries no targeting information: `window` (the same string on all
     175 nodes; hoisted to the top), `type` (a duplicate of `role` in every node observed),
     `visible` (already in `states`), and the states every node has (`sensitive`/`showing`/…).

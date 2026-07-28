@@ -147,6 +147,13 @@ class Mock(BaseHTTPRequestHandler):
                 call_tool("query_app", "{}", "call_refused")
             elif tool_results == 3:
                 call_tool("query_app", '{"app":"nautilus","match":"buscar"}', "call_nomatch")
+            elif tool_results == 4:
+                # Alternation. The model reached for "a|b" unprompted in a live
+                # session and got five empty results, because `match` was a plain
+                # substring test — and it was right to want it: the two ends of a
+                # drag are two names. The left side must not match anything, so a
+                # hit can only come from the OR.
+                call_tool("query_app", '{"app":"nautilus","match":"zzz|Sidebar"}', "call_or")
             else:
                 send(self._chunk(delta={"role": "assistant", "content": FINAL[:1]}))
                 send(self._chunk(delta={"content": FINAL[1:]}))
@@ -746,7 +753,21 @@ def main():
             # learn that a button is called "Buscar mensajes". So the empty result
             # has to carry the labels on screen AND the price of the alternative.
             miss = next((m.get("content", "") for m in Mock.last_messages
-                         if m.get("role") == "tool" and '"match"' in str(m.get("content", ""))), "")
+                         if m.get("role") == "tool" and '"match":"buscar"' in str(m.get("content", ""))), "")
+            alt = next((m.get("content", "") for m in Mock.last_messages
+                        if m.get("role") == "tool" and '"match":"zzz|Sidebar"' in str(m.get("content", ""))), "")
+            if not alt:
+                problems.append("the alternation query_app result never reached the next request")
+            else:
+                try:
+                    got_alt = json.loads(alt)
+                except Exception:
+                    got_alt = {}
+                if not got_alt.get("count"):
+                    problems.append("`a|b` matched nothing — alternation is not honoured, "
+                                    "so asking for both ends of a drag in one call still fails")
+                elif "Show Sidebar" not in alt:
+                    problems.append(f"alternation matched, but not the right node: {alt[:200]!r}")
             if not miss:
                 problems.append("the no-match query_app result never reached the next request")
             else:
@@ -762,6 +783,14 @@ def main():
                 # list is the head-cut bug again, one level up.
                 elif showing[0] != "Show Sidebar":
                     problems.append(f"labels are not control-first: {showing[:3]}")
+                # …but control-first is an ORDERING, not a filter. In a file manager
+                # the content IS the target: Nautilus draws file items as table
+                # cells, so a role-only list offered "Open Trash" and not the file to
+                # drag onto it, and the model paid a whole-window dump for the other
+                # half (live, 2026-07-29). The stub's rows are `table row` for the
+                # same reason.
+                elif not any(s.startswith("file-") for s in showing):
+                    problems.append(f"content never fills the remaining slots: {showing}")
                 hint = got.get("hint", "")
                 if "KB" not in hint:
                     problems.append(f"the fallback was recommended without its price: {hint!r}")

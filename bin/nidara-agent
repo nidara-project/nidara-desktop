@@ -557,7 +557,7 @@ const SEE_TOOL_DEFS = [
             "Look inside ANOTHER application's window through its accessibility tree: a flat list of controls with role, name, text, the actions each one exposes, and window-relative bounds. This is how you see outside Nidara — you have no other view of another app. Targets the focused window unless you pass `app`. A real window holds hundreds of controls, so pass `match` when you know what you are after; a match that finds little answers with `showing`, the labels on screen — read those before asking for a whole window. Some toolkits expose little or nothing; if the tree comes back empty, say so rather than acting blind.",
         props: {
             app: { type: "string", description: "App name substring; omit for the focused window" },
-            match: { type: "string", description: "Keep only controls whose name, text or role contains this" },
+            match: { type: "string", description: "Keep only controls whose name, text or role CONTAINS this (substring, not a regex). \"a|b\" keeps either — ask for both ends of a drag in one call" },
         },
         required: [],
     },
@@ -1167,9 +1167,13 @@ const MAX_A11Y_RESULT = 32000
 // `showing` — a name is not a label (in a chat app it is the whole message).
 const A11Y_SHOWING_HITS = 8
 const A11Y_SHOWING_MAX = 40
-// Below this many control-role names, fall back to every labelish name: an unknown
-// toolkit must degrade to a noisy list, never to an empty one.
-const A11Y_SHOWING_FALLBACK = 8
+// `match` accepts alternation: "a|b" keeps a node matching EITHER. Not a
+// convenience — the model reached for it unprompted and got five empty results in
+// one session (live, 2026-07-29: `match:"cs.svg|Trash"`, count 0 every time, then
+// it fell back to dumping the window twice). It was also right to want it: the two
+// ends of a drag are two names, and asking for both in one call is the correct
+// economy. A literal "|" in an accessible name loses, which is a trade worth making.
+const A11Y_MATCH_OR = "|"
 // States every node carries; they say nothing about which control to pick.
 const A11Y_NOISE_STATES = new Set([
     "sensitive", "showing", "visible", "enabled", "focusable", "selectable", "opaque",
@@ -1204,14 +1208,19 @@ function labelsOf(nodes) {
         if (nm && A11Y_CONTROL_ROLES.has(n.role)) seen.add(nm)
         if (seen.size >= A11Y_SHOWING_MAX) break
     }
-    // Only if the roles told us almost nothing — a toolkit we have not seen, or a
-    // window that really is all content. Better a noisy list than an empty one.
-    if (seen.size < A11Y_SHOWING_FALLBACK)
-        for (const n of nodes) {
-            const nm = labelish(n)
-            if (nm) seen.add(nm)
-            if (seen.size >= A11Y_SHOWING_MAX) break
-        }
+    // Then fill the remaining slots with everything else that reads like a label.
+    // Controls-first is an ORDERING, not a filter, and the difference is a measured
+    // one: in a chat window the content is noise, but in a FILE MANAGER the content
+    // is the target — Nautilus draws file items as `table cell`/`table row`, so a
+    // role-only list offered "Open Trash" and not the file to drag onto it, and the
+    // model paid a 21 KB whole-window dump for the other half (live, 2026-07-29).
+    // Filling costs little: Nautilus 406 → 729 b, Telegram 401 → 743 b, both still
+    // ~50× cheaper than the dump they exist to prevent.
+    for (const n of nodes) {
+        const nm = labelish(n)
+        if (nm) seen.add(nm)
+        if (seen.size >= A11Y_SHOWING_MAX) break
+    }
     return [...seen]
 }
 
@@ -1280,9 +1289,10 @@ function queryAppTool(app, match) {
     const total = data.nodes.length
     const needle = String(match ?? "").trim().toLowerCase()
     let nodes = data.nodes
-    if (needle)
+    const needles = needle ? needle.split(A11Y_MATCH_OR).map(s => s.trim()).filter(Boolean) : []
+    if (needles.length)
         nodes = nodes.filter(n => [n.id, n.text, n.role, n.type].some(
-            v => typeof v === "string" && v.toLowerCase().includes(needle)))
+            v => typeof v === "string" && needles.some(w => v.toLowerCase().includes(w))))
 
     // The window title lives on every node and is the same string on all of them
     // whenever one window matched — hoist it rather than pay for 175 copies.
@@ -1298,7 +1308,7 @@ function queryAppTool(app, match) {
         source: data.source,
         app: data.app ?? app ?? null,
         ...(windows.length === 1 ? { window: windows[0] } : {}),
-        ...(needle ? { match, scanned: total } : {}),
+        ...(needles.length ? { match, scanned: total } : {}),
         count: lean.length,
         ...(beforeCollapse !== lean.length ? { of_nodes: beforeCollapse } : {}),
     }
@@ -1306,7 +1316,7 @@ function queryAppTool(app, match) {
     // answer it here: the labels that ARE on screen (which is where the local
     // language lives), and what the dump would cost. Computed only on this path —
     // a filtered query that found what it wanted must not pay for either.
-    const showing = needle && lean.length <= A11Y_SHOWING_HITS ? labelsOf(data.nodes) : null
+    const showing = needles.length && lean.length <= A11Y_SHOWING_HITS ? labelsOf(data.nodes) : null
     if (showing) {
         const kb = Math.round(
             JSON.stringify(collapseA11ySiblings(data.nodes.map(leanA11yNode))).length / 1024)

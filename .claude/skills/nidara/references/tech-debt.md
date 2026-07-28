@@ -762,6 +762,29 @@ focus gate refused every Assistant call before reaching the ping. **Rule for any
 helper: nothing but the one JSON may reach stdout — fire-and-forget children must be
 `Gio.Subprocess` with `STDOUT_SILENCE`, never `spawn_command_line_async`.**
 
+**(m) `scroll` and `drag` verified live at last — and the friction was `match`.
+Fixed 2026-07-29.** The sixth run dragged `cs.svg. File` onto `Open Trash` in
+Nautilus and scrolled it four times, every call `ok:true`. That closes the live gap:
+**all five pointer verbs** (click / hover / scroll / drag / type) have now been
+driven against a real window. The waste was elsewhere, again, and again in what we
+tell the model:
+
+- **The model wrote `match:"cs.svg|Trash"` and got `count: 0` five times.** `match`
+  was a plain `includes()`, so `|` meant a literal pipe. It was **right to want it**:
+  the two ends of a drag are two names and asking for both in one call is the
+  correct economy. `match` now splits on `|` and keeps a node matching EITHER. A
+  literal pipe in an accessible name loses — a trade worth making.
+- **`showing` had half the answer and the model still dumped the window.** Measured
+  against the live Nautilus tree: the list it would have returned contains
+  **"Open Trash"** in 406 b — the very label the model paid a 21 KB whole-window
+  dump to learn. What it did NOT contain was the file: Nautilus draws items as
+  `table cell`/`table row`, which the control-role pass excludes. **In a chat window
+  the content is noise; in a file manager the content is the target.** So
+  controls-first is now strictly an ORDERING, with the remaining slots filled from
+  everything else labelish: Nautilus 406 → 729 b, Telegram 401 → 743 b, both still
+  ~50× cheaper than the dump they exist to prevent. Pinned: scenario 4 asserts the
+  first label is the control AND that content fills the rest (both verified failing).
+
 **(l) A hover DOES hold — until our own island takes the pointer back. Measured
 2026-07-29, do not re-derive.** The user hovered Telegram's emoji button through
 the agent, watched the panel open, and then watched it close on its own. Three
