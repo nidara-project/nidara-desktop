@@ -762,6 +762,46 @@ focus gate refused every Assistant call before reaching the ping. **Rule for any
 helper: nothing but the one JSON may reach stdout — fire-and-forget children must be
 `Gio.Subprocess` with `STDOUT_SILENCE`, never `spawn_command_line_async`.**
 
+**(i) ~~Every Gemini tool turn died on step 2 — the reasoning signature was never
+captured.~~ FIXED 2026-07-28.** Surfaced as "a JSON error from Google"; the log said
+only `curl failed: exit=22 http=400`. Three things had to be fixed to even see it,
+and the order matters if this recurs:
+
+1. **The 400's body was being thrown away.** `--fail-with-body` was already there, so
+   the provider's explanation WAS captured — and the log printed curl's useless
+   `stderr="returned error: 400"` instead. Body first now.
+2. **Root cause, measured against the live API** (three probes, not docs): the
+   Interactions API **rejects a history whose `function_call` carries no signature
+   anywhere**, with a bare `Request contains an invalid argument` that names no field.
+   Verified positively too — a preceding `{type:"thought", signature}` step is
+   accepted, and so is the signature placed on the call; only "neither" fails.
+   The signature arrives as a **bare `{"signature": …}` delta with NO `type` field**:
+
+   ```
+   step.start {"index":0,"step":{"type":"thought"}}
+   step.delta {"index":0,"delta":{"signature":"CiQBEU0y…"}}     ← here, untyped
+   step.start {"index":1,"step":{"type":"function_call",…}}     ← NOT here
+   ```
+
+   The daemon tested `d.type === "thought_signature"`, a shape the API never sends,
+   so it captured nothing and replayed unsigned calls. **`sig=0/1` in the step log
+   was this, and it had been sitting in the log for weeks read as a curiosity.**
+   Treat `sig=0/N` on a Gemini turn as a defect, not a quirk.
+3. **A dead end that made it worse:** the model had called `list_apps` — an ACTION
+   from run_action's index — as if it were a tool, and got "there is no tool called
+   list_apps", which is the least useful possible answer about a name that plainly
+   appears in its prompt. The unknown-tool branch now checks the action index and
+   answers `"list_apps" is an ACTION — retry as run_action with action="list_apps"`.
+
+**Two wrong turns worth remembering, because both looked convincing.** The first
+theory was "Gemini 400s on an undeclared function name in history" — tested against
+`generateContent`, which returned **200**, so it was dropped. The second was "the
+call id must be server-issued" — three id shapes were tried and all failed
+*identically*, which is what pointed at something common to all of them. The
+Interactions API's single generic error message makes bisecting the request the only
+way through; `scripts/ci/agent-loop-test.py` now pins the outcome (scenario 3b,
+verified failing against the old condition before being kept).
+
 **(h) Three failures from the second live run (a 7-minute timer), all fixed
 2026-07-28.** Read the transcript, not the vibe — every one had a mechanical cause.
 

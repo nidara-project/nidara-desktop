@@ -285,6 +285,53 @@ print(json.dumps({"source": "atspi", "app": sys.argv[1],
 '''
 
 
+# The Gemini (Interactions API) lane, same record/replay trick as STUB_CURL.
+#
+# The shape here is COPIED FROM THE LIVE API (2026-07-28), not from the docs, and
+# the detail under test is the one that broke: the reasoning signature arrives as a
+# BARE `{"signature": ...}` delta on the `thought` step, with NO `type` field. The
+# daemon used to look for `type == "thought_signature"`, never matched, and replayed
+# a `function_call` with no signature anywhere — which the API rejects outright with
+# "Request contains an invalid argument". Every Gemini tool turn died on its second
+# step. If this test starts failing, check what the live stream sends before
+# "fixing" the daemon to match the test.
+STUB_CURL_GEMINI = r'''#!/usr/bin/env python3
+import json, os, pathlib, sys
+rec = pathlib.Path(os.environ["NIDARA_TEST_REC"])
+body = sys.stdin.read()
+rec.joinpath("req-%d.json" % (len(list(rec.glob("req-*.json"))) + 1)).write_text(body)
+try:
+    steps = json.loads(body).get("input", [])
+except Exception:
+    steps = []
+after_tool = any(s.get("type") == "function_result" for s in steps)
+def ev(kind, data):
+    sys.stdout.write("event: %s\ndata: %s\n\n" % (kind, json.dumps(data)))
+ev("interaction.created", {"event_type": "interaction.created",
+   "interaction": {"id": "i1", "status": "in_progress"}})
+if not after_tool:
+    ev("step.start", {"event_type": "step.start", "index": 0, "step": {"type": "thought"}})
+    ev("step.delta", {"event_type": "step.delta", "index": 0, "delta": {"signature": "@SIG@"}})
+    ev("step.stop", {"event_type": "step.stop", "index": 0})
+    ev("step.start", {"event_type": "step.start", "index": 1,
+       "step": {"id": "gz1", "type": "function_call", "name": "@TOOL@", "arguments": {}}})
+    ev("step.delta", {"event_type": "step.delta", "index": 1,
+       "delta": {"type": "arguments_delta", "arguments": "@ARGS@"}})
+    ev("step.stop", {"event_type": "step.stop", "index": 1})
+else:
+    ev("step.start", {"event_type": "step.start", "index": 0, "step": {"type": "model_output"}})
+    ev("step.delta", {"event_type": "step.delta", "index": 0,
+       "delta": {"type": "text", "text": "@FINAL@"}})
+    ev("step.stop", {"event_type": "step.stop", "index": 0})
+ev("interaction.completed", {"event_type": "interaction.completed", "interaction": {
+   "id": "i1", "status": "completed",
+   "usage": {"total_tokens": 20, "total_input_tokens": 11, "total_output_tokens": 9,
+             "total_cached_tokens": 0, "total_thought_tokens": 5}}})
+sys.stdout.write("data: [DONE]\n\n")
+sys.stderr.write("nidara-http:200")
+'''
+
+
 def make_stub_helpers(bind: Path):
     # A successful pointer action, the shape nidara-click prints.
     p = bind / "nidara-click"
@@ -296,8 +343,8 @@ def make_stub_helpers(bind: Path):
     p.chmod(0o755)
 
 
-def make_stub_curl(bind: Path, rec: Path):
-    src = (STUB_CURL.replace("@SIG@", SIG).replace("@TOOL@", TOOL)
+def make_stub_curl(bind: Path, rec: Path, template: str = None):
+    src = ((template or STUB_CURL).replace("@SIG@", SIG).replace("@TOOL@", TOOL)
            .replace("@ARGS@", ARGS.replace('"', '\\"')).replace("@FINAL@", FINAL))
     (bind / "curl").write_text(src)
     (bind / "curl").chmod(0o755)
@@ -305,7 +352,7 @@ def make_stub_curl(bind: Path, rec: Path):
 
 def drive_daemon(port: int, anthropic_rec: Path | None = None,
                  ai_extra: dict | None = None, argv_rec: Path | None = None,
-                 prompt: str = "make the accent blue"):
+                 prompt: str = "make the accent blue", gemini_rec: Path | None = None):
     """Spawn a fresh daemon, send one user turn, return (events, stderr_lines)."""
     tmp = Path(tempfile.mkdtemp(prefix="nidara-agent-test-"))
     try:
@@ -313,7 +360,8 @@ def drive_daemon(port: int, anthropic_rec: Path | None = None,
         # Empty provider → the keyring is never touched (no D-Bus in CI); the mock
         # needs no key anyway.
         (tmp / "nidara" / "ai.json").write_text(json.dumps({
-            "brainBackend": "anthropic" if anthropic_rec else "openai",
+            "brainBackend": ("anthropic" if anthropic_rec
+                             else "gemini" if gemini_rec else "openai"),
             "brainProvider": "",
             "brainModel": "mock",
             "brainEndpoint": f"http://127.0.0.1:{port}/v1",
@@ -326,6 +374,8 @@ def drive_daemon(port: int, anthropic_rec: Path | None = None,
             make_stub_helpers(bind)
         if anthropic_rec:
             make_stub_curl(bind, anthropic_rec)
+        if gemini_rec:
+            make_stub_curl(bind, gemini_rec, STUB_CURL_GEMINI)
 
         env = dict(os.environ)
         env["XDG_CONFIG_HOME"] = str(tmp)
@@ -338,8 +388,8 @@ def drive_daemon(port: int, anthropic_rec: Path | None = None,
         env["XDG_STATE_HOME"] = str(tmp / "state")
         env["PATH"] = f"{bind}:{env.get('PATH', '')}"
         env.setdefault("LANG", "en_US.UTF-8")
-        if anthropic_rec:
-            env["NIDARA_TEST_REC"] = str(anthropic_rec)
+        if anthropic_rec or gemini_rec:
+            env["NIDARA_TEST_REC"] = str(anthropic_rec or gemini_rec)
         if argv_rec:
             env["NIDARA_TEST_ARGV"] = str(argv_rec)
 
@@ -498,6 +548,49 @@ def main():
             if not any("think=5" in l for l in stderr_lines):
                 problems.append("thinking tokens not read from usage (no think=5 in telemetry)")
             report("anthropic: thinking blocks survive the tool round-trip", problems, events, stderr_lines)
+        finally:
+            shutil.rmtree(rec, ignore_errors=True)
+
+        # ── Scenario 3b: Gemini echoes its reasoning SIGNATURE ────────────────
+        # The Interactions API rejects a history whose `function_call` carries no
+        # signature anywhere — with a bare "Request contains an invalid argument"
+        # that names no field. So every Gemini tool turn is a two-part contract:
+        # capture the signature off the stream, echo it back on the next request.
+        # It was silently broken for weeks (the daemon matched a `type` the API
+        # never sends), and the only outward sign was `sig=0/1` in the step log
+        # plus turns dying on step 2. Asserted on the captured request bodies.
+        rec = Path(tempfile.mkdtemp(prefix="nidara-agent-grec-"))
+        try:
+            events, stderr_lines = drive_daemon(port, gemini_rec=rec)
+            problems = []
+            reqs = sorted(rec.glob("req-*.json"))
+            if len(reqs) < 2:
+                problems.append(f"expected 2 requests (tool call + follow-up), got {len(reqs)}")
+            else:
+                second = json.loads(reqs[1].read_text())
+                steps = second.get("input", [])
+                sigs = [s for s in steps
+                        if s.get("signature") == SIG
+                        and s.get("type") in ("thought", "function_call")]
+                if not sigs:
+                    kinds = [(s.get("type"), bool(s.get("signature"))) for s in steps]
+                    problems.append(f"reasoning signature not echoed in request 2 — steps: {kinds}")
+                calls = [s for s in steps if s.get("type") == "function_call"]
+                if not calls:
+                    problems.append("request 2 dropped the function_call")
+                elif not any(s.get("type") == "thought" and s.get("signature") for s in steps) \
+                        and not calls[0].get("signature"):
+                    problems.append("function_call replayed unsigned — the API rejects this")
+                if not any(s.get("type") == "function_result" for s in steps):
+                    problems.append("request 2 carried no function_result")
+            text = "".join(e.get("text", "") for e in events if e.get("t") == "delta")
+            if FINAL not in text:
+                problems.append(f"final answer missing (streamed text: {text!r})")
+            if not any("sig=1/1" in l for l in stderr_lines) and \
+               not any("think=5" in l for l in stderr_lines):
+                problems.append("signature/usage telemetry missing from the step log")
+            report("gemini: the reasoning signature survives the tool round-trip",
+                   problems, events, stderr_lines)
         finally:
             shutil.rmtree(rec, ignore_errors=True)
 

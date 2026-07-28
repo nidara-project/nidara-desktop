@@ -1467,13 +1467,31 @@ function execTool(tu) {
                 if (tu.input?.content == null) return { ok: false, content: "write_file needs `content`." }
                 return capResult(writeFileTool(r.path, String(tu.input.content)))
             }
-            default:
+            default: {
                 // The model named a tool that isn't offered. Name the real ones so
                 // the correction is actionable instead of a dead end.
+                //
+                // The common case is not a hallucination at all: run_action's
+                // description lists every ACTION by name (list_apps, focus_window,
+                // setIsland…), and the model calls one of those as if it were a tool.
+                // Measured 2026-07-28 with `list_apps`. Saying "no such tool" to a
+                // name that plainly exists in the prompt is the least useful possible
+                // answer, so check the action index and route it.
+                const ts = buildToolset()
+                const asAction = ts.actionMap[tu.name] ? tu.name
+                    : ts.actionMap[toSnake(tu.name)] ? toSnake(tu.name) : null
+                if (asAction) return {
+                    ok: false,
+                    content: `"${tu.name}" is an ACTION, not a tool — those are not called directly. `
+                        + `Retry as: run_action with action="${asAction}"`
+                        + (tu.input && Object.keys(tu.input).length
+                            ? ` and its positional values in \`args\` (you passed ${JSON.stringify(tu.input)}).` : "."),
+                }
                 return {
                     ok: false,
-                    content: `There is no tool called "${tu.name}". Available tools: ${buildToolset().defs.map(d => d.name).join(", ")}.`,
+                    content: `There is no tool called "${tu.name}". Available tools: ${ts.defs.map(d => d.name).join(", ")}.`,
                 }
+            }
         }
         // Same lossless squeeze as the system prompt, and it matters MORE here:
         // a tool result is appended to `history` and re-sent on every later
@@ -2019,9 +2037,31 @@ function makeGeminiHandler() {
                         const slot = slots.get(data.index)
                         if (slot) slot.argParts.push(typeof d.arguments === "string" ? d.arguments : JSON.stringify(d.arguments))
                     }
-                    // The reasoning signature for a TEXT reply rides on its own
-                    // `thought` step's delta (function calls carry it on the call).
-                    else if (d.type === "thought_signature" && d.signature) thoughtSig = d.signature
+                    // THE reasoning signature. Echoing it back is not optional: a
+                    // history containing a `function_call` with no signature anywhere
+                    // is rejected outright with a bare "Request contains an invalid
+                    // argument", which names no field and points nowhere.
+                    //
+                    // It arrives as a BARE `{signature}` delta with NO `type` — this
+                    // used to test `d.type === "thought_signature"`, a shape the API
+                    // never sends, so the signature was never captured on any Gemini
+                    // turn (that is what `sig=0/1` in the step log meant, logged for
+                    // weeks and read as a curiosity). Measured against the live
+                    // stream 2026-07-28:
+                    //
+                    //   step.start {"index":0,"step":{"type":"thought"}}
+                    //   step.delta {"index":0,"delta":{"signature":"CiQBEU0y…"}}
+                    //   step.start {"index":1,"step":{"type":"function_call",…}}   ← no signature here
+                    //
+                    // So it belongs to the THOUGHT step, not the call, and it is
+                    // routed by index: a signature on a function_call slot rides on
+                    // that call, anything else is the turn's thought signature.
+                    // Both placements were verified accepted; only "neither" fails.
+                    else if (d.signature) {
+                        const slot = slots.get(data.index)
+                        if (slot) slot.signature = d.signature
+                        else thoughtSig = d.signature
+                    }
                     break
                 }
                 case "interaction.completed": {
@@ -2358,7 +2398,17 @@ async function streamCurl(req, onLine) {
     const exitCode = proc.get_exit_status()
     const ok = proc.get_successful()
     currentCurl = null
-    if (!ok) log(`curl failed: exit=${exitCode} http=${httpCode || "net"}${retryAfter ? ` retry-after=${retryAfter}s` : ""} ${err ? `stderr="${truncate(err, 200)}"` : `body=${raw.length}b`}`)
+    // On an HTTP error the PROVIDER's explanation is in the body — that is the whole
+    // point of --fail-with-body — while curl's stderr says only "returned error: 400".
+    // Logging the stderr and dropping the body left a 400 as an unexplained event
+    // (2026-07-28: a turn died and the reason had to be inferred from request sizes).
+    // Body first whenever we got one, and only fall back to stderr for curl's OWN
+    // failures (DNS/TLS/timeout), where there is no body and stderr is all there is.
+    if (!ok) {
+        const detail = raw.trim() ? `body="${truncate(raw.trim().replace(/\s+/g, " "), 400)}"`
+            : err ? `stderr="${truncate(err, 200)}"` : "no body"
+        log(`curl failed: exit=${exitCode} http=${httpCode || "net"}${retryAfter ? ` retry-after=${retryAfter}s` : ""} ${detail}`)
+    }
     return { ok, raw, err, httpCode, exitCode, retryAfter }
 }
 
