@@ -173,6 +173,32 @@ Tokens live in `styles/_base.scss`. Dark/light values are injected at runtime by
 
 The only legitimate hex literals are the accent swatches and the danger/success/warning seeds defined inside `NidaraTheme.ts`.
 
+### `--nidara-surface*` alphas are ADDITIVE — a level picked while nested is wrong once unnested
+
+The surface ramp is translucent white over the glass (`surface-back` 0.04 · `surface` 0.08 ·
+`surface-raised` 0.20), so **a widget's apparent level is the sum of everything under it**, not the
+token it names. A chip at `surface-back` inside a `surface` bubble reads at ~0.12; lift that same
+chip out onto the bare panel and it reads at 0.04 and all but vanishes — which is exactly what
+happened to `.agent-tool-chip` when the assistant's tool chips were unbubbled (2026-07-29).
+
+**So when you re-parent a widget to a shallower background, re-pick its surface token.** Nothing
+warns you: it typechecks, the SCSS compiles, and the boot smoke passes. And do not settle it from a
+screenshot — near-threshold alpha over blurred glass is precisely what a capture flatters (see
+`tech-debt.md` on screenshot fidelity). It takes a look at the live panel.
+
+Corollary for hierarchy: when two elements have to share an alpha for legibility, carry the
+difference in **shape** instead — a small hugging pill against a wide filled block reads as two
+levels at the same 0.08.
+
+### Optical vs geometric centring next to text — `valign: CENTER` is not enough
+
+A dot or glyph set `valign: Gtk.Align.CENTER` beside a label centres against the label's **line
+box**, whose lower third is descender space most strings never use — so it reads as sitting *low*.
+The house fix is an explicit nudge with a comment saying `optical`: `.agent-error-dot` uses
+`margin-top: 5px` to meet the first line of wrapped text, `.agent-tool-dot` a `margin-bottom: 2px`
+(the margin joins the centred outer box, so 2px of bottom margin lifts a 6px dot by 1px). Both were
+caught by the user's eye, not by inspection.
+
 ### Semantic colour goes in a MARK or a FILL — never in the copy
 
 **Do not tint text `--nidara-danger`/`--nidara-warning`.** Red type on glass reads badly (thin
