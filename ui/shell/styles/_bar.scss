@@ -349,14 +349,6 @@ window#nidara-bar-zone {
             font-size: $fs-small;
             color: var(--nidara-text);
         }
-        // What the model said on its way to an action, demoted to context: same
-        // dim as the chip it sits on, one step down the ramp from the answer.
-        // Colour carries "expired", size carries "not the reply" — the answer is
-        // the only full-weight text in the bubble, which is the whole point.
-        .agent-interim-text {
-            font-size: $fs-mini;
-            color: var(--nidara-text-dim);
-        }
         // Abnormal end of a turn. The DOT is the semantic mark, the text stays
         // neutral-dim — red text on glass reads badly (house rule: colour goes in
         // the mark or the fill, never in the copy).
@@ -378,10 +370,24 @@ window#nidara-bar-zone {
         background: var(--nidara-surface);
     }
 
-    /* No margin-top: the chips are the bubble's FIRST child now (they run before
-       the answer), so the old 2px separator from the text above would only push
-       the bubble's own padding out of true. The bubble box's 6px spacing does
-       the separating from here on. */
+    /* The WORK half of an assistant turn — narration + chips — is deliberately
+       UNBUBBLED: it sits bare on the panel glass so that the answer, which keeps
+       its bubble, is the only thing in the turn wearing a background. That is the
+       whole separation mechanism, and it costs no chrome. See makeBubble. */
+    .agent-interim-text {
+        /* FULL SIZE, dimmed. It was $fs-mini in the first cut and that was the
+           mistake: the opening sentence of a turn is not the caption of whatever
+           chip follows it, and 11px prose labelled it as one. Colour alone
+           carries "this was on the way, not the reply" — the answer's BUBBLE is
+           what carries the hierarchy now. */
+        font-size: $fs-small;
+        color: var(--nidara-text-dim);
+    }
+    /* Deliberately one step FAINTER than the answer bubble (0.04 vs 0.08 on
+       glass): bare on the panel it only has to read as a marker on a line of
+       prose, and letting it match the bubble would undo the very contrast the
+       bubble exists to provide. It used to sit INSIDE a bubble, where it stacked
+       to ~0.12 — so this is fainter than it looks in the old screenshots. */
     .agent-tool-chip {
         padding: 3px 8px;
         border-radius: var(--nidara-radius-pill);

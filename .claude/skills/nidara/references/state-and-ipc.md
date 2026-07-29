@@ -737,17 +737,31 @@ live on a 5-step turn: 0 / 148 / 109 / 0 / 79 chars, so the actual answer was 79
   answer. Deriving it means the two views cannot disagree — and it is why this needed **no daemon
   change and no transcript version bump** (an older transcript simply has no `interim` and renders
   as it always did).
-- **Chips render BEFORE the answer in the bubble** (`makeBubble`: pulse → `toolsBox` → `textLabel` →
-  error). This is chronology, and it is also the fix for the complaint that stood out most: the
-  transcript auto-scrolls to the bottom, so text-then-chips put the answer above the cut on any turn
-  with more than a few steps. **Do not re-order these two.**
-- The move is **not** a reflow. Streaming text sits in `textLabel` at the bottom; when a chip arrives
-  the text becomes that chip's `interim`, which is the same position on screen (the chip is appended
+- **Only the ANSWER is bubbled. The work is bare on the glass.** An assistant turn renders as
+  pulse → `toolsBox` (narration + chips, unbubbled) → `bubble` (the answer, or the error that
+  replaced it). A bubble says "one utterance" and a six-call turn is not one, so wrapping the lot in
+  a single bubble was what made the steps read as one block. **The background is the differentiator**
+  — the reply is the only part of the turn wearing one — which separates the answer no matter how
+  many steps ran and costs no chrome. Same model as Claude Code / Cursor: an assistant turn is a
+  stream of blocks and the reply is the last one. A USER turn is one utterance and keeps the plain
+  bubble.
+- **Chips render BEFORE the answer.** Chronology (the tools ran first), and also why the answer
+  lands where the transcript auto-scrolls to. Text-then-chips put the answer above the cut on any
+  turn with more than a few steps. **Do not re-order these two.**
+- **Narration is dim but FULL SIZE (`$fs-small`).** The first cut used `$fs-mini` and that was the
+  real mistake in it: the opening sentence of a turn is not the caption of whatever chip happens to
+  follow, and 11px prose labelled it as one. The chip pill is `halign START` for the same reason —
+  bare on glass a full-width pill reads as a band, not a marker.
+- The interim move is **not** a reflow. Streaming text sits in `textLabel` at the bottom; when a chip
+  arrives the text becomes that chip's `interim`, the same position on screen (the chip is appended
   below it). It dims in place rather than jumping.
-- Rejected alternatives, both for a reason worth keeping: a ChatGPT-style collapsible step list
-  (hides exactly what explains a failure, and here the user is watching an agent touch their desktop),
-  and discarding interim text (loses the *why* — "Nautilus wasn't focused" was the most useful
-  sentence of the run it came from).
+- **`bubble.visible` is gated on `text || error`**, not on the turn existing — otherwise an empty
+  rounded rectangle sits under the chips for the whole length of a working turn.
+- Rejected alternatives, each for a reason worth keeping: a ChatGPT-style collapsible step list
+  (hides exactly what explains a failure, and here the user is watching an agent touch their own
+  desktop); discarding interim text (loses the *why* — "Nautilus wasn't focused" was the most useful
+  sentence of the run it came from); per-step cards and a left rail (both buy differentiation with
+  chrome the 300px panel cannot spare, and the unbubbled form gets it by removing chrome instead).
 
 #### Session persistence — the conversation survives a reload (2026-07-27)
 
