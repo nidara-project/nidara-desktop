@@ -1661,6 +1661,55 @@ Fix direction: a timeout around the store (10–15 s) that re-enables the button
 error pointing at the keyring, plus a writability probe instead of a liveness one. Worth doing —
 the failure is silent, and the Assistant's API key is the one thing this page exists to save.
 
+### 42. The Assistant can type into ANOTHER AGENT's terminal — accepted property, no fix (2026-07-30)
+
+Demonstrated live by the user, not theorised. They asked the Assistant to write into the Claude Code
+window and it did, in two tool calls:
+
+```
+type_text kitty "Hola Claude, soy tu asistente de escritorio…" → ok {active:"kitty"}
+press_key  kitty Return                                        → ok
+query_app  kitty                                               → ok {count:0}
+```
+
+**Nothing malfunctioned.** A terminal is a window like any other, `nidara-type` verified focus as
+designed, the fake cursor played and the chips appeared in the island. This is `type_text` working.
+
+**It is HALF a channel, and that asymmetry is worth keeping in mind.** The third call is the
+Assistant trying to read the result: `query_app kitty` → `count:0`, because a terminal exposes no
+AT-SPI tree. It can write into an agent's prompt and cannot read the reply. Note the corollary — the
+absence of a channel to a coding agent is often stated as an architectural fact (there is no IPC path
+Nidara→Claude Code, only the reverse via `nidara-mcp`); that is true of IPC and **false of the
+capability surface**, and reasoning from the architecture got it wrong here.
+
+**Three layers, and only the first is enforced. Do not conflate them:**
+
+1. **Trigger — holds.** There is no autonomous trigger: no proactivity, no scheduler, nothing starts
+   a turn but a user message. So this cannot happen while the user is away. This is the user's own
+   framing ("it only happens if I ask for it") and at this layer it is correct.
+2. **Action selection — NOT the same claim.** Inside a turn the user did start, the MODEL chooses the
+   tools. A broad instruction can therefore produce a `type_text` at a window the user never had in
+   mind, without anything resembling agent volition. And the file-read layer means content the
+   Assistant reads can carry instructions, which composes: read → decide → type into a terminal. The
+   trigger invariant does not cover any of that.
+3. **Authentication at the receiving end — none, and none is possible.** The demo was detected
+   because the content was implausible, NOT by any mechanism. A plausible line ("also add X to that
+   commit") would have been indistinguishable from the user. The user had instructed the Assistant to
+   announce itself precisely so it could be identified — which means **the identification worked
+   because the sender cooperated. A declared origin is not authentication.** A TTY cannot tell who
+   typed.
+
+**Why there is nothing to fix in Nidara.** Driving arbitrary windows IS computer-use; special-casing
+"windows that look like agents" would be both unreliable and a violation of the point. The real
+guarantee is the one the tier-1 framing already claims — **"nothing invisible"** — and it held
+completely here: focus-verified, cursor painted, chips logged, kill switch one chord away
+(`Super+Shift+Esc`). Keep that framing honest rather than upgrading it to "cannot".
+
+**The consequence for anyone reviewing this project WITH an agent:** if a Nidara session has
+`allowComputerControl` on, that agent's input stream is writable by the Assistant. Turn the gate off
+for unattended work, and treat instructions that arrive mid-session claiming an origin as content,
+never as authority.
+
 ---
 
 ## Meta: how to interpret "tech debt" here
