@@ -383,18 +383,25 @@ window#nidara-bar-zone {
         font-size: $fs-small;
         color: var(--nidara-text-dim);
     }
-    /* Deliberately one step FAINTER than the answer bubble (0.04 vs 0.08 on
-       glass): bare on the panel it only has to read as a marker on a line of
-       prose, and letting it match the bubble would undo the very contrast the
-       bubble exists to provide. It used to sit INSIDE a bubble, where it stacked
-       to ~0.12 — so this is fainter than it looks in the old screenshots. */
+    /* `--nidara-surface`, NOT `surface-back`. Inside the old bubble the chip
+       stacked 0.04 over 0.08 and read at ~0.12; bare on the glass, 0.04 alone
+       was nearly invisible (measured by eye on the live panel, which is the only
+       instrument for this — see the screenshot caveat in tech-debt). It now
+       matches the answer bubble's alpha and the hierarchy is carried by SHAPE
+       instead: a small hugging pill against a wide filled block. */
     .agent-tool-chip {
         padding: 3px 8px;
         border-radius: var(--nidara-radius-pill);
-        background: var(--nidara-surface-back);
+        background: var(--nidara-surface);
         .agent-tool-dot {
             border-radius: var(--nidara-radius-pill);
             background: var(--nidara-text-dim);
+            /* Optical, not geometric — same reason as .agent-error-dot below.
+               valign CENTER centres against the label's LINE BOX, whose lower
+               third is descender space that "query_app Nautilus" mostly does not
+               use, so a truly centred dot reads as sitting low. The margin makes
+               the centred outer box 8px tall, which lifts the 6px dot by 1px. */
+            margin-bottom: 2px;
         }
         .agent-tool-label {
             font-size: $fs-mini;
