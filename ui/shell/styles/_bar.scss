@@ -404,12 +404,18 @@ window#nidara-bar-zone {
             background: var(--nidara-text-dim);
             /* Optical nudge DOWNWARD, measured off the rendered pixels rather
                than reasoned about: geometrically centred, the dot's centre landed
-               at y13.5 while the label's cap-height band (y12–17) centres at
-               y14.5, so it read 1px high. 2px of top margin joins the centred
-               outer box and drops the dot by exactly that 1px. The opposite nudge
-               was tried first on the theory that descender space makes a centred
-               dot look LOW; the pixels said otherwise. */
-            margin-top: 2px;
+               2px above the label's ink. The margin joins the CENTRED outer box,
+               so it only moves the dot by half of itself: dot centre = content
+               centre + margin/2. Measured at margin 2 the centre landed on 18.5
+               against ink centring on 19.5, which confirmed the formula and gave
+               the remaining px — at 4 the dot occupies exactly the same rows as
+               the text ink (y17–22 in the sample that settled it).
+
+               The opposite nudge was tried FIRST, on the theory that descender
+               space makes a centred dot look LOW. The pixels said otherwise. Do
+               not re-derive the direction from reasoning; crop and read the rows
+               (see design-system.md). */
+            margin-top: 4px;
         }
         .agent-tool-label {
             font-size: $fs-mini;
