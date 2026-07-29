@@ -724,6 +724,31 @@ AgentService pops the island open so a background answer surfaces. Being the isl
 its `handleKey` claims only Escape (everything else falls through to the entry); the bar grants EXCLUSIVE
 keyboard while `needsKeyboard()`. The empty state (no provider) routes to Settings → AI.
 
+**Bubble anatomy — an assistant turn is NOT one reply (2026-07-29).** A multi-step turn narrates
+between calls ("I'll check whether Nautilus is focused first"), and every provider does it. Measured
+live on a 5-step turn: 0 / 148 / 109 / 0 / 79 chars, so the actual answer was 79 of 336 — the other
+257 were expired status reports, one of them announcing something that had not happened yet.
+
+- **`Turn.text` is the FINAL answer only; narration lives on `ToolCall.interim`,** the chip it
+  preceded. **Nothing marks it as interim on the wire and nothing should.** The daemon streams a
+  step's deltas and only then emits that step's `tool` events, so **arrival order already carries the
+  interleaving**: `AgentService`'s `case "tool"` moves whatever text is still unclaimed onto the new
+  chip and clears `text`. Text with a chip behind it was narration; text unclaimed at the end is the
+  answer. Deriving it means the two views cannot disagree — and it is why this needed **no daemon
+  change and no transcript version bump** (an older transcript simply has no `interim` and renders
+  as it always did).
+- **Chips render BEFORE the answer in the bubble** (`makeBubble`: pulse → `toolsBox` → `textLabel` →
+  error). This is chronology, and it is also the fix for the complaint that stood out most: the
+  transcript auto-scrolls to the bottom, so text-then-chips put the answer above the cut on any turn
+  with more than a few steps. **Do not re-order these two.**
+- The move is **not** a reflow. Streaming text sits in `textLabel` at the bottom; when a chip arrives
+  the text becomes that chip's `interim`, which is the same position on screen (the chip is appended
+  below it). It dims in place rather than jumping.
+- Rejected alternatives, both for a reason worth keeping: a ChatGPT-style collapsible step list
+  (hides exactly what explains a failure, and here the user is watching an agent touch their desktop),
+  and discarding interim text (loses the *why* — "Nautilus wasn't focused" was the most useful
+  sentence of the run it came from).
+
 #### Session persistence — the conversation survives a reload (2026-07-27)
 
 The daemon is a **child** of the shell, so `Super+Shift+R` took it down and the model's context with

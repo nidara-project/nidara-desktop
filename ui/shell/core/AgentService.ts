@@ -23,9 +23,31 @@ export interface ToolCall {
     summary: string
     ok?: boolean
     resultSummary?: string
+    /**
+     * What the model said immediately BEFORE deciding on this call — "I'll check
+     * whether Nautilus is focused first". It belongs to the chip rather than to
+     * the turn because that is what it is: the reason for THIS action, written
+     * before it ran.
+     *
+     * Nothing marks it as interim on the wire and nothing needs to. The daemon
+     * streams a step's deltas and only then emits that step's `tool` events (see
+     * its step loop), so arrival order already carries the interleaving — text
+     * that turns out to have a chip behind it was narration, and text still
+     * unclaimed when the turn ends is the answer. Deriving it here means the two
+     * can never disagree.
+     */
+    interim?: string
 }
 export interface Turn {
     role: "user" | "assistant"
+    /**
+     * The FINAL answer, not everything the assistant said. A multi-step turn
+     * narrates between tool calls (measured 2026-07-29: 148 + 109 + 79 chars
+     * across five steps, of which only the last 79 answered the question), and
+     * concatenating those into one string presented four expired status reports
+     * as the reply — including one announcing something that had not happened
+     * yet. Narration lives on the chip it preceded, in `ToolCall.interim`.
+     */
     text: string
     tools: ToolCall[]
     /**
@@ -257,7 +279,11 @@ function handleEvent(ev: any) {
                 if (a && !a.text && !a.error && !a.tools.length && !cancelling)
                     a.error = t("island.agent.error.empty")
                 cancelling = false
-                log(`turn end: ${Math.round((Date.now() - turnStartedAt))}ms text=${a?.text.length ?? 0}c tools=${a?.tools.length ?? 0}${a?.error ? " ERROR" : ""}`)
+                // `text` is the answer and `interim` the narration, logged apart:
+                // the ratio between them is the whole reason this split exists, and
+                // a single total hid it for as long as it was one string.
+                const interimChars = a?.tools.reduce((n, tc) => n + (tc.interim?.length ?? 0), 0) ?? 0
+                log(`turn end: ${Math.round((Date.now() - turnStartedAt))}ms text=${a?.text.length ?? 0}c interim=${interimChars}c tools=${a?.tools.length ?? 0}${a?.error ? " ERROR" : ""}`)
                 // Same boundary the daemon writes its own half on, so the two
                 // files always describe the same conversation.
                 saveTranscript()
@@ -279,7 +305,15 @@ function handleEvent(ev: any) {
         }
         case "tool": {
             const a = currentAssistant()
-            if (a) a.tools.push({ name: ev.name, summary: ev.summary })
+            // Text still unclaimed at the moment a call starts was the reason for
+            // it, so it moves onto the chip and stops being the answer. `text` is
+            // therefore always "what is currently the final word" — correct at
+            // every instant of the stream, not only at the end.
+            if (a) {
+                const interim = a.text.trim()
+                if (interim) a.text = ""
+                a.tools.push({ name: ev.name, summary: ev.summary, interim: interim || undefined })
+            }
             log(`tool: ${ev.summary ?? ev.name}`)
             notify()
             break

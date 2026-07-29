@@ -1278,6 +1278,15 @@ Ordered by what hurt most in the live run:
 13. **Provider catalogs can list dead models.** Google's `/v1/models` returned `gemini-2.0-flash-lite`,
    retired — picking it 404s. The catalog exposes no retired flag, so this cannot be filtered
    reliably; the model field stays free text on purpose.
+14. ~~**The bubble is the concatenation of every reply in the turn, and the answer lands
+   off-screen.**~~ **FIXED 2026-07-29** — narration moved onto `ToolCall.interim`, chips render
+   before the answer. See `state-and-ipc.md`, "Bubble anatomy". **Residual: NOT pinned by CI, and
+   it is the kind of thing that regresses silently.** The ordering is three `append` calls in
+   `makeBubble` and the derivation is one `case` in a subscribed handler — reverse either and
+   nothing errors, nothing fails typecheck, and the boot smoke still passes, because the shell has
+   no test runner and `agent-loop-test.py` only drives the daemon. A shell-side harness would cover
+   this and a good deal else (`AgentService`'s event reducer is pure data), but standing one up is
+   its own decision and was not made here.
 
 ### 37. No `NidaraScroller` in the kit — every surface re-solves the scrollbar (2026-07-21)
 **User's call, deferred by them ("not now, but we have to"):** the scrollbar is rebuilt from scratch

@@ -90,9 +90,17 @@ export function AgentCompact(opts: { ghost?: boolean } = {}): Gtk.Widget {
 function makeToolChip(): { row: Gtk.Widget; update: (tc: ToolCall) => void } {
     const dot = new Gtk.Box({ css_classes: ["agent-tool-dot"], width_request: 6, height_request: 6, valign: Gtk.Align.CENTER })
     const label = new Gtk.Label({ css_classes: ["agent-tool-label"], valign: Gtk.Align.CENTER, ellipsize: 3, max_width_chars: 40, xalign: 0 })
-    const row = new Gtk.Box({ css_classes: ["agent-tool-chip"], spacing: 6 })
-    row.append(dot)
-    row.append(label)
+    const pill = new Gtk.Box({ css_classes: ["agent-tool-chip"], spacing: 6 })
+    pill.append(dot)
+    pill.append(label)
+    // The narration that preceded this call, dimmed, directly above it. Not
+    // ellipsized and not clipped: "Nautilus wasn't focused, focusing it" was the
+    // most useful sentence of the run it came from — the point is to demote it
+    // from answer to context, not to hide it.
+    const interim = new Gtk.Label({ css_classes: ["agent-interim-text"], wrap: true, xalign: 0, halign: Gtk.Align.START, visible: false })
+    const row = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 3 })
+    row.append(interim)
+    row.append(pill)
     // A chip appears when the tool STARTS and only later learns its outcome, so
     // between those two beats the dot breathes: that is the difference between
     // "running this now" and "ran this", which the chip could not express before.
@@ -101,10 +109,12 @@ function makeToolChip(): { row: Gtk.Widget; update: (tc: ToolCall) => void } {
         row,
         update: (tc) => {
             label.label = tc.summary
+            interim.label = tc.interim ?? ""
+            interim.visible = !!tc.interim
             breath.setActive(tc.ok === undefined)
             // Semantic, never accent: a shell rejection tints the dot danger.
-            if (tc.ok === false) row.add_css_class("agent-tool-fail")
-            else row.remove_css_class("agent-tool-fail")
+            if (tc.ok === false) pill.add_css_class("agent-tool-fail")
+            else pill.remove_css_class("agent-tool-fail")
         },
     }
 }
@@ -152,9 +162,19 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
     })
     // Working indicator — only ever mounted in an assistant bubble.
     const pulse = isUser ? null : makePulseDots()
-    bubble.append(textLabel)
+    // CHIPS FIRST, ANSWER LAST — chronological, and the two are the same fix.
+    // The tools ran BEFORE the text that concludes the turn, so text-then-chips
+    // was backwards; and because the transcript auto-scrolls to the bottom, it
+    // put the answer above the cut on any turn with more than a few steps. The
+    // user's words: it is what stands out most.
+    //
+    // Streaming text lands in `textLabel` at the bottom and MOVES INTO the next
+    // chip's interim slot when one arrives — which is the same position on
+    // screen, since the chip is appended below it. The text does not jump; it
+    // dims in place while a chip appears underneath.
     if (pulse) bubble.append(pulse.widget)
     bubble.append(toolsBox)
+    bubble.append(textLabel)
     bubble.append(errorLabel)
     // Assistant left, user right — the bubble hugs its content; the row aligns it.
     const row = new Gtk.Box({ halign: isUser ? Gtk.Align.END : Gtk.Align.START })

@@ -349,6 +349,14 @@ window#nidara-bar-zone {
             font-size: $fs-small;
             color: var(--nidara-text);
         }
+        // What the model said on its way to an action, demoted to context: same
+        // dim as the chip it sits on, one step down the ramp from the answer.
+        // Colour carries "expired", size carries "not the reply" — the answer is
+        // the only full-weight text in the bubble, which is the whole point.
+        .agent-interim-text {
+            font-size: $fs-mini;
+            color: var(--nidara-text-dim);
+        }
         // Abnormal end of a turn. The DOT is the semantic mark, the text stays
         // neutral-dim — red text on glass reads badly (house rule: colour goes in
         // the mark or the fill, never in the copy).
@@ -370,7 +378,10 @@ window#nidara-bar-zone {
         background: var(--nidara-surface);
     }
 
-    .agent-tool-chips { margin-top: 2px; }
+    /* No margin-top: the chips are the bubble's FIRST child now (they run before
+       the answer), so the old 2px separator from the text above would only push
+       the bubble's own padding out of true. The bubble box's 6px spacing does
+       the separating from here on. */
     .agent-tool-chip {
         padding: 3px 8px;
         border-radius: var(--nidara-radius-pill);
