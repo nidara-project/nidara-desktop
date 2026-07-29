@@ -190,14 +190,35 @@ Corollary for hierarchy: when two elements have to share an alpha for legibility
 difference in **shape** instead — a small hugging pill against a wide filled block reads as two
 levels at the same 0.08.
 
-### Optical vs geometric centring next to text — `valign: CENTER` is not enough
+### ⛔ A CSS margin and `set_size_request` on the SAME widget fight — the margin wins
 
-A dot or glyph set `valign: Gtk.Align.CENTER` beside a label centres against the label's **line
-box**, whose lower third is descender space most strings never use — so it reads as sitting *low*.
-The house fix is an explicit nudge with a comment saying `optical`: `.agent-error-dot` uses
-`margin-top: 5px` to meet the first line of wrapped text, `.agent-tool-dot` a `margin-bottom: 2px`
-(the margin joins the centred outer box, so 2px of bottom margin lifts a 6px dot by 1px). Both were
-caught by the user's eye, not by inspection.
+**In GTK4 a CSS margin is drawn INSIDE the widget's allocation, and `width_request`/`height_request`
+set the minimum of that allocation** — so a request plus a margin does not offset the widget, it
+**shrinks** it. Measured off rendered pixels (2026-07-29): `.agent-tool-dot` requested 6×6 with
+`margin-bottom: 2px` and painted **6×4**, a horizontal oval instead of a circle. The same pattern had
+already shipped in `.agent-error-dot` — 6×6 requested against `margin-top: 5px`, painting **6×1**, a
+hairline where a dot was intended, unnoticed because only an abnormal turn end draws it.
+
+**Rule: if a widget needs a nudge, its size must come from CSS `min-width`/`min-height`, not from a
+size request.** `min-*` applies to the content box and survives the margin. A sweep of every
+`*_request:` in the shell found exactly these two (`cc-status-banner` pairs a WIDTH request with a
+vertical margin — different axes, harmless), but the trap is silent: nothing errors, nothing fails
+typecheck, and the widget just draws the wrong shape.
+
+### Optical vs geometric centring next to text — and MEASURE the direction
+
+`valign: Gtk.Align.CENTER` beside a label centres against the label's **allocation**, which is not
+where the ink looks centred, so a nudge with a comment saying `optical` is the house pattern
+(`.agent-error-dot`: `margin-top: 5px` to meet the first line of wrapped text; `.agent-tool-dot`:
+`margin-top: 2px`).
+
+**Do not reason about which way to nudge — measure it.** The plausible theory here (the line box's
+lower third is descender space most strings never use, so a centred dot reads *low*) was applied
+first and was **backwards**: the pixels showed the dot's centre at y13.5 against a cap-height band
+centring at y14.5, i.e. already 1px HIGH, and the "fix" moved it 2px further up. Crop the widget out
+of a screenshot and read the rows — `magick <png> -crop WxH+X+Y txt:-` piped through a brightness
+threshold prints an ASCII map that settles it in one shot, and it costs less than a second round of
+asking the user whether it looks right yet.
 
 ### Semantic colour goes in a MARK or a FILL — never in the copy
 

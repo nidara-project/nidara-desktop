@@ -88,7 +88,13 @@ export function AgentCompact(opts: { ghost?: boolean } = {}): Gtk.Widget {
 // ── Transcript bubbles ───────────────────────────────────────────────────────
 
 function makeToolChip(): { row: Gtk.Widget; update: (tc: ToolCall) => void } {
-    const dot = new Gtk.Box({ css_classes: ["agent-tool-dot"], width_request: 6, height_request: 6, valign: Gtk.Align.CENTER })
+    // Size comes from CSS `min-width`/`min-height`, NOT from a size request. In
+    // GTK4 a CSS margin is drawn INSIDE the widget's allocation and a size
+    // request is the minimum of that allocation, so request + margin SHRINKS the
+    // visible box: 6×6 requested with a 2px margin measured 6×4 on screen and
+    // rendered the dot as a horizontal oval. `min-height` is the content box, so
+    // it survives the nudge below.
+    const dot = new Gtk.Box({ css_classes: ["agent-tool-dot"], valign: Gtk.Align.CENTER })
     const label = new Gtk.Label({ css_classes: ["agent-tool-label"], valign: Gtk.Align.CENTER, ellipsize: 3, max_width_chars: 40, xalign: 0 })
     // halign START so the pill HUGS its label. Inside a bubble it could span the
     // full width harmlessly; bare on the glass, a full-width pill reads as a band
@@ -156,7 +162,11 @@ function makeBubble(turn: Turn): { row: Gtk.Widget; rendered: RenderedTurn } {
     // rule (same as the failed tool chip right above, same as the critical
     // battery glyph). Red text on glass reads badly, which is why the first cut
     // of this was rejected.
-    const errorDot = new Gtk.Box({ css_classes: ["agent-error-dot"], width_request: 6, height_request: 6, valign: Gtk.Align.START })
+    // Sized in CSS for the same reason as the tool-chip dot, and here the bug it
+    // avoids was already SHIPPED: this dot requested 6×6 and carries a 5px top
+    // margin, so it was rendering 6×1 — a hairline, not a dot. Only an abnormal
+    // turn end paints it, which is why nobody caught it.
+    const errorDot = new Gtk.Box({ css_classes: ["agent-error-dot"], valign: Gtk.Align.START })
     const errorText = new Gtk.Label({ css_classes: ["agent-error-text"], wrap: true, xalign: 0, halign: Gtk.Align.START })
     const errorLabel = new Gtk.Box({ css_classes: ["agent-error-row"], spacing: 6, visible: false })
     errorLabel.append(errorDot)

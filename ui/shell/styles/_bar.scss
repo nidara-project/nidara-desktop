@@ -354,6 +354,8 @@ window#nidara-bar-zone {
         // the mark or the fill, never in the copy).
         .agent-error-row { margin-top: 2px; }
         .agent-error-dot {
+            min-width: 6px;                      // size here, NOT a size request
+            min-height: 6px;                     // (the margin below would eat it)
             margin-top: 5px;                     // optical: aligns to the first text line
             border-radius: var(--nidara-radius-pill);
             background: var(--nidara-danger);
@@ -394,14 +396,20 @@ window#nidara-bar-zone {
         border-radius: var(--nidara-radius-pill);
         background: var(--nidara-surface);
         .agent-tool-dot {
+            /* The SIZE lives here, not in a size request — see makeToolChip. A
+               request plus the margin below would render 6×4. */
+            min-width: 6px;
+            min-height: 6px;
             border-radius: var(--nidara-radius-pill);
             background: var(--nidara-text-dim);
-            /* Optical, not geometric — same reason as .agent-error-dot below.
-               valign CENTER centres against the label's LINE BOX, whose lower
-               third is descender space that "query_app Nautilus" mostly does not
-               use, so a truly centred dot reads as sitting low. The margin makes
-               the centred outer box 8px tall, which lifts the 6px dot by 1px. */
-            margin-bottom: 2px;
+            /* Optical nudge DOWNWARD, measured off the rendered pixels rather
+               than reasoned about: geometrically centred, the dot's centre landed
+               at y13.5 while the label's cap-height band (y12–17) centres at
+               y14.5, so it read 1px high. 2px of top margin joins the centred
+               outer box and drops the dot by exactly that 1px. The opposite nudge
+               was tried first on the theory that descender space makes a centred
+               dot look LOW; the pixels said otherwise. */
+            margin-top: 2px;
         }
         .agent-tool-label {
             font-size: $fs-mini;
