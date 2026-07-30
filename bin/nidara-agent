@@ -554,7 +554,13 @@ const SEE_TOOL_DEFS = [
     {
         name: "query_app",
         description:
-            "Look inside ANOTHER application's window through its accessibility tree: a flat list of controls with role, name, text, the actions each one exposes, and window-relative bounds. This is how you see outside Nidara — you have no other view of another app. Targets the focused window unless you pass `app`. A real window holds hundreds of controls, so pass `match` when you know what you are after; a match that finds little answers with `showing`, the labels on screen — read those before asking for a whole window. Some toolkits expose little or nothing; if the tree comes back empty, say so rather than acting blind.",
+            "Look inside ANOTHER application's window through its accessibility tree: a flat list of controls with role, name, text, the actions each one exposes, and window-relative bounds. This is how you see outside Nidara — you have no other view of another app. Targets the focused window unless you pass `app`. A real window holds hundreds of controls, so pass `match` when you know what you are after; a match that finds little answers with `showing`, the labels on screen — read those before asking for a whole window. Some toolkits expose little or nothing; if the tree comes back empty, say so rather than acting blind. "
+            // Measured failure, same model, twice: with an earlier query_app in its
+            // history it answered about the CURRENT screen from that old copy and made
+            // no call at all (steps=1 tools=0), while the answer was sitting in the
+            // live screen. A file read stays true until something writes; a screen
+            // read is false the instant it is taken, and nothing said so.
+            + "The result is a SNAPSHOT of one instant, not a view that stays open: a screen changes on its own — a terminal scrolls, a dialog opens, a page loads. Before answering about what is on screen NOW, call this again. An earlier result in this conversation describes a screen that no longer exists, so reusing it is how you end up reporting something that is not there.",
         props: {
             app: { type: "string", description: "App name substring; omit for the focused window" },
             match: { type: "string", description: "Keep only controls whose name, text or role CONTAINS this (substring, not a regex). \"a|b\" keeps either — ask for both ends of a drag in one call" },

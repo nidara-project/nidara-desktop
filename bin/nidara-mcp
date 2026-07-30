@@ -231,7 +231,12 @@ const TOOLS = [
     {
         name: "query_app",
         description:
-            "Snapshot a THIRD-PARTY application's UI via the accessibility tree (AT-SPI) — the same flat-node shape as query_ui (role/name/text/actions/bounds per node), but for a foreign window (a browser, file manager, editor) instead of the shell. Read-only, like query_ui. Default targets the focused window; pass `app` to target another by name (e.g. \"nautilus\", \"firefox\"). Gated by Settings → AI → Allow Agents to See Other Apps (off by default). Some toolkits expose little (Qt needs QT_ACCESSIBILITY=1, Chromium/Electron --force-renderer-accessibility) — fall back to the screenshot tool there.",
+            "Snapshot a THIRD-PARTY application's UI via the accessibility tree (AT-SPI) — the same flat-node shape as query_ui (role/name/text/actions/bounds per node), but for a foreign window (a browser, file manager, editor) instead of the shell. Read-only, like query_ui. Default targets the focused window; pass `app` to target another by name (e.g. \"nautilus\", \"firefox\"). "
+            // Parity with the daemon's own description — same measured failure applies
+            // to any client: an old result in the conversation reads exactly like a
+            // current one unless the tool says otherwise.
+            + "It is a SNAPSHOT of one instant, not a view that stays open: a screen changes on its own — a terminal scrolls, a dialog opens, a page loads. Before answering about what is on screen NOW, call it again; an earlier result in the conversation describes a screen that no longer exists. "
+            + "Gated by Settings → AI → Allow Agents to See Other Apps (off by default). Some toolkits expose little (Qt needs QT_ACCESSIBILITY=1, Chromium/Electron --force-renderer-accessibility) — fall back to the screenshot tool there.",
         inputSchema: {
             type: "object",
             properties: {
