@@ -158,12 +158,13 @@ export function registerConfigEntries() {
     // know it was answering four of eight. Same read-only rule as the rest — these
     // are the most sensitive gates in the product, so `setConfig` must keep
     // refusing them; the Settings → AI page is the only door that flips them.
-    // A `desc` must NOT restate the default — `value` is in the same JSON object,
-    // and a default is a second answer to the question the reader is asking. The
-    // first draft of these four said "Off by default" and a model reported
-    // allowFileWrite as OFF while reading `value: true` two fields away (measured
-    // 2026-07-30). Semantics that are NOT in the value belong here: what the gate
-    // opens, which other gate it implies, where it is flipped.
+    // A `desc` does NOT restate the default: `value` is in the same JSON object, so
+    // a default is a second answer to the question the reader came with. (The first
+    // draft said "Off by default"; removing it did NOT fix the misread it was
+    // suspected of — that turned out to be the UI tree carrying no switch state,
+    // see UITree.activeOf — but a desc that answers a question the value already
+    // answers is worth avoiding on its own.) What belongs here is what the value
+    // cannot say: what the gate opens, which gate it implies, where it is flipped.
     registerConfig("ai.allowComputerUse", {
         desc: "Whether agents may PERCEIVE other apps via the accessibility tree (nidara-a11y, query_app). Toggle it in Settings → AI.",
         type: "boolean",

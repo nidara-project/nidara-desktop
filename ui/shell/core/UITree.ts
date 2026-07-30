@@ -29,6 +29,8 @@ interface UINode {
     id: string | null
     cssClasses: string[]
     text: string | null
+    /** On/off for widgets that HAVE a state (switch, toggle, check); absent otherwise. */
+    active?: boolean
     visible: boolean
     mapped: boolean
     bounds: { x?: number; y?: number; w: number; h: number }
@@ -61,6 +63,20 @@ function textOf(w: any): string | null {
     return null
 }
 
+// On/off state, for the widgets that have one. A `GtkSwitch` arrives with no id,
+// no text and no CSS class of its own, so without this a Settings page reads as a
+// column of labels next to indistinguishable switches — and a reader that cannot
+// see a value does not always say so: asked which AI permissions were on, an agent
+// read the AI page plus the schema and reported one of the eight as off when it was
+// on (measured 2026-07-30). A permissions page is the worst possible place to make
+// someone guess. Only `active` — Nidara has no `Gtk.Scale` (sliders are Cairo, see
+// common/Slider.ts), so there is no `value` to report here.
+function activeOf(w: any): boolean | undefined {
+    if (!(w instanceof Gtk.Switch || w instanceof Gtk.ToggleButton || w instanceof Gtk.CheckButton)) return undefined
+    const v = safe<boolean | null>(() => w.get_active(), null)
+    return typeof v === "boolean" ? v : undefined
+}
+
 function boundsOf(w: any, toplevel: any): UINode["bounds"] {
     const b: UINode["bounds"] = { w: safe(() => w.get_width(), 0), h: safe(() => w.get_height(), 0) }
     try {
@@ -73,6 +89,7 @@ function boundsOf(w: any, toplevel: any): UINode["bounds"] {
 function nodeOf(w: any, toplevel: any, windowLabel: string, path: string): UINode {
     const type = typeName(w)
     const rawName = safe(() => w.get_name(), "")
+    const active = activeOf(w)
     return {
         window: windowLabel,
         type,
@@ -80,6 +97,9 @@ function nodeOf(w: any, toplevel: any, windowLabel: string, path: string): UINod
         id: rawName && rawName !== type ? rawName : null,
         cssClasses: safe(() => w.get_css_classes(), []) as string[],
         text: textOf(w),
+        // Omitted, not `false`, for everything that has no state: a missing field
+        // reads as "not applicable", a `false` reads as "off".
+        ...(active === undefined ? {} : { active }),
         visible: safe(() => w.get_visible(), true),
         mapped: safe(() => w.get_mapped(), false),
         bounds: boundsOf(w, toplevel),

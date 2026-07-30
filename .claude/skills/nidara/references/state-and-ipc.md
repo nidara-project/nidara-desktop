@@ -125,8 +125,18 @@ readable and closable agent-side (`toggleAbout`, then `queryUI .about-spec-val@a
 window's name is `nidara-about` — or check `dumpState` → `overlays.about`). Add more the same
 way (e.g. a dock context menu) when a click-only surface needs verifying. NB: menu **row text** lives on the child `.nidara-menu-label`
 label, not the `.nidara-menu-row` button container (queryUI reports own text, not
-descendant text), so assert against the label class. Tier 1 is structure+text; semantic per-widget state (slider value,
-dock-item running/active) is a deferred opt-in tier the widgets would cooperate on, sharing
+descendant text), so assert against the label class.
+
+**Switches, toggles and check buttons report `active`** (added 2026-07-30). A `GtkSwitch`
+arrives with no id, no text and no CSS class of its own, so a Settings page used to read as a
+column of labels beside eight indistinguishable switches — and **a reader that cannot see a
+value does not always say so**: asked which AI permissions were on, an agent read the AI page
+plus the schema and reported one of the eight as off while it was on. A permissions page is the
+worst place to leave someone guessing. The field is **omitted, not `false`**, for everything
+that has no state — a missing field reads as "not applicable", a `false` reads as "off". Only
+`active`: there is no `value` to report because Nidara has no `Gtk.Scale` (sliders are Cairo).
+Beyond that, tier 1 is structure+text; the remaining semantic state (dock-item
+running/active) is a deferred opt-in tier the widgets would cooperate on, sharing
 the same node model the AT-SPI2 backend now fills for third-party apps (see "computer-use"
 below — `queryUI` is the shell's own toplevels; `query_app` is the same shape via AT-SPI).
 
@@ -495,11 +505,12 @@ Rules:
   import widget state) with a real `desc` (that string is the agent-facing documentation)
   and delegate `set` to the owning service's setter. That's ALL it takes to appear in
   `describeConfig`.
-- **A `desc` must not restate the DEFAULT.** `value` sits in the same JSON object, so a
-  default is a second answer to the question the reader came with — and it wins sometimes: a
-  desc reading "Off by default" got `ai.allowFileWrite` reported as off while `value: true`
-  was two fields away (measured 2026-07-30). Put in the desc only what the value cannot say:
-  what the setting does, which other setting it implies, where a human flips it.
+- **A `desc` should not restate the DEFAULT.** `value` sits in the same JSON object, so a
+  default is a second answer to the question the reader came with. (It was first suspected of
+  causing a misread of `ai.allowFileWrite`; removing it did not fix that — the cause was the
+  UI tree carrying no switch state, below — so this is hygiene, not a proven bug.) Put in the
+  desc only what the value cannot say: what the setting does, which other setting it implies,
+  where a human flips it.
 
 ### The MCP server: `nidara-mcp`
 
