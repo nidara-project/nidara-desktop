@@ -170,24 +170,24 @@ const TOOLS = [
     {
         name: "list_apps",
         description:
-            "List the installed, launchable apps as JSON [{id, name, wmClass}] — the same index the dock and app grid use. Call this to discover an app's id before launch_app.",
+            "List the installed, launchable apps as JSON [{id, name, wmClass}] — the same index the dock and app grid use. For browsing what exists: launch_app resolves a plain name on its own, so you do not need this first.",
         inputSchema: { type: "object", properties: {}, additionalProperties: false },
         handler: () => okResult(agsRequest(["listApps"])),
     },
     {
         name: "launch_app",
         description:
-            "Launch an installed app by its id (from list_apps), e.g. \"org.gnome.Nautilus\". Origin-aware (flatpak vs gtk-launch) and scoped exactly like a dock click. Opens the app; it does NOT drive it (use the computer-use tools for that).",
+            "Launch an installed app by NAME or id — \"calculator\" works, so does \"org.gnome.Nautilus\". A name matching several apps comes back with the candidates, so there is no need to list_apps first. Origin-aware (flatpak vs gtk-launch) and scoped exactly like a dock click. Waits for the window and focuses it, then reports that; it does NOT drive the app (use the computer-use tools for that).",
         inputSchema: {
             type: "object",
             properties: {
-                id: { type: "string", description: "App id from list_apps (e.g. org.gnome.Nautilus)" },
+                id: { type: "string", description: "App name or id (e.g. \"calculator\", \"org.gnome.Nautilus\")" },
             },
             required: ["id"],
             additionalProperties: false,
         },
         handler: ({ id } = {}) => {
-            if (!id) return errResult("launch_app needs an app id (see list_apps)")
+            if (!id) return errResult("launch_app needs an app name or id")
             return okResult(agsRequest(["launchApp", id]))
         },
     },

@@ -14,7 +14,7 @@ import { currentLocale } from "./core/i18n"
 import { readFile } from "ags/file"
 import { exec, execAsync } from "ags/process"
 import agentConfig from "./core/AgentConfig"
-import appService from "./core/AppService"
+import appService, { type AppData } from "./core/AppService"
 import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue } from "./core/ConfigRegistry"
 import { registerConfigEntries } from "./config-entries"
 import hyprlandState from "./core/HyprlandState"
@@ -131,6 +131,77 @@ function resolveWindow(arg?: string): any | null {
     ?? clients.find(c => norm(c.class).includes(norm(q)))
     ?? clients.find(c => norm(c.title).includes(norm(q)))
     ?? null
+}
+
+// Resolve a launch argument to an installed app, by id OR by name. `launchApp`
+// used to demand an EXACT desktop id, so the obvious `launchApp calculator` came
+// back "no installed app with id … — see listApps", and an agent obeys that
+// literally: it dumps the whole catalogue (80 apps, 7 KB) to learn one id, and
+// that dump then rides in `history` and is resent on every later step of the
+// turn. Measured on the bench 2026-07-31: two of thirteen steps, for a name the
+// index resolves on its own — `search()` is the same one Prism searches. An
+// ambiguous query is answered with the CANDIDATES; a reply that points back at
+// the catalogue is what costs the catalogue (the `settingsPage` lesson, #68).
+function resolveApp(q: string): { app?: AppData; error?: string } {
+  const exactId = appService.hasApp(q) ? appService.getAppData(q) : null
+  if (exactId) return { app: exactId }
+
+  const hits = appService.search(q)
+  if (hits.length === 0) return { error: `no installed app matching "${q}" — see listApps` }
+  const byName = hits.find(a => a.name.toLowerCase() === q.toLowerCase())
+  if (byName) return { app: byName }
+  if (hits.length === 1) return { app: hits[0] }
+  const list = hits.map(a => `${a.id} (${a.name})`).join(", ")
+  return { error: `"${q}" matches ${hits.length} apps: ${list} — launch one by id` }
+}
+
+// Does a live client belong to the app we just launched? `wmClass` is often null
+// in the index (it is parsed from the desktop entry, which frequently omits it —
+// Calculator has none), so the id's own tail is the reliable half.
+function clientIsApp(cls: string | undefined, app: AppData): boolean {
+  const c = (cls ?? "").toLowerCase()
+  if (!c) return false
+  const wm = (app.wmClass ?? "").toLowerCase()
+  if (wm && (c === wm || c.includes(wm))) return true
+  const id = app.id.toLowerCase()
+  return c === id || c.split(".").pop() === id.split(".").pop()
+}
+
+// Wait for the launched app's window and put it in front. A window that maps while
+// one of our own layer surfaces holds an EXCLUSIVE keyboard grab does NOT get
+// focus — Hyprland refuses outright, the constraint `core/InputYield` exists for —
+// and the Assistant island holds that grab the entire time the user is talking to
+// it. So an app the Assistant launches comes up unfocused and the very next
+// pointer/keyboard verb refuses: on the bench that was a wasted step plus a
+// `focus_window` round trip on EVERY "open X and do Y", and only from inside the
+// Assistant (an external MCP client, with nothing grabbing, never sees it).
+// Costs nothing in the ordinary case: `begin()` is a no-op when no surface is
+// grabbing, and there Hyprland has already focused the window itself.
+// Waiting also removes a race the caller used to absorb — perception right after
+// a launch could find no window at all — so the reply says which of the two
+// happened instead of leaving it to be discovered.
+async function focusLaunched(target: AppData, before: Set<string>): Promise<string> {
+  const bare = (s?: string) => (s ?? "").toLowerCase().replace(/^0x/, "")
+  const deadline = GLib.get_monotonic_time() + 5_000_000
+  let win: any = null
+  while (!win && GLib.get_monotonic_time() < deadline) {
+    await new Promise<void>(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 150, () => { r(); return GLib.SOURCE_REMOVE }))
+    win = ((hyprlandState.clients ?? []) as any[])
+      .find(c => !before.has(bare(c.address)) && clientIsApp(c.class, target)) ?? null
+  }
+  if (!win) return " — no window within 5s (it may still be starting, or be a background app)"
+
+  await inputYield.begin()
+  try {
+    await hyprlandState.focusWindow(win.address)
+    await new Promise<void>(r => GLib.timeout_add(GLib.PRIORITY_DEFAULT, 80, () => { r(); return GLib.SOURCE_REMOVE }))
+    const now = hyprlandState.focusedClient as any
+    return bare(now?.address) === bare(win.address)
+      ? `, window ready and focused: ${win.class}`
+      : `, window ready but focus refused by the compositor (still on ${now?.class ?? "nothing"})`
+  } finally {
+    inputYield.end()
+  }
 }
 
 const IPC_COMMANDS: Record<string, IpcCommand> = {
@@ -512,17 +583,21 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
       ),
   },
   launchApp: {
-    desc: "Launch an installed app by id (`launchApp org.gnome.Nautilus`) — origin-aware (flatpak run / gtk-launch), exactly the dock-click path (uwsm-scoped, CWD=$HOME). Discover ids with listApps.",
-    run: args => {
-      const id = (args[0] ?? "").trim()
-      if (!id) return "usage: launchApp <app-id> (see listApps)"
-      if (!appService.hasApp(id)) return `no installed app with id "${id}" — see listApps`
-      const cmd = appService.getLaunchCommand(id)
+    desc: "Launch an installed app by NAME or id (`launchApp calculator`, `launchApp org.gnome.Nautilus`) — origin-aware (flatpak run / gtk-launch), exactly the dock-click path (uwsm-scoped, CWD=$HOME). A name that matches several apps comes back with the candidates, so listApps is only for browsing. Waits for the window and focuses it, then says so: the next perception or pointer call can go straight at it.",
+    run: async args => {
+      const q = (args[0] ?? "").trim()
+      if (!q) return "usage: launchApp <name-or-id> (e.g. `launchApp calculator`; see listApps)"
+      const { app: target, error } = resolveApp(q)
+      if (!target) return error!
+      const cmd = appService.getLaunchCommand(target.id)
+      const before = new Set(
+        ((hyprlandState.clients ?? []) as any[]).map(c => (c.address ?? "").toLowerCase().replace(/^0x/, "")),
+      )
       // Same launch path as a dock click (DockItem.tsx): uwsm-scoped, cd $HOME so
       // children don't inherit the shell's CWD. Fire-and-forget.
       execAsync(["uwsm", "app", "--", "sh", "-c", `cd "$HOME" && exec ${cmd}`])
         .catch(e => console.error("[IPC] launchApp:", e))
-      return `launched ${id}`
+      return `launched ${target.id}${await focusLaunched(target, before)}`
     },
   },
   listActions: {

@@ -384,6 +384,31 @@ Sequence that works, and why (verified against `rawSurfaceFocus`, which touches 
 moves → grab comes back (window focus untouched) → the helper yields again → the release refocuses
 the last window, which is the target → `hyprctl activewindow` names it → the focus check passes.
 
+#### The same refusal has a THIRD victim: a window that MAPS while a surface grabs (2026-07-31)
+
+`InputYield` fixed the verbs — but a newly mapped window never asked for focus, so nothing yielded
+for it and Hyprland simply did not focus it. Verified by A/B with the variable isolated: island
+closed → the launched app is focused; island open in agent mode → the previously focused toplevel
+stays active. That is structural for the built-in Assistant, because the island is open **by
+definition** while the user is talking to it: every "open X and do Y" paid a refused pointer/keyboard
+verb plus a `focus_window` round trip. An external MCP client, with nothing grabbing, never sees it —
+which is why only the terminal bench could find it.
+
+So `launchApp` now **waits for the window and focuses it** (`focusLaunched` in `app.ts`), reusing the
+same `inputYield.begin()/end()` truce as `focusWindow`. Two properties worth keeping:
+
+- **Focusing a window while the island grabs does NOT take the keyboard from the island** (measured:
+  typed text still lands in `.agent-entry`, the focused app receives nothing). The conversation is
+  not disturbed by the shell putting the launched app in front.
+- `begin()` is a **no-op when nobody is grabbing**, so the ordinary dock-click case pays nothing and
+  Hyprland's own focus stands.
+
+`launchApp` also resolves a **name**, not just an exact desktop id (`launchApp calculator`), through
+the same `AppService.search()` Prism uses, and answers an ambiguous name with the CANDIDATES. The
+old exact-id-only version cost two steps and a 7 KB catalogue dump that then rode in `history` for
+the rest of the turn — the model asked for `calculator`, was told "see listApps", and obeyed. Same
+lesson as `settingsPage` (#68): **a reply that points at the catalogue costs the catalogue.**
+
 ### How to find out who holds the keyboard: `dumpState.keyboardFocus`
 
 Two of the obvious routes are dead ends (2026-07-26): `hyprctl activewindow` reports the focused
@@ -1186,6 +1211,25 @@ scrolling off-screen content, drag-and-drop / rubber-band selection / sliders):
   wrapper resolves both ends through the same `resolveNode()` before anything is pressed, and a
   half-resolved drag is precisely what that ordering prevents. The real reason it was missing was
   that nobody had written it.
+- **A control and the label INSIDE it are ONE candidate, not two** (`collapseContained`,
+  2026-07-31). GTK gives a labelled button two accessible nodes with the same name in the same
+  place; `resolveNode` counted both and refused — so on the bench **every** key press in
+  gnome-calculator (`8`, `×`, `=`) came back `ambiguous: 2 nodes … pass a role and/or occurrence`
+  and cost a round trip to re-ask, on a tree the model had already read. The collapse is by
+  **containment, not proximity**: a hit whose centre falls inside an earlier hit's bounds is part
+  of it (the walk is parent-first, so the control is the one kept). Verified both ways — the four
+  calculator keys now land first try, and the `=` in the display vs the `=` key, which do not
+  contain one another, are still correctly reported as two. `occurrence` therefore indexes DISTINCT
+  targets now, which is what a caller meant by it. `centreOf` carries `w`/`h` for this and they are
+  stripped before any candidate list is emitted, so the `{x, y, role}` shape is unchanged.
+  **Not covered by CI**: it needs a live AT-SPI tree, and `agent-loop`'s stub helpers never reach
+  the resolver.
+- **A keyspec failure now says what to do instead** (2026-07-31). `wtype`'s own `Unknown key '*'`
+  names what broke and not the next move, so the caller pays a round trip guessing — measured on
+  the bench, `press_key *` failed and the recovery (`type_text "*"`) was a whole extra step. The
+  key-mode failure appends that keysyms are NAMES (`asterisk`, not `*`) and that a literal
+  character goes through text mode. Same principle as the two above and as `settingsPage` (#68):
+  **an error that only names the failure costs a step; one that names the next move costs nothing.**
 - **Same gate + indicator + kill switch + focus verification** as the keyboard (clicking/scrolling
   is position/stacking-dependent, so geometry is read FRESH right before injecting). First slice is
   single-monitor.

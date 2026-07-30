@@ -234,7 +234,16 @@ function inject(mode, app, payload, wtype) {
 
     const r = run(argv)
     if (!r.ok) {
-        emit({ ok: false, app, mode, error: `wtype failed: ${r.err || "no output"}` })
+        // wtype's own "Unknown key '*'" is true and useless: it names what failed and
+        // not what to do, so the caller spends a round trip guessing. Measured on the
+        // bench 2026-07-31 — `press_key *` failed, and the recovery (`type_text "*"`)
+        // was a whole extra step. Keysyms are NAMES, and the verb that always works
+        // for a literal character is the other one; say both.
+        const hint = mode === "key"
+            ? " — a keyspec is xkb keysym NAMES (Return, Tab, Escape, asterisk, plus), not the"
+              + " character the key produces. For a literal character use text mode (type_text)."
+            : ""
+        emit({ ok: false, app, mode, error: `wtype failed: ${r.err || "no output"}${hint}` })
         return
     }
     pingShell()

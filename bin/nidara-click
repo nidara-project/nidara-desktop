@@ -186,7 +186,10 @@ function centreOf(acc) {
     if (!c) return null
     const r = safe(() => c.get_extents(Atspi.CoordType.WINDOW), null)
     if (!r) return null
-    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), role: roleOf(acc) }
+    // w/h ride along for `collapseContained` only; they are stripped before a
+    // candidate list is emitted, so the reported shape stays {x, y, role}.
+    return { x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2), role: roleOf(acc),
+             w: r.width, h: r.height }
 }
 // How many real node names a failed lookup reports back. A miss used to be a dead
 // end ("no showing node named X"), and the model's only recovery was to spend a
@@ -254,9 +257,33 @@ const MODES = {
 // Resolve one node name (+ optional role / occurrence) to its window-relative
 // centre. Emits the error itself and returns null — callers just bail. `label`
 // names WHICH end failed, which only matters for drag-app's two of them.
+// A GTK control and the label INSIDE it are two accessible nodes with the same
+// name in the same place — clicking either lands on the same pixel. Counting them
+// as two candidates made the OBVIOUS call fail: measured on the bench 2026-07-31,
+// every labelled key in gnome-calculator ("8", "×", "=") came back "ambiguous: 2
+// nodes" and cost a round trip to re-ask with a role, on a tree the model had
+// already read. Nothing is being chosen here — a hit whose centre falls INSIDE an
+// earlier hit is part of that hit, not an alternative to it. The walk is
+// parent-first, so the control is the one kept. Genuinely separate targets (the
+// "=" in the display vs the "=" key) do not contain one another and stay
+// ambiguous, which is the answer the caller needs.
+function collapseContained(hits) {
+    const out = []
+    for (const h of hits) {
+        const within = out.some(o =>
+            h.x >= o.x - o.w / 2 && h.x <= o.x + o.w / 2 &&
+            h.y >= o.y - o.h / 2 && h.y <= o.y + o.h / 2)
+        if (!within) out.push(h)
+    }
+    return out
+}
+
+const bare = h => ({ x: h.x, y: h.y, role: h.role })
+
 function resolveNode(appFilter, app, label, nodeName, role, occRaw) {
     const where = label ? `${label} node ` : "node "
-    const { hits, seen } = findNodeCentres(appFilter, nodeName, role)
+    const { hits: raw, seen } = findNodeCentres(appFilter, nodeName, role)
+    const hits = collapseContained(raw)
     if (!hits.length) {
         // Answer the next question in the same breath. `showing` is what is on screen
         // RIGHT NOW, which is also the honest reason a name can be correct and still
@@ -272,12 +299,12 @@ function resolveNode(appFilter, app, label, nodeName, role, occRaw) {
     }
     if (hits.length > 1 && occRaw === "") {
         emit({ error: `ambiguous: ${hits.length} nodes match the ${where}"${nodeName}" — pass a role and/or occurrence`,
-            candidates: hits.slice(0, 20) })
+            candidates: hits.slice(0, 20).map(bare) })
         return null
     }
     const t = occRaw === "" ? hits[0] : hits[parseInt(occRaw, 10)]
     if (!t) { emit({ error: `${where}occurrence out of range (${hits.length} matches)` }); return null }
-    return t
+    return bare(t)
 }
 
 // ── main ─────────────────────────────────────────────────────────────────────

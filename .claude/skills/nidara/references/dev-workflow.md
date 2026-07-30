@@ -650,6 +650,41 @@ there). Guard the run by asserting that shape before touching anything.
 same question, changed screen. Best case: the source the old read described is **gone** (the terminal
 was closed), which leaves the dead copy as the only possible origin of the old answer.
 
+**Every other run needs a NEW conversation, and there is no verb for it** (the island has a button;
+IPC has nothing). Scripted, the reset is stop → delete → start, because the shell rewrites the files
+on exit:
+
+```bash
+systemctl --user stop nidara; sleep 2
+rm -f "${XDG_STATE_HOME:-$HOME/.local/state}"/nidara/agent/{transcript,session}.json
+systemctl --user start nidara; sleep 7
+```
+
+**Do NOT judge a fix by the turn's total step count — it is dominated by model strategy variance.**
+Measured 2026-07-31, same model, same question, three runs: removing four forced steps left the
+total at 13, then 16, because the model spent the slack differently (run 1 typed `1847` with
+`type_text`; runs 2 and 3 clicked eight digit keys one at a time, one API round trip each). The
+metric that isolates OUR cost from the model's choices is **how many steps pass before the first
+productive action** — the four wasted steps went to 0 and that number does not move with strategy.
+A structural fix should also be proved OUTSIDE the model, deterministically, by driving the verb
+from a shell (which is what actually settles it); the live turn only shows it holds in situ.
+
+**A subtlety this cost: removing a refusal can remove an affordance.** Before the fix, the focus
+refusal pushed the model through `focus_window`, whose description happens to say it is "the
+precondition for the synthetic keyboard" — so the model learned `type_text` existed and used it.
+With the refusal gone, nothing mentioned the keyboard and both later runs clicked glyph by glyph.
+Suspect this whenever an error path is deleted: check what the error was teaching.
+
+**Bring the app up in a known state, and clean up your own contamination.** Two false findings came
+from the environment, not the product: gnome-text-editor **restores its session** (it reopened two
+of the repo's real files, which a computer-use agent could then type into — disable
+`restore-session`, or pick an app with no user data), and a leftover second window makes every node
+match twice, which reads exactly like a resolver bug. Count the windows before believing an
+"ambiguous" result. `hyprctl dispatch closewindow address:0x…` **fails on this config** — Hyprland's
+config is Lua here, so the dispatch is parsed as Lua and errors with `')' expected near 'address'`;
+use `ags request closeWindow` (or `hl.dsp.*` form), and never discard the output of a dispatch you
+depend on, or you will read the unchanged state as the app "ignoring" you.
+
 ## Persistence
 
 All persistent state lives in `~/.config/nidara/`:

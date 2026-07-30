@@ -1735,6 +1735,41 @@ name/`prgname` is already load-bearing — the Hyprland class is `io.Astal.ags` 
 says do not "fix" that**, the dock's remap keys off it, and the layer-shell namespaces are separate
 again. Verifying by a11y tree alone would prove the string changed, not that Orca reads it.
 
+### 44. What the calculator bench left open (2026-07-31)
+
+The run that produced `launchApp`-resolves-a-name, launch-focuses-under-grab and
+`collapseContained` also produced three things that were measured but NOT acted on.
+
+**(a) The model drives text entry one glyph per API round trip — and we may have caused it.**
+Asked to compute `1847 × 293`, run 1 used `type_text "1847"`; runs 2 and 3 clicked eight digit keys
+individually, 8 steps where 1 would do, and the glyph-by-glyph path is also where the name mistakes
+happen (`*` instead of `×`). The plausible cause is uncomfortable: **the focus refusal we removed
+was the thing advertising the keyboard**, since the recovery went through `focus_window`, whose
+description says it is "the precondition for the synthetic keyboard". The obvious response — a line
+in `click_app`/`launchApp` pointing at `type_text` — is a PROMPT change and must be treated as one:
+A/B it on the same model with a fresh conversation each run, report the token cost, and remember the
+falsified theory in #39 (removing "Off by default" changed nothing). **Unproven; do not land it as
+an obvious win.**
+
+**(b) There is no IPC verb to start a new conversation.** The island has a button; `listActions` has
+`toggleAgent` and nothing else. Every bench run — and any future eval harness — has to stop the
+shell, delete `transcript.json`/`session.json` and start it again, because the shell rewrites them
+on exit. A `agentNewConversation` verb would be three lines, but note it would have to be **gated**
+for the same reason `agentSend` would be: it spends the user's API budget by making the next turn
+cost a full uncached prefix.
+
+**(c) `collapseContained` has no test and cannot easily get one.** It needs a live AT-SPI tree;
+`agent-loop` stubs the helpers and never reaches the resolver. It is a pure function of boxes, so a
+GJS unit runner would cover it — there is no such runner today, and standing one up is its own
+decision (the same one #39.14 reaches from the shell side).
+
+**Data point for #39.6 while here:** on `gemini-2.5-flash` the implicit cache DOES fire — `cached=`
+was non-zero on 8 of 13 steps, up to 10.7k tokens, i.e. the fixed `sys`+`tools` prefix (22 KB) is
+largely paid once. That does not contradict the "1 hit in 36" measured on `gemini-3-flash-preview`;
+it narrows it to that preview model. The consequence is that **the growing history, not the schema
+block, is the lever** — the step-4 `query_app` dump (11 KB, no `match`) was resent on all nine
+following steps, ≈25k of the turn's 127k tokens.
+
 ---
 
 ## Meta: how to interpret "tech debt" here
