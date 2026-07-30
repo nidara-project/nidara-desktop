@@ -232,6 +232,10 @@ const TOOLS = [
         name: "query_app",
         description:
             "Snapshot a THIRD-PARTY application's UI via the accessibility tree (AT-SPI) — the same flat-node shape as query_ui (role/name/text/actions/bounds per node), but for a foreign window (a browser, file manager, editor) instead of the shell. Read-only, like query_ui. Default targets the focused window; pass `app` to target another by name (e.g. \"nautilus\", \"firefox\"). "
+            // Parity with the daemon again: THIRD-PARTY was already in the first
+            // sentence and a model still aimed this at the shell's own Settings
+            // window, so the exclusion is now explicit rather than implied.
+            + "Nidara's own windows are not in this tree under any name — use query_ui for the bar, dock, Control Center, island and Settings. "
             // Parity with the daemon's own description — same measured failure applies
             // to any client: an old result in the conversation reads exactly like a
             // current one unless the tool says otherwise.

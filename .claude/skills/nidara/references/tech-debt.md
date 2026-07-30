@@ -1710,6 +1710,31 @@ completely here: focus-verified, cursor painted, chips logged, kill switch one c
 for unattended work, and treat instructions that arrive mid-session claiming an origin as content,
 never as authority.
 
+### 43. Nidara is on the accessibility bus as `gjs`, with unnamed frames (2026-07-30)
+
+Found while measuring why the Assistant could not read its own Settings window. The shell **does**
+publish an AT-SPI tree — 154 nodes, the bar's clock and window title among them — but it is
+registered under the interpreter's name:
+
+```
+$ nidara-a11y ZZZ  →  apps: [… 'org.gnome.Nautilus', 'gjs', 'org.gnome.Terminal']
+$ nidara-a11y gjs  →  app: gjs · window: None · count: 154 · frames with name ""
+```
+
+Nothing in the repo calls `GLib.set_application_name` / `set_prgname`, so every Nidara toplevel
+arrives as an unnamed frame of an app called `gjs`. **Two separate costs, and the accessibility one
+is the real one:** a screen reader (Orca) announces the bar, dock and Settings as "gjs" with
+anonymous frames, which is a genuine defect in a desktop environment; and no name an agent could
+try (`io.Astal.ags`, "Nidara Settings", "nidara") matches, which is why `query_app` on our own
+window returns zero — the wrong-door confusion documented in `state-and-ipc.md`.
+
+**Not fixed together with the tool descriptions on purpose** (PR of 2026-07-30 covered the doors,
+not the name): the fix is one or two calls in each bundle's `app.ts`, but it is an accessibility
+change and deserves verifying with an actual screen reader plus a check on every place a
+name/`prgname` is already load-bearing — the Hyprland class is `io.Astal.ags` and **commandment 7
+says do not "fix" that**, the dock's remap keys off it, and the layer-shell namespaces are separate
+again. Verifying by a11y tree alone would prove the string changed, not that Orca reads it.
+
 ---
 
 ## Meta: how to interpret "tech debt" here

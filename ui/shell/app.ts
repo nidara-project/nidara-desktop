@@ -655,7 +655,11 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
     },
   },
   queryUI: {
-    desc: "Snapshot what the UI is rendering as JSON (read-only, like dumpState). " +
+    // The first clause is all an agent sees in nidara-agent's action index, so it
+    // has to say WHOSE windows these are: query_app reads other apps through
+    // AT-SPI and cannot see Nidara at all, and an agent that doesn't know this
+    // tries the accessibility tree on its own Settings window and finds nothing.
+    desc: "Read Nidara's OWN windows as JSON — bar, dock, Control Center, Assistant island, Settings — read-only, and the only way to see them: query_app cannot. " +
       "Optional selector: `.cssClass`, `#id`, `Type`, or `selector@window` " +
       "(e.g. `queryUI .bar-app-name`, `queryUI .nidara-menu-row@bar`)",
     run: args => JSON.stringify(queryUI(args[0]), null, 2),
@@ -828,14 +832,20 @@ app.start({
       raiseSettings()
     }
     const openSettingsPage = (id: string): string => {
-      if (!id) return "usage: settingsPage <pageId> (e.g. bluetooth, network, appearance)"
+      // Every failure hands back the valid ids. A bare "unknown page: AI" told an
+      // agent only that its guess was wrong, so it burned a step re-guessing
+      // (measured 2026-07-30) — and the ids are not derivable from the sidebar
+      // labels, which are translated.
+      const validPages = (): string =>
+        [...new Set(settingsWindows.flatMap(s => (s as any).pageIds ?? []))].join(", ")
+      if (!id) return `usage: settingsPage <pageId> — valid: ${validPages() || "bluetooth, network, appearance, …"}`
       if (settingsWindows.length === 0) openSettings()   // lazy-create + raise
       else raiseSettings()
       let found = false
       settingsWindows.forEach(s => {
         if ((s as any).navigateToPage?.(id)) found = true
       })
-      return found ? "ok" : `unknown page: ${id}`
+      return found ? "ok" : `unknown page: ${id} — valid: ${validPages()}`
     }
     const toggleOverview = () => {
       status.toggleOverview()

@@ -446,9 +446,15 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     // Drive navigation from outside (`ags request settingsPage <id>`) — lets
     // scripts and agents open a specific page without synthesizing clicks.
+    // Case-insensitive because the ids are lowercase while the NAMES are not: an
+    // agent asked for the AI page and sent `AI`, which cost it a step for nothing
+    // (measured 2026-07-30). `pageIds` is published so the caller can say which
+    // ids exist instead of only that this one didn't.
+    ;(win as any).pageIds = categories.map(c => c.id)
     ;(win as any).navigateToPage = (id: string): boolean => {
-        if (!pageCache.has(id)) return false
-        navigateTo(id)
+        const key = String(id ?? "").trim().toLowerCase()
+        if (!pageCache.has(key)) return false
+        navigateTo(key)
         return true
     }
 

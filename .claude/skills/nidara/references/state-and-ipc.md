@@ -130,10 +130,25 @@ dock-item running/active) is a deferred opt-in tier the widgets would cooperate 
 the same node model the AT-SPI2 backend now fills for third-party apps (see "computer-use"
 below — `queryUI` is the shell's own toplevels; `query_app` is the same shape via AT-SPI).
 
+**That split is invisible from the outside, so both tools have to state it** (done 2026-07-30
+after measuring the cost). Nidara's windows are not reachable through AT-SPI under any name an
+agent would try — it registers on the bus as `gjs` with unnamed frames (see `tech-debt.md`) —
+so `query_app io.Astal.ags` and `query_app "Nidara Settings"` both return zero **with the
+window open in front of it**, which reads as "nothing there" rather than "wrong door". A model
+asked to read its own Settings window spent three steps and ~15k tokens finding that out, then
+answered from `describe_settings` instead. `queryUI`'s `desc` now opens by naming whose windows
+it reads (that first clause is the entire line the daemon's action index carries, cut at the
+first `.`/`[`/`(` — so keep those characters out of it), and `query_app`'s says "OTHER apps
+only" plus where the inside door is, in the daemon and the MCP server both.
+
 Commands receive arguments: `requestHandler` passes `argv.slice(1)` to the handler
 (`run(args)`). `ags request settingsPage bluetooth` opens the Settings window directly on
-that page (sidebar category ids; returns `unknown page: <id>` for bad ids) — the agent-
-friendly way to reach a Settings page without synthesizing clicks.
+that page (sidebar category ids) — the agent-friendly way to reach a Settings page without
+synthesizing clicks. **A rejection lists the valid ids** (`unknown page: AI — valid: network,
+bluetooth, appearance, …`, from `pageIds` published by the window) and lookup is
+case-insensitive: the ids are lowercase while the page NAMES are not, and the labels are
+translated, so neither the user nor an agent can derive an id from what is on screen. An error
+that only says "no" costs a whole step to re-guess — measured on `settings_page AI`, 2026-07-30.
 
 ### Window & workspace management (ungated, the shell driving its own compositor)
 
@@ -466,10 +481,25 @@ Rules:
   disabled, `setConfig` refuses with a pointer to the page. Reads are never gated.
 - `ai.*` keys are visible but **not writable via setConfig** — the gate must not be
   flippable through the door it controls.
+- **Every gate in `ai.json` must be registered here, `writable: false`** — all eight of them
+  (`allowConfigWrite`, `allowScreenshot`, `allowWindowClose`, `allowMcp`, `allowComputerUse`,
+  `allowComputerControl`, `allowFileRead`, `allowFileWrite`). The last four were added with the
+  computer-use and file layers and **not registered until 2026-07-30**, which made
+  `describeConfig` a half-truth rather than an omission: asked which permissions were on, the
+  Assistant read the registry honestly and answered **four of eight** with nothing marking the
+  list as partial. A gate the agent cannot see is one it cannot report, explain, or point the
+  user at — and an incomplete answer that looks complete is worse than a refusal. Registering a
+  gate is **not** making it writable: `writable: false` keeps `setConfig` refusing, and the
+  Settings → AI page stays the only door that flips one.
 - **Adding a setting:** register it in `config-entries.ts` (NOT in core/ — dock settings
   import widget state) with a real `desc` (that string is the agent-facing documentation)
   and delegate `set` to the owning service's setter. That's ALL it takes to appear in
   `describeConfig`.
+- **A `desc` must not restate the DEFAULT.** `value` sits in the same JSON object, so a
+  default is a second answer to the question the reader came with — and it wins sometimes: a
+  desc reading "Off by default" got `ai.allowFileWrite` reported as off while `value: true`
+  was two fields away (measured 2026-07-30). Put in the desc only what the value cannot say:
+  what the setting does, which other setting it implies, where a human flips it.
 
 ### The MCP server: `nidara-mcp`
 

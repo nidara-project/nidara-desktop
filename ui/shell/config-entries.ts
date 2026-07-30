@@ -152,6 +152,42 @@ export function registerConfigEntries() {
         writable: false,
         get: () => agentConfig.allowMcp,
     })
+    // The computer-use and file gates were added later (2026-07-27) and were the
+    // only ones missing here, which made `describeConfig` a HALF-TRUTH: asked what
+    // permissions were on, the Assistant answered with the four above and no way to
+    // know it was answering four of eight. Same read-only rule as the rest — these
+    // are the most sensitive gates in the product, so `setConfig` must keep
+    // refusing them; the Settings → AI page is the only door that flips them.
+    // A `desc` must NOT restate the default — `value` is in the same JSON object,
+    // and a default is a second answer to the question the reader is asking. The
+    // first draft of these four said "Off by default" and a model reported
+    // allowFileWrite as OFF while reading `value: true` two fields away (measured
+    // 2026-07-30). Semantics that are NOT in the value belong here: what the gate
+    // opens, which other gate it implies, where it is flipped.
+    registerConfig("ai.allowComputerUse", {
+        desc: "Whether agents may PERCEIVE other apps via the accessibility tree (nidara-a11y, query_app). Toggle it in Settings → AI.",
+        type: "boolean",
+        writable: false,
+        get: () => agentConfig.allowComputerUse,
+    })
+    registerConfig("ai.allowComputerControl", {
+        desc: "Whether agents may ACT in other apps — accessibility actions, synthetic keyboard and pointer (nidara-act/type/click). Implies allowComputerUse. Toggle it in Settings → AI, or revoke it instantly with the kill switch (disableComputerControl).",
+        type: "boolean",
+        writable: false,
+        get: () => agentConfig.allowComputerControl,
+    })
+    registerConfig("ai.allowFileRead", {
+        desc: "Whether the built-in Assistant may READ Nidara's own config, the shipped assets and the shell log (read_file/list_dir/search_files, prefix-limited). Toggle it in Settings → AI.",
+        type: "boolean",
+        writable: false,
+        get: () => agentConfig.allowFileRead,
+    })
+    registerConfig("ai.allowFileWrite", {
+        desc: "Whether the built-in Assistant may WRITE the three user-owned config files it is allowed to edit (edit_file/write_file, exact allowlist, every write committed to git). Implies allowFileRead. Toggle it in Settings → AI.",
+        type: "boolean",
+        writable: false,
+        get: () => agentConfig.allowFileWrite,
+    })
     // The built-in Assistant's brain (BYOK). Visible so agents can see how the
     // native assistant is configured; set it in Settings → AI (the API key lives
     // in the keyring and is deliberately NOT exposed here).

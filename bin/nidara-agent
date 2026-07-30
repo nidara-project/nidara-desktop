@@ -554,7 +554,13 @@ const SEE_TOOL_DEFS = [
     {
         name: "query_app",
         description:
-            "Look inside ANOTHER application's window through its accessibility tree: a flat list of controls with role, name, text, the actions each one exposes, and window-relative bounds. This is how you see outside Nidara — you have no other view of another app. Targets the focused window unless you pass `app`. A real window holds hundreds of controls, so pass `match` when you know what you are after; a match that finds little answers with `showing`, the labels on screen — read those before asking for a whole window. Some toolkits expose little or nothing; if the tree comes back empty, say so rather than acting blind. "
+            "Look inside ANOTHER application's window through its accessibility tree: a flat list of controls with role, name, text, the actions each one exposes, and window-relative bounds. This is how you see outside Nidara — you have no other view of another app. Targets the focused window unless you pass `app`. "
+            // Measured 2026-07-30: asked to read Nidara's own Settings window, the
+            // model spent three steps here ("Nidara Settings", then the Hyprland
+            // class) before giving up, because nothing said the inside has a
+            // different door. The index line for query_ui now points back.
+            + "OTHER apps only — Nidara's own windows are not in this tree under any name; read those with `run_action query_ui <selector>`. "
+            + "A real window holds hundreds of controls, so pass `match` when you know what you are after; a match that finds little answers with `showing`, the labels on screen — read those before asking for a whole window. Some toolkits expose little or nothing; if the tree comes back empty, say so rather than acting blind. "
             // Measured failure, same model, twice: with an earlier query_app in its
             // history it answered about the CURRENT screen from that old copy and made
             // no call at all (steps=1 tools=0), while the answer was sitting in the
