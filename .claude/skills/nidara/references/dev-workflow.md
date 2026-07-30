@@ -599,6 +599,57 @@ of a tool turn (rebuilt assistant message), usage that looks too **cheap** (unre
 installed (transitive) so `@girs/secret-1.d.ts` exists locally, but if CI typecheck ever complains
 about `gi://Secret`, the `ci-assets` girs snapshot needs a refresh (`scripts/dev/publish-ci-typings.sh`).
 
+### Testing the Assistant's PERCEPTION of a live app (the terminal bench)
+
+`agent-loop` covers the wire; the mock cannot cover whether the model **looks** when it should.
+That failure is invisible in the island — a stale answer and a fresh one render identically — and it
+is what this bench exists to catch. Setup: a coding agent runs in a terminal, the Assistant is asked
+to read that terminal, and the operator at the keyboard is the other side of the conversation. It
+earned its place by finding a real defect (PR #66: with an earlier `query_app` in history the model
+answered a live question from a dead screen, `steps=1 tools=0`), and the procedure below is what made
+that measurable rather than anecdotal.
+
+**Use a terminal that publishes a tree.** `gnome-terminal` (VTE) exposes the visible screen as one
+`role: "terminal"` text node; **kitty publishes nothing at all** — it is absent from the registry, not
+empty. The tree comes from the EMULATOR, never from the program inside it. `--ax-screen-reader` on
+`claude` is **not** needed; the raw TUI reads fine.
+
+**Mint the token inside the test, and put it in the terminal's INPUT LINE.** The check is always "can
+it read something it cannot have known", so the value must not exist before the run. It cannot be
+printed as prose either: a TUI collapses tool calls to one line and flushes prose at the **end** of a
+turn, so the operator's messages are not on screen at the moment the agent reads, and earlier ones have
+scrolled past the cap. The prompt box is the only region that is both visible and stable.
+
+**Verify each hop before the next one, or the run proves nothing:**
+
+```bash
+# 1) the token is where the agent will look — through the SAME path it uses
+nidara-a11y org.gnome.Terminal | jq -r '.nodes[]|select(.role=="terminal").text' | grep -q "$TOKEN"
+# 2) the question actually landed in the island (see below) — BEFORE pressing Return
+ags request queryUI .agent-entry     # its `text` must be your question
+```
+
+**Driving the island needs `wtype` directly.** No keyboard verb points at it: `nidara-type` demands an
+`<app>` and verifies focus via `hyprctl activewindow`, where a layer surface never appears. In agent
+mode the island holds an **EXCLUSIVE grab** (`Bar.tsx:366`), so synthetic keys reach it — which is also
+why hop 2 is mandatory: if the grab wasn't there, you just typed your question into the operator's own
+prompt. Clean up with the island **closed first**, then `ctrl+u` — an open island eats the clear.
+
+**Run the whole thing as ONE command.** Every separate tool call that raises a permission prompt
+**closes the island**, which is how the first attempt typed into the wrong window. (Auto-accept mode
+avoids it, but one script is what makes the run repeatable.)
+
+**Read the verdict from the log, never from the bubble** — `grep -E '\[(nidara-)?[aA]gent'`:
+`steps=2 tools=1` means it re-read; `steps=1 tools=0` means it answered from its context and the text
+in the island is a coincidence. State is `$XDG_STATE_HOME/nidara/agent/`: `transcript.json` is
+`{version,updated,transcript:[{role,text,tools}]}` (the UI's view — poll it for the answer) and
+`session.json` holds the daemon's `history` (the model's context — check the stale copy is really in
+there). Guard the run by asserting that shape before touching anything.
+
+**To test a fix for a VOLATILE read, the stale copy has to still be in `history`** — same conversation,
+same question, changed screen. Best case: the source the old read described is **gone** (the terminal
+was closed), which leaves the dead copy as the only possible origin of the old answer.
+
 ## Persistence
 
 All persistent state lives in `~/.config/nidara/`:

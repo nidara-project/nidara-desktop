@@ -50,6 +50,7 @@ Before doing anything that touches code:
 - **Editing SCSS, restyling anything, working on the design tokens** → read `references/design-system.md`.
 - **Adding a new core service or modifying state** → read `references/architecture.md` (core/ section) and `references/state-and-ipc.md` (Status.ts).
 - **Working on the installer, build, or session boot** → read `references/dev-workflow.md`.
+- **Touching the Assistant** (`bin/nidara-agent`, a wire lane, or what it can perceive) → read `references/dev-workflow.md`: the fake-brain walk, the wire-lane re-sync procedure, and the terminal bench for perception claims (a model that answers from a stale read looks identical in the island — only the log tells you).
 - **Debugging something weird, or considering a refactor** → check `references/tech-debt.md` first — it might already be a known issue.
 - **Helping a user customize their OWN installed copy** (not the canonical repo) → read `references/agent-contribution.md` FIRST. It tells you whether a change is personal (→ config layer), should become a Setting, or is a global improvement worth proposing back upstream as a PR.
 
