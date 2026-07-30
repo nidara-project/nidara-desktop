@@ -1019,6 +1019,17 @@ here and it is one wrapper mode + one tool in each consumer. Phase 1 — percept
   keep their meaning), then a **rescue pass through `classMatches`**, which canonicalises BOTH
   sides — last dot-segment, separators dropped. Keep it symmetric: either side can be the
   dotted one, and the version that only split `cls` missed this exact case.
+- **A perception result is a SNAPSHOT and the tool has to say so** — measured twice with the
+  same model, which is what rules out model tier. Fresh conversation: it called `query_app` and
+  answered correctly. Same question with an earlier `query_app` in history: **`steps=1 tools=0`**,
+  no call at all, answered from the stale copy while the answer sat on the live screen. Reusing it
+  is *reasonable* — a file read stays true until something writes, and the daemon models exactly
+  that (`readThisSession`, invalidated in `writeFile`). A screen has **no write to hook**: it goes
+  stale on its own, so no mechanism can mark it and the DESCRIPTION carries the rule ("snapshot of
+  one instant, call it again before answering about now"). Kept in parity in `nidara-agent` and
+  `nidara-mcp`. **Any new volatile perception tool needs the same sentence** — and note the shape
+  of the lesson: the truncation notice that named a lever the tool did not have made things worse,
+  so a caveat must always name the lever that works.
 
 Phase 2a — **action, deterministic only (built)**:
 
