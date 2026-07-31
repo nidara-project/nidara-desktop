@@ -61,12 +61,14 @@ class Mock(BaseHTTPRequestHandler):
     hits = 0
     served_5xx = False
     last_tools = []       # tool NAMES offered in the most recent request
+    last_tool_defs = []   # the full tool objects — run_action's action index is IN its description
     last_messages = []    # messages of the most recent request (tool results included)
 
     @classmethod
     def reset(cls, mode):
         cls.mode, cls.hits, cls.served_5xx = mode, 0, False
         cls.last_tools = []
+        cls.last_tool_defs = []
         cls.last_messages = []
 
     def log_message(self, *a):
@@ -99,6 +101,7 @@ class Mock(BaseHTTPRequestHandler):
             payload = {}
         messages = payload.get("messages", [])
         Mock.last_tools = [t.get("function", {}).get("name") for t in payload.get("tools", [])]
+        Mock.last_tool_defs = payload.get("tools", [])
         Mock.last_messages = messages
         has_tool_result = any(m.get("role") == "tool" for m in messages)
         tool_results = sum(1 for m in messages if m.get("role") == "tool")
@@ -133,7 +136,18 @@ class Mock(BaseHTTPRequestHandler):
             send(self._chunk(delta={"tool_calls": [{"index": 0, "function": {"arguments": args[half:]}}]}))
             send(self._chunk(finish="tool_calls"))
 
-        if Mock.mode == "computer_use":
+        if Mock.mode == "hidden_action":
+            # The model reaches for a HIDDEN action by name. It cannot have read the
+            # name off run_action's index (that is the other half of this scenario),
+            # but a model that guesses — or one steered by a prompt injection in a
+            # window title it just read — must still be stopped by the resolver.
+            if tool_results == 0:
+                call_tool("run_action", '{"action":"agent_new_conversation"}', "call_hidden")
+            else:
+                send(self._chunk(delta={"role": "assistant", "content": FINAL[:1]}))
+                send(self._chunk(delta={"content": FINAL[1:]}))
+                send(self._chunk(finish="stop"))
+        elif Mock.mode == "computer_use":
             # Four helper-backed calls in one turn: a pointer click that SUCCEEDS
             # (asserted on the argv the helper received), a perception call that
             # returns a tree (asserted on the projection applied to it), one the
@@ -179,9 +193,13 @@ def make_stub_ags(bind: Path):
         "#!/bin/sh\n"
         '[ "$1" = request ] || exit 0\n'
         "case \"$2\" in\n"
+        # agentNewConversation is served here on purpose: the shell really does
+        # publish it, and the daemon's job is to drop it. A stub that omitted it
+        # would make the denylist assertion pass without the denylist.
         "  listActions) printf '%s' "
         "'{\"toggleControlCenter\":{\"desc\":\"Toggle the control center\"},"
-        "\"launchApp\":{\"desc\":\"Launch an app\"}}' ;;\n"
+        "\"launchApp\":{\"desc\":\"Launch an app\"},"
+        "\"agentNewConversation\":{\"desc\":\"End the conversation and begin an empty one\"}}' ;;\n"
         "  describeConfig) printf '%s' "
         "'{\"appearance.accent\":{\"type\":\"string\",\"value\":\"purple\",\"writable\":true}}' ;;\n"
         "  dumpState) printf '%s' '{\"overlays\":{},\"dark\":false}' ;;\n"
@@ -694,6 +712,39 @@ def main():
         if offered:
             problems.append(f"computer-use tools offered with both gates OFF: {offered}")
         report("computer-use: not offered while gated off", problems, events, stderr_lines)
+
+        # ── Scenario 4b: a HIDDEN action is unreachable, not merely unlisted ──
+        # `agentNewConversation` discards the conversation the model is standing
+        # in. It exists for a person at a terminal and for an MCP client driving
+        # an eval; the Assistant must not be able to call it, because a reset
+        # mid-turn strands the tool_call whose tool_result the next request has to
+        # carry — and because starting over is not a move inside a turn.
+        # HIDDEN_ACTIONS is what enforces that, and it enforces it TWICE: the name
+        # never enters run_action's index, and run_action resolves only through the
+        # map built with the same filter. Both halves are asserted, because either
+        # one alone is a false sense of safety — an unlisted-but-callable action is
+        # exactly what a prompt injection in a window title would go looking for.
+        Mock.reset("hidden_action")
+        events, stderr_lines = drive_daemon(port, prompt="start a new conversation")
+        problems = []
+        run_action = next((t for t in Mock.last_tool_defs
+                           if t.get("function", {}).get("name") == "run_action"), None)
+        if not run_action:
+            problems.append("run_action was not offered at all — the index assertion below proves nothing")
+        else:
+            index = run_action["function"].get("description", "")
+            if "agent_new_conversation" in index or "agentNewConversation" in index:
+                problems.append("the hidden action is advertised in run_action's index")
+            # Guards the assertion above against passing on an EMPTY index (a
+            # listActions failure, which the daemon survives by design).
+            if "toggle_control_center" not in index:
+                problems.append("a visible action is missing from the index — the stub or the index broke")
+        results = [e for e in events if e.get("t") == "toolresult"]
+        if not results:
+            problems.append("the daemon never dispatched the call — nothing was resolved either way")
+        elif any(r.get("ok") for r in results):
+            problems.append("a hidden action RESOLVED and ran — the denylist is advisory, not enforcing")
+        report("hidden actions: unreachable, not just unlisted", problems, events, stderr_lines)
 
         Mock.reset("computer_use")
         argv_rec = Path(tempfile.mkdtemp(prefix="nidara-agent-argv-"))

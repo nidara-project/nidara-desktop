@@ -1604,7 +1604,7 @@ function compactJson(s) {
     try { return JSON.stringify(JSON.parse(s)) } catch { return s }
 }
 
-// Actions the assistant should not be TOLD about. Two kinds, and the listing is
+// Actions the assistant should not be TOLD about. Three kinds, and the listing is
 // ~1.7 KB lighter without them (measured 2026-07-21):
 //   1. Already offered as dedicated tools with better descriptions (the settings
 //      cluster), or redundant with run_action's own index (listActions) — listing
@@ -1612,12 +1612,23 @@ function compactJson(s) {
 //   2. Shell-internal plumbing: the lockscreen and the computer-use visual layer
 //      call these on the shell's behalf. Nobody asks their desktop to
 //      "notifyComputerAction", and the kill switch is the USER's control.
+//   3. Actions it must not be able to REACH — the only category here that is about
+//      AUTHORITY rather than tokens or redundancy. `agentNewConversation` discards
+//      this very conversation: called mid-turn it would strand the tool_call whose
+//      tool_result the next request has to carry, and "start over" belongs to the
+//      user and to whoever drives an eval, never to a move inside a turn.
+// This list is not merely advisory, which is what makes (3) sound: `run_action`
+// resolves ONLY through `actionMap`, built with the same filter below, so a hidden
+// name is UNREACHABLE and not just unadvertised. External callers keep it — a
+// terminal via `ags request`, and MCP, whose run_action is an unfiltered
+// passthrough by design (its client is a person's agent, not this daemon).
 // A DENYLIST on purpose: `run_action` stays a passthrough and a newly added
 // action still shows up for free, which is the property that keeps this whole
 // prompt self-maintaining.
 const HIDDEN_ACTIONS = new Set([
     "describeConfig", "getConfig", "setConfig", "dumpState", "listActions",
     "hideForLock", "showAfterLock", "notifyComputerAction", "agentPointer", "disableComputerControl",
+    "agentNewConversation",
 ])
 
 

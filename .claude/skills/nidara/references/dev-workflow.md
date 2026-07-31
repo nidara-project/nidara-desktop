@@ -650,15 +650,23 @@ there). Guard the run by asserting that shape before touching anything.
 same question, changed screen. Best case: the source the old read described is **gone** (the terminal
 was closed), which leaves the dead copy as the only possible origin of the old answer.
 
-**Every other run needs a NEW conversation, and there is no verb for it** (the island has a button;
-IPC has nothing). Scripted, the reset is stop → delete → start, because the shell rewrites the files
-on exit:
+**Every other run needs a NEW conversation** — a carried-over conversation answers from context and
+proves nothing. One verb, no shell restart:
 
 ```bash
-systemctl --user stop nidara; sleep 2
-rm -f "${XDG_STATE_HOME:-$HOME/.local/state}"/nidara/agent/{transcript,session}.json
-systemctl --user start nidara; sleep 7
+ags request agentNewConversation      # "conversation ended — N turns dropped"
 ```
+
+It refuses while a turn is in flight (`a turn is in flight — nothing was discarded`); poll
+`ags request dumpState` → `ai.assistant.busy` and retry. **Deliberately unreachable from the
+Assistant itself** (`HIDDEN_ACTIONS` in the daemon) — see `state-and-ipc.md`; you drive it, it
+cannot drive itself.
+
+**Do not "reset" by deleting the two state files under a live shell — that does nothing.** The shell
+holds the conversation in memory and rewrites both at the next turn end, so the deletion is silently
+undone and the run you thought was fresh is not. (The old stop → delete → start dance worked for that
+reason, not because the shell writes on exit — it does not.) If the shell is already down, deleting
+the files is fine.
 
 **Do NOT judge a fix by the turn's total step count — it is dominated by model strategy variance.**
 Measured 2026-07-31, same model, same question, three runs: removing four forced steps left the

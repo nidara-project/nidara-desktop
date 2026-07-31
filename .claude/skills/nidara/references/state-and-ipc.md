@@ -64,7 +64,7 @@ read source to discover it:
 
 Current commands (run `listActions` for the live list): `toggleCC|toggleControlCenter`,
 `toggleNC|toggleNotificationCenter`, `togglePrism|toggleSearch`, `toggleAppGrid`,
-`openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `togglePlayer` (media island; errors if no MPRIS player is on the bus), `toggleAgent` (the built-in Assistant island; `Super+A`), `toggleAbout`, `toggleBarOverlay` (alias `toggleGameOverlay`),
+`openSettings` (alias `toggleSettings`), `settingsPage <pageId>`, `toggleOverview`, `togglePlayer` (media island; errors if no MPRIS player is on the bus), `toggleAgent` (the built-in Assistant island; `Super+A`), `agentNewConversation` (ends the Assistant's conversation and starts an empty one — hidden from the Assistant itself, refuses mid-turn), `toggleAbout`, `toggleBarOverlay` (alias `toggleGameOverlay`),
 `openWindowMenu`, `hideForLock`, `showAfterLock`, `describeConfig`, `getConfig [key]`,
 `setConfig <key> <value>`, `screenshot [path]`, `queryUI [selector]`, `listApps`, `launchApp <id>`,
 `disableComputerControl`, `notifyComputerAction` (computer-use tools ping it so the bar's AI-control
@@ -748,6 +748,31 @@ exactly like MCP). The **file layer below is the one documented exception** to t
   `describeConfig`), the redundant `listActions`, and shell-internal plumbing (`hideForLock`,
   `agentPointer`, the kill switch). Denylist on purpose: a NEW action still appears in the index for
   free.
+- **`HIDDEN_ACTIONS` is also the AUTHORITY boundary, not only a token squeeze** — and the distinction
+  matters when adding to it. Two of its three categories are about cost or redundancy; the third is
+  about what the Assistant may not be able to do at all. It holds because the list is **enforcing,
+  not advisory**: `run_action` resolves only through `actionMap`, built with the same filter, so a
+  hidden name is UNREACHABLE — a model that guesses it, or one steered by a prompt injection in a
+  window title it just read, is stopped by the resolver and not merely left uninformed. Pinned in
+  `scripts/ci/agent-loop-test.py` ("hidden actions: unreachable, not just unlisted"), which asserts
+  BOTH halves, because either alone is a false sense of safety. The stub `ags` serves the hidden name
+  from `listActions` on purpose — a stub that omitted it would pass without the denylist.
+  **`agentNewConversation` is the first entry of that third kind** (see below).
+- **`agentNewConversation` — the one verb deliberately out of the Assistant's reach.** It ends the
+  conversation and starts an empty one, dropping BOTH halves (`transcript.json` and the daemon's
+  `session.json`, in memory and on disk) via `AgentService.reset()`. Reachable from a terminal
+  (`ags request`) and from MCP, whose `run_action` is an unfiltered passthrough by design — its
+  client is a person's agent, not this daemon. NOT reachable from the built-in Assistant: a reset
+  mid-turn would strand the `tool_call` whose `tool_result` the next request has to carry, and
+  "start over" belongs to the user or to whoever drives an eval, never to a move inside a turn.
+  It **refuses while a turn is in flight** rather than resetting under it, and the refusal names
+  something pollable — `dumpState` grew `ai.assistant` (`configured`/`busy`/`state`/`turns`) for
+  exactly that reason, an addition the Assistant itself never pays for (`dumpState` is hidden too).
+  No alias: aliases are a FIELD in `listActions`, never a key, so they never enter the index and the
+  denylist would never see one — a second name would look covered without being it.
+  **Why it had to exist:** deleting the two state files under a live shell does nothing, because the
+  shell holds the conversation in memory and rewrites them at the next turn end. Before this verb,
+  a fresh conversation meant restarting the shell, which every bench run had to do.
 - **Token/cache is a PARKED topic (user, 2026-07-22) — don't reopen it with experiments.** What is
   known and stable: `cached` is a SUBSET of input shown as a percentage on the island; the cost driver
   is STEP COUNT, not prompt size (an 8-step turn is ~25k input tokens); Anthropic needs

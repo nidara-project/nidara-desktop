@@ -14,6 +14,7 @@ import { currentLocale } from "./core/i18n"
 import { readFile } from "ags/file"
 import { exec, execAsync } from "ags/process"
 import agentConfig from "./core/AgentConfig"
+import agentService from "./core/AgentService"
 import appService, { type AppData } from "./core/AppService"
 import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue } from "./core/ConfigRegistry"
 import { registerConfigEntries } from "./config-entries"
@@ -238,6 +239,26 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
   toggleAgent: {
     desc: "Toggle the built-in Assistant island (the conversational agent). Opens the empty state if no provider is configured (Settings → AI)",
     run: () => void status.toggleIsland(ISLAND_AGENT),
+  },
+  agentNewConversation: {
+    // DELIBERATELY OUT OF THE ASSISTANT'S OWN REACH: this name is in the daemon's
+    // HIDDEN_ACTIONS, so it never enters run_action's index and run_action cannot
+    // resolve it. The Assistant must not be able to discard its own context — a
+    // reset mid-turn would break the tool_call/tool_result pairing it is standing
+    // on, and "start over" is the user's call, not a move in a turn. Every other
+    // caller keeps it: a terminal (`ags request`) and an MCP client, which is the
+    // point — an eval harness driving the bench is exactly who needs it.
+    desc: "End the Assistant's conversation and begin an empty one — drops BOTH halves (the transcript the user reads and the model's history), in memory and on disk. The programmatic twin of the island's \"New conversation\" button, and the only way to reach a fresh conversation without restarting the shell: deleting the state files under a live shell does nothing, because the shell holds the conversation in memory and rewrites them at the next turn end. Refuses while a turn is in flight — read `dumpState` `ai.assistant` and retry once `busy` is false.",
+    // No alias on purpose: a second name would look covered by the daemon's
+    // denylist without being it — aliases are a FIELD in listActions, never a key,
+    // so they never enter run_action's index and the denylist never sees them.
+    run: () => {
+      if (agentService.busy)
+        return "a turn is in flight — nothing was discarded; wait for dumpState ai.assistant.busy to go false and call again"
+      const turns = agentService.transcript.length
+      agentService.reset()
+      return turns ? `conversation ended — ${turns} turns dropped` : "conversation was already empty"
+    },
   },
   setIsland: {
     desc: "Set the Activity Island to an EXACT state — `setIsland closed` (alias `\"\"`) collapses it to the bar capsule, `setIsland agent|overview|player|battery` opens that mode. Unlike the toggle* commands this is not ambiguous when you cannot see the current state, so it is the one to use programmatically; read the state back from dumpState `overlays.island` / `overlays.islandBounds`. The Assistant runs INSIDE this island: closing it does not end the turn or lose the conversation (the transcript is persisted and redrawn on reopen), so closing it to uncover a control you need to click is safe.",
@@ -658,6 +679,17 @@ const IPC_COMMANDS: Record<string, IpcCommand> = {
             allowMcp: agentConfig.allowMcp,
             allowComputerUse: agentConfig.allowComputerUse,
             allowComputerControl: agentConfig.allowComputerControl,
+            // The built-in Assistant's LIVE conversation, not a gate. Added for
+            // agentNewConversation, whose refusal has to name something a caller
+            // can actually poll — a refusal that names no next step is the defect
+            // this surface keeps re-learning. Costs the Assistant nothing: it
+            // cannot call dumpState (HIDDEN_ACTIONS), only outside clients can.
+            assistant: {
+              configured: agentService.configured(),
+              busy: agentService.busy,
+              state: agentService.state,
+              turns: agentService.transcript.length,
+            },
           },
           overlays: {
             controlCenter: status.cc_open,

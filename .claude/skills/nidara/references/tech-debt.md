@@ -1751,12 +1751,21 @@ A/B it on the same model with a fresh conversation each run, report the token co
 falsified theory in #39 (removing "Off by default" changed nothing). **Unproven; do not land it as
 an obvious win.**
 
-**(b) There is no IPC verb to start a new conversation.** The island has a button; `listActions` has
-`toggleAgent` and nothing else. Every bench run — and any future eval harness — has to stop the
-shell, delete `transcript.json`/`session.json` and start it again, because the shell rewrites them
-on exit. A `agentNewConversation` verb would be three lines, but note it would have to be **gated**
-for the same reason `agentSend` would be: it spends the user's API budget by making the next turn
-cost a full uncached prefix.
+**(b) ~~There is no IPC verb to start a new conversation.~~ RESOLVED 2026-08-01 —
+`agentNewConversation`.** See `state-and-ipc.md`. Two things this item got wrong, both worth keeping:
+
+- **It is NOT gated, and equating it with `agentSend` was the error.** `agentSend` *causes* a turn,
+  so it spends the user's API budget directly; this one only resets state — the next turn pays an
+  uncached prefix, but only if a human sends one. The control it actually needs is the opposite kind:
+  **who may call it**, not how much it may spend. It is in the daemon's `HIDDEN_ACTIONS`, so the
+  Assistant cannot reach it (a mid-turn reset would strand the `tool_call` whose `tool_result` the
+  next request must carry), while a terminal and an MCP client can. A permission toggle would have
+  bought nothing here and left the real hazard — the model calling it on itself — wide open.
+- **The stated reason the old dance was needed was wrong.** The shell does not rewrite the state
+  files on exit (`saveTranscript()` fires only at turn end); it holds the conversation **in memory**,
+  which is why deleting the files under a live shell is silently undone. Same conclusion, different
+  mechanism — and the difference matters, because "it writes on exit" implies deleting files after a
+  stop is unreliable, and it is not.
 
 **(c) `collapseContained` has no test and cannot easily get one.** It needs a live AT-SPI tree;
 `agent-loop` stubs the helpers and never reaches the resolver. It is a pure function of boxes, so a
