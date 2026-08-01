@@ -156,7 +156,10 @@ function mediaActivity(): IslandActivity {
 // ── Screen recording: pulsing dot + elapsed timer ────────────────────────────
 // Mirrors the CC indicator (same status.recording source, same danger dot
 // language) in the island's compact. No expanded mode of its own — Stop lives
-// in the CC banner; clicking the capsule falls through to the overview.
+// in the CC banner, so a click OPENS THE CONTROL CENTER: the only place the
+// recording can actually be acted on. (It used to fall through to the workspace
+// overview, a leftover from when the overview was the capsule's default
+// identity — an unrelated surface answering the click, user-caught 2026-08-01.)
 function recActivity(): IslandActivity {
     // The elapsed label derives from one shared start timestamp: ghost twins
     // only paint during morph frames, and they must show the SAME time as the
@@ -196,6 +199,7 @@ function recActivity(): IslandActivity {
     return {
         id: "rec",
         priority: 20,
+        onExpand: () => status.toggleCC(),
         compact: makeForm(),
         makeGhost: () => makeForm({ ghost: true }),
         // The same pulsing danger dot the compact and the CC badge use — a

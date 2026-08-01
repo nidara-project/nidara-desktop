@@ -84,9 +84,18 @@ export interface IslandActivity {
         makeGhost: () => Gtk.Widget
         getSource: () => Gtk.Widget | null
     }
-    /** Expanded mode opened by clicking the capsule while this activity
-     *  fronts. Omit = the click falls back to the workspace overview. */
+    /** Expanded mode opened by clicking the capsule (or this activity's chip)
+     *  while it fronts. Omit = there is no island surface for it, and the click
+     *  falls to `onExpand`. It does NOT fall back to the workspace overview:
+     *  that fallback made sense only while the overview was the capsule's
+     *  default identity, and once the dots became an activity with a mode of
+     *  their own it just meant an unrelated surface answering the click
+     *  (user-caught 2026-08-01 on the recording pill). */
     expandMode?: string
+    /** What a click does when this activity has no island mode of its own —
+     *  the destination where the user can actually act on it. Recording sends
+     *  you to the Control Center, which is where its Stop lives. */
+    onExpand?: () => void
     /** HIGH-priority only: expand automatically when this activity TAKES the
      *  front (once per takeover — closing the island while the condition
      *  persists must not re-open it). */
@@ -159,9 +168,17 @@ export function ActivityIsland() {
     const dotsAct = activities.find(a => a.id === DOTS_ID)!
 
     // Expansion is EXPLICIT and follows the compact: the capsule opens what it
-    // is currently showing. The overview always stays reachable via Super+W.
+    // is currently showing — its own island mode, or, for an activity that has
+    // none, wherever the user can actually act on it (`onExpand`). Nothing at
+    // all if it has neither: answering with an unrelated surface is worse than
+    // not answering. The overview always stays reachable via Super+W, and now
+    // also via the workspaces' own chip.
     let front: IslandActivity | null = null
-    const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleIsland(front?.expandMode ?? ISLAND_OVERVIEW) })
+    const openFront = () => {
+        if (front?.expandMode) status.toggleIsland(front.expandMode)
+        else front?.onExpand?.()
+    }
+    const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => openFront() })
     // Live dot refs for the morph: ghosts lerp FROM these bounds. (While the
     // compact shows another activity the dots are unmapped and MorphRevealer
     // lets the overview's landing dots ride the content fade instead.)
@@ -195,11 +212,15 @@ export function ActivityIsland() {
     // user-caught 2026-07-20). Two deliberate steps: mutate, then open. Shared
     // by auto-expand and by a chip click, which need exactly the same beat.
     const openAfterSwap = (a: IslandActivity) => {
-        if (!a.expandMode) return
+        if (!a.expandMode && !a.onExpand) return
         if (autoExpandTimer !== null) GLib.source_remove(autoExpandTimer)
         autoExpandTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, COMPACT_SWAP_MS + 80, () => {
             autoExpandTimer = null
-            if (front === a && a.isLive()) status.island_mode = a.expandMode!
+            // Still the front and still live: the beat is long enough for the
+            // world to have moved on (the turn ended, the battery recovered).
+            if (front !== a || !a.isLive()) return GLib.SOURCE_REMOVE
+            if (a.expandMode) status.island_mode = a.expandMode
+            else a.onExpand!()
             return GLib.SOURCE_REMOVE
         })
     }
@@ -243,10 +264,8 @@ export function ActivityIsland() {
 
     // A chip click: take the front AND open. Not just open — the row's whole
     // claim is that the capsule shows what you are dealing with, so picking one
-    // has to move it there. Activities with no mode of their own (a capture,
-    // whose Stop lives in the CC banner) promote and stop there rather than
-    // opening the overview, which is what the capsule's own fallback would have
-    // done and would read as the wrong surface answering the click.
+    // has to move it there. An activity with no island mode of its own opens
+    // wherever it can actually be acted on instead (`onExpand`).
     const promote = (a: IslandActivity) => {
         // Only a LIVE activity can be pinned. The pin settles who owns the
         // capsule among things that are RUNNING; a merely INDICATED chip (the
@@ -261,6 +280,8 @@ export function ActivityIsland() {
             openAfterSwap(a)
         } else if (a.expandMode) {
             status.island_mode = a.expandMode
+        } else {
+            a.onExpand?.()
         }
     }
     // ── The indicator row ────────────────────────────────────────────────────
