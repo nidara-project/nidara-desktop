@@ -172,11 +172,41 @@ export function ActivityIsland() {
     let background: IslandActivity[] = []
     const backgroundSubs: Array<() => void> = []
     let autoExpandTimer: number | null = null
+    // A chip click PINS its activity to the front, because priority is a guess
+    // about what matters and a click is not. The pin outlives every ordinary
+    // change and ends only when the user picks something else or the pinned
+    // activity dies — otherwise "put the workspaces back" would last exactly
+    // until the next track change.
+    let pinned: IslandActivity | null = null
+
+    // Open a mode ONE BEAT after the compact mutation, never in the same tick:
+    // the crossfade, the pill's width interpolation and the new page's first
+    // allocation must LAND before the morph reads the capsule as its source.
+    // Expanding immediately grew the island out of a still-resizing pill and
+    // dissolved a compact form the user never saw settle (a phantom red % —
+    // user-caught 2026-07-20). Two deliberate steps: mutate, then open. Shared
+    // by auto-expand and by a chip click, which need exactly the same beat.
+    const openAfterSwap = (a: IslandActivity) => {
+        if (!a.expandMode) return
+        if (autoExpandTimer !== null) GLib.source_remove(autoExpandTimer)
+        autoExpandTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, COMPACT_SWAP_MS + 80, () => {
+            autoExpandTimer = null
+            if (front === a && a.isLive()) status.island_mode = a.expandMode!
+            return GLib.SOURCE_REMOVE
+        })
+    }
+
     const arbitrate = () => {
         const live = activities.filter(a => a.isLive())
         // The dots activity is always live, so `live` is never empty and the
         // compact always has a front.
-        const next = live.reduce((m, a) => (a.priority > m.priority ? a : m))
+        const top = live.reduce((m, a) => (a.priority > m.priority ? a : m))
+        if (pinned && !pinned.isLive()) pinned = null
+        // The pin holds the front against priority — with ONE exception: an
+        // auto-expanding activity (a critical battery) exists to interrupt, so
+        // it takes the front anyway. It does not CLEAR the pin: when the
+        // interruption passes, what the user chose comes back.
+        const next = pinned && !(top.autoExpand && top !== pinned) ? pinned : top
         const back = live.filter(a => a !== next).sort((x, y) => y.priority - x.priority)
         // The front can hold steady while the background changes (music starts
         // under a critical battery), so this is computed before the early-out.
@@ -194,23 +224,20 @@ export function ActivityIsland() {
         // priority leaves a still-live activity's surface open.
         if (prev?.expandMode && status.island_mode === prev.expandMode && !prev.isLive())
             status.island_mode = ""
-        if (front?.autoExpand && front.expandMode) {
-            // SEQUENCED, not immediate: the compact mutation (crossfade + pill
-            // resize + the new page's first allocation) must LAND before the
-            // morph reads the capsule as its source — expanding in the same
-            // tick grew the island out of a still-resizing pill (visible
-            // re-seat) and dissolved a compact form the user never saw settle
-            // (a phantom red % — user-caught 2026-07-20). One beat after the
-            // swap it reads as two deliberate steps: mutate, then open.
-            const a = front
-            if (autoExpandTimer !== null) GLib.source_remove(autoExpandTimer)
-            autoExpandTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, COMPACT_SWAP_MS + 80, () => {
-                autoExpandTimer = null
-                if (front === a && a.isLive()) status.island_mode = a.expandMode!
-                return GLib.SOURCE_REMOVE
-            })
-        }
+        if (front.autoExpand) openAfterSwap(front)
         if (backChanged) for (const cb of backgroundSubs) cb()
+    }
+
+    // A chip click: take the front AND open. Not just open — the row's whole
+    // claim is that the capsule shows what you are dealing with, so picking one
+    // has to move it there. Activities with no mode of their own (a capture,
+    // whose Stop lives in the CC banner) promote and stop there rather than
+    // opening the overview, which is what the capsule's own fallback would have
+    // done and would read as the wrong surface answering the click.
+    const promote = (a: IslandActivity) => {
+        pinned = a
+        arbitrate()
+        openAfterSwap(a)
     }
     // ── The indicator row ────────────────────────────────────────────────────
     // The live activities that are NOT fronting, as chips beside the capsule —
@@ -233,10 +260,9 @@ export function ActivityIsland() {
         glyph.valign = Gtk.Align.CENTER
         // Same glass recipe as the capsule — a sibling shape, not a new
         // material. `perfect` makes the radius h/2, so at CHIP_W ≈ the row
-        // height it lands as a circle. No hover accent and no click yet: the
-        // row does not promote anything, and a hover highlight would promise
-        // an action that isn't wired.
-        const chip = SquircleContainer({ child: glyph, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, perfect: true })
+        // height it lands as a circle. Same hover accent too: a chip is a
+        // control, and it answers a click the way the capsule does.
+        const chip = SquircleContainer({ child: glyph, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => promote(a) })
         chip.width_request = CHIP_W
         chip.margin_start = CHIP_GAP
         // Gtk.Revealer, not ScaleRevealer: this is a HORIZONTAL appearance and
