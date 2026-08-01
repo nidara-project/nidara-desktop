@@ -1104,6 +1104,30 @@ here and it is one wrapper mode + one tool in each consumer. Phase 1 — percept
   - **Grid text is per-line rstripped** (1402 of 5432 chars on one screen were width padding).
     Lossless on a grid, so it buys back a quarter of the budget; **not** applied to plain text
     widgets, where a trailing space can be something someone typed.
+- **A control ADOPTS the value it displays (`foldValueCarriers`).** GTK4 puts a control's text in a
+  CHILD — a combo box's entry, a spin button's field — so flattened it lands as `text: null` on the
+  control plus a separate anonymous node, tied to it by nothing but geometry. Any role filter then
+  keeps the control and drops the carrier: `match:"combo box"` answered with seven nameless boxes and
+  the value nowhere, the model reported the text "not available through the accessibility interface"
+  with it ONE NODE AWAY, and recovering cost a 23 KB whole-window dump (bench, 2026-08-01). A control
+  with nothing to read now adopts the text/value of a descendant that fills it, and that descendant is
+  dropped.
+  - **Containment, NOT equality** — the same lesson as `collapseContained`, and getting it wrong cost
+    a debugging pass here too: a combo box is 405 px wide and its entry 369, because the arrow takes
+    the rest. The test is "inside the host and ≥ half its area"; the area floor is what stops a list
+    item in a scroll pane from being read as the pane's value.
+  - Only ANONYMOUS descendants fold (one with an accessible name is addressable in its own right),
+    and the action helpers walk the live AT-SPI tree themselves — nothing here can make a control
+    unreachable.
+  - **It does not manufacture coverage.** A plain `GtkDropDown` showing "Left" is, verified raw,
+    panels all the way down with no name and no text anywhere: the value is simply not in AT-SPI.
+    There the honest answer really is "I cannot see it", and that is what the model will get.
+- **A name-addressed tool must name the coordinate-addressed one.** `do_app_action` aims by accessible
+  name, and an app can be full of controls that have none (GTK4's own widget factory: nameless
+  switches, combo boxes, tabs). No wording about picking a *better* name can rescue that — on the
+  bench the model spent three steps here, twice sending an EMPTY node name. Both the miss and the
+  omitted-node case now point at `click_at` + the `bounds` from `query_app`. An omitted argument is a
+  SIGNAL (the caller had nothing to give), not a slip; restating the signature just buys a third try.
 - **ONE APP WEARS THREE NAMES, and every helper must answer to all three.** Hyprland's class
   (`org.gtk.WidgetFactory4` — what `list_windows` and `launch_app` hand back), AT-SPI's app name
   (`gtk4-widget-factory` — what `query_app` sees) and the `.desktop` name (`Widget Factory`). The

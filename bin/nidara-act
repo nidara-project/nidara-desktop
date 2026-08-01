@@ -241,11 +241,20 @@ function main() {
             emit({ error: `no app matching "${app}" is running — \`apps\` lists the accessible applications right now`, apps })
             return
         }
+        // The third possibility this used to leave out: the control is right there
+        // and simply HAS NO NAME. A whole app can be like that — GTK4's own widget
+        // factory exposes nameless switches, combo boxes and tabs — and this helper
+        // aims by name only, so no wording about picking a better name can rescue
+        // it. On the bench 2026-08-01 the model burned three steps here, twice
+        // sending an EMPTY node name, because nothing said the door was elsewhere.
+        // A name-addressed tool that cannot name the coordinate-addressed one is a
+        // dead end that reads like a naming mistake.
         emit({
             error: `no showing node named "${nodeName}"${roleFilter ? ` (role ${roleFilter})` : ""} found in app "${app}"`
                 + (showing.length
                     ? " — `showing` lists the short, single-line names on screen right now (control labels); pick one VERBATIM. Not there? The control may only appear once something else is set, or its name is long/multi-line — then use query_app with a match."
-                    : " — nothing label-like is showing; check the right window is focused, or use query_app to see the tree."),
+                    : " — nothing label-like is showing; check the right window is focused, or use query_app to see the tree.")
+                + " If query_app shows the control with no name at all, it cannot be reached from here: click it by position instead, with click_at and the `bounds` from query_app.",
             showing,
         })
         return

@@ -1463,6 +1463,16 @@ function execTool(tu) {
             case "do_app_action": {
                 if (!computerGate().act) return { ok: false, content: GATE_ACT_OFF }
                 const i = tu.input || {}
+                // An OMITTED node is a signal, not a slip: it means the caller had
+                // no name to give, which is what a nameless control looks like from
+                // the outside. Measured on the bench 2026-08-01 — the model sent an
+                // empty node twice in one turn against a switch that has no
+                // accessible name. Restating the signature only invites a third try,
+                // so name the tool that does not need a name.
+                if (i.app && i.action && !i.node)
+                    return { ok: false, content: "do_app_action aims by accessible NAME, and this call had none. "
+                        + "If the control has no name in query_app (`id: null`), no name will work: click it by "
+                        + "position with click_at, passing the `bounds` query_app gave for it." }
                 if (!i.app || !i.node || !i.action)
                     return { ok: false, content: "do_app_action needs app, node and action." }
                 return capResult(helperResult("nidara-act",

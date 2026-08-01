@@ -245,6 +245,67 @@ function isInteresting(n) {
     return !!(n.id || n.text || n.actions.length || n.value || INTERACTIVE_ROLES.has(n.type))
 }
 
+// ── a control adopts the value it displays ─────────────────────────────────────
+// A control that SHOWS a value usually does not CARRY it: GTK4 puts the text in a
+// child (a combo box's entry, a spin button's field). Flattened, that leaves the
+// control with `text: null` and the value in a separate node that nothing but
+// geometry ties back to it — and any role filter then keeps the control and drops
+// the child. Measured on the bench 2026-08-01: `match:"combo box"` answered with
+// seven nameless boxes and the value nowhere, the model reported the text was "not
+// available through the accessibility interface" while it sat ONE NODE AWAY, and
+// recovering cost a 23 KB whole-window dump that rode on every later step.
+//
+// So a control with nothing to read adopts the text/value of a descendant that
+// occupies essentially the same box, and that descendant is dropped. Same
+// "containment, not proximity" rule as nidara-click's collapseContained, applied
+// to perception instead of resolution. Two things make it safe to drop the child:
+// only ANONYMOUS ones are folded (a node with an accessible name is addressable in
+// its own right), and the action helpers walk the live AT-SPI tree themselves —
+// nothing here can make a control unreachable.
+// CONTAINMENT, not equality — the distinction cost a debugging pass. A combo box
+// is 405 px wide and the entry that holds its text is 369: the dropdown arrow
+// takes the rest, so the boxes are nowhere near equal. What identifies the value
+// carrier is that it fills MOST of its host. The area floor is what keeps a list
+// item inside a scroll pane, or one row of a table, from being mistaken for it.
+const BOX_SLACK = 4         // px
+const FILL_RATIO = 0.5      // the carrier occupies at least half its host
+
+function fillsHost(host, cand) {
+    if (!host || !cand) return false
+    const [hx, hy, hw, hh] = [host.x ?? 0, host.y ?? 0, host.w ?? 0, host.h ?? 0]
+    const [cx, cy, cw, ch] = [cand.x ?? 0, cand.y ?? 0, cand.w ?? 0, cand.h ?? 0]
+    if (hw <= 0 || hh <= 0 || cw <= 0 || ch <= 0) return false
+    const inside = cx >= hx - BOX_SLACK && cy >= hy - BOX_SLACK
+        && cx + cw <= hx + hw + BOX_SLACK && cy + ch <= hy + hh + BOX_SLACK
+    return inside && (cw * ch) >= FILL_RATIO * (hw * hh)
+}
+
+function foldValueCarriers(nodes) {
+    const drop = new Set()
+    for (let i = 0; i < nodes.length; i++) {
+        const host = nodes[i]
+        if (drop.has(i) || host.text || host.value) continue
+        if (!INTERACTIVE_ROLES.has(host.type)) continue
+        // A descendant's path is the host's path plus the host's own tag, and the
+        // walk is depth-first, so the subtree is contiguous from here — stop at the
+        // first node outside it rather than scanning the rest of the window.
+        const tag = host.type + (host.id ? `#${host.id}` : "")
+        const prefix = host.path ? `${host.path} > ${tag}` : tag
+        for (let j = i + 1; j < nodes.length; j++) {
+            const cand = nodes[j]
+            if (typeof cand.path !== "string" || !cand.path.startsWith(prefix)) break
+            if (drop.has(j) || cand.id) continue
+            if (!cand.text && !cand.value) continue
+            if (!fillsHost(host.bounds, cand.bounds)) continue
+            if (cand.text) host.text = cand.text
+            if (cand.value && !host.value) host.value = cand.value
+            drop.add(j)
+            break
+        }
+    }
+    return drop.size ? nodes.filter((_, i) => !drop.has(i)) : nodes
+}
+
 // ── tree walk ──────────────────────────────────────────────────────────────────
 
 function walk(acc, windowLabel, path, depth, out, startTime) {
@@ -407,10 +468,11 @@ function main() {
         return
     }
 
-    const out = []
+    const walked = []
     const startTime = GLib.get_monotonic_time() / 1000
     for (const { frame, label } of targets)
-        walk(frame, label, "", 0, out, startTime)
+        walk(frame, label, "", 0, walked, startTime)
+    const out = foldValueCarriers(walked)
 
     const result = {
         source: "atspi",
