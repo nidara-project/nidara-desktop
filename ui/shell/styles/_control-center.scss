@@ -182,6 +182,20 @@
     font-variant-numeric: tabular-nums;
 }
 
+// The same clock as the hero of the detail page, where it is the whole content
+// above Stop rather than a subtitle. Plain text colour: the page is REACHED from
+// a tile that already says "recording", and a red number is just a number in a
+// colour that means danger — nothing here is dangerous. Red in this shell is for
+// the small status marks (island dot, CC badge) and for revocation, nowhere else.
+.rec-elapsed-big {
+    font-size: $fs-title-2;
+    font-weight: $fw-semibold;
+    color: var(--nidara-text);
+    font-variant-numeric: tabular-nums;
+    margin-top: 6px;
+    margin-bottom: 2px;
+}
+
 /* --- Edit Mode Controls --- */
 .cc-edit-pill {
     label {

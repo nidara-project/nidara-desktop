@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import { PANEL_W } from "../common/widget-kit"
+import { NidaraButton } from "../../lib/nidara-kit/button"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
@@ -8,8 +9,7 @@ import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/T
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
-import status from "../core/Status"
-import { DANGER_HEX } from "../../lib/status-colors"
+import status, { recordingElapsed } from "../core/Status"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -69,34 +69,36 @@ export async function stopRecording() {
 }
 
 // ── Recording elapsed timer ────────────────────────────────────────────────────
+// The text comes from core (recordingElapsed → status.recordingStartedAt): the
+// SHARED stamp, never a local one, so a surface built mid-capture shows the true
+// elapsed time instead of restarting (or freezing) at 0:00.
+
+// Drive `apply` once now, on every recording state change, and once a second
+// while recording. `full` is true for the two former (the state may have
+// flipped: re-read everything) and false for a mere tick (only the clock moved).
+// Returns the teardown for the caller's unrealize.
+function driveElapsed(apply: (full: boolean) => void): () => void {
+    let timerId = 0
+    const stopTick = () => { if (timerId) { GLib.source_remove(timerId); timerId = 0 } }
+    const sync = () => {
+        apply(true)
+        stopTick()
+        // Ticks ONLY while recording — an idle timer would repaint a blurred
+        // surface once a second for nothing.
+        if (status.recording) timerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+            apply(false)
+            return GLib.SOURCE_CONTINUE
+        })
+    }
+    const sigId = status.connect("notify::recording", sync)
+    sync()   // initial sync: the signal may have fired long before this was built
+    return () => { safeDisconnect(status, sigId); stopTick() }
+}
 
 function makeElapsedLabel(): Gtk.Label {
-    const label = new Gtk.Label({ label: "0:00", css_classes: ["rec-elapsed"] })
-    let startTime = 0
-    let timerId = 0
-
-    const onRecordingChanged = () => {
-        if (status.recording) {
-            startTime = Date.now()
-            timerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
-                const elapsed = Math.floor((Date.now() - startTime) / 1000)
-                const m = Math.floor(elapsed / 60)
-                const s = elapsed % 60
-                label.label = `${m}:${String(s).padStart(2, "0")}`
-                return GLib.SOURCE_CONTINUE
-            })
-        } else {
-            if (timerId) { GLib.source_remove(timerId); timerId = 0 }
-            label.label = "0:00"
-        }
-    }
-
-    const sigId = status.connect("notify::recording", onRecordingChanged)
-    label.connect("unrealize", () => {
-        safeDisconnect(status, sigId)
-        if (timerId) { GLib.source_remove(timerId); timerId = 0 }
-    })
-
+    const label = new Gtk.Label({ label: recordingElapsed(), css_classes: ["rec-elapsed-big"] })
+    const dispose = driveElapsed(() => { label.label = recordingElapsed() })
+    label.connect("unrealize", dispose)
     return label
 }
 
@@ -131,7 +133,13 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
     audioRow.append(audioLabel)
     audioRow.append(audioSwitch)
 
-    const startBtn = new Gtk.Button({ label: t("widget.screenrecord.start"), css_classes: ["suggested-action"], hexpand: true })
+    // NidaraButton (unscoped `button.nidara-btn`) rather than Adwaita's
+    // `suggested-action`, which only looks right inside the two panel scopes that
+    // happen to restyle it — see nidara-kit/button.ts. The segmented mode row
+    // above keeps `suggested-action` on purpose: there it is not a button style
+    // but the SELECTED marker of `.nidara-seg-btn`, which owns its own rule.
+    const startBtn = NidaraButton({ label: t("widget.screenrecord.start"), variant: "primary" })
+    startBtn.hexpand = true
     startBtn.connect("clicked", () => startRecording(selectedMode, withAudio, onClose))
 
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: PANEL_W.sm })
@@ -163,41 +171,27 @@ function buildContent(size: WidgetSize): Gtk.Widget {
     // through buildCapsuleInner + wrapCapsuleTile (like screenshot/clipboard) lands
     // the icon/text on the exact same grid. Idle = action tile (name, no sub);
     // recording = "Recording…" + a live elapsed timer in the subtitle slot. The
-    // pulsing danger-red fill itself is BaseIsland's getActive/activeColorHex (see
-    // the widget registration below) — this content only owns icon/text, not any
+    // accent fill itself is BaseIsland's getActive (see the widget registration
+    // below) — this content only owns icon/text, not any
     // background tint anymore (the old .rec-active-bg icon-badge tint and
     // .rec-stop-icon/.rec-label colour overrides are gone: the WHOLE capsule fills
     // now, and .rec-stop-icon was dead CSS anyway — colour never applies to a
     // Gtk.Image, only -gtk-icon-filter does, see design-system.md).
-    const pad2 = (n: number) => String(n).padStart(2, "0")
-    let recStart = 0
-    const elapsedStr = () => {
-        const s = Math.max(0, Math.floor((Date.now() - recStart) / 1000))
-        return `${Math.floor(s / 60)}:${pad2(s % 60)}`
-    }
     const getIcon  = () => status.recording ? Icons.recordStop : Icons.record
     const getTitle = () => status.recording ? t("widget.screenrecord.recording") : t("widget.screenrecord.name")
-    const getSub   = () => status.recording ? elapsedStr() : ""
+    const getSub   = () => status.recording ? recordingElapsed() : ""
 
     const inner = buildCapsuleInner(getIcon, getTitle, getSub)
 
-    let tickId = 0
-    const stopTick = () => { if (tickId) { GLib.source_remove(tickId); tickId = 0 } }
-    const syncRec = () => {
-        const rec = status.recording
-        if (rec) recStart = Date.now()
+    // One driver for both jobs: a `full` pass re-reads icon/title/sub (the state
+    // flipped), a tick only moves the subtitle's digits.
+    const dispose = driveElapsed((full) => {
+        if (!full) { inner.subLabel.label = getSub(); return }
         inner.update()                               // re-reads icon/title/sub
-        if (rec) inner.subLabel.add_css_class("rec-elapsed")
+        if (status.recording) inner.subLabel.add_css_class("rec-elapsed")
         else inner.subLabel.remove_css_class("rec-elapsed")
-        stopTick()
-        if (rec) tickId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
-            inner.subLabel.label = getSub()
-            return GLib.SOURCE_CONTINUE
-        })
-    }
-    const sigId = status.connect("notify::recording", syncRec)
-    inner.box.connect("unrealize", () => { safeDisconnect(status, sigId); stopTick() })
-    syncRec()
+    })
+    inner.box.connect("unrealize", dispose)
 
     return wrapCapsuleTile(inner.box)
 }
@@ -206,10 +200,14 @@ function buildContent(size: WidgetSize): Gtk.Widget {
 
 function buildBarContent(): Gtk.Widget {
     const image = new Gtk.Image({ gicon: Icons.record, pixel_size: 16, margin_start: 16, margin_end: 16, css_classes: ["nd-icon"] })
+    // The GLYPH is the whole signal: record ⇄ stop, matching what the click now
+    // does. No colour class — `.rec-bar-active` had no rule anywhere and could
+    // never have had one: `color:` does not recolour a Gtk.Image unless the icon
+    // filename ends in -symbolic (design-system.md), exactly like the
+    // `.rec-stop-icon` that was deleted for the same reason. The red belongs to
+    // the island dot two capsules away, which is where the state is stated.
     const syncState = () => {
         image.gicon = status.recording ? Icons.recordStop : Icons.record
-        if (status.recording) image.add_css_class("rec-bar-active")
-        else image.remove_css_class("rec-bar-active")
     }
     const sigId = status.connect("notify::recording", syncState)
     image.connect("unrealize", () => { safeDisconnect(status, sigId) })
@@ -218,22 +216,44 @@ function buildBarContent(): Gtk.Widget {
 }
 
 // ── Bar expansion panel content ───────────────────────────────────────────────
-
+// SETUP ONLY. While a capture is live the bar pill never opens this panel — a
+// click on it stops the recording outright (see barClick below), so the panel
+// has no "recording" page to switch to and no Gtk.Stack sizing everything to
+// its largest child. The elapsed time lives in the Activity Island, which is
+// always on screen; repeating it in a panel you have to open first was the
+// duplicate, not the service.
 function buildBarExpanded(onClose: () => void): Gtk.Widget {
-    // Stack switches between setup (idle) and active (recording) views
-    const stack = new Gtk.Stack({ transition_type: Gtk.StackTransitionType.CROSSFADE, transition_duration: 150 })
+    return buildRecordPopoverContent(onClose)
+}
+
+// ── CC detail page ────────────────────────────────────────────────────────────
+// The Control Center's recording surface: setup while idle, elapsed + Stop while
+// recording. Unlike the bar pill, a CC tile tap must not be destructive (it is
+// the same tap that merely opens a detail everywhere else), so Stop is a real
+// button here.
+function buildCCDetail(onClose: () => void): Gtk.Widget {
+    // vhomogeneous:false — a Gtk.Stack is homogeneous BY DEFAULT and would size
+    // both pages to the taller one (setup), leaving the two-control recording
+    // page floating in a panel built for a mode row + a switch + a button.
+    // interpolate_size animates the shrink instead of snapping it.
+    const stack = new Gtk.Stack({
+        transition_type: Gtk.StackTransitionType.CROSSFADE, transition_duration: 150,
+        vhomogeneous: false, interpolate_size: true, valign: Gtk.Align.START,
+    })
 
     // ── Idle page ──────────────────────────────────────────────
-    const idlePage = buildRecordPopoverContent(onClose)
-    stack.add_named(idlePage, "idle")
+    stack.add_named(buildRecordPopoverContent(onClose), "idle")
 
     // ── Recording page ─────────────────────────────────────────
-    const elapsed = makeElapsedLabel()
-    const stopBtn = new Gtk.Button({ label: t("widget.screenrecord.stop"), css_classes: ["destructive-action"], hexpand: true })
+    // `primary`, NOT `danger`: red on a button promises the click destroys
+    // something, and stopping a capture you started on purpose is how the flow
+    // finishes — it writes the file. Same role Start has on the other page, so
+    // the same button. Danger is left for deletion.
+    const stopBtn = NidaraButton({ label: t("widget.screenrecord.stop"), variant: "primary" })
+    stopBtn.hexpand = true
     stopBtn.connect("clicked", () => stopRecording())
     const recBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: PANEL_W.sm })
-    recBox.append(elapsed)
-    recBox.append(new Gtk.Separator())
+    recBox.append(makeElapsedLabel())
     recBox.append(stopBtn)
     stack.add_named(recBox, "recording")
 
@@ -261,34 +281,30 @@ const screenrecordWidget: AtomicWidget = {
     buildContent,
     buildBarContent,
     buildBarExpanded,
-    buildCCDetail: buildBarExpanded,
+    buildCCDetail,
     ccDetailRows: 2,
-    // Whole-capsule danger-red fill while recording, pulsing — same getActive/
-    // getFill mechanism as the other toggle tiles, but with a FIXED colour
-    // (activeColorHex) since "recording" must read as urgent regardless of the
-    // user's accent, and a live-varying activeAlpha for the pulse (1.4s period,
-    // matching the old CSS rec-pulse-cc keyframe it replaces). watchActive ticks a
-    // ~15fps redraw only while actually recording — no timer at all otherwise.
+    // The bar pill is a STOP BUTTON while recording: one click ends the capture,
+    // no panel, no confirmation. Stopping is the only thing you want from that
+    // icon once a capture is live, and making you open a panel to reach a button
+    // was two clicks for a one-click intent. Idle → returns false → the normal
+    // expansion panel (setup) opens.
+    barClick: () => {
+        if (!status.recording) return false
+        void stopRecording()
+        return true
+    },
+    // Recording fills the capsule with the ACCENT, exactly like every other tile
+    // that is switched on (dark_mode, night_light, focus…) — no `activeColorHex`,
+    // no pulse. It used to be a throbbing DANGER_HEX, which was two mistakes at
+    // once (2026-08-02): the throb meant a ~15 fps Cairo redraw of a tile on a
+    // blurred surface for the whole capture, and the red said "alarm" about a
+    // tile that is simply a control in its on state. The place red still earns is
+    // the STATUS mark — the island dot, the CC badge — where it is 8px and means
+    // "this is happening whether or not you are looking". A tile is not that.
     getActive: () => status.recording,
-    activeColorHex: DANGER_HEX,
-    activeAlpha: () => 0.75 + 0.25 * Math.sin(Date.now() * (2 * Math.PI / 1400)),
     watchActive: (cb) => {
-        let tickId = 0
-        const stopTick = () => { if (tickId) { GLib.source_remove(tickId); tickId = 0 } }
-        const startTick = () => {
-            if (tickId) return
-            tickId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 66, () => {
-                if (!status.recording) { tickId = 0; return GLib.SOURCE_REMOVE }
-                cb()
-                return GLib.SOURCE_CONTINUE
-            })
-        }
-        const sigId = status.connect("notify::recording", () => {
-            cb()
-            if (status.recording) startTick(); else stopTick()
-        })
-        if (status.recording) startTick()
-        return () => { safeDisconnect(status, sigId); stopTick() }
+        const sigId = status.connect("notify::recording", cb)
+        return () => safeDisconnect(status, sigId)
     },
 }
 

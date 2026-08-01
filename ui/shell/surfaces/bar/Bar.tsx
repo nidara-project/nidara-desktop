@@ -609,6 +609,9 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       row.append(new Gtk.Label({ label: w.name, halign: Gtk.Align.START, hexpand: true }))
       const btn = new Gtk.Button({ child: row, css_classes: ["nidara-menu-row"], hexpand: true })
       btn.connect("clicked", () => {
+        // Same first refusal as a visible pill (see rebuildBarWidgets) — an
+        // overflowed widget must not behave differently from a shown one.
+        if (w.barClick?.()) { status.bar_expanded_id = ""; return }
         if (hasExpand) {
           status.bar_expanded_id = id
         } else if (hasCCDetail) {
@@ -650,11 +653,21 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // cc_edit_mode (not cc_open): while editing the CC the pills stay inert;
       // with the CC merely open, a pill click switches to its surface directly
       // (the bar_expanded_id setter closes the exclusive overlays).
-      const onRelease = hasExpand
-          ? () => { if (status.cc_edit_mode) return; status.bar_expanded_id = status.bar_expanded_id === id ? "" : id }
+      // barClick gets first refusal on EVERY click (asked here, not cached at
+      // build time) so a widget can act directly in a state where opening a panel
+      // would only be in the way — screenrecord stops the capture. See Types.ts.
+      const open = hasExpand
+          ? () => { status.bar_expanded_id = status.bar_expanded_id === id ? "" : id }
           : hasCCDetail
-              ? () => { if (status.cc_edit_mode) return; status.cc_open = true; status.cc_detail_id = id }
+              ? () => { status.cc_open = true; status.cc_detail_id = id }
               : undefined
+      const onRelease = (hasExpand || hasCCDetail || w.barClick)
+          ? () => {
+              if (status.cc_edit_mode) return
+              if (w.barClick?.()) { status.bar_expanded_id = ""; return }
+              open?.()
+          }
+          : undefined
       const capsule = SquircleContainer({
           child: w.buildBarContent(), gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar",
           borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true,

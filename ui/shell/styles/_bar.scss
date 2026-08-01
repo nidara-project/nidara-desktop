@@ -194,18 +194,20 @@ window#nidara-bar-zone {
 
 // ── Status-indicator badge (recording, AI control, …) ─────────────────────────
 // A small dot inside the Control-Center capsule, right of its icon — the
-// always-visible signal; detail + Stop live in the CC banner (.cc-status-*).
-//   armed  — present but idle (AI granted, not acting): subtle, no pulse.
-//   active — happening now (recording / agent acting): full, pulsing.
+// always-visible signal that the CC has something for you (detail/Stop live in
+// the CC itself: the .cc-status-* banner, or the widget tile).
+//   armed  — present but idle (AI granted, not acting): subtle.
+//   active — happening now (recording / agent acting): full.
+// NO animation in either state. A blink here re-blurs the whole 2560×1440 bar
+// surface every frame for as long as the condition lasts (a capture is minutes,
+// not a moment), and it read as an alarm; the opacity step already separates the
+// two states. Keep it that way — see design-system.md on continuous animation.
 .bar-cc-badge {
     border-radius: var(--nidara-radius-pill);
     background: var(--nidara-danger);
     opacity: 0.6;
 
-    &.is-active {
-        opacity: 1;
-        animation: rec-pulse 1.4s ease-in-out infinite;
-    }
+    &.is-active { opacity: 1; }
 }
 
 .bar-overflow-label {
@@ -215,18 +217,25 @@ window#nidara-bar-zone {
     letter-spacing: 0.04em;
 }
 
-@keyframes rec-pulse {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0.3; }
-}
-
 // ── Activity Island: compact activity forms ───────────────────────────────────
 // The capsule's mutated content while an activity is live (media rides the
 // player compact's own Cairo painters; these are the REC and battery forms).
+// Steady, not pulsing — same reasoning as .bar-cc-badge, and the island is the
+// worse offender (its own OVERLAY surface, blurred over the bar). What proves
+// the capture is alive is the clock next to it, which is already ticking.
 .island-rec-dot {
     border-radius: var(--nidara-radius-pill);
     background: var(--nidara-danger);
-    animation: rec-pulse 1.4s ease-in-out infinite;
+}
+
+// The capture card's hero clock (RecordingIsland). Text colour, not danger —
+// the red in that card is the 8px dot beside the title, which is the whole of
+// the shell's red budget for a state that is merely happening.
+.island-rec-clock {
+    font-size: $fs-title-1;
+    font-weight: $fw-semibold;
+    font-variant-numeric: tabular-nums;
+    color: var(--nidara-text);
 }
 
 .island-rec-time {

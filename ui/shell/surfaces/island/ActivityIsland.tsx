@@ -5,10 +5,11 @@ import { MorphRevealer, MorphGlass, MorphPair } from "../../common/MorphRevealer
 import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import { CAPSULE_BORDER } from "../bar/capsule"
 import Theme from "../../core/ThemeManager"
-import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT } from "../../core/Status"
+import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT, ISLAND_RECORDING } from "../../core/Status"
 import WorkspaceOverview, { WO_GLASS } from "../overview/WorkspaceOverview"
 import PlayerIsland, { PLAYER_GLASS } from "./PlayerIsland"
 import BatteryIsland, { BATTERY_GLASS } from "./BatteryIsland"
+import RecordingIsland, { RECORDING_GLASS } from "./RecordingIsland"
 import AgentIsland, { AGENT_GLASS } from "./AgentIsland"
 import { buildActivities, DOTS_ID } from "./IslandActivities"
 
@@ -443,6 +444,13 @@ export function ActivityIsland() {
         id: ISLAND_BATTERY,
         widget: BatteryIsland(),
         glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: BATTERY_GLASS.border, n: BATTERY_GLASS.n, radius: BATTERY_GLASS.radius }),
+    })
+    // No keyboard grab: the capture card is a statement + Stop, dismissed by
+    // outside click / capsule click like the player and the battery alert.
+    registerMode({
+        id: ISLAND_RECORDING,
+        widget: RecordingIsland(),
+        glass: () => ({ alpha: Theme.overlayOpacity, color: chromeGlassColor(), border: RECORDING_GLASS.border, n: RECORDING_GLASS.n, radius: RECORDING_GLASS.radius }),
     })
     // Keyboard grab: the assistant has a text entry (like the overview cursor
     // needs keys, this needs the entry to receive them — the bar grants EXCLUSIVE

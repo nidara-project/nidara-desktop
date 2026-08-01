@@ -231,11 +231,29 @@ belongs to a small dedicated element next to the neutral text, or to a filled ba
 | Tool call rejected (`.agent-tool-fail`) | the 6px dot | `--nidara-text-dim` |
 | Turn ended abnormally (`.agent-error-row`) | the 6px dot | `--nidara-text-dim` |
 | Battery critical | the battery glyph's fill | plain white `%` |
-| Recording active | the whole capsule fills | `--nidara-text` on top |
+| Recording active (island compact, CC badge) | the 8px dot | `--nidara-text` |
 
-Rejected twice now (battery `%` 2026-07-20, assistant errors 2026-07-21 — both caught by the
-user's eye), which is why it is a rule and not a preference. Corollary already documented below:
-once a capsule fills with a semantic colour, do NOT tint the label on top of it as well.
+Rejected three times now (battery `%` 2026-07-20, assistant errors 2026-07-21, the capture card's
+and detail page's clock 2026-08-02 — all three caught by the user's eye), which is why it is a rule
+and not a preference. Corollary already documented below: once a capsule fills with a semantic
+colour, do NOT tint the label on top of it as well.
+
+### And the red BUDGET is smaller than that (2026-08-02, user call: "se tiende a abusar del rojo")
+
+Passing the mark-not-copy test does not earn a colour the right to be red. Red is for exactly two
+things:
+
+1. **A status MARK** — a small dot saying "this is happening whether or not you are looking"
+   (`.island-rec-dot`, `.bar-cc-badge`, the tool-failure dots). Small, steady, never a whole shape.
+2. **The destructive edge of an ACTION** — deletion, and revocation like the AI kill switch.
+
+Everything else that is merely *on* uses the ordinary accent-fill vocabulary, because that is what
+"on" already means in this shell. Screenrecord had drifted into the opposite: a whole capsule filled
+`DANGER_HEX` while recording, a red clock in the detail page, and a `destructive-action` Stop button.
+All three are gone — the tile fills with the plain accent like `dark_mode`/`night_light`/`focus`, the
+clocks are `--nidara-text`, and **Stop is `suggested-action`**: stopping a capture you started on
+purpose is how the flow FINISHES (it writes the file), not something that destroys work. Reserve
+`destructive-action` for a click the user could regret.
 
 ## Shell-skin appearance & opacity (`appearance.shellAppearance` + the glass sliders)
 
@@ -505,6 +523,20 @@ to this in 2026-06):
   same height as a labelled one in a cluster (e.g. details/forget sitting next to Connect),
   instead of looking smaller/odd. Don't hand-roll icon buttons with ad-hoc sizing.
 
+**Never `suggested-action` / `destructive-action` — and know WHY they seem to work.** Those are
+Adwaita classes, and the shell restyles them in exactly two class scopes: `.bar-expansion-panel`
+(`_bar.scss`) and `.cc-detail-panel` (`_control-center.scss`). Inside those two, an Adwaita class
+looks native; **one pixel outside, it renders as raw GTK — Adwaita blue and Adwaita red, colours
+the user never picked.** That is not theoretical: it shipped twice on 2026-08-02, in the island's
+capture card (blue Stop) and in the CC status banner row (red revoke button), both caught on sight
+by the user. `button.nidara-btn` is deliberately UNSCOPED, so `NidaraButton` is the only button
+vocabulary that is correct in every window — bar, island, CC, Settings.
+The ONE legitimate remaining use is `.nidara-seg-btn.suggested-action`, where the class is not a
+button style at all but the SELECTED marker of a segmented control, and `_components.scss` owns
+that rule (screenshot/screenrecord mode rows). Still-unconverted real buttons: `widgets/vpn.ts`,
+`widgets/bluetooth.ts`, `widgets/screenshot.ts`'s save — all currently INSIDE a restyled panel
+scope, so they look right by luck; convert them if you move or touch them (see tech-debt).
+
 For an icon that belongs **next to a row's title** rather than as a trailing control (e.g. a
 lock on a secured Wi-Fi row), pass it as `NidaraRow`'s `titleIcon` arg (threaded through
 `createRow(label, subtitle, widget, titleIcon)`) — don't park it in the trailing control box.
@@ -580,18 +612,32 @@ poller + listener `Set` in `vpn.ts` (`watchVpnActive`), lazily started on first 
 of a `GLib.timeout_add` per built tile instance — cheaper and it's what let the 1×1 icon and the
 capsule badge both go live for free, which they weren't before.
 
-**A FIXED (non-accent) fill colour, and a PULSING one, are both the same mechanism with two more
-optional props — `activeColorHex`/`activeAlpha`, threaded the same way as `getActive`/`getFill`.**
-`screenrecord` is the reference: the recording indicator must read as urgent regardless of which
-accent the user picked, so `activeColorHex: DANGER_HEX` (`lib/status-colors.ts`) overrides the
-live-accent lookup `getActive`/`getFill` use by default. `activeAlpha` accepts `number | (() =>
-number)` — screenrecord passes a getter, `0.75 + 0.25 * Math.sin(Date.now() * (2π/1400))`,
-replacing the old CSS `@keyframes rec-pulse-cc` (1.4s, opacity 1↔0.5) now that the fill is
-Cairo-painted, not CSS. The getter is only ever CALLED while `frac > 0` (i.e. only while
-recording), so it doesn't need its own "am I active" guard. Pulsing needs `watchActive` to do more
-than relay one domain signal: it must ALSO tick a ~15fps redraw timer *while active* so the
-sine wave visibly advances, started/stopped on `notify::recording` (no timer at all while idle —
-same "no session-long timers for hidden work" discipline as `poll.ts`).
+**A FIXED (non-accent) fill colour is available as one more optional prop —
+`activeColorHex`, threaded the same way as `getActive`/`getFill` (`lib/status-colors.ts` holds the
+seeds). NOTHING IN THE SHELL USES IT.** Screenrecord was its only consumer and lost it 2026-08-02:
+a tile that is on fills with the ACCENT like every other tile, and red belongs to the small status
+marks — see the red-budget rule above before reaching for this. `activeAlpha`
+(`number | (() => number)`) likewise exists for a live-varying alpha, and a getter there is how a
+Cairo tile could pulse — **also unused, also not for new code**: screenrecord's
+`0.75 + 0.25·sin(2π t/1400)` plus its ~15 fps redraw timer went the same day, see the indicator
+rule below.
+
+**INDICATORS DO NOT BLINK (2026-08-01, user call).** A condition that lasts minutes — a capture
+running, AI control granted — is marked with a STEADY danger mark, never an animated one.
+Two reasons, and the second is the one that generalises:
+- It reads wrong. A throbbing red capsule is an alarm demanding action; "you are recording" is a
+  state. Liveness is already proven by the elapsed clock ticking beside the mark.
+- **It is a permanent compositor cost.** Every one of these marks sits on a blurred layer (bar,
+  island, CC), and Hyprland re-blurs the whole surface on any repaint — so a 1.4 s CSS opacity
+  keyframe or a 15 fps Cairo redraw means re-blurring 2560×1440 forever, for a dot. This is the
+  general rule from the glow work: **continuous animation costs ≈40 % GPU; momentary is fine,
+  perpetual is not.**
+The three marks are `.bar-cc-badge` (CC capsule, opacity 0.6 armed / 1.0 active — the STEP is what
+distinguishes them, no keyframe), `.island-rec-dot` (island compact + its indicator chip), and the
+screenrecord tile's steady `DANGER_HEX` fill. The one surviving `@keyframes rec-pulse` user is
+`.cc-status-dot.is-active` (`_control-center.scss`, where the keyframe now lives): a few seconds of
+"the agent just acted", inside a surface that only paints while open — momentary, and invisible
+when the CC is closed.
 
 **The "something is happening" pulse — `common/PulseDots.ts`.** The shell's one working
 indicator: `makePulseDots()` (the three-dot typing idiom, Cairo) and `pulseOpacity(widget)`
@@ -605,13 +651,13 @@ the island hides rather than destroys, so a widget stays "active" while invisibl
 otherwise tick forever behind a closed panel. Opacity, never `transform: scale` (commandment
 3), and alpha is what reads as breathing anyway.
 
-Migrating `screenrecord`
+(Historical, kept for the CSS-bug lesson in it.) Migrating `screenrecord`
 also retired its OWN one-off CSS states (`.rec-active-bg` icon-badge tint + keyframe, same
 badge-only-not-whole-capsule pattern VPN had before), and deleted `.rec-stop-icon { color: danger
 }` outright — dead CSS on a `Gtk.Image`, the exact bug class documented in the icon-tinting entry
 above, just not caught until this pass. The label/subtitle no longer get a manual danger-red
-override either: once the WHOLE capsule fills, `--nidara-text`'s default white/black already reads
-fine on top (same reasoning as the split-target badge, same as every other filled toggle tile) —
+override either: once the WHOLE capsule fills (with the accent, since 2026-08-02),
+`--nidara-text`'s default white/black already reads fine on top (same reasoning as the split-target badge, same as every other filled toggle tile) —
 tinting the text AGAIN on top of a filled background is how the Power.tsx checkmark bug happened
 in the first place.
 

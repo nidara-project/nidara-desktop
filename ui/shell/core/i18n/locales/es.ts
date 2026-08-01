@@ -639,6 +639,9 @@ export default {
     "widget.wifi.row.status": "Estado",
     "widget.wifi.row.disabled": "Desactivado",
 
+    // Activity Island — captura de pantalla en curso
+    "island.recording.title": "Grabando la pantalla",
+
     // Battery widget
     "island.battery.critical": "Batería críticamente baja",
     "island.battery.hint": "Conecta el cargador",

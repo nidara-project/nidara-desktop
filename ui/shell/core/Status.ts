@@ -37,6 +37,7 @@ export class UIStatus extends GObject.Object {
     private _island_mode = ""
     private _about_open = false
     private _recording = false
+    private _recording_started_at = 0
     private _bar_expanded_id = ""
     private _cc_detail_id = ""
 
@@ -162,8 +163,19 @@ export class UIStatus extends GObject.Object {
     public set recording(v: boolean) {
         if (this._recording === v) return
         this._recording = v
+        if (v) this._recording_started_at = Date.now()
         this.notify("recording")
     }
+
+    // When the CURRENT capture started (ms epoch), stamped by the setter above.
+    // The single source of truth for every elapsed timer — the island pill, the
+    // CC tile, the CC detail page. Each used to stamp its OWN start inside its
+    // `notify::recording` handler, which broke twice: a surface BUILT while
+    // already recording never sees the signal (the bar panel is constructed
+    // fresh on open → frozen at 0:00), and one rebuilt mid-capture restarted
+    // the count from zero. Not a GObject property: it only ever changes
+    // together with `recording`, so subscribers watch that one signal.
+    public get recordingStartedAt() { return this._recording_started_at }
 
     public get bar_expanded_id() { return this._bar_expanded_id }
     public set bar_expanded_id(v: string) {
@@ -196,7 +208,20 @@ export class UIStatus extends GObject.Object {
 export const ISLAND_OVERVIEW = "overview"
 export const ISLAND_PLAYER = "player"
 export const ISLAND_BATTERY = "battery"
+export const ISLAND_RECORDING = "recording"
 export const ISLAND_AGENT = "agent"
 
 export const status = new UIStatus()
+
+// The live capture's elapsed time as m:ss, derived from recordingStartedAt.
+// Lives here for the same reason as the mode ids above: the island's compact and
+// the screenrecord widget both paint it, and having the island import the widget
+// would close a cycle (widgets/ imports the CC factories, which import the
+// registry). One stamp, one formatter, no clock disagreeing with another.
+export function recordingElapsed(): string {
+    if (!status.recording) return "0:00"
+    const s = Math.max(0, Math.floor((Date.now() - status.recordingStartedAt) / 1000))
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`
+}
+
 export default status

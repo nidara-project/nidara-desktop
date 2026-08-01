@@ -670,6 +670,9 @@ export default {
     "widget.wifi.row.status": "Status",
     "widget.wifi.row.disabled": "Disabled",
 
+    // Activity Island — live screen capture
+    "island.recording.title": "Recording screen",
+
     // Activity Island — battery-critical alert
     "island.battery.critical": "Battery critically low",
     "island.battery.hint": "Connect the charger",

@@ -50,6 +50,13 @@ export interface AtomicWidget {
                                         // default left-anchored capsule layout (icon+label)
     buildBarContent?: () => Gtk.Widget                      // compact bar variant (icon only)
     buildBarExpanded?: (onClose: () => void) => Gtk.Widget  // bar inline expansion panel
+    // Intercept a click on the bar pill. Return true = handled, the expansion
+    // panel does NOT open; false = fall through to the normal behaviour. Consulted
+    // on every click (not once at build time), so it can answer differently as the
+    // widget's state changes — screenrecord uses it to make the pill a one-click
+    // Stop while a capture is live. Keep it for actions that are unambiguous in
+    // that state; anything needing a choice belongs in the panel.
+    barClick?: () => boolean
     buildCCDetail?: (onClose: () => void) => Gtk.Widget     // CC full-panel detail (no inner scroll)
     ccDetailRows?: number                                   // squircle height in grid rows (default 2)
     // Per-widget settings page. When present, the Settings → Widgets card shows a
