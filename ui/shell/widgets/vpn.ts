@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import { PANEL_W } from "../common/widget-kit"
+import { NidaraButton } from "../../lib/nidara-kit/button"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
@@ -88,9 +89,15 @@ function buildVpnContent(onClose: () => void): Gtk.Widget {
             } else {
                 profiles.forEach(p => {
                     let active = p.active
-                    const btn = new Gtk.Button({
+                    // Connect = affirmative CTA (`primary`); disconnect is
+                    // REVERSIBLE, so neutral — `danger` is for destructive only
+                    // (design-system.md). Was Adwaita's suggested-/destructive-
+                    // action, correct only by virtue of rendering inside
+                    // `.cc-detail-panel`, one of the two scopes that restyle them.
+                    const btn = NidaraButton({
                         valign: Gtk.Align.CENTER,
-                        css_classes: active ? ["destructive-action"] : ["suggested-action"],
+                        pill: true,
+                        variant: active ? "secondary" : "primary",
                         label: active ? t("settings.network.vpn.btn.disconnect") : t("settings.network.vpn.btn.connect"),
                     })
                     btn.connect("clicked", async () => {

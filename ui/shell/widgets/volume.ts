@@ -114,7 +114,12 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
 
     const box = new Gtk.Box({ spacing: 10, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10, valign: Gtk.Align.CENTER })
     const muteImg = new Gtk.Image({ gicon: AudioSvc.targetVolumeIcon(stream), pixel_size: 16, css_classes: ["nd-icon"] })
-    const muteBtn = new Gtk.Button({ child: muteImg, css_classes: ["settings-icon-btn", "flat"], valign: Gtk.Align.CENTER })
+    // `settings-icon-btn` alone: it is a Nidara class, unscoped in _components.scss,
+    // and already paints the whole thing (transparent, accent hover, 28px box).
+    // The Adwaita `flat` that used to ride along added nothing here and only made
+    // the row depend on rendering inside one of the two scopes that restyle
+    // Adwaita classes — the sibling row above never had it.
+    const muteBtn = new Gtk.Button({ child: muteImg, css_classes: ["settings-icon-btn"], valign: Gtk.Align.CENTER })
     muteBtn.connect("clicked", () => { AudioSvc.toggleMute(stream) })
     stream.connect("notify::mute", () => { muteImg.gicon = AudioSvc.targetVolumeIcon(stream) })
     box.append(new Gtk.Image({ icon_name: iconName, pixel_size: 16, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))

@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import { PANEL_W } from "../common/widget-kit"
+import { NidaraButton } from "../../lib/nidara-kit/button"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
@@ -86,15 +87,22 @@ function buildControls(onClose: () => void): Gtk.Widget {
     }
     modeBtns[0].add_css_class("suggested-action")
 
-    const makeActionBtn = (action: CaptureAction, label: string, cssClass: string) => {
-        const btn = new Gtk.Button({ label, css_classes: [cssClass], hexpand: true })
+    // Two real actions side by side: Save is the affirmative CTA, Copy is its
+    // neutral sibling. Both were Adwaita classes (`suggested-action` / `flat`),
+    // which only looked native because this panel renders inside the two scopes
+    // that restyle them — outside those, raw GTK. `ghost` would have been the
+    // literal translation of `flat`, but ghost reads as text-with-a-hover and is
+    // for subtle nav affordances, not for an action (design-system.md).
+    const makeActionBtn = (action: CaptureAction, label: string, variant: "primary" | "secondary") => {
+        const btn = NidaraButton({ label, variant, pill: true })
+        btn.hexpand = true
         btn.connect("clicked", () => capture(selectedMode, action, onClose))
         return btn
     }
 
     const actionRow = new Gtk.Box({ spacing: 6, homogeneous: true })
-    actionRow.append(makeActionBtn("copy", t("widget.screenshot.action.copy"), "flat"))
-    actionRow.append(makeActionBtn("save", t("widget.screenshot.action.save"), "suggested-action"))
+    actionRow.append(makeActionBtn("copy", t("widget.screenshot.action.copy"), "secondary"))
+    actionRow.append(makeActionBtn("save", t("widget.screenshot.action.save"), "primary"))
 
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: PANEL_W.lg })
     box.append(modeRow)

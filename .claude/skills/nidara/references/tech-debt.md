@@ -406,15 +406,23 @@ polish/optimization. If the hover growth ever truly must stop, it needs a struct
 (custom Cairo indicator or non-overlay reserved scrollbar with its own reflow tradeoff), not
 more specificity. Same root as #9 (the Adwaita stylesheet is loaded in-process).
 
-### 16b. Adwaita button classes still in three widgets (2026-08-02)
-`widgets/vpn.ts`, `widgets/bluetooth.ts` and `widgets/screenshot.ts` (save) still build buttons with
-`suggested-action`/`destructive-action`. They LOOK right only because they render inside
-`.bar-expansion-panel` or `.cc-detail-panel`, the two scopes that restyle those Adwaita classes —
-move one of those buttons anywhere else and it turns Adwaita blue/red on the spot (which is exactly
-what happened to the island capture card and the CC banner row before they were converted). Low
-urgency, zero visible symptom today; convert to `NidaraButton` when touching those widgets. NOT to
-be confused with `.nidara-seg-btn.suggested-action` (segmented-control SELECTED marker, legitimate,
-owns its rule in `_components.scss`).
+### 16b. Adwaita button classes — swept, one text-link left (2026-08-02)
+RESOLVED for `widgets/vpn.ts`, `widgets/bluetooth.ts` and `widgets/screenshot.ts`: all now build
+`NidaraButton`s, and connect/disconnect follows the Settings pages' intent mapping (connect =
+`primary`, **disconnect = `secondary`, not `danger`** — it is reversible). `widgets/volume.ts` also
+lost a vestigial `flat` riding along with `settings-icon-btn`, which already owns that look and is
+unscoped.
+
+STILL OPEN, one button: `volume.ts`'s "set as default" text link (`["flat", "compact-btn"]`). `flat`
+is Adwaita's and `compact-btn` is ours but scoped to `.cc-detail-panel`, so it depends on where it
+renders like the rest did — but `NidaraButton` has no compact/text-link size, and `ghost` at the
+kit's default padding is visibly bigger than the caption-sized link that row is laid out around.
+Converting it properly means ADDING a size modifier to the kit (`nidara-btn--compact`), which is a
+design decision about the button vocabulary, not a mechanical swap. Left deliberately.
+
+NOT to be confused with `.nidara-seg-btn.suggested-action` (screenshot/screenrecord mode rows): there
+the Adwaita class is not a button style but the SELECTED marker of a segmented control, and
+`_components.scss` owns that rule. Legitimate, leave it.
 
 ### 17. Status-indicator subsystem: extension points deliberately not wired (2026-06-19)
 `surfaces/bar/StatusIndicators.tsx` is a declarative registry (`INDICATORS`, three states

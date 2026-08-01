@@ -533,9 +533,10 @@ by the user. `button.nidara-btn` is deliberately UNSCOPED, so `NidaraButton` is 
 vocabulary that is correct in every window — bar, island, CC, Settings.
 The ONE legitimate remaining use is `.nidara-seg-btn.suggested-action`, where the class is not a
 button style at all but the SELECTED marker of a segmented control, and `_components.scss` owns
-that rule (screenshot/screenrecord mode rows). Still-unconverted real buttons: `widgets/vpn.ts`,
-`widgets/bluetooth.ts`, `widgets/screenshot.ts`'s save — all currently INSIDE a restyled panel
-scope, so they look right by luck; convert them if you move or touch them (see tech-debt).
+that rule (screenshot/screenrecord mode rows). Every real button in `widgets/` was converted on
+2026-08-02 (vpn, bluetooth, screenshot; volume lost a vestigial `flat`), leaving exactly one known
+holdout — volume's caption-sized "set as default" text link, which needs a compact size in the kit
+rather than a swap. See tech-debt 16b.
 
 For an icon that belongs **next to a row's title** rather than as a trailing control (e.g. a
 lock on a secured Wi-Fi row), pass it as `NidaraRow`'s `titleIcon` arg (threaded through

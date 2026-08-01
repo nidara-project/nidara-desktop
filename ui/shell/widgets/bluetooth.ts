@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import { NidaraButton } from "../../lib/nidara-kit/button"
 import { buildRoundContent, buildSplitCapsuleContent } from "../surfaces/control-center/Toggles"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { makeIconAction } from "./bar-helpers"
@@ -63,9 +64,16 @@ function buildDeviceList(): { box: Gtk.ListBox; refresh: () => void } {
                 halign: Gtk.Align.START, hexpand: true, ellipsize: 3, max_width_chars: 16,
             })
 
-            const actionBtn = new Gtk.Button({
+            // Same button as the Settings → Bluetooth row (unified 2026-08-02):
+            // connect is the affirmative CTA (`primary`), disconnect is REVERSIBLE
+            // and therefore neutral — `danger` is for destructive only. It used to
+            // be Adwaita's suggested-/destructive-action, which looked native only
+            // because this list renders inside `.cc-detail-panel`, one of the two
+            // scopes that restyle those classes; anywhere else it was raw GTK.
+            const actionBtn = NidaraButton({
                 valign: Gtk.Align.CENTER,
-                css_classes: dev.connected ? ["destructive-action"] : ["suggested-action"],
+                pill: true,
+                variant: dev.connected ? "secondary" : "primary",
                 label: dev.connected ? t("settings.bluetooth.disconnect") : t("settings.bluetooth.connect"),
             })
             actionBtn.connect("clicked", () => {
