@@ -514,8 +514,12 @@ registered in `config-entries.ts`):
 Rules:
 - Writes are **gated by Settings → AI** (`AgentConfig.allowConfigWrite`, `ai.json`). When
   disabled, `setConfig` refuses with a pointer to the page. Reads are never gated.
-- `ai.*` keys are visible but **not writable via setConfig** — the gate must not be
-  flippable through the door it controls.
+- **Every `ai.*` key that GRANTS something is visible but not writable via setConfig** — a gate
+  must not be flippable through the door it controls. The line is *grant*, not namespace:
+  `ai.assistantGlow` (the glow on the window the Assistant is working in, `AgentGlow.ts`) is
+  writable, because it turns a *signal* on and off and permits nothing. That also makes it
+  answerable — "stop glowing my windows" is a reasonable thing to ask the Assistant, and it is
+  the one thing on this page it can do about itself.
 - **Every gate in `ai.json` must be registered here, `writable: false`** — all eight of them
   (`allowConfigWrite`, `allowScreenshot`, `allowWindowClose`, `allowMcp`, `allowComputerUse`,
   `allowComputerControl`, `allowFileRead`, `allowFileWrite`). The last four were added with the

@@ -15,6 +15,7 @@ import { readFile } from "ags/file"
 import { exec, execAsync } from "ags/process"
 import agentConfig from "./core/AgentConfig"
 import agentService from "./core/AgentService"
+import { initAgentGlow } from "./core/AgentGlow"
 import appService, { type AppData } from "./core/AppService"
 import { describeConfig, getConfigValue, getAllConfigValues, setConfigValue } from "./core/ConfigRegistry"
 import { registerConfigEntries } from "./config-entries"
@@ -791,6 +792,10 @@ app.start({
 
     // Agent-facing config surface (describeConfig/getConfig/setConfig)
     registerConfigEntries()
+
+    // "The Assistant is working in this window" — the inner glow follows
+    // agentService.busy. Also clears a glow left on by a shell that died mid-turn.
+    initAgentGlow()
 
     // Note: the nidara-bar/dock blur layer rules live in hyprland.lua
     // (hl.layer_rule). They used to be re-applied here via `hyprctl keyword`,

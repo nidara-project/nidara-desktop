@@ -427,6 +427,12 @@ export default {
     "settings.ai.brain.key.save": "Save key",
     "settings.ai.brain.key.clear": "Forget",
 
+    // Built-in Assistant — the visual signal while a turn runs (core/AgentGlow.ts)
+    "settings.ai.group.signal": "While it works",
+    "settings.ai.group.signal.scope": "What the desktop shows you while the Assistant is doing something, so you can tell its work from yours.",
+    "settings.ai.assistant-glow": "Glow the window it's working in",
+    "settings.ai.assistant-glow.desc": "The focused window's border lights up for as long as a turn runs, and sweeps once when the Assistant takes a window over. Needs Hyprland 0.56 or newer.",
+
     // Badge on the fake AI cursor (surfaces/agent-pointer/)
     "agentPointer.badge": "AI",
 

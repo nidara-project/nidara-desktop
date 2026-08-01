@@ -114,6 +114,26 @@ hl.config({
             render_power = 2,
             color        = "rgba(00000055)",
         },
+
+        -- Inner glow (Hyprland ≥ 0.56) — OFF here and owned by the SHELL, which
+        -- turns it on only while the built-in Assistant is running a turn:
+        -- "the AI is working in this window". core/AgentGlow.ts is the only
+        -- thing that ever flips `enabled`; everything else is set once, here.
+        --
+        -- `color_inactive` transparent is what makes this usable at all. The
+        -- glow has no window rule (verified against the 0.56 binary: only these
+        -- five options exist, all global), and `color_inactive` DEFAULTS TO
+        -- `color` — leave it out and every window glows. Transparent means only
+        -- the FOCUSED window does, which is exactly the invariant the agent's
+        -- toolset already enforces: every action it takes acts on the focused
+        -- window and refuses otherwise, so focused ≡ the window it is working in.
+        glow = {
+            enabled        = false,
+            range          = 24,
+            render_power   = 3,
+            color          = { colors = {"rgba(9b6cffcc)", "rgba(4fc3ffcc)"}, angle = 45 },
+            color_inactive = "rgba(00000000)",
+        },
     },
 
     -- Groups (tabbed windows): same glass language as window borders. The
@@ -209,6 +229,26 @@ hl.animation({ leaf = "layers",        enabled = true, speed = 3,   bezier = "ea
 hl.animation({ leaf = "layersIn",      enabled = true, speed = 3,   bezier = "easeOut", style = "fade" })
 hl.animation({ leaf = "layersOut",     enabled = true, speed = 2,   bezier = "easeOut", style = "fade" })
 hl.animation({ leaf = "workspaces",    enabled = true, speed = 6,   bezier = "default" })
+
+-- The Assistant's "taking this window over" sweep: on every focus change
+-- Hyprland runs the glow gradient once around the border (onFocusAnimUpdate),
+-- then stops. `speed` is TENTHS OF A SECOND PER LAP and inverted — bigger is
+-- slower — so 30 = one 3 s lap.
+--
+-- Enabled here PERMANENTLY on purpose, even though the glow itself is off
+-- almost always. Two measured facts (2026-08-01, 2560x1440@144, Hyprland CPU
+-- jiffies + amdgpu gpu_busy_percent, focus flips as the load):
+--   · Arming it live does NOT work. Enable it under an already-open window and
+--     that window never sweeps again (2.5%/1.8% GPU/CPU = idle), while a window
+--     created afterwards sweeps normally (3.4%/2.8%). The animated variable is
+--     built with the window, so the config has to be in place BEFORE the window
+--     exists — i.e. here, not from the shell at turn start.
+--   · Leaving it armed while the glow is off is FREE (1.6%/1.6% ≈ idle): with
+--     nothing painted there is nothing to damage.
+-- NEVER add `style = "loop"`. A loop dirties the window every tick whatever it
+-- paints — measured 32% GPU permanently, the SAME with the glow disabled or at
+-- alpha 0, because re-compositing means re-blurring the bar and dock on top.
+hl.animation({ leaf = "glowangle",     enabled = true, speed = 30,  bezier = "linear" })
 
 
 -- ── Nidara startup ─────────────────────────────────────────────────────

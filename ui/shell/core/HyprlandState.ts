@@ -230,6 +230,23 @@ class HyprlandStateClass extends GObject.Object {
         return this.evalLua(`hl.config({ cursor = { invisible = ${visible ? "false" : "true"} } })`)
     }
 
+    /** Turn the inner glow on/off (`decoration:glow:enabled`). Everything else
+     *  about the glow — range, colors, and the transparent `color_inactive` that
+     *  limits it to the FOCUSED window — is set once in hyprland.lua; this is the
+     *  only knob anyone flips at runtime. Driven by core/AgentGlow.ts. */
+    setGlow(enabled: boolean) {
+        return this.evalLua(`hl.config({ decoration = { glow = { enabled = ${enabled} } } })`)
+    }
+
+    /** Does this Hyprland have the inner glow (0.56+)? `getoption` answers an
+     *  unknown option with the bare string "no such option", not JSON, so the
+     *  parse failing IS the answer — no version arithmetic needed, and a future
+     *  rename degrades to "feature off" instead of to a stream of eval errors. */
+    async supportsGlow(): Promise<boolean> {
+        const o = await this.getOptionJson("decoration:glow:enabled")
+        return typeof o?.bool === "boolean"
+    }
+
     /** Hyprland version, e.g. "0.55.2" ("" on failure). */
     async version(): Promise<string> {
         try {

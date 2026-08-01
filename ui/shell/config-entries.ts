@@ -189,6 +189,17 @@ export function registerConfigEntries() {
         writable: false,
         get: () => agentConfig.allowFileWrite,
     })
+    // The one ai.* entry that IS writable, because it is the one that is not a
+    // gate: it turns a visual signal on and off and grants nothing. Writable also
+    // makes it answerable — "stop glowing my windows" is a reasonable thing to ask
+    // the Assistant, and it can do it about itself.
+    registerConfig("ai.assistantGlow", {
+        desc: "Glow the border of the window the built-in Assistant is working in, for as long as a turn runs. Requires Hyprland 0.56+; makes Nidara the owner of decoration:glow.",
+        type: "boolean",
+        writable: true,
+        get: () => agentConfig.assistantGlow,
+        set: v => agentConfig.setAssistantGlow(v as boolean),
+    })
     // The built-in Assistant's brain (BYOK). Visible so agents can see how the
     // native assistant is configured; set it in Settings → AI (the API key lives
     // in the keyring and is deliberately NOT exposed here).

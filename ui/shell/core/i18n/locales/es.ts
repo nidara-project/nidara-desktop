@@ -576,6 +576,12 @@ export default {
     "settings.ai.brain.key.save": "Guardar clave",
     "settings.ai.brain.key.clear": "Olvidar",
 
+    // Asistente integrado — la señal visual mientras trabaja (core/AgentGlow.ts)
+    "settings.ai.group.signal": "Mientras trabaja",
+    "settings.ai.group.signal.scope": "Qué te enseña el escritorio mientras el Asistente hace algo, para que distingas su trabajo del tuyo.",
+    "settings.ai.assistant-glow": "Iluminar la ventana en la que trabaja",
+    "settings.ai.assistant-glow.desc": "El borde de la ventana enfocada se ilumina mientras dura el turno, y da una vuelta cuando el Asistente toma posesión de una ventana. Necesita Hyprland 0.56 o posterior.",
+
     // Insignia del cursor falso del agente (surfaces/agent-pointer/)
     "agentPointer.badge": "IA",
 

@@ -329,6 +329,23 @@ export default function AiPage() {
 
     page.append(brainGroup.box)
 
+    // ── While it works — the signal, not a permission ────────────────────────
+    // Its own group rather than a row among the gates: everything below grants
+    // something, this only shows something. It is also the only setting on this
+    // page that reaches outside the shell (it makes Nidara the owner of
+    // Hyprland's decoration:glow), which is why it can be turned off.
+    const signalGroup = listGroup(t("settings.ai.group.signal"), t("settings.ai.group.signal.scope"))
+
+    signalGroup.listBox.append(toggleRow(
+        t("settings.ai.assistant-glow"),
+        t("settings.ai.assistant-glow.desc"),
+        agentConfig.assistantGlow,
+        (v) => agentConfig.setAssistantGlow(v),
+        (apply) => agentConfig.onChange(() => apply(agentConfig.assistantGlow)),
+    ))
+
+    page.append(signalGroup.box)
+
     // ── Desktop access — what agents may do to the shell itself ─────────────
     const accessGroup = listGroup(t("settings.ai.group.access"), t("settings.ai.group.access.scope"))
 

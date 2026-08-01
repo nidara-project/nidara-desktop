@@ -71,6 +71,13 @@ interface AgentSettings {
     /** Same for endpoints, so an edited URL survives a round trip through another
      *  provider — only meaningful where the endpoint is editable (Ollama, Custom). */
     brainEndpoints: Record<string, string>
+
+    /** Glow the focused window's border while the Assistant is running a turn
+     *  (core/AgentGlow.ts). Not a gate — a visual preference, and the one setting
+     *  in this file that changes something OUTSIDE the shell: it makes Nidara the
+     *  owner of Hyprland's `decoration:glow`. Off is for users who set that up
+     *  themselves in hyprland-user.lua and would rather keep it. */
+    assistantGlow: boolean
 }
 
 const DEFAULTS: AgentSettings = {
@@ -88,6 +95,7 @@ const DEFAULTS: AgentSettings = {
     brainEndpoint: "http://localhost:11434/v1",
     brainModels: {},
     brainEndpoints: {},
+    assistantGlow: true,
 }
 
 let _settings: AgentSettings = { ...DEFAULTS }
@@ -147,6 +155,7 @@ export const agentConfig = {
     get brainBackend() { return _settings.brainBackend },
     get brainModel() { return _settings.brainModel },
     get brainEndpoint() { return _settings.brainEndpoint },
+    get assistantGlow() { return _settings.assistantGlow },
 
     // True for ACTING_DECAY_MS after the most recent computer-use action fired.
     get computerActing() { return _acting },
@@ -163,6 +172,14 @@ export const agentConfig = {
             _listeners.forEach(fn => fn())
             return GLib.SOURCE_REMOVE
         })
+        _listeners.forEach(fn => fn())
+    },
+
+    // core/AgentGlow.ts listens on onChange, so turning this off mid-turn takes
+    // the glow away immediately rather than at the end of the turn.
+    setAssistantGlow(val: boolean) {
+        _settings.assistantGlow = val
+        save()
         _listeners.forEach(fn => fn())
     },
 
