@@ -684,6 +684,29 @@ slider (bar popovers, Settings pages) is unaffected. Brightness has no change si
 `watchActive` is just a 2s redraw poll (reusing the polling reality `buildVertical`/
 `buildHorizontal` already live with) reading the SAME shared `_cachedPct` those keep fresh.
 
+**Anything that sits IN the Control Center is painted like the Control Center — and spaced on its
+rhythm.** Two rules, both learned by shipping the opposite (2026-08-02, the AI-control banner):
+
+- **Cairo, not a CSS card.** A `@include material-card` box (flat background + 1px CSS border)
+  dropped on top of a grid of Cairo glass reads as a foreign element pasted over the panel, however
+  close the colours are: no inner specular rim, no squircle profile, no shell-opacity tracking. Use
+  a `SquircleContainer` with BaseIsland's numbers (`borderWidth: 1.5`, `inset: 2.0`, `padding: 12`,
+  `useShellOpacity`, `gloss`) and `Shape.CAPSULE` for a single-row full-width card. Put the
+  `GRID_WIDTH` size request on the CAPSULE, never on the inner box — padding is drawn INSIDE the
+  requested width, so a child requesting `GRID_WIDTH` makes the card 24px wider than the grid and
+  breaks the right edge every tile is aligned to.
+- **The panel has TWO spacing scales, and mixing them is visible.** `GAP` (12) is the gap WITHIN a
+  block — between tiles. **24 is the gap BETWEEN blocks**, which is what the Edit pill already uses
+  (`editBtnWrapper.margin_top` in `IslandGrid.tsx`). A card separated from the grid by 12 looks
+  stuck to it — tighter than the panel's own internal spacing, which is the tell that a block gap
+  was set by eye instead of read off the existing rhythm.
+
+`.cc-island` is NOT the class to reach for on such a card: it carries
+`.cc-island button { @include nidara-reset }` to strip Adwaita defaults out of tile content, and
+that selector matches `button.nidara-btn` at EQUAL specificity — `_control-center` is imported after
+`_components`, so the reset wins and any `NidaraButton` inside loses its background and border.
+Give the card its own class with `background-color: transparent`.
+
 **Multi-cell `centerContent` tiles align their items to the grid-cell centres.** A 2×1 tile
 spans two grid cells; its content (e.g. cpu_memory's two metric rings) should sit one grid
 **pitch** (`UNIT + GAP`) apart, centred — so each item lands on its cell centre, exactly where a

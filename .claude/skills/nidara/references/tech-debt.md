@@ -406,6 +406,16 @@ polish/optimization. If the hover growth ever truly must stop, it needs a struct
 (custom Cairo indicator or non-overlay reserved scrollbar with its own reflow tradeoff), not
 more specificity. Same root as #9 (the Adwaita stylesheet is loaded in-process).
 
+### 16b. Adwaita button classes still in three widgets (2026-08-02)
+`widgets/vpn.ts`, `widgets/bluetooth.ts` and `widgets/screenshot.ts` (save) still build buttons with
+`suggested-action`/`destructive-action`. They LOOK right only because they render inside
+`.bar-expansion-panel` or `.cc-detail-panel`, the two scopes that restyle those Adwaita classes —
+move one of those buttons anywhere else and it turns Adwaita blue/red on the spot (which is exactly
+what happened to the island capture card and the CC banner row before they were converted). Low
+urgency, zero visible symptom today; convert to `NidaraButton` when touching those widgets. NOT to
+be confused with `.nidara-seg-btn.suggested-action` (segmented-control SELECTED marker, legitimate,
+owns its rule in `_components.scss`).
+
 ### 17. Status-indicator subsystem: extension points deliberately not wired (2026-06-19)
 `surfaces/bar/StatusIndicators.tsx` is a declarative registry (`INDICATORS`, three states
 hidden/armed/active) rendered as a small **badge on the bar's Control-Center button**
@@ -413,6 +423,21 @@ hidden/armed/active) rendered as a small **badge on the bar's Control-Center but
 Stop/kill-switch lives). It currently hosts only recording + AI-control but is the intended home for
 **privacy/activity indicators** (mic, camera, screen-share, location). Those are **not wired** (no
 source detection yet); adding one = a new `INDICATORS` entry with `state()` + `subscribe()` + `onClick`.
+The banner is a **Cairo island** since 2026-08-02 (user call), not a CSS `material-card`: same
+painter/gloss/border/inset as the tiles below it, transparent CSS background, `margin-bottom: 24px`
+(the CC's BLOCK rhythm — the air the Edit pill gets; 12px is the WITHIN-block tile gap, and using it
+made the card look stuck to the grid). It also lost its danger tint on background AND border: four
+reds on one row — tint, border, dot, Adwaita-red button — read as "something has gone wrong"
+instead of "AI control is on". It states a fact and offers the switch; the red left is the dot. Its
+button is `NidaraButton({variant:"secondary"})` — revoking a permission is reversible, and `danger`
+means destructive.
+**Recording left the registry entirely** on 2026-08-02 (badge-only from 08-01, then gone): the island
+owns the live capture end to end, and the badge must never point at a CC that has nothing to show —
+the screenrecord tile is opt-in and can be bar-only. The `banner?: boolean` opt-out that existed for
+one day went with it (no consumer left). The boundary that settled it: **the CC says what is GRANTED
+(permissions, and the kill switch), the island says what is RUNNING.** A privacy indicator with no
+island activity behind it (mic, camera) gets a full entry here; anything the island already shows
+live gets none.
 Also deferred by product decision: **drag-reorder of bar widgets** (bar order is category-derived via
 `barOrder`; the CC has its own Edit-mode reorder). The AI "active" signal depends on the tools pinging
 `notifyComputerAction` — an action path that bypasses `nidara-act/type/click` would stay "armed", not

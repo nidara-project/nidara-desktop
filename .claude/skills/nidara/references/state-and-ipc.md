@@ -1181,10 +1181,24 @@ Phase 2a — **action, deterministic only (built)**:
   you can't see. The effective check is `allowComputerControl && allowComputerUse`, re-read live
   by `nidara-act` and the `do_app_action` MCP tool.
 - **CC badge + banner**: the model + both consumers live in
-  `surfaces/bar/StatusIndicators.tsx` (`ccBadge`, `ccStatusBanner`), shared with the recording
-  indicator. While control is granted, a small **badge** on the bar's Control-Center button signals
-  it — **subtle** when armed (granted, idle), **pulsing** when active (recording, or for
-  ~`ACTING_DECAY_MS` after a real action). The action tools (`nidara-act`/`nidara-type`/`nidara-click`)
+  `surfaces/bar/StatusIndicators.tsx` (`ccBadge`, `ccStatusBanner`). Since 2026-08-02 the registry
+  holds **AI control only** — it is the home of PERMISSIONS THE CC HOLDS THE SWITCH FOR (mic,
+  camera, screen-share when they get source detection), not of activities. Recording left in two
+  steps and both are the same lesson: **the badge means "the Control Center has something for
+  you", so an indicator whose CC surface may not exist must not light it.** A capture is fully told
+  by the Activity Island (pill + ticking clock, always on screen), and the only CC thing about it
+  is the screenrecord tile, which is opt-in (`defaultInCc: false`) and can live in the BAR ONLY —
+  the badge was pointing at a panel that might say nothing, and it even brightened armed→active
+  when a capture started, promising an escalation with nothing behind it.
+  While control is granted, a small **badge** on the bar's Control-Center button signals it —
+  **subtle** when armed (granted, idle), **full** when active (for ~`ACTING_DECAY_MS` after a real
+  action); neither state animates, see design-system.md. The banner card is a **Cairo
+  SquircleContainer** (`Shape.CAPSULE`, BaseIsland's padding/border/inset numbers, `GRID_WIDTH`
+  size request on the CAPSULE and `halign END` to share the grid's right edge), NOT a CSS card, and
+  it is deliberately not given `.cc-island` — that class carries
+  `.cc-island button { @include nidara-reset }`, which matches `button.nidara-btn` at EQUAL
+  specificity and, `_control-center` being imported after `_components`, would strip the Stop
+  button's background and border. The action tools (`nidara-act`/`nidara-type`/`nidara-click`)
   ping `ags request notifyComputerAction` on success → `AgentConfig.pulseComputerAction()` flips the
   transient `computerActing` flag (auto-decays). Opening the CC shows a **status banner above the
   widgets** (`ControlCenter.tsx`) with a row per active indicator + a **Stop** button — **that is the

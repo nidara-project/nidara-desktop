@@ -9,16 +9,36 @@
    never receives keyboard focus and is mouse/touch-only by design. Adding
    :focus-visible rules here would be dead code. See the design-tokens rationale. */
 
-/* --- Status banner (recording / AI control) above the widgets --- */
-/* A danger-tinted card; one .cc-status-row per active indicator (dot + text +
-   Stop). Collapsed to nothing by the widget when no indicator is active. */
+/* --- Status banner (AI control) above the widgets --- */
+/* One .cc-status-row per active indicator (dot + text + a Stop button).
+   Collapsed to nothing by the widget when no indicator is active.
+
+   The CARD ITSELF IS CAIRO — a SquircleContainer built in StatusIndicators.tsx,
+   exactly like the tiles below it. No border and no padding here: both belong to
+   the painter (glass fill, 1.5px inner rim, 12px inset), and the background must
+   stay transparent so nothing paints a rectangle behind the squircle. It is
+   deliberately NOT given `.cc-island` (that class resets Adwaita defaults on any
+   descendant button and would flatten the NidaraButton — see the note there). It
+   used to be a CSS
+   `material-card` tinted danger-red on background AND border, under a red dot
+   and a red button — four reds on one small row, and a flat CSS box pasted over
+   a grid of Cairo glass. It read as "something has gone wrong, turn this off
+   NOW"; it is a notice (2026-08-02, user call).
+
+   MARGIN = the CC's block rhythm: 24px, the same air the Edit pill gets below
+   the grid (`editBtnWrapper.margin_top` in IslandGrid.tsx). 12px is the gap
+   BETWEEN TILES (GAP) — using it here made the card look stuck to the grid,
+   tighter than the panel's own internal spacing. Two scales, on purpose:
+   12 inside a block, 24 between blocks. */
 .cc-status-banner {
-    @include material-card;
-    background-color: rgba(var(--nidara-danger-rgb), 0.10);
-    border-color: rgba(var(--nidara-danger-rgb), 0.32);
-    padding: 8px 10px;
-    margin-bottom: 10px;
+    background-color: transparent;
+    margin-bottom: 24px;
 }
+/* The last pulsing dot in the shell, and deliberately so: it marks the agent
+   having JUST acted (a few seconds, ~pulseComputerAction) inside a surface that
+   only paints while open — not a minutes-long condition on an always-visible
+   layer, which is why the bar badge and the island dot are steady. Keyframe
+   defined here, next to its only user. */
 .cc-status-dot {
     border-radius: var(--nidara-radius-pill);
     background: var(--nidara-danger);
@@ -28,6 +48,11 @@
         opacity: 1;
         animation: rec-pulse 1.4s ease-in-out infinite;
     }
+}
+
+@keyframes rec-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.3; }
 }
 
 /* --- Island Body --- */
