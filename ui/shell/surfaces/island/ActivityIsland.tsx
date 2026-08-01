@@ -211,16 +211,21 @@ export function ActivityIsland() {
     // dissolved a compact form the user never saw settle (a phantom red % —
     // user-caught 2026-07-20). Two deliberate steps: mutate, then open. Shared
     // by auto-expand and by a chip click, which need exactly the same beat.
+    // ISLAND MODES ONLY, on purpose. The beat exists because the island cannot
+    // grow out of a pill that is still interpolating its width; jumping to
+    // another surface (`onExpand`) is not a morph and has no such constraint —
+    // and, more to the point, must not happen here at all: taking the front is
+    // "show this in the capsule", and yanking the user to a different surface
+    // because an activity CHANGED is not the same act as asking for it.
+    // Expanding stays an explicit second click (user call, 2026-08-01).
     const openAfterSwap = (a: IslandActivity) => {
-        if (!a.expandMode && !a.onExpand) return
+        if (!a.expandMode) return
         if (autoExpandTimer !== null) GLib.source_remove(autoExpandTimer)
         autoExpandTimer = GLib.timeout_add(GLib.PRIORITY_DEFAULT, COMPACT_SWAP_MS + 80, () => {
             autoExpandTimer = null
             // Still the front and still live: the beat is long enough for the
             // world to have moved on (the turn ended, the battery recovered).
-            if (front !== a || !a.isLive()) return GLib.SOURCE_REMOVE
-            if (a.expandMode) status.island_mode = a.expandMode
-            else a.onExpand!()
+            if (front === a && a.isLive()) status.island_mode = a.expandMode!
             return GLib.SOURCE_REMOVE
         })
     }
@@ -262,10 +267,13 @@ export function ActivityIsland() {
         if (backChanged) for (const cb of backgroundSubs) cb()
     }
 
-    // A chip click: take the front AND open. Not just open — the row's whole
-    // claim is that the capsule shows what you are dealing with, so picking one
-    // has to move it there. An activity with no island mode of its own opens
-    // wherever it can actually be acted on instead (`onExpand`).
+    // A chip click: take the front, and open IF opening means expanding the
+    // island in place. Not just open — the row's whole claim is that the
+    // capsule shows what you are dealing with, so picking one has to move it
+    // there. But an activity whose destination is another surface entirely
+    // (recording → the Control Center) only gets promoted: switching the
+    // capsule to it is not the same act as asking to go there, and one click
+    // should not do both. Its second click, on the capsule, does the jump.
     const promote = (a: IslandActivity) => {
         // Only a LIVE activity can be pinned. The pin settles who owns the
         // capsule among things that are RUNNING; a merely INDICATED chip (the
@@ -281,6 +289,9 @@ export function ActivityIsland() {
         } else if (a.expandMode) {
             status.island_mode = a.expandMode
         } else {
+            // Nothing to promote it to and no island mode: "go there" is the
+            // only meaning the click has left. (Unreachable today — the one
+            // indicated-but-idle activity is the assistant, which has a mode.)
             a.onExpand?.()
         }
     }
