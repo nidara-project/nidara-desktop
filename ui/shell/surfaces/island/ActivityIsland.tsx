@@ -91,10 +91,33 @@ export interface IslandActivity {
      *  front (once per takeover — closing the island while the condition
      *  persists must not re-open it). */
     autoExpand?: boolean
+    /** The activity's glyph in the INDICATOR ROW — what it looks like while it
+     *  is live but something else fronts the capsule. Built once by the row.
+     *  Required, not optional: an activity with no glyph would simply vanish
+     *  from the desktop whenever anything outranked it, which is the failure
+     *  the row exists to fix. Keep it ~16px of ink, the icon weight of the bar. */
+    indicator: () => Gtk.Widget
     /** Wire liveness; call `changed` whenever isLive() may have flipped. */
     watch: (changed: () => void) => void
     isLive: () => boolean
 }
+
+/** How many indicators can show at once. Beyond this the lowest-priority live
+ *  activities are simply not drawn: the row is a glance, and a fourth chip
+ *  pushes the capsule far enough off-centre that the bar stops reading as
+ *  centred at all. */
+const INDICATOR_MAX = 3
+
+/** A chip's width. Its HEIGHT is whatever the bar row gives it — the chips sit
+ *  in the same box as the capsule, so they match it by construction instead of
+ *  by a duplicated constant. 32 is that height, which is what turns `perfect`'s
+ *  h/2 radius into a circle rather than a pill. */
+const CHIP_W = 32
+
+/** Gap before each chip — the bar's rhythm between capsules. It lives on the
+ *  chip's margin rather than the box's spacing so it collapses with the chip;
+ *  see the row's comment. */
+const CHIP_GAP = 8
 
 export function ActivityIsland() {
     // ── Compact state: one page per activity, in a morphing stack ────────────
@@ -189,11 +212,64 @@ export function ActivityIsland() {
         }
         if (backChanged) for (const cb of backgroundSubs) cb()
     }
+    // ── The indicator row ────────────────────────────────────────────────────
+    // The live activities that are NOT fronting, as chips beside the capsule —
+    // the iOS split: one pill carrying the current thing, small circles for the
+    // rest. Every chip is built ONCE and packed in DESCENDING priority order,
+    // which buys two things: the visible subset is automatically in priority
+    // order without ever reordering the box (icons that swap places under the
+    // cursor were the thing to avoid), and each chip's rect stays put for the
+    // input region.
+    // No box spacing here or in the bar's centre box: a collapsed Gtk.Revealer
+    // still counts as a visible child, so spacing would reserve 8px per chip
+    // forever and push the capsule off-centre in an idle session. The gap rides
+    // each chip's margin_start instead, so it slides in WITH the chip and
+    // collapses to nothing with it.
+    const indicatorRow = new Gtk.Box({ halign: Gtk.Align.CENTER })
+    const chips = new Map<string, { revealer: Gtk.Revealer, hit: Gtk.Widget }>()
+    for (const a of [...activities].sort((x, y) => y.priority - x.priority)) {
+        const glyph = a.indicator()
+        glyph.halign = Gtk.Align.CENTER
+        glyph.valign = Gtk.Align.CENTER
+        // Same glass recipe as the capsule — a sibling shape, not a new
+        // material. `perfect` makes the radius h/2, so at CHIP_W ≈ the row
+        // height it lands as a circle. No hover accent and no click yet: the
+        // row does not promote anything, and a hover highlight would promise
+        // an action that isn't wired.
+        const chip = SquircleContainer({ child: glyph, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, perfect: true })
+        chip.width_request = CHIP_W
+        chip.margin_start = CHIP_GAP
+        // Gtk.Revealer, not ScaleRevealer: this is a HORIZONTAL appearance and
+        // ScaleRevealer animates the measured HEIGHT only (it passes width
+        // straight through), so a chip would pop to full width and shove the
+        // capsule sideways in one frame. SLIDE_RIGHT is the bar's existing
+        // idiom for an element that comes and goes (widgets/bar-helpers.ts).
+        // Duration = the compact swap's, so when a chip appears BECAUSE the
+        // front changed, the capsule's width interpolation and the row's
+        // widening are one settling movement instead of two.
+        const revealer = new Gtk.Revealer({
+            transition_type: Gtk.RevealerTransitionType.SLIDE_RIGHT,
+            transition_duration: COMPACT_SWAP_MS,
+            reveal_child: false,
+        })
+        revealer.set_child(chip)
+        indicatorRow.append(revealer)
+        chips.set(a.id, { revealer, hit: chip })
+    }
+    const syncIndicators = () => {
+        const shown = new Set(background.slice(0, INDICATOR_MAX).map(a => a.id))
+        for (const [id, c] of chips) c.revealer.reveal_child = shown.has(id)
+    }
+    backgroundSubs.push(syncIndicators)
+
     for (const a of activities) a.watch(arbitrate)
     // Closing a mode can end a liveness clause (media holds its compact while
     // its panel is open; a pause grace may have expired underneath).
     status.connect("notify::island-mode", () => { if (status.island_mode === "") arbitrate() })
     arbitrate()
+    // The first arbitration runs before the subscription above could fire (and
+    // `backChanged` is false when the session starts idle), so seed the row.
+    syncIndicators()
 
     // Both morph endpoints paint chrome glass (SquircleContainer chrome:true):
     // tint pinned by shellAppearance, alpha from the bar/overlay opacity axes.
@@ -250,6 +326,10 @@ export function ActivityIsland() {
             getSourceContent: () => front?.compact ?? null,
             glassFrom: compactGlass,
             glassTo: mode.glass,
+            // The chips leave with the capsule's content. Every mode gets the
+            // same row (only one revealer animates at a time, so they cannot
+            // fight over its opacity).
+            companions: [indicatorRow],
         })
         // The island is the capsule GROWN, not a separate panel: top-anchored
         // (top edge pinned to the capsule by syncAnchor), centered like the
@@ -297,10 +377,24 @@ export function ActivityIsland() {
     return {
         /** Compact state — the bar appends this to its center box. */
         capsule,
+        /** The indicator chips — appended to the same centre box, right of the
+         *  capsule, so the GROUP is what centres on the monitor. */
+        indicatorRow,
+        /** Everything on this surface the user can hit, RE-READ on every input
+         *  region stamp. The capsule is always in: it keeps its geometry while a
+         *  mode is open (it is switched off by opacity alone, and clicking it
+         *  closes the mode). The chips are not: while a mode is open they are
+         *  faded to nothing, and leaving their rects stamped would put an
+         *  invisible dead patch in the bar where a click should reach the
+         *  dismiss catcher. Collapsed chips fall out on the caller's zero-size
+         *  guard. */
+        hitTargets: () => indicatorRow.opacity === 0
+            ? [capsule as Gtk.Widget]
+            : [capsule as Gtk.Widget, ...[...chips.values()].map(c => c.hit)],
         /** Every LIVE activity that is NOT fronting the capsule, highest
-         *  priority first — the model behind the indicator row (an icon per
-         *  entry). Idle session = only the dots are live = empty list, which is
-         *  why the bar looks unchanged until something else runs. */
+         *  priority first — the model the indicator row paints. Idle session =
+         *  only the dots are live = empty list, which is why the bar looks
+         *  unchanged until something else runs. */
         background: () => background,
         /** Fire when that list changes (membership or order). */
         onBackgroundChanged: (cb: () => void) => { backgroundSubs.push(cb) },

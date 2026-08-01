@@ -229,17 +229,22 @@ export function PlayerCompact(opts: {
     return box
 }
 
-// ── Art morph ghost ──────────────────────────────────────────────────────────
-// The traveling twin of the cover art: natural size = the PANEL slot (96px,
-// radius 14 — identical draw to buildMediaDetailPanel's artDa), scaled DOWN
-// by the morph toward the compact's 20px slot, so it stays sharp the whole
-// flight and matches both endpoints (the compact's radius is derived from
-// this one, see ART_RADIUS).
-export function makeArtGhost(): Gtk.Widget {
+// ── Self-syncing cover art ───────────────────────────────────────────────────
+// A DrawingArea of `size` px that paints the CURRENT track's cover, clipped to
+// the squircle, with the empty wash when there is none. It reads the player on
+// DRAW rather than subscribing: both callers paint at moments that already have
+// their own redraw cadence, and neither can be left holding a stale bitmap.
+//
+// `wash: false` drops the empty-state fill so the widget paints NOTHING without
+// a cover — that is what lets the indicator chip stack it over a music glyph and
+// never have to toggle visibility. `refresh()` re-reads the player and repaints
+// ONLY if the cover path actually changed, for callers (the chip) that have no
+// redraw cadence of their own and must not damage the surface on every tick.
+export function makeCoverArt(size: number, radius: number, wash = true): Gtk.Widget {
     let pixbuf: GdkPixbuf.Pixbuf | null = null
     let loaded: string | null = null
-    const da = new Gtk.DrawingArea({ width_request: PANEL_ART, height_request: PANEL_ART })
-    // Decode guarded by path identity, evaluated ON DRAW: the ghost only
+    const da = new Gtk.DrawingArea({ width_request: size, height_request: size })
+    // Decode guarded by path identity. Evaluated on draw: the morph ghost only
     // paints during morph frames (the revealer redraws it every frame), and a
     // track can change while the island sits open — checking here means the
     // close flight always carries the CURRENT art, with no per-tick wiring.
@@ -248,7 +253,7 @@ export function makeArtGhost(): Gtk.Widget {
         if (path === loaded) return
         loaded = path
         if (path) {
-            try { pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, PANEL_ART, PANEL_ART, false) }
+            try { pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, size, size, false) }
             catch { pixbuf = null }
         } else { pixbuf = null }
     }
@@ -256,17 +261,33 @@ export function makeArtGhost(): Gtk.Widget {
         if (w <= 0 || h <= 0) return
         sync()
         cr.save()
-        createSquirclePath(cr, 0, 0, w, h, 14, 3.2)
+        createSquirclePath(cr, 0, 0, w, h, radius, 3.2)
         if (pixbuf) {
             cr.clip()
             Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
             cr.paint()
-        } else {
+        } else if (wash) {
             const c = Theme.chromeIsDark ? 1 : 0
             cr.setSourceRGBA(c, c, c, 0.1)
             cr.fill()
         }
         cr.restore()
     })
+    ;(da as any).refresh = () => {
+        if (media.resolveCoverArt(media.selectedPlayer()) === loaded) return
+        da.queue_draw()   // the draw func re-syncs; this only decides WHETHER to redraw
+    }
     return da
 }
+
+// The traveling twin of the cover art: natural size = the PANEL slot (96px,
+// radius 14 — identical draw to buildMediaDetailPanel's artDa), scaled DOWN
+// by the morph toward the compact's 20px slot, so it stays sharp the whole
+// flight and matches both endpoints (the compact's radius is derived from
+// this one, see ART_RADIUS).
+export const makeArtGhost = (): Gtk.Widget => makeCoverArt(PANEL_ART, 14)
+
+// The indicator row's cover: the compact's own 20px slot, same radius, so the
+// thumbnail beside the capsule and the one inside it are one drawing. No wash —
+// the chip stacks it over a music glyph.
+export const makeMiniArt = (): Gtk.Widget => makeCoverArt(ART, ART_RADIUS, false)

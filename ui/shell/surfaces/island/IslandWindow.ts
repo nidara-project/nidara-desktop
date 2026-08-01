@@ -49,11 +49,12 @@ export interface IslandWindowHandle {
     win: Gtk.Window
     /** Mount the compact capsule's row (always present) and the mode revealers
      *  (revealed on demand). Both end up in ONE surface — see the header.
-     *  `hitTarget` is the capsule ITSELF, not the row: the row spans the whole
-     *  monitor width to centre the capsule, and stamping that into the input
-     *  region would swallow every click meant for the bar's own capsules
-     *  underneath. */
-    mount: (capsuleRow: Gtk.Widget, hitTarget: Gtk.Widget, revealers: MorphRevealer[]) => void
+     *  `hitTargets` are the capsule and the indicator chips THEMSELVES, not the
+     *  row: the row spans the whole monitor width to centre them, and stamping
+     *  that into the input region would swallow every click meant for the bar's
+     *  own capsules underneath. It is a GETTER, re-read on every stamp — which
+     *  of them can be hit changes with the island (see ActivityIsland). */
+    mount: (capsuleRow: Gtk.Widget, hitTargets: () => Gtk.Widget[], revealers: MorphRevealer[]) => void
     /** Root the revealers are anchored against — their `margin_top` is measured
      *  relative to this, exactly as it used to be against the bar's overlay. */
     root: () => Gtk.Widget
@@ -120,7 +121,7 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         console.error("[IslandWindow] LayerShell failed:", e)
     }
 
-    let hitTarget: Gtk.Widget | null = null
+    let hitTargets: () => Gtk.Widget[] = () => []
     let revealers: MorphRevealer[] = []
 
     // Mirrors the bar's own catcher, on this surface — see setCatcher's doc.
@@ -156,8 +157,9 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             })
         }
         // The capsule must stay clickable at all times — it is a bar control that
-        // happens to be painted here.
-        add(hitTarget)
+        // happens to be painted here. Same for whichever indicator chips are
+        // currently revealed.
+        for (const t of hitTargets()) add(t)
         for (const r of revealers) add(r)
         // The catcher's rect is stamped EXPLICITLY rather than measured: it is
         // shown and stamped in the same turn, so its allocation is still a layout
@@ -193,7 +195,7 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
             x0 = Math.min(x0, b.get_x());              y0 = Math.min(y0, b.get_y())
             x1 = Math.max(x1, b.get_x() + b.get_width()); y1 = Math.max(y1, b.get_y() + b.get_height())
         }
-        add(hitTarget)
+        for (const t of hitTargets()) add(t)
         for (const r of revealers) add(r)
         if (!isFinite(x0)) return null
         // The connector name (DP-1, …) so a consumer on a multi-monitor setup can
@@ -212,8 +214,8 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
     return {
         win,
         root: () => root,
-        mount: (row, target, mounted) => {
-            hitTarget = target
+        mount: (row, targets, mounted) => {
+            hitTargets = targets
             revealers = mounted
             root.add_overlay(row)
             // Between the capsule and the modes: later overlay children paint on

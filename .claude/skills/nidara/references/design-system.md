@@ -955,7 +955,19 @@ mid-flight). (c) The **content**
 (`contentTarget`) fades in over the last stretch (progress 0.45→1) while the child
 paints with the glass rect mapped onto the interpolated rect — content materializes
 inside the already-formed shape; between the dissolve's end (0.35) and the content's
-start (0.45) the flying pairs carry the continuity. All bounds are
+start (0.45) the flying pairs carry the continuity. (d) The **companions**
+(`companions[]`): widgets that belong to the compact but are NOT the source rect — today
+the island's indicator chips. The source widget itself is switched off outright
+(`opacity = p <= 0 ? 1 : 0`) because the painted clone replaces it; a companion has no
+clone and sits OUTSIDE the growing shape, so it ramps over the same [0, 0.35] window as
+the source dissolve (a hard cut blinks it out while the island is still capsule-sized and
+nowhere near covering it). **This is not optional polish: source and island live in ONE
+surface, so the island's 5% glass does not hide — or blur — anything painted beside it.
+Anything left lit next to the capsule reads straight through the open island** (found the
+moment the chips shipped, 2026-08-01). Whatever is faded this way must also drop out of
+`IslandWindow`'s input-region stamp, or it leaves an invisible dead patch where a click
+should reach the dismiss catcher — which is why `mount` takes a hitTargets GETTER.
+All bounds are
 `compute_bounds`-re-read every frame so bar relayouts can't leave a stale origin. Same `reveal(open, onDone?)` contract as
 `ScaleRevealer` (self-managed visibility, close-then-`onDone` for the input-region
 refresh) — but easing is cubic **ease-in-out in BOTH directions**, a deliberate deviation

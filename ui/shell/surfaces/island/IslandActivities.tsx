@@ -5,11 +5,12 @@ import AstalBattery from "gi://AstalBattery"
 import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT } from "../../core/Status"
 import * as media from "../../core/MediaService"
 import { safeDisconnect } from "../../core/signals"
-import { PlayerCompact, makeArtGhost } from "./PlayerIsland"
+import { PlayerCompact, makeArtGhost, makeMiniArt } from "./PlayerIsland"
 import { AgentCompact } from "./AgentIsland"
 import agentService from "../../core/AgentService"
 import { makeBatteryGlyph, batteryPresent, batteryFrac } from "../../common/BatteryGlyph"
-import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
+import { makeWorkspaceDot, makeActiveDotGlyph, WS_COUNT } from "../../common/WorkspaceDot"
+import Icons from "../../core/Icons"
 import type { IslandActivity } from "./ActivityIsland"
 
 // The island's ACTIVITIES — the concrete things the capsule can show live
@@ -59,6 +60,7 @@ function dotsActivity(): IslandActivity {
         priority: 0,
         compact: box,
         expandMode: ISLAND_OVERVIEW,
+        indicator: makeActiveDotGlyph,
         watch: () => {},            // always live: nothing can change it
         isLive: () => true,
     }
@@ -77,6 +79,11 @@ function mediaActivity(): IslandActivity {
     let wasPlaying = false
     let changed: () => void = () => {}
 
+    // Indicator covers, refreshed by the player rewire below. Each one repaints
+    // only when the cover PATH changed (see makeCoverArt.refresh): the generic
+    // `notify` ticks at 1 Hz while playing, and a chip that redrew on every tick
+    // would cost the compositor a blur pass over the island once a second.
+    const artRefreshers: Array<() => void> = []
     const cancelGrace = () => {
         if (grace !== null) { GLib.source_remove(grace); grace = null }
     }
@@ -93,11 +100,20 @@ function mediaActivity(): IslandActivity {
         wasPlaying = playing
         changed()
     }
+    let artSig: number | null = null
     const rewire = () => {
         safeDisconnect(curPlayer, sig); sig = null
+        safeDisconnect(curPlayer, artSig); artSig = null
         curPlayer = media.selectedPlayer()
-        if (curPlayer) sig = curPlayer.connect("notify::playback-status", onStatus)
+        if (curPlayer) {
+            sig = curPlayer.connect("notify::playback-status", onStatus)
+            // The cover rides the GENERIC notify: a track change inside one
+            // player never touches playback-status, so the narrow signal above
+            // would leave the chip showing the previous album.
+            artSig = curPlayer.connect("notify", () => { for (const r of artRefreshers) r() })
+        }
         else { cancelGrace(); wasPlaying = false }
+        for (const r of artRefreshers) r()
         onStatus()
     }
     return {
@@ -111,6 +127,19 @@ function mediaActivity(): IslandActivity {
         flyer: {
             makeGhost: makeArtGhost,
             getSource: () => ((compact as any).artDa as Gtk.Widget) ?? null,
+        },
+        // The cover, with a music glyph UNDERNEATH it: the art paints opaque
+        // over the glyph when there is one and paints nothing when there isn't,
+        // so the fallback needs no visibility bookkeeping. (The empty wash the
+        // compact draws is suppressed here — a grey square the size of an icon
+        // says nothing; a music note says "something is playing".)
+        indicator: () => {
+            const stack = new Gtk.Overlay()
+            stack.set_child(new Gtk.Image({ gicon: Icons.music, pixel_size: 16, css_classes: ["nd-icon"] }))
+            const art = makeMiniArt()
+            artRefreshers.push(() => (art as any).refresh())
+            stack.add_overlay(art)
+            return stack
         },
         watch: (cb) => { changed = cb; media.subscribe(rewire); rewire() },
         // The open player panel HOLDS liveness while a player exists (a grace
@@ -168,6 +197,9 @@ function recActivity(): IslandActivity {
         priority: 20,
         compact: makeForm(),
         makeGhost: () => makeForm({ ghost: true }),
+        // The same pulsing danger dot the compact and the CC badge use — a
+        // capture has exactly one mark across the whole desktop.
+        indicator: () => new Gtk.Box({ css_classes: ["island-rec-dot"], width_request: 8, height_request: 8 }),
         watch: (changed) => {
             status.connect("notify::recording", () => {
                 if (status.recording) { recStart = Date.now(); syncLabels(); ensureTick() }
@@ -237,6 +269,13 @@ function batteryActivity(): IslandActivity {
             makeGhost: () => makeBatteryGlyph(44),
             getSource: () => ((compact as any).glyph as Gtk.Widget) ?? null,
         },
+        // The one Cairo battery glyph again, at bar icon size — its own fill
+        // already carries the danger colour, so the chip needs nothing added.
+        // Registered with the other glyphs so a level change repaints it (it
+        // reads batteryFrac on DRAW and has no cadence of its own). Nothing
+        // outranks 30 today, so a live battery always fronts and this chip never
+        // actually shows — it exists so that stops being true silently.
+        indicator: () => { const g = makeBatteryGlyph(16); glyphs.push(g); return g },
         watch: (changed) => {
             bat?.connect("notify", () => { evalCritical(); syncForms(); changed() })
             evalCritical(); syncForms()
@@ -261,6 +300,8 @@ function agentActivity(): IslandActivity {
         compact,
         expandMode: ISLAND_AGENT,
         makeGhost: () => AgentCompact({ ghost: true }),
+        // `sparkles`, the same glyph the working pill wears.
+        indicator: () => new Gtk.Image({ gicon: Icons.sparkles, pixel_size: 16, css_classes: ["nd-icon"] }),
         watch: (changed) => {
             agentService.subscribe(changed)
             // Re-arbitrate on island open/close too: opening the agent cold via

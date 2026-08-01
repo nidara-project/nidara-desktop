@@ -135,6 +135,7 @@ export class MorphRevealer extends Gtk.Widget {
     sourceGhosts: Gtk.Widget[]
     getSourceGhost: (() => Gtk.Widget | null) | null
     getSourceContent: (() => Gtk.Widget | null) | null
+    companions: Gtk.Widget[]
     glassFrom: () => MorphGlass
     glassTo: () => MorphGlass
     durationIn: number
@@ -167,6 +168,16 @@ export class MorphRevealer extends Gtk.Widget {
         sourceGhosts?: Gtk.Widget[],
         getSourceGhost?: () => Gtk.Widget | null,
         getSourceContent?: () => Gtk.Widget | null,
+        /** Widgets that belong to the compact but are NOT the morph's source
+         *  rect — the island's indicator chips beside the capsule. The source
+         *  is replaced by the painted clone and switched off outright; these
+         *  have no clone to replace them and sit OUTSIDE the growing shape, so
+         *  they fade over the opening's first stretch instead (a hard cut would
+         *  blink them out while the island is still capsule-sized and nowhere
+         *  near covering them). Without this they simply stay lit and read
+         *  straight through the island's 5% glass — both live in ONE surface,
+         *  so nothing composited there blurs or hides anything else. */
+        companions?: Gtk.Widget[],
         durationIn?: number, durationOut?: number,
     }) {
         super({})
@@ -181,6 +192,7 @@ export class MorphRevealer extends Gtk.Widget {
         this.sourceGhosts = opts.sourceGhosts ?? []
         this.getSourceGhost = opts.getSourceGhost ?? null
         this.getSourceContent = opts.getSourceContent ?? null
+        this.companions = opts.companions ?? []
         this.durationIn = opts.durationIn ?? 300
         this.durationOut = opts.durationOut ?? 220
         this.child.set_parent(this)
@@ -210,6 +222,11 @@ export class MorphRevealer extends Gtk.Widget {
         // open (opacity only, so it stays clickable geometry); back at close.
         const src = this.getSourceWidget?.()
         if (src) src.opacity = p <= 0 ? 1 : 0
+        // Companions ramp instead of cutting (see the ctor doc): gone by the
+        // time the shape has grown past them, back by the time it has shrunk
+        // away. Same window as the source-content dissolve, so the capsule's
+        // content and the chips beside it leave together.
+        for (const c of this.companions) c.opacity = 1 - clamp01(p / SOURCE_FADE_END)
         if (this.contentTarget)
             this.contentTarget.opacity = clamp01((p - CONTENT_START) / (1 - CONTENT_START))
         // Landing elements exist only at rest — the ghosts own the journey.

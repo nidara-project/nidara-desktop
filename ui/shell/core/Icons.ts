@@ -92,6 +92,7 @@ const Icons = {
     shield:            f("shield"),
     shieldOff:         f("shield-off"),
     sparkles:          f("sparkles"),
+    music:             f("music"),
     gamepad:           f("gamepad-2"),
 } as const
 

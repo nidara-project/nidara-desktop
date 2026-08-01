@@ -518,8 +518,17 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   appTitleWidget.set_visible(barSettings.showAppTitle)
   left.append(sysMenuWidget)
   left.append(appTitleWidget)
+  // NO spacing — the gap lives on each chip's own margin (see ActivityIsland).
+  // A Gtk.Box reserves its spacing between every VISIBLE child, and a collapsed
+  // Gtk.Revealer is still visible (it just measures 0), so spacing here would
+  // hold a permanent 8px to the right of the capsule and leave it off-centre in
+  // an idle session — the one state that must look exactly as it always has.
+  // The GROUP is what centres: a chip appearing shifts the capsule off the
+  // monitor's axis, which is the cost of the iOS split and is only ever paid
+  // while something is actually running.
   const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER })
-  center.append(island.capsule)   // the island's compact state (workspace dots)
+  center.append(island.capsule)      // the island's compact state
+  center.append(island.indicatorRow) // live activities that are NOT fronting it
   center.set_visible(barSettings.showWorkspaces)
   // `center` is NOT put in the bar's CenterBox: the capsule paints on the
   // island's surface (see islandWin above). It goes into a row that reuses the
@@ -531,7 +540,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const islandRow = new Gtk.Box({ css_classes: ["bar-centerbox"], height_request: BAR_H, valign: Gtk.Align.START })
   islandRow.append(center)
   center.hexpand = true           // halign CENTER inside a full-width row
-  islandWin.mount(islandRow, island.capsule, island.revealers)
+  islandWin.mount(islandRow, island.hitTargets, island.revealers)
   // The capsule is a CLICK TARGET living on a mostly click-through surface, so
   // its rect in the input region has to track its real size — and that size
   // moves on its own: the compact stack interpolates width when the fronting
@@ -539,6 +548,16 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // with no page change at all. The glass DrawingArea's `resize` fires on
   // exactly those, and only those.
   ;(island.capsule as any).glassArea?.connect("resize", () => islandWin.updateInputRegion())
+  // A chip appearing or leaving moves the capsule sideways WITHOUT resizing it,
+  // so the resize hook above never fires for it and both the chip's rect and the
+  // capsule's displaced one would stay unstamped. Re-stamped after the reveal
+  // lands (the slide takes COMPACT_SWAP_MS; the capsule may still be settling,
+  // and while it is, the resize hook keeps stamping anyway).
+  island.onBackgroundChanged(() => {
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+      islandWin.updateInputRegion(); return GLib.SOURCE_REMOVE
+    })
+  })
   const right = new Gtk.Box({ css_classes: ["bar-right"], halign: Gtk.Align.END, spacing: 8 })
   // Absorbs SizeGroup slack so actual capsules stay pinned to the right edge.
   // When left > right (long window title), SizeGroup widens the right allocation;

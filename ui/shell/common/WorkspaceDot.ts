@@ -11,6 +11,19 @@ export const WS_COUNT = 5
 // morph swaps between them at its endpoints and any visual difference reads
 // as a pop. Long-lived widgets only: the "changed" subscription is never
 // disconnected (same lifetime model as the bar capsule's original dots).
+/** The ACTIVE dot's form, frozen and stateless — the workspaces' glyph in the
+ *  island's indicator row. It says "you are on a workspace", not WHICH one: one
+ *  pill cannot carry five, and the row's job is only to point back at a surface
+ *  you can open. Same `.workspace-dot.active` classes as the real dots, so it is
+ *  the same ink (and the only accent in the row — which is exactly what the
+ *  accent is for: active state). */
+export function makeActiveDotGlyph(): Gtk.Widget {
+    return new Gtk.Box({
+        css_classes: ["workspace-dot", "active"],
+        valign: Gtk.Align.CENTER, halign: Gtk.Align.CENTER,
+    })
+}
+
 export function makeWorkspaceDot(i: number): Gtk.Widget {
     const dot = new Gtk.Box({ css_classes: ["workspace-dot"], valign: Gtk.Align.CENTER })
     const update = () => {
