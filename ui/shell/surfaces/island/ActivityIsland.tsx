@@ -100,6 +100,14 @@ export interface IslandActivity {
     /** Wire liveness; call `changed` whenever isLive() may have flipped. */
     watch: (changed: () => void) => void
     isLive: () => boolean
+    /** Show a chip WITHOUT competing for the front. Defaults to `isLive` — an
+     *  activity is normally indicated exactly when it is running. The Assistant
+     *  overrides it: once a provider is configured it is always one click away,
+     *  because the filtering already happened (you turned on an experimental
+     *  feature AND entered a key). Liveness cannot express that — an activity
+     *  that claimed to be live while idle would take the capsule from the music
+     *  and never give it back. */
+    isIndicated?: () => boolean
 }
 
 /** How many indicators can show at once. Beyond this the lowest-priority live
@@ -207,7 +215,12 @@ export function ActivityIsland() {
         // it takes the front anyway. It does not CLEAR the pin: when the
         // interruption passes, what the user chose comes back.
         const next = pinned && !(top.autoExpand && top !== pinned) ? pinned : top
-        const back = live.filter(a => a !== next).sort((x, y) => y.priority - x.priority)
+        // The row is everything INDICATED that isn't fronting — which is wider
+        // than "live": an activity can earn a chip without being able to take
+        // the capsule (see isIndicated).
+        const back = activities
+            .filter(a => a !== next && (a.isLive() || a.isIndicated?.()))
+            .sort((x, y) => y.priority - x.priority)
         // The front can hold steady while the background changes (music starts
         // under a critical battery), so this is computed before the early-out.
         const backChanged = back.length !== background.length || back.some((a, i) => a !== background[i])
@@ -235,9 +248,20 @@ export function ActivityIsland() {
     // opening the overview, which is what the capsule's own fallback would have
     // done and would read as the wrong surface answering the click.
     const promote = (a: IslandActivity) => {
-        pinned = a
-        arbitrate()
-        openAfterSwap(a)
+        // Only a LIVE activity can be pinned. The pin settles who owns the
+        // capsule among things that are RUNNING; a merely INDICATED chip (the
+        // idle assistant) has nothing to hold it with, and pinning it would
+        // either be cleared on the spot by the liveness check or — worse, if it
+        // weren't — park an idle activity in the capsule forever. Clicking it
+        // just opens it, which is what makes it live: the same path Super+A
+        // takes, where the island-mode change is what re-arbitrates the compact.
+        if (a.isLive()) {
+            pinned = a
+            arbitrate()
+            openAfterSwap(a)
+        } else if (a.expandMode) {
+            status.island_mode = a.expandMode
+        }
     }
     // ── The indicator row ────────────────────────────────────────────────────
     // The live activities that are NOT fronting, as chips beside the capsule —

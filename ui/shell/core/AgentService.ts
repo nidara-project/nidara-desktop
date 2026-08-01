@@ -153,11 +153,25 @@ let agentState: "idle" | "thinking" | "acting" = "idle"
 let usage = { input: 0, output: 0, cached: 0 }
 let lastError: string | null = null
 let cancelling = false      // user pressed cancel → an empty turn is expected, not a fault
+// A turn ENDED without the island being able to show it — the desktop was busy
+// with another overlay, so expand-on-finish stood down. Without this the answer
+// (or the failure) simply never happened as far as the screen was concerned:
+// the working pill settled back to the workspace dots and that was all. The
+// island's indicator chip wears it as a badge until the island is opened.
+let unread: "answer" | "error" | null = null
 
 let turnStartedAt = 0
 
 const listeners = new Set<() => void>()
 const notify = () => listeners.forEach(fn => fn())
+
+// Reading IS opening: the answer is the last thing in the transcript, so there
+// is nothing finer to mark read. Cleared here rather than in the island so the
+// badge cannot survive a surface that opened by some other route — Super+A,
+// IPC, the indicator chip, or expand-on-finish itself.
+status.connect("notify::island-mode", () => {
+    if (status.island_mode === ISLAND_AGENT && unread !== null) { unread = null; notify() }
+})
 
 // Half of the agent's telemetry (the other half is the daemon's own stderr,
 // which lands in the same nidara-ui.log). Together they make a failed turn
@@ -173,7 +187,13 @@ function failTurn(message: string, expand = true) {
     lastError = message
     const a = currentAssistant()
     if (a) a.error = message
-    if (expand && !status.isAnyOverlayOpen) status.island_mode = ISLAND_AGENT
+    // Same fork as the answer's: pop the island, or leave a mark. `expand:false`
+    // means the caller knows the state:idle right behind it will do the popping,
+    // so it must not mark here either — that would badge an island about to open.
+    if (expand) {
+        if (!status.isAnyOverlayOpen) status.island_mode = ISLAND_AGENT
+        else unread = "error"
+    }
     notify()
 }
 
@@ -278,6 +298,7 @@ function handleEvent(ev: any) {
                 const a = currentAssistant()
                 if (a && !a.text && !a.error && !a.tools.length && !cancelling)
                     a.error = t("island.agent.error.empty")
+                const cancelledThisTurn = cancelling
                 cancelling = false
                 // `text` is the answer and `interim` the narration, logged apart:
                 // the ratio between them is the whole reason this split exists, and
@@ -291,7 +312,13 @@ function handleEvent(ev: any) {
                 // (background). If the desktop is otherwise idle, pop the answer
                 // open. Never steal from another open overlay (CC/Prism/…) or
                 // re-open while already showing (island already counts as open).
+                // When we DON'T pop, the turn still has to have visibly happened:
+                // mark it unread so the island's chip badges it. A cancelled turn
+                // is the user's own doing and is not news. An error already marked
+                // itself in failTurn, and stays an error — it is the more
+                // consequential of the two.
                 if (!status.isAnyOverlayOpen) status.island_mode = ISLAND_AGENT
+                else if (!cancelledThisTurn && unread !== "error") unread = a?.error ? "error" : "answer"
             } else {
                 busy = true
             }
@@ -358,6 +385,11 @@ export const agentService = {
 
     /** Whether a provider is configured (Settings → AI) — drives the empty state. */
     configured(): boolean { return agentConfig.brainProvider !== "" },
+
+    /** A finished turn the island never got to show, or null. `"error"` outranks
+     *  `"answer"`: a turn that failed silently is the one worth interrupting for.
+     *  Cleared by opening the island. */
+    get unread(): "answer" | "error" | null { return unread },
 
     send(text: string) {
         const msg = text.trim()

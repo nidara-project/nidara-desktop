@@ -1169,11 +1169,17 @@ Ordered by what hurt most in the live run:
      expand-on-finish pops the island open with the answer when the desktop is otherwise idle.
    - **Island open, user watching** → the arriving text IS the beat, same as every chat UI
      (ChatGPT, Claude). Adding a chime/flash here would be noise. Deliberately nothing.
-   - **⚠️ THE REAL HOLE: the turn finishes while another overlay is open** (CC, Search…). Expand-on-
-     finish is suppressed on purpose — never steal from another overlay — so the answer lands with
-     **zero** signal: the glyph just settles back to the workspace dots as if nothing happened. Fix
-     direction: the capsule should hold an "unread answer" mark until the island is opened, instead
-     of reverting. Not built; judge it in use first.
+   - ~~**THE REAL HOLE: the turn finishes while another overlay is open**~~ **CLOSED 2026-08-01**,
+     and not by the fix this entry proposed. The plan was an "unread" mark on the CAPSULE, which
+     would have been a mechanism serving one case. The island's INDICATOR ROW made it a property of
+     something already on screen instead: `AgentService.unread` (`"answer" | "error" | null`) is set
+     at turn end exactly where expand-on-finish stands down, cleared by `island_mode === ISLAND_AGENT`
+     (in the service, so no route into the island can leave it stale), and painted as a badge on the
+     assistant's chip — which is already there, because a configured assistant is always indicated.
+     **It covers the silent ERRORS too** (`failTurn`'s suppressed branch, the half this entry never
+     mentioned), badged in danger colour: an error and an answer are not equally good news. The
+     lesson is the one the user made the call on: a general surface absorbs the special case, so
+     wait for it rather than patching the case alone.
 5. ~~**Replies ignore the UI language.**~~ **The item was WRONG — reframed by the user 2026-07-21.**
    The desired behaviour is the opposite of what it asked for: **the assistant replies in the language
    of the MESSAGE, and follows the user if they switch. The desktop locale is a hint for the ambiguous

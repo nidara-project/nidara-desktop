@@ -8,6 +8,7 @@ import { safeDisconnect } from "../../core/signals"
 import { PlayerCompact, makeArtGhost, makeMiniArt } from "./PlayerIsland"
 import { AgentCompact } from "./AgentIsland"
 import agentService from "../../core/AgentService"
+import agentConfig from "../../core/AgentConfig"
 import { makeBatteryGlyph, batteryPresent, batteryFrac } from "../../common/BatteryGlyph"
 import { makeWorkspaceDot, makeActiveDotGlyph, WS_COUNT } from "../../common/WorkspaceDot"
 import Icons from "../../core/Icons"
@@ -300,16 +301,52 @@ function agentActivity(): IslandActivity {
         compact,
         expandMode: ISLAND_AGENT,
         makeGhost: () => AgentCompact({ ghost: true }),
-        // `sparkles`, the same glyph the working pill wears.
-        indicator: () => new Gtk.Image({ gicon: Icons.sparkles, pixel_size: 16, css_classes: ["nd-icon"] }),
+        // `sparkles`, the same glyph the working pill wears, with a BADGE for a
+        // turn that finished while the island could not show it. That mark is
+        // the whole of the old "answer nobody saw" problem: not a mechanism of
+        // its own, just a dot on an icon that was going to be there anyway.
+        // Danger-coloured for a failed turn — an error and an answer are not
+        // equally good news, and the badge is the only place that can say so
+        // before you open it.
+        indicator: () => {
+            const wrap = new Gtk.Overlay()
+            wrap.set_child(new Gtk.Image({ gicon: Icons.sparkles, pixel_size: 16, css_classes: ["nd-icon"] }))
+            const badge = new Gtk.Box({
+                css_classes: ["island-chip-badge"],
+                width_request: 7, height_request: 7,
+                halign: Gtk.Align.END, valign: Gtk.Align.START,
+                visible: false,
+            })
+            wrap.add_overlay(badge)
+            const syncBadge = () => {
+                const u = agentService.unread
+                badge.set_visible(u !== null)
+                badge.set_css_classes(u === "error"
+                    ? ["island-chip-badge", "error"]
+                    : ["island-chip-badge"])
+            }
+            agentService.subscribe(syncBadge)
+            syncBadge()
+            return wrap
+        },
         watch: (changed) => {
             agentService.subscribe(changed)
             // Re-arbitrate on island open/close too: opening the agent cold via
             // Super+A must mutate the compact to the agent form BEFORE the morph
             // reads its source (no dots-blink), and closing must revert.
             status.connect("notify::island-mode", changed)
+            // Configuring a provider in Settings adds the chip THERE AND THEN,
+            // which is the moment the feature becomes real to the user; without
+            // this it would appear on the next shell reload and read as a bug.
+            agentConfig.onChange(changed)
         },
         isLive: () => agentService.busy || status.island_mode === ISLAND_AGENT,
+        // Configured = always reachable. Deliberately NOT part of isLive: an
+        // always-live agent would outrank the music (25 > 10) and hold the
+        // capsule for a session that never used it. An unread answer rides the
+        // badge above, not the front — the chip is already on screen, so there
+        // is nothing to announce by taking the capsule from whatever is running.
+        isIndicated: () => agentService.configured(),
     }
 }
 

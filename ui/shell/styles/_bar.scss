@@ -236,6 +236,22 @@ window#nidara-bar-zone {
     color: var(--nidara-text);
 }
 
+/* Indicator-chip badge: a turn that finished while the island could not show
+   it. Accent = an answer waiting (accent means "active/selected", and this is
+   the chip that has something for you); danger = the turn failed. No animation:
+   it sits in the bar for as long as it takes the user to look, and a pulsing
+   dot there costs the compositor a blur pass per frame, forever. */
+.island-chip-badge {
+    border-radius: var(--nidara-radius-pill);
+    background: $nidara-accent;
+    /* Reads against the glyph it overlaps, whatever the wallpaper does. */
+    box-shadow: 0 0 0 1.5px var(--nidara-surface-raised);
+}
+
+.island-chip-badge.error {
+    background: var(--nidara-danger);
+}
+
 .island-battery-pct {
     font-size: $fs-small;
     font-weight: $fw-bold;
