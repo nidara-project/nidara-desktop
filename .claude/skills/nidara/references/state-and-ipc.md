@@ -1104,12 +1104,27 @@ here and it is one wrapper mode + one tool in each consumer. Phase 1 — percept
   - **Grid text is per-line rstripped** (1402 of 5432 chars on one screen were width padding).
     Lossless on a grid, so it buys back a quarter of the budget; **not** applied to plain text
     widgets, where a trailing space can be something someone typed.
-- **The `<app-name>` filter matches AT-SPI NAMES, and an agent's vocabulary is Hyprland CLASSES**
-  (that's what `list_windows` returns). Those are not the same string: `gnome-terminal` has no
-  substring relation to `org.gnome.Terminal`. A strict substring pass runs first (so exact filters
-  keep their meaning), then a **rescue pass through `classMatches`**, which canonicalises BOTH
-  sides — last dot-segment, separators dropped. Keep it symmetric: either side can be the
-  dotted one, and the version that only split `cls` missed this exact case.
+- **ONE APP WEARS THREE NAMES, and every helper must answer to all three.** Hyprland's class
+  (`org.gtk.WidgetFactory4` — what `list_windows` and `launch_app` hand back), AT-SPI's app name
+  (`gtk4-widget-factory` — what `query_app` sees) and the `.desktop` name (`Widget Factory`). The
+  invariant is **`sameApp()`, duplicated verbatim in `bin/nidara-{a11y,act,click,type}`** (they are
+  standalone scripts, each copied to `/usr/bin` on its own — there is no shared module, so the
+  comment marks them as copies; change one, change all four). `AppService.nameTokens` in the shell
+  is the same rule in TypeScript. It runs as a **rescue after a strict substring miss**, so an exact
+  filter keeps meaning exactly what it meant, and app selection is decided on NAMES BEFORE the tree
+  is walked — the rescue never costs a second walk.
+  - Order: exact/substring → **token-set subset** → bare-letters containment.
+  - **Tokenize the ORIGINAL string, never a lowercased one.** The word breaks of `WidgetFactory`
+    live in its capitals; lowercasing first fuses it to one token and the match fails. This is the
+    bug the deterministic test caught while writing the fix — `sameApp` had it internally.
+  - Subset, not equality, is what makes a **superset query** work (`GTK Widget Factory` ⊇
+    `Widget Factory`) — which is how users and window titles actually name things.
+  - The bare-letters pass exists because `hyprctl activewindow` hands us an **already-lowercased**
+    class, where the camelCase seams are gone for good.
+  - Why it matters, measured on the bench 2026-08-01: `query_app` accepted only the AT-SPI name and
+    `click_at` only the Hyprland class, so **no single string drove both halves** and the model tried
+    four names for one app — six wasted steps in one turn. Perception and action must be aimable by
+    the same string or the loop cannot close.
 - **A perception result is a SNAPSHOT and the tool has to say so** — measured twice with the
   same model, which is what rules out model tier. Fresh conversation: it called `query_app` and
   answered correctly. Same question with an earlier `query_app` in history: **`steps=1 tools=0`**,
@@ -1255,6 +1270,14 @@ scrolling off-screen content, drag-and-drop / rubber-band selection / sliders):
   key-mode failure appends that keysyms are NAMES (`asterisk`, not `*`) and that a literal
   character goes through text mode. Same principle as the two above and as `settingsPage` (#68):
   **an error that only names the failure costs a step; one that names the next move costs nothing.**
+- **A refusal states what it KNOWS, never what it inferred** (2026-08-01). The focus refusal used to
+  end `; it is not open — run_action list_windows to see what is` whenever it failed to find a
+  matching window. That is an inference from *our own* matcher missing, and on the bench it was
+  **flatly false**: the window was open AND focused, under another of its names. The model obeyed the
+  sentence — `focus_window`, then `list_windows`, both no-ops — and failed again, two steps. It now
+  says `no open window answers to that name`, which is the fact. Generalises past this one string:
+  **an error that names the next move is worth nothing if the move is wrong**, and a diagnostic
+  derived from a failed lookup must describe the lookup, not the world.
 - **Same gate + indicator + kill switch + focus verification** as the keyboard (clicking/scrolling
   is position/stacking-dependent, so geometry is read FRESH right before injecting). First slice is
   single-monitor.

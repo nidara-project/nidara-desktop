@@ -108,9 +108,40 @@ function actionsOf(acc) {
     return { iface, names }
 }
 
-// Tolerant app match: AT-SPI app name vs the user-supplied filter (substring).
-function appMatches(appName, filter) {
-    return appName.toLowerCase().includes(filter)
+// ── one name per app ───────────────────────────────────────────────────────────
+// KEEP IDENTICAL in nidara-a11y, nidara-click and nidara-type — see the long
+// comment in nidara-a11y for the why. Short version: one app wears three names
+// (Hyprland class / AT-SPI name / .desktop name), substrings cannot bridge them
+// once a version digit moves sides, and a live run on 2026-08-01 paid six steps
+// because perception and action each accepted only one of the three.
+const NAME_NOISE = new Set(["org", "com", "io", "net", "app", "desktop"])
+const nameTokens = (s) => (s || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")   // camelCase  → "Widget Factory"
+    .replace(/([a-zA-Z])(\d)/g, "$1 $2")   // Factory4   → "Factory 4"
+    .replace(/(\d)([a-zA-Z])/g, "$1 $2")   // gtk4       → "gtk 4"
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(t => t && !NAME_NOISE.has(t))
+
+function sameApp(a, b) {
+    const la = (a || "").toLowerCase(), lb = (b || "").toLowerCase()
+    if (!la || !lb) return false
+    if (la === lb || la.includes(lb) || lb.includes(la)) return true
+    // Tokenize the ORIGINAL strings, never the lowercased ones: the word breaks of
+    // "WidgetFactory" live in its capitals, and lowercasing first is exactly the
+    // bug this function exists to kill (it fused "widgetfactory" into one token).
+    const ta = nameTokens(a), tb = nameTokens(b)
+    if (ta.length && tb.length) {
+        const [small, big] = ta.length <= tb.length ? [ta, tb] : [tb, ta]
+        const set = new Set(big)
+        if (small.every(t => set.has(t))) return true
+    }
+    // Last resort for a side that reaches us already lowercased — Hyprland's class
+    // does — where the camelCase seams are gone for good: drop digits and
+    // separators and compare bare letters. >2 chars so noise cannot match.
+    const bare = (s) => s.toLowerCase().replace(/[^a-z]/g, "")
+    const x = bare(a), y = bare(b)
+    return x.length > 2 && y.length > 2 && (x.includes(y) || y.includes(x))
 }
 
 // A miss reports the names actually on screen, exactly as nidara-click does — the
@@ -160,13 +191,19 @@ function findMatches(filter, nodeName, roleFilter) {
         for (const c of children(acc)) visit(c, depth + 1)
     }
 
-    for (const app of children(desktop)) {
-        const appName = nameOf(app) || "?"
-        apps.push(appName)
-        if (!appMatches(appName, filter)) continue
-        appFound = true
+    // App selection is two-pass on NAMES ONLY — strict substring first, so an
+    // exact filter keeps meaning exactly what it meant, then the tolerant rescue
+    // for the other spellings of the same app. Deciding before walking is what
+    // keeps the rescue free: the tree is walked once, never twice.
+    const allApps = children(desktop)
+    const named = allApps.map(app => [app, nameOf(app) || "?"])
+    for (const [, appName] of named) apps.push(appName)
+
+    let targets = named.filter(([, n]) => n.toLowerCase().includes(filter))
+    if (!targets.length) targets = named.filter(([, n]) => sameApp(n, filter))
+    appFound = targets.length > 0
+    for (const [app] of targets)
         for (const win of children(app)) visit(win, 0)
-    }
     // Prefer exact-name matches; fall back to substring matches.
     return { matches: exact.length ? exact : partial, apps, showing: [...seen], appFound }
 }

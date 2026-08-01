@@ -298,22 +298,52 @@ function hyprActiveClass() {
     }
 }
 
-// Tolerant match between an AT-SPI app name and a Hyprland class — they rarely
-// match verbatim ("Files"/"nautilus" vs "org.gnome.Nautilus").
-// Last dot-segment, separators dropped: "org.gnome.Terminal" and "gnome-terminal"
-// both reduce to something the other contains. Symmetric on purpose — the caller
-// passes a Hyprland class in one place and an agent-supplied filter in another, and
-// EITHER side can be the dotted/hyphenated one. (The old version only split `cls`,
-// so a dotted appName against a hyphenated filter missed.)
-const canonName = (s) => (s || "").toLowerCase().split(".").pop().replace(/[-_ ]/g, "")
+// ── one name per app ───────────────────────────────────────────────────────────
+// ONE app wears three different names, and an agent meets all three: Hyprland's
+// class ("org.gtk.WidgetFactory4"), AT-SPI's app name ("gtk4-widget-factory") and
+// the .desktop name ("Widget Factory"). Substring folding cannot bridge them the
+// moment a version digit moves sides — "gtk4widgetfactory" vs "widgetfactory4",
+// neither contains the other — and on 2026-08-01 a live run paid SIX steps for it:
+// query_app accepted only the AT-SPI name, click_at only the Hyprland class, so no
+// single string drove both halves and the model tried four names for one app.
+//
+// So compare TOKEN SETS, not substrings: split on separators, camelCase and
+// letter/digit seams, drop the reverse-DNS prefix, and match when one side's
+// tokens are all present in the other's. Subset (not equality) is what makes a
+// superset query work — "GTK Widget Factory" ⊇ "Widget Factory" — which is how
+// users and window titles actually name things.
+//
+// KEEP IDENTICAL in nidara-act, nidara-click and nidara-type: the four helpers
+// are standalone scripts by design (each is copied to /usr/bin on its own), and
+// the whole point of this function is that all four agree.
+const NAME_NOISE = new Set(["org", "com", "io", "net", "app", "desktop"])
+const nameTokens = (s) => (s || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")   // camelCase  → "Widget Factory"
+    .replace(/([a-zA-Z])(\d)/g, "$1 $2")   // Factory4   → "Factory 4"
+    .replace(/(\d)([a-zA-Z])/g, "$1 $2")   // gtk4       → "gtk 4"
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(t => t && !NAME_NOISE.has(t))
 
-function classMatches(appName, cls) {
-    appName = (appName || "").toLowerCase()
-    cls = (cls || "").toLowerCase()
-    if (!appName || !cls) return false
-    if (cls.includes(appName) || appName.includes(cls)) return true
-    const a = canonName(appName), c = canonName(cls)
-    return !!a && !!c && (a.includes(c) || c.includes(a))
+function sameApp(a, b) {
+    const la = (a || "").toLowerCase(), lb = (b || "").toLowerCase()
+    if (!la || !lb) return false
+    if (la === lb || la.includes(lb) || lb.includes(la)) return true
+    // Tokenize the ORIGINAL strings, never the lowercased ones: the word breaks of
+    // "WidgetFactory" live in its capitals, and lowercasing first is exactly the
+    // bug this function exists to kill (it fused "widgetfactory" into one token).
+    const ta = nameTokens(a), tb = nameTokens(b)
+    if (ta.length && tb.length) {
+        const [small, big] = ta.length <= tb.length ? [ta, tb] : [tb, ta]
+        const set = new Set(big)
+        if (small.every(t => set.has(t))) return true
+    }
+    // Last resort for a side that reaches us already lowercased — Hyprland's class
+    // does — where the camelCase seams are gone for good: drop digits and
+    // separators and compare bare letters. >2 chars so noise cannot match.
+    const bare = (s) => s.toLowerCase().replace(/[^a-z]/g, "")
+    const x = bare(a), y = bare(b)
+    return x.length > 2 && y.length > 2 && (x.includes(y) || y.includes(x))
 }
 
 function selectTargets(filter) {
@@ -336,9 +366,9 @@ function selectTargets(filter) {
                 const winName = safe(() => win.get_name(), "")
                 const label = winName ? `${appName} — ${winName}` : appName
                 const match = filter
-                    ? tolerant ? classMatches(appName, filter) : appName.toLowerCase().includes(filter)
+                    ? tolerant ? sameApp(appName, filter) : appName.toLowerCase().includes(filter)
                     : activeClass
-                        ? classMatches(appName, activeClass)
+                        ? sameApp(appName, activeClass)
                         : isActive(win)
                 if (match) targets.push({ frame: win, label })
             }

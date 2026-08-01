@@ -677,6 +677,15 @@ productive action** — the four wasted steps went to 0 and that number does not
 A structural fix should also be proved OUTSIDE the model, deterministically, by driving the verb
 from a shell (which is what actually settles it); the live turn only shows it holds in situ.
 
+**Write the deterministic table BEFORE the live re-run — it is where the fix's own bugs are.** On
+2026-08-01 the run-3 fix (one tolerant `sameApp` shared by perception and action) was verified first
+against a hand-written table of name pairs, positives *and* negatives, asserted symmetrically. It
+failed 3 of 11 immediately: the new matcher lowercased its inputs before tokenizing, destroying the
+capitals that mark the word breaks in `WidgetFactory` — the exact class of bug it existed to fix. A
+live re-run would have shown "still broken" and cost an API turn to say less. Keep the negatives in
+the table: a name matcher gets loose long before it gets wrong, and the PWA class
+(`chrome-…-Default` vs `google-chrome`) is the cheap canary.
+
 **A subtlety this cost: removing a refusal can remove an affordance.** Before the fix, the focus
 refusal pushed the model through `focus_window`, whose description happens to say it is "the
 precondition for the synthetic keyboard" — so the model learned `type_text` existed and used it.

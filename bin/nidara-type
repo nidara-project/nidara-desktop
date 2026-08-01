@@ -108,14 +108,47 @@ function hyprActiveClass() {
     }
 }
 
+// ── one name per app ───────────────────────────────────────────────────────────
+// KEEP IDENTICAL in nidara-a11y, nidara-act and nidara-click — see the long
+// comment in nidara-a11y for the why. Short version: one app wears three names
+// (Hyprland class / AT-SPI name / .desktop name), substrings cannot bridge them
+// once a version digit moves sides, and a live run on 2026-08-01 paid six steps
+// because perception named the app one way and action demanded another.
+const NAME_NOISE = new Set(["org", "com", "io", "net", "app", "desktop"])
+const nameTokens = (s) => (s || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")   // camelCase  → "Widget Factory"
+    .replace(/([a-zA-Z])(\d)/g, "$1 $2")   // Factory4   → "Factory 4"
+    .replace(/(\d)([a-zA-Z])/g, "$1 $2")   // gtk4       → "gtk 4"
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(t => t && !NAME_NOISE.has(t))
+
+function sameApp(a, b) {
+    const la = (a || "").toLowerCase(), lb = (b || "").toLowerCase()
+    if (!la || !lb) return false
+    if (la === lb || la.includes(lb) || lb.includes(la)) return true
+    // Tokenize the ORIGINAL strings, never the lowercased ones: the word breaks of
+    // "WidgetFactory" live in its capitals, and lowercasing first is exactly the
+    // bug this function exists to kill (it fused "widgetfactory" into one token).
+    const ta = nameTokens(a), tb = nameTokens(b)
+    if (ta.length && tb.length) {
+        const [small, big] = ta.length <= tb.length ? [ta, tb] : [tb, ta]
+        const set = new Set(big)
+        if (small.every(t => set.has(t))) return true
+    }
+    // Last resort for a side that reaches us already lowercased — Hyprland's class
+    // does — where the camelCase seams are gone for good: drop digits and
+    // separators and compare bare letters. >2 chars so noise cannot match.
+    const bare = (s) => s.toLowerCase().replace(/[^a-z]/g, "")
+    const x = bare(a), y = bare(b)
+    return x.length > 2 && y.length > 2 && (x.includes(y) || y.includes(x))
+}
+
 // Tolerant match between the user's <app> filter and the active window class
-// ("telegram" vs "org.telegram.desktop"/"TelegramDesktop").
+// ("telegram" vs "org.telegram.desktop"/"TelegramDesktop", and "gtk4-widget-factory"
+// — the name query_app answers to — vs "org.gtk.WidgetFactory4").
 function focusMatches(activeClass, app) {
-    app = (app || "").toLowerCase()
-    if (!activeClass || !app) return false
-    if (activeClass.includes(app) || app.includes(activeClass)) return true
-    const tail = activeClass.split(".").pop()
-    return !!tail && (tail.includes(app) || app.includes(tail))
+    return sameApp(activeClass, app)
 }
 
 // The address of the window the caller MEANT, for the refusal to hand back. A
@@ -212,7 +245,11 @@ function inject(mode, app, payload, wtype) {
         const hint = focusHint(app)
         emit({
             error: `refused: "${app}" is not the focused window (active: ${active ?? "unknown"}) — focus the WINDOW first with focus_window`
-                + (hint ? ` (address ${hint.address}), then retry` : `; it is not open — run_action list_windows to see what is`),
+                // Say what we KNOW (no open window answers to that name), never what
+                // we inferred ("it is not open"): on 2026-08-01 that inference was
+                // false — the window was open AND focused under another of its names —
+                // and the model spent two steps chasing the wrong remedy.
+                + (hint ? ` (address ${hint.address}), then retry` : `; no open window answers to that name — run_action list_windows for the ones that are`),
             active,
             ...(hint ? { focus: hint } : {}),
         })

@@ -12,6 +12,24 @@ export interface AppData {
     wmClass: string | null
 }
 
+/**
+ * Split an app name or id into comparable word tokens: separators, camelCase and
+ * letter/digit seams all count as breaks, and the reverse-DNS prefix is dropped.
+ * "org.gtk.WidgetFactory4" and "gtk4-widget-factory" both become
+ * [gtk, widget, factory, 4], which substring matching can never reconcile.
+ * Deliberately the same rule as `sameApp` in bin/nidara-{a11y,act,click,type} —
+ * the whole point is that every surface an agent touches agrees on what an app
+ * is called. Keep them in step.
+ */
+const NAME_NOISE = new Set(["org", "com", "io", "net", "app", "desktop"])
+const nameTokens = (s: string): string[] => (s || "")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([a-zA-Z])(\d)/g, "$1 $2")
+    .replace(/(\d)([a-zA-Z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(t => t && !NAME_NOISE.has(t))
+
 // Icons that are file-type placeholders or symbolic UI icons — not real app icons.
 // Avoid using these as app icons; try to find a better themed alternative first.
 const BAD_ICONS = [
@@ -726,6 +744,27 @@ class AppService {
         for (const app of this.cache.values()) {
             if (app.name.toLowerCase().includes(q) || (app.id && app.id.toLowerCase().includes(q))) {
                 results.push(app)
+            }
+        }
+
+        // Rescue pass for a query with a word TOO MANY. Substring matching only
+        // survives a query that is a piece of the name; the names people and
+        // window titles actually use are the other way round — "GTK Widget
+        // Factory" for a .desktop called "Widget Factory", "Firefox browser",
+        // "GIMP image editor". On 2026-08-01 that cost a live agent run two steps
+        // and a 7 KB dump of all 80 apps, because launch_app answers a miss with
+        // the whole catalogue. Rescue ONLY when the primary pass came back empty,
+        // so Prism's ranking is untouched wherever it already had hits.
+        if (!results.length) {
+            const wanted = new Set(nameTokens(q))
+            const coveredBy = (s: string) => {
+                const t = nameTokens(s)
+                return t.length > 0 && t.every(tok => wanted.has(tok))
+            }
+            if (wanted.size) {
+                for (const app of this.cache.values()) {
+                    if (coveredBy(app.name) || (app.id && coveredBy(app.id))) results.push(app)
+                }
             }
         }
 
