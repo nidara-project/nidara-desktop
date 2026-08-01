@@ -10,7 +10,7 @@ import WorkspaceOverview, { WO_GLASS } from "../overview/WorkspaceOverview"
 import PlayerIsland, { PLAYER_GLASS } from "./PlayerIsland"
 import BatteryIsland, { BATTERY_GLASS } from "./BatteryIsland"
 import AgentIsland, { AGENT_GLASS } from "./AgentIsland"
-import { buildActivities } from "./IslandActivities"
+import { buildActivities, DOTS_ID } from "./IslandActivities"
 
 // The Activity Island — the bar-center capsule as a MULTI-PURPOSE morphing
 // surface. The capsule is the island's COMPACT state; each thing it can host
@@ -35,9 +35,15 @@ import { buildActivities } from "./IslandActivities"
 // concrete activities live in IslandActivities.tsx). The engine here owns the
 // arbitration: the highest-priority LIVE activity fronts the compact (the
 // capsule's Gtk.Stack crossfades + interpolates size, so the pill reshapes
-// with the swap); none live = the workspace dots. Clicking the capsule
-// expands whatever fronts it. This is the mechanic the agent mode will ride
-// (a "working" pill that expands when the agent needs a confirmation).
+// with the swap). The workspace dots are an activity too — priority 0, always
+// live — so "nothing else running" is not a special case, it is just the dots
+// winning. Clicking the capsule expands whatever fronts it. This is the
+// mechanic the agent mode rides (a "working" pill that expands when the agent
+// needs a confirmation).
+//
+// The live activities that DON'T front are published as `background` for the
+// indicator row (iOS-style: the front is the capsule, the rest are icons beside
+// it). Nothing paints them yet — that's the next step.
 
 export interface IslandMode {
     id: string
@@ -91,22 +97,18 @@ export interface IslandActivity {
 }
 
 export function ActivityIsland() {
-    // ── Compact state: dots page + one page per activity, in a morphing stack ─
-    // (Dots absorbed from the old surfaces/bar/Workspaces.tsx — the capsule
-    // belongs to the island now; the bar just places it.)
+    // ── Compact state: one page per activity, in a morphing stack ────────────
+    // The workspace dots are an activity too (priority 0, always live — see
+    // IslandActivities' dotsActivity), so there is no separate dots page and no
+    // `else` branch in the arbitration below: the dots are simply what fronts
+    // the capsule when nothing outranks them.
     // halign CENTER on every compact page: during the stack's width
     // interpolation the incoming page is allocated at the still-resizing pill
     // width — left-packed content rides the MOVING left edge and visibly
     // drifts sideways (user-caught 2026-07-20 on media→battery). Centered,
     // the pill condenses/expands symmetrically around the content. At rest
     // (allocation = natural width) CENTER and FILL are identical.
-    const dotsBox = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
-    const dots: Gtk.Widget[] = []
-    for (let i = 1; i <= WS_COUNT; i++) {
-        const dot = makeWorkspaceDot(i)
-        dots.push(dot)
-        dotsBox.append(dot)
-    }
+    //
     // interpolate_size + non-homogeneous: the capsule's pill WIDTH animates
     // along with the crossfade when the compact mutates — one shape reshaping,
     // not a jump-cut (same principle as the big morph, GTK-native here).
@@ -118,32 +120,52 @@ export function ActivityIsland() {
         vhomogeneous: false,
         interpolate_size: true,
     })
-    compactStack.add_named(dotsBox, "dots")
+    // buildActivities returns the dots first, so the stack's initial visible
+    // child is the dots page — the capsule's resting form, before the first
+    // arbitration has run.
     const activities = buildActivities()
     for (const a of activities) compactStack.add_named(a.compact, a.id)
+    const dotsAct = activities.find(a => a.id === DOTS_ID)!
 
     // Expansion is EXPLICIT and follows the compact: the capsule opens what it
     // is currently showing. The overview always stays reachable via Super+W.
     let front: IslandActivity | null = null
     const capsule = SquircleContainer({ child: compactStack, gloss: true, useShellOpacity: true, chrome: true, opacityRole: "bar", borderColor: CAPSULE_BORDER, hoverBorderAccent: true, perfect: true, onClick: () => status.toggleIsland(front?.expandMode ?? ISLAND_OVERVIEW) })
     // Live dot refs for the morph: ghosts lerp FROM these bounds. (While the
-    // compact shows an activity the dots are unmapped and MorphRevealer lets
-    // the overview's landing dots ride the content fade instead.)
-    ;(capsule as any).morphDots = dots
+    // compact shows another activity the dots are unmapped and MorphRevealer
+    // lets the overview's landing dots ride the content fade instead.)
+    ;(capsule as any).morphDots = (dotsAct.compact as any).dots as Gtk.Widget[]
 
     // ── Arbitration: WHICH live activity fronts the compact ──────────────────
     // Liveness POLICY stays inside each activity (media owns its pause grace,
     // battery its hysteresis) — the engine only picks the winner and applies
     // the two cross-activity rules: a dead activity's expanded surface closes,
     // and an auto-expand activity opens its surface when it takes the front.
+    //
+    // The losers are NOT discarded: they are published as `background` (every
+    // live activity that isn't fronting), which is exactly what the indicator
+    // row paints. Order is by PRIORITY, never by arrival — an arrival-ordered
+    // row would make the icons swap places under the user's cursor.
+    let background: IslandActivity[] = []
+    const backgroundSubs: Array<() => void> = []
     let autoExpandTimer: number | null = null
     const arbitrate = () => {
         const live = activities.filter(a => a.isLive())
-        const next = live.length ? live.reduce((m, a) => (a.priority > m.priority ? a : m)) : null
-        if (next === front) return
+        // The dots activity is always live, so `live` is never empty and the
+        // compact always has a front.
+        const next = live.reduce((m, a) => (a.priority > m.priority ? a : m))
+        const back = live.filter(a => a !== next).sort((x, y) => y.priority - x.priority)
+        // The front can hold steady while the background changes (music starts
+        // under a critical battery), so this is computed before the early-out.
+        const backChanged = back.length !== background.length || back.some((a, i) => a !== background[i])
+        background = back
+        if (next === front) {
+            if (backChanged) for (const cb of backgroundSubs) cb()
+            return
+        }
         const prev = front
         front = next
-        compactStack.visible_child_name = front?.id ?? "dots"
+        compactStack.visible_child_name = front.id
         // The thing the open surface was showing is GONE (player left the bus,
         // battery recovered) — close it; a mere front takeover by a higher
         // priority leaves a still-live activity's surface open.
@@ -165,6 +187,7 @@ export function ActivityIsland() {
                 return GLib.SOURCE_REMOVE
             })
         }
+        if (backChanged) for (const cb of backgroundSubs) cb()
     }
     for (const a of activities) a.watch(arbitrate)
     // Closing a mode can end a liveness clause (media holds its compact while
@@ -274,6 +297,13 @@ export function ActivityIsland() {
     return {
         /** Compact state — the bar appends this to its center box. */
         capsule,
+        /** Every LIVE activity that is NOT fronting the capsule, highest
+         *  priority first — the model behind the indicator row (an icon per
+         *  entry). Idle session = only the dots are live = empty list, which is
+         *  why the bar looks unchanged until something else runs. */
+        background: () => background,
+        /** Fire when that list changes (membership or order). */
+        onBackgroundChanged: (cb: () => void) => { backgroundSubs.push(cb) },
         /** All mode revealers — the bar mounts each on its master overlay and
          *  includes them in its input-region pass (visibility-gated there). */
         revealers: [...modes.values()].map(rt => rt.revealer),

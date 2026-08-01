@@ -2,13 +2,14 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import AstalMpris from "gi://AstalMpris"
 import AstalBattery from "gi://AstalBattery"
-import status, { ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT } from "../../core/Status"
+import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT } from "../../core/Status"
 import * as media from "../../core/MediaService"
 import { safeDisconnect } from "../../core/signals"
 import { PlayerCompact, makeArtGhost } from "./PlayerIsland"
 import { AgentCompact } from "./AgentIsland"
 import agentService from "../../core/AgentService"
 import { makeBatteryGlyph, batteryPresent, batteryFrac } from "../../common/BatteryGlyph"
+import { makeWorkspaceDot, WS_COUNT } from "../../common/WorkspaceDot"
 import type { IslandActivity } from "./ActivityIsland"
 
 // The island's ACTIVITIES — the concrete things the capsule can show live
@@ -18,11 +19,50 @@ import type { IslandActivity } from "./ActivityIsland"
 // engine only picks the highest-priority live one.
 //
 // Priorities (spacing of 10 leaves room to slot things between):
-//   media 10 < recording 20 < battery-critical 30
+//   dots 0 < media 10 < recording 20 < agent 25 < battery-critical 30
 // An active capture outranks ambient playback (it's the rarer, more
 // consequential state); a critically-low battery outranks everything (it is
 // ALSO the auto-expand prototype — the agent's "needs confirmation" will ride
-// the same flag).
+// the same flag). The workspace dots sit at the FLOOR and are always live —
+// see dotsActivity below.
+
+// ── Workspace dots: the island's FLOOR, always live ──────────────────────────
+// Priority 0 with `isLive: () => true`, which makes the dots an activity like
+// any other instead of the arbitration's `else` branch. That `else` was a real
+// bug: with anything live (music playing) the capsule showed THAT activity and
+// its click opened THAT mode, so the workspace overview stopped being reachable
+// with the mouse at all. As an activity the dots merely lose the FRONT to a
+// higher priority and stay in the live set, which is what the indicator row
+// paints. Idle session = nothing else live = the dots front the capsule and the
+// bar looks exactly as it always has.
+//
+// No `makeGhost`: the dots' morph continuity is the TRAVELING PAIR set (each
+// capsule dot flies to the overview's landing dot — see ActivityIsland's
+// registerMode), not a dissolving twin.
+export const DOTS_ID = "dots"
+
+function dotsActivity(): IslandActivity {
+    // spacing 10 (dots are small — the other activity forms use 8), 16px side
+    // margins and halign CENTER: the bar capsule family standard.
+    const box = new Gtk.Box({ spacing: 10, margin_start: 16, margin_end: 16, halign: Gtk.Align.CENTER })
+    const dots: Gtk.Widget[] = []
+    for (let i = 1; i <= WS_COUNT; i++) {
+        const dot = makeWorkspaceDot(i)
+        dots.push(dot)
+        box.append(dot)
+    }
+    // The live dot refs the morph's traveling ghosts lerp FROM (same idiom as
+    // battery's `.glyph`): ActivityIsland republishes them as capsule.morphDots.
+    ;(box as any).dots = dots
+    return {
+        id: DOTS_ID,
+        priority: 0,
+        compact: box,
+        expandMode: ISLAND_OVERVIEW,
+        watch: () => {},            // always live: nothing can change it
+        isLive: () => true,
+    }
+}
 
 // ── Media (ambient): playing mutates the compact, never auto-expands ─────────
 function mediaActivity(): IslandActivity {
@@ -232,6 +272,8 @@ function agentActivity(): IslandActivity {
     }
 }
 
+// Dots FIRST: they are the priority-0 always-live activity, so they are both
+// the compact stack's initial page and the capsule's resting form.
 export function buildActivities(): IslandActivity[] {
-    return [mediaActivity(), recActivity(), batteryActivity(), agentActivity()]
+    return [dotsActivity(), mediaActivity(), recActivity(), batteryActivity(), agentActivity()]
 }
