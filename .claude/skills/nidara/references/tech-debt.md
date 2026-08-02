@@ -1907,12 +1907,8 @@ The only change that removed it was removing the resize. **Root cause not establ
 somewhere in how the compositor presents a layer surface across a size change, and chasing it further
 needs Hyprland-side instrumentation, not shell-side.
 
-**Separate bug found along the way (user-reported 2026-08-02, NOT investigated):** because the island
-sits at `exclusive_zone = -1` while the bar is at `40`, anything that reserves space at the top of
-the output — Hyprland's own config-error bar is the case observed — pushes the bar's capsules down
-but leaves the island where it is, so the compact capsule stops lining up with the bar row it is
-supposed to be part of. Cosmetic and rare, but it is a real divergence between two surfaces that are
-meant to read as one.
+**Separate bug found along the way (user-reported 2026-08-02) — FIXED the same day**, see
+`architecture.md`'s IslandWindow section and `HyprlandState.layerTop`.
 
 **So: do not re-propose "just make the layers smaller".** It is measured, it works, and it looks
 wrong. If the GPU cost is worth paying down, the mechanism has to be one that does not resize the

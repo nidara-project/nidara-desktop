@@ -79,6 +79,14 @@ export interface IslandWindowHandle {
      *  when the level is (re)set, so whenever the BAR moves to OVERLAY too (bar
      *  overlay mode) it would land after us and cover the island. */
     raise: () => void
+    /** Follow the BAR's top edge. We sit at `exclusive_zone = -1` so nothing can
+     *  displace us — which is right until something reserves space ABOVE the bar
+     *  (Hyprland's config-error bar), because the bar respects that reservation
+     *  and we do not, leaving the capsule floating above the row it belongs to.
+     *  Rather than model who reserves what, mirror where the bar actually IS
+     *  (`HyprlandState.layerTop`, which documents the full mechanism). 0 in the
+     *  normal case, so this changes nothing until something pushes the bar. */
+    setTopOffset: (px: number) => void
 }
 
 export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
@@ -123,6 +131,10 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
 
     let hitTargets: () => Gtk.Widget[] = () => []
     let revealers: MorphRevealer[] = []
+    // How far the whole surface is pushed down to stay level with the bar — see
+    // setTopOffset. Normally 0; everything below that converts between
+    // root-relative and monitor-relative coordinates has to add it.
+    let topOffset = 0
 
     // Mirrors the bar's own catcher, on this surface — see setCatcher's doc.
     const catcher = new Gtk.Button({ css_classes: ["overlay-catcher"], visible: false, hexpand: true, vexpand: true })
@@ -165,10 +177,13 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         // shown and stamped in the same turn, so its allocation is still a layout
         // pass behind. (Same reason the bar unions its own catcher rect by hand.)
         if (catcherTop !== null) {
+            // Height is the SURFACE's, not the monitor's: a top offset shortens us
+            // by that much, and a rect past the surface would just be clipped.
             // @ts-ignore
             region.unionRectangle({
                 x: 0, y: catcherTop,
-                width: Math.round(monGeo.width), height: Math.round(monGeo.height - catcherTop),
+                width: Math.round(monGeo.width),
+                height: Math.round(monGeo.height - topOffset - catcherTop),
             })
         }
         surface.set_input_region(region)
@@ -202,7 +217,12 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         // tell whether this rect is even on the output it is clicking — the numbers
         // are monitor-LOCAL and would otherwise silently compare across screens.
         return {
-            x: Math.round(x0), y: Math.round(y0),
+            // + topOffset: bounds are root-relative, and root-relative equals
+            // monitor-relative only while the surface starts at the monitor's top
+            // corner. Forget it and the agent is told the island is higher than it
+            // is, which is exactly the "clicking under the island" bug this exists
+            // to prevent.
+            x: Math.round(x0), y: Math.round(y0 + topOffset),
             w: Math.round(x1 - x0), h: Math.round(y1 - y0),
             monitor: gdkmonitor.get_connector() ?? "",
         }
@@ -254,6 +274,16 @@ export function IslandWindow(gdkmonitor: Gdk.Monitor): IslandWindowHandle {
         },
         raise: () => {
             try { Gtk4LayerShell.set_layer(win, Gtk4LayerShell.Layer.OVERLAY) } catch (e) {}
+        },
+        setTopOffset: (px) => {
+            const v = Math.max(0, Math.round(px))
+            if (v === topOffset) return
+            topOffset = v
+            try { Gtk4LayerShell.set_margin(win, Gtk4LayerShell.Edge.TOP, v) }
+            catch (e) { console.error("[IslandWindow] top margin failed:", e) }
+            // The input region is stamped in surface coordinates; the surface just
+            // moved, so the catcher's hand-written rect has to be re-cut.
+            updateInputRegion()
         },
     }
 }

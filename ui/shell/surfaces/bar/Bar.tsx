@@ -541,6 +541,18 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   islandRow.append(center)
   center.hexpand = true           // halign CENTER inside a full-width row
   islandWin.mount(islandRow, island.hitTargets, island.revealers)
+  // Keep the island level with the bar. Both surfaces are full-rect at y=0 in the
+  // normal case, so this is a no-op — it only matters when something reserves
+  // space ABOVE the bar (Hyprland's config-error bar), which slides the bar down
+  // while the island's `exclusive_zone = -1` keeps it put, leaving the capsule
+  // floating over the row it belongs to (user-caught 2026-08-02, reproduced with
+  // a reserving layer created before the shell). `configreloaded` is exactly when
+  // that bar appears and disappears, so it is the one event worth re-syncing on;
+  // the deferred first call waits for our own surface to exist to be measured.
+  const syncIslandToBar = () =>
+    hs.layerTop("nidara-bar").then(y => { if (y !== null) islandWin.setTopOffset(y) })
+  GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => { syncIslandToBar(); return GLib.SOURCE_REMOVE })
+  hs.connect("config-reloaded", syncIslandToBar)
   // The capsule is a CLICK TARGET living on a mostly click-through surface, so
   // its rect in the input region has to track its real size — and that size
   // moves on its own: the compact stack interpolates width when the fronting

@@ -103,6 +103,20 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     surface is EXACTLY the monitor rect regardless of what the bar and dock
     reserve (with zone 0 the bar's own 40px reservation would push the surface —
     and therefore the capsule — off the bar row).
+    **The island FOLLOWS the bar's top edge** (`setTopOffset`, fed by
+    `HyprlandState.layerTop("nidara-bar")` on startup and on `config-reloaded`).
+    The two surfaces answer to different rules on purpose — the bar's `zone = 40`
+    both reserves space AND respects everyone else's reservations, the island's
+    `-1` does neither — and that is right for each alone and wrong together: let
+    anything reserve space ABOVE the bar (Hyprland's own config-error bar is the
+    case in the wild) and the bar slides down while the island stays, leaving the
+    capsule floating over the row it belongs to. Reproduced with a 60px reserving
+    layer created before the shell; `zone = 0` is NOT the fix (it would respect the
+    full 100px and land 40px BELOW the bar instead of 60px above). Mirroring where
+    the bar actually is needs no model of who reserves what. **Anything converting
+    root-relative bounds to monitor-relative must add the offset** —
+    `occupiedRect` does, and it is what stops the agent clicking under the island.
+
     **Do not "optimise" this into a surface that resizes.** It was tried and
     reverted on 2026-08-02: shrinking it to a capsule-height strip when collapsed
     is worth a measured −6.1 pts of GPU, but every grow produced a visible

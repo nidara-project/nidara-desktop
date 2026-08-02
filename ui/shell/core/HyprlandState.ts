@@ -206,6 +206,36 @@ class HyprlandStateClass extends GObject.Object {
         catch (e) { console.error("[HyprlandState] getOptionJson", name, e); return null }
     }
 
+    /** Top edge (screen y) of one of OUR layer surfaces, by namespace — or null if
+     *  it is not mapped on that monitor.
+     *
+     *  Exists so the Activity Island can FOLLOW the bar instead of guessing where
+     *  it is. The two surfaces answer to different rules on purpose: the bar asks
+     *  for `exclusive_zone = 40` (it reserves space, and a surface with zone >= 0
+     *  also RESPECTS everyone else's reservations), while the island asks for `-1`
+     *  so nothing displaces it — if it respected reservations, the first one it
+     *  would respect is the bar's own 40px and the capsule would leave the bar row.
+     *  Both choices are right alone and wrong together: let anything reserve space
+     *  ABOVE the bar — Hyprland's own config-error bar is the case in the wild —
+     *  and the bar slides down while the island stays, so the capsule floats above
+     *  the row it belongs to. Reproduced 2026-08-02 with a 60px reserving layer
+     *  created before the shell: `nidara-bar` at `0 60`, `nidara-island` at `0 0`.
+     *
+     *  Reading the bar's real position beats computing it from `reserved`: it is
+     *  exact whatever did the pushing, and it needs no model of who reserves what.
+     *  Setting the island to zone 0 is NOT the fix — it would respect the full
+     *  100px and land 40px below the bar instead of 60px above it. */
+    async layerTop(namespace: string): Promise<number | null> {
+        try {
+            const byMonitor = JSON.parse(await execAsync(["hyprctl", "layers", "-j"]))
+            for (const mon of Object.values<any>(byMonitor))
+                for (const level of Object.values<any>(mon?.levels ?? {}))
+                    for (const l of level as any[])
+                        if (l?.namespace === namespace) return l.y ?? 0
+        } catch (e) { console.error("[HyprlandState] layerTop", namespace, e) }
+        return null
+    }
+
     /** Run a Lua-parser eval — the ONLY way to change Hyprland config live (the Lua
      *  parser rejects `hyprctl keyword`). Failures are logged with the offending call. */
     evalLua(luaCall: string) {
