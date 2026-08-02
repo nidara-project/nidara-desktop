@@ -398,6 +398,16 @@ floor** and therefore stops honouring a low user opacity setting. A layer surfac
 gets blur with no floor. Pick accordingly; `popups_ignorealpha` cannot be lowered
 without Hyprland blurring the popup's own drop shadow into a halo.
 
+**Row 2 needs `blur_popups = true` on that layer's own `layer_rule`, and it is the
+easy one to forget**, because `decoration:blur:popups` is already on globally and
+covers row 3 — so a popover of a WINDOW blurs and the identical popover of a LAYER
+does not. Being a `Gtk.Popover` is not enough on its own. `nidara-island` shipped
+without the flag and its player-panel source menu (and every tooltip inside an
+island mode) came out flat, while the same menu blurred fine in the Control Center
+— which lives in the bar's window, where `nidara-bar` already had it (user-caught
+2026-08-03). **Any layer that can open a `Gtk.Popover` needs the flag**; check it
+whenever a surface moves to a layer of its own.
+
 ## Glass capsule edge = AA, NOT none (don't flip it back)
 
 `drawSquircle` fills the glass body with **antialias GRAY (AA)** so the capsule

@@ -612,8 +612,13 @@ hl.window_rule({
 -- 0.01 like the bar, NOT the 0.30 a popup would need: `ignore_alpha` and
 -- `popups_ignorealpha` are different knobs, which is why the island keeps its
 -- 0.05 glass and stays tied to the user's opacity setting.
+-- It needs `blur_popups` for the same reason the bar does, and shipped without
+-- it: while the island lived inside the bar's window its popups were the BAR's
+-- popups and this rule covered them. Moving it to its own surface moved them
+-- too, and the player panel's source menu came out unblurred (user-caught
+-- 2026-08-03). Any layer that can open a Gtk.Popover needs the flag.
 hl.layer_rule({ match = { namespace = "nidara-bar" },      blur = true, blur_popups = true, ignore_alpha = 0.01  })
-hl.layer_rule({ match = { namespace = "nidara-island" },   blur = true, ignore_alpha = 0.01  })
+hl.layer_rule({ match = { namespace = "nidara-island" },   blur = true, blur_popups = true, ignore_alpha = 0.01  })
 hl.layer_rule({ match = { namespace = "nidara-dock" },     blur = true, blur_popups = true, ignore_alpha = 0.04 })
 hl.layer_rule({ match = { namespace = "nidara-lock" },     blur = true, ignore_alpha = 0.3   })
 
