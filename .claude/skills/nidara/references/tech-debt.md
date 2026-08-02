@@ -1842,6 +1842,153 @@ Until then: **grep for `sameApp` before touching any of them.**
 
 ---
 
+### 46. All three layers are monitor-sized and blurred — and dynamic sizing is a DEAD END (2026-08-02)
+
+`hyprctl layers` on a 2560x1440 desktop: `nidara-bar`, `nidara-dock` and `nidara-island` are all
+`0 0 2560 1440`, **all three with blur**. Making the island resize itself was implemented, measured,
+and **reverted the same day**. Read the "what was ruled out" part before proposing it again.
+
+**The mechanism, because `ignore_alpha` makes it easy to guess wrong:** Hyprland charges layer blur
+by the surface's **BOX**, not by the pixels that end up visible. `ignore_alpha` decides what is SEEN
+blurred, not what is COMPUTED — it is cosmetic and buys nothing here. Cost ≈ *damaged area × number
+of blurred layers covering it*, so with three full-screen layers **every repaint of every window
+anywhere pays triple blur**. It is a tax on daily use (scroll, video, dragging), not on idle — a
+different axis from #18's idle work.
+
+**Measured 2026-08-02**, synthetic damage 1600x700 at 144/s, 3 rounds shuffled, baseline stable to
+±0.4 pts: a full-screen blurred layer costs **+5.9 pts** of GPU; the same layer shrunk to what it
+actually shows costs **+0.4**. Fixing the island A/B'd at **31.4% → 25.3% (−6.1 pts)** against the
+real shell. ⚠️ **Do not quote these as the user-visible win:** cost scales with area × repaint rate,
+so 720p video at 60fps is roughly a third of this load (~2 pts/layer). Real, worth doing, not
+dramatic.
+
+#### Why dynamic sizing was reverted — and what was ruled out
+
+The island version WORKED and delivered the win: A/B'd against the real shell at **31.4% → 25.3%,
+−6.1 pts**, capsule and modes functionally unchanged, surface cycling cleanly 96↔1440 with no
+unmap/remap. It was reverted anyway, because **every grow produced a visible artefact**: the
+workspace dots rise and stretch horizontally, the indicator chips narrow upward before hiding. Fast —
+a frame or two — but plainly visible, on every single open.
+
+**Ruled out, each by a build the user compared against the pre-change one:**
+1. **GTK layout — the whole widget tree, with a CONTROL.** Instrumented `IslandWindow` to log
+   window, root, every hit target and every `MorphRevealer` (bounds + `progress`) on every frame
+   across a grow. Results: the capsule is constant at `1103,8 273x32` throughout; the chips are
+   constant until they unmap; the opening mode's revealer shows **one frame at `0,0 0x0`** before
+   snapping to `381,8 1798x341`. That `0x0` frame looks like a smoking gun and **is not one** — the
+   control build (`COLLAPSED_H` = monitor height, i.e. every other change in place but no resize
+   ever happening, the build the user confirms looks correct) shows **the identical `0x0` frame**.
+   It is just GTK: a widget made visible has no allocation until the next layout pass.
+   ⚠️ Deferring the reveal until `win.get_height()` matches does NOT avoid it either — the window
+   reports its new height a frame BEFORE its children are allocated. Waiting on the window is
+   waiting on the wrong thing.
+   **Conclusion, now with a control behind it: shell-side geometry is IDENTICAL in the good and bad
+   builds.** The only difference is the surface resize, so the artefact is compositor-side and
+   cannot be fixed from the widget tree.
+2. **Hyprland's `layers` animation** (it animates layer geometry, speed 3 / easeOut — the obvious
+   suspect for a stretch). Disabled globally via the user config; artefact unchanged. Note the base
+   config sets it at hyprland.lua:228 and `safe_require("hyprland-user")` runs at :637, so a user
+   override does win — verify with `hyprctl animations` and read the `enabled` field, not just the
+   first two lines.
+3. **Timing / ordering.** Deferring the morph until the allocation matched, then a further
+   `SETTLE_FRAMES` for the buffer to catch up: no effect. The artefact tracks the RESIZE, not the
+   animation that follows it.
+4. **Blur kernel clamped at the surface edge** (with a 96px surface the capsule has only 48px of
+   margin below it, less than the effective blur radius). Raised the collapsed height to 320: no
+   effect.
+
+5. **Hyprland re-arranging the other layers on a resize** (user's hypothesis: the island ignores
+   exclusive zones — `zone -1` — while the bar respects them, so they visibly diverge when
+   Hyprland's error bar appears). Polled `hyprctl layers` at ~250/s while a test layer toggled
+   between `2560x1300` and `400x60`: **every other layer reported exactly one geometry throughout**.
+   Resizing one layer does not move the others.
+
+The only change that removed it was removing the resize. **Root cause not established** — it is
+somewhere in how the compositor presents a layer surface across a size change, and chasing it further
+needs Hyprland-side instrumentation, not shell-side.
+
+**Separate bug found along the way (user-reported 2026-08-02, NOT investigated):** because the island
+sits at `exclusive_zone = -1` while the bar is at `40`, anything that reserves space at the top of
+the output — Hyprland's own config-error bar is the case observed — pushes the bar's capsules down
+but leaves the island where it is, so the compact capsule stops lining up with the bar row it is
+supposed to be part of. Cosmetic and rare, but it is a real divergence between two surfaces that are
+meant to read as one.
+
+**So: do not re-propose "just make the layers smaller".** It is measured, it works, and it looks
+wrong. If the GPU cost is worth paying down, the mechanism has to be one that does not resize the
+surface at all — which is `set_visible_region` (below).
+
+**If someone does revisit it anyway**, the parts that were right and should be reused: keep the
+origin fixed (anchor TOP, leave BOTTOM free, drive HEIGHT only) so every root-relative rect stays
+valid; grow BEFORE the animation; shrink only once every revealer is at rest closed — a surface does
+not draw outside its own rect, and `MorphRevealer.reveal` fires `onDone` synchronously for revealers
+already in the target state, so a naive shrink-on-done guillotines the one still animating.
+
+#### Also dead: splitting the island into TWO surfaces (capsule small + modes on demand)
+
+The obvious follow-up — capsule and chips on a small surface that never resizes, modes on a
+monitor-sized surface that is only MAPPED while something is open — was prototyped in C on
+2026-08-02 (`handoff.c`, scratchpad). Three sub-questions passed:
+
+- **Map/unmap is visually clean** (soft fade from `layersIn`, no stretch, no jump) and **costs zero
+  while unmapped** — measured as a textbook square wave: a layer toggling every 1.5s produced 7 low
+  and 7 high 1.5s windows with a **4.5 pt** step, returning to baseline every cycle.
+- The small surface **never resized and never remapped** (2560x96 in 1745/1745 samples) once it was
+  changed to stop PAINTING rather than hide.
+- `hl.layer_rule` accepts **`animation = "none"`**, so the map fade can be suppressed per namespace.
+
+**The handoff itself is what kills it.** Whichever way it is ordered, the small surface's frame lands
+before the big one's — its buffer is 2560x96 against 2560x1440, so it renders sooner. Result,
+confirmed by the user on the prototype: **opening shows a GAP** (capsule's glass vanishes, then the
+mode's appears) and **closing shows DOUBLE GLASS**. Reversing the order just swaps which end gets
+which. Even moving the map out of the critical path — present the big surface empty and transparent
+first, then swap contents on two already-mapped surfaces in one turn — does not fix it, because the
+two commits still land on different frames.
+
+**What it would take is an atomic commit across two layer surfaces, and Wayland does not offer one.**
+That is the real reason the whole island lives on ONE surface (the 2026-07-26 seam) — inside a single
+surface the handoff IS atomic. Treat commandment 5's exception as load-bearing, not stylistic.
+
+#### Also dead: `decoration:blur:xray = true`
+
+The one zero-code lever: with xray the layers blur only the BACKGROUND, so a window repainting under
+them costs nothing — exactly the cost measured above, gone for a config line. **Rejected on design
+grounds (user, 2026-08-02), and the reason generalises past the bar:** it applies to every glass
+surface we have. Open the Control Center over a window and it would blur the *wallpaper* instead,
+with the window simply absent underneath. The glass would stop behaving like glass. That is not a
+taste setting, it breaks the premise of the material — do not offer it as a Setting either.
+
+#### The remaining candidate: `set_visible_region`
+
+`hyprland-surface-v1.set_visible_region` (`hyprland-protocols`, in Arch `extra`; Hyprland ≥0.56
+implements it — verified in the installed binary's symbols) declares a visible sub-region and
+recovers ~88% of the same cost **without resizing the surface at all**, so by construction it cannot
+produce the artefact above. Measured 2026-08-02 with a purpose-built C client: full-screen blurred
+layer +5.9 pts, same layer with a 400x60 region declared **+0.7**, and it holds even when the damage
+falls directly UNDER the declared region (cost tracks the intersection, monotonically — a 1280x600
+region costs +3.0). Two caveats from the same measurements: there is a **floor of ~1 pt per layer**
+however small the region (the blur samples past the edge, so the cost is the region expanded by the
+radius), and a region declared away from the damage measured CHEAPER than an unblurred full-screen
+layer — the clip cuts composition too, not just blur.
+
+**Why it is not done:** it cannot be called from GJS (`libwayland-client` has no GI, and
+`gdk_wayland_surface_get_wl_surface` is `introspectable="0"` in `GdkWayland-4.0.gir`), so it needs a
+small C library with GIR + typelib, packaged into pacman/`install.sh` and wired into all three
+bundles. Precedent for the C part exists (`bin/nidara-input.c`, compiled by `install.sh` and the
+PKGBUILD) but that is a standalone binary; this one has to be **in-process**, because the region is
+set on OUR OWN `wl_surface`.
+
+⚠️ **Its failure mode is worse than resizing's, and that is the real design constraint:** content
+outside the declared region is **not drawn at all** — a hard GL scissor on the geometry, not just on
+the blur (`OpenGL.cpp` ~1574-1594: with a non-empty `clipRegion` the texture draw iterates the clip
+region instead of the damage). And `SurfacePassElement.cpp:150-158` intersects the region with the
+buffer and sets `cancel` if it comes out empty, so a stale region after a resize **makes the surface
+vanish** rather than degrade. There is exactly 1px of tolerance (`visibleRegion.expand(1)`).
+Confirmed in the source and live: with a 1200x400 shape declared visible only over its left 400px,
+the other 800px — frame included — simply were not there.
+
+---
+
 ## Meta: how to interpret "tech debt" here
 
 Not a bug list — conscious tradeoffs to pay down opportunistically:

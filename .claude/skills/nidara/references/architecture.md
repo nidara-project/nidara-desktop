@@ -103,6 +103,14 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     surface is EXACTLY the monitor rect regardless of what the bar and dock
     reserve (with zone 0 the bar's own 40px reservation would push the surface —
     and therefore the capsule — off the bar row).
+    **Do not "optimise" this into a surface that resizes.** It was tried and
+    reverted on 2026-08-02: shrinking it to a capsule-height strip when collapsed
+    is worth a measured −6.1 pts of GPU, but every grow produced a visible
+    artefact (workspace dots rising and stretching, indicator chips narrowing
+    upward) that could not be tuned away. See `tech-debt.md` §46 for the full
+    attribution and what was ruled out — the short version is that GTK is provably
+    innocent and the cost is compositor-side, so it is not a scheduling bug you
+    can fix from here.
     **The layer-shell rule worth memorising, because a wrong guess about it cost
     real time:** a surface requesting `exclusive_zone > 0` is arranged against
     the FULL output area; only surfaces asking for **zone 0** get pushed into the
