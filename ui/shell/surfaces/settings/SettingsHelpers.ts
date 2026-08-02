@@ -92,11 +92,11 @@ export const listGroup = (title: string, footer: string = "") => NidaraList(titl
 
 // ── Generic Row ───────────────────────────────────────────────────────────────
 // Universal NidaraRow + the settings-only side effect (search-index registration).
-export const createRow = (label: string, subtitle: string, widget: Gtk.Widget, titleIcon?: Gtk.Widget, leadingIcon?: Gtk.Widget) => {
+export const createRow = (label: string, subtitle: string, widget: Gtk.Widget, titleIcon?: Gtk.Widget, leadingIcon?: Gtk.Widget, footer?: Gtk.Widget) => {
     if (_pageCtx.id) {
         _searchIndex.push({ pageId: _pageCtx.id, pageLabel: _pageCtx.label, label, subtitle })
     }
-    return NidaraRow(label, subtitle, widget, [], titleIcon, leadingIcon)
+    return NidaraRow(label, subtitle, widget, [], titleIcon, leadingIcon, footer)
 }
 
 /** Same as createRow but with the control on its own full-width line underneath —

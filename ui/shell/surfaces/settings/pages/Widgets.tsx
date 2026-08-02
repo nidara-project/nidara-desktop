@@ -4,6 +4,7 @@ import ccLayout from "../../control-center/CCLayoutManager"
 import registry, { widgetAvailable, CATEGORY_ORDER } from "../../../widgets/index"
 import { AtomicWidget, WidgetCategory } from "../../control-center/Types"
 import { pageBox, listGroup, createRow, type SettingsNav } from "../SettingsHelpers"
+import { NidaraButton } from "../../../../lib/nidara-kit"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import { attachTooltip } from "../../../common/Tooltip"
@@ -23,8 +24,9 @@ function controlGroup(label: string, active: boolean, sensitive: boolean, toolti
 }
 
 // One row per widget: leading identity icon + name, then the Bar / Control Center
-// switches on the right. A widget that declares buildSettings also gets a chevron
-// that pushes its own settings subpage (none ship today, but the hook stays wired).
+// switches on the right — and NOTHING else in that trailing slot, which is what
+// keeps the switch columns aligned down the whole page. A widget with its own
+// settings grows a second line inside the SAME row (see the footer below).
 function buildWidgetRow(nav: SettingsNav, w: AtomicWidget): Gtk.ListBoxRow {
     const placement = widgetConfig.get(w.id)
     // Hardware gate: the row stays visible (so the user sees WHY it's off) but the
@@ -65,20 +67,43 @@ function buildWidgetRow(nav: SettingsNav, w: AtomicWidget): Gtk.ListBoxRow {
         ))
     }
 
-    // Per-widget "Configure" → pushes the widget's own settings as a subpage.
-    if (w.buildSettings && available) {
-        const chevron = new Gtk.Button({
-            child: new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 16, css_classes: ["nd-icon"], opacity: 0.4 }),
-            css_classes: ["settings-icon-btn"], valign: Gtk.Align.CENTER,
-        })
-        attachTooltip(chevron, t("settings.widgets.configure"), { chrome: false })
-        chevron.connect("clicked", () => nav.pushSubpage({
-            id: `widgets/${w.id}`, title: w.name, parentId: "widgets", build: w.buildSettings!,
-        }))
-        controls.append(chevron)
-    }
+    // "Configure" goes on a SECOND LINE INSIDE this row, never in the trailing
+    // slot beside the switches. Two earlier shapes were wrong, both user-caught
+    // on 2026-08-02:
+    //   1. A chevron appended to the trailing slot. The slot is for ONE control
+    //      and it then held three — and since only SOME widgets have settings,
+    //      the chevron pushed just those rows' switches left, so the Bar/Center
+    //      columns stopped lining up down the page. An OPTIONAL control in the
+    //      trailing slot misaligns the whole column; "it fits" is not the test.
+    //   2. A sibling row underneath. That fixed the alignment but read as
+    //      another ITEM in the list — an indent alone cannot say "this belongs
+    //      to the row above" when every row in a list looks alike.
+    // Inside the row, the two lines share one cell and one hover, so ownership
+    // is structural rather than a hint.
+    const footer = (w.buildSettings && available) ? configureButton(nav, w) : undefined
+    return createRow(w.name, "", controls, undefined, leadingIcon, footer)
+}
 
-    return createRow(w.name, "", controls, undefined, leadingIcon)
+/** The in-row "Configure" control. Reuses the key that used to label this
+ *  control's tooltip — already translated in all 12 catalogues, so moving it
+ *  cost no new translation debt. */
+function configureButton(nav: SettingsNav, w: AtomicWidget): Gtk.Button {
+    const btn = NidaraButton({
+        // ghost + compact is exactly what the size ramp documents this slot for:
+        // a control inside a dense row that must not out-weigh the row's own
+        // text (same call the CC audio detail's "set as default" link makes).
+        // It is editorial here, not a way to make something fit.
+        label: t("settings.widgets.configure"),
+        variant: "ghost", size: "compact", halign: Gtk.Align.START,
+    })
+    // Line the label up with the widget's NAME: leading-icon width (18) + the
+    // row's 16px spacing. NidaraRow can't compute this — only the caller knows
+    // how big its leading icon is.
+    btn.margin_start = 34
+    btn.connect("clicked", () => nav.pushSubpage({
+        id: `widgets/${w.id}`, title: w.name, parentId: "widgets", build: w.buildSettings!,
+    }))
+    return btn
 }
 
 // Widgets are grouped by category (Media / Utilities / System) in the SAME order

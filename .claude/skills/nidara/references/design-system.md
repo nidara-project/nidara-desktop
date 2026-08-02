@@ -610,10 +610,29 @@ shared "pick an image for this" row: preview leading, text middle, `[Choose imag
 trailing, dialog and SVG/PNG filters included; callers supply only `renderPreview` / `isCustom` /
 `onPick` / `onReset`. Use it for any new image-picking setting rather than a fourth copy.
 
-Two legitimate escapes when one control genuinely will not fit the trailing slot: **`createStackedRow`**
-(control on its own full-width line beneath the text — for entries and button pairs) and a
-dedicated preview row of its own (Settings → Gaming's wallpaper, Users' avatar, where the image is
-large enough to be the row).
+Three legitimate escapes when one control genuinely will not fit the trailing slot:
+**`createStackedRow`** (control on its own full-width line beneath the text — for entries and
+button pairs), a dedicated preview row of its own (Settings → Gaming's wallpaper, Users' avatar,
+where the image is large enough to be the row), and **`NidaraRow`'s `footer` arg** (below).
+
+**An OPTIONAL control in the trailing slot misaligns the whole column — "it fits" is not the
+test.** Settings → Widgets put a "Configure" chevron beside each configurable widget's
+Bar/Center switches; since only *some* widgets have settings, the chevron pushed just those rows'
+switches left and the switch columns stopped lining up down the page (user-caught 2026-08-02:
+*"se desalinean del resto"*). A control that is not present in EVERY row of a group cannot share
+that group's trailing slot. The fix is **`NidaraRow`'s `footer`** (threaded through
+`createRow(label, subtitle, widget, titleIcon, leadingIcon, footer)`): a second line INSIDE the
+row, under the text column, while line 1 keeps its title and trailing control untouched — so a
+column of trailing controls stays aligned even though only some rows carry a footer. The caller
+owns the footer's `halign` and its `margin_start` (leading-icon width + the row's 16px spacing —
+34 for an 18px icon; `NidaraRow` cannot know the icon's size), and keeps it visually lighter than
+the title: **ghost + compact** is the house style for this slot.
+
+Do NOT reach for a sibling row instead. That was the intermediate fix here and it read as another
+ITEM in the list — *"como si fuese otro widget"* — because an indent alone cannot say "this
+belongs to the row above" when every row in a list looks alike. Inside the row, the two lines
+share one cell and one hover, so ownership is structural rather than a hint. (A sibling row is
+still right when the thing genuinely IS a peer item — that is what the Apps page's `navRow`s are.)
 
 **Inside a stacked row, keep going: one control per line, actions last.** Moving to
 `createStackedRow` buys a whole card's width — spending it on a field and its buttons side by side

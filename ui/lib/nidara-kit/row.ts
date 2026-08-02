@@ -94,22 +94,50 @@ export function NidaraRow(
     titleIcon?: Gtk.Widget,
     /** Icon shown BEFORE the title, leading the row (e.g. a widget/app identity icon). */
     leadingIcon?: Gtk.Widget,
+    /**
+     * A SECOND line INSIDE the row, under the text column — for a secondary
+     * control that belongs to this item but must not compete with `control` for
+     * the trailing slot (Settings → Widgets puts "Configure" here).
+     *
+     * Not the same thing as `NidaraStackedRow`, which replaces the horizontal
+     * shape entirely: here line 1 keeps its title + trailing control exactly as
+     * it is, so a column of trailing controls stays aligned even though only
+     * some rows carry a footer. That is the whole reason this exists — the
+     * alternative, a sibling row underneath, reads as another ITEM in the list
+     * rather than as part of this one (user-caught 2026-08-02).
+     *
+     * The caller owns the footer's `halign` and its `margin_start` (the indent
+     * that lines it up with the title — leading-icon width + 16px spacing;
+     * NidaraRow cannot know the icon's size). Keep it visually lighter than the
+     * title: ghost + compact is the house style for a control in this slot.
+     */
+    footer?: Gtk.Widget,
 ): Gtk.ListBoxRow {
-    const box = new Gtk.Box({
-        spacing: 16, margin_start: 16, margin_end: 16, margin_top: 14, margin_bottom: 14,
-    })
+    const line = new Gtk.Box({ spacing: 16 })
 
-    if (leadingIcon) box.append(leadingIcon)
+    if (leadingIcon) line.append(leadingIcon)
 
     // textColumn, not a copy of it. This function used to inline its own — byte for
     // byte the same widgets — which is why a fix applied to `textColumn` changed the
     // stacked rows and left every ordinary row untouched (caught live 2026-07-27,
     // after the fix "did nothing"). The helper's docstring already claimed both
     // shapes shared it; now they do.
-    box.append(textColumn(label, subtitle, titleIcon))
-    if (control) box.append(control)
+    line.append(textColumn(label, subtitle, titleIcon))
+    if (control) line.append(control)
+
+    // The row's padding always sits on the OUTERMOST box, so a footer row has the
+    // same outer metrics as a plain one and only adds its own line — without a
+    // footer this is `line` itself, byte-identical to the original layout.
+    let content: Gtk.Box = line
+    if (footer) {
+        content = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10 })
+        content.append(line)
+        content.append(footer)
+    }
+    content.margin_start = 16; content.margin_end = 16
+    content.margin_top = 14; content.margin_bottom = 14
 
     const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row", ...extraClasses] })
-    row.set_child(box)
+    row.set_child(content)
     return row
 }
