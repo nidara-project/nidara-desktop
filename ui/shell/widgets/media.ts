@@ -1,5 +1,4 @@
 import { Gtk, Gdk } from "ags/gtk4"
-import { PANEL_W } from "../common/widget-kit"
 import AstalMpris from "gi://AstalMpris"
 import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
@@ -17,75 +16,14 @@ import { attachTooltip } from "../common/Tooltip"
 import { menuRow, menuSeparator } from "../common/MenuRow"
 import { sideFor, paintGlassBubble, ARROW_H, BUF, type ArrowSide } from "../common/GlassBubble"
 
-function buildBarContent(): Gtk.Widget {
-    const prevImg = new Gtk.Image({ gicon: Icons.skipBack,    pixel_size: 16 , css_classes: ["nd-icon"] })
-    const playImg = new Gtk.Image({ gicon: Icons.play,        pixel_size: 16 , css_classes: ["nd-icon"] })
-    const nextImg = new Gtk.Image({ gicon: Icons.skipForward, pixel_size: 16 , css_classes: ["nd-icon"] })
-    const prev = new Gtk.Button({ child: prevImg, css_classes: ["bar-media-btn"] })
-    const play = new Gtk.Button({ child: playImg, css_classes: ["bar-media-btn"] })
-    const next = new Gtk.Button({ child: nextImg, css_classes: ["bar-media-btn"] })
+// NO bar variant. The Activity Island already carries the player as an activity
+// (IslandActivities' mediaActivity: cover art in the compact capsule the moment
+// an MPRIS player is live, the full panel when it opens), so a bar pill with its
+// own transport buttons was the same service stated twice, a capsule apart. The
+// island is the single home; the CC tile is the grid's copy of it. See
+// references/architecture.md.
 
-    const title = new Gtk.Label({
-        label: "",
-        css_classes: ["bar-widget-label"],
-        max_width_chars: 16,
-        ellipsize: 3,
-        visible: false,
-    })
-
-    const box = new Gtk.Box({
-        spacing: 4,
-        valign: Gtk.Align.CENTER,
-        margin_start: 16,
-        margin_end: 16,
-    })
-    box.append(prev)
-    box.append(play)
-    box.append(next)
-    box.append(title)
-
-    let player: any = null
-    let playerSigId: number | null = null
-
-    const update = () => {
-        const p = player
-        const playing = p?.playback_status === AstalMpris.PlaybackStatus.PLAYING
-        // AstalMpris polls position every 1s while PLAYING and emits notify::position,
-        // firing this generic "notify" handler 1×/s. Guard the gicon assignment so an
-        // unchanged play/pause icon never queues a draw → no 1 Hz bar re-blur while
-        // music plays. (label/sensitive/visible below are already GTK equality-guarded.)
-        const wantIcon = playing ? Icons.pause : Icons.play
-        if (playImg.gicon !== wantIcon) playImg.gicon = wantIcon
-        prev.sensitive = p?.can_go_previous !== false
-        next.sensitive = p?.can_go_next !== false
-        const t = p?.title || ""
-        title.label = t
-        title.visible = t.length > 0
-    }
-
-    const updatePlayer = () => {
-        safeDisconnect(player, playerSigId)
-        playerSigId = null
-        player = media.selectedPlayer()
-        if (player) playerSigId = player.connect("notify", update)
-        update()
-    }
-
-    const unsubscribe = media.subscribe(updatePlayer)
-    box.connect("unrealize", () => {
-        unsubscribe()
-        safeDisconnect(player, playerSigId)
-    })
-
-    prev.connect("clicked", () => { try { player?.previous() } catch {} })
-    play.connect("clicked", () => { try { player?.play_pause() } catch {} })
-    next.connect("clicked", () => { try { player?.next() } catch {} })
-
-    updatePlayer()
-    return box
-}
-
-// Hours-aware time formatter shared by bar expanded and CC detail
+// Hours-aware time formatter shared by the island panel and CC detail
 function fmt(secs: number): string {
     const s = Math.max(0, Math.floor(secs))
     const h = Math.floor(s / 3600)
@@ -392,11 +330,6 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     return root
 }
 
-// Bar pill expansion: same rich panel, fixed width to match CC detail squircle
-function buildBarExpanded(_onClose: () => void): Gtk.Widget {
-    return buildMediaDetailPanel(PANEL_W.full)
-}
-
 function buildCCDetail(_onClose: () => void): Gtk.Widget {
     return buildMediaDetailPanel(0)
 }
@@ -406,12 +339,10 @@ const mediaWidget: AtomicWidget = {
     category: "media",
     name: t("cc.media.name"),
     icon: Icons.play,
-    locations: ["bar", "cc"],
+    locations: ["cc"],
     defaultSize: WidgetSize.SQUARE,
     supportedSizes: [WidgetSize.SINGLE, WidgetSize.WIDE, WidgetSize.SQUARE],
     buildContent: (size, budget) => MediaIslandContent().buildContent(size, budget),
-    buildBarContent,
-    buildBarExpanded,
     buildCCDetail,
     ccDetailRows: 3,
 }

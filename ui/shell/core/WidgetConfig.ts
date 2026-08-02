@@ -68,11 +68,17 @@ class WidgetConfigManager extends GObject.Object {
         this.emit("changed")
     }
 
+    // BAR_ORDER already lists every bar-capable widget, so intersecting with it
+    // both orders the pills AND drops ids that can no longer render there — a
+    // widget that loses its bar variant (media, once the Activity Island took
+    // over the player) leaves a `"bar": true` behind in everyone's saved config.
+    // Those used to be appended at the end, where they consumed one of the bar's
+    // limited icon slots before the render loop skipped them for having no
+    // buildBarContent. The saved flag is left untouched: it costs nothing and
+    // comes back if the widget ever regains a bar variant.
     barWidgetIds(): string[] {
         const active = new Set(Object.keys(DEFAULTS).filter(id => this._config[id]?.bar))
-        const ordered = BAR_ORDER.filter(id => active.has(id))
-        const rest = [...active].filter(id => !BAR_ORDER.includes(id))
-        return [...ordered, ...rest]
+        return BAR_ORDER.filter(id => active.has(id))
     }
 
     ccWidgetIds(): string[] {
