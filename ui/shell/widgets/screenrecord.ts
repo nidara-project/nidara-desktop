@@ -1,30 +1,28 @@
 import { Gtk } from "ags/gtk4"
+import Gio from "gi://Gio"
 import { PANEL_W } from "../common/widget-kit"
 import { NidaraButton } from "../../lib/nidara-kit/button"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
+import { pageBox, listGroup, createRow, toggleRow, dropdownRow } from "../surfaces/settings/SettingsHelpers"
 
 import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import { safeDisconnect } from "../core/signals"
 import status, { recordingElapsed } from "../core/Status"
+import recordingConfig, {
+    AUDIO_MIC, AUDIO_SYSTEM, FORMATS, FRAMERATES, QUALITIES,
+    buildCaptureCommand, hardwareAvailable, listAudioDevices,
+    type RecordFormat, type RecordQuality,
+} from "../core/RecordingConfig"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type RecordMode = "screen" | "region"
 
-// ── State ─────────────────────────────────────────────────────────────────────
-
-const SAVE_DIR = GLib.build_filenamev([GLib.get_home_dir(), "Videos"])
-
-function saveFilename(): string {
-    const now = new Date()
-    const pad = (n: number) => String(n).padStart(2, "0")
-    const ts = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}_${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`
-    return `${SAVE_DIR}/Recording_${ts}.mp4`
-}
+// ── Capture ───────────────────────────────────────────────────────────────────
 
 async function startRecording(mode: RecordMode, withAudio: boolean, onClose: () => void) {
     // Close overlay first so it doesn't appear in region selector
@@ -34,33 +32,34 @@ async function startRecording(mode: RecordMode, withAudio: boolean, onClose: () 
         return GLib.SOURCE_REMOVE
     }))
 
-    // Ensure Videos directory exists
-    GLib.mkdir_with_parents(SAVE_DIR, 0o755)
-
-    const args: string[] = ["wf-recorder"]
-    if (withAudio) args.push("--audio")
-
+    let region: string | undefined
     if (mode === "region") {
-        let geo: string
         try {
-            geo = (await execAsync(["slurp"])).trim()
+            region = (await execAsync(["slurp"])).trim()
         } catch {
             return // user cancelled slurp
         }
-        args.push("-g", geo)
     }
 
-    const outFile = saveFilename()
-    args.push("-f", outFile)
+    // Quality, container, frame rate, destination and WHICH audio source all
+    // come from the widget's settings (core/RecordingConfig) — the panel only
+    // decides screen-or-region and audio-or-not.
+    const { argv, outFile, audioDevice } = await buildCaptureCommand({ region, audio: withAudio })
 
     status.recording = true
     try {
-        await execAsync(args)
+        await execAsync(argv)
     } catch {
         // wf-recorder exits with non-zero on SIGINT — that's normal
     } finally {
         status.recording = false
-        execAsync(["notify-send", t("widget.screenrecord.saved"), outFile]).catch(() => {})
+        // Say so when audio was asked for and no source could be resolved:
+        // wf-recorder would otherwise write a perfectly normal-looking file that
+        // is simply silent, which is exactly the failure this feature had.
+        const body = withAudio && !audioDevice
+            ? `${outFile}\n${t("widget.screenrecord.no-audio")}`
+            : outFile
+        execAsync(["notify-send", t("widget.screenrecord.saved"), body]).catch(() => {})
     }
 }
 
@@ -106,7 +105,6 @@ function makeElapsedLabel(): Gtk.Label {
 
 function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
     let selectedMode: RecordMode = "screen"
-    let withAudio = false
 
     const modeRow = new Gtk.Box({ spacing: 4, homogeneous: true })
     const screenBtn = new Gtk.Button({ label: t("widget.screenrecord.mode.screen"), css_classes: ["nidara-seg-btn", "suggested-action"] })
@@ -126,7 +124,6 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
 
     const audioRow = new Gtk.Box({ spacing: 8 })
     const audioSwitch = new Gtk.Switch({ valign: Gtk.Align.CENTER })
-    audioSwitch.connect("notify::active", () => { withAudio = audioSwitch.active })
     // nidara-row-title gives it the mode-aware text colour (a plain Gtk.Label
     // inherits an unreliable default that rendered white in light mode too).
     const audioLabel = new Gtk.Label({ label: t("widget.screenrecord.audio"), hexpand: true, halign: Gtk.Align.START, css_classes: ["nidara-row-title"] })
@@ -140,7 +137,11 @@ function buildRecordPopoverContent(onClose: () => void): Gtk.Widget {
     // but the SELECTED marker of `.nidara-seg-btn`, which owns its own rule.
     const startBtn = NidaraButton({ label: t("widget.screenrecord.start"), variant: "primary" })
     startBtn.hexpand = true
-    startBtn.connect("clicked", () => startRecording(selectedMode, withAudio, onClose))
+    // Read the switch AT CLICK TIME rather than mirroring it into a closure via
+    // notify::active. The mirror is one more thing that has to fire for audio to
+    // survive the trip to wf-recorder, and it is not observable from the file
+    // that comes out — the switch itself is the state, so ask it.
+    startBtn.connect("clicked", () => startRecording(selectedMode, audioSwitch.active, onClose))
 
     const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, width_request: PANEL_W.sm })
     box.append(modeRow)
@@ -266,6 +267,163 @@ function buildCCDetail(onClose: () => void): Gtk.Widget {
     return stack
 }
 
+// ── Settings subpage ──────────────────────────────────────────────────────────
+// Reached from Settings → Widgets → Screen recording ›. This is the first user
+// of AtomicWidget.buildSettings: the widget's preferences live WITH the widget
+// (the "mini-app" contract in Types.ts), not in a Settings page that would have
+// to know what a screen recorder needs.
+
+/** The audio-source picker. Its options are the two logical sentinels plus every
+ *  PulseAudio source, and that list only exists after pactl answers — so the row
+ *  ships with the sentinels (which is what the default resolves to anyway) and
+ *  splices the devices in when they arrive, without disturbing the selection. */
+function audioSourceRow(): Gtk.ListBoxRow {
+    const deviceLabels = new Map<string, string>()
+    let values: string[] = [AUDIO_SYSTEM, AUDIO_MIC]
+    const labels = () => values.map(v =>
+        v === AUDIO_SYSTEM ? t("widget.screenrecord.settings.source.system")
+        : v === AUDIO_MIC  ? t("widget.screenrecord.settings.source.mic")
+        : deviceLabels.get(v) ?? v)
+
+    const model = new Gtk.StringList({ strings: labels() })
+    const drp = new Gtk.DropDown({ model, valign: Gtk.Align.CENTER })
+
+    let syncing = false
+    const selectStored = () => {
+        const idx = values.indexOf(recordingConfig.audioSource)
+        syncing = true
+        drp.selected = idx >= 0 ? idx : 0
+        syncing = false
+    }
+    selectStored()
+
+    drp.connect("notify::selected", () => {
+        if (syncing) return
+        const v = values[drp.selected]
+        if (v !== undefined) recordingConfig.setAudioSource(v)
+    })
+
+    listAudioDevices().then(devices => {
+        for (const d of devices) deviceLabels.set(d.name, d.description)
+        values = [AUDIO_SYSTEM, AUDIO_MIC, ...devices.map(d => d.name)]
+        // splice(0, n, …) replaces the whole model in one go — swapping the
+        // model object instead would reset `selected` to 0. Guarded, because the
+        // replacement itself moves `selected` and the resulting notify would
+        // otherwise persist whatever landed under the index mid-splice.
+        syncing = true
+        model.splice(0, model.get_n_items(), labels())
+        syncing = false
+        selectStored()
+    }).catch(() => {})
+
+    return createRow(
+        t("widget.screenrecord.settings.source"),
+        t("widget.screenrecord.settings.source.desc"),
+        drp,
+    )
+}
+
+/** Destination folder: the current path, and a button that opens a folder chooser. */
+function saveDirRow(): Gtk.ListBoxRow {
+    const home = GLib.get_home_dir()
+    const pretty = (p: string) => p.startsWith(home) ? `~${p.slice(home.length)}` : p
+
+    const pathLabel = new Gtk.Label({
+        label: pretty(recordingConfig.saveDir),
+        css_classes: ["settings-row-status", "dimmed"],
+        ellipsize: 3, max_width_chars: 28, valign: Gtk.Align.CENTER,
+    })
+    const chooseBtn = NidaraButton({
+        label: t("widget.screenrecord.settings.choose-folder"),
+        variant: "secondary", pill: true, valign: Gtk.Align.CENTER,
+    })
+    chooseBtn.connect("clicked", () => {
+        const fd = new Gtk.FileDialog({ title: t("widget.screenrecord.settings.dialog.folder"), modal: true })
+        try { fd.set_initial_folder(Gio.File.new_for_path(recordingConfig.saveDir)) } catch {}
+        fd.select_folder(chooseBtn.get_root() as Gtk.Window | null, null, (_: any, res: any) => {
+            try {
+                const path = fd.select_folder_finish(res)?.get_path()
+                if (!path) return                 // cancelled
+                recordingConfig.setSaveDir(path)
+                pathLabel.label = pretty(path)
+            } catch { /* cancelled */ }
+        })
+    })
+
+    const trailing = new Gtk.Box({ spacing: 10, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
+    trailing.append(pathLabel)
+    trailing.append(chooseBtn)
+    return createRow(t("widget.screenrecord.settings.save-to"), "", trailing)
+}
+
+function buildSettings(): Gtk.Widget {
+    const page = pageBox("screenrecord-settings-page")
+
+    // ── Audio ─────────────────────────────────────────────────────────────
+    const audio = listGroup(t("widget.screenrecord.settings.audio-group"))
+    audio.listBox.append(audioSourceRow())
+    page.append(audio.box)
+
+    // ── Video ─────────────────────────────────────────────────────────────
+    const qualityLabels: Record<RecordQuality, string> = {
+        low: t("widget.screenrecord.settings.quality.low"),
+        balanced: t("widget.screenrecord.settings.quality.balanced"),
+        high: t("widget.screenrecord.settings.quality.high"),
+    }
+    const fpsLabel = (n: number) => n === 0 ? t("widget.screenrecord.settings.framerate.auto") : `${n} fps`
+
+    const video = listGroup(t("widget.screenrecord.settings.video-group"))
+    video.listBox.append(dropdownRow(
+        t("widget.screenrecord.settings.quality"),
+        t("widget.screenrecord.settings.quality.desc"),
+        qualityLabels[recordingConfig.quality],
+        QUALITIES.map(q => qualityLabels[q]),
+        v => {
+            const q = QUALITIES.find(k => qualityLabels[k] === v)
+            if (q) recordingConfig.setQuality(q)
+        },
+    ))
+    video.listBox.append(dropdownRow(
+        t("widget.screenrecord.settings.framerate"),
+        t("widget.screenrecord.settings.framerate.desc"),
+        fpsLabel(recordingConfig.framerate),
+        FRAMERATES.map(fpsLabel),
+        v => {
+            const n = FRAMERATES.find(f => fpsLabel(f) === v)
+            if (n !== undefined) recordingConfig.setFramerate(n)
+        },
+    ))
+    // No render node, no row: a toggle that cannot change anything is worse than
+    // an absent one. The stored value still exists and comes back with the GPU.
+    if (hardwareAvailable()) {
+        video.listBox.append(toggleRow(
+            t("widget.screenrecord.settings.hardware"),
+            t("widget.screenrecord.settings.hardware.desc"),
+            recordingConfig.hardware,
+            v => recordingConfig.setHardware(v),
+        ))
+    }
+    page.append(video.box)
+
+    // ── File ──────────────────────────────────────────────────────────────
+    const formatLabels: Record<RecordFormat, string> = { mp4: "MP4", mkv: "MKV", webm: "WebM" }
+    const file = listGroup(t("widget.screenrecord.settings.file-group"))
+    file.listBox.append(dropdownRow(
+        t("widget.screenrecord.settings.format"),
+        t("widget.screenrecord.settings.format.desc"),
+        formatLabels[recordingConfig.format],
+        FORMATS.map(f => formatLabels[f]),
+        v => {
+            const f = FORMATS.find(k => formatLabels[k] === v)
+            if (f) recordingConfig.setFormat(f)
+        },
+    ))
+    file.listBox.append(saveDirRow())
+    page.append(file.box)
+
+    return page
+}
+
 // ── Widget registration ───────────────────────────────────────────────────────
 
 const screenrecordWidget: AtomicWidget = {
@@ -282,6 +440,7 @@ const screenrecordWidget: AtomicWidget = {
     buildBarContent,
     buildBarExpanded,
     buildCCDetail,
+    buildSettings,
     ccDetailRows: 2,
     // The bar pill is a STOP BUTTON while recording: one click ends the capture,
     // no panel, no confirmation. Stopping is the only thing you want from that

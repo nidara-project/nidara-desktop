@@ -14,6 +14,9 @@ import Theme from "./core/ThemeManager"
 import { ACCENT_PALETTE, type AccentKey, type ShellAppearance } from "./core/NidaraTheme"
 import NightLight from "./core/NightLightManager"
 import notifConfig from "./core/NotifConfig"
+import recordingConfig, {
+    FORMATS, QUALITIES, type RecordFormat, type RecordQuality,
+} from "./core/RecordingConfig"
 import Gaming, { type WallpaperMode } from "./core/GamingManager"
 import agentConfig from "./core/AgentConfig"
 import { dockSettings, updateDockSettings, type DockPosition } from "./surfaces/dock/state"
@@ -108,6 +111,48 @@ export function registerConfigEntries() {
         type: "boolean",
         get: () => notifConfig.dndDefault,
         set: v => notifConfig.setDndDefault(v as boolean),
+    })
+
+    // ── Screen recording ──────────────────────────────────────────────────
+    registerConfig("recording.audioSource", {
+        desc: "What the capture panel's Audio switch records: '@system' (the default output's monitor — what you hear), '@mic' (the default input), or a literal PulseAudio source name from `pactl list short sources`. A named device that is no longer present falls back to '@system' rather than silently recording something else.",
+        type: "string",
+        get: () => recordingConfig.audioSource,
+        set: v => recordingConfig.setAudioSource(v as string),
+    })
+    registerConfig("recording.quality", {
+        desc: "Encoder quality preset for screen recordings. Trades file size against fidelity; the exact CRF/QP depends on the codec the format selects.",
+        type: "enum",
+        enum: QUALITIES,
+        get: () => recordingConfig.quality,
+        set: v => recordingConfig.setQuality(v as RecordQuality),
+    })
+    registerConfig("recording.framerate", {
+        desc: "Recording frame rate. 0 = follow the compositor (a frame only when the screen changes — variable rate, smallest file); otherwise a constant rate.",
+        type: "number",
+        min: 0,
+        max: 120,
+        get: () => recordingConfig.framerate,
+        set: v => recordingConfig.setFramerate(v as number),
+    })
+    registerConfig("recording.hardware", {
+        desc: "Encode screen recordings on the GPU (VAAPI). Applies to the H.264 formats (mp4/mkv) only — webm always encodes in software, and the setting is ignored without a /dev/dri render node.",
+        type: "boolean",
+        get: () => recordingConfig.hardware,
+        set: v => recordingConfig.setHardware(v as boolean),
+    })
+    registerConfig("recording.format", {
+        desc: "Container for screen recordings. mp4/mkv record H.264, webm records VP9.",
+        type: "enum",
+        enum: FORMATS,
+        get: () => recordingConfig.format,
+        set: v => recordingConfig.setFormat(v as RecordFormat),
+    })
+    registerConfig("recording.saveDir", {
+        desc: "Directory screen recordings are written to (created if missing).",
+        type: "string",
+        get: () => recordingConfig.saveDir,
+        set: v => recordingConfig.setSaveDir(v as string),
     })
 
     // ── Gaming ────────────────────────────────────────────────────────────
