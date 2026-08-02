@@ -8,6 +8,7 @@ import { t } from "../core/i18n"
 import Icons from "../core/Icons"
 import * as AudioSvc from "../core/AudioService"
 import { safeDisconnect } from "../core/signals"
+import { NidaraButton } from "../../lib/nidara-kit/button"
 
 // ── Bar icon (dynamic, reflects mute/volume level) ────────────────────────────
 
@@ -80,7 +81,10 @@ function buildSpeakerRow(ep: any, isDefault: boolean): Gtk.ListBoxRow {
             css_classes: ["settings-row-status", "accent-label"], valign: Gtk.Align.CENTER,
         }))
     } else {
-        const setBtn = new Gtk.Button({ label: t("settings.audio.btn.set-default"), css_classes: ["flat", "compact-btn"], valign: Gtk.Align.CENTER })
+        const setBtn = NidaraButton({
+            label: t("settings.audio.btn.set-default"),
+            variant: "ghost", size: "compact", valign: Gtk.Align.CENTER,
+        })
         setBtn.connect("clicked", () => AudioSvc.setDefault(ep))
         header.append(setBtn)
     }
@@ -112,30 +116,47 @@ function buildStreamRow(stream: any): Gtk.ListBoxRow {
     const appName = stream.description || stream.name || "App"
     const iconName = AudioSvc.streamIconName(stream)
 
-    const box = new Gtk.Box({ spacing: 10, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10, valign: Gtk.Align.CENTER })
+    // Same shape as buildSpeakerRow above and as Settings → Audio's stream row:
+    // header (identity + mute) on top, slider underneath. A single horizontal line
+    // is what this row used to be, and at CC width it squeezed the app name to
+    // ~16 chars to make room for a slider that ended up too short to aim with.
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8, margin_start: 14, margin_end: 14, margin_top: 10, margin_bottom: 10 })
+
+    const header = new Gtk.Box({ spacing: 8 })
+    // Real app icon — NO `nd-icon`. That class is `-gtk-icon-filter: invert(1)`
+    // (_reset.scss), meant for our monochrome UI glyphs; on a full-colour app icon
+    // it inverts the artwork. Same note as Settings → Audio's stream row.
+    header.append(new Gtk.Image({ icon_name: iconName, pixel_size: 20, valign: Gtk.Align.CENTER }))
+    header.append(new Gtk.Label({
+        label: appName,
+        halign: Gtk.Align.START, hexpand: true,
+        css_classes: ["nidara-row-title"], ellipsize: 3, max_width_chars: 18,
+    }))
+
     const muteImg = new Gtk.Image({ gicon: AudioSvc.targetVolumeIcon(stream), pixel_size: 16, css_classes: ["nd-icon"] })
     // `settings-icon-btn` alone: it is a Nidara class, unscoped in _components.scss,
-    // and already paints the whole thing (transparent, accent hover, 28px box).
+    // and already paints the whole thing (transparent, tinted hover, 28px box).
     // The Adwaita `flat` that used to ride along added nothing here and only made
     // the row depend on rendering inside one of the two scopes that restyle
     // Adwaita classes — the sibling row above never had it.
     const muteBtn = new Gtk.Button({ child: muteImg, css_classes: ["settings-icon-btn"], valign: Gtk.Align.CENTER })
     muteBtn.connect("clicked", () => { AudioSvc.toggleMute(stream) })
     stream.connect("notify::mute", () => { muteImg.gicon = AudioSvc.targetVolumeIcon(stream) })
-    box.append(new Gtk.Image({ icon_name: iconName, pixel_size: 16, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER }))
-    box.append(muteBtn)
-    box.append(new Gtk.Label({
-        label: appName,
-        halign: Gtk.Align.START, hexpand: true,
-        css_classes: ["nidara-row-title"], ellipsize: 3, max_width_chars: 16,
-    }))
+    header.append(muteBtn)
+    box.append(header)
+
     const valLabel = new Gtk.Label({ label: `${Math.round(stream.volume * 100)}%`, css_classes: ["slider-value-label"], width_chars: 5, xalign: 1.0 })
     const scale = makeVolumeSlider(stream, {
         onValueChanged: (v) => { valLabel.label = `${Math.round(v)}%` },
         onExternal: () => { muteImg.gicon = AudioSvc.targetVolumeIcon(stream) },
     })
-    box.append(scale)
-    box.append(valLabel)
+    const sliderRow = new Gtk.Box({ spacing: 8 })
+    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeLow, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    sliderRow.append(scale)
+    sliderRow.append(new Gtk.Image({ gicon: Icons.volumeHigh, pixel_size: 14, opacity: 0.5, css_classes: ["nd-icon"] }))
+    sliderRow.append(valLabel)
+    box.append(sliderRow)
+
     const row = new Gtk.ListBoxRow({ css_classes: ["nidara-row"] })
     row.set_child(box)
     return row
