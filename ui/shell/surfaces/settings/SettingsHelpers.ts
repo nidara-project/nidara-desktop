@@ -276,6 +276,34 @@ export const presetRow = (
     return createRow(label, subtitle, btnBox)
 }
 
+// ── Stacked-row field layout ──────────────────────────────────────────────────
+/**
+ * The line of action buttons that sits BENEATH a field in a stacked row,
+ * right-aligned, primary last.
+ *
+ * A field and its buttons side by side is the trailing-slot squeeze one level
+ * down: the entry gets whatever width the buttons leave, so it has to be pinned
+ * to a `width_chars` stub and the three read as one clump. Given a whole card's
+ * width, the field should take it and the actions should sit under it — which
+ * also puts the buttons in the same place on every row, instead of wherever the
+ * field's length happens to leave them.
+ */
+export const actionRow = (...actions: Gtk.Widget[]): Gtk.Box => {
+    const box = new Gtk.Box({ spacing: 8, halign: Gtk.Align.END })
+    for (const a of actions) box.append(a)
+    return box
+}
+
+/** Full-width field with its actions on their own line beneath — the control for
+ *  a `createStackedRow` whose value is an entry the user then acts on. */
+export const fieldWithActions = (field: Gtk.Widget, ...actions: Gtk.Widget[]): Gtk.Box => {
+    field.hexpand = true
+    const box = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 8 })
+    box.append(field)
+    box.append(actionRow(...actions))
+    return box
+}
+
 // ── Image Picker Row ──────────────────────────────────────────────────────────
 /**
  * "Pick an image for this" as ONE row: current image leading, text in the middle,

@@ -571,6 +571,10 @@ export default {
     "settings.ai.brain.key.unavailable": "Llavero no disponible",
     "settings.ai.brain.key.save": "Guardar clave",
     "settings.ai.brain.key.clear": "Olvidar",
+    "settings.ai.brain.key.saved": "Clave guardada en el llavero.",
+    "settings.ai.brain.key.replaced": "Clave sustituida: la anterior de este proveedor ya no está.",
+    "settings.ai.brain.key.cleared": "Clave olvidada. El asistente no podrá usar este proveedor hasta que guardes otra.",
+    "settings.ai.brain.key.failed": "No se pudo escribir en el llavero. La clave no se ha guardado.",
 
     // Asistente integrado — la señal visual mientras trabaja (core/AgentGlow.ts)
     "settings.ai.group.signal": "Mientras trabaja",

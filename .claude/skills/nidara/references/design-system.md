@@ -615,6 +615,23 @@ Two legitimate escapes when one control genuinely will not fit the trailing slot
 dedicated preview row of its own (Settings → Gaming's wallpaper, Users' avatar, where the image is
 large enough to be the row).
 
+**Inside a stacked row, keep going: one control per line, actions last.** Moving to
+`createStackedRow` buys a whole card's width — spending it on a field and its buttons side by side
+just reproduces the squeeze one level down, with the entry pinned to a `width_chars` stub and the
+three reading as one clump. Use **`fieldWithActions(field, ...buttons)`** (`SettingsHelpers.ts`):
+the field takes the full width, the buttons sit on their own line beneath, right-aligned with the
+primary LAST. `actionRow(...buttons)` is that button line on its own, for stacks with extra parts.
+This bit Settings → AI twice over (user-caught 2026-08-02): the API-key row had entry + Save +
+Forget on one line, and the model row had an entry, a dropdown AND "Find models" competing for a
+single line once a fetch succeeded. Note what the model row teaches about ORDER — the catalog
+dropdown writes into the entry above it, so it is a picker for that field and belongs directly
+under it, while the button that *populates* the dropdown is an action and goes in the action line.
+Group by what a control DOES to the field, not by what it looks like.
+
+⚠️ The AI page was cited as prior art for this shape while it was itself wrong, and Settings →
+Users' name row was converted to match it before anyone noticed. When you copy a layout from
+another page, check it against the rule rather than assuming the older page earned it.
+
 ## CC capsule tiles: stateful vs action (no fake status line)
 
 The 2×1 (WIDE) CC tile built by `buildCapsuleInner(getIcon, getTitle, getSubTitle)` (in

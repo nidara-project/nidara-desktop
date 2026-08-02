@@ -5,7 +5,7 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
 import { showNidaraAlert, NidaraButton } from "../../../../lib/nidara-kit"
 import { getUsers, getCurrentUser, type User } from "../../../../lib/users"
-import { listGroup, createRow, createStackedRow, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, createStackedRow, fieldWithActions, pageBox } from "../SettingsHelpers"
 import { showAvatarCropper } from "../../../common/AvatarCropper"
 import { attachTooltip } from "../../../common/Tooltip"
 import { t } from "../../../core/i18n"
@@ -524,10 +524,7 @@ export default function UsersPage() {
     // Stacked, not trailing: an entry plus its Apply button is two controls, and the
     // trailing slot holds one. Squeezed in there the entry had to be pinned to a
     // fixed `width_chars` and the pair still read as a clump against the right edge.
-    // Same shape as the AI page's API-key row — entry hexpands, buttons follow.
-    nameEntry.hexpand = true
-    const nameRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
-    nameRow.append(nameEntry); nameRow.append(nameApplyBtn)
+    const nameRow = fieldWithActions(nameEntry, nameApplyBtn)
     profileGroup.listBox.append(createStackedRow(t("settings.users.name"), t("settings.users.name.desc"), nameRow))
     profileGroup.listBox.append(createRow(
         t("settings.users.username"), "",

@@ -426,6 +426,10 @@ export default {
     "settings.ai.brain.key.unavailable": "Keyring unavailable",
     "settings.ai.brain.key.save": "Save key",
     "settings.ai.brain.key.clear": "Forget",
+    "settings.ai.brain.key.saved": "Key saved to the keyring.",
+    "settings.ai.brain.key.replaced": "Key replaced — the previous one for this provider is gone.",
+    "settings.ai.brain.key.cleared": "Key forgotten. The assistant can't reach this provider until you save a new one.",
+    "settings.ai.brain.key.failed": "Couldn't write to the keyring. The key was not saved.",
 
     // Built-in Assistant — the visual signal while a turn runs (core/AgentGlow.ts)
     "settings.ai.group.signal": "While it works",
