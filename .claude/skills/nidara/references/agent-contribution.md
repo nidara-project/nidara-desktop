@@ -50,6 +50,36 @@ Examples (real):
 - A new colour palette the user likes → the palette *is data* (local), but a new palette
   *engine capability* (e.g. a new token slot) is global.
 
+**Two things do NOT deserve to be a Setting, however personal they feel:**
+
+1. **A visibility toggle that strands the user.** If hiding a chrome element removes the
+   only route to a capability with no replacement, it is a footgun, not a preference.
+   Concretely (0.6.0): the bar's `showSystemMenu` toggle hid the launcher capsule, which
+   owns the ONLY GUI path to log out / restart / shut down — and the exit-session keybind
+   is deliberately not shipped (`hyprland.lua`). It was removed. Every DE that is not an
+   explicit panel-builder (Plasma) makes the same call: macOS, GNOME and Windows let you
+   toggle informational items but never the control that governs leaving the session. Test
+   before adding one: *"with this off, is there still a way to do the thing?"* If the honest
+   answer is "the config layer", it belongs there, not in Settings.
+2. **A toggle whose label no longer matches its blast radius.** A setting is a promise about
+   what it does. When the surface under it grows, the promise silently gets bigger too — and
+   nobody re-reads old labels. Same release: `showWorkspaces` ("Show the workspace switcher
+   in the center") kept hiding the bar's centre box after the Activity Island moved in, so it
+   was quietly switching off media, recording and AI indicators — including the shell's ONLY
+   live-capture indicator, letting you screen-record with nothing on screen saying so, which
+   is test 1 all over again. It was removed, not renamed. **When you move a surface into a
+   slot an existing toggle controls, that toggle is part of your change** — re-read its label
+   and its key name in the same PR.
+
+**Renaming a mislabelled toggle is not automatically the fix.** The first attempt at the one
+above was `showWorkspaces` → `showIsland` with honest copy, and it was still wrong twice over:
+the recording hole survived the rename, and the new name over-promised in the other direction
+— the island's expanded modes are separate overlay children of the island surface
+(`IslandWindow.mount`), so Super+A, Super+W and the battery alert opened regardless of the
+setting. When a label is wrong, **first ask what the honest setting would do, then ask whether
+anyone should want it.** A truthful name on a setting nobody should have just documents the
+footgun.
+
 ### 🟥 GLOBAL — improves the DE for everyone; propose a PR (with consent)
 Correctness, compatibility, performance, accessibility, or a genuinely reusable capability.
 Nothing about it is specific to one user's taste.

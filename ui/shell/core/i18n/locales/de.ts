@@ -389,12 +389,8 @@ export default {
 
     "settings.bar.title": "Obere Leiste",
     "settings.bar.group.layout": "Anordnung",
-    "settings.bar.system-menu": "Systemmenü",
-    "settings.bar.system-menu.desc": "Distributionssymbol und Systemmenü-Schaltfläche anzeigen",
     "settings.bar.app-title": "Titel der aktiven App",
     "settings.bar.app-title.desc": "Namen des fokussierten Fensters in der Leiste anzeigen",
-    "settings.bar.workspaces": "Arbeitsflächen",
-    "settings.bar.workspaces.desc": "Arbeitsflächenumschalter in der Mitte anzeigen",
     "settings.bar.group.icon": "Symbol der Menüschaltfläche",
     "settings.bar.icon-preset": "Standard",
     "settings.bar.icon-custom": "Benutzerdefiniertes Symbol",

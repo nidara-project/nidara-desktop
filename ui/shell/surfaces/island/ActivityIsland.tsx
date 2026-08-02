@@ -505,7 +505,7 @@ export function ActivityIsland() {
         /** Pin every revealer's top edge to the capsule's top (both wear their
          *  glass with the same 2px Cairo inset, so aligning the BOXES aligns
          *  the drawn edges). Falls back to the panel gap when the capsule is
-         *  hidden (showWorkspaces off — matches the morph's centered-pop
+         *  hidden or not yet mapped (matches the morph's centered-pop
          *  fallback). Call per-open, before the reveal.
          *
          *  `relativeTo` is the ISLAND surface's root: the capsule was moved onto

@@ -389,12 +389,8 @@ export default {
 
     "settings.bar.title": "Верхняя панель",
     "settings.bar.group.layout": "Компоновка",
-    "settings.bar.system-menu": "Системное меню",
-    "settings.bar.system-menu.desc": "Показывать значок дистрибутива и кнопку системного меню",
     "settings.bar.app-title": "Название активного приложения",
     "settings.bar.app-title.desc": "Показывать название активного окна на панели",
-    "settings.bar.workspaces": "Рабочие столы",
-    "settings.bar.workspaces.desc": "Показывать переключатель рабочих столов по центру",
     "settings.bar.group.icon": "Значок кнопки меню",
     "settings.bar.icon-preset": "По умолчанию",
     "settings.bar.icon-custom": "Свой значок",

@@ -389,12 +389,8 @@ export default {
 
     "settings.bar.title": "トップバー",
     "settings.bar.group.layout": "レイアウト",
-    "settings.bar.system-menu": "システムメニュー",
-    "settings.bar.system-menu.desc": "ディストリビューションのアイコンとシステムメニューボタンを表示します",
     "settings.bar.app-title": "アクティブなアプリのタイトル",
     "settings.bar.app-title.desc": "バーにフォーカス中のウィンドウ名を表示します",
-    "settings.bar.workspaces": "ワークスペース",
-    "settings.bar.workspaces.desc": "中央にワークスペース切り替えを表示します",
     "settings.bar.group.icon": "メニューボタンのアイコン",
     "settings.bar.icon-preset": "既定",
     "settings.bar.icon-custom": "カスタムアイコン",

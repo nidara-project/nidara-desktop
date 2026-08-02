@@ -389,12 +389,8 @@ export default {
 
     "settings.bar.title": "顶栏",
     "settings.bar.group.layout": "布局",
-    "settings.bar.system-menu": "系统菜单",
-    "settings.bar.system-menu.desc": "显示发行版图标和系统菜单按钮",
     "settings.bar.app-title": "当前应用标题",
     "settings.bar.app-title.desc": "在顶栏显示当前活动窗口的名称",
-    "settings.bar.workspaces": "工作区",
-    "settings.bar.workspaces.desc": "在中间显示工作区切换器",
     "settings.bar.group.icon": "菜单按钮图标",
     "settings.bar.icon-preset": "默认",
     "settings.bar.icon-custom": "自定义图标",

@@ -347,12 +347,8 @@ export default {
 
     "settings.bar.title": "Barra superior",
     "settings.bar.group.layout": "Disposición",
-    "settings.bar.system-menu": "Menú del sistema",
-    "settings.bar.system-menu.desc": "Mostrar el icono de la distro y el botón del menú del sistema",
     "settings.bar.app-title": "Título de la app activa",
     "settings.bar.app-title.desc": "Mostrar el nombre de la ventana enfocada en la barra",
-    "settings.bar.workspaces": "Escritorios",
-    "settings.bar.workspaces.desc": "Mostrar el selector de escritorios en el centro",
     "settings.bar.group.icon": "Icono del botón del menú",
     "settings.bar.icon-preset": "Por defecto",
     "settings.bar.icon-custom": "Icono personalizado",

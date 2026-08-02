@@ -389,12 +389,8 @@ export default {
 
     "settings.bar.title": "Górny pasek",
     "settings.bar.group.layout": "Układ",
-    "settings.bar.system-menu": "Menu systemowe",
-    "settings.bar.system-menu.desc": "Pokaż ikonę dystrybucji i przycisk menu systemowego",
     "settings.bar.app-title": "Nazwa aktywnej aplikacji",
     "settings.bar.app-title.desc": "Pokaż nazwę aktywnego okna na pasku",
-    "settings.bar.workspaces": "Obszary robocze",
-    "settings.bar.workspaces.desc": "Pokaż przełącznik obszarów roboczych na środku",
     "settings.bar.group.icon": "Ikona przycisku menu",
     "settings.bar.icon-preset": "Domyślna",
     "settings.bar.icon-custom": "Własna ikona",

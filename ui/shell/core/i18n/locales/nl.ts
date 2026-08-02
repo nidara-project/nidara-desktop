@@ -389,12 +389,8 @@ export default {
 
     "settings.bar.title": "Bovenbalk",
     "settings.bar.group.layout": "Indeling",
-    "settings.bar.system-menu": "Systeemmenu",
-    "settings.bar.system-menu.desc": "Toon het distropictogram en de systeemmenuknop",
     "settings.bar.app-title": "Titel van actieve app",
     "settings.bar.app-title.desc": "Toon de naam van het actieve venster op de balk",
-    "settings.bar.workspaces": "Werkbladen",
-    "settings.bar.workspaces.desc": "Toon de werkbladwisselaar in het midden",
     "settings.bar.group.icon": "Pictogram van menuknop",
     "settings.bar.icon-preset": "Standaard",
     "settings.bar.icon-custom": "Aangepast pictogram",

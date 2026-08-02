@@ -514,7 +514,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const left = new Gtk.Box({ css_classes: ["bar-left"], halign: Gtk.Align.START, hexpand: false, spacing: 8 })
   const sysMenuWidget = SystemMenuIcon()
   const appTitleWidget = AppTitle(monGeo.width, openCustomExpansion)
-  sysMenuWidget.set_visible(barSettings.showSystemMenu)
+  // The system-menu capsule has no visibility setting on purpose: it owns the
+  // only GUI path to log out / restart / shut down (SystemMenu.tsx), and the
+  // exit-session keybind was deliberately not shipped, so hiding it leaves no
+  // way to end the session. Every other DE that is not an explicit panel-builder
+  // makes the same call (macOS/GNOME/Windows never let you remove it). The
+  // island's centre box below is permanent for the sibling reason — see barState.
   appTitleWidget.set_visible(barSettings.showAppTitle)
   left.append(sysMenuWidget)
   left.append(appTitleWidget)
@@ -529,7 +534,6 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const center = new Gtk.Box({ css_classes: ["bar-center"], halign: Gtk.Align.CENTER })
   center.append(island.capsule)      // the island's compact state
   center.append(island.indicatorRow) // live activities that are NOT fronting it
-  center.set_visible(barSettings.showWorkspaces)
   // `center` is NOT put in the bar's CenterBox: the capsule paints on the
   // island's surface (see islandWin above). It goes into a row that reuses the
   // SAME `.bar-centerbox` class the bar's own row does, so the 8px top margin
@@ -764,9 +768,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   barBox.set_start_widget(left); barBox.set_end_widget(right)
 
   onBarSettingsChanged((s) => {
-    sysMenuWidget.set_visible(s.showSystemMenu)
     appTitleWidget.set_visible(s.showAppTitle)
-    center.set_visible(s.showWorkspaces)
   })
 
   const monitorHeight = gdkmonitor.get_geometry().height

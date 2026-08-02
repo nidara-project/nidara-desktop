@@ -389,12 +389,8 @@ export default {
 
     "settings.bar.title": "Barre supérieure",
     "settings.bar.group.layout": "Disposition",
-    "settings.bar.system-menu": "Menu système",
-    "settings.bar.system-menu.desc": "Afficher l'icône de la distribution et le bouton du menu système",
     "settings.bar.app-title": "Titre de l'application active",
     "settings.bar.app-title.desc": "Afficher le nom de la fenêtre active dans la barre",
-    "settings.bar.workspaces": "Espaces de travail",
-    "settings.bar.workspaces.desc": "Afficher le sélecteur d'espaces au centre",
     "settings.bar.group.icon": "Icône du bouton de menu",
     "settings.bar.icon-preset": "Par défaut",
     "settings.bar.icon-custom": "Icône personnalisée",

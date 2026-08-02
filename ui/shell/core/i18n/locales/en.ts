@@ -438,12 +438,8 @@ export default {
 
     "settings.bar.title": "Top bar",
     "settings.bar.group.layout": "Layout",
-    "settings.bar.system-menu": "System menu",
-    "settings.bar.system-menu.desc": "Show the distro icon and system menu button",
     "settings.bar.app-title": "Active app title",
     "settings.bar.app-title.desc": "Show the focused window name in the bar",
-    "settings.bar.workspaces": "Workspaces",
-    "settings.bar.workspaces.desc": "Show the workspace switcher in the center",
     "settings.bar.group.icon": "Menu button icon",
     "settings.bar.icon-preset": "Default",
     "settings.bar.icon-custom": "Custom icon",

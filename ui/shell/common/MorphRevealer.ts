@@ -55,8 +55,8 @@ import { drawSquircle } from "./DrawingUtils"
 //      pair ghosts (art, dots) carry the continuity.
 //
 // Bounds are re-read via compute_bounds every frame (bar relayouts can't
-// leave a stale origin). If the source capsule is hidden/unmapped at open
-// (showWorkspaces off), the whole morph degrades to the v1 fallback: a
+// leave a stale origin). If the source capsule is hidden/unmapped at open, the
+// whole morph degrades to the v1 fallback: a
 // centered OVERLAY_POP-equivalent (subtle rect zoom + whole-widget fade) with
 // the island's own glass params, no ghosts, landing dots left riding the
 // content fade.

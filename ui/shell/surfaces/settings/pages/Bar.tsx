@@ -19,23 +19,15 @@ export default function BarPage() {
     // ── Layout group ──────────────────────────────────────────────────────────
     const layoutGroup = listGroup(t("settings.bar.group.layout"))
 
-    layoutGroup.listBox.append(toggleRow(
-        t("settings.bar.system-menu"),
-        t("settings.bar.system-menu.desc"),
-        barSettings.showSystemMenu,
-        (v) => updateBarSettings({ showSystemMenu: v }),
-    ))
+    // The only layout toggle left, and the only one of the original three that
+    // was ever a preference rather than a footgun: the system-menu capsule and
+    // the Activity Island are both permanent now, each because hiding it removed
+    // the sole route to a capability. Reasoning lives in `bar/barState.ts`.
     layoutGroup.listBox.append(toggleRow(
         t("settings.bar.app-title"),
         t("settings.bar.app-title.desc"),
         barSettings.showAppTitle,
         (v) => updateBarSettings({ showAppTitle: v }),
-    ))
-    layoutGroup.listBox.append(toggleRow(
-        t("settings.bar.workspaces"),
-        t("settings.bar.workspaces.desc"),
-        barSettings.showWorkspaces,
-        (v) => updateBarSettings({ showWorkspaces: v }),
     ))
 
     page.append(layoutGroup.box)

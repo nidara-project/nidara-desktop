@@ -389,12 +389,8 @@ export default {
 
     "settings.bar.title": "Barra superiore",
     "settings.bar.group.layout": "Layout",
-    "settings.bar.system-menu": "Menu di sistema",
-    "settings.bar.system-menu.desc": "Mostra l'icona della distro e il pulsante del menu di sistema",
     "settings.bar.app-title": "Titolo app attiva",
     "settings.bar.app-title.desc": "Mostra il nome della finestra in primo piano nella barra",
-    "settings.bar.workspaces": "Spazi di lavoro",
-    "settings.bar.workspaces.desc": "Mostra il selettore degli spazi di lavoro al centro",
     "settings.bar.group.icon": "Icona del pulsante menu",
     "settings.bar.icon-preset": "Predefinita",
     "settings.bar.icon-custom": "Icona personalizzata",
