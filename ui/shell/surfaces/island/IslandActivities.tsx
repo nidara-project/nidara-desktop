@@ -5,7 +5,7 @@ import AstalBattery from "gi://AstalBattery"
 import status, { ISLAND_OVERVIEW, ISLAND_PLAYER, ISLAND_BATTERY, ISLAND_AGENT, ISLAND_RECORDING, recordingElapsed } from "../../core/Status"
 import * as media from "../../core/MediaService"
 import { safeDisconnect } from "../../core/signals"
-import { PlayerCompact, makeArtGhost, makeMiniArt } from "./PlayerIsland"
+import { PlayerCompact, makeArtGhost } from "./PlayerIsland"
 import { AgentCompact } from "./AgentIsland"
 import agentService from "../../core/AgentService"
 import agentConfig from "../../core/AgentConfig"
@@ -80,11 +80,6 @@ function mediaActivity(): IslandActivity {
     let wasPlaying = false
     let changed: () => void = () => {}
 
-    // Indicator covers, refreshed by the player rewire below. Each one repaints
-    // only when the cover PATH changed (see makeCoverArt.refresh): the generic
-    // `notify` ticks at 1 Hz while playing, and a chip that redrew on every tick
-    // would cost the compositor a blur pass over the island once a second.
-    const artRefreshers: Array<() => void> = []
     const cancelGrace = () => {
         if (grace !== null) { GLib.source_remove(grace); grace = null }
     }
@@ -101,20 +96,11 @@ function mediaActivity(): IslandActivity {
         wasPlaying = playing
         changed()
     }
-    let artSig: number | null = null
     const rewire = () => {
         safeDisconnect(curPlayer, sig); sig = null
-        safeDisconnect(curPlayer, artSig); artSig = null
         curPlayer = media.selectedPlayer()
-        if (curPlayer) {
-            sig = curPlayer.connect("notify::playback-status", onStatus)
-            // The cover rides the GENERIC notify: a track change inside one
-            // player never touches playback-status, so the narrow signal above
-            // would leave the chip showing the previous album.
-            artSig = curPlayer.connect("notify", () => { for (const r of artRefreshers) r() })
-        }
+        if (curPlayer) sig = curPlayer.connect("notify::playback-status", onStatus)
         else { cancelGrace(); wasPlaying = false }
-        for (const r of artRefreshers) r()
         onStatus()
     }
     return {
@@ -129,19 +115,18 @@ function mediaActivity(): IslandActivity {
             makeGhost: makeArtGhost,
             getSource: () => ((compact as any).artDa as Gtk.Widget) ?? null,
         },
-        // The cover, with a music glyph UNDERNEATH it: the art paints opaque
-        // over the glyph when there is one and paints nothing when there isn't,
-        // so the fallback needs no visibility bookkeeping. (The empty wash the
-        // compact draws is suppressed here — a grey square the size of an icon
-        // says nothing; a music note says "something is playing".)
-        indicator: () => {
-            const stack = new Gtk.Overlay()
-            stack.set_child(new Gtk.Image({ gicon: Icons.music, pixel_size: 16, css_classes: ["nd-icon"] }))
-            const art = makeMiniArt()
-            artRefreshers.push(() => (art as any).refresh())
-            stack.add_overlay(art)
-            return stack
-        },
+        // A music glyph, like every other chip — NOT the cover art. The chip is
+        // a 24px circle (28px row height less SquircleContainer's 2px technical
+        // inset per side, `perfect` → radius h/2), and the largest square that
+        // fits INSIDE a 24px circle is 24/√2 ≈ 17px: the compact's 20px cover
+        // poked out of the glass on all four sides, and shrinking it to 17 would
+        // fill the circle edge to edge and eat the glass ring that makes a chip
+        // read as a chip. A square and a circle of nearly the same size cannot
+        // both survive — so the art stays where it is legible (the compact's
+        // 20px slot beside the title, the panel's 96px), and the chip says
+        // "music" the way rec says "capture" and the assistant says "assistant":
+        // one monochrome glyph on glass. (User-caught 2026-08-03.)
+        indicator: () => new Gtk.Image({ gicon: Icons.music, pixel_size: 16, css_classes: ["nd-icon"] }),
         watch: (cb) => { changed = cb; media.subscribe(rewire); rewire() },
         // The open player panel HOLDS liveness while a player exists (a grace
         // expiring under the open panel must not yank the compact); closing

@@ -232,15 +232,10 @@ export function PlayerCompact(opts: {
 // ── Self-syncing cover art ───────────────────────────────────────────────────
 // A DrawingArea of `size` px that paints the CURRENT track's cover, clipped to
 // the squircle, with the empty wash when there is none. It reads the player on
-// DRAW rather than subscribing: both callers paint at moments that already have
-// their own redraw cadence, and neither can be left holding a stale bitmap.
-//
-// `wash: false` drops the empty-state fill so the widget paints NOTHING without
-// a cover — that is what lets the indicator chip stack it over a music glyph and
-// never have to toggle visibility. `refresh()` re-reads the player and repaints
-// ONLY if the cover path actually changed, for callers (the chip) that have no
-// redraw cadence of their own and must not damage the surface on every tick.
-export function makeCoverArt(size: number, radius: number, wash = true): Gtk.Widget {
+// DRAW rather than subscribing: its one caller (the morph's traveling twin)
+// paints at moments that already have their own redraw cadence, and must not be
+// left holding a stale bitmap.
+export function makeCoverArt(size: number, radius: number): Gtk.Widget {
     let pixbuf: GdkPixbuf.Pixbuf | null = null
     let loaded: string | null = null
     const da = new Gtk.DrawingArea({ width_request: size, height_request: size })
@@ -266,17 +261,13 @@ export function makeCoverArt(size: number, radius: number, wash = true): Gtk.Wid
             cr.clip()
             Gdk.cairo_set_source_pixbuf(cr, pixbuf, 0, 0)
             cr.paint()
-        } else if (wash) {
+        } else {
             const c = Theme.chromeIsDark ? 1 : 0
             cr.setSourceRGBA(c, c, c, 0.1)
             cr.fill()
         }
         cr.restore()
     })
-    ;(da as any).refresh = () => {
-        if (media.resolveCoverArt(media.selectedPlayer()) === loaded) return
-        da.queue_draw()   // the draw func re-syncs; this only decides WHETHER to redraw
-    }
     return da
 }
 
@@ -286,8 +277,3 @@ export function makeCoverArt(size: number, radius: number, wash = true): Gtk.Wid
 // flight and matches both endpoints (the compact's radius is derived from
 // this one, see ART_RADIUS).
 export const makeArtGhost = (): Gtk.Widget => makeCoverArt(PANEL_ART, 14)
-
-// The indicator row's cover: the compact's own 20px slot, same radius, so the
-// thumbnail beside the capsule and the one inside it are one drawing. No wash —
-// the chip stacks it over a music glyph.
-export const makeMiniArt = (): Gtk.Widget => makeCoverArt(ART, ART_RADIUS, false)
