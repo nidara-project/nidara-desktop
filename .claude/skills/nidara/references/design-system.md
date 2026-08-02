@@ -597,6 +597,24 @@ in Settings → Control Center, or an app icon), pass `NidaraRow`'s `leadingIcon
 through `createRow(label, subtitle, widget, titleIcon, leadingIcon)`) — it sits as the row's
 first child, before the title column.
 
+**A row has three zones — `[leadingIcon] [text (expands)] [control]` — and the trailing slot is
+for ONE control.** The moment you find yourself building a `Gtk.Box` of unrelated things to pass
+as `widget`, the row is telling you something belongs in another zone. A preview thumbnail is a
+leading icon, not the first item in a button box: cramming it trailing reads as one dense clump
+shoved against the right edge with the text stranded far left, and it looks like the layout is
+saving space. This is a RECURRING slip, not a one-off — Settings → Top bar (launcher icon) and
+Settings → Apps → app detail (icon override) both did it, with byte-identical copies of the
+preview box, the two buttons and the `Gtk.FileDialog` (user-caught 2026-08-02: *"está todo
+apretado en la misma fila"*). Both now build on **`imagePickerRow`** (`SettingsHelpers.ts`), the
+shared "pick an image for this" row: preview leading, text middle, `[Choose image…] [reset]`
+trailing, dialog and SVG/PNG filters included; callers supply only `renderPreview` / `isCustom` /
+`onPick` / `onReset`. Use it for any new image-picking setting rather than a fourth copy.
+
+Two legitimate escapes when one control genuinely will not fit the trailing slot: **`createStackedRow`**
+(control on its own full-width line beneath the text — for entries and button pairs) and a
+dedicated preview row of its own (Settings → Gaming's wallpaper, Users' avatar, where the image is
+large enough to be the row).
+
 ## CC capsule tiles: stateful vs action (no fake status line)
 
 The 2×1 (WIDE) CC tile built by `buildCapsuleInner(getIcon, getTitle, getSubTitle)` (in

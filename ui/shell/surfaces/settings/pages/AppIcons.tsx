@@ -1,11 +1,8 @@
 import { Gtk } from "ags/gtk4"
-import Gio from "gi://Gio"
 import appService, { type AppData } from "../../../core/AppService"
-import { pageBox, listGroup, createRow, type SettingsNav } from "../SettingsHelpers"
+import { pageBox, listGroup, imagePickerRow, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
-import { NidaraButton } from "../../../../lib/nidara-kit"
-import { attachTooltip } from "../../../common/Tooltip"
 import { loadPixbuf, makeIconImage } from "./AppIconImage"
 
 // ── Per-app detail subpage ──────────────────────────────────────────────────────
@@ -17,73 +14,38 @@ function buildAppIconDetailPage(app: AppData, syncRow: () => void): Gtk.Widget {
     const page = pageBox("app-icon-detail-page")
     const { box, listBox } = listGroup(t("settings.apps.detail.group.icon"))
 
-    const preview = new Gtk.Image({ pixel_size: 40, valign: Gtk.Align.CENTER })
-    const refreshPreview = () => {
-        // Re-reads fresh state the same way the row's syncRow does — app.icon gets
-        // canonicalized to the override path once one exists, so re-fetch by id
-        // rather than trust the (possibly now-stale) closure value.
-        const iconRef = appService.getAppData(app.id)?.icon ?? appService.getCanonicalIconName(app.icon ?? "")
-        app.icon = iconRef
-        const pb = loadPixbuf(iconRef, 40)
-        if (pb) preview.set_from_pixbuf(pb)
-        else preview.icon_name = iconRef ?? "application-x-executable"
-    }
-    refreshPreview()
-
-    const resetBtn = NidaraButton({
-        label: t("settings.apps.restore"),
-        variant: "secondary",
-        pill: true,
-        valign: Gtk.Align.CENTER,
-        sensitive: !!appService.getIconOverridePath(app.icon ?? ""),
-    })
-    attachTooltip(resetBtn, t("settings.apps.tooltip.remove-override"), { chrome: false })
-    resetBtn.connect("clicked", () => {
-        appService.removeIconOverride(app.icon ?? "")
-        refreshPreview()
-        resetBtn.sensitive = false
-        syncRow()
-    })
-
     // Choose image — the single, primary way to set an icon. The user picks an
     // IMAGE FILE — never an icon-theme name (a prior free-text field was a
     // confusing power-user trap; prior art macOS/Windows/GNOME = pick an image).
-    const chooseBtn = NidaraButton({
-        label: t("settings.apps.choose-image"),
-        variant: "primary",
-        pill: true,
-        valign: Gtk.Align.CENTER,
-    })
-    chooseBtn.connect("clicked", () => {
-        const fd = new Gtk.FileDialog({ title: t("settings.apps.dialog.select-icon"), modal: true })
-        const filter = new Gtk.FileFilter()
-        filter.add_mime_type("image/svg+xml")
-        filter.add_mime_type("image/png")
-        filter.set_name(t("settings.apps.filter.images"))
-        const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
-        filters.append(filter)
-        fd.set_filters(filters)
-        const win = chooseBtn.get_root() as Gtk.Window | null
-        fd.open(win, null, (_: any, res: any) => {
-            try {
-                const path = fd.open_finish(res)?.get_path()
-                if (!path) return
-                const ok = appService.setIconOverride(app.icon ?? "", path)
-                if (ok) {
-                    refreshPreview()
-                    resetBtn.sensitive = true
-                    syncRow()
-                }
-            } catch {}
-        })
-    })
-
-    const controlBox = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
-    controlBox.append(preview)
-    controlBox.append(chooseBtn)
-    controlBox.append(resetBtn)
-
-    listBox.append(createRow(t("settings.apps.dialog.icon"), t("settings.apps.detail.icon.desc"), controlBox))
+    // The row shape (preview leading, text, buttons trailing) and the dialog live
+    // in `imagePickerRow`; only what the icon IS and what setting one does are here.
+    listBox.append(imagePickerRow(
+        t("settings.apps.dialog.icon"),
+        t("settings.apps.detail.icon.desc"),
+        {
+            renderPreview: (img) => {
+                // Re-reads fresh state the same way the row's syncRow does — app.icon
+                // gets canonicalized to the override path once one exists, so re-fetch
+                // by id rather than trust the (possibly now-stale) closure value.
+                const iconRef = appService.getAppData(app.id)?.icon ?? appService.getCanonicalIconName(app.icon ?? "")
+                app.icon = iconRef
+                const pb = loadPixbuf(iconRef, 40)
+                if (pb) img.set_from_pixbuf(pb)
+                else img.icon_name = iconRef ?? "application-x-executable"
+            },
+            isCustom: () => !!appService.getIconOverridePath(app.icon ?? ""),
+            onPick: (path) => {
+                if (!appService.setIconOverride(app.icon ?? "", path)) return false
+                syncRow()
+            },
+            onReset: () => { appService.removeIconOverride(app.icon ?? ""); syncRow() },
+            resetLabel: t("settings.apps.restore"),
+            resetTooltip: t("settings.apps.tooltip.remove-override"),
+            // The icon IS the subject of this page, so it gets more room than the
+            // 32px app-identity default.
+            previewSize: 40,
+        },
+    ))
     page.append(box)
 
     return page

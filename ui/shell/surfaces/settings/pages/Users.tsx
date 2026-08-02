@@ -5,7 +5,7 @@ import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
 import { showNidaraAlert, NidaraButton } from "../../../../lib/nidara-kit"
 import { getUsers, getCurrentUser, type User } from "../../../../lib/users"
-import { listGroup, createRow, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, createStackedRow, pageBox } from "../SettingsHelpers"
 import { showAvatarCropper } from "../../../common/AvatarCropper"
 import { attachTooltip } from "../../../common/Tooltip"
 import { t } from "../../../core/i18n"
@@ -512,7 +512,7 @@ export default function UsersPage() {
     changeRow.set_child(changeAvatarBtn)
     profileGroup.listBox.append(changeRow)
 
-    const nameEntry = new Gtk.Entry({ text: displayName, placeholder_text: username, width_chars: 22, valign: Gtk.Align.CENTER })
+    const nameEntry = new Gtk.Entry({ text: displayName, placeholder_text: username, valign: Gtk.Align.CENTER })
     const nameApplyBtn = NidaraButton({ label: t("settings.users.name.apply"), variant: "primary", pill: true, valign: Gtk.Align.CENTER })
     const applyName = () => {
         const n = nameEntry.text.trim(); if (!n) return
@@ -521,9 +521,14 @@ export default function UsersPage() {
         nameApplyBtn.sensitive = true
     }
     nameApplyBtn.connect("clicked", applyName); nameEntry.connect("activate", applyName)
+    // Stacked, not trailing: an entry plus its Apply button is two controls, and the
+    // trailing slot holds one. Squeezed in there the entry had to be pinned to a
+    // fixed `width_chars` and the pair still read as a clump against the right edge.
+    // Same shape as the AI page's API-key row — entry hexpands, buttons follow.
+    nameEntry.hexpand = true
     const nameRow = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER })
     nameRow.append(nameEntry); nameRow.append(nameApplyBtn)
-    profileGroup.listBox.append(createRow(t("settings.users.name"), t("settings.users.name.desc"), nameRow))
+    profileGroup.listBox.append(createStackedRow(t("settings.users.name"), t("settings.users.name.desc"), nameRow))
     profileGroup.listBox.append(createRow(
         t("settings.users.username"), "",
         new Gtk.Label({ label: username, css_classes: ["nidara-row-subtitle"], valign: Gtk.Align.CENTER }),

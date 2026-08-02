@@ -1,7 +1,9 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import { makeHSlider } from "../../common/Slider"
-import { NidaraRow, NidaraStackedRow, NidaraList } from "../../../lib/nidara-kit"
+import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton } from "../../../lib/nidara-kit"
+import { attachTooltip } from "../../common/Tooltip"
+import { t } from "../../core/i18n"
 
 /**
  * Shared UI helpers for Settings pages.
@@ -272,6 +274,91 @@ export const presetRow = (
     })
 
     return createRow(label, subtitle, btnBox)
+}
+
+// ── Image Picker Row ──────────────────────────────────────────────────────────
+/**
+ * "Pick an image for this" as ONE row: current image leading, text in the middle,
+ * [Choose image…] [reset] trailing.
+ *
+ * The three-zone shape is the point. Both call sites used to hand-roll a
+ * `Gtk.Box` holding preview + both buttons and pass the whole thing as the
+ * TRAILING control, so a 24px thumbnail, a primary button and a secondary button
+ * shared one slot and the row read as one dense clump pushed against the right
+ * edge. `NidaraRow` already separates leading icon / text / control — the rows
+ * just weren't using it. Nothing here is new layout machinery; it is the row
+ * vocabulary applied.
+ *
+ * It is also the de-duplication: Settings → Top bar (launcher icon) and
+ * Settings → Apps → app detail (per-app icon override) had byte-identical copies
+ * of the preview box, the two buttons and the `Gtk.FileDialog` with its SVG/PNG
+ * filters. Only "what the image IS" and "what picking one does" ever differed,
+ * which is exactly what the callbacks carry.
+ */
+export const imagePickerRow = (
+    label: string,
+    subtitle: string,
+    opts: {
+        /** Paint the current image into the preview. Called now and after every change. */
+        renderPreview: (img: Gtk.Image) => void
+        /** True while a custom image is set — drives the reset button's sensitivity. */
+        isCustom: () => boolean
+        /** Apply a chosen file. Return false to reject it (nothing is refreshed). */
+        onPick: (path: string) => boolean | void
+        /** Restore the built-in/default image. */
+        onReset: () => void
+        /** Label for the reset button ("Default", "Restore original"…). */
+        resetLabel: string
+        resetTooltip?: string
+        /** Leading preview size in px. 32 matches the app-identity leading icons
+         *  in Autostart/Widgets; the detail pages pass more when the image IS the
+         *  subject of the page. */
+        previewSize?: number
+    },
+): Gtk.ListBoxRow => {
+    const { renderPreview, isCustom, onPick, onReset, resetLabel, resetTooltip, previewSize = 32 } = opts
+
+    const preview = new Gtk.Image({ pixel_size: previewSize, valign: Gtk.Align.CENTER })
+    const resetBtn = NidaraButton({
+        label: resetLabel, variant: "secondary", pill: true,
+        valign: Gtk.Align.CENTER, sensitive: isCustom(),
+    })
+    if (resetTooltip) attachTooltip(resetBtn, resetTooltip, { chrome: false })
+
+    const refresh = () => { renderPreview(preview); resetBtn.sensitive = isCustom() }
+    refresh()
+
+    resetBtn.connect("clicked", () => { onReset(); refresh() })
+
+    const chooseBtn = NidaraButton({
+        label: t("settings.apps.choose-image"), variant: "primary", pill: true,
+        valign: Gtk.Align.CENTER,
+    })
+    chooseBtn.connect("clicked", () => {
+        const fd = new Gtk.FileDialog({ title: t("settings.apps.dialog.select-icon"), modal: true })
+        const filter = new Gtk.FileFilter()
+        filter.add_mime_type("image/svg+xml")
+        filter.add_mime_type("image/png")
+        filter.set_name(t("settings.apps.filter.images"))
+        const filters = new Gio.ListStore({ item_type: Gtk.FileFilter.$gtype })
+        filters.append(filter)
+        fd.set_filters(filters)
+        fd.open(chooseBtn.get_root() as Gtk.Window | null, null, (_: any, res: any) => {
+            try {
+                const path = fd.open_finish(res)?.get_path()
+                if (!path) return               // cancelled
+                if (onPick(path) === false) return
+                refresh()
+            } catch { /* cancelled */ }
+        })
+    })
+
+    // Trailing slot holds ONLY the buttons now — the preview leads the row.
+    const buttons = new Gtk.Box({ spacing: 8, valign: Gtk.Align.CENTER, halign: Gtk.Align.END })
+    buttons.append(chooseBtn)
+    buttons.append(resetBtn)
+
+    return createRow(label, subtitle, buttons, undefined, preview)
 }
 
 // ── Static Info Label ─────────────────────────────────────────────────────────
