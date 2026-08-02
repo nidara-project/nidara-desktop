@@ -406,19 +406,25 @@ polish/optimization. If the hover growth ever truly must stop, it needs a struct
 (custom Cairo indicator or non-overlay reserved scrollbar with its own reflow tradeoff), not
 more specificity. Same root as #9 (the Adwaita stylesheet is loaded in-process).
 
-### 16b. Adwaita button classes — swept, one text-link left (2026-08-02)
-RESOLVED for `widgets/vpn.ts`, `widgets/bluetooth.ts` and `widgets/screenshot.ts`: all now build
-`NidaraButton`s, and connect/disconnect follows the Settings pages' intent mapping (connect =
-`primary`, **disconnect = `secondary`, not `danger`** — it is reversible). `widgets/volume.ts` also
-lost a vestigial `flat` riding along with `settings-icon-btn`, which already owns that look and is
+### 16b. Adwaita button classes — RESOLVED, sweep complete (2026-08-02)
+`widgets/vpn.ts`, `widgets/bluetooth.ts` and `widgets/screenshot.ts` all build `NidaraButton`s, and
+connect/disconnect follows the Settings pages' intent mapping (connect = `primary`, **disconnect =
+`secondary`, not `danger`** — it is reversible). `widgets/volume.ts` and `settings/pages/Widgets.tsx`
+lost vestigial `flat`s riding along with `settings-icon-btn`, which already owns that look and is
 unscoped.
 
-STILL OPEN, one button: `volume.ts`'s "set as default" text link (`["flat", "compact-btn"]`). `flat`
-is Adwaita's and `compact-btn` is ours but scoped to `.cc-detail-panel`, so it depends on where it
-renders like the rest did — but `NidaraButton` has no compact/text-link size, and `ghost` at the
-kit's default padding is visibly bigger than the caption-sized link that row is laid out around.
-Converting it properly means ADDING a size modifier to the kit (`nidara-btn--compact`), which is a
-design decision about the button vocabulary, not a mechanical swap. Left deliberately.
+The last holdout — `volume.ts`'s "set as default" text link (`["flat", "compact-btn"]`) — closed the
+same day by **adding the size axis the swap needed**: `NidaraButton({ size: "compact" })` →
+`nidara-btn--compact`, orthogonal to variant/pill/icon, one step down the ramp ($fs-caption, ~24px).
+The link is now `ghost` + `compact`; `button.compact-btn` was deleted from `_control-center.scss`.
+The vocabulary decision and its two guard rails (compact is editorial, not a fitting tool; the
+modifier must stay declared LAST in `button.nidara-btn`) are written up in `design-system.md` —
+read that before adding a third size.
+
+Residual, deliberate: `button.flat` stays in `_control-center.scss` with **no author-side consumers**,
+as a defensive normalizer for GTK composite widgets that carry `.flat` internally (night-light's
+`SpinButton`). Deleting it would silently hand those internals back to Adwaita inside the panel. Not
+debt to pay down; just don't write `flat` in page code.
 
 NOT to be confused with `.nidara-seg-btn.suggested-action` (screenshot/screenrecord mode rows): there
 the Adwaita class is not a button style but the SELECTED marker of a segmented control, and

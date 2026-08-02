@@ -388,8 +388,15 @@ button.nidara-seg-btn {
 //   danger              danger tint + danger text/border
 //   ghost               transparent, dim text
 //
-// Modifier:
+// Shape modifiers:
 //   nidara-btn--pill   fully rounded, slightly wider padding
+//   nidara-btn--icon   square-ish icon-only footprint
+//
+// Size axis (orthogonal to variant AND to the shape modifiers):
+//   (none)             default   ~32px tall, $fs-small
+//   nidara-btn--compact          ~24px tall, $fs-caption — one step down the ramp,
+//                                for dense rows where a default button would
+//                                out-weigh the row's own text.
 
 button.nidara-btn {
     // Wipe Adwaita/GTK defaults completely
@@ -464,6 +471,20 @@ button.nidara-btn {
     &.nidara-btn--icon {
         padding: 5px 8px;
         min-width: 0;
+    }
+
+    // ── compact size modifier ─────────────────────────────────────────────────
+    // One step down the ramp: caption text, tighter box (~24px tall vs ~32px).
+    // Declared LAST on purpose — it is a size, not a shape, so it must win the
+    // padding fight against --pill/--icon while leaving their border-radius and
+    // min-width alone. Keep it that way if you add modifiers below.
+    &.nidara-btn--compact {
+        font-size: $fs-caption;
+        min-height: 16px;
+        padding: 3px 10px;
+
+        &.nidara-btn--pill { padding: 3px 12px; }
+        &.nidara-btn--icon { padding: 3px 6px; }
     }
 }
 
@@ -582,8 +603,15 @@ button.settings-icon-btn {
     min-width: 28px;
     min-height: 28px;
 
-    &:hover  { background: var(--nidara-accent-10); color: var(--nidara-accent); background-image: none; }
-    &:active { background: rgba(var(--nidara-accent-rgb), 0.18); background-image: none; }
+    // Tints are NEUTRAL and one step DEEPER than the row's own, on purpose.
+    // This button lives inside a `.nidara-row`, which is already wearing
+    // `--nidara-surface-hover` (0.12) by the time the pointer reaches the button —
+    // an equal tint would read as dead. So: row 0.12 → button hover 0.16 → press 0.20.
+    // It used to reach for `--nidara-accent-10` to win that contrast, which spent the
+    // accent on a hover; the accent means ACTIVE/SELECTED (see design-system.md), and
+    // a neutral rung of the same ladder buys the same visibility without the meaning.
+    &:hover  { background: var(--nidara-surface-active); color: var(--nidara-text); background-image: none; }
+    &:active { background: var(--nidara-surface-raised); background-image: none; }
 }
 
 

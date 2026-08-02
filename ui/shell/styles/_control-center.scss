@@ -591,7 +591,12 @@
         &:active { background: rgba(var(--nidara-danger-rgb), 0.65); }
     }
 
-    // Flat button (screenshot copy, set-default text link)
+    // Flat button — NO author-side consumers left (the screenshot copy button and
+    // the set-default text link are both NidaraButtons now; the latter is
+    // ghost + compact). Kept as a defensive normalizer: GTK's own composite
+    // widgets can carry `.flat` internally (e.g. night-light's SpinButton), and
+    // without this they'd fall through to Adwaita's look inside the panel.
+    // Do not add `.flat` from page code — use NidaraButton({ variant: "ghost" }).
     button.flat {
         background: transparent;
         background-image: none;
@@ -606,13 +611,9 @@
         &:active { background: rgba(var(--nidara-accent-rgb), 0.18); }
     }
 
-    // Compact text button (set-default, inside audio device rows)
-    button.compact-btn {
-        font-size: $fs-caption;
-        font-weight: $fw-medium;
-        min-height: 24px;
-        padding: 2px 8px;
-    }
+    // (button.compact-btn deleted — its one consumer, the audio "set as default"
+    //  link, is now NidaraButton({ variant: "ghost", size: "compact" }); the size
+    //  lives in the kit, not in whatever panel the button happens to render in.)
 
     // Mute toggles use the global button.settings-icon-btn (_components.scss).
 

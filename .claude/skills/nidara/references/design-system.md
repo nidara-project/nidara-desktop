@@ -441,6 +441,14 @@ stair-stepped curves were clearly visible. So AA wins. The border/rim strokes
   (found live, corrected same day). Cairo-drawing a glyph means picking its colour is now on you;
   default to mode-aware white/black (`Theme.isDark`) like `--nidara-text`, and only reach for
   live accent when the glyph sits on the shell's own neutral glass, not on another accent fill.
+- **NEVER put `nd-icon` on a third-party APP icon** — only on our own monochrome UI glyphs.
+  `.nd-icon` is `-gtk-icon-filter: invert(1)`, an unconditional invert; on full-colour app artwork
+  it hands back a photo negative. This has now been found three separate times (the notification
+  centre's app icon, Settings → Audio's per-app row, and the CC audio detail's per-app row — the
+  last one fixed 2026-08-02, reported by the user as "los iconos salen invertidos"). The pattern to
+  copy when an image is *sometimes* ours and sometimes the app's: decide per icon, like
+  `MenuRow`'s `appIcon?: boolean` opt-out or `widgets/media.ts`'s `remove_css_class("nd-icon")`
+  once a real app icon resolves. Fallback art of ours that lands in the same slot still gets it.
 - **Any Cairo draw call that needs a colour defined as a hex string elsewhere goes through
   `hexToFloatRgb(hex)`** (`common/DrawingUtils.ts`) — `"#rrggbb"` → `{r,g,b}` as 0..1 floats,
   never a hand-rolled `parseInt(hex.slice(...), 16) / 255` triplet. Before this existed, that
@@ -523,6 +531,46 @@ to this in 2026-06):
   same height as a labelled one in a cluster (e.g. details/forget sitting next to Connect),
   instead of looking smaller/odd. Don't hand-roll icon buttons with ad-hoc sizing.
 
+**Size is a separate axis from intent and from shape** (added 2026-08-02, tech-debt 16b). There
+are exactly two steps and `size` composes with every variant, `pill` and `icon`:
+
+| `size` | Metrics | Use for |
+|---|---|---|
+| `"default"` (omit) | `$fs-small`, `padding 5px 14px`, ~32px tall | every normal action |
+| `"compact"` | `$fs-caption`, `padding 3px 10px`, ~24px tall | a control inside a **dense row** that must not out-weigh the row's own text |
+
+Two rules that keep the axis from rotting into a free-for-all:
+
+- **Compact is not a fitting tool.** If a default-size button doesn't fit, the layout is wrong —
+  fix the layout. Compact is for the *editorial* case: the row's own label is the subject and the
+  button is an aside (the CC audio detail's "set as default" = `ghost` + `compact`; the same
+  control in Settings → Audio stays default-size, because that row is roomier and the button is
+  the row's point). The same action legitimately takes different sizes in different surfaces.
+- **In `_components.scss`, `--compact` is declared LAST inside `button.nidara-btn`** so its
+  padding beats `--pill`/`--icon` while leaving their `border-radius`/`min-width` intact (it
+  re-specifies padding for both combinations). Anything you add below it must not re-set padding
+  unconditionally.
+
+There is no `"large"`. Don't add one speculatively — one was never needed, and a size ramp nobody
+uses is just three ways to be inconsistent.
+
+**Icon buttons inside a list row use `settings-icon-btn`, and their tints are NEUTRAL** (mute
+buttons in CC/Settings audio, the Settings → Widgets configure chevron). This is the *second*
+icon-button class next to `NidaraButton({ icon: true })` and it survives for one reason: it is
+28×28 with 4px padding, sized to sit in a dense row. Not folded into the kit (2026-08-02, user
+call) because the merge changes the box on five rows for no behavioural gain.
+
+The load-bearing detail is the **tint ladder**: the button sits inside a `.nidara-row`, which is
+already wearing `--nidara-surface-hover` (0.12) by the time the pointer is on the button. An equal
+tint reads as a dead control. So the row is 0.12, the button's hover is `--nidara-surface-active`
+(0.16) and its press is `--nidara-surface-raised` (0.20) — each one rung deeper than its parent.
+Until 2026-08-02 it reached for `--nidara-accent-10` to win that contrast, which is the
+active/selected tint spent on a hover; the neutral rung buys the same visibility without
+overloading the accent. **If you add a control inside a row and it looks dead on hover, go one rung
+down the neutral ladder — do not reach for the accent.** Watch out for `--nidara-state-selected`:
+despite the neutral-sounding name it is accent-tinted (`rgba(accent, 0.22)`), so it is not a rung
+of this ladder.
+
 **Never `suggested-action` / `destructive-action` — and know WHY they seem to work.** Those are
 Adwaita classes, and the shell restyles them in exactly two class scopes: `.bar-expansion-panel`
 (`_bar.scss`) and `.cc-detail-panel` (`_control-center.scss`). Inside those two, an Adwaita class
@@ -534,9 +582,12 @@ vocabulary that is correct in every window — bar, island, CC, Settings.
 The ONE legitimate remaining use is `.nidara-seg-btn.suggested-action`, where the class is not a
 button style at all but the SELECTED marker of a segmented control, and `_components.scss` owns
 that rule (screenshot/screenrecord mode rows). Every real button in `widgets/` was converted on
-2026-08-02 (vpn, bluetooth, screenshot; volume lost a vestigial `flat`), leaving exactly one known
-holdout — volume's caption-sized "set as default" text link, which needs a compact size in the kit
-rather than a swap. See tech-debt 16b.
+2026-08-02 (vpn, bluetooth, screenshot; volume lost a vestigial `flat`), and the last holdout —
+volume's caption-sized "set as default" text link — went with it once the kit grew a compact size
+(same day, see the size table above). **`widgets/` and `surfaces/` now carry zero author-written
+Adwaita button classes.** The `button.flat` rule still in `_control-center.scss` has no author-side
+consumers left; it survives only as a defensive normalizer for GTK composite widgets that carry
+`.flat` internally (night-light's `SpinButton`). Don't read it as permission to write `flat`.
 
 For an icon that belongs **next to a row's title** rather than as a trailing control (e.g. a
 lock on a secured Wi-Fi row), pass it as `NidaraRow`'s `titleIcon` arg (threaded through

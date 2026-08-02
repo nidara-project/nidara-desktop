@@ -69,7 +69,7 @@ function buildWidgetRow(nav: SettingsNav, w: AtomicWidget): Gtk.ListBoxRow {
     if (w.buildSettings && available) {
         const chevron = new Gtk.Button({
             child: new Gtk.Image({ gicon: Icons.chevronRight, pixel_size: 16, css_classes: ["nd-icon"], opacity: 0.4 }),
-            css_classes: ["settings-icon-btn", "flat"], valign: Gtk.Align.CENTER,
+            css_classes: ["settings-icon-btn"], valign: Gtk.Align.CENTER,
         })
         attachTooltip(chevron, t("settings.widgets.configure"), { chrome: false })
         chevron.connect("clicked", () => nav.pushSubpage({
