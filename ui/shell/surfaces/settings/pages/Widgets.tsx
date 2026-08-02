@@ -96,10 +96,14 @@ function configureButton(nav: SettingsNav, w: AtomicWidget): Gtk.Button {
         label: t("settings.widgets.configure"),
         variant: "ghost", size: "compact", halign: Gtk.Align.START,
     })
-    // Line the label up with the widget's NAME: leading-icon width (18) + the
-    // row's 16px spacing. NidaraRow can't compute this — only the caller knows
-    // how big its leading icon is.
-    btn.margin_start = 34
+    // Line the LABEL up with the widget's NAME — the text is what the eye reads
+    // down that column, not the button's box. Leading-icon width (18) + the row's
+    // 16px spacing, MINUS the 10px left padding `.nidara-btn--compact` puts
+    // inside the button (_components.scss): a ghost button has no visible edge,
+    // so that padding is pure optical offset and showed up live as a 10px step
+    // under the name. NidaraRow can't compute the first half — only the caller
+    // knows how big its leading icon is.
+    btn.margin_start = 34 - 10
     btn.connect("clicked", () => nav.pushSubpage({
         id: `widgets/${w.id}`, title: w.name, parentId: "widgets", build: w.buildSettings!,
     }))

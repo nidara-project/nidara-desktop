@@ -628,6 +628,14 @@ owns the footer's `halign` and its `margin_start` (leading-icon width + the row'
 34 for an 18px icon; `NidaraRow` cannot know the icon's size), and keeps it visually lighter than
 the title: **ghost + compact** is the house style for this slot.
 
+Align the footer's **text**, not its box. A `.nidara-btn--compact` carries `padding: 3px 10px`
+(`_components.scss`) and a ghost button has no visible edge, so that 10px is pure optical offset:
+`margin_start: 34` lands the button flush under the leading icon's gutter but the LABEL a visible
+step right of the title (caught live 2026-08-02 — the code said "line the label up with the name"
+and did not). Subtract the variant's horizontal padding — `34 - 10` — and verify by comparing the
+label's `bounds.x` from `query_ui .nidara-row-title` against the row titles above it, which is
+the measurement the eye is actually making.
+
 Do NOT reach for a sibling row instead. That was the intermediate fix here and it read as another
 ITEM in the list — *"como si fuese otro widget"* — because an indent alone cannot say "this
 belongs to the row above" when every row in a list looks alike. Inside the row, the two lines

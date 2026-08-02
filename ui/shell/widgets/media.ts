@@ -34,8 +34,9 @@ function fmt(secs: number): string {
         : `${m}:${String(sec).padStart(2, "0")}`
 }
 
-// Shared rich player panel used by the bar expanded pill, the CC detail page
-// and the Activity Island's player mode (surfaces/island/PlayerIsland.tsx).
+// Shared rich player panel used by the CC detail page and the Activity Island's
+// player mode (surfaces/island/PlayerIsland.tsx) — the bar expanded pill was the
+// third caller until the bar variant went away (see above).
 // Progress is expressed as 0-100% so makeHSlider's range never needs to change.
 export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     let player: any = null
