@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import { dockSettings, updateDockSettings, onDockSettingsChanged, type DockPosition } from "../../dock/state"
-import { listGroup, createRow, toggleRow, sliderRow, presetRow, dropdownRow, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, toggleRow, sliderRow, presetRow, dropdownRow, pageBox, bindWhileRealized } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 
 export default function DockPage() {
@@ -97,9 +97,10 @@ export default function DockPage() {
         autoHideSwitch.active = dockSettings.autoHide
         verticalNote.visible = vertical
     }
-    syncAutoHide()
-    const unsub = onDockSettingsChanged(syncAutoHide)
-    page.connect("unrealize", () => { try { unsub?.() } catch {} })
+    bindWhileRealized(page, () => {
+        syncAutoHide()
+        return onDockSettingsChanged(syncAutoHide)
+    })
 
     const delaySlider = sliderRow(
         t("settings.dock.hide-delay"), t("settings.dock.hide-delay.desc"),

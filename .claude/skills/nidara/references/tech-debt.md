@@ -319,7 +319,7 @@ already GTK equality-guarded. **Deferred items CLOSED in the 2026-07-02 optimiza
   preview box (`new_from_file_at_scale(path, 640, 360, true)`) instead of the full wallpaper
   (~17 MB decoded, retained forever because Settings hides instead of destroying).
 
-### 12. Sporadic double-disconnect CRITICALs — RESOLVED (helper + full sweep 2026-06-23)
+### 12. Sporadic double-disconnect CRITICALs — RESOLVED (helper + sweep 2026-06-23; lifecycle half in 12b, 2026-08-02)
 Rare bursts (≈2 in 30 h) of `GLib-GObject-CRITICAL … instance has no handler with id` (3–4
 ids at once, 2 instances) and `GLib-CRITICAL … Source ID not found when attempting to
 remove it`. Some cleanup path disconnects handlers / removes sources twice. Ruled out by
@@ -357,6 +357,47 @@ left tree-wide, the only `.disconnect(` call is inside `safeDisconnect` itself; 
 **Rule still stands:** use `safeDisconnect` for ALL disconnect-in-cleanup code — never bare
 `try{disconnect}catch{}` (it doesn't catch the C-level critical) and never a bare `obj.disconnect(id)`
 in an `unrealize`/`destroy` handler.
+
+#### 12b. …but that sweep silenced the criticals without fixing the LIFECYCLE — RESOLVED 2026-08-02
+The 06-23 sweep made double-cleanup *harmless*. It never made anything re-subscribe. Nothing above
+is wrong; it was half the bug, and the silent half is the one users feel.
+
+**The mechanism.** `showPage()` swaps pages with `contentArea.remove(current)` + `append(next)`, and
+category pages are built once into `pageCache`. Removing a widget from its parent **unroots it →
+`unrealize`**, but the page is not destroyed — coming back re-realizes *the same widget*. So
+`page.connect("unrealize", dispose)` fires the first time the user navigates away and is never
+undone: **the page comes back looking alive but frozen.** `safeDisconnect` and the `cleaned`
+once-guards in `SettingsHelpers` turned that into a bug with no symptom in the log.
+
+What it actually cost, before the fix (all confirmed by reading the disposal path of each page):
+- **Audio** — `watchDevices`/`watchStreams` gone: plug in a headset after your first visit and the
+  list never notices.
+- **Bluetooth** — device list frozen AND `unregisterPairingAgent()` left standing: **pairing stops
+  working for the rest of the session**.
+- **Display** — monitor topology stale. **Appearance** — theme + night-light sync dead.
+  **Dock**, **Power** — same shape.
+- **Every `toggleRow`/`dropdownRow` with `onExt`** on every page — deaf to external config change.
+- **Region** — the one page that still screamed, because a GLib *source* has no `safeDisconnect`
+  equivalent: `GLib.source_remove(clockTimerId)` unguarded and never nulled → the clock preview died
+  after one visit, and each later departure logged `GLib-CRITICAL … Source ID N was not found`
+  (**always the same N** — the tell that a stale id is being re-removed rather than a new one leaking).
+
+**Fix:** `bindWhileRealized(widget, subscribe)` in `SettingsHelpers.ts` — subscribes on every
+`realize`, disposes on every `unrealize`, idempotent both ways. Put the initial refresh INSIDE
+`subscribe`: a page you return to must re-read the world, not replay the state it had when the
+window opened. All 8 sites migrated (Region, Audio, Bluetooth, Display, Appearance ×2, Dock, Power,
+plus both `SettingsHelpers` row helpers, whose `cleaned` guards are gone).
+
+🔑 **Rule: in Settings, `unrealize` means "I was taken out for a moment", NOT "I am being
+destroyed".** Anything a page needs in order to stay CURRENT — service watches, signal handlers,
+GLib timers — goes through `bindWhileRealized`. A bare unrealize-cleanup is only correct for things
+that are genuinely per-realization and re-created on the way in (subpages qualify: `pushSubpage`
+rebuilds them on every push — that is why `Network.tsx`'s AP-detail teardown was never affected).
+
+⚠️ Diagnostic that generalises: **the same source/handler id repeating in a critical means a stale
+id is being removed again; a leak shows different ids.** And `G_DEBUG=fatal-criticals` was never
+needed here — the user naming the exact navigation (Language → Appearance) beat three rounds of
+static analysis, two of which pointed at the wrong file.
 
 ### 13. Lockscreen GTK4 segfault when a wl_output vanishes — upstream, mitigated by watchdog
 On wake-from-suspend the DP link re-trains and the wl_output disappears for ~1 s; GTK

@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import GObject from "gi://GObject"
 import { execAsync } from "ags/process"
-import { listGroup, createRow, toggleRow, pageBox, staticLabel } from "../SettingsHelpers"
+import { listGroup, createRow, toggleRow, pageBox, staticLabel, bindWhileRealized } from "../SettingsHelpers"
 import regionConfig, { TimeFormat, DateFormat } from "../../../core/RegionConfig"
 import inputConfig from "../../../core/InputConfig"
 import { t } from "../../../core/i18n"
@@ -58,11 +58,9 @@ export default function RegionPage() {
     previewBox.append(clockSubLabel)
     page.append(previewBox)
 
-    // Live update timer — 1s tick while page is visible
-    const clockTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
-        clockLabel.label = clockPreview()
-        return GLib.SOURCE_CONTINUE
-    })
+    // The 1s tick is armed in bindWhileRealized at the bottom of the page, so it
+    // really does run only "while the page is visible" — and, crucially, is armed
+    // AGAIN when the user comes back. Created here it survived exactly one visit.
 
     // ── Hora ──────────────────────────────────────────────────────────────────
     const { box: timeBox, listBox: timeList } = listGroup(t("settings.region.time.group"))
@@ -313,16 +311,26 @@ export default function RegionPage() {
 
     page.append(localeBox)
 
-    const regionSigId = regionConfig.connect("changed", () => {
+    const syncFromConfig = () => {
         clockLabel.label = clockPreview()
         timeDrp.active = timeFmts.indexOf(regionConfig.timeFormat)
         dateDrp.active = dateFmts.indexOf(regionConfig.dateFormat)
-    })
+    }
 
-    page.connect("unrealize", () => {
-        GLib.source_remove(clockTimerId)
-        if (tzStatusTimerId) GLib.source_remove(tzStatusTimerId)
-        safeDisconnect(regionConfig, regionSigId)
+    bindWhileRealized(page, () => {
+        syncFromConfig()   // the formats may have changed while the page was away
+        const clockTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, () => {
+            clockLabel.label = clockPreview()
+            return GLib.SOURCE_CONTINUE
+        })
+        const regionSigId = regionConfig.connect("changed", syncFromConfig)
+        return () => {
+            GLib.source_remove(clockTimerId)
+            // Transient "✓ / ✗" button reset; it also self-clears (SOURCE_REMOVE),
+            // so null it here or leaving twice removes an id that is already gone.
+            if (tzStatusTimerId) { GLib.source_remove(tzStatusTimerId); tzStatusTimerId = 0 }
+            safeDisconnect(regionConfig, regionSigId)
+        }
     })
 
     return page

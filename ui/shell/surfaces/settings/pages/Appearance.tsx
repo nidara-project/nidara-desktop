@@ -9,7 +9,7 @@ import Wallpaper, { TRANSITION_LABELS, type TransitionType } from "../../../core
 import { ACCENT_PALETTE, type AccentKey, type ShellAppearance } from "../../../core/NidaraTheme"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
-import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, toggleRow, dropdownRow, sliderRow, pageBox, bindWhileRealized } from "../SettingsHelpers"
 import { makeHSlider } from "../../../common/Slider"
 import { attachTooltip } from "../../../common/Tooltip"
 import { safeDisconnect } from "../../../core/signals"
@@ -197,9 +197,11 @@ export default function AppearancePage() {
         masterValue.label = uni ? `${Math.round(glassRepr() * 100)}%` : "—"
         masterSlider.opacity = uni ? 1 : 0.55
     }
-    const masterSyncId = Theme.connect("changed", syncMaster)
-    masterSlider.connect("unrealize", () => safeDisconnect(Theme, masterSyncId))
-    syncMaster()
+    bindWhileRealized(masterSlider, () => {
+        syncMaster()
+        const masterSyncId = Theme.connect("changed", syncMaster)
+        return () => safeDisconnect(Theme, masterSyncId)
+    })
 
     const masterBox = new Gtk.Box({ spacing: 12, valign: Gtk.Align.CENTER, hexpand: false })
     const mkGlassEnd = (icon: Gio.FileIcon) => new Gtk.Image({ gicon: icon, pixel_size: 16, opacity: 0.5, css_classes: ["nd-icon"], valign: Gtk.Align.CENTER })
@@ -342,14 +344,19 @@ export default function AppearancePage() {
     schedTimeRow.visible = NightLight.scheduleEnabled
     nlGroup.listBox.append(schedTimeRow)
 
-    // Keep manual toggle in sync when schedule fires
-    const nlChangedId = NightLight.connect("changed", () => {
+    // Keep manual toggle in sync when schedule fires — and when the schedule fired
+    // while the user was on another page (this one is cached, so it must re-read).
+    const syncNightLight = () => {
         nlSwitch.active    = NightLight.enabled
         nlSwitch.sensitive = !NightLight.scheduleEnabled
         schedSwitch.active = NightLight.scheduleEnabled
         schedTimeRow.visible = NightLight.scheduleEnabled
+    }
+    bindWhileRealized(page, () => {
+        syncNightLight()
+        const nlChangedId = NightLight.connect("changed", syncNightLight)
+        return () => safeDisconnect(NightLight, nlChangedId)
     })
-    page.connect("unrealize", () => safeDisconnect(NightLight, nlChangedId))
 
     page.append(nlGroup.box)
 

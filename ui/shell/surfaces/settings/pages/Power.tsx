@@ -2,7 +2,7 @@ import { Gtk } from "ags/gtk4"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 import Gio from "gi://Gio"
-import { listGroup, pageBox, dropdownRow, createRow } from "../SettingsHelpers"
+import { listGroup, pageBox, dropdownRow, createRow, bindWhileRealized } from "../SettingsHelpers"
 import Icons from "../../../core/Icons"
 import { t } from "../../../core/i18n"
 import Theme from "../../../core/ThemeManager"
@@ -165,8 +165,10 @@ function buildSelectionCheck(size = 16): Gtk.Widget {
         cr.lineTo(20 * s, 6 * s)
         cr.stroke()
     })
-    const sigId = Theme.connect("changed", () => da.queue_draw())
-    da.connect("unrealize", () => safeDisconnect(Theme, sigId))
+    bindWhileRealized(da, () => {
+        const sigId = Theme.connect("changed", () => da.queue_draw())
+        return () => safeDisconnect(Theme, sigId)
+    })
     return da
 }
 

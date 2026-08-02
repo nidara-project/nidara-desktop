@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import AstalBluetooth from "gi://AstalBluetooth"
 import GLib from "gi://GLib"
-import { listGroup, createRow, pageBox } from "../SettingsHelpers"
+import { listGroup, createRow, pageBox, bindWhileRealized } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as BT from "../../../core/BluetoothService"
@@ -163,11 +163,15 @@ export default function BluetoothPage() {
         BT.startDiscovery()
         if (scanTimerId !== null) GLib.source_remove(scanTimerId)
         scanTimerId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 8000, () => {
+            // Drop the id BEFORE stopScan: this source is mid-dispatch and about to
+            // remove itself by returning SOURCE_REMOVE, so letting stopScan remove it
+            // by id as well is a double-remove.
+            scanTimerId = null
             stopScan()
             return GLib.SOURCE_REMOVE
         })
     })
-    scanBtn.connect("unrealize", () => stopScan())
+    // Leaving the page stops the scan — owned by the page's own teardown below.
 
     scanGroup.listBox.append(createRow(
         t("settings.bluetooth.scan"),
@@ -291,7 +295,8 @@ export default function BluetoothPage() {
         rebuildList(nearbyGroup.listBox, BT.nearbyDevices(bt), false)
     }
 
-    const disposeDevices = BT.watchDevices(refreshLists)
+    // The three watches below are armed in bindWhileRealized at the bottom of the
+    // page, not here — see there for why building them once was wrong.
 
     // With the radio off you can't scan or hold a connection, so the device lists
     // and the scan control are meaningless — hide them (and stop any in-flight
@@ -303,8 +308,6 @@ export default function BluetoothPage() {
         nearbyGroup.box.visible = on
         if (!on) stopScan()
     }
-
-    const disposePower = BT.watchPower(() => { syncPower(); applyPowered() })
 
     // ── Adapter presence ──────────────────────────────────────────────────────
     // Banner ↔ content switch. The pairing agent only lives while an adapter
@@ -325,17 +328,25 @@ export default function BluetoothPage() {
             BT.unregisterPairingAgent()
         }
     }
-    const disposeAdapter = BT.watchAdapter(applyAdapter)
-
-    page.connect("unrealize", () => {
-        disposeDevices()
-        disposePower()
-        disposeAdapter()
-        closeActiveDialog()
-        BT.unregisterPairingAgent()
+    // Armed per visit, not per window. Tearing these down on unrealize while
+    // arming them only at build meant that after the user left this page once, the
+    // device lists never noticed another headset and — worse — the pairing agent
+    // stayed unregistered, so pairing silently stopped working for the rest of the
+    // session. applyAdapter() is inside because coming back must re-read the world.
+    bindWhileRealized(page, () => {
+        const disposeDevices = BT.watchDevices(refreshLists)
+        const disposePower   = BT.watchPower(() => { syncPower(); applyPowered() })
+        const disposeAdapter = BT.watchAdapter(applyAdapter)
+        applyAdapter()
+        return () => {
+            disposeDevices()
+            disposePower()
+            disposeAdapter()
+            stopScan()
+            closeActiveDialog()
+            BT.unregisterPairingAgent()
+        }
     })
-
-    applyAdapter()
 
     return page
 }

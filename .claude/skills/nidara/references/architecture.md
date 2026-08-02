@@ -353,6 +353,17 @@ Pure-GTK4 primitives + Nidara tokens, **no Adwaita, no resets**. Consumed only b
 
 The Settings sidebar (`Settings.tsx` `categories[]`) is **ordered into 3 unlabelled clusters** via `NidaraSidebar`'s `groupStart` dividers; the array order *is* the IA, so reorder there. The window opens on **Appearance** by default (not the first item). The **AI page** (`pages/Ai.tsx`, third cluster) governs the agent surface — its rule: every row must gate or report something REAL (no placeholder toggles); it grows with the AI-native roadmap (assistant model picker…). Its IA (2026-07) is four groups, one concept each: **Desktop Access** (shell-scoped capabilities, default on) · **Other Apps** (computer-use perception/control, escalating, default off) · **MCP Server** (the CHANNEL: enable toggle + `.mcp.json` connect row — a transport, not a permission; capability toggles gate `ags request` and MCP alike) · **Agent Interface** (read-only facts). Don't fold the MCP toggle back among the capability toggles. Pages that contain sub-screens use the **parent-page + `pushSubpage` pattern**: e.g. **Apps** is a landing (`pages/Apps.tsx`) with three navigable rows that push **Default Apps** (`pages/DefaultApps.tsx`), **App Icons** (`pages/AppIcons.tsx`) and **Autostart** (`pages/Autostart.tsx` — moved off the sidebar 2026-07; Windows Apps→Startup prior art). Subpages can nest: Autostart pushes its own installed-apps picker (`apps/autostart/add`), like App Icons' per-app detail (`apps/icons/{id}`). Caveat: subpage rows aren't in the search index (subpages build lazily), so a parent's landing rows should carry searchable labels.
 
+**Page lifetime — the trap.** Category pages are built ONCE into `pageCache` and swapped by
+`remove()` + `append()`, so navigating away **unrealizes a page without destroying it** and coming
+back re-realizes the same widget. `unrealize` here means *"taken out for a moment"*, not *"being
+destroyed"*: anything the page needs in order to stay CURRENT — service watches, signal handlers,
+GLib timers — must go through **`bindWhileRealized(widget, subscribe)`** (`SettingsHelpers.ts`),
+which re-subscribes on every realize and disposes on every unrealize. Do the initial refresh inside
+`subscribe` too, so a page you return to re-reads the world. A bare `connect("unrealize", dispose)`
+silently freezes the page after the user's first departure (that was tech-debt #12b: frozen device
+lists, a dead pairing agent, a stopped clock preview). Subpages are exempt — `pushSubpage` rebuilds
+them on every push.
+
 Naming note (2026-07): the page with id `widgets` (`pages/Widgets.tsx`) is titled **"Control
 Center"** in the UI and its copy says "controls", since it manages bar + CC
 placement in a single Settings page. `AtomicWidget`, the `widgets/` dir

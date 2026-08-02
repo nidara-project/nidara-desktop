@@ -1,5 +1,5 @@
 import { Gtk } from "ags/gtk4"
-import { listGroup, createRow, pageBox, staticLabel } from "../SettingsHelpers"
+import { listGroup, createRow, pageBox, staticLabel, bindWhileRealized } from "../SettingsHelpers"
 import { showNidaraAlert } from "../../../../lib/nidara-kit"
 import hs from "../../../core/HyprlandState"
 import { t } from "../../../core/i18n"
@@ -312,15 +312,18 @@ export default function DisplayPage() {
         hs.monitors.map(m => m.name).sort().join("|")
 
     let lastTopology = topology()
-    render()
-
-    const sigId = hs.connect("changed", () => {
-        const next = topology()
-        if (next === lastTopology) return
-        lastTopology = next
+    // Re-rendered and re-watched per visit: monitors can be plugged, unplugged or
+    // rearranged while the user is on another page, and this page is cached.
+    bindWhileRealized(page, () => {
         render()
+        const sigId = hs.connect("changed", () => {
+            const next = topology()
+            if (next === lastTopology) return
+            lastTopology = next
+            render()
+        })
+        return () => safeDisconnect(hs, sigId)
     })
-    page.connect("unrealize", () => safeDisconnect(hs, sigId))
 
     return page
 }

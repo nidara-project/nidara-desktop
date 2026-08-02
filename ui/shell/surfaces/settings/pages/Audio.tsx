@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import AstalWp from "gi://AstalWp"
-import { listGroup, pageBox } from "../SettingsHelpers"
+import { listGroup, pageBox, bindWhileRealized } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
 import * as AudioSvc from "../../../core/AudioService"
@@ -231,13 +231,16 @@ export default function AudioPage() {
     }
 
     // ── Signals ───────────────────────────────────────────────────────────────
-    const disposeDevices = AudioSvc.watchDevices(refreshDevices, audio)
-    const disposeStreams = AudioSvc.watchStreams(refreshStreams, audio)
-
-    refreshDevices()
-    refreshStreams()
-
-    page.connect("unrealize", () => { disposeDevices(); disposeStreams() })
+    // Re-watched on every realize: the page is cached, so watching once left the
+    // device and stream lists frozen at whatever was plugged in the first time the
+    // user opened this page. The refresh belongs inside for the same reason.
+    bindWhileRealized(page, () => {
+        const disposeDevices = AudioSvc.watchDevices(refreshDevices, audio)
+        const disposeStreams = AudioSvc.watchStreams(refreshStreams, audio)
+        refreshDevices()
+        refreshStreams()
+        return () => { disposeDevices(); disposeStreams() }
+    })
 
     streamGroup.listBox.append(emptyStreams)
     page.append(speakerGroup.box)

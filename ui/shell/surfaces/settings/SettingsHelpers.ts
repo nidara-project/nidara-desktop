@@ -28,6 +28,42 @@ export interface SettingsNav {
     goBack: () => void
 }
 
+// ── Page lifetime ─────────────────────────────────────────────────────────────
+/**
+ * Bind a live subscription to a widget's REALIZED lifetime.
+ *
+ * Use this instead of `widget.connect("unrealize", dispose)` for anything a page
+ * needs in order to stay CURRENT: service watches, signal handlers, GLib timers.
+ *
+ * Why it must exist: category pages are built once and cached (`pageCache` in
+ * Settings.tsx), and navigating away only `remove()`s the page from the content
+ * area. That unrealizes it WITHOUT destroying it, and coming back re-realizes the
+ * very same widget. A plain unrealize-cleanup therefore fires the first time the
+ * user leaves and is never undone — the page returns looking alive but frozen: a
+ * device list that no longer notices a headset, a clock preview stuck at the
+ * minute you left. `safeDisconnect` and once-guards (tech-debt #12) only made
+ * that silent; they never re-armed anything.
+ *
+ * `subscribe` runs on every realize and its returned disposer on every unrealize,
+ * so put the initial refresh inside it too: a page you come back to should show
+ * the world as it is now, not as it was when the window opened.
+ */
+export function bindWhileRealized(
+    widget: Gtk.Widget,
+    subscribe: () => (() => void) | void,
+): void {
+    let dispose: (() => void) | null = null
+    const start = () => {
+        if (dispose) return
+        const d = subscribe()
+        dispose = typeof d === "function" ? d : () => {}
+    }
+    const stop = () => { if (dispose) { dispose(); dispose = null } }
+    widget.connect("realize", start)
+    widget.connect("unrealize", stop)
+    if (widget.get_realized()) start()
+}
+
 // ── Search index ──────────────────────────────────────────────────────────────
 export interface SearchItem {
     pageId: string
@@ -89,14 +125,13 @@ export const toggleRow = (
         return false
     })
     if (onExt) {
-        const cleanup = onExt((v: boolean) => {
+        // Re-subscribed on every realize: the switch is recycled with its cached page,
+        // so a once-only cleanup would leave it deaf to external changes forever after
+        // the first time the user navigates away. See bindWhileRealized.
+        bindWhileRealized(sw, () => onExt((v: boolean) => {
             if (sw.active === v) return
             syncing = true; sw.active = v; syncing = false
-        })
-        // unrealize fires on every realize/unrealize cycle; guard so the page-provided
-        // cleanup (often a signal disconnect) runs at most once. See tech-debt #12.
-        let cleaned = false
-        sw.connect("unrealize", () => { if (!cleaned) { cleaned = true; cleanup() } })
+        }))
     }
     return createRow(label, subtitle, sw)
 }
@@ -125,14 +160,12 @@ export const dropdownRow = (
         if (idx < opts.length) cb(opts[idx])
     })
     if (onExt) {
-        const cleanup = onExt((v: string) => {
+        // See toggleRow — re-subscribed on every realize, not cleaned up once.
+        bindWhileRealized(drp, () => onExt((v: string) => {
             const idx = opts.indexOf(v)
             if (idx < 0 || idx === drp.selected) return
             syncing = true; drp.selected = idx; syncing = false
-        })
-        // See toggleRow — guard the page-provided cleanup against repeated unrealize.
-        let cleaned = false
-        drp.connect("unrealize", () => { if (!cleaned) { cleaned = true; cleanup() } })
+        }))
     }
     return createRow(label, subtitle, drp)
 }
