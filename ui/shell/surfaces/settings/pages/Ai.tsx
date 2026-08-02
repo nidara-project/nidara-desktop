@@ -163,12 +163,30 @@ export default function AiPage() {
     // catalog can't simply be left unselected: without a placeholder the first
     // model in the list always looks chosen, which reads as "this is your model"
     // for something the user never picked (user-caught 2026-07-22).
+    //
+    // And it RESTS on that placeholder forever: the dropdown is a menu you pick
+    // from, not a second place the value lives. It used to preselect the
+    // configured model, which put the same id in the entry AND in the list right
+    // below it — one value shown twice, and the reason the pair read as
+    // redundant (user-caught 2026-08-02). The entry above is the single display
+    // of the value, and the id landing in it IS the confirmation that the pick
+    // registered. Snapping back also makes re-picking the current model work,
+    // which a sticky selection silently forbade (no `notify::selected` when the
+    // chosen row is already selected — so retyping was the only way back to a
+    // model you had strayed from).
     modelDrop.connect("notify::selected", () => {
         if (suppressDropCb) return
         // Row 0 selects nothing on purpose — never commit it over a real value.
+        // It is also where we park ourselves after every pick, and that write
+        // re-enters here: without the early-out it would commit the placeholder.
         if (modelDrop.selected === 0) return
         const item = modelList.get_string(modelDrop.selected)
         if (item) { modelEntry.set_text(item); commitModel() }
+        // Back to "Choose a model…" — guarded, since this is a selection change
+        // like any other and would otherwise re-enter the handler above.
+        suppressDropCb = true
+        modelDrop.selected = 0
+        suppressDropCb = false
     })
 
     const fetchBtn = NidaraButton({ label: t("settings.ai.brain.model.fetch"), pill: true })
@@ -198,15 +216,14 @@ export default function AiPage() {
                 while (modelList.get_n_items() > 0) modelList.remove(0)
                 modelList.append(t("settings.ai.brain.model.choose"))
                 r.models.forEach(m => modelList.append(m))
-                // Preselect the configured model, comparing on the BARE id: the
-                // stored value may still carry Google's `models/` prefix (the
-                // compat spelling) while the catalog is now normalised without it,
-                // and a mismatch here silently looks like "your model isn't offered".
-                const bare = (s: string) => s.replace(/^models\//, "")
-                const idx = r.models.findIndex(m => bare(m) === bare(agentConfig.brainModel))
-                // +1 for the placeholder row; 0 means "none matched", which is
-                // exactly the placeholder — no model gets chosen on the user's behalf.
-                modelDrop.selected = idx >= 0 ? idx + 1 : 0
+                // Rests on the placeholder — the catalog never displays the
+                // configured model, the entry above does. This used to preselect
+                // it (matching on the BARE id, since a stored value may still
+                // carry Google's `models/` prefix while the catalog is normalised
+                // without it), which is precisely what showed one value twice.
+                // Dropping the preselect drops that whole matching problem with
+                // it: nothing here claims anything about your model any more.
+                modelDrop.selected = 0
                 suppressDropCb = false
                 modelDrop.visible = true
                 modelStatus.visible = false

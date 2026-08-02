@@ -628,6 +628,17 @@ dropdown writes into the entry above it, so it is a picker for that field and be
 under it, while the button that *populates* the dropdown is an action and goes in the action line.
 Group by what a control DOES to the field, not by what it looks like.
 
+**A picker is not a second place the value lives.** When a control's job is to write into another
+control, it must not also display the result — one value shown in two widgets stacked on top of
+each other reads as a duplicate, and the user asks why it appears twice (2026-08-02, the model
+row). Park the picker on its placeholder permanently: the catalog dropdown rests on
+"Choose a model…" forever, the entry above is the single display, and the id landing there IS the
+confirmation the pick registered. Two things fall out for free — the bare-id matching needed to
+preselect the configured model disappears along with the preselect, and re-picking the model you
+are already on starts working (`notify::selected` never fires when the chosen row is already
+selected, so a sticky selection silently made straying from a model a one-way trip). Snapping back
+to row 0 re-enters the handler, so it needs the same `suppressDropCb` guard as the rebuild.
+
 ⚠️ The AI page was cited as prior art for this shape while it was itself wrong, and Settings →
 Users' name row was converted to match it before anyone noticed. When you copy a layout from
 another page, check it against the rule rather than assuming the older page earned it.
