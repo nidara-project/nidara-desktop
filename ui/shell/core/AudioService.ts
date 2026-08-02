@@ -15,6 +15,7 @@ import { execAsync } from "ags/process"
 import AstalWp from "gi://AstalWp"
 import Icons from "./Icons"
 import { safeDisconnect } from "./signals"
+import { appService } from "./AppService"
 
 export function wp(): AstalWp.Wp | null {
     return AstalWp.get_default()
@@ -40,13 +41,28 @@ export function targetVolumeIcon(target: any) {
     return volumeIcon(target?.volume ?? 0, target?.mute ?? false)
 }
 
-/** Per-app stream icon name. Prefer the real (full-colour) app icon, falling
- *  back to the app name then a generic glyph; the placeholder card icon is junk. */
+/** Per-app stream icon name.
+ *
+ *  TWO measured facts about what AstalWp hands us, both of which broke the
+ *  obvious implementation (verified live 2026-08-02 against the real graph):
+ *
+ *  - **The app's name is `description`, not `name`.** `name` is the STREAM's name
+ *    — "Playback Stream", "Playback". `description` is the client: "Clocks",
+ *    "Google Chrome".
+ *  - **`icon` is never empty.** A client that declared no `application.icon-name`
+ *    gets `application-x-executable-symbolic` — a real, resolvable theme name for
+ *    the generic app glyph. So "did the client tell us its icon?" cannot be
+ *    answered by an emptiness check: GNOME Clocks played audio under a GEAR
+ *    because that placeholder was taken for an answer. Hence
+ *    `isGenericIconName` — the placeholder is a NO, not an icon.
+ *
+ *  So: declared icon (Chrome sets `google-chrome`) → desktop registry by app name
+ *  → a generic audio glyph for a stream that belongs to nothing we can name.
+ */
 export function streamIconName(stream: any): string {
-    const raw: string = stream.icon ?? ""
-    return (raw && raw !== "audio-card-symbolic")
-        ? raw
-        : (stream.name?.toLowerCase() ?? "audio-x-generic-symbolic")
+    const declared: string = stream.icon ?? ""
+    if (declared && !appService.isGenericIconName(declared)) return declared
+    return appService.iconForAppName(stream.description ?? "") ?? "audio-x-generic-symbolic"
 }
 
 // ── Endpoint / stream accessors ──────────────────────────────────────────────

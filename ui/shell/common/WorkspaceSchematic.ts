@@ -160,7 +160,13 @@ export function createSchematicMap(wsId: number, width: number): SchematicHandle
 
             widget.box.set_size_request(w, h)
 
-            const iconId = c.class || "application-x-executable"
+            // Identity FIRST, icon second. Feeding `c.class` straight to the icon
+            // theme makes this surface disagree with the dock about the same
+            // window: Settings is `io.Astal.ags`, a name no theme has, so it fell
+            // all the way through to the generic glyph while the dock — which does
+            // normalize — drew the registry's icon. Not the dock's slot mapping
+            // (resolveHyprlandClass), which would draw Nautilus as the Home icon.
+            const iconId = appService.resolveWindowApp(c.class || "") || c.class || "application-x-executable"
             const instance = (c as any).initialClass || (c as any).instance || ""
             let webAppIcon: string | null = null
             if (iconId.startsWith("chrome-") && iconId.endsWith("-default")) {

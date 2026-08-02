@@ -45,6 +45,10 @@ const BAD_ICONS = [
     "unknown"
 ]
 
+// Every file manager collapses into the dock's single Home/Finder shortcut.
+// Dock grouping ONLY — see resolveHyprlandClass vs resolveWindowApp.
+const FILE_MANAGER_CLASSES = ["org.gnome.nautilus", "nautilus", "thunar", "dolphin", "pcmanfm", "nemo", "nemo-desktop"]
+
 class AppService {
     private cache = new Map<string, AppData>()
     private gAppCache = new Map<string, any>()
@@ -438,28 +442,53 @@ class AppService {
     }
 
     /**
-     * Normalizes a Hyprland window class to a desktop app ID.
-     * Returns null for windows that should be ignored (e.g. the shell itself).
+     * WHICH APP a Hyprland window belongs to — identity, nothing else.
+     * Returns null for windows that should be ignored (the shell's own surfaces).
+     *
+     * **Every surface that shows something per-window must normalize through this
+     * before asking for an icon, a name, or anything else.** The raw class is not
+     * the app: Settings is a real app window that Hyprland reports as
+     * `io.Astal.ags` (see commandment 7), and the icon theme has no entry under
+     * that name — the desktop registry knows it as `nidara-settings`. A surface
+     * that skips this step silently renders the generic app glyph and disagrees
+     * with the dock about what the same window is; that is exactly what the
+     * workspace overview did until 2026-08-02.
+     */
+    resolveWindowApp(rawClass: string): string | null {
+        if (!rawClass) return null
+        const key = rawClass.toLowerCase()
+
+        // "io.Astal.ags" is our shell's only regular window (the Settings window).
+        // Layer shell windows never appear in hypr.clients, but just in case:
+        if (key.includes("ags") && rawClass !== "io.Astal.ags") return null
+
+        if (key === "org.nidara.desktop" || key === "gjs" || key === "io.astal.ags") return "nidara-settings"
+        return key
+    }
+
+    /**
+     * Which DOCK SLOT a Hyprland window belongs to = `resolveWindowApp` plus the
+     * dock's own groupings. Deliberately NOT the same question as identity: the
+     * dock collapses every file manager into its single Home/Finder shortcut, so
+     * a Nautilus window answers "home-shortcut" here and "org.gnome.nautilus"
+     * above. Only the dock wants this; anything asking "what app is this?" wants
+     * `resolveWindowApp` (asking this one would draw Nautilus as the Home icon).
      */
     resolveHyprlandClass(rawClass: string): string | null {
-        if (!rawClass) return null
-        const rawClassLower = rawClass.toLowerCase()
+        const app = this.resolveWindowApp(rawClass)
+        if (!app) return null
+        return FILE_MANAGER_CLASSES.includes(app) ? "home-shortcut" : app
+    }
 
-        // "io.Astal.ags" is our shell's only regular window (Settings Adw.Window).
-        // Layer shell windows never appear in hypr.clients, but just in case:
-        if (rawClassLower.includes("ags") && rawClass !== "io.Astal.ags") return null
-
-        let key = rawClassLower
-        if (key === "org.nidara.desktop" || key === "gjs" || key === "io.astal.ags") {
-            key = "nidara-settings"
-        }
-
-        // File Manager Integration -> Map any detected file manager window to our Home/Finder shortcut
-        if (["org.gnome.nautilus", "nautilus", "thunar", "dolphin", "pcmanfm", "nemo", "nemo-desktop"].includes(key)) {
-            key = "home-shortcut"
-        }
-
-        return key
+    /**
+     * True for the placeholder glyphs a theme hands back when it does NOT know the
+     * app (`application-x-executable`, `image-missing`, the `*-x-generic` family…).
+     * Public because these arrive from OUTSIDE the icon theme too — PipeWire hands
+     * us `application-x-executable-symbolic` for a client that declared no icon —
+     * and a caller that treats one as a real answer stops looking and renders it.
+     */
+    isGenericIconName(name: string): boolean {
+        return !!name && BAD_ICONS.some(f => name.includes(f))
     }
 
     /**
@@ -514,6 +543,33 @@ class AppService {
 
         if (hit) this.nameMap.set(k, hit)
         return hit
+    }
+
+    /**
+     * Resolve an icon from a HUMAN-FACING app name — PipeWire's `application.name`,
+     * a notification's `app_name`, anything a third party typed for a person to read.
+     * Use this instead of `getIconName()` whenever the string is a display name
+     * rather than a desktop ID / WM_CLASS / icon name.
+     *
+     * REGISTRY FIRST, icon theme second — that order is the whole point. A display
+     * name is an ordinary word, and a theme will happily answer an ordinary word
+     * with something unrelated: on Colloid, `clocks` is a symlink to
+     * `preferences-system-time`, so a raw `has_icon("clocks")` returns the date &
+     * time settings gear. It does not fail — it SUCCEEDS with the wrong art, and
+     * nothing logs. The registry knows "Clocks" is `org.gnome.clocks.desktop` with
+     * `Icon=org.gnome.clocks`, which the theme also has. Ask it first.
+     */
+    iconForAppName(name: string): string | null {
+        if (!name) return null
+        const info = this.getAppInfo(name)
+        const entryIcon = info?.get_icon?.() ?? null
+        if (entryIcon) {
+            const resolved = this.getIconName(entryIcon)
+            if (resolved) return resolved
+        }
+        // No registry match (a stream from something with no desktop entry) —
+        // the raw name is all we have left, theme collisions and all.
+        return this.getIconName(name)
     }
 
     getAppData(id: string): AppData | null {

@@ -29,7 +29,21 @@ export function createIconWidget(n: AstalNotifd.Notification, size: number) {
             else img.icon_name = icon
         } else if (icon) img.gicon = icon
     } else {
-        const fallback = appService.getIconName(n.app_icon || n.app_name)
+        // The registry doesn't know this sender (a script, a bare notify-send, an
+        // app with no .desktop entry). Both remaining sources are hostile in the
+        // same way the audio ones were, so neither is taken at face value:
+        //   - `app_icon` is whatever the sender typed. A PLACEHOLDER
+        //     (`dialog-information`, `application-x-executable`) is a "we didn't
+        //     say", not an icon — accepting one stops the search on a generic
+        //     glyph, which is how the CC audio rows ended up drawing a gear.
+        //   - `app_name` is a DISPLAY name, so it goes through iconForAppName
+        //     (registry before theme): the theme will answer an ordinary word
+        //     like "Music" with whatever it happens to alias.
+        const declared = n.app_icon || ""
+        const fromDeclared = declared && !appService.isGenericIconName(declared)
+            ? appService.getIconName(declared)
+            : null
+        const fallback = fromDeclared || appService.iconForAppName(n.app_name || "")
         if (fallback?.startsWith("/") || fallback?.startsWith("file://")) img.gicon = Gio.FileIcon.new(Gio.File.new_for_path(fallback.replace("file://", "")))
         else if (fallback) img.icon_name = fallback
         // nd-icon ONLY on our own Lucide fallback art (black stroke → mode filter);
