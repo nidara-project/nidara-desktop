@@ -1,6 +1,7 @@
 import { Gtk } from "ags/gtk4"
+import Gio from "gi://Gio"
+import GLib from "gi://GLib"
 import { PANEL_W } from "../common/widget-kit"
-import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
 
@@ -14,9 +15,39 @@ interface ClipEntry {
     preview: string
 }
 
+// cliphist prints the RAW BYTES it stored, and every text-mode way of reading a
+// process here — Astal's execAsync, Gio's communicate_utf8 — marshals stdout
+// through a NUL-terminated C string. So ONE entry saved as UTF-16 (an app that
+// publishes its selection that way: ASCII interleaved with NULs) truncated the
+// WHOLE listing at its first NUL. Measured: 49151 bytes / 750 lines arrived as
+// the six characters `1035\th`, so the panel showed a single mystery entry named
+// "h" and the rest of the history looked wiped — which is what made it read as
+// data loss rather than as a rendering bug (user-caught 2026-08-03).
+//
+// Read the BYTES and drop the C0 controls before decoding: no single clip can
+// hide the others again, and the UTF-16 case decodes to readable ASCII for free.
+// Tab and newline stay — they are cliphist's field and record separators.
+function readList(): Promise<string> {
+    return new Promise((resolve, reject) => {
+        let proc: Gio.Subprocess
+        try {
+            proc = Gio.Subprocess.new(["cliphist", "list"], Gio.SubprocessFlags.STDOUT_PIPE)
+        } catch (e) { reject(e); return }
+        proc.communicate_async(null, null, (_s: any, res: any) => {
+            try {
+                const [, stdout] = proc.communicate_finish(res)
+                const bytes = stdout?.get_data()
+                if (!bytes) { resolve(""); return }
+                const kept = bytes.filter(b => b === 0x09 || b === 0x0A || (b >= 0x20 && b !== 0x7F))
+                resolve(new TextDecoder().decode(kept))
+            } catch (e) { reject(e) }
+        })
+    })
+}
+
 async function listEntries(): Promise<ClipEntry[]> {
     try {
-        const out = await execAsync(["cliphist", "list"])
+        const out = await readList()
         return out
             .split("\n")
             .filter(l => l.trim())
@@ -35,10 +66,56 @@ async function listEntries(): Promise<ClipEntry[]> {
     }
 }
 
-function copyEntry(entry: ClipEntry): Promise<string> {
+/** Run `argv`, feeding it `input` on stdin, and resolve with its raw stdout. */
+function runBytes(argv: string[], input: Uint8Array | null, wantStdout: boolean): Promise<Uint8Array> {
+    return new Promise((resolve, reject) => {
+        let proc: Gio.Subprocess
+        const flags = Gio.SubprocessFlags.STDIN_PIPE
+            | (wantStdout ? Gio.SubprocessFlags.STDOUT_PIPE : Gio.SubprocessFlags.NONE)
+        try { proc = Gio.Subprocess.new(argv, flags) }
+        catch (e) { reject(e); return }
+        proc.communicate_async(input ? new GLib.Bytes(input) : null, null, (_s: any, res: any) => {
+            try {
+                const [, stdout] = proc.communicate_finish(res)
+                resolve(stdout?.get_data() ?? new Uint8Array(0))
+            } catch (e) { reject(e) }
+        })
+    })
+}
+
+/** `"utf-16le"`/`"utf-16be"` if these bytes are UTF-16 text, else null.
+ *
+ *  cliphist stores bytes and no MIME type, so a clip an app published as UTF-16
+ *  comes back as UTF-16 and `wl-copy` re-offers it as plain text — which is why
+ *  the entry above pasted as NOTHING into every UTF-8 text field. Text in the
+ *  ASCII range puts a NUL in every code unit's high byte, at ODD offsets little
+ *  endian and EVEN offsets big endian, so the test is most of the pairs plus a
+ *  clean parity split. A stray NUL inside genuine text cannot reach that, and
+ *  binary clips cannot either: cliphist previews those as "[[ binary data … ]]"
+ *  and their bytes have NULs at both parities. */
+function utf16Encoding(bytes: Uint8Array): string | null {
+    if (bytes.length < 4) return null
+    let even = 0, odd = 0
+    for (let i = 0; i < bytes.length; i++) {
+        if (bytes[i] !== 0) continue
+        if (i % 2 === 0) even++; else odd++
+    }
+    const pairs = Math.floor(bytes.length / 2)
+    if (even === 0 && odd > pairs * 0.8) return "utf-16le"
+    if (odd === 0 && even > pairs * 0.8) return "utf-16be"
+    return null
+}
+
+async function copyEntry(entry: ClipEntry): Promise<void> {
     const tab = entry.line.indexOf("\t")
     const id = tab !== -1 ? entry.line.slice(0, tab) : entry.line
-    return execAsync(["bash", "-c", `printf '%s\t' ${JSON.stringify(id)} | cliphist decode | wl-copy`])
+    // `cliphist decode` reads the id (tab-terminated) from stdin.
+    const raw = await runBytes(["cliphist", "decode"], new TextEncoder().encode(`${id}\t`), true)
+    const enc = utf16Encoding(raw)
+    // Only re-encode what we positively identified; everything else — including
+    // every image — goes back to the clipboard byte for byte.
+    const payload = enc ? new TextEncoder().encode(new TextDecoder(enc).decode(raw)) : raw
+    await runBytes(["wl-copy"], payload, false)
 }
 
 // ── Shared list builder ───────────────────────────────────────────────────────

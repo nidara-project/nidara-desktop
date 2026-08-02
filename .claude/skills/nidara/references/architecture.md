@@ -194,6 +194,28 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     homogeneous `Gtk.Stack` sizing it to the setup page — that was the "Stop
     floating in a big empty panel" bug, 2026-08-01). Reserve it for an action that
     is UNAMBIGUOUS in that state; anything offering a choice belongs in the panel.
+    **`execAsync` CANNOT read a command whose output may contain a NUL byte, and
+    it fails silently by truncating.** Astal's `execAsync` (like Gio's
+    `communicate_utf8`) marshals stdout through a NUL-terminated C string, so
+    everything after the first NUL is gone before any JS runs — no error, no
+    warning, just a short string, and no amount of sanitising in JS can recover
+    it. `cliphist list` prints the raw bytes it stored, so ONE clip saved as
+    UTF-16 (an app publishing its selection that way: ASCII interleaved with
+    NULs) truncated the WHOLE listing: **49151 bytes / 750 lines arrived as the
+    six characters `1035\th`**, and the clipboard panel showed a single mystery
+    entry named "h" with the rest of the history apparently wiped — which is why
+    it was reported as data loss rather than as a display bug (user-caught
+    2026-08-03; the first fix attempt sanitised the label and did nothing,
+    because the bytes never reached it). `widgets/clipboard.ts` reads stdout as
+    BYTES via `Gio.Subprocess.communicate_async` and drops the C0 controls before
+    decoding (keeping tab/newline — cliphist's field and record separators).
+    Reach for the same shape for any command that can emit arbitrary bytes.
+    The write path had the mirror of the same problem: cliphist stores no MIME
+    type, so `decode | wl-copy` re-offered the UTF-16 bytes as plain text and the
+    entry pasted as NOTHING. `copyEntry` now sniffs UTF-16 by NUL parity (all
+    NULs at odd offsets = LE, all at even = BE, ≥80% of the pairs) and re-encodes
+    to UTF-8; anything not positively identified — every image — is copied back
+    byte for byte.
     Both the visible pill and the overflow-menu row honour it, or an overflowed
     widget would behave differently from a shown one.
     **Per-widget settings (`buildSettings`)**: a widget with real preferences
