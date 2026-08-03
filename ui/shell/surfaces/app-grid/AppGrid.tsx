@@ -431,7 +431,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
             // Same halo as every other menu of rows (system menu, CC context menu, bar
             // panels): the row's hover fill spans this box, so this is its margin, and a
             // bubble is not a different kind of menu just because it has an arrow.
-            const PAD = rowInsetFor(RADIUS.md)
+            const PAD = rowInsetFor(RADIUS.md, 2)
             menuRows.margin_top    = BUF + PAD + (menuSide === "top"    ? ARROW_H : 0)
             menuRows.margin_bottom = BUF + PAD + (menuSide === "bottom" ? ARROW_H : 0)
             menuRows.margin_start  = BUF + PAD + (menuSide === "left"   ? ARROW_H : 0)

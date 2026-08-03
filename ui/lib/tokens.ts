@@ -42,16 +42,25 @@ export const RADIUS = {
 
 /**
  * How far a row's hover fill sits from a surface's **VISIBLE** edge — on all four
- * sides, and **derived from that surface's own corner**:
+ * sides, and derived from **the corner it actually sits in**, radius *and* exponent:
  *
- *     inset = surface radius − the row's radius
+ *     d = (k(n)·R − k(2)·rowRadius) / k(2),   k(n) = √2·(1 − 2^(−1/n))
  *
- * This is CONCENTRICITY, the same rule that derives `sm` from the `.nidara-list`
- * inset one level down: two curves read as parallel only when the inner radius is
- * the outer one minus the gap. So the inset is not a number to remember, it is a
- * consequence of the corner it sits in — `lg` 24 → 14, `md` 16 → 6. A 12 inside a
- * 16 corner (what the three bubble menus had) leaves twice the air the curve asks
- * for, and it reads as exactly that: a hole.
+ * The goal is one gap: the fill should stand as far from the corner's curve as it
+ * does from the straight edge. `k(n)·R` is how far a `drawSquircle` corner reaches
+ * along its 45° diagonal (its path is `|x/R|ⁿ + |y/R|ⁿ = 1`, so the diagonal point
+ * is `R·2^(−1/n)` from the corner centre), and `k(2)·r` is the same for the row's
+ * own circular CSS corner. For a real circle it collapses to plain concentricity,
+ * `d = R − r`, the same rule that derives `sm` from the `.nidara-list` inset.
+ *
+ * **The exponent is not a footnote — it moves the answer more than the radius does.**
+ * At `lg` 24 a circular corner asks for 14 and an `n: 3.2` squircle for 6, because a
+ * squircle is nearly square and simply does not intrude. Feeding every `lg` surface
+ * the circular answer is what made the system menu and the CC panels read as too
+ * airy (user-caught 2026-08-03, third round) while the circular-cornered bubbles at
+ * the same formula looked right. Pass the `n` the surface is painted with:
+ * `SquircleContainer` defaults to 3.2, `perfect: true` means 2, `GlassBubble` draws
+ * `cr.arc` (2), and a CSS `border-radius` is 2.
  *
  * **The row's radius is the fixed side of the equation, not the free one.** Varying
  * a row's corner per container would make the same menu row look different in the
@@ -68,13 +77,12 @@ export const RADIUS = {
  * ⚠️ Measured from the GLASS, not from the widget rect: `SquircleContainer` paints
  * the glass `GLASS_INSET` (2px) inside its allocation, so a box aligned to the rect
  * is that much closer to the visible edge than it looks in the source. Callers
- * write `rowInsetFor(R) + GLASS_INSET` and say so — that discrepancy is what left
+ * write `rowInsetFor(...) + GLASS_INSET` and say so — that discrepancy is what left
  * the system menu 2px tighter than its siblings while its comment claimed parity.
- *
- * ⚠️ The corner's EXPONENT matters as much as its radius, and this formula assumes
- * the strict case (a circle). A squircle with a high `n` is nearly square and leaves
- * slack a circle does not — Prism's `n: 4.5` panel at `xl` is comfortable on 8, far
- * under the 22 this would ask for. Only apply it where the corner is really round.
  */
-export const rowInsetFor = (surfaceRadius: number) => surfaceRadius - RADIUS.sm
+const cornerReach = (n: number) => Math.SQRT2 * (1 - Math.pow(2, -1 / n))
+
+export const rowInsetFor = (surfaceRadius: number, n: number = 3.2, rowRadius: number = RADIUS.sm) =>
+    Math.max(4, Math.round((cornerReach(n) * surfaceRadius - cornerReach(2) * rowRadius) / cornerReach(2)))
+
 

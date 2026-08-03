@@ -139,7 +139,7 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     const layoutSourceMenu = () => {
         if (!srcRows) return
         // Same halo as every other menu of rows — see tokens.ts.
-        const PAD = rowInsetFor(RADIUS.md)
+        const PAD = rowInsetFor(RADIUS.md, 2)
         srcRows.margin_top    = BUF + PAD + (srcSide === "top"    ? ARROW_H : 0)
         srcRows.margin_bottom = BUF + PAD + (srcSide === "bottom" ? ARROW_H : 0)
         srcRows.margin_start  = BUF + PAD + (srcSide === "left"   ? ARROW_H : 0)

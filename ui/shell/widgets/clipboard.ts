@@ -71,14 +71,15 @@ const MAX_ROWS = 200
 // What Bar.tsx gives every other expansion panel. We take the HORIZONTAL over
 // (barExpandedFlush) so the scroll can reach the panel edge, then re-apply it to the
 // content. Flush leaves the box at GLASS_INSET, so this is measured from the glass —
-// which is what rowInsetFor() already means. Same halo as every other lg surface.
-const PANEL_PAD = rowInsetFor(RADIUS.lg)
+// which is what rowInsetFor() already means. `n: 2` — this rides INSIDE the bar's
+// `perfect: true` capsule, so it takes that surface's circular answer, not a squircle's.
+const PANEL_PAD = rowInsetFor(RADIUS.lg, 2)
 
 // How far this panel's content already starts inside the capsule's VISIBLE corner —
 // the vertical margin Bar.tsx keeps on `expansionInner` even when flush, measured from
 // the widget rect, less the glass that SquircleContainer paints inside it. Feeds the
 // scroll's corner clearance; it moves with Bar.tsx, so derive it, never copy it.
-const PANEL_TOP_INSET = rowInsetFor(RADIUS.lg)
+const PANEL_TOP_INSET = rowInsetFor(RADIUS.lg, 2)
 
 async function listEntries(): Promise<ClipEntry[]> {
     try {

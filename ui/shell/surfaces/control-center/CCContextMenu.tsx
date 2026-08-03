@@ -62,8 +62,9 @@ export function createCCContextMenu(opts: CCContextMenuOpts = {}): CCContextMenu
     const rows = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 2,
-        // rowInsetFor(lg) from the GLASS, all four sides — the row hover fill spans this
-        // box, so this is its halo. Same token as the system menu and the bar panels.
+        // The halo from the GLASS, all four sides — the row hover fill spans this box.
+        // Squircle corner (default `n`), so 6: same call as the system menu, and the same
+        // reason the bar's circular panel gets a different number from the same radius.
         margin_top: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_bottom: rowInsetFor(RADIUS.lg) + GLASS_INSET,
         margin_start: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_end: rowInsetFor(RADIUS.lg) + GLASS_INSET,
     })

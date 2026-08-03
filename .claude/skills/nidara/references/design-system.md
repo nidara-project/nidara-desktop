@@ -290,17 +290,31 @@ Swept 2026-08-03. Each step is +4, and horizontal is always +4 over vertical:
 
 | Surface | v / h | Who |
 |---|---|---|
-| **A list of rows on a shell surface** | **`rowInsetFor(R)` = R − `sm`, uniform, from the GLASS** — `lg` 24 → **14**, `md` 16 → **6** | bar expansion panels (incl. the window menu, which inherits `expansionInner`), the **system menu**, the CC context menu, the **CC detail panel**, the clipboard, the three `GlassBubble` menus (dock item, app-grid item, media source) |
+| **A list of rows on a shell surface** | **`rowInsetFor(R, n)`**, uniform, from the GLASS — radius **and exponent**: circular `lg` 24 → **14**, squircle `lg` 24 → **6**, circular `md` 16 → **6** | bar expansion panels + clipboard (`perfect: true`, so `n: 2` → 14); the **system menu**, the CC context menu and the **CC detail panel** (squircles → 6); the three `GlassBubble` menus (`cr.arc`, `md` → 6) |
 | **Window row** | **12 / 16** | `NidaraRow`, and hand-rolled rows inside Settings |
 | **Island** | **16 / 20** | all five island modes |
 
 **That first row is not a tier — it is a formula, `rowInsetFor()` in `ui/lib/tokens.ts`.** A row's
-hover fill spans its container, so the container's padding IS the fill's margin, and two curves
-read as parallel only at **CONCENTRICITY**: `inset = surface radius − row radius`. Same rule that
-derives `sm` from the `.nidara-list` inset, one level up. So the inset is not a number to remember,
-it is a consequence of the corner it sits in — and that is why one constant looked right on the bar
-and wrong in a dock menu: `12` inside a `md` corner is twice the air a 16-radius curve asks for
-(user-caught 2026-08-03, second round).
+hover fill spans its container, so the container's padding IS the fill's margin, and the goal is
+ONE gap: the fill should stand as far from the corner's curve as it does from the straight edge.
+
+```
+d = (k(n)·R − k(2)·rowRadius) / k(2)        k(n) = √2·(1 − 2^(−1/n))
+```
+
+`k(n)·R` is how far a `drawSquircle` corner reaches along its 45° diagonal (its path is
+`|x/R|ⁿ + |y/R|ⁿ = 1`, so the diagonal point sits `R·2^(−1/n)` from the corner centre). For a real
+circle it collapses to plain concentricity, `d = R − r` — the same rule that derives `sm` from the
+`.nidara-list` inset, one level up.
+
+⚠️ **The exponent moves the answer more than the radius does, and that is not a footnote.** At `lg`
+24: a circular corner asks for **14**, an `n: 3.2` squircle for **6**. Two surfaces of the *same
+radius* legitimately take insets that differ by 8px, because a squircle is nearly square and simply
+does not intrude. Getting this wrong is what the user caught twice — first a flat `12` that was
+double what a `md` bubble wants, then the circular answer applied to every `lg` surface, which left
+the system menu and the CC panels reading airy while the bubbles next to them looked right. Pass
+the `n` the surface is actually painted with: `SquircleContainer` defaults to **3.2**,
+`perfect: true` means **2**, `GlassBubble` draws `cr.arc` (**2**), a CSS `border-radius` is **2**.
 
 **The row's radius is the fixed side of the equation.** Varying a row's corner per container would
 make the same menu row look different in the dock and in the system menu — a worse inconsistency
@@ -313,11 +327,10 @@ caught the halo being twice as wide at the sides as at the ends. No menu system 
 highlight is ~5/4pt, Windows 11 flyouts 4/4). The text's own breathing room lives on the row —
 `.nidara-menu-row` is `7px 12px`.
 
-⚠️ **The corner's EXPONENT matters as much as its radius**, and the formula assumes the strict case
-(a circle: `perfect: true`, `cr.arc`, or a CSS `border-radius`). A squircle with a high `n` is
-nearly square and leaves slack a circle does not — Prism's `n: 4.5` panel at `xl` is comfortable on
-8, far under the 22 concentricity would ask for. This is `cornerClearFor`'s lesson one level up:
-apply it where the corner is really round, and measure where it is not.
+Prism is the check that the formula is honest: its panel is `xl` 32 but `n: 4.5`, and the formula
+gives **5.6** — which is why its long-standing 8 never looked wrong, while the 22 a circular 32
+would have demanded would have been absurd. This is `cornerClearFor`'s lesson one level up: the
+corner's squareness is a real quantity, not a hedge.
 
 **A panel's header is a row too.** In the CC detail panel the back-button header sat at 10 from
 the glass while the rows under it sat at 6 — two axes inside one card. The header's fill now keeps
@@ -331,7 +344,8 @@ media source menu are `GlassBubble` popovers rather than squircle cards, and the
 `PAD = 5` — a *fifth* halo. They go through `rowInsetFor()` like everything else; the arrow changes
 the silhouette, not what the padding around a list of rows means. Their corner is `md` and
 **circular** (`bubblePath` draws `cr.arc`), so the formula gives 6 — which is also why the flat 12
-they briefly had read as a hole. (`radiusMax` in those calls is **not** a ladder rung and must not
+they briefly had read as a hole, and why they were the one surface that looked right while the
+squircle panels were still on the circular answer. (`radiusMax` in those calls is **not** a ladder rung and must not
 be swept onto one — `paintGlassBubble` computes a near-pill `min(w,h)/2` and `radiusMax` only caps
 it — but it *is* the surface radius to feed `rowInsetFor`, so the two now come from one token.)
 

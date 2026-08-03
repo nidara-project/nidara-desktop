@@ -32,8 +32,10 @@ export function SystemMenuOverlay() {
   const menuBox = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
     spacing: 2,
-    // rowInsetFor(lg) from the GLASS, all four sides: the row's hover fill spans this
-    // box, so this margin IS the halo between the hover and the card's edge.
+    // The halo from the GLASS, all four sides: the row's hover fill spans this box, so
+    // this margin IS the gap between the hover and the card's edge. Default `n` (3.2):
+    // this card is a squircle, which barely intrudes into its own corner, so it wants 6
+    // where the bar's circular `perfect: true` panel wants 14 at the same radius.
     // ⚠️ Twice user-caught here. The first fix read `expansionInner`'s constructor
     // (12) and wrote 12 — but Bar.tsx REWRITES that margin on every open, and the
     // number that ships is measured from the widget rect, so this menu still sat

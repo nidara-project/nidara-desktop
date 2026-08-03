@@ -537,7 +537,7 @@ export function DockItem(
         menuRows = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nidara-menu"] })
         // Same halo as every other menu of rows — see tokens.ts. A bubble is not a
         // different kind of menu just because it carries an arrow.
-        const PAD = rowInsetFor(RADIUS.md)
+        const PAD = rowInsetFor(RADIUS.md, 2)
         menuRows.margin_top    = BUF + PAD + (side === "top"    ? ARROW_H : 0)
         menuRows.margin_bottom = BUF + PAD + (side === "bottom" ? ARROW_H : 0)
         menuRows.margin_start  = BUF + PAD + (side === "left"   ? ARROW_H : 0)
