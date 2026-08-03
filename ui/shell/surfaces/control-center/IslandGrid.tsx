@@ -353,7 +353,11 @@ export default function IslandGrid() {
         // clipboard's per-row ✕), and GTK's overlay slider grew toward the pointer
         // onto exactly that spot — tech-debt #15, now structural rather than fought
         // with specificity.
-        const { widget: scroll } = NidaraScrolled({ child: panel })
+        // reserveLane: false — the panel already carries the halo, and the lane lives in it.
+        // Reserving would ADD 12 to each side on top (the panel sat at 18 until this was
+        // spotted). A detail row's trailing control clears the lane on its own: the row's
+        // content margin is 12, so a switch's edge lands 18 in, past the 12px lane.
+        const { widget: scroll } = NidaraScrolled({ child: panel, reserveLane: false })
         scroll.height_request = cellH
 
         const inner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: GRID_WIDTH })

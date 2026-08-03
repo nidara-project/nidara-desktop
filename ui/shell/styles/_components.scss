@@ -141,11 +141,13 @@ selection {
 /* Navigation sidebar list (icon+label rows, single-select → accent). */
 .nidara-sidebar {
     background: transparent;
-    // 12px sides = the NidaraScrolled lane, so the scroll bar lives inside the list's
-    // own inset instead of being added to one side of it (window.ts passes
-    // reserveLane: false). Symmetric is the point: a row's hover/selected fill has to
-    // read the same distance from both capsule walls.
-    padding: 6px 12px;
+    // The row-fill halo, same as every other list of rows (rowInsetFor in tokens.ts).
+    // It used to be 12 on the sides to hold the NidaraScrolled lane; the lane does not
+    // need that — what has to clear the lane is a row's trailing CONTROL, and these rows
+    // have none (icon + label, both leading). The pill floats over the fill's last pixels
+    // the way every overlay scrollbar does. `window.ts` still passes reserveLane: false,
+    // so the bar stays inside this box instead of widening the capsule.
+    padding: 6px;
 
     > row {
         @include nidara-reset;

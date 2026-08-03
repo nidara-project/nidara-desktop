@@ -61,8 +61,12 @@ export interface NidaraScrolledOpts {
      *  grab without aiming, and it must stay >= that sum or the expanded pill would
      *  have to choose between leaving the lane and touching the surface edge. */
     lane?: number
-    /** Pad the child by `lane` so content never sits under the bar. Default true;
-     *  pass false when the caller's own CSS already reserves the lane. */
+    /** Pad the child by `lane` on BOTH sides. Default true — the fallback for content
+     *  with no inset of its own. Pass false whenever the content HAS one, or it pays
+     *  twice (a panel with a 6px halo ended up at 18). The content's inset does not have
+     *  to be as wide as the lane: what must clear the lane is a row's trailing CONTROL,
+     *  and that sits inside the row's own trailing padding — the pill floating over the
+     *  fill's last pixels is what an overlay scrollbar does everywhere. */
     reserveLane?: boolean
     /** Keep the bar permanently visible instead of fading after idle. */
     alwaysVisible?: boolean
@@ -161,8 +165,8 @@ export function NidaraScrolled(opts: NidaraScrolledOpts): NidaraScrolledResult {
     // BOTH sides, not just the trailing one. Padding only where the bar sits buys the
     // hit protection and loses the symmetry: a row's hover/selected fill then ends
     // `lane` px from one wall and flush against the other, which is what the sidebar
-    // made obvious. Content that already has an inset wide enough to hold the lane
-    // passes reserveLane: false and keeps its own (that is the preferred shape).
+    // made obvious. Content that has its own inset passes reserveLane: false and keeps
+    // it — that is the preferred shape, and the inset need not be as wide as the lane.
     if (opts.reserveLane ?? true) {
         opts.child.margin_start = (opts.child.margin_start || 0) + lane
         opts.child.margin_end = (opts.child.margin_end || 0) + lane

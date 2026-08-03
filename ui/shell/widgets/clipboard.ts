@@ -348,10 +348,13 @@ function buildClipboardContent(onClose: () => void): Gtk.Widget {
     // NidaraScrolled, not Gtk.ScrolledWindow: every row carries a ✕ at its right
     // edge, and GTK's overlay slider grows toward the pointer as it approaches,
     // eating that button's hit area (tech-debt #15).
-    // barExpandedFlush: the scroll reaches the panel's inner edge so the bar sits
-    // there, per the shell-wide rule. The 14px the panel used to give us moves onto
-    // the CONTENT — and the bar's 12px lane fits inside that inset, so an expanded
-    // pill still never reaches a row's ✕. reserveLane off: the inset already is one.
+    // barExpandedFlush: the scroll reaches the panel's inner edge so the bar sits there,
+    // per the shell-wide rule, and the panel's own inset moves onto the CONTENT.
+    // reserveLane off: the lane lives in that inset. It is WIDER than the inset (12 vs the
+    // halo's 6) and that is fine — what has to clear the lane is the row's trailing
+    // CONTROL, not its fill: the ✕ sits inside `.nidara-menu-row`'s 12px trailing padding,
+    // so its edge lands 18px in, past the 12px lane. The pill floats over the fill's last
+    // pixels, which is what an overlay scrollbar does everywhere.
     list.margin_start = PANEL_PAD
     list.margin_end = PANEL_PAD
     const { widget: scroll } = NidaraScrolled({
