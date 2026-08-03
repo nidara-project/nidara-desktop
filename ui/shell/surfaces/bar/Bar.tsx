@@ -103,20 +103,27 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   let cachedMaxIcons: number | null = null
   const capsuleRefs = new Map<string, Gtk.Widget>()
   // The halo of the row hover fill, from the GLASS, all four sides (the horizontal is
-  // re-applied per panel below, since a flush panel takes it over). `n: 2` because this
-  // capsule is `perfect: true` — REAL circular arcs, the one lg surface that is not a
-  // squircle, and a circle intrudes far more into its corner: 14 here against the
-  // squircle siblings' 6. See rowInsetFor in tokens.ts.
+  // re-applied per panel below, since a flush panel takes it over). Default `n` — this
+  // panel is a squircle like every other floating popup of the shell, so 6. See
+  // rowInsetFor in tokens.ts.
   const expansionInner = new Gtk.Box({
-      margin_top: rowInsetFor(RADIUS.lg, 2) + GLASS_INSET, margin_bottom: rowInsetFor(RADIUS.lg, 2) + GLASS_INSET,
-      margin_start: rowInsetFor(RADIUS.lg, 2) + GLASS_INSET, margin_end: rowInsetFor(RADIUS.lg, 2) + GLASS_INSET,
+      margin_top: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_bottom: rowInsetFor(RADIUS.lg) + GLASS_INSET,
+      margin_start: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_end: rowInsetFor(RADIUS.lg) + GLASS_INSET,
   })
   // Pop animation (grow toward the anchor + fade) shared by every overlay —
   // the wrapper is the variable, so all the existing alignment/margin/region
   // code below operates on it transparently (animateLayout:false = Gtk.Bin).
+  // NOT `perfect: true`, deliberately. Every other `perfect` in this file is a bar
+  // CAPSULE — 40px tall, where it is what clamps the corner to min(w,h)/2 and makes the
+  // stadium. This panel is the only large surface that had inherited it, and at radius lg
+  // it bought nothing but a circular corner: a different shape from the system menu, the
+  // CC context menu and the CC detail island, which are the same family (`lg` = "any
+  // floating popup of the shell"). A squircle also does not reach into its own corner, so
+  // the halo above drops from 14 to 6 — the reason this panel read airy next to a menu
+  // sitting right under it.
   const expansionCapsule = new ScaleRevealer(SquircleContainer({
       child: expansionInner, gloss: true, useShellOpacity: true,
-      borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, perfect: true, radius: RADIUS.lg,
+      borderColor: { r: 1, g: 1, b: 1, a: 0.2 }, radius: RADIUS.lg,
       css_classes: ["bar-expansion-panel"],
   }), { ...OVERLAY_POP, pivot: "top-center" })   // grows down from its bar capsule
   expansionCapsule.valign = Gtk.Align.START
@@ -471,8 +478,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // allocation (drawSquircle paints the glass in from the rect), so flush-to-rect
       // hangs the content outside the shape — and puts a scroll lane's pill 2px nearer
       // the curve than its clearance assumes, which is what clipped the clipboard bar.
-      expansionInner.margin_start = flush ? GLASS_INSET : rowInsetFor(RADIUS.lg, 2) + GLASS_INSET
-      expansionInner.margin_end = flush ? GLASS_INSET : rowInsetFor(RADIUS.lg, 2) + GLASS_INSET
+      expansionInner.margin_start = flush ? GLASS_INSET : rowInsetFor(RADIUS.lg) + GLASS_INSET
+      expansionInner.margin_end = flush ? GLASS_INSET : rowInsetFor(RADIUS.lg) + GLASS_INSET
       // Direct pill→pill switch (one click, no dismissal in between): the
       // capsule is still fully revealed at the PREVIOUS anchor's position, so
       // snap it to the hidden state first — otherwise the new content paints

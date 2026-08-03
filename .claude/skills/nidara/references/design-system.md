@@ -290,7 +290,7 @@ Swept 2026-08-03. Each step is +4, and horizontal is always +4 over vertical:
 
 | Surface | v / h | Who |
 |---|---|---|
-| **A list of rows on a shell surface** | **`rowInsetFor(R, n)`**, uniform, from the GLASS — radius **and exponent**: circular `lg` 24 → **14**, squircle `lg` 24 → **6**, circular `md` 16 → **6** | bar expansion panels + clipboard (`perfect: true`, so `n: 2` → 14); the **system menu**, the CC context menu and the **CC detail panel** (squircles → 6); the three `GlassBubble` menus (`cr.arc`, `md` → 6) |
+| **A list of rows on a shell surface** | **`rowInsetFor(R, n)`**, uniform, from the GLASS — radius **and exponent**. Every floating popup of the shell is a squircle at `lg`, so in practice they all land on **6** | bar expansion panels + clipboard, the **system menu**, the CC context menu, the **CC detail panel** (squircle `lg` → 6); the three `GlassBubble` menus and the Settings dropdown (circular `md` → 6) |
 | **Window row** | **12 / 16** | `NidaraRow`, and hand-rolled rows inside Settings |
 | **Island** | **16 / 20** | all five island modes |
 
@@ -315,6 +315,16 @@ double what a `md` bubble wants, then the circular answer applied to every `lg` 
 the system menu and the CC panels reading airy while the bubbles next to them looked right. Pass
 the `n` the surface is actually painted with: `SquircleContainer` defaults to **3.2**,
 `perfect: true` means **2**, `GlassBubble` draws `cr.arc` (**2**), a CSS `border-radius` is **2**.
+
+**`perfect: true` belongs to CAPSULES, not to panels — and that is why every popup now lands on the
+same 6.** In `Bar.tsx` every other `perfect` is a 40px-tall bar capsule, where it is what clamps the
+corner to `min(w,h)/2` and produces the stadium. The bar expansion panel had inherited it from the
+file it shares with them, and at `lg` it bought nothing but a *circular* corner — a different shape
+from the system menu, the CC context menu and the CC detail island, which are the same family
+(`lg` is literally defined as "any floating popup of the shell"). The user asked the right question
+— *"shouldn't they all be squircles like the system menu?"* — and the answer was yes: one shape for
+the family, and the halo falls out of it (14 → 6). **If a large surface reads airy next to a menu
+right under it, check whether it is circular by accident before touching its padding.**
 
 **The row's radius is the fixed side of the equation.** Varying a row's corner per container would
 make the same menu row look different in the dock and in the system menu — a worse inconsistency

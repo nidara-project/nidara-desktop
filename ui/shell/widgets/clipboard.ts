@@ -71,15 +71,15 @@ const MAX_ROWS = 200
 // What Bar.tsx gives every other expansion panel. We take the HORIZONTAL over
 // (barExpandedFlush) so the scroll can reach the panel edge, then re-apply it to the
 // content. Flush leaves the box at GLASS_INSET, so this is measured from the glass —
-// which is what rowInsetFor() already means. `n: 2` — this rides INSIDE the bar's
-// `perfect: true` capsule, so it takes that surface's circular answer, not a squircle's.
-const PANEL_PAD = rowInsetFor(RADIUS.lg, 2)
+// which is what rowInsetFor() already means. Default `n`: the panel is a squircle, like
+// every other floating popup of the shell.
+const PANEL_PAD = rowInsetFor(RADIUS.lg)
 
 // How far this panel's content already starts inside the capsule's VISIBLE corner —
 // the vertical margin Bar.tsx keeps on `expansionInner` even when flush, measured from
 // the widget rect, less the glass that SquircleContainer paints inside it. Feeds the
 // scroll's corner clearance; it moves with Bar.tsx, so derive it, never copy it.
-const PANEL_TOP_INSET = rowInsetFor(RADIUS.lg, 2)
+const PANEL_TOP_INSET = rowInsetFor(RADIUS.lg)
 
 async function listEntries(): Promise<ClipEntry[]> {
     try {
@@ -361,11 +361,12 @@ function buildClipboardContent(onClose: () => void): Gtk.Widget {
         minContentHeight: 60,
         maxContentHeight: 360,
         widthRequest: PANEL_W.xl + PANEL_PAD * 2,
-        // The panel is a `perfect: true` capsule — REAL circular arcs, which leave no
-        // slack at the tangent point the way a squircle does. This scroll is its first
-        // child, so its top runs into that corner: PANEL_TOP_INSET is how far in it
-        // already starts (Bar.tsx's 10px content margin, less SquircleContainer's 2px
-        // glass inset), and the rest of the clearance is the kit's.
+        // This scroll is the panel's first child, so its top runs into the panel's corner:
+        // PANEL_TOP_INSET is how far in it already starts, and the rest of the clearance is
+        // the kit's. `cornerRadius` is the panel's radius as if the corner were CIRCULAR —
+        // it is a squircle now (Bar.tsx dropped `perfect: true`), which reaches into its
+        // corner far less, so this over-reserves. Deliberate: over-reserving moves the pill
+        // a couple of px inward, under-reserving puts it on the curve, and that was the bug.
         cornerRadius: RADIUS.lg,
         cornerInset: PANEL_TOP_INSET,
     })
