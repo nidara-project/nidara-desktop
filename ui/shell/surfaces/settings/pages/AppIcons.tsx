@@ -1,4 +1,5 @@
 import { Gtk } from "ags/gtk4"
+import { NidaraScrolled } from "../../../../lib/nidara-kit"
 import appService, { type AppData } from "../../../core/AppService"
 import { pageBox, listGroup, imagePickerRow, type SettingsNav } from "../SettingsHelpers"
 import { t } from "../../../core/i18n"
@@ -199,17 +200,16 @@ export default function AppIconsPage(nav: SettingsNav) {
     })
     searchInput.connect("changed", () => appList.invalidate_filter())
 
-    const scroll = new Gtk.ScrolledWindow({
-        vexpand: true,
-        min_content_height: 400,
-        hscrollbar_policy: Gtk.PolicyType.NEVER,
-        // Non-overlay: the scrollbar takes its own gutter instead of floating over
-        // the rows' right edge (where the chevron sits) and covering it.
-        overlay_scrolling: false,
-        css_classes: ["apps-list-scroll"],
+    // NidaraScrolled reserves the lane itself, so the rows' trailing chevron is never
+    // under the bar — that is what `overlay_scrolling: false` used to buy, without
+    // the gutter appearing and resizing the list the moment it starts overflowing.
+    const { widget: scrollWidget, scrolled: scroll } = NidaraScrolled({
+        child: appList,
+        minContentHeight: 400,
+        cssClasses: ["apps-list-scroll"],
     })
-    scroll.set_child(appList)
-    groupBox.append(scroll)
+    scroll.vexpand = true; scrollWidget.vexpand = true
+    groupBox.append(scrollWidget)
 
     page.append(groupBox)
 

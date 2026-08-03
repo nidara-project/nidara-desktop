@@ -4,7 +4,8 @@ import GLib from "gi://GLib"
 import GdkPixbuf from "gi://GdkPixbuf"
 import { execAsync } from "ags/process"
 import hs from "../../core/HyprlandState"
-import { drawSquircle, createSquirclePath } from "../../common/DrawingUtils"
+import { drawSquircle, squircleThumb } from "../../common/DrawingUtils"
+import { NidaraScrolled } from "../../../lib/nidara-kit"
 import SquircleContainer, { Shape } from "../../common/SquircleContainer"
 import { ScaleRevealer, attachGhostSwipeDismiss } from "../../common/ScaleRevealer"
 import IconButton from "../../common/IconButton"
@@ -64,30 +65,13 @@ function heroImagePath(n: AstalNotifd.Notification): string | null {
     return path
 }
 
-// Squircle-clipped cover-fit painter shared by the compact thumb and the expanded hero.
-function heroDrawingArea(pixbuf: any, w: number, h: number, radius: number, cssClass: string): Gtk.DrawingArea {
-    const da = new Gtk.DrawingArea({ width_request: w, height_request: h, css_classes: [cssClass] })
-    let scaled: any = null   // cached cover-fit copy — scale_simple allocates, keep it out of the draw path
-    da.set_draw_func((_da: any, cr: any, dw: number, dh: number) => {
-        if (dw <= 0 || dh <= 0) return
-        // cover-fit: scale so the shorter side fills, then centre-crop inside the squircle
-        const scale = Math.max(dw / pixbuf.get_width(), dh / pixbuf.get_height())
-        const sw = Math.max(1, Math.round(pixbuf.get_width() * scale)), sh = Math.max(1, Math.round(pixbuf.get_height() * scale))
-        if (!scaled || scaled.get_width() !== sw || scaled.get_height() !== sh)
-            scaled = pixbuf.scale_simple(sw, sh, GdkPixbuf.InterpType.BILINEAR)
-        cr.save(); createSquirclePath(cr, 0, 0, dw, dh, radius, 3.2); cr.clip()
-        Gdk.cairo_set_source_pixbuf(cr, scaled, (dw - sw) / 2, (dh - sh) / 2); cr.paint(); cr.restore()
-    })
-    return da
-}
-
 export function createHeroWidget(n: AstalNotifd.Notification, size: number): Gtk.Widget | null {
     const path = heroImagePath(n)
     if (!path) return null
     let pixbuf: any = null
     try { pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, size * 2, size * 2, true) } catch { return null }
     if (!pixbuf) return null
-    const da = heroDrawingArea(pixbuf, size, size, 12, "nc-hero")
+    const da = squircleThumb(pixbuf, size, size, 12, "nc-hero")
     da.halign = Gtk.Align.END; da.valign = Gtk.Align.CENTER
     return da
 }
@@ -115,7 +99,7 @@ export function createExpandedHeroWidget(n: AstalNotifd.Notification, width: num
     let pixbuf: any = null
     try { pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(path, width * 2, width * 2, true) } catch { return null }
     if (!pixbuf) return null
-    return heroDrawingArea(pixbuf, width, height, 16, "nc-hero-big")
+    return squircleThumb(pixbuf, width, height, 16, "nc-hero-big")
 }
 
 // Relative timestamp for the NC cards. A helper (not inlined) so the per-minute
@@ -458,12 +442,23 @@ export default function NotificationCenter() {
     // above the Bar's catcher and swallow the outside-clicks that dismiss the
     // NC. max_content_height (set via setMaxHeight below) is the cap: past it
     // the list scrolls.
-    const scroll = new Gtk.ScrolledWindow({ hscrollbar_policy: Gtk.PolicyType.NEVER, vscrollbar_policy: Gtk.PolicyType.AUTOMATIC, vexpand: true, hexpand: true, propagate_natural_height: true, css_classes: ["nc-scroll", "nc-transparent-scroll"] })
     // The scroll forces its child to the full viewport width (GRID_WIDTH + LANE). A
     // padding-right of LANE (in .nc-content-box) keeps the cards at GRID_WIDTH and leaves
-    // the lane free on the right for the overlay scrollbar — no reflow, no overlap.
+    // the lane free on the right for the indicator — no reflow, no overlap.
     const listContainer = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 12, css_classes: ["nc-content-box"], margin_top: 0, margin_bottom: 0 })
-    scroll.set_child(listContainer)
+    // NidaraScrolled retires tech-debt #15: GTK's overlay slider grew on pointer
+    // PROXIMITY (it sets .hovering itself, Adwaita's rule beat every override) and ate
+    // the right edge of each card's close ✕. The replacement indicator is can_target
+    // false, so there is nothing left to grow into the button.
+    const { widget: scrollWidget, scrolled: scroll } = NidaraScrolled({
+        child: listContainer,
+        propagateNaturalHeight: true,
+        // .nc-content-box already pads the lane in CSS — don't reserve it twice.
+        lane: LANE, reserveLane: false,
+        cssClasses: ["nc-scroll"],
+    })
+    scroll.vexpand = true; scroll.hexpand = true
+    scrollWidget.vexpand = true; scrollWidget.hexpand = true
 
     const CAL_H = 3 * UNIT + 2 * GAP      // 3 rows = 264px
     const calendarIsland = SquircleContainer({
@@ -490,7 +485,7 @@ export default function NotificationCenter() {
     listContainer.append(pillBox)
 
     outer.append(calendarIsland)
-    outer.append(scroll)
+    outer.append(scrollWidget)
 
     const updateNotifs = () => {
         // `transient` (freedesktop) = excluded from persistence: banner only, never

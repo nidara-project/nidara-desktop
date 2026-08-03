@@ -438,42 +438,17 @@
     padding: 0;
     /* The scroll viewport is GRID_WIDTH + 8 (LANE in NotificationCenter.tsx). This padding
        keeps the cards at GRID_WIDTH (no reflow/stretch) and frees the lane on the right
-       for the overlay scrollbar. */
+       for the scroll indicator. */
     padding-right: 8px;
 }
 
-/* Overlay scrollbar floating inside the reserved LANE on the right (added width, not
-   stolen from the cards). The problem in the narrow 8px lane was that the expanded
-   slider overlapped the cards' close buttons. What actually fixes that here is the
-   `trough` reset (margin/padding 0) + the tight 1px slider side margin: together they
-   pin the scrollbar FLUSH to the right screen edge, so it grows toward the wall, not
-   left over the cards. NOTE: the slider DOES still widen on hover/drag — GTK adds
-   .hovering/.dragging by proximity and Adwaita's rule wins despite the explicit state
-   selectors below; the size-pin is not load-bearing. If the hover growth ever needs
-   to truly stop, it'll take a structural change, not more specificity. */
-.nc-scroll.nc-transparent-scroll scrollbar,
-.nc-scroll.nc-transparent-scroll scrollbar.overlay-indicator {
-    min-width: 0;
-    background: transparent;
-    border: none;
-
-    trough { min-width: 0; margin: 0; padding: 0; background: transparent; border: none; }
-
-    slider,
-    &.hovering slider,
-    &.dragging slider {
-        min-width: 5px;
-        min-height: 28px;
-        margin: 4px 1px;          /* tight right margin keeps it flush to the edge */
-        background: var(--nidara-surface-raised);
-        border-radius: var(--nidara-radius-pill);
-        transition: background 0.2s #{$ease};
-    }
-
-    &:hover slider,
-    &.hovering slider,
-    &.dragging slider { background: var(--nidara-text-dim); }
-}
+/* The reserved LANE now hosts NidaraScrolled's indicator (.nidara-scroll-thumb in
+   _components.scss), not a GTK scrollbar — the view runs vscrollbar_policy EXTERNAL,
+   so no scrollbar node exists here to style. This retired tech-debt #15: the old
+   overlay slider widened on pointer PROXIMITY (GTK sets .hovering itself and
+   Adwaita's rule beat every override we could write) and ate the right edge of each
+   card's close ✕. Pinning it flush to the wall was mitigation; removing the widget
+   is the fix. Do NOT reintroduce `scrollbar` rules here. */
 
 .nc-empty {
     /* Sits inside the same glass capsule as the clear-all pill — match its type. */

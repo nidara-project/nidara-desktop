@@ -17,6 +17,11 @@ export { NidaraSelect } from "./select"
 // NidaraClamp — max-width centering container (replaces Adw.Clamp)
 export { NidaraClamp } from "./clamp"
 
+// NidaraScrolled — scroll view whose indicator can never take a click (replaces
+// Gtk.ScrolledWindow wherever rows carry a control at their right edge)
+export type { NidaraScrolledOpts, NidaraScrolledResult } from "./scrolled"
+export { NidaraScrolled } from "./scrolled"
+
 // NidaraSplitView — sidebar+content with auto-collapse (replaces Adw.OverlaySplitView + Adw.Breakpoint)
 export type { NidaraSplitViewResult } from "./split-view"
 export { NidaraSplitView } from "./split-view"

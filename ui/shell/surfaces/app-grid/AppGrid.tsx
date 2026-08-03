@@ -1,4 +1,5 @@
 import { Gtk, Gdk } from "ags/gtk4"
+import { NidaraScrolled } from "../../../lib/nidara-kit"
 import { execAsync } from "ags/process"
 import GLib from "gi://GLib"
 // @ts-ignore
@@ -203,15 +204,16 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     const ROW_H    = 163
     const scrollHeight = GRID_ROWS * ROW_H + (GRID_ROWS - 1) * 8 + 16
 
-    const scroll = new Gtk.ScrolledWindow({
-        hscrollbar_policy: Gtk.PolicyType.NEVER,
-        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        vexpand: false,
-        hexpand: true,
-        height_request: scrollHeight,
-        css_classes: ["app-grid-scroll"],
+    // The flowbox centres its tiles in the full width, so nothing lives at the right
+    // edge for the bar to cover — no lane to reserve here.
+    const { widget: scrollBox, scrolled: scroll } = NidaraScrolled({
+        child: flowbox,
+        reserveLane: false,
+        cssClasses: ["app-grid-scroll"],
     })
-    scroll.set_child(flowbox)
+    scroll.hexpand = true
+    scroll.height_request = scrollHeight
+    scrollBox.hexpand = true
 
     // ── Fade overlay ───────────────────────────────────────────────────────
     const adj = scroll.get_vadjustment()
@@ -243,7 +245,7 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
     Theme.connect("changed",     () => { if (fadeDA.get_mapped()) fadeDA.queue_draw() })
 
     const scrollOverlay = new Gtk.Overlay()
-    scrollOverlay.set_child(scroll)
+    scrollOverlay.set_child(scrollBox)
     scrollOverlay.add_overlay(fadeDA)
 
     const gridArea = new Gtk.Box({

@@ -74,7 +74,12 @@ calendar { color: var(--nidara-text); }
     }
 }
 
-/* ── Nidara scrollbar — scoped to shell components only ────────────────────── */
+/* ── Native GTK scrollbar fallback — scoped to shell components only ─────────
+   Nidara's own scroll views are NidaraScrolled (lib/nidara-kit/scrolled.ts), which
+   runs vscrollbar_policy EXTERNAL and paints .nidara-scroll-lane/.nidara-scroll-thumb
+   instead — none of this applies to them. What is left here catches native scrollbars
+   inside widgets we do not construct (a GTK internal, a third-party child), so the odd
+   one out still looks like the rest. Prefer NidaraScrolled over adding rules here. */
 #nidara-dock,
 #nidara-bar,
 #nidara-island,

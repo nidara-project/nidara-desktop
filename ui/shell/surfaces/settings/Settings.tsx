@@ -1,7 +1,7 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import status from "../../core/Status"
-import { NidaraClamp, NidaraSidebar, NidaraWindow } from "../../../lib/nidara-kit"
+import { NidaraClamp, NidaraScrolled, NidaraSidebar, NidaraWindow } from "../../../lib/nidara-kit"
 
 // Page Imports
 import AppearancePage from "./pages/Appearance"
@@ -127,14 +127,16 @@ export default function Settings(monitor: Gdk.Monitor) {
 
     // Every page (and dynamically-pushed subpage) is a clamped, scrollable box.
     const wrapPage = (widget: Gtk.Widget): Gtk.Widget => {
-        const scroll = new Gtk.ScrolledWindow({
-            hscrollbar_policy: Gtk.PolicyType.NEVER,
-            vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-            hexpand: true,
-            vexpand: true,
-            css_classes: ["settings-page-scroll"],
+        // NidaraScrolled everywhere, windows included — one scroll behaviour for the
+        // whole DE. The clamp already centres the content inside a much wider
+        // viewport, so there is nothing at the right edge to reserve a lane against.
+        const { widget: scroll, scrolled } = NidaraScrolled({
+            child: NidaraClamp(widget, 800, true),   // NidaraClamp replaces Adw.Clamp
+            reserveLane: false,
+            cssClasses: ["settings-page-scroll"],
         })
-        scroll.set_child(NidaraClamp(widget, 800, true))   // NidaraClamp replaces Adw.Clamp
+        scrolled.hexpand = true; scrolled.vexpand = true
+        scroll.hexpand = true; scroll.vexpand = true
         return scroll
     }
 
@@ -228,14 +230,13 @@ export default function Settings(monitor: Gdk.Monitor) {
     searchResultsPage.append(searchResultsEmpty)
 
     const srClamp = NidaraClamp(searchResultsPage, 800, true)
-    const srScroll = new Gtk.ScrolledWindow({
-        hscrollbar_policy: Gtk.PolicyType.NEVER,
-        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        hexpand: true,
-        vexpand: true,
-        css_classes: ["settings-page-scroll"],
+    const { widget: srScroll, scrolled: srScrolled } = NidaraScrolled({
+        child: srClamp,
+        reserveLane: false,
+        cssClasses: ["settings-page-scroll"],
     })
-    srScroll.set_child(srClamp)
+    srScrolled.hexpand = true; srScrolled.vexpand = true
+    srScroll.hexpand = true; srScroll.vexpand = true
     pageCache.set("search-results", srScroll)
 
     const populateResults = (query: string) => {

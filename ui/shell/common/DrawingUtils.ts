@@ -1,4 +1,6 @@
 import Cairo from "gi://cairo"
+import GdkPixbuf from "gi://GdkPixbuf"
+import { Gtk, Gdk } from "ags/gtk4"
 
 /** "#rrggbb" → { r, g, b } as 0..1 floats, what Cairo's setSourceRGBA wants. The
  *  single conversion point for any Cairo draw call that needs a color defined as
@@ -213,4 +215,40 @@ export const drawSquircle = (
 
         cr.restore()
     }
+}
+
+/** A squircle-clipped, cover-fit thumbnail of `pixbuf`, as a `Gtk.DrawingArea`.
+ *
+ *  Cover-fit (scale so the SHORTER side fills, then centre-crop) rather than
+ *  contain: a thumbnail column only reads as a column if every cell is the same
+ *  rectangle, and letterboxing a 2560×1440 screenshot next to a square avatar
+ *  makes the list look broken. The squircle clip is the same shape language as
+ *  every other rounded surface here — GTK4 CSS `border-radius` does NOT clip a
+ *  child's rendering, so this is Cairo's job, not the stylesheet's.
+ *
+ *  `scale_simple` allocates a whole new pixbuf, so the cover-fit copy is cached
+ *  and only recomputed when the allocation actually changes — never call it from
+ *  inside a draw function without that guard.
+ *
+ *  Shared by the notification hero/thumb and the clipboard history rows. */
+export function squircleThumb(
+    pixbuf: any,
+    w: number,
+    h: number,
+    radius: number,
+    cssClass: string,
+): Gtk.DrawingArea {
+    const da = new Gtk.DrawingArea({ width_request: w, height_request: h, css_classes: [cssClass] })
+    let scaled: any = null
+    da.set_draw_func((_da: any, cr: any, dw: number, dh: number) => {
+        if (dw <= 0 || dh <= 0) return
+        const scale = Math.max(dw / pixbuf.get_width(), dh / pixbuf.get_height())
+        const sw = Math.max(1, Math.round(pixbuf.get_width() * scale))
+        const sh = Math.max(1, Math.round(pixbuf.get_height() * scale))
+        if (!scaled || scaled.get_width() !== sw || scaled.get_height() !== sh)
+            scaled = pixbuf.scale_simple(sw, sh, GdkPixbuf.InterpType.BILINEAR)
+        cr.save(); createSquirclePath(cr, 0, 0, dw, dh, radius, 3.2); cr.clip()
+        Gdk.cairo_set_source_pixbuf(cr, scaled, (dw - sw) / 2, (dh - sh) / 2); cr.paint(); cr.restore()
+    })
+    return da
 }

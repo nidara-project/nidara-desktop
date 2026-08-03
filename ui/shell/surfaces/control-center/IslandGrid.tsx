@@ -1,4 +1,5 @@
 import { Gtk, Gdk } from "ags/gtk4"
+import { NidaraScrolled } from "../../../lib/nidara-kit"
 import GObject from "gi://GObject"
 import GLib from "gi://GLib"
 import BaseIsland, { islandPadding, resolveIslandShape } from "./BaseIsland"
@@ -337,12 +338,12 @@ export default function IslandGrid() {
         })
         panel.append(w.buildCCDetail(hideDetail))
 
-        const scroll = new Gtk.ScrolledWindow({
-            hscrollbar_policy: Gtk.PolicyType.NEVER,
-            vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-            height_request: cellH,
-        })
-        scroll.set_child(panel)
+        // NidaraScrolled: a detail page's rows may carry a right-edge control (the
+        // clipboard's per-row ✕), and GTK's overlay slider grew toward the pointer
+        // onto exactly that spot — tech-debt #15, now structural rather than fought
+        // with specificity.
+        const { widget: scroll } = NidaraScrolled({ child: panel })
+        scroll.height_request = cellH
 
         const inner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: GRID_WIDTH })
         inner.append(backBtn)

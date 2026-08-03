@@ -210,6 +210,39 @@ selection {
     border-radius: $nidara-radius-sm;
     @include nidara-row-states;
 }
+/* NidaraScrolled's bar (lib/nidara-kit/scrolled.ts). A single DrawingArea spanning
+   the full height: the whole lane is the hit area (constant width — that is the fix
+   for tech-debt #15, since GTK's slider grew toward whatever the pointer approached
+   and ate the ✕ next to it), and the thin pill is PAINTED inside it. It is painted
+   rather than laid out because a scroll position is not a layout property: moving a
+   box by margin made the drag lag behind the pointer and made the view re-allocate
+   on every step. `color` here is the pill's fill, read back in Cairo via
+   get_style_context().get_color() — nidara-kit is self-contained and cannot import
+   ThemeManager, so this is how it stays token-driven.
+   The lane WIDTH must never become state-dependent: growing on hover IS the bug. */
+.nidara-scroll-bar {
+    background: transparent;
+    color: var(--nidara-surface-raised);
+    transition: opacity 0.25s ease, color 0.15s ease;
+
+    &:hover,
+    &.dragging { color: var(--nidara-text-dim); }
+}
+
+/* Destructive row (menuRow({ danger: true }), the system menu's confirm action).
+   The label keeps the normal text colour — NO red text (user call, 2026-08-03): red
+   lettering in a flat list reads as an error message, and it fires before the user
+   has done anything wrong. The destructive signal is the HOVER instead: the tint the
+   row takes under the pointer turns red, i.e. it only speaks at the moment the click
+   is actually being aimed. Beats nidara-row-states on specificity so the neutral
+   hover doesn't win. This class was applied in three places (CC context menu
+   "Remove", the system menu confirm, and now the clipboard) while being defined
+   NOWHERE — those rows had been rendering as ordinary rows. */
+.nidara-menu-row.danger-action {
+    &:hover  { background-color: rgba(var(--nidara-danger-rgb), 0.14); }
+    &:active { background-color: rgba(var(--nidara-danger-rgb), 0.22); }
+}
+
 .nidara-menu-label {
     font-size: $fs-small;
     font-weight: $fw-medium;

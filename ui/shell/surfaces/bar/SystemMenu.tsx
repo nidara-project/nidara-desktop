@@ -101,13 +101,13 @@ export function SystemMenuOverlay() {
     max_width_chars: 20,
   })
 
-  const confirmCancelBtn = new Gtk.Button({ label: t("bar.system-menu.confirm.cancel"), css_classes: ["nidara-menu-row", "system-confirm-secondary"], hexpand: true })
+  const confirmCancelBtn = new Gtk.Button({ label: t("bar.system-menu.confirm.cancel"), css_classes: ["nidara-menu-row", "nidara-confirm-secondary"], hexpand: true })
   confirmCancelBtn.connect("clicked", () => {
     pendingCmd = null
     showPage(menuBox)
   })
 
-  const confirmActionBtn = new Gtk.Button({ label: "", css_classes: ["nidara-menu-row", "system-confirm-primary"], hexpand: true })
+  const confirmActionBtn = new Gtk.Button({ label: "", css_classes: ["nidara-menu-row", "nidara-confirm-primary"], hexpand: true })
   confirmActionBtn.connect("clicked", () => {
     pendingCmd?.()
     pendingCmd = null

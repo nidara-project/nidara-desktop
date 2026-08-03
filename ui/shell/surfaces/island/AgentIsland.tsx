@@ -2,7 +2,7 @@ import { Gtk, Gdk } from "ags/gtk4"
 import GLib from "gi://GLib"
 import SquircleContainer from "../../common/SquircleContainer"
 import { PANEL_W } from "../../common/widget-kit"
-import { NidaraButton } from "../../../lib/nidara-kit"
+import { NidaraButton, NidaraScrolled } from "../../../lib/nidara-kit"
 import { makePulseDots, pulseOpacity } from "../../common/PulseDots"
 import Icons from "../../core/Icons"
 import agentService, { Turn, ToolCall } from "../../core/AgentService"
@@ -277,17 +277,18 @@ export default function AgentIsland() {
 
     // Transcript (configured state).
     const listBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10, css_classes: ["agent-transcript"] })
-    const scroller = new Gtk.ScrolledWindow({
-        propagate_natural_height: true,
-        max_content_height: 300,
-        hscrollbar_policy: Gtk.PolicyType.NEVER,
-        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        // Overlay scrolling stays ON here (unlike Settings' lists): the bar must not
-        // resize the chat when it appears. It rides a RESERVED lane instead — the
-        // transcript's own right padding, pinned flush by the scrollbar block in
-        // _bar.scss. See design-system.md, "Any ScrolledWindow".
-        css_classes: ["agent-scroller"],
+    // Nothing is reserved for a gutter that appears and disappears: the bar must not
+    // resize the chat when the transcript starts overflowing. The indicator rides the
+    // transcript's own right padding (a RESERVED lane) and, being can_target false,
+    // cannot grow toward the bubbles the way GTK's overlay slider did — that fight is
+    // over, see lib/nidara-kit/scrolled.ts and design-system.md, "Any ScrolledWindow".
+    const { widget: scrollerWidget, scrolled: scroller } = NidaraScrolled({
         child: listBox,
+        propagateNaturalHeight: true,
+        maxContentHeight: 300,
+        // .agent-transcript already pads the 16px lane in CSS.
+        lane: 16, reserveLane: false,
+        cssClasses: ["agent-scroller"],
     })
 
     // Entry row.
@@ -307,7 +308,7 @@ export default function AgentIsland() {
     entryBox.append(sendBtn)
 
     const chatBox = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, spacing: 10 })
-    chatBox.append(scroller)
+    chatBox.append(scrollerWidget)
     chatBox.append(entryBox)
 
     // Empty state (no provider configured).
