@@ -107,6 +107,23 @@ calendar { color: var(--nidara-text); }
 
         button { opacity: 0; min-width: 0; min-height: 0; padding: 0; }
     }
+
+    /* Overscroll indicators. GTK paints `scrolledwindow > overshoot.top` as a radial
+       gradient of #020202 (verified in the theme's own CSS, extracted from libgtk's
+       gresource) and `undershoot.*` as a fade at the edge that still has content. On an
+       opaque app window that reads as depth; on GLASS it is a black smear that appears
+       out of nowhere the moment a list is pulled past its end, and it does not even
+       reach the surface's edge, so it reads as a stray band rather than as an edge
+       effect. Nidara's own scroll bar already says where you are. User-caught in the
+       Settings dropdown 2026-08-03, but it was never specific to that popover — every
+       scrolled surface in the DE had it. */
+    scrolledwindow > overshoot,
+    scrolledwindow > undershoot {
+        background: none;
+        background-image: none;
+        box-shadow: none;
+        border: none;
+    }
 }
 
 /* Reset for Nidara Settings window (Gtk.Window, decorated: false) */
