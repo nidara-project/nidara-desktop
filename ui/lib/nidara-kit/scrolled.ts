@@ -1,5 +1,6 @@
 import GLib from "gi://GLib"
 import { Gtk } from "ags/gtk4"
+import { RADIUS } from "../tokens"
 
 /**
  * NidaraScrolled — the shell's scroll view. One component for overlay surfaces AND
@@ -402,7 +403,7 @@ export function attachScrollBar(
  */
 export function adoptGtkScrolled(
     scrolled: Gtk.ScrolledWindow,
-    opts: { lane?: number, alwaysVisible?: boolean } = {},
+    opts: { lane?: number, alwaysVisible?: boolean, cornerRadius?: number, cornerInset?: number } = {},
 ): boolean {
     const parent = scrolled.get_parent() as Gtk.Box | null
     if (!parent || !(parent instanceof Gtk.Box)) return false
@@ -453,6 +454,10 @@ function dropDownScroller(drop: Gtk.Widget): Gtk.ScrolledWindow | null {
 export function NidaraDropDown(props: any = {}): Gtk.DropDown {
     const drop = new Gtk.DropDown(props)
     const sw = dropDownScroller(drop)
-    if (sw) adoptGtkScrolled(sw)
+    // The popover's contents box carries VERTICAL padding only (_components.scss), so this
+    // viewport runs flush into the card's side walls and the bar sits 4px from them like
+    // every other surface. Flush means the pill also runs into the card's corner, hence
+    // the radius: `cornerInset` is the 6px of vertical padding it already starts inside.
+    if (sw) adoptGtkScrolled(sw, { cornerRadius: RADIUS.md, cornerInset: 6 })
     return drop
 }
