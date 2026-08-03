@@ -151,6 +151,10 @@ function savePng(widget, path) {
     const renderer = Gsk.CairoRenderer.new()
     renderer.realize(null)
     renderer.render_texture(node, null).save_to_png(path)
+    // Not optional: a realized renderer that reaches the GC aborts the process
+    // (`gsk_renderer_dispose: assertion failed: (!priv->is_realized)`), which kills
+    // the run before a SECOND frame is ever written.
+    renderer.unrealize()
     print(`  → ${path} (${w}x${h})`)
 }
 
@@ -159,7 +163,23 @@ const loop = GLib.MainLoop.new(null, false)
 
 GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
     popoverOf(drop).popup()
-    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 500, () => {
+    // SCROLL=<px> moves the list BEFORE anything is measured or rendered. That is the
+    // only way to see whether a vertical inset is AIR the content passes through or a
+    // band the content is CUT at — the two are identical at rest. It happens here, and
+    // the process still renders exactly ONE frame, because a second
+    // WidgetPaintable snapshot of a popover child comes back empty often enough to
+    // waste an afternoon.
+    const scrollBy = parseFloat(GLib.getenv("SCROLL") || "0")
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
+        // …but only once the list is allocated: before that the adjustment's upper is
+        // still 0 and the value you set is clamped straight back to it.
+        if (scrollBy > 0) {
+            const adj = findNode(popoverOf(drop), "scrolledwindow")?.get_vadjustment()
+            if (adj) adj.set_value(adj.get_lower() + scrollBy)
+        }
+        return GLib.SOURCE_REMOVE
+    })
+    GLib.timeout_add(GLib.PRIORITY_DEFAULT, 900, () => {
         const pop = popoverOf(drop)
         print("\n═══ CSS NODE TREE (bounds relative to the popover) ═══")
         dump(pop, pop)
@@ -176,6 +196,12 @@ GLib.timeout_add(GLib.PRIORITY_DEFAULT, 400, () => {
         savePng(pop, `${OUT}-popover.png`)
         const contents = findNode(pop, "contents")
         if (contents) savePng(contents, `${OUT}-contents.png`)
+
+        const adj = findNode(pop, "scrolledwindow")?.get_vadjustment()
+        if (adj) print(`\nscroll: value ${adj.get_value()} of ${adj.get_upper()}, page ${adj.get_page_size()}`
+            + `\n  → page size IS the viewport. On a natively-scrollable list a vertical`
+            + ` margin — or padding, measured, they are identical — shrinks it, and the`
+            + `\n    content is then clipped at that inset instead of at the card's edge.`)
 
         win.close()
         loop.quit()

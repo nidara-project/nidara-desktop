@@ -101,7 +101,7 @@ adjustment, dragged by a `Gtk.GestureDrag`.
 
 | | Rule |
 |---|---|
-| **Alignment** | The bar sits at the **trailing edge of the scroll viewport**, and every surface's viewport must reach its own **visible inner edge**. One rule for panels and windows. Before this was written down there were three: the clipboard bar sat 14px in (it inherited `expansionInner`'s margin), Settings sat at 0, the NC/Assistant somewhere else again — which is exactly what the user noticed.  ⚠️ **Padding on the CARD is outside the scroll** — it pushes the viewport in and takes the bar with it. The Settings dropdown had `padding: 6px` on `popover > contents`, so its pill sat 10px from the wall (6 + `EDGE_CLEAR`) against 4 on every flush surface, and the whole list read as roomier than the menus it sits among. The row inset belongs on the ROWS — **all four sides from ONE declaration** (`listview { margin: 6px }`), the card keeps nothing (`contents { padding: 0 }`), and the bar then needs the card's radius as `cornerRadius` because flush means it runs into the corner. Splitting the inset across two boxes is how you end up with a card padding and a list margin **both** live, which measures 13px at the top against 7 at the sides. |
+| **Alignment** | The bar sits at the **trailing edge of the scroll viewport**, and every surface's viewport must reach its own **visible inner edge**. One rule for panels and windows. Before this was written down there were three: the clipboard bar sat 14px in (it inherited `expansionInner`'s margin), Settings sat at 0, the NC/Assistant somewhere else again — which is exactly what the user noticed.  ⚠️ **Padding on the CARD is outside the scroll** — it pushes the viewport in and takes the bar with it. The Settings dropdown had `padding: 6px` on `popover > contents`, so its pill sat 10px from the wall (6 + `EDGE_CLEAR`) against 4 on every flush surface, and the whole list read as roomier than the menus it sits among. The row inset belongs on the ROWS (`listview { margin: 0 6px }`), the card keeps nothing (`contents { padding: 0 }`), and the bar then needs the card's radius as `cornerRadius` because flush means it runs into the corner. Splitting the inset across two boxes is how you end up with a card padding and a list margin **both** live, which measures 13px at the top against 7 at the sides.  🔑 **Sides only, and on purpose** — see "A vertical inset on a scrollable list is viewport, not air" below. |
 | **Content inset** | **What has to clear the lane is a row's trailing CONTROL, not its fill.** The lane may be wider than the content's inset — the pill then floats over the fill's last pixels, which is what an overlay scrollbar does everywhere. It must never reach a ✕ or a switch, and it does not have to: those sit inside the row's own trailing padding, so on the clipboard the ✕ lands 18px in (6 halo + 12 row padding) against a 12px lane. This replaces the earlier rule "content inset ≥ lane", which was true of the insets of the day (12–14) and became a trap when the halo dropped to 6: it made a scrolling list look airier than a static one for no reason the eye could name. `reserveLane` (default true) pads the child by `lane` on BOTH sides and is the fallback for content with no inset of its own; pass `false` whenever the content has one, or it pays twice (the CC detail panel sat at 18 that way). |
 | **Widths** | Pill **4px at rest → 8px hovered/dragging** = `$space-1`/`$space-2` on the project's 4px scale. Not free-hand numbers — the earlier 5/9 were, and the user caught it. Lane **12px** (`$space-3`), and it must stay ≥ 8 so an expanded pill never leaves the lane. |
 | **Hover** | The pill grows; **the hit lane never does.** That distinction IS tech-debt #15 — GTK grew the *hit area*, which is why it could eat a neighbouring button. Growth is safe on every surface precisely because the lane is measured from the viewport wall and a row's trailing control clears it — see Content inset. |
@@ -290,7 +290,7 @@ Swept 2026-08-03. Each step is +4, and horizontal is always +4 over vertical:
 
 | Surface | v / h | Who |
 |---|---|---|
-| **A list of rows on a shell surface** | **`rowInsetFor(R, n)`**, uniform, from the GLASS — radius **and exponent**. Every floating popup of the shell is a squircle at `lg`, so in practice they all land on **6** | bar expansion panels + clipboard, the **system menu**, the CC context menu, the **CC detail panel** (squircle `lg` → 6); the three `GlassBubble` menus (`lg` squircle body + arrow → 6); the Settings dropdown (circular `md` → 6) |
+| **A list of rows on a shell surface** | **`rowInsetFor(R, n)`**, uniform, from the GLASS — radius **and exponent**. Every floating popup of the shell is a squircle at `lg`, so in practice they all land on **6** | bar expansion panels + clipboard, the **system menu**, the CC context menu, the **CC detail panel** (squircle `lg` → 6); the three `GlassBubble` menus (`lg` squircle body + arrow → 6); the Settings dropdown (circular `md` → 6, **sides only** — see below) |
 | **Window row** | **12 / 16** | `NidaraRow`, and hand-rolled rows inside Settings |
 | **Island** | **16 / 20** | all five island modes |
 
@@ -467,6 +467,31 @@ out on purpose, the exception belongs beside the blanket.
 🔑 **Focus is not one affordance.** A control styled as an INPUT (the dropdown trigger, the text
 inputs) shows keyboard focus as its 2px border going accent — no ring. A BUTTON shows a ring
 (`nidara-focus-ring`). One control must never show both.
+
+### A vertical inset on a SCROLLABLE list is viewport, not air
+
+`GtkListView`, `GtkGridView` and `GtkColumnView` implement `GtkScrollable`, so a
+`Gtk.ScrolledWindow` hands them the whole surface with **no `GtkViewport` in between** and they
+scroll inside their own allocation. A vertical `margin` on such a list — **or a `padding`, they
+measure identically** — therefore takes it out of the PAGE: 6px each side turned a 400px card
+into a 388px viewport, and the rows were then clipped 6px inside the card instead of at its
+edge. A dead band, and it reads as the top and bottom being more separated than the sides
+(user-reported, 2026-08-03; measured with `scripts/dev/gtk-probe.js`, which prints the page size
+for exactly this reason).
+
+Every other list in the shell sits inside a viewport (its child is an ordinary box), where
+padding is part of the scrollable content and **scrolls away** — air at rest, content to the
+edge once you scroll. That is the behaviour to match, and a native list cannot: wrapping it in a
+viewport to force one costs the list's recycling and GTK's open-at-the-selected-item scroll,
+both of which need the list to own the adjustments.
+
+**So: a scrollable list insets its SIDES and not its ends.** The Settings dropdown is
+`listview { margin: 0 6px }`. Where the ends need air and the list is short enough never to
+scroll, the air belongs to a box around it, not to the list.
+
+⚠️ The consumer of `cornerRadius`/`cornerInset` has to follow: with the ends flush, the scroll
+pill starts at the corner and must keep the whole arc's clearance (`cornerInset: 0`), not an
+indent the list no longer has.
 
 ## Tokens
 

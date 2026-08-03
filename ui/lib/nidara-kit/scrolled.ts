@@ -488,11 +488,20 @@ export function NidaraDropDown(props: any = {}): Gtk.DropDown {
     drop.list_factory = factory
 
     const sw = dropDownScroller(drop)
-    // The popover's contents box carries NO padding (_components.scss): the whole inset is
-    // the list's own margin, so this viewport runs flush into the card on all four sides
-    // and the bar sits 4px from the wall like every other surface. Flush means the pill
-    // runs into the card's corner, hence the radius; `cornerInset` is that 6px of list
-    // margin, which is how far the content already starts inside the corner.
-    if (sw) adoptGtkScrolled(sw, { cornerRadius: RADIUS.md, cornerInset: 6 })
+    // The popover's contents box carries no padding and the list insets only its SIDES
+    // (_components.scss), so this viewport runs flush into the card top and bottom — which
+    // is where the bar lives. `cornerInset: 0`: the view starts AT the corner vertically,
+    // so the pill has to keep the whole arc's clearance (a radius-16 corner reaches
+    // ~10.6px in at the trailing wall) instead of counting an indent it no longer has.
+    //
+    // ⚠️ Why the vertical inset is gone at all, so nobody puts it back: `GtkListView` is a
+    // `GtkScrollable`, so a ScrolledWindow gives it the card directly — no `GtkViewport`.
+    // A vertical margin (or padding — measured, identical) therefore shrinks the PAGE, and
+    // the content gets clipped at the inset instead of at the card's edge: a dead band the
+    // rows disappear into. Everywhere else in the shell the list is not scrollable itself,
+    // sits in a viewport, and its padding scrolls away with the content. Wrapping this list
+    // in a viewport to get that back would cost the ListView's recycling AND GTK's
+    // open-at-the-selected-item scroll, which both depend on it owning the adjustments.
+    if (sw) adoptGtkScrolled(sw, { cornerRadius: RADIUS.md, cornerInset: 0 })
     return drop
 }
