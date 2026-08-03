@@ -66,6 +66,12 @@ export interface NidaraScrolledOpts {
     reserveLane?: boolean
     /** Keep the bar permanently visible instead of fading after idle. */
     alwaysVisible?: boolean
+    /** Corner radius, px, of the surface whose edge this view sits flush against —
+     *  the token, not a guess: `--nidara-radius-lg` 24 for a window, `-md` 16 for a
+     *  card, 20 for a bar-expansion capsule. It sets how far the pill stops short of
+     *  the ends so a rounded corner cannot clip it. Default 0 = square edge, or a
+     *  view that does not reach the surface's own edge. */
+    cornerRadius?: number
     /** Extra classes on the ScrolledWindow. */
     cssClasses?: string[]
 }
@@ -83,14 +89,29 @@ const THUMB_HOVER = 8
 const THUMB_MIN_H = 28
 const HIDE_MS = 1100
 // Clearance between the pill and the surface's own edge, on all four sides. The
-// vertical half keeps the pill out of a glass capsule's rounded corners; the
-// horizontal half is why the pill is not painted flush against the trailing edge —
-// flush, it landed ON the panel's border and poked through the rounded corner
-// (reported on the clipboard panel: "the bar comes out at the top and on the right").
-// It also explains the lane: LANE = THUMB_HOVER + EDGE_CLEAR = 12. The hit lane keeps
-// its full constant width — only the paint is inset.
+// vertical half keeps the pill out of a rounded corner; the horizontal half is why
+// the pill is not painted flush against the trailing edge — flush, it landed ON the
+// panel's border and poked through the rounded corner (reported on the clipboard
+// panel: "the bar comes out at the top and on the right"). It also explains the lane:
+// LANE = THUMB_HOVER + EDGE_CLEAR = 12. The hit lane keeps its full constant width —
+// only the paint is inset.
 const CORNER_CLEAR = 4
 const EDGE_CLEAR = 4
+
+/**
+ * How much height a corner of radius `r` eats at the pill's distance from the wall.
+ *
+ * A rounded corner clips whatever is drawn inside its arc, and the pill runs at
+ * EDGE_CLEAR from the trailing wall, so the arc reaches
+ * `r - sqrt(r² - (r - EDGE_CLEAR)²)` px in from the end of the lane. 4px covers a
+ * card (radius-sm/md) and is wrong for a window: `glass(floating)` is radius-lg =
+ * 24px, which eats 10.7px — reported as the Settings bar being cut off at the bottom.
+ * Ceiled, and never below the 4px floor, which is also the value for a square edge.
+ */
+const cornerClearFor = (r: number) =>
+    r <= EDGE_CLEAR
+        ? CORNER_CLEAR
+        : Math.max(CORNER_CLEAR, Math.ceil(r - Math.sqrt(r * r - (r - EDGE_CLEAR) ** 2)))
 
 /** Vertical pill, in the lane's own coordinates. */
 function pillPath(cr: any, x: number, y: number, w: number, h: number) {
@@ -127,7 +148,11 @@ export function NidaraScrolled(opts: NidaraScrolledOpts): NidaraScrolledResult {
     scrolled.set_child(opts.child)
 
     return {
-        widget: attachScrollBar(scrolled, { lane, alwaysVisible: opts.alwaysVisible }),
+        widget: attachScrollBar(scrolled, {
+            lane,
+            alwaysVisible: opts.alwaysVisible,
+            cornerRadius: opts.cornerRadius,
+        }),
         scrolled,
     }
 }
@@ -140,10 +165,11 @@ export function NidaraScrolled(opts: NidaraScrolledOpts): NidaraScrolledResult {
  */
 export function attachScrollBar(
     scrolled: Gtk.ScrolledWindow,
-    opts: { lane?: number, alwaysVisible?: boolean } = {},
+    opts: { lane?: number, alwaysVisible?: boolean, cornerRadius?: number } = {},
 ): Gtk.Widget {
     const lane = opts.lane ?? 12
     const alwaysVisible = opts.alwaysVisible ?? false
+    const cornerClear = cornerClearFor(opts.cornerRadius ?? 0)
     // EXTERNAL, always: the point is that GTK never creates a scrollbar widget, so
     // there is no node left to grow toward the pointer.
     scrolled.vscrollbar_policy = Gtk.PolicyType.EXTERNAL
@@ -155,7 +181,7 @@ export function attachScrollBar(
         halign: Gtk.Align.END,
         valign: Gtk.Align.FILL,
         width_request: Math.max(lane, THUMB_HOVER + EDGE_CLEAR),
-        margin_top: CORNER_CLEAR, margin_bottom: CORNER_CLEAR,
+        margin_top: cornerClear, margin_bottom: cornerClear,
         can_target: false,
         visible: false,
         opacity: alwaysVisible ? 1 : 0,

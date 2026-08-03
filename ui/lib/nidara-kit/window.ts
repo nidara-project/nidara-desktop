@@ -3,6 +3,16 @@ import Gio from "gi://Gio"
 import { NidaraScrolled } from "./scrolled"
 import { NidaraSplitView, type NidaraSplitViewResult } from "./split-view"
 
+/**
+ * Chrome radii as numbers, mirroring the CSS tokens: the window is `glass(floating)`
+ * = `--nidara-radius-lg`, the sidebar capsule is `material-card` = `--nidara-radius-md`.
+ * They live here because Cairo and NidaraScrolled's geometry cannot read a CSS var —
+ * a corner that clips has to be known in px. Move these if the tokens move; the
+ * duplication is on the list for the design-token audit (tech-debt #47).
+ */
+export const NIDARA_WINDOW_RADIUS = 24
+export const NIDARA_CARD_RADIUS = 16
+
 export interface NidaraWindowOpts {
     app: any
     title: string
@@ -88,6 +98,8 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     const { widget: sidebarScrollWidget, scrolled: sidebarScroll } = NidaraScrolled({
         child: sidebar,
         reserveLane: false,
+        // Flush with the capsule's rounded bottom, so the pill stops short of it.
+        cornerRadius: NIDARA_CARD_RADIUS,
         cssClasses: ["nidara-window-sidebar-scroll"],
     })
     sidebarScroll.vexpand = true

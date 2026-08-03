@@ -52,7 +52,7 @@ export { NidaraSidebar } from "./sidebar"
 export type { NidaraSidebarItem, NidaraSidebarResult } from "./sidebar"
 
 // NidaraWindow — settings-style window shell (glass + split + reparenting header)
-export { NidaraWindow } from "./window"
+export { NidaraWindow, NIDARA_WINDOW_RADIUS, NIDARA_CARD_RADIUS } from "./window"
 export type { NidaraWindowOpts, NidaraWindowResult } from "./window"
 
 // showNidaraAlert — modal confirmation dialog (replaces Adw.AlertDialog)

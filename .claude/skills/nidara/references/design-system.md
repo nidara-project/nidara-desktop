@@ -106,7 +106,7 @@ adjustment, dragged by a `Gtk.GestureDrag`.
 | **Widths** | Pill **4px at rest → 8px hovered/dragging** = `$space-1`/`$space-2` on the project's 4px scale. Not free-hand numbers — the earlier 5/9 were, and the user caught it. Lane **12px** (`$space-3`), and it must stay ≥ 8 so an expanded pill never leaves the lane. |
 | **Hover** | The pill grows; **the hit lane never does.** That distinction IS tech-debt #15 — GTK grew the *hit area*, which is why it could eat a neighbouring button. Growth is safe on every surface precisely because the lane fits inside the content inset. A faint full-height track fades in with it (macOS shape), derived from the same CSS colour at low alpha. |
 | **Persistence** | Auto-hides everywhere, windows included: reveal on scroll or on pointer motion in the view, fade after 1.1s. One behaviour across the DE. |
-| **Corners** | 4px `CORNER_CLEAR` top and bottom so a flush bar never clips into a glass capsule's rounded corner. |
+| **Corners** | The pill stops short of both ends so a rounded corner cannot clip it — and **how far is derived, not fixed**: an arc of radius `r` reaches `r - √(r² - (r - EDGE_CLEAR)²)` px in at the pill's distance from the wall. 4px is the floor (square edge, or a `radius-sm` card); a `radius-md` card needs 6, a bar capsule (20) needs 8, and a **window** — `glass(floating)` = `radius-lg` 24 — needs **11**. Pass `cornerRadius` with the surface's own token wherever the view runs flush into it; the Settings pages were reported clipped at the bottom because they inherited the 4px floor against a 24px corner. |
 
 **`barExpandedFlush`** (`AtomicWidget`) is how a bar-expansion panel opts out of the 14px
 horizontal inset `Bar.tsx` gives every panel, so its scroll can reach the edge; the widget then

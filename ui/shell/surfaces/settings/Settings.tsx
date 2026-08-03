@@ -1,7 +1,10 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import app from "ags/gtk4/app"
 import status from "../../core/Status"
-import { NidaraClamp, NidaraScrolled, NidaraSidebar, NidaraWindow } from "../../../lib/nidara-kit"
+import {
+    NidaraClamp, NidaraScrolled, NidaraSidebar, NidaraWindow,
+    NIDARA_WINDOW_RADIUS as WINDOW_RADIUS,
+} from "../../../lib/nidara-kit"
 
 // Page Imports
 import AppearancePage from "./pages/Appearance"
@@ -133,6 +136,10 @@ export default function Settings(monitor: Gdk.Monitor) {
         const { widget: scroll, scrolled } = NidaraScrolled({
             child: NidaraClamp(widget, 800, true),   // NidaraClamp replaces Adw.Clamp
             reserveLane: false,
+            // The page runs flush into the window's bottom-right corner, and the
+            // window is glass(floating) = --nidara-radius-lg. At 24px that arc clips
+            // ~11px of the pill; the 4px a card needs is not enough here.
+            cornerRadius: WINDOW_RADIUS,
             cssClasses: ["settings-page-scroll"],
         })
         scrolled.hexpand = true; scrolled.vexpand = true
@@ -233,6 +240,7 @@ export default function Settings(monitor: Gdk.Monitor) {
     const { widget: srScroll, scrolled: srScrolled } = NidaraScrolled({
         child: srClamp,
         reserveLane: false,
+        cornerRadius: WINDOW_RADIUS,
         cssClasses: ["settings-page-scroll"],
     })
     srScrolled.hexpand = true; srScrolled.vexpand = true
