@@ -15,6 +15,7 @@ import Theme from "../core/ThemeManager"
 import { attachTooltip } from "../common/Tooltip"
 import { menuRow, menuSeparator } from "../common/MenuRow"
 import { sideFor, paintGlassBubble, ARROW_H, BUF, type ArrowSide } from "../common/GlassBubble"
+import { PANEL_INSET } from "../../lib/tokens"
 
 // NO bar variant. The Activity Island already carries the player as an activity
 // (IslandActivities' mediaActivity: cover art in the compact capsule the moment
@@ -137,7 +138,8 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
 
     const layoutSourceMenu = () => {
         if (!srcRows) return
-        const PAD = 5   // interior padding between the glass edge and the rows
+        // Same halo as every other menu of rows — see tokens.ts.
+        const PAD = PANEL_INSET
         srcRows.margin_top    = BUF + PAD + (srcSide === "top"    ? ARROW_H : 0)
         srcRows.margin_bottom = BUF + PAD + (srcSide === "bottom" ? ARROW_H : 0)
         srcRows.margin_start  = BUF + PAD + (srcSide === "left"   ? ARROW_H : 0)

@@ -13,7 +13,7 @@ import { t } from "../../core/i18n"
 import Icons from "../../core/Icons"
 import { ScaleRevealer, OVERLAY_POP } from "../../common/ScaleRevealer"
 import SquircleContainer from "../../common/SquircleContainer"
-import { RADIUS } from "../../../lib/tokens"
+import { RADIUS, PANEL_INSET } from "../../../lib/tokens"
 import Theme from "../../core/ThemeManager"
 import Cairo from "gi://cairo"
 import shellActions from "../../core/ShellActions"
@@ -428,7 +428,10 @@ export default function AppGridPanel(monitor: Gdk.Monitor, onClose: () => void):
 
         const layoutMenu = () => {
             if (!menuRows) return
-            const PAD = 5  // interior padding between the glass edge and the rows
+            // Same halo as every other menu of rows (system menu, CC context menu, bar
+            // panels): the row's hover fill spans this box, so this is its margin, and a
+            // bubble is not a different kind of menu just because it has an arrow.
+            const PAD = PANEL_INSET
             menuRows.margin_top    = BUF + PAD + (menuSide === "top"    ? ARROW_H : 0)
             menuRows.margin_bottom = BUF + PAD + (menuSide === "bottom" ? ARROW_H : 0)
             menuRows.margin_start  = BUF + PAD + (menuSide === "left"   ? ARROW_H : 0)

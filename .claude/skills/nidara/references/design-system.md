@@ -302,6 +302,21 @@ from the glass) until the user caught the halo being twice as wide at the sides 
 no menu system runs 2:1 (AppKit's highlight is ~5/4pt, Windows 11 flyouts 4/4). The text's own
 breathing room lives on the row — `.nidara-menu-row` is `7px 12px`.
 
+**A bubble is not a different kind of menu.** The dock item menu, the app-grid item menu and the
+media source menu are `GlassBubble` popovers rather than squircle cards, and they had their own
+`PAD = 5` — a *fifth* halo next to the panels' 12. They take `PANEL_INSET` too; the arrow changes
+the silhouette, not what the padding around a list of rows means. (`radiusMax` in those calls is
+**not** a ladder rung and must not be swept onto one — `paintGlassBubble` computes a near-pill
+`min(w,h)/2` and `radiusMax` only caps it.)
+
+**The one deliberate exception: the Settings dropdown popover**, because there the geometry is an
+ALIGNMENT AXIS and the axis wins. That list is the trigger *opened*, laid out at the trigger's
+width, so an option has to sit on the same left edge as the value it replaces: the trigger puts
+its label at 16 (2px border + 14 padding), so the popover is `1 (border) + 5 (contents) + 10
+(row)`. It was landing at 23 against that 16 — a 7px sideways jump on open, which on a narrow
+list reads as "why is this padding so big" (user-caught 2026-08-03). Three numbers, one axis:
+move one and the value appears to slide as the list opens.
+
 ⚠️ **Never copy a sibling's margin out of its constructor.** `Bar.tsx` builds `expansionInner`
 with one value and **rewrites it on every open** (flush panels take the horizontal over), so the
 number in the constructor is not the number that ships. The system menu was fixed twice for this:
@@ -356,6 +371,19 @@ column — measured 2026-08-03, a `.nidara-row-title` sat 18px inside a row whos
 16, which is why the group header above the card could never be aligned to it with any round
 number. `.nidara-row` now sets `padding: 0` explicitly. Suspect this on any Adwaita-derived node
 whose geometry is 2px off what the code says.
+
+⚠️ **It does not clear `margin` either, and the theme uses margin on list internals.** GTK ships
+`dropdown popover listview { margin: 8px }` and `… > row.activatable { padding: 8px }` — our
+provider (810) outranks the theme (600) on the row padding *because we declare it*, but nothing
+overrode that 8px margin, so the Settings dropdown list carried an inset nobody in this repo had
+chosen. **Read the theme instead of guessing at it:**
+
+```bash
+gresource extract /usr/lib/libgtk-4.so.1 /org/gtk/libgtk/theme/Default/Default-dark.css > /tmp/adwaita.css
+```
+
+That is the actual cascade you are fighting; grep it before theorising about a widget whose
+spacing does not match its source.
 
 ## Tokens
 

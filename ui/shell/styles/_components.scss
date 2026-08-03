@@ -617,7 +617,12 @@ dropdown popover {
         border: 1px solid var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
         border-radius: $nidara-radius-md;
         box-shadow: var(--nidara-shadow-popover);
-        padding: 4px;
+        // ALIGNMENT AXIS, not a panel inset: the list is the trigger OPENED, and it is
+        // laid out at the trigger's width, so an option has to sit on the same left edge
+        // as the value it replaces. The trigger puts its label at 16 (2px border + 14
+        // padding); here that is 1 (border) + 5 + the row's 10. Move any of the three
+        // and the value appears to jump sideways as the list opens.
+        padding: 5px;
         // overflow: hidden not supported in GTK4 CSS — clipping is handled by border-radius
     }
 
@@ -631,6 +636,13 @@ dropdown popover {
 
     listview {
         @include nidara-reset;
+        // ⚠️ `nidara-reset` clears background/border/shadow/outline — NOT margin, and not
+        // padding. GTK's own theme ships `dropdown popover listview { margin: 8px }`
+        // (verified in Default-dark.css, extracted from libgtk's gresource), so until
+        // this line existed the list carried 8px nobody in this repo had chosen: the
+        // option text landed 23px in against the trigger's 16, and a narrow list makes
+        // that read as "why is this padding so big". Own the number or inherit a stranger's.
+        margin: 0;
 
         > row {
             border-radius: $nidara-radius-sm;
