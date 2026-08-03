@@ -453,11 +453,44 @@ function dropDownScroller(drop: Gtk.Widget): Gtk.ScrolledWindow | null {
  */
 export function NidaraDropDown(props: any = {}): Gtk.DropDown {
     const drop = new Gtk.DropDown(props)
+
+    // Our own LIST factory (the button keeps GTK's default one, via `list-factory` rather
+    // than `factory`), and the row we hand it CARRIES THE FILL — `.nidara-dropdown-item`,
+    // not GTK's `row` node.
+    //
+    // Why: GTK's list item box is inset inside its list by an amount no stylesheet in this
+    // repo accounts for. Measured live with the popover open, twice, before and after
+    // swapping the factory: the item sits 6px in on the left, 6 top, 6 bottom and 24 on
+    // the right, always exactly 30px narrower than the ListView, and the numbers scale
+    // together when the content changes. The theme has no margin on those rows, our CSS
+    // has none, and the same reading came back with GTK's factory and with ours — so the
+    // inset belongs to the item box itself. Rather than keep guessing at a box we do not
+    // own, the fill moves onto a widget we do: `> row` is stripped to nothing and this box
+    // hexpands into it, which is the same shape as every other list in the shell (MenuRow,
+    // NidaraRow) — none of which is a GtkListView.
+    const factory = new Gtk.SignalListItemFactory()
+    factory.connect("setup", (_f: any, item: any) => {
+        const label = new Gtk.Label({ xalign: 0, hexpand: true, halign: Gtk.Align.FILL })
+        const row = new Gtk.Box({
+            css_classes: ["nidara-dropdown-item"],
+            hexpand: true, halign: Gtk.Align.FILL,
+        })
+        row.append(label)
+        item.set_child(row)
+    })
+    factory.connect("bind", (_f: any, item: any) => {
+        const obj: any = item.get_item()
+        const label: any = item.get_child()?.get_first_child()
+        if (label) label.label = obj?.string ?? obj?.get_string?.() ?? String(obj ?? "")
+    })
+    drop.list_factory = factory
+
     const sw = dropDownScroller(drop)
-    // The popover's contents box carries VERTICAL padding only (_components.scss), so this
-    // viewport runs flush into the card's side walls and the bar sits 4px from them like
-    // every other surface. Flush means the pill also runs into the card's corner, hence
-    // the radius: `cornerInset` is the 6px of vertical padding it already starts inside.
+    // The popover's contents box carries NO padding (_components.scss): the whole inset is
+    // the list's own margin, so this viewport runs flush into the card on all four sides
+    // and the bar sits 4px from the wall like every other surface. Flush means the pill
+    // runs into the card's corner, hence the radius; `cornerInset` is that 6px of list
+    // margin, which is how far the content already starts inside the corner.
     if (sw) adoptGtkScrolled(sw, { cornerRadius: RADIUS.md, cornerInset: 6 })
     return drop
 }
