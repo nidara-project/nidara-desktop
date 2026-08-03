@@ -159,6 +159,42 @@ When a reload seems to do nothing or styles refuse to refresh, the cause is almo
 2. `killall gjs` — then `Super+Shift+R` once it's gone.
 3. `tail -f "$XDG_RUNTIME_DIR/nidara-ui.log"` and re-trigger; look for stack traces.
 
+### Measuring a control's real geometry with no screen (`scripts/dev/gtk-probe.js`)
+
+For any question of the form *"where does this inset actually come from?"* on a widget that
+mixes GTK's own boxes with our CSS — the native `Gtk.DropDown` is the standing example. Reading
+the three stylesheets failed five rounds in a row on that one; this is what ended it.
+
+```bash
+gtk4-broadwayd :5 &                          # offscreen display, once per session
+GDK_BACKEND=broadway BROADWAY_DISPLAY=:5 \
+  gjs -m scripts/dev/gtk-probe.js /tmp/probe
+```
+
+It builds the specimen with `ui/shell/style.css` loaded at the **same provider priority the
+shell uses** (`PRIORITY_USER + 10`, as in `ThemeManager`), and prints the CSS node tree with
+each node's bounds / padding / border / margin / state, the same deltas `queryUI` reports
+(node vs toplevel), and a PNG of the surface — `Gtk.WidgetPaintable` → `Gsk.CairoRenderer` →
+`save_to_png`, so you can count pixels of the actual render. `EXTRA_CSS=` loads above
+style.css and `LOW_CSS=` loads at the *theme's* priority, which turns it from a dump into an
+experiment: "does our declaration really beat the theme's?" is one run, not an argument.
+
+Why offscreen and not the live shell: it is reproducible, it needs nobody to hold a popover
+open, and it can answer counterfactuals ("what did the PREVIOUS commit's CSS measure?") that a
+live session cannot. That last one is how the dropdown's "13px at the top vs 7 at the sides"
+turned out to be a **stale-stylesheet reading** — the card padding and the list margin both
+live at once, which no committed state ever had.
+
+⚠️ **`:focus-visible` cannot be reproduced offscreen.** GTK grants it on keyboard traversal
+only; `grab_focus()` + `gtk_window_set_focus_visible()` set the FOCUS_VISIBLE *state flag*
+(you can see it in the dump) and the selector still does not match. Use `:focus` or `:selected`
+as the stand-in when the question is about the CASCADE; anything that genuinely depends on the
+focused state is a live check.
+
+⚠️ **Never conclude from one absolute bound.** `compute_bounds` on these nodes is ambiguous
+enough that a single number fits two readings; compare DELTAS between nodes measured in the
+same run — that rule is why the probe prints the pairs itself.
+
 ### Testing in a QEMU VM (installer / greeter / lockscreen)
 
 The paths CI cannot cover — `install.sh` on a virgin Arch, the greetd→greeter→login

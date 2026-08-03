@@ -596,9 +596,14 @@ dropdown popover {
         // in, and the scroll bar rides the viewport's trailing edge, so the pill ended up
         // 10px from the card wall (6 + EDGE_CLEAR) against 4 on every flush surface. The
         // shell rule is that a viewport reaches its own visible inner edge.
-        // The whole inset lives on the LIST below, all four sides from ONE declaration —
-        // splitting it (vertical here, horizontal there) is what left the list 7px from
-        // the side walls and 13 from the top, measured live with the popover open.
+        // The whole inset lives on the LIST below, all four sides from ONE declaration.
+        // ⚠️ The "7px at the sides, 13 at the top" this file used to blame on splitting
+        // the inset was a stale-stylesheet reading: 13 = 1 border + 6 of card padding
+        // + 6 of list margin, i.e. BOTH declarations live at once, which is what a
+        // half-recompiled style.css had. Reproduced exactly offscreen
+        // (`scripts/dev/gtk-probe.js`, EXTRA_CSS='… > contents { padding: 6px 0 }'),
+        // and with this `0` the same probe reads 7 left and 7 top. Either declaration
+        // ALONE is symmetric; it is having both that is not.
         padding: 0;
         // overflow: hidden not supported in GTK4 CSS — clipping is handled by border-radius
     }
@@ -627,12 +632,15 @@ dropdown popover {
         // is also what stops a stranger's number from deciding the axis.
         margin: 6px;
 
-        // GTK's own item node carries NOTHING: no padding, no fill, no radius. Its box is
-        // inset inside the list by an amount nothing in this repo controls (measured live:
-        // 6px left/top/bottom, 24 right, always 30 narrower than the ListView, identical
-        // with GTK's factory and with ours), so a fill painted on it can never line up
-        // with the rest of the shell. `NidaraDropDown` hands the factory a
-        // `.nidara-dropdown-item` that hexpands into it and carries the fill instead.
+        // GTK's own item node carries NOTHING: no padding, no fill, no radius. The fill
+        // lives on `.nidara-dropdown-item`, a box `NidaraDropDown` hands the factory,
+        // which hexpands into it — the same shape as every other list in the shell.
+        // ⚠️ The reason first written here — that GTK's item box is inset inside the list
+        // by 6/24 and is always 30px narrower — does NOT reproduce. Offscreen, with GTK's
+        // factory AND with ours, the item is exactly the ListView's content rect
+        // (`FACTORY=gtk scripts/dev/gtk-probe.js`). What the swap does buy is real and
+        // measured: GTK's default factory puts a CHECKMARK in every item (18px icon +
+        // 4 spacing) and a fill of ours cannot sit on a node that also carries that.
         > row {
             @include nidara-reset;
             padding: 0;

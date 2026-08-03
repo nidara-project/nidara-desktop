@@ -363,6 +363,24 @@ window.nidara-settings-window button:focus-visible {
     @include nidara-focus-ring;
 }
 
+// …with ONE exception, and it has to live here rather than in the component.
+// A dropdown trigger is styled as an INPUT (_components.scss): its keyboard focus
+// is the 2px border going accent, and that block already says `outline: none` to
+// keep a ring off it. That declaration loses — same provider, and
+// `window.nidara-settings-window button` (0,2,2) out-specifies `dropdown > button`
+// (0,1,2) — so the trigger wore BOTH: an accent border and an accent outline 2px
+// outside it. Two concentric accent rings on one control, which is exactly what
+// tabbing showed. Measured 2026-08-03 with a stand-alone GTK probe
+// (scripts/dev/gtk-probe.js) using the same two selectors at the same priority.
+//
+// 🔑 A blanket `window.X <element>:focus-visible` reaches INSIDE every composed
+// widget in the window and out-specifies that widget's own opt-out. When a
+// component says `outline: none` on purpose, the exception belongs next to the
+// blanket, not in the component — the component already tried.
+window.nidara-settings-window dropdown > button:focus-visible {
+    outline: none;
+}
+
 // ── User avatar ───────────────────────────────────────────────────────────────
 // Large circular profile avatar (Gtk.Picture, COVER-cropped). Pill radius on the
 // square picture = a circle; surface background shows behind the fallback glyph.

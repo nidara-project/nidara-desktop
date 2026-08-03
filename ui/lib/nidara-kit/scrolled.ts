@@ -458,16 +458,18 @@ export function NidaraDropDown(props: any = {}): Gtk.DropDown {
     // than `factory`), and the row we hand it CARRIES THE FILL — `.nidara-dropdown-item`,
     // not GTK's `row` node.
     //
-    // Why: GTK's list item box is inset inside its list by an amount no stylesheet in this
-    // repo accounts for. Measured live with the popover open, twice, before and after
-    // swapping the factory: the item sits 6px in on the left, 6 top, 6 bottom and 24 on
-    // the right, always exactly 30px narrower than the ListView, and the numbers scale
-    // together when the content changes. The theme has no margin on those rows, our CSS
-    // has none, and the same reading came back with GTK's factory and with ours — so the
-    // inset belongs to the item box itself. Rather than keep guessing at a box we do not
-    // own, the fill moves onto a widget we do: `> row` is stripped to nothing and this box
-    // hexpands into it, which is the same shape as every other list in the shell (MenuRow,
-    // NidaraRow) — none of which is a GtkListView.
+    // Why: GTK's default factory puts a CHECKMARK in every item (an 18px icon plus 4px of
+    // spacing, 22px of the popover's width), and a fill of ours cannot sit on a node that
+    // also carries GTK's own. So the fill moves onto a widget we own: `> row` is stripped
+    // to nothing in _components.scss and this box hexpands into it, which is the same
+    // shape as every other list in the shell (MenuRow, NidaraRow) — none of which is a
+    // GtkListView.
+    //
+    // ⚠️ The reason first written here — that GTK's item box is inset inside its list by
+    // 6/24 and is always 30px narrower, whatever the factory — does NOT reproduce.
+    // Offscreen, with GTK's factory and with ours, the item is exactly the ListView's
+    // content rect: `FACTORY=gtk|nidara scripts/dev/gtk-probe.js`. Keep the swap for the
+    // checkmark and for owning the fill, not for a phantom inset.
     const factory = new Gtk.SignalListItemFactory()
     factory.connect("setup", (_f: any, item: any) => {
         const label = new Gtk.Label({ xalign: 0, hexpand: true, halign: Gtk.Align.FILL })

@@ -101,7 +101,7 @@ adjustment, dragged by a `Gtk.GestureDrag`.
 
 | | Rule |
 |---|---|
-| **Alignment** | The bar sits at the **trailing edge of the scroll viewport**, and every surface's viewport must reach its own **visible inner edge**. One rule for panels and windows. Before this was written down there were three: the clipboard bar sat 14px in (it inherited `expansionInner`'s margin), Settings sat at 0, the NC/Assistant somewhere else again — which is exactly what the user noticed.  ⚠️ **Padding on the CARD is outside the scroll** — it pushes the viewport in and takes the bar with it. The Settings dropdown had `padding: 6px` on `popover > contents`, so its pill sat 10px from the wall (6 + `EDGE_CLEAR`) against 4 on every flush surface, and the whole list read as roomier than the menus it sits among. The row inset belongs on the ROWS (`listview { margin: 0 6px }`), the card keeps only what does not cross the viewport (vertical), and the bar then needs the card's radius as `cornerRadius` because flush means it runs into the corner. |
+| **Alignment** | The bar sits at the **trailing edge of the scroll viewport**, and every surface's viewport must reach its own **visible inner edge**. One rule for panels and windows. Before this was written down there were three: the clipboard bar sat 14px in (it inherited `expansionInner`'s margin), Settings sat at 0, the NC/Assistant somewhere else again — which is exactly what the user noticed.  ⚠️ **Padding on the CARD is outside the scroll** — it pushes the viewport in and takes the bar with it. The Settings dropdown had `padding: 6px` on `popover > contents`, so its pill sat 10px from the wall (6 + `EDGE_CLEAR`) against 4 on every flush surface, and the whole list read as roomier than the menus it sits among. The row inset belongs on the ROWS — **all four sides from ONE declaration** (`listview { margin: 6px }`), the card keeps nothing (`contents { padding: 0 }`), and the bar then needs the card's radius as `cornerRadius` because flush means it runs into the corner. Splitting the inset across two boxes is how you end up with a card padding and a list margin **both** live, which measures 13px at the top against 7 at the sides. |
 | **Content inset** | **What has to clear the lane is a row's trailing CONTROL, not its fill.** The lane may be wider than the content's inset — the pill then floats over the fill's last pixels, which is what an overlay scrollbar does everywhere. It must never reach a ✕ or a switch, and it does not have to: those sit inside the row's own trailing padding, so on the clipboard the ✕ lands 18px in (6 halo + 12 row padding) against a 12px lane. This replaces the earlier rule "content inset ≥ lane", which was true of the insets of the day (12–14) and became a trap when the halo dropped to 6: it made a scrolling list look airier than a static one for no reason the eye could name. `reserveLane` (default true) pads the child by `lane` on BOTH sides and is the fallback for content with no inset of its own; pass `false` whenever the content has one, or it pays twice (the CC detail panel sat at 18 that way). |
 | **Widths** | Pill **4px at rest → 8px hovered/dragging** = `$space-1`/`$space-2` on the project's 4px scale. Not free-hand numbers — the earlier 5/9 were, and the user caught it. Lane **12px** (`$space-3`), and it must stay ≥ 8 so an expanded pill never leaves the lane. |
 | **Hover** | The pill grows; **the hit lane never does.** That distinction IS tech-debt #15 — GTK grew the *hit area*, which is why it could eat a neighbouring button. Growth is safe on every surface precisely because the lane is measured from the viewport wall and a row's trailing control clears it — see Content inset. |
@@ -441,6 +441,32 @@ gresource extract /usr/lib/libgtk-4.so.1 /org/gtk/libgtk/theme/Default/Default-d
 
 That is the actual cascade you are fighting; grep it before theorising about a widget whose
 spacing does not match its source.
+
+### Who wins: the theme is not the enemy, our own blanket rules are
+
+Measured 2026-08-03 with `scripts/dev/gtk-probe.js`, both directions, because the answer had
+been guessed at twice:
+
+- **Against the THEME, provider priority decides, per property, whatever the specificity.**
+  A theme rule at 600 setting `outline-color` + `outline-width` as longhands is fully
+  neutralised by our `outline: none` shorthand at 810 (`LOW_CSS='… row:selected { outline-color:
+  red; outline-width: 4px }'` → zero red pixels). So `@mixin nidara-reset` really does kill
+  Adwaita's focus rings; that hypothesis is closed, don't re-open it.
+- **Within style.css, ordinary CSS specificity decides — and a window-scoped blanket rule
+  out-specifies a component's own opt-out.** `window.nidara-settings-window button:focus-visible`
+  (0,2,2) beats `dropdown > button:focus-visible` (0,1,2), so the dropdown trigger wore the
+  blanket's accent OUTLINE *on top of* its own accent BORDER: **two concentric accent rings on
+  one control**, which is what tabbing through Settings showed. The exception lives next to the
+  blanket (`window.nidara-settings-window dropdown > button:focus-visible { outline: none }`),
+  not in the component — the component already said `outline: none` and lost.
+
+🔑 **A blanket `window.X <element>:state` reaches inside every composed widget in that window.**
+Before writing one, ask which components style that element themselves; when one of them opts
+out on purpose, the exception belongs beside the blanket.
+
+🔑 **Focus is not one affordance.** A control styled as an INPUT (the dropdown trigger, the text
+inputs) shows keyboard focus as its 2px border going accent — no ring. A BUTTON shows a ring
+(`nidara-focus-ring`). One control must never show both.
 
 ## Tokens
 
