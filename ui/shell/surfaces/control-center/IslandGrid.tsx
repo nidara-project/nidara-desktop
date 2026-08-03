@@ -10,8 +10,8 @@ import widgetConfig from "../../core/WidgetConfig"
 import registry, { widgetAvailable, watchWidgetAvailability } from "../../widgets/index"
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
-import SquircleContainer, { Shape, resolveDrawParams } from "../../common/SquircleContainer"
-import { RADIUS } from "../../../lib/tokens"
+import SquircleContainer, { Shape, resolveDrawParams, GLASS_INSET } from "../../common/SquircleContainer"
+import { RADIUS, PANEL_INSET } from "../../../lib/tokens"
 import { drawSquircle, hexToFloatRgb } from "../../common/DrawingUtils"
 import Theme from "../../core/ThemeManager"
 import { DANGER_HEX } from "../../../lib/status-colors"
@@ -324,10 +324,16 @@ export default function IslandGrid() {
         const cellH = rows * (UNIT + GAP) - GAP
 
         // Header: back button + title — lives inside the squircle for glass contrast
-        const backBtnChild = new Gtk.Box({ spacing: 8, margin_start: 8, margin_end: 8, margin_top: 12, margin_bottom: 12 })
+        // The header is a row like the ones below it: its own fill keeps PANEL_INSET from
+        // the glass, and its content takes the same 12 the detail rows use, so the title
+        // and every row title share one left edge (they did not — 10 against 6).
+        const backBtnChild = new Gtk.Box({ spacing: 8, margin_start: 12, margin_end: 12, margin_top: 12, margin_bottom: 12 })
         backBtnChild.append(new Gtk.Image({ gicon: Icons.chevronLeft, pixel_size: 14, css_classes: ["nd-icon"] }))
         backBtnChild.append(new Gtk.Label({ label: w.name, css_classes: ["cc-detail-title"], halign: Gtk.Align.START }))
-        const backBtn = new Gtk.Button({ child: backBtnChild, css_classes: ["cc-detail-back-btn"], halign: Gtk.Align.START, margin_start: 4, margin_top: 4 })
+        const backBtn = new Gtk.Button({
+            child: backBtnChild, css_classes: ["cc-detail-back-btn"], halign: Gtk.Align.START,
+            margin_start: PANEL_INSET + GLASS_INSET, margin_top: PANEL_INSET + GLASS_INSET,
+        })
         backBtn.connect("clicked", hideDetail)
 
         // Content
@@ -335,7 +341,11 @@ export default function IslandGrid() {
             orientation: Gtk.Orientation.VERTICAL,
             css_classes: ["cc-detail-panel"],
             hexpand: true,
-            margin_start: 8, margin_end: 8, margin_bottom: 8,
+            // Same halo as every other list of rows on a radius-lg surface. This island is
+            // a FIXED 356px wide, so the inset is paid out of the row: 340 → 328 usable.
+            margin_start: PANEL_INSET + GLASS_INSET,
+            margin_end: PANEL_INSET + GLASS_INSET,
+            margin_bottom: PANEL_INSET + GLASS_INSET,
         })
         panel.append(w.buildCCDetail(hideDetail))
 
@@ -348,7 +358,13 @@ export default function IslandGrid() {
 
         const inner = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, width_request: GRID_WIDTH })
         inner.append(backBtn)
-        inner.append(new Gtk.Separator({ css_classes: ["cc-detail-sep"], margin_bottom: 4 }))
+        // Full-bleed, but flush to the GLASS: with no margin it spanned the widget rect,
+        // i.e. 2px past the painted edge on each side (SquircleContainer draws GLASS_INSET
+        // in). A hairline is exactly the kind of child that overhangs without anyone noticing.
+        inner.append(new Gtk.Separator({
+            css_classes: ["cc-detail-sep"], margin_bottom: 4,
+            margin_start: GLASS_INSET, margin_end: GLASS_INSET,
+        }))
         inner.append(scroll)
 
         detailIsland = SquircleContainer({

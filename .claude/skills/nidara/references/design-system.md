@@ -289,7 +289,7 @@ Swept 2026-08-03. Each step is +4, and horizontal is always +4 over vertical:
 
 | Surface | v / h | Who |
 |---|---|---|
-| **Dense panel** | **12 / 12** (`PANEL_INSET`, from the GLASS) | bar expansion panels (incl. the window menu, which inherits `expansionInner`), the **system menu**, the CC context menu, CC/NC lists, `widgets/*` |
+| **Dense panel** | **12 / 12** (`PANEL_INSET`, from the GLASS) | bar expansion panels (incl. the window menu, which inherits `expansionInner`), the **system menu**, the CC context menu, the **CC detail panel**, the three `GlassBubble` menus (dock item, app-grid item, media source), CC/NC lists, `widgets/*` |
 | **Window row** | **12 / 16** | `NidaraRow`, and hand-rolled rows inside Settings |
 | **Island** | **16 / 20** | all five island modes |
 
@@ -301,6 +301,13 @@ point the padding is no longer text inset, it is **the fill's margin**. It ran `
 from the glass) until the user caught the halo being twice as wide at the sides as at the ends;
 no menu system runs 2:1 (AppKit's highlight is ~5/4pt, Windows 11 flyouts 4/4). The text's own
 breathing room lives on the row — `.nidara-menu-row` is `7px 12px`.
+
+**A panel's header is a row too.** In the CC detail panel the back-button header sat at 10 from
+the glass while the rows under it sat at 6 — two axes inside one card. The header's fill now keeps
+`PANEL_INSET` like any row, and its *content* takes the same 12 the detail rows use, so the title
+and every row title share one left edge. The island is a fixed 356px, so this inset is paid out of
+the row (340 → 328 usable) — a fixed-width surface is a reason to know the cost, not to keep two
+axes.
 
 **A bubble is not a different kind of menu.** The dock item menu, the app-grid item menu and the
 media source menu are `GlassBubble` popovers rather than squircle cards, and they had their own
