@@ -50,6 +50,12 @@ export interface AtomicWidget {
                                         // default left-anchored capsule layout (icon+label)
     buildBarContent?: () => Gtk.Widget                      // compact bar variant (icon only)
     buildBarExpanded?: (onClose: () => void) => Gtk.Widget  // bar inline expansion panel
+    /** The expansion panel handles its OWN horizontal insets, so the bar drops the
+     *  14px it normally gives every panel. For content that must reach the panel's
+     *  inner edge — a scroll view, whose bar sits at that edge by the shell-wide
+     *  rule (design-system.md, "Any ScrolledWindow"). The widget then owes its own
+     *  content the inset the panel used to provide. */
+    barExpandedFlush?: boolean
     // Intercept a click on the bar pill. Return true = handled, the expansion
     // panel does NOT open; false = fall through to the normal behaviour. Consulted
     // on every click (not once at build time), so it can answer differently as the

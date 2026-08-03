@@ -443,6 +443,7 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   const showExpansion = (id: string) => {
       const onClose = () => { status.bar_expanded_id = "" }
       let content: Gtk.Widget | undefined
+      let flush = false
       if (id === CUSTOM_ID) {
           if (!customContentBuilder) return
           content = customContentBuilder(onClose)
@@ -453,7 +454,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
           const w = registry.get(id)
           if (!w?.buildBarExpanded) return
           content = w.buildBarExpanded(onClose)
+          flush = !!w.barExpandedFlush
       }
+      // A flush panel reaches the capsule's inner edge horizontally (its scroll bar
+      // has to live there); it keeps the vertical breathing room either way.
+      expansionInner.margin_start = flush ? 0 : 14
+      expansionInner.margin_end = flush ? 0 : 14
       // Direct pill→pill switch (one click, no dismissal in between): the
       // capsule is still fully revealed at the PREVIOUS anchor's position, so
       // snap it to the hidden state first — otherwise the new content paints

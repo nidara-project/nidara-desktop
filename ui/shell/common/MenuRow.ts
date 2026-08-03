@@ -26,13 +26,18 @@ export interface MenuRowOpts {
     ellipsize?: boolean
     /** Extra trailing widget (e.g. a dim hint label). Placed before the check. */
     trailing?: Gtk.Widget
+    /** Centre the icon+label instead of left-aligning them. For a row that is an
+     *  ACTION on the whole list rather than one of its items — a footer like "Clear
+     *  history". Left alignment reads as "another entry"; centred reads as a button.
+     *  Not for rows inside a menu's item column: they must share one text axis. */
+    center?: boolean
     onClick: () => void
 }
 
 const CHECK_KEY = "__nidaraMenuCheck"
 
 export function menuRow(opts: MenuRowOpts): Gtk.Button {
-    const inner = new Gtk.Box({ spacing: 10 })
+    const inner = new Gtk.Box({ spacing: 10, halign: opts.center ? Gtk.Align.CENTER : Gtk.Align.FILL, hexpand: true })
     if (opts.icon) {
         inner.append(new Gtk.Image({ gicon: opts.icon, pixel_size: 15, css_classes: opts.appIcon ? [] : ["nd-icon"], valign: Gtk.Align.CENTER }))
     }
@@ -42,9 +47,11 @@ export function menuRow(opts: MenuRowOpts): Gtk.Button {
     // left while max_width_chars caps the natural width). Off by default so a
     // content-sized menu (the CC context menu) still grows to fit its labels
     // instead of collapsing to a single character.
-    inner.append(opts.ellipsize
-        ? new Gtk.Label({ label: opts.label, halign: Gtk.Align.FILL, hexpand: true, xalign: 0, ellipsize: 3, max_width_chars: 1, css_classes: ["nidara-menu-label"] })
-        : new Gtk.Label({ label: opts.label, halign: Gtk.Align.START, hexpand: true, css_classes: ["nidara-menu-label"] }))
+    inner.append(opts.center
+        ? new Gtk.Label({ label: opts.label, halign: Gtk.Align.CENTER, css_classes: ["nidara-menu-label"] })
+        : opts.ellipsize
+            ? new Gtk.Label({ label: opts.label, halign: Gtk.Align.FILL, hexpand: true, xalign: 0, ellipsize: 3, max_width_chars: 1, css_classes: ["nidara-menu-label"] })
+            : new Gtk.Label({ label: opts.label, halign: Gtk.Align.START, hexpand: true, css_classes: ["nidara-menu-label"] }))
     if (opts.trailing) inner.append(opts.trailing)
     const check = new Gtk.Image({
         gicon: Icons.check, pixel_size: 15,

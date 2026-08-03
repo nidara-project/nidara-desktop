@@ -294,7 +294,32 @@ hl.on("hyprland.start", function()
     -- Code/browser credentials. Secrets only (no ssh/gpg agent takeover).
     hl.exec_cmd("uwsm app -s b -- gnome-keyring-daemon --start --components=secrets")
     hl.exec_cmd("uwsm app -s b -- hypridle")
-    hl.exec_cmd("uwsm app -s b -- wl-paste --watch cliphist store")
+    -- TWO watchers, one per generic type — not one untyped watcher. With no --type,
+    -- wl-paste picks the mime type itself, and its order (src/wl-paste.c,
+    -- mime_type_to_request) is: text/plain;charset=utf-8 → text/plain → ANY text/* →
+    -- only then anything else. A browser's "Copy image" offers image/png alongside a
+    -- text/html or text/plain flavour of the source URL, so `try_any_text` matched
+    -- first and cliphist stored the URL — every single time. Symptom the user sees:
+    -- "copy image" and "copy image address" produce the same clipboard entry, and no
+    -- image ever reaches the history (measured: 0 binary entries in an 82 MB, 750-item
+    -- db). The image path itself was never broken — an image-ONLY offer stored fine.
+    -- `--type image` is the only way to make wl-paste ask for the bitmap when text is
+    -- also on offer; `--type text` reproduces today's order exactly for text offers and
+    -- simply skips offers with no text at all. A copy carrying both lands twice (one
+    -- text row, one image row) — that is cliphist's documented setup, and it means
+    -- either flavour is one click away.
+    -- -max-items 50, not cliphist's default 750. 750 is tuned for its own CLI, which
+    -- is fuzzel-searchable; our panel is a scroll list with no search, so anything past
+    -- ~50 rows is storage nobody can reach (prior art: Win+V keeps 25, Klipper 20).
+    -- It is also a size decision now that images are stored: measured on a real 750-item
+    -- history, 549 rows were under 1 KB but EIGHTEEN were over 1 MB and ate 50 of the
+    -- 60 MB — the tail is what costs, and it is unbounded per item (cliphist has no
+    -- max-size flag). The flag rides the store command rather than a config file so
+    -- there is one place to read and nothing to keep in sync. NOTE: cliphist trims to
+    -- the limit on the NEXT store, all at once — lowering this deletes the surplus
+    -- immediately, it does not age out.
+    hl.exec_cmd("uwsm app -s b -- wl-paste --type text --watch cliphist -max-items 50 store")
+    hl.exec_cmd("uwsm app -s b -- wl-paste --type image --watch cliphist -max-items 50 store")
 end)
 
 
