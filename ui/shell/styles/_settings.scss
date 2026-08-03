@@ -20,8 +20,9 @@ window.nidara-settings-window {
     }
     // The dropdown's popover list too (its rows pin $fs-small px in _components).
     // Scoped to the Settings window only — the popover is a descendant of the
-    // dropdown in the CSS tree, so this matches; bar/widget lists use NidaraSelect
-    // (a Gtk.Box overlay, not a native `dropdown`), so they're untouched.
+    // dropdown in the CSS tree, so this matches. Bar and widget lists are not native
+    // dropdowns at all (GlassBubble menus and `.linked` button groups), so they are
+    // untouched by this and stay on the fixed px ramp.
     dropdown popover listview > row,
     popover.combo listview > row {
         font-size: $fse-small;

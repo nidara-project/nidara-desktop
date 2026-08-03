@@ -342,28 +342,9 @@ switch,
    The old "Premium Nidara" block with a `.accent` modifier was superseded by it
    (the `.accent` modifier was unused) and has been removed. */
 
-/* --- NidaraPopover --- */
-/* Specificity (0,1,2) matches libadwaita's popover.background > contents,
-   load priority 810 > ~600 ensures our rules win the cascade.
-   CSS vars (--nidara-popover-*) are used instead of @define-color to stay
-   SCSS-compilable — @name syntax in property values is not valid SCSS. */
-popover.nidara-popover {
-    @include nidara-reset;
-
-    > contents {
-        /* Fallback ensures visible background even before --nidara-popover-bg token is set */
-        background-color: var(--nidara-popover-bg, rgba(36, 36, 36, 0.82));
-        border-radius: $nidara-radius-md;
-        border: 1px solid var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
-        box-shadow: var(--nidara-shadow-popover);
-        padding: 0;
-    }
-
-    > arrow {
-        background-color: var(--nidara-popover-bg, rgba(36, 36, 36, 0.82));
-        border-color: var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
-    }
-}
+/* (The `popover.nidara-popover` block was deleted with its widget — the NidaraPopover
+   class had no consumers in any bundle, so these rules styled a node that never existed.
+   The --nidara-popover-* tokens stay: the `dropdown popover` block below uses them.) */
 
 button.settings-action-row {
     @include nidara-reset;
@@ -373,24 +354,6 @@ button.settings-action-row {
 
     &:hover  { background: var(--nidara-surface-hover); }
     &:active { background: var(--nidara-surface-active); }
-}
-
-/* Hover/active for non-accent buttons inside any nidara popover */
-popover.nidara-popover button:not(.suggested-action):not(.destructive-action):not(.settings-action-row) {
-    &:hover  { background: var(--nidara-surface-hover);   transition: background 0.15s ease; }
-    &:active { background: var(--nidara-surface-active); transition: background 0.05s ease; }
-}
-
-/* Accent (selected/primary) buttons inside nidara popovers */
-popover.nidara-popover button.suggested-action {
-    background: $nidara-accent;
-    color: var(--nidara-accent-fg);
-    border: none;
-    border-radius: $nidara-radius-xs;
-    transition: background 0.15s ease;
-
-    &:hover  { background: rgba(var(--nidara-accent-rgb), 0.85); }
-    &:active { background: rgba(var(--nidara-accent-rgb), 0.65); }
 }
 
 /* --- Segmented mode buttons (screenshot / screenrecord) --- */
@@ -549,8 +512,9 @@ button.nidara-btn {
 // consumer, Settings → Power's profile checkmark, now draws in Cairo instead.)
 
 // ── Gtk.DropDown ─────────────────────────────────────────────────────────────
-// GTK4 native dropdown — auto-positions above/below based on available space.
-// No NidaraOverlayManager needed; no off-screen bug.
+// GTK4 native dropdown — auto-positions above/below available space, and its popover
+// is a real Wayland surface, so the compositor's popup blur frosts it. The in-window
+// overlay list this replaced could do neither; it was deleted with its manager.
 
 // Trigger button
 // Trigger button styled like the base text input (.nidara-input): surface-back

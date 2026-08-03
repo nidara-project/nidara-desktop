@@ -2092,3 +2092,21 @@ The likely answer is one exported ratio (~25 %) applied to the art's short side,
 a small thumb does not go nearly-circular. Low priority: it is visible only on notification art
 and clipboard image rows, and changing it moves how every notification looks — worth doing when
 something else is already touching that surface.
+
+### 49. The bubble menu is copy-pasted three times (2026-08-03)
+`DockItem.tsx`, `AppGrid.tsx` and `widgets/media.ts` each build the same popover by hand:
+`new Gtk.Popover` → `Gtk.Grid` → a `DrawingArea` painted by `paintGlassBubble(…, { radiusMax: 16 })`
+→ a `nidara-menu` rows `Gtk.Box` → a `Theme.connect("changed")` redraw (plus its disconnect
+bookkeeping) → `set_child`/`set_parent` → `sideFor(position)` for the arrow side → a layout
+function putting `BUF + PAD (+ ARROW_H on the arrow side)` on four margins.
+
+**The evidence it should be one component: the `PAD` line had to be hand-edited in all three files**
+when the dense-panel halo became `PANEL_INSET`. Nothing links them, so a fourth bubble menu would
+start from a copy of whichever one its author found first.
+
+The extraction is `GlassBubbleMenu({ anchor, position, buildRows })` in `ui/shell/common/` (shell,
+not the kit — it needs `Theme` and `GlassBubble`). What differs per call site and has to stay
+parametric: when the rows are rebuilt (dock and app grid rebuild per show, media on source change),
+whether the side is recomputed on move, and the destroy-time signal cleanup. Deliberately NOT done
+inside the token audit — refactoring three interactive surfaces belongs on its own branch with its
+own live check (rule 3 at the top of this file).

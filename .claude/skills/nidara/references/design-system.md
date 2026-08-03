@@ -130,7 +130,8 @@ owes its own content that inset (`PANEL_PAD` in `widgets/clipboard.ts` — keep 
 
 Migrated: clipboard panel + CC detail (`IslandGrid`), notification centre, Assistant transcript,
 every Settings page (`wrapPage`) plus the app/autostart lists and search results, app grid, and
-in the kit itself the **`NidaraWindow` sidebar** and the **`NidaraSelect` list**.
+in the kit itself the **`NidaraWindow` sidebar** (the `NidaraSelect` list was migrated too, then
+deleted with the component in the token audit — Settings uses `NidaraDropDown`).
 
 **`new Gtk.ScrolledWindow` now appears exactly twice in the tree** and that is the invariant to
 check when this claim is made again: `scrolled.ts` itself, and `IslandGrid`'s `gridClamp`, which
@@ -146,8 +147,8 @@ dropdown tradeoff). Its existence is not a licence to leave a Nidara-built view 
 ⚠️ `NidaraScrolled` returns an **overlay wrapping the view**, so anything positional belongs on
 the wrapper, not on the `scrolled`: margins (the sidebar's 4px gap to the search slot moved from
 CSS into `window.ts` for this — a margin on the view alone leaves the lane taller than the
-viewport it maps to, and the thumb drifts from the content) and, in `NidaraSelect`, the
-`width_request`/`measure`/`show` that position the popup.
+viewport it maps to, and the thumb drifts from the content) and any `width_request`/`measure`
+that positions a popup around it.
 
 **Do not add `scrollbar` rules for any of them** — there is no such node. `overlay_scrolling:
 false` is no longer needed anywhere and should not come back: its gutter appears WITH the bar,
@@ -750,7 +751,7 @@ This is the table that decides almost every "which widget should I use?" questio
 | Floating overlays (CC, NotifCenter, Prism (search), SystemMenu, Overview) | **`Gtk.Box` + gtk4-layer-shell + custom CSS** | Adwaita would only add chrome you'd have to undo. |
 | Toggles / switches / buttons inside overlays | **`Gtk.Switch`, `Gtk.Button`** (NOT `Adw.*Row`) | Base widgets style cleanly; `Adw.*Row` brings padding/focus-ring/separators that have to be killed one by one. |
 | Sliders (any) | **`makeSlider`** from `common/Slider.ts` (NOT `Gtk.Scale`) | See "Sliders" below — one Cairo component for the whole shell. |
-| Settings window | **`ui/lib/nidara-kit`** (`NidaraSplitView`, `NidaraClamp`, `NidaraButton`, `NidaraSelect`) | Custom split view. **Do NOT use `Adw.OverlaySplitView`** — it breaks capsule margins. |
+| Settings window | **`ui/lib/nidara-kit`** (`NidaraSplitView`, `NidaraClamp`, `NidaraButton`, `NidaraDropDown`) | Custom split view. **Do NOT use `Adw.OverlaySplitView`** — it breaks capsule margins. |
 | Modal dialogs | **`showNidaraAlert`** from `nidara-kit` | Clean, themeable. |
 
 **Rule of thumb:** everything is **pure GTK4** — libadwaita has been fully removed. Dark/light is set via `Gtk.Settings.gtk_application_prefer_dark_theme` (no `Adw.init()`); the About window is a plain `Gtk.Window` (no `Adw.AboutWindow`). Don't reintroduce any `Adw.*`.
