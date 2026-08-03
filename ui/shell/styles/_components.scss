@@ -582,7 +582,16 @@ dropdown popover {
         background-color: var(--nidara-popover-bg, rgba(36, 36, 36, 0.85));
         border: 1px solid var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
         border-radius: $nidara-radius-md;
-        box-shadow: var(--nidara-shadow-popover);
+        // ⚠️ margin 0 + no shadow, TOGETHER. GTK gives `popover > contents` a ~17px margin
+        // per side purely as room for its own drop shadow to render unclipped, and the
+        // popup SURFACE is sized to include it — measured live 2026-08-03 with `queryUI`:
+        // the list sat 41px inside the popover against the 7 this stylesheet accounts for,
+        // and the whole thing read as "this popover has more padding" through four rounds
+        // of chasing the wrong number. `.nidara-sidebar-popup` in _settings.scss hit this
+        // first and fixed it the same way; keep the two in step. The definition here is
+        // the compositor's blur plus the 1px border, not a drop shadow.
+        margin: 0;
+        box-shadow: none;
         // Vertical only. The horizontal inset belongs to the LIST below, not to this box:
         // padding here sits OUTSIDE the scroll, so it pushes the viewport in, and the
         // scroll bar rides the viewport's trailing edge — it ended up 10px from the card
