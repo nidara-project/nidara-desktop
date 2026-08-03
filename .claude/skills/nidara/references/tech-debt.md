@@ -44,8 +44,7 @@ pseudo in `_base.scss` — an opt-in alias for our own widgets, same policy as t
 `.settings-icon-btn` is only ever added plain/`+flat`) and `.is-danger` (`_control-center.scss`, the
 only live `is-*` toggle is `.is-active` in `StatusIndicators.tsx`). The other 24 candidates are all
 accounted-for traps: the 9 dynamic `.accent-*` swatches, `.nidara-btn--ghost` (variant `"ghost"` IS
-used, Audio.tsx), the 4 GTK-internal nodes (`combo`/`day-name`/`other-month`/`week-number`), the 2 GTK
-overlay-scrollbar nodes (`hovering`/`overlay-indicator`, #15), the 4 kept aliases above, and 4
+used, Audio.tsx), the 4 GTK-internal nodes (`combo`/`day-name`/`other-month`/`week-number`), the 4 kept aliases above, and 4
 tombstone *comments* the extractor matches inside `/* … */` (`bar-ws-dot`/`cc-resize-btn`/
 `cc-media-progress`/`settings-page-title` — the CSS is already gone, the comment documents why the
 live class is named differently). **Next-run trap:** the extractor matches `.name` inside comments, so
@@ -431,21 +430,24 @@ direction** per right-click — items low in the launcher flip the menu up so it
 and the fixed Cairo arrow still points at the item (`compute_bounds` vs root height, 0.65
 threshold). **There are no more native `Gtk.PopoverMenu`s in the shell.**
 
-### 15. The NC overlay scrollbar still widens on hover — can't be defeated by CSS (don't chase it)
-The notification-center list uses a GTK overlay scrollbar in an **8px lane** to the right of
-the cards (so cards stay flush with the bar capsules — see `state-and-ipc.md`). GTK widens
-the overlay slider on pointer **proximity** (it adds `.hovering`/`.dragging` itself, NOT the
-CSS `:hover`), and **Adwaita's `scrollbar.overlay-indicator.hovering slider` rule wins
-despite higher-specificity overrides** in `_control-center.scss` — the size-pin there is NOT
-load-bearing (verified: the slider still grows). What largely keeps it off the cards' close
-buttons is **anchoring the scrollbar flush to the right edge** (`trough` margin/padding reset
-+ a 1px slider side margin), so it grows toward the wall, not left over the cards. `set_can_target(false)`
-on the scrollbar does NOT help — proximity-expand is independent of event targeting.
-**Residual (accepted, low priority):** on hover the widened slider still steals a *few px* of
-input from the close button's right edge — nearly imperceptible in use, left as possible
-polish/optimization. If the hover growth ever truly must stop, it needs a structural change
-(custom Cairo indicator or non-overlay reserved scrollbar with its own reflow tradeoff), not
-more specificity. Same root as #9 (the Adwaita stylesheet is loaded in-process).
+### 15. Overlay scrollbar grew on pointer proximity and ate right-edge buttons — RESOLVED (2026-08-03)
+GTK expanded the overlay slider on **proximity** (it adds `.hovering`/`.dragging` itself, not
+the CSS `:hover`), so the bar reached toward the very control the user was aiming at — the NC
+cards' close ✕, then the clipboard rows' ✕. CSS could never win it: Adwaita's
+`scrollbar.overlay-indicator.hovering slider` beat every in-process override, its base slider
+rule carries `border: 4px solid transparent` (8px of invisible width) that takes over exactly
+when hovered, and `set_can_target(false)` was useless — proximity expansion is independent of
+event targeting. Anchoring the bar flush to the wall was mitigation, not a fix.
+**Fixed by `NidaraScrolled`** (`lib/nidara-kit/scrolled.ts`): `vscrollbar_policy: EXTERNAL` so
+no scrollbar widget exists, plus our own fixed-width bar (transparent hit lane + 5px thumb)
+that **still drags** — a first pass made it non-interactive and the user rejected that as a
+regression; the drag was never the problem, the *growth* was. A second pass laid the bar out
+with `margin_top`/`height_request` and produced a lagging drag plus flicker/ghosting, because a
+scroll position is not a layout property (details in design-system.md); the bar is now a single
+stationary DrawingArea that only repaints. Migrated everywhere including
+windows: clipboard + CC detail, NC, Assistant transcript, all Settings pages, app grid. Their
+`scrollbar` CSS blocks are deleted and `overlay_scrolling: false` is gone — don't reintroduce
+either. See design-system.md, "Any ScrolledWindow". Same root as #9 (Adwaita loaded in-process).
 
 ### 16b. Adwaita button classes — RESOLVED, sweep complete (2026-08-02)
 `widgets/vpn.ts`, `widgets/bluetooth.ts` and `widgets/screenshot.ts` all build `NidaraButton`s, and
@@ -2034,3 +2036,31 @@ Not a bug list — conscious tradeoffs to pay down opportunistically:
 2. If it would balloon your change, leave it and add a comment linking here.
 3. **Don't refactor as a side-effect of an unrelated change** — drive-by fixes tend to be
    partial and create drift.
+
+### 47. The design tokens drifted — spacing and radii are several ladders, not one (2026-08-03) — NEXT SESSION
+Raised by the user while reviewing the scroll bar: *"parece que hemos puesto un valor distinto
+cada vez que hemos hecho algo, y ahora no cuadra en todos los sitios"* — and the specific catch
+was the bar-expansion capsule at radius **20** while windows are **24**. Correct on both counts.
+Measured, so the audit starts from data rather than a re-scan:
+
+**Radii — two unrelated ladders.** The CSS tokens are `xs 6 / sm 10 / md 16 / lg 24` (already
+not a clean 4-step: 6 and 10 are half-steps). The Cairo literals passed to
+`SquircleContainer`/`drawSquircle` are a *different* set — `16 / 20 / 24 / 32 / 64` — and two of
+them have **no token at all**: `20` in `surfaces/bar/Bar.tsx` (the expansion capsule, i.e. the
+clipboard/battery/screenshot panels) and `surfaces/control-center/CCContextMenu.tsx`. `24` in
+`SystemMenu.tsx` + `IslandGrid.tsx`, `32` in nine places (all four islands, NC capsules, app
+grid, Prism, BaseIsland), `64` in `WorkspaceOverview.tsx`, `16` in one NC header.
+
+**Spacing — the 4px scale (`$space-1..10`, `_base.scss:133`) is declared but not enforced.**
+Off-scale pixel values in `styles/*.scss`, by frequency: `6px` ×20, `14px` ×11, `10px` ×8,
+`7px` ×4, `5px` ×7, `3px` ×7, `18px` ×2, `22px` ×2. (`1px`/`2px` ×14 are legitimate hairlines
+and borders — exclude them.) Note the shape of the offenders: almost all are *a multiple of 4
+plus 2*, i.e. a half-step that crept in one component at a time. `14` in particular is load-
+bearing right now — it is `Bar.tsx`'s expansion inset and `PANEL_PAD` in `widgets/clipboard.ts`,
+which must move together.
+
+**Scope for the audit:** decide one radius ladder that covers both CSS and Cairo (the Cairo
+sizes are large surfaces, the CSS ones are controls — they may legitimately be two *named*
+tiers of one scale, but they must be named and shared, not literals); then sweep the off-scale
+spacing. Do it as a single pass with the user, not opportunistically — the values are currently
+consistent *with each other* in several places, so half a sweep is worse than none.

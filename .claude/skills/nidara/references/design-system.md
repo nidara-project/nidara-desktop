@@ -69,39 +69,73 @@ nidara-reset; background: transparent; } }` and a transparent `ListBox`. Also se
 rows' trailing controls (buttons). The shell scrollbar is already themed (`_reset.scss`, scoped to
 `.nidara-settings-window` etc.) as a thin pill.
 
-## Any ScrolledWindow: `overlay_scrolling: false` unless a lane is reserved
+## Any ScrolledWindow: use `NidaraScrolled` — windows included
 
-Generalises the note above — this one keeps recurring (Settings lists, then the Assistant
-transcript, 2026-07-21). GTK4 defaults to **overlay scrolling**: the bar is painted ON TOP of the
-content, so it lands over whatever hugs the trailing edge — a row's buttons, or right-aligned chat
-bubbles. Two sanctioned fixes, in order of preference:
+**What was wrong with GTK's scrollbar was not that it was interactive. It was that it GREW.**
+GTK expands the overlay slider on pointer *proximity* — it sets `.hovering`/`.dragging` on the
+node itself, which is not the CSS `:hover` — so the bar reaches out toward whatever the pointer
+is approaching. When a list's rows carry a control at their right edge (a close ✕, a chevron),
+the bar gets there first and eats the click. This recurred three times (Settings lists → the
+Assistant transcript 2026-07-21 → the clipboard rows 2026-08-03) and **CSS cannot win it**:
+Adwaita's `scrollbar.overlay-indicator.hovering slider` beats any specificity we can write
+in-process, its base slider rule also carries `border: 4px solid transparent` (8px of invisible
+real width) that takes over exactly when hovered, and `set_can_target(false)` does nothing
+because proximity expansion is independent of event targeting.
 
-1. **`overlay_scrolling: false`** — GTK allocates the scrollbar its own gutter. Cheapest (one
-   property), but the gutter appears WITH the bar, so the content **resizes** the moment the view
-   starts overflowing, and GTK's gutter sits visibly inset from the edge. Fine for a settings list
-   whose rows are already full-width; **not** fine for a surface the user watches while it grows.
-   Precedent: `Autostart.tsx`, `AppIcons.tsx`.
-2. **Reserve a lane** (preferred on any live/animated surface). Keep overlay scrolling and pad the
-   scrolling content by the lane width — always, overflowing or not — so nothing ever shifts; then
-   pin the bar flush to the lane with a `trough` reset (`margin/padding: 0`) + a 1px slider side
-   margin, so it grows toward the wall instead of back over the content. Recipe:
-   `.nc-content-box` + `.nc-transparent-scroll` (`_control-center.scss`, fixed `GRID_WIDTH` cards)
-   and `.agent-transcript` + `.agent-scroller` (`_bar.scss`, 8px lane, 4px slider). Caveat both
-   inherit: the slider still fattens on hover — Adwaita's `.hovering` rule beats explicit state
-   selectors; stopping it needs a structural change, not more specificity.
+So the answer is **a bar of fixed width in a reserved lane** — not a bar you cannot touch.
+(A first pass dropped dragging entirely; the user rejected it as a regression, correctly: the
+drag was never the problem.)
 
-The user's ask that settled this (2026-07-21, Assistant transcript): *thin, as far right as
-possible, and it must not affect the chat's content or size* — that is exactly case 2.
+**`NidaraScrolled`** (`lib/nidara-kit/scrolled.ts`) is the one scroll view for the whole DE,
+overlay surfaces and windows alike. `vscrollbar_policy: EXTERNAL` keeps the scrolling (wheel,
+touchpad, kinetic, keyboard) while GTK never creates a scrollbar widget — no node left to grow,
+no Adwaita rule left to fight. The bar is ours: a `Gtk.Box` in a `Gtk.Overlay`, sized from the
+adjustment, dragged by a `Gtk.GestureDrag`.
 
-**Specificity trap, cost us a full round:** the shell scrollbar in `_reset.scss` is scoped by **ID**
-(`#nidara-bar scrollbar slider` = (1,0,2)). A per-surface override written as a bare class
-(`.agent-scroller scrollbar slider` = (0,1,2)) **loses silently** — you then debug geometry from CSS
-that never applied. Keep the override inside its `window#name` scope (commandment 2) and it inherits
-the ID, landing at (1,1,2). Also: the visible gap beside an overlay bar is Adwaita's **`trough`
-margins**, not the slider width — reset the trough. Component to end this: tech-debt #37.
+- **One stationary `Gtk.DrawingArea`, full height.** The whole lane is the hit area and the thin
+  pill is *painted* inside it. Its colour comes from the widget's CSS `color` read back via
+  `get_style_context().get_color()` — the same trick as `common/WorkspaceSchematic.ts`, and the
+  only way to stay token-driven from nidara-kit, which cannot import ThemeManager.
 
-Never "fix" it by adding blanket right padding to a surface — that pays 8px of dead air on every
-surface, overflowing or not.
+### The settled spec (2026-08-03 — decided with the user, do not re-litigate)
+
+| | Rule |
+|---|---|
+| **Alignment** | The bar sits at the **trailing edge of the scroll viewport**, and every surface's viewport must reach its own **visible inner edge**. One rule for panels and windows. Before this was written down there were three: the clipboard bar sat 14px in (it inherited `expansionInner`'s margin), Settings sat at 0, the NC/Assistant somewhere else again — which is exactly what the user noticed. |
+| **Content inset** | Content keeps its own inset and **the lane lives inside it**. That is what keeps a row's trailing ✕ out of the bar. `reserveLane` (default true) is the fallback for content that has no inset of its own; pass `false` when it already does. |
+| **Widths** | Pill **4px at rest → 8px hovered/dragging** = `$space-1`/`$space-2` on the project's 4px scale. Not free-hand numbers — the earlier 5/9 were, and the user caught it. Lane **12px** (`$space-3`), and it must stay ≥ 8 so an expanded pill never leaves the lane. |
+| **Hover** | The pill grows; **the hit lane never does.** That distinction IS tech-debt #15 — GTK grew the *hit area*, which is why it could eat a neighbouring button. Growth is safe on every surface precisely because the lane fits inside the content inset. A faint full-height track fades in with it (macOS shape), derived from the same CSS colour at low alpha. |
+| **Persistence** | Auto-hides everywhere, windows included: reveal on scroll or on pointer motion in the view, fade after 1.1s. One behaviour across the DE. |
+| **Corners** | 4px `CORNER_CLEAR` top and bottom so a flush bar never clips into a glass capsule's rounded corner. |
+
+**`barExpandedFlush`** (`AtomicWidget`) is how a bar-expansion panel opts out of the 14px
+horizontal inset `Bar.tsx` gives every panel, so its scroll can reach the edge; the widget then
+owes its own content that inset (`PANEL_PAD` in `widgets/clipboard.ts` — keep the two in step).
+- 🔑 **A scroll position is not a layout property.** The first version built the bar from boxes
+  and moved it with `margin_top`/`height_request`, which produced three bugs from one mistake:
+  the **drag lagged** (`Gtk.GestureDrag` reports offsets in the coordinate space of the widget
+  it is attached to — and that widget was being moved *by the drag*, so the origin moved every
+  frame), and the view **flickered with ghosted content** (changing a size request from an
+  adjustment notify, which fires *during* allocation, queues another resize on every scroll
+  step). Scrolling must only `queue_draw()`. Put the gesture on something that never moves.
+- **`reserveLane`** (default true) pads the child by `lane` so content never sits under the
+  bar. Pass `false` where the caller's CSS already reserves it (`.nc-content-box` 8px,
+  `.agent-transcript` 16px) or where nothing lives at the right edge (a clamped Settings page,
+  the app grid's centred flowbox).
+- Geometry never depends on allocation: `page_size` IS the viewport height in a ScrolledWindow,
+  so the thumb is right on the first notify, before being mapped and measured.
+- The lane is targetable **only while visible** — a faded-out lane that still took clicks would
+  swallow them invisibly, which is the very bug this replaces.
+- `alwaysVisible` for content where the bar doubles as a position readout.
+
+Migrated: clipboard panel + CC detail (`IslandGrid`), notification centre, Assistant transcript,
+every Settings page (`wrapPage`) plus the app/autostart lists and search results, app grid.
+**Do not add `scrollbar` rules for any of them** — there is no such node. `overlay_scrolling:
+false` is no longer needed anywhere and should not come back: its gutter appears WITH the bar,
+so content resizes the moment a view starts overflowing.
+
+The user's ask that settled the lane part (2026-07-21, Assistant transcript): *thin, as far
+right as possible, and it must not affect the chat's content or size*.
 
 ## Search field — `.settings-search` box, never `Gtk.SearchEntry`
 
@@ -459,6 +493,19 @@ stair-stepped curves were clearly visible. So AA wins. The border/rim strokes
   copy when an image is *sometimes* ours and sometimes the app's: decide per icon, like
   `MenuRow`'s `appIcon?: boolean` opt-out or `widgets/media.ts`'s `remove_css_class("nd-icon")`
   once a real app icon resolves. Fallback art of ours that lands in the same slot still gets it.
+- **Any bitmap that lands in a rounded slot goes through `squircleThumb(pixbuf, w, h, radius,
+  cssClass)`** (`common/DrawingUtils.ts`) — a `Gtk.DrawingArea` that cover-fits (scale so the
+  SHORTER side fills, then centre-crop) inside a squircle clip. **GTK4 CSS `border-radius` does
+  NOT clip a child's rendering**, so rounding an image is Cairo's job, never the stylesheet's;
+  and cover-fit rather than contain, because a thumbnail column only reads as a column when
+  every cell is the same rectangle — letterboxing a 2560×1440 screenshot beside a square avatar
+  makes the list look broken. It was born inside `NotificationCenter.tsx` (`heroDrawingArea`)
+  and moved out the moment the clipboard history needed the same thing. `scale_simple`
+  allocates, so the cover-fit copy is cached and only recomputed when the allocation changes —
+  **never call `scale_simple` from inside a draw func without that guard.** Decode with
+  `GdkPixbuf.Pixbuf.new_from_stream_at_scale_async` and scale against the shorter side (`-1` on
+  the other axis): a bounding box gives a 2560×100 panorama a 2px-tall thumb, and a synchronous
+  decode of twenty screenshots visibly stalls the panel as it opens.
 - **Any Cairo draw call that needs a colour defined as a hex string elsewhere goes through
   `hexToFloatRgb(hex)`** (`common/DrawingUtils.ts`) — `"#rrggbb"` → `{r,g,b}` as 0..1 floats,
   never a hand-rolled `parseInt(hex.slice(...), 16) / 255` triplet. Before this existed, that
@@ -1047,6 +1094,18 @@ like default GTK". Two consumers today, same pattern (see `surfaces/dock/DockIte
   separators, dim section/submenu headers — section labels render as headers too). It activates
   actions on the passed group directly. The bubble DrawingArea + rows box are built ONCE (stable host,
   rows rebuilt per show) so the Theme subscription isn't leaked per show.
+- **Destructive rows** are `menuRow({ danger: true })` → `.nidara-menu-row.danger-action`: red
+  LABEL and a red-tinted hover, **never a filled red row**. The shell's red budget is a small
+  mark or a destructive edge; a solid red bar in a flat menu reads as an alert rather than as one
+  option among several. It beats `nidara-row-states` on specificity so the neutral hover can't
+  win. *(Was applied in three places while being defined nowhere — CC context menu "Remove" and
+  the system menu's confirm action had been rendering as ordinary rows.)*
+- **Destructive confirmation in a popover surface is INLINE, never a dialog** — the row swaps in
+  place for a cancel/confirm pair (`.nidara-confirm-secondary` / `.nidara-confirm-primary`, both
+  on top of `.nidara-menu-row` for geometry). A modal over a popover dismisses the very surface
+  it is asking about. Shared by the bar system menu (logout/restart/shutdown) and the clipboard
+  widget's "Clear history"; the classes are `nidara-*` because they are universal — they were
+  `system-confirm-*` until the second caller appeared.
 - **CSS** is the shared **`.nidara-menu-popover`** (`_components.scss`) — it only resets the popover
   chrome to transparent (`@include nidara-reset` on root + `> contents`), exactly like
   `.nidara-tooltip`; the glass is all Cairo. (The old per-surface `.dock-menu` rule is gone.)

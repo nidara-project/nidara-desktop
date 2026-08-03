@@ -29,7 +29,9 @@ Read this when adding/editing widgets, changing how overlays attach, modifying a
    `exec uwsm start -e -D Hyprland hyprland.desktop -- -c /usr/share/nidara/config/hypr/hyprland.lua`.
    uwsm runs the session as systemd units → activates `graphical-session.target`, clean teardown on exit.
 3. `hyprland.lua` on `hyprland.start` launches daemons via `uwsm app -- <daemon>` (independent systemd scopes):
-   `nidara-ui`, `awww-daemon`, polkit agent, `hypridle`, `wl-paste --watch cliphist store`.
+   `nidara-ui`, `awww-daemon`, polkit agent, `hypridle`, and `wl-paste --watch cliphist store`
+   **twice** — once `--type text`, once `--type image` (see the clipboard widget notes below;
+   one untyped watcher silently never captures an image).
 4. **`nidara-ui`** (UI launcher in `/usr/bin/`): kills stale `gjs`, then —
    - **Dev mode:** if `~/.config/nidara/.dev` exists, `cd` to its path and `ags run app.ts`.
    - **Prod mode:** exec the bundle at `/usr/share/nidara/ui/shell/build/nidara`.
@@ -216,6 +218,50 @@ Five pillars by responsibility (UI split renamed from the old `widget/` dir 2026
     NULs at odd offsets = LE, all at even = BE, ≥80% of the pairs) and re-encodes
     to UTF-8; anything not positively identified — every image — is copied back
     byte for byte.
+    **The capture side needs TWO `wl-paste` watchers, one per generic type** —
+    `--type text` and `--type image` (`hyprland.lua`, `hyprland.start`), never one
+    untyped watcher. With no `--type`, wl-paste chooses the mime type itself and its
+    order (`src/wl-paste.c`, `mime_type_to_request`) is `text/plain;charset=utf-8`
+    → `text/plain` → **ANY `text/*`** → only then anything else. A browser's "Copy
+    image" offers `image/png` next to a `text/html`/`text/plain` flavour of the
+    source URL, so `try_any_text` won and cliphist stored the URL — making "copy
+    image" and "copy image address" produce the same entry, forever (user-caught
+    2026-08-03; measured: **0 binary entries in an 82 MB, 750-item db**). The image
+    path itself was never broken — an image-ONLY offer stored fine, which is why the
+    bug reads as an app quirk instead of a config one. `--type text` reproduces the
+    old order exactly for text offers and skips offers with no text; a copy carrying
+    both now lands twice (one text row, one image row), which is cliphist's
+    documented setup. Reading back needs nothing special: `wl-copy` runs `xdg-mime`
+    over its stdin, so a decoded PNG is re-offered as `image/png`.
+    An image row's preview is cliphist's literal
+    `[[ binary data 24 KiB jpeg 1920x1080 ]]` (0.7.0) — never show it raw; the row
+    becomes `Image · JPEG · 1920×1080` **plus a real thumbnail** via the shared
+    `squircleThumb` (see design-system.md), decoded lazily per row and cached by
+    cliphist id. The text alone identifies nothing: five screenshots of the same
+    monitor are five identical rows, which is why Win+V and Klipper both show art.
+    Non-image binary is NOT wrapped that way, it arrives raw, so matching the exact
+    shape is safe.
+    **Retention is set at the CAPTURE end** — `cliphist -max-items 50 store` on both
+    watchers, not cliphist's default 750, and not a config file (one place to read,
+    nothing to sync). 750 is tuned for cliphist's own fuzzel-searchable CLI; our panel
+    is a scroll list with no search, so the panel shows EVERYTHING retained and nothing
+    is kept that cannot be reached (prior art: Win+V 25, Klipper 20). It is a size
+    decision too: measured on a real 750-item history, 549 rows were under 1 KB but
+    **eighteen were over 1 MB and ate 50 of the 60 MB** — the tail is what costs, and
+    per-item size is unbounded (cliphist has no max-size flag). ⚠️ cliphist trims to
+    the limit on the NEXT store, **all at once** — lowering it deletes the surplus
+    immediately, it does not age out. ⚠️ And the bolt db **never shrinks**: freed pages
+    are reused, so the file sits at its high-water mark (79 MB for 0.9 MB of content
+    here). Reclaiming it means rebuilding the db — dump each entry oldest-first, store
+    into a NEW db path, verify byte-for-byte (sha256 per entry), then swap.
+    Deletion is `cliphist delete` (id on stdin, tab-terminated, matches on the id
+    ALONE — verified, including entries whose content holds NULs, which matters because
+    our `line` went through the C0 filter and is not byte-identical to cliphist's
+    output) and `cliphist wipe` for all of it. The panel puts a hover-revealed ✕ on
+    each row (allocated at rest via `opacity`/`can_target`, never `visible`, so the
+    reveal cannot reflow the row under the pointer) and a "Clear history" footer that
+    swaps in place into a cancel/confirm pair — **a modal is wrong over a popover**,
+    it dismisses the very surface it is asking about.
     Both the visible pill and the overflow-menu row honour it, or an overflowed
     widget would behave differently from a shown one.
     **Per-widget settings (`buildSettings`)**: a widget with real preferences
