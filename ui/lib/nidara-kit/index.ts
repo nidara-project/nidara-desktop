@@ -22,6 +22,12 @@ export { NidaraClamp } from "./clamp"
 export type { NidaraScrolledOpts, NidaraScrolledResult } from "./scrolled"
 export { NidaraScrolled } from "./scrolled"
 
+// NidaraDropDown — Gtk.DropDown whose popup list carries the same bar. The native
+// dropdown stays (its popover is a real Wayland popup, so it gets compositor blur);
+// what goes is GTK's scrollbar inside it. attachScrollBar/adoptGtkScrolled are the
+// same machinery for any other view GTK builds for us.
+export { NidaraDropDown, attachScrollBar, adoptGtkScrolled } from "./scrolled"
+
 // NidaraSplitView — sidebar+content with auto-collapse (replaces Adw.OverlaySplitView + Adw.Breakpoint)
 export type { NidaraSplitViewResult } from "./split-view"
 export { NidaraSplitView } from "./split-view"

@@ -1,6 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import { listGroup, createRow, pageBox } from "../SettingsHelpers"
+import { NidaraDropDown } from "../../../../lib/nidara-kit"
 import { t } from "../../../core/i18n"
 
 // Build a dropdown row backed by GIO app list for a given MIME type.
@@ -31,7 +32,7 @@ function appRow(
     const initName = names.includes(defName) ? defName : names[0]
 
     const model = new Gtk.StringList({ strings: names })
-    const drp = new Gtk.DropDown({ model, valign: Gtk.Align.CENTER })
+    const drp = NidaraDropDown({ model, valign: Gtk.Align.CENTER })
     drp.selected = Math.max(0, names.indexOf(initName))
 
     drp.connect("notify::selected", () => {

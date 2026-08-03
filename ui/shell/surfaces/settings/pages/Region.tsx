@@ -7,7 +7,7 @@ import regionConfig, { TimeFormat, DateFormat } from "../../../core/RegionConfig
 import inputConfig from "../../../core/InputConfig"
 import { t } from "../../../core/i18n"
 import { safeDisconnect } from "../../../core/signals"
-import { NidaraButton } from "../../../../lib/nidara-kit"
+import { NidaraButton, NidaraDropDown } from "../../../../lib/nidara-kit"
 
 const TIME_FORMAT_LABELS = (): Record<TimeFormat, string> => ({
     "24h": t("settings.region.time.24h"),
@@ -69,7 +69,7 @@ export default function RegionPage() {
     const timeFmts = Object.keys(tFmtsDict) as TimeFormat[]
     const timeLabels = timeFmts.map(k => tFmtsDict[k])
     const timeModel = new Gtk.StringList({ strings: timeLabels })
-    const timeDrp = new Gtk.DropDown({ model: timeModel, valign: Gtk.Align.CENTER })
+    const timeDrp = NidaraDropDown({ model: timeModel, valign: Gtk.Align.CENTER })
     timeDrp.selected = Math.max(0, timeFmts.indexOf(regionConfig.timeFormat))
     timeDrp.connect("notify::selected", () => {
         const v = timeFmts[timeDrp.selected]
@@ -93,7 +93,7 @@ export default function RegionPage() {
     const dateFmts = Object.keys(dFmtsDict) as DateFormat[]
     const dateLabels = dateFmts.map(k => dFmtsDict[k])
     const dateModel = new Gtk.StringList({ strings: dateLabels })
-    const dateDrp = new Gtk.DropDown({ model: dateModel, valign: Gtk.Align.CENTER })
+    const dateDrp = NidaraDropDown({ model: dateModel, valign: Gtk.Align.CENTER })
     dateDrp.selected = Math.max(0, dateFmts.indexOf(regionConfig.dateFormat))
     dateDrp.connect("notify::selected", () => {
         const v = dateFmts[dateDrp.selected]
@@ -231,7 +231,7 @@ export default function RegionPage() {
     // Populated from `locale -a`; "" means "same as LANG".
     const regionalValues: string[] = [""]
     const regionalModel = new Gtk.StringList({ strings: [t("settings.region.locale.regional.same")] })
-    const regionalDrp = new Gtk.DropDown({ model: regionalModel, valign: Gtk.Align.CENTER })
+    const regionalDrp = NidaraDropDown({ model: regionalModel, valign: Gtk.Align.CENTER })
 
     execAsync(["locale", "-a"]).then(output => {
         const locales = output.trim().split("\n")
@@ -313,8 +313,11 @@ export default function RegionPage() {
 
     const syncFromConfig = () => {
         clockLabel.label = clockPreview()
-        timeDrp.active = timeFmts.indexOf(regionConfig.timeFormat)
-        dateDrp.active = dateFmts.indexOf(regionConfig.dateFormat)
+        // `selected`, not `active` — `active` is Gtk.ComboBox's property and setting it
+        // on a Gtk.DropDown did nothing at all, so an external change to the time or
+        // date format never moved these two. Found by the typechecker on the way past.
+        timeDrp.selected = Math.max(0, timeFmts.indexOf(regionConfig.timeFormat))
+        dateDrp.selected = Math.max(0, dateFmts.indexOf(regionConfig.dateFormat))
     }
 
     bindWhileRealized(page, () => {

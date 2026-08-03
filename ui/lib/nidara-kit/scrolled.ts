@@ -57,8 +57,9 @@ export interface NidaraScrolledOpts {
     maxContentHeight?: number
     propagateNaturalHeight?: boolean
     widthRequest?: number
-    /** Width of the hit lane, px. Default 12 — enough to grab without aiming, and
-     *  it must stay >= THUMB_HOVER so the expanded pill never leaves the lane. */
+    /** Width of the hit lane, px. Default 12 = THUMB_HOVER + EDGE_CLEAR — enough to
+     *  grab without aiming, and it must stay >= that sum or the expanded pill would
+     *  have to choose between leaving the lane and touching the surface edge. */
     lane?: number
     /** Pad the child by `lane` so content never sits under the bar. Default true;
      *  pass false when the caller's own CSS already reserves the lane. */
@@ -81,9 +82,15 @@ const THUMB_REST = 4
 const THUMB_HOVER = 8
 const THUMB_MIN_H = 28
 const HIDE_MS = 1100
-// Keeps the bar out of a glass capsule's rounded corners, where the surface edge
-// curves inward and a flush pill would clip.
+// Clearance between the pill and the surface's own edge, on all four sides. The
+// vertical half keeps the pill out of a glass capsule's rounded corners; the
+// horizontal half is why the pill is not painted flush against the trailing edge —
+// flush, it landed ON the panel's border and poked through the rounded corner
+// (reported on the clipboard panel: "the bar comes out at the top and on the right").
+// It also explains the lane: LANE = THUMB_HOVER + EDGE_CLEAR = 12. The hit lane keeps
+// its full constant width — only the paint is inset.
 const CORNER_CLEAR = 4
+const EDGE_CLEAR = 4
 
 /** Vertical pill, in the lane's own coordinates. */
 function pillPath(cr: any, x: number, y: number, w: number, h: number) {
@@ -98,7 +105,6 @@ function pillPath(cr: any, x: number, y: number, w: number, h: number) {
 
 export function NidaraScrolled(opts: NidaraScrolledOpts): NidaraScrolledResult {
     const lane = opts.lane ?? 12
-    const alwaysVisible = opts.alwaysVisible ?? false
 
     const scrolled = new Gtk.ScrolledWindow({
         hscrollbar_policy: opts.hscrollPolicy ?? Gtk.PolicyType.NEVER,
@@ -109,8 +115,38 @@ export function NidaraScrolled(opts: NidaraScrolledOpts): NidaraScrolledResult {
     if (opts.maxContentHeight !== undefined) scrolled.max_content_height = opts.maxContentHeight
     if (opts.propagateNaturalHeight !== undefined) scrolled.propagate_natural_height = opts.propagateNaturalHeight
     if (opts.widthRequest !== undefined) scrolled.width_request = opts.widthRequest
-    if (opts.reserveLane ?? true) opts.child.margin_end = (opts.child.margin_end || 0) + lane
+    // BOTH sides, not just the trailing one. Padding only where the bar sits buys the
+    // hit protection and loses the symmetry: a row's hover/selected fill then ends
+    // `lane` px from one wall and flush against the other, which is what the sidebar
+    // made obvious. Content that already has an inset wide enough to hold the lane
+    // passes reserveLane: false and keeps its own (that is the preferred shape).
+    if (opts.reserveLane ?? true) {
+        opts.child.margin_start = (opts.child.margin_start || 0) + lane
+        opts.child.margin_end = (opts.child.margin_end || 0) + lane
+    }
     scrolled.set_child(opts.child)
+
+    return {
+        widget: attachScrollBar(scrolled, { lane, alwaysVisible: opts.alwaysVisible }),
+        scrolled,
+    }
+}
+
+/**
+ * Give an EXISTING `Gtk.ScrolledWindow` the Nidara bar, returning the overlay to pack
+ * in its place. Split out of NidaraScrolled for the views we do not construct: the
+ * scroller inside a `Gtk.DropDown`'s popover is GTK's, and it was the last place in
+ * the DE still showing GTK's own scrollbar (`adoptGtkScrolled` does the swap).
+ */
+export function attachScrollBar(
+    scrolled: Gtk.ScrolledWindow,
+    opts: { lane?: number, alwaysVisible?: boolean } = {},
+): Gtk.Widget {
+    const lane = opts.lane ?? 12
+    const alwaysVisible = opts.alwaysVisible ?? false
+    // EXTERNAL, always: the point is that GTK never creates a scrollbar widget, so
+    // there is no node left to grow toward the pointer.
+    scrolled.vscrollbar_policy = Gtk.PolicyType.EXTERNAL
 
     // ONE widget, full height, never moved and never resized by scrolling. It is the
     // hit lane and the painted thumb at once.
@@ -118,7 +154,7 @@ export function NidaraScrolled(opts: NidaraScrolledOpts): NidaraScrolledResult {
         css_classes: ["nidara-scroll-bar"],
         halign: Gtk.Align.END,
         valign: Gtk.Align.FILL,
-        width_request: Math.max(lane, THUMB_HOVER),
+        width_request: Math.max(lane, THUMB_HOVER + EDGE_CLEAR),
         margin_top: CORNER_CLEAR, margin_bottom: CORNER_CLEAR,
         can_target: false,
         visible: false,
@@ -193,12 +229,13 @@ export function NidaraScrolled(opts: NidaraScrolledOpts): NidaraScrolledResult {
         // the same CSS colour, so it follows the theme without a second token.
         if (expand > 0.01) {
             cr.setSourceRGBA(col.red, col.green, col.blue, col.alpha * 0.18 * expand)
-            pillPath(cr, w - thumbW, 0, thumbW, h)
+            pillPath(cr, w - EDGE_CLEAR - thumbW, 0, thumbW, h)
             cr.fill()
         }
         cr.setSourceRGBA(col.red, col.green, col.blue, col.alpha)
-        // Pinned to the lane's trailing edge; the rest of the lane is invisible hit area.
-        pillPath(cr, w - thumbW, t.y, thumbW, t.h)
+        // EDGE_CLEAR in from the lane's trailing edge — never flush against the
+        // surface's own border. The rest of the lane is invisible hit area.
+        pillPath(cr, w - EDGE_CLEAR - thumbW, t.y, thumbW, t.h)
         cr.fill()
     })
 
@@ -295,5 +332,74 @@ export function NidaraScrolled(opts: NidaraScrolledOpts): NidaraScrolledResult {
     overlay.connect("destroy", clearHide)
 
     syncPresence()
-    return { widget: overlay, scrolled }
+    return overlay
+}
+
+/**
+ * Swap a GTK-internal `Gtk.ScrolledWindow` for one wearing our bar, in place.
+ *
+ * For views built by GTK itself, where there is no constructor of ours to call. The
+ * scroller keeps every property GTK set on it (a `Gtk.DropDown` sizes its popup with
+ * `max_content_height` + `propagate_natural_height` — verified intact after the swap);
+ * only its parent changes, from the box to an overlay standing in the same slot.
+ *
+ * Returns false and leaves the widget untouched when the tree is not the expected
+ * shape — a GTK version that nests things differently must degrade to GTK's own
+ * scrollbar, never crash a Settings control.
+ */
+export function adoptGtkScrolled(
+    scrolled: Gtk.ScrolledWindow,
+    opts: { lane?: number, alwaysVisible?: boolean } = {},
+): boolean {
+    const parent = scrolled.get_parent() as Gtk.Box | null
+    if (!parent || !(parent instanceof Gtk.Box)) return false
+    // Read the slot BEFORE unparenting — afterwards the sibling links are gone.
+    const prev = scrolled.get_prev_sibling()
+    try {
+        parent.remove(scrolled)
+        const overlay = attachScrollBar(scrolled, opts)
+        if (prev) parent.insert_child_after(overlay, prev)
+        else parent.prepend(overlay)
+        return true
+    } catch (e) {
+        console.warn("[NidaraScrolled] adoptGtkScrolled:", e)
+        return false
+    }
+}
+
+/**
+ * The `Gtk.ScrolledWindow` inside a `Gtk.DropDown`'s popover, or null.
+ * Structure (probed against GTK 4, not assumed): dropdown → GtkPopover → GtkBox →
+ * [GtkBox (search entry), GtkScrolledWindow → GtkListView].
+ */
+function dropDownScroller(drop: Gtk.Widget): Gtk.ScrolledWindow | null {
+    let child = drop.get_first_child()
+    while (child) {
+        if (child instanceof Gtk.Popover) {
+            const box = (child as Gtk.Popover).get_child()
+            let c = box?.get_first_child() ?? null
+            while (c) {
+                if (c instanceof Gtk.ScrolledWindow) return c as Gtk.ScrolledWindow
+                c = c.get_next_sibling()
+            }
+        }
+        child = child.get_next_sibling()
+    }
+    return null
+}
+
+/**
+ * `Gtk.DropDown` with the shell's scroll bar in its popup list.
+ *
+ * Settings uses the NATIVE dropdown on purpose — its popover is a real Wayland popup,
+ * so Hyprland's popup blur frosts it, which a window-overlay list cannot get (see the
+ * dropdown blur tradeoff). That left GTK's scrollbar inside it: visibly a different
+ * component from every other list in the DE, and carrying the same defect — it grows
+ * toward the pointer, so a click near an option's trailing edge lands on the bar.
+ */
+export function NidaraDropDown(props: any = {}): Gtk.DropDown {
+    const drop = new Gtk.DropDown(props)
+    const sw = dropDownScroller(drop)
+    if (sw) adoptGtkScrolled(sw)
+    return drop
 }

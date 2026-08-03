@@ -80,10 +80,14 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     // not an exception to the rule (design-system.md, "Any ScrolledWindow — windows
     // included"). It was the last GTK scrollbar left inside a Nidara window, sitting
     // two panes away from ours and looking like a different component.
-    // The lane is reserved, so a nav row never extends under it: the row's trailing
-    // px must stay clickable even while the bar is revealed.
+    // reserveLane: false because `.nidara-sidebar` carries the inset itself, 12px on
+    // BOTH sides. Reserving it here instead added the lane to the list's own 6px
+    // padding on one side only, so a row's hover/selected fill sat 18px from the
+    // right edge and 6px from the left — the user spotted it immediately, and a
+    // sidebar is where it shows most (narrow capsule, high-contrast selection).
     const { widget: sidebarScrollWidget, scrolled: sidebarScroll } = NidaraScrolled({
         child: sidebar,
+        reserveLane: false,
         cssClasses: ["nidara-window-sidebar-scroll"],
     })
     sidebarScroll.vexpand = true

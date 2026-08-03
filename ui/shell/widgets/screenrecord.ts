@@ -2,6 +2,7 @@ import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import { PANEL_W } from "../common/widget-kit"
 import { NidaraButton } from "../../lib/nidara-kit/button"
+import { NidaraDropDown } from "../../lib/nidara-kit/scrolled"
 import GLib from "gi://GLib"
 import { execAsync } from "ags/process"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
@@ -286,7 +287,7 @@ function audioSourceRow(): Gtk.ListBoxRow {
         : deviceLabels.get(v) ?? v)
 
     const model = new Gtk.StringList({ strings: labels() })
-    const drp = new Gtk.DropDown({ model, valign: Gtk.Align.CENTER })
+    const drp = NidaraDropDown({ model, valign: Gtk.Align.CENTER })
 
     let syncing = false
     const selectStored = () => {

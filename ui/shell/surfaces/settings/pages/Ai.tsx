@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Secret from "gi://Secret"
 import { listGroup, pageBox, toggleRow, createRow, createStackedRow, dropdownRow, staticLabel, actionRow, fieldWithActions } from "../SettingsHelpers"
-import { NidaraButton } from "../../../../lib/nidara-kit"
+import { NidaraButton, NidaraDropDown } from "../../../../lib/nidara-kit"
 import agentConfig from "../../../core/AgentConfig"
 import { AGENT_PROVIDERS, providerById } from "../../../core/AgentProviders"
 import { fetchModels, catalogNeedsKey } from "../../../core/AgentCatalog"
@@ -155,7 +155,7 @@ export default function AiPage() {
     modelEntry.add_controller(modelFocus)
 
     const modelList = new Gtk.StringList({ strings: [] })
-    const modelDrop = new Gtk.DropDown({ model: modelList, visible: false, valign: Gtk.Align.CENTER })
+    const modelDrop = NidaraDropDown({ model: modelList, visible: false, valign: Gtk.Align.CENTER })
     let suppressDropCb = false
     // Index 0 is a PLACEHOLDER, not a model. GtkDropDown builds its own
     // GtkSingleSelection with `autoselect` on, which refuses to hold "nothing

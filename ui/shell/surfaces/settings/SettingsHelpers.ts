@@ -1,7 +1,7 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
 import { makeHSlider } from "../../common/Slider"
-import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton } from "../../../lib/nidara-kit"
+import { NidaraRow, NidaraStackedRow, NidaraList, NidaraButton, NidaraDropDown } from "../../../lib/nidara-kit"
 import { attachTooltip } from "../../common/Tooltip"
 import { t } from "../../core/i18n"
 
@@ -148,11 +148,12 @@ export const dropdownRow = (
     // See toggleRow's `onExt` — same live external-sync contract (guarded, no loop).
     onExt?: (apply: (v: string) => void) => (() => void),
 ) => {
-    // Native Gtk.DropDown: its popover is a separate Wayland surface, so Hyprland's
-    // popup blur frosts it (a window-overlay list would only show the content behind
-    // it, no compositor blur). Styled via `dropdown popover` in _components.scss.
+    // NidaraDropDown = the native Gtk.DropDown (its popover is a separate Wayland
+    // surface, so Hyprland's popup blur frosts it — a window-overlay list would only
+    // show the content behind it, no compositor blur) with our scroll bar swapped into
+    // its popup list. Styled via `dropdown popover` in _components.scss.
     const model = new Gtk.StringList({ strings: opts })
-    const drp = new Gtk.DropDown({ model, valign: Gtk.Align.CENTER })
+    const drp = NidaraDropDown({ model, valign: Gtk.Align.CENTER })
     const initIdx = opts.indexOf(init)
     drp.selected = initIdx >= 0 ? initIdx : 0
     let syncing = false

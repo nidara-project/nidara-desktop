@@ -1,6 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import { listGroup, createRow, pageBox, staticLabel, bindWhileRealized } from "../SettingsHelpers"
-import { showNidaraAlert } from "../../../../lib/nidara-kit"
+import { showNidaraAlert, NidaraDropDown } from "../../../../lib/nidara-kit"
 import hs from "../../../core/HyprlandState"
 import { t } from "../../../core/i18n"
 import Icons from "../../../core/Icons"
@@ -53,7 +53,7 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
         return vs
     }
     let scaleVals = buildScaleStrings(mon.width ?? 0, mon.height ?? 0)
-    const scaleDrp = new Gtk.DropDown({ model: new Gtk.StringList({ strings: scaleVals.map(s => `${s}×`) }), valign: Gtk.Align.CENTER })
+    const scaleDrp = NidaraDropDown({ model: new Gtk.StringList({ strings: scaleVals.map(s => `${s}×`) }), valign: Gtk.Align.CENTER })
     let scaleApplying = false
     const syncScaleSel = () => {
         const cur = parseFloat(String(monitorConfig.getScale(name)))
@@ -111,10 +111,10 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
         let modeApplying = false
         let prevMode = `${curW}x${curH}@${curHz}`
 
-        const resDrp = new Gtk.DropDown({ model: new Gtk.StringList({ strings: resList.map(r => `${r.w} × ${r.h}`) }), valign: Gtk.Align.CENTER })
+        const resDrp = NidaraDropDown({ model: new Gtk.StringList({ strings: resList.map(r => `${r.w} × ${r.h}`) }), valign: Gtk.Align.CENTER })
         resDrp.selected = Math.max(0, resList.findIndex(r => r.w === curW && r.h === curH))
 
-        const hzDrp = new Gtk.DropDown({ model: new Gtk.StringList({ strings: hzForRes(resDrp.selected).map(hz => `${hz} Hz`) }), valign: Gtk.Align.CENTER })
+        const hzDrp = NidaraDropDown({ model: new Gtk.StringList({ strings: hzForRes(resDrp.selected).map(hz => `${hz} Hz`) }), valign: Gtk.Align.CENTER })
         const hzInit = hzForRes(resDrp.selected).findIndex(hz => hz === curHz)
         hzDrp.selected = hzInit >= 0 ? hzInit : 0
 
@@ -202,7 +202,7 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
     }
 
     const rotModel = new Gtk.StringList({ strings: ROTATIONS })
-    const rotDrp = new Gtk.DropDown({ model: rotModel, valign: Gtk.Align.CENTER })
+    const rotDrp = NidaraDropDown({ model: rotModel, valign: Gtk.Align.CENTER })
     const currentTransform = monitorConfig.getTransform(name)
     rotDrp.selected = currentTransform < ROTATIONS.length ? currentTransform : 0
 
@@ -254,7 +254,7 @@ function buildMonitorSection(mon: any, availableModes: string[]): Gtk.Widget {
         t("settings.display.vrr.fullscreen"),
     ]
     const vrrModel = new Gtk.StringList({ strings: VRR_OPTS })
-    const vrrDrp = new Gtk.DropDown({ model: vrrModel, valign: Gtk.Align.CENTER })
+    const vrrDrp = NidaraDropDown({ model: vrrModel, valign: Gtk.Align.CENTER })
     const currentVrr = monitorConfig.vrr
     vrrDrp.selected = currentVrr < VRR_OPTS.length ? currentVrr : 0
 

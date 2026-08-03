@@ -124,7 +124,11 @@ selection {
 /* Navigation sidebar list (icon+label rows, single-select → accent). */
 .nidara-sidebar {
     background: transparent;
-    padding: 6px;
+    // 12px sides = the NidaraScrolled lane, so the scroll bar lives inside the list's
+    // own inset instead of being added to one side of it (window.ts passes
+    // reserveLane: false). Symmetric is the point: a row's hover/selected fill has to
+    // read the same distance from both capsule walls.
+    padding: 6px 12px;
 
     > row {
         @include nidara-reset;
@@ -144,7 +148,9 @@ selection {
     // Override the row interaction model — it must be inert.
     > row.sidebar-divider {
         min-height: 0;
-        margin: 7px 12px;
+        // Spans exactly the row width now that the list carries the 12px inset — a
+        // separator that stops short of the rows it separates reads as a third margin.
+        margin: 7px 0;
         padding: 0;
         background: transparent;
         box-shadow: none;
