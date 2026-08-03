@@ -2101,7 +2101,7 @@ bookkeeping) → `set_child`/`set_parent` → `sideFor(position)` for the arrow 
 function putting `BUF + PAD (+ ARROW_H on the arrow side)` on four margins.
 
 **The evidence it should be one component: the `PAD` line had to be hand-edited in all three files**
-when the dense-panel halo became `PANEL_INSET`. Nothing links them, so a fourth bubble menu would
+when the dense-panel halo became `rowInsetFor()`. Nothing links them, so a fourth bubble menu would
 start from a copy of whichever one its author found first.
 
 The extraction is `GlassBubbleMenu({ anchor, position, buildRows })` in `ui/shell/common/` (shell,

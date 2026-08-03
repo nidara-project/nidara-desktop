@@ -9,7 +9,7 @@ import Cairo from "gi://cairo"
 import Gio from "gi://Gio"
 
 import SquircleContainer, { GLASS_INSET } from "../../common/SquircleContainer"
-import { RADIUS, PANEL_INSET } from "../../../lib/tokens"
+import { RADIUS, rowInsetFor } from "../../../lib/tokens"
 import { CAPSULE_BORDER } from "./capsule"
 import Theme from "../../core/ThemeManager"
 import appService from "../../core/AppService"
@@ -102,12 +102,12 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
   // Measurement cache — populated after first layout; used to cap visible icons
   let cachedMaxIcons: number | null = null
   const capsuleRefs = new Map<string, Gtk.Widget>()
-  // PANEL_INSET from the GLASS on all four sides (the horizontal is re-applied per
+  // rowInsetFor(lg) from the GLASS on all four sides (the horizontal is re-applied per
   // panel below, since a flush panel takes it over). See tokens.ts: the row hover
   // fill spans this box, so this is the fill's halo, and it has to be uniform.
   const expansionInner = new Gtk.Box({
-      margin_top: PANEL_INSET + GLASS_INSET, margin_bottom: PANEL_INSET + GLASS_INSET,
-      margin_start: PANEL_INSET + GLASS_INSET, margin_end: PANEL_INSET + GLASS_INSET,
+      margin_top: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_bottom: rowInsetFor(RADIUS.lg) + GLASS_INSET,
+      margin_start: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_end: rowInsetFor(RADIUS.lg) + GLASS_INSET,
   })
   // Pop animation (grow toward the anchor + fade) shared by every overlay —
   // the wrapper is the variable, so all the existing alignment/margin/region
@@ -469,8 +469,8 @@ export default function Bar(gdkmonitor: Gdk.Monitor) {
       // allocation (drawSquircle paints the glass in from the rect), so flush-to-rect
       // hangs the content outside the shape — and puts a scroll lane's pill 2px nearer
       // the curve than its clearance assumes, which is what clipped the clipboard bar.
-      expansionInner.margin_start = flush ? GLASS_INSET : PANEL_INSET + GLASS_INSET
-      expansionInner.margin_end = flush ? GLASS_INSET : PANEL_INSET + GLASS_INSET
+      expansionInner.margin_start = flush ? GLASS_INSET : rowInsetFor(RADIUS.lg) + GLASS_INSET
+      expansionInner.margin_end = flush ? GLASS_INSET : rowInsetFor(RADIUS.lg) + GLASS_INSET
       // Direct pill→pill switch (one click, no dismissal in between): the
       // capsule is still fully revealed at the PREVIOUS anchor's position, so
       // snap it to the hidden state first — otherwise the new content paints

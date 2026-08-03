@@ -11,7 +11,7 @@ import registry, { widgetAvailable, watchWidgetAvailability } from "../../widget
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
 import SquircleContainer, { Shape, resolveDrawParams, GLASS_INSET } from "../../common/SquircleContainer"
-import { RADIUS, PANEL_INSET } from "../../../lib/tokens"
+import { RADIUS, rowInsetFor } from "../../../lib/tokens"
 import { drawSquircle, hexToFloatRgb } from "../../common/DrawingUtils"
 import Theme from "../../core/ThemeManager"
 import { DANGER_HEX } from "../../../lib/status-colors"
@@ -324,7 +324,7 @@ export default function IslandGrid() {
         const cellH = rows * (UNIT + GAP) - GAP
 
         // Header: back button + title — lives inside the squircle for glass contrast
-        // The header is a row like the ones below it: its own fill keeps PANEL_INSET from
+        // The header is a row like the ones below it: its own fill keeps the same inset from
         // the glass, and its content takes the same 12 the detail rows use, so the title
         // and every row title share one left edge (they did not — 10 against 6).
         const backBtnChild = new Gtk.Box({ spacing: 8, margin_start: 12, margin_end: 12, margin_top: 12, margin_bottom: 12 })
@@ -332,7 +332,7 @@ export default function IslandGrid() {
         backBtnChild.append(new Gtk.Label({ label: w.name, css_classes: ["cc-detail-title"], halign: Gtk.Align.START }))
         const backBtn = new Gtk.Button({
             child: backBtnChild, css_classes: ["cc-detail-back-btn"], halign: Gtk.Align.START,
-            margin_start: PANEL_INSET + GLASS_INSET, margin_top: PANEL_INSET + GLASS_INSET,
+            margin_start: rowInsetFor(RADIUS.lg) + GLASS_INSET, margin_top: rowInsetFor(RADIUS.lg) + GLASS_INSET,
         })
         backBtn.connect("clicked", hideDetail)
 
@@ -343,9 +343,9 @@ export default function IslandGrid() {
             hexpand: true,
             // Same halo as every other list of rows on a radius-lg surface. This island is
             // a FIXED 356px wide, so the inset is paid out of the row: 340 → 328 usable.
-            margin_start: PANEL_INSET + GLASS_INSET,
-            margin_end: PANEL_INSET + GLASS_INSET,
-            margin_bottom: PANEL_INSET + GLASS_INSET,
+            margin_start: rowInsetFor(RADIUS.lg) + GLASS_INSET,
+            margin_end: rowInsetFor(RADIUS.lg) + GLASS_INSET,
+            margin_bottom: rowInsetFor(RADIUS.lg) + GLASS_INSET,
         })
         panel.append(w.buildCCDetail(hideDetail))
 

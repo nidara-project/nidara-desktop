@@ -15,7 +15,7 @@ import Theme from "../core/ThemeManager"
 import { attachTooltip } from "../common/Tooltip"
 import { menuRow, menuSeparator } from "../common/MenuRow"
 import { sideFor, paintGlassBubble, ARROW_H, BUF, type ArrowSide } from "../common/GlassBubble"
-import { PANEL_INSET } from "../../lib/tokens"
+import { RADIUS, rowInsetFor } from "../../lib/tokens"
 
 // NO bar variant. The Activity Island already carries the player as an activity
 // (IslandActivities' mediaActivity: cover art in the compact capsule the moment
@@ -127,7 +127,7 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
         srcPopover.set_has_tooltip(false)
         const grid = new Gtk.Grid()
         srcDraw = new Gtk.DrawingArea({ hexpand: true, vexpand: true, halign: Gtk.Align.FILL, valign: Gtk.Align.FILL })
-        srcDraw.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, srcSide, { radiusMax: 16 }))
+        srcDraw.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, srcSide, { radiusMax: RADIUS.md }))
         grid.attach(srcDraw, 0, 0, 1, 1)
         srcRows = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nidara-menu"] })
         grid.attach(srcRows, 0, 0, 1, 1)
@@ -139,7 +139,7 @@ export function buildMediaDetailPanel(widthRequest: number): Gtk.Widget {
     const layoutSourceMenu = () => {
         if (!srcRows) return
         // Same halo as every other menu of rows — see tokens.ts.
-        const PAD = PANEL_INSET
+        const PAD = rowInsetFor(RADIUS.md)
         srcRows.margin_top    = BUF + PAD + (srcSide === "top"    ? ARROW_H : 0)
         srcRows.margin_bottom = BUF + PAD + (srcSide === "bottom" ? ARROW_H : 0)
         srcRows.margin_start  = BUF + PAD + (srcSide === "left"   ? ARROW_H : 0)

@@ -290,37 +290,56 @@ Swept 2026-08-03. Each step is +4, and horizontal is always +4 over vertical:
 
 | Surface | v / h | Who |
 |---|---|---|
-| **Dense panel** | **12 / 12** (`PANEL_INSET`, from the GLASS) | bar expansion panels (incl. the window menu, which inherits `expansionInner`), the **system menu**, the CC context menu, the **CC detail panel**, the three `GlassBubble` menus (dock item, app-grid item, media source), CC/NC lists, `widgets/*` |
+| **A list of rows on a shell surface** | **`rowInsetFor(R)` = R − `sm`, uniform, from the GLASS** — `lg` 24 → **14**, `md` 16 → **6** | bar expansion panels (incl. the window menu, which inherits `expansionInner`), the **system menu**, the CC context menu, the **CC detail panel**, the clipboard, the three `GlassBubble` menus (dock item, app-grid item, media source) |
 | **Window row** | **12 / 16** | `NidaraRow`, and hand-rolled rows inside Settings |
 | **Island** | **16 / 20** | all five island modes |
 
-**The dense panel's inset is UNIFORM, and it is measured from the glass** (`PANEL_INSET` in
-`ui/lib/tokens.ts`; every consumer writes `PANEL_INSET + GLASS_INSET` because the box is laid out
-against the widget rect). The +4 horizontal of the other two tiers is right while the padding is a
-**text** inset — but a dense panel's rows carry a hover fill that *spans the box*, and at that
-point the padding is no longer text inset, it is **the fill's margin**. It ran `12 / 6` (measured
-from the glass) until the user caught the halo being twice as wide at the sides as at the ends;
-no menu system runs 2:1 (AppKit's highlight is ~5/4pt, Windows 11 flyouts 4/4). The text's own
-breathing room lives on the row — `.nidara-menu-row` is `7px 12px`.
+**That first row is not a tier — it is a formula, `rowInsetFor()` in `ui/lib/tokens.ts`.** A row's
+hover fill spans its container, so the container's padding IS the fill's margin, and two curves
+read as parallel only at **CONCENTRICITY**: `inset = surface radius − row radius`. Same rule that
+derives `sm` from the `.nidara-list` inset, one level up. So the inset is not a number to remember,
+it is a consequence of the corner it sits in — and that is why one constant looked right on the bar
+and wrong in a dock menu: `12` inside a `md` corner is twice the air a 16-radius curve asks for
+(user-caught 2026-08-03, second round).
+
+**The row's radius is the fixed side of the equation.** Varying a row's corner per container would
+make the same menu row look different in the dock and in the system menu — a worse inconsistency
+than any halo. Rows stay at `sm`; the container yields. Consumers write
+`rowInsetFor(R) + GLASS_INSET`, because the box is laid out against the widget rect.
+
+Uniform on all four sides, too. The +4 horizontal of the other two tiers is right while the padding
+is a **text** inset; once the fill spans the box it is a margin, and it ran `12 / 6` until the user
+caught the halo being twice as wide at the sides as at the ends. No menu system runs 2:1 (AppKit's
+highlight is ~5/4pt, Windows 11 flyouts 4/4). The text's own breathing room lives on the row —
+`.nidara-menu-row` is `7px 12px`.
+
+⚠️ **The corner's EXPONENT matters as much as its radius**, and the formula assumes the strict case
+(a circle: `perfect: true`, `cr.arc`, or a CSS `border-radius`). A squircle with a high `n` is
+nearly square and leaves slack a circle does not — Prism's `n: 4.5` panel at `xl` is comfortable on
+8, far under the 22 concentricity would ask for. This is `cornerClearFor`'s lesson one level up:
+apply it where the corner is really round, and measure where it is not.
 
 **A panel's header is a row too.** In the CC detail panel the back-button header sat at 10 from
 the glass while the rows under it sat at 6 — two axes inside one card. The header's fill now keeps
-`PANEL_INSET` like any row, and its *content* takes the same 12 the detail rows use, so the title
+its inset like any row, and its *content* takes the same 12 the detail rows use, so the title
 and every row title share one left edge. The island is a fixed 356px, so this inset is paid out of
 the row (340 → 328 usable) — a fixed-width surface is a reason to know the cost, not to keep two
 axes.
 
 **A bubble is not a different kind of menu.** The dock item menu, the app-grid item menu and the
 media source menu are `GlassBubble` popovers rather than squircle cards, and they had their own
-`PAD = 5` — a *fifth* halo next to the panels' 12. They take `PANEL_INSET` too; the arrow changes
-the silhouette, not what the padding around a list of rows means. (`radiusMax` in those calls is
-**not** a ladder rung and must not be swept onto one — `paintGlassBubble` computes a near-pill
-`min(w,h)/2` and `radiusMax` only caps it.)
+`PAD = 5` — a *fifth* halo. They go through `rowInsetFor()` like everything else; the arrow changes
+the silhouette, not what the padding around a list of rows means. Their corner is `md` and
+**circular** (`bubblePath` draws `cr.arc`), so the formula gives 6 — which is also why the flat 12
+they briefly had read as a hole. (`radiusMax` in those calls is **not** a ladder rung and must not
+be swept onto one — `paintGlassBubble` computes a near-pill `min(w,h)/2` and `radiusMax` only caps
+it — but it *is* the surface radius to feed `rowInsetFor`, so the two now come from one token.)
 
-**The one deliberate exception: the Settings dropdown popover**, because there the geometry is an
-ALIGNMENT AXIS and the axis wins. That list is the trigger *opened*, laid out at the trigger's
-width, so an option has to sit on the same left edge as the value it replaces: the trigger puts
-its label at 16 (2px border + 14 padding), so the popover is `1 (border) + 5 (contents) + 10
+**The Settings dropdown popover satisfies both rules at once**, which is the sign the formula is
+right. Concentricity gives 6 (`md` 16 − `sm` 10); the ALIGNMENT AXIS says the list is the trigger
+*opened*, laid out at the trigger's width, so an option must sit on the same left edge as the value
+it replaces — the trigger puts its label at 16 (2px border + 14 padding), so the popover is
+`1 (border) + 6 (contents) + 9
 (row)`. It was landing at 23 against that 16 — a 7px sideways jump on open, which on a narrow
 list reads as "why is this padding so big" (user-caught 2026-08-03). Three numbers, one axis:
 move one and the value appears to slide as the list opens.

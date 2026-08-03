@@ -581,12 +581,14 @@ dropdown popover {
         border: 1px solid var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
         border-radius: $nidara-radius-md;
         box-shadow: var(--nidara-shadow-popover);
-        // ALIGNMENT AXIS, not a panel inset: the list is the trigger OPENED, and it is
-        // laid out at the trigger's width, so an option has to sit on the same left edge
-        // as the value it replaces. The trigger puts its label at 16 (2px border + 14
-        // padding); here that is 1 (border) + 5 + the row's 10. Move any of the three
-        // and the value appears to jump sideways as the list opens.
-        padding: 5px;
+        // Two constraints, one solution. (1) CONCENTRIC: this is a radius-md corner, so
+        // a radius-sm row sits parallel at 16 − 10 = 6 (see rowInsetFor in tokens.ts).
+        // (2) ALIGNMENT AXIS: the list is the trigger OPENED, laid out at the trigger's
+        // width, so an option must sit on the same left edge as the value it replaces —
+        // the trigger's label is at 16 (2px border + 14 padding), and here that is
+        // 1 (border) + 6 + the row's 9. Move any of the three and the value jumps
+        // sideways as the list opens.
+        padding: 6px;
         // overflow: hidden not supported in GTK4 CSS — clipping is handled by border-radius
     }
 
@@ -610,7 +612,8 @@ dropdown popover {
 
         > row {
             border-radius: $nidara-radius-sm;
-            padding: 6px 10px;
+            // 9, not 10: it is the second term of the axis above (1 + 6 + 9 = 16).
+            padding: 6px 9px;
             min-height: 0;
             color: var(--nidara-text);
             font-size: $fs-small;

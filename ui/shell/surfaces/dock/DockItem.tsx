@@ -22,7 +22,7 @@ import { safeDisconnect } from "../../core/signals"
 import { attachTooltip } from "../../common/Tooltip"
 import { renderMenuModel } from "../../common/NidaraMenu"
 import { sideFor, paintGlassBubble, ARROW_H, BUF } from "../../common/GlassBubble"
-import { PANEL_INSET } from "../../../lib/tokens"
+import { RADIUS, rowInsetFor } from "../../../lib/tokens"
 
 // hypr kept as alias for hs to minimise diff surface in this file
 const hypr = hs
@@ -531,13 +531,13 @@ export function DockItem(
             hexpand: true, vexpand: true,
             halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
         })
-        da.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, side, { radiusMax: 16 }))
+        da.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, side, { radiusMax: RADIUS.md }))
         grid.attach(da, 0, 0, 1, 1)
 
         menuRows = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nidara-menu"] })
         // Same halo as every other menu of rows — see tokens.ts. A bubble is not a
         // different kind of menu just because it carries an arrow.
-        const PAD = PANEL_INSET
+        const PAD = rowInsetFor(RADIUS.md)
         menuRows.margin_top    = BUF + PAD + (side === "top"    ? ARROW_H : 0)
         menuRows.margin_bottom = BUF + PAD + (side === "bottom" ? ARROW_H : 0)
         menuRows.margin_start  = BUF + PAD + (side === "left"   ? ARROW_H : 0)

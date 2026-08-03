@@ -41,23 +41,40 @@ export const RADIUS = {
  */
 
 /**
- * Dense panel inset — how far a row's hover fill sits from the panel's **VISIBLE**
- * edge, on all four sides.
+ * How far a row's hover fill sits from a surface's **VISIBLE** edge — on all four
+ * sides, and **derived from that surface's own corner**:
  *
- * Uniform on purpose. The three-tier container padding (`design-system.md`) puts
- * +4 on the horizontal, and that is right while the padding is a *text* inset —
- * but the moment a child's hover fill spans the container, the padding stops being
- * text inset and becomes the FILL'S MARGIN, and a halo twice as wide at the sides
- * as at the ends reads as a mistake (measured 12 / 6 before this; no menu system
- * runs 2:1 — AppKit is ~5/4, Windows 11 flyouts 4/4). The text's own breathing
- * room lives on the row (`.nidara-menu-row` is `7px 12px`).
+ *     inset = surface radius − the row's radius
+ *
+ * This is CONCENTRICITY, the same rule that derives `sm` from the `.nidara-list`
+ * inset one level down: two curves read as parallel only when the inner radius is
+ * the outer one minus the gap. So the inset is not a number to remember, it is a
+ * consequence of the corner it sits in — `lg` 24 → 14, `md` 16 → 6. A 12 inside a
+ * 16 corner (what the three bubble menus had) leaves twice the air the curve asks
+ * for, and it reads as exactly that: a hole.
+ *
+ * **The row's radius is the fixed side of the equation, not the free one.** Varying
+ * a row's corner per container would make the same menu row look different in the
+ * dock and in the system menu — a worse inconsistency than any halo. Rows stay at
+ * `sm`; the container yields.
+ *
+ * Uniform on all four sides, too. The three-tier container padding
+ * (`design-system.md`) puts +4 on the horizontal, which is right while the padding
+ * is a *text* inset — but once a child's fill spans the container, the padding is
+ * the FILL'S MARGIN, and a halo twice as wide at the sides as at the ends reads as
+ * a mistake (it was 12/6; no menu system runs 2:1 — AppKit ~5/4, Windows 11
+ * flyouts 4/4). The text's own breathing room lives on the row.
  *
  * ⚠️ Measured from the GLASS, not from the widget rect: `SquircleContainer` paints
  * the glass `GLASS_INSET` (2px) inside its allocation, so a box aligned to the rect
- * is that much closer to the visible edge than it looks in the source. Every dense
- * panel writes `PANEL_INSET + GLASS_INSET` and says so — that discrepancy is what
- * left the system menu 2px tighter than its siblings while its comment claimed
- * parity.
+ * is that much closer to the visible edge than it looks in the source. Callers
+ * write `rowInsetFor(R) + GLASS_INSET` and say so — that discrepancy is what left
+ * the system menu 2px tighter than its siblings while its comment claimed parity.
+ *
+ * ⚠️ The corner's EXPONENT matters as much as its radius, and this formula assumes
+ * the strict case (a circle). A squircle with a high `n` is nearly square and leaves
+ * slack a circle does not — Prism's `n: 4.5` panel at `xl` is comfortable on 8, far
+ * under the 22 this would ask for. Only apply it where the corner is really round.
  */
-export const PANEL_INSET = 12
+export const rowInsetFor = (surfaceRadius: number) => surfaceRadius - RADIUS.sm
 

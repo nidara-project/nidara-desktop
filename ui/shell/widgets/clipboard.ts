@@ -7,7 +7,7 @@ import { GLASS_INSET } from "../common/SquircleContainer"
 import { menuRow, menuSeparator } from "../common/MenuRow"
 import IconButton from "../common/IconButton"
 import { NidaraScrolled } from "../../lib/nidara-kit"
-import { RADIUS, PANEL_INSET } from "../../lib/tokens"
+import { RADIUS, rowInsetFor } from "../../lib/tokens"
 import { PANEL_W } from "../common/widget-kit"
 import { AtomicWidget, WidgetSize } from "../surfaces/control-center/Types"
 import { buildCapsuleInner, wrapCapsuleTile } from "../surfaces/control-center/Toggles"
@@ -71,14 +71,14 @@ const MAX_ROWS = 200
 // What Bar.tsx gives every other expansion panel. We take the HORIZONTAL over
 // (barExpandedFlush) so the scroll can reach the panel edge, then re-apply it to the
 // content. Flush leaves the box at GLASS_INSET, so this is measured from the glass —
-// which is what PANEL_INSET already means. Same halo as every other dense panel.
-const PANEL_PAD = PANEL_INSET
+// which is what rowInsetFor() already means. Same halo as every other lg surface.
+const PANEL_PAD = rowInsetFor(RADIUS.lg)
 
 // How far this panel's content already starts inside the capsule's VISIBLE corner —
 // the vertical margin Bar.tsx keeps on `expansionInner` even when flush, measured from
 // the widget rect, less the glass that SquircleContainer paints inside it. Feeds the
 // scroll's corner clearance; it moves with Bar.tsx, so derive it, never copy it.
-const PANEL_TOP_INSET = PANEL_INSET
+const PANEL_TOP_INSET = rowInsetFor(RADIUS.lg)
 
 async function listEntries(): Promise<ClipEntry[]> {
     try {
