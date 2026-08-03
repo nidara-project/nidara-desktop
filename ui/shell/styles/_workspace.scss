@@ -14,14 +14,14 @@
 .workspace-overview {
     background: transparent;
     border: none;
-    padding: 32px;
+    padding: $space-8;
     box-shadow: none;
 }
 
 /* --- Workspace Items --- */
 .wo-item {
-    padding: 16px;
-    border-radius: 24px;
+    padding: $space-4;
+    border-radius: $nidara-radius-lg;
     background-color: var(--nidara-surface-back);
     border: 1px solid var(--nidara-border);
     transition: background-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1);
@@ -85,7 +85,7 @@
 .wo-btn {
     @include nidara-reset;
     padding: 0;
-    border-radius: 24px;
+    border-radius: $nidara-radius-lg;
 
     &:focus,
     &:active {

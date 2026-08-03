@@ -14,7 +14,7 @@ const MAX_FILE_RESULTS = 6
 
 function AppResultRow(appData: AppData): Gtk.ListBoxRow {
     const box = new Gtk.Box({ css_classes: ["prism-result-content"], spacing: 12, margin_start: 12, margin_end: 12, margin_top: 8, margin_bottom: 8 })
-    const icon = new Gtk.Image({ pixel_size: 32, css_classes: ["prism-result-icon"] })
+    const icon = new Gtk.Image({ pixel_size: 32 })
     const resolved = appService.getIconName(appData.icon)
     if (resolved && (resolved.startsWith("/") || resolved.startsWith("file://"))) icon.file = resolved.replace("file://", "")
     else icon.icon_name = resolved || "application-x-executable"
@@ -32,7 +32,7 @@ function AppResultRow(appData: AppData): Gtk.ListBoxRow {
 function FileResultRow(uri: string, displayName: string, mimeType: string): Gtk.ListBoxRow {
     const box = new Gtk.Box({ css_classes: ["prism-result-content"], spacing: 12, margin_start: 12, margin_end: 12, margin_top: 8, margin_bottom: 8 })
 
-    const icon = new Gtk.Image({ pixel_size: 32, css_classes: ["prism-result-icon"] })
+    const icon = new Gtk.Image({ pixel_size: 32 })
     try {
         const gicon = Gio.content_type_get_icon(mimeType)
         if (gicon) icon.gicon = gicon

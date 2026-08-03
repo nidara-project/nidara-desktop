@@ -2037,36 +2037,41 @@ Not a bug list — conscious tradeoffs to pay down opportunistically:
 3. **Don't refactor as a side-effect of an unrelated change** — drive-by fixes tend to be
    partial and create drift.
 
-### 47. Design-token audit — RADII DONE, TSX spacing still open (2026-08-03)
+### 47. Design-token audit — CLOSED for `ui/shell` (2026-08-03)
 Raised by the user reviewing the scroll bar: *"parece que hemos puesto un valor distinto cada
 vez que hemos hecho algo"* — the specific catch was the bar-expansion capsule at radius **20**
 while windows are **24**. Correct.
 
-**✅ Radii — closed.** One ladder in `ui/lib/tokens.ts` mirrored by `--nidara-radius-*`; zero
-radius literals left in TS/TSX; `64 → 32` (Workspace Overview), `20 → 24` (bar expansion + CC
-context menu), new `xl: 32`. Full rationale — including why the ladder is deliberately NOT on
-the 4px spacing scale and why `sm` is derived from the card inset — is in `design-system.md`
-under "Radii — ONE ladder".
+**✅ Radii — closed, TS/TSX *and* SCSS.** One ladder in `ui/lib/tokens.ts` mirrored by
+`--nidara-radius-*`; **zero radius literals in `ui/shell`** (`64 → 32` Workspace Overview,
+`20 → 24` bar expansion + CC context menu, `18 → md` app-grid tiles, `14 → md` popover,
+`12 → md` ws-strip tile, `8 → xs` calendar cell, new `xl: 32`). Two literals turned out to be
+**stadiums, not rungs** (`pill`, no pixels changed), and two entries were rounding nothing and
+were deleted: the `--nidara-radius-squircle: 28%` token (zero consumers, ever) and
+`.prism-result-icon` (`border-radius` on a background-less `Gtk.Image`). Rationale — why the
+ladder is deliberately NOT on the 4px spacing scale, why `sm` is derived from the card inset,
+and the stadium rule — is in `design-system.md` under "Radii — ONE ladder".
 
-**✅ Spacing, SCSS side — closed.** Only 8 of 43 margins were off-scale; swept to `$space-*`.
-Two size drifts fixed (`.agent-reset/.agent-send` 30→28, `.bar-popover-value` 38→40).
+**✅ Spacing — closed.** SCSS margins (8 of 43 off-scale) in the first pass; then the TSX side,
+**164 off-scale values down to 4**, all derived and commented; then SCSS container padding.
+The structural fix underneath it: **row heights are declared** (48 one-line / 72 two-line via
+`min-height` on the kit component's own classes, which is why the same row measured 43px on
+Network and 47px on Appearance), and container padding sits on three tiers — dense panel 8/12,
+window row 12/16, island 16/20.
 
-**🔴 Still open: the TSX side — 164 off-scale `margin_*`/`spacing` values across 30+ files.**
-`6 ×33, 10 ×66, 14 ×44, 18 ×7, 22 ×5` — every one of them `4n+2`, i.e. a complete second
-ladder used ~155 times, not noise. **Do not sweep it as a cleanup**: it changes the density of
-the entire shell at once, and it cannot be verified in one look.
+**The rule that governs any future sweep here: the token for a control is the HEIGHT (24 compact
+/ 32 control / ~48 row), not the padding.** `nidara-kit/row.ts`'s `margin_top/bottom: 14` is
+what lands a `$fs-small` row at 48; `button.nidara-btn`'s `padding: 5px 14px` and the alert
+footer's `14px` are the same shape; the switch's `slider { margin: 3px }` is (24 trough − 18
+slider)/2. Snapping those to the 4px scale resizes the shell instead of tidying it.
 
-The finding that should drive it, and the reason the SCSS sweep deliberately left most padding
-alone: **most of these are not spacing at all, they are arithmetic toward a target box height.**
-`nidara-kit/row.ts` is the case that matters — the universal row is `margin_start/end: 16`
-(on scale) and `margin_top/bottom: 14` (off), and 14 is what lands a `$fs-small` row at ~48px,
-the standard list-row height. Same shape as `button.nidara-btn`'s `padding: 5px 14px`, whose own
-comment says it exists to hit the NidaraButton box height, and as the switch's `slider { margin:
-3px }` (24px trough − 18px slider). **The token for that layer is the HEIGHT (24 compact / 32
-control / ~48 row), not the padding.**
+Untouched on purpose and still correct: optical nudges on text (`_bar.scss` `margin-top: 5px`,
+`.rec-elapsed-big` 6/2), derived sizes (`.accent-circle-btn` 30 = 24 swatch + 3+3 border), and
+alignment axes (Prism's `22`).
 
-**So the next pass settles the row/control heights FIRST**, then sweeps the ~155 remaining
-literals against those, rather than against an abstract "multiple of 4" that would silently
-restyle every row in Settings. Untouched on purpose and still correct: optical nudges on text
-(`_bar.scss` `margin-top: 5px`, `.rec-elapsed-big` 6/2) and derived sizes
-(`.accent-circle-btn` 30 = 24 swatch + 3+3 border).
+**What is genuinely left:**
+- **The bar capsule** — `Bar.tsx`'s `margin 14` and `_bar.scss`'s `padding: 6px 14px` are one
+  unit; they move together or not at all, and moving them changes the bar's height.
+- **The greeter and lockscreen bundles**, which carry standalone stylesheets that never import
+  the token layer (11 literal paddings, 1 literal radius). Not reachable from `ui/shell`'s
+  tokens without giving those bundles the scale first — and only verifiable in a VM.

@@ -131,6 +131,9 @@ selection {
 /* Boxed list container — dense frosted card holding .nidara-row children. */
 .nidara-list {
     @include material-card;
+    /* ⚠️ Load-bearing: a row sits 5px inside this card (1px border + this 3px + 1px row
+       margin), and radius-sm 10 is DERIVED from that inset against the card's radius-md
+       16. Change this 3 and `sm` has to be re-derived in ui/lib/tokens.ts. */
     padding: 3px;
     box-shadow: none;
 }
@@ -350,7 +353,7 @@ popover.nidara-popover {
     > contents {
         /* Fallback ensures visible background even before --nidara-popover-bg token is set */
         background-color: var(--nidara-popover-bg, rgba(36, 36, 36, 0.82));
-        border-radius: 14px;
+        border-radius: $nidara-radius-md;
         border: 1px solid var(--nidara-popover-border, rgba(255, 255, 255, 0.14));
         box-shadow: var(--nidara-shadow-popover);
         padding: 0;

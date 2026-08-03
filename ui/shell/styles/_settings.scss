@@ -188,7 +188,7 @@ button.nidara-breadcrumb-link {
 
 // ── Sidebar search slot (search box pinned above the nav list) ─────────────────
 .nidara-sidebar-top {
-    padding: 8px 8px 4px;
+    padding: $space-2 $space-2 $space-1;
 }
 
 // ── Search entry ──────────────────────────────────────────────────────────────
@@ -235,7 +235,9 @@ stack.settings-stack {
 // ── Page typography ───────────────────────────────────────────────────────────
 .settings-page {
     background: transparent;
-    padding: 32px 40px 40px;
+    // Bottom > top on purpose: the last card needs room to clear the window's own
+    // rounded bottom corners, the first one starts under a header that already has its own.
+    padding: $space-8 $space-10 $space-10;
 }
 
 // Page titles now live in the window header breadcrumb (Settings.tsx), so the
@@ -309,7 +311,7 @@ button.accent-circle-btn {
 // scroll out of the viewport, showing a cut-off rectangle (the bug this fixes).
 scrolledwindow.apps-list-scroll {
     @include material-card;
-    padding: 3px;
+    padding: 3px;   // same card inset as .nidara-list — see the note there before changing it
 
     // GtkListBox is scrollable → no GtkViewport; the list is a direct child.
     // Reset it (and a viewport defensively) so the card is the only painted
@@ -343,8 +345,8 @@ scrolledwindow.apps-list-scroll {
     background: var(--nidara-surface-back);
     border: 1px solid var(--nidara-border);
     border-radius: $nidara-radius-md;
-    padding: 24px 32px 20px;
-    margin-bottom: 8px;
+    padding: $space-6 $space-8 $space-5;
+    margin-bottom: $space-2;
 }
 
 .region-clock-preview {
@@ -366,7 +368,7 @@ window.nidara-settings-window button:focus-visible {
 // Avatar + change-button rows: no row hover, a touch of breathing room on top.
 row.users-avatar-row {
     &:hover { background-color: transparent; }
-    &:first-child { padding-top: 18px; }
+    &:first-child { padding-top: $space-4; }
 }
 
 .users-avatar {
@@ -471,7 +473,7 @@ button.settings-preset-btn {
 
 // ── Wallpaper preview ─────────────────────────────────────────────────────────
 row.wallpaper-preview-row {
-    padding: 12px;
+    padding: $space-3;
     &:hover { background-color: transparent; }
 
     picture.wallpaper-preview {
@@ -533,7 +535,10 @@ entry.nidara-alert-entry {
 .nidara-alert-buttons {
     button.nidara-alert-btn {
         @include nidara-reset;
-        padding: 14px 16px;
+        // 14 is arithmetic toward a height, not a gap: 14 + 14 + the ~20px line box of
+        // $fse-small lands the dialog's footer buttons on the 48px row height. Snapping
+        // it to $space-4 would make them 52. Same reasoning as nidara-kit/row.ts.
+        padding: 14px $space-4;
         font-size: $fse-small;
         font-weight: $fw-medium;
         color: var(--nidara-text);

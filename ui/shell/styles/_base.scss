@@ -45,7 +45,9 @@
     --nidara-radius-sm: 10px;
     --nidara-radius-xs: 6px;
     --nidara-radius-pill: 9999px;
-    --nidara-radius-squircle: 28%;
+    /* (--nidara-radius-squircle: 28% deleted — zero consumers, and it could not have
+       had one: a percentage radius was meant for rounding art, but GTK4 border-radius
+       does not clip a child's rendering. That job is squircleThumb()/Cairo.) */
 
     /* --- Semantic Colors --- */
     --nidara-danger: #ff3b30;

@@ -59,7 +59,9 @@ window#nidara-app-launcher {
     box-shadow: none;
     outline: none;
     padding: 0;
-    border-radius: 18px;
+    // Same rung as .app-grid-button below — the child has no inset from this box, so
+    // the two corners are coincident and must not be derived apart.
+    border-radius: $nidara-radius-md;
 
     &:active {
         background: transparent;
@@ -90,8 +92,8 @@ window#nidara-app-launcher {
 /* ── App button ── */
 .app-grid-button {
     @include nidara-reset;
-    border-radius: 18px;
-    padding: 12px 16px;
+    border-radius: $nidara-radius-md;
+    padding: $space-3 $space-4;
     transition: background 0.15s ease;
 
     @include nidara-tile-states;
@@ -119,12 +121,14 @@ window#nidara-app-launcher {
 
 /* ── Workspace strip ── */
 .ws-strip {
-    padding: 0 4px;
+    padding: 0 $space-1;
 }
 
 .ws-strip-item {
+    // 6 + the 2px border below = an 8px inset to the schematic, i.e. $space-2 measured
+    // from the tile's visible edge (the border IS the edge). Derived, not free-hand.
     padding: 6px;
-    border-radius: 12px;
+    border-radius: $nidara-radius-md;
     background: var(--nidara-surface-back);
     border: 2px solid var(--nidara-border);
     transition: background 0.15s ease, border-color 0.15s ease;

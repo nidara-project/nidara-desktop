@@ -301,7 +301,9 @@
     font-size: $fs-mini;
     font-weight: $fw-bold;
     padding: 1px 6px;
-    border-radius: 12px;
+    // ~17px tall (11px glyph + 1px padding): the old 12 was already past half the
+    // height, i.e. a pill wearing a ladder value. Say what it is.
+    border-radius: var(--nidara-radius-pill);
     margin-left: $space-2;
 }
 
@@ -357,7 +359,7 @@
         // Kill Adwaita's blue focus ring on every day cell. GTK4 has NO `outline`
         // shorthand — must use the longhand props or the ring survives.
         grid label:not(.day-name):not(.week-number) {
-            border-radius: 8px;
+            border-radius: $nidara-radius-xs;
             border: 1px solid transparent;
             outline-style: none;
             outline-width: 0;
@@ -538,6 +540,8 @@
     }
 
     // Primary action (VPN connect, screenshot save, start recording)
+    // The 6px vertical is NOT a gap: these carry `border: none`, so 6 lands on the same
+    // 32px control height as NidaraButton's 5px + 1px border. Keep them in step.
     button.suggested-action {
         background: var(--nidara-accent);
         background-image: none;

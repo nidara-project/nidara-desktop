@@ -207,7 +207,10 @@ by user decision (2026-07-09), flagged to revisit.
 `RADIUS` in `ui/lib/tokens.ts` is the source; `--nidara-radius-*` in `_base.scss` is a
 **mirror**, and both files say so. Cairo cannot read a CSS var — a corner that clips has
 to be known in px — so the duplication is deliberate and labelled. **There are no radius
-literals left in TS/TSX**; that is the invariant to re-check when adding a surface.
+literals left in TS/TSX, nor in `ui/shell/styles/*.scss`** (use `$nidara-radius-*`, the SCSS
+alias of the same vars); that is the invariant to re-check when adding a surface. The greeter
+and lockscreen bundles carry their own standalone stylesheets and are NOT covered — they do
+not import the token layer at all (see `tech-debt.md`).
 
 | Token | px | What wears it |
 |---|---|---|
@@ -218,7 +221,14 @@ literals left in TS/TSX**; that is the invariant to re-check when adding a surfa
 | `xl` | 32 | island / overlay directly on the wallpaper: all five island modes, app grid, Prism, NC cards, CC islands |
 | pill | 9999 | capsules |
 
-Squircle 28% (n ≈ 3.2) — **only** for app-icon plates.
+There is no percentage rung. `--nidara-radius-squircle: 28%` was documented here as "only for
+app-icon plates" and **had zero consumers in any bundle** — the plates wear `lg` like everything
+else. It could not have had one either: it was meant for rounding *art*, and **GTK4's
+`border-radius` does not clip a child's rendering** (that is why `squircleThumb()` exists).
+Deleted 2026-08-03. The same rule retired `.prism-result-icon`, a rule whose entire body was
+`border-radius: 8px` on a background-less `Gtk.Image` — it had been rounding nothing since it
+was written. **A radius on a node with no background of its own is decoration in the
+stylesheet, not on screen.**
 
 Three things this ladder is not, all of which came up in the audit:
 
@@ -235,6 +245,12 @@ Three things this ladder is not, all of which came up in the audit:
   widest thing in the shell, and it sits at `xl` like a 200px recording island. It was 64
   until the audit; it is also one of five modes morphing out of the same capsule through
   `MorphRevealer`, which interpolates the radius, so an odd one out is visible in motion.
+
+- **A radius past half the box's short side is a STADIUM, not a rung — say `pill`.** The SCSS
+  sweep found two numbers hiding as ladder values: the active workspace dot (`4` on a box 6px
+  tall) and the NC header badge (`12` on ~17px). Both were already clamped by GTK to the same
+  capsule they would draw at `pill`, so writing `pill` changed no pixels and removed two
+  off-ladder literals. Check the height before you read a corner value as a radius.
 
 ⚠️ **Changing a rung has a second-order cost: it moves the scroll-pill corner clearance**
 (`⌈r − √(r² − (r−4)²)⌉ + 4`, see the NidaraScrolled spec above). Going 20 → 24 on the bar
@@ -287,6 +303,27 @@ Two rules out of that:
 - **Never sweep a spacing value by its NUMBER; sweep it by its ROLE.** Read what the box is.
 - **A tier you introduce to explain a change you already made is not a tier.** Derive it from what
   the surfaces are, then check it against pixels.
+
+#### The SCSS side (swept 2026-08-03, second pass)
+
+The TSX sweep left SCSS *padding* untouched on the theory that it is all height arithmetic. That
+holds for controls and **not** for a container's section padding, so the stylesheets got their own
+pass. The finding is the useful part: of 58 literal paddings in `ui/shell/styles/`, only a handful
+were spacing at all — one genuinely off-scale gap (a `18px` breathing room) and the rest either on
+the scale already or arithmetic. **They are now written as `$space-*` where they are gaps, so the
+scale is enforced and not merely declared, and left as literals *with a comment* where they are
+not.** Prefer the token; a bare number in a padding is now a claim that it is derived.
+
+Two shapes of derived padding worth recognising, both of which a "tidy" sweep would break:
+
+- **A gap measured from a rect, when the glass is painted inside it.** `.prism-results-list` is
+  `10px` on the sides because `SquircleContainer` paints 2px in from the widget rect
+  (`GLASS_INSET`), so 10 from the rect *is* `$space-2` from the visible edge. Same trap as the
+  scroll-pill corner: what you write is the rect, what the eye measures is the glass.
+- **An ALIGNMENT AXIS wearing spacing's clothes.** Prism's search field is `padding: $space-4 22px`
+  and 22 is not a spacing value at all — a result row's text lands at 10 (list) + 12 (row) = 22, so
+  the field and the results share one left edge. Before you correct a number, find out what it
+  lines up with; if something else has to move with it, say so in the comment.
 
 ### Some off-scale numbers are an ALIGNMENT AXIS — check before "fixing" them
 

@@ -13,7 +13,10 @@
     // focus surface, so there's no rounded rect to mismatch the Cairo squircle.
     background: none;
     border: none;
-    padding: 16px 22px;
+    // The 22 is an ALIGNMENT AXIS, not a spacing value: a result row's text sits at
+    // 10 (.prism-results-list) + 12 (.prism-result-row) = 22, so the field's text and
+    // the results below it share one left edge. Move one, move all three.
+    padding: $space-4 22px;
 }
 
 .prism-search-entry {
@@ -36,13 +39,17 @@
 
 .prism-results-list {
     background: transparent;
-    padding: 6px 10px 10px;
+    // Every gap from a row to its boundary reads 8px: the sides/bottom are 10 because
+    // SquircleContainer paints the glass 2px INSIDE the widget rect (GLASS_INSET), so
+    // 10 from the rect is 8 from the visible edge; the top is a true 8 to .prism-divider.
+    // The 10 is also the alignment axis above — see .prism-search-box.
+    padding: $space-2 10px 10px;
 }
 
 .prism-result-row {
     background: transparent;
-    padding: 8px 12px;
-    border-radius: 10px;
+    padding: $space-2 $space-3;
+    border-radius: $nidara-radius-sm;
     transition: background 0.2s ease;
 }
 
@@ -66,9 +73,9 @@
     box-shadow: none;
 }
 
-.prism-result-icon {
-    border-radius: 8px;
-}
+/* (.prism-result-icon deleted — it only ever set border-radius on a Gtk.Image, which
+   has no background of its own, and GTK4's border-radius does NOT clip a child's
+   rendering. It rounded nothing. Rounding a bitmap is squircleThumb()'s job.) */
 
 .prism-result-title {
     color: var(--nidara-text);

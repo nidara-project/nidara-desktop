@@ -94,8 +94,11 @@ window#nidara-bar-zone {
 }
 
 .workspace-dot.active {
+    // A 6px-tall dot stretched to 18 wide: this is a STADIUM, not a corner radius.
+    // The old literal 4 was already past half the height and clamped to the same
+    // shape — it was never a rung of the ladder.
     min-width: 18px;
-    border-radius: 4px;
+    border-radius: var(--nidara-radius-pill);
     background-color: $nidara-accent;
 }
 
@@ -343,11 +346,11 @@ window#nidara-bar-zone {
        over once hovered. Do NOT reintroduce `scrollbar` rules here. */
     /* Matches LANE in AgentIsland.tsx — keeps the bubbles in the same column as
        the header/entry while the scroller itself spans into the panel padding. */
-    .agent-transcript { padding-right: 16px; }
+    .agent-transcript { padding-right: $space-4; }
 
 
     .agent-bubble {
-        padding: 8px 12px;
+        padding: $space-2 $space-3;
         border-radius: var(--nidara-radius-lg);
         .agent-bubble-text {
             font-size: $fs-small;
