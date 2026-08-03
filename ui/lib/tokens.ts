@@ -40,3 +40,24 @@ export const RADIUS = {
  * `nidara-kit/scrolled.ts` does the maths: lg eats 11px, xl eats 15px).
  */
 
+/**
+ * Dense panel inset — how far a row's hover fill sits from the panel's **VISIBLE**
+ * edge, on all four sides.
+ *
+ * Uniform on purpose. The three-tier container padding (`design-system.md`) puts
+ * +4 on the horizontal, and that is right while the padding is a *text* inset —
+ * but the moment a child's hover fill spans the container, the padding stops being
+ * text inset and becomes the FILL'S MARGIN, and a halo twice as wide at the sides
+ * as at the ends reads as a mistake (measured 12 / 6 before this; no menu system
+ * runs 2:1 — AppKit is ~5/4, Windows 11 flyouts 4/4). The text's own breathing
+ * room lives on the row (`.nidara-menu-row` is `7px 12px`).
+ *
+ * ⚠️ Measured from the GLASS, not from the widget rect: `SquircleContainer` paints
+ * the glass `GLASS_INSET` (2px) inside its allocation, so a box aligned to the rect
+ * is that much closer to the visible edge than it looks in the source. Every dense
+ * panel writes `PANEL_INSET + GLASS_INSET` and says so — that discrepancy is what
+ * left the system menu 2px tighter than its siblings while its comment claimed
+ * parity.
+ */
+export const PANEL_INSET = 12
+

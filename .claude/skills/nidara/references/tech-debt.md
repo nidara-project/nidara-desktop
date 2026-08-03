@@ -2075,3 +2075,20 @@ alignment axes (Prism's `22`).
 - **The greeter and lockscreen bundles**, which carry standalone stylesheets that never import
   the token layer (11 literal paddings, 1 literal radius). Not reachable from `ui/shell`'s
   tokens without giving those bundles the scale first — and only verifiable in a VM.
+
+### 48. Art rounding is three unrelated numbers (2026-08-03)
+Found while closing #47, and deliberately NOT swept with it (see rule 3 above — don't refactor as
+a side-effect). The radius ladder governs container corners; **rounding a bitmap is a different
+job**, done in Cairo by `squircleThumb(pixbuf, w, h, radius, cssClass)` because GTK4's
+`border-radius` does not clip a child's rendering. Those radii are art proportions, not rungs —
+but right now they do not agree with each other either:
+
+- `widgets/clipboard.ts` — `THUMB_RADIUS 8` on a 32px thumb = **25 %**, the macOS icon ratio.
+- `NotificationCenter.tsx:75` — `12` on a hero whose `size` is a **parameter**, so the ratio
+  changes with the caller.
+- `NotificationCenter.tsx:103` — `16` on the big hero, width and height variable.
+
+The likely answer is one exported ratio (~25 %) applied to the art's short side, with a floor so
+a small thumb does not go nearly-circular. Low priority: it is visible only on notification art
+and clipboard image rows, and changing it moves how every notification looks — worth doing when
+something else is already touching that surface.

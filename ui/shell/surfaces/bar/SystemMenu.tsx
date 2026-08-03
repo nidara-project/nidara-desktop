@@ -5,8 +5,8 @@ import { execAsync } from "ags/process"
 import status from "../../core/Status"
 import Icons from "../../core/Icons"
 import shellActions from "../../core/ShellActions"
-import SquircleContainer from "../../common/SquircleContainer"
-import { RADIUS } from "../../../lib/tokens"
+import SquircleContainer, { GLASS_INSET } from "../../common/SquircleContainer"
+import { RADIUS, PANEL_INSET } from "../../../lib/tokens"
 import { t } from "../../core/i18n"
 
 // System menu dropdown (About / Settings / Lock / Suspend / Logout / Restart / Shutdown)
@@ -32,12 +32,15 @@ export function SystemMenuOverlay() {
   const menuBox = new Gtk.Box({
     orientation: Gtk.Orientation.VERTICAL,
     spacing: 2,
-    // The dense-panel padding (8 / 12), NOT a symmetric one: the row's hover fill
-    // spans this box, so this margin IS the gap between the hover and the card's
-    // edge. The bar's window menu gets 12 horizontally from `expansionInner`, and
-    // this menu had an idiosyncratic symmetric 10 that left its hover half as far
-    // from the glass (6px vs 12px, measured) — user-caught 2026-08-03.
-    margin_top: 8, margin_bottom: 8, margin_start: 12, margin_end: 12,
+    // PANEL_INSET from the GLASS, all four sides: the row's hover fill spans this
+    // box, so this margin IS the halo between the hover and the card's edge.
+    // ⚠️ Twice user-caught here. The first fix read `expansionInner`'s constructor
+    // (12) and wrote 12 — but Bar.tsx REWRITES that margin on every open, and the
+    // number that ships is measured from the widget rect, so this menu still sat
+    // 10 from the glass against its siblings' 12. Use the token, not a literal
+    // copied from another file's constructor.
+    margin_top: PANEL_INSET + GLASS_INSET, margin_bottom: PANEL_INSET + GLASS_INSET,
+    margin_start: PANEL_INSET + GLASS_INSET, margin_end: PANEL_INSET + GLASS_INSET,
   })
 
   const makeRow = (ico: Gio.FileIcon, txt: string, _danger: boolean, cmd: () => void) => {
@@ -131,7 +134,8 @@ export function SystemMenuOverlay() {
     // content sits on the same axis as the menu rows it replaces. Vertical is
     // symmetric — the 16/14 this used to be was a 2px optical nudge nobody wrote
     // down, and the token sweep turned it into 16/12, a nudge nobody chose.
-    margin_top: 16, margin_bottom: 16, margin_start: 12, margin_end: 12,
+    margin_top: 16, margin_bottom: 16,
+    margin_start: PANEL_INSET + GLASS_INSET, margin_end: PANEL_INSET + GLASS_INSET,
     width_request: 210,
   })
   confirmBox.append(confirmIcon)

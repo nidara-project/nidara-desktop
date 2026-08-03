@@ -205,7 +205,9 @@ by user decision (2026-07-09), flagged to revisit.
 ## Radii — ONE ladder, in `ui/lib/tokens.ts` (audited 2026-08-03)
 
 `RADIUS` in `ui/lib/tokens.ts` is the source; `--nidara-radius-*` in `_base.scss` is a
-**mirror**, and both files say so. Cairo cannot read a CSS var — a corner that clips has
+**mirror**, and both files say so. The ladder governs **container corners**; rounding *art* is a
+separate job (a ratio of the bitmap's own size, painted by `squircleThumb()`), and those numbers
+are not rungs — see `tech-debt.md` #48 for the three that currently disagree. Cairo cannot read a CSS var — a corner that clips has
 to be known in px — so the duplication is deliberate and labelled. **There are no radius
 literals left in TS/TSX, nor in `ui/shell/styles/*.scss`** (use `$nidara-radius-*`, the SCSS
 alias of the same vars); that is the invariant to re-check when adding a surface. The greeter
@@ -287,9 +289,24 @@ Swept 2026-08-03. Each step is +4, and horizontal is always +4 over vertical:
 
 | Surface | v / h | Who |
 |---|---|---|
-| **Dense panel** | **8 / 12** | bar expansion panels (incl. the window menu, which inherits `expansionInner`), the **system menu**, the CC context menu, CC/NC lists, `widgets/*` |
+| **Dense panel** | **12 / 12** (`PANEL_INSET`, from the GLASS) | bar expansion panels (incl. the window menu, which inherits `expansionInner`), the **system menu**, the CC context menu, CC/NC lists, `widgets/*` |
 | **Window row** | **12 / 16** | `NidaraRow`, and hand-rolled rows inside Settings |
 | **Island** | **16 / 20** | all five island modes |
+
+**The dense panel's inset is UNIFORM, and it is measured from the glass** (`PANEL_INSET` in
+`ui/lib/tokens.ts`; every consumer writes `PANEL_INSET + GLASS_INSET` because the box is laid out
+against the widget rect). The +4 horizontal of the other two tiers is right while the padding is a
+**text** inset — but a dense panel's rows carry a hover fill that *spans the box*, and at that
+point the padding is no longer text inset, it is **the fill's margin**. It ran `12 / 6` (measured
+from the glass) until the user caught the halo being twice as wide at the sides as at the ends;
+no menu system runs 2:1 (AppKit's highlight is ~5/4pt, Windows 11 flyouts 4/4). The text's own
+breathing room lives on the row — `.nidara-menu-row` is `7px 12px`.
+
+⚠️ **Never copy a sibling's margin out of its constructor.** `Bar.tsx` builds `expansionInner`
+with one value and **rewrites it on every open** (flush panels take the horizontal over), so the
+number in the constructor is not the number that ships. The system menu was fixed twice for this:
+the second fix read the constructor's `12`, wrote `12`, and stayed 2px tighter than its siblings
+because theirs is measured after `+ GLASS_INSET`. Import the token.
 
 **Menus are NOT a separate tier** — an earlier version of this section claimed a symmetric `8/8`
 "menu tier" and it was wrong. It was invented to justify a blanket `sed`: `SystemMenu.tsx` held

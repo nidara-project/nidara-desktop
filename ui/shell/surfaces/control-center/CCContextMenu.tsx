@@ -5,8 +5,8 @@ import widgetConfig from "../../core/WidgetConfig"
 import registry from "../../widgets/index"
 import Icons from "../../core/Icons"
 import { t } from "../../core/i18n"
-import SquircleContainer from "../../common/SquircleContainer"
-import { RADIUS } from "../../../lib/tokens"
+import SquircleContainer, { GLASS_INSET } from "../../common/SquircleContainer"
+import { RADIUS, PANEL_INSET } from "../../../lib/tokens"
 import { menuRow, menuSeparator } from "../../common/MenuRow"
 
 // Right-click context menu for CC tiles.
@@ -62,7 +62,10 @@ export function createCCContextMenu(opts: CCContextMenuOpts = {}): CCContextMenu
     const rows = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
         spacing: 2,
-        margin_top: 8, margin_bottom: 8, margin_start: 12, margin_end: 12,
+        // PANEL_INSET from the GLASS, all four sides — the row hover fill spans this
+        // box, so this is its halo. Same token as the system menu and the bar panels.
+        margin_top: PANEL_INSET + GLASS_INSET, margin_bottom: PANEL_INSET + GLASS_INSET,
+        margin_start: PANEL_INSET + GLASS_INSET, margin_end: PANEL_INSET + GLASS_INSET,
     })
 
     const card = SquircleContainer({
