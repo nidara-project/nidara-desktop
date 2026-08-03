@@ -67,6 +67,25 @@ const corner = (
     else           cr.arcNegative(ccx, ccy, reff, a1, a2)
 }
 
+// One BODY corner as a SUPERELLIPSE quarter — `drawSquircle`'s own path,
+// |x/r|ⁿ + |y/r|ⁿ = 1, so a bubble can wear the same silhouette as the squircle cards it
+// is a sibling of. Emitted in the direction `cr.arc` would have taken: `sx`/`sy` place
+// the quarter around its centre, and `fromTop` says whether the path arrives along the
+// axis where py = r. The circular case is NOT routed through here — callers keep their
+// `cr.arc`, so the tooltip's stadium ends stay exact arcs rather than a polyline.
+const bodyCorner = (
+    cr: any, cx: number, cy: number, r: number, n: number,
+    sx: number, sy: number, fromTop: boolean,
+) => {
+    const STEPS = 48
+    for (let i = 0; i <= STEPS; i++) {
+        const t = (fromTop ? STEPS - i : i) / STEPS * (Math.PI / 2)
+        const px = r * Math.pow(Math.abs(Math.cos(t)), 2 / n)
+        const py = r * Math.pow(Math.abs(Math.sin(t)), 2 / n)
+        cr.lineTo(cx + sx * px, cy + sy * py)
+    }
+}
+
 // ONE continuous path: a rounded rect (perfect arcs) with a pointer spliced into
 // `side`, centred on the edge plus `off` (the slide correction — see paintGlassBubble).
 // The pointer is a triangle whose THREE corners are all circular arcs — the tip
@@ -78,6 +97,7 @@ export const bubblePath = (
     cr: any, x: number, y: number, w: number, h: number, r: number, side: ArrowSide,
     off: number = 0,
     aw: number = ARROW_W, ah: number = ARROW_H, tipR: number = TIP_R, baseR: number = BASE_R,
+    n: number = 2,
 ) => {
     const x2 = x + w, y2 = y + h
     const cx = x + w / 2 + off, cy = y + h / 2 + off
@@ -89,28 +109,32 @@ export const bubblePath = (
         corner(cr, cx, y - ah,      cx + aw / 2, y,      x2 - r, y,         baseR)
     }
     cr.lineTo(x2 - r, y)
-    cr.arc(x2 - r, y + r, r, -HALF, 0)                        // top-right
+    if (n === 2) cr.arc(x2 - r, y + r, r, -HALF, 0)           // top-right
+    else bodyCorner(cr, x2 - r, y + r, r, n, +1, -1, true)
     if (side === "right") {
         corner(cr, x2, y + r,       x2, cy - aw / 2,     x2 + ah, cy,       baseR)
         corner(cr, x2, cy - aw / 2, x2 + ah, cy,         x2, cy + aw / 2,   tipR)
         corner(cr, x2 + ah, cy,     x2, cy + aw / 2,     x2, y2 - r,        baseR)
     }
     cr.lineTo(x2, y2 - r)
-    cr.arc(x2 - r, y2 - r, r, 0, HALF)                        // bottom-right
+    if (n === 2) cr.arc(x2 - r, y2 - r, r, 0, HALF)           // bottom-right
+    else bodyCorner(cr, x2 - r, y2 - r, r, n, +1, +1, false)
     if (side === "bottom") {
         corner(cr, x2 - r, y2,      cx + aw / 2, y2,     cx, y2 + ah,       baseR)
         corner(cr, cx + aw / 2, y2, cx, y2 + ah,         cx - aw / 2, y2,   tipR)
         corner(cr, cx, y2 + ah,     cx - aw / 2, y2,     x + r, y2,         baseR)
     }
     cr.lineTo(x + r, y2)
-    cr.arc(x + r, y2 - r, r, HALF, Math.PI)                   // bottom-left
+    if (n === 2) cr.arc(x + r, y2 - r, r, HALF, Math.PI)      // bottom-left
+    else bodyCorner(cr, x + r, y2 - r, r, n, -1, +1, true)
     if (side === "left") {
         corner(cr, x, y2 - r,       x, cy + aw / 2,      x - ah, cy,        baseR)
         corner(cr, x, cy + aw / 2,  x - ah, cy,          x, cy - aw / 2,    tipR)
         corner(cr, x - ah, cy,      x, cy - aw / 2,      x, y + r,          baseR)
     }
     cr.lineTo(x, y + r)
-    cr.arc(x + r, y + r, r, Math.PI, 3 * HALF)                // top-left
+    if (n === 2) cr.arc(x + r, y + r, r, Math.PI, 3 * HALF)   // top-left
+    else bodyCorner(cr, x + r, y + r, r, n, -1, -1, false)
     cr.closePath()
 }
 
@@ -121,6 +145,12 @@ export interface GlassBubbleOpts {
     /** Max corner radius (clamped further so the arrow base fits the straight edge).
      *  Tooltip ≈ 13; a roomier menu can pass more. Default 13. */
     radiusMax?: number
+    /** Superellipse exponent of the BODY corners — `drawSquircle`'s `n`. Default 2 (true
+     *  circular arcs), which is right for a tooltip: it is a near-pill and its ends ARE
+     *  stadium arcs. A menu bubble passes 3.2 so its silhouette matches the squircle cards
+     *  it is a sibling of (system menu, CC context menu, bar panels). The arrow's own three
+     *  corners stay circular either way — they are features of the pointer, not of the box. */
+    n?: number
     /** Shift the pointer along its edge (px, ± from the centre) so it keeps aiming
      *  at the anchor when the compositor SLID the popup along a screen edge
      *  (Tooltip.ts measures this). Clamped so the base never eats the corner arcs. */
@@ -128,7 +158,7 @@ export interface GlassBubbleOpts {
 }
 
 export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide, opts: GlassBubbleOpts = {}) => {
-    const { chrome = true, radiusMax = 13 } = opts
+    const { chrome = true, radiusMax = 13, n = 2 } = opts
     const arrowW = ARROW_W, arrowH = ARROW_H, tipR = TIP_R
     if (w <= 0 || h <= 0) return
     // Shell skin follows the pinned appearance; app-mode (About) follows the system mode.
@@ -170,7 +200,7 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
     // 1) Glass fill — AA (smooth silhouette).
     cr.save()
     cr.setAntialias(2)
-    bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR)
+    bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
     cr.setSourceRGBA(tint.r, tint.g, tint.b, alpha)
     cr.fill()
     cr.restore()
@@ -179,10 +209,10 @@ export const paintGlassBubble = (cr: any, w: number, h: number, side: ArrowSide,
     //    only the inner ~1px survives the clip (no outer AA spilling onto glass).
     cr.save()
     cr.setAntialias(1) // NONE for a crisp clip
-    bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR)
+    bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
     cr.clip()
     cr.setAntialias(2) // AA for a smooth stroke
-    bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR)
+    bubblePath(cr, bx, by, bw, bh, r, side, off, aw, arrowH, tipR, BASE_R, n)
     cr.setLineWidth(BORDER_W * 2)
     if (dark) cr.setSourceRGBA(1, 1, 1, 0.16)   // 1px inner white edge on dark glass
     else      cr.setSourceRGBA(0, 0, 0, 0.12)   // subtle dark rim for definition on light glass

@@ -531,13 +531,15 @@ export function DockItem(
             hexpand: true, vexpand: true,
             halign: Gtk.Align.FILL, valign: Gtk.Align.FILL,
         })
-        da.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, side, { radiusMax: RADIUS.md }))
+        da.set_draw_func((_da, cr, w, h) => paintGlassBubble(cr, w, h, side, { radiusMax: RADIUS.lg, n: 3.2 }))
         grid.attach(da, 0, 0, 1, 1)
 
         menuRows = new Gtk.Box({ orientation: Gtk.Orientation.VERTICAL, css_classes: ["nidara-menu"] })
-        // Same halo as every other menu of rows — see tokens.ts. A bubble is not a
-        // different kind of menu just because it carries an arrow.
-        const PAD = rowInsetFor(RADIUS.md, 2)
+        // Same halo AND the same silhouette as every other menu of rows: the bubble is
+        // painted at radius lg with the shell's squircle exponent (see the draw func
+        // above), so it reads as the system menu with a pointer, not as its own shape
+        // language. A bubble is not a different kind of menu just because it has an arrow.
+        const PAD = rowInsetFor(RADIUS.lg)
         menuRows.margin_top    = BUF + PAD + (side === "top"    ? ARROW_H : 0)
         menuRows.margin_bottom = BUF + PAD + (side === "bottom" ? ARROW_H : 0)
         menuRows.margin_start  = BUF + PAD + (side === "left"   ? ARROW_H : 0)

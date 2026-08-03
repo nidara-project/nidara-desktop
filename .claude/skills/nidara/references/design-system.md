@@ -290,7 +290,7 @@ Swept 2026-08-03. Each step is +4, and horizontal is always +4 over vertical:
 
 | Surface | v / h | Who |
 |---|---|---|
-| **A list of rows on a shell surface** | **`rowInsetFor(R, n)`**, uniform, from the GLASS — radius **and exponent**. Every floating popup of the shell is a squircle at `lg`, so in practice they all land on **6** | bar expansion panels + clipboard, the **system menu**, the CC context menu, the **CC detail panel** (squircle `lg` → 6); the three `GlassBubble` menus and the Settings dropdown (circular `md` → 6) |
+| **A list of rows on a shell surface** | **`rowInsetFor(R, n)`**, uniform, from the GLASS — radius **and exponent**. Every floating popup of the shell is a squircle at `lg`, so in practice they all land on **6** | bar expansion panels + clipboard, the **system menu**, the CC context menu, the **CC detail panel** (squircle `lg` → 6); the three `GlassBubble` menus (`lg` squircle body + arrow → 6); the Settings dropdown (circular `md` → 6) |
 | **Window row** | **12 / 16** | `NidaraRow`, and hand-rolled rows inside Settings |
 | **Island** | **16 / 20** | all five island modes |
 
@@ -314,7 +314,8 @@ does not intrude. Getting this wrong is what the user caught twice — first a f
 double what a `md` bubble wants, then the circular answer applied to every `lg` surface, which left
 the system menu and the CC panels reading airy while the bubbles next to them looked right. Pass
 the `n` the surface is actually painted with: `SquircleContainer` defaults to **3.2**,
-`perfect: true` means **2**, `GlassBubble` draws `cr.arc` (**2**), a CSS `border-radius` is **2**.
+`perfect: true` means **2**, a CSS `border-radius` is **2**, and `paintGlassBubble` takes an `n`
+(default 2 for the tooltip, 3.2 for the menus — see the bubble section below).
 
 **`perfect: true` belongs to CAPSULES, not to panels — and that is why every popup now lands on the
 same 6.** In `Bar.tsx` every other `perfect` is a 40px-tall bar capsule, where it is what clamps the
@@ -349,15 +350,20 @@ and every row title share one left edge. The island is a fixed 356px, so this in
 the row (340 → 328 usable) — a fixed-width surface is a reason to know the cost, not to keep two
 axes.
 
-**A bubble is not a different kind of menu.** The dock item menu, the app-grid item menu and the
-media source menu are `GlassBubble` popovers rather than squircle cards, and they had their own
-`PAD = 5` — a *fifth* halo. They go through `rowInsetFor()` like everything else; the arrow changes
-the silhouette, not what the padding around a list of rows means. Their corner is `md` and
-**circular** (`bubblePath` draws `cr.arc`), so the formula gives 6 — which is also why the flat 12
-they briefly had read as a hole, and why they were the one surface that looked right while the
-squircle panels were still on the circular answer. (`radiusMax` in those calls is **not** a ladder rung and must not
-be swept onto one — `paintGlassBubble` computes a near-pill `min(w,h)/2` and `radiusMax` only caps
-it — but it *is* the surface radius to feed `rowInsetFor`, so the two now come from one token.)
+**A bubble is not a different kind of menu — and by the end of the audit it is not a different
+shape either.** The dock item menu, the app-grid item menu and the media source menu are
+`GlassBubble` popovers rather than squircle cards, and they had their own `PAD = 5`, a *fifth*
+halo. They go through `rowInsetFor()` like everything else. Then the user asked the obvious
+follow-up — *"shouldn't the dock menus be the same too?"* — and the answer was the same as for the
+bar panel: `lg` means **any floating popup of the shell**, so the three menu bubbles are now
+painted at `radiusMax: RADIUS.lg` with `n: 3.2`, the shell's squircle. **The arrow is the only
+thing that distinguishes a bubble menu; the box it hangs off is the same card as the system
+menu's.** `paintGlassBubble` grew an `n` for this and defaults it to **2** — the tooltip is a
+near-pill whose ends genuinely are stadium arcs, and it stays exact `cr.arc` rather than a
+polyline. (`radiusMax` is a CAP, not a ladder rung — `paintGlassBubble` computes a near-pill
+`min(w,h)/2` first — but it *is* the surface radius `rowInsetFor` derives from, so the two come
+from one token.) (`radiusMax` in those calls is **not** a ladder rung and must not
+be swept onto one.)
 
 **The Settings dropdown popover satisfies both rules at once**, which is the sign the formula is
 right. Concentricity gives 6 (`md` 16 − `sm` 10); the ALIGNMENT AXIS says the list is the trigger
@@ -1303,8 +1309,20 @@ context menu paints the same shape (see "The glass bubble" below); the tooltip o
 
 The Cairo glass bubble — a rounded capsule with a **pointer spliced into one side as one continuous
 silhouette** (single fill, single 1px inner edge wrapping body AND arrow, no seam) — lives in
-`common/GlassBubble.ts` and is **shared by the tooltip and BOTH context menus (dock + app-grid)** so
-they all speak the same glass language. Don't re-implement it; every consumer paints via `paintGlassBubble`.
+`common/GlassBubble.ts` and is **shared by the tooltip and the three menu bubbles (dock item,
+app-grid item, media source)** so they all speak the same glass language. Don't re-implement it;
+every consumer paints via `paintGlassBubble`.
+
+⚠️ **Two consumers, two body profiles, one painter.** `paintGlassBubble` takes `n` (the superellipse
+exponent of `drawSquircle`'s path) and `radiusMax`:
+
+| Consumer | `radiusMax` | `n` | why |
+|---|---|---|---|
+| Tooltip | 13 | **2** (default) | a near-pill: `min(w,h)/2` already rounds it to a stadium, and stadium ends genuinely ARE circular arcs. Kept on `cr.arc`, not a polyline. |
+| The three menu bubbles | **`RADIUS.lg`** | **3.2** | a menu bubble is one of the shell's floating popups, so its body is the same `lg` squircle as the system menu and the CC context menu. The arrow is the only thing that distinguishes it. |
+
+The pointer's own three corners stay circular in both cases — they are features of the pointer, not
+of the box.
 
 - **The pointer is a downward TRIANGLE with ONLY the tip filleted** — a TRUE circular arc tangent to
   both diagonal sides, so the sides stay perfectly straight (no kink, no bowing). **The arc must stay
