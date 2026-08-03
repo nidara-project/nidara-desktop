@@ -1,5 +1,6 @@
 import { Gtk, Gdk } from "ags/gtk4"
 import { NidaraOverlayManager } from "./overlay-manager"
+import { NidaraScrolled } from "./scrolled"
 
 export interface SelectOption {
   label: string
@@ -64,15 +65,16 @@ export function NidaraSelect(
     css_classes: ["nidara-select-list", `${cssClass}-list`],
   })
   // Scroll wrapper so long lists (themes, icons…) cap their height and scroll
-  // instead of overflowing the window.
-  const listScroll = new Gtk.ScrolledWindow({
-    hscrollbar_policy: Gtk.PolicyType.NEVER,
-    vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-    propagate_natural_height: true,
-    max_content_height: 300,
-    css_classes: ["nidara-select-scroll", `${cssClass}-scroll`],
+  // instead of overflowing the window. NidaraScrolled, never a bare
+  // Gtk.ScrolledWindow: an option row is clickable to its trailing edge, and GTK's
+  // slider would grow toward the pointer and eat that click — tech-debt #15, the
+  // same bug the component exists to hold shut.
+  const { widget: listWidget } = NidaraScrolled({
+    child: listBox,
+    propagateNaturalHeight: true,
+    maxContentHeight: 300,
+    cssClasses: ["nidara-select-scroll", `${cssClass}-scroll`],
   })
-  listScroll.set_child(listBox)
 
   // ── Open / close ──────────────────────────────────────────────────────────
   function open() {
@@ -86,22 +88,24 @@ export function NidaraSelect(
       }
     } catch (e) { console.warn("[NidaraSelect]", e) }
 
-    // List matches trigger width exactly — no centering needed.
+    // List matches trigger width exactly — no centering needed. The width and the
+    // measurement go on the overlay wrapper, not the view inside it: the wrapper is
+    // what gets shown, and it is what carries the scroll lane.
     const tw = trigger.get_width()
     const th = trigger.get_height()
-    listScroll.width_request = tw
+    listWidget.width_request = tw
 
     // Open below the trigger; flip above if it would overflow the bottom.
-    const [, natH] = listScroll.measure(Gtk.Orientation.VERTICAL, tw)
+    const [, natH] = listWidget.measure(Gtk.Orientation.VERTICAL, tw)
     const overlayH = manager.overlay.get_height() || 600
     let y = ay + th + 2
     if (y + natH > overlayH - 8) y = Math.max(8, ay - natH - 2)
 
-    manager.show(listScroll, ax, y)
+    manager.show(listWidget, ax, y)
   }
 
   trigger.connect("clicked", () => {
-    if (listScroll.get_parent() !== null) manager.hide()
+    if (listWidget.get_parent() !== null) manager.hide()
     else open()
   })
 

@@ -184,10 +184,10 @@ selection {
     min-height: 50px;
     padding: 0 6px;
 }
-.nidara-window-sidebar-scroll {
-    // Gap between the search slot at the capsule top and the list below it.
-    margin-top: 4px;
-}
+// .nidara-window-sidebar-scroll has no rules on purpose: the sidebar is a
+// NidaraScrolled, whose bar lives on the wrapping overlay, so its gap to the search
+// slot is set on that overlay in window.ts — CSS here would move the view out from
+// under its own scroll lane.
 
 /* Menu — shared by the tray menu (renderMenuModel), the bar system menu and the
    CC context menu. A flat list of .nidara-menu-row buttons, not a Gtk.Popover. */

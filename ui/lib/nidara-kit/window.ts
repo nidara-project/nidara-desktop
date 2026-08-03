@@ -1,5 +1,6 @@
 import { Gtk } from "ags/gtk4"
 import Gio from "gi://Gio"
+import { NidaraScrolled } from "./scrolled"
 import { NidaraSplitView, type NidaraSplitViewResult } from "./split-view"
 
 export interface NidaraWindowOpts {
@@ -75,13 +76,22 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
     if (name) win.set_name(name)
 
     // ── Sidebar capsule (toolbar on top, scrolling list below) ────────────────
-    const sidebarScroll = new Gtk.ScrolledWindow({
-        hscrollbar_policy: Gtk.PolicyType.NEVER,
-        vscrollbar_policy: Gtk.PolicyType.AUTOMATIC,
-        css_classes: ["nidara-window-sidebar-scroll"],
-        vexpand: true,
+    // NidaraScrolled, like every other scroll view in the DE — a window's sidebar is
+    // not an exception to the rule (design-system.md, "Any ScrolledWindow — windows
+    // included"). It was the last GTK scrollbar left inside a Nidara window, sitting
+    // two panes away from ours and looking like a different component.
+    // The lane is reserved, so a nav row never extends under it: the row's trailing
+    // px must stay clickable even while the bar is revealed.
+    const { widget: sidebarScrollWidget, scrolled: sidebarScroll } = NidaraScrolled({
+        child: sidebar,
+        cssClasses: ["nidara-window-sidebar-scroll"],
     })
-    sidebarScroll.set_child(sidebar)
+    sidebarScroll.vexpand = true
+    sidebarScrollWidget.vexpand = true
+    // Gap to the search slot above. It lives on the OVERLAY, not on the view: the
+    // bar spans the overlay, so a margin on the view alone would leave the lane 4px
+    // taller than the viewport it maps to and the thumb would drift from the content.
+    sidebarScrollWidget.margin_top = 4
 
     const sidebarColumn = new Gtk.Box({
         orientation: Gtk.Orientation.VERTICAL,
@@ -94,7 +104,7 @@ export function NidaraWindow(opts: NidaraWindowOpts): NidaraWindowResult {
         topSlot.append(sidebarTop)
         sidebarColumn.append(topSlot)
     }
-    sidebarColumn.append(sidebarScroll)
+    sidebarColumn.append(sidebarScrollWidget)
 
     // ── Sidebar toggle ────────────────────────────────────────────────────────
     const sidebarToggle = new Gtk.Button({

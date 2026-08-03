@@ -129,7 +129,26 @@ owes its own content that inset (`PANEL_PAD` in `widgets/clipboard.ts` — keep 
 - `alwaysVisible` for content where the bar doubles as a position readout.
 
 Migrated: clipboard panel + CC detail (`IslandGrid`), notification centre, Assistant transcript,
-every Settings page (`wrapPage`) plus the app/autostart lists and search results, app grid.
+every Settings page (`wrapPage`) plus the app/autostart lists and search results, app grid, and
+in the kit itself the **`NidaraWindow` sidebar** and the **`NidaraSelect` list**.
+
+**`new Gtk.ScrolledWindow` now appears exactly twice in the tree** and that is the invariant to
+check when this claim is made again: `scrolled.ts` itself, and `IslandGrid`'s `gridClamp`, which
+is a width clamp with `NEVER` on both axes (`propagate_natural_width: false` reports a width
+independent of its child) and therefore has no scrollbar node at all. Anything else is a miss —
+the kit's two were missed on the first pass precisely because the surfaces looked done.
+A window's sidebar is not an exception; it sat two panes from ours looking like another component.
+
+`_reset.scss`'s native-`scrollbar` fallback stays, but it now covers only GTK internals we do not
+construct (`Gtk.DropDown`'s popup list is the live one — Settings uses it for blur, see the
+dropdown tradeoff). Its existence is not a licence to leave a Nidara-built view unmigrated.
+
+⚠️ `NidaraScrolled` returns an **overlay wrapping the view**, so anything positional belongs on
+the wrapper, not on the `scrolled`: margins (the sidebar's 4px gap to the search slot moved from
+CSS into `window.ts` for this — a margin on the view alone leaves the lane taller than the
+viewport it maps to, and the thumb drifts from the content) and, in `NidaraSelect`, the
+`width_request`/`measure`/`show` that position the popup.
+
 **Do not add `scrollbar` rules for any of them** — there is no such node. `overlay_scrolling:
 false` is no longer needed anywhere and should not come back: its gutter appears WITH the bar,
 so content resizes the moment a view starts overflowing.
